@@ -1,5 +1,5 @@
 # Lamine Dabo
-(/assets/img/7a630c12-fbef-4575-8630-3d0d448788f6.jpg)
+
 # Entrepreneur
 
 ### Education
