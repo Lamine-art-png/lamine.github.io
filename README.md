@@ -17,4 +17,4 @@
 - Market opportunity Business Challenge
 
 ### Technical Skills
-- Python, SQL
+- Python, SQL, Mongo DB
