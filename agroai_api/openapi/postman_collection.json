@@ -1,0 +1,269 @@
+{
+  "info": {
+    "name": "AGRO-AI API v1",
+    "description": "Irrigation decision engine API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000/v1"
+    },
+    {
+      "key": "blockId",
+      "value": "block-001"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Check",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Recommendations",
+      "item": [
+        {
+          "name": "Compute Recommendation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{$guid}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"constraints\": {\n    \"min_duration_min\": 30,\n    \"max_duration_min\": 240,\n    \"preferred_time_start\": \"06:00\"\n  },\n  \"targets\": {\n    \"target_soil_vwc\": 0.35,\n    \"efficiency\": 0.85\n  },\n  \"horizon_hours\": 72\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/blocks/{{blockId}}/recommendations:compute",
+              "host": ["{{baseUrl}}"],
+              "path": ["blocks", "{{blockId}}", "recommendations:compute"]
+            }
+          }
+        },
+        {
+          "name": "Get Recommendation",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/blocks/{{blockId}}/recommendations",
+              "host": ["{{baseUrl}}"],
+              "path": ["blocks", "{{blockId}}", "recommendations"]
+            }
+          }
+        },
+        {
+          "name": "Simulate Scenario",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"block_ids\": [\"block-001\", \"block-002\"],\n  \"horizon_hours\": 72,\n  \"targets\": {\n    \"target_soil_vwc\": 0.35\n  }\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/scenarios:simulate",
+              "host": ["{{baseUrl}}"],
+              "path": ["scenarios:simulate"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Ingestion",
+      "item": [
+        {
+          "name": "Ingest Telemetry",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"records\": [\n    {\n      \"type\": \"soil_vwc\",\n      \"timestamp\": \"{{$isoTimestamp}}\",\n      \"value\": 0.32,\n      \"unit\": \"m3/m3\",\n      \"source\": \"sensor-001\"\n    },\n    {\n      \"type\": \"et0\",\n      \"timestamp\": \"{{$isoTimestamp}}\",\n      \"value\": 5.5,\n      \"unit\": \"mm/day\",\n      \"source\": \"weather-api\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/blocks/{{blockId}}/telemetry",
+              "host": ["{{baseUrl}}"],
+              "path": ["blocks", "{{blockId}}", "telemetry"]
+            }
+          }
+        },
+        {
+          "name": "Ingest Events",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"records\": [\n    {\n      \"type\": \"irrigation_start\",\n      \"timestamp\": \"{{$isoTimestamp}}\",\n      \"data\": {\"zone\": \"zone-1\"},\n      \"source\": \"controller-001\"\n    }\n  ]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/blocks/{{blockId}}/events",
+              "host": ["{{baseUrl}}"],
+              "path": ["blocks", "{{blockId}}", "events"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Reports",
+      "item": [
+        {
+          "name": "Get ROI Report",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/reports/roi?from=2024-01-01&to=2024-12-31&blockId={{blockId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["reports", "roi"],
+              "query": [
+                {"key": "from", "value": "2024-01-01"},
+                {"key": "to", "value": "2024-12-31"},
+                {"key": "blockId", "value": "{{blockId}}"}
+              ]
+            }
+          }
+        },
+        {
+          "name": "Get Water Budget",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/blocks/{{blockId}}/water-budget",
+              "host": ["{{baseUrl}}"],
+              "path": ["blocks", "{{blockId}}", "water-budget"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Orchestration",
+      "item": [
+        {
+          "name": "Apply Controller",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"start_time\": \"{{$isoTimestamp}}\",\n  \"duration_min\": 120,\n  \"zone_ids\": [\"zone-1\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/controllers/controller-001:apply?provider=wiseconn",
+              "host": ["{{baseUrl}}"],
+              "path": ["controllers", "controller-001:apply"],
+              "query": [{"key": "provider", "value": "wiseconn"}]
+            }
+          }
+        },
+        {
+          "name": "Cancel Schedule",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/schedules/{{scheduleId}}:cancel",
+              "host": ["{{baseUrl}}"],
+              "path": ["schedules", "{{scheduleId}}:cancel"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Webhooks",
+      "item": [
+        {
+          "name": "Register Webhook",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"url\": \"https://example.com/webhook\",\n  \"event_types\": [\"recommendation.created\", \"test.event\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/webhooks",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks"]
+            }
+          }
+        },
+        {
+          "name": "List Webhooks",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/webhooks",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks"]
+            }
+          }
+        },
+        {
+          "name": "Test Webhook",
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/webhooks/test",
+              "host": ["{{baseUrl}}"],
+              "path": ["webhooks", "test"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
