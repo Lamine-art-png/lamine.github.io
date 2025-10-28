@@ -1,17 +1,12 @@
 terraform {
   required_version = ">= 1.5.0"
   required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-    random = {
-      source = "hashicorp/random"
-      version = "~> 3.6"
-    }
+    aws = { source = "hashicorp/aws", version = "~> 5.0" }
+    random = { source = "hashicorp/random", version = "~> 3.6" }
   }
+
   backend "s3" {
-    bucket         = "PUT_YOUR_US_WEST_1_BUCKET_NAME_HERE"
+    bucket         = "<YOUR-US-WEST-1-BUCKET>"   # EXACT bucket you created
     key            = "manulife-pilot/terraform.tfstate"
     region         = "us-west-1"
     dynamodb_table = "tf-locks"
