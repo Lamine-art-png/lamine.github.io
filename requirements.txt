@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pydantic
+pandas
+pyarrow
+scikit-learn
+ruff
+pytest

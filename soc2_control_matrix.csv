@@ -1,0 +1,10 @@
+Control ID,TSC Ref,Control Description,Implementation,Evidence,Owner,Status
+CTL-01,CC1.1,Security objectives defined,"Pilot scope, roles, RACI",README + Runbooks,CEO,In Place
+CTL-02,CC6.1,Logical access restricted,RBAC owner/analyst + API keys,"Code refs src/auth/rbac_example.py, IAM policies",CTO,In Place
+CTL-03,CC6.2,User provisioning,Tenant onboarding checklist,Ticket + audit log,CTO,In Place
+CTL-04,CC6.6,Authn/Authz & rotation,Secrets Manager rotation policy,Rotation events,CTO,In Place
+CTL-05,CC7.2,Vuln mgmt,ECR scan on push,Scan reports,CTO,In Place
+CTL-06,CC7.3,Change mgmt,PR reviews + CI/CD,PRs + CI logs,CTO,In Place
+CTL-07,CC7.4,Monitoring,CloudWatch alarms,Screenshots,CTO,In Place
+CTL-08,CC9.1,Availability,RTO/RPO documented,DR drill evidence,CTO,Planned
+CTL-09,CC2.1,Risk assessment,Pilot risk register,Risk doc,CEO,Planned
