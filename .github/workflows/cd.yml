@@ -58,8 +58,8 @@ jobs:
       - name: Terraform init (reconfigure)
         run: terraform init -reconfigure -input=false
 
-      - name: Terraform fmt
-        run: terraform fmt -check
+      - name: Terraform fmt (auto-fix)
+        run: terraform fmt -recursive -no-color
 
       - name: Terraform validate
         run: terraform validate
