@@ -1,59 +1,50 @@
-name: CI - Build & Push API image
+name: CI - Build & Check Terraform
 
 on:
-  push:
-    branches: [ main ]
+  pull_request:
     paths:
-      - 'agroai_api/**'
-      - 'Dockerfile'
+      - 'terraform/**'
       - '.github/workflows/ci.yml'
-      - 'README.md'   # temp trigger
-  workflow_dispatch:
 
 permissions:
-  id-token: write
   contents: read
-
-env:
-  ECR_REPO: agroai-manulife-pilot-api
+  pull-requests: write
 
 jobs:
-  build-and-push:
+  tf_check:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: terraform
     steps:
       - uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: ${{ secrets.AWS_REGION }}
+          terraform_version: 1.7.5
 
-      - name: Resolve account & ECR URI
-        id: acct
-        run: |
-          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
-          echo "ACCOUNT_ID=$ACCOUNT_ID" >> $GITHUB_OUTPUT
-          echo "ECR_URI=$ACCOUNT_ID.dkr.ecr.${{ secrets.AWS_REGION }}.amazonaws.com/${{ env.ECR_REPO }}" >> $GITHUB_OUTPUT
+      - name: Terraform fmt (check only)
+        run: terraform fmt -check -recursive
 
-      - name: Ensure ECR repo exists
-        run: |
-          aws ecr describe-repositories --repository-names "${{ env.ECR_REPO }}" >/dev/null 2>&1 || \
-          aws ecr create-repository --repository-name "${{ env.ECR_REPO }}" >/dev/null
+      - name: Terraform init (no backend, faster)
+        run: terraform init -backend=false
 
-      - name: Login to ECR
-        run: |
-          aws ecr get-login-password --region ${{ secrets.AWS_REGION }} \
-            | docker login --username AWS --password-stdin ${{ steps.acct.outputs.ECR_URI }}
+      - name: Terraform validate
+        run: terraform validate
 
-      - name: Build image
-        run: |
-          docker build -t ${{ env.ECR_REPO }}:sha-${{ github.sha }} .
+      - name: Terraform plan (no backend, for PR review)
+        run: terraform plan -no-color || true
 
-      - name: Tag & push
-        run: |
-          docker tag  ${{ env.ECR_REPO }}:sha-${{ github.sha }}  ${{ steps.acct.outputs.ECR_URI }}:sha-${{ github.sha }}
-          docker push ${{ steps.acct.outputs.ECR_URI }}:sha-${{ github.sha }}
-
-      - name: Image pushed
-        run: echo "Pushed -> ${{ steps.acct.outputs.ECR_URI }}:sha-${{ github.sha }}"
+      - name: Comment plan on PR
+        if: ${{ github.event_name == 'pull_request' }}
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          recreate: true
+          path: terraform/plan.out.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Save plan to file
+        if: ${{ always() }}
+        run: terraform plan -no-color > plan.out.txt || true
