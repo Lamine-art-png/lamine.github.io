@@ -61,9 +61,23 @@ jobs:
           echo '### Terraform Outputs' >> $GITHUB_STEP_SUMMARY
           jq -r 'to_entries[] | "- \(.key): \(.value.value)"' tf-outputs.json >> $GITHUB_STEP_SUMMARY
 
+      - name: Capture Terraform outputs (JSON)
+        working-directory: terraform
+        run: terraform output -json | tee tf-outputs.json
+
       - name: Upload outputs artifact
         uses: actions/upload-artifact@v4
         with:
           name: tf-outputs
           path: terraform/tf-outputs.json
+          retention-days: 5
+
+      - name: Add outputs to job summary
+        working-directory: terraform
+        run: |
+          echo "## Terraform Outputs" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          cat tf-outputs.json >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
 
