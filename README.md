@@ -22,3 +22,4 @@ make tfapply
 - CloudWatch alarm screenshots, RDS snapshots, Secrets rotation events
 - `data/processed/evaluation.json`, `feature_importance.csv`, `bias_report.json`
 - `ops/runbooks/*.md` (export PDF)
+- <!-- trigger deploy -->
