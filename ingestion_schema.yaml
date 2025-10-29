@@ -1,0 +1,12 @@
+# Expected batch drops (CSV) for pilot ingestion
+et:
+  required_columns: ["timestamp","station_id","eto_mm","precip_mm","tmin_c","tmax_c","wind_mps","rh_pct"]
+soil_moisture:
+  required_columns: ["timestamp","sensor_id","depth_cm","vwc_pct","temperature_c","battery_v"]
+weather:
+  required_columns: ["timestamp","lat","lon","precip_mm","tavg_c","tdew_c","wind_mps","rh_pct","cloud_pct"]
+metadata:
+  farms: ["farm_id","name","crop","acreage","region","lat","lon"]
+mappings:
+  station_to_farm: ["station_id","farm_id"]
+  sensor_to_farm: ["sensor_id","farm_id"]

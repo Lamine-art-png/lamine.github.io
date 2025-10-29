@@ -1,0 +1,38 @@
+version: '3.8'
+
+services:
+  api:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=sqlite:///./agroai.db
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-in-production-min-32-chars}
+      - WEBHOOK_SECRET=${WEBHOOK_SECRET:-dev-webhook-secret}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - ENABLE_METRICS=true
+      - ENABLE_WEBHOOKS=true
+      - ENABLE_METERING=true
+    volumes:
+      - ./app:/app/app
+      - ./data:/app/data
+      - api-db:/app
+    command: >
+      sh -c "python scripts/seed.py &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload"
+
+  # Optional: PostgreSQL for production
+  # postgres:
+  #   image: postgres:15
+  #   environment:
+  #     - POSTGRES_USER=agroai
+  #     - POSTGRES_PASSWORD=agroai
+  #     - POSTGRES_DB=agroai
+  #   ports:
+  #     - "5432:5432"
+  #   volumes:
+  #     - postgres-data:/var/lib/postgresql/data
+
+volumes:
+  api-db:
+  # postgres-data:
