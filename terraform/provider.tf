@@ -5,7 +5,7 @@ terraform {
     random = { source = "hashicorp/random", version = "~> 3.6" }
   }
   backend "s3" {
-    bucket         = "<YOUR-US-WEST-1-BUCKET>"  # exact name from CloudShell
+    bucket         = "<agroai-tfstate-ld-20251028-ncal>"  # exact name from CloudShell
     key            = "manulife-pilot/terraform.tfstate"
     region         = "us-west-1"
     dynamodb_table = "tf-locks"
