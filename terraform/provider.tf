@@ -8,12 +8,11 @@ terraform {
 
 terraform {
   backend "s3" {
-    bucket         = "agroai-tfstate-ld-20251028-ncal"  
+    bucket         = "agroai-tfstate-ld-usw1-1761768239"
     key            = "manulife-pilot/terraform.tfstate"
     region         = "us-west-1"
     dynamodb_table = "tf-locks"
     encrypt        = true
   }
 }
-
 provider "aws" { region = var.region }
