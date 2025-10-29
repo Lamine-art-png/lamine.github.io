@@ -6,22 +6,24 @@ on:
     paths:
       - 'terraform/**'
       - '.github/workflows/cd.yml'
-      - 'README.md'         # temp trigger
   workflow_dispatch:
 
 permissions:
   id-token: write
   contents: read
 
+concurrency:
+  group: tf-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  tf-apply:
+  tf_apply:
+    name: Terraform init/plan/apply
     runs-on: ubuntu-latest
-    env:
-      STATE_BUCKET: <YOUR-US-WEST-1-S3-BUCKET>   # <<< put the exact bucket name here
     defaults:
       run:
+        shell: bash
         working-directory: terraform
-
     steps:
       - uses: actions/checkout@v4
 
@@ -31,32 +33,16 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # ---- debug additions ----
-      - name: Debug AWS identity & region
-        run: |
-          echo "REF=$GITHUB_REF  REPO=$GITHUB_REPOSITORY"
-          aws sts get-caller-identity
-          echo "REGION=${{ secrets.AWS_REGION }}  BUCKET=${STATE_BUCKET}"
-
-      - name: Check backend resources (S3 + DynamoDB)
-        run: |
-          set -e
-          aws s3api get-bucket-location --bucket "${STATE_BUCKET}"
-          aws dynamodb describe-table --table-name tf-locks --region "${{ secrets.AWS_REGION }}"
-      # ---- end debug ----
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.7.5
 
-      # reconfigure so TF picks the new backend cleanly
-           - name: Terraform init (reconfigure)
-        run: terraform init -input=false -reconfigure
+      - name: Terraform init (reconfigure)
+        run: terraform init -reconfigure -input=false
 
-      - name: Terraform fmt (non-blocking)
-        run: terraform fmt -recursive -check
-        continue-on-error: true
+      - name: Terraform fmt
+        run: terraform fmt -check
 
       - name: Terraform validate
         run: terraform validate
