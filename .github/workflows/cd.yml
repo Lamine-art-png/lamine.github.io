@@ -20,11 +20,13 @@ jobs:
   tf_apply:
     name: Terraform init/plan/apply
     runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      AWS_DEFAULT_REGION: ${{ secrets.AWS_REGION }}
     defaults:
       run:
         shell: bash
         working-directory: terraform
-
     steps:
       - uses: actions/checkout@v4
 
@@ -34,15 +36,16 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
 
-      # 🔎 Quick debug: confirm who we are and that backend resources exist
       - name: Who am I?
         run: |
+          set -x
           echo "GITHUB_REPOSITORY=$GITHUB_REPOSITORY"
           echo "GITHUB_REF=$GITHUB_REF"
-          echo "AWS_REGION (secret)=${{ secrets.AWS_REGION }}"
+          echo "AWS_REGION=$AWS_REGION"
           aws sts get-caller-identity
-          aws s3api get-bucket-location --bucket agroai-tfstate-ld-usw1-1761768239 || true
-          aws dynamodb describe-table --table-name tf-locks --region us-west-1 || true
+          aws s3api get-bucket-location --bucket agroai-tfstate-ld-usw1-1761768239
+          aws s3 ls s3://agroai-tfstate-ld-usw1-1761768239 || true
+          aws dynamodb describe-table --table-name tf-locks --region us-west-1
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -50,6 +53,8 @@ jobs:
           terraform_version: 1.7.5
 
       - name: Terraform init (reconfigure)
+        env:
+          TF_LOG: INFO
         run: terraform init -reconfigure -input=false
 
       - name: Terraform fmt
