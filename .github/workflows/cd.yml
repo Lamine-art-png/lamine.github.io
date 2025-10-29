@@ -55,3 +55,15 @@ jobs:
 
       - name: Terraform apply
         run: terraform apply -input=false -auto-approve tfplan
+      - name: Show Terraform outputs
+        run: |
+          terraform output -json | tee tf-outputs.json
+          echo '### Terraform Outputs' >> $GITHUB_STEP_SUMMARY
+          jq -r 'to_entries[] | "- \(.key): \(.value.value)"' tf-outputs.json >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload outputs artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: tf-outputs
+          path: terraform/tf-outputs.json
+
