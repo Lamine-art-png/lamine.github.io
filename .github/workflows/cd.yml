@@ -22,13 +22,11 @@ env:
 
 jobs:
   tf_apply:
-    name: Terraform init/plan/apply
     runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
         working-directory: terraform
-
     steps:
       - uses: actions/checkout@v4
 
@@ -37,18 +35,6 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-1
-
-      - name: Who am I / check backend resources
-        run: |
-          echo "AWS_REGION=$AWS_REGION"
-          aws sts get-caller-identity
-          echo "--- S3 bucket location ---"
-          aws s3api get-bucket-location --bucket agroai-tfstate-ld-usw1-1761768239 || true
-          echo "--- DynamoDB table ---"
-          aws dynamodb describe-table --table-name tf-locks --region us-west-1 || true
-          echo "--- Backend block sanity ---"
-          grep -n "backend" -n provider.tf || true
-          sed -n '10,22p' provider.tf || true
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -59,7 +45,7 @@ jobs:
         run: terraform init -reconfigure -input=false
 
       - name: Terraform fmt (auto-fix)
-        run: terraform fmt -recursive -no-color
+        run: terraform fmt -recursive
 
       - name: Terraform validate
         run: terraform validate
