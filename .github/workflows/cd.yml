@@ -2,7 +2,7 @@ name: CD - Terraform apply (us-west-1)
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
     paths:
       - 'terraform/**'
       - '.github/workflows/cd.yml'
@@ -38,12 +38,10 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-1
 
-      # 🔍 Debug BEFORE init: prove the ECR resource is in this checkout
-      - name: Sanity: show repo state & ECR resource
+      - name: "Sanity: show repo state & ECR resource"
         run: |
           echo "Commit: $(git rev-parse --short HEAD)"
           echo "PWD=$(pwd)"
-          echo "Listing terraform dir:"
           ls -la
           echo "--- grep for ECR resource ---"
           grep -nR 'resource "aws_ecr_repository" "api"' . || true
@@ -75,15 +73,19 @@ jobs:
       - name: Terraform apply
         run: terraform apply -input=false -auto-approve tfplan
 
-      - name: Collect & publish outputs
-        run: |
-          terraform output -json | tee tf-outputs.json
-          echo "## Terraform Outputs" >> $GITHUB_STEP_SUMMARY
-          jq -r 'to_entries[] | "- \(.key): \(.value.value // \"null\")"' tf-outputs.json >> $GITHUB_STEP_SUMMARY
+      - name: Capture Terraform outputs (JSON)
+        run: terraform output -json | tee tf-outputs.json
 
       - name: Upload outputs artifact
         uses: actions/upload-artifact@v4
         with:
           name: tf-outputs
-          path: terraform/tf-outputs.json
+          path: tf-outputs.json
           retention-days: 5
+
+      - name: Add outputs to job summary
+        run: |
+          echo "## Terraform Outputs" >> $GITHUB_STEP_SUMMARY
+          echo '```json' >> $GITHUB_STEP_SUMMARY
+          cat tf-outputs.json >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
