@@ -22,11 +22,13 @@ env:
 
 jobs:
   tf_apply:
+    name: Terraform init/plan/apply
     runs-on: ubuntu-latest
     defaults:
       run:
         shell: bash
         working-directory: terraform
+
     steps:
       - uses: actions/checkout@v4
 
@@ -35,6 +37,23 @@ jobs:
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-1
+
+      # 🔍 Debug BEFORE init: prove the ECR resource is in this checkout
+      - name: Sanity: show repo state & ECR resource
+        run: |
+          echo "Commit: $(git rev-parse --short HEAD)"
+          echo "PWD=$(pwd)"
+          echo "Listing terraform dir:"
+          ls -la
+          echo "--- grep for ECR resource ---"
+          grep -nR 'resource "aws_ecr_repository" "api"' . || true
+          echo "--- first 220 lines of main.tf ---"
+          nl -ba main.tf | sed -n '1,220p' || true
+          echo "--- AWS identity ---"
+          aws sts get-caller-identity
+          echo "--- (non-fatal) backend checks ---"
+          aws s3api get-bucket-location --bucket agroai-tfstate-ld-usw1-1761768239 || true
+          aws dynamodb describe-table --table-name tf-locks --region us-west-1 || true
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -55,15 +74,12 @@ jobs:
 
       - name: Terraform apply
         run: terraform apply -input=false -auto-approve tfplan
-      - name: Show Terraform outputs
+
+      - name: Collect & publish outputs
         run: |
           terraform output -json | tee tf-outputs.json
-          echo '### Terraform Outputs' >> $GITHUB_STEP_SUMMARY
-          jq -r 'to_entries[] | "- \(.key): \(.value.value)"' tf-outputs.json >> $GITHUB_STEP_SUMMARY
-
-      - name: Capture Terraform outputs (JSON)
-        working-directory: terraform
-        run: terraform output -json | tee tf-outputs.json
+          echo "## Terraform Outputs" >> $GITHUB_STEP_SUMMARY
+          jq -r 'to_entries[] | "- \(.key): \(.value.value // \"null\")"' tf-outputs.json >> $GITHUB_STEP_SUMMARY
 
       - name: Upload outputs artifact
         uses: actions/upload-artifact@v4
@@ -71,13 +87,3 @@ jobs:
           name: tf-outputs
           path: terraform/tf-outputs.json
           retention-days: 5
-
-      - name: Add outputs to job summary
-        working-directory: terraform
-        run: |
-          echo "## Terraform Outputs" >> $GITHUB_STEP_SUMMARY
-          echo '```json' >> $GITHUB_STEP_SUMMARY
-          cat tf-outputs.json >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
-
-
