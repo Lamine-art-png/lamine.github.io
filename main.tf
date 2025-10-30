@@ -133,9 +133,3 @@ resource "aws_cloudwatch_log_group" "api" {
   name              = "/ecs/${var.project}-api"
   retention_in_days = 14
 }
-# terraform/main.tf  (ensure it's inside the terraform/ directory)
-resource "aws_ecr_repository" "api" {
-  name = "${var.project}-api"   # e.g., agroai-manulife-pilot-api
-  image_scanning_configuration { scan_on_push = true }
-  force_delete = true
-}
