@@ -40,26 +40,26 @@ module "db" {
   source  = "terraform-aws-modules/rds/aws"
   version = "~> 6.5"
 
-  identifier                = "${var.project}-pg"
-  engine                    = "postgres"
-  engine_version            = "16.2"
-  instance_class            = var.db_instance
-  username                  = var.db_username
-  db_name                   = var.db_name
-  create_random_password    = true
-  allocated_storage         = 20
-  deletion_protection       = false
-  publicly_accessible       = false
-  backup_window             = "05:00-06:00"
-  maintenance_window        = "sun:06:00-sun:07:00"
+  identifier                 = "${var.project}-pg"
+  engine                     = "postgres"
+  engine_version             = "16.2"
+  instance_class             = var.db_instance
+  username                   = var.db_username
+  db_name                    = var.db_name
+  create_random_password     = true
+  allocated_storage          = 20
+  deletion_protection        = false
+  publicly_accessible        = false
+  backup_window              = "05:00-06:00"
+  maintenance_window         = "sun:06:00-sun:07:00"
   performance_insights_enabled = true
-  monitoring_interval       = 60
+  monitoring_interval        = 60
 
   vpc_security_group_ids = [aws_security_group.api_sg.id]
   subnet_ids             = module.network.private_subnets
 }
 
-# --- ECR repo for API image (ONLY ONE DEFINITION) ---
+# --- ECR repo for API image (single definition) ---
 resource "aws_ecr_repository" "api" {
   name = "${var.project}-api"   # e.g., agroai-manulife-pilot-api
   image_scanning_configuration { scan_on_push = true }
@@ -116,10 +116,11 @@ module "api_service" {
   launch_type   = "FARGATE"
 
   # expose pilot quickly (no ALB yet)
-  subnet_ids         = module.network.public_subnets   # <-- was private_subnets
+  subnet_ids         = module.network.public_subnets
   security_group_ids = [aws_security_group.api_sg.id]
-  assign_public_ip   = true                            # <-- was false
-  force_new_deployment = true                         # ensure tasks roll after net change
+  assign_public_ip   = true
+  force_new_deployment = true
+  enable_execute_command = true
 
   container_definitions = [
     {
@@ -143,12 +144,7 @@ module "api_service" {
       }
     }
   ]
+
+  # ensure log group exists before tasks start
+  depends_on = [aws_cloudwatch_log_group.api]
 }
-
-  subnet_ids         = module.network.private_subnets
-  security_group_ids = [aws_security_group.api_sg.id]
-  assign_public_ip   = false
-
-  enable_execute_command = true
-}
-
