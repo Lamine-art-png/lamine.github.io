@@ -115,6 +115,12 @@ module "api_service" {
   desired_count = var.desired_count
   launch_type   = "FARGATE"
 
+  # expose pilot quickly (no ALB yet)
+  subnet_ids         = module.network.public_subnets   # <-- was private_subnets
+  security_group_ids = [aws_security_group.api_sg.id]
+  assign_public_ip   = true                            # <-- was false
+  force_new_deployment = true                         # ensure tasks roll after net change
+
   container_definitions = [
     {
       name      = "api"
@@ -122,21 +128,22 @@ module "api_service" {
       essential = true
       portMappings = [{ containerPort = 80, hostPort = 80 }]
       environment = [
-        { name = "ENV", value = var.env }
+        { name = "ENV", value = var.env },
       ]
       secrets = [
-        { name = "DATABASE_URL", valueFrom = aws_secretsmanager_secret.db_url.arn }
+        { name = "DATABASE_URL", valueFrom = aws_secretsmanager_secret.db_url.arn },
       ]
       logConfiguration = {
         logDriver = "awslogs",
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.api.name
+          awslogs-group         = "/ecs/${var.project}-api"
           awslogs-region        = var.region
           awslogs-stream-prefix = "ecs"
         }
       }
     }
   ]
+}
 
   subnet_ids         = module.network.private_subnets
   security_group_ids = [aws_security_group.api_sg.id]
