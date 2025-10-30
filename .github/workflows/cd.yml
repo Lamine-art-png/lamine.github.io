@@ -38,20 +38,21 @@ jobs:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: us-west-1
 
-      - name: "Sanity: show repo state & ECR resource"
+      - name: Who am I / backend sanity
         run: |
-          echo "Commit: $(git rev-parse --short HEAD)"
           echo "PWD=$(pwd)"
-          ls -la
-          echo "--- grep for ECR resource ---"
-          grep -nR 'resource "aws_ecr_repository" "api"' . || true
-          echo "--- first 220 lines of main.tf ---"
-          nl -ba main.tf | sed -n '1,220p' || true
-          echo "--- AWS identity ---"
+          echo "AWS_REGION=$AWS_REGION"
           aws sts get-caller-identity
-          echo "--- (non-fatal) backend checks ---"
+          echo "--- Backend (S3 & DynamoDB) ---"
           aws s3api get-bucket-location --bucket agroai-tfstate-ld-usw1-1761768239 || true
           aws dynamodb describe-table --table-name tf-locks --region us-west-1 || true
+          echo "--- Terraform dir listing ---"
+          ls -la
+          echo "--- main.tf head ---"
+          nl -ba main.tf | sed -n '1,220p' || true
+          echo "--- Grep for ECR/ECS ---"
+          grep -n 'resource "aws_ecr_repository" "api"' main.tf || true
+          grep -n 'module "ecs"' main.tf || true
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -73,19 +74,23 @@ jobs:
       - name: Terraform apply
         run: terraform apply -input=false -auto-approve tfplan
 
-      - name: Capture Terraform outputs (JSON)
-        run: terraform output -json | tee tf-outputs.json
+      - name: Terraform state introspection
+        run: |
+          echo "---- terraform state list ----"
+          terraform state list || true
+          echo "---- terraform outputs (json) ----"
+          terraform output -json | tee tf-outputs.json || true
 
       - name: Upload outputs artifact
         uses: actions/upload-artifact@v4
         with:
           name: tf-outputs
-          path: tf-outputs.json
+          path: terraform/tf-outputs.json
           retention-days: 5
 
       - name: Add outputs to job summary
         run: |
           echo "## Terraform Outputs" >> $GITHUB_STEP_SUMMARY
           echo '```json' >> $GITHUB_STEP_SUMMARY
-          cat tf-outputs.json >> $GITHUB_STEP_SUMMARY
+          cat tf-outputs.json >> $GITHUB_STEP_SUMMARY || echo "{}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
