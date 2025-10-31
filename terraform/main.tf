@@ -47,20 +47,17 @@ module "api_service" {
   source  = "terraform-aws-modules/ecs/aws//modules/service"
   version = "~> 5.11"
 
-  name          = "${var.project}-api"
-  cluster_arn   = module.ecs.cluster_arn
-  cpu           = 256
-  memory        = 512
-  desired_count = var.desired_count
-  launch_type   = "FARGATE"
-
-  # Fast pilot: public subnets + public IP (no ALB yet)
-  subnet_ids           = module.network.public_subnets
-  security_group_ids   = [aws_security_group.api_sg.id]
-  assign_public_ip     = true
+  name            = "${var.project}-api"
+  cluster_arn     = module.ecs.cluster_arn
+  cpu             = 256
+  memory          = 512
+  desired_count   = var.desired_count
+  launch_type     = "FARGATE"
+  subnet_ids         = module.network.public_subnets
+  security_group_ids = [aws_security_group.api_sg.id]
+  assign_public_ip   = true
   force_new_deployment = true
 
-  # Use a public image so we don't depend on ECR push yet
   container_definitions = [
     {
       name      = "api"
