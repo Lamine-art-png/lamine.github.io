@@ -1,13 +1,11 @@
 #############################################
-# terraform/main.tf  (us-west-1 deployment)
+# terraform/main.tf  (us-west-1 pilot)
 #############################################
 
-# Availability Zones (N. California uses e.g., a/c)
 data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# --- Networking (VPC/Subnets/SGs) — simplified for pilot ---
 module "network" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.0"
@@ -21,9 +19,6 @@ module "network" {
 
   enable_nat_gateway = true
   single_nat_gateway = true
-
-  public_subnet_tags  = { "kubernetes.io/role/elb"         = "1" }
-  private_subnet_tags = { "kubernetes.io/role/internal-elb" = "1" }
 }
 
 resource "aws_security_group" "api_sg" {
@@ -35,67 +30,11 @@ resource "aws_security_group" "api_sg" {
   egress  { from_port = 0  to_port = 0  protocol = "-1"  cidr_blocks = ["0.0.0.0/0"] }
 }
 
-# --- RDS Postgres for pilot ---
-module "db" {
-  source  = "terraform-aws-modules/rds/aws"
-  version = "~> 6.5"
-
-  identifier                 = "${var.project}-pg"
-  engine                     = "postgres"
-  engine_version             = "16.2"
-  instance_class             = var.db_instance
-  username                   = var.db_username
-  db_name                    = var.db_name
-  create_random_password     = true
-  allocated_storage          = 20
-  deletion_protection        = false
-  publicly_accessible        = false
-  backup_window              = "05:00-06:00"
-  maintenance_window         = "sun:06:00-sun:07:00"
-  performance_insights_enabled = true
-  monitoring_interval        = 60
-
-  vpc_security_group_ids = [aws_security_group.api_sg.id]
-  subnet_ids             = module.network.private_subnets
-}
-
-# --- ECR repo for API image (single definition) ---
-resource "aws_ecr_repository" "api" {
-  name = "${var.project}-api"   # e.g., agroai-manulife-pilot-api
-  image_scanning_configuration { scan_on_push = true }
-  force_delete = true
-}
-
-# --- Secrets Manager for DB URL ---
-resource "aws_secretsmanager_secret" "db_url" {
-  name = "${var.project}/db_url"
-}
-
-resource "aws_secretsmanager_secret_version" "db_url_v" {
-  secret_id = aws_secretsmanager_secret.db_url.id
-  secret_string = jsonencode({
-    url = "postgresql://${module.db.db_instance_username}:${module.db.db_instance_password}@${module.db.db_instance_address}:5432/${module.db.db_instance_name}"
-  })
-}
-
-# --- S3 buckets for raw data and models ---
-resource "aws_s3_bucket" "raw" {
-  bucket        = "${var.project}-raw-${var.env}"
-  force_destroy = true
-}
-
-resource "aws_s3_bucket" "models" {
-  bucket        = "${var.project}-models-${var.env}"
-  force_destroy = true
-}
-
-# --- CloudWatch Log Group used by ECS service ---
 resource "aws_cloudwatch_log_group" "api" {
   name              = "/ecs/${var.project}-api"
   retention_in_days = 14
 }
 
-# --- ECS Fargate Cluster + Service for API ---
 module "ecs" {
   source  = "terraform-aws-modules/ecs/aws"
   version = "~> 5.11"
@@ -115,36 +54,27 @@ module "api_service" {
   desired_count = var.desired_count
   launch_type   = "FARGATE"
 
-  # expose pilot quickly (no ALB yet)
-  subnet_ids         = module.network.public_subnets
-  security_group_ids = [aws_security_group.api_sg.id]
-  assign_public_ip   = true
+  # Fast pilot: public subnets + public IP (no ALB yet)
+  subnet_ids           = module.network.public_subnets
+  security_group_ids   = [aws_security_group.api_sg.id]
+  assign_public_ip     = true
   force_new_deployment = true
-  enable_execute_command = true
 
+  # Use a public image so we don't depend on ECR push yet
   container_definitions = [
     {
       name      = "api"
-      image     = "${aws_ecr_repository.api.repository_url}:${var.api_image}"
+      image     = "public.ecr.aws/nginx/nginx:latest"
       essential = true
       portMappings = [{ containerPort = 80, hostPort = 80 }]
-      environment = [
-        { name = "ENV", value = var.env },
-      ]
-      secrets = [
-        { name = "DATABASE_URL", valueFrom = aws_secretsmanager_secret.db_url.arn },
-      ]
       logConfiguration = {
         logDriver = "awslogs",
         options = {
-          awslogs-group         = "/ecs/${var.project}-api"
+          awslogs-group         = aws_cloudwatch_log_group.api.name
           awslogs-region        = var.region
           awslogs-stream-prefix = "ecs"
         }
       }
     }
   ]
-
-  # ensure log group exists before tasks start
-  depends_on = [aws_cloudwatch_log_group.api]
 }
