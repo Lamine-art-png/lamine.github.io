@@ -1,10 +1,11 @@
 #############################################
 # terraform/main.tf  (us-west-1 pilot)
-# - VPC (2 public + 2 private subnets)
+# - VPC (2 public + 2 private)
 # - SG allowing HTTP
 # - CloudWatch log group
-# - ECS cluster + Fargate service (no capacity providers)
-# - Public IP on tasks, image = public NGINX
+# - ECS cluster (no capacity providers args)
+# - Fargate service in public subnets (public IP)
+# - Uses public NGINX image so we can test quickly
 #############################################
 
 # Availability Zones
@@ -12,7 +13,7 @@ data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# --- Networking (VPC/Subnets) ---
+# --- Networking ---
 module "network" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.0"
@@ -28,7 +29,7 @@ module "network" {
   single_nat_gateway = true
 }
 
-# --- Security Group (allow HTTP from Internet) ---
+# --- Security group (HTTP) ---
 resource "aws_security_group" "api_sg" {
   name        = "${var.project}-api-sg"
   description = "Allow HTTP from internet"
@@ -49,21 +50,18 @@ resource "aws_security_group" "api_sg" {
   }
 }
 
-# --- CloudWatch Log Group for ECS ---
+# --- CloudWatch logs for the service ---
 resource "aws_cloudwatch_log_group" "api" {
   name              = "/ecs/${var.project}-api"
   retention_in_days = 14
 }
 
-# --- ECS Cluster (no capacity providers configured) ---
+# --- ECS Cluster (minimal; do NOT pass capacity provider args) ---
 module "ecs" {
   source  = "terraform-aws-modules/ecs/aws"
   version = "~> 5.11"
 
   cluster_name = "${var.project}-cluster"
-
-  # Important: avoid capacity providers to fix the merge() error
-  create_capacity_providers = false
 }
 
 # --- ECS Fargate Service (public, no ALB) ---
@@ -78,14 +76,14 @@ module "api_service" {
   desired_count = var.desired_count
   launch_type   = "FARGATE"
 
-  # Fast pilot: run in public subnets with a public IP
+  # Fast pilot: put tasks in public subnets with a public IP
   subnet_ids           = module.network.public_subnets
   security_group_ids   = [aws_security_group.api_sg.id]
   assign_public_ip     = true
   force_new_deployment = true
   enable_execute_command = true
 
-  # Use a public image so we don't depend on ECR yet
+  # Public image for smoke test
   container_definitions = [
     {
       name      = "api"
