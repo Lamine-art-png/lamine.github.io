@@ -3,7 +3,7 @@
 # - VPC (2 public + 2 private subnets)
 # - SG allowing HTTP
 # - CloudWatch log group
-# - ECS cluster + Fargate service
+# - ECS cluster + Fargate service (no capacity providers)
 # - Public IP on tasks, image = public NGINX
 #############################################
 
@@ -55,13 +55,15 @@ resource "aws_cloudwatch_log_group" "api" {
   retention_in_days = 14
 }
 
-# --- ECS Cluster ---
+# --- ECS Cluster (no capacity providers configured) ---
 module "ecs" {
   source  = "terraform-aws-modules/ecs/aws"
   version = "~> 5.11"
 
-  cluster_name               = "${var.project}-cluster"
-  fargate_capacity_providers = ["FARGATE"]
+  cluster_name = "${var.project}-cluster"
+
+  # Important: avoid capacity providers to fix the merge() error
+  create_capacity_providers = false
 }
 
 # --- ECS Fargate Service (public, no ALB) ---
@@ -77,9 +79,9 @@ module "api_service" {
   launch_type   = "FARGATE"
 
   # Fast pilot: run in public subnets with a public IP
-  subnet_ids         = module.network.public_subnets
-  security_group_ids = [aws_security_group.api_sg.id]
-  assign_public_ip   = true
+  subnet_ids           = module.network.public_subnets
+  security_group_ids   = [aws_security_group.api_sg.id]
+  assign_public_ip     = true
   force_new_deployment = true
   enable_execute_command = true
 
