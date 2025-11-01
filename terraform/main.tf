@@ -50,8 +50,20 @@ module "ecs" {
   source  = "terraform-aws-modules/ecs/aws"
   version = "~> 5.12"
 
-  cluster_name               = "${var.project}-cluster"
-  fargate_capacity_providers = ["FARGATE"]
+  cluster_name = "${var.project}-cluster"
+
+  # Must be a MAP, not a list
+  fargate_capacity_providers = {
+    FARGATE = {
+      # give the cluster a default strategy; simple single-provider setup
+      default_capacity_provider_strategy = [{
+        base   = 1
+        weight = 100
+      }]
+    }
+  }
+
+  # keep the rest default (autoscaling providers = {})
 }
 
 module "api_service" {
