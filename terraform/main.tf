@@ -2,12 +2,10 @@
 # terraform/main.tf  (us-west-1 pilot, NGINX)
 #############################################
 
-# Use two AZs
 data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# VPC + public/private subnets + NAT
 module "network" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.21"
@@ -23,7 +21,6 @@ module "network" {
   single_nat_gateway = true
 }
 
-# Security group for HTTP
 resource "aws_security_group" "api_sg" {
   name        = "${var.project}-api-sg"
   description = "Allow HTTP from internet"
@@ -44,7 +41,6 @@ resource "aws_security_group" "api_sg" {
   }
 }
 
-# ECS cluster with a Fargate provider
 module "ecs" {
   source  = "terraform-aws-modules/ecs/aws"
   version = "~> 5.12"
@@ -62,13 +58,6 @@ module "ecs" {
   }
 }
 
-# Pre-create the exact CloudWatch Logs group the container will use
-resource "aws_cloudwatch_log_group" "api" {
-  name              = "/aws/ecs/${var.project}-api/api"
-  retention_in_days = 14
-}
-
-# Fargate service (public subnets, public IP)
 module "api_service" {
   source  = "terraform-aws-modules/ecs/aws//modules/service"
   version = "~> 5.12"
@@ -86,7 +75,7 @@ module "api_service" {
   subnet_ids         = module.network.public_subnets
   security_group_ids = [aws_security_group.api_sg.id]
 
-  # Map-of-containers (what the module expects)
+  # Map-of-containers (expected by the module)
   container_definitions = {
     api = {
       image     = "public.ecr.aws/nginx/nginx:latest"
@@ -99,10 +88,11 @@ module "api_service" {
         protocol      = "tcp"
       }]
 
+      # Let the module create this log group; use a fresh path to avoid conflicts
       log_configuration = {
         log_driver = "awslogs"
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.api.name
+          awslogs-group         = "/aws/ecs/${var.project}-api/nginx"
           awslogs-region        = var.region
           awslogs-stream-prefix = "ecs"
         }
