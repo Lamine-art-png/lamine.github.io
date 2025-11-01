@@ -47,56 +47,52 @@ module "ecs" {
 
   cluster_name = "${var.project}-cluster"
 
-  # Must be a MAP, not a list
+  # must be a MAP (not a list) to satisfy the module's merge()
   fargate_capacity_providers = {
     FARGATE = {
-      # give the cluster a default strategy; simple single-provider setup
       default_capacity_provider_strategy = [{
         base   = 1
         weight = 100
       }]
     }
   }
-
-  # keep the rest default (autoscaling providers = {})
 }
 
 module "api_service" {
   source  = "terraform-aws-modules/ecs/aws//modules/service"
   version = "~> 5.12"
 
-  name            = "${var.project}-api"
-  cluster_arn     = module.ecs.cluster_arn
-  cpu             = 256
-  memory          = 512
-  desired_count   = var.desired_count
-  launch_type     = "FARGATE"
-  assign_public_ip = true
-  enable_execute_command = true
-  force_new_deployment   = true
+  name                    = "${var.project}-api"
+  cluster_arn             = module.ecs.cluster_arn
+  cpu                     = 256
+  memory                  = 512
+  desired_count           = var.desired_count
+  launch_type             = "FARGATE"
+  assign_public_ip        = true
+  enable_execute_command  = true
+  force_new_deployment    = true
 
   subnet_ids         = module.network.public_subnets
   security_group_ids = [aws_security_group.api_sg.id]
 
-  # Map-of-containers; keys must be container names
+  # map-of-containers; key is container name
   container_definitions = {
     api = {
       image     = "public.ecr.aws/nginx/nginx:latest"
       essential = true
 
-      port_mappings = [
-        {
-          name          = "http"
-          containerPort = 80
-          hostPort      = 80
-          protocol      = "tcp"
-        }
-      ]
+      port_mappings = [{
+        name          = "http"
+        containerPort = 80
+        hostPort      = 80
+        protocol      = "tcp"
+      }]
 
+      # IMPORTANT: use a STRING path, not a TF resource reference
       log_configuration = {
         log_driver = "awslogs"
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.api.name
+          awslogs-group         = "/aws/ecs/${var.project}-api/api"
           awslogs-region        = var.region
           awslogs-stream-prefix = "ecs"
         }
