@@ -41,11 +41,6 @@ resource "aws_security_group" "api_sg" {
   }
 }
 
-resource "aws_cloudwatch_log_group" "api" {
-  name              = "/ecs/${var.project}-api"
-  retention_in_days = 14
-}
-
 module "ecs" {
   source  = "terraform-aws-modules/ecs/aws"
   version = "~> 5.12"
