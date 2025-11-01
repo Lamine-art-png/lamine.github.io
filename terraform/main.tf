@@ -63,7 +63,6 @@ resource "aws_cloudwatch_log_group" "api" {
   name              = "/ecs/${var.project}-api"
   retention_in_days = 14
 }
-
 module "api_service" {
   source  = "terraform-aws-modules/ecs/aws//modules/service"
   version = "~> 5.12"
@@ -74,40 +73,39 @@ module "api_service" {
   memory                = 512
   desired_count         = var.desired_count
   launch_type           = "FARGATE"
-
-  # **Networking – make it truly public**
-  subnet_ids            = module.network.public_subnets
   assign_public_ip      = true
-  create_security_group = false
-  security_group_ids    = [aws_security_group.api_sg.id]
-
   enable_execute_command = true
   force_new_deployment   = true
 
-  # One container (map form)
-  container_definitions = {
-    api = {
-      image     = "public.ecr.aws/nginx/nginx:latest"
-      essential = true
+  subnet_ids         = module.network.public_subnets
+  security_group_ids = [aws_security_group.api_sg.id]
 
-      port_mappings = [{
-        name          = "http"
-        containerPort = 80
-        hostPort      = 80
-        protocol      = "tcp"
-      }]
-
-      log_configuration = {
-        log_driver = "awslogs"
+  # Hand ECS a JSON container definition (avoids schema mismatches)
+  container_definitions = jsonencode([
+    {
+      name       = "api"
+      image      = "public.ecr.aws/nginx/nginx:latest"
+      essential  = true
+      portMappings = [
+        {
+          name          = "http"
+          containerPort = 80
+          hostPort      = 80
+          protocol      = "tcp"
+        }
+      ]
+      logConfiguration = {
+        logDriver = "awslogs"
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.api.name
-          awslogs-region        = var.region
-          awslogs-stream-prefix = "ecs"
+          "awslogs-group"         = aws_cloudwatch_log_group.api.name
+          "awslogs-region"        = var.region
+          "awslogs-stream-prefix" = "ecs"
         }
       }
     }
-  }
+  ])
 }
+
 
       # IMPORTANT: use a STRING path, not a TF resource reference
       log_configuration = {
