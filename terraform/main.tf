@@ -47,7 +47,7 @@ module "ecs" {
 
   cluster_name = "${var.project}-cluster"
 
-  # Must be a MAP (module merges maps)
+  # must be a MAP (module merges maps)
   fargate_capacity_providers = {
     FARGATE = {
       default_capacity_provider_strategy = [{
@@ -58,7 +58,7 @@ module "ecs" {
   }
 }
 
-# CloudWatch logs group referenced by the container
+# CloudWatch log group used by the container
 resource "aws_cloudwatch_log_group" "api" {
   name              = "/ecs/${var.project}-api"
   retention_in_days = 14
@@ -68,26 +68,26 @@ module "api_service" {
   source  = "terraform-aws-modules/ecs/aws//modules/service"
   version = "~> 5.12"
 
-  name                    = "${var.project}-api"
-  cluster_arn             = module.ecs.cluster_arn
-  cpu                     = 256
-  memory                  = 512
-  desired_count           = var.desired_count
-  launch_type             = "FARGATE"
-  assign_public_ip        = true
-  enable_execute_command  = true
-  force_new_deployment    = true
+  name                   = "${var.project}-api"
+  cluster_arn            = module.ecs.cluster_arn
+  cpu                    = 256
+  memory                 = 512
+  desired_count          = var.desired_count
+  launch_type            = "FARGATE"
+  assign_public_ip       = true
+  enable_execute_command = true
+  force_new_deployment   = true
 
   subnet_ids         = module.network.public_subnets
   security_group_ids = [aws_security_group.api_sg.id]
 
-  # Hand ECS a JSON container definition
-  container_definitions = jsonencode([
-    {
-      name       = "api"
-      image      = "public.ecr.aws/nginx/nginx:latest"
-      essential  = true
-      portMappings = [
+  # Map-of-containers (keys = container names)
+  container_definitions = {
+    api = {
+      image     = "public.ecr.aws/nginx/nginx:latest"
+      essential = true
+
+      port_mappings = [
         {
           name          = "http"
           containerPort = 80
@@ -95,14 +95,15 @@ module "api_service" {
           protocol      = "tcp"
         }
       ]
-      logConfiguration = {
-        logDriver = "awslogs"
+
+      log_configuration = {
+        log_driver = "awslogs"
         options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.api.name
-          "awslogs-region"        = var.region
-          "awslogs-stream-prefix" = "ecs"
+          awslogs-group         = aws_cloudwatch_log_group.api.name
+          awslogs-region        = var.region
+          awslogs-stream-prefix = "ecs"
         }
       }
     }
-  ])
+  }
 }
