@@ -67,7 +67,7 @@ module "ecs" {
 # --- ECS Fargate Service (public, no ALB) ---
 module "api_service" {
   source  = "terraform-aws-modules/ecs/aws//modules/service"
-  version = "~> 5.11"
+  version = "~> 5.12"
 
   name          = "${var.project}-api"
   cluster_arn   = module.ecs.cluster_arn
@@ -76,26 +76,30 @@ module "api_service" {
   desired_count = var.desired_count
   launch_type   = "FARGATE"
 
-  # Fast pilot: put tasks in public subnets with a public IP
-  subnet_ids           = module.network.public_subnets
-  security_group_ids   = [aws_security_group.api_sg.id]
-  assign_public_ip     = true
-  force_new_deployment = true
+  # Fast pilot: public subnets + public IP (no ALB yet)
+  subnet_ids         = module.network.public_subnets
+  security_group_ids = [aws_security_group.api_sg.id]
+  assign_public_ip   = true
   enable_execute_command = true
+  force_new_deployment   = true
 
-  # Public image for smoke test
-  container_definitions = [
-    {
-      name      = "api"
+  # IMPORTANT: module expects this map-of-containers shape (snake_case keys)
+  container_definitions = {
+    api = {
       image     = "public.ecr.aws/nginx/nginx:latest"
       essential = true
 
-      portMappings = [
-        { containerPort = 80, hostPort = 80 }
+      port_mappings = [
+        {
+          name          = "http"
+          containerPort = 80
+          hostPort      = 80
+          protocol      = "tcp"
+        }
       ]
 
-      logConfiguration = {
-        logDriver = "awslogs"
+      log_configuration = {
+        log_driver = "awslogs"
         options = {
           awslogs-group         = aws_cloudwatch_log_group.api.name
           awslogs-region        = var.region
@@ -103,7 +107,7 @@ module "api_service" {
         }
       }
     }
-  ]
-
+  }
+}
   depends_on = [aws_cloudwatch_log_group.api]
 }
