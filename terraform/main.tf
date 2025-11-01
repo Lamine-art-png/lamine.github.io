@@ -47,7 +47,7 @@ module "ecs" {
 
   cluster_name = "${var.project}-cluster"
 
-  # must be a MAP (not a list) to satisfy the module's merge()
+  # Must be a MAP (module merges maps)
   fargate_capacity_providers = {
     FARGATE = {
       default_capacity_provider_strategy = [{
@@ -58,29 +58,30 @@ module "ecs" {
   }
 }
 
-# CloudWatch logs (if not already present)
+# CloudWatch logs group referenced by the container
 resource "aws_cloudwatch_log_group" "api" {
   name              = "/ecs/${var.project}-api"
   retention_in_days = 14
 }
+
 module "api_service" {
   source  = "terraform-aws-modules/ecs/aws//modules/service"
   version = "~> 5.12"
 
-  name                  = "${var.project}-api"
-  cluster_arn           = module.ecs.cluster_arn
-  cpu                   = 256
-  memory                = 512
-  desired_count         = var.desired_count
-  launch_type           = "FARGATE"
-  assign_public_ip      = true
-  enable_execute_command = true
-  force_new_deployment   = true
+  name                    = "${var.project}-api"
+  cluster_arn             = module.ecs.cluster_arn
+  cpu                     = 256
+  memory                  = 512
+  desired_count           = var.desired_count
+  launch_type             = "FARGATE"
+  assign_public_ip        = true
+  enable_execute_command  = true
+  force_new_deployment    = true
 
   subnet_ids         = module.network.public_subnets
   security_group_ids = [aws_security_group.api_sg.id]
 
-  # Hand ECS a JSON container definition (avoids schema mismatches)
+  # Hand ECS a JSON container definition
   container_definitions = jsonencode([
     {
       name       = "api"
@@ -104,18 +105,4 @@ module "api_service" {
       }
     }
   ])
-}
-
-
-      # IMPORTANT: use a STRING path, not a TF resource reference
-      log_configuration = {
-        log_driver = "awslogs"
-        options = {
-          awslogs-group         = "/aws/ecs/${var.project}-api/api"
-          awslogs-region        = var.region
-          awslogs-stream-prefix = "ecs"
-        }
-      }
-    }
-  }
 }
