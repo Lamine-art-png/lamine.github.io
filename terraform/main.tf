@@ -58,24 +58,33 @@ module "ecs" {
   }
 }
 
+# CloudWatch logs (if not already present)
+resource "aws_cloudwatch_log_group" "api" {
+  name              = "/ecs/${var.project}-api"
+  retention_in_days = 14
+}
+
 module "api_service" {
   source  = "terraform-aws-modules/ecs/aws//modules/service"
   version = "~> 5.12"
 
-  name                    = "${var.project}-api"
-  cluster_arn             = module.ecs.cluster_arn
-  cpu                     = 256
-  memory                  = 512
-  desired_count           = var.desired_count
-  launch_type             = "FARGATE"
-  assign_public_ip        = true
-  enable_execute_command  = true
-  force_new_deployment    = true
+  name                  = "${var.project}-api"
+  cluster_arn           = module.ecs.cluster_arn
+  cpu                   = 256
+  memory                = 512
+  desired_count         = var.desired_count
+  launch_type           = "FARGATE"
 
-  subnet_ids         = module.network.public_subnets
-  security_group_ids = [aws_security_group.api_sg.id]
+  # **Networking – make it truly public**
+  subnet_ids            = module.network.public_subnets
+  assign_public_ip      = true
+  create_security_group = false
+  security_group_ids    = [aws_security_group.api_sg.id]
 
-  # map-of-containers; key is container name
+  enable_execute_command = true
+  force_new_deployment   = true
+
+  # One container (map form)
   container_definitions = {
     api = {
       image     = "public.ecr.aws/nginx/nginx:latest"
@@ -87,6 +96,18 @@ module "api_service" {
         hostPort      = 80
         protocol      = "tcp"
       }]
+
+      log_configuration = {
+        log_driver = "awslogs"
+        options = {
+          awslogs-group         = aws_cloudwatch_log_group.api.name
+          awslogs-region        = var.region
+          awslogs-stream-prefix = "ecs"
+        }
+      }
+    }
+  }
+}
 
       # IMPORTANT: use a STRING path, not a TF resource reference
       log_configuration = {
