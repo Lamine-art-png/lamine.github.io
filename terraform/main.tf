@@ -2,10 +2,12 @@
 # terraform/main.tf  (us-west-1 pilot, NGINX)
 #############################################
 
+# Use two AZs in the region
 data "aws_availability_zones" "available" {
   state = "available"
 }
 
+# VPC with public & private subnets (NAT enabled for future needs)
 module "network" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.21"
@@ -21,9 +23,34 @@ module "network" {
   single_nat_gateway = true
 }
 
+# ECS cluster (capacity providers must be a MAP)
+module "ecs" {
+  source  = "terraform-aws-modules/ecs/aws"
+  version = "~> 5.12"
+
+  cluster_name = "${var.project}-cluster"
+
+  # Simple default capacity provider strategy on plain FARGATE
+  fargate_capacity_providers = {
+    FARGATE = {
+      default_capacity_provider_strategy = [{
+        base   = 1
+        weight = 100
+      }]
+    }
+  }
+}
+
+# Logs for the container
+resource "aws_cloudwatch_log_group" "api" {
+  name              = "/ecs/${var.project}-api"
+  retention_in_days = 14
+}
+
+# Security group (allow HTTP from the internet)
 resource "aws_security_group" "api_sg" {
   name        = "${var.project}-api-sg"
-  description = "Allow HTTP from internet"
+  description = "Allow HTTP"
   vpc_id      = module.network.vpc_id
 
   ingress {
@@ -41,39 +68,17 @@ resource "aws_security_group" "api_sg" {
   }
 }
 
-module "ecs" {
-  source  = "terraform-aws-modules/ecs/aws"
-  version = "~> 5.12"
-
-  cluster_name = "${var.project}-cluster"
-
-  # must be a MAP (module merges maps)
-  fargate_capacity_providers = {
-    FARGATE = {
-      default_capacity_provider_strategy = [{
-        base   = 1
-        weight = 100
-      }]
-    }
-  }
-}
-
-# CloudWatch log group used by the container
-resource "aws_cloudwatch_log_group" "api" {
-  name              = "/ecs/${var.project}-api"
-  retention_in_days = 14
-}
-
+# Minimal Fargate service running NGINX in public subnets
 module "api_service" {
   source  = "terraform-aws-modules/ecs/aws//modules/service"
   version = "~> 5.12"
 
   name                   = "${var.project}-api"
   cluster_arn            = module.ecs.cluster_arn
-  cpu                    = 256
-  memory                 = 512
   desired_count          = var.desired_count
   launch_type            = "FARGATE"
+  cpu                    = 256
+  memory                 = 512
   assign_public_ip       = true
   enable_execute_command = true
   force_new_deployment   = true
@@ -81,27 +86,28 @@ module "api_service" {
   subnet_ids         = module.network.public_subnets
   security_group_ids = [aws_security_group.api_sg.id]
 
-  # Map-of-containers (keys = container names)
+  # Prevent the submodule from auto-creating a duplicate log group
+  create_cloudwatch_log_group = false
+
+  # Map-of-containers (module expects a map, not a JSON string)
   container_definitions = {
     api = {
       image     = "public.ecr.aws/nginx/nginx:latest"
       essential = true
 
-      port_mappings = [
-        {
-          name          = "http"
-          containerPort = 80
-          hostPort      = 80
-          protocol      = "tcp"
-        }
-      ]
+      port_mappings = [{
+        name          = "http"
+        containerPort = 80
+        hostPort      = 80
+        protocol      = "tcp"
+      }]
 
       log_configuration = {
         log_driver = "awslogs"
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.api.name
-          awslogs-region        = var.region
-          awslogs-stream-prefix = "ecs"
+          "awslogs-group"         = aws_cloudwatch_log_group.api.name
+          "awslogs-region"        = var.region
+          "awslogs-stream-prefix" = "ecs"
         }
       }
     }
