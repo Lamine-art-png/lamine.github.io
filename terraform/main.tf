@@ -1,4 +1,5 @@
-# Use default VPC + its subnets to avoid VPC quota issues
+# main.tf — default VPC, unique SG name, no cluster CW log group creation
+
 data "aws_vpc" "default" {
   default = true
 }
@@ -10,9 +11,8 @@ data "aws_subnets" "in_default_vpc" {
   }
 }
 
-# Security group in the default VPC
 resource "aws_security_group" "api_sg" {
-  name        = "${var.project}-api-sg"
+  name_prefix = "${var.project}-api-sg-"     # <— avoids 'Duplicate' error
   description = "Allow HTTP from internet"
   vpc_id      = data.aws_vpc.default.id
 
@@ -29,14 +29,16 @@ resource "aws_security_group" "api_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  tags = { Name = "${var.project}-api-sg" }
 }
 
-# ECS cluster
 module "ecs" {
   source  = "terraform-aws-modules/ecs/aws"
   version = "~> 5.12"
 
-  cluster_name = "${var.project}-cluster"
+  cluster_name                 = "${var.project}-cluster"
+  create_cloudwatch_log_group  = false   # <— don't recreate existing cluster log group
 
   fargate_capacity_providers = {
     FARGATE = {
@@ -48,7 +50,6 @@ module "ecs" {
   }
 }
 
-# Fargate service with a single nginx container
 module "api_service" {
   source  = "terraform-aws-modules/ecs/aws//modules/service"
   version = "~> 5.12"
@@ -64,7 +65,6 @@ module "api_service" {
   force_new_deployment   = true
   platform_version       = "1.4.0"
 
-  # use two subnets from the default VPC
   subnet_ids         = slice(data.aws_subnets.in_default_vpc.ids, 0, 2)
   security_group_ids = [aws_security_group.api_sg.id]
 
@@ -81,9 +81,8 @@ module "api_service" {
         protocol      = "tcp"
       }]
 
-      # IMPORTANT: don't let Terraform create CW log groups; let the agent do it
+      # Let the agent create the task log group/stream if needed
       create_cloudwatch_log_group = false
-
       log_configuration = {
         log_driver = "awslogs"
         options = {
