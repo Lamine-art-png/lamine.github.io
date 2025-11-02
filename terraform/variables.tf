@@ -1,14 +1,4 @@
-variable "project" {
+variable "service_name" {
   type    = string
-  default = "agroai-manulife-pilot"
-}
-
-variable "region" {
-  type    = string
-  default = "us-west-1"
-}
-
-variable "desired_count" {
-  type    = number
-  default = 1
+  default = "agroai-manulife-pilot-api-v2"  # fallback if CI doesn't set it
 }
