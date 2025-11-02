@@ -1,21 +1,3 @@
-#############################################
-# terraform/main.tf  (us-west-1 pilot, Fargate)
-#############################################
-
-terraform {
-  required_version = ">= 1.5"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.62"
-    }
-  }
-}
-
-provider "aws" {
-  region = var.region
-}
-
 data "aws_availability_zones" "available" {
   state = "available"
 }
@@ -61,7 +43,7 @@ module "ecs" {
 
   cluster_name = "${var.project}-cluster"
 
-  # must be a MAP
+  # must be a map
   fargate_capacity_providers = {
     FARGATE = {
       default_capacity_provider_strategy = [{
@@ -70,6 +52,12 @@ module "ecs" {
       }]
     }
   }
+}
+
+# pre-create so ECS can write logs
+resource "aws_cloudwatch_log_group" "api" {
+  name              = "/aws/ecs/${var.project}-api"
+  retention_in_days = 14
 }
 
 module "api_service" {
@@ -85,18 +73,15 @@ module "api_service" {
   assign_public_ip       = true
   enable_execute_command = true
   force_new_deployment   = true
-  platform_version       = "1.4.0"
 
   subnet_ids         = module.network.public_subnets
   security_group_ids = [aws_security_group.api_sg.id]
 
-  # Single container, keep NGINX in the foreground so ECS sees it as alive
+  # start with the AWS sample container to prove networking/logs
   container_definitions = {
     api = {
-      image     = "public.ecr.aws/nginx/nginx:stable"
+      image     = "public.ecr.aws/ecs-sample/ecs-sample:latest"
       essential = true
-
-      command = ["nginx", "-g", "daemon off;"]
 
       port_mappings = [{
         name          = "http"
@@ -108,10 +93,9 @@ module "api_service" {
       log_configuration = {
         log_driver = "awslogs"
         options = {
-          awslogs-group         = "/aws/ecs/${var.project}-api"
+          awslogs-group         = aws_cloudwatch_log_group.api.name
           awslogs-region        = var.region
           awslogs-stream-prefix = "api"
-          awslogs-create-group  = "true"
         }
       }
     }
