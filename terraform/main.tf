@@ -1,13 +1,25 @@
 #############################################
-# terraform/main.tf  (us-west-1 pilot, NGINX)
+# terraform/main.tf  (us-west-1 pilot, Fargate)
 #############################################
 
-# --- Availability Zones (pick two) ---
+terraform {
+  required_version = ">= 1.5"
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 5.62"
+    }
+  }
+}
+
+provider "aws" {
+  region = var.region
+}
+
 data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# --- VPC / Subnets / NAT ---
 module "network" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.21"
@@ -23,7 +35,6 @@ module "network" {
   single_nat_gateway = true
 }
 
-# --- Security group for the service (HTTP in / all out) ---
 resource "aws_security_group" "api_sg" {
   name        = "${var.project}-api-sg"
   description = "Allow HTTP from internet"
@@ -44,13 +55,13 @@ resource "aws_security_group" "api_sg" {
   }
 }
 
-# --- ECS Cluster (Fargate capacity provider as a MAP) ---
 module "ecs" {
   source  = "terraform-aws-modules/ecs/aws"
   version = "~> 5.12"
 
   cluster_name = "${var.project}-cluster"
 
+  # must be a MAP
   fargate_capacity_providers = {
     FARGATE = {
       default_capacity_provider_strategy = [{
@@ -61,20 +72,13 @@ module "ecs" {
   }
 }
 
-# --- CloudWatch Logs: group MUST exist before task starts ---
-resource "aws_cloudwatch_log_group" "api" {
-  name              = "/aws/ecs/${var.project}-api"
-  retention_in_days = 14
-}
-
-# --- ECS Service (Fargate) running NGINX in public subnets ---
 module "api_service" {
   source  = "terraform-aws-modules/ecs/aws//modules/service"
   version = "~> 5.12"
 
   name                   = "${var.project}-api"
   cluster_arn            = module.ecs.cluster_arn
-  desired_count          = 1
+  desired_count          = var.desired_count
   launch_type            = "FARGATE"
   cpu                    = 256
   memory                 = 512
@@ -86,31 +90,29 @@ module "api_service" {
   subnet_ids         = module.network.public_subnets
   security_group_ids = [aws_security_group.api_sg.id]
 
-  # optional but helpful
-  deployment_circuit_breaker = { enable = true, rollback = true }
-
+  # Single container, keep NGINX in the foreground so ECS sees it as alive
   container_definitions = {
-  api = {
-    image     = "public.ecr.aws/nginx/nginx:stable"
-    essential = true
+    api = {
+      image     = "public.ecr.aws/nginx/nginx:stable"
+      essential = true
 
-    # keep nginx as PID 1 so ECS thinks the container is alive
-    command = ["nginx", "-g", "daemon off;"]
+      command = ["nginx", "-g", "daemon off;"]
 
-    port_mappings = [{
-      name          = "http"
-      containerPort = 80
-      hostPort      = 80
-      protocol      = "tcp"
-    }]
+      port_mappings = [{
+        name          = "http"
+        containerPort = 80
+        hostPort      = 80
+        protocol      = "tcp"
+      }]
 
-    log_configuration = {
-      log_driver = "awslogs"
-      options = {
-        awslogs-group         = "/aws/ecs/${var.project}-api"
-        awslogs-region        = var.region
-        awslogs-stream-prefix = "api"
-        awslogs-create-group  = "true"
+      log_configuration = {
+        log_driver = "awslogs"
+        options = {
+          awslogs-group         = "/aws/ecs/${var.project}-api"
+          awslogs-region        = var.region
+          awslogs-stream-prefix = "api"
+          awslogs-create-group  = "true"
+        }
       }
     }
   }
