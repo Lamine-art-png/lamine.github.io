@@ -1,6 +1,4 @@
-data "aws_availability_zones" "available" {
-  state = "available"
-}
+data "aws_availability_zones" "available" { state = "available" }
 
 module "network" {
   source  = "terraform-aws-modules/vpc/aws"
@@ -22,19 +20,8 @@ resource "aws_security_group" "api_sg" {
   description = "Allow HTTP from internet"
   vpc_id      = module.network.vpc_id
 
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  ingress { from_port = 80 to_port = 80 protocol = "tcp" cidr_blocks = ["0.0.0.0/0"] }
+  egress  { from_port = 0  to_port = 0  protocol = "-1"  cidr_blocks = ["0.0.0.0/0"] }
 }
 
 module "ecs" {
@@ -43,21 +30,14 @@ module "ecs" {
 
   cluster_name = "${var.project}-cluster"
 
-  # must be a map
+  # Avoid module creating its own CW log group (prevents duplicate error)
+  create_cloudwatch_log_group = false
+
   fargate_capacity_providers = {
     FARGATE = {
-      default_capacity_provider_strategy = [{
-        base   = 1
-        weight = 100
-      }]
+      default_capacity_provider_strategy = [{ base = 1, weight = 100 }]
     }
   }
-}
-
-# pre-create so ECS can write logs
-resource "aws_cloudwatch_log_group" "api" {
-  name              = "/aws/ecs/${var.project}-api"
-  retention_in_days = 14
 }
 
 module "api_service" {
@@ -73,15 +53,16 @@ module "api_service" {
   assign_public_ip       = true
   enable_execute_command = true
   force_new_deployment   = true
+  platform_version       = "1.4.0"
 
   subnet_ids         = module.network.public_subnets
   security_group_ids = [aws_security_group.api_sg.id]
 
-  # start with the AWS sample container to prove networking/logs
   container_definitions = {
     api = {
-      image     = "public.ecr.aws/ecs-sample/ecs-sample:latest"
+      image     = "public.ecr.aws/ecs-sample/ecs-sample:latest" # simple, known-good
       essential = true
+      command   = ["nginx", "-g", "daemon off;"]
 
       port_mappings = [{
         name          = "http"
@@ -93,9 +74,10 @@ module "api_service" {
       log_configuration = {
         log_driver = "awslogs"
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.api.name
+          awslogs-group         = "/aws/ecs/${var.project}-api"
           awslogs-region        = var.region
           awslogs-stream-prefix = "api"
+          awslogs-create-group  = "true"   # task agent creates stream/group if needed
         }
       }
     }
