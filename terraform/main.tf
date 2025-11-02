@@ -90,25 +90,27 @@ module "api_service" {
   deployment_circuit_breaker = { enable = true, rollback = true }
 
   container_definitions = {
-    api = {
-      image     = "public.ecr.aws/ecs-sample/amazon-ecs-sample:latest"
-      essential = true
+  api = {
+    image     = "public.ecr.aws/nginx/nginx:stable"
+    essential = true
 
-      port_mappings = [{
-        name          = "http"
-        containerPort = 80
-        hostPort      = 80
-        protocol      = "tcp"
-      }]
+    # keep nginx as PID 1 so ECS thinks the container is alive
+    command = ["nginx", "-g", "daemon off;"]
 
-      log_configuration = {
-        log_driver = "awslogs"
-        options = {
-          awslogs-group         = "/aws/ecs/${var.project}-api"
-          awslogs-region        = var.region
-          awslogs-stream-prefix = "api"
-          awslogs-create-group  = "true"
-        }
+    port_mappings = [{
+      name          = "http"
+      containerPort = 80
+      hostPort      = 80
+      protocol      = "tcp"
+    }]
+
+    log_configuration = {
+      log_driver = "awslogs"
+      options = {
+        awslogs-group         = "/aws/ecs/${var.project}-api"
+        awslogs-region        = var.region
+        awslogs-stream-prefix = "api"
+        awslogs-create-group  = "true"
       }
     }
   }
