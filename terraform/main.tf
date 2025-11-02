@@ -1,9 +1,8 @@
-#############################################
+ #############################################
 # ECS Fargate service in the default VPC
-# (no custom VPC, no log-group creation)
 #############################################
 
-# Use the default VPC + its default subnets
+# Use the account’s default VPC and its default subnets
 data "aws_vpc" "default" {
   default = true
 }
@@ -19,7 +18,12 @@ data "aws_subnets" "default_vpc" {
   }
 }
 
-# Security group (unique name to avoid “Duplicate”)
+locals {
+  subnets        = slice(data.aws_subnets.default_vpc.ids, 0, 2)
+  log_group_name = "/aws/ecs/${var.project}-api"
+}
+
+# Security group (unique name via prefix)
 resource "aws_security_group" "api_sg" {
   name_prefix = "${var.project}-api-sg-"
   description = "Allow HTTP from internet"
@@ -42,7 +46,7 @@ resource "aws_security_group" "api_sg" {
   tags = { Name = "${var.project}-api-sg" }
 }
 
-# ECS cluster (don’t try to create a cluster log group)
+# ECS cluster (do NOT create a cluster CW log group)
 module "ecs" {
   source  = "terraform-aws-modules/ecs/aws"
   version = "~> 5.12"
@@ -60,7 +64,7 @@ module "ecs" {
   }
 }
 
-# Fargate service (don’t let the module create any log group)
+# Fargate service
 module "api_service" {
   source  = "terraform-aws-modules/ecs/aws//modules/service"
   version = "~> 5.12"
@@ -76,10 +80,7 @@ module "api_service" {
   force_new_deployment   = true
   platform_version       = "1.4.0"
 
-  # IMPORTANT: prevent module auto-creating CW log groups (avoids AlreadyExists)
-  create_cloudwatch_log_group = false
-
-  subnet_ids         = slice(data.aws_subnets.default_vpc.ids, 0, 2)
+  subnet_ids         = local.subnets
   security_group_ids = [aws_security_group.api_sg.id]
 
   container_definitions = {
@@ -98,10 +99,9 @@ module "api_service" {
       log_configuration = {
         log_driver = "awslogs"
         options = {
-          awslogs-group         = "/aws/ecs/${var.project}-api" # can already exist
+          awslogs-group         = local.log_group_name
           awslogs-region        = var.region
           awslogs-stream-prefix = "api"
-          # no creation here; module-wide flag above prevents create
         }
       }
     }
