@@ -69,7 +69,7 @@ module "api_service" {
   source  = "terraform-aws-modules/ecs/aws//modules/service"
   version = "~> 5.12"
 
-  name                   = "${var.project}-api"
+  name = var.service_name
   cluster_arn            = module.ecs.cluster_arn
   desired_count          = var.desired_count
   launch_type            = "FARGATE"
