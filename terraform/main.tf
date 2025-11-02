@@ -81,15 +81,18 @@ module "api_service" {
   assign_public_ip       = true
   enable_execute_command = true
   force_new_deployment   = true
+  platform_version       = "1.4.0"
 
   subnet_ids         = module.network.public_subnets
   security_group_ids = [aws_security_group.api_sg.id]
 
-  # Map-of-containers (what the module expects)
   container_definitions = {
     api = {
-      image     = "public.ecr.aws/nginx/nginx:latest"
+      image     = "public.ecr.aws/nginx/nginx:stable"
       essential = true
+
+      # keep the main process in the foreground so the container doesn't exit
+      command = ["nginx", "-g", "daemon off;"]
 
       port_mappings = [{
         name          = "http"
@@ -98,12 +101,22 @@ module "api_service" {
         protocol      = "tcp"
       }]
 
+      # simple local health check
+      health_check = {
+        command     = ["CMD-SHELL", "curl -f http://localhost:80/ || exit 1"]
+        interval    = 10
+        timeout     = 5
+        retries     = 3
+        startPeriod = 10
+      }
+
       log_configuration = {
         log_driver = "awslogs"
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.api.name
+          awslogs-group         = "/aws/ecs/${var.project}-api"
           awslogs-region        = var.region
           awslogs-stream-prefix = "api"
+          awslogs-create-group  = "true"
         }
       }
     }
