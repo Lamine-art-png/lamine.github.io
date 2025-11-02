@@ -74,7 +74,7 @@ module "api_service" {
 
   name                   = "${var.project}-api"
   cluster_arn            = module.ecs.cluster_arn
-  desired_count          = var.desired_count
+  desired_count          = 1
   launch_type            = "FARGATE"
   cpu                    = 256
   memory                 = 512
@@ -86,13 +86,13 @@ module "api_service" {
   subnet_ids         = module.network.public_subnets
   security_group_ids = [aws_security_group.api_sg.id]
 
+  # optional but helpful
+  deployment_circuit_breaker = { enable = true, rollback = true }
+
   container_definitions = {
     api = {
-      image     = "public.ecr.aws/nginx/nginx:stable"
+      image     = "public.ecr.aws/ecs-sample/amazon-ecs-sample:latest"
       essential = true
-
-      # keep the main process in the foreground so the container doesn't exit
-      command = ["nginx", "-g", "daemon off;"]
 
       port_mappings = [{
         name          = "http"
@@ -100,15 +100,6 @@ module "api_service" {
         hostPort      = 80
         protocol      = "tcp"
       }]
-
-      # simple local health check
-      health_check = {
-        command     = ["CMD-SHELL", "curl -f http://localhost:80/ || exit 1"]
-        interval    = 10
-        timeout     = 5
-        retries     = 3
-        startPeriod = 10
-      }
 
       log_configuration = {
         log_driver = "awslogs"
