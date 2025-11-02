@@ -47,7 +47,7 @@ module "ecs" {
 
   cluster_name = "${var.project}-cluster"
 
-  # Must be a MAP (not a list)
+  # Must be a MAP, not a list
   fargate_capacity_providers = {
     FARGATE = {
       default_capacity_provider_strategy = [{
@@ -62,20 +62,20 @@ module "api_service" {
   source  = "terraform-aws-modules/ecs/aws//modules/service"
   version = "~> 5.12"
 
-  name                   = "${var.project}-api"
-  cluster_arn            = module.ecs.cluster_arn
-  desired_count          = var.desired_count
-  launch_type            = "FARGATE"
-  cpu                    = 256
-  memory                 = 512
-  assign_public_ip       = true
-  enable_execute_command = true
-  force_new_deployment   = true
+  name                    = "${var.project}-api"
+  cluster_arn             = module.ecs.cluster_arn
+  desired_count           = var.desired_count
+  launch_type             = "FARGATE"
+  cpu                     = 256
+  memory                  = 512
+  assign_public_ip        = true
+  enable_execute_command  = true
+  force_new_deployment    = true
+  subnet_ids              = module.network.public_subnets
+  security_group_ids      = [aws_security_group.api_sg.id]
+  health_check_grace_period_seconds = 0
 
-  subnet_ids         = module.network.public_subnets
-  security_group_ids = [aws_security_group.api_sg.id]
-
-  # Map-of-containers (expected by the module)
+  # Map-of-containers (what the module expects)
   container_definitions = {
     api = {
       image     = "public.ecr.aws/nginx/nginx:latest"
@@ -88,13 +88,14 @@ module "api_service" {
         protocol      = "tcp"
       }]
 
-      # Let the module create this log group; use a fresh path to avoid conflicts
+      # Let the module create the log group it needs.
+      # Use ONE name consistently. This is the one your task will look for.
       log_configuration = {
         log_driver = "awslogs"
         options = {
-          awslogs-group         = "/aws/ecs/${var.project}-api/nginx"
+          awslogs-group         = "/aws/ecs/${var.project}-api"
           awslogs-region        = var.region
-          awslogs-stream-prefix = "ecs"
+          awslogs-stream-prefix = "api"
         }
       }
     }
