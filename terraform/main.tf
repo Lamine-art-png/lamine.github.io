@@ -2,25 +2,12 @@
 # terraform/main.tf  (us-west-1 pilot, NGINX)
 #############################################
 
-terraform {
-  required_version = ">= 1.6.0"
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.60"
-    }
-  }
-}
-
-provider "aws" {
-  region = var.region
-}
-
+# --- Availability Zones (pick two) ---
 data "aws_availability_zones" "available" {
   state = "available"
 }
 
-# ---------- VPC / Networking ----------
+# --- VPC / Subnets / NAT ---
 module "network" {
   source  = "terraform-aws-modules/vpc/aws"
   version = "~> 5.21"
@@ -29,30 +16,41 @@ module "network" {
   cidr = var.vpc_cidr
 
   azs             = slice(data.aws_availability_zones.available.names, 0, 2)
-  public_subnets  = ["10.42.101.0/24", "10.42.102.0/24"]
   private_subnets = ["10.42.1.0/24", "10.42.2.0/24"]
+  public_subnets  = ["10.42.101.0/24", "10.42.102.0/24"]
 
   enable_nat_gateway = true
   single_nat_gateway = true
 }
 
+# --- Security group for the service (HTTP in / all out) ---
 resource "aws_security_group" "api_sg" {
   name        = "${var.project}-api-sg"
   description = "Allow HTTP from internet"
   vpc_id      = module.network.vpc_id
 
-  ingress { from_port = 80 to_port = 80 protocol = "tcp" cidr_blocks = ["0.0.0.0/0"] }
-  egress  { from_port = 0  to_port = 0  protocol = "-1"   cidr_blocks = ["0.0.0.0/0"] }
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
 }
 
-# ---------- ECS Cluster ----------
+# --- ECS Cluster (Fargate capacity provider as a MAP) ---
 module "ecs" {
   source  = "terraform-aws-modules/ecs/aws"
   version = "~> 5.12"
 
   cluster_name = "${var.project}-cluster"
 
-  # Must be a MAP
   fargate_capacity_providers = {
     FARGATE = {
       default_capacity_provider_strategy = [{
@@ -63,13 +61,13 @@ module "ecs" {
   }
 }
 
-# ---------- CloudWatch Logs ----------
+# --- CloudWatch Logs: group MUST exist before task starts ---
 resource "aws_cloudwatch_log_group" "api" {
   name              = "/aws/ecs/${var.project}-api"
   retention_in_days = 14
 }
 
-# ---------- ECS Service (Fargate, NGINX) ----------
+# --- ECS Service (Fargate) running NGINX in public subnets ---
 module "api_service" {
   source  = "terraform-aws-modules/ecs/aws//modules/service"
   version = "~> 5.12"
@@ -83,7 +81,6 @@ module "api_service" {
   assign_public_ip       = true
   enable_execute_command = true
   force_new_deployment   = true
-  platform_version       = "1.4.0"
 
   subnet_ids         = module.network.public_subnets
   security_group_ids = [aws_security_group.api_sg.id]
@@ -104,16 +101,11 @@ module "api_service" {
       log_configuration = {
         log_driver = "awslogs"
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.api.name   # <- exact group
+          awslogs-group         = aws_cloudwatch_log_group.api.name
           awslogs-region        = var.region
           awslogs-stream-prefix = "api"
-          # optional safety if you grant CreateLogGroup on the exec role:
-          # awslogs-create-group = "true"
         }
       }
     }
   }
-
-  # Make sure the log group exists before tasks launch
-  depends_on = [aws_cloudwatch_log_group.api]
 }
