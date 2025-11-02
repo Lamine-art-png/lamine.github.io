@@ -1,22 +1,16 @@
-#############################################
-# ECS on Fargate in the *default VPC*
-# - No new VPC/NAT/IGW (avoids VPCLimitExceeded)
-# - Container creates its own CloudWatch Logs group
-#############################################
-
-# Use the region’s default VPC and its subnets
+# Use default VPC + its subnets to avoid VPC quota issues
 data "aws_vpc" "default" {
   default = true
 }
 
-data "aws_subnets" "default_vpc_subnets" {
+data "aws_subnets" "in_default_vpc" {
   filter {
     name   = "vpc-id"
     values = [data.aws_vpc.default.id]
   }
 }
 
-# Security Group (HTTP open; unrestricted egress)
+# Security group in the default VPC
 resource "aws_security_group" "api_sg" {
   name        = "${var.project}-api-sg"
   description = "Allow HTTP from internet"
@@ -37,7 +31,7 @@ resource "aws_security_group" "api_sg" {
   }
 }
 
-# ECS Cluster (Fargate)
+# ECS cluster
 module "ecs" {
   source  = "terraform-aws-modules/ecs/aws"
   version = "~> 5.12"
@@ -54,7 +48,7 @@ module "ecs" {
   }
 }
 
-# One-container service (nginx for a clean health check)
+# Fargate service with a single nginx container
 module "api_service" {
   source  = "terraform-aws-modules/ecs/aws//modules/service"
   version = "~> 5.12"
@@ -65,12 +59,13 @@ module "api_service" {
   launch_type            = "FARGATE"
   cpu                    = 256
   memory                 = 512
-  platform_version       = "1.4.0"
   assign_public_ip       = true
   enable_execute_command = true
   force_new_deployment   = true
+  platform_version       = "1.4.0"
 
-  subnet_ids         = data.aws_subnets.default_vpc_subnets.ids
+  # use two subnets from the default VPC
+  subnet_ids         = slice(data.aws_subnets.in_default_vpc.ids, 0, 2)
   security_group_ids = [aws_security_group.api_sg.id]
 
   container_definitions = {
@@ -86,10 +81,12 @@ module "api_service" {
         protocol      = "tcp"
       }]
 
+      # IMPORTANT: don't let Terraform create CW log groups; let the agent do it
+      create_cloudwatch_log_group = false
+
       log_configuration = {
         log_driver = "awslogs"
         options = {
-          # Let the task create it on first run — avoids “already exists” in TF
           awslogs-group         = "/aws/ecs/${var.project}-api"
           awslogs-region        = var.region
           awslogs-stream-prefix = "api"
