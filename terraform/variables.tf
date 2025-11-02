@@ -1,4 +1,3 @@
-# terraform/variables.tf
 variable "region" {
   type    = string
   default = "us-west-1"
@@ -7,11 +6,6 @@ variable "region" {
 variable "project" {
   type    = string
   default = "agroai-manulife-pilot"
-}
-
-variable "env" {
-  type    = string
-  default = "dev"
 }
 
 variable "vpc_cidr" {
