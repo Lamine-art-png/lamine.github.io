@@ -2,17 +2,20 @@ name: CD - Terraform apply (us-west-1)
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
     paths:
-      - '**.tf'
-      - '.github/workflows/cd.yml'
+      - "**.tf"
+      - ".github/workflows/cd.yml"
 
 jobs:
   tf-apply:
     runs-on: ubuntu-latest
-    permissions:            # <-- must be here (job-level), NOT under env
+
+    # Must be at the job level (not inside env)
+    permissions:
       id-token: write
       contents: read
+
     env:
       AWS_REGION: us-west-1
       AWS_DEFAULT_REGION: us-west-1
