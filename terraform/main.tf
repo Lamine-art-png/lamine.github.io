@@ -1,23 +1,23 @@
-locals {
-  service_name   = var.service_name != "" ? var.service_name : "${var.project}-api"
-  log_group_name = "/aws/ecs/${local.service_name}/api"
-}
-
-# Use default VPC (avoids VPC quota issues)
+# Use default VPC + subnets
 data "aws_vpc" "default" {
   default = true
 }
 
-data "aws_subnets" "default_vpc" {
+data "aws_subnets" "in_default_vpc" {
   filter {
     name   = "vpc-id"
     values = [data.aws_vpc.default.id]
   }
 }
 
-# Security group for the task
+locals {
+  svc_name       = length(var.service_name) > 0 ? var.service_name : "${var.project}-api"
+  log_group_name = "/aws/ecs/${local.svc_name}"
+}
+
+# SG with proper multi-line blocks
 resource "aws_security_group" "api_sg" {
-  name_prefix = "${local.service_name}-sg-"
+  name_prefix = "${var.project}-api-sg-"
   description = "Allow HTTP from internet"
   vpc_id      = data.aws_vpc.default.id
 
@@ -35,10 +35,12 @@ resource "aws_security_group" "api_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = { Name = "${local.service_name}-sg" }
+  tags = {
+    Name = "${var.project}-api-sg"
+  }
 }
 
-# ECS cluster (no extra CloudWatch group created here)
+# ECS cluster
 module "ecs" {
   source  = "terraform-aws-modules/ecs/aws"
   version = "~> 5.12"
@@ -55,12 +57,12 @@ module "ecs" {
   }
 }
 
-# Fargate service with a single nginx container
+# Fargate service
 module "api_service" {
   source  = "terraform-aws-modules/ecs/aws//modules/service"
   version = "~> 5.12"
 
-  name                   = local.service_name
+  name                   = local.svc_name
   cluster_arn            = module.ecs.cluster_arn
   desired_count          = var.desired_count
   launch_type            = "FARGATE"
@@ -71,14 +73,13 @@ module "api_service" {
   force_new_deployment   = true
   platform_version       = "1.4.0"
 
-  subnet_ids         = slice(data.aws_subnets.default_vpc.ids, 0, 2)
+  subnet_ids         = slice(data.aws_subnets.in_default_vpc.ids, 0, 2)
   security_group_ids = [aws_security_group.api_sg.id]
 
   container_definitions = {
     api = {
       image     = "public.ecr.aws/nginx/nginx:stable"
       essential = true
-      command   = ["nginx", "-g", "daemon off;"]
 
       port_mappings = [{
         name          = "http"
@@ -87,12 +88,14 @@ module "api_service" {
         protocol      = "tcp"
       }]
 
+      # Let the agent create/use the log group; make the name unique per run
       log_configuration = {
         log_driver = "awslogs"
         options = {
           awslogs-group         = local.log_group_name
           awslogs-region        = var.region
           awslogs-stream-prefix = "api"
+          awslogs-create-group  = "true"
         }
       }
     }
