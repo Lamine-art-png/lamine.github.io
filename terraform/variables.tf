@@ -8,13 +8,13 @@ variable "project" {
   default = "agroai-manulife-pilot"
 }
 
+# Optional: CI can override with TF_VAR_service_name
+variable "service_name" {
+  type    = string
+  default = ""
+}
+
 variable "desired_count" {
   type    = number
   default = 1
-}
-
-/* Optional. CI will pass a unique value to avoid name/log-group collisions. */
-variable "service_name" {
-  type    = string
-  default = ""  # when empty, we'll derive from var.project
 }
