@@ -1,3 +1,0 @@
-output "cluster_arn"     { value = module.ecs.cluster_arn }
-output "service_name"    { value = var.service_name }
-output "log_group_name"  { value = local.log_group_name }
