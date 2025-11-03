@@ -2,12 +2,9 @@ name: CD - Terraform apply (us-west-1)
 
 on:
   push:
-    branches: [main]
-    paths:
-      - '**/*.tf'
-      - '.github/workflows/cd.yml'
+    branches: [ "main" ]
+    paths: [ "**.tf", ".github/workflows/cd.yml" ]
 
-# OIDC permissions must be at workflow (or job) level, not inside env
 permissions:
   id-token: write
   contents: read
@@ -18,32 +15,17 @@ jobs:
     env:
       AWS_REGION: us-west-1
       AWS_DEFAULT_REGION: us-west-1
-      # Makes the ECS service name unique per run to avoid "not idempotent" errors
       TF_VAR_service_name: agroai-manulife-pilot-api-${{ github.run_id }}
-
     steps:
       - uses: actions/checkout@v4
-
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          role-session-name: gha-${{ github.run_id }}
           aws-region: us-west-1
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.7.5
-
-      - name: Terraform Init
-        run: terraform init -reconfigure -input=false
-
-      - name: Terraform Validate
-        run: terraform validate
-
-      - name: Terraform Plan
-        run: terraform plan -input=false -out=tfplan
-
-      - name: Terraform Apply
-        run: terraform apply -input=false -auto-approve tfplan
+      - uses: hashicorp/setup-terraform@v3
+        with: { terraform_version: 1.7.5 }
+      - run: terraform init -reconfigure -input=false
+      - run: terraform validate
+      - run: terraform plan -input=false -out=tfplan
+      - run: terraform apply -input=false -auto-approve tfplan
