@@ -2,34 +2,20 @@ name: CD - Terraform apply (us-west-1)
 
 on:
   push:
-    branches: [ main ]
+    branches: [ "main" ]
     paths:
-      - 'terraform/**'
+      - '**.tf'
       - '.github/workflows/cd.yml'
-  workflow_dispatch:
-
-permissions:
-  id-token: write
-  contents: read
-
-concurrency:
-  group: tf-${{ github.ref }}
-  cancel-in-progress: true
-
-env:
-  AWS_REGION: us-west-1
-  AWS_DEFAULT_REGION: us-west-1
-  # pass a unique ECS service/log group name into Terraform each run
-  TF_VAR_service_name: agroai-manulife-pilot-api-${{ github.run_id }}
 
 jobs:
-  tf_apply:
-    name: Terraform init/plan/apply
+  tf-apply:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-        working-directory: terraform
+    env:
+      AWS_REGION: us-west-1
+      AWS_DEFAULT_REGION: us-west-1
+      TF_VAR_service_name: agroai-manulife-pilot-api-${{ github.run_id }}
+      # Defaults in variables.tf cover region/project/desired_count,
+      # override in repo/Org env if you want.
 
     steps:
       - uses: actions/checkout@v4
@@ -37,42 +23,22 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: us-west-1
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.7.5
 
-      - name: Terraform init (reconfigure)
+      - name: Terraform Init
         run: terraform init -reconfigure -input=false
 
-      - name: Terraform fmt (auto-fix)
-        run: terraform fmt -recursive
-
-      - name: Terraform validate
+      - name: Terraform Validate
         run: terraform validate
 
-      - name: Terraform plan
-        run: terraform plan -out=tfplan -input=false
+      - name: Terraform Plan
+        run: terraform plan -input=false -out=tfplan
 
-      - name: Terraform apply
+      - name: Terraform Apply
         run: terraform apply -input=false -auto-approve tfplan
-
-      - name: Capture Terraform outputs (JSON)
-        run: terraform output -json | tee tf-outputs.json
-
-      - name: Upload outputs artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: tf-outputs
-          path: tf-outputs.json
-          retention-days: 5
-
-      - name: Add outputs to job summary
-        run: |
-          echo "## Terraform Outputs" >> $GITHUB_STEP_SUMMARY
-          echo '```json' >> $GITHUB_STEP_SUMMARY
-          cat tf-outputs.json >> $GITHUB_STEP_SUMMARY
-          echo '```' >> $GITHUB_STEP_SUMMARY
