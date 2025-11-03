@@ -19,29 +19,38 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write
+      id-token: write   # OIDC token for AWS
+
+    # IMPORTANT: run Terraform from the terraform/ dir
     defaults:
       run:
-        working-directory: terraform   # ← this is the key
+        working-directory: terraform
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
       - name: Debug layout (one-time)
         run: |
           echo "PWD=$(pwd)"
           echo "Root files:"; ls -la ..
           echo "Terraform dir:"; ls -la
-          echo "variables.tf preview:"; sed -n '1,60p' variables.tf
+          echo "--- variables.tf ---"; sed -n '1,120p' variables.tf || true
 
-      - uses: hashicorp/setup-terraform@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: 1.7.5
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-session-name: gha-terraform
           aws-region: ${{ secrets.AWS_REGION }}
+
+      - name: Verify caller identity
+        run: aws sts get-caller-identity
 
       - name: Init
         run: terraform init -reconfigure -upgrade
