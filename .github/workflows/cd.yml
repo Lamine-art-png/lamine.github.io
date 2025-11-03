@@ -11,7 +11,6 @@ jobs:
   tf-apply:
     runs-on: ubuntu-latest
 
-    # Must be at the job level (not inside env)
     permissions:
       id-token: write
       contents: read
@@ -27,9 +26,9 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: us-west-1
+          role-to-assume: arn:aws:iam::292039821285:role/github-oidc-terraform-deployer
           role-session-name: gha-${{ github.run_id }}
+          aws-region: us-west-1
 
       - name: Verify caller identity
         run: aws sts get-caller-identity
