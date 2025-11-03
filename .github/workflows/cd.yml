@@ -2,30 +2,48 @@ name: CD - Terraform apply (us-west-1)
 
 on:
   push:
-    branches: [ "main" ]
-    paths: [ "**.tf", ".github/workflows/cd.yml" ]
-
-permissions:
-  id-token: write
-  contents: read
+    branches: [ main ]
+    paths:
+      - '**.tf'
+      - '.github/workflows/cd.yml'
 
 jobs:
   tf-apply:
     runs-on: ubuntu-latest
+    permissions:            # <-- must be here (job-level), NOT under env
+      id-token: write
+      contents: read
     env:
       AWS_REGION: us-west-1
       AWS_DEFAULT_REGION: us-west-1
       TF_VAR_service_name: agroai-manulife-pilot-api-${{ github.run_id }}
+
     steps:
       - uses: actions/checkout@v4
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-west-1
-      - uses: hashicorp/setup-terraform@v3
-        with: { terraform_version: 1.7.5 }
-      - run: terraform init -reconfigure -input=false
-      - run: terraform validate
-      - run: terraform plan -input=false -out=tfplan
-      - run: terraform apply -input=false -auto-approve tfplan
+          role-session-name: gha-${{ github.run_id }}
+
+      - name: Verify caller identity
+        run: aws sts get-caller-identity
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.7.5
+
+      - name: Terraform Init
+        run: terraform init -reconfigure -input=false
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        run: terraform plan -input=false -out=tfplan
+
+      - name: Terraform Apply
+        run: terraform apply -input=false -auto-approve tfplan
