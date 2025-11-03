@@ -19,7 +19,7 @@ concurrency:
 env:
   AWS_REGION: us-west-1
   AWS_DEFAULT_REGION: us-west-1
-  # 👇 This passes a unique service name into Terraform (maps to var.service_name)
+  # pass a unique ECS service/log group name into Terraform each run
   TF_VAR_service_name: agroai-manulife-pilot-api-${{ github.run_id }}
 
 jobs:
