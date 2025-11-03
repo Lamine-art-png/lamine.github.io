@@ -19,9 +19,8 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: read
-      id-token: write   # OIDC token for AWS
+      id-token: write   # REQUIRED for OIDC
 
-    # IMPORTANT: run Terraform from the terraform/ dir
     defaults:
       run:
         working-directory: terraform
@@ -30,12 +29,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Debug layout (one-time)
+      - name: Assert required secrets exist (no values printed)
+        env:
+          ROLE:   ${{ secrets.AWS_ROLE_ARN }}
+          REGION: ${{ secrets.AWS_REGION }}
         run: |
-          echo "PWD=$(pwd)"
-          echo "Root files:"; ls -la ..
-          echo "Terraform dir:"; ls -la
-          echo "--- variables.tf ---"; sed -n '1,120p' variables.tf || true
+          test -n "$ROLE"   || (echo "❌ Missing secret: AWS_ROLE_ARN" && exit 1)
+          test -n "$REGION" || (echo "❌ Missing secret: AWS_REGION" && exit 1)
+          echo "✅ Secrets present"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -48,6 +49,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           role-session-name: gha-terraform
           aws-region: ${{ secrets.AWS_REGION }}
+          audience: sts.amazonaws.com
 
       - name: Verify caller identity
         run: aws sts get-caller-identity
