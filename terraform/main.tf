@@ -74,7 +74,12 @@ resource "aws_cloudwatch_log_group" "ecs" {
 
 resource "aws_ecs_cluster" "pilot" {
   name = "${var.project}-cluster"
-  setting { name = "containerInsights" value = "enabled" }
+
+  setting {
+    name  = "containerInsights"
+    value = "enabled"
+  }
+
   tags = { Project = var.project, ManagedBy = "terraform" }
 }
 
@@ -84,7 +89,10 @@ resource "aws_ecs_cluster" "pilot" {
 data "aws_iam_policy_document" "ecs_task_exec_assume" {
   statement {
     actions = ["sts:AssumeRole"]
-    principals { type = "Service" identifiers = ["ecs-tasks.amazonaws.com"] }
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
   }
 }
 
@@ -109,6 +117,7 @@ resource "aws_ecs_task_definition" "app" {
   cpu                      = "256"
   memory                   = "512"
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+
   runtime_platform {
     operating_system_family = "LINUX"
     cpu_architecture        = "X86_64"
@@ -119,7 +128,9 @@ resource "aws_ecs_task_definition" "app" {
       name      = "app"
       image     = var.container_image
       essential = true
-      portMappings = [ { containerPort = 80, hostPort = 80, protocol = "tcp" } ]
+      portMappings = [
+        { containerPort = 80, hostPort = 80, protocol = "tcp" }
+      ]
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -151,6 +162,7 @@ resource "aws_lb_target_group" "ecs" {
   protocol    = "HTTP"
   vpc_id      = data.aws_vpc.default.id
   target_type = "ip"
+
   health_check {
     path                = var.health_check_path
     matcher             = "200-399"
@@ -159,6 +171,7 @@ resource "aws_lb_target_group" "ecs" {
     timeout             = 5
     interval            = 15
   }
+
   tags = { Project = var.project, ManagedBy = "terraform" }
 }
 
@@ -166,7 +179,11 @@ resource "aws_lb_listener" "http" {
   load_balancer_arn = aws_lb.app.arn
   port              = 80
   protocol          = "HTTP"
-  default_action { type = "forward" target_group_arn = aws_lb_target_group.ecs.arn }
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.ecs.arn
+  }
 }
 
 ############################################################
@@ -205,7 +222,7 @@ resource "aws_ecs_service" "app" {
 ############################################################
 # Outputs
 ############################################################
-output "alb_dns_name"      { value = aws_lb.app.dns_name }
-output "ecs_cluster_name"  { value = aws_ecs_cluster.pilot.name }
-output "ecs_service_name"  { value = aws_ecs_service.app.name }
-output "subnet_ids_used"   { value = slice(data.aws_subnets.default.ids, 0, 2) }
+output "alb_dns_name"     { value = aws_lb.app.dns_name }
+output "ecs_cluster_name" { value = aws_ecs_cluster.pilot.name }
+output "ecs_service_name" { value = aws_ecs_service.app.name }
+output "subnet_ids_used"  { value = slice(data.aws_subnets.default.ids, 0, 2) }
