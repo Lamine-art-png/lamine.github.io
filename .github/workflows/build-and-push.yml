@@ -6,6 +6,7 @@ on:
     paths:
       - 'agroai_api/**'
       - '.github/workflows/build-and-push.yml'
+  workflow_dispatch: {}   # let you run it manually too
 
 jobs:
   deploy:
@@ -15,6 +16,7 @@ jobs:
       id-token: write
     env:
       AWS_REGION: us-west-1
+      # >>> make sure these match your ECS names <<<
       CLUSTER: agroai-manulife-pilot-cluster
       SERVICE: agroai-manulife-pilot-svc
       ECR_REPO: ${{ secrets.ECR_REPO_URL }}
@@ -38,4 +40,21 @@ jobs:
 
       - name: Force ECS rollout (pull new :latest)
         run: |
-          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --force-new-deployment
+          aws ecs update-service \
+            --cluster "$CLUSTER" \
+            --service "$SERVICE" \
+            --force-new-deployment
+
+      # Optional: quick smoke test against the task public IP
+      - name: Smoke test /
+        shell: bash
+        run: |
+          sleep 10
+          TASK_ARN=$(aws ecs list-tasks --cluster "$CLUSTER" --desired-status RUNNING --query 'taskArns[0]' --output text)
+          ENI=$(aws ecs describe-tasks --cluster "$CLUSTER" --tasks "$TASK_ARN" \
+                 --query 'tasks[0].attachments[0].details[?name==`networkInterfaceId`].value' --output text)
+          IP=$(aws ec2 describe-network-interfaces --network-interface-ids "$ENI" \
+                 --query 'NetworkInterfaces[0].Association.PublicIp' --output text)
+          echo "Public IP: $IP"
+          curl -sS -m 5 "http://$IP/health" | tee /tmp/smoke.txt
+          test "$(jq -r '.health' < /tmp/smoke.txt 2>/dev/null)" = "good"
