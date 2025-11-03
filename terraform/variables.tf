@@ -11,9 +11,8 @@ variable "aws_region" {
 
 variable "container_image" {
   type    = string
-  # point to your ECR image (must exist and be public to the ECS task via the exec role)
-  default = "292039821285.dkr.ecr.us-west-1.amazonaws.com/agroai-manulife-pilot-api"
-  # e.g. "292039821285.dkr.ecr.us-west-1.amazonaws.com/agroai-manulife-pilot-api:latest"
+  default = "<YOUR_ECR_REPO_URL>:latest"
+  # e.g. 292039821285.dkr.ecr.us-west-1.amazonaws.com/agroai-manulife-pilot-api:latest
 }
 
 variable "health_check_path" {
