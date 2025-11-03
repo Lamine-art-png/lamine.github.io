@@ -1,95 +1,32 @@
-# Use default VPC + subnets already in account
-data "aws_vpc" "default" {
-  default = true
+# Use 2 AZs available in the chosen region
+data "aws_availability_zones" "available" {
+  state = "available"
 }
 
-data "aws_subnets" "in_default_vpc" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
-}
+module "vpc" {
+  source  = "terraform-aws-modules/vpc/aws"
+  version = "~> 5.0"
 
-# Security group for HTTP
-resource "aws_security_group" "api_sg" {
-  name_prefix = "${var.project}-api-sg-"
-  description = "Allow HTTP from internet"
-  vpc_id      = data.aws_vpc.default.id
+  name = "${var.project}-vpc"
+  cidr = "10.0.0.0/16"
 
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  azs             = slice(data.aws_availability_zones.available.names, 0, 2)
+  public_subnets  = ["10.0.1.0/24", "10.0.2.0/24"]
 
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+  enable_dns_hostnames = true
+  enable_dns_support   = true
+  map_public_ip_on_launch = true
+  nat_gateway_enabled  = false
 
-  tags = { Name = "${var.project}-api-sg" }
-}
-
-# ECS Cluster
-module "ecs" {
-  source  = "terraform-aws-modules/ecs/aws"
-  version = "~> 5.12"
-
-  cluster_name = "${var.project}-cluster"
-
-  fargate_capacity_providers = {
-    FARGATE = {
-      default_capacity_provider_strategy = [{
-        base   = 1
-        weight = 100
-      }]
-    }
+  tags = {
+    Project = var.project
+    ManagedBy = "terraform"
   }
 }
 
-# ECS Service (Fargate) — single container, NGINX demo
-module "api_service" {
-  source  = "terraform-aws-modules/ecs/aws//modules/service"
-  version = "~> 5.12"
-
-  name                   = var.service_name
-  cluster_arn            = module.ecs.cluster_arn
-  desired_count          = var.desired_count
-  launch_type            = "FARGATE"
-  cpu                    = 256
-  memory                 = 512
-  assign_public_ip       = true
-  enable_execute_command = true
-  force_new_deployment   = true
-  platform_version       = "1.4.0"
-
-  subnet_ids         = slice(data.aws_subnets.in_default_vpc.ids, 0, 2)
-  security_group_ids = [aws_security_group.api_sg.id]
-
-  container_definitions = {
-    api = {
-      image     = "public.ecr.aws/nginx/nginx:stable"
-      essential = true
-
-      port_mappings = [{
-        containerPort = 80
-        hostPort      = 80
-        protocol      = "tcp"
-      }]
-
-      # Make the log group name unique by service_name so runs don’t collide
-      log_configuration = {
-        log_driver = "awslogs"
-        options = {
-          awslogs-group         = "/aws/ecs/${var.service_name}"
-          awslogs-region        = var.region
-          awslogs-stream-prefix = "api"
-          awslogs-create-group  = "true"
-        }
-      }
-    }
-  }
+output "vpc_id" {
+  value = module.vpc.vpc_id
+}
+output "public_subnets" {
+  value = module.vpc.public_subnets
 }
