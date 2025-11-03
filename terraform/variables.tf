@@ -11,8 +11,7 @@ variable "aws_region" {
 
 variable "container_image" {
   type    = string
-  default = "<YOUR_ECR_REPO_URL>:latest"
-  # e.g. 292039821285.dkr.ecr.us-west-1.amazonaws.com/agroai-manulife-pilot-api:latest
+  default = "292039821285.dkr.ecr.us-west-1.amazonaws.com/agroai-manulife-pilot-api"
 }
 
 variable "health_check_path" {
