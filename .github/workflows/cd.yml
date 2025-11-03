@@ -3,71 +3,82 @@ name: CD - Terraform apply (us-west-1)
 on:
   workflow_dispatch:
     inputs:
-      action:
-        description: "plan/apply/destroy"
+      plan_apply_destroy:
+        description: 'plan/apply/destroy'
         required: true
-        default: plan
+        default: 'plan'
         type: choice
         options: [plan, apply, destroy]
-  push:
-    branches: [ main ]
-    paths:
-      - 'terraform/**'
 
 jobs:
   tf-apply:
     runs-on: ubuntu-latest
     permissions:
+      id-token: write
       contents: read
-      id-token: write   # REQUIRED for OIDC
-
-    defaults:
-      run:
-        working-directory: terraform
+    env:
+      AWS_REGION: us-west-1
+      TF_IN_AUTOMATION: 1
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Assert required secrets exist (no values printed)
-        env:
-          ROLE:   ${{ secrets.AWS_ROLE_ARN }}
-          REGION: ${{ secrets.AWS_REGION }}
         run: |
-          test -n "$ROLE"   || (echo "❌ Missing secret: AWS_ROLE_ARN" && exit 1)
-          test -n "$REGION" || (echo "❌ Missing secret: AWS_REGION" && exit 1)
-          echo "✅ Secrets present"
+          test -n "${{ secrets.AWS_ROLE_ARN }}" || (echo "❌ Missing secret: AWS_ROLE_ARN" && exit 1)
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.7.5
+          terraform_version: 1.9.5
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          role-session-name: gha-terraform
-          aws-region: ${{ secrets.AWS_REGION }}
-          audience: sts.amazonaws.com
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Verify caller identity
         run: aws sts get-caller-identity
 
       - name: Init
+        working-directory: terraform
         run: terraform init -reconfigure -upgrade
 
+      - name: Fmt
+        working-directory: terraform
+        run: terraform fmt -recursive
+
       - name: Validate
+        working-directory: terraform
         run: terraform validate
 
       - name: Plan
-        if: ${{ github.event.inputs.action == '' || github.event.inputs.action == 'plan' }}
-        run: terraform plan -out=tfplan
+        if: ${{ github.event.inputs.plan_apply_destroy == 'plan' }}
+        working-directory: terraform
+        run: terraform plan -no-color
 
       - name: Apply
-        if: ${{ github.event.inputs.action == 'apply' }}
-        run: terraform apply -auto-approve
+        if: ${{ github.event.inputs.plan_apply_destroy == 'apply' }}
+        working-directory: terraform
+        run: terraform apply -auto-approve -no-color
 
       - name: Destroy
-        if: ${{ github.event.inputs.action == 'destroy' }}
-        run: terraform destroy -auto-approve
+        if: ${{ github.event.inputs.plan_apply_destroy == 'destroy' }}
+        working-directory: terraform
+        run: terraform destroy -auto-approve -no-color
+
+      - name: Show Terraform outputs
+        if: always()
+        working-directory: terraform
+        run: |
+          if terraform output > /dev/null 2>&1; then
+            terraform output -no-color | tee /tmp/tf-outputs.txt
+            echo "### Terraform outputs" >> $GITHUB_STEP_SUMMARY
+            printf '```\n%s\n```\n' "$(cat /tmp/tf-outputs.txt)" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "No outputs (no state yet or no outputs defined)." | tee /tmp/tf-outputs.txt
+            echo "### Terraform outputs" >> $GITHUB_STEP_SUMMARY
+            printf '```\n%s\n```\n' "No outputs (no state yet or no outputs defined)." >> $GITHUB_STEP_SUMMARY
+          fi
