@@ -1,8 +1,13 @@
 # ========= Default VPC & Subnets =========
-data "aws_vpc" "default" { default = true }
+data "aws_vpc" "default" {
+  default = true
+}
 
 data "aws_subnets" "default" {
-  filter { name = "vpc-id" values = [data.aws_vpc.default.id] }
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
 }
 
 # ========= Security Group (open HTTP) =========
@@ -51,7 +56,10 @@ resource "aws_ecs_cluster" "pilot" {
 data "aws_iam_policy_document" "ecs_task_exec_assume" {
   statement {
     actions = ["sts:AssumeRole"]
-    principals { type = "Service" identifiers = ["ecs-tasks.amazonaws.com"] }
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
   }
 }
 
@@ -121,7 +129,7 @@ resource "aws_ecs_service" "app" {
 }
 
 # ========= Outputs =========
-output "default_vpc_id"     { value = data.aws_vpc.default.id }
-output "ecs_cluster_name"   { value = aws_ecs_cluster.pilot.name }
-output "ecs_service_name"   { value = aws_ecs_service.app.name }
-output "subnet_ids_used"    { value = slice(data.aws_subnets.default.ids, 0, 2) }
+output "default_vpc_id"   { value = data.aws_vpc.default.id }
+output "ecs_cluster_name" { value = aws_ecs_cluster.pilot.name }
+output "ecs_service_name" { value = aws_ecs_service.app.name }
+output "subnet_ids_used"  { value = slice(data.aws_subnets.default.ids, 0, 2) }
