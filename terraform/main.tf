@@ -1,4 +1,4 @@
-# Use default VPC + subnets
+# Use default VPC + subnets already in account
 data "aws_vpc" "default" {
   default = true
 }
@@ -10,12 +10,7 @@ data "aws_subnets" "in_default_vpc" {
   }
 }
 
-locals {
-  svc_name       = length(var.service_name) > 0 ? var.service_name : "${var.project}-api"
-  log_group_name = "/aws/ecs/${local.svc_name}"
-}
-
-# SG with proper multi-line blocks
+# Security group for HTTP
 resource "aws_security_group" "api_sg" {
   name_prefix = "${var.project}-api-sg-"
   description = "Allow HTTP from internet"
@@ -35,12 +30,10 @@ resource "aws_security_group" "api_sg" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = {
-    Name = "${var.project}-api-sg"
-  }
+  tags = { Name = "${var.project}-api-sg" }
 }
 
-# ECS cluster
+# ECS Cluster
 module "ecs" {
   source  = "terraform-aws-modules/ecs/aws"
   version = "~> 5.12"
@@ -57,12 +50,12 @@ module "ecs" {
   }
 }
 
-# Fargate service
+# ECS Service (Fargate) — single container, NGINX demo
 module "api_service" {
   source  = "terraform-aws-modules/ecs/aws//modules/service"
   version = "~> 5.12"
 
-  name                   = local.svc_name
+  name                   = var.service_name
   cluster_arn            = module.ecs.cluster_arn
   desired_count          = var.desired_count
   launch_type            = "FARGATE"
@@ -82,17 +75,16 @@ module "api_service" {
       essential = true
 
       port_mappings = [{
-        name          = "http"
         containerPort = 80
         hostPort      = 80
         protocol      = "tcp"
       }]
 
-      # Let the agent create/use the log group; make the name unique per run
+      # Make the log group name unique by service_name so runs don’t collide
       log_configuration = {
         log_driver = "awslogs"
         options = {
-          awslogs-group         = local.log_group_name
+          awslogs-group         = "/aws/ecs/${var.service_name}"
           awslogs-region        = var.region
           awslogs-stream-prefix = "api"
           awslogs-create-group  = "true"
