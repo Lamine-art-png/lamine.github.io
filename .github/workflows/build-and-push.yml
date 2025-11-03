@@ -1,0 +1,41 @@
+name: CI+CD - API → ECR → ECS
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - 'agroai_api/**'
+      - '.github/workflows/build-and-push.yml'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    env:
+      AWS_REGION: us-west-1
+      CLUSTER: agroai-manulife-pilot-cluster
+      SERVICE: agroai-manulife-pilot-svc
+      ECR_REPO: ${{ secrets.ECR_REPO_URL }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to ECR
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build & push :latest
+        run: |
+          docker build -t "$ECR_REPO:latest" agroai_api
+          docker push "$ECR_REPO:latest"
+
+      - name: Force ECS rollout (pull new :latest)
+        run: |
+          aws ecs update-service --cluster "$CLUSTER" --service "$SERVICE" --force-new-deployment
