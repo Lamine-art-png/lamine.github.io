@@ -113,7 +113,8 @@ resource "aws_ecs_task_definition" "app" {
   container_definitions = jsonencode([
     {
       name      = "api"
-      image     = var.container_image                      # e.g. 12345.dkr.ecr.us-west-1.amazonaws.com/agroai-manulife-pilot-api:latest
+      image = "${var.container_image}:latest"
+      # e.g. 12345.dkr.ecr.us-west-1.amazonaws.com/agroai-manulife-pilot-api:latest
       essential = true
       portMappings = [
         { containerPort = 80, protocol = "tcp" }
