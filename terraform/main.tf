@@ -6,15 +6,15 @@ locals {
 }
 
 # --- Networking (default VPC/Subnets) ---
-data "aws_vpc" "default" { default = true }
-
-data "aws_subnets" "default" {
-  filter { name = "vpc-id" values = [data.aws_vpc.default.id] }
+data "aws_vpc" "default" {
+  default = true
 }
 
-# --- ECR repo (image URL) ---
-data "aws_ecr_repository" "api" {
-  name = "${var.project}-api"
+data "aws_subnets" "default" {
+  filter {
+    name   = "vpc-id"
+    values = [data.aws_vpc.default.id]
+  }
 }
 
 # --- Logs ---
@@ -29,7 +29,10 @@ data "aws_iam_policy_document" "ecs_task_assume_role" {
   statement {
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
-    principals { type = "Service" identifiers = ["ecs-tasks.amazonaws.com"] }
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
   }
 }
 
@@ -50,7 +53,7 @@ resource "aws_ecs_cluster" "pilot" {
   tags = local.tags
 }
 
-# --- Security group (use prefix to avoid duplicate-name errors) ---
+# --- SG for tasks (use name_prefix to avoid duplicate-name errors) ---
 resource "aws_security_group" "ecs_tasks" {
   name_prefix = "${var.project}-ecs-tasks-"
   description = "Allow HTTP egress/ingress for ECS tasks"
@@ -76,6 +79,7 @@ resource "aws_security_group" "ecs_tasks" {
 }
 
 # --- Task definition ---
+# NOTE: image comes from data.aws_ecr_repository.api defined in ecr.tf
 resource "aws_ecs_task_definition" "app" {
   family                   = "${var.project}-api"
   requires_compatibilities = ["FARGATE"]
@@ -132,10 +136,14 @@ resource "aws_ecs_service" "svc" {
     assign_public_ip = true
   }
 
-  deployment_circuit_breaker { enable = true, rollback = true }
-  health_check_grace_period_seconds = 60  # optional but recommended
-  force_new_deployment  = true
-  wait_for_steady_state = true
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  health_check_grace_period_seconds = 60
+  force_new_deployment              = true
+  wait_for_steady_state             = true
 
   depends_on = [aws_cloudwatch_log_group.ecs]
 }
