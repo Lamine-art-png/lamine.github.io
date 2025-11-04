@@ -1,5 +1,5 @@
 #####################
-# Locals & lookups
+# Locals & VPC lookups
 #####################
 locals {
   tags = {
@@ -20,32 +20,7 @@ data "aws_subnets" "default" {
 }
 
 #####################
-# Networking
-#####################
-resource "aws_security_group" "ecs_tasks" {
-  name        = "${var.project}-ecs-tasks"
-  description = "Allow HTTP from anywhere to ECS tasks"
-  vpc_id      = data.aws_vpc.default.id
-  tags        = local.tags
-
-  ingress {
-    description = "HTTP"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-}
-
-#####################
-# Logs
+# CloudWatch logs
 #####################
 resource "aws_cloudwatch_log_group" "ecs" {
   name              = "/ecs/${var.project}"
@@ -54,10 +29,10 @@ resource "aws_cloudwatch_log_group" "ecs" {
 }
 
 #####################
-# ECS cluster
+# ECS cluster (with Container Insights)
 #####################
 resource "aws_ecs_cluster" "pilot" {
-  name = "${var.project}-cluster"
+  name = var.project
   setting {
     name  = "containerInsights"
     value = "enabled"
@@ -66,7 +41,64 @@ resource "aws_ecs_cluster" "pilot" {
 }
 
 #####################
-# Task definition
+# Security group for tasks
+#####################
+resource "aws_security_group" "ecs_tasks" {
+  name        = "${var.project}-ecs-tasks-sg"
+  description = "Allow HTTP egress/ingress for ECS tasks"
+  vpc_id      = data.aws_vpc.default.id
+  tags        = local.tags
+
+  # Inbound: HTTP from anywhere (adjust as needed)
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  # Outbound: everything
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+}
+
+#####################
+# IAM: ECS task execution role
+#####################
+data "aws_iam_policy_document" "ecs_task_assume_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ecs_task_execution" {
+  name               = "${var.project}-ecs-task-exec"
+  assume_role_policy = data.aws_iam_policy_document.ecs_task_assume_role.json
+  tags               = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_exec_basic" {
+  role       = aws_iam_role.ecs_task_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_exec_ecr_ro" {
+  role       = aws_iam_role.ecs_task_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+#####################
+# Task definition (Fargate, container on port 80)
 #####################
 resource "aws_ecs_task_definition" "app" {
   family                   = "${var.project}-api"
@@ -74,17 +106,19 @@ resource "aws_ecs_task_definition" "app" {
   network_mode             = "awsvpc"
   cpu                      = 256
   memory                   = 512
-  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
-  tags                     = local.tags
 
-  # If var.container_image is the repo **without** tag, we append :latest here.
+  execution_role_arn = aws_iam_role.ecs_task_execution.arn
+  tags               = local.tags
+
   container_definitions = jsonencode([
     {
-      name         = "api"
-      image        = "${var.container_image}:latest"
-      essential    = true
-      portMappings = [{ containerPort = 80, protocol = "tcp" }]
-      healthCheck  = {
+      name      = "api"
+      image     = var.container_image                      # e.g. 12345.dkr.ecr.us-west-1.amazonaws.com/agroai-manulife-pilot-api:latest
+      essential = true
+      portMappings = [
+        { containerPort = 80, protocol = "tcp" }
+      ]
+      healthCheck = {
         command     = ["CMD-SHELL", "curl -f http://localhost${var.health_check_path} || exit 1"]
         interval    = 30
         timeout     = 5
@@ -94,9 +128,9 @@ resource "aws_ecs_task_definition" "app" {
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
-          "awslogs-region"        = var.aws_region
-          "awslogs-stream-prefix" = "api"
+          awslogs-group         = aws_cloudwatch_log_group.ecs.name
+          awslogs-region        = var.aws_region
+          awslogs-stream-prefix = "api"
         }
       }
     }
@@ -104,7 +138,7 @@ resource "aws_ecs_task_definition" "app" {
 }
 
 #####################
-# ECS service
+# ECS service (1 task, public IP)
 #####################
 resource "aws_ecs_service" "svc" {
   name            = "${var.project}-svc"
@@ -115,15 +149,15 @@ resource "aws_ecs_service" "svc" {
   propagate_tags  = "SERVICE"
   tags            = local.tags
 
-  # allow replacing the single task during deploys (no extra capacity)
-  deployment_minimum_healthy_percent = 0
-  deployment_maximum_percent         = 100
-
   network_configuration {
     subnets         = data.aws_subnets.default.ids
     security_groups = [aws_security_group.ecs_tasks.id]
     assign_public_ip = true
   }
 
-  depends_on = [aws_cloudwatch_log_group.ecs]
+  force_new_deployment = true
+
+  depends_on = [
+    aws_cloudwatch_log_group.ecs
+  ]
 }
