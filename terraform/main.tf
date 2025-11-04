@@ -6,18 +6,13 @@ locals {
 }
 
 # --- Networking (default VPC/Subnets) ---
-data "aws_vpc" "default" {
-  default = true
-}
+data "aws_vpc" "default" { default = true }
 
 data "aws_subnets" "default" {
-  filter {
-    name   = "vpc-id"
-    values = [data.aws_vpc.default.id]
-  }
+  filter { name = "vpc-id" values = [data.aws_vpc.default.id] }
 }
 
-# --- ECR repo (for the image URL) ---
+# --- ECR repo (image URL) ---
 data "aws_ecr_repository" "api" {
   name = "${var.project}-api"
 }
@@ -34,10 +29,7 @@ data "aws_iam_policy_document" "ecs_task_assume_role" {
   statement {
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
-    principals {
-      type        = "Service"
-      identifiers = ["ecs-tasks.amazonaws.com"]
-    }
+    principals { type = "Service" identifiers = ["ecs-tasks.amazonaws.com"] }
   }
 }
 
@@ -58,7 +50,7 @@ resource "aws_ecs_cluster" "pilot" {
   tags = local.tags
 }
 
-# --- SG for tasks (use name_prefix to avoid duplicate-name errors) ---
+# --- Security group (use prefix to avoid duplicate-name errors) ---
 resource "aws_security_group" "ecs_tasks" {
   name_prefix = "${var.project}-ecs-tasks-"
   description = "Allow HTTP egress/ingress for ECS tasks"
@@ -85,7 +77,7 @@ resource "aws_security_group" "ecs_tasks" {
 
 # --- Task definition ---
 resource "aws_ecs_task_definition" "app" {
-  family                   = "${var.project}-api"   # e.g., agroai-manulife-pilot-api
+  family                   = "${var.project}-api"
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = 256
@@ -115,9 +107,9 @@ resource "aws_ecs_task_definition" "app" {
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          awslogs-group         = aws_cloudwatch_log_group.ecs.name
-          awslogs-region        = var.aws_region
-          awslogs-stream-prefix = "api"
+          "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "api"
         }
       }
     }
@@ -140,11 +132,8 @@ resource "aws_ecs_service" "svc" {
     assign_public_ip = true
   }
 
-  deployment_circuit_breaker {
-    enable   = true
-    rollback = true
-  }
-
+  deployment_circuit_breaker { enable = true, rollback = true }
+  health_check_grace_period_seconds = 60  # optional but recommended
   force_new_deployment  = true
   wait_for_steady_state = true
 
