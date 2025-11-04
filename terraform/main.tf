@@ -99,7 +99,7 @@ resource "aws_ecs_cluster" "pilot" {
 # Task definition
 #####################
 resource "aws_ecs_task_definition" "app" {
-  family                   = "${var.project}-app"
+  family                   = "${var.project}-api"   # <-- was -app; make it -api
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = 256
@@ -110,12 +110,10 @@ resource "aws_ecs_task_definition" "app" {
   container_definitions = jsonencode([
     {
       name         = "api"
-      image        = var.container_image  # e.g. 2920....dkr.ecr.us-west-1.amazonaws.com/agroai-manulife-pilot-api:latest
+      image        = var.container_image
       essential    = true
-      portMappings = [
-        { containerPort = 80, protocol = "tcp" }
-      ]
-      healthCheck = {
+      portMappings = [{ containerPort = 80, protocol = "tcp" }]
+      healthCheck  = {
         command     = ["CMD-SHELL", "curl -f http://localhost${var.health_check_path} || exit 1"]
         interval    = 30
         timeout     = 5
