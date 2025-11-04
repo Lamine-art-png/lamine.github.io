@@ -1,15 +1,12 @@
-#####################
-# Tags
-#####################
 locals {
   tags = {
-    Project   = var.project
     ManagedBy = "terraform"
+    Project   = var.project
   }
 }
 
 #####################
-# Networking (default VPC + subnets)
+# Networking lookups
 #####################
 data "aws_vpc" "default" {
   default = true
@@ -22,10 +19,50 @@ data "aws_subnets" "default" {
   }
 }
 
-#####################
-# Security Group (use prefix to avoid name clashes)
-#####################
+###########################
+# Logs + IAM for ECS tasks
+###########################
+resource "aws_cloudwatch_log_group" "ecs" {
+  name              = "/ecs/${var.project}"
+  retention_in_days = 7
+  tags              = local.tags
+}
+
+data "aws_iam_policy_document" "ecs_task_assume_role" {
+  statement {
+    actions = ["sts:AssumeRole"]
+    principals {
+      type        = "Service"
+      identifiers = ["ecs-tasks.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ecs_task_execution" {
+  name               = "${var.project}-ecs-task-exec"
+  assume_role_policy = data.aws_iam_policy_document.ecs_task_assume_role.json
+  tags               = local.tags
+}
+
+resource "aws_iam_role_policy_attachment" "ecs_exec_basic" {
+  role       = aws_iam_role.ecs_task_execution.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
+}
+
+################
+# ECS cluster
+################
+resource "aws_ecs_cluster" "pilot" {
+  # Keep this stable so TF never tries to replace it
+  name = "${var.project}-cluster" # agroai-manulife-pilot-cluster
+  tags = local.tags
+}
+
+#########################
+# Security group for ECS
+#########################
 resource "aws_security_group" "ecs_tasks" {
+  # Use prefix so we never collide on re-creates
   name_prefix = "${var.project}-ecs-tasks-"
   description = "Allow HTTP egress/ingress for ECS tasks"
   vpc_id      = data.aws_vpc.default.id
@@ -50,54 +87,6 @@ resource "aws_security_group" "ecs_tasks" {
 }
 
 #####################
-# Logs
-#####################
-resource "aws_cloudwatch_log_group" "ecs" {
-  name              = "/ecs/${var.project}"
-  retention_in_days = 14
-  tags              = local.tags
-}
-
-#####################
-# IAM (task execution role)
-#####################
-data "aws_iam_policy_document" "ecs_task_assume_role" {
-  statement {
-    actions = ["sts:AssumeRole"]
-    principals {
-      type        = "Service"
-      identifiers = ["ecs-tasks.amazonaws.com"]
-    }
-  }
-}
-
-resource "aws_iam_role" "ecs_task_execution" {
-  name               = "${var.project}-ecs-task-exec"
-  assume_role_policy = data.aws_iam_policy_document.ecs_task_assume_role.json
-  tags               = local.tags
-}
-
-# Standard ECS task execution permissions (includes pulling from ECR, writing logs)
-resource "aws_iam_role_policy_attachment" "ecs_exec_basic" {
-  role       = aws_iam_role.ecs_task_execution.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
-# (Optional) extra ECR read; harmless if redundant
-resource "aws_iam_role_policy_attachment" "ecs_exec_ecr_ro" {
-  role       = aws_iam_role.ecs_task_execution.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
-}
-
-#####################
-# ECS cluster (KEEP the existing name to avoid replacement)
-#####################
-resource "aws_ecs_cluster" "pilot" {
-  name = "${var.project}-cluster"  # resolves to agroai-manulife-pilot-cluster
-  tags = local.tags
-}
-
-#####################
 # Task definition
 #####################
 resource "aws_ecs_task_definition" "app" {
@@ -111,11 +100,13 @@ resource "aws_ecs_task_definition" "app" {
 
   container_definitions = jsonencode([
     {
-      name         = "api"
-      image        = "${var.container_image}:latest"   # repo from variables.tf + :latest
-      essential    = true
-      portMappings = [{ containerPort = 80, protocol = "tcp" }]
-      healthCheck  = {
+      name      = "api"
+      image     = "${var.container_image}:latest" # tag added here
+      essential = true
+      portMappings = [
+        { containerPort = 80, protocol = "tcp" }
+      ]
+      healthCheck = {
         command     = ["CMD-SHELL", "curl -f http://localhost${var.health_check_path} || exit 1"]
         interval    = 30
         timeout     = 5
@@ -134,9 +125,9 @@ resource "aws_ecs_task_definition" "app" {
   ])
 }
 
-#####################
+################
 # ECS service
-#####################
+################
 resource "aws_ecs_service" "svc" {
   name            = "${var.project}-svc"
   cluster         = aws_ecs_cluster.pilot.id
@@ -144,7 +135,14 @@ resource "aws_ecs_service" "svc" {
   desired_count   = 1
   launch_type     = "FARGATE"
   propagate_tags  = "SERVICE"
-  tags            = local.tags
+
+  # Safer deployments
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+  force_new_deployment  = true
+  wait_for_steady_state = true
 
   network_configuration {
     subnets         = data.aws_subnets.default.ids
@@ -152,14 +150,9 @@ resource "aws_ecs_service" "svc" {
     assign_public_ip = true
   }
 
-  deployment_circuit_breaker {
-    enable   = true
-    rollback = true
-  }
+  tags = local.tags
 
-  force_new_deployment  = true
-  wait_for_steady_state = true
-
-  # Make sure the log group exists before the first task starts
-  depends_on = [aws_cloudwatch_log_group.ecs]
+  depends_on = [
+    aws_cloudwatch_log_group.ecs
+  ]
 }
