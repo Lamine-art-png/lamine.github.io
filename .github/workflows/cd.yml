@@ -1,14 +1,20 @@
 name: CD - Terraform apply (us-west-1)
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
   push:
+    branches: [ "main" ]
     paths:
       - "terraform/**"
-      - ".github/workflows/cd-terraform-apply.yml"
+      - ".github/workflows/tf-apply.yml"
 
-env:
-  AWS_REGION: us-west-1
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: tf-apply-main
+  cancel-in-progress: false
 
 jobs:
   tf-apply:
@@ -16,14 +22,15 @@ jobs:
     defaults:
       run:
         working-directory: terraform
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Configure AWS (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-region: ${{ env.AWS_REGION }}
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}   # <-- set this repo secret to your OIDC role ARN
+          aws-region: us-west-1
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -37,7 +44,7 @@ jobs:
         run: terraform validate
 
       - name: Plan
-        run: terraform plan -no-color -lock-timeout=5m
+        run: terraform plan -input=false -lock=true -lock-timeout=5m -out=tfplan
 
       - name: Apply
-        run: terraform apply -auto-approve -no-color -lock-timeout=5m
+        run: terraform apply -input=false -lock=true -lock-timeout=5m -auto-approve tfplan
