@@ -99,13 +99,40 @@ resource "aws_ecs_cluster" "pilot" {
 # Task definition
 #####################
 resource "aws_ecs_task_definition" "app" {
-  family                   = "${var.project}-api"   # <-- was -app; make it -api
+  family                   = "${var.project}-api"   # family name is okay as -api
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = 256
   memory                   = 512
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
   tags                     = local.tags
+
+  # If var.container_image is just the repo URL, append :latest here
+  # If you already put :latest in the variable, change this line to: image = var.container_image
+  container_definitions = jsonencode([
+    {
+      name         = "api"
+      image        = "${var.container_image}:latest"
+      essential    = true
+      portMappings = [{ containerPort = 80, protocol = "tcp" }]
+      healthCheck  = {
+        command     = ["CMD-SHELL", "curl -f http://localhost${var.health_check_path} || exit 1"]
+        interval    = 30
+        timeout     = 5
+        retries     = 3
+        startPeriod = 10
+      }
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          "awslogs-group"         = aws_cloudwatch_log_group.ecs.name
+          "awslogs-region"        = var.aws_region
+          "awslogs-stream-prefix" = "api"
+        }
+      }
+    }
+  ])
+}
 
   container_definitions = jsonencode([
     {
@@ -136,33 +163,32 @@ resource "aws_ecs_task_definition" "app" {
 # ECS service
 #####################
 resource "aws_ecs_service" "svc" {
-  # ...existing...
-  desired_count = 1
+  name            = "${var.project}-svc"
+  cluster         = aws_ecs_cluster.pilot.id
+  task_definition = aws_ecs_task_definition.app.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
+  propagate_tags  = "SERVICE"
+  tags            = local.tags
 
   # single-task rollout (no overlap)
   deployment_minimum_healthy_percent = 0
-  deployment_maximum_percent        = 100
+  deployment_maximum_percent         = 100
 
-  # safer deploys (auto-rollback on bad task)
+  # auto-rollback on bad deploys
   deployment_circuit_breaker {
     enable   = true
     rollback = true
   }
 
-  # if your app needs a few seconds to boot, give it grace
+  # give the app a few seconds to boot before health checks
   health_check_grace_period_seconds = 30
 
-  # ...existing network_configuration, etc...
-}
-
   network_configuration {
-    subnets         = data.aws_subnets.default.ids
-    security_groups = [aws_security_group.ecs_tasks.id]
+    subnets          = data.aws_subnets.default.ids
+    security_groups  = [aws_security_group.ecs_tasks.id]
     assign_public_ip = true
   }
 
-  # Ensure the log group exists before first run
-  depends_on = [
-    aws_cloudwatch_log_group.ecs
-  ]
+  depends_on = [aws_cloudwatch_log_group.ecs]
 }
