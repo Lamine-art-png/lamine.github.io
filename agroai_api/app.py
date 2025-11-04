@@ -1,11 +1,13 @@
-from fastapi import FastAPI
+# agroai_api/Dockerfile
+FROM python:3.11-slim
+WORKDIR /app
 
-app = FastAPI()
+# Add curl for the ECS health check
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends curl \
+ && rm -rf /var/lib/apt/lists/*
 
-@app.get("/")
-def root():
-    return {"status": "ok", "service": "agroai-pilot"}
-
-@app.get("/health")
-def health():
-    return {"health": "good"}
+RUN pip install --no-cache-dir fastapi uvicorn
+COPY app.py .
+EXPOSE 80
+CMD ["uvicorn", "app:app", "--host", "0.0.0.0", "--port", "80"]
