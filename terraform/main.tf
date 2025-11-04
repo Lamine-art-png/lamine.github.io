@@ -1,13 +1,11 @@
 locals {
   tags = {
-    ManagedBy = "terraform"
     Project   = var.project
+    ManagedBy = "terraform"
   }
 }
 
-#####################
-# Networking lookups
-#####################
+# --- Networking (default VPC/Subnets) ---
 data "aws_vpc" "default" {
   default = true
 }
@@ -19,17 +17,22 @@ data "aws_subnets" "default" {
   }
 }
 
-###########################
-# Logs + IAM for ECS tasks
-###########################
+# --- ECR repo (for the image URL) ---
+data "aws_ecr_repository" "api" {
+  name = "${var.project}-api"
+}
+
+# --- Logs ---
 resource "aws_cloudwatch_log_group" "ecs" {
   name              = "/ecs/${var.project}"
-  retention_in_days = 7
+  retention_in_days = 14
   tags              = local.tags
 }
 
+# --- IAM: ECS task execution role ---
 data "aws_iam_policy_document" "ecs_task_assume_role" {
   statement {
+    effect  = "Allow"
     actions = ["sts:AssumeRole"]
     principals {
       type        = "Service"
@@ -49,20 +52,14 @@ resource "aws_iam_role_policy_attachment" "ecs_exec_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-################
-# ECS cluster
-################
+# --- ECS cluster ---
 resource "aws_ecs_cluster" "pilot" {
-  # Keep this stable so TF never tries to replace it
-  name = "${var.project}-cluster" # agroai-manulife-pilot-cluster
+  name = "${var.project}-cluster"   # e.g., agroai-manulife-pilot-cluster
   tags = local.tags
 }
 
-#########################
-# Security group for ECS
-#########################
+# --- SG for tasks (use name_prefix to avoid duplicate-name errors) ---
 resource "aws_security_group" "ecs_tasks" {
-  # Use prefix so we never collide on re-creates
   name_prefix = "${var.project}-ecs-tasks-"
   description = "Allow HTTP egress/ingress for ECS tasks"
   vpc_id      = data.aws_vpc.default.id
@@ -86,11 +83,9 @@ resource "aws_security_group" "ecs_tasks" {
   tags = local.tags
 }
 
-#####################
-# Task definition
-#####################
+# --- Task definition ---
 resource "aws_ecs_task_definition" "app" {
-  family                   = "${var.project}-api"
+  family                   = "${var.project}-api"   # e.g., agroai-manulife-pilot-api
   requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
   cpu                      = 256
@@ -100,19 +95,23 @@ resource "aws_ecs_task_definition" "app" {
 
   container_definitions = jsonencode([
     {
-      name      = "api"
-      image     = "${var.container_image}:latest" # tag added here
-      essential = true
-      portMappings = [
-        { containerPort = 80, protocol = "tcp" }
+      name         = "api"
+      image        = "${data.aws_ecr_repository.api.repository_url}:latest"
+      essential    = true
+      portMappings = [{ containerPort = 80, protocol = "tcp" }]
+
+      environment = [
+        { name = "HEALTH_CHECK_PATH", value = var.health_check_path }
       ]
+
       healthCheck = {
-        command     = ["CMD-SHELL", "curl -f http://localhost${var.health_check_path} || exit 1"]
+        command     = ["CMD-SHELL", "curl -fsS http://localhost$HEALTH_CHECK_PATH || exit 1"]
         interval    = 30
         timeout     = 5
         retries     = 3
         startPeriod = 10
       }
+
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -125,9 +124,7 @@ resource "aws_ecs_task_definition" "app" {
   ])
 }
 
-################
-# ECS service
-################
+# --- ECS service (1 task, public IP) ---
 resource "aws_ecs_service" "svc" {
   name            = "${var.project}-svc"
   cluster         = aws_ecs_cluster.pilot.id
@@ -135,24 +132,21 @@ resource "aws_ecs_service" "svc" {
   desired_count   = 1
   launch_type     = "FARGATE"
   propagate_tags  = "SERVICE"
+  tags            = local.tags
 
-  # Safer deployments
+  network_configuration {
+    subnets          = data.aws_subnets.default.ids
+    security_groups  = [aws_security_group.ecs_tasks.id]
+    assign_public_ip = true
+  }
+
   deployment_circuit_breaker {
     enable   = true
     rollback = true
   }
+
   force_new_deployment  = true
   wait_for_steady_state = true
 
-  network_configuration {
-    subnets         = data.aws_subnets.default.ids
-    security_groups = [aws_security_group.ecs_tasks.id]
-    assign_public_ip = true
-  }
-
-  tags = local.tags
-
-  depends_on = [
-    aws_cloudwatch_log_group.ecs
-  ]
+  depends_on = [aws_cloudwatch_log_group.ecs]
 }
