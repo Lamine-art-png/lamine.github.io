@@ -136,13 +136,24 @@ resource "aws_ecs_task_definition" "app" {
 # ECS service
 #####################
 resource "aws_ecs_service" "svc" {
-  name            = "${var.project}-svc"
-  cluster         = aws_ecs_cluster.pilot.id
-  task_definition = aws_ecs_task_definition.app.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
-  propagate_tags  = "SERVICE"
-  tags            = local.tags
+  # ...existing...
+  desired_count = 1
+
+  # single-task rollout (no overlap)
+  deployment_minimum_healthy_percent = 0
+  deployment_maximum_percent        = 100
+
+  # safer deploys (auto-rollback on bad task)
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
+  # if your app needs a few seconds to boot, give it grace
+  health_check_grace_period_seconds = 30
+
+  # ...existing network_configuration, etc...
+}
 
   network_configuration {
     subnets         = data.aws_subnets.default.ids
