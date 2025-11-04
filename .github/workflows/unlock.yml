@@ -4,31 +4,29 @@ on:
   workflow_dispatch:
     inputs:
       lock_id:
-        description: "Terraform lock ID (UUID from the error)"
+        description: "Terraform lock ID (UUID) from the error"
         required: true
-        type: string
 
 permissions:
-  id-token: write      # <-- REQUIRED for OIDC
+  id-token: write
   contents: read
 
 jobs:
   unlock:
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
     steps:
       - uses: actions/checkout@v4
-
-      - name: Configure AWS (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}   # already used in your other workflows
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: us-west-1
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5
+      - name: Init backend
+        run: terraform init -reconfigure -upgrade
       - name: Force unlock
-        working-directory: terraform
-        run: |
-          terraform init -reconfigure -input=false
-          terraform force-unlock -force "${{ inputs.lock_id }}"
+        run: terraform force-unlock -force "${{ inputs.lock_id }}"
