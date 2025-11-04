@@ -1,13 +1,16 @@
 #####################
-# Locals & VPC lookups
+# Tags
 #####################
 locals {
   tags = {
-    ManagedBy = "terraform"
     Project   = var.project
+    ManagedBy = "terraform"
   }
 }
 
+#####################
+# Networking (default VPC + subnets)
+#####################
 data "aws_vpc" "default" {
   default = true
 }
@@ -20,7 +23,34 @@ data "aws_subnets" "default" {
 }
 
 #####################
-# CloudWatch logs
+# Security Group (use prefix to avoid name clashes)
+#####################
+resource "aws_security_group" "ecs_tasks" {
+  name_prefix = "${var.project}-ecs-tasks-"
+  description = "Allow HTTP egress/ingress for ECS tasks"
+  vpc_id      = data.aws_vpc.default.id
+
+  ingress {
+    from_port        = 80
+    to_port          = 80
+    protocol         = "tcp"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  egress {
+    from_port        = 0
+    to_port          = 0
+    protocol         = "-1"
+    cidr_blocks      = ["0.0.0.0/0"]
+    ipv6_cidr_blocks = ["::/0"]
+  }
+
+  tags = local.tags
+}
+
+#####################
+# Logs
 #####################
 resource "aws_cloudwatch_log_group" "ecs" {
   name              = "/ecs/${var.project}"
@@ -29,47 +59,7 @@ resource "aws_cloudwatch_log_group" "ecs" {
 }
 
 #####################
-# ECS cluster (with Container Insights)
-#####################
-resource "aws_ecs_cluster" "pilot" {
-  name = var.project
-  setting {
-    name  = "containerInsights"
-    value = "enabled"
-  }
-  tags = local.tags
-}
-
-#####################
-# Security group for tasks
-#####################
-resource "aws_security_group" "ecs_tasks" {
-  name        = "${var.project}-ecs-tasks-sg"
-  description = "Allow HTTP egress/ingress for ECS tasks"
-  vpc_id      = data.aws_vpc.default.id
-  tags        = local.tags
-
-  # Inbound: HTTP from anywhere (adjust as needed)
-  ingress {
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
-  }
-
-  # Outbound: everything
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
-  }
-}
-
-#####################
-# IAM: ECS task execution role
+# IAM (task execution role)
 #####################
 data "aws_iam_policy_document" "ecs_task_assume_role" {
   statement {
@@ -87,18 +77,28 @@ resource "aws_iam_role" "ecs_task_execution" {
   tags               = local.tags
 }
 
+# Standard ECS task execution permissions (includes pulling from ECR, writing logs)
 resource "aws_iam_role_policy_attachment" "ecs_exec_basic" {
   role       = aws_iam_role.ecs_task_execution.name
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
+# (Optional) extra ECR read; harmless if redundant
 resource "aws_iam_role_policy_attachment" "ecs_exec_ecr_ro" {
   role       = aws_iam_role.ecs_task_execution.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
 }
 
 #####################
-# Task definition (Fargate, container on port 80)
+# ECS cluster (KEEP the existing name to avoid replacement)
+#####################
+resource "aws_ecs_cluster" "pilot" {
+  name = "${var.project}-cluster"  # resolves to agroai-manulife-pilot-cluster
+  tags = local.tags
+}
+
+#####################
+# Task definition
 #####################
 resource "aws_ecs_task_definition" "app" {
   family                   = "${var.project}-api"
@@ -106,20 +106,16 @@ resource "aws_ecs_task_definition" "app" {
   network_mode             = "awsvpc"
   cpu                      = 256
   memory                   = 512
-
-  execution_role_arn = aws_iam_role.ecs_task_execution.arn
-  tags               = local.tags
+  execution_role_arn       = aws_iam_role.ecs_task_execution.arn
+  tags                     = local.tags
 
   container_definitions = jsonencode([
     {
-      name      = "api"
-      image = "${var.container_image}:latest"
-      # e.g. 12345.dkr.ecr.us-west-1.amazonaws.com/agroai-manulife-pilot-api:latest
-      essential = true
-      portMappings = [
-        { containerPort = 80, protocol = "tcp" }
-      ]
-      healthCheck = {
+      name         = "api"
+      image        = "${var.container_image}:latest"   # repo from variables.tf + :latest
+      essential    = true
+      portMappings = [{ containerPort = 80, protocol = "tcp" }]
+      healthCheck  = {
         command     = ["CMD-SHELL", "curl -f http://localhost${var.health_check_path} || exit 1"]
         interval    = 30
         timeout     = 5
@@ -139,7 +135,7 @@ resource "aws_ecs_task_definition" "app" {
 }
 
 #####################
-# ECS service (1 task, public IP)
+# ECS service
 #####################
 resource "aws_ecs_service" "svc" {
   name            = "${var.project}-svc"
@@ -156,9 +152,14 @@ resource "aws_ecs_service" "svc" {
     assign_public_ip = true
   }
 
-  force_new_deployment = true
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
 
-  depends_on = [
-    aws_cloudwatch_log_group.ecs
-  ]
+  force_new_deployment  = true
+  wait_for_steady_state = true
+
+  # Make sure the log group exists before the first task starts
+  depends_on = [aws_cloudwatch_log_group.ecs]
 }
