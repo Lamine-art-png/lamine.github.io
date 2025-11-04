@@ -1,25 +1,34 @@
 name: TF Force Unlock
+
 on:
   workflow_dispatch:
     inputs:
       lock_id:
-        description: "Terraform lock ID from the error (the long UUID)"
+        description: "Terraform lock ID (UUID from the error)"
         required: true
+        type: string
+
+permissions:
+  id-token: write      # <-- REQUIRED for OIDC
+  contents: read
+
 jobs:
   unlock:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Configure AWS (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}   # already used in your other workflows
           aws-region: us-west-1
 
-      - uses: hashicorp/setup-terraform@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
 
       - name: Force unlock
         working-directory: terraform
         run: |
-          terraform init -reconfigure
-          terraform force-unlock -force "${{ github.event.inputs.lock_id }}"
+          terraform init -reconfigure -input=false
+          terraform force-unlock -force "${{ inputs.lock_id }}"
