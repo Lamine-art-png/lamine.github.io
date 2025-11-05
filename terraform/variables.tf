@@ -10,8 +10,16 @@ variable "aws_region" {
   default     = "us-west-1"
 }
 
+# Change this to 8000/8080 if your app uses that port
+variable "container_port" {
+  description = "Container/app listening port"
+  type        = number
+  default     = 80
+}
+
+# Path used by the health check
 variable "health_check_path" {
-  description = "Path the container must return 200 on"
+  description = "HTTP path for container health check"
   type        = string
-  default     = "/health"
+  default     = "/"
 }
