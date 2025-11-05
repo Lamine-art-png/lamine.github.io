@@ -53,11 +53,6 @@ resource "aws_ecs_cluster" "pilot" {
   tags = local.tags
 }
 
-# --- ECR (already created) ---
-data "aws_ecr_repository" "api" {
-  name = "agroai-manulife-pilot-api"
-}
-
 # --- Task definition ---
 resource "aws_ecs_task_definition" "app" {
   family                   = "${var.project}-api"
