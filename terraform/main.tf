@@ -53,7 +53,7 @@ resource "aws_ecs_cluster" "pilot" {
   tags = local.tags
 }
 
-# Lookup your ECR repo (adjust the name if different)
+# --- ECR (must already exist) ---
 data "aws_ecr_repository" "api" {
   name = "agroai-manulife-pilot-api"
 }
@@ -114,25 +114,27 @@ resource "aws_ecs_service" "svc" {
   propagate_tags  = "SERVICE"
   tags            = local.tags
 
-  # Registers the container to the ALB Target Group (defined in alb.tf)
   load_balancer {
-    target_group_arn = aws_lb_target_group.api.arn
-    container_name   = "api"                   # must match the container name above
+    target_group_arn = aws_lb_target_group.api.arn   # defined in alb.tf
+    container_name   = "api"
     container_port   = var.container_port
   }
 
   network_configuration {
     subnets          = data.aws_subnets.default.ids
-    security_groups  = [aws_security_group.ecs_tasks.id]  # SG defined in alb.tf
+    security_groups  = [aws_security_group.ecs_tasks.id]  # defined in alb.tf
     assign_public_ip = true
   }
 
-  deployment_circuit_breaker { enable = true, rollback = true }
+  deployment_circuit_breaker {
+    enable   = true
+    rollback = true
+  }
+
   force_new_deployment  = true
   wait_for_steady_state = true
 
-  depends_on = [
-    aws_lb_listener.https,                     # from alb.tf
-    aws_cloudwatch_log_group.ecs
-  ]
+  # Listener dependency is optional—remove if you don't define it in alb.tf
+  # depends_on = [aws_lb_listener.https, aws_cloudwatch_log_group.ecs]
+  depends_on = [aws_cloudwatch_log_group.ecs]
 }
