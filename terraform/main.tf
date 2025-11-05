@@ -54,9 +54,10 @@ resource "aws_ecs_cluster" "pilot" {
 }
 
 # --- Security Group: open the actual app port to the world ---
+# main.tf
 resource "aws_security_group" "ecs_tasks" {
   name_prefix = "${var.project}-ecs-tasks-"
-  description = "Allow ingress to app port and all egress for ECS tasks"
+  description = "Allow HTTP egress/ingress for ECS tasks"
   vpc_id      = data.aws_vpc.default.id
 
   ingress {
@@ -73,6 +74,12 @@ resource "aws_security_group" "ecs_tasks" {
     protocol         = "-1"
     cidr_blocks      = ["0.0.0.0/0"]
     ipv6_cidr_blocks = ["::/0"]
+  }
+
+  # Important for safe replace
+  revoke_rules_on_delete = true
+  lifecycle {
+    create_before_destroy = true
   }
 
   tags = local.tags
