@@ -21,5 +21,6 @@ output "alb_dns_name" {
 }
 
 output "api_url" {
-  value = "https://${var.domain_name}"
+  description = "Public URL for the API"
+  value       = var.domain_name != "" ? "https://${var.domain_name}" : "https://${aws_lb.api.dns_name}"
 }
