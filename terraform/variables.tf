@@ -20,12 +20,23 @@ variable "container_port" {
   }
 }
 
+# Use /health for ALB health checks
 variable "health_check_path" {
   description = "HTTP path the container must return 200 on"
   type        = string
-  default     = "/"
+  default     = "/health"
   validation {
     condition     = can(regex("^/", var.health_check_path))
     error_message = "health_check_path must start with '/'."
   }
+}
+
+variable "domain_name" {
+  description = "Fully-qualified DNS name for the API (e.g., api.agroai-pilot.com)"
+  type        = string
+}
+
+variable "hosted_zone_id" {
+  description = "Route53 hosted zone ID for the domain"
+  type        = string
 }
