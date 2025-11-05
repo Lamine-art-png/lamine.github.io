@@ -17,3 +17,9 @@ variable "health_check_path" {
   type    = string
   default = "/healthz"
 }
+variable "domain_name" {
+  description = "Optional hostname for the API (e.g., api.example.com). Leave blank to use the ALB DNS."
+  type        = string
+  default     = ""
+}
+
