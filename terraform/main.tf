@@ -126,7 +126,6 @@ resource "aws_ecs_service" "svc" {
     assign_public_ip = true
   }
 
-  # ← proper multi-line block
   deployment_circuit_breaker {
     enable   = true
     rollback = true
