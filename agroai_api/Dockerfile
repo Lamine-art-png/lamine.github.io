@@ -2,18 +2,17 @@
 FROM python:3.11-slim
 WORKDIR /app
 
-# deps + curl for ECS health check
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt \
- && apt-get update && apt-get install -y curl \
+# curl is needed for the ECS health check command in your task def
+RUN apt-get update && apt-get install -y --no-install-recommends curl \
  && rm -rf /var/lib/apt/lists/*
 
-# app code
-COPY app/ app/
+# install Python deps
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-# container port
-ENV PORT=80
+# copy the app
+COPY . .
+
+# expose and run FastAPI on 0.0.0.0:80
 EXPOSE 80
-
-# FastAPI via Uvicorn; note module path: app/app.py -> "app.app:app"
 CMD ["uvicorn", "app.app:app", "--host", "0.0.0.0", "--port", "80"]
