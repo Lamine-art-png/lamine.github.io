@@ -2,19 +2,29 @@ name: infra
 on:
   workflow_dispatch:
   push:
-    paths: ['**.tf', '.github/workflows/infra.yml']
+    paths:
+      - 'terraform/**/*.tf'
+      - '.github/workflows/infra.yml'
+
 jobs:
   plan-apply:
     runs-on: ubuntu-latest
     permissions: { id-token: write, contents: read }
+    defaults:
+      run:
+        working-directory: ./terraform   # <<< run terraform from here
     steps:
       - uses: actions/checkout@v4
+
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ secrets.AWS_REGION }}
+
       - uses: hashicorp/setup-terraform@v3
-        with: { terraform_version: 1.6.6 }
+        with:
+          terraform_version: 1.9.8
+
       - run: terraform init -reconfigure -input=false
       - run: terraform validate
       - run: terraform plan -input=false -out=tfplan
