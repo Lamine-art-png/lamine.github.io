@@ -126,6 +126,7 @@ resource "aws_ecs_service" "svc" {
     assign_public_ip = true
   }
 
+  # <-- This is now correct multi-line syntax
   deployment_circuit_breaker {
     enable   = true
     rollback = true
@@ -134,7 +135,5 @@ resource "aws_ecs_service" "svc" {
   force_new_deployment  = true
   wait_for_steady_state = true
 
-  # Listener dependency is optional—remove if you don't define it in alb.tf
-  # depends_on = [aws_lb_listener.https, aws_cloudwatch_log_group.ecs]
   depends_on = [aws_cloudwatch_log_group.ecs]
 }
