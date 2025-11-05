@@ -1,4 +1,4 @@
-name: CI - Build & Check Terraform
+name: CI - Terraform Lint & Plan
 
 on:
   pull_request:
@@ -17,25 +17,35 @@ jobs:
       run:
         shell: bash
         working-directory: terraform
+
     steps:
       - uses: actions/checkout@v4
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.7.5
+          terraform_version: 1.9.5
 
-      - name: Terraform fmt (check only)
+      - name: terraform fmt (check)
         run: terraform fmt -check -recursive
 
-      - name: Terraform init (no backend, faster)
-        run: terraform init -backend=false
+      - name: terraform init (no backend, faster)
+        run: terraform init -backend=false -upgrade
 
-      - name: Terraform validate
+      - name: terraform validate
         run: terraform validate
 
-      - name: Terraform plan (no backend, for PR review)
-        run: terraform plan -no-color || true
+      # Write the plan to a file that the comment step can read
+      - name: terraform plan (no backend)
+        id: plan
+        continue-on-error: true
+        run: terraform plan -no-color | tee plan.out.txt
+
+      - name: Upload plan as artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: terraform/plan.out.txt
 
       - name: Comment plan on PR
         if: ${{ github.event_name == 'pull_request' }}
@@ -43,8 +53,3 @@ jobs:
         with:
           recreate: true
           path: terraform/plan.out.txt
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      - name: Save plan to file
-        if: ${{ always() }}
-        run: terraform plan -no-color > plan.out.txt || true
