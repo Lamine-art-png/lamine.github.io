@@ -53,7 +53,7 @@ resource "aws_ecs_cluster" "pilot" {
   tags = local.tags
 }
 
-# --- ECR (must already exist) ---
+# --- ECR (already created) ---
 data "aws_ecr_repository" "api" {
   name = "agroai-manulife-pilot-api"
 }
@@ -126,7 +126,7 @@ resource "aws_ecs_service" "svc" {
     assign_public_ip = true
   }
 
-  # <-- This is now correct multi-line syntax
+  # ← proper multi-line block
   deployment_circuit_breaker {
     enable   = true
     rollback = true
