@@ -5,7 +5,7 @@ locals {
   }
 }
 
-# --- Networking: default VPC + its subnets ---
+# --- Networking: default VPC + subnets ---
 data "aws_vpc" "default" {
   default = true
 }
@@ -53,38 +53,12 @@ resource "aws_ecs_cluster" "pilot" {
   tags = local.tags
 }
 
-# --- Security Group: open the actual app port to the world ---
-# main.tf
-resource "aws_security_group" "ecs_tasks" {
-  name_prefix = "${var.project}-ecs-tasks-"
-  description = "Allow HTTP egress/ingress for ECS tasks"
-  vpc_id      = data.aws_vpc.default.id
-
-  ingress {
-    from_port        = var.container_port
-    to_port          = var.container_port
-    protocol         = "tcp"
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
-  }
-
-  egress {
-    from_port        = 0
-    to_port          = 0
-    protocol         = "-1"
-    cidr_blocks      = ["0.0.0.0/0"]
-    ipv6_cidr_blocks = ["::/0"]
-  }
-
-  # Important for safe replace
-  revoke_rules_on_delete = true
-  lifecycle {
-    create_before_destroy = true
-  }
-
-  tags = local.tags
+# Lookup your ECR repo (adjust the name if different)
+data "aws_ecr_repository" "api" {
+  name = "agroai-manulife-pilot-api"
 }
 
+# --- Task definition ---
 resource "aws_ecs_task_definition" "app" {
   family                   = "${var.project}-api"
   requires_compatibilities = ["FARGATE"]
@@ -100,13 +74,10 @@ resource "aws_ecs_task_definition" "app" {
       image     = "${data.aws_ecr_repository.api.repository_url}:latest"
       essential = true
 
-      # ⬇⬇ your port mapping, env, and health check live here
-      portMappings = [
-        {
-          containerPort = var.container_port
-          protocol      = "tcp"
-        }
-      ]
+      portMappings = [{
+        containerPort = var.container_port
+        protocol      = "tcp"
+      }]
 
       environment = [
         { name = "HEALTH_CHECK_PATH", value = var.health_check_path },
@@ -133,7 +104,7 @@ resource "aws_ecs_task_definition" "app" {
   ])
 }
 
-# --- ECS Service (1 task, public IP) ---
+# --- ECS Service (behind ALB) ---
 resource "aws_ecs_service" "svc" {
   name            = "${var.project}-svc"
   cluster         = aws_ecs_cluster.pilot.id
@@ -143,16 +114,16 @@ resource "aws_ecs_service" "svc" {
   propagate_tags  = "SERVICE"
   tags            = local.tags
 
-  # Register the container with the ALB Target Group
+  # Registers the container to the ALB Target Group (defined in alb.tf)
   load_balancer {
     target_group_arn = aws_lb_target_group.api.arn
-    container_name   = "api"                # must match the container name in the task definition
+    container_name   = "api"                   # must match the container name above
     container_port   = var.container_port
   }
 
   network_configuration {
     subnets          = data.aws_subnets.default.ids
-    security_groups  = [aws_security_group.ecs_tasks.id]  # tightened SG that only allows ALB
+    security_groups  = [aws_security_group.ecs_tasks.id]  # SG defined in alb.tf
     assign_public_ip = true
   }
 
@@ -160,9 +131,8 @@ resource "aws_ecs_service" "svc" {
   force_new_deployment  = true
   wait_for_steady_state = true
 
-  # Ensure the HTTPS listener (and cert) exist before the service registers
   depends_on = [
-    aws_lb_listener.https,
+    aws_lb_listener.https,                     # from alb.tf
     aws_cloudwatch_log_group.ecs
   ]
 }
