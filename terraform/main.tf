@@ -96,17 +96,21 @@ resource "aws_ecs_task_definition" "app" {
 
   container_definitions = jsonencode([
     {
-      name         = "api"
-      image        = "${data.aws_ecr_repository.api.repository_url}:latest"
-      essential    = true
+      name      = "api"
+      image     = "${data.aws_ecr_repository.api.repository_url}:latest"
+      essential = true
 
+      # ⬇⬇ your port mapping, env, and health check live here
       portMappings = [
-        { containerPort = var.container_port, protocol = "tcp" }
+        {
+          containerPort = var.container_port
+          protocol      = "tcp"
+        }
       ]
 
       environment = [
         { name = "HEALTH_CHECK_PATH", value = var.health_check_path },
-        { name = "PORT", value = tostring(var.container_port) }
+        { name = "PORT",              value = tostring(var.container_port) }
       ]
 
       healthCheck = {
