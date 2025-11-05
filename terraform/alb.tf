@@ -1,4 +1,4 @@
-# --- ALB SG ---
+# --- ALB security group ---
 resource "aws_security_group" "alb" {
   name   = "${var.project}-alb"
   vpc_id = data.aws_vpc.default.id
@@ -20,7 +20,7 @@ resource "aws_security_group" "alb" {
   tags = local.tags
 }
 
-# --- Tasks SG (only here, not in main.tf) ---
+# --- ECS tasks security group (only here; NOT in main.tf) ---
 resource "aws_security_group" "ecs_tasks" {
   name   = "${var.project}-ecs-tasks"
   vpc_id = data.aws_vpc.default.id
