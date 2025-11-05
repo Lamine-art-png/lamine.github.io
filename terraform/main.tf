@@ -143,19 +143,26 @@ resource "aws_ecs_service" "svc" {
   propagate_tags  = "SERVICE"
   tags            = local.tags
 
+  # Register the container with the ALB Target Group
+  load_balancer {
+    target_group_arn = aws_lb_target_group.api.arn
+    container_name   = "api"                # must match the container name in the task definition
+    container_port   = var.container_port
+  }
+
   network_configuration {
     subnets          = data.aws_subnets.default.ids
-    security_groups  = [aws_security_group.ecs_tasks.id]
+    security_groups  = [aws_security_group.ecs_tasks.id]  # tightened SG that only allows ALB
     assign_public_ip = true
   }
 
-  deployment_circuit_breaker {
-    enable   = true
-    rollback = true
-  }
-
+  deployment_circuit_breaker { enable = true, rollback = true }
   force_new_deployment  = true
   wait_for_steady_state = true
 
-  depends_on = [aws_cloudwatch_log_group.ecs]
+  # Ensure the HTTPS listener (and cert) exist before the service registers
+  depends_on = [
+    aws_lb_listener.https,
+    aws_cloudwatch_log_group.ecs
+  ]
 }
