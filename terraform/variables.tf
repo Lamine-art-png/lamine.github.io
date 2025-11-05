@@ -1,21 +1,19 @@
 variable "project" {
-  description = "Project name prefix"
-  type        = string
+  type    = string
+  default = "agroai-manulife-pilot"
 }
 
 variable "aws_region" {
-  description = "AWS region"
-  type        = string
+  type    = string
+  default = "us-west-2"
 }
 
 variable "container_port" {
-  description = "Container port exposed by the API"
-  type        = number
-  default     = 8080
+  type    = number
+  default = 8000
 }
 
 variable "health_check_path" {
-  description = "HTTP path for health check"
-  type        = string
-  default     = "/healthz"
+  type    = string
+  default = "/healthz"
 }
