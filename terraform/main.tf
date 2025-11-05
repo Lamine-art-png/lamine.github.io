@@ -78,7 +78,6 @@ resource "aws_security_group" "ecs_tasks" {
   tags = local.tags
 }
 
-# --- Task Definition (Fargate) ---
 resource "aws_ecs_task_definition" "app" {
   family                   = "${var.project}-api"
   requires_compatibilities = ["FARGATE"]
@@ -93,26 +92,22 @@ resource "aws_ecs_task_definition" "app" {
       name         = "api"
       image        = "${data.aws_ecr_repository.api.repository_url}:latest"
       essential    = true
+
       portMappings = [
-        {
-          containerPort = var.container_port
-          protocol      = "tcp"
-        }
+        { containerPort = var.container_port, protocol = "tcp" }
       ]
 
       environment = [
-        { name = "PORT",               value = tostring(var.container_port) },
-        { name = "HEALTH_CHECK_PATH",  value = var.health_check_path }
+        { name = "HEALTH_CHECK_PATH", value = var.health_check_path },
+        { name = "PORT", value = tostring(var.container_port) }
       ]
 
-      # NOTE: Requires curl inside the container image. If you don't have it yet,
-      # temporarily remove this healthCheck block, deploy, then add curl in the image and re-enable.
       healthCheck = {
-        command     = ["CMD-SHELL", "curl -fsS http://127.0.0.1:$PORT$HEALTH_CHECK_PATH || exit 1"]
+        command     = ["CMD-SHELL", "curl -fsS http://localhost$HEALTH_CHECK_PATH || exit 1"]
         interval    = 30
         timeout     = 5
         retries     = 3
-        startPeriod = 30
+        startPeriod = 10
       }
 
       logConfiguration = {
