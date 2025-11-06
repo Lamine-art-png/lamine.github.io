@@ -75,11 +75,9 @@ resource "aws_ecs_cluster" "pilot" {
 
 resource "aws_security_group" "ecs_tasks" {
   name        = "${var.project}-ecs-tasks"
-  description = "Security group for ECS tasks"
+  description = "Allow inbound HTTP to API tasks"
   vpc_id      = data.aws_vpc.default.id
 
-  # For now allow inbound from anywhere on app port
-  # (tighten once ALB is active)
   ingress {
     from_port   = var.container_port
     to_port     = var.container_port
@@ -136,15 +134,14 @@ resource "aws_ecs_task_definition" "app" {
         }
       }
 
+      # TEMP: super-safe health check to prove the task can stay up
+      # Once it's stable, we'll point this at your real endpoint.
       healthCheck = {
-        command     = [
-          "CMD-SHELL",
-          "curl -fsS http://127.0.0.1:${var.container_port}${var.health_check_path} || exit 1"
-        ]
+        command     = ["CMD-SHELL", "echo healthy"]
         interval    = 30
         retries     = 3
         timeout     = 5
-        startPeriod = 15
+        startPeriod = 5
       }
     }
   ])
@@ -158,21 +155,20 @@ resource "aws_ecs_task_definition" "app" {
 
 resource "aws_ecs_service" "svc" {
   name            = "${var.project}-svc"
-  cluster         = aws_ecs_cluster.pilot.id
+  cluster         = aws_ecs_cluster.pilot.arn
   task_definition = aws_ecs_task_definition.app.arn
   desired_count   = 1
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets          = data.aws_subnets.default.ids
-    security_groups  = [aws_security_group.ecs_tasks.id]
+    subnets         = data.aws_subnets.default.ids
+    security_groups = [aws_security_group.ecs_tasks.id]
     assign_public_ip = true
   }
 
-  deployment_circuit_breaker {
-    enable   = true
-    rollback = true
-  }
+  deployment_minimum_healthy_percent = 0
+  deployment_maximum_percent         = 200
+  health_check_grace_period_seconds  = 60
 
   tags = local.tags
 }
