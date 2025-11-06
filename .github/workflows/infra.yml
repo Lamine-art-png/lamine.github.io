@@ -4,19 +4,21 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - 'terraform/**.tf'
+      - 'terraform/**/*.tf'
       - '.github/workflows/infra.yml'
 
 jobs:
   plan-apply:
     runs-on: ubuntu-latest
-    permissions: { id-token: write, contents: read }
+    permissions:
+      id-token: write
+      contents: read
 
-    # Make region available to Terraform variables
+    # Make region available to Terraform (matches variables.tf default)
     env:
       TF_VAR_aws_region: ${{ secrets.AWS_REGION }}
 
-    # Run all shell steps from the terraform/ folder
+    # All shell steps run from terraform/ directory
     defaults:
       run:
         working-directory: terraform
@@ -24,11 +26,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # <<< OIDC role + region (must come before any AWS/TF steps) >>>
+      # Configure AWS via GitHub OIDC
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region:     ${{ secrets.AWS_REGION }}
+          aws-region: ${{ secrets.AWS_REGION }}
 
       - uses: hashicorp/setup-terraform@v3
         with:
@@ -41,7 +43,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: tfplan
-          path: tfplan
+          path: terraform/tfplan
 
       - if: github.ref == 'refs/heads/main'
         run: terraform apply -auto-approve tfplan
