@@ -1,3 +1,7 @@
+################################
+# Common tags
+################################
+
 locals {
   tags = {
     Project   = var.project
@@ -5,7 +9,9 @@ locals {
   }
 }
 
-# --- Networking: default VPC + subnets ---
+################################
+# Network data
+################################
 
 data "aws_vpc" "default" {
   default = true
@@ -18,7 +24,9 @@ data "aws_subnets" "default" {
   }
 }
 
-# --- CloudWatch Logs ---
+################################
+# CloudWatch Logs
+################################
 
 resource "aws_cloudwatch_log_group" "ecs" {
   name              = "/ecs/${var.project}"
@@ -26,11 +34,12 @@ resource "aws_cloudwatch_log_group" "ecs" {
   tags              = local.tags
 }
 
-# --- IAM: ECS task execution role ---
+################################
+# IAM: ECS task execution role
+################################
 
 data "aws_iam_policy_document" "ecs_task_assume_role" {
   statement {
-    effect  = "Allow"
     actions = ["sts:AssumeRole"]
 
     principals {
@@ -51,34 +60,59 @@ resource "aws_iam_role_policy_attachment" "ecs_exec_basic" {
   policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
 }
 
-# --- ECS cluster ---
+################################
+# ECS Cluster
+################################
 
 resource "aws_ecs_cluster" "pilot" {
   name = "${var.project}-cluster"
   tags = local.tags
 }
 
-# --- ECR repo lookup (MUST exist: ${var.project}-api in us-west-1) ---
+################################
+# Security Group for tasks
+################################
 
-data "aws_ecr_repository" "api" {
-  name = "${var.project}-api"
+resource "aws_security_group" "ecs_tasks" {
+  name        = "${var.project}-ecs-tasks"
+  description = "Security group for ECS tasks"
+  vpc_id      = data.aws_vpc.default.id
+
+  # For now allow inbound from anywhere on app port
+  # (tighten once ALB is active)
+  ingress {
+    from_port   = var.container_port
+    to_port     = var.container_port
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = local.tags
 }
 
-# --- Task definition ---
+################################
+# Task Definition
+################################
 
 resource "aws_ecs_task_definition" "app" {
   family                   = "${var.project}-api"
-  requires_compatibilities = ["FARGATE"]
   network_mode             = "awsvpc"
-  cpu                      = 256
-  memory                   = 512
+  requires_compatibilities = ["FARGATE"]
+  cpu                      = "256"
+  memory                   = "512"
   execution_role_arn       = aws_iam_role.ecs_task_execution.arn
-  tags                     = local.tags
 
   container_definitions = jsonencode([
     {
       name      = "api"
-      image     = "${data.aws_ecr_repository.api.repository_url}:latest"
+      image     = var.api_image != "" ? var.api_image : "${data.aws_ecr_repository.api.repository_url}:latest"
       essential = true
 
       portMappings = [
@@ -89,17 +123,9 @@ resource "aws_ecs_task_definition" "app" {
       ]
 
       environment = [
+        { name = "PORT",              value = tostring(var.container_port) },
         { name = "HEALTH_CHECK_PATH", value = var.health_check_path },
-        { name = "PORT",              value = tostring(var.container_port) }
       ]
-
-      healthCheck = {
-        command     = ["CMD-SHELL", "curl -fsS http://localhost$HEALTH_CHECK_PATH || exit 1"]
-        interval    = 30
-        timeout     = 5
-        retries     = 3
-        startPeriod = 10
-      }
 
       logConfiguration = {
         logDriver = "awslogs"
@@ -109,11 +135,23 @@ resource "aws_ecs_task_definition" "app" {
           awslogs-stream-prefix = "api"
         }
       }
+
+      healthCheck = {
+        command     = ["CMD-SHELL", "curl -fsS http://localhost${var.health_check_path} || exit 1"]
+        interval    = 30
+        retries     = 3
+        timeout     = 5
+        startPeriod = 10
+      }
     }
   ])
+
+  tags = local.tags
 }
 
-# --- ECS Service ---
+################################
+# ECS Service (no ALB yet)
+################################
 
 resource "aws_ecs_service" "svc" {
   name            = "${var.project}-svc"
@@ -121,18 +159,6 @@ resource "aws_ecs_service" "svc" {
   task_definition = aws_ecs_task_definition.app.arn
   desired_count   = 1
   launch_type     = "FARGATE"
-  propagate_tags  = "SERVICE"
-  tags            = local.tags
-
-  # Register with ALB only if we're creating one
-  dynamic "load_balancer" {
-    for_each = var.create_alb ? [1] : []
-    content {
-      target_group_arn = aws_lb_target_group.api[0].arn
-      container_name   = "api"
-      container_port   = var.container_port
-    }
-  }
 
   network_configuration {
     subnets          = data.aws_subnets.default.ids
@@ -145,12 +171,5 @@ resource "aws_ecs_service" "svc" {
     rollback = true
   }
 
-  force_new_deployment  = true
-  wait_for_steady_state = true
-
-  # Static list; aws_lb_listener.http is fine even with count = 0
-  depends_on = [
-    aws_cloudwatch_log_group.ecs,
-    aws_lb_listener.http
-  ]
+  tags = local.tags
 }
