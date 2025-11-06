@@ -1,7 +1,16 @@
-# --- ALB security group ---
+locals {
+  tags = {
+    Project   = var.project
+    ManagedBy = "terraform"
+  }
+}
+
+# ALB security group (only when create_alb = true)
 resource "aws_security_group" "alb" {
-  name   = "${var.project}-alb"
-  vpc_id = data.aws_vpc.default.id
+  count       = var.create_alb ? 1 : 0
+  name        = "${var.project}-alb"
+  description = "ALB security group"
+  vpc_id      = data.aws_vpc.default.id
 
   ingress {
     from_port   = 80
@@ -20,64 +29,49 @@ resource "aws_security_group" "alb" {
   tags = local.tags
 }
 
-# --- ECS tasks security group (only here; NOT in main.tf) ---
-resource "aws_security_group" "ecs_tasks" {
-  name   = "${var.project}-ecs-tasks"
-  vpc_id = data.aws_vpc.default.id
-
-  ingress {
-    from_port       = var.container_port
-    to_port         = var.container_port
-    protocol        = "tcp"
-    security_groups = [aws_security_group.alb.id]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
+# ALB itself (optional)
+resource "aws_lb" "api" {
+  count                      = var.create_alb ? 1 : 0
+  name                       = "${var.project}-alb"
+  load_balancer_type         = "application"
+  subnets                    = data.aws_subnets.default.ids
+  security_groups            = [aws_security_group.alb[0].id]
+  enable_deletion_protection = false
 
   tags = local.tags
 }
 
-# --- ALB + TG + Listener ---
-resource "aws_lb" "api" {
-  name               = "${var.project}-alb"
-  load_balancer_type = "application"
-  subnets            = data.aws_subnets.default.ids
-  security_groups    = [aws_security_group.alb.id]
-  idle_timeout       = 60
-  tags               = local.tags
-}
-
+# Target group (optional)
 resource "aws_lb_target_group" "api" {
+  count       = var.create_alb ? 1 : 0
   name        = "${var.project}-tg"
   port        = var.container_port
   protocol    = "HTTP"
-  vpc_id      = data.aws_vpc.default.id
   target_type = "ip"
+  vpc_id      = data.aws_vpc.default.id
 
   health_check {
+    enabled             = true
     path                = var.health_check_path
+    matcher             = "200-399"
     interval            = 30
     timeout             = 5
     healthy_threshold   = 2
     unhealthy_threshold = 2
-    matcher             = "200-399"
   }
 
   tags = local.tags
 }
 
+# HTTP listener (optional)
 resource "aws_lb_listener" "http" {
-  load_balancer_arn = aws_lb.api.arn
+  count             = var.create_alb ? 1 : 0
+  load_balancer_arn = aws_lb.api[0].arn
   port              = 80
   protocol          = "HTTP"
 
   default_action {
     type             = "forward"
-    target_group_arn = aws_lb_target_group.api.arn
+    target_group_arn = aws_lb_target_group.api[0].arn
   }
 }
