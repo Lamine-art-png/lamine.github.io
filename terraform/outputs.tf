@@ -1,26 +1,17 @@
-# Core ECS outputs (keep)
-output "cluster_name" {
-  value = aws_ecs_cluster.pilot.name
-}
-
-output "service_name" {
-  value = aws_ecs_service.svc.name
-}
-
-output "task_family" {
-  value = aws_ecs_task_definition.app.family
-}
-
-output "log_group_name" {
-  value = aws_cloudwatch_log_group.ecs.name
-}
-
-# ALB/HTTPS (add)
 output "alb_dns_name" {
-  value = aws_lb.api.dns_name
+  description = "ALB DNS name (empty if ALB not created)"
+  value       = var.create_alb && length(aws_lb.api) > 0 ? aws_lb.api[0].dns_name : ""
 }
 
 output "api_url" {
-  description = "Public URL for the API"
-  value       = var.domain_name != "" ? "https://${var.domain_name}" : "https://${aws_lb.api.dns_name}"
+  description = "API URL (custom domain if set; otherwise ALB DNS; empty if no ALB)"
+  value = (
+    var.domain_name != ""
+      ? "https://${var.domain_name}"
+      : (
+          var.create_alb && length(aws_lb.api) > 0
+            ? "http://${aws_lb.api[0].dns_name}"
+            : ""
+        )
+  )
 }
