@@ -6,6 +6,7 @@ locals {
 }
 
 # --- Networking: default VPC + subnets ---
+
 data "aws_vpc" "default" {
   default = true
 }
@@ -18,6 +19,7 @@ data "aws_subnets" "default" {
 }
 
 # --- CloudWatch Logs ---
+
 resource "aws_cloudwatch_log_group" "ecs" {
   name              = "/ecs/${var.project}"
   retention_in_days = 14
@@ -25,10 +27,12 @@ resource "aws_cloudwatch_log_group" "ecs" {
 }
 
 # --- IAM: ECS task execution role ---
+
 data "aws_iam_policy_document" "ecs_task_assume_role" {
   statement {
     effect  = "Allow"
     actions = ["sts:AssumeRole"]
+
     principals {
       type        = "Service"
       identifiers = ["ecs-tasks.amazonaws.com"]
@@ -48,12 +52,49 @@ resource "aws_iam_role_policy_attachment" "ecs_exec_basic" {
 }
 
 # --- ECS cluster ---
+
 resource "aws_ecs_cluster" "pilot" {
   name = "${var.project}-cluster"
   tags = local.tags
 }
 
+# --- ECR repo lookup ---
+
+data "aws_ecr_repository" "api" {
+  name = "${var.project}-api"
+}
+
+# --- Security group for ECS tasks ---
+
+resource "aws_security_group" "ecs_tasks" {
+  name        = "${var.project}-ecs-tasks"
+  description = "Security group for ECS tasks"
+  vpc_id      = data.aws_vpc.default.id
+
+  # Outbound to anywhere
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  # Inbound only from ALB when it exists
+  dynamic "ingress" {
+    for_each = var.create_alb ? [1] : []
+    content {
+      from_port       = var.container_port
+      to_port         = var.container_port
+      protocol        = "tcp"
+      security_groups = [aws_security_group.alb[0].id]
+    }
+  }
+
+  tags = local.tags
+}
+
 # --- Task definition ---
+
 resource "aws_ecs_task_definition" "app" {
   family                   = "${var.project}-api"
   requires_compatibilities = ["FARGATE"]
@@ -69,10 +110,12 @@ resource "aws_ecs_task_definition" "app" {
       image     = "${data.aws_ecr_repository.api.repository_url}:latest"
       essential = true
 
-      portMappings = [{
-        containerPort = var.container_port
-        protocol      = "tcp"
-      }]
+      portMappings = [
+        {
+          containerPort = var.container_port
+          protocol      = "tcp"
+        }
+      ]
 
       environment = [
         { name = "HEALTH_CHECK_PATH", value = var.health_check_path },
@@ -99,7 +142,8 @@ resource "aws_ecs_task_definition" "app" {
   ])
 }
 
-# --- ECS Service (behind ALB) ---
+# --- ECS Service ---
+
 resource "aws_ecs_service" "svc" {
   name            = "${var.project}-svc"
   cluster         = aws_ecs_cluster.pilot.id
@@ -109,15 +153,19 @@ resource "aws_ecs_service" "svc" {
   propagate_tags  = "SERVICE"
   tags            = local.tags
 
-  load_balancer {
-    target_group_arn = aws_lb_target_group.api.arn   # defined in alb.tf
-    container_name   = "api"
-    container_port   = var.container_port
+  # Attach to ALB only if it exists
+  dynamic "load_balancer" {
+    for_each = var.create_alb ? [1] : []
+    content {
+      target_group_arn = aws_lb_target_group.api[0].arn
+      container_name   = "api"
+      container_port   = var.container_port
+    }
   }
 
   network_configuration {
     subnets          = data.aws_subnets.default.ids
-    security_groups  = [aws_security_group.ecs_tasks.id]  # defined in alb.tf
+    security_groups  = [aws_security_group.ecs_tasks.id]
     assign_public_ip = true
   }
 
@@ -129,5 +177,8 @@ resource "aws_ecs_service" "svc" {
   force_new_deployment  = true
   wait_for_steady_state = true
 
-  depends_on = [aws_cloudwatch_log_group.ecs]
+  depends_on = concat(
+    [aws_cloudwatch_log_group.ecs],
+    var.create_alb ? [aws_lb_listener.http[0]] : []
+  )
 }
