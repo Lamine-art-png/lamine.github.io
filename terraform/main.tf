@@ -58,39 +58,10 @@ resource "aws_ecs_cluster" "pilot" {
   tags = local.tags
 }
 
-# --- ECR repo lookup ---
+# --- ECR repo lookup (MUST exist: ${var.project}-api in us-west-1) ---
 
 data "aws_ecr_repository" "api" {
   name = "${var.project}-api"
-}
-
-# --- Security group for ECS tasks ---
-
-resource "aws_security_group" "ecs_tasks" {
-  name        = "${var.project}-ecs-tasks"
-  description = "Security group for ECS tasks"
-  vpc_id      = data.aws_vpc.default.id
-
-  # Outbound to anywhere
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  # Inbound only from ALB when it exists
-  dynamic "ingress" {
-    for_each = var.create_alb ? [1] : []
-    content {
-      from_port       = var.container_port
-      to_port         = var.container_port
-      protocol        = "tcp"
-      security_groups = [aws_security_group.alb[0].id]
-    }
-  }
-
-  tags = local.tags
 }
 
 # --- Task definition ---
@@ -153,7 +124,7 @@ resource "aws_ecs_service" "svc" {
   propagate_tags  = "SERVICE"
   tags            = local.tags
 
-  # Attach to ALB only if it exists
+  # Register with ALB only if we're creating one
   dynamic "load_balancer" {
     for_each = var.create_alb ? [1] : []
     content {
@@ -177,8 +148,9 @@ resource "aws_ecs_service" "svc" {
   force_new_deployment  = true
   wait_for_steady_state = true
 
-  depends_on = concat(
-    [aws_cloudwatch_log_group.ecs],
-    var.create_alb ? [aws_lb_listener.http[0]] : []
-  )
+  # Static list; aws_lb_listener.http is fine even with count = 0
+  depends_on = [
+    aws_cloudwatch_log_group.ecs,
+    aws_lb_listener.http
+  ]
 }
