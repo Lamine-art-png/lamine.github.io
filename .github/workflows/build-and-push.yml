@@ -1,48 +1,48 @@
-name: CI+CD - Build API image and push to ECR
+name: build-and-push
 
 on:
   workflow_dispatch:
   push:
-    branches: [ "main" ]
     paths:
-      - "agroai_api/**"
-      - ".github/workflows/build-api.yml"
-
-permissions:
-  id-token: write
-  contents: read
-
-env:
-  AWS_REGION: us-west-1
-  AWS_ACCOUNT_ID: "292039821285"
-  ECR_REPOSITORY: "agroai-manulife-pilot-api"
-  IMAGE_TAG: "${{ github.sha }}"
+      - 'Dockerfile'
+      - 'agroai_api/**'
+      - '.github/workflows/build-and-push.yml'
 
 jobs:
-  build-and-push:
+  build-push:
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    env:
+      AWS_REGION: ${{ secrets.AWS_REGION }}
+      # This MUST match the ECR repo Terraform is using
+      ECR_REPO_NAME: agroai-manulife-pilot-api
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Configure AWS (OIDC)
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
-      - name: Login to Amazon ECR
-        id: ecr
+      - name: Ensure ECR repo exists
+        run: |
+          aws ecr describe-repositories --repository-names "$ECR_REPO_NAME" \
+          || aws ecr create-repository --repository-name "$ECR_REPO_NAME"
+
+      - name: Login to ECR
+        id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build & push image
-        uses: docker/build-push-action@v5
-        with:
-          context: ./agroai_api
-          file: ./agroai_api/Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: |
-            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
-            ${{ steps.ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ env.IMAGE_TAG }}
+      - name: Build and push Docker image
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: latest
+        run: |
+          docker build -t "$ECR_REGISTRY/$ECR_REPO_NAME:$IMAGE_TAG" .
+          docker push "$ECR_REGISTRY/$ECR_REPO_NAME:$IMAGE_TAG"
