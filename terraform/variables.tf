@@ -25,6 +25,7 @@ variable "domain_name" {
 }
 
 variable "create_alb" {
-  type    = bool
-  default = false  # flip to true once ALB creation is allowed
+  description = "Whether to create ALB + listener + target group. Keep false while ELB is blocked on your account."
+  type        = bool
+  default     = false
 }
