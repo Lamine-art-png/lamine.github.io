@@ -18,14 +18,14 @@ variable "health_check_path" {
   default = "/healthz"
 }
 
-variable "domain_name" {
-  description = "Optional hostname for the API (e.g., api.example.com). Leave blank to use the ALB DNS."
-  type        = string
-  default     = ""
+variable "create_alb" {
+  description = "If true, create ALB + listeners + SG and (later) wire ECS service to it."
+  type        = bool
+  default     = false  # keep false until AWS lifts your ELB restriction
 }
 
-variable "create_alb" {
-  description = "Whether to create ALB + listener + target group. Keep false while ELB is blocked on your account."
-  type        = bool
-  default     = false
+variable "api_image" {
+  description = "ECR image:tag for the API. If empty, ':latest' in the repo is used."
+  type        = string
+  default     = ""
 }
