@@ -137,11 +137,14 @@ resource "aws_ecs_task_definition" "app" {
       }
 
       healthCheck = {
-        command     = ["CMD-SHELL", "curl -fsS http://localhost${var.health_check_path} || exit 1"]
+        command     = [
+          "CMD-SHELL",
+          "curl -fsS http://127.0.0.1:${var.container_port}${var.health_check_path} || exit 1"
+        ]
         interval    = 30
         retries     = 3
         timeout     = 5
-        startPeriod = 10
+        startPeriod = 15
       }
     }
   ])
