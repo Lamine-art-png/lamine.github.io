@@ -1,35 +1,38 @@
 name: deploy-api
+
 on:
   workflow_dispatch:
   push:
-    paths: ['api/**', '.github/workflows/deploy.yml']
+    branches: [ main ]
+    paths:
+      - '.github/workflows/deploy.yml'
+
 jobs:
-  build-push:
+  deploy:
     runs-on: ubuntu-latest
-    permissions: { id-token: write, contents: read }
+    permissions:
+      id-token: write
+      contents: read
+
     env:
       AWS_REGION: ${{ secrets.AWS_REGION }}
-      REPO_NAME: ${{ vars.ECR_REPO }}
+      CLUSTER_NAME: agroai-manulife-pilot-cluster
+      SERVICE_NAME: agroai-manulife-pilot-svc
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: aws-actions/configure-aws-credentials@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-      - name: Ensure ECR repo
-        run: |
-          aws ecr describe-repositories --repository-names "$REPO_NAME" || \
-          aws ecr create-repository --repository-name "$REPO_NAME"
-      - uses: aws-actions/amazon-ecr-login@v2
-        id: ecr
-      - name: Build & push
-        run: |
-          IMAGE="${{ steps.ecr.outputs.registry }}/$REPO_NAME:latest"
-          docker build -t "$IMAGE" .
-          docker push "$IMAGE"
-      - name: Force ECS rollout
+
+      - name: Force new ECS deployment
         run: |
           aws ecs update-service \
-            --cluster "${{ vars.PROJECT }}-cluster" \
-            --service "${{ vars.PROJECT }}-svc" \
-            --force-new-deployment
+            --cluster "$CLUSTER_NAME" \
+            --service "$SERVICE_NAME" \
+            --force-new-deployment \
+            --region "$AWS_REGION"
