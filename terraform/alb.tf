@@ -1,11 +1,43 @@
-locals {
-  tags = {
-    Project   = var.project
-    ManagedBy = "terraform"
+# ECS tasks security group (always)
+resource "aws_security_group" "ecs_tasks" {
+  name        = "${var.project}-ecs-tasks"
+  description = "Security group for ECS tasks"
+  vpc_id      = data.aws_vpc.default.id
+
+  # Outbound to anywhere
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
   }
+
+  # When ALB exists, restrict ingress to ALB SG
+  dynamic "ingress" {
+    for_each = var.create_alb ? [1] : []
+    content {
+      from_port       = var.container_port
+      to_port         = var.container_port
+      protocol        = "tcp"
+      security_groups = [aws_security_group.alb[0].id]
+    }
+  }
+
+  # When ALB does not exist, allow direct access for testing
+  dynamic "ingress" {
+    for_each = var.create_alb ? [] : [1]
+    content {
+      from_port   = var.container_port
+      to_port     = var.container_port
+      protocol    = "tcp"
+      cidr_blocks = ["0.0.0.0/0"]
+    }
+  }
+
+  tags = local.tags
 }
 
-# ALB security group (only when create_alb = true)
+# ALB security group (only if create_alb = true)
 resource "aws_security_group" "alb" {
   count       = var.create_alb ? 1 : 0
   name        = "${var.project}-alb"
@@ -29,14 +61,14 @@ resource "aws_security_group" "alb" {
   tags = local.tags
 }
 
-# ALB itself (optional)
+# ALB (optional)
 resource "aws_lb" "api" {
-  count                      = var.create_alb ? 1 : 0
-  name                       = "${var.project}-alb"
-  load_balancer_type         = "application"
-  subnets                    = data.aws_subnets.default.ids
-  security_groups            = [aws_security_group.alb[0].id]
-  enable_deletion_protection = false
+  count              = var.create_alb ? 1 : 0
+  name               = "${var.project}-alb"
+  load_balancer_type = "application"
+  subnets            = data.aws_subnets.default.ids
+  security_groups    = [aws_security_group.alb[0].id]
+  idle_timeout       = 60
 
   tags = local.tags
 }
@@ -63,7 +95,7 @@ resource "aws_lb_target_group" "api" {
   tags = local.tags
 }
 
-# HTTP listener (optional)
+# Listener (optional)
 resource "aws_lb_listener" "http" {
   count             = var.create_alb ? 1 : 0
   load_balancer_arn = aws_lb.api[0].arn
