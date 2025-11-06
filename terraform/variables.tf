@@ -15,7 +15,7 @@ variable "container_port" {
 
 variable "health_check_path" {
   type    = string
-  default = "/healthz"
+  default = "/"
 }
 
 variable "create_alb" {
