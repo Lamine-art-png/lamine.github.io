@@ -1,17 +1,21 @@
 FROM python:3.11-slim
+
 WORKDIR /app
 
-# Needed for ECS health check (curl)
-RUN apt-get update && apt-get install -y --no-install-recommends curl \
- && rm -rf /var/lib/apt/lists/*
-
-# Install deps
+# Install dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy app code
-COPY . .
+# Copy application code
+COPY app ./app
 
-# Run FastAPI on 0.0.0.0:80
-EXPOSE 80
-CMD ["uvicorn", "app.app:app", "--host", "0.0.0.0", "--port", "80"]
+# Make sure "app" is a proper Python package
+# (If app/__init__.py does not exist in your repo, create an empty one there.)
+# Here we assume it's already present in the repo.
+
+# Runtime env
+ENV PORT=8000
+ENV HEALTH_CHECK_PATH=/healthz
+
+# Start FastAPI with the correct module path
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
