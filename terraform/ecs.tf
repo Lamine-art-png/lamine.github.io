@@ -1,4 +1,4 @@
-resource "aws_ecs_cluster" "api" {
+ resource "aws_ecs_cluster" "api" {
   name = "agroai-manulife-pilot-cluster"
 }
 
@@ -9,16 +9,25 @@ resource "aws_ecs_task_definition" "api" {
   cpu                      = "256"
   memory                   = "512"
 
+  # If you already defined this role in another file, reference it here.
+  # Otherwise add the IAM role resources we discussed.
+  execution_role_arn = aws_iam_role.ecs_task_execution.arn
+
   container_definitions = jsonencode([
     {
-      name      = "api"
-      image     = var.api_image  # wired from CI/CD
+      name  = "api"
+      image = var.api_image != "" ?
+        var.api_image :
+        "${data.aws_ecr_repository.api.repository_url}:latest"
+
       essential = true
-      portMappings = [{
-        containerPort = 8000
-        protocol      = "tcp"
-      }]
-      # logConfiguration, env vars, etc.
+
+      portMappings = [
+        {
+          containerPort = 8000
+          protocol      = "tcp"
+        }
+      ]
     }
   ])
 }
@@ -31,8 +40,8 @@ resource "aws_ecs_service" "api" {
   launch_type     = "FARGATE"
 
   network_configuration {
-    subnets         = var.private_subnet_ids
-    security_groups = [aws_security_group.ecs_api.id]
+    subnets          = var.private_subnet_ids
+    security_groups  = [aws_security_group.ecs_api.id]
     assign_public_ip = false
   }
 
