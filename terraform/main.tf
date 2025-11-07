@@ -9,7 +9,7 @@ terraform {
   }
 
   backend "s3" {
-    # TODO: fill in:
+    # fill in your real values when ready:
     # bucket = "your-tf-state-bucket"
     # key    = "agroai-pilot/us-west-1/terraform.tfstate"
     # region = "us-west-1"
