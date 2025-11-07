@@ -9,10 +9,11 @@ terraform {
   }
 
   backend "s3" {
-    # fill in your real values when ready:
-    # bucket = "your-tf-state-bucket"
-    # key    = "agroai-pilot/us-west-1/terraform.tfstate"
-    # region = "us-west-1"
+    bucket = "agroai-tfstate-ld-usw1-1761768239"
+    key    = "agroai-pilot/us-west-1/terraform.tfstate"
+    region = "us-west-1"
+    # dynamodb_table = "terraform-locks" # only if you actually have this table
+    encrypt = true
   }
 }
 
