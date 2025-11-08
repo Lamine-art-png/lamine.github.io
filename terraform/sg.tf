@@ -32,8 +32,8 @@ resource "aws_security_group" "alb_api" {
 
 resource "aws_security_group" "ecs_api" {
   name        = "agroai-manulife-pilot-ecs-tasks"
-  description = "Allow inbound HTTP to API tasks"    # match console text
-  vpc_id      = var.vpc_id                            # vpc-0c4cf14e0f5f0f680
+  description = "Allow inbound HTTP to API tasks"    # <-- match imported SG
+  vpc_id      = var.vpc_id
 
   ingress {
     from_port       = 8000
