@@ -19,7 +19,7 @@ resource "aws_ecs_task_definition" "api" {
   container_definitions = jsonencode([
     {
       name      = "api"
-      image     = var.api_image != "" ? var.api_image : "${data.aws_ecr_repository.api.repository_url}:latest"
+      image     = var.api_image != 292039821285.dkr.ecr.us-west-1.amazonaws.com/agroai-manulife-pilot-api:latest ? var.api_image : "${data.aws_ecr_repository.api.repository_url}:latest"
       essential = true
 
       portMappings = [
