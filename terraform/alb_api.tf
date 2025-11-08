@@ -4,18 +4,32 @@ resource "aws_lb" "api" {
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_api.id]
   subnets            = var.public_subnet_ids
+
+  tags = {
+    Project   = var.project
+    ManagedBy = "terraform"
+  }
 }
 
 resource "aws_lb_target_group" "api" {
-  name        = "tg-api-8000-tf"  # <— change from tg-api-8000-default
-  port        = 8000
+  name        = "tg-api-8000-tf"        # unique, matches what ECS refers to
+  port        = var.container_port      # 8000 from terraform.tfvars
   protocol    = "HTTP"
   target_type = "ip"
   vpc_id      = var.vpc_id
 
   health_check {
-    path = "/v1/health"
-    # etc
+    path                = var.health_check_path # "/v1/health"
+    matcher             = "200"
+    interval            = 15
+    timeout             = 5
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+  }
+
+  tags = {
+    Project   = var.project
+    ManagedBy = "terraform"
   }
 }
 
@@ -36,7 +50,7 @@ resource "aws_lb_listener" "api_http" {
   }
 }
 
-# HTTPS 443 -> forward to TG
+# HTTPS 443 -> forward to target group
 resource "aws_lb_listener" "api_https" {
   load_balancer_arn = aws_lb.api.arn
   port              = 443
