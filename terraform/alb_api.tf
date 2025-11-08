@@ -1,9 +1,11 @@
 resource "aws_lb" "api" {
-  name               = "api-agroai-pilot-alb-default" # match console
-  internal           = false
+  name               = "api-agroai-pilot-alb-default"  # match existing ALB
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb_api.id]
-  subnets            = var.public_subnet_ids
+  internal           = false
+
+  security_groups = [aws_security_group.alb_api.id]
+  subnets        = var.public_subnet_ids
+
   tags = {
     Project   = "agroai-manulife-pilot"
     ManagedBy = "terraform"
