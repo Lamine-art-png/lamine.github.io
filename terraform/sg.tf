@@ -1,18 +1,18 @@
 resource "aws_security_group" "alb_api" {
-  name        = "alb-api-sg-tf"
-  description = "ALB for api.agroai-manulife-pilot.com"
+  name        = "alb-api-sg-tf"            # or whatever the ALB SG is actually named
+  description = "ALB for api.agroai-pilot.com"
   vpc_id      = var.vpc_id
 
   ingress {
-    from_port   = 443
-    to_port     = 443
+    from_port   = 80
+    to_port     = 80
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
-    from_port   = 80
-    to_port     = 80
+    from_port   = 443
+    to_port     = 443
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -34,11 +34,6 @@ resource "aws_security_group" "ecs_api" {
   name        = "agroai-manulife-pilot-ecs-tasks"
   description = "ECS tasks for API"
   vpc_id      = var.vpc_id
-
-  # important: ensure create-before-destroy semantics
-  lifecycle {
-    create_before_destroy = true
-  }
 
   ingress {
     from_port       = 8000
