@@ -32,7 +32,7 @@ resource "aws_security_group" "alb_api" {
 
 resource "aws_security_group" "ecs_api" {
   name        = "agroai-manulife-pilot-ecs-tasks"
-  description = "ECS tasks for API"
+  description = "Allow inbound HTTP to API tasks"  # <- match existing!
   vpc_id      = var.vpc_id
 
   ingress {
