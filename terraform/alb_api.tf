@@ -1,5 +1,5 @@
 resource "aws_lb" "api" {
-  name               = "api-agroai-pilot-alb-default"  # match existing ALB
+  name               = "api-agroai-pilot-alb-default"  # <-- IMPORTANT
   load_balancer_type = "application"
   internal           = false
 
