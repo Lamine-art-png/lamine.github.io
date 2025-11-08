@@ -1,4 +1,4 @@
- resource "aws_ecs_cluster" "api" {
+resource "aws_ecs_cluster" "api" {
   name = "agroai-manulife-pilot-cluster"
 }
 
@@ -9,8 +9,7 @@ resource "aws_ecs_task_definition" "api" {
   cpu                      = "256"
   memory                   = "512"
 
-  # If you already defined this role in another file, reference it here.
-  # Otherwise add the IAM role resources we discussed.
+  # This role must be defined elsewhere (iam.tf, etc.)
   execution_role_arn = aws_iam_role.ecs_task_execution.arn
 
   container_definitions = jsonencode([
