@@ -1,5 +1,5 @@
 resource "aws_security_group" "alb_api" {
-  name        = "alb-api-sg-tf"
+  name        = "alb-api-sg-tf"           # must match the existing SG if you want no replace
   description = "ALB for api.agroai-pilot.com"
   vpc_id      = var.vpc_id
 
@@ -35,7 +35,6 @@ resource "aws_security_group" "ecs_api" {
   description = "ECS tasks for API"
   vpc_id      = var.vpc_id
 
-  # Only ALB can talk to ECS tasks on 8000
   ingress {
     from_port       = 8000
     to_port         = 8000
