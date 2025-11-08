@@ -32,9 +32,8 @@ resource "aws_security_group" "alb_api" {
 
 resource "aws_security_group" "ecs_api" {
   name        = "agroai-manulife-pilot-ecs-tasks"
-  # set this to EXACTLY what the SG has in AWS right now:
-  description = "Allow inbound HTTP to API tasks"  # or whatever console shows
-  vpc_id      = var.vpc_id                         # should be vpc-0c4cf14e0f5f0f680
+  description = "Allow inbound HTTP to API tasks"    # match console text
+  vpc_id      = var.vpc_id                            # vpc-0c4cf14e0f5f0f680
 
   ingress {
     from_port       = 8000
