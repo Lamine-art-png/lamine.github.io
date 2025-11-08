@@ -7,19 +7,15 @@ resource "aws_lb" "api" {
 }
 
 resource "aws_lb_target_group" "api" {
-  name        = "tg-api-8000-default"
+  name        = "tg-api-8000-tf"  # <— change from tg-api-8000-default
   port        = 8000
   protocol    = "HTTP"
   target_type = "ip"
   vpc_id      = var.vpc_id
 
   health_check {
-    path                = "/v1/health"
-    matcher             = "200"
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
-    interval            = 15
-    timeout             = 5
+    path = "/v1/health"
+    # etc
   }
 }
 
