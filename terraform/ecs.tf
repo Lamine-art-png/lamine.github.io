@@ -9,15 +9,10 @@ resource "aws_ecs_task_definition" "api" {
   cpu                      = "256"
   memory                   = "512"
 
-  execution_role_arn = aws_iam_role.ecs_task_execution.arn
-
   container_definitions = jsonencode([
     {
-      name  = "api"
-      image = var.api_image != "" ?
-  var.api_image :
-  "${data.aws_ecr_repository.api.repository_url}:latest"
-
+      name      = "api"
+      image     = var.api_image != "" ? var.api_image : "${data.aws_ecr_repository.api.repository_url}:latest"
       essential = true
 
       portMappings = [
