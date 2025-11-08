@@ -1,12 +1,11 @@
 resource "aws_lb" "api" {
-  name               = "api-agroai-pilot-alb"
+  name               = "api-agroai-pilot-alb-default" # match console
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_api.id]
   subnets            = var.public_subnet_ids
-
   tags = {
-    Project   = var.project
+    Project   = "agroai-manulife-pilot"
     ManagedBy = "terraform"
   }
 }
