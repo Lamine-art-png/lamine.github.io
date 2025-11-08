@@ -12,23 +12,18 @@ resource "aws_lb" "api" {
 }
 
 resource "aws_lb_target_group" "api" {
-  name        = "tg-api-8000-tf"        # unique, matches what ECS refers to
-  port        = var.container_port      # 8000 from terraform.tfvars
+  name        = "tg-api-8000-tf"      # match existing if you don’t want replacement
+  port        = 8000
   protocol    = "HTTP"
   target_type = "ip"
   vpc_id      = var.vpc_id
 
   health_check {
-    path                = var.health_check_path # "/v1/health"
-    matcher             = "200"
-    interval            = 15
-    timeout             = 5
-    healthy_threshold   = 2
-    unhealthy_threshold = 2
+    path = "/v1/health"
   }
 
   tags = {
-    Project   = var.project
+    Project   = "agroai-manulife-pilot"
     ManagedBy = "terraform"
   }
 }
