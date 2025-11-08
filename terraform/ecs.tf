@@ -16,7 +16,6 @@ resource "aws_ecs_task_definition" "api" {
       name      = "api"
       image     = var.api_image
       essential = true
-
       portMappings = [
         {
           containerPort = 8000
