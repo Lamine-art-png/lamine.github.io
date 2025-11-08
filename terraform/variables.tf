@@ -31,6 +31,5 @@ variable "private_subnet_ids" {
 }
 
 variable "api_image" {
-  type        = string
-  description = "ECR image for the API"
+  type = string
 }
