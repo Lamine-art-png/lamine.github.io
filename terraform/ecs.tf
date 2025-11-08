@@ -13,13 +13,10 @@ resource "aws_ecs_task_definition" "api" {
   cpu                      = "256"
   memory                   = "512"
 
-  # If you have this role defined elsewhere; if not, comment this line for now.
-  # execution_role_arn = aws_iam_role.ecs_task_execution.arn
-
   container_definitions = jsonencode([
     {
       name      = "api"
-      image     = var.api_image != 292039821285.dkr.ecr.us-west-1.amazonaws.com/agroai-manulife-pilot-api:latest ? var.api_image : "${data.aws_ecr_repository.api.repository_url}:latest"
+      image     = var.api_image  # from terraform.tfvars
       essential = true
 
       portMappings = [
