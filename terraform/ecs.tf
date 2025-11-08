@@ -15,8 +15,8 @@ resource "aws_ecs_task_definition" "api" {
     {
       name  = "api"
       image = var.api_image != "" ?
-        var.api_image :
-        "${data.aws_ecr_repository.api.repository_url}:latest"
+  var.api_image :
+  "${data.aws_ecr_repository.api.repository_url}:latest"
 
       essential = true
 
