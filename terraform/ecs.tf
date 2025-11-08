@@ -9,6 +9,10 @@ resource "aws_ecs_task_definition" "api" {
   cpu                      = "256"
   memory                   = "512"
 
+  # If you already defined this role elsewhere, keep only the reference.
+  # If not, you'll need to add the ecs_task_execution role in another file.
+  # execution_role_arn = aws_iam_role.ecs_task_execution.arn
+
   container_definitions = jsonencode([
     {
       name      = "api"
