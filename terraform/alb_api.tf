@@ -1,11 +1,9 @@
 resource "aws_lb" "api" {
-  name               = "api-agroai-pilot-alb-default"  # <-- IMPORTANT
+  name               = "api-agroai-pilot-alb-default"
   load_balancer_type = "application"
-  internal           = false
-
-  security_groups = [aws_security_group.alb_api.id]
-  subnets        = var.public_subnet_ids
-
+  security_groups    = [aws_security_group.alb_api.id] # once alb_api matches
+  subnets            = var.public_subnet_ids
+  # only set attributes that match the current ALB or are safe to change in-place
   tags = {
     Project   = "agroai-manulife-pilot"
     ManagedBy = "terraform"
