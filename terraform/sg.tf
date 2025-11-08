@@ -35,6 +35,7 @@ resource "aws_security_group" "ecs_api" {
   description = "ECS tasks for API"
   vpc_id      = var.vpc_id
 
+  # Only ALB can talk to ECS tasks on 8000
   ingress {
     from_port       = 8000
     to_port         = 8000
@@ -49,5 +50,8 @@ resource "aws_security_group" "ecs_api" {
     cidr_blocks = ["0.0.0.0/0"]
   }
 
-  tags = local.tags
+  tags = {
+    Project   = "agroai-manulife-pilot"
+    ManagedBy = "terraform"
+  }
 }
