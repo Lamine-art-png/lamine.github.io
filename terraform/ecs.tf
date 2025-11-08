@@ -13,13 +13,16 @@ resource "aws_ecs_task_definition" "api" {
 
   container_definitions = jsonencode([
     {
-      name         = "api"
-      image        = var.api_image
-      essential    = true
-      portMappings = [{
-        containerPort = 8000
-        protocol      = "tcp"
-      }]
+      name      = "api"
+      image     = var.api_image
+      essential = true
+
+      portMappings = [
+        {
+          containerPort = 8000
+          protocol      = "tcp"
+        }
+      ]
     }
   ])
 }
