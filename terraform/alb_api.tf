@@ -11,16 +11,14 @@ resource "aws_lb" "api" {
 }
 
 resource "aws_lb_target_group" "api" {
-  name        = "tg-api-8000-tf"      # match existing if you don’t want replacement
+  name        = "tg-api-8000-tf"      # or the actual existing TG name if imported
   port        = 8000
   protocol    = "HTTP"
   target_type = "ip"
-  vpc_id      = var.vpc_id
-
+  vpc_id      = var.vpc_id            # vpc-0c4cf14e0f5f0f680
   health_check {
     path = "/v1/health"
   }
-
   tags = {
     Project   = "agroai-manulife-pilot"
     ManagedBy = "terraform"
