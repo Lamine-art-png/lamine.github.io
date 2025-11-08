@@ -32,6 +32,5 @@ variable "private_subnet_ids" {
 
 variable "api_image" {
   type        = string
-  description = "Full image URI for the API task (set via CI/CD)"
-  default     = "" # or leave unset and pass via -var / tfvars in CI
+  description = "ECR image for the API"
 }
