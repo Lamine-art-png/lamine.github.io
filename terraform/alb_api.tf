@@ -1,11 +1,34 @@
 resource "aws_lb" "api" {
-  # Must match the real ALB you want Terraform to own
-  name               = "api-agroai-pilot-alb"
+  name               = "api-agroai-pilot-alb-default"  # EXACTLY as in AWS / state
   load_balancer_type = "application"
   internal           = false
 
   security_groups = [aws_security_group.alb_api.id]
-  subnets         = var.public_subnet_ids  # in vpc-08c26202f480ac757
+  subnets         = var.public_subnet_ids
+
+  tags = {
+    Project   = "agroai-manulife-pilot"
+    ManagedBy = "terraform"
+  }
+}
+
+resource "aws_lb_target_group" "api" {
+  name        = "tg-api-8000"                     # match existing
+  port        = 80                                # match existing
+  protocol    = "HTTP"
+  target_type = "ip"
+  vpc_id      = var.vpc_id                        # vpc-08c26202f480ac757
+
+  health_check {
+    enabled             = true
+    path                = "/v1/health"
+    protocol            = "HTTP"
+    matcher             = "200"
+    interval            = 30
+    timeout             = 5
+    healthy_threshold   = 5
+    unhealthy_threshold = 2
+  }
 
   tags = {
     Project   = "agroai-manulife-pilot"
