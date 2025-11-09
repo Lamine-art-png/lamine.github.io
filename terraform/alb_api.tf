@@ -1,5 +1,5 @@
 resource "aws_lb" "api" {
-  name               = "api-agroai-pilot-alb-default"  # EXACTLY as in AWS / state
+  name               = "api-agroai-pilot-alb-default"  # must match
   load_balancer_type = "application"
   internal           = false
 
