@@ -32,10 +32,10 @@ resource "aws_security_group" "alb_api" {
 
 resource "aws_security_group" "ecs_api" {
   name        = "agroai-manulife-pilot-ecs-tasks"
-  description = "Allow inbound HTTP to API tasks"
+  description = "Allow inbound HTTP to API tasks"  # EXACT match to AWS
   vpc_id      = var.vpc_id
 
-  # Only ALB SG can hit ECS tasks on 8000
+  # Allow traffic from the ALB SG to port 8000 on tasks
   ingress {
     from_port       = 8000
     to_port         = 8000
