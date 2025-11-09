@@ -1,24 +1,17 @@
 resource "aws_lb" "api" {
-  name               = "api-agroai-pilot-alb-default"
+  name               = "api-agroai-pilot-alb-default"  # EXACTLY as in AWS
   load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb_api.id] # once alb_api matches
-  subnets            = var.public_subnet_ids
-  # only set attributes that match the current ALB or are safe to change in-place
-  tags = {
-    Project   = "agroai-manulife-pilot"
-    ManagedBy = "terraform"
-  }
-}
+  internal           = false
 
-resource "aws_lb_target_group" "api" {
-  name        = "tg-api-8000-tf"      # or the actual existing TG name if imported
-  port        = 8000
-  protocol    = "HTTP"
-  target_type = "ip"
-  vpc_id      = var.vpc_id            # vpc-0c4cf14e0f5f0f680
-  health_check {
-    path = "/v1/health"
-  }
+  security_groups = [aws_security_group.alb_api.id]
+  subnets         = var.public_subnet_ids  # whatever the ALB is actually using
+
+  # Any other attributes should match what the existing ALB has:
+  # - idle_timeout
+  # - enable_deletion_protection
+  # - ip_address_type
+  # etc, or omit them so Terraform doesn't think it must change them.
+  
   tags = {
     Project   = "agroai-manulife-pilot"
     ManagedBy = "terraform"
