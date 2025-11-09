@@ -1,8 +1,12 @@
+variable "vpc_id" {
+  type = string
+}
+
 resource "aws_security_group" "alb_api" {
-  # MUST match the existing SG in AWS / terraform state
+  # Must match existing SG sg-01a446eb1458eb7cf
   name        = "alb-api-sg"
   description = "Public ALB for api-agroai-pilot.com"
-  vpc_id      = "vpc-08c26202f480ac757" # <-- use exactly what AWS shows for sg-01a446eb1458eb7cf
+  vpc_id      = var.vpc_id
 
   ingress {
     from_port   = 80
@@ -32,10 +36,10 @@ resource "aws_security_group" "alb_api" {
 }
 
 resource "aws_security_group" "ecs_api" {
-  # MUST also match the existing ECS-tasks SG you imported
+  # Must match existing ECS tasks SG sg-0e3350ce8b6707462
   name        = "agroai-manulife-pilot-ecs-tasks"
   description = "Allow inbound HTTP to API tasks"
-  vpc_id      = "vpc-0c4cf14e0f5f0f680" # or whatever AWS shows for sg-0e3350ce8b6707462
+  vpc_id      = var.vpc_id
 
   ingress {
     from_port       = 8000
