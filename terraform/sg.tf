@@ -1,7 +1,7 @@
 resource "aws_security_group" "alb_api" {
-  name        = "alb-api-sg"
-  description = "Public ALB for api-agroai-pilot.com"
-  vpc_id      = var.vpc_id
+  name        = "alb-api-sg-tf"
+  description = "ALB for api.agroai-pilot.com"
+  vpc_id      = "vpc-0c4cf14e0f5f0f680"
 
   ingress {
     from_port   = 80
@@ -30,16 +30,18 @@ resource "aws_security_group" "alb_api" {
   }
 }
 
+# IMPORTANT: this must match sg-0e3350ce8b6707462 exactly
 resource "aws_security_group" "ecs_api" {
   name        = "agroai-manulife-pilot-ecs-tasks"
-  description = "Allow inbound HTTP to API tasks"  # MUST match existing SG
-  vpc_id      = var.vpc_id                         # vpc-0c4cf14e0f5f0f680
+  description = "Allow inbound HTTP to API tasks"
+  vpc_id      = "vpc-0c4cf14e0f5f0f680"
 
   ingress {
     from_port       = 8000
     to_port         = 8000
     protocol        = "tcp"
-    security_groups = [aws_security_group.alb_api.id]
+    # Existing SG it trusts today:
+    security_groups = ["sg-0069e0001aaff32e0"]
   }
 
   egress {
