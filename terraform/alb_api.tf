@@ -1,11 +1,10 @@
 resource "aws_lb" "api" {
-  # Must match the existing ALB you are adopting
-  name               = "api-agroai-pilot-alb-default"
+  name               = "api-agroai-pilot-alb-default" # EXACTLY what AWS shows for the existing ALB
   load_balancer_type = "application"
   internal           = false
 
   security_groups = [aws_security_group.alb_api.id]
-  subnets         = var.public_subnet_ids  # must all be in var.vpc_id
+  subnets         = var.public_subnet_ids
 
   tags = {
     Project   = "agroai-manulife-pilot"
@@ -14,12 +13,11 @@ resource "aws_lb" "api" {
 }
 
 resource "aws_lb_target_group" "api" {
-  # Must match the existing TG you are adopting, or the desired new one
-  name        = "tg-api-8000"
-  port        = 80            # <-- use 80 *or* 8000, but it must match reality + ECS task/container_port
+  name        = "tg-api-8000"   # match existing TG if you imported it
+  port        = 80              # or 8000, but must match reality
   protocol    = "HTTP"
   target_type = "ip"
-  vpc_id      = var.vpc_id    # e.g. vpc-08c26202f480ac757
+  vpc_id      = var.vpc_id
 
   tags = {
     Project   = "agroai-manulife-pilot"
@@ -27,7 +25,6 @@ resource "aws_lb_target_group" "api" {
   }
 }
 
-# HTTP :80 -> redirect to HTTPS :443
 resource "aws_lb_listener" "api_http" {
   load_balancer_arn = aws_lb.api.arn
   port              = 80
@@ -43,7 +40,6 @@ resource "aws_lb_listener" "api_http" {
   }
 }
 
-# HTTPS :443 -> forward to target group
 resource "aws_lb_listener" "api_https" {
   load_balancer_arn = aws_lb.api.arn
   port              = 443
