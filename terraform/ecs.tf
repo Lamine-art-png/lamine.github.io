@@ -2,40 +2,18 @@
 # ECS cluster
 ############################
 
-# Existing cluster (imported or created by TF)
 resource "aws_ecs_cluster" "api" {
   name = "agroai-manulife-pilot-cluster"
 }
 
 ############################
-# Task execution IAM role
-############################
-
-resource "aws_iam_role" "ecs_task_execution" {
-  name = "ecsTaskExecutionRole-agroai-manulife-pilot"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Service = "ecs-tasks.amazonaws.com"
-        }
-        Action = "sts:AssumeRole"
-      }
-    ]
-  })
-}
-
-resource "aws_iam_role_policy_attachment" "ecs_task_execution_policy" {
-  role       = aws_iam_role.ecs_task_execution.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy"
-}
-
-############################
 # Task definition
 ############################
+
+# Assumes you already have:
+# data "aws_ecr_repository" "api" {
+#   name = "agroai-manulife-pilot-api"
+# }
 
 resource "aws_ecs_task_definition" "api" {
   family                   = "agroai-manulife-pilot-api"
@@ -49,7 +27,7 @@ resource "aws_ecs_task_definition" "api" {
   container_definitions = jsonencode([
     {
       name      = "api"
-      image     = "292039821285.dkr.ecr.us-west-1.amazonaws.com/agroai-manulife-pilot-api:latest"
+      image     = "${data.aws_ecr_repository.api.repository_url}:latest"
       essential = true
 
       portMappings = [
@@ -59,13 +37,12 @@ resource "aws_ecs_task_definition" "api" {
           protocol      = "tcp"
         }
       ]
-      # add environment / logging blocks here if you need them
     }
   ])
 }
 
 ############################
-# ECS service behind ALB
+# ECS service
 ############################
 
 resource "aws_ecs_service" "api" {
@@ -79,8 +56,7 @@ resource "aws_ecs_service" "api" {
   deployment_maximum_percent         = 200
 
   network_configuration {
-    # This must be subnets in vpc-0c4cf14e0f5f0f680
-    subnets          = var.private_subnet_ids
+    subnets          = var.private_subnet_ids     # in vpc-0c4cf14e0f5f0f680
     security_groups  = [aws_security_group.ecs_api.id]
     assign_public_ip = false
   }
@@ -94,5 +70,6 @@ resource "aws_ecs_service" "api" {
   depends_on = [
     aws_lb_listener.api_http,
     aws_lb_listener.api_https,
+    aws_lb_target_group.api,
   ]
 }
