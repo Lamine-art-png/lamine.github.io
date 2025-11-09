@@ -2,7 +2,7 @@ project           = "agroai-manulife-pilot"
 aws_region        = "us-west-1"
 container_port    = 8000
 health_check_path = "/v1/health"
-vpc_id            = "vpc-0c4cf14e0f5f0f680"
+vpc_id            = "vpc-08c26202f480ac757"
 
 public_subnet_ids = [
   "subnet-037e57b86892998a9",
