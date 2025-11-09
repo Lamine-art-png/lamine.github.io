@@ -1,49 +1,63 @@
-resource "aws_ecs_cluster" "api" {
-  name = "agroai-manulife-pilot-cluster"
-}
+# ALB security group (new, TF-managed)
+resource "aws_security_group" "alb_api" {
+  name        = "alb-api-sg-tf"
+  description = "ALB for api-agroai-pilot.com"
+  vpc_id      = "vpc-0c4cf14e0f5f0f680"
 
-resource "aws_ecs_task_definition" "api" {
-  family                   = "agroai-manulife-pilot-api"
-  requires_compatibilities = ["FARGATE"]
-  network_mode             = "awsvpc"
-  cpu                      = "256"
-  memory                   = "512"
-
-  execution_role_arn = aws_iam_role.ecs_task_execution.arn
-
-  container_definitions = jsonencode([
-    {
-      name      = "api"
-      image     = "292039821285.dkr.ecr.us-west-1.amazonaws.com/agroai-manulife-pilot-api:latest"
-      essential = true
-      portMappings = [
-        {
-          containerPort = 8000
-          protocol      = "tcp"
-        }
-      ]
-    }
-  ])
-}
-
-resource "aws_ecs_service" "api" {
-  name            = "agroai-manulife-pilot-svc"
-  cluster         = aws_ecs_cluster.api.id
-  task_definition = aws_ecs_task_definition.api.arn
-  desired_count   = 1
-  launch_type     = "FARGATE"
-
-  network_configuration {
-    subnets          = var.private_subnet_ids
-    security_groups  = [aws_security_group.ecs_api.id]
-    assign_public_ip = false
+  ingress {
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
-  load_balancer {
-    target_group_arn = aws_lb_target_group.api.arn
-    container_name   = "api"
-    container_port   = 8000
+  ingress {
+    from_port   = 443
+    to_port     = 443
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
   }
 
-  depends_on = [aws_lb_listener.api_https]
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Project   = "agroai-manulife-pilot"
+    ManagedBy = "terraform"
+  }
+}
+
+# ECS task SG – match existing sg-0e3350ce8b6707462
+resource "aws_security_group" "ecs_api" {
+  name        = "agroai-manulife-pilot-ecs-tasks"
+  description = "Allow inbound HTTP to API tasks"   # must match remote
+  vpc_id      = "vpc-0c4cf14e0f5f0f680"
+
+  # match current real rule (old ALB SG)
+  ingress {
+    from_port       = 8000
+    to_port         = 8000
+    protocol        = "tcp"
+    security_groups = ["sg-0069e0001aaff32e0"]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Project   = "agroai-manulife-pilot"
+    ManagedBy = "terraform"
+  }
+
+  lifecycle {
+    ignore_changes = [description]
+  }
 }
