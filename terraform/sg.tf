@@ -1,9 +1,4 @@
-variable "vpc_id" {
-  type = string
-}
-
 resource "aws_security_group" "alb_api" {
-  # Must match existing SG sg-01a446eb1458eb7cf
   name        = "alb-api-sg"
   description = "Public ALB for api-agroai-pilot.com"
   vpc_id      = var.vpc_id
@@ -36,7 +31,6 @@ resource "aws_security_group" "alb_api" {
 }
 
 resource "aws_security_group" "ecs_api" {
-  # Must match existing ECS tasks SG sg-0e3350ce8b6707462
   name        = "agroai-manulife-pilot-ecs-tasks"
   description = "Allow inbound HTTP to API tasks"
   vpc_id      = var.vpc_id
