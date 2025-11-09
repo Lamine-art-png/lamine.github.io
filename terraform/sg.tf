@@ -1,6 +1,7 @@
+# ALB security group (new, TF-managed)
 resource "aws_security_group" "alb_api" {
   name        = "alb-api-sg-tf"
-  description = "ALB for api.agroai-pilot.com"
+  description = "ALB for api-agroai-pilot.com"
   vpc_id      = "vpc-0c4cf14e0f5f0f680"
 
   ingress {
@@ -30,17 +31,17 @@ resource "aws_security_group" "alb_api" {
   }
 }
 
-# IMPORTANT: this must match sg-0e3350ce8b6707462 exactly
+# ECS tasks SG — MUST MATCH EXISTING sg-0e3350ce8b6707462
 resource "aws_security_group" "ecs_api" {
   name        = "agroai-manulife-pilot-ecs-tasks"
-  description = "Allow inbound HTTP to API tasks"
+  description = "Allow inbound HTTP to API tasks"  # <- match state exactly
   vpc_id      = "vpc-0c4cf14e0f5f0f680"
 
+  # Match the existing rule in state: from the old ALB SG sg-0069e0001aaff32e0
   ingress {
     from_port       = 8000
     to_port         = 8000
     protocol        = "tcp"
-    # Existing SG it trusts today:
     security_groups = ["sg-0069e0001aaff32e0"]
   }
 
@@ -54,5 +55,10 @@ resource "aws_security_group" "ecs_api" {
   tags = {
     Project   = "agroai-manulife-pilot"
     ManagedBy = "terraform"
+  }
+
+  # Optional safety so future description tweaks don't force replacement
+  lifecycle {
+    ignore_changes = [description]
   }
 }
