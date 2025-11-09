@@ -1,12 +1,10 @@
 resource "aws_lb" "api" {
-  # Use the real ALB name you want Terraform to own/import.
-  # If your existing ALB is "api-agroai-pilot-alb-default", keep this.
-  name               = "api-agroai-pilot-alb-default"
+  # Create a new ALB in the tasks’ VPC
+  name               = "api-agroai-pilot-alb"
   load_balancer_type = "application"
   internal           = false
-
-  security_groups = [aws_security_group.alb_api.id]
-  subnets         = var.public_subnet_ids
+  security_groups    = [aws_security_group.alb_api.id]
+  subnets            = var.public_subnet_ids
 
   tags = {
     Project   = "agroai-manulife-pilot"
@@ -14,10 +12,12 @@ resource "aws_lb" "api" {
   }
 }
 
+# Use the TG you want the service to register to (port 8000 in the 0c4cf... VPC).
+# If you already imported an existing TG (e.g., tg-api-8000-tf), make the
+# name/port/vpc match that object to avoid replacement.
 resource "aws_lb_target_group" "api" {
-  # Target group for ECS service
-  name        = "tg-api-8000"
-  port        = 8000              # must match ECS containerPort
+  name        = "tg-api-8000-tf"
+  port        = 8000
   protocol    = "HTTP"
   target_type = "ip"
   vpc_id      = var.vpc_id
@@ -28,6 +28,7 @@ resource "aws_lb_target_group" "api" {
   }
 }
 
+# HTTP -> HTTPS redirect
 resource "aws_lb_listener" "api_http" {
   load_balancer_arn = aws_lb.api.arn
   port              = 80
@@ -35,7 +36,6 @@ resource "aws_lb_listener" "api_http" {
 
   default_action {
     type = "redirect"
-
     redirect {
       port        = "443"
       protocol    = "HTTPS"
@@ -44,6 +44,7 @@ resource "aws_lb_listener" "api_http" {
   }
 }
 
+# HTTPS -> forward to TG
 resource "aws_lb_listener" "api_https" {
   load_balancer_arn = aws_lb.api.arn
   port              = 443
