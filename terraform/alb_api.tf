@@ -1,10 +1,10 @@
 resource "aws_lb" "api" {
-  # Create a new ALB in the tasks’ VPC
   name               = "api-agroai-pilot-alb"
   load_balancer_type = "application"
   internal           = false
-  security_groups    = [aws_security_group.alb_api.id]
-  subnets            = var.public_subnet_ids
+
+  security_groups = [aws_security_group.alb_api.id]
+  subnets         = var.public_subnet_ids
 
   tags = {
     Project   = "agroai-manulife-pilot"
@@ -12,15 +12,17 @@ resource "aws_lb" "api" {
   }
 }
 
-# Use the TG you want the service to register to (port 8000 in the 0c4cf... VPC).
-# If you already imported an existing TG (e.g., tg-api-8000-tf), make the
-# name/port/vpc match that object to avoid replacement.
 resource "aws_lb_target_group" "api" {
   name        = "tg-api-8000-tf"
   port        = 8000
   protocol    = "HTTP"
   target_type = "ip"
-  vpc_id      = var.vpc_id
+  vpc_id      = "vpc-0c4cf14e0f5f0f680"
+
+  health_check {
+    path = "/health"
+    port = "traffic-port"
+  }
 
   tags = {
     Project   = "agroai-manulife-pilot"
@@ -28,7 +30,6 @@ resource "aws_lb_target_group" "api" {
   }
 }
 
-# HTTP -> HTTPS redirect
 resource "aws_lb_listener" "api_http" {
   load_balancer_arn = aws_lb.api.arn
   port              = 80
@@ -44,7 +45,6 @@ resource "aws_lb_listener" "api_http" {
   }
 }
 
-# HTTPS -> forward to TG
 resource "aws_lb_listener" "api_https" {
   load_balancer_arn = aws_lb.api.arn
   port              = 443
