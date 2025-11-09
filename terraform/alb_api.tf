@@ -1,24 +1,18 @@
 resource "aws_lb" "api" {
-  name               = "api-agroai-pilot-alb-default"  # EXACTLY as in AWS
+  # Must match the real ALB you want Terraform to own
+  name               = "api-agroai-pilot-alb"
   load_balancer_type = "application"
   internal           = false
 
   security_groups = [aws_security_group.alb_api.id]
-  subnets         = var.public_subnet_ids  # whatever the ALB is actually using
+  subnets         = var.public_subnet_ids  # in vpc-08c26202f480ac757
 
-  # Any other attributes should match what the existing ALB has:
-  # - idle_timeout
-  # - enable_deletion_protection
-  # - ip_address_type
-  # etc, or omit them so Terraform doesn't think it must change them.
-  
   tags = {
     Project   = "agroai-manulife-pilot"
     ManagedBy = "terraform"
   }
 }
 
-# HTTP 80 -> redirect to HTTPS
 resource "aws_lb_listener" "api_http" {
   load_balancer_arn = aws_lb.api.arn
   port              = 80
@@ -35,7 +29,6 @@ resource "aws_lb_listener" "api_http" {
   }
 }
 
-# HTTPS 443 -> forward to target group
 resource "aws_lb_listener" "api_https" {
   load_balancer_arn = aws_lb.api.arn
   port              = 443
