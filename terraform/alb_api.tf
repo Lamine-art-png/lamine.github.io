@@ -1,5 +1,7 @@
 resource "aws_lb" "api" {
-  name               = "api-agroai-pilot-alb-default" # EXACTLY what AWS shows for the existing ALB
+  # Use the real ALB name you want Terraform to own/import.
+  # If your existing ALB is "api-agroai-pilot-alb-default", keep this.
+  name               = "api-agroai-pilot-alb-default"
   load_balancer_type = "application"
   internal           = false
 
@@ -13,8 +15,9 @@ resource "aws_lb" "api" {
 }
 
 resource "aws_lb_target_group" "api" {
-  name        = "tg-api-8000"   # match existing TG if you imported it
-  port        = 80              # or 8000, but must match reality
+  # Target group for ECS service
+  name        = "tg-api-8000"
+  port        = 8000              # must match ECS containerPort
   protocol    = "HTTP"
   target_type = "ip"
   vpc_id      = var.vpc_id
@@ -32,6 +35,7 @@ resource "aws_lb_listener" "api_http" {
 
   default_action {
     type = "redirect"
+
     redirect {
       port        = "443"
       protocol    = "HTTPS"
