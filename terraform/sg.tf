@@ -34,15 +34,14 @@ resource "aws_security_group" "alb_api" {
 # ECS tasks SG — MUST MATCH EXISTING sg-0e3350ce8b6707462
 resource "aws_security_group" "ecs_api" {
   name        = "agroai-manulife-pilot-ecs-tasks"
-  description = "Allow inbound HTTP to API tasks"  # <- match state exactly
+  description = "Allow inbound HTTP to API tasks"  # match existing
   vpc_id      = "vpc-0c4cf14e0f5f0f680"
 
-  # Match the existing rule in state: from the old ALB SG sg-0069e0001aaff32e0
   ingress {
     from_port       = 8000
     to_port         = 8000
     protocol        = "tcp"
-    security_groups = ["sg-0069e0001aaff32e0"]
+    security_groups = ["sg-0069e0001aaff32e0"]      # existing ALB SG for now
   }
 
   egress {
@@ -57,7 +56,6 @@ resource "aws_security_group" "ecs_api" {
     ManagedBy = "terraform"
   }
 
-  # Optional safety so future description tweaks don't force replacement
   lifecycle {
     ignore_changes = [description]
   }
