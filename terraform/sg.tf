@@ -1,7 +1,7 @@
 resource "aws_security_group" "alb_api" {
-  name        = "alb-api-sg"                         # matches state
+  name        = "alb-api-sg"                         # must match real SG
   description = "Public ALB for api-agroai-pilot.com"
-  vpc_id      = var.vpc_id                           # 08c...
+  vpc_id      = var.vpc_id                           # = 08c2...
 
   ingress {
     from_port   = 80
@@ -33,7 +33,7 @@ resource "aws_security_group" "alb_api" {
 resource "aws_security_group" "ecs_api" {
   name        = "agroai-manulife-pilot-ecs-tasks"
   description = "Allow inbound HTTP to API tasks"
-  vpc_id      = var.vpc_id                           # IMPORTANT: 08c, not 0c4
+  vpc_id      = var.vpc_id                           # now 08c2..., not 0c4
 
   ingress {
     from_port       = 8000
