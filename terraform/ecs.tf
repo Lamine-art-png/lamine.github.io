@@ -1,19 +1,6 @@
-############################
-# ECS cluster
-############################
-
 resource "aws_ecs_cluster" "api" {
   name = "agroai-manulife-pilot-cluster"
 }
-
-############################
-# Task definition
-############################
-
-# Assumes you already have:
-# data "aws_ecr_repository" "api" {
-#   name = "agroai-manulife-pilot-api"
-# }
 
 resource "aws_ecs_task_definition" "api" {
   family                   = "agroai-manulife-pilot-api"
@@ -27,13 +14,11 @@ resource "aws_ecs_task_definition" "api" {
   container_definitions = jsonencode([
     {
       name      = "api"
-      image     = "${data.aws_ecr_repository.api.repository_url}:latest"
+      image     = "292039821285.dkr.ecr.us-west-1.amazonaws.com/agroai-manulife-pilot-api:latest"
       essential = true
-
       portMappings = [
         {
           containerPort = 8000
-          hostPort      = 8000
           protocol      = "tcp"
         }
       ]
@@ -41,24 +26,17 @@ resource "aws_ecs_task_definition" "api" {
   ])
 }
 
-############################
-# ECS service
-############################
-
 resource "aws_ecs_service" "api" {
   name            = "agroai-manulife-pilot-svc"
   cluster         = aws_ecs_cluster.api.id
   task_definition = aws_ecs_task_definition.api.arn
-  desired_count   = 1
   launch_type     = "FARGATE"
-
-  deployment_minimum_healthy_percent = 100
-  deployment_maximum_percent         = 200
+  desired_count   = 1
 
   network_configuration {
-    subnets          = var.private_subnet_ids     # in vpc-0c4cf14e0f5f0f680
+    subnets          = var.public_subnet_ids
     security_groups  = [aws_security_group.ecs_api.id]
-    assign_public_ip = false
+    assign_public_ip = true
   }
 
   load_balancer {
@@ -67,9 +45,16 @@ resource "aws_ecs_service" "api" {
     container_port   = 8000
   }
 
+  deployment_minimum_healthy_percent = 100
+  deployment_maximum_percent         = 200
+
+  tags = {
+    Project   = "agroai-manulife-pilot"
+    ManagedBy = "terraform"
+  }
+
   depends_on = [
-    aws_lb_listener.api_http,
     aws_lb_listener.api_https,
-    aws_lb_target_group.api,
   ]
 }
+

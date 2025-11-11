@@ -1,21 +1,21 @@
 variable "project" {
-  type        = string
-  default     = "agroai-manulife-pilot"
+  type    = string
+  default = "agroai-manulife-pilot"
 }
 
 variable "aws_region" {
-  type        = string
-  default     = "us-west-1"
+  type    = string
+  default = "us-west-1"
 }
 
 variable "container_port" {
-  type        = number
-  default     = 8000
+  type    = number
+  default = 8000
 }
 
 variable "health_check_path" {
-  type        = string
-  default     = "/v1/health"
+  type    = string
+  default = "/v1/health"
 }
 
 variable "vpc_id" {

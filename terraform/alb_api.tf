@@ -1,10 +1,16 @@
+# Assume data.aws_acm_certificate.api is already defined ONCE elsewhere
+
 resource "aws_lb" "api" {
-  name               = "api-agroai-pilot-alb"
+  name               = "api-agroai-pilot-alb-tf" # new unique name
   load_balancer_type = "application"
   internal           = false
 
+  subnets = [
+    "subnet-037e57b86892998a9",
+    "subnet-05475eccb2a806e7b",
+  ]
+
   security_groups = [aws_security_group.alb_api.id]
-  subnets         = var.public_subnet_ids
 
   tags = {
     Project   = "agroai-manulife-pilot"
@@ -20,8 +26,8 @@ resource "aws_lb_target_group" "api" {
   vpc_id      = "vpc-0c4cf14e0f5f0f680"
 
   health_check {
-    path = "/health"
-    port = "traffic-port"
+    path    = "/v1/health"
+    matcher = "200"
   }
 
   tags = {
@@ -37,6 +43,7 @@ resource "aws_lb_listener" "api_http" {
 
   default_action {
     type = "redirect"
+
     redirect {
       port        = "443"
       protocol    = "HTTPS"
@@ -57,3 +64,4 @@ resource "aws_lb_listener" "api_https" {
     target_group_arn = aws_lb_target_group.api.arn
   }
 }
+

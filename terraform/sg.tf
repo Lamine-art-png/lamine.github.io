@@ -1,13 +1,14 @@
 ##########################################
-# ALB security group (TF managed)
+# ALB SG
 ##########################################
 
 resource "aws_security_group" "alb_api" {
   name        = "alb-api-sg-tf"
-  description = "ALB for api-agroai-pilot.com"
+  description = "ALB for api-agroai-pilot"
   vpc_id      = "vpc-0c4cf14e0f5f0f680"
 
   ingress {
+    description = "HTTP"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -15,6 +16,7 @@ resource "aws_security_group" "alb_api" {
   }
 
   ingress {
+    description = "HTTPS"
     from_port   = 443
     to_port     = 443
     protocol    = "tcp"
@@ -35,27 +37,14 @@ resource "aws_security_group" "alb_api" {
 }
 
 ##########################################
-# ECS tasks SG — existing sg-0e3350ce8b6707462
-##########################################
-
-##########################################
-# ECS tasks SG — existing sg-0e3350ce8b6707462
+# ECS tasks SG
 ##########################################
 
 resource "aws_security_group" "ecs_api" {
-  name        = "agroai-manulife-pilot-ecs-tasks"
-  description = "Allow inbound HTTP to API tasks"  # must match existing
+  name        = "agroai-manulife-pilot-ecs-tasks-tf"
+  description = "Allow inbound 8000 from ALB to ECS tasks"
   vpc_id      = "vpc-0c4cf14e0f5f0f680"
 
-  # Existing rule from legacy ALB SG (matches current state)
-  ingress {
-    from_port       = 8000
-    to_port         = 8000
-    protocol        = "tcp"
-    security_groups = ["sg-0069e0001aaff32e0"]
-  }
-
-  # New rule from TF-managed ALB SG
   ingress {
     from_port       = 8000
     to_port         = 8000
@@ -74,8 +63,5 @@ resource "aws_security_group" "ecs_api" {
     Project   = "agroai-manulife-pilot"
     ManagedBy = "terraform"
   }
-
-  lifecycle {
-    ignore_changes = [description]
-  }
 }
+
