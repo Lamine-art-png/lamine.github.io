@@ -29,6 +29,11 @@ jobs:
           role-to-assume: arn:aws:iam::292039821285:role/lamine_terraform-deploy
           aws-region: us-west-1
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
+
       - name: Terraform fmt
         run: terraform fmt -check
 
