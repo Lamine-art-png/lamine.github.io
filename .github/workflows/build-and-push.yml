@@ -1,14 +1,13 @@
 name: Build and Push API Image
 
 on:
-  workflow_dispatch: {}  # manual trigger for now
-  # later:
-  # push:
-  #   branches: [ main ]
-  #   paths:
-  #     - 'Dockerfile'
-  #     - 'agroai_api/**'
-  #     - '.github/workflows/build-and-push.yml'
+  workflow_dispatch: {}
+  push:
+    branches: [ main ]
+    paths:
+      - 'Dockerfile'
+      - 'agroai_api/**'
+      - '.github/workflows/build-and-push.yml'
 
 jobs:
   build-and-push:
