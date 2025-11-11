@@ -14,12 +14,8 @@ jobs:
     runs-on: ubuntu-latest
 
     permissions:
-      id-token: write   # for OIDC
+      id-token: write
       contents: read
-
-    env:
-      AWS_REGION: us-west-1
-      ECR_REPOSITORY: agroai-manulife-pilot-api
 
     steps:
       - name: Checkout repo
@@ -29,17 +25,16 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: arn:aws:iam::292039821285:role/lamine_agroai-api
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: us-west-1
 
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, tag, and push image
-        id: build-and-push-step
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
+          ECR_REPOSITORY: agroai-manulife-pilot-api
         run: |
           GIT_SHA=${GITHUB_SHA::7}
           IMAGE_TAG=v1.${GITHUB_RUN_NUMBER}-${GIT_SHA}
