@@ -1,48 +1,45 @@
-name: build-and-push
+name: Build and Push API Image
 
 on:
-  workflow_dispatch:
-  push:
-    paths:
-      - 'Dockerfile'
-      - 'agroai_api/**'
-      - '.github/workflows/build-and-push.yml'
+  workflow_dispatch: {}  # manual trigger for now
+  # later you can add:
+  # push:
+  #   branches: [ main ]
+  #   paths:
+  #     - 'Dockerfile'
+  #     - 'app/**'
 
 jobs:
-  build-push:
+  build-and-push:
     runs-on: ubuntu-latest
     permissions:
-      id-token: write
+      id-token: write   # for OIDC
       contents: read
 
-    env:
-      AWS_REGION: ${{ secrets.AWS_REGION }}
-      # This MUST match the ECR repo Terraform is using
-      ECR_REPO_NAME: agroai-manulife-pilot-api
-
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Configure AWS credentials (OIDC)
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: arn:aws:iam::292039821285:role/github-actions-ecr-push
+          aws-region: us-west-1
 
-      - name: Ensure ECR repo exists
-        run: |
-          aws ecr describe-repositories --repository-names "$ECR_REPO_NAME" \
-          || aws ecr create-repository --repository-name "$ECR_REPO_NAME"
-
-      - name: Login to ECR
+      - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push Docker image
+      - name: Build, tag, and push image
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: latest
+          ECR_REPOSITORY: agroai-manulife-pilot-api
         run: |
-          docker build -t "$ECR_REGISTRY/$ECR_REPO_NAME:$IMAGE_TAG" .
-          docker push "$ECR_REGISTRY/$ECR_REPO_NAME:$IMAGE_TAG"
+          GIT_SHA=${GITHUB_SHA::7}
+          IMAGE_TAG=v1.${GITHUB_RUN_NUMBER}-${GIT_SHA}
+
+          docker build -t $ECR_REPOSITORY:$IMAGE_TAG .
+          docker tag $ECR_REPOSITORY:$IMAGE_TAG $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+          docker push $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG
+
+          echo "IMAGE_TAG=$IMAGE_TAG" >> $GITHUB_OUTPUT
