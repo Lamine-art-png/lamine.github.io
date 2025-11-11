@@ -2,19 +2,25 @@ name: Build and Push API Image
 
 on:
   workflow_dispatch: {}  # manual trigger for now
-  # later you can add:
+  # later:
   # push:
   #   branches: [ main ]
   #   paths:
   #     - 'Dockerfile'
-  #     - 'app/**'
+  #     - 'agroai_api/**'
+  #     - '.github/workflows/build-and-push.yml'
 
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
+
     permissions:
       id-token: write   # for OIDC
       contents: read
+
+    env:
+      AWS_REGION: us-west-1
+      ECR_REPOSITORY: agroai-manulife-pilot-api
 
     steps:
       - name: Checkout repo
@@ -23,18 +29,18 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-        role-to-assume: arn:aws:iam::292039821285:role/lamine_agroai-api
-        aws-region: us-west-1
-
+          role-to-assume: arn:aws:iam::292039821285:role/lamine_agroai-api
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
       - name: Build, tag, and push image
+        id: build-and-push-step
         env:
           ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: agroai-manulife-pilot-api
+          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
         run: |
           GIT_SHA=${GITHUB_SHA::7}
           IMAGE_TAG=v1.${GITHUB_RUN_NUMBER}-${GIT_SHA}
