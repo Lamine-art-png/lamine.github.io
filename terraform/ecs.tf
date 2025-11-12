@@ -1,24 +1,30 @@
-##############################
+##########################
 # ECS Cluster & logging
-##############################
+##########################
 
 resource "aws_ecs_cluster" "api" {
   name = "${var.project}-cluster"
-  tags = { Project = var.project }
+
+  tags = {
+    Project = var.project
+  }
 }
 
 resource "aws_cloudwatch_log_group" "api" {
   name              = "/ecs/${var.project}"
   retention_in_days = 14
-  tags              = { Project = var.project }
+
+  tags = {
+    Project = var.project
+  }
 }
 
-# Discover the active AWS region for log driver
+# Discover the active AWS region for the log driver
 data "aws_region" "current" {}
 
-##############################
+##########################
 # Task definition (Fargate)
-##############################
+##########################
 
 resource "aws_ecs_task_definition" "api" {
   family                   = "${var.project}-task"
@@ -46,18 +52,23 @@ resource "aws_ecs_task_definition" "api" {
       ]
 
       environment = [
-        { name = "PORT", value = "8000" }
+        {
+          name  = "PORT"
+          value = "8000"
+        }
       ]
 
+      # CloudWatch Logs configuration
       logConfiguration = {
         logDriver = "awslogs"
         options = {
-          awslogs-group         = "/ecs/${var.project}"
+          awslogs-group         = aws_cloudwatch_log_group.api.name
           awslogs-region        = data.aws_region.current.name
           awslogs-stream-prefix = "api"
         }
       }
 
+      # Container health check (matches FastAPI /v1/health)
       healthCheck = {
         command     = ["CMD-SHELL", "curl -f http://localhost:8000/v1/health || exit 1"]
         interval    = 30
@@ -68,39 +79,50 @@ resource "aws_ecs_task_definition" "api" {
     }
   ])
 
-  tags = { Project = var.project }
+  tags = {
+    Project = var.project
+  }
 }
 
-##############################
+##########################
 # ECS Service (targets ALB)
-##############################
+##########################
 
 resource "aws_ecs_service" "api" {
   name            = "${var.project}-svc"
-  cluster         = aws_ecs_cluster.api.id
+  cluster         = aws_ecs_cluster.api.arn
   task_definition = aws_ecs_task_definition.api.arn
   launch_type     = "FARGATE"
-  desired_count   = 1
+
+  desired_count = 1
 
   network_configuration {
     subnets          = var.private_subnet_ids
-    security_groups  = [aws_security_group.ecs_api.id]
+    security_groups  = [aws_security_group.ecs_api.id] # adjust name if your SG differs
     assign_public_ip = false
   }
 
-  # This must match your ALB target group & the container’s port/name above
   load_balancer {
     target_group_arn = aws_lb_target_group.api.arn
     container_name   = "api"
     container_port   = 8000
   }
 
-  propagate_tags = "SERVICE"
+  # Safer rolling deployments
+  deployment_minimum_healthy_percent = 100
+  deployment_maximum_percent         = 200
+
+  lifecycle {
+    ignore_changes = [desired_count]
+  }
 
   depends_on = [
+    aws_lb_listener.http,
+    aws_lb_listener.https,
     aws_cloudwatch_log_group.api
   ]
 
-  tags = { Project = var.project }
+  tags = {
+    Project = var.project
+  }
 }
-
