@@ -13,11 +13,11 @@ resource "aws_ecs_task_definition" "api" {
 
   container_definitions = jsonencode([
     {
-     name  = "api"
-     image = "${data.aws_ecr_repository.api.repository_url}:${var.image_tag}"
-     # ...rest unchanged...
+      name  = "api"
+      image = "${data.aws_ecr_repository.api.repository_url}:${var.image_tag}"
+      # ...rest unchanged...
     }
-])
+  ])
 }
 
 resource "aws_ecs_service" "api" {
