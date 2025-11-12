@@ -30,12 +30,7 @@ variable "private_subnet_ids" {
   type = list(string)
 }
 
-variable "api_image" {
-  type = string
-}
-
 variable "image_tag" {
+  description = "Docker image tag to deploy"
   type        = string
-  description = "Docker image tag for the API service"
 }
-
