@@ -33,3 +33,9 @@ variable "private_subnet_ids" {
 variable "api_image" {
   type = string
 }
+
+variable "image_tag" {
+  type        = string
+  description = "Docker image tag for the API service"
+}
+

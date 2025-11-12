@@ -13,17 +13,11 @@ resource "aws_ecs_task_definition" "api" {
 
   container_definitions = jsonencode([
     {
-      name      = "api"
-      image     = "292039821285.dkr.ecr.us-west-1.amazonaws.com/agroai-manulife-pilot-api:v1.27-34c73a1"
-      essential = true
-      portMappings = [
-        {
-          containerPort = 8000
-          protocol      = "tcp"
-        }
-      ]
+     name  = "api"
+     image = "${data.aws_ecr_repository.api.repository_url}:${var.image_tag}"
+     # ...rest unchanged...
     }
-  ])
+])
 }
 
 resource "aws_ecs_service" "api" {
