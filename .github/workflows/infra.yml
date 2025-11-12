@@ -1,23 +1,32 @@
 name: Terraform Deploy
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
   push:
     branches: [ main ]
     paths:
       - 'terraform/**'
+      - '.github/workflows/infra.yml'
+
+permissions:
+  id-token: write
+  contents: read
+
+# Avoid overlapping applies on the same branch
+concurrency:
+  group: infra-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  AWS_REGION: us-west-1
 
 jobs:
   terraform-deploy:
     runs-on: ubuntu-latest
-
-    permissions:
-      id-token: write
-      contents: read
-
     defaults:
       run:
         working-directory: terraform
+        shell: bash
 
     steps:
       - name: Checkout
@@ -26,22 +35,25 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::292039821285:role/lamine_terraform-deploy
-          aws-region: us-west-1
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.9.8
+          terraform_wrapper: false
 
       - name: Terraform fmt
-        run: terraform fmt -check
+        run: terraform fmt -check -recursive
 
       - name: Terraform init
-        run: terraform init
+        run: terraform init -input=false -no-color
 
       - name: Terraform plan
-        run: terraform plan
+        env:
+          TF_IN_AUTOMATION: "true"
+        run: terraform plan -input=false -no-color -out=tfplan
 
       - name: Terraform apply
-        run: terraform apply -auto-approve
+        if: github.ref == 'refs/heads/main'
+        run: terraform apply -input=false -auto-approve -no-color tfplan
