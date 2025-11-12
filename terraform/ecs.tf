@@ -1,54 +1,106 @@
+##############################
+# ECS Cluster & logging
+##############################
+
 resource "aws_ecs_cluster" "api" {
-  name = "agroai-manulife-pilot-cluster"
+  name = "${var.project}-cluster"
+  tags = { Project = var.project }
 }
 
+resource "aws_cloudwatch_log_group" "api" {
+  name              = "/ecs/${var.project}"
+  retention_in_days = 14
+  tags              = { Project = var.project }
+}
+
+# Discover the active AWS region for log driver
+data "aws_region" "current" {}
+
+##############################
+# Task definition (Fargate)
+##############################
+
 resource "aws_ecs_task_definition" "api" {
-  family                   = "agroai-manulife-pilot-api"
-  requires_compatibilities = ["FARGATE"]
+  family                   = "${var.project}-task"
   network_mode             = "awsvpc"
+  requires_compatibilities = ["FARGATE"]
   cpu                      = "256"
   memory                   = "512"
 
   execution_role_arn = aws_iam_role.ecs_task_execution.arn
+  task_role_arn      = aws_iam_role.ecs_task.arn
 
+  # Image comes from ECR (declared in ecr.tf as data.aws_ecr_repository.api)
   container_definitions = jsonencode([
     {
-      name  = "api"
-      image = "${data.aws_ecr_repository.api.repository_url}:${var.image_tag}"
-      # ...rest unchanged...
+      name      = "api"
+      image     = "${data.aws_ecr_repository.api.repository_url}:${var.image_tag}"
+      essential = true
+
+      portMappings = [
+        {
+          containerPort = 8000
+          hostPort      = 8000
+          protocol      = "tcp"
+        }
+      ]
+
+      environment = [
+        { name = "PORT", value = "8000" }
+      ]
+
+      logConfiguration = {
+        logDriver = "awslogs"
+        options = {
+          awslogs-group         = "/ecs/${var.project}"
+          awslogs-region        = data.aws_region.current.name
+          awslogs-stream-prefix = "api"
+        }
+      }
+
+      healthCheck = {
+        command     = ["CMD-SHELL", "curl -f http://localhost:8000/v1/health || exit 1"]
+        interval    = 30
+        timeout     = 5
+        retries     = 3
+        startPeriod = 10
+      }
     }
   ])
+
+  tags = { Project = var.project }
 }
 
+##############################
+# ECS Service (targets ALB)
+##############################
+
 resource "aws_ecs_service" "api" {
-  name            = "agroai-manulife-pilot-svc"
+  name            = "${var.project}-svc"
   cluster         = aws_ecs_cluster.api.id
   task_definition = aws_ecs_task_definition.api.arn
   launch_type     = "FARGATE"
   desired_count   = 1
 
   network_configuration {
-    subnets          = var.public_subnet_ids
+    subnets          = var.private_subnet_ids
     security_groups  = [aws_security_group.ecs_api.id]
-    assign_public_ip = true
+    assign_public_ip = false
   }
 
+  # This must match your ALB target group & the container’s port/name above
   load_balancer {
     target_group_arn = aws_lb_target_group.api.arn
     container_name   = "api"
     container_port   = 8000
   }
 
-  deployment_minimum_healthy_percent = 100
-  deployment_maximum_percent         = 200
-
-  tags = {
-    Project   = "agroai-manulife-pilot"
-    ManagedBy = "terraform"
-  }
+  propagate_tags = "SERVICE"
 
   depends_on = [
-    aws_lb_listener.api_https,
+    aws_cloudwatch_log_group.api
   ]
+
+  tags = { Project = var.project }
 }
 
