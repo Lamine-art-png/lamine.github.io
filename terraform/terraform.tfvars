@@ -16,3 +16,5 @@ private_subnet_ids = [
 
 api_image = "292039821285.dkr.ecr.us-west-1.amazonaws.com/agroai-manulife-pilot-api:v1.27-9333c46"
 
+image_tag = "v1.27-05f4413"
+image_tag = "v1.27-933c34"
