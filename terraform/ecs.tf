@@ -116,9 +116,9 @@ resource "aws_ecs_service" "api" {
     ignore_changes = [desired_count]
   }
 
+  # Ensure TG + log group exist before the service
   depends_on = [
-    aws_lb_listener.http,
-    aws_lb_listener.https,
+    aws_lb_target_group.api,
     aws_cloudwatch_log_group.api
   ]
 
@@ -126,3 +126,4 @@ resource "aws_ecs_service" "api" {
     Project = var.project
   }
 }
+
