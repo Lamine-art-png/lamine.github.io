@@ -1,11 +1,10 @@
-import uuid
+kimport uuid
 import time
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
 
 from app.core.config import settings
 from app.core.logging import setup_logging, set_request_id
@@ -77,10 +76,7 @@ async def add_request_id_header(request: Request, call_next):
 async def log_requests(request: Request, call_next):
     logger.info(
         "Request start",
-        extra={
-            "path": request.url.path,
-            "method": request.method,
-        },
+        extra={"path": request.url.path, "method": request.method},
     )
     response: Response = await call_next(request)
     logger.info(
@@ -107,7 +103,8 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # ---------------------------------------------------------------------------
-# Mount v1 API router (health etc.)
+# Mount v1 API router (health + demo + debug)
+# settings.API_V1_PREFIX is what makes paths start with /v1
 # ---------------------------------------------------------------------------
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
@@ -123,42 +120,6 @@ def get_metrics():
 
 
 # ---------------------------------------------------------------------------
-# Demo recommendation endpoint (flat path: /v1/demo/recommendation)
-# ---------------------------------------------------------------------------
-class DemoRecommendationRequest(BaseModel):
-    field_id: str
-    crop: str
-    acres: float
-    location: str
-    baseline_inches_per_week: float
-
-
-@app.post("/v1/demo/recommendation", summary="Demo irrigation recommendation")
-async def demo_recommendation(payload: DemoRecommendationRequest):
-    """
-    Demo endpoint for OEMs / pilots.
-
-    Takes a simple field payload and returns a mocked
-    irrigation recommendation + savings estimate.
-    """
-    # Pick a mid-range savings between 20–35%
-    target_savings = 0.275  # 27.5%
-
-    recommended_inches = payload.baseline_inches_per_week * (1 - target_savings)
-
-    return {
-        "field_id": payload.field_id,
-        "crop": payload.crop,
-        "acres": payload.acres,
-        "location": payload.location,
-        "baseline_inches_per_week": payload.baseline_inches_per_week,
-        "recommended_inches_per_week": round(recommended_inches, 2),
-        "expected_water_savings_percent": round(target_savings * 100, 1),
-        "notes": "Demo-only recommendation for AGRO-AI OEM integration.",
-    }
-
-
-# ---------------------------------------------------------------------------
 # Root endpoint
 # ---------------------------------------------------------------------------
 @app.get("/")
@@ -169,6 +130,7 @@ def root():
         "docs": "/docs",
         "openapi": "/openapi.json",
         "health": f"{settings.API_V1_PREFIX}/health",
-        "demo_recommendation": "/v1/demo/recommendation",
+        "demo_recommendation": f"{settings.API_V1_PREFIX}/demo/recommendation",
+        "debug_routes": f"{settings.API_V1_PREFIX}/debug/routes",
     }
 
