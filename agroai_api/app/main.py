@@ -34,14 +34,23 @@ app = FastAPI(
 )
 
 # CORS
+# Safely read BACKEND_CORS_ORIGINS if it exists, otherwise default to "*"
+allow_origins = getattr(settings, "BACKEND_CORS_ORIGINS", ["*"])
+
+# If it comes from env as a comma-separated string, normalize to list
+if isinstance(allow_origins, str):
+    allow_origins = [o.strip() for o in allow_origins.split(",") if o.strip()]
+
+if not allow_origins:
+    allow_origins = ["*"]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.BACKEND_CORS_ORIGINS,
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 @app.middleware("http")
 async def add_request_id_and_timing(request: Request, call_next):
