@@ -1,8 +1,9 @@
 from fastapi import APIRouter
+from . import health
 from pydantic import BaseModel
 
 api_router = APIRouter()
-
+api_router.include_router(health.router, prefix="", tags=["health"])
 
 # ---------------------------------------------------------------------------
 # Health check
