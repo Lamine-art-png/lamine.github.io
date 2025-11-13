@@ -34,52 +34,56 @@ app = FastAPI(
     openapi_url="/openapi.json",
 )
 
+# ---------------------------------------------------------------------------
 # CORS
+# ---------------------------------------------------------------------------
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],          # tighten later for prod
+    allow_origins=getattr(settings, "CORS_ORIGINS", ["*"]),
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-
+# ---------------------------------------------------------------------------
+# Middleware: request ID
+# ---------------------------------------------------------------------------
 @app.middleware("http")
 async def add_request_id(request: Request, call_next):
-    """Attach request id to context + response."""
-    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    request_id = str(uuid.uuid4())
     set_request_id(request_id)
-    response = await call_next(request)
+
+    response: Response = await call_next(request)
     response.headers["X-Request-ID"] = request_id
     return response
 
 
+# ---------------------------------------------------------------------------
+# Middleware: basic request logging
+# ---------------------------------------------------------------------------
 @app.middleware("http")
 async def log_requests(request: Request, call_next):
-    """Basic request logging."""
-    start = time.time()
+    start_time = time.time()
+    response: Response = await call_next(request)
+    duration_ms = (time.time() - start_time) * 1000.0
+
     logger.info(
-        "Request started",
-        extra={
-            "method": request.method,
-            "path": request.url.path,
-            "client": request.client.host if request.client else None,
-        },
-    )
-    response = await call_next(request)
-    duration = (time.time() - start) * 1000
-    logger.info(
-        "Request completed",
+        "request_completed",
         extra={
             "method": request.method,
             "path": request.url.path,
             "status_code": response.status_code,
-            "duration_ms": round(duration, 2),
+            "duration_ms": round(duration_ms, 2),
         },
     )
+
+    response.headers["X-Process-Time-ms"] = f"{duration_ms:.2f}"
     return response
 
 
+# ---------------------------------------------------------------------------
+# Global error handler
+# ---------------------------------------------------------------------------
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     logger.error(f"Unhandled exception: {exc}", exc_info=True)
@@ -89,22 +93,31 @@ async def global_exception_handler(request: Request, exc: Exception):
     )
 
 
-# Mount your API
+# ---------------------------------------------------------------------------
+# Mount v1 API router
+# ---------------------------------------------------------------------------
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
 
+# ---------------------------------------------------------------------------
+# Metrics endpoint
+# ---------------------------------------------------------------------------
 @app.get("/metrics")
 def get_metrics():
-    if not settings.ENABLE_METRICS:
+    if not getattr(settings, "ENABLE_METRICS", False):
         return Response(status_code=404)
     return metrics.metrics_endpoint()
 
 
+# ---------------------------------------------------------------------------
+# Root endpoint
+# ---------------------------------------------------------------------------
 @app.get("/")
 def root():
     return {
         "name": settings.APP_NAME,
         "version": settings.VERSION,
         "docs": "/docs",
+        "openapi": "/openapi.json",
         "health": f"{settings.API_V1_PREFIX}/health",
     }
