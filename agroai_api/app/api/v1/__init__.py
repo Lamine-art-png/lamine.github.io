@@ -21,12 +21,15 @@ api_router.include_router(webhooks.router, tags=["webhooks"])
 
 from fastapi import APIRouter
 
+from .demo import router as demo_router   # ⬅️ add this import
+
 api_router = APIRouter()
 
-# existing includes… (keep them)
-# from .something import router as something_router
-# api_router.include_router(something_router, prefix="/something")
+# keep your existing include_router(...) calls here (health, etc)
 
-from .demo import router as demo_router
-api_router.include_router(demo_router, prefix="/demo", tags=["demo"])
+api_router.include_router(
+    demo_router,
+    prefix="/demo",
+    tags=["demo"],
+)
 
