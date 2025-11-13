@@ -15,10 +15,8 @@ router = APIRouter()
 # --------------------------------------------------------------------
 @router.get("/health")
 def health_check(db: Session = Depends(get_db)):
-    """
-    Returns API status and a simple DB connectivity check.
-    """
-    db_status = "unknown"
+    """Health check endpoint."""
+    db_status = "ok"
     try:
         db.execute(text("SELECT 1"))
         db_status = "ok"
@@ -29,10 +27,8 @@ def health_check(db: Session = Depends(get_db)):
         "status": "ok",
         "database": db_status,
         "version": "1.0.0",
-        # unique marker so we can prove which code is running
-        "build_marker": "v1-demo-endpoint",
+        "marker": "build-demo-v3",  # <<< NEW, SUPER OBVIOUS
     }
-
 
 # --------------------------------------------------------------------
 # Demo recommendation endpoint (for OEMs / pilots)
