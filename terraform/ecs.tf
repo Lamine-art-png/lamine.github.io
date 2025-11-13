@@ -108,7 +108,7 @@ resource "aws_ecs_service" "api" {
     container_port   = 8000
   }
 
-  # Safer rolling deployments
+  # 👉 safer rolling deployments
   deployment_minimum_healthy_percent = 100
   deployment_maximum_percent         = 200
 
@@ -116,7 +116,6 @@ resource "aws_ecs_service" "api" {
     ignore_changes = [desired_count]
   }
 
-  # Ensure TG + log group exist before the service
   depends_on = [
     aws_lb_target_group.api,
     aws_cloudwatch_log_group.api
