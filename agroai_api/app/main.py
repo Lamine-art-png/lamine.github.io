@@ -10,7 +10,7 @@ from app.core.config import settings
 from app.core.logging import setup_logging, set_request_id
 from app.core import metrics
 from app.db.base import init_db
-from app.api.v1 import api_router
+from app.api.v1.health import router as v1_health_router
 
 logger = setup_logging()
 
@@ -106,8 +106,11 @@ async def global_exception_handler(request: Request, exc: Exception):
 # Mount v1 API router (health + demo + debug)
 # settings.API_V1_PREFIX is what makes paths start with /v1
 # ---------------------------------------------------------------------------
-app.include_router(api_router, prefix=settings.API_V1_PREFIX)
-
+app.include_router(
+    v1_health_router,
+    prefix="/v1",
+    tags=["v1"],
+)
 
 # ---------------------------------------------------------------------------
 # Metrics endpoint

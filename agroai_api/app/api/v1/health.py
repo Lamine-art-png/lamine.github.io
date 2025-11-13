@@ -1,3 +1,4 @@
+# app/api/v1/health.py
 """Health + demo recommendation endpoints."""
 
 from fastapi import APIRouter, Depends
