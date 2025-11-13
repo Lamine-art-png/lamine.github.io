@@ -2,14 +2,14 @@
 # ECS Service autoscaling
 ##########################
 
-# Target: scale the service's desired_count between 1 and 3
+# Target: scale the ECS service desired_count between 1 and 3
 resource "aws_appautoscaling_target" "ecs_api" {
   max_capacity       = 3
   min_capacity       = 1
   service_namespace  = "ecs"
   scalable_dimension = "ecs:service:DesiredCount"
 
-  # "service/<cluster-name>/<service-name>"
+  # service/<cluster-name>/<service-name>
   resource_id = format(
     "service/%s/%s",
     aws_ecs_cluster.api.name,
@@ -30,13 +30,10 @@ resource "aws_appautoscaling_policy" "ecs_api_cpu" {
       predefined_metric_type = "ECSServiceAverageCPUUtilization"
     }
 
-    # Aim for ~55% CPU
+    # Aim for ~55% average CPU
     target_value       = 55
     scale_in_cooldown  = 60
     scale_out_cooldown = 60
   }
 }
-<<<<<<< HEAD
-=======
 
->>>>>>> 58db8ac (Add ECS service autoscaling on CPU)
