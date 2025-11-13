@@ -11,18 +11,15 @@ router = APIRouter()
 
 
 # ---------------------------------------------------------------------------
-# /v1/health
+# Health check endpoint
 # ---------------------------------------------------------------------------
+
 @router.get("/health")
 def health_check(db: Session = Depends(get_db)):
-    """
-    Basic health check.
-
-    Verifies the API is up and that the DB is reachable.
-    """
+    """Basic health check + DB connectivity."""
+    db_status = "ok"
     try:
         db.execute(text("SELECT 1"))
-        db_status = "ok"
     except Exception:
         db_status = "error"
 
@@ -34,8 +31,9 @@ def health_check(db: Session = Depends(get_db)):
 
 
 # ---------------------------------------------------------------------------
-# /v1/demo/recommendation
+# Demo recommendation endpoint (for OEMs / pilots)
 # ---------------------------------------------------------------------------
+
 class DemoRecommendationRequest(BaseModel):
     field_id: str
     crop: str
@@ -49,8 +47,8 @@ async def demo_recommendation(payload: DemoRecommendationRequest):
     """
     Demo endpoint for OEMs / pilots.
 
-    Takes a simple field payload and returns a mocked irrigation
-    recommendation + savings estimate.
+    Takes a simple field payload and returns a mocked
+    irrigation recommendation + savings estimate.
     """
     # Pick a mid-range savings between 20–35%
     target_savings = 0.275  # 27.5%
