@@ -36,3 +36,7 @@ resource "aws_appautoscaling_policy" "ecs_api_cpu" {
     scale_out_cooldown = 60
   }
 }
+<<<<<<< HEAD
+=======
+
+>>>>>>> 58db8ac (Add ECS service autoscaling on CPU)
