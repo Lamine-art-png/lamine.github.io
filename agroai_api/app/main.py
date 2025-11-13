@@ -16,9 +16,11 @@ from app.api.v1 import api_router
 logger = setup_logging()
 
 
+# ---------------------------------------------------------------------------
+# Lifespan: startup / shutdown
+# ---------------------------------------------------------------------------
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup and shutdown lifecycle."""
     logger.info("Starting AGRO-AI API")
     init_db()
     logger.info("Database initialized")
@@ -26,6 +28,9 @@ async def lifespan(app: FastAPI):
     logger.info("Shutting down AGRO-AI API")
 
 
+# ---------------------------------------------------------------------------
+# FastAPI app
+# ---------------------------------------------------------------------------
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.VERSION,
@@ -34,6 +39,7 @@ app = FastAPI(
     redoc_url="/redoc",
     openapi_url="/openapi.json",
 )
+
 
 # ---------------------------------------------------------------------------
 # CORS
@@ -46,36 +52,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
 # ---------------------------------------------------------------------------
-# Request ID + basic metrics middleware
+# Request ID + timing middleware
 # ---------------------------------------------------------------------------
 @app.middleware("http")
-async def add_request_id_and_metrics(request: Request, call_next):
-    # Request ID
-    request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
-    set_request_id(request_id)
-    request.state.request_id = request_id
-
+async def add_request_id_header(request: Request, call_next):
+    request_id = str(uuid.uuid4())
     start_time = time.time()
-    response: Response = await call_next(request)
-    duration_ms = (time.time() - start_time) * 1000.0
+    set_request_id(request_id)
 
-    # response headers
+    response: Response = await call_next(request)
+
+    duration_ms = (time.time() - start_time) * 1000
     response.headers["X-Request-ID"] = request_id
     response.headers["X-Process-Time-ms"] = f"{duration_ms:.2f}"
+    return response
 
-    # prometheus-style metrics (if enabled)
-    try:
-        metrics.http_requests_total.labels(
-            method=request.method,
-            path=request.url.path,
-            status_code=response.status_code,
-        ).inc()
-        metrics.http_request_duration_ms.observe(duration_ms)
-    except Exception:
-        # never break the request on metrics failure
-        logger.exception("Failed to record metrics")
 
+# ---------------------------------------------------------------------------
+# Logging middleware
+# ---------------------------------------------------------------------------
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    logger.info(
+        "Request start",
+        extra={
+            "path": request.url.path,
+            "method": request.method,
+        },
+    )
+    response: Response = await call_next(request)
+    logger.info(
+        "Request end",
+        extra={
+            "path": request.url.path,
+            "method": request.method,
+            "status_code": response.status_code,
+        },
+    )
     return response
 
 
@@ -84,7 +99,7 @@ async def add_request_id_and_metrics(request: Request, call_next):
 # ---------------------------------------------------------------------------
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error("Unhandled exception: %s", exc, exc_info=True)
+    logger.error(f"Unhandled exception: {exc}", exc_info=True)
     return JSONResponse(
         status_code=500,
         content={"detail": "Internal server error", "type": "internal_error"},
@@ -92,13 +107,23 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 
 # ---------------------------------------------------------------------------
-# Mount v1 API router (existing endpoints, including /v1/health)
+# Mount v1 API router (health etc.)
 # ---------------------------------------------------------------------------
 app.include_router(api_router, prefix=settings.API_V1_PREFIX)
 
 
 # ---------------------------------------------------------------------------
-# Demo recommendation endpoint (API-first OEM demo)
+# Metrics endpoint
+# ---------------------------------------------------------------------------
+@app.get("/metrics")
+def get_metrics():
+    if not getattr(settings, "ENABLE_METRICS", False):
+        return Response(status_code=404)
+    return metrics.metrics_endpoint()
+
+
+# ---------------------------------------------------------------------------
+# Demo recommendation endpoint (flat path: /v1/demo/recommendation)
 # ---------------------------------------------------------------------------
 class DemoRecommendationRequest(BaseModel):
     field_id: str
@@ -108,7 +133,7 @@ class DemoRecommendationRequest(BaseModel):
     baseline_inches_per_week: float
 
 
-@app.post(f"{settings.API_V1_PREFIX}/demo/recommendation", tags=["demo"])
+@app.post("/v1/demo/recommendation", summary="Demo irrigation recommendation")
 async def demo_recommendation(payload: DemoRecommendationRequest):
     """
     Demo endpoint for OEMs / pilots.
@@ -117,7 +142,7 @@ async def demo_recommendation(payload: DemoRecommendationRequest):
     irrigation recommendation + savings estimate.
     """
     # Pick a mid-range savings between 20–35%
-    target_savings = 0.275  # 27.5 %
+    target_savings = 0.275  # 27.5%
 
     recommended_inches = payload.baseline_inches_per_week * (1 - target_savings)
 
@@ -134,16 +159,6 @@ async def demo_recommendation(payload: DemoRecommendationRequest):
 
 
 # ---------------------------------------------------------------------------
-# Metrics endpoint
-# ---------------------------------------------------------------------------
-@app.get("/metrics")
-def get_metrics():
-    if not getattr(settings, "ENABLE_METRICS", False):
-        return Response(status_code=404)
-    return metrics.metrics_endpoint()
-
-
-# ---------------------------------------------------------------------------
 # Root endpoint
 # ---------------------------------------------------------------------------
 @app.get("/")
@@ -154,5 +169,6 @@ def root():
         "docs": "/docs",
         "openapi": "/openapi.json",
         "health": f"{settings.API_V1_PREFIX}/health",
+        "demo_recommendation": "/v1/demo/recommendation",
     }
 
