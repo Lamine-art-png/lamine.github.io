@@ -40,5 +40,6 @@ class Settings(BaseSettings):
         env_file = ".env"
         case_sensitive = True
 
+   DEMO_API_KEY: str = "changeme-demo-key"  # override via env in prod
 
 settings = Settings()
