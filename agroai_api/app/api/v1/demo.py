@@ -7,11 +7,9 @@ from app.api.deps import verify_demo_api_key
 
 logger = logging.getLogger(__name__)
 
-# This router will be mounted under the global /v1 prefix
 router = APIRouter(
     prefix="/demo",
     tags=["demo"],
-    dependencies=[Depends(verify_demo_api_key)],
 )
 
 
@@ -23,7 +21,10 @@ class DemoRecommendationRequest(BaseModel):
     baseline_inches_per_week: float
 
 
-@router.post("/recommendation")
+@router.post(
+    "/recommendation",
+    dependencies=[Depends(verify_demo_api_key)],
+)
 async def demo_recommendation(payload: DemoRecommendationRequest):
     """
     Demo endpoint for OEMs / pilots.
@@ -47,7 +48,6 @@ async def demo_recommendation(payload: DemoRecommendationRequest):
         "notes": "Demo-only recommendation for AGRO-AI OEM integration.",
     }
 
-    # Structured log for every demo recommendation
     logger.info(
         "demo_recommendation",
         extra={
