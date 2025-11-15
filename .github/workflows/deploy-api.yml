@@ -8,7 +8,7 @@ on:
 
 env:
   AWS_REGION: us-west-1
-  AWS_ACCOUNT_ID: 292039821285          # your account ID
+  AWS_ACCOUNT_ID: "292039821285"
   ECR_REPOSITORY: agroai-manulife-pilot-api
 
 jobs:
@@ -34,9 +34,9 @@ jobs:
         id: meta
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            TAG="${GITHUB_REF#refs/tags/}"      # v1.0.3
+            TAG="${GITHUB_REF#refs/tags/}"      # e.g. v1.0.3
           else
-            TAG="sha-${GITHUB_SHA::7}"          # sha-abc1234
+            TAG="sha-${GITHUB_SHA::7}"          # e.g. sha-abc1234
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
@@ -68,16 +68,16 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.9.8   # pin a version you’re happy with
-
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
 
       - name: Terraform init
         run: terraform init -input=false
@@ -86,3 +86,4 @@ jobs:
         run: |
           terraform apply -auto-approve -input=false \
             -var="image_tag=${{ needs.build-and-push.outputs.image_tag }}"
+
