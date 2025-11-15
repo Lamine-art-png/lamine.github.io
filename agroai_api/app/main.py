@@ -2,6 +2,7 @@ import uuid
 import time
 from contextlib import asynccontextmanager
 
+from pydantic import BaseModel
 from fastapi import FastAPI, Request, Response
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,6 +33,43 @@ app = FastAPI(
     redoc_url="/redoc",
     openapi_url="/openapi.json",
 )
+
+class DemoRecommendationRequest(BaseModel):
+    field_id: str
+    crop: str
+    acres: float
+    location: str
+    baseline_inches_per_week: float
+
+
+class DemoRecommendationResponse(BaseModel):
+    field_id: str
+    crop: str
+    acres: float
+    location: str
+    baseline_inches_per_week: float
+    recommended_inches_per_week: float
+    expected_water_savings_percent: float
+    notes: str
+
+
+@app.post("/v1/demo/recommendation", response_model=DemoRecommendationResponse)
+def demo_recommendation(payload: DemoRecommendationRequest) -> DemoRecommendationResponse:
+    # Simple demo logic: constant 27.5% savings
+    savings_fraction = 0.275
+
+    recommended = payload.baseline_inches_per_week * (1 - savings_fraction)
+
+    return DemoRecommendationResponse(
+        field_id=payload.field_id,
+        crop=payload.crop,
+        acres=payload.acres,
+        location=payload.location,
+        baseline_inches_per_week=payload.baseline_inches_per_week,
+        recommended_inches_per_week=round(recommended, 2),
+        expected_water_savings_percent=round(savings_fraction * 100, 1),
+        notes="Demo-only recommendation for AGRO-AI OEM integration.",
+    )
 
 # CORS
 # Safely read BACKEND_CORS_ORIGINS if it exists, otherwise default to "*"
