@@ -1,0 +1,5 @@
+field_id,crop,acres,baseline_inches_per_week,agroai_inches_per_week
+block-1,almonds,100,1.6,1.1
+block-2,vineyard,50,1.4,1.0
+block-3,pistachios,80,1.8,1.2
+

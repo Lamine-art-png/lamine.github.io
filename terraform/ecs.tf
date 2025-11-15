@@ -1,6 +1,6 @@
-##########################
+###########################
 # ECS Cluster & logging
-##########################
+###########################
 
 resource "aws_ecs_cluster" "api" {
   name = "${var.project}-cluster"
@@ -22,9 +22,14 @@ resource "aws_cloudwatch_log_group" "api" {
 # Discover the active AWS region for the log driver
 data "aws_region" "current" {}
 
-##########################
+# OpenWeather API key from SSM Parameter Store
+data "aws_ssm_parameter" "openweather_api_key" {
+  name = "/agroai/api/openweather_api_key"
+}
+
+###########################
 # Task definition (Fargate)
-##########################
+###########################
 
 resource "aws_ecs_task_definition" "api" {
   family                   = "${var.project}-task"
@@ -58,6 +63,13 @@ resource "aws_ecs_task_definition" "api" {
         }
       ]
 
+      secrets = [
+        {
+          name      = "OPENWEATHER_API_KEY"
+          valueFrom = data.aws_ssm_parameter.openweather_api_key.arn
+        }
+      ]
+
       # CloudWatch Logs configuration
       logConfiguration = {
         logDriver = "awslogs"
@@ -84,9 +96,9 @@ resource "aws_ecs_task_definition" "api" {
   }
 }
 
-##########################
+###########################
 # ECS Service (targets ALB)
-##########################
+###########################
 
 resource "aws_ecs_service" "api" {
   name            = "${var.project}-svc"
@@ -108,21 +120,15 @@ resource "aws_ecs_service" "api" {
     container_port   = 8000
   }
 
-  # 👉 safer rolling deployments
-  deployment_minimum_healthy_percent = 100
+  deployment_minimum_healthy_percent = 50
   deployment_maximum_percent         = 200
-
-  lifecycle {
-    ignore_changes = [desired_count]
-  }
-
-  depends_on = [
-    aws_lb_target_group.api,
-    aws_cloudwatch_log_group.api
-  ]
 
   tags = {
     Project = var.project
   }
+
+  depends_on = [
+    aws_lb_listener.api_https
+  ]
 }
 
