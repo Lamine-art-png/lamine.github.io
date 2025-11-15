@@ -8,7 +8,7 @@ on:
 
 env:
   AWS_REGION: us-west-1
-  AWS_ACCOUNT_ID: 292039821285          # <-- your account ID
+  AWS_ACCOUNT_ID: 292039821285          # your account ID
   ECR_REPOSITORY: agroai-manulife-pilot-api
 
 jobs:
@@ -38,7 +38,7 @@ jobs:
           else
             TAG="sha-${GITHUB_SHA::7}"          # sha-abc1234
           fi
-          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -67,6 +67,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8   # pin a version you’re happy with
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
