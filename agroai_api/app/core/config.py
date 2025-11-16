@@ -16,7 +16,7 @@ class Settings(BaseSettings):
 
     # App
     APP_NAME: str = "AGRO-AI API"
-    VERSION: str = "1.0.0"
+    VERSION: str = "1.0.1"
     API_V1_PREFIX: str = "/v1"
 
     # Observability
