@@ -18,8 +18,8 @@ def health_check(db: Session = Depends(get_db)):
 
     return {
         "status": "ok",
-        "database": db_status,
-        "version": "1.0.0",
+        "database": "ok",
+        "version": app_version,
         "marker": "build-demo-v3",
     }
 
