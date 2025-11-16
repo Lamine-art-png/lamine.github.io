@@ -1,25 +1,21 @@
-from fastapi import APIRouter, Depends
-from sqlalchemy.orm import Session
-from sqlalchemy import text
-
-from app.db.base import get_db
+from fastapi import APIRouter
+from pydantic import BaseModel
+from app.core.config import settings
 
 router = APIRouter()
 
-@router.get("/health")
-def health_check(db: Session = Depends(get_db)):
-    """Health check endpoint."""
-    db_status = "ok"
-    try:
-        db.execute(text("SELECT 1"))
-        db_status = "ok"
-    except Exception:
-        db_status = "error"
 
-    return {
-        "status": "ok",
-        "database": "ok",
-        "version": app_version,
-        "marker": "build-demo-v3",
-    }
+class HealthResponse(BaseModel):
+    status: str
+    database: str
+    version: str
+
+
+@router.get("/health", response_model=HealthResponse)
+async def health() -> HealthResponse:
+    return HealthResponse(
+        status="ok",
+        database="ok",
+        version=settings.VERSION,  # <- reads from config instead of hard-coded "1.0.0"
+    )
 
