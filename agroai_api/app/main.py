@@ -1,54 +1,37 @@
-import uuid
-import time
-from contextlib import asynccontextmanager
-from pathlib import Path
-import csv
 from typing import List
 
+from fastapi import FastAPI
 from pydantic import BaseModel
-from fastapi import FastAPI, Request, Response
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-
-from app.core.config import settings
-from app.core.logging import setup_logging
-from app.db.base import init_db
-from app.api.v1 import api_router
-
-# ------------------------------------------------------------------------------
-# App setup
-# ------------------------------------------------------------------------------
-
-logger = setup_logging()
 
 
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    logger.info("Starting AGRO-AI API")
-    init_db()
-    logger.info("Database initialized")
-    yield
-    logger.info("Shutting down AGRO-AI API")
+API_VERSION = "1.1.0"
 
 
 app = FastAPI(
-    title=settings.APP_NAME,
-    version=settings.VERSION,
-    lifespan=lifespan,
+    title="AGRO-AI API",
+    version=API_VERSION,
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
 )
 
-# Mount existing v1 API router (health, recommendations, etc.)
-app.include_router(api_router, prefix="/v1")
+
+# --------- Health endpoint ---------
 
 
-# ------------------------------------------------------------------------------
-# Demo recommendation endpoint
-# ------------------------------------------------------------------------------
+@app.get("/v1/health")
+async def health():
+    """
+    Simple health check used by ECS and external monitors.
+    """
+    return {
+        "status": "ok",
+        "database": "ok",  # placeholder – not actually checking DB here
+        "version": API_VERSION,
+    }
 
-DATA_CSV = Path(__file__).resolve().parent.parent / "data" / "demo_blocks.csv"
+
+# --------- Demo recommendation models ---------
 
 
 class DemoRecommendationRequest(BaseModel):
@@ -63,9 +46,11 @@ class DemoRecommendationBlock(BaseModel):
     field_id: str
     crop: str
     acres: float
+    location: str
     baseline_inches_per_week: float
     agroai_inches_per_week: float
     water_savings_percent: float
+    notes: str | None = None
 
 
 class DemoRecommendationResponse(BaseModel):
@@ -73,93 +58,35 @@ class DemoRecommendationResponse(BaseModel):
     blocks: List[DemoRecommendationBlock]
 
 
+# --------- Demo recommendation endpoint ---------
+
+
 @app.post("/v1/demo/recommendation", response_model=DemoRecommendationResponse)
 async def demo_recommendation(
     payload: DemoRecommendationRequest,
 ) -> DemoRecommendationResponse:
-    rows: list[DemoRecommendationBlock] = []
+    """
+    Tiny demo endpoint:
+    - takes a single field
+    - pretends AGRO-AI saves ~30% water vs baseline
+    """
 
-    # Try to use demo_blocks.csv if it exists
-    if DATA_CSV.exists():
-        with DATA_CSV.open() as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                if row["field_id"] != payload.field_id:
-                    continue
+    baseline = payload.baseline_inches_per_week
+    # pretend AGRO-AI saves 30%
+    agroai = round(baseline * 0.7, 2)
 
-                baseline = float(row["baseline_inches_per_week"])
-                agroai = float(row["agroai_inches_per_week"])
-                savings_pct = round((baseline - agroai) / baseline * 100.0, 1)
+    savings_pct = round((baseline - agroai) / baseline * 100.0, 1)
 
-                rows.append(
-                    DemoRecommendationBlock(
-                        field_id=row["field_id"],
-                        crop=row["crop"],
-                        acres=float(row["acres"]),
-                        baseline_inches_per_week=baseline,
-                        agroai_inches_per_week=agroai,
-                        water_savings_percent=savings_pct,
-                    )
-                )
+    block = DemoRecommendationBlock(
+        field_id=payload.field_id,
+        crop=payload.crop,
+        acres=payload.acres,
+        location=payload.location,
+        baseline_inches_per_week=baseline,
+        agroai_inches_per_week=agroai,
+        water_savings_percent=savings_pct,
+        notes="Demo-only recommendation for OEM integration.",
+    )
 
-    # Fallback: synthesize a demo block from the payload (30% savings)
-    if not rows:
-        baseline = payload.baseline_inches_per_week
-        agroai = round(baseline * 0.7, 2)
-        savings_pct = round((baseline - agroai) / baseline * 100.0, 1)
-
-        rows.append(
-            DemoRecommendationBlock(
-                field_id=payload.field_id,
-                crop=payload.crop,
-                acres=payload.acres,
-                baseline_inches_per_week=baseline,
-                agroai_inches_per_week=agroai,
-                water_savings_percent=savings_pct,
-            )
-        )
-
-    return DemoRecommendationResponse(status="ok", blocks=rows)
-
-
-# ------------------------------------------------------------------------------
-# CORS + simple request logging middleware
-# ------------------------------------------------------------------------------
-
-allow_origins = getattr(settings, "BACKEND_CORS_ORIGINS", ["*"])
-if isinstance(allow_origins, str):
-    allow_origins = [o.strip() for o in allow_origins.split(",") if o.strip()]
-if not allow_origins:
-    allow_origins = ["*"]
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allow_origins,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-
-@app.middleware("http")
-async def add_request_logging(request: Request, call_next):
-    request_id = str(uuid.uuid4())
-    start = time.monotonic()
-
-    try:
-        response: Response = await call_next(request)
-    finally:
-        duration_ms = (time.monotonic() - start) * 1000
-        logger.info(
-            "request",
-            extra={
-                "path": str(request.url.path),
-                "method": request.method,
-                "status_code": getattr(response, "status_code", None),
-                "request_id": request_id,
-                "duration_ms": round(duration_ms, 2),
-            },
-        )
-
-    return response
+    return DemoRecommendationResponse(status="ok", blocks=[block])
 
