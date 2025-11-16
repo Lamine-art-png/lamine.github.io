@@ -1,38 +1,25 @@
+kfrom pathlib import Path
+import csv
 from typing import List
 
 from fastapi import FastAPI
 from pydantic import BaseModel
 
 
-API_VERSION = "1.1.0"
-
+# --- FastAPI app -------------------------------------------------------------
 
 app = FastAPI(
-    title="AGRO-AI API",
-    version=API_VERSION,
+    title="AGRO-AI Irrigation Intelligence API",
+    version="1.1.0",
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json",
 )
 
-
-# --------- Health endpoint ---------
-
-
-@app.get("/v1/health")
-async def health():
-    """
-    Simple health check used by ECS and external monitors.
-    """
-    return {
-        "status": "ok",
-        "database": "ok",  # placeholder – not actually checking DB here
-        "version": API_VERSION,
-    }
+DATA_CSV = Path(__file__).resolve().parent.parent / "data" / "demo_blocks.csv"
 
 
-# --------- Demo recommendation models ---------
-
+# --- Models ------------------------------------------------------------------
 
 class DemoRecommendationRequest(BaseModel):
     field_id: str
@@ -42,51 +29,79 @@ class DemoRecommendationRequest(BaseModel):
     baseline_inches_per_week: float
 
 
-class DemoRecommendationBlock(BaseModel):
+class DemoBlock(BaseModel):
     field_id: str
     crop: str
     acres: float
-    location: str
     baseline_inches_per_week: float
     agroai_inches_per_week: float
     water_savings_percent: float
-    notes: str | None = None
 
 
-class DemoRecommendationResponse(BaseModel):
+class DemoResponse(BaseModel):
     status: str
-    blocks: List[DemoRecommendationBlock]
+    blocks: List[DemoBlock]
 
 
-# --------- Demo recommendation endpoint ---------
+# --- Endpoints ---------------------------------------------------------------
+
+@app.get("/v1/health")
+def health():
+    return {
+        "status": "ok",
+        "database": "ok",
+        "version": "1.1.0",
+    }
 
 
-@app.post("/v1/demo/recommendation", response_model=DemoRecommendationResponse)
-async def demo_recommendation(
-    payload: DemoRecommendationRequest,
-) -> DemoRecommendationResponse:
+@app.post("/v1/demo/recommendation", response_model=DemoResponse)
+def demo_recommendation(payload: DemoRecommendationRequest) -> DemoResponse:
     """
     Tiny demo endpoint:
-    - takes a single field
-    - pretends AGRO-AI saves ~30% water vs baseline
+    - optional: looks up the field in demo_blocks.csv
+    - otherwise: pretends 30% water savings on the payload baseline
     """
+    blocks: List[DemoBlock] = []
 
-    baseline = payload.baseline_inches_per_week
-    # pretend AGRO-AI saves 30%
-    agroai = round(baseline * 0.7, 2)
+    # 1) If we have a CSV, try to use it
+    if DATA_CSV.exists():
+        with DATA_CSV.open() as f:
+            reader = csv.DictReader(f)
+            for row in reader:
+                if row.get("field_id") != payload.field_id:
+                    continue
 
-    savings_pct = round((baseline - agroai) / baseline * 100.0, 1)
+                baseline = float(row["baseline_inches_per_week"])
+                agroai = float(row.get("agroai_inches_per_week") or baseline * 0.7)
+                savings_pct = round((baseline - agroai) / baseline * 100.0, 1)
 
-    block = DemoRecommendationBlock(
-        field_id=payload.field_id,
-        crop=payload.crop,
-        acres=payload.acres,
-        location=payload.location,
-        baseline_inches_per_week=baseline,
-        agroai_inches_per_week=agroai,
-        water_savings_percent=savings_pct,
-        notes="Demo-only recommendation for OEM integration.",
-    )
+                blocks.append(
+                    DemoBlock(
+                        field_id=row["field_id"],
+                        crop=row["crop"],
+                        acres=float(row["acres"]),
+                        baseline_inches_per_week=baseline,
+                        agroai_inches_per_week=agroai,
+                        water_savings_percent=savings_pct,
+                    )
+                )
 
-    return DemoRecommendationResponse(status="ok", blocks=[block])
+    # 2) Fallback: synthesize from payload
+    if not blocks:
+        baseline = payload.baseline_inches_per_week
+        agroai = round(baseline * 0.7, 2)  # pretend 30% savings
+        savings_pct = round((baseline - agroai) / baseline * 100.0, 1)
+
+        blocks.append(
+            DemoBlock(
+                field_id=payload.field_id,
+                crop=payload.crop,
+                acres=payload.acres,
+                baseline_inches_per_week=baseline,
+                agroai_inches_per_week=agroai,
+                water_savings_percent=savings_pct,
+            )
+        )
+
+    return DemoResponse(status="ok", blocks=blocks)
 
