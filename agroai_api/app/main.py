@@ -1,10 +1,18 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 app = FastAPI(
     title="AGRO-AI Pilot API",
     version="1.1.0",
     openapi_url="/openapi.json"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],      # for demo; later we can tighten to your domains
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
