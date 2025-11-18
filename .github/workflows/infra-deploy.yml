@@ -1,20 +1,23 @@
 name: Deploy Infra (Terraform)
 
 on:
-  workflow_dispatch:
-  push:
+  workflow_dispatch:        # manual trigger from Actions tab
+  push:                     # optional: auto-run on changes to terraform/
+    branches: [ main ]
     paths:
-      - 'terraform/**.tf'
-      - 'terraform/terraform.tfvars'
+      - 'terraform/**'
       - '.github/workflows/infra-deploy.yml'
+
+permissions:
+  id-token: write           # needed for GitHub → AWS OIDC
+  contents: read
 
 jobs:
   terraform:
     runs-on: ubuntu-latest
-
-    permissions:
-      id-token: write
-      contents: read
+    defaults:
+      run:
+        working-directory: terraform
 
     steps:
       - name: Checkout
@@ -23,7 +26,7 @@ jobs:
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: arn:aws:iam::292039821285:role/github-actions-agroai-terraform
+          role-to-assume: arn:aws:iam::292039821285:role/infra_deploy_role
           aws-region: us-west-1
 
       - name: Setup Terraform
@@ -32,15 +35,11 @@ jobs:
           terraform_version: 1.9.8
 
       - name: Terraform Init
-        working-directory: terraform
         run: terraform init -input=false
 
       - name: Terraform Plan
-        working-directory: terraform
         run: terraform plan -input=false
 
       - name: Terraform Apply
         if: github.ref == 'refs/heads/main'
-        working-directory: terraform
         run: terraform apply -auto-approve -input=false
-
