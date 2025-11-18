@@ -15,4 +15,4 @@ private_subnet_ids = [
 ]
 
 
-image_tag = "v1.29-c28d3dd"
+image_tag = "v1.68-a2ab99a"
