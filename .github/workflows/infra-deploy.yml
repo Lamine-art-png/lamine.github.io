@@ -1,21 +1,23 @@
 name: Deploy Infra (Terraform)
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:        # manual trigger
+  push:
+    branches: [ main ]
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/infra-deploy.yml'
+
+permissions:
+  id-token: write           # needed for OIDC
+  contents: read
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
-    permissions:
-      id-token: write
-      contents: read
-
-    env:
-      TF_WORKING_DIR: terraform
-
     steps:
-      - name: Checkout
+      - name: Checkout repo
         uses: actions/checkout@v4
 
       - name: Configure AWS credentials (OIDC)
@@ -26,15 +28,17 @@ jobs:
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.5
 
       - name: Terraform Init
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform init -input=false
+        working-directory: terraform
+        run: terraform init
 
       - name: Terraform Plan
-        working-directory: ${{ env.TF_WORKING_DIR }}
+        working-directory: terraform
         run: terraform plan -input=false
 
       - name: Terraform Apply
-        working-directory: ${{ env.TF_WORKING_DIR }}
-        run: terraform apply -input=false -auto-approve
+        working-directory: terraform
+        run: terraform apply -auto-approve -input=false
