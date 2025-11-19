@@ -1,15 +1,10 @@
 name: Deploy Infra (Terraform)
 
 on:
-  workflow_dispatch:        # manual trigger from Actions tab
-  push:                     # optional: auto-run on changes to terraform/
-    branches: [ main ]
-    paths:
-      - 'terraform/**'
-      - '.github/workflows/infra-deploy.yml'
+  workflow_dispatch:   # manual trigger only for now
 
 permissions:
-  id-token: write           # needed for GitHub → AWS OIDC
+  id-token: write      # needed for OIDC
   contents: read
 
 jobs:
@@ -28,6 +23,7 @@ jobs:
         with:
           role-to-assume: arn:aws:iam::292039821285:role/infra_deploy_role
           aws-region: us-west-1
+          audience: sts.amazonaws.com
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
