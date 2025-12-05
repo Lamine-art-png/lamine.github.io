@@ -4,3 +4,8 @@ terraform.tfstate.backup
 *.tfplan
 AWSCLIV2.pkg
 trust.json
+# AGRO-AI generated artifacts
+agroai/agroai_results.csv
+agroai/charts/*.png
+agroai/reports/*.html
+

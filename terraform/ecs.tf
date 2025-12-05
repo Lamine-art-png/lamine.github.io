@@ -105,6 +105,7 @@ resource "aws_ecs_service" "api" {
   cluster         = aws_ecs_cluster.api.arn
   task_definition = aws_ecs_task_definition.api.arn
   launch_type     = "FARGATE"
+  propagate_tags  = "SERVICE"
 
   desired_count = 1
 
