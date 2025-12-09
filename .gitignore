@@ -24,3 +24,4 @@ __pycache__/
 # Terraform local secrets
 terraform/terraform.tfvars
 terraform/*.tfvars
+__init__.py
