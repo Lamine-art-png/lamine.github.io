@@ -34,3 +34,8 @@ variable "image_tag" {
   description = "Docker image tag to deploy"
   type        = string
 }
+
+variable "openweather_api_key" {
+  type      = string
+  sensitive = true
+}
