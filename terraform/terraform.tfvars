@@ -16,3 +16,5 @@ private_subnet_ids = [
 
 
 image_tag = "v1.69-9c56e1c"
+openweather_api_key = "13453137d1b56511802304e7024fb57f"
+
