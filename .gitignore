@@ -9,3 +9,7 @@ agroai/agroai_results.csv
 agroai/charts/*.png
 agroai/reports/*.html
 
+
+# Terraform local secrets
+terraform/terraform.tfvars
+terraform/*.tfvars

@@ -55,6 +55,12 @@ resource "aws_ecs_task_definition" "api" {
           protocol      = "tcp"
         }
       ]
+      secrets = [
+        {
+          name      = "OPENWEATHER_API_KEY"
+          valueFrom = aws_secretsmanager_secret.openweather.arn
+        }
+      ]
 
       environment = [
         {
