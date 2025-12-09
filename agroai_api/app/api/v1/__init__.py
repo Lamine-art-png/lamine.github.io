@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
-from . import health, demo  # import both sub-routers
+from . import health
+from .endpoints import demo
 
 # Global /v1 prefix for all v1 endpoints
 api_router = APIRouter(prefix="/v1")
