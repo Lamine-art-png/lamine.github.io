@@ -17,6 +17,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
+
     outputs:
       image_tag: ${{ steps.meta.outputs.tag }}
 
@@ -34,9 +35,9 @@ jobs:
         id: meta
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            TAG="${GITHUB_REF#refs/tags/}"      # e.g. v1.0.3
+            TAG="${GITHUB_REF#refs/tags/}"
           else
-            TAG="sha-${GITHUB_SHA::7}"          # e.g. sha-abc1234
+            TAG="sha-${GITHUB_SHA::7}"
           fi
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
 
@@ -44,10 +45,10 @@ jobs:
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build and push image
+      - name: Build and push Docker image
         run: |
-          ECR_REGISTRY=${{ steps.login-ecr.outputs.registry }}
-          ECR_REPO_URL="$ECR_REGISTRY/${{ env.ECR_REPOSITORY }}"
+          ECR_REGISTRY="${{ steps.login-ecr.outputs.registry }}"
+          ECR_REPO_URL="${ECR_REGISTRY}/${{ env.ECR_REPOSITORY }}"
           TAG="${{ steps.meta.outputs.tag }}"
 
           echo "Building $ECR_REPO_URL:$TAG"
@@ -60,6 +61,7 @@ jobs:
     permissions:
       id-token: write
       contents: read
+
     defaults:
       run:
         working-directory: terraform
@@ -83,7 +85,11 @@ jobs:
         run: terraform init -input=false
 
       - name: Terraform apply
+        env:
+          TF_VAR_vpc_id: ${{ secrets.VPC_ID }}
+          TF_VAR_public_subnet_ids: ${{ secrets.PUBLIC_SUBNET_IDS }}
+          TF_VAR_private_subnet_ids: ${{ secrets.PRIVATE_SUBNET_IDS }}
+          TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
         run: |
           terraform apply -auto-approve -input=false \
             -var="image_tag=${{ needs.build-and-push.outputs.image_tag }}"
-
