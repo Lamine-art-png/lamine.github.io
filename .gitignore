@@ -13,3 +13,14 @@ agroai/reports/*.html
 # Terraform local secrets
 terraform/terraform.tfvars
 terraform/*.tfvars
+
+# OS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc
+
+# Terraform local secrets
+terraform/terraform.tfvars
+terraform/*.tfvars
