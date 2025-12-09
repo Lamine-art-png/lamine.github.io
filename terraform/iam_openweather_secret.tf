@@ -1,3 +1,7 @@
+data "aws_iam_role" "ecs_exec" {
+  name = "ecsTaskExecutionRole-agroai-manulife-pilot"
+}
+
 data "aws_iam_policy_document" "ecs_openweather_secret" {
   statement {
     actions = [
@@ -15,6 +19,6 @@ resource "aws_iam_policy" "ecs_openweather_secret" {
 }
 
 resource "aws_iam_role_policy_attachment" "ecs_openweather_secret_attach" {
-  role       = aws_iam_role.ecs_task_execution_role.name
+  role       = data.aws_iam_role.ecs_exec.name
   policy_arn = aws_iam_policy.ecs_openweather_secret.arn
 }
