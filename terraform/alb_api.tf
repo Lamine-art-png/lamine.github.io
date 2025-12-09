@@ -5,10 +5,7 @@ resource "aws_lb" "api" {
   load_balancer_type = "application"
   internal           = false
 
-  subnets = [
-    "subnet-037e57b86892998a9",
-    "subnet-05475eccb2a806e7b",
-  ]
+  subnets = var.public_subnet_ids
 
   security_groups = [aws_security_group.alb_api.id]
 
@@ -23,7 +20,7 @@ resource "aws_lb_target_group" "api" {
   port        = 8000
   protocol    = "HTTP"
   target_type = "ip"
-  vpc_id      = "vpc-0c4cf14e0f5f0f680"
+  vpc_id      = var.vpc_id
 
   health_check {
     path    = "/v1/health"
