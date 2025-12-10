@@ -1,12 +1,12 @@
-name: infra-deploy
+name: Infra Deploy
 
 on:
-  workflow_dispatch:
   push:
     branches: [ "main" ]
     paths:
       - "terraform/**"
       - ".github/workflows/infra-deploy.yml"
+  workflow_dispatch:
 
 permissions:
   id-token: write
@@ -22,16 +22,21 @@ jobs:
 
     env:
       TF_IN_AUTOMATION: "true"
-      TF_INPUT: "false"
 
-      # Secret
-      TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
-
-      # Non-secret inputs (store these as Actions Variables)
+      # Prefer repo Variables for non-sensitive IDs
       TF_VAR_project: ${{ vars.PROJECT }}
       TF_VAR_vpc_id: ${{ vars.VPC_ID }}
+
+      # These MUST be valid HCL/JSON list strings in GitHub Variables:
+      # Example value: ["subnet-aaa","subnet-bbb"]
       TF_VAR_public_subnet_ids: ${{ vars.PUBLIC_SUBNET_IDS }}
       TF_VAR_ecs_subnet_ids: ${{ vars.ECS_SUBNET_IDS }}
+
+      # Sensitive
+      TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
+
+      # Safe default; you can override
+      TF_VAR_image_tag: ${{ github.sha }}
 
     steps:
       - name: Checkout
@@ -50,6 +55,9 @@ jobs:
 
       - name: Terraform Init
         run: terraform init -input=false
+
+      - name: Terraform Validate
+        run: terraform validate
 
       - name: Terraform Plan
         run: terraform plan -input=false
