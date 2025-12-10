@@ -1,7 +1,6 @@
-############################################
-# ALB SG
-############################################
-
+########################################
+# ALB Security Group
+########################################
 resource "aws_security_group" "alb_api" {
   name        = "${var.project}-alb-api-sg"
   description = "ALB for ${var.project}"
@@ -36,10 +35,9 @@ resource "aws_security_group" "alb_api" {
   }
 }
 
-############################################
-# ECS tasks SG
-############################################
-
+########################################
+# ECS Tasks Security Group
+########################################
 resource "aws_security_group" "ecs_api" {
   name        = "${var.project}-ecs-tasks-sg"
   description = "Allow inbound API traffic from ALB"

@@ -1,4 +1,4 @@
-variable "project" {
+kkvariable "project" {
   type        = string
   description = "Project name prefix"
 }
@@ -10,7 +10,7 @@ variable "vpc_id" {
 
 variable "public_subnet_ids" {
   type        = list(string)
-  description = "Public subnets (ALB typically lives here)"
+  description = "Public subnets for the ALB"
 }
 
 variable "ecs_subnet_ids" {
@@ -22,6 +22,12 @@ variable "api_container_port" {
   type        = number
   description = "Container port for the API"
   default     = 8000
+}
+
+variable "image_tag" {
+  type        = string
+  description = "Docker image tag for the API container"
+  default     = "latest"
 }
 
 variable "openweather_api_key" {
