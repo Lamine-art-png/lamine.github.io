@@ -1,34 +1,35 @@
 # Assume data.aws_acm_certificate.api is already defined ONCE elsewhere
 
 resource "aws_lb" "api" {
-  name               = "api-agroai-pilot-alb-tf" # new unique name
+  name               = "${var.project}-alb"
   load_balancer_type = "application"
-  internal           = false
-
-  subnets = var.public_subnet_ids
-
-  security_groups = [aws_security_group.alb_api.id]
+  security_groups    = [aws_security_group.alb_api.id]
+  subnets            = var.public_subnet_ids
 
   tags = {
-    Project   = "agroai-manulife-pilot"
+    Project   = var.project
     ManagedBy = "terraform"
   }
 }
 
 resource "aws_lb_target_group" "api" {
-  name        = "tg-api-8000-tf"
-  port        = 8000
+  name        = "${var.project}-tg"
+  port        = var.api_container_port
   protocol    = "HTTP"
   target_type = "ip"
   vpc_id      = var.vpc_id
 
   health_check {
-    path    = "/v1/health"
-    matcher = "200"
+    path                = "/v1/health"
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    timeout             = 5
+    interval            = 30
+    matcher             = "200-399"
   }
 
   tags = {
-    Project   = "agroai-manulife-pilot"
+    Project   = var.project
     ManagedBy = "terraform"
   }
 }

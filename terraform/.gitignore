@@ -1,7 +1,17 @@
+# Terraform
 .terraform/
 terraform.tfstate
 terraform.tfstate.backup
 *.tfplan
+
+# Terraform local secrets / vars (do not commit)
+terraform/terraform.tfvars
+terraform/*.tfvars
+terraform/*.tfvars.local
+terraform.tfvars
+terraform.tfvars.local
+
+# AWS installer / trust doc
 AWSCLIV2.pkg
 trust.json
 
@@ -10,12 +20,6 @@ agroai/agroai_results.csv
 agroai/charts/*.png
 agroai/reports/*.html
 
-# Terraform local secrets
-terraform/terraform.tfvars
-terraform/*.tfvars
-terraform/*.tfvars.local
-terraform.tfvars.local
-
 # OS
 .DS_Store
 
@@ -23,6 +27,6 @@ terraform.tfvars.local
 __pycache__/
 *.pyc
 
-# accidental root init
+# Ignore accidental root init if needed
 __init__.py
 

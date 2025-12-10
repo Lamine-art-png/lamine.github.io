@@ -1,41 +1,32 @@
 variable "project" {
-  type    = string
-  default = "agroai-manulife-pilot"
-}
-
-variable "aws_region" {
-  type    = string
-  default = "us-west-1"
-}
-
-variable "container_port" {
-  type    = number
-  default = 8000
-}
-
-variable "health_check_path" {
-  type    = string
-  default = "/v1/health"
+  type        = string
+  description = "Project name prefix"
 }
 
 variable "vpc_id" {
-  type = string
+  type        = string
+  description = "VPC ID for all networking"
 }
 
 variable "public_subnet_ids" {
-  type = list(string)
+  type        = list(string)
+  description = "Public subnets (ALB typically lives here)"
 }
 
-variable "private_subnet_ids" {
-  type = list(string)
+variable "ecs_subnet_ids" {
+  type        = list(string)
+  description = "Subnets for ECS tasks"
 }
 
-variable "image_tag" {
-  description = "Docker image tag to deploy"
-  type        = string
+variable "api_container_port" {
+  type        = number
+  description = "Container port for the API"
+  default     = 8000
 }
 
 variable "openweather_api_key" {
-  type      = string
-  sensitive = true
+  type        = string
+  description = "OpenWeather API key"
+  sensitive   = true
 }
+

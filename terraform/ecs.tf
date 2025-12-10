@@ -1,6 +1,7 @@
 ############################
 # ECS Cluster & logging
 ############################
+
 resource "aws_ecs_cluster" "api" {
   name = "${var.project}-cluster"
 
@@ -23,6 +24,7 @@ data "aws_region" "current" {}
 ############################
 # Task definition (Fargate)
 ############################
+
 resource "aws_ecs_task_definition" "api" {
   family                   = "${var.project}-task"
   network_mode             = "awsvpc"
@@ -54,7 +56,7 @@ resource "aws_ecs_task_definition" "api" {
         }
       ]
 
-      # Secrets Manager → inject at runtime into container env
+      # ✅ Single source of truth: Secrets Manager
       secrets = [
         {
           name      = "OPENWEATHER_API_KEY"
@@ -89,20 +91,18 @@ resource "aws_ecs_task_definition" "api" {
 ############################
 # ECS Service (targets ALB)
 ############################
-resource "aws_ecs_service" "api" {
-  name            = "${var.project}-svc"
-  cluster         = aws_ecs_cluster.api.arn
-  task_definition = aws_ecs_task_definition.api.arn
-  launch_type     = "FARGATE"
 
-  desired_count   = 1
-  propagate_tags  = "SERVICE"
+resource "aws_ecs_service" "api" {
+  # ... your existing config ...
 
   network_configuration {
-    subnets          = var.public_subnet_ids
+    subnets          = var.ecs_subnet_ids
     security_groups  = [aws_security_group.ecs_api.id]
     assign_public_ip = true
   }
+
+  # ... rest unchanged ...
+}
 
   load_balancer {
     target_group_arn = aws_lb_target_group.api.arn
