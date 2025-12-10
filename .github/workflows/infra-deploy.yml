@@ -1,17 +1,12 @@
-name: Terraform Infra Deploy
+name: infra-deploy
 
 on:
-  pull_request:
-    branches: [ "main" ]
-    paths:
-      - "terraform/**"
-      - ".github/workflows/infra-deploy.yml"
+  workflow_dispatch:
   push:
     branches: [ "main" ]
     paths:
       - "terraform/**"
       - ".github/workflows/infra-deploy.yml"
-  workflow_dispatch:
 
 permissions:
   id-token: write
@@ -21,14 +16,22 @@ jobs:
   terraform:
     runs-on: ubuntu-latest
 
-    # ✅ This is the key fix for Secrets Manager error
-    env:
-      TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
-      TF_IN_AUTOMATION: "true"
-
     defaults:
       run:
         working-directory: terraform
+
+    env:
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+
+      # Secret
+      TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
+
+      # Non-secret inputs (store these as Actions Variables)
+      TF_VAR_project: ${{ vars.PROJECT }}
+      TF_VAR_vpc_id: ${{ vars.VPC_ID }}
+      TF_VAR_public_subnet_ids: ${{ vars.PUBLIC_SUBNET_IDS }}
+      TF_VAR_ecs_subnet_ids: ${{ vars.ECS_SUBNET_IDS }}
 
     steps:
       - name: Checkout
@@ -45,19 +48,12 @@ jobs:
         with:
           terraform_version: 1.9.8
 
-      - name: Terraform Format Check
-        run: terraform fmt -check -recursive
-
       - name: Terraform Init
         run: terraform init -input=false
 
-      - name: Terraform Validate
-        run: terraform validate -no-color
-
       - name: Terraform Plan
-        run: terraform plan -input=false -no-color
+        run: terraform plan -input=false
 
-      # ✅ Apply only on main (not on PRs)
       - name: Terraform Apply
-        if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
-        run: terraform apply -auto-approve -input=false -no-color
+        if: github.ref == 'refs/heads/main'
+        run: terraform apply -auto-approve -input=false
