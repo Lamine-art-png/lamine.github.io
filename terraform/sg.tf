@@ -1,5 +1,5 @@
 ########################################
-# ALB Security Group
+# ALB SG
 ########################################
 resource "aws_security_group" "alb_api" {
   name        = "${var.project}-alb-api-sg"
@@ -36,7 +36,7 @@ resource "aws_security_group" "alb_api" {
 }
 
 ########################################
-# ECS Tasks Security Group
+# ECS tasks SG
 ########################################
 resource "aws_security_group" "ecs_api" {
   name        = "${var.project}-ecs-tasks-sg"

@@ -24,6 +24,12 @@ variable "api_container_port" {
   default     = 8000
 }
 
+variable "image_tag" {
+  type        = string
+  description = "ECR image tag to deploy"
+  default     = "latest"
+}
+
 variable "openweather_api_key" {
   type        = string
   description = "OpenWeather API key"

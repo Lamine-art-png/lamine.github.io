@@ -1,12 +1,10 @@
-# Assume data.aws_acm_certificate.api is already defined ONCE elsewhere
-
 resource "aws_lb" "api" {
   name               = "${var.project}-alb"
   load_balancer_type = "application"
   internal           = false
 
-  security_groups = [aws_security_group.alb_api.id]
   subnets         = var.public_subnet_ids
+  security_groups = [aws_security_group.alb_api.id]
 
   tags = {
     Project   = var.project
@@ -52,11 +50,11 @@ resource "aws_lb_listener" "api_http" {
   }
 }
 
+# Assumes you define data.aws_acm_certificate.api ONCE somewhere else
 resource "aws_lb_listener" "api_https" {
   load_balancer_arn = aws_lb.api.arn
   port              = 443
   protocol          = "HTTPS"
-  ssl_policy        = "ELBSecurityPolicy-TLS13-1-2-Res-2021-06"
   certificate_arn   = data.aws_acm_certificate.api.arn
 
   default_action {
