@@ -93,32 +93,35 @@ resource "aws_ecs_task_definition" "api" {
 ############################
 
 resource "aws_ecs_service" "api" {
-  # ... your existing config ...
-
-  network_configuration {
-    subnets          = var.ecs_subnet_ids
-    security_groups  = [aws_security_group.ecs_api.id]
-    assign_public_ip = true
-  }
-
-  # ... rest unchanged ...
-}
-
-  load_balancer {
-    target_group_arn = aws_lb_target_group.api.arn
-    container_name   = "api"
-    container_port   = 8000
-  }
+  name            = "${var.project}-svc"
+  cluster         = aws_ecs_cluster.api.id
+  task_definition = aws_ecs_task_definition.api.arn
+  desired_count   = 1
+  launch_type     = "FARGATE"
 
   deployment_minimum_healthy_percent = 50
   deployment_maximum_percent         = 200
 
-  tags = {
-    Project = var.project
+  network_configuration {
+    subnets          = var.ecs_subnet_ids
+    security_groups  = [aws_security_group.ecs_api.id]
+    assign_public_ip = false
+  }
+
+  load_balancer {
+    target_group_arn = aws_lb_target_group.api.arn
+    container_name   = "api"
+    container_port   = var.api_container_port
   }
 
   depends_on = [
+    aws_lb_listener.api_http,
     aws_lb_listener.api_https
   ]
+
+  tags = {
+    Project   = var.project
+    ManagedBy = "terraform"
+  }
 }
 
