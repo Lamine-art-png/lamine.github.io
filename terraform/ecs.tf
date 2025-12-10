@@ -1,7 +1,6 @@
-###########################
+############################
 # ECS Cluster & logging
-###########################
-
+############################
 resource "aws_ecs_cluster" "api" {
   name = "${var.project}-cluster"
 
@@ -19,18 +18,11 @@ resource "aws_cloudwatch_log_group" "api" {
   }
 }
 
-# Discover the active AWS region for the log driver
 data "aws_region" "current" {}
 
-# OpenWeather API key from SSM Parameter Store
-data "aws_ssm_parameter" "openweather_api_key" {
-  name = "/agroai/api/openweather_api_key"
-}
-
-###########################
+############################
 # Task definition (Fargate)
-###########################
-
+############################
 resource "aws_ecs_task_definition" "api" {
   family                   = "${var.project}-task"
   network_mode             = "awsvpc"
@@ -41,7 +33,6 @@ resource "aws_ecs_task_definition" "api" {
   execution_role_arn = aws_iam_role.ecs_task_execution.arn
   task_role_arn      = aws_iam_role.ecs_task.arn
 
-  # Image comes from ECR (declared in ecr.tf as data.aws_ecr_repository.api)
   container_definitions = jsonencode([
     {
       name      = "api"
@@ -55,12 +46,6 @@ resource "aws_ecs_task_definition" "api" {
           protocol      = "tcp"
         }
       ]
-      secrets = [
-        {
-          name      = "OPENWEATHER_API_KEY"
-          valueFrom = aws_secretsmanager_secret.openweather.arn
-        }
-      ]
 
       environment = [
         {
@@ -69,14 +54,14 @@ resource "aws_ecs_task_definition" "api" {
         }
       ]
 
+      # Secrets Manager → inject at runtime into container env
       secrets = [
         {
           name      = "OPENWEATHER_API_KEY"
-          valueFrom = data.aws_ssm_parameter.openweather_api_key.arn
+          valueFrom = aws_secretsmanager_secret.openweather.arn
         }
       ]
 
-      # CloudWatch Logs configuration
       logConfiguration = {
         logDriver = "awslogs"
         options = {
@@ -86,7 +71,6 @@ resource "aws_ecs_task_definition" "api" {
         }
       }
 
-      # Container health check (matches FastAPI /v1/health)
       healthCheck = {
         command     = ["CMD-SHELL", "curl -f http://localhost:8000/v1/health || exit 1"]
         interval    = 30
@@ -102,18 +86,17 @@ resource "aws_ecs_task_definition" "api" {
   }
 }
 
-###########################
+############################
 # ECS Service (targets ALB)
-###########################
-
+############################
 resource "aws_ecs_service" "api" {
   name            = "${var.project}-svc"
   cluster         = aws_ecs_cluster.api.arn
   task_definition = aws_ecs_task_definition.api.arn
   launch_type     = "FARGATE"
-  propagate_tags  = "SERVICE"
 
-  desired_count = 1
+  desired_count   = 1
+  propagate_tags  = "SERVICE"
 
   network_configuration {
     subnets          = var.public_subnet_ids

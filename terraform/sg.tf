@@ -1,10 +1,9 @@
-############################################
-# ALB Security Group
-############################################
-
+############################
+# ALB SG
+############################
 resource "aws_security_group" "alb_api" {
   name        = "${var.project}-alb-sg"
-  description = "ALB security group for ${var.project}"
+  description = "ALB for ${var.project}"
   vpc_id      = var.vpc_id
 
   ingress {
@@ -36,10 +35,9 @@ resource "aws_security_group" "alb_api" {
   }
 }
 
-############################################
-# ECS Tasks Security Group
-############################################
-
+############################
+# ECS tasks SG
+############################
 resource "aws_security_group" "ecs_api" {
   name        = "${var.project}-ecs-tasks-sg"
   description = "Allow inbound 8000 from ALB to ECS tasks"
