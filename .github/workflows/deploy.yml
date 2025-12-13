@@ -1,0 +1,125 @@
+name: deploy
+
+on:
+  push:
+    branches: [ "main" ]
+    paths:
+      - "terraform/**"
+      - "Dockerfile"
+      - "agroai_api/**"
+      - ".github/workflows/deploy.yml"
+  workflow_dispatch: {}
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-push:
+    name: Build & Push (ECR)
+    runs-on: ubuntu-latest
+
+    outputs:
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
+      # If you set repo variable ECR_REPOSITORY, it will use it.
+      # Otherwise it will default to "<PROJECT>-api"
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || format('{0}-api', vars.PROJECT) }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Compute image tag
+        id: meta
+        run: |
+          echo "image_tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Build & Push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.meta.outputs.image_tag }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+
+  terraform-apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    needs: [ build-and-push ]
+
+    defaults:
+      run:
+        working-directory: terraform
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
+
+      TF_IN_AUTOMATION: "true"
+      TF_INPUT: "false"
+
+      # MUST be lowercase TF_VAR_* to match Terraform variable names
+      TF_VAR_project: ${{ vars.PROJECT }}
+      TF_VAR_vpc_id: ${{ vars.VPC_ID }}
+      TF_VAR_public_subnet_ids: ${{ vars.PUBLIC_SUBNET_IDS }}
+      TF_VAR_ecs_subnet_ids: ${{ vars.ECS_SUBNET_IDS }}
+      TF_VAR_image_tag: ${{ needs.build-and-push.outputs.image_tag }}
+
+      # secret (don’t print)
+      TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ vars.TERRAFORM_VERSION || '1.9.8' }}
+
+      - name: Debug non-secret inputs
+        run: |
+          echo "TF_VAR_project=${TF_VAR_project}"
+          echo "TF_VAR_vpc_id=${TF_VAR_vpc_id}"
+          echo "TF_VAR_public_subnet_ids=${TF_VAR_public_subnet_ids}"
+          echo "TF_VAR_ecs_subnet_ids=${TF_VAR_ecs_subnet_ids}"
+          echo "TF_VAR_image_tag=${TF_VAR_image_tag}"
+          echo "openweather_key_len=${#TF_VAR_openweather_api_key}"
+
+      - name: Terraform fmt
+        run: terraform fmt -check -recursive
+
+      - name: Terraform init
+        run: terraform init
+
+      - name: Terraform validate
+        run: terraform validate
+
+      - name: Terraform plan
+        run: terraform plan -no-color -out=tfplan
+
+      - name: Terraform apply
+        run: terraform apply -no-color -auto-approve tfplan
