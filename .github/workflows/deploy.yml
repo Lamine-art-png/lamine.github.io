@@ -2,96 +2,22 @@ name: Deploy (Build to ECR + Terraform Apply)
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  id-token: write
-
-concurrency:
-  group: deploy-${{ github.ref }}
-  cancel-in-progress: true
-
 env:
-  AWS_REGION: ${{ secrets.AWS_REGION || vars.AWS_REGION || 'us-west-1' }}
+  AWS_REGION: us-west-1
 
 jobs:
-  build_and_push:
+  build_push:
     name: Build & Push (ECR)
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
 
     outputs:
-      image_tag: ${{ steps.meta.outputs.image_tag }}
-      ecr_repo: ${{ steps.meta.outputs.ecr_repo }}
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Fail fast if ECR repository var is empty
-        shell: bash
-        run: |
-          echo "ECR_REPOSITORY=${{ vars.ECR_REPOSITORY }}"
-          test -n "${{ vars.ECR_REPOSITORY }}" || (echo "ERROR: vars.ECR_REPOSITORY is missing/empty" && exit 1)
-
-      - name: Configure AWS credentials (OIDC)
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Who am I (STS)
-        shell: bash
-        run: aws sts get-caller-identity
-
-      - name: Login to Amazon ECR
-        id: login_ecr
-        uses: aws-actions/amazon-ecr-login@v2
-
-      - name: Compute image metadata
-        id: meta
-        shell: bash
-        run: |
-          ECR_REPO="${{ vars.ECR_REPOSITORY }}"
-          IMAGE_TAG="${GITHUB_SHA::7}"
-          echo "ecr_repo=$ECR_REPO" >> "$GITHUB_OUTPUT"
-          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
-          echo "ECR_REPO=$ECR_REPO" >> "$GITHUB_ENV"
-          echo "IMAGE_TAG=$IMAGE_TAG" >> "$GITHUB_ENV"
-
-      - name: Ensure ECR repository exists
-        shell: bash
-        run: |
-          set -e
-          aws ecr describe-repositories --repository-names "$ECR_REPO" >/dev/null 2>&1 \
-            || aws ecr create-repository --repository-name "$ECR_REPO" >/dev/null
-
-      - name: Build & Push image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ steps.login_ecr.outputs.registry }}/${{ env.ECR_REPO }}:${{ env.IMAGE_TAG }}
-
-  terraform_apply:
-    name: Terraform Apply
-    runs-on: ubuntu-latest
-    needs: build_and_push
-
-    # Map your GitHub repo Variables -> Terraform vars (TF_VAR_*)
-    env:
-      TF_VAR_project: ${{ vars.PROJECT }}
-      TF_VAR_vpc_id: ${{ vars.VPC_ID }}
-      TF_VAR_public_subnet_ids: ${{ vars.PUBLIC_SUBNET_IDS }}
-      TF_VAR_ecs_subnet_ids: ${{ vars.ECS_SUBNET_IDS }}
-
-      # image tag from build job output -> Terraform var.image_tag
-      TF_VAR_image_tag: ${{ needs.build_and_push.outputs.image_tag }}
-
-      # Support either secret name (you had OPEN_WEATHER_API_KEY earlier)
-      TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY || secrets.OPEN_WEATHER_API_KEY }}
+      image_tag: ${{ steps.build-image.outputs.image_tag }}
 
     steps:
       - name: Checkout
@@ -100,62 +26,94 @@ jobs:
       - name: Fail fast if AWS role secret is empty
         shell: bash
         run: |
-          test -n "${{ secrets.AWS_ROLE_ARN }}" || (echo "ERROR: AWS_ROLE_ARN secret is missing/empty" && exit 1)
-
-      - name: Fail fast if OpenWeather key is missing (safe)
-        shell: bash
-        env:
-          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY || secrets.OPEN_WEATHER_API_KEY }}
-        run: |
-          if [ -z "$OPENWEATHER_API_KEY" ]; then
-            echo "ERROR: OpenWeather secret is missing/empty (OPENWEATHER_API_KEY or OPEN_WEATHER_API_KEY)"
+          set -euo pipefail
+          if [ -z "${{ secrets.AWS_ROLE_TO_ASSUME }}" ]; then
+            echo "ERROR: Missing GitHub Secret AWS_ROLE_TO_ASSUME"
             exit 1
           fi
-          echo "OPENWEATHER_API_KEY length: ${#OPENWEATHER_API_KEY}"
-
-      - name: Sanity check required repo variables (fail fast)
-        shell: bash
-        run: |
-          echo "PROJECT=${{ vars.PROJECT }}"
-          echo "VPC_ID=${{ vars.VPC_ID }}"
-          echo "PUBLIC_SUBNET_IDS=${{ vars.PUBLIC_SUBNET_IDS }}"
-          echo "ECS_SUBNET_IDS=${{ vars.ECS_SUBNET_IDS }}"
-
-          test -n "${{ vars.PROJECT }}" || (echo "ERROR: vars.PROJECT is missing/empty" && exit 1)
-          test -n "${{ vars.VPC_ID }}" || (echo "ERROR: vars.VPC_ID is missing/empty" && exit 1)
-          test -n "${{ vars.PUBLIC_SUBNET_IDS }}" || (echo "ERROR: vars.PUBLIC_SUBNET_IDS is missing/empty" && exit 1)
-          test -n "${{ vars.ECS_SUBNET_IDS }}" || (echo "ERROR: vars.ECS_SUBNET_IDS is missing/empty" && exit 1)
-
-      - name: Validate subnet vars are JSON arrays
-        shell: bash
-        run: |
-          python3 - << 'PY'
-          import json, os, sys
-          for k in ["TF_VAR_public_subnet_ids", "TF_VAR_ecs_subnet_ids"]:
-              raw = os.environ.get(k, "")
-              try:
-                  v = json.loads(raw)
-              except Exception as e:
-                  print(f"ERROR: {k} is not valid JSON array: {e}")
-                  print(f"Value was: {raw}")
-                  sys.exit(1)
-              if not isinstance(v, list) or not all(isinstance(x, str) for x in v):
-                  print(f"ERROR: {k} must be a JSON array of strings")
-                  print(f"Parsed value: {v}")
-                  sys.exit(1)
-          print("Subnet vars OK")
-          PY
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build, tag, and push image
+        id: build-image
+        shell: bash
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${ECR_REPOSITORY}" ]; then
+            echo "ERROR: Missing GitHub Repository Variable ECR_REPOSITORY"
+            exit 1
+          fi
+
+          # IMPORTANT:
+          # -f points at the Dockerfile in agroai_api/
+          # BUT the build context is repo root (.) so Docker can COPY agroai.py, etc.
+          docker build -f agroai_api/Dockerfile -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
+          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
+
+          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+
+  terraform_apply:
+    name: Terraform Apply
+    runs-on: ubuntu-latest
+    needs: build_push
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Fail fast if required repo vars are missing
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          missing=0
+          for v in PROJECT VPC_ID PUBLIC_SUBNET_IDS ECS_SUBNET_IDS ECR_REPOSITORY; do
+            val="${{ vars[format('{0}', v)] }}"
+            if [ -z "$val" ]; then
+              echo "ERROR: Missing GitHub Repository Variable: $v"
+              missing=1
+            fi
+          done
+
+          if [ "$missing" -eq 1 ]; then
+            exit 1
+          fi
+
+      - name: Fail fast if OpenWeather key is missing (safe)
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${{ secrets.OPENWEATHER_API_KEY }}" ]; then
+            echo "ERROR: Missing GitHub Secret OPENWEATHER_API_KEY"
+            exit 1
+          fi
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.6.6"
+          terraform_version: 1.6.6
 
       - name: Terraform fmt (check)
         shell: bash
@@ -163,7 +121,7 @@ jobs:
 
       - name: Terraform init
         shell: bash
-        run: terraform -chdir=terraform init -input=false
+        run: terraform -chdir=terraform init
 
       - name: Terraform validate
         shell: bash
@@ -171,9 +129,25 @@ jobs:
 
       - name: Terraform plan
         shell: bash
-        run: terraform -chdir=terraform plan -input=false -out=tfplan
+        env:
+          TF_VAR_project: ${{ vars.PROJECT }}
+          TF_VAR_vpc_id: ${{ vars.VPC_ID }}
+          TF_VAR_public_subnet_ids: ${{ vars.PUBLIC_SUBNET_IDS }}
+          TF_VAR_ecs_subnet_ids: ${{ vars.ECS_SUBNET_IDS }}
+          TF_VAR_ecr_repository: ${{ vars.ECR_REPOSITORY }}
+          TF_VAR_image_tag: ${{ needs.build_push.outputs.image_tag }}
+          TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
+        run: terraform -chdir=terraform plan -input=false
 
       - name: Terraform apply
         shell: bash
-        run: terraform -chdir=terraform apply -input=false -auto-approve tfplan
+        env:
+          TF_VAR_project: ${{ vars.PROJECT }}
+          TF_VAR_vpc_id: ${{ vars.VPC_ID }}
+          TF_VAR_public_subnet_ids: ${{ vars.PUBLIC_SUBNET_IDS }}
+          TF_VAR_ecs_subnet_ids: ${{ vars.ECS_SUBNET_IDS }}
+          TF_VAR_ecr_repository: ${{ vars.ECR_REPOSITORY }}
+          TF_VAR_image_tag: ${{ needs.build_push.outputs.image_tag }}
+          TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
+        run: terraform -chdir=terraform apply -auto-approve -input=false
 
