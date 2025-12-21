@@ -1,4 +1,4 @@
-resource "aws_secretsmanager_secret" "openweather" {
+kresource "aws_secretsmanager_secret" "openweather" {
   name = "${var.project}/openweather_api_key"
 
   tags = {

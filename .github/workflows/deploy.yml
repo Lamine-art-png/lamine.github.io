@@ -3,44 +3,45 @@ name: Deploy (Build to ECR + Terraform Apply)
 on:
   push:
     branches: ["main"]
-    paths:
-      - "agroai_api/**"
-      - "terraform/**"
-      - "Dockerfile"
-      - ".github/workflows/deploy.yml"
   workflow_dispatch: {}
 
 permissions:
-  contents: read
   id-token: write
+  contents: read
 
 concurrency:
   group: deploy-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   AWS_REGION: us-west-1
-  # Fallback protects you from the exact error you're seeing (missing repo name).
-  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'agroai-manulife-pilot-api' }}
+  TF_DIR: terraform
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
 
 jobs:
-  build_and_push:
+  build_push:
     name: Build & Push (ECR)
     runs-on: ubuntu-latest
 
     outputs:
-      image_tag: ${{ steps.meta.outputs.image_tag }}
-      image_uri: ${{ steps.meta.outputs.image_uri }}
+      image_tag: ${{ steps.out.outputs.image_tag }}
+      image_uri: ${{ steps.out.outputs.image_uri }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
       - name: Fail fast if ECR repo var is empty
+        shell: bash
         run: |
-          set -euo pipefail
-          echo "ECR_REPOSITORY=${ECR_REPOSITORY}"
-          test -n "${ECR_REPOSITORY}"
+          echo "ECR_REPOSITORY='${{ vars.ECR_REPOSITORY }}'"
+          test -n "${{ vars.ECR_REPOSITORY }}" || (echo "ERROR: vars.ECR_REPOSITORY is empty" && exit 1)
+
+      - name: Fail fast if AWS role secret is empty
+        shell: bash
+        run: |
+          test -n "${{ secrets.AWS_ROLE_ARN }}" || (echo "ERROR: secrets.AWS_ROLE_ARN is empty" && exit 1)
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -52,36 +53,62 @@ jobs:
         run: aws sts get-caller-identity
 
       - name: Login to Amazon ECR
-        id: login_ecr
+        id: ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Compute image metadata
-        id: meta
-        run: |
-          set -euo pipefail
-          TAG="${GITHUB_SHA::12}"
-          REGISTRY="${{ steps.login_ecr.outputs.registry }}"
-          IMAGE_URI="${REGISTRY}/${ECR_REPOSITORY}:${TAG}"
-
-          echo "image_tag=${TAG}" >> "$GITHUB_OUTPUT"
-          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
-
-          echo "Will build/push: ${IMAGE_URI}"
-
       - name: Build & Push image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:${{ github.sha }}
+            ${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:latest
+
+      - name: Export image uri + tag
+        id: out
+        shell: bash
         run: |
-          set -euo pipefail
-          docker build -t "${{ steps.meta.outputs.image_uri }}" .
-          docker push "${{ steps.meta.outputs.image_uri }}"
+          IMAGE_TAG="${GITHUB_SHA}"
+          IMAGE_URI="${{ steps.ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:${IMAGE_TAG}"
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
+          echo "Pushed: ${IMAGE_URI}"
 
   terraform_apply:
     name: Terraform Apply
     runs-on: ubuntu-latest
-    needs: [build_and_push]
+    needs: [build_push]
+
+    # IMPORTANT: This is what makes var.openweather_api_key non-empty in Terraform.
+    # Terraform maps TF_VAR_openweather_api_key -> var.openweather_api_key
+    env:
+      TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
+
+      # Optional: only enable if your Terraform has matching variables.
+      # TF_VAR_image_tag: ${{ needs.build_push.outputs.image_tag }}
+      # TF_VAR_image_uri: ${{ needs.build_push.outputs.image_uri }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Fail fast if AWS role secret is empty
+        shell: bash
+        run: |
+          test -n "${{ secrets.AWS_ROLE_ARN }}" || (echo "ERROR: secrets.AWS_ROLE_ARN is empty" && exit 1)
+
+      # This proves the secret exists IN THE RUNNER, without printing it.
+      - name: Fail fast if OpenWeather key is missing (safe)
+        shell: bash
+        env:
+          OPENWEATHER_API_KEY: ${{ secrets.OPENWEATHER_API_KEY }}
+        run: |
+          if [ -z "$OPENWEATHER_API_KEY" ]; then
+            echo "ERROR: OPENWEATHER_API_KEY secret is missing/empty in this repo/run"
+            exit 1
+          fi
+          echo "OPENWEATHER_API_KEY length: ${#OPENWEATHER_API_KEY}"
 
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
@@ -92,58 +119,20 @@ jobs:
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: "1.9.8"
+          terraform_wrapper: false
 
-      - name: Sanity check required repo variables (fail fast)
-        working-directory: terraform
-        run: |
-          set -euo pipefail
-          test -n "${{ vars.PROJECT }}"
-          test -n "${{ vars.VPC_ID }}"
-          test -n "${{ vars.PUBLIC_SUBNET_IDS }}"
-          test -n "${{ vars.ECS_SUBNET_IDS }}"
-          echo "Repo vars look non-empty ✅"
-
-      - name: Validate subnet vars are JSON arrays
-        working-directory: terraform
-        run: |
-          set -euo pipefail
-          python - <<'PY'
-          import json
-          pub = json.loads(r'''${{ vars.PUBLIC_SUBNET_IDS }}''')
-          ecs = json.loads(r'''${{ vars.ECS_SUBNET_IDS }}''')
-          assert isinstance(pub, list) and all(isinstance(x,str) for x in pub), pub
-          assert isinstance(ecs, list) and all(isinstance(x,str) for x in ecs), ecs
-          print("Subnet vars are valid JSON arrays ✅")
-          PY
-
-      - name: Terraform fmt
-        working-directory: terraform
-        run: terraform fmt -check -diff -recursive
+      - name: Terraform fmt (check)
+        run: terraform -chdir=${{ env.TF_DIR }} fmt -check -recursive
 
       - name: Terraform init
-        working-directory: terraform
-        run: terraform init -input=false
+        run: terraform -chdir=${{ env.TF_DIR }} init
+
+      - name: Terraform validate
+        run: terraform -chdir=${{ env.TF_DIR }} validate
 
       - name: Terraform plan
-        working-directory: terraform
-        env:
-          TF_VAR_project: ${{ vars.PROJECT }}
-          TF_VAR_vpc_id: ${{ vars.VPC_ID }}
-          TF_VAR_public_subnet_ids: ${{ vars.PUBLIC_SUBNET_IDS }}
-          TF_VAR_ecs_subnet_ids: ${{ vars.ECS_SUBNET_IDS }}
-          TF_VAR_image_uri: ${{ needs.build_and_push.outputs.image_uri }}
-          TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
-        run: terraform plan -input=false -no-color -out=tfplan
+        run: terraform -chdir=${{ env.TF_DIR }} plan -out=tfplan
 
       - name: Terraform apply
-        working-directory: terraform
-        env:
-          TF_VAR_project: ${{ vars.PROJECT }}
-          TF_VAR_vpc_id: ${{ vars.VPC_ID }}
-          TF_VAR_public_subnet_ids: ${{ vars.PUBLIC_SUBNET_IDS }}
-          TF_VAR_ecs_subnet_ids: ${{ vars.ECS_SUBNET_IDS }}
-          TF_VAR_image_uri: ${{ needs.build_and_push.outputs.image_uri }}
-          TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
-        run: terraform apply -auto-approve -input=false tfplan
+        run: terraform -chdir=${{ env.TF_DIR }} apply -auto-approve tfplan
 
