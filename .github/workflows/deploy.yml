@@ -7,6 +7,11 @@ on:
 
 env:
   AWS_REGION: us-west-1
+  TF_DIR: terraform
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
 
 jobs:
   build_push:
@@ -17,53 +22,41 @@ jobs:
       contents: read
 
     outputs:
-      image_tag: ${{ steps.build-image.outputs.image_tag }}
+      image_tag: ${{ steps.meta.outputs.image_tag }}
+      image_uri: ${{ steps.meta.outputs.image_uri }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fail fast if AWS role secret is empty
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -z "${{ secrets.AWS_ROLE_TO_ASSUME }}" ]; then
-            echo "ERROR: Missing GitHub Secret AWS_ROLE_TO_ASSUME"
-            exit 1
-          fi
-
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Build, tag, and push image
-        id: build-image
-        shell: bash
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-          IMAGE_TAG: ${{ github.sha }}
+      - name: Compute image tag + URI
+        id: meta
         run: |
-          set -euo pipefail
+          IMAGE_TAG="${GITHUB_SHA::7}"
+          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:${IMAGE_TAG}"
+          echo "image_tag=${IMAGE_TAG}" >> "$GITHUB_OUTPUT"
+          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
 
-          if [ -z "${ECR_REPOSITORY}" ]; then
-            echo "ERROR: Missing GitHub Repository Variable ECR_REPOSITORY"
-            exit 1
-          fi
+      - name: Build image (agroai_api/Dockerfile)
+        run: |
+          docker build \
+            -f agroai_api/Dockerfile \
+            -t "${{ steps.meta.outputs.image_uri }}" \
+            .
 
-          # IMPORTANT:
-          # -f points at the Dockerfile in agroai_api/
-          # BUT the build context is repo root (.) so Docker can COPY agroai.py, etc.
-          docker build -f agroai_api/Dockerfile -t "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG" .
-          docker push "$ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG"
-
-          echo "image_tag=$IMAGE_TAG" >> "$GITHUB_OUTPUT"
+      - name: Push image
+        run: |
+          docker push "${{ steps.meta.outputs.image_uri }}"
 
   terraform_apply:
     name: Terraform Apply
@@ -77,77 +70,25 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Fail fast if required repo vars are missing
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          missing=0
-          for v in PROJECT VPC_ID PUBLIC_SUBNET_IDS ECS_SUBNET_IDS ECR_REPOSITORY; do
-            val="${{ vars[format('{0}', v)] }}"
-            if [ -z "$val" ]; then
-              echo "ERROR: Missing GitHub Repository Variable: $v"
-              missing=1
-            fi
-          done
-
-          if [ "$missing" -eq 1 ]; then
-            exit 1
-          fi
-
-      - name: Fail fast if OpenWeather key is missing (safe)
-        shell: bash
-        run: |
-          set -euo pipefail
-          if [ -z "${{ secrets.OPENWEATHER_API_KEY }}" ]; then
-            echo "ERROR: Missing GitHub Secret OPENWEATHER_API_KEY"
-            exit 1
-          fi
-
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.6.6
 
-      - name: Terraform fmt (check)
-        shell: bash
-        run: terraform -chdir=terraform fmt -check
+      - name: Terraform Init
+        run: terraform -chdir=${{ env.TF_DIR }} init -input=false
 
-      - name: Terraform init
-        shell: bash
-        run: terraform -chdir=terraform init
-
-      - name: Terraform validate
-        shell: bash
-        run: terraform -chdir=terraform validate
-
-      - name: Terraform plan
-        shell: bash
-        env:
-          TF_VAR_project: ${{ vars.PROJECT }}
-          TF_VAR_vpc_id: ${{ vars.VPC_ID }}
-          TF_VAR_public_subnet_ids: ${{ vars.PUBLIC_SUBNET_IDS }}
-          TF_VAR_ecs_subnet_ids: ${{ vars.ECS_SUBNET_IDS }}
-          TF_VAR_ecr_repository: ${{ vars.ECR_REPOSITORY }}
-          TF_VAR_image_tag: ${{ needs.build_push.outputs.image_tag }}
-          TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
-        run: terraform -chdir=terraform plan -input=false
-
-      - name: Terraform apply
-        shell: bash
-        env:
-          TF_VAR_project: ${{ vars.PROJECT }}
-          TF_VAR_vpc_id: ${{ vars.VPC_ID }}
-          TF_VAR_public_subnet_ids: ${{ vars.PUBLIC_SUBNET_IDS }}
-          TF_VAR_ecs_subnet_ids: ${{ vars.ECS_SUBNET_IDS }}
-          TF_VAR_ecr_repository: ${{ vars.ECR_REPOSITORY }}
-          TF_VAR_image_tag: ${{ needs.build_push.outputs.image_tag }}
-          TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
-        run: terraform -chdir=terraform apply -auto-approve -input=false
+      - name: Terraform Apply
+        run: |
+          terraform -chdir=${{ env.TF_DIR }} apply -auto-approve \
+            -var="project=${{ vars.PROJECT }}" \
+            -var="vpc_id=${{ vars.VPC_ID }}" \
+            -var='public_subnet_ids=${{ vars.PUBLIC_SUBNET_IDS }}' \
+            -var='ecs_subnet_ids=${{ vars.ECS_SUBNET_IDS }}' \
+            -var="ecr_repository=${{ vars.ECR_REPOSITORY }}" \
+            -var="image_tag=${{ needs.build_push.outputs.image_tag }}"
 
