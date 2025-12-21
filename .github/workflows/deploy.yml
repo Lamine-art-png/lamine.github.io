@@ -15,18 +15,19 @@ permissions:
   id-token: write
 
 concurrency:
-  group: terraform-${{ github.ref }}
+  group: deploy-${{ github.ref }}
   cancel-in-progress: false
 
 env:
   AWS_REGION: us-west-1
-  TF_IN_AUTOMATION: "true"
-  TF_INPUT: "false"
+  # Fallback protects you from the exact error you're seeing (missing repo name).
+  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY || 'agroai-manulife-pilot-api' }}
 
 jobs:
   build_and_push:
     name: Build & Push (ECR)
     runs-on: ubuntu-latest
+
     outputs:
       image_tag: ${{ steps.meta.outputs.image_tag }}
       image_uri: ${{ steps.meta.outputs.image_uri }}
@@ -35,11 +36,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Fail fast if ECR repo var is empty
+        run: |
+          set -euo pipefail
+          echo "ECR_REPOSITORY=${ECR_REPOSITORY}"
+          test -n "${ECR_REPOSITORY}"
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      - name: Who am I (STS)
+        run: aws sts get-caller-identity
 
       - name: Login to Amazon ECR
         id: login_ecr
@@ -50,8 +60,13 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${GITHUB_SHA::12}"
-          echo "image_tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "image_uri=${{ steps.login_ecr.outputs.registry }}/${{ vars.ECR_REPOSITORY }}:$TAG" >> "$GITHUB_OUTPUT"
+          REGISTRY="${{ steps.login_ecr.outputs.registry }}"
+          IMAGE_URI="${REGISTRY}/${ECR_REPOSITORY}:${TAG}"
+
+          echo "image_tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "image_uri=${IMAGE_URI}" >> "$GITHUB_OUTPUT"
+
+          echo "Will build/push: ${IMAGE_URI}"
 
       - name: Build & Push image
         run: |
@@ -87,8 +102,20 @@ jobs:
           test -n "${{ vars.VPC_ID }}"
           test -n "${{ vars.PUBLIC_SUBNET_IDS }}"
           test -n "${{ vars.ECS_SUBNET_IDS }}"
-          test -n "${{ vars.ECR_REPOSITORY }}"
           echo "Repo vars look non-empty ✅"
+
+      - name: Validate subnet vars are JSON arrays
+        working-directory: terraform
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          pub = json.loads(r'''${{ vars.PUBLIC_SUBNET_IDS }}''')
+          ecs = json.loads(r'''${{ vars.ECS_SUBNET_IDS }}''')
+          assert isinstance(pub, list) and all(isinstance(x,str) for x in pub), pub
+          assert isinstance(ecs, list) and all(isinstance(x,str) for x in ecs), ecs
+          print("Subnet vars are valid JSON arrays ✅")
+          PY
 
       - name: Terraform fmt
         working-directory: terraform
@@ -103,8 +130,8 @@ jobs:
         env:
           TF_VAR_project: ${{ vars.PROJECT }}
           TF_VAR_vpc_id: ${{ vars.VPC_ID }}
-          TF_VAR_public_subnet_ids: ${{ toJson(fromJson(vars.PUBLIC_SUBNET_IDS)) }}
-          TF_VAR_ecs_subnet_ids: ${{ toJson(fromJson(vars.ECS_SUBNET_IDS)) }}
+          TF_VAR_public_subnet_ids: ${{ vars.PUBLIC_SUBNET_IDS }}
+          TF_VAR_ecs_subnet_ids: ${{ vars.ECS_SUBNET_IDS }}
           TF_VAR_image_uri: ${{ needs.build_and_push.outputs.image_uri }}
           TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
         run: terraform plan -input=false -no-color -out=tfplan
@@ -114,8 +141,8 @@ jobs:
         env:
           TF_VAR_project: ${{ vars.PROJECT }}
           TF_VAR_vpc_id: ${{ vars.VPC_ID }}
-          TF_VAR_public_subnet_ids: ${{ toJson(fromJson(vars.PUBLIC_SUBNET_IDS)) }}
-          TF_VAR_ecs_subnet_ids: ${{ toJson(fromJson(vars.ECS_SUBNET_IDS)) }}
+          TF_VAR_public_subnet_ids: ${{ vars.PUBLIC_SUBNET_IDS }}
+          TF_VAR_ecs_subnet_ids: ${{ vars.ECS_SUBNET_IDS }}
           TF_VAR_image_uri: ${{ needs.build_and_push.outputs.image_uri }}
           TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
         run: terraform apply -auto-approve -input=false tfplan
