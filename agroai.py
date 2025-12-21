@@ -1,33 +1,30 @@
 """
+agroai.py (REPO ROOT)
+
 Shim module so the API can `import agroai` inside the container.
 
-This file MUST exist at repo root: ./agroai.py
-
-Goal: importing `agroai` should NEVER crash the container.
-Later, you can move real logic here (or re-export from your real module).
+Goal: make `import agroai` always succeed so the container boots.
+Later, put real logic in:
+- agroai_api/app/agroai.py  OR
+- agroai_api/agroai.py
+…and this shim will re-export it.
 """
 
-from __future__ import annotations
+from importlib import import_module
 
-import warnings
+_CANDIDATES = ("agroai_api.app.agroai", "agroai_api.agroai")
 
-# Try to re-export your real implementation if it exists.
-# If it doesn't exist yet, we just keep the shim importable.
-try:
-    # Option A: if your real code lives here
-    from agroai_api.app.agroai import *  # noqa: F401,F403
-except Exception:
+_loaded = None
+for name in _CANDIDATES:
     try:
-        # Option B: if your real code lives here
-        from agroai_api.agroai import *  # noqa: F401,F403
-    except Exception:
-        warnings.warn(
-            "agroai shim loaded (no real implementation found yet). "
-            "This is OK for boot; implement functions later if endpoints need them.",
-            RuntimeWarning,
-        )
+        _loaded = import_module(name)
+        break
+    except ModuleNotFoundError:
+        continue
 
-# Optional: expose a tiny marker so you can tell the shim is present
-__all__ = globals().get("__all__", [])
-__version__ = "0.1.0-shim"
+if _loaded:
+    # Re-export public names from the real module (if present)
+    for k in dir(_loaded):
+        if not k.startswith("_"):
+            globals()[k] = getattr(_loaded, k)
 
