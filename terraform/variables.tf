@@ -36,7 +36,7 @@ variable "openweather_api_key" {
   sensitive   = true
 
   validation {
-    condition     = length(trim(var.openweather_api_key)) > 0
+    condition     = length(trimspace(var.openweather_api_key)) > 0
     error_message = "openweather_api_key must be set (TF_VAR_openweather_api_key or -var)."
   }
 }
