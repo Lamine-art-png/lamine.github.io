@@ -1,21 +1,33 @@
 """
-Compatibility shim so `import agroai` works inside the container.
+Shim module so the API can `import agroai` inside the container.
 
-This file should live at the REPO ROOT: ./agroai.py
+This file MUST exist at repo root: ./agroai.py
+
+Goal: importing `agroai` should NEVER crash the container.
+Later, you can move real logic here (or re-export from your real module).
 """
 
-# Option A: if your real implementation is here:
+from __future__ import annotations
+
+import warnings
+
+# Try to re-export your real implementation if it exists.
+# If it doesn't exist yet, we just keep the shim importable.
 try:
+    # Option A: if your real code lives here
     from agroai_api.app.agroai import *  # noqa: F401,F403
-except ModuleNotFoundError:
-    # Option B: if your real implementation is here instead:
+except Exception:
     try:
+        # Option B: if your real code lives here
         from agroai_api.agroai import *  # noqa: F401,F403
-    except ModuleNotFoundError as e:
-        raise ModuleNotFoundError(
-            "import agroai failed. Create your core module at one of:\n"
-            "- agroai_api/app/agroai.py\n"
-            "- agroai_api/agroai.py\n"
-            "or change `import agroai` in agroai_api/app/main.py to the correct path."
-        ) from e
+    except Exception:
+        warnings.warn(
+            "agroai shim loaded (no real implementation found yet). "
+            "This is OK for boot; implement functions later if endpoints need them.",
+            RuntimeWarning,
+        )
+
+# Optional: expose a tiny marker so you can tell the shim is present
+__all__ = globals().get("__all__", [])
+__version__ = "0.1.0-shim"
 
