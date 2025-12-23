@@ -5,7 +5,8 @@ WORKDIR /app
 RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
 # Copy backend code
-COPY agroai_api/ ./agroai_api
+COPY agroai ./agroai
+COPY agroai_api ./agroai_api
 
 # Install deps (adjust path if your requirements file lives elsewhere)
 RUN pip install --no-cache-dir -r agroai_api/requirements.txt
