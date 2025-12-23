@@ -18,7 +18,9 @@ RUN pip install --no-cache-dir -r /app/requirements.txt
 COPY agroai_api/ /app/agroai_api/
 
 # Shim module at repo root so `import agroai` works
-COPY agroai.py /app/agroai.py
+COPY agroai/ /app/agroai/
+# optional (only if you still need the CLI file in the image)
+COPY agroai_cli.py /app/agroai_cli.py
 
 # Make /app importable
 ENV PYTHONPATH=/app
