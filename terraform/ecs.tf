@@ -49,20 +49,25 @@ resource "aws_ecs_task_definition" "api" {
         }
       ]
 
+      # ✅ TEMP unblock: stop using Secrets Manager for OpenWeather
       environment = [
         {
           name  = "PORT"
           value = "8000"
+        },
+        {
+          name  = "OPENWEATHER_API_KEY"
+          value = var.openweather_api_key
         }
       ]
 
-      # ✅ Single source of truth: Secrets Manager
-      secrets = [
-        {
-          name      = "OPENWEATHER_API_KEY"
-          valueFrom = aws_secretsmanager_secret.openweather.arn
-        }
-      ]
+      # ❌ REMOVE this block entirely
+      # secrets = [
+      #   {
+      #     name      = "OPENWEATHER_API_KEY"
+      #     valueFrom = aws_secretsmanager_secret.openweather.arn
+      #   }
+      # ]
 
       logConfiguration = {
         logDriver = "awslogs"
@@ -108,6 +113,7 @@ resource "aws_ecs_service" "api" {
     assign_public_ip = true
   }
 
+  # ✅ This is the ALB target group wiring
   load_balancer {
     target_group_arn = aws_lb_target_group.api.arn
     container_name   = "api"
@@ -115,6 +121,7 @@ resource "aws_ecs_service" "api" {
   }
 
   depends_on = [
+    aws_lb_target_group.api,
     aws_lb_listener.api_http,
     aws_lb_listener.api_https
   ]
