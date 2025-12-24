@@ -61,13 +61,10 @@ resource "aws_ecs_task_definition" "api" {
         }
       ]
 
-      # ❌ REMOVE this block entirely
-      # secrets = [
-      #   {
-      #     name      = "OPENWEATHER_API_KEY"
-      #     valueFrom = aws_secretsmanager_secret.openweather.arn
-      #   }
-      # ]
+       {
+         name  = "OPENWEATHER_API_KEY"
+         value = var.openweather_api_key
+       }
 
       logConfiguration = {
         logDriver = "awslogs"
