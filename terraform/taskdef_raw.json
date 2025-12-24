@@ -1,0 +1,101 @@
+{
+    "taskDefinitionArn": "arn:aws:ecs:us-west-1:292039821285:task-definition/agroai-manulife-pilot-task:48",
+    "containerDefinitions": [
+        {
+            "name": "api",
+            "image": "292039821285.dkr.ecr.us-west-1.amazonaws.com/agroai-manulife-pilot-api:latest",
+            "cpu": 0,
+            "portMappings": [
+                {
+                    "containerPort": 8000,
+                    "hostPort": 8000,
+                    "protocol": "tcp"
+                }
+            ],
+            "essential": true,
+            "environment": [
+                {
+                    "name": "PORT",
+                    "value": "8000"
+                },
+                {
+                    "name": "OPENWEATHER_API_KEY",
+                    "value": "13453137d1b56511802304e7024fb57f"
+                }
+            ],
+            "mountPoints": [],
+            "volumesFrom": [],
+            "logConfiguration": {
+                "logDriver": "awslogs",
+                "options": {
+                    "awslogs-group": "/ecs/agroai-manulife-pilot",
+                    "awslogs-region": "us-west-1",
+                    "awslogs-stream-prefix": "api"
+                }
+            },
+            "healthCheck": {
+                "command": [
+                    "CMD-SHELL",
+                    "curl -f http://localhost:8000/v1/health || exit 1"
+                ],
+                "interval": 30,
+                "timeout": 5,
+                "retries": 3,
+                "startPeriod": 10
+            },
+            "systemControls": []
+        }
+    ],
+    "family": "agroai-manulife-pilot-task",
+    "taskRoleArn": "arn:aws:iam::292039821285:role/agroai-manulife-pilot-task",
+    "executionRoleArn": "arn:aws:iam::292039821285:role/ecsTaskExecutionRole-agroai-manulife-pilot",
+    "networkMode": "awsvpc",
+    "revision": 48,
+    "volumes": [],
+    "status": "ACTIVE",
+    "requiresAttributes": [
+        {
+            "name": "com.amazonaws.ecs.capability.logging-driver.awslogs"
+        },
+        {
+            "name": "ecs.capability.execution-role-awslogs"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.ecr-auth"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.19"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.task-iam-role"
+        },
+        {
+            "name": "ecs.capability.container-health-check"
+        },
+        {
+            "name": "ecs.capability.execution-role-ecr-pull"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.18"
+        },
+        {
+            "name": "ecs.capability.task-eni"
+        },
+        {
+            "name": "com.amazonaws.ecs.capability.docker-remote-api.1.29"
+        }
+    ],
+    "placementConstraints": [],
+    "compatibilities": [
+        "EC2",
+        "MANAGED_INSTANCES",
+        "FARGATE"
+    ],
+    "requiresCompatibilities": [
+        "FARGATE"
+    ],
+    "cpu": "256",
+    "memory": "512",
+    "registeredAt": "2025-12-23T16:57:04.008000-08:00",
+    "registeredBy": "arn:aws:sts::292039821285:assumed-role/GitHubActionsAgroAI/GitHubActions"
+}
