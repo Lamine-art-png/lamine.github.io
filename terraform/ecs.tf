@@ -1,7 +1,3 @@
-############################
-# ECS Cluster & logging
-############################
-
 resource "aws_ecs_cluster" "api" {
   name = "${var.project}-cluster"
 
@@ -21,10 +17,6 @@ resource "aws_cloudwatch_log_group" "api" {
 
 data "aws_region" "current" {}
 
-############################
-# Task definition (Fargate)
-############################
-
 resource "aws_ecs_task_definition" "api" {
   family                   = "${var.project}-task"
   network_mode             = "awsvpc"
@@ -37,50 +29,43 @@ resource "aws_ecs_task_definition" "api" {
 
   container_definitions = jsonencode([
     {
-      name      = "api"
-      image     = "${data.aws_ecr_repository.api.repository_url}:${var.image_tag}"
-      essential = true
-
-      portMappings = [
+      "name" : "api",
+      "image" : "${data.aws_ecr_repository.api.repository_url}:${var.image_tag}",
+      "essential" : true,
+      "portMappings" : [
         {
-          containerPort = 8000
-          hostPort      = 8000
-          protocol      = "tcp"
+          "containerPort" : 8000,
+          "hostPort" : 8000,
+          "protocol" : "tcp"
         }
-      ]
-
-      # ✅ TEMP unblock: stop using Secrets Manager for OpenWeather
-      environment = [
+      ],
+      "environment" : [
         {
-          name  = "PORT"
-          value = "8000"
+          "name" : "PORT",
+          "value" : "8000"
         },
         {
-          name  = "OPENWEATHER_API_KEY"
-          value = var.openweather_api_key
+          "name" : "OPENWEATHER_API_KEY",
+          "value" : var.openweather_api_key
         }
-      ]
-
-       {
-         name  = "OPENWEATHER_API_KEY"
-         value = var.openweather_api_key
-       }
-
-      logConfiguration = {
-        logDriver = "awslogs"
-        options = {
-          awslogs-group         = aws_cloudwatch_log_group.api.name
-          awslogs-region        = data.aws_region.current.name
-          awslogs-stream-prefix = "api"
+      ],
+      "logConfiguration" : {
+        "logDriver" : "awslogs",
+        "options" : {
+          "awslogs-group" : aws_cloudwatch_log_group.api.name,
+          "awslogs-region" : data.aws_region.current.name,
+          "awslogs-stream-prefix" : "api"
         }
-      }
-
-      healthCheck = {
-        command     = ["CMD-SHELL", "curl -f http://localhost:8000/v1/health || exit 1"]
-        interval    = 30
-        timeout     = 5
-        retries     = 3
-        startPeriod = 10
+      },
+      "healthCheck" : {
+        "command" : [
+          "CMD-SHELL",
+          "curl -f http://localhost:8000/v1/health || exit 1"
+        ],
+        "interval" : 30,
+        "timeout" : 5,
+        "retries" : 3,
+        "startPeriod" : 10
       }
     }
   ])
@@ -89,10 +74,6 @@ resource "aws_ecs_task_definition" "api" {
     Project = var.project
   }
 }
-
-############################
-# ECS Service (targets ALB)
-############################
 
 resource "aws_ecs_service" "api" {
   name            = "${var.project}-svc"
@@ -110,7 +91,6 @@ resource "aws_ecs_service" "api" {
     assign_public_ip = true
   }
 
-  # ✅ This is the ALB target group wiring
   load_balancer {
     target_group_arn = aws_lb_target_group.api.arn
     container_name   = "api"
