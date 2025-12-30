@@ -5,6 +5,7 @@ on:
     branches: ["main"]
   workflow_dispatch: {}
 
+# Required for GitHub OIDC → AWS role assumption
 permissions:
   id-token: write
   contents: read
@@ -16,8 +17,6 @@ concurrency:
 env:
   AWS_REGION: us-west-1
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-  ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
-  ECS_SERVICE: ${{ vars.ECS_SERVICE }}
 
 jobs:
   deploy:
@@ -27,11 +26,29 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # ---- Sanity checks (BEFORE configure-aws-credentials) ----
+      - name: Fail fast if role ARN secret missing
+        run: |
+          if [ -z "${{ secrets.AWS_OIDC_ROLE_ARN }}" ]; then
+            echo "Missing secret AWS_OIDC_ROLE_ARN (Repo Settings → Actions → Secrets)"
+            exit 1
+          fi
+          if [ -z "${{ env.ECR_REPOSITORY }}" ]; then
+            echo "Missing repo variable ECR_REPOSITORY (Repo Settings → Actions → Variables)"
+            exit 1
+          fi
+          echo "AWS_REGION=${AWS_REGION}"
+          echo "ECR_REPOSITORY=${ECR_REPOSITORY}"
+
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN || secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
+
+      # ---- Identity check (RIGHT AFTER configure-aws-credentials) ----
+      - name: Who am I (AWS)
+        run: aws sts get-caller-identity
 
       - name: Login to Amazon ECR
         id: login-ecr
@@ -50,10 +67,12 @@ jobs:
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
             ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
 
+      - name: Export image URI for Terraform
+        id: image
+        run: echo "image_uri=${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}" >> $GITHUB_OUTPUT
+
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_wrapper: false
 
       - name: Terraform Init
         working-directory: terraform
@@ -62,16 +81,19 @@ jobs:
       - name: Terraform Apply
         working-directory: terraform
         env:
-          TF_IN_AUTOMATION: "true"
           TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
+          TF_VAR_image_uri: ${{ steps.image.outputs.image_uri }}
         run: terraform apply -auto-approve
 
+      # Optional: force a new ECS deployment if you store these as repo variables
       - name: Force new ECS deployment (optional)
-        if: ${{ env.ECS_CLUSTER != '' && env.ECS_SERVICE != '' }}
+        env:
+          ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
+          ECS_SERVICE: ${{ vars.ECS_SERVICE }}
         run: |
-          aws ecs update-service \
-            --region "${AWS_REGION}" \
-            --cluster "${ECS_CLUSTER}" \
-            --service "${ECS_SERVICE}" \
-            --force-new-deployment
+          if [ -n "$ECS_CLUSTER" ] && [ -n "$ECS_SERVICE" ]; then
+            aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" --force-new-deployment
+          else
+            echo "Skipping ECS force deployment (vars.ECS_CLUSTER / vars.ECS_SERVICE not set)"
+          fi
 
