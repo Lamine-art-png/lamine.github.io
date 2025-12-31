@@ -7,26 +7,26 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /app
 
-# Minimal OS libs commonly needed (matplotlib + fonts)
+# OS libs needed for matplotlib rendering + fonts
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    curl \
-    libfreetype6 \
-    libpng16-16 \
-    fonts-dejavu-core \
-  && rm -rf /var/lib/apt/lists/*
+      curl \
+      libfreetype6 \
+      libpng16-16 \
+      fonts-dejavu-core \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps first for better caching
-# IMPORTANT: this assumes the build context is repo root and agroai_api/ exists
+# IMPORTANT: this image installs from agroai_api/requirements.txt (NOT terraform/requirements.txt)
 COPY agroai_api/requirements.txt /app/requirements.txt
+
 RUN python -m pip install --upgrade pip \
- && pip install -r /app/requirements.txt \
- && python -c "import matplotlib; print('matplotlib OK', matplotlib.__version__)"
+    && pip install -r /app/requirements.txt \
+    && python -c "import matplotlib; print('matplotlib OK')"
 
 # Copy app code
 COPY . /app
 
 EXPOSE 8000
 
-# Start API
 CMD ["uvicorn", "agroai_api.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
