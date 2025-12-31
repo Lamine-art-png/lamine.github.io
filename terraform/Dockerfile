@@ -15,13 +15,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
       fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Python deps first for better caching
-# IMPORTANT: this image installs from agroai_api/requirements.txt (NOT terraform/requirements.txt)
-COPY agroai_api/requirements.txt /app/requirements.txt
+# Install Python deps from the file you are actually maintaining
+COPY terraform/requirements.txt /app/requirements.txt
 
 RUN python -m pip install --upgrade pip \
     && pip install -r /app/requirements.txt \
-    && python -c "import matplotlib; print('matplotlib OK')"
+    && python -c "import matplotlib; print('matplotlib OK')" \
+    && python -c "import matplotlib; import matplotlib.pyplot as plt; print('pyplot OK')"
 
 # Copy app code
 COPY . /app
