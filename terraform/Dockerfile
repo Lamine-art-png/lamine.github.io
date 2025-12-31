@@ -13,13 +13,14 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libfreetype6 \
     libpng16-16 \
     fonts-dejavu-core \
- && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/*
 
 # Install Python deps first for better caching
-# IMPORTANT: this path assumes the build context is repo root and agroai_api/ exists
+# IMPORTANT: this assumes the build context is repo root and agroai_api/ exists
 COPY agroai_api/requirements.txt /app/requirements.txt
 RUN python -m pip install --upgrade pip \
- && pip install -r /app/requirements.txt
+ && pip install -r /app/requirements.txt \
+ && python -c "import matplotlib; print('matplotlib OK', matplotlib.__version__)"
 
 # Copy app code
 COPY . /app
