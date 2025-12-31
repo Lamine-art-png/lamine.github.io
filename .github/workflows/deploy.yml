@@ -3,12 +3,7 @@ name: Deploy (Build to ECR + Terraform Apply)
 on:
   push:
     branches: ["main"]
-  workflow_dispatch:
-    inputs:
-      force_ecs_deploy:
-        description: "Force new ECS deployment after terraform apply"
-        required: false
-        default: "true"
+  workflow_dispatch: {}
 
 permissions:
   id-token: write
@@ -19,21 +14,9 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  # Prefer repo Variables, but allow hard default
-  AWS_REGION: ${{ vars.AWS_REGION || 'us-west-1' }}
-
-  # Repo Variables you should set:
-  # - ECR_REPOSITORY  (e.g. agroai-manulife-pilot-api)
+  AWS_REGION: us-west-1
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-
-  # Role ARN can be in Secrets OR Variables (you said you used Variables)
-  ROLE_ARN: ${{ secrets.AWS_OIDC_ROLE_ARN || vars.AWS_OIDC_ROLE_ARN }}
-
-  # Optional: if you want the workflow to force deploy via AWS CLI
-  ECS_CLUSTER: ${{ vars.ECS_CLUSTER }}
-  ECS_SERVICE: ${{ vars.ECS_SERVICE }}
-
-  TF_IN_AUTOMATION: true
+  AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_OIDC_ROLE_ARN != '' && secrets.AWS_OIDC_ROLE_ARN || vars.AWS_OIDC_ROLE_ARN }}
 
 jobs:
   deploy:
@@ -43,44 +26,35 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # --------- Sanity checks BEFORE AWS auth ----------
+      # ---- OIDC sanity check (supports either Secrets OR Variables) ----
       - name: Fail fast if role ARN missing
         run: |
-          if [ -z "${ROLE_ARN}" ]; then
-            echo "Missing AWS_OIDC_ROLE_ARN."
-            echo "Set it in: Repo Settings → Secrets and variables → Actions → Variables (or Secrets)"
+          if [ -z "${AWS_ROLE_TO_ASSUME}" ]; then
+            echo "Missing AWS role ARN. Set either:"
+            echo "  - Secrets: AWS_OIDC_ROLE_ARN   OR"
+            echo "  - Variables: AWS_OIDC_ROLE_ARN"
             exit 1
           fi
 
-      - name: Fail fast if ECR_REPOSITORY missing
-        run: |
-          if [ -z "${ECR_REPOSITORY}" ]; then
-            echo "Missing ECR_REPOSITORY."
-            echo "Set it in: Repo Settings → Secrets and variables → Actions → Variables"
-            exit 1
-          fi
-
-      # --------- AWS auth (OIDC) ----------
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.ROLE_ARN }}
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Who am I (AWS)
         run: aws sts get-caller-identity
 
-      # --------- ECR login ----------
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      # --------- Docker build/push ----------
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push image to ECR (using terraform/Dockerfile)
-        id: build
+      # ---- Build image using terraform/Dockerfile ----
+      - name: Build and push image to ECR (terraform/Dockerfile)
+        id: build-image
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -94,33 +68,38 @@ jobs:
         run: |
           IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
           echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
-          echo "Built image: $IMAGE_URI"
+          # common TF var names (harmless if unused)
+          echo "TF_VAR_image_uri=$IMAGE_URI" >> $GITHUB_ENV
+          echo "TF_VAR_container_image=$IMAGE_URI" >> $GITHUB_ENV
+          echo "TF_VAR_ecr_image=$IMAGE_URI" >> $GITHUB_ENV
 
-      # --------- Terraform ----------
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.9.8
 
       - name: Terraform Init
         working-directory: terraform
         run: terraform init -input=false
 
+      - name: Sanity check tfvars exists in runner
+        working-directory: terraform
+        run: |
+          ls -la
+          test -f terraform.tfvars || (echo "terraform.tfvars missing in CI. Commit/push terraform/terraform.tfvars" && exit 1)
+
       - name: Terraform Apply
         working-directory: terraform
         env:
-          # If your Terraform uses this variable, it's now available:
-          TF_VAR_image_uri: ${{ env.IMAGE_URI }}
+          TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
+        run: terraform apply -auto-approve -input=false -lock-timeout=5m -var-file=terraform.tfvars
 
-          # If Terraform needs OpenWeather key, support Secret OR Variable:
-          TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY || vars.OPENWEATHER_API_KEY }}
-        run: terraform apply -auto-approve -input=false -lock-timeout=5m
-
-      # --------- Optional: force ECS to redeploy ----------
+      # Optional: only runs if you set these repo variables
       - name: Force new ECS deployment (optional)
-        if: ${{ github.event_name == 'workflow_dispatch' && inputs.force_ecs_deploy == 'true' && env.ECS_CLUSTER != '' && env.ECS_SERVICE != '' }}
+        if: ${{ vars.ECS_CLUSTER != '' && vars.ECS_SERVICE != '' }}
         run: |
           aws ecs update-service \
-            --region "${AWS_REGION}" \
-            --cluster "${ECS_CLUSTER}" \
-            --service "${ECS_SERVICE}" \
+            --cluster "${{ vars.ECS_CLUSTER }}" \
+            --service "${{ vars.ECS_SERVICE }}" \
             --force-new-deployment
 

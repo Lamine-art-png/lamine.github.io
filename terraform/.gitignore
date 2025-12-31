@@ -30,3 +30,6 @@ __pycache__/
 # Ignore accidental root init if needed
 __init__.py
 
+
+# allow non-sensitive CI vars
+!terraform.auto.tfvars
