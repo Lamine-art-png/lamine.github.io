@@ -3,19 +3,18 @@ name: Deploy (Build to ECR + Terraform Apply)
 on:
   push:
     branches: [ "main" ]
-  workflow_dispatch: {}
 
 permissions:
   id-token: write
   contents: read
 
-env:
-  AWS_REGION: ${{ vars.AWS_REGION }}
-  ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
+    env:
+      AWS_REGION: us-west-1
+      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
 
     steps:
       - name: Checkout
@@ -25,28 +24,28 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: ${{ env.AWS_REGION }}
+          aws-region: us-west-1
 
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
+      - name: Set image tag
+        id: meta
+        run: echo "IMAGE_TAG=${GITHUB_SHA}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
       - name: Build & Push Docker image (SHA + latest)
-        env:
-          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
-          IMAGE_TAG: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY"
-
-          docker build \
-            -f terraform/Dockerfile \
-            -t "$IMAGE_URI:$IMAGE_TAG" \
-            -t "$IMAGE_URI:latest" \
-            .
-
-          docker push "$IMAGE_URI:$IMAGE_TAG"
-          docker push "$IMAGE_URI:latest"
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: terraform/Dockerfile
+          push: true
+          tags: |
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.meta.outputs.IMAGE_TAG }}
+            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -65,6 +64,6 @@ jobs:
         working-directory: terraform
         env:
           TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
-          TF_VAR_image_tag: ${{ github.sha }}
+          TF_VAR_image_tag: ${{ steps.meta.outputs.IMAGE_TAG }}
         run: terraform apply -auto-approve -input=false
 
