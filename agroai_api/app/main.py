@@ -16,9 +16,11 @@ app = FastAPI(
 )
 
 # --- Static assets for demo reports (charts + fonts) ---
-
 AGROAI_DIR = Path(agroai.__file__).resolve().parent
 CHARTS_DIR = AGROAI_DIR / "charts"
+
+# ✅ FIX: ensure directory exists so StaticFiles doesn't crash the app
+CHARTS_DIR.mkdir(parents=True, exist_ok=True)
 
 app.mount(
     "/demo-assets",
@@ -26,19 +28,12 @@ app.mount(
     name="demo-assets",
 )
 
-
-@app.get("/demo/sample-report", response_class=HTMLResponse)
-def sample_report():
-    html_path = generate_sample_report()
-    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
-
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],      # for demo; later we can tighten to your domains
+    allow_origins=["*"],  # demo; lock down later
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 class DemoRequest(BaseModel):
     field_id: str
@@ -46,7 +41,6 @@ class DemoRequest(BaseModel):
     acres: float
     location: str
     baseline_inches_per_week: float
-
 
 class DemoResponse(BaseModel):
     field_id: str
@@ -57,12 +51,6 @@ class DemoResponse(BaseModel):
     recommended_inches_per_week: float
     savings_pct: float
 
-@app.get("/demo/sample-report", response_class=HTMLResponse)
-def sample_report() -> HTMLResponse:
-    html_path = generate_sample_report()
-    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
-
-
 @app.get("/v1/health")
 async def health():
     return {
@@ -71,14 +59,17 @@ async def health():
         "version": "1.1.0",
     }
 
+@app.get("/demo/sample-report", response_class=HTMLResponse)
+def sample_report():
+    html_path = generate_sample_report()
+    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 @app.post("/v1/demo/recommendation", response_model=DemoResponse)
 async def demo_recommendation(payload: DemoRequest):
     # Toy logic for demo: ~25% water savings
     rec = round(payload.baseline_inches_per_week * 0.75, 2)
     savings_pct = round(
-        (payload.baseline_inches_per_week - rec)
-        / payload.baseline_inches_per_week * 100,
+        (payload.baseline_inches_per_week - rec) / payload.baseline_inches_per_week * 100,
         1,
     )
 
@@ -87,12 +78,4 @@ async def demo_recommendation(payload: DemoRequest):
         "recommended_inches_per_week": rec,
         "savings_pct": savings_pct,
     }
-
-@app.get("/demo/sample-report", response_class=HTMLResponse)
-def sample_report():
-    """
-    Generate and return an HTML sample water report.
-    """
-    html_path = generate_sample_report()
-    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
