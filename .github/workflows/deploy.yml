@@ -2,21 +2,16 @@ name: Deploy (Build to ECR + Terraform Apply)
 
 on:
   push:
-    branches: ["main"]
+    branches: [ "main" ]
   workflow_dispatch: {}
 
 permissions:
   id-token: write
   contents: read
 
-concurrency:
-  group: deploy-main
-  cancel-in-progress: false
-
 env:
-  AWS_REGION: us-west-1
+  AWS_REGION: ${{ vars.AWS_REGION }}
   ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
-  AWS_ROLE_TO_ASSUME: ${{ secrets.AWS_OIDC_ROLE_ARN != '' && secrets.AWS_OIDC_ROLE_ARN || vars.AWS_OIDC_ROLE_ARN }}
 
 jobs:
   deploy:
@@ -26,80 +21,50 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      # ---- OIDC sanity check (supports either Secrets OR Variables) ----
-      - name: Fail fast if role ARN missing
-        run: |
-          if [ -z "${AWS_ROLE_TO_ASSUME}" ]; then
-            echo "Missing AWS role ARN. Set either:"
-            echo "  - Secrets: AWS_OIDC_ROLE_ARN   OR"
-            echo "  - Variables: AWS_OIDC_ROLE_ARN"
-            exit 1
-          fi
-
       - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+          role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
-
-      - name: Who am I (AWS)
-        run: aws sts get-caller-identity
 
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      # ---- Build image using terraform/Dockerfile ----
-      - name: Build and push image to ECR (terraform/Dockerfile)
-        id: build-image
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: terraform/Dockerfile
-          push: true
-          tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
-
-      - name: Export image URI for Terraform
+      - name: Build & Push Docker image (SHA + latest)
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          IMAGE_URI="${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ github.sha }}"
-          echo "IMAGE_URI=$IMAGE_URI" >> $GITHUB_ENV
-          # common TF var names (harmless if unused)
-          echo "TF_VAR_image_uri=$IMAGE_URI" >> $GITHUB_ENV
-          echo "TF_VAR_container_image=$IMAGE_URI" >> $GITHUB_ENV
-          echo "TF_VAR_ecr_image=$IMAGE_URI" >> $GITHUB_ENV
+          set -euo pipefail
+          IMAGE_URI="$ECR_REGISTRY/$ECR_REPOSITORY"
+
+          docker build \
+            -f terraform/Dockerfile \
+            -t "$IMAGE_URI:$IMAGE_TAG" \
+            -t "$IMAGE_URI:latest" \
+            .
+
+          docker push "$IMAGE_URI:$IMAGE_TAG"
+          docker push "$IMAGE_URI:latest"
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.9.8
+          terraform_version: 1.6.6
 
       - name: Terraform Init
         working-directory: terraform
         run: terraform init -input=false
 
-      - name: Sanity check tfvars exists in runner
+      - name: Terraform Validate
         working-directory: terraform
-        run: |
-          ls -la
-          test -f terraform.tfvars || (echo "terraform.tfvars missing in CI. Commit/push terraform/terraform.tfvars" && exit 1)
+        run: terraform validate
 
       - name: Terraform Apply
         working-directory: terraform
         env:
           TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
-        run: terraform apply -auto-approve -input=false -lock-timeout=5m -var-file=terraform.tfvars
-
-      # Optional: only runs if you set these repo variables
-      - name: Force new ECS deployment (optional)
-        if: ${{ vars.ECS_CLUSTER != '' && vars.ECS_SERVICE != '' }}
-        run: |
-          aws ecs update-service \
-            --cluster "${{ vars.ECS_CLUSTER }}" \
-            --service "${{ vars.ECS_SERVICE }}" \
-            --force-new-deployment
+          TF_VAR_image_tag: ${{ github.sha }}
+        run: terraform apply -auto-approve -input=false
 
