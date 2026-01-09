@@ -3,18 +3,18 @@ name: Deploy (Build to ECR + Terraform Apply)
 on:
   push:
     branches: [ "main" ]
+  workflow_dispatch:
 
 permissions:
   id-token: write
   contents: read
 
+env:
+  AWS_REGION: us-west-1
+
 jobs:
   deploy:
     runs-on: ubuntu-latest
-
-    env:
-      AWS_REGION: us-west-1
-      ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
 
     steps:
       - name: Checkout
@@ -24,33 +24,30 @@ jobs:
         uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_OIDC_ROLE_ARN }}
-          aws-region: us-west-1
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2
 
-      - name: Set image tag
-        id: meta
-        run: echo "IMAGE_TAG=${GITHUB_SHA}" >> $GITHUB_OUTPUT
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
       - name: Build & Push Docker image (SHA + latest)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: terraform/Dockerfile
-          push: true
-          tags: |
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:${{ steps.meta.outputs.IMAGE_TAG }}
-            ${{ steps.login-ecr.outputs.registry }}/${{ env.ECR_REPOSITORY }}:latest
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ vars.ECR_REPOSITORY }}
+          IMAGE_TAG: ${{ github.sha }}
+        run: |
+          docker buildx create --use || true
+          docker buildx build \
+            --platform linux/amd64 \
+            -f terraform/Dockerfile \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:$IMAGE_TAG \
+            -t $ECR_REGISTRY/$ECR_REPOSITORY:latest \
+            --push .
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
-          terraform_version: 1.6.6
+          terraform_version: 1.7.5
 
       - name: Terraform Init
         working-directory: terraform
@@ -64,6 +61,6 @@ jobs:
         working-directory: terraform
         env:
           TF_VAR_openweather_api_key: ${{ secrets.OPENWEATHER_API_KEY }}
-          TF_VAR_image_tag: ${{ steps.meta.outputs.IMAGE_TAG }}
+          TF_VAR_image_tag: ${{ github.sha }}
         run: terraform apply -auto-approve -input=false
 

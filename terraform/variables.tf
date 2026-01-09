@@ -25,8 +25,8 @@ variable "api_container_port" {
 }
 
 variable "image_tag" {
+  description = "Docker image tag to deploy (usually a git SHA)"
   type        = string
-  description = "ECR image tag to deploy"
   default     = "latest"
 }
 
