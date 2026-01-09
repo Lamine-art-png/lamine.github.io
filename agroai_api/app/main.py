@@ -1,50 +1,57 @@
-from pathlib import Path
+# agroai_api/app/main.py
 
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
-from fastapi import Body
-from fastapi.responses import Response
-from typing import List, Dict, Any, Optional
+from __future__ import annotations
+
+import datetime
 import io
+from typing import Any, Dict, List
 
-import agroai
-from agroai.report import generate_sample_report
+from fastapi import Body, FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import HTMLResponse, Response
+from pydantic import BaseModel, Field
+
+VERSION = "1.1.0"
 
 app = FastAPI(
-    title="AGRO-AI Pilot API",
-    version="1.1.0",
-    openapi_url="/openapi.json",
+    title="AGRO-AI API",
+    version=VERSION,
 )
 
-# --- Static assets for demo reports (charts + fonts) ---
-AGROAI_DIR = Path(agroai.__file__).resolve().parent
-CHARTS_DIR = AGROAI_DIR / "charts"
-
-# ✅ FIX: ensure directory exists so StaticFiles doesn't crash the app
-CHARTS_DIR.mkdir(parents=True, exist_ok=True)
-
-app.mount(
-    "/demo-assets",
-    StaticFiles(directory=str(CHARTS_DIR)),
-    name="demo-assets",
-)
-
+# CORS: allow your production site + local dev
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # demo; lock down later
+    allow_origins=[
+        "https://agroai-pilot.com",
+        "https://www.agroai-pilot.com",
+        "http://localhost:5173",
+        "http://localhost:3000",
+    ],
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# -------------------------
+# Health
+# -------------------------
+@app.get("/v1/health")
+async def health() -> Dict[str, Any]:
+    # If you later wire a real DB check, update "database" accordingly.
+    return {"status": "ok", "database": "ok", "version": VERSION}
+
+
+# -------------------------
+# Existing demo: recommendation (toy)
+# (Keeps your current behavior compatible)
+# -------------------------
 class DemoRequest(BaseModel):
     field_id: str
     crop: str
     acres: float
     location: str
-    baseline_inches_per_week: float
+    baseline_inches_per_week: float = Field(..., gt=0)
+
 
 class DemoResponse(BaseModel):
     field_id: str
@@ -55,34 +62,48 @@ class DemoResponse(BaseModel):
     recommended_inches_per_week: float
     savings_pct: float
 
-@app.get("/v1/health")
-async def health():
-    return {
-        "status": "ok",
-        "database": "ok",
-        "version": "1.1.0",
-    }
-
-@app.get("/demo/sample-report", response_class=HTMLResponse)
-def sample_report():
-    html_path = generate_sample_report()
-    return HTMLResponse(content=html_path.read_text(encoding="utf-8"))
 
 @app.post("/v1/demo/recommendation", response_model=DemoResponse)
-async def demo_recommendation(payload: DemoRequest):
-    # Toy logic for demo: ~25% water savings
+async def demo_recommendation(payload: DemoRequest) -> DemoResponse:
+    # Toy logic: ~25% water savings
     rec = round(payload.baseline_inches_per_week * 0.75, 2)
     savings_pct = round(
         (payload.baseline_inches_per_week - rec) / payload.baseline_inches_per_week * 100,
         1,
     )
 
-    return {
+    return DemoResponse(
         **payload.dict(),
-        "recommended_inches_per_week": rec,
-        "savings_pct": savings_pct,
-    }
+        recommended_inches_per_week=rec,
+        savings_pct=savings_pct,
+    )
 
+
+# -------------------------
+# Optional: simple HTML sample report page
+# (Keeps your existing "/demo/sample-report" idea but self-contained)
+# -------------------------
+@app.get("/demo/sample-report", response_class=HTMLResponse)
+def sample_report() -> HTMLResponse:
+    html = f"""
+    <html>
+      <head><title>AGRO-AI Demo Report</title></head>
+      <body style="font-family: system-ui; margin: 32px;">
+        <h2>AGRO-AI — Sample Report (DEMO)</h2>
+        <p>API version: <b>{VERSION}</b></p>
+        <p>This is a placeholder HTML report for quick demos.</p>
+        <hr/>
+        <p><b>Next:</b> use <code>POST /v1/demo/report</code> to generate a PDF from selected blocks.</p>
+      </body>
+    </html>
+    """
+    return HTMLResponse(content=html)
+
+
+# -------------------------
+# NEW: Block list + Run + PDF report (Cristobal-proof)
+# These are what your website "live demo" page should call.
+# -------------------------
 class DemoBlock(BaseModel):
     id: str
     label: str
@@ -90,63 +111,74 @@ class DemoBlock(BaseModel):
     acres: float
     location: str
 
-# Hardcoded demo blocks (simple, reliable)
+
+# Hardcoded demo blocks (reliable, zero dependencies)
 DEMO_BLOCKS: List[DemoBlock] = [
     DemoBlock(id="B1", label="Block 1", crop="Vineyard", acres=12.4, location="Napa, CA"),
     DemoBlock(id="B2", label="Block 2", crop="Vineyard", acres=18.1, location="Sonoma, CA"),
     DemoBlock(id="B3", label="Block 3", crop="Almonds", acres=25.0, location="Fresno, CA"),
 ]
 
+
 class DemoRunRequest(BaseModel):
-    block_ids: List[str]
+    block_ids: List[str] = Field(..., min_length=1)
     mode: str = "synthetic"
-    assumptions: Dict[str, Any] = {}
+    assumptions: Dict[str, Any] = Field(default_factory=dict)
+
 
 @app.get("/v1/demo/blocks", response_model=List[DemoBlock])
-def demo_blocks():
+def demo_blocks() -> List[DemoBlock]:
     return DEMO_BLOCKS
 
+
 @app.post("/v1/demo/run")
-def demo_run(payload: DemoRunRequest = Body(...)):
-    # Use your existing toy savings logic style (consistent with /v1/demo/recommendation)
+def demo_run(payload: DemoRunRequest = Body(...)) -> Dict[str, Any]:
     blocks_by_id = {b.id: b for b in DEMO_BLOCKS}
-    prescriptions = []
+    prescriptions: List[Dict[str, Any]] = []
 
     for bid in payload.block_ids:
         b = blocks_by_id.get(bid)
         if not b:
             raise HTTPException(status_code=404, detail=f"Unknown demo block: {bid}")
 
-        # simple “baseline vs recommended” numbers for demo
+        # Toy baseline vs recommended (placeholder for your real engine)
         baseline = 1.0  # inches/week (toy)
         recommended = round(baseline * 0.75, 2)  # 25% savings toy logic
         savings_pct = round((baseline - recommended) / baseline * 100, 1)
 
-        prescriptions.append({
-            "block_id": b.id,
-            "label": b.label,
-            "crop": b.crop,
-            "acres": b.acres,
-            "location": b.location,
-            "baseline_inches_per_week": baseline,
-            "recommended_inches_per_week": recommended,
-            "savings_pct": savings_pct,
-            "mode": "decision-support",
-            "reason": "demo logic: reduce baseline by 25% (placeholder for model)",
-            "confidence": 0.62,
-        })
+        prescriptions.append(
+            {
+                "block_id": b.id,
+                "label": b.label,
+                "crop": b.crop,
+                "acres": b.acres,
+                "location": b.location,
+                "baseline_inches_per_week": baseline,
+                "recommended_inches_per_week": recommended,
+                "savings_pct": savings_pct,
+                "mode": "decision-support",
+                "reason": "demo logic: reduce baseline by 25% (placeholder for model)",
+                "confidence": 0.62,
+            }
+        )
 
     return {
         "generated_at": datetime.datetime.utcnow().isoformat() + "Z",
+        "mode": payload.mode,
         "prescriptions": prescriptions,
-        "report_endpoint": "/v1/demo/report"
+        "report_endpoint": "/v1/demo/report",
     }
 
+
 @app.post("/v1/demo/report")
-def demo_report(payload: DemoRunRequest = Body(...)):
-    # Generate prescriptions first (no state)
+def demo_report(payload: DemoRunRequest = Body(...)) -> Response:
+    """
+    Bulletproof: generates a PDF on-demand from the request.
+    No run_id, no in-memory state, no 404 after restarts.
+    """
     run = demo_run(payload)
 
+    # PDF generation (requires reportlab in requirements)
     from reportlab.lib.pagesizes import letter
     from reportlab.pdfgen import canvas
 
@@ -168,7 +200,11 @@ def demo_report(payload: DemoRunRequest = Body(...)):
 
     c.setFont("Helvetica", 10)
     for item in run["prescriptions"][:12]:
-        line = f"- {item['label']} ({item['crop']}): {item['recommended_inches_per_week']} in/wk  (savings {item['savings_pct']}%)"
+        line = (
+            f"- {item['label']} ({item['crop']}): "
+            f"{item['recommended_inches_per_week']} in/wk  "
+            f"(savings {item['savings_pct']}%)"
+        )
         c.drawString(60, y, line)
         y -= 14
         if y < 90:
