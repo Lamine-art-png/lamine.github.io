@@ -1,0 +1,7 @@
+HTTP/2 200 
+date: Fri, 09 Jan 2026 20:03:37 GMT
+content-type: application/pdf
+content-length: 1946
+server: uvicorn
+content-disposition: inline; filename=agroai_demo_report.pdf
+
