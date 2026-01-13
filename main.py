@@ -18,10 +18,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# ✅ Health (single source of truth)
+# ✅ Health (includes build SHA)
 app.include_router(health_router)
 
 # ✅ Demo endpoints
 app.include_router(demo_router, prefix="/v1/demo", tags=["demo"])
 
-# Keep your other routers/includes below as they are (unchanged)

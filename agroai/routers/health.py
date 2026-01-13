@@ -9,5 +9,6 @@ def health():
     return {
         "ok": True,
         "ts": datetime.now(timezone.utc).isoformat(),
-        "build": os.getenv("GIT_SHA", os.getenv("RENDER_GIT_COMMIT", "dev")),
+        "build": os.getenv("GIT_SHA", "dev"),
     }
+
