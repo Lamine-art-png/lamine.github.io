@@ -30,3 +30,6 @@ EXPOSE 8000
 
 CMD ["uvicorn", "agroai_api.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
 
+ARG GIT_SHA=dev
+ENV GIT_SHA=$GIT_SHA
+
