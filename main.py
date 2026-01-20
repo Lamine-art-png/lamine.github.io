@@ -1,26 +1,21 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from app.routers import demo
 
-from agroai.routers.health import router as health_router
-from app.routers.demo import router as demo_router
-
-app = FastAPI(title="AGRO-AI API", version="1.1.0")
+app = FastAPI(title="AGRO-AI API")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://agroai-pilot.com",
-        "https://www.agroai-pilot.com",
-        "http://localhost:5173",
-    ],
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ✅ Health (includes build SHA)
-app.include_router(health_router)
+# Keep both for compatibility
+app.include_router(demo.router, prefix="/demo", tags=["demo"])
+app.include_router(demo.router, prefix="/v1/demo", tags=["demo"])
 
-# ✅ Demo endpoints
-app.include_router(demo_router, prefix="/v1/demo", tags=["demo"])
-
+@app.get("/health")
+def health():
+    return {"ok": True}
