@@ -1,955 +1,373 @@
-# app/routers/demo.py
-from __future__ import annotations
-
+from fastapi import APIRouter
+from fastapi.responses import JSONResponse, Response
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any
+from datetime import datetime
 import io
-import json
 import math
-import os
-from dataclasses import asdict, dataclass
-from datetime import datetime, timezone
-from typing import Any, Dict, List, Literal, Optional
+import random
 
-from fastapi import APIRouter, Query
-from fastapi.responses import Response
-from pydantic import BaseModel, Field, ConfigDict
-
-# PDF (ReportLab)
-from reportlab.lib import colors
-from reportlab.lib.pagesizes import LETTER
-from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.pdfgen import canvas
+from reportlab.lib.pagesizes import letter
 from reportlab.lib.units import inch
-from reportlab.platypus import (
-    Image,
-    Paragraph,
-    SimpleDocTemplate,
-    Spacer,
-    Table,
-    TableStyle,
-    XPreformatted,
-    PageBreak,
-)
-from reportlab.graphics.shapes import Drawing, String
-from reportlab.graphics.charts.barcharts import VerticalBarChart
-from reportlab.graphics.charts.linecharts import LineChart
-from reportlab.graphics.charts.piecharts import Pie
-from reportlab.graphics.charts.legends import Legend
+from reportlab.lib.utils import ImageReader
 
-router = APIRouter()
+# Optional charts (safe if matplotlib installed)
+def _chart_png(title: str, xs, ys):
+    try:
+        import matplotlib.pyplot as plt
+        buf = io.BytesIO()
+        plt.figure()
+        plt.title(title)
+        plt.plot(xs, ys)
+        plt.xlabel("Week")
+        plt.ylabel("Value")
+        plt.tight_layout()
+        plt.savefig(buf, format="png", dpi=140)
+        plt.close()
+        buf.seek(0)
+        return buf.getvalue()
+    except Exception:
+        return None
 
-GALLONS_PER_ACRE_FOOT = 325_851.0
-ACRE_INCH_GALLONS = 27_154.285  # 1 acre-inch in gallons (approx)
-THEME_BRAND = colors.HexColor("#2f343b")  # glacial slate
-THEME_DARK = colors.HexColor("#111827")
-THEME_GRID = colors.HexColor("#c7c9cf")
-THEME_LIGHT = colors.HexColor("#fafafa")
+ACRE_INCH_GAL = 27154.285
+ACRE_FOOT_GAL = 325851.0
 
+router = APIRouter(tags=["demo"])
 
-# -------------------------
-# Models
-# -------------------------
 class Assumptions(BaseModel):
-    # IMPORTANT: allow extra keys from the UI without 422s
-    model_config = ConfigDict(extra="allow")
-
-    # scenario switch (Normal / Heat / Restriction) — keep as str to avoid 422 if UI sends variants
     scenario: str = Field(default="normal")
-
-    # proof/audit metadata (optional, but makes PDF look enterprise-grade)
-    baseline_policy: str = Field(default="typical_grower_schedule")
-    system_type: str = Field(default="drip/micro (demo)")
-    data_sources: List[str] = Field(
-        default_factory=lambda: [
-            "Baseline schedule (declared)",
-            "Weather/ET0 (demo: synthetic placeholder)",
-            "Soil/constraints (demo: synthetic placeholder)",
-        ]
-    )
-    constraints: List[str] = Field(default_factory=lambda: ["irrigation window", "allocation limits (scenario)"])
-
-    # economics knobs
-    target_savings_pct: float = Field(default=25, ge=0, le=80)
-    scenario_savings_pcts: List[float] = Field(default_factory=lambda: [25, 35])
-    kwh_per_acre_foot: float = Field(default=280, ge=0)
-    water_price_per_acre_foot: float = Field(default=250, ge=0)
-    energy_price_per_kwh: float = Field(default=0.22, ge=0)
+    target_savings_percent: float = Field(default=25)
+    scenario_comparison: str = Field(default="")
+    kwh_per_acre_foot: float = Field(default=280)
+    water_price_per_acre_foot: float = Field(default=250)
+    energy_price_per_kwh: float = Field(default=0.22)
     notes: str = Field(default="")
 
-
 class CustomBlock(BaseModel):
-    model_config = ConfigDict(extra="allow")
-
-    label: str = "Custom block"
-    crop: str = "Unknown"
-    location: str = "Unknown"
-    acres: float = Field(default=10, ge=0)
-    baseline_in_per_week: float = Field(default=1.0, ge=0)
-
-
-class DemoRequest(BaseModel):
-    # IMPORTANT: allow extra keys from future UIs without 422s
-    model_config = ConfigDict(extra="allow")
-
-    # Backward compatible: some callers used field_id
-    field_id: Optional[str] = None
-
-    block_ids: List[str] = Field(default_factory=list)
-    mode: Literal["synthetic", "real"] = "synthetic"
-    assumptions: Assumptions = Field(default_factory=Assumptions)
-    custom_block: Optional[CustomBlock] = None
-
-
-@dataclass
-class Block:
-    block_id: str
-    label: str
     crop: str
     location: str
     acres: float
-    baseline_in_per_week: float
-    county: str = "Unknown"
-    state: str = "CA"
-
-
-@dataclass
-class Prescription:
-    block: Block
-    recommended_in_per_week: float
-    savings_pct: float
-    gallons_saved_week: float
-    acre_feet_saved_week: float
-    water_value_saved_usd_week: float
-    energy_kwh_saved_week: float
-    energy_value_saved_usd_week: float
-    total_value_saved_usd_week: float
-    confidence: float
-    rationale: str
-
-
-# -------------------------
-# Demo blocks (synthetic)
-# -------------------------
-def _infer_county(location: str) -> str:
-    s = (location or "").lower()
-    if "napa" in s:
-        return "Napa"
-    if "sonoma" in s:
-        return "Sonoma"
-    if "fresno" in s:
-        return "Fresno"
-    if "kern" in s:
-        return "Kern"
-    if "tulare" in s:
-        return "Tulare"
-    return "Unknown"
-
-
-def get_demo_blocks() -> List[Block]:
-    return [
-        Block(
-            block_id="B1",
-            label="Block 1 — Vineyard — Napa, CA",
-            crop="Vineyard",
-            location="Napa, CA",
-            acres=12.4,
-            baseline_in_per_week=1.00,
-            county="Napa",
-            state="CA",
-        ),
-        Block(
-            block_id="B2",
-            label="Block 2 — Vineyard — Sonoma, CA",
-            crop="Vineyard",
-            location="Sonoma, CA",
-            acres=18.2,
-            baseline_in_per_week=1.10,
-            county="Sonoma",
-            state="CA",
-        ),
-        Block(
-            block_id="B3",
-            label="Block 3 — Almonds — Fresno, CA",
-            crop="Almonds",
-            location="Fresno, CA",
-            acres=33.0,
-            baseline_in_per_week=1.25,
-            county="Fresno",
-            state="CA",
-        ),
-    ]
-
-
-def resolve_blocks(req: DemoRequest) -> List[Block]:
-    demo = {b.block_id: b for b in get_demo_blocks()}
-    blocks: List[Block] = []
-
-    for bid in req.block_ids:
-        if bid in demo:
-            blocks.append(demo[bid])
-
-    if req.custom_block is not None:
-        cb = req.custom_block
-        blocks.append(
-            Block(
-                block_id="CUSTOM",
-                label=cb.label or "Custom block",
-                crop=cb.crop or "Unknown",
-                location=cb.location or "Unknown",
-                acres=float(cb.acres or 0),
-                baseline_in_per_week=float(cb.baseline_in_per_week or 0),
-                county=_infer_county(cb.location),
-                state="CA",
-            )
-        )
-
-    # HARDEN: if nothing selected, default to B1 so demo never returns empty
-    if not blocks and "B1" in demo:
-        blocks = [demo["B1"]]
-
-    # if caller didn’t provide field_id, derive something stable
-    if not req.field_id:
-        req.field_id = blocks[0].block_id if blocks else "UNKNOWN"
-
-    return blocks
-
-
-# -------------------------
-# Core calc
-# -------------------------
-def _scenario_effective_target(a: Assumptions) -> float:
-    """Scenario switch changes the effective savings target to create believable behavior.
-
-    - normal: use target_savings_pct
-    - heat: reduce savings (you need to irrigate more)
-    - restriction: increase savings (you must cut more)
-    """
-    target = float(a.target_savings_pct or 0)
-    s = (a.scenario or "normal").strip().lower()
-
-    # normalize common variants
-    if "heat" in s:
-        factor = 0.55
-    elif "restrict" in s:
-        factor = 1.25
-    else:
-        factor = 1.0
-
-    eff = target * factor
-    eff = max(0.0, min(80.0, eff))
-    return eff
-
-
-def compute_prescriptions(blocks: List[Block], a: Assumptions) -> List[Prescription]:
-    eff_target = _scenario_effective_target(a)
-    out: List[Prescription] = []
-
-    for b in blocks:
-        baseline = max(0.0, b.baseline_in_per_week)
-        recommended = max(0.0, baseline * (1.0 - eff_target / 100.0))
-
-        # inches -> acre-feet: (in/12) * acres
-        baseline_af = (baseline / 12.0) * b.acres
-        rec_af = (recommended / 12.0) * b.acres
-        saved_af = max(0.0, baseline_af - rec_af)
-
-        saved_gal = saved_af * GALLONS_PER_ACRE_FOOT
-
-        water_value = saved_af * float(a.water_price_per_acre_foot or 0)
-        kwh_saved = saved_af * float(a.kwh_per_acre_foot or 0)
-        energy_value = kwh_saved * float(a.energy_price_per_kwh or 0)
-
-        total_value = water_value + energy_value
-
-        # Confidence is synthetic here (demo); in real mode this would be model-driven
-        confidence = 0.86 if b.county != "Unknown" else 0.74
-
-        scenario_note = (a.scenario or "normal").strip().lower()
-        rationale = (
-            f"Scenario='{scenario_note}'. Recommendation reduces applied water relative to the declared baseline "
-            f"using an effective savings target of {eff_target:.1f}%. "
-            "Savings are computed against baseline and priced using the provided assumptions (water + pumping energy). "
-            "In production, baselines and confidence are estimated from measured ET, soil moisture, controller logs, and yield/quality constraints."
-        )
-
-        out.append(
-            Prescription(
-                block=b,
-                recommended_in_per_week=recommended,
-                savings_pct=eff_target,
-                gallons_saved_week=saved_gal,
-                acre_feet_saved_week=saved_af,
-                water_value_saved_usd_week=water_value,
-                energy_kwh_saved_week=kwh_saved,
-                energy_value_saved_usd_week=energy_value,
-                total_value_saved_usd_week=total_value,
-                confidence=confidence,
-                rationale=rationale,
-            )
-        )
-
-    return out
-
-
-def compute_scenarios(blocks: List[Block], a: Assumptions) -> List[Dict[str, Any]]:
-    pcts = [x for x in (a.scenario_savings_pcts or []) if isinstance(x, (int, float))]
-    pcts = [float(x) for x in pcts if 0 < float(x) < 90]
-    if not pcts:
-        pcts = [float(a.target_savings_pct or 25)]
-
-    scenarios: List[Dict[str, Any]] = []
-    for pct in sorted(set(pcts)):
-        tmp = Assumptions(
-            scenario=a.scenario,
-            baseline_policy=a.baseline_policy,
-            system_type=a.system_type,
-            data_sources=list(a.data_sources or []),
-            constraints=list(a.constraints or []),
-            target_savings_pct=pct,
-            scenario_savings_pcts=pcts,
-            kwh_per_acre_foot=a.kwh_per_acre_foot,
-            water_price_per_acre_foot=a.water_price_per_acre_foot,
-            energy_price_per_kwh=a.energy_price_per_kwh,
-            notes=a.notes,
-        )
-        pres = compute_prescriptions(blocks, tmp)
-        scenarios.append(
-            {
-                "savings_pct": pct,
-                "scenario": tmp.scenario,
-                "total_gallons_saved_week": sum(x.gallons_saved_week for x in pres),
-                "total_kwh_saved_week": sum(x.energy_kwh_saved_week for x in pres),
-                "total_water_value_saved_usd_week": sum(x.water_value_saved_usd_week for x in pres),
-                "total_energy_value_saved_usd_week": sum(x.energy_value_saved_usd_week for x in pres),
-                "total_value_saved_usd_week": sum(x.total_value_saved_usd_week for x in pres),
-            }
-        )
-    return scenarios
-
-
-def fmt(n: float, d: int = 2) -> str:
-    if n is None:
-        return "-"
-    if isinstance(n, float) and (math.isnan(n) or math.isinf(n)):
-        return "-"
-    return f"{n:,.{d}f}"
-
-
-# -------------------------
-# Charts (ReportLab graphics)
-# -------------------------
-def _legend(series_names: List[str], series_colors: List[colors.Color], x: float, y: float) -> Legend:
-    lg = Legend()
-    lg.x = x
-    lg.y = y
-    lg.alignment = "right"
-    lg.fontName = "Helvetica"
-    lg.fontSize = 8
-    lg.dxTextSpace = 6
-    lg.dy = 6
-    lg.columnMaximum = 1
-    lg.colorNamePairs = list(zip(series_colors, series_names))
-    return lg
-
-
-def make_grouped_bar_chart(
-    title: str,
-    labels: List[str],
-    series: List[List[float]],
-    series_names: List[str],
-) -> Drawing:
-    w, h = 7.0 * inch, 3.1 * inch
-    d = Drawing(w, h)
-
-    d.add(String(0, h - 14, title, fontName="Helvetica-Bold", fontSize=12, fillColor=THEME_DARK))
-
-    chart = VerticalBarChart()
-    chart.x = 28
-    chart.y = 32
-    chart.width = w - 56
-    chart.height = h - 64
-    chart.data = series
-    chart.categoryAxis.categoryNames = labels
-    chart.categoryAxis.labels.fontName = "Helvetica"
-    chart.categoryAxis.labels.fontSize = 8
-    chart.valueAxis.labels.fontName = "Helvetica"
-    chart.valueAxis.labels.fontSize = 8
-    chart.valueAxis.gridStrokeColor = colors.HexColor("#d6d8dc")
-
-    palette = [THEME_BRAND, colors.HexColor("#6b7280"), colors.HexColor("#111827"), colors.HexColor("#9ca3af")]
-    for i in range(len(series)):
-        chart.bars[i].fillColor = palette[i % len(palette)]
-
-    d.add(chart)
-
-    if series_names:
-        series_colors = [chart.bars[i].fillColor for i in range(len(series))]
-        d.add(_legend(series_names, series_colors, w - 8, h - 22))
-
-    return d
-
-
-def make_line_chart(title: str, labels: List[str], values: List[float]) -> Drawing:
-    w, h = 7.0 * inch, 3.0 * inch
-    d = Drawing(w, h)
-
-    d.add(String(0, h - 14, title, fontName="Helvetica-Bold", fontSize=12, fillColor=THEME_DARK))
-
-    lc = LineChart()
-    lc.x = 30
-    lc.y = 34
-    lc.width = w - 60
-    lc.height = h - 70
-    lc.data = [values]
-    lc.categoryAxis.categoryNames = labels
-    lc.categoryAxis.labels.fontName = "Helvetica"
-    lc.categoryAxis.labels.fontSize = 8
-    lc.valueAxis.labels.fontName = "Helvetica"
-    lc.valueAxis.labels.fontSize = 8
-    lc.valueAxis.gridStrokeColor = colors.HexColor("#d6d8dc")
-
-    lc.lines[0].strokeColor = THEME_BRAND
-    lc.lines[0].strokeWidth = 2
-
-    d.add(lc)
-    return d
-
-
-def make_pie_chart(title: str, labels: List[str], values: List[float]) -> Drawing:
-    w, h = 7.0 * inch, 3.2 * inch
-    d = Drawing(w, h)
-
-    d.add(String(0, h - 14, title, fontName="Helvetica-Bold", fontSize=12, fillColor=THEME_DARK))
-
-    pie = Pie()
-    pie.x = 70
-    pie.y = 18
-    pie.width = 220
-    pie.height = 220
-    pie.data = [max(0.0, float(v)) for v in values]
-    pie.labels = labels
-    pie.slices.strokeWidth = 0.5
-    pie.slices.strokeColor = colors.white
-
-    palette = [THEME_BRAND, colors.HexColor("#6b7280"), colors.HexColor("#9ca3af"), colors.HexColor("#111827")]
-    for i in range(len(values)):
-        pie.slices[i].fillColor = palette[i % len(palette)]
-        pie.slices[i].labelRadius = 1.08
-        pie.slices[i].fontName = "Helvetica"
-        pie.slices[i].fontSize = 8
-
-    d.add(pie)
-    return d
-
-
-# -------------------------
-# PDF report
-# -------------------------
-def _try_logo() -> Optional[Image]:
-    candidates = [
-        os.path.join(os.getcwd(), "public", "agro-ai-logo.png"),
-        os.path.join(os.getcwd(), "public", "agro-ai-logo.jpg"),
-        os.path.join(os.getcwd(), "public", "agro-ai-logo.jpeg"),
-    ]
-    for p in candidates:
-        if os.path.exists(p):
-            try:
-                img = Image(p)
-                img.drawHeight = 0.35 * inch
-                img.drawWidth = 0.35 * inch
-                return img
-            except Exception:
-                return None
-    return None
-
-
-def build_pdf(req: DemoRequest, blocks: List[Block], pres: List[Prescription]) -> bytes:
-    ts = datetime.now(timezone.utc).isoformat()
-    scenarios = compute_scenarios(blocks, req.assumptions)
-
-    styles = getSampleStyleSheet()
-    base = styles["BodyText"]
-    base.fontName = "Helvetica"
-    base.fontSize = 10
-    base.leading = 14
-
-    h1 = ParagraphStyle(
-        "h1",
-        parent=styles["Heading1"],
-        fontName="Helvetica-Bold",
-        fontSize=18,
-        leading=22,
-        textColor=THEME_DARK,
-    )
-    h2 = ParagraphStyle(
-        "h2",
-        parent=styles["Heading2"],
-        fontName="Helvetica-Bold",
-        fontSize=12,
-        leading=16,
-        textColor=THEME_DARK,
-    )
-    small = ParagraphStyle(
-        "small",
-        parent=base,
-        fontName="Helvetica",
-        fontSize=9,
-        leading=12,
-        textColor=colors.HexColor("#374151"),
-    )
-    mono = ParagraphStyle("mono", parent=base, fontName="Courier", fontSize=8, leading=10)
-
-    def on_page(canvas, doc):
-        canvas.saveState()
-        canvas.setFont("Helvetica", 8)
-        canvas.setFillColor(colors.HexColor("#6b7280"))
-        sc = (req.assumptions.scenario or "normal")
-        canvas.drawString(
-            doc.leftMargin,
-            0.55 * inch,
-            f"AGRO-AI Weekly Proof Report (DEMO) • Field {req.field_id} • scenario={sc} • {ts}",
-        )
-        canvas.drawRightString(LETTER[0] - doc.rightMargin, 0.55 * inch, f"Page {canvas.getPageNumber()}")
-        canvas.restoreState()
-
-    buf = io.BytesIO()
-    doc = SimpleDocTemplate(
-        buf,
-        pagesize=LETTER,
-        leftMargin=0.75 * inch,
-        rightMargin=0.75 * inch,
-        topMargin=0.72 * inch,
-        bottomMargin=0.78 * inch,
-        title="AGRO-AI Weekly Proof Report (DEMO)",
-        author="AGRO-AI",
-    )
-
-    story: List[Any] = []
-
-    total_gal = sum(x.gallons_saved_week for x in pres)
-    total_kwh = sum(x.energy_kwh_saved_week for x in pres)
-    total_usd = sum(x.total_value_saved_usd_week for x in pres)
-    total_water_usd = sum(x.water_value_saved_usd_week for x in pres)
-    total_energy_usd = sum(x.energy_value_saved_usd_week for x in pres)
-
-    # PAGE 1
-    logo = _try_logo()
-    if logo:
-        header_tbl = Table([[logo, Paragraph("AGRO-AI — Weekly Proof Report (DEMO)", h1)]], colWidths=[0.45 * inch, 6.2 * inch])
-        header_tbl.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "MIDDLE")]))
-        story.append(header_tbl)
-    else:
-        story.append(Paragraph("AGRO-AI — Weekly Proof Report (DEMO)", h1))
-
-    story.append(Spacer(1, 6))
-    story.append(Paragraph(f"<b>Generated (UTC):</b> {ts}", base))
-    story.append(Paragraph(f"<b>Field ID:</b> {req.field_id}", base))
-    story.append(Paragraph(f"<b>Mode:</b> {req.mode}", base))
-    story.append(Paragraph(f"<b>Scenario:</b> {(req.assumptions.scenario or 'normal')}", base))
-    story.append(Spacer(1, 10))
-
-    kpi = [
-        ["KPI", "Value"],
-        ["Blocks evaluated", str(len(blocks))],
-        ["Target savings (effective)", f"{fmt(_scenario_effective_target(req.assumptions), 1)}%"],
-        ["Water saved (gal / week)", fmt(total_gal, 0)],
-        ["Energy saved (kWh / week)", fmt(total_kwh, 0)],
-        ["Total value saved ($ / week)", f"${fmt(total_usd, 0)}"],
-    ]
-    t = Table(kpi, colWidths=[2.6 * inch, 3.8 * inch])
-    t.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e6e7ea")),
-                ("TEXTCOLOR", (0, 0), (-1, 0), THEME_DARK),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 10),
-                ("GRID", (0, 0), (-1, -1), 0.5, THEME_GRID),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, THEME_LIGHT]),
-            ]
-        )
-    )
-    story.append(t)
-    story.append(Spacer(1, 10))
-
-    story.append(Paragraph("<b>Executive takeaways</b>", h2))
-    story.append(
-        Paragraph(
-            "This report quantifies weekly water, energy, and cost impact from irrigation prescriptions relative to a declared baseline. "
-            "This is a demo path: synthetic logic + assumptions for pricing; production binds these to measured ET/soil/controller logs and site-specific economics.",
-            base,
-        )
-    )
-    story.append(Spacer(1, 6))
-    story.append(
-        Paragraph(
-            f"Weekly savings: <b>{fmt(total_gal, 0)}</b> gallons/week and <b>${fmt(total_usd, 0)}</b>/week total value "
-            f"(water: <b>${fmt(total_water_usd, 0)}</b>, energy: <b>${fmt(total_energy_usd, 0)}</b>).",
-            base,
-        )
-    )
-
-    story.append(PageBreak())
-
-    # PAGE 2 — Portfolio overview + charts
-    story.append(Paragraph("Portfolio Overview", h1))
-    story.append(Spacer(1, 8))
-
-    blocks_rows = [["Block", "Crop / Location", "Acres", "Baseline (in/wk)", "County"]]
-    for b in blocks:
-        blocks_rows.append([b.block_id, f"{b.crop} — {b.location}", fmt(b.acres, 1), fmt(b.baseline_in_per_week, 2), b.county])
-
-    bt = Table(blocks_rows, colWidths=[0.75 * inch, 2.7 * inch, 0.8 * inch, 1.2 * inch, 1.1 * inch], repeatRows=1)
-    bt.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), THEME_DARK),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("GRID", (0, 0), (-1, -1), 0.5, THEME_GRID),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, THEME_LIGHT]),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ]
-        )
-    )
-    story.append(bt)
-    story.append(Spacer(1, 14))
-
-    labels = [p.block.block_id for p in pres]
-    baseline_vals = [p.block.baseline_in_per_week for p in pres]
-    rec_vals = [p.recommended_in_per_week for p in pres]
-    gallons_by_block = [p.gallons_saved_week for p in pres]
-
-    story.append(
-        make_grouped_bar_chart(
-            "Baseline vs Recommended (inches / week)",
-            labels=labels,
-            series=[baseline_vals, rec_vals],
-            series_names=["Baseline", "Recommended"],
-        )
-    )
-    story.append(Spacer(1, 10))
-    story.append(
-        make_grouped_bar_chart(
-            "Water Saved by Block (gallons / week)",
-            labels=labels,
-            series=[gallons_by_block],
-            series_names=["Gallons saved"],
-        )
-    )
-
-    story.append(PageBreak())
-
-    # PAGE 3 — Scenario comparison
-    story.append(Paragraph("Scenario Comparison", h1))
-    story.append(Spacer(1, 8))
-    story.append(
-        Paragraph(
-            "Comparison across requested savings scenarios (independent of the scenario switch). "
-            "Use this to calibrate proof standards with stakeholders.",
-            base,
-        )
-    )
-    story.append(Spacer(1, 10))
-
-    scen_rows = [["Scenario", "Gallons saved / wk", "kWh saved / wk", "Water $ / wk", "Energy $ / wk", "Total $ / wk"]]
-    scen_labels: List[str] = []
-    scen_gal: List[float] = []
-    scen_usd: List[float] = []
-    for s in scenarios:
-        lbl = f"{int(round(float(s['savings_pct'])))}%"
-        scen_labels.append(lbl)
-        scen_gal.append(float(s["total_gallons_saved_week"]))
-        scen_usd.append(float(s["total_value_saved_usd_week"]))
-        scen_rows.append(
-            [
-                lbl,
-                fmt(float(s["total_gallons_saved_week"]), 0),
-                fmt(float(s["total_kwh_saved_week"]), 0),
-                f"${fmt(float(s['total_water_value_saved_usd_week']), 0)}",
-                f"${fmt(float(s['total_energy_value_saved_usd_week']), 0)}",
-                f"${fmt(float(s['total_value_saved_usd_week']), 0)}",
-            ]
-        )
-
-    scen_tbl = Table(scen_rows, colWidths=[0.8 * inch, 1.35 * inch, 1.1 * inch, 0.95 * inch, 0.95 * inch, 0.9 * inch], repeatRows=1)
-    scen_tbl.setStyle(
-        TableStyle(
-            [
-                ("GRID", (0, 0), (-1, -1), 0.5, THEME_GRID),
-                ("BACKGROUND", (0, 0), (-1, 0), THEME_DARK),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, THEME_LIGHT]),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ]
-        )
-    )
-    story.append(scen_tbl)
-    story.append(Spacer(1, 14))
-    story.append(make_grouped_bar_chart("Water Saved (gal / week) by Scenario", labels=scen_labels, series=[scen_gal], series_names=["Gallons saved"]))
-    story.append(Spacer(1, 10))
-    story.append(make_line_chart("Total Value Saved ($ / week) by Scenario", labels=scen_labels, values=scen_usd))
-
-    story.append(PageBreak())
-
-    # PAGE 4 — Economics
-    story.append(Paragraph("Economics Breakdown", h1))
-    story.append(Spacer(1, 8))
-    water_value_by_block = [p.water_value_saved_usd_week for p in pres]
-    energy_value_by_block = [p.energy_value_saved_usd_week for p in pres]
-    story.append(
-        make_grouped_bar_chart(
-            "Weekly Value Saved by Block (Water vs Energy)",
-            labels=labels,
-            series=[water_value_by_block, energy_value_by_block],
-            series_names=["Water value ($/wk)", "Energy value ($/wk)"],
-        )
-    )
-    story.append(Spacer(1, 12))
-    total_value_by_block = [p.total_value_saved_usd_week for p in pres]
-    story.append(make_pie_chart("Share of Total Weekly Value Saved (by Block)", labels=[p.block.block_id for p in pres], values=total_value_by_block))
-
-    story.append(PageBreak())
-
-    # PAGE 5 — Prescription detail
-    story.append(Paragraph("Prescription Detail", h1))
-    story.append(Spacer(1, 8))
-
-    detail_rows = [[
-        "Block", "Acres", "Baseline (in/wk)", "Rec (in/wk)", "AF saved/wk",
-        "Gallons saved/wk", "kWh saved/wk", "Total $/wk", "Conf."
-    ]]
-    conf_vals = []
-    for p in pres:
-        b = p.block
-        conf_vals.append(float(p.confidence) * 100.0)
-        detail_rows.append([
-            b.block_id,
-            fmt(b.acres, 1),
-            fmt(b.baseline_in_per_week, 2),
-            fmt(p.recommended_in_per_week, 2),
-            fmt(p.acre_feet_saved_week, 3),
-            fmt(p.gallons_saved_week, 0),
-            fmt(p.energy_kwh_saved_week, 0),
-            f"${fmt(p.total_value_saved_usd_week, 0)}",
-            f"{fmt(p.confidence * 100, 0)}%",
-        ])
-
-    dt = Table(
-        detail_rows,
-        colWidths=[0.6*inch, 0.6*inch, 0.95*inch, 0.75*inch, 0.75*inch, 1.05*inch, 0.85*inch, 0.75*inch, 0.5*inch],
-        repeatRows=1,
-    )
-    dt.setStyle(
-        TableStyle(
-            [
-                ("BACKGROUND", (0, 0), (-1, 0), THEME_DARK),
-                ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 8),
-                ("GRID", (0, 0), (-1, -1), 0.5, THEME_GRID),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, THEME_LIGHT]),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ]
-        )
-    )
-    story.append(dt)
-    story.append(Spacer(1, 14))
-    story.append(make_grouped_bar_chart("Model Confidence by Block (demo proxy, %)", labels=labels, series=[conf_vals], series_names=["Confidence (%)"]))
-    story.append(Spacer(1, 10))
-    story.append(Paragraph("<b>Rationale (applies to this demo run)</b>", h2))
-    story.append(Paragraph(pres[0].rationale if pres else "No prescriptions.", base))
-
-    story.append(PageBreak())
-
-    # PAGE 6 — Audit trail
-    story.append(Paragraph("Compliance & Audit Trail (SGMA-style)", h1))
-    story.append(Spacer(1, 8))
-
-    model_version = os.getenv("GIT_SHA", os.getenv("RENDER_GIT_COMMIT", "dev"))
-    audit = [
-        ["Field", "Value"],
-        ["Report type", "Weekly proof report (demo)"],
-        ["Generated (UTC)", ts],
-        ["Field ID", req.field_id],
-        ["Scenario", (req.assumptions.scenario or "normal")],
-        ["Blocks", ", ".join([b.block_id for b in blocks])],
-        ["Locations", "; ".join(sorted(set([b.location for b in blocks])))],
-        ["Counties", "; ".join(sorted(set([b.county for b in blocks])))],
-        ["Baseline policy", req.assumptions.baseline_policy],
-        ["System type", req.assumptions.system_type],
-        ["Assumptions (target savings)", f"{fmt(req.assumptions.target_savings_pct, 1)}%"],
-        ["Assumptions (effective savings)", f"{fmt(_scenario_effective_target(req.assumptions), 1)}%"],
-        ["Assumptions (water $/AF)", f"${fmt(req.assumptions.water_price_per_acre_foot, 0)}"],
-        ["Assumptions (kWh/AF)", fmt(req.assumptions.kwh_per_acre_foot, 0)],
-        ["Assumptions (energy $/kWh)", f"${fmt(req.assumptions.energy_price_per_kwh, 2)}"],
-        ["Notes", req.assumptions.notes or "-"],
-        ["Data sources (demo)", "; ".join(req.assumptions.data_sources or [])],
-        ["Constraints (demo)", "; ".join(req.assumptions.constraints or [])],
-        ["Model/Build version (demo)", model_version],
-    ]
-    at = Table(audit, colWidths=[2.2 * inch, 4.2 * inch])
-    at.setStyle(
-        TableStyle(
-            [
-                ("GRID", (0, 0), (-1, -1), 0.5, THEME_GRID),
-                ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#e6e7ea")),
-                ("FONTNAME", (0, 0), (-1, 0), "Helvetica-Bold"),
-                ("FONTSIZE", (0, 0), (-1, -1), 9),
-                ("VALIGN", (0, 0), (-1, -1), "TOP"),
-                ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, THEME_LIGHT]),
-            ]
-        )
-    )
-    story.append(at)
-
-    story.append(PageBreak())
-
-    # PAGE 7 — Appendix JSON
-    story.append(Paragraph("Appendix — Raw Payload & Outputs", h1))
-    story.append(Spacer(1, 8))
-
-    payload = req.model_dump()
-    payload["resolved_blocks"] = [asdict(b) for b in blocks]
-    payload["prescriptions"] = [
-        {
-            "block": asdict(p.block),
-            "recommended_in_per_week": p.recommended_in_per_week,
-            "savings_pct": p.savings_pct,
-            "gallons_saved_week": p.gallons_saved_week,
-            "acre_feet_saved_week": p.acre_feet_saved_week,
-            "water_value_saved_usd_week": p.water_value_saved_usd_week,
-            "energy_kwh_saved_week": p.energy_kwh_saved_week,
-            "energy_value_saved_usd_week": p.energy_value_saved_usd_week,
-            "total_value_saved_usd_week": p.total_value_saved_usd_week,
-            "confidence": p.confidence,
-            "rationale": p.rationale,
-        }
-        for p in pres
-    ]
-    payload["scenarios"] = scenarios
-
-    story.append(Paragraph("Raw JSON (truncated for PDF safety):", h2))
-    story.append(Spacer(1, 6))
-    raw = json.dumps(payload, indent=2)
-    raw = raw[:24_000] + ("\n…\n" if len(raw) > 24_000 else "")
-    story.append(XPreformatted(raw, mono))
-
-    story.append(Spacer(1, 10))
-    story.append(Paragraph("Disclaimer:", h2))
-    story.append(
-        Paragraph(
-            "This PDF is generated from a demo computation path. It shows the structure of an audit-ready report "
-            "(KPIs, prescriptions, scenario comparison, economics, and metadata). For production, bind baselines and "
-            "confidence to measured ET/soil/controller data and basin-specific compliance rules.",
-            small,
-        )
-    )
-
-    doc.build(story, onFirstPage=on_page, onLaterPages=on_page)
-    return buf.getvalue()
-
-
-# -------------------------
-# Routes
-# -------------------------
-@router.get("/blocks")
+    baseline_inches_week: float
+
+class DemoRunIn(BaseModel):
+    block_ids: List[str] = Field(default_factory=lambda: ["B1"])
+    mode: str = Field(default="synthetic")
+    assumptions: Assumptions = Field(default_factory=Assumptions)
+    custom_block: Optional[CustomBlock] = None
+    report_pages: Optional[int] = 100
+
+BLOCKS = [
+    {"id": "B1", "name": "Vineyard North (12.4 ac)", "crop": "Vineyard", "location": "Napa, CA", "acres": 12.4, "baseline_inches_week": 1.0},
+    {"id": "B2", "name": "Vineyard South (8.1 ac)", "crop": "Vineyard", "location": "Napa, CA", "acres": 8.1, "baseline_inches_week": 0.9},
+]
+
+@router.get("/v1/health")
+def health():
+    return {"ok": True, "ts": datetime.utcnow().isoformat() + "Z", "service": "agro-ai-demo"}
+
+@router.get("/v1/demo/blocks")
 def blocks():
-    return [
-        {
-            "block_id": b.block_id,
-            "label": b.label,
-            "crop": b.crop,
-            "location": b.location,
-            "acres": b.acres,
-            "baseline_in_per_week": b.baseline_in_per_week,
-        }
-        for b in get_demo_blocks()
-    ]
+    return BLOCKS
 
+def _scenario_scalar(s: str) -> float:
+    s = (s or "normal").lower()
+    if s == "heat":
+        return 1.18
+    if s == "restriction":
+        return 0.78
+    return 1.0
 
-@router.post("/run")
-def run(req: DemoRequest):
-    blocks_ = resolve_blocks(req)
-    pres = compute_prescriptions(blocks_, req.assumptions)
+def _compute(blocks: List[Dict[str, Any]], a: Assumptions) -> Dict[str, Any]:
+    scenario = (a.scenario or "normal").lower()
+    scalar = _scenario_scalar(scenario)
+    target = max(0.0, min(0.9, (a.target_savings_percent or 0) / 100.0))
+
+    acres_total = sum(float(b["acres"]) for b in blocks)
+    baseline_gal = 0.0
+
+    for b in blocks:
+        bi = float(b["baseline_inches_week"]) * scalar
+        baseline_gal += float(b["acres"]) * bi * ACRE_INCH_GAL
+
+    recommended_gal = baseline_gal * (1 - target)
+    savings_gal = max(0.0, baseline_gal - recommended_gal)
+    savings_af = savings_gal / ACRE_FOOT_GAL
+
+    energy_saved_kwh = savings_af * float(a.kwh_per_acre_foot)
+    energy_saved_usd = energy_saved_kwh * float(a.energy_price_per_kwh)
+    water_saved_usd = savings_af * float(a.water_price_per_acre_foot)
+
+    # Simple weekly schedule (illustrative, consistent)
+    # 7 days, gallons/day allocated with mild variation
+    rng = random.Random(42 + int(target * 1000) + int(acres_total * 10))
+    day_fracs = [max(0.08, min(0.18, 1/7 + rng.uniform(-0.03, 0.03))) for _ in range(7)]
+    ssum = sum(day_fracs)
+    day_fracs = [f/ssum for f in day_fracs]
+    schedule = [{"day": i+1, "recommended_gal": recommended_gal * day_fracs[i]} for i in range(7)]
 
     return {
-        "field_id": req.field_id,
-        "generated": datetime.now(timezone.utc).isoformat(),
-        "assumptions": req.assumptions.model_dump(),
-        "prescriptions": [
-            {
-                "block": asdict(p.block),
-                "block_id": p.block.block_id,  # compat
-                "label": p.block.label,
-                "crop": p.block.crop,
-                "location": p.block.location,
-                "acres": p.block.acres,
-                "baseline_in_per_week": p.block.baseline_in_per_week,
-                "baseline_inches_per_week": p.block.baseline_in_per_week,  # compat
-                "recommended_in_per_week": p.recommended_in_per_week,
-                "recommended_inches_per_week": p.recommended_in_per_week,  # compat
-                "savings_pct": p.savings_pct,
-                "gallons_saved_week": p.gallons_saved_week,
-                "acre_feet_saved_week": p.acre_feet_saved_week,
-                "water_value_saved_usd_week": p.water_value_saved_usd_week,
-                "energy_kwh_saved_week": p.energy_kwh_saved_week,
-                "energy_value_saved_usd_week": p.energy_value_saved_usd_week,
-                "total_value_saved_usd_week": p.total_value_saved_usd_week,
-                "confidence": p.confidence,
-                "rationale": p.rationale,
-            }
-            for p in pres
-        ],
+        "mode": "synthetic-live",
+        "scenario": scenario,
+        "totals": {
+            "acres": acres_total,
+            "baseline_gal_week": baseline_gal,
+            "recommended_gal_week": recommended_gal,
+            "savings_gal_week": savings_gal,
+        },
+        "economics": {
+            "savings_acre_feet_week": savings_af,
+            "energy_saved_kwh_week": energy_saved_kwh,
+            "energy_saved_usd_week": energy_saved_usd,
+            "water_saved_usd_week": water_saved_usd,
+        },
+        "assumptions": a.model_dump(),
+        "blocks": blocks,
+        "schedule": schedule,
+        "generated_at": datetime.utcnow().isoformat() + "Z",
     }
 
+@router.post("/v1/demo/run")
+def demo_run(inp: DemoRunIn):
+    chosen = []
+    ids = set(inp.block_ids or [])
+    for b in BLOCKS:
+        if b["id"] in ids:
+            chosen.append(dict(b))
+    if inp.custom_block:
+        cb = inp.custom_block
+        chosen.append({
+            "id": "CUSTOM",
+            "name": "Custom block",
+            "crop": cb.crop,
+            "location": cb.location,
+            "acres": cb.acres,
+            "baseline_inches_week": cb.baseline_inches_week,
+        })
+    if not chosen:
+        chosen = [dict(BLOCKS[0])]
 
-@router.post("/recommendation")
-def recommendation(req: DemoRequest):
-    return run(req)
+    result = _compute(chosen, inp.assumptions)
 
+    # Human summary as plain text (frontend should show this, keep raw JSON too)
+    t = result["totals"]
+    e = result["economics"]
+    a = result["assumptions"]
+    summary = "\n".join([
+        "Executive summary (demo)",
+        f"Scenario: {result['scenario'].title()}",
+        "",
+        f"Across {t['acres']:.2f} acres, baseline is ~{t['baseline_gal_week']:.0f} gal/week.",
+        f"Recommended is ~{t['recommended_gal_week']:.0f} gal/week → savings ~{t['savings_gal_week']:.0f} gal/week.",
+        f"That’s ~{e['savings_acre_feet_week']:.2f} acre-feet/week avoided.",
+        "",
+        "Economics (illustrative):",
+        f"• Water value saved: ${e['water_saved_usd_week']:.2f}/week (at ${a['water_price_per_acre_foot']:.2f}/acre-foot)",
+        f"• Energy saved: {e['energy_saved_kwh_week']:.2f} kWh/week → ${e['energy_saved_usd_week']:.2f}/week (at ${a['energy_price_per_kwh']:.2f}/kWh)",
+        "",
+        "Transparency:",
+        "• Assumptions are explicit + exportable",
+        "• Per-block schedule attached",
+    ])
+    result["readable_summary"] = summary
+    return JSONResponse(result)
 
-@router.post("/report")
-def report(req: DemoRequest):
-    blocks_ = resolve_blocks(req)
-    pres = compute_prescriptions(blocks_, req.assumptions)
-    pdf = build_pdf(req, blocks_, pres)
+@router.post("/v1/demo/report")
+def demo_report(inp: DemoRunIn):
+    # Reuse compute so PDF is consistent with /run
+    chosen = []
+    ids = set(inp.block_ids or [])
+    for b in BLOCKS:
+        if b["id"] in ids:
+            chosen.append(dict(b))
+    if inp.custom_block:
+        cb = inp.custom_block
+        chosen.append({
+            "id": "CUSTOM",
+            "name": "Custom block",
+            "crop": cb.crop,
+            "location": cb.location,
+            "acres": cb.acres,
+            "baseline_inches_week": cb.baseline_inches_week,
+        })
+    if not chosen:
+        chosen = [dict(BLOCKS[0])]
 
-    return Response(
-        content=pdf,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": "inline; filename=agro_ai_weekly_proof_report_demo.pdf",
-            "Cache-Control": "no-store",
-        },
-    )
+    result = _compute(chosen, inp.assumptions)
+    pages = int(inp.report_pages or 100)
+    pages = max(10, min(200, pages))  # safety clamp
 
+    # Charts (optional)
+    xs = list(range(1, 13))
+    base = [result["totals"]["baseline_gal_week"] * (1 + 0.02*math.sin(i)) for i in xs]
+    rec = [result["totals"]["recommended_gal_week"] * (1 + 0.02*math.sin(i+1)) for i in xs]
+    png1 = _chart_png("Baseline vs Recommended (12 weeks)", xs, base)
+    png2 = _chart_png("Recommended (12 weeks)", xs, rec)
 
-# NEW: Same-origin GET PDF endpoint (for /demo/report.pdf proxy style)
-@router.get("/report.pdf")
-def report_pdf(
-    block_ids: str = Query(default="", description="Comma-separated block IDs, e.g. B1,B2"),
-    scenario: str = Query(default="normal", description="normal|heat|restriction"),
-    target_savings_pct: Optional[float] = Query(default=None, description="Override target savings %"),
-):
-    bids = [b.strip() for b in (block_ids or "").split(",") if b.strip()]
-    a = Assumptions()
-    a.scenario = scenario or "normal"
-    if target_savings_pct is not None:
-        a.target_savings_pct = float(target_savings_pct)
+    buf = io.BytesIO()
+    c = canvas.Canvas(buf, pagesize=letter)
+    W, H = letter
 
-    req = DemoRequest(block_ids=bids, mode="synthetic", assumptions=a)
-    blocks_ = resolve_blocks(req)
-    pres = compute_prescriptions(blocks_, req.assumptions)
-    pdf = build_pdf(req, blocks_, pres)
+    def header(page_no: int, title: str):
+        c.setFont("Helvetica-Bold", 14)
+        c.drawString(0.75*inch, H - 0.75*inch, "AGRO-AI — Irrigation Intelligence Proof Report")
+        c.setFont("Helvetica", 10)
+        c.drawRightString(W - 0.75*inch, H - 0.72*inch, f"Page {page_no} / {pages}")
+        c.setFont("Helvetica-Bold", 12)
+        c.drawString(0.75*inch, H - 1.1*inch, title)
+        c.setLineWidth(0.5)
+        c.line(0.75*inch, H - 1.2*inch, W - 0.75*inch, H - 1.2*inch)
 
-    return Response(
-        content=pdf,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": "inline; filename=agro_ai_weekly_proof_report_demo.pdf",
-            "Cache-Control": "no-store",
-        },
-    )
+    # Page 1: cover
+    header(1, "Executive cover")
+    c.setFont("Helvetica", 11)
+    c.drawString(0.75*inch, H - 1.6*inch, f"Scenario: {result['scenario'].title()}")
+    c.drawString(0.75*inch, H - 1.85*inch, f"Generated: {result['generated_at']}")
+    c.drawString(0.75*inch, H - 2.1*inch, "Purpose: prove the system responds + explain why (assumptions + schedule + economics).")
+    c.setFont("Helvetica-Bold", 18)
+    c.drawString(0.75*inch, H - 2.8*inch, "Irrigation Intelligence — Decision Proof Package")
+    c.setFont("Helvetica", 11)
+    c.drawString(0.75*inch, H - 3.15*inch, "This demo report is synthetic but structurally identical to a pilot deliverable.")
+    c.showPage()
+
+    # Page 2: summary + KPIs
+    header(2, "Executive summary")
+    t = result["totals"]; e = result["economics"]; a = result["assumptions"]
+    y = H - 1.6*inch
+    c.setFont("Helvetica", 11)
+    lines = [
+        f"Across {t['acres']:.2f} acres, baseline irrigation is ~{t['baseline_gal_week']:.0f} gal/week.",
+        f"AGRO-AI recommends ~{t['recommended_gal_week']:.0f} gal/week → savings ~{t['savings_gal_week']:.0f} gal/week.",
+        f"That’s ~{e['savings_acre_feet_week']:.2f} acre-feet/week avoided.",
+        "",
+        f"Illustrative economics (per week): water saved ≈ ${e['water_saved_usd_week']:.2f}, energy saved ≈ ${e['energy_saved_usd_week']:.2f}.",
+        "Decision posture: minimize waste without risking yield; respect constraints; keep it auditable.",
+    ]
+    for ln in lines:
+        c.drawString(0.75*inch, y, ln); y -= 0.22*inch
+
+    if png1:
+        img = ImageReader(io.BytesIO(png1))
+        c.drawImage(img, 0.75*inch, 1.4*inch, width=6.9*inch, height=3.0*inch, preserveAspectRatio=True, mask='auto')
+    c.showPage()
+
+    # Page 3: block inventory + assumptions
+    header(3, "Block inventory + assumptions")
+    y = H - 1.6*inch
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(0.75*inch, y, "Blocks included"); y -= 0.25*inch
+    c.setFont("Helvetica", 10)
+    for b in chosen:
+        c.drawString(0.9*inch, y, f"• {b['name']} — {b['acres']:.2f} ac — baseline {b['baseline_inches_week']:.2f} in/week — {b['location']}")
+        y -= 0.2*inch
+
+    y -= 0.15*inch
+    c.setFont("Helvetica-Bold", 11)
+    c.drawString(0.75*inch, y, "Assumptions (explicit)"); y -= 0.25*inch
+    c.setFont("Helvetica", 10)
+    for k, v in a.items():
+        c.drawString(0.9*inch, y, f"• {k}: {v}")
+        y -= 0.2*inch
+        if y < 1.2*inch:
+            break
+    c.showPage()
+
+    # Remaining pages: repeatable “proof” structure
+    # We create sections: constraints, schedule, per-block rationale, economics sensitivity, appendix tables.
+    rng = random.Random(1337)
+    for page in range(4, pages + 1):
+        section = (page - 4) % 6
+
+        if section == 0:
+            header(page, "Constraints + operating envelope")
+            c.setFont("Helvetica", 10)
+            y = H - 1.6*inch
+            bullets = [
+                "Irrigation window: favor early morning to reduce evaporation and peak pumping.",
+                "Safety: avoid aggressive cuts during high ET weeks; maintain minimum soil moisture floor.",
+                "Operational: keep runtime changes smooth to avoid valve/pump shock.",
+                "Audit: every recommendation must tie back to assumptions + baseline + scenario.",
+            ]
+            for b in bullets:
+                c.drawString(0.9*inch, y, f"• {b}"); y -= 0.22*inch
+
+        elif section == 1:
+            header(page, "7-day schedule (machine-ready)")
+            c.setFont("Helvetica", 10)
+            y = H - 1.6*inch
+            c.drawString(0.75*inch, y, "Recommended gallons/day (illustrative allocation):"); y -= 0.25*inch
+            for row in result["schedule"]:
+                c.drawString(0.9*inch, y, f"Day {row['day']}: {row['recommended_gal']:.0f} gal"); y -= 0.2*inch
+
+        elif section == 2:
+            header(page, "Per-block rationale (what you’d show an ops lead)")
+            c.setFont("Helvetica", 10)
+            y = H - 1.6*inch
+            for b in chosen:
+                cut = a["target_savings_percent"]
+                c.drawString(0.75*inch, y, f"{b['name']}: baseline {b['baseline_inches_week']:.2f} in/week → target cut {cut:.0f}% (scenario adjusted).")
+                y -= 0.22*inch
+                c.drawString(0.95*inch, y, "Reason: remove over-application while maintaining risk buffer for heat spikes & distribution inefficiency.")
+                y -= 0.28*inch
+                if y < 1.2*inch:
+                    break
+
+        elif section == 3:
+            header(page, "Economics sensitivity (quick levers)")
+            c.setFont("Helvetica", 10)
+            y = H - 1.6*inch
+            c.drawString(0.75*inch, y, "Weekly savings under alternate assumptions:"); y -= 0.25*inch
+            for alt in [15, 25, 35]:
+                target_alt = alt / 100.0
+                base_g = t["baseline_gal_week"]
+                rec_g = base_g * (1 - target_alt)
+                sav_g = base_g - rec_g
+                sav_af = sav_g / ACRE_FOOT_GAL
+                water_usd = sav_af * a["water_price_per_acre_foot"]
+                c.drawString(0.9*inch, y, f"Target {alt}% → save ~{sav_g:.0f} gal/week (~{sav_af:.2f} af) → water value ≈ ${water_usd:.2f}/week")
+                y -= 0.2*inch
+
+        elif section == 4:
+            header(page, "Appendix table: weekly projection (12 weeks)")
+            c.setFont("Helvetica", 9)
+            y = H - 1.6*inch
+            c.drawString(0.75*inch, y, "Week | Baseline (gal) | Recommended (gal) | Savings (gal)"); y -= 0.22*inch
+            for w in range(1, 13):
+                wobble = 1 + 0.03 * math.sin(w)
+                bgal = t["baseline_gal_week"] * wobble
+                rgal = t["recommended_gal_week"] * wobble
+                sgal = max(0.0, bgal - rgal)
+                c.drawString(0.75*inch, y, f"{w:>4} | {bgal:>13.0f} | {rgal:>16.0f} | {sgal:>11.0f}")
+                y -= 0.18*inch
+                if y < 1.2*inch:
+                    break
+            if png2:
+                img = ImageReader(io.BytesIO(png2))
+                c.drawImage(img, 0.75*inch, 1.15*inch, width=6.9*inch, height=2.6*inch, preserveAspectRatio=True, mask='auto')
+
+        else:
+            header(page, "Audit notes (why executives trust it)")
+            c.setFont("Helvetica", 10)
+            y = H - 1.6*inch
+            bullets = [
+                "All outputs are traceable to: baseline policy + scenario scalar + explicit target savings.",
+                "Schedules are machine-ready and can map to controller runtime or setpoints.",
+                "This report format is the same structure used in a paid pilot deliverable.",
+                "In a real pilot: ET0/weather, soil telemetry, controller logs, and constraints replace synthetic inputs.",
+            ]
+            for b in bullets:
+                c.drawString(0.9*inch, y, f"• {b}"); y -= 0.22*inch
+
+        c.showPage()
+
+    c.save()
+    pdf = buf.getvalue()
+
+    headers = {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": "attachment; filename=AGRO-AI_Demo_Report.pdf",
+        "Cache-Control": "no-store, max-age=0",
+        "Pragma": "no-cache",
+        "Expires": "0",
+    }
+    return Response(content=pdf, headers=headers, media_type="application/pdf")
