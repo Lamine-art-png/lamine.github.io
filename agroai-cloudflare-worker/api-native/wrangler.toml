@@ -19,7 +19,7 @@ bindings = [
 
 [[env.staging.migrations]]
 tag = "v1"
-new_classes = ["TalgilSyncDO"]
+new_sqlite_classes = ["TalgilSyncDO"]
 
 # ── Production ───────────────────────────────────────────
 # [env.production]
