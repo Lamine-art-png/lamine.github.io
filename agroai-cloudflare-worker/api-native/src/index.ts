@@ -20,6 +20,7 @@
 
 import { TalgilSyncDO } from "./sync/TalgilSyncDO";
 import type { Env } from "./sync/TalgilSyncDO";
+import { ensureTenant } from "./lib/db";
 
 // Re-export Durable Object class for wrangler
 export { TalgilSyncDO };
@@ -68,6 +69,12 @@ export default {
     // ── Sync DO routes (POST) ───────────────────────────
     if (method === "POST" && path.startsWith("/v1/integrations/talgil/")) {
       const action = path.replace("/v1/integrations/talgil/", "");
+
+      // Ensure tenant row exists before any FK-constrained writes
+      if (action === "connect") {
+        await ensureTenant(env.DB, tenantId!);
+      }
+
       return routeToSyncDO(env, tenantId!, action, url);
     }
 
