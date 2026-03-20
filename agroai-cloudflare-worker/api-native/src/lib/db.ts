@@ -11,6 +11,22 @@ import type {
   ValveWcRow,
 } from "../mappers/talgil_map";
 
+// ── tenants ─────────────────────────────────────────────
+// Ensure tenant row exists (FK target for integrations_talgil).
+
+export async function ensureTenant(
+  db: D1Database,
+  tenantId: string,
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO tenants (id, name) VALUES (?, ?)
+       ON CONFLICT (id) DO NOTHING`,
+    )
+    .bind(tenantId, tenantId)
+    .run();
+}
+
 // ── integrations_talgil ─────────────────────────────────
 
 export interface IntegrationRow {

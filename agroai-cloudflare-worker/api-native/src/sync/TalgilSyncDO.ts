@@ -57,6 +57,7 @@ import {
 } from "../mappers/talgil_map";
 
 import {
+  ensureTenant,
   upsertIntegration,
   setIntegrationError,
   getIntegration,
@@ -142,6 +143,9 @@ export class TalgilSyncDO implements DurableObject {
   // to get complete sensor metadata, populates integration + catalog.
   // ────────────────────────────────────────────────────────
   private async handleConnect(tenantId: string): Promise<Response> {
+    // Ensure tenant row exists (FK target for integrations_talgil)
+    await ensureTenant(this.env.DB, tenantId);
+
     const baseUrl = this.env.TALGIL_BASE_URL;
     const apiKey = this.env.TALGIL_API_KEY;
 
