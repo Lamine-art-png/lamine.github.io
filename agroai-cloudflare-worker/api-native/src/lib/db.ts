@@ -1,6 +1,7 @@
 /**
  * D1 database helpers for Talgil integration tables.
- * All upserts use INSERT OR REPLACE to avoid duplicates.
+ * Uses D1 batch API for performance where possible.
+ * All upserts use INSERT OR REPLACE / ON CONFLICT to avoid duplicates.
  */
 
 import type {
@@ -81,20 +82,6 @@ export async function setIntegrationError(
     .run();
 }
 
-export async function disconnectIntegration(
-  db: D1Database,
-  tenantId: string,
-): Promise<void> {
-  await db
-    .prepare(
-      `UPDATE integrations_talgil
-       SET status = 'disconnected', updated_at = datetime('now')
-       WHERE tenant_id = ?`,
-    )
-    .bind(tenantId)
-    .run();
-}
-
 export async function getIntegration(
   db: D1Database,
   tenantId: string,
@@ -106,19 +93,24 @@ export async function getIntegration(
 }
 
 // ── talgil_sensor_catalog ───────────────────────────────
+// Uses batch for performance when inserting multiple sensors.
 
 export async function upsertSensorCatalog(
   db: D1Database,
   rows: SensorCatalogRow[],
 ): Promise<number> {
-  let count = 0;
-  for (const r of rows) {
-    await db
+  if (rows.length === 0) return 0;
+
+  // Use D1 batch for better performance
+  const stmts = rows.map((r) =>
+    db
       .prepare(
         `INSERT INTO talgil_sensor_catalog
            (tenant_id, controller_id, sensor_uid, sensor_name, sensor_type, units,
-            data_source, last_seen_at_ms, last_seen_at, raw_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            data_source, last_seen_at_ms, last_seen_at,
+            min_limit, max_limit, low_threshold, high_threshold,
+            reading_rate, units_descriptor, raw_json)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
          ON CONFLICT (tenant_id, controller_id, sensor_uid) DO UPDATE SET
            sensor_name = excluded.sensor_name,
            sensor_type = excluded.sensor_type,
@@ -126,6 +118,12 @@ export async function upsertSensorCatalog(
            data_source = excluded.data_source,
            last_seen_at_ms = excluded.last_seen_at_ms,
            last_seen_at = excluded.last_seen_at,
+           min_limit = excluded.min_limit,
+           max_limit = excluded.max_limit,
+           low_threshold = excluded.low_threshold,
+           high_threshold = excluded.high_threshold,
+           reading_rate = excluded.reading_rate,
+           units_descriptor = excluded.units_descriptor,
            raw_json = excluded.raw_json`,
       )
       .bind(
@@ -138,41 +136,58 @@ export async function upsertSensorCatalog(
         r.data_source,
         r.last_seen_at_ms,
         r.last_seen_at,
+        r.min_limit,
+        r.max_limit,
+        r.low_threshold,
+        r.high_threshold,
+        r.reading_rate,
+        r.units_descriptor,
         r.raw_json,
-      )
-      .run();
-    count++;
-  }
-  return count;
+      ),
+  );
+
+  await db.batch(stmts);
+  return rows.length;
 }
 
 // ── talgil_sensor_log ───────────────────────────────────
+// Uses batch for performance.
 
 export async function upsertSensorLog(
   db: D1Database,
   rows: SensorLogRow[],
 ): Promise<number> {
+  if (rows.length === 0) return 0;
+
+  // Batch in groups of 50 to stay within D1 limits
+  const BATCH_SIZE = 50;
   let count = 0;
-  for (const r of rows) {
-    await db
-      .prepare(
-        `INSERT INTO talgil_sensor_log
-           (tenant_id, controller_id, sensor_uid, observed_at_ms, observed_at, value_num, raw_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT (tenant_id, controller_id, sensor_uid, observed_at_ms) DO NOTHING`,
-      )
-      .bind(
-        r.tenant_id,
-        r.controller_id,
-        r.sensor_uid,
-        r.observed_at_ms,
-        r.observed_at,
-        r.value_num,
-        r.raw_json,
-      )
-      .run();
-    count++;
+
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    const stmts = batch.map((r) =>
+      db
+        .prepare(
+          `INSERT INTO talgil_sensor_log
+             (tenant_id, controller_id, sensor_uid, observed_at_ms, observed_at, value_num, raw_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (tenant_id, controller_id, sensor_uid, observed_at_ms) DO NOTHING`,
+        )
+        .bind(
+          r.tenant_id,
+          r.controller_id,
+          r.sensor_uid,
+          r.observed_at_ms,
+          r.observed_at,
+          r.value_num,
+          r.raw_json,
+        ),
+    );
+
+    await db.batch(stmts);
+    count += batch.length;
   }
+
   return count;
 }
 
@@ -182,28 +197,39 @@ export async function upsertEventLog(
   db: D1Database,
   rows: EventLogRow[],
 ): Promise<number> {
+  if (rows.length === 0) return 0;
+
+  const BATCH_SIZE = 50;
   let count = 0;
-  for (const r of rows) {
-    await db
-      .prepare(
-        `INSERT INTO talgil_event_log
-           (tenant_id, controller_id, event_key, event_at_ms, event_at, event_type, source_key, raw_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT (tenant_id, controller_id, event_key) DO NOTHING`,
-      )
-      .bind(
-        r.tenant_id,
-        r.controller_id,
-        r.event_key,
-        r.event_at_ms,
-        r.event_at,
-        r.event_type,
-        r.source_key,
-        r.raw_json,
-      )
-      .run();
-    count++;
+
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    const stmts = batch.map((r) =>
+      db
+        .prepare(
+          `INSERT INTO talgil_event_log
+             (tenant_id, controller_id, event_key, event_at_ms, event_at,
+              event_type, source_key, message, raw_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (tenant_id, controller_id, event_key) DO NOTHING`,
+        )
+        .bind(
+          r.tenant_id,
+          r.controller_id,
+          r.event_key,
+          r.event_at_ms,
+          r.event_at,
+          r.event_type,
+          r.source_key,
+          r.message,
+          r.raw_json,
+        ),
+    );
+
+    await db.batch(stmts);
+    count += batch.length;
   }
+
   return count;
 }
 
@@ -213,30 +239,40 @@ export async function upsertValveWc(
   db: D1Database,
   rows: ValveWcRow[],
 ): Promise<number> {
+  if (rows.length === 0) return 0;
+
+  const BATCH_SIZE = 50;
   let count = 0;
-  for (const r of rows) {
-    await db
-      .prepare(
-        `INSERT INTO talgil_valve_wc
-           (tenant_id, controller_id, valve_uid, bucket_start_ms, bucket_start_at,
-            bucket_end_ms, bucket_end_at, rate, amount_value, raw_json)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-         ON CONFLICT (tenant_id, controller_id, valve_uid, bucket_start_ms) DO NOTHING`,
-      )
-      .bind(
-        r.tenant_id,
-        r.controller_id,
-        r.valve_uid,
-        r.bucket_start_ms,
-        r.bucket_start_at,
-        r.bucket_end_ms,
-        r.bucket_end_at,
-        r.rate,
-        r.amount_value,
-        r.raw_json,
-      )
-      .run();
-    count++;
+
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE);
+    const stmts = batch.map((r) =>
+      db
+        .prepare(
+          `INSERT INTO talgil_valve_wc
+             (tenant_id, controller_id, valve_uid, bucket_start_ms, bucket_start_at,
+              bucket_end_ms, bucket_end_at, rate, amount_value, value_per_area, raw_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT (tenant_id, controller_id, valve_uid, bucket_start_ms) DO NOTHING`,
+        )
+        .bind(
+          r.tenant_id,
+          r.controller_id,
+          r.valve_uid,
+          r.bucket_start_ms,
+          r.bucket_start_at,
+          r.bucket_end_ms,
+          r.bucket_end_at,
+          r.rate,
+          r.amount_value,
+          r.value_per_area,
+          r.raw_json,
+        ),
+    );
+
+    await db.batch(stmts);
+    count += batch.length;
   }
+
   return count;
 }

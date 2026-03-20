@@ -1,35 +1,51 @@
 /**
  * TalgilSyncDO — Durable Object that orchestrates Talgil data sync.
  *
- * ╔══════════════════════════════════════════════════════════════════╗
- * ║  ARCHITECTURE DECISIONS (driven by Kosta's direct feedback)    ║
- * ╠══════════════════════════════════════════════════════════════════╣
- * ║  1. /mytargets is called ONCE during connect, never on sync.   ║
- * ║  2. Operational sync uses full image ONLY (/targets/{id}/).    ║
- * ║  3. NO separate /sensors call — sensors are in full image.     ║
- * ║  4. Sensor catalog is populated FROM the full image.           ║
- * ║  5. Historical sensor log is a SEPARATE batch process.         ║
- * ║  6. Historical batch stays within simulator date range.        ║
- * ║  7. Event log + water consumption are DISABLED by default.     ║
- * ║  8. Operational sync runs every 20 minutes (not every minute). ║
- * ╚══════════════════════════════════════════════════════════════════╝
+ * ╔══════════════════════════════════════════════════════════════════════╗
+ * ║  ARCHITECTURE DECISIONS (driven by Kosta's feedback + API v1.47)   ║
+ * ╠══════════════════════════════════════════════════════════════════════╣
+ * ║  1. /mytargets is called ONCE during connect, never on sync.       ║
+ * ║  2. Operational sync uses FILTERED full image.                     ║
+ * ║  3. NO separate /sensors call — sensors are in full image.         ║
+ * ║  4. Sensor catalog is populated FROM the full image.               ║
+ * ║  5. Historical sensor log uses per-sensor /sensors/{id}/log.       ║
+ * ║  6. Historical batch stays within simulator date range (dev).      ║
+ * ║  7. Event log + water consumption are DIAGNOSTIC until proven.     ║
+ * ║  8. Operational sync runs every 20 minutes (not every minute).     ║
+ * ║  9. Rate-aware chunking for DB queries (max ranges enforced).      ║
+ * ║ 10. Filtered image reduces traffic per behavior guidelines.        ║
+ * ╚══════════════════════════════════════════════════════════════════════╝
  *
  * Sync modes:
- *   "connect"          → discover controller via /mytargets, fetch first full image
- *   "sync"             → operational: fetch full image, update catalog + snapshot
- *   "backfill"         → historical: fetch sensor log in day-sized chunks
- *   "test_eventlog"    → diagnostic: single event log request to test permissions
- *   "test_wc"          → diagnostic: single water consumption request to test permissions
+ *   "connect"          → discover via /mytargets, fetch first full image
+ *   "sync"             → operational: filtered image, update catalog + snapshot
+ *   "backfill"         → historical: per-sensor log in day chunks
+ *   "test_eventlog"    → diagnostic: single event log request
+ *   "test_wc"          → diagnostic: single water consumption request
  */
 
 import {
   talgilListTargets,
   talgilGetFullImage,
+  talgilGetFilteredImage,
   talgilGetSensorLog,
   talgilGetEventLog,
   talgilGetWaterConsumption,
   SIMULATOR_FROM_MS,
   SIMULATOR_UNTIL_MS,
+  SYNC_FILTER,
+  MIN_INTERVAL,
+  clampToSimulatorRange,
+  chunkDateRange,
+  diagnoseError,
+  extractSensors,
+  extractControllerName,
+  extractOnlineStatus,
+  normalizeSensorUid,
+} from "../connectors/talgil";
+
+import type {
+  TalgilWcResponse,
 } from "../connectors/talgil";
 
 import {
@@ -60,14 +76,13 @@ export interface Env {
   TALGIL_API_KEY: string;
   TALGIL_BASE_URL: string;
   ADMIN_TOKEN: string;
+  ENVIRONMENT?: string;
 }
 
 // ── Constants ───────────────────────────────────────────
 
 const ONE_DAY_MS = 86_400_000;
-
-// Historical backfill: chunk size = 1 day to stay polite
-const BACKFILL_CHUNK_MS = ONE_DAY_MS;
+const BACKFILL_CHUNK_MS = ONE_DAY_MS; // 1-day chunks for sensor log backfill
 
 // ── Durable Object ──────────────────────────────────────
 
@@ -123,8 +138,8 @@ export class TalgilSyncDO implements DurableObject {
 
   // ────────────────────────────────────────────────────────
   // MODE: connect
-  // Called once. Discovers controller, fetches full image,
-  // populates integration row + sensor catalog.
+  // Called once. Discovers controller, fetches FULL (unfiltered) image
+  // to get complete sensor metadata, populates integration + catalog.
   // ────────────────────────────────────────────────────────
   private async handleConnect(tenantId: string): Promise<Response> {
     const baseUrl = this.env.TALGIL_BASE_URL;
@@ -150,6 +165,7 @@ export class TalgilSyncDO implements DurableObject {
       return Response.json({
         ok: false,
         error: errMsg,
+        diagnosis: diagnoseError(targetsResult.status),
         url: targetsResult.url,
         http_status: targetsResult.status,
       });
@@ -157,10 +173,11 @@ export class TalgilSyncDO implements DurableObject {
 
     // Use the first target (simulator controller 6115 in dev)
     const target = targetsResult.data[0];
-    const controllerId = target.ID;
-    const controllerName = target.Name ?? `Controller ${controllerId}`;
+    const controllerId = target.serial ?? target.ID ?? 0;
+    const controllerName = extractControllerName(target);
 
-    // Step 2: Fetch full image to get sensors and metadata
+    // Step 2: Fetch FULL image (unfiltered) to get complete sensor metadata
+    // Connect uses unfiltered because we need all metadata fields for catalog
     const imageResult = await talgilGetFullImage(baseUrl, apiKey, controllerId);
 
     await writeAudit(this.env.DB, {
@@ -179,13 +196,14 @@ export class TalgilSyncDO implements DurableObject {
       return Response.json({
         ok: false,
         error: errMsg,
+        diagnosis: diagnoseError(imageResult.status),
         url: imageResult.url,
         http_status: imageResult.status,
       });
     }
 
     const image = imageResult.data;
-    const controllerOnline = image.Online ?? 0;
+    const controllerOnline = extractOnlineStatus(image);
 
     // Step 3: Populate integration row
     await upsertIntegration(
@@ -222,6 +240,9 @@ export class TalgilSyncDO implements DurableObject {
       row_count: snapshotCount,
     });
 
+    // List discovered sensor UIDs for debugging
+    const sensorUids = catalogRows.map((r) => r.sensor_uid);
+
     return Response.json({
       ok: true,
       controller_id: controllerId,
@@ -229,13 +250,15 @@ export class TalgilSyncDO implements DurableObject {
       controller_online: controllerOnline,
       sensor_catalog_count: catalogCount,
       sensor_snapshot_count: snapshotCount,
-      sensors_in_image: image.Sensors?.length ?? 0,
+      sensors_in_image: extractSensors(image).length,
+      sensor_uids: sensorUids,
+      state: image.state ?? null,
     });
   }
 
   // ────────────────────────────────────────────────────────
   // MODE: sync (operational)
-  // Fetches full image ONLY. No /mytargets. No /sensors.
+  // Fetches FILTERED image. No /mytargets. No /sensors.
   // Updates catalog + takes sensor snapshot.
   // Designed to run every 20 minutes.
   // ────────────────────────────────────────────────────────
@@ -254,13 +277,19 @@ export class TalgilSyncDO implements DurableObject {
 
     const controllerId = integration.controller_id;
 
-    // Single request: full image
-    const imageResult = await talgilGetFullImage(baseUrl, apiKey, controllerId);
+    // Use filtered image to reduce traffic
+    // Filter: sensors container + key fields (uid, name, type, units, value, updateTime, state, online)
+    const imageResult = await talgilGetFilteredImage(
+      baseUrl,
+      apiKey,
+      controllerId,
+      SYNC_FILTER,
+    );
 
     await writeAudit(this.env.DB, {
       tenant_id: tenantId,
-      action: "sync.full_image",
-      detail: `GET /targets/${controllerId}/ operational sync`,
+      action: "sync.filtered_image",
+      detail: `GET /targets/${controllerId}/?filter=${SYNC_FILTER}`,
       outcome: imageResult.ok ? "success" : "failure",
       url: imageResult.url,
       http_status: imageResult.status,
@@ -268,11 +297,12 @@ export class TalgilSyncDO implements DurableObject {
     });
 
     if (!imageResult.ok || !imageResult.data) {
-      const errMsg = imageResult.error ?? "Full image fetch failed";
+      const errMsg = imageResult.error ?? "Filtered image fetch failed";
       await setIntegrationError(this.env.DB, tenantId, errMsg);
       return Response.json({
         ok: false,
         error: errMsg,
+        diagnosis: diagnoseError(imageResult.status),
         url: imageResult.url,
         http_status: imageResult.status,
       });
@@ -285,17 +315,17 @@ export class TalgilSyncDO implements DurableObject {
       this.env.DB,
       tenantId,
       controllerId,
-      image.Name ?? `Controller ${controllerId}`,
-      image.Online ?? 0,
+      extractControllerName(image) || integration.controller_name,
+      extractOnlineStatus(image),
       "connected",
       JSON.stringify(image).slice(0, 50000),
     );
 
-    // Update sensor catalog from full image
+    // Update sensor catalog from filtered image
     const catalogRows = mapSensorCatalogFromImage(tenantId, controllerId, image);
     const catalogCount = await upsertSensorCatalog(this.env.DB, catalogRows);
 
-    // Capture sensor snapshot from full image
+    // Capture sensor snapshot from filtered image
     const snapshotRows = mapSensorSnapshotFromImage(tenantId, controllerId, image);
     const snapshotCount = await upsertSensorLog(this.env.DB, snapshotRows);
 
@@ -303,19 +333,18 @@ export class TalgilSyncDO implements DurableObject {
       ok: true,
       mode: "sync",
       controller_id: controllerId,
-      controller_online: image.Online ?? 0,
+      controller_online: extractOnlineStatus(image),
       catalog_upserted: catalogCount,
       snapshot_stored: snapshotCount,
-      sensors_in_image: image.Sensors?.length ?? 0,
+      sensors_in_image: extractSensors(image).length,
     });
   }
 
   // ────────────────────────────────────────────────────────
   // MODE: backfill (historical sensor log)
-  // Fetches /sensors/log in day-sized chunks within simulator range.
+  // Fetches per-sensor /sensors/{id}/log in day-sized chunks.
   // This is a SEPARATE process from operational sync.
-  // Accepts optional from/until query params (ms).
-  // Defaults to full simulator date range.
+  // Respects rate-aware max ranges and simulator date range.
   // ────────────────────────────────────────────────────────
   private async handleBackfill(
     tenantId: string,
@@ -338,11 +367,9 @@ export class TalgilSyncDO implements DurableObject {
     const fromMs = parseInt(url.searchParams.get("from") ?? String(SIMULATOR_FROM_MS), 10);
     const untilMs = parseInt(url.searchParams.get("until") ?? String(SIMULATOR_UNTIL_MS), 10);
 
-    // Clamp to simulator range for safety
-    const clampedFrom = Math.max(fromMs, SIMULATOR_FROM_MS);
-    const clampedUntil = Math.min(untilMs, SIMULATOR_UNTIL_MS);
-
-    if (clampedFrom >= clampedUntil) {
+    // Clamp to simulator range for dev safety
+    const clamped = clampToSimulatorRange(fromMs, untilMs);
+    if (!clamped) {
       return Response.json({
         ok: false,
         error: "Invalid or empty date range after clamping to simulator window",
@@ -353,70 +380,86 @@ export class TalgilSyncDO implements DurableObject {
       });
     }
 
-    const chunks: Array<{ from: number; until: number }> = [];
-    let cursor = clampedFrom;
-    while (cursor < clampedUntil) {
-      const chunkEnd = Math.min(cursor + BACKFILL_CHUNK_MS, clampedUntil);
-      chunks.push({ from: cursor, until: chunkEnd });
-      cursor = chunkEnd;
+    // Get sensor list from catalog to know which sensors to backfill
+    const catalogResult = await this.env.DB
+      .prepare(
+        `SELECT sensor_uid FROM talgil_sensor_catalog
+         WHERE tenant_id = ? AND controller_id = ?`,
+      )
+      .bind(tenantId, controllerId)
+      .all<{ sensor_uid: string }>();
+
+    const sensorUids = catalogResult.results?.map((r) => r.sensor_uid) ?? [];
+
+    if (sensorUids.length === 0) {
+      return Response.json({
+        ok: false,
+        error: "No sensors in catalog. Call connect first to populate sensor catalog.",
+      });
     }
 
+    // Chunk the date range into 1-day windows
+    const chunks = chunkDateRange(clamped.from, clamped.until, "none");
+
     let totalRows = 0;
-    const chunkResults: Array<{
-      from: string;
-      until: string;
-      ok: boolean;
-      rows: number;
-      url: string;
-      error?: string;
+    const sensorResults: Array<{
+      sensor_uid: string;
+      chunks_processed: number;
+      rows_stored: number;
+      errors: string[];
     }> = [];
 
-    for (const chunk of chunks) {
-      const result = await talgilGetSensorLog(
-        baseUrl,
-        apiKey,
-        controllerId,
-        chunk.from,
-        chunk.until,
-      );
+    // Process each sensor sequentially (to respect minimum intervals)
+    for (const sensorUid of sensorUids) {
+      let sensorRows = 0;
+      const errors: string[] = [];
 
-      await writeAudit(this.env.DB, {
-        tenant_id: tenantId,
-        action: "backfill.sensor_log",
-        detail: `GET /targets/${controllerId}/sensors/log chunk`,
-        outcome: result.ok ? "success" : "failure",
-        url: result.url,
-        http_status: result.status,
-        row_count: Array.isArray(result.data) ? result.data.length : 0,
-        error_message: result.error,
-      });
+      for (const chunk of chunks) {
+        const result = await talgilGetSensorLog(
+          baseUrl,
+          apiKey,
+          controllerId,
+          sensorUid,
+          chunk.from,
+          chunk.until,
+        );
 
-      if (result.ok && Array.isArray(result.data)) {
-        const logRows = mapSensorLogRows(tenantId, controllerId, result.data);
-        const inserted = await upsertSensorLog(this.env.DB, logRows);
-        totalRows += inserted;
-        chunkResults.push({
-          from: new Date(chunk.from).toISOString(),
-          until: new Date(chunk.until).toISOString(),
-          ok: true,
-          rows: inserted,
+        await writeAudit(this.env.DB, {
+          tenant_id: tenantId,
+          action: "backfill.sensor_log",
+          detail: `GET /targets/${controllerId}/sensors/${sensorUid}/log chunk`,
+          outcome: result.ok ? "success" : "failure",
           url: result.url,
+          http_status: result.status,
+          row_count: Array.isArray(result.data) ? result.data.length : 0,
+          error_message: result.error,
         });
-      } else {
-        chunkResults.push({
-          from: new Date(chunk.from).toISOString(),
-          until: new Date(chunk.until).toISOString(),
-          ok: false,
-          rows: 0,
-          url: result.url,
-          error: result.error,
-        });
+
+        if (result.ok && Array.isArray(result.data)) {
+          const logRows = mapSensorLogRows(tenantId, controllerId, sensorUid, result.data);
+          const inserted = await upsertSensorLog(this.env.DB, logRows);
+          sensorRows += inserted;
+        } else if (result.error) {
+          errors.push(`${new Date(chunk.from).toISOString()}: ${result.error}`);
+        }
+
+        // Respect 15-second minimum interval between log requests
+        if (chunks.indexOf(chunk) < chunks.length - 1) {
+          await new Promise((resolve) => setTimeout(resolve, MIN_INTERVAL.db_log + 1000));
+        }
       }
 
-      // Respect 15-second minimum interval between log requests
-      // (Talgil API behavior guidelines v8)
-      if (chunks.indexOf(chunk) < chunks.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, 16_000));
+      totalRows += sensorRows;
+      sensorResults.push({
+        sensor_uid: sensorUid,
+        chunks_processed: chunks.length,
+        rows_stored: sensorRows,
+        errors,
+      });
+
+      // Small delay between sensors too
+      if (sensorUids.indexOf(sensorUid) < sensorUids.length - 1) {
+        await new Promise((resolve) => setTimeout(resolve, MIN_INTERVAL.db_log + 1000));
       }
     }
 
@@ -425,19 +468,20 @@ export class TalgilSyncDO implements DurableObject {
       mode: "backfill",
       controller_id: controllerId,
       date_range: {
-        from: new Date(clampedFrom).toISOString(),
-        until: new Date(clampedUntil).toISOString(),
+        from: new Date(clamped.from).toISOString(),
+        until: new Date(clamped.until).toISOString(),
       },
-      chunks_processed: chunkResults.length,
+      sensors_processed: sensorUids.length,
+      chunks_per_sensor: chunks.length,
       total_rows_stored: totalRows,
-      chunk_details: chunkResults,
+      sensor_details: sensorResults,
     });
   }
 
   // ────────────────────────────────────────────────────────
   // MODE: test_eventlog (diagnostic)
   // Single request to /eventlog to test permissions.
-  // Uses middle of simulator date range.
+  // API v1.47: returns array of {time, context, subcontext, message}
   // ────────────────────────────────────────────────────────
   private async handleTestEventLog(tenantId: string): Promise<Response> {
     const baseUrl = this.env.TALGIL_BASE_URL;
@@ -465,7 +509,7 @@ export class TalgilSyncDO implements DurableObject {
     await writeAudit(this.env.DB, {
       tenant_id: tenantId,
       action: "test.eventlog",
-      detail: `Diagnostic: GET /targets/${controllerId}/eventlog`,
+      detail: `Diagnostic: GET /targets/${controllerId}/eventlog?from=${fromMs}&until=${untilMs}`,
       outcome: result.ok ? "success" : "failure",
       url: result.url,
       http_status: result.status,
@@ -484,6 +528,10 @@ export class TalgilSyncDO implements DurableObject {
         entries_received: result.data.length,
         rows_stored: inserted,
         sample: result.data.slice(0, 3),
+        date_range: {
+          from: new Date(fromMs).toISOString(),
+          until: new Date(untilMs).toISOString(),
+        },
       });
     }
 
@@ -494,18 +542,19 @@ export class TalgilSyncDO implements DurableObject {
       http_status: result.status,
       error: result.error,
       entries_received: Array.isArray(result.data) ? result.data.length : 0,
-      diagnosis:
-        result.status === 403
-          ? "HTTP 403: Dev account may lack eventlog permission. Confirm with Kosta."
-          : result.status === 0
-            ? "Network error: Request may not have reached Talgil server."
-            : `Unexpected status ${result.status}. Check URL construction.`,
+      diagnosis: diagnoseError(result.status),
+      date_range: {
+        from: new Date(fromMs).toISOString(),
+        until: new Date(untilMs).toISOString(),
+      },
+      note: "If 403, permission or access scope may be limiting this endpoint. Confirm with Kosta.",
     });
   }
 
   // ────────────────────────────────────────────────────────
   // MODE: test_wc (diagnostic)
   // Single request to /wc/valves to test permissions.
+  // API v1.47: returns object keyed by valve uid → array of {from, until, value, valuePerArea}
   // ────────────────────────────────────────────────────────
   private async handleTestWaterConsumption(
     tenantId: string,
@@ -535,26 +584,34 @@ export class TalgilSyncDO implements DurableObject {
     await writeAudit(this.env.DB, {
       tenant_id: tenantId,
       action: "test.wc",
-      detail: `Diagnostic: GET /targets/${controllerId}/wc/valves`,
+      detail: `Diagnostic: GET /targets/${controllerId}/wc/valves?from=${fromMs}&until=${untilMs}&rate=daily`,
       outcome: result.ok ? "success" : "failure",
       url: result.url,
       http_status: result.status,
-      row_count: Array.isArray(result.data) ? result.data.length : 0,
       error_message: result.error,
     });
 
-    if (result.ok && Array.isArray(result.data) && result.data.length > 0) {
-      const wcRows = mapValveWcRows(tenantId, controllerId, result.data, "daily");
-      const inserted = await upsertValveWc(this.env.DB, wcRows);
-      return Response.json({
-        ok: true,
-        endpoint: "wc/valves",
-        url: result.url,
-        http_status: result.status,
-        entries_received: result.data.length,
-        rows_stored: inserted,
-        sample: result.data.slice(0, 3),
-      });
+    if (result.ok && result.data && typeof result.data === "object") {
+      const wcResponse = result.data as TalgilWcResponse;
+      const valveCount = Object.keys(wcResponse).length;
+
+      if (valveCount > 0) {
+        const wcRows = mapValveWcRows(tenantId, controllerId, wcResponse, "daily");
+        const inserted = await upsertValveWc(this.env.DB, wcRows);
+        return Response.json({
+          ok: true,
+          endpoint: "wc/valves",
+          url: result.url,
+          http_status: result.status,
+          valves_received: valveCount,
+          buckets_stored: inserted,
+          sample_valves: Object.keys(wcResponse).slice(0, 5),
+          date_range: {
+            from: new Date(fromMs).toISOString(),
+            until: new Date(untilMs).toISOString(),
+          },
+        });
+      }
     }
 
     return Response.json({
@@ -563,13 +620,12 @@ export class TalgilSyncDO implements DurableObject {
       url: result.url,
       http_status: result.status,
       error: result.error,
-      entries_received: Array.isArray(result.data) ? result.data.length : 0,
-      diagnosis:
-        result.status === 403
-          ? "HTTP 403: Dev account may lack water consumption permission. Confirm with Kosta."
-          : result.status === 0
-            ? "Network error: Request may not have reached Talgil server."
-            : `Unexpected status ${result.status}. Check URL construction.`,
+      diagnosis: diagnoseError(result.status),
+      date_range: {
+        from: new Date(fromMs).toISOString(),
+        until: new Date(untilMs).toISOString(),
+      },
+      note: "If 403, permission or access scope may be limiting this endpoint. Confirm with Kosta.",
     });
   }
 }
