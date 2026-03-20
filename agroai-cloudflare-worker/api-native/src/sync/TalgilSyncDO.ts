@@ -125,7 +125,9 @@ export class TalgilSyncDO implements DurableObject {
       }
     } catch (err) {
       const msg = (err as Error).message ?? String(err);
-      await setIntegrationError(this.env.DB, tenantId, msg);
+      try {
+        await setIntegrationError(this.env.DB, tenantId, msg);
+      } catch { /* best-effort */ }
       await writeAudit(this.env.DB, {
         tenant_id: tenantId,
         action: `sync.${mode}`,
@@ -133,7 +135,7 @@ export class TalgilSyncDO implements DurableObject {
         outcome: "failure",
         error_message: msg,
       });
-      return Response.json({ error: msg }, { status: 500 });
+      return Response.json({ error: msg, code_version: "v2.1.0-fk-fix" }, { status: 500 });
     }
   }
 
@@ -144,7 +146,15 @@ export class TalgilSyncDO implements DurableObject {
   // ────────────────────────────────────────────────────────
   private async handleConnect(tenantId: string): Promise<Response> {
     // Ensure tenant row exists (FK target for integrations_talgil)
-    await ensureTenant(this.env.DB, tenantId);
+    try {
+      await ensureTenant(this.env.DB, tenantId);
+    } catch (tenantErr) {
+      const msg = (tenantErr as Error).message ?? String(tenantErr);
+      return Response.json({
+        error: `ensureTenant failed: ${msg}`,
+        code_version: "v2.1.0-fk-fix",
+      }, { status: 500 });
+    }
 
     const baseUrl = this.env.TALGIL_BASE_URL;
     const apiKey = this.env.TALGIL_API_KEY;
