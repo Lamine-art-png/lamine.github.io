@@ -159,8 +159,8 @@ export interface TalgilApiResult<T> {
 
 // ── Simulator boundaries ────────────────────────────────
 
-export const SIMULATOR_FROM_MS = 1740182400000; // 2026-02-22T00:00:00Z
-export const SIMULATOR_UNTIL_MS = 1741651199000; // 2026-03-10T23:59:59Z
+export const SIMULATOR_FROM_MS = 1771718400000; // 2026-02-22T00:00:00Z
+export const SIMULATOR_UNTIL_MS = 1773187199000; // 2026-03-10T23:59:59Z
 
 // ── Rate-aware maximum DB query ranges (behavior guidelines v8) ───
 
