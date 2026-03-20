@@ -27,6 +27,7 @@
 export interface TalgilTarget {
   serial?: number;
   ID?: number;
+  id?: number;
   name?: string;
   Name?: string;
   affiliate?: string;

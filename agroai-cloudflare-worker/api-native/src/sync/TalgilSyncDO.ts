@@ -123,7 +123,7 @@ export class TalgilSyncDO implements DurableObject {
           );
       }
     } catch (err) {
-      const msg = (err as Error).message;
+      const msg = (err as Error).message ?? String(err);
       await setIntegrationError(this.env.DB, tenantId, msg);
       await writeAudit(this.env.DB, {
         tenant_id: tenantId,
@@ -173,8 +173,16 @@ export class TalgilSyncDO implements DurableObject {
 
     // Use the first target (simulator controller 6115 in dev)
     const target = targetsResult.data[0];
-    const controllerId = target.serial ?? target.ID ?? 0;
+    const controllerId = target.serial ?? target.ID ?? target.id ?? 0;
     const controllerName = extractControllerName(target);
+
+    // Log raw target shape for debugging field name mismatches
+    await writeAudit(this.env.DB, {
+      tenant_id: tenantId,
+      action: "connect.target_debug",
+      detail: `Raw target keys: ${Object.keys(target).join(", ")}; controllerId=${controllerId}`,
+      outcome: controllerId ? "success" : "failure",
+    });
 
     // Step 2: Fetch FULL image (unfiltered) to get complete sensor metadata
     // Connect uses unfiltered because we need all metadata fields for catalog
