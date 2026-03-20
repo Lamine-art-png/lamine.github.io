@@ -324,14 +324,7 @@ async function handleSensorsHistory(
   params.push(limit);
 
   const stmt = env.DB.prepare(query);
-  // D1 bind requires positional args
-  const bound = params.length === 2
-    ? stmt.bind(params[0], params[1])
-    : params.length === 3
-      ? stmt.bind(params[0], params[1], params[2])
-      : params.length === 4
-        ? stmt.bind(params[0], params[1], params[2], params[3])
-        : stmt.bind(params[0], params[1], params[2], params[3], params[4]);
+  const bound = stmt.bind(...params);
 
   const rows = await bound.all();
 
@@ -395,9 +388,7 @@ async function handleWaterConsumption(
   params.push(limit);
 
   const stmt = env.DB.prepare(query);
-  const bound = params.length === 2
-    ? stmt.bind(params[0], params[1])
-    : stmt.bind(params[0], params[1], params[2]);
+  const bound = stmt.bind(...params);
 
   const rows = await bound.all();
 
