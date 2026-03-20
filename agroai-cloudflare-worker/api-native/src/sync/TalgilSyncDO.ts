@@ -211,9 +211,17 @@ export class TalgilSyncDO implements DurableObject {
     }
 
     const image = imageResult.data;
-    const controllerOnline = extractOnlineStatus(image);
 
-    // Step 3: Populate integration row
+    // Detect Talgil logical errors returned as HTTP 200 with { rc, message }
+    // rc:1101 = "Controller is not currently connected to server"
+    const rc = (image as Record<string, unknown>).rc as number | undefined;
+    const rcMessage = (image as Record<string, unknown>).message as string | undefined;
+    const controllerOffline = rc !== undefined && rc !== 0;
+
+    const controllerOnline = controllerOffline ? 0 : extractOnlineStatus(image);
+
+    // Step 3: Populate integration row — mark connected even if controller offline
+    // (we verified the API key + controller exist; sensors will populate on next sync when online)
     await upsertIntegration(
       this.env.DB,
       tenantId,
@@ -223,6 +231,30 @@ export class TalgilSyncDO implements DurableObject {
       "connected",
       JSON.stringify(image).slice(0, 50000), // cap stored JSON
     );
+
+    if (controllerOffline) {
+      await writeAudit(this.env.DB, {
+        tenant_id: tenantId,
+        action: "connect.controller_offline",
+        detail: `Controller ${controllerId} offline (rc=${rc}): ${rcMessage}. Sensors will be populated on next sync when controller comes online.`,
+        outcome: "skipped",
+      });
+
+      return Response.json({
+        ok: true,
+        controller_id: controllerId,
+        controller_name: controllerName,
+        controller_online: 0,
+        controller_offline_reason: rcMessage,
+        controller_offline_rc: rc,
+        sensor_catalog_count: 0,
+        sensor_snapshot_count: 0,
+        sensors_in_image: 0,
+        sensor_uids: [],
+        state: null,
+        note: "Controller is offline. Integration is connected — sensors will be populated automatically on the next sync when the controller comes online.",
+      });
+    }
 
     // Step 4: Populate sensor catalog FROM FULL IMAGE (not separate /sensors)
     const catalogRows = mapSensorCatalogFromImage(tenantId, controllerId, image);
@@ -318,16 +350,40 @@ export class TalgilSyncDO implements DurableObject {
 
     const image = imageResult.data;
 
+    // Detect Talgil logical errors (e.g. rc:1101 = controller offline)
+    const rc = (image as Record<string, unknown>).rc as number | undefined;
+    const rcMessage = (image as Record<string, unknown>).message as string | undefined;
+    const controllerOffline = rc !== undefined && rc !== 0;
+
     // Update integration row (status, online, timestamp)
     await upsertIntegration(
       this.env.DB,
       tenantId,
       controllerId,
-      extractControllerName(image) || integration.controller_name,
-      extractOnlineStatus(image),
+      controllerOffline ? integration.controller_name : (extractControllerName(image) || integration.controller_name),
+      controllerOffline ? 0 : extractOnlineStatus(image),
       "connected",
       JSON.stringify(image).slice(0, 50000),
     );
+
+    if (controllerOffline) {
+      await writeAudit(this.env.DB, {
+        tenant_id: tenantId,
+        action: "sync.controller_offline",
+        detail: `Controller ${controllerId} offline (rc=${rc}): ${rcMessage}`,
+        outcome: "skipped",
+      });
+
+      return Response.json({
+        ok: true,
+        controller_id: controllerId,
+        controller_online: 0,
+        controller_offline_reason: rcMessage,
+        sensor_catalog_count: 0,
+        sensor_snapshot_count: 0,
+        note: "Controller offline — sync skipped. Will retry on next cycle.",
+      });
+    }
 
     // Update sensor catalog from filtered image
     const catalogRows = mapSensorCatalogFromImage(tenantId, controllerId, image);
