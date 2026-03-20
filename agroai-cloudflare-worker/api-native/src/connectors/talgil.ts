@@ -200,39 +200,62 @@ async function talgilFetch<T>(
   baseUrl: string,
   path: string,
   apiKey: string,
+  maxRetries: number = 3,
 ): Promise<TalgilApiResult<T>> {
   const url = `${baseUrl}${path}`;
-  try {
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        "TLG-API-Key": apiKey,
-        Accept: "application/json",
-      },
-    });
+  const backoffMs = [2000, 4000, 8000];
 
-    if (!res.ok) {
-      const body = await res.text().catch(() => "");
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: "GET",
+        headers: {
+          "TLG-API-Key": apiKey,
+          Accept: "application/json",
+        },
+      });
+
+      // Retry on 429 with exponential backoff
+      if (res.status === 429 && attempt < maxRetries) {
+        const retryAfter = res.headers.get("Retry-After");
+        const waitMs = retryAfter
+          ? Math.min(parseInt(retryAfter, 10) * 1000, 16000)
+          : backoffMs[attempt] ?? 8000;
+        await new Promise((r) => setTimeout(r, waitMs));
+        continue;
+      }
+
+      if (!res.ok) {
+        const body = await res.text().catch(() => "");
+        return {
+          ok: false,
+          status: res.status,
+          data: null,
+          url,
+          error: `HTTP ${res.status}: ${body.slice(0, 500)}`,
+        };
+      }
+
+      const data = (await res.json()) as T;
+      return { ok: true, status: res.status, data, url };
+    } catch (err) {
+      // Retry network errors too
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, backoffMs[attempt] ?? 8000));
+        continue;
+      }
       return {
         ok: false,
-        status: res.status,
+        status: 0,
         data: null,
         url,
-        error: `HTTP ${res.status}: ${body.slice(0, 500)}`,
+        error: `Network error: ${(err as Error).message}`,
       };
     }
-
-    const data = (await res.json()) as T;
-    return { ok: true, status: res.status, data, url };
-  } catch (err) {
-    return {
-      ok: false,
-      status: 0,
-      data: null,
-      url,
-      error: `Network error: ${(err as Error).message}`,
-    };
   }
+
+  // Should not reach here, but just in case
+  return { ok: false, status: 0, data: null, url, error: "Max retries exhausted" };
 }
 
 // ── Public API functions ────────────────────────────────
