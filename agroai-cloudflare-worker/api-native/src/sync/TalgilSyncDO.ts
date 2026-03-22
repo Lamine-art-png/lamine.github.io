@@ -187,7 +187,7 @@ export class TalgilSyncDO implements DurableObject {
 
     // Use the first target (simulator controller 6115 in dev)
     const target = targetsResult.data[0];
-    const controllerId = target.serial ?? target.ID ?? target.id ?? 0;
+    const controllerId = Math.floor(Number(target.serial ?? target.ID ?? target.id ?? 0));
     const controllerName = extractControllerName(target);
 
     // Log raw target shape for debugging field name mismatches

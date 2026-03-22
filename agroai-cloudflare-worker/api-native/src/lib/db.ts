@@ -102,10 +102,16 @@ export async function getIntegration(
   db: D1Database,
   tenantId: string,
 ): Promise<IntegrationRow | null> {
-  return db
+  const row = await db
     .prepare(`SELECT * FROM integrations_talgil WHERE tenant_id = ?`)
     .bind(tenantId)
     .first<IntegrationRow>();
+
+  // D1 may return controller_id as a float string ("6115.0") — normalize to integer
+  if (row) {
+    row.controller_id = Math.floor(Number(row.controller_id));
+  }
+  return row;
 }
 
 // ── talgil_sensor_catalog ───────────────────────────────
