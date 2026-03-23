@@ -34,7 +34,6 @@ import {
   SIMULATOR_FROM_MS,
   SIMULATOR_UNTIL_MS,
   SYNC_FILTER,
-  MIN_INTERVAL,
   clampToSimulatorRange,
   chunkDateRange,
   diagnoseError,
@@ -135,7 +134,7 @@ export class TalgilSyncDO implements DurableObject {
         outcome: "failure",
         error_message: msg,
       });
-      return Response.json({ error: msg, code_version: "v2.1.0-fk-fix" }, { status: 500 });
+      return Response.json({ error: msg, code_version: "v2.2.0-rate-fix" }, { status: 500 });
     }
   }
 
@@ -143,6 +142,8 @@ export class TalgilSyncDO implements DurableObject {
   // MODE: connect
   // Called once. Discovers controller, fetches FULL (unfiltered) image
   // to get complete sensor metadata, populates integration + catalog.
+  // IDEMPOTENT: if already connected, skips /mytargets and reuses
+  // the stored controller ID to avoid unnecessary API calls.
   // ────────────────────────────────────────────────────────
   private async handleConnect(tenantId: string): Promise<Response> {
     // Ensure tenant row exists (FK target for integrations_talgil)
@@ -152,51 +153,71 @@ export class TalgilSyncDO implements DurableObject {
       const msg = (tenantErr as Error).message ?? String(tenantErr);
       return Response.json({
         error: `ensureTenant failed: ${msg}`,
-        code_version: "v2.1.0-fk-fix",
+        code_version: "v2.2.0-rate-fix",
       }, { status: 500 });
     }
 
     const baseUrl = this.env.TALGIL_BASE_URL;
     const apiKey = this.env.TALGIL_API_KEY;
 
-    // Step 1: Discover controller via /mytargets
-    const targetsResult = await talgilListTargets(baseUrl, apiKey);
+    let controllerId: number;
+    let controllerName: string;
 
-    await writeAudit(this.env.DB, {
-      tenant_id: tenantId,
-      action: "connect.list_targets",
-      detail: "GET /mytargets to discover controller ID",
-      outcome: targetsResult.ok ? "success" : "failure",
-      url: targetsResult.url,
-      http_status: targetsResult.status,
-      row_count: targetsResult.data?.length ?? 0,
-      error_message: targetsResult.error,
-    });
+    // Check if already connected — skip /mytargets if so
+    const existing = await getIntegration(this.env.DB, tenantId);
+    if (existing && existing.controller_id > 0) {
+      // Already discovered — reuse stored controller ID
+      controllerId = existing.controller_id;
+      controllerName = existing.controller_name;
 
-    if (!targetsResult.ok || !targetsResult.data?.length) {
-      const errMsg = targetsResult.error ?? "No targets returned from /mytargets";
-      await setIntegrationError(this.env.DB, tenantId, errMsg);
-      return Response.json({
-        ok: false,
-        error: errMsg,
-        diagnosis: diagnoseError(targetsResult.status),
+      await writeAudit(this.env.DB, {
+        tenant_id: tenantId,
+        action: "connect.skip_mytargets",
+        detail: `Already connected to controller ${controllerId} — skipping /mytargets`,
+        outcome: "skipped",
+      });
+    } else {
+      // Step 1: Discover controller via /mytargets (first time only)
+      const targetsResult = await talgilListTargets(baseUrl, apiKey);
+
+      await writeAudit(this.env.DB, {
+        tenant_id: tenantId,
+        action: "connect.list_targets",
+        detail: "GET /mytargets to discover controller ID",
+        outcome: targetsResult.ok ? "success" : "failure",
         url: targetsResult.url,
         http_status: targetsResult.status,
+        row_count: targetsResult.data?.length ?? 0,
+        error_message: targetsResult.error,
       });
+
+      if (!targetsResult.ok || !targetsResult.data?.length) {
+        const errMsg = targetsResult.error ?? "No targets returned from /mytargets";
+        await setIntegrationError(this.env.DB, tenantId, errMsg);
+        return Response.json({
+          ok: false,
+          error: errMsg,
+          diagnosis: diagnoseError(targetsResult.status),
+          url: targetsResult.url,
+          http_status: targetsResult.status,
+        });
+      }
+
+      // Use the first target (simulator controller 6115 in dev)
+      const target = targetsResult.data[0];
+      controllerId = Math.floor(Number(target.serial ?? target.ID ?? target.id ?? 0));
+      controllerName = extractControllerName(target);
+
+      // Log raw target shape for debugging field name mismatches
+      await writeAudit(this.env.DB, {
+        tenant_id: tenantId,
+        action: "connect.target_debug",
+        detail: `Raw target keys: ${Object.keys(target).join(", ")}; controllerId=${controllerId}`,
+        outcome: controllerId ? "success" : "failure",
+      });
+
+      // Rate limiting between API calls is enforced automatically by talgilFetch
     }
-
-    // Use the first target (simulator controller 6115 in dev)
-    const target = targetsResult.data[0];
-    const controllerId = Math.floor(Number(target.serial ?? target.ID ?? target.id ?? 0));
-    const controllerName = extractControllerName(target);
-
-    // Log raw target shape for debugging field name mismatches
-    await writeAudit(this.env.DB, {
-      tenant_id: tenantId,
-      action: "connect.target_debug",
-      detail: `Raw target keys: ${Object.keys(target).join(", ")}; controllerId=${controllerId}`,
-      outcome: controllerId ? "success" : "failure",
-    });
 
     // Step 2: Fetch FULL image (unfiltered) to get complete sensor metadata
     // Connect uses unfiltered because we need all metadata fields for catalog
@@ -521,10 +542,7 @@ export class TalgilSyncDO implements DurableObject {
           errors.push(`${new Date(chunk.from).toISOString()}: ${result.error}`);
         }
 
-        // Respect 15-second minimum interval between log requests
-        if (chunks.indexOf(chunk) < chunks.length - 1) {
-          await new Promise((resolve) => setTimeout(resolve, MIN_INTERVAL.db_log + 1000));
-        }
+        // Rate limiting between log requests is enforced automatically by talgilFetch (16s gap)
       }
 
       totalRows += sensorRows;
@@ -535,10 +553,7 @@ export class TalgilSyncDO implements DurableObject {
         errors,
       });
 
-      // Small delay between sensors too
-      if (sensorUids.indexOf(sensorUid) < sensorUids.length - 1) {
-        await new Promise((resolve) => setTimeout(resolve, MIN_INTERVAL.db_log + 1000));
-      }
+      // Rate limiting between sensors is enforced automatically by talgilFetch
     }
 
     return Response.json({

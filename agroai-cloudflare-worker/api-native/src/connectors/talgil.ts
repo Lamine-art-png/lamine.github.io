@@ -194,6 +194,25 @@ export const MIN_INTERVAL = {
 export const SYNC_FILTER = "sensors|uid|name|type|units|value|updateTime|state|online";
 export const FULL_FILTER = "info|state|sensors|lines|waterMeters|valves|programs|uid|name|type|units|value|updateTime|online|area|flow|acc|accTime";
 
+// ── Rate limiter ────────────────────────────────────────
+// Enforces minimum spacing between consecutive API calls to Talgil.
+// The API returns "not allowed" if requests come too quickly.
+
+let lastRequestTime = 0;
+
+/**
+ * Wait until at least `minGapMs` has elapsed since the last request.
+ * Default gap: 2 seconds (live GET minimum is 1s, with safety margin).
+ */
+async function enforceRateLimit(minGapMs: number = 2000): Promise<void> {
+  const now = Date.now();
+  const elapsed = now - lastRequestTime;
+  if (elapsed < minGapMs) {
+    await new Promise((r) => setTimeout(r, minGapMs - elapsed));
+  }
+  lastRequestTime = Date.now();
+}
+
 // ── HTTP helper ─────────────────────────────────────────
 
 async function talgilFetch<T>(
@@ -201,9 +220,13 @@ async function talgilFetch<T>(
   path: string,
   apiKey: string,
   maxRetries: number = 3,
+  minGapMs: number = 2000,
 ): Promise<TalgilApiResult<T>> {
   const url = `${baseUrl}${path}`;
   const backoffMs = [2000, 4000, 8000];
+
+  // Enforce minimum spacing between requests
+  await enforceRateLimit(minGapMs);
 
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
@@ -222,6 +245,7 @@ async function talgilFetch<T>(
           ? Math.min(parseInt(retryAfter, 10) * 1000, 16000)
           : backoffMs[attempt] ?? 8000;
         await new Promise((r) => setTimeout(r, waitMs));
+        lastRequestTime = Date.now();
         continue;
       }
 
@@ -330,6 +354,8 @@ export function talgilGetSensorLog(
     baseUrl,
     `/targets/${controllerId}/sensors/${sensorId}/log?from=${fromMs}&until=${untilMs}&otype=${otype}`,
     apiKey,
+    3,
+    MIN_INTERVAL.db_log + 1000, // 16s between log requests
   );
 }
 
@@ -352,6 +378,8 @@ export function talgilGetEventLog(
     baseUrl,
     `/targets/${controllerId}/eventlog?from=${fromMs}&until=${untilMs}`,
     apiKey,
+    3,
+    MIN_INTERVAL.db_event_log + 1000, // 16s between event log requests
   );
 }
 
@@ -374,7 +402,7 @@ export function talgilGetWaterConsumption(
 ): Promise<TalgilApiResult<TalgilWcResponse>> {
   let path = `/targets/${controllerId}/wc/valves?from=${fromMs}&until=${untilMs}&rate=${rate}`;
   if (vids) path += `&vids=${encodeURIComponent(vids)}`;
-  return talgilFetch<TalgilWcResponse>(baseUrl, path, apiKey);
+  return talgilFetch<TalgilWcResponse>(baseUrl, path, apiKey, 3, MIN_INTERVAL.db_wc + 1000); // 61s between wc requests
 }
 
 // ── Helpers ─────────────────────────────────────────────
