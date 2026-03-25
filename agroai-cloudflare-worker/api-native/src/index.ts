@@ -140,11 +140,11 @@ async function routeToSyncDO(
   doUrl.searchParams.set("tenantId", tenantId);
   doUrl.searchParams.set("mode", mode);
 
-  // Forward from/until params for backfill
-  const from = requestUrl.searchParams.get("from");
-  const until = requestUrl.searchParams.get("until");
-  if (from) doUrl.searchParams.set("from", from);
-  if (until) doUrl.searchParams.set("until", until);
+  // Forward backfill params to DO
+  for (const key of ["from", "until", "batch", "offset"]) {
+    const val = requestUrl.searchParams.get(key);
+    if (val) doUrl.searchParams.set(key, val);
+  }
 
   const doId = env.TALGIL_SYNC.idFromName(tenantId);
   const doStub = env.TALGIL_SYNC.get(doId);
