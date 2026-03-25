@@ -336,23 +336,27 @@ export function talgilGetFilteredImage(
 }
 
 /**
- * GET /targets/{id}/sensors/{sensorId}/log?from={ms}&until={ms}
+ * GET /targets/{id}/sensors/{numericId}/log?from={ms}&until={ms}
  * Per-sensor historical log — BATCH PROCESS ONLY.
  * Must respect 15-second minimum interval between calls.
  * Must stay within simulator date range for dev environment.
- * Note: otype parameter removed — the API infers the object type from the sensor UID.
+ *
+ * IMPORTANT: The API expects the numeric sensor index (e.g. 33),
+ * NOT the full UID (e.g. 31:33). The UID format is {objectType}:{index}.
  */
 export function talgilGetSensorLog(
   baseUrl: string,
   apiKey: string,
   controllerId: number,
-  sensorId: string,
+  sensorUid: string,
   fromMs: number,
   untilMs: number,
 ): Promise<TalgilApiResult<TalgilSensorLogEntry[]>> {
+  // Extract numeric index from UID "31:33" → "33"
+  const numericId = sensorUid.includes(":") ? sensorUid.split(":")[1] : sensorUid;
   return talgilFetch<TalgilSensorLogEntry[]>(
     baseUrl,
-    `/targets/${controllerId}/sensors/${sensorId}/log?from=${fromMs}&until=${untilMs}`,
+    `/targets/${controllerId}/sensors/${numericId}/log?from=${fromMs}&until=${untilMs}`,
     apiKey,
     3,
     MIN_INTERVAL.db_log + 1000, // 16s between log requests
