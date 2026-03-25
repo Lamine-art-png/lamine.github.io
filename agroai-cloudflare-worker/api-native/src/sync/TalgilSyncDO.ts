@@ -68,6 +68,18 @@ import {
 
 import { writeAudit } from "../lib/audit";
 
+// ── Helpers ─────────────────────────────────────────────
+
+/** Parse a date query param: accepts epoch-ms number or ISO/YYYY-MM-DD string */
+function parseDateParam(raw: string | null, fallback: number): number {
+  if (raw === null) return fallback;
+  // If it looks like a pure number, treat as epoch-ms
+  if (/^\d{10,}$/.test(raw)) return parseInt(raw, 10);
+  // Otherwise parse as date string
+  const ms = new Date(raw).getTime();
+  return Number.isNaN(ms) ? fallback : ms;
+}
+
 // ── Env type ────────────────────────────────────────────
 
 export interface Env {
@@ -463,8 +475,9 @@ export class TalgilSyncDO implements DurableObject {
     const controllerId = integration.controller_id;
 
     // Default to simulator date range; allow override
-    const fromMs = parseInt(url.searchParams.get("from") ?? String(SIMULATOR_FROM_MS), 10);
-    const untilMs = parseInt(url.searchParams.get("until") ?? String(SIMULATOR_UNTIL_MS), 10);
+    // Accept either epoch-ms numbers or ISO/YYYY-MM-DD date strings
+    const fromMs = parseDateParam(url.searchParams.get("from"), SIMULATOR_FROM_MS);
+    const untilMs = parseDateParam(url.searchParams.get("until"), SIMULATOR_UNTIL_MS);
 
     // Clamp to simulator range for dev safety
     const clamped = clampToSimulatorRange(fromMs, untilMs);
