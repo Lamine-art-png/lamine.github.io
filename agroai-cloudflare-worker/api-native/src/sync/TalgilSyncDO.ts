@@ -513,6 +513,14 @@ export class TalgilSyncDO implements DurableObject {
     // Chunk the date range into 1-day windows
     const chunks = chunkDateRange(clamped.from, clamped.until, "none");
 
+    // Batch size: limit sensors per call to avoid Cloudflare Worker timeout.
+    // With 16s gaps between log requests, 1 sensor × 1 chunk ≈ 16s.
+    // Default batch=3 keeps us well under the 30s DO timeout.
+    const batchSize = parseInt(url.searchParams.get("batch") ?? "3", 10);
+    const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
+    const batchedUids = sensorUids.slice(offset, offset + batchSize);
+    const remaining = sensorUids.length - offset - batchedUids.length;
+
     let totalRows = 0;
     const sensorResults: Array<{
       sensor_uid: string;
@@ -522,7 +530,7 @@ export class TalgilSyncDO implements DurableObject {
     }> = [];
 
     // Process each sensor sequentially (to respect minimum intervals)
-    for (const sensorUid of sensorUids) {
+    for (const sensorUid of batchedUids) {
       let sensorRows = 0;
       const errors: string[] = [];
 
@@ -577,7 +585,14 @@ export class TalgilSyncDO implements DurableObject {
         from: new Date(clamped.from).toISOString(),
         until: new Date(clamped.until).toISOString(),
       },
-      sensors_processed: sensorUids.length,
+      batch: {
+        offset,
+        batch_size: batchSize,
+        sensors_in_batch: batchedUids.length,
+        total_sensors: sensorUids.length,
+        remaining,
+        next_offset: remaining > 0 ? offset + batchSize : null,
+      },
       chunks_per_sensor: chunks.length,
       total_rows_stored: totalRows,
       sensor_details: sensorResults,
