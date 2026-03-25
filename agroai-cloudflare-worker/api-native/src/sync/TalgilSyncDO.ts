@@ -555,10 +555,19 @@ export class TalgilSyncDO implements DurableObject {
           error_message: result.error,
         });
 
-        if (result.ok && Array.isArray(result.data)) {
-          const logRows = mapSensorLogRows(tenantId, controllerId, sensorUid, result.data);
-          const inserted = await upsertSensorLog(this.env.DB, logRows);
-          sensorRows += inserted;
+        if (result.ok && result.data != null) {
+          // The API may return an array directly or an object with entries
+          const entries = Array.isArray(result.data) ? result.data : [];
+          if (entries.length > 0) {
+            const logRows = mapSensorLogRows(tenantId, controllerId, sensorUid, entries);
+            const inserted = await upsertSensorLog(this.env.DB, logRows);
+            sensorRows += inserted;
+          }
+          // Store raw shape for debugging (first chunk only, truncated)
+          if (entries.length === 0 && errors.length === 0) {
+            const raw = JSON.stringify(result.data).slice(0, 200);
+            errors.push(`empty_response: ${raw}`);
+          }
         } else if (result.error) {
           errors.push(`${new Date(chunk.from).toISOString()}: ${result.error}`);
         }
