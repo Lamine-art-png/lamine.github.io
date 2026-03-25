@@ -336,14 +336,21 @@ export function talgilGetFilteredImage(
 }
 
 /**
- * GET /targets/{id}/sensors/{numericId}/log?from={ms}&until={ms}
+ * GET /targets/{id}/sensors/{numericId}/log?from={ms}&until={ms}&otype={n}
  * Per-sensor historical log — BATCH PROCESS ONLY.
  * Must respect 15-second minimum interval between calls.
  * Must stay within simulator date range for dev environment.
  *
- * IMPORTANT: The API expects the numeric sensor index (e.g. 33),
- * NOT the full UID (e.g. 31:33). The UID format is {objectType}:{index}.
+ * IMPORTANT:
+ * - The API expects the numeric sensor index (e.g. 33), NOT the full UID (31:33).
+ * - The otype parameter is REQUIRED. For analog sensors (UID prefix 31), otype=2.
  */
+
+// Map UID prefix to otype value for the sensor log API
+const UID_PREFIX_TO_OTYPE: Record<string, number> = {
+  "31": 2, // analog sensors
+};
+
 export function talgilGetSensorLog(
   baseUrl: string,
   apiKey: string,
@@ -352,11 +359,13 @@ export function talgilGetSensorLog(
   fromMs: number,
   untilMs: number,
 ): Promise<TalgilApiResult<TalgilSensorLogEntry[]>> {
-  // Extract numeric index from UID "31:33" → "33"
-  const numericId = sensorUid.includes(":") ? sensorUid.split(":")[1] : sensorUid;
+  // Extract numeric index from UID "31:33" → "33", and otype from prefix "31" → 2
+  const parts = sensorUid.split(":");
+  const numericId = parts.length > 1 ? parts[1] : parts[0];
+  const otype = UID_PREFIX_TO_OTYPE[parts[0]] ?? 2;
   return talgilFetch<TalgilSensorLogEntry[]>(
     baseUrl,
-    `/targets/${controllerId}/sensors/${numericId}/log?from=${fromMs}&until=${untilMs}`,
+    `/targets/${controllerId}/sensors/${numericId}/log?from=${fromMs}&until=${untilMs}&otype=${otype}`,
     apiKey,
     3,
     MIN_INTERVAL.db_log + 1000, // 16s between log requests
