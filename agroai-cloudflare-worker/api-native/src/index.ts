@@ -36,7 +36,7 @@ export default {
       return Response.json({
         status: "ok",
         service: "agroai-talgil-connector",
-        version: "2.2.0",
+        version: "2.3.0",
         timestamp: new Date().toISOString(),
       });
     }

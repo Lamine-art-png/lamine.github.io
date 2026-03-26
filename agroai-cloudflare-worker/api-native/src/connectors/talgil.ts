@@ -219,11 +219,10 @@ async function talgilFetch<T>(
   baseUrl: string,
   path: string,
   apiKey: string,
-  maxRetries: number = 3,
+  maxRetries: number = 2,
   minGapMs: number = 2000,
 ): Promise<TalgilApiResult<T>> {
   const url = `${baseUrl}${path}`;
-  const backoffMs = [2000, 4000, 8000];
 
   // Enforce minimum spacing between requests
   await enforceRateLimit(minGapMs);
@@ -238,17 +237,20 @@ async function talgilFetch<T>(
         },
       });
 
-      // Retry on 429 with exponential backoff
+      // Only retry on 429 (rate limited) — respect Retry-After header
       if (res.status === 429 && attempt < maxRetries) {
         const retryAfter = res.headers.get("Retry-After");
+        // Default wait: use the minGapMs (which already includes the rate limit)
         const waitMs = retryAfter
-          ? Math.min(parseInt(retryAfter, 10) * 1000, 16000)
-          : backoffMs[attempt] ?? 8000;
+          ? Math.max(parseInt(retryAfter, 10) * 1000, minGapMs)
+          : minGapMs;
         await new Promise((r) => setTimeout(r, waitMs));
         lastRequestTime = Date.now();
         continue;
       }
 
+      // All other HTTP errors: return immediately, do NOT retry.
+      // Retrying 400/403/404/500 would just generate "not allowed" warnings.
       if (!res.ok) {
         const body = await res.text().catch(() => "");
         return {
@@ -263,9 +265,10 @@ async function talgilFetch<T>(
       const data = (await res.json()) as T;
       return { ok: true, status: res.status, data, url };
     } catch (err) {
-      // Retry network errors too
+      // Network errors (no HTTP response): retry with rate-limit-safe delay
       if (attempt < maxRetries) {
-        await new Promise((r) => setTimeout(r, backoffMs[attempt] ?? 8000));
+        await new Promise((r) => setTimeout(r, minGapMs));
+        lastRequestTime = Date.now();
         continue;
       }
       return {
@@ -278,7 +281,6 @@ async function talgilFetch<T>(
     }
   }
 
-  // Should not reach here, but just in case
   return { ok: false, status: 0, data: null, url, error: "Max retries exhausted" };
 }
 

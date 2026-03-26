@@ -146,7 +146,7 @@ export class TalgilSyncDO implements DurableObject {
         outcome: "failure",
         error_message: msg,
       });
-      return Response.json({ error: msg, code_version: "v2.2.0-rate-fix" }, { status: 500 });
+      return Response.json({ error: msg, code_version: "v2.3.0" }, { status: 500 });
     }
   }
 
@@ -165,7 +165,7 @@ export class TalgilSyncDO implements DurableObject {
       const msg = (tenantErr as Error).message ?? String(tenantErr);
       return Response.json({
         error: `ensureTenant failed: ${msg}`,
-        code_version: "v2.2.0-rate-fix",
+        code_version: "v2.3.0",
       }, { status: 500 });
     }
 
@@ -555,21 +555,40 @@ export class TalgilSyncDO implements DurableObject {
           error_message: result.error,
         });
 
-        if (result.ok && result.data != null) {
-          // The API may return an array directly or an object with entries
-          const entries = Array.isArray(result.data) ? result.data : [];
-          if (entries.length > 0) {
-            const logRows = mapSensorLogRows(tenantId, controllerId, sensorUid, entries);
+        if (!result.ok) {
+          // API returned an error — log it clearly and move on
+          const errDetail = `HTTP ${result.status} for sensor ${sensorUid}: ${result.error}`;
+          errors.push(errDetail);
+          await writeAudit(this.env.DB, {
+            tenant_id: tenantId,
+            action: "backfill.sensor_log_error",
+            detail: errDetail,
+            outcome: "failure",
+            url: result.url,
+            http_status: result.status,
+            error_message: result.error,
+          });
+        } else if (result.data != null) {
+          // API returned 200 — but check if it's actually sensor data (array)
+          // or an error object like { status: 400, error: "Bad Request" }
+          if (!Array.isArray(result.data)) {
+            const raw = JSON.stringify(result.data).slice(0, 300);
+            const errDetail = `Unexpected response shape for sensor ${sensorUid}: ${raw}`;
+            errors.push(errDetail);
+            await writeAudit(this.env.DB, {
+              tenant_id: tenantId,
+              action: "backfill.sensor_log_error",
+              detail: errDetail,
+              outcome: "failure",
+              url: result.url,
+              http_status: result.status,
+            });
+          } else if (result.data.length > 0) {
+            const logRows = mapSensorLogRows(tenantId, controllerId, sensorUid, result.data);
             const inserted = await upsertSensorLog(this.env.DB, logRows);
             sensorRows += inserted;
           }
-          // Store raw shape for debugging (first chunk only, truncated)
-          if (entries.length === 0 && errors.length === 0) {
-            const raw = JSON.stringify(result.data).slice(0, 200);
-            errors.push(`empty_response: ${raw}`);
-          }
-        } else if (result.error) {
-          errors.push(`${new Date(chunk.from).toISOString()}: ${result.error}`);
+          // Empty arrays are normal (no data in that time window) — not an error
         }
 
         // Rate limiting between log requests is enforced automatically by talgilFetch (16s gap)
