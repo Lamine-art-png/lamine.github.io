@@ -34,6 +34,7 @@ import {
   SIMULATOR_FROM_MS,
   SIMULATOR_UNTIL_MS,
   SYNC_FILTER,
+  MIN_INTERVAL,
   diagnoseError,
   extractSensors,
   extractControllerName,
@@ -126,6 +127,10 @@ export class TalgilSyncDO implements DurableObject {
           return await this.handleTestEventLog(tenantId);
         case "test_wc":
           return await this.handleTestWaterConsumption(tenantId);
+        case "loadtest":
+          return await this.handleLoadTestStart(tenantId, url);
+        case "loadtest_stop":
+          return await this.handleLoadTestStop(tenantId);
         default:
           return Response.json(
             { error: `Unknown mode: ${mode}` },
@@ -702,5 +707,200 @@ export class TalgilSyncDO implements DurableObject {
       },
       note: "If 403, permission or access scope may be limiting this endpoint. Confirm with Kosta.",
     });
+  }
+
+  // ────────────────────────────────────────────────────────
+  // MODE: loadtest (48-hour load test with multiple controllers)
+  // Runs a scheduled cycle every 20 minutes:
+  //   1. Filtered image (sync) for each controller — 2s gap
+  //   2. Bulk sensor log for each controller — 16s gap
+  //   3. Event log for each controller — 16s gap
+  //   4. Water consumption for each controller — 61s gap
+  // Uses Durable Object alarms for scheduling.
+  // ────────────────────────────────────────────────────────
+
+  private async handleLoadTestStart(
+    tenantId: string,
+    url: URL,
+  ): Promise<Response> {
+    const controllers = (url.searchParams.get("controllers") ?? "6115,61151,61152,61153")
+      .split(",")
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => !isNaN(n));
+    const durationHours = parseInt(url.searchParams.get("hours") ?? "48", 10);
+    const cycleMinutes = parseInt(url.searchParams.get("cycle") ?? "20", 10);
+
+    const startMs = Date.now();
+    const endMs = startMs + durationHours * 3_600_000;
+
+    // Store load test config in DO storage
+    await this.state.storage.put("loadtest", {
+      tenantId,
+      controllers,
+      startMs,
+      endMs,
+      cycleMinutes,
+      cyclesCompleted: 0,
+    });
+
+    // Schedule first alarm immediately
+    await this.state.storage.setAlarm(Date.now() + 1000);
+
+    await writeAudit(this.env.DB, {
+      tenant_id: tenantId,
+      action: "loadtest.start",
+      detail: `Started ${durationHours}h load test: controllers=${controllers.join(",")}, cycle=${cycleMinutes}min`,
+      outcome: "success",
+    });
+
+    return Response.json({
+      ok: true,
+      mode: "loadtest",
+      controllers,
+      duration_hours: durationHours,
+      cycle_minutes: cycleMinutes,
+      start: new Date(startMs).toISOString(),
+      end: new Date(endMs).toISOString(),
+      message: `Load test started. ${controllers.length} controllers, ${cycleMinutes}-min cycles for ${durationHours} hours.`,
+    });
+  }
+
+  private async handleLoadTestStop(tenantId: string): Promise<Response> {
+    await this.state.storage.delete("loadtest");
+    await this.state.storage.deleteAlarm();
+
+    await writeAudit(this.env.DB, {
+      tenant_id: tenantId,
+      action: "loadtest.stop",
+      detail: "Load test stopped manually",
+      outcome: "success",
+    });
+
+    return Response.json({ ok: true, message: "Load test stopped." });
+  }
+
+  // Durable Object alarm handler — runs each load test cycle
+  async alarm(): Promise<void> {
+    const config = await this.state.storage.get<{
+      tenantId: string;
+      controllers: number[];
+      startMs: number;
+      endMs: number;
+      cycleMinutes: number;
+      cyclesCompleted: number;
+    }>("loadtest");
+
+    if (!config) return; // No active load test
+
+    const now = Date.now();
+    if (now >= config.endMs) {
+      // Test duration expired
+      await writeAudit(this.env.DB, {
+        tenant_id: config.tenantId,
+        action: "loadtest.complete",
+        detail: `Load test completed after ${config.cyclesCompleted} cycles`,
+        outcome: "success",
+      });
+      await this.state.storage.delete("loadtest");
+      return;
+    }
+
+    const baseUrl = this.env.TALGIL_BASE_URL;
+    const apiKey = this.env.TALGIL_API_KEY;
+    const cycleStart = Date.now();
+    let requestCount = 0;
+    let errorCount = 0;
+
+    // Use recent 1-hour window for DB queries
+    const untilMs = Date.now();
+    const fromMs = untilMs - 3_600_000; // last hour
+
+    // ── Phase 1: Filtered image sync for each controller (live_get, 2s gap) ──
+    for (const cid of config.controllers) {
+      const result = await talgilGetFilteredImage(baseUrl, apiKey, cid, SYNC_FILTER);
+      requestCount++;
+      if (!result.ok) errorCount++;
+
+      await writeAudit(this.env.DB, {
+        tenant_id: config.tenantId,
+        action: "loadtest.sync",
+        detail: `Cycle ${config.cyclesCompleted + 1}: GET /targets/${cid}/?filter=...`,
+        outcome: result.ok ? "success" : "failure",
+        url: result.url,
+        http_status: result.status,
+        error_message: result.error,
+      });
+    }
+
+    // ── Phase 2: Bulk sensor log for each controller (db_log, 16s gap) ──
+    for (const cid of config.controllers) {
+      const result = await talgilGetAllSensorLogs(baseUrl, apiKey, cid, fromMs, untilMs);
+      requestCount++;
+      if (!result.ok) errorCount++;
+
+      await writeAudit(this.env.DB, {
+        tenant_id: config.tenantId,
+        action: "loadtest.sensor_log",
+        detail: `Cycle ${config.cyclesCompleted + 1}: GET /targets/${cid}/sensors/log`,
+        outcome: result.ok ? "success" : "failure",
+        url: result.url,
+        http_status: result.status,
+        row_count: Array.isArray(result.data) ? result.data.length : 0,
+        error_message: result.error,
+      });
+    }
+
+    // ── Phase 3: Event log for each controller (db_event_log, 16s gap) ──
+    for (const cid of config.controllers) {
+      const result = await talgilGetEventLog(baseUrl, apiKey, cid, fromMs, untilMs);
+      requestCount++;
+      if (!result.ok) errorCount++;
+
+      await writeAudit(this.env.DB, {
+        tenant_id: config.tenantId,
+        action: "loadtest.event_log",
+        detail: `Cycle ${config.cyclesCompleted + 1}: GET /targets/${cid}/eventlog`,
+        outcome: result.ok ? "success" : "failure",
+        url: result.url,
+        http_status: result.status,
+        row_count: Array.isArray(result.data) ? result.data.length : 0,
+        error_message: result.error,
+      });
+    }
+
+    // ── Phase 4: Water consumption for each controller (db_wc, 61s gap) ──
+    for (const cid of config.controllers) {
+      const result = await talgilGetWaterConsumption(baseUrl, apiKey, cid, fromMs, untilMs, "daily");
+      requestCount++;
+      if (!result.ok) errorCount++;
+
+      await writeAudit(this.env.DB, {
+        tenant_id: config.tenantId,
+        action: "loadtest.wc",
+        detail: `Cycle ${config.cyclesCompleted + 1}: GET /targets/${cid}/wc/valves`,
+        outcome: result.ok ? "success" : "failure",
+        url: result.url,
+        http_status: result.status,
+        error_message: result.error,
+      });
+    }
+
+    const cycleMs = Date.now() - cycleStart;
+
+    await writeAudit(this.env.DB, {
+      tenant_id: config.tenantId,
+      action: "loadtest.cycle_complete",
+      detail: `Cycle ${config.cyclesCompleted + 1}: ${requestCount} requests, ${errorCount} errors, ${Math.round(cycleMs / 1000)}s elapsed`,
+      outcome: errorCount === 0 ? "success" : "failure",
+    });
+
+    // Update cycles count
+    config.cyclesCompleted++;
+    await this.state.storage.put("loadtest", config);
+
+    // Schedule next cycle
+    const nextAlarmMs = cycleStart + config.cycleMinutes * 60_000;
+    const delay = Math.max(nextAlarmMs - Date.now(), 10_000); // at least 10s gap
+    await this.state.storage.setAlarm(Date.now() + delay);
   }
 }

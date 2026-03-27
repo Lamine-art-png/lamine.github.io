@@ -8,6 +8,8 @@
  *   POST /v1/integrations/talgil/disconnect     → mark integration disconnected
  *   POST /v1/integrations/talgil/test/eventlog  → diagnostic: test eventlog permissions
  *   POST /v1/integrations/talgil/test/wc        → diagnostic: test water consumption permissions
+ *   POST /v1/integrations/talgil/loadtest       → start 48-hour load test with multiple controllers
+ *   POST /v1/integrations/talgil/loadtest_stop  → stop running load test
  *   GET  /v1/integrations/talgil/status         → integration status + row counts
  *   GET  /v1/integrations/talgil/sensors/catalog → sensor catalog (metadata)
  *   GET  /v1/integrations/talgil/sensors/latest  → latest sensor values with catalog metadata
@@ -131,6 +133,12 @@ async function routeToSyncDO(
     case "test/wc":
       mode = "test_wc";
       break;
+    case "loadtest":
+      mode = "loadtest";
+      break;
+    case "loadtest_stop":
+      mode = "loadtest_stop";
+      break;
     default:
       return Response.json({ error: `Unknown action: ${action}` }, { status: 404 });
   }
@@ -140,8 +148,8 @@ async function routeToSyncDO(
   doUrl.searchParams.set("tenantId", tenantId);
   doUrl.searchParams.set("mode", mode);
 
-  // Forward date range params to DO
-  for (const key of ["from", "until"]) {
+  // Forward params to DO
+  for (const key of ["from", "until", "controllers", "hours", "cycle"]) {
     const val = requestUrl.searchParams.get(key);
     if (val) doUrl.searchParams.set(key, val);
   }
