@@ -157,29 +157,37 @@ export function mapSensorLogRows(
 
 // ── Mapper: Bulk sensor log entries → D1 rows ────────────
 // Used with the bulk endpoint GET /targets/{id}/sensors/log (no sensor ID).
-// Each entry includes its own uid field.
+// Response shape: array of objects, each keyed by sensor UID:
+//   [ {"31:1": [{time, value}, ...]}, {"31:2": [{time, value}, ...]}, ... ]
 
 export function mapBulkSensorLogRows(
   tenantId: string,
   controllerId: number,
-  entries: TalgilSensorLogEntry[],
+  entries: Record<string, unknown>[],
 ): SensorLogRow[] {
-  return entries
-    .filter((e) => typeof (e.time ?? e.Time) === "number" && (e.uid ?? e.UID))
-    .map((e) => {
-      const timeMs = (e.time ?? e.Time)!;
-      const val = e.value ?? e.Value;
-      const uid = (e.uid ?? e.UID)!;
-      return {
-        tenant_id: tenantId,
-        controller_id: controllerId,
-        sensor_uid: uid,
-        observed_at_ms: timeMs,
-        observed_at: msToIso(timeMs),
-        value_num: typeof val === "number" ? val : null,
-        raw_json: JSON.stringify(e),
-      };
-    });
+  const rows: SensorLogRow[] = [];
+
+  for (const entry of entries) {
+    for (const [sensorUid, logArray] of Object.entries(entry)) {
+      if (!Array.isArray(logArray)) continue;
+      for (const item of logArray) {
+        const timeMs = item.time ?? item.Time;
+        if (typeof timeMs !== "number") continue;
+        const val = item.value ?? item.Value;
+        rows.push({
+          tenant_id: tenantId,
+          controller_id: controllerId,
+          sensor_uid: sensorUid,
+          observed_at_ms: timeMs,
+          observed_at: msToIso(timeMs),
+          value_num: typeof val === "number" ? val : null,
+          raw_json: JSON.stringify(item),
+        });
+      }
+    }
+  }
+
+  return rows;
 }
 
 // ── Mapper: Full image sensors → snapshot sensor log ────

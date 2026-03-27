@@ -352,8 +352,8 @@ export function talgilGetAllSensorLogs(
   fromMs: number,
   untilMs: number,
   otype: number = 2,
-): Promise<TalgilApiResult<TalgilSensorLogEntry[]>> {
-  return talgilFetch<TalgilSensorLogEntry[]>(
+): Promise<TalgilApiResult<Record<string, unknown>[]>> {
+  return talgilFetch<Record<string, unknown>[]>(
     baseUrl,
     `/targets/${controllerId}/sensors/log?from=${fromMs}&until=${untilMs}&otype=${otype}`,
     apiKey,
