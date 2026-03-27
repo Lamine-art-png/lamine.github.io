@@ -530,6 +530,11 @@ export class TalgilSyncDO implements DurableObject {
       }
     }
 
+    // Debug: include sample of raw response to understand the shape
+    const sample = Array.isArray(result.data) && result.data.length > 0
+      ? result.data.slice(0, 2).map((e) => JSON.stringify(e).slice(0, 300))
+      : [];
+
     return Response.json({
       ok: errors.length === 0,
       mode: "backfill",
@@ -542,6 +547,7 @@ export class TalgilSyncDO implements DurableObject {
       sensors_in_response: sensorCount,
       total_rows_stored: totalRows,
       errors,
+      sample,
       url: result.url,
       http_status: result.status,
     });
