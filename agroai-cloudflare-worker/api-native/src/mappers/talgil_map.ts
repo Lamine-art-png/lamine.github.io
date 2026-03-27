@@ -155,6 +155,33 @@ export function mapSensorLogRows(
     });
 }
 
+// ── Mapper: Bulk sensor log entries → D1 rows ────────────
+// Used with the bulk endpoint GET /targets/{id}/sensors/log (no sensor ID).
+// Each entry includes its own uid field.
+
+export function mapBulkSensorLogRows(
+  tenantId: string,
+  controllerId: number,
+  entries: TalgilSensorLogEntry[],
+): SensorLogRow[] {
+  return entries
+    .filter((e) => typeof (e.time ?? e.Time) === "number" && (e.uid ?? e.UID))
+    .map((e) => {
+      const timeMs = (e.time ?? e.Time)!;
+      const val = e.value ?? e.Value;
+      const uid = (e.uid ?? e.UID)!;
+      return {
+        tenant_id: tenantId,
+        controller_id: controllerId,
+        sensor_uid: uid,
+        observed_at_ms: timeMs,
+        observed_at: msToIso(timeMs),
+        value_num: typeof val === "number" ? val : null,
+        raw_json: JSON.stringify(e),
+      };
+    });
+}
+
 // ── Mapper: Full image sensors → snapshot sensor log ────
 // Captures current sensor values from the full image as point-in-time readings.
 

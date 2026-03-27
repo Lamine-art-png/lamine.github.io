@@ -36,7 +36,7 @@ export default {
       return Response.json({
         status: "ok",
         service: "agroai-talgil-connector",
-        version: "2.3.0",
+        version: "2.4.0",
         timestamp: new Date().toISOString(),
       });
     }
@@ -140,8 +140,8 @@ async function routeToSyncDO(
   doUrl.searchParams.set("tenantId", tenantId);
   doUrl.searchParams.set("mode", mode);
 
-  // Forward backfill params to DO
-  for (const key of ["from", "until", "batch", "offset"]) {
+  // Forward date range params to DO
+  for (const key of ["from", "until"]) {
     const val = requestUrl.searchParams.get(key);
     if (val) doUrl.searchParams.set(key, val);
   }

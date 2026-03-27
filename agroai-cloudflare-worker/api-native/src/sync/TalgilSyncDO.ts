@@ -28,14 +28,12 @@ import {
   talgilListTargets,
   talgilGetFullImage,
   talgilGetFilteredImage,
-  talgilGetSensorLog,
+  talgilGetAllSensorLogs,
   talgilGetEventLog,
   talgilGetWaterConsumption,
   SIMULATOR_FROM_MS,
   SIMULATOR_UNTIL_MS,
   SYNC_FILTER,
-  clampToSimulatorRange,
-  chunkDateRange,
   diagnoseError,
   extractSensors,
   extractControllerName,
@@ -50,7 +48,7 @@ import type {
 import {
   mapSensorCatalogFromImage,
   mapSensorSnapshotFromImage,
-  mapSensorLogRows,
+  mapBulkSensorLogRows,
   mapEventLogRows,
   mapValveWcRows,
 } from "../mappers/talgil_map";
@@ -146,7 +144,7 @@ export class TalgilSyncDO implements DurableObject {
         outcome: "failure",
         error_message: msg,
       });
-      return Response.json({ error: msg, code_version: "v2.3.0" }, { status: 500 });
+      return Response.json({ error: msg, code_version: "v2.4.0" }, { status: 500 });
     }
   }
 
@@ -165,7 +163,7 @@ export class TalgilSyncDO implements DurableObject {
       const msg = (tenantErr as Error).message ?? String(tenantErr);
       return Response.json({
         error: `ensureTenant failed: ${msg}`,
-        code_version: "v2.3.0",
+        code_version: "v2.4.0",
       }, { status: 500 });
     }
 
@@ -453,9 +451,10 @@ export class TalgilSyncDO implements DurableObject {
 
   // ────────────────────────────────────────────────────────
   // MODE: backfill (historical sensor log)
-  // Fetches per-sensor /sensors/{id}/log in day-sized chunks.
-  // This is a SEPARATE process from operational sync.
-  // Respects rate-aware max ranges and simulator date range.
+  // Uses BULK endpoint: GET /targets/{id}/sensors/log (no sensor ID)
+  // to fetch ALL sensors' historical data in a SINGLE request.
+  // Per Kosta: "Remove the number(ID) of the sensor and you will
+  // get all sensors at once."
   // ────────────────────────────────────────────────────────
   private async handleBackfill(
     tenantId: string,
@@ -474,156 +473,77 @@ export class TalgilSyncDO implements DurableObject {
 
     const controllerId = integration.controller_id;
 
-    // Default to simulator date range; allow override
-    // Accept either epoch-ms numbers or ISO/YYYY-MM-DD date strings
-    const fromMs = parseDateParam(url.searchParams.get("from"), SIMULATOR_FROM_MS);
-    const untilMs = parseDateParam(url.searchParams.get("until"), SIMULATOR_UNTIL_MS);
+    // Default: last 24 hours. Use real time ranges per Kosta's guidance.
+    // Accept either epoch-ms numbers or ISO/YYYY-MM-DD date strings.
+    const nowMs = Date.now();
+    const defaultFrom = nowMs - 86_400_000; // 24 hours ago
+    const fromMs = parseDateParam(url.searchParams.get("from"), defaultFrom);
+    const untilMs = parseDateParam(url.searchParams.get("until"), nowMs);
 
-    // Clamp to simulator range for dev safety
-    const clamped = clampToSimulatorRange(fromMs, untilMs);
-    if (!clamped) {
+    if (fromMs >= untilMs) {
       return Response.json({
         ok: false,
-        error: "Invalid or empty date range after clamping to simulator window",
-        simulator_from: new Date(SIMULATOR_FROM_MS).toISOString(),
-        simulator_until: new Date(SIMULATOR_UNTIL_MS).toISOString(),
+        error: "Invalid date range: 'from' must be before 'until'",
         requested_from: new Date(fromMs).toISOString(),
         requested_until: new Date(untilMs).toISOString(),
       });
     }
 
-    // Get sensor list from catalog to know which sensors to backfill
-    const catalogResult = await this.env.DB
-      .prepare(
-        `SELECT sensor_uid FROM talgil_sensor_catalog
-         WHERE tenant_id = ? AND controller_id = ?`,
-      )
-      .bind(tenantId, controllerId)
-      .all<{ sensor_uid: string }>();
+    const errors: string[] = [];
 
-    const sensorUids = catalogResult.results?.map((r) => r.sensor_uid) ?? [];
+    // Single bulk request — gets ALL sensors at once
+    const result = await talgilGetAllSensorLogs(
+      baseUrl,
+      apiKey,
+      controllerId,
+      fromMs,
+      untilMs,
+    );
 
-    if (sensorUids.length === 0) {
-      return Response.json({
-        ok: false,
-        error: "No sensors in catalog. Call connect first to populate sensor catalog.",
-      });
-    }
-
-    // Chunk the date range into 1-day windows
-    const chunks = chunkDateRange(clamped.from, clamped.until, "none");
-
-    // Batch size: limit sensors per call to avoid Cloudflare Worker timeout.
-    // With 16s gaps between log requests, 1 sensor × 1 chunk ≈ 16s.
-    // Default batch=3 keeps us well under the 30s DO timeout.
-    const batchSize = parseInt(url.searchParams.get("batch") ?? "3", 10);
-    const offset = parseInt(url.searchParams.get("offset") ?? "0", 10);
-    const batchedUids = sensorUids.slice(offset, offset + batchSize);
-    const remaining = sensorUids.length - offset - batchedUids.length;
+    await writeAudit(this.env.DB, {
+      tenant_id: tenantId,
+      action: "backfill.bulk_sensor_log",
+      detail: `GET /targets/${controllerId}/sensors/log (bulk, all sensors)`,
+      outcome: result.ok ? "success" : "failure",
+      url: result.url,
+      http_status: result.status,
+      row_count: Array.isArray(result.data) ? result.data.length : 0,
+      error_message: result.error,
+    });
 
     let totalRows = 0;
-    const sensorResults: Array<{
-      sensor_uid: string;
-      chunks_processed: number;
-      rows_stored: number;
-      errors: string[];
-    }> = [];
+    let sensorCount = 0;
 
-    // Process each sensor sequentially (to respect minimum intervals)
-    for (const sensorUid of batchedUids) {
-      let sensorRows = 0;
-      const errors: string[] = [];
-
-      for (const chunk of chunks) {
-        const result = await talgilGetSensorLog(
-          baseUrl,
-          apiKey,
-          controllerId,
-          sensorUid,
-          chunk.from,
-          chunk.until,
-        );
-
-        await writeAudit(this.env.DB, {
-          tenant_id: tenantId,
-          action: "backfill.sensor_log",
-          detail: `GET /targets/${controllerId}/sensors/${sensorUid}/log chunk`,
-          outcome: result.ok ? "success" : "failure",
-          url: result.url,
-          http_status: result.status,
-          row_count: Array.isArray(result.data) ? result.data.length : 0,
-          error_message: result.error,
-        });
-
-        if (!result.ok) {
-          // API returned an error — log it clearly and move on
-          const errDetail = `HTTP ${result.status} for sensor ${sensorUid}: ${result.error}`;
-          errors.push(errDetail);
-          await writeAudit(this.env.DB, {
-            tenant_id: tenantId,
-            action: "backfill.sensor_log_error",
-            detail: errDetail,
-            outcome: "failure",
-            url: result.url,
-            http_status: result.status,
-            error_message: result.error,
-          });
-        } else if (result.data != null) {
-          // API returned 200 — but check if it's actually sensor data (array)
-          // or an error object like { status: 400, error: "Bad Request" }
-          if (!Array.isArray(result.data)) {
-            const raw = JSON.stringify(result.data).slice(0, 300);
-            const errDetail = `Unexpected response shape for sensor ${sensorUid}: ${raw}`;
-            errors.push(errDetail);
-            await writeAudit(this.env.DB, {
-              tenant_id: tenantId,
-              action: "backfill.sensor_log_error",
-              detail: errDetail,
-              outcome: "failure",
-              url: result.url,
-              http_status: result.status,
-            });
-          } else if (result.data.length > 0) {
-            const logRows = mapSensorLogRows(tenantId, controllerId, sensorUid, result.data);
-            const inserted = await upsertSensorLog(this.env.DB, logRows);
-            sensorRows += inserted;
-          }
-          // Empty arrays are normal (no data in that time window) — not an error
-        }
-
-        // Rate limiting between log requests is enforced automatically by talgilFetch (16s gap)
+    if (!result.ok) {
+      const errDetail = `HTTP ${result.status}: ${result.error}`;
+      errors.push(errDetail);
+    } else if (result.data != null) {
+      if (!Array.isArray(result.data)) {
+        const raw = JSON.stringify(result.data).slice(0, 300);
+        errors.push(`Unexpected response shape: ${raw}`);
+      } else if (result.data.length > 0) {
+        const logRows = mapBulkSensorLogRows(tenantId, controllerId, result.data);
+        totalRows = await upsertSensorLog(this.env.DB, logRows);
+        // Count unique sensors in response
+        const uniqueUids = new Set(logRows.map((r) => r.sensor_uid));
+        sensorCount = uniqueUids.size;
       }
-
-      totalRows += sensorRows;
-      sensorResults.push({
-        sensor_uid: sensorUid,
-        chunks_processed: chunks.length,
-        rows_stored: sensorRows,
-        errors,
-      });
-
-      // Rate limiting between sensors is enforced automatically by talgilFetch
     }
 
     return Response.json({
-      ok: true,
+      ok: errors.length === 0,
       mode: "backfill",
       controller_id: controllerId,
       date_range: {
-        from: new Date(clamped.from).toISOString(),
-        until: new Date(clamped.until).toISOString(),
+        from: new Date(fromMs).toISOString(),
+        until: new Date(untilMs).toISOString(),
       },
-      batch: {
-        offset,
-        batch_size: batchSize,
-        sensors_in_batch: batchedUids.length,
-        total_sensors: sensorUids.length,
-        remaining,
-        next_offset: remaining > 0 ? offset + batchSize : null,
-      },
-      chunks_per_sensor: chunks.length,
+      entries_received: Array.isArray(result.data) ? result.data.length : 0,
+      sensors_in_response: sensorCount,
       total_rows_stored: totalRows,
-      sensor_details: sensorResults,
+      errors,
+      url: result.url,
+      http_status: result.status,
     });
   }
 
