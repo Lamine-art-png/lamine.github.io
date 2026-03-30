@@ -11,7 +11,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
-VERSION = "1.1.0"
+from app.api.v1.model_info import router as model_info_router
+
+VERSION = "1.2.0"
 
 app = FastAPI(
     title="AGRO-AI API",
@@ -31,6 +33,11 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# -------------------------
+# Model info & methodology (public)
+# -------------------------
+app.include_router(model_info_router, prefix="/v1")
 
 # -------------------------
 # Health

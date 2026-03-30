@@ -1,0 +1,4 @@
+# Copy to .dev.vars.staging and fill in actual values
+TALGIL_API_KEY=your_talgil_dev_api_key
+TALGIL_BASE_URL=https://dev.talgil.com/api
+ADMIN_TOKEN=your_admin_token
