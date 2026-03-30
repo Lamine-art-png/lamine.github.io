@@ -780,6 +780,10 @@ export class TalgilSyncDO implements DurableObject {
   }
 
   // Durable Object alarm handler — runs each load test cycle
+  // Schedule per Kosta's approval:
+  //   - Sync (filtered image): every 20 min (every cycle)
+  //   - Sensor log + Event log: every 6 hours (every 18th cycle at 20-min intervals)
+  //   - Water consumption: every 24 hours (every 72nd cycle at 20-min intervals)
   async alarm(): Promise<void> {
     const config = await this.state.storage.get<{
       tenantId: string;
@@ -794,7 +798,6 @@ export class TalgilSyncDO implements DurableObject {
 
     const now = Date.now();
     if (now >= config.endMs) {
-      // Test duration expired
       await writeAudit(this.env.DB, {
         tenant_id: config.tenantId,
         action: "loadtest.complete",
@@ -808,14 +811,22 @@ export class TalgilSyncDO implements DurableObject {
     const baseUrl = this.env.TALGIL_BASE_URL;
     const apiKey = this.env.TALGIL_API_KEY;
     const cycleStart = Date.now();
+    const cycleNum = config.cyclesCompleted + 1;
     let requestCount = 0;
     let errorCount = 0;
 
-    // Use recent 1-hour window for DB queries
-    const untilMs = Date.now();
-    const fromMs = untilMs - 3_600_000; // last hour
+    // Determine which phases to run this cycle
+    const cyclesPerSixHours = Math.round((6 * 60) / config.cycleMinutes); // 18 at 20-min cycles
+    const cyclesPerDay = Math.round((24 * 60) / config.cycleMinutes);     // 72 at 20-min cycles
+    const runDbLogs = cycleNum === 1 || cycleNum % cyclesPerSixHours === 0;
+    const runWc = cycleNum === 1 || cycleNum % cyclesPerDay === 0;
 
-    // ── Phase 1: Filtered image sync for each controller (live_get, 2s gap) ──
+    // Time window for DB queries: last 6 hours for logs, last 24 hours for wc
+    const untilMs = Date.now();
+    const logFromMs = untilMs - 6 * 3_600_000;
+    const wcFromMs = untilMs - 24 * 3_600_000;
+
+    // ── Phase 1: Filtered image sync — EVERY cycle (every 20 min) ──
     for (const cid of config.controllers) {
       const result = await talgilGetFilteredImage(baseUrl, apiKey, cid, SYNC_FILTER);
       requestCount++;
@@ -824,7 +835,7 @@ export class TalgilSyncDO implements DurableObject {
       await writeAudit(this.env.DB, {
         tenant_id: config.tenantId,
         action: "loadtest.sync",
-        detail: `Cycle ${config.cyclesCompleted + 1}: GET /targets/${cid}/?filter=...`,
+        detail: `Cycle ${cycleNum}: GET /targets/${cid}/?filter=...`,
         outcome: result.ok ? "success" : "failure",
         url: result.url,
         http_status: result.status,
@@ -832,69 +843,73 @@ export class TalgilSyncDO implements DurableObject {
       });
     }
 
-    // ── Phase 2: Bulk sensor log for each controller (db_log, 16s gap) ──
-    for (const cid of config.controllers) {
-      const result = await talgilGetAllSensorLogs(baseUrl, apiKey, cid, fromMs, untilMs);
-      requestCount++;
-      if (!result.ok) errorCount++;
+    // ── Phase 2: Sensor log — every 6 hours ──
+    if (runDbLogs) {
+      for (const cid of config.controllers) {
+        const result = await talgilGetAllSensorLogs(baseUrl, apiKey, cid, logFromMs, untilMs);
+        requestCount++;
+        if (!result.ok) errorCount++;
 
-      await writeAudit(this.env.DB, {
-        tenant_id: config.tenantId,
-        action: "loadtest.sensor_log",
-        detail: `Cycle ${config.cyclesCompleted + 1}: GET /targets/${cid}/sensors/log`,
-        outcome: result.ok ? "success" : "failure",
-        url: result.url,
-        http_status: result.status,
-        row_count: Array.isArray(result.data) ? result.data.length : 0,
-        error_message: result.error,
-      });
+        await writeAudit(this.env.DB, {
+          tenant_id: config.tenantId,
+          action: "loadtest.sensor_log",
+          detail: `Cycle ${cycleNum}: GET /targets/${cid}/sensors/log (6h window)`,
+          outcome: result.ok ? "success" : "failure",
+          url: result.url,
+          http_status: result.status,
+          row_count: Array.isArray(result.data) ? result.data.length : 0,
+          error_message: result.error,
+        });
+      }
+
+      // ── Phase 3: Event log — every 6 hours ──
+      for (const cid of config.controllers) {
+        const result = await talgilGetEventLog(baseUrl, apiKey, cid, logFromMs, untilMs);
+        requestCount++;
+        if (!result.ok) errorCount++;
+
+        await writeAudit(this.env.DB, {
+          tenant_id: config.tenantId,
+          action: "loadtest.event_log",
+          detail: `Cycle ${cycleNum}: GET /targets/${cid}/eventlog (6h window)`,
+          outcome: result.ok ? "success" : "failure",
+          url: result.url,
+          http_status: result.status,
+          row_count: Array.isArray(result.data) ? result.data.length : 0,
+          error_message: result.error,
+        });
+      }
     }
 
-    // ── Phase 3: Event log for each controller (db_event_log, 16s gap) ──
-    for (const cid of config.controllers) {
-      const result = await talgilGetEventLog(baseUrl, apiKey, cid, fromMs, untilMs);
-      requestCount++;
-      if (!result.ok) errorCount++;
+    // ── Phase 4: Water consumption — every 24 hours ──
+    if (runWc) {
+      for (const cid of config.controllers) {
+        const result = await talgilGetWaterConsumption(baseUrl, apiKey, cid, wcFromMs, untilMs, "daily");
+        requestCount++;
+        if (!result.ok) errorCount++;
 
-      await writeAudit(this.env.DB, {
-        tenant_id: config.tenantId,
-        action: "loadtest.event_log",
-        detail: `Cycle ${config.cyclesCompleted + 1}: GET /targets/${cid}/eventlog`,
-        outcome: result.ok ? "success" : "failure",
-        url: result.url,
-        http_status: result.status,
-        row_count: Array.isArray(result.data) ? result.data.length : 0,
-        error_message: result.error,
-      });
+        await writeAudit(this.env.DB, {
+          tenant_id: config.tenantId,
+          action: "loadtest.wc",
+          detail: `Cycle ${cycleNum}: GET /targets/${cid}/wc/valves (24h window)`,
+          outcome: result.ok ? "success" : "failure",
+          url: result.url,
+          http_status: result.status,
+          error_message: result.error,
+        });
+      }
     }
 
-    // ── Phase 4: Water consumption for each controller (db_wc, 61s gap) ──
-    for (const cid of config.controllers) {
-      const result = await talgilGetWaterConsumption(baseUrl, apiKey, cid, fromMs, untilMs, "daily");
-      requestCount++;
-      if (!result.ok) errorCount++;
-
-      await writeAudit(this.env.DB, {
-        tenant_id: config.tenantId,
-        action: "loadtest.wc",
-        detail: `Cycle ${config.cyclesCompleted + 1}: GET /targets/${cid}/wc/valves`,
-        outcome: result.ok ? "success" : "failure",
-        url: result.url,
-        http_status: result.status,
-        error_message: result.error,
-      });
-    }
-
+    const phases = ["sync" + (runDbLogs ? "+sensor_log+event_log" : "") + (runWc ? "+wc" : "")];
     const cycleMs = Date.now() - cycleStart;
 
     await writeAudit(this.env.DB, {
       tenant_id: config.tenantId,
       action: "loadtest.cycle_complete",
-      detail: `Cycle ${config.cyclesCompleted + 1}: ${requestCount} requests, ${errorCount} errors, ${Math.round(cycleMs / 1000)}s elapsed`,
+      detail: `Cycle ${cycleNum}: ${requestCount} requests, ${errorCount} errors, ${Math.round(cycleMs / 1000)}s, phases=${phases[0]}`,
       outcome: errorCount === 0 ? "success" : "failure",
     });
 
-    // Update cycles count
     config.cyclesCompleted++;
     await this.state.storage.put("loadtest", config);
 
