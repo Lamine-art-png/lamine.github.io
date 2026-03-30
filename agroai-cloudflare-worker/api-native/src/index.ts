@@ -17,12 +17,16 @@
  *   GET  /v1/integrations/talgil/events          → stored event log entries
  *   GET  /v1/integrations/talgil/wc              → stored water consumption data
  *   GET  /v1/integrations/talgil/audit           → recent audit log entries
+ *   GET  /v1/integrations/talgil/anomalies       → sensors with abnormal readings (>2σ)
+ *   GET  /v1/integrations/talgil/trends           → sensor trend analysis (rising/falling/stable)
+ *   GET  /v1/integrations/talgil/alerts           → threshold violations + data gaps
  *   GET  /health                                 → health check
  */
 
 import { TalgilSyncDO } from "./sync/TalgilSyncDO";
 import type { Env } from "./sync/TalgilSyncDO";
 import { ensureTenant } from "./lib/db";
+import { detectAnomalies, analyzeTrends, checkAlerts } from "./analytics/sensor_analytics";
 
 // Re-export Durable Object class for wrangler
 export { TalgilSyncDO };
@@ -97,6 +101,12 @@ export default {
           return handleWaterConsumption(env, tenantId!, url);
         case "/v1/integrations/talgil/audit":
           return handleAuditLog(env, tenantId!);
+        case "/v1/integrations/talgil/anomalies":
+          return handleAnomalies(env, tenantId!, url);
+        case "/v1/integrations/talgil/trends":
+          return handleTrends(env, tenantId!, url);
+        case "/v1/integrations/talgil/alerts":
+          return handleAlerts(env, tenantId!);
         default:
           return Response.json({ error: "Not found" }, { status: 404 });
       }
@@ -431,5 +441,69 @@ async function handleAuditLog(env: Env, tenantId: string): Promise<Response> {
     tenant_id: tenantId,
     count: rows.results?.length ?? 0,
     entries: rows.results ?? [],
+  });
+}
+
+// ── Analytics: Anomaly Detection ────────────────────────
+
+async function handleAnomalies(
+  env: Env,
+  tenantId: string,
+  url: URL,
+): Promise<Response> {
+  const windowHours = parseInt(url.searchParams.get("window") ?? "168", 10); // 7 days default
+  const anomalies = await detectAnomalies(env.DB, tenantId, windowHours);
+
+  return Response.json({
+    tenant_id: tenantId,
+    window_hours: windowHours,
+    anomaly_count: anomalies.length,
+    critical: anomalies.filter((a) => a.severity === "critical").length,
+    warning: anomalies.filter((a) => a.severity === "warning").length,
+    anomalies,
+  });
+}
+
+// ── Analytics: Trend Analysis ───────────────────────────
+
+async function handleTrends(
+  env: Env,
+  tenantId: string,
+  url: URL,
+): Promise<Response> {
+  const windowHours = parseInt(url.searchParams.get("window") ?? "24", 10);
+  const trends = await analyzeTrends(env.DB, tenantId, windowHours);
+
+  const rising = trends.filter((t) => t.direction === "rising");
+  const falling = trends.filter((t) => t.direction === "falling");
+  const stable = trends.filter((t) => t.direction === "stable");
+
+  return Response.json({
+    tenant_id: tenantId,
+    window_hours: windowHours,
+    sensor_count: trends.length,
+    summary: {
+      rising: rising.length,
+      falling: falling.length,
+      stable: stable.length,
+    },
+    trends,
+  });
+}
+
+// ── Analytics: Smart Alerts ─────────────────────────────
+
+async function handleAlerts(
+  env: Env,
+  tenantId: string,
+): Promise<Response> {
+  const alerts = await checkAlerts(env.DB, tenantId);
+
+  return Response.json({
+    tenant_id: tenantId,
+    alert_count: alerts.length,
+    critical: alerts.filter((a) => a.severity === "critical").length,
+    warning: alerts.filter((a) => a.severity === "warning").length,
+    alerts,
   });
 }
