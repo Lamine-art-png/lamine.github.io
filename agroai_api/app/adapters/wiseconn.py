@@ -470,12 +470,16 @@ class WiseConnAdapter(ControllerAdapter, DataProviderAdapter):
     def map_zone(self, raw: Dict[str, Any], farm_id: str) -> CanonicalZone:
         """Map a raw WiseConn zone to AGRO-AI canonical zone."""
         parsed = WCZoneRaw.model_validate(raw)
+        # type can be a list (e.g. ['Soil', 'Irrigation']) or a string
+        zone_type = parsed.type
+        if isinstance(zone_type, list):
+            zone_type = ",".join(str(t) for t in zone_type)
         return CanonicalZone(
             provider="wiseconn",
             provider_id=str(parsed.id),
             farm_provider_id=farm_id,
             name=parsed.name or f"Zone {parsed.id}",
-            zone_type=parsed.type,
+            zone_type=zone_type,
             area_ha=parsed.area * 0.404686 if parsed.area else None,  # acres→ha
             raw=raw,
         )

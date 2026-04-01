@@ -44,7 +44,7 @@ class WCZoneRaw(BaseModel):
     id: Any
     name: Optional[str] = None
     farm_id: Optional[Any] = Field(None, alias="farmId")
-    type: Optional[str] = None
+    type: Optional[Any] = None  # Can be str or list (e.g. ['Soil', 'Irrigation'])
     area: Optional[float] = None  # area in provider units
 
     class Config:
