@@ -88,8 +88,9 @@ class WCIrrigationRaw(BaseModel):
     id: Optional[Any] = None
     zone_id: Optional[Any] = Field(None, alias="zoneId")
     status: Optional[str] = None
-    start: Optional[str] = None  # ISO datetime or similar
-    end: Optional[str] = None
+    # WiseConn uses initTime/endTime (not start/end)
+    init_time: Optional[str] = Field(None, alias="initTime")
+    end_time: Optional[str] = Field(None, alias="endTime")
     duration_minutes: Optional[int] = Field(None, alias="durationMinutes")
     volume: Optional[Any] = None  # Can be float or dict {'value': float, 'unitAbrev': str}
     program_name: Optional[str] = Field(None, alias="programName")

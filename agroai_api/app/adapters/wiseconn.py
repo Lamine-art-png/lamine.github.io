@@ -487,6 +487,11 @@ class WiseConnAdapter(ControllerAdapter, DataProviderAdapter):
     def map_measure(self, raw: Dict[str, Any], zone_id: str) -> CanonicalMeasure:
         """Map a raw WiseConn measure to AGRO-AI canonical measure."""
         parsed = WCMeasureRaw.model_validate(raw)
+        depth = parsed.depth
+        # Extract depth from name if not in explicit field
+        # e.g. "HS North 24" → 24 inches, "HS North 60" → 60 inches
+        if depth is None and parsed.name:
+            depth = self._extract_depth_from_name(parsed.name)
         return CanonicalMeasure(
             provider="wiseconn",
             provider_id=str(parsed.id),
@@ -494,9 +499,30 @@ class WiseConnAdapter(ControllerAdapter, DataProviderAdapter):
             name=parsed.name or f"Measure {parsed.id}",
             variable=normalize_variable(parsed.name, parsed.unit),
             unit=normalize_unit(parsed.unit),
-            depth_inches=parsed.depth,
+            depth_inches=depth,
             raw=raw,
         )
+
+    @staticmethod
+    def _extract_depth_from_name(name: str) -> Optional[float]:
+        """Extract depth in inches from measure name.
+
+        Patterns observed in WiseConn demo:
+        - "HS North" → 12 (shallowest, first sensor)
+        - "HS  North 24" → 24
+        - "HS  North 36" → 36
+        - "HS  North 48" → 48
+        - "HS  North 60" → 60
+        """
+        import re
+        # Match trailing number in names like "HS North 24"
+        match = re.search(r'\b(\d+)\s*$', name.strip())
+        if match:
+            return float(match.group(1))
+        # "HS North" without a number is the shallowest (12 inches)
+        if re.match(r'^HS\s+\w+$', name.strip(), re.IGNORECASE):
+            return 12.0
+        return None
 
     def map_data_points(
         self,
@@ -533,8 +559,8 @@ class WiseConnAdapter(ControllerAdapter, DataProviderAdapter):
     ) -> CanonicalIrrigation:
         """Map raw WiseConn irrigation to canonical model."""
         parsed = WCIrrigationRaw.model_validate(raw)
-        start = self._parse_timestamp(parsed.start) if parsed.start else None
-        end = self._parse_timestamp(parsed.end) if parsed.end else None
+        start = self._parse_timestamp(parsed.init_time) if parsed.init_time else None
+        end = self._parse_timestamp(parsed.end_time) if parsed.end_time else None
 
         # Convert volume to m3 if available
         vol_m3 = None

@@ -89,11 +89,12 @@ def sample_irrigation_raw():
     return {
         "id": 501,
         "zoneId": 101,
-        "status": "completed",
-        "start": "2024-03-15T06:00:00",
-        "end": "2024-03-15T06:30:00",
+        "status": "Executed OK",
+        "initTime": "2024-03-15T06:00:00.000Z",
+        "endTime": "2024-03-15T06:30:00.000Z",
         "durationMinutes": 30,
         "programName": "Morning Cycle",
+        "volume": {"value": 10000, "unitAbrev": "gal"},
     }
 
 
