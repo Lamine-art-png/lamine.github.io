@@ -91,8 +91,26 @@ class WCIrrigationRaw(BaseModel):
     start: Optional[str] = None  # ISO datetime or similar
     end: Optional[str] = None
     duration_minutes: Optional[int] = Field(None, alias="durationMinutes")
-    volume: Optional[float] = None
+    volume: Optional[Any] = None  # Can be float or dict {'value': float, 'unitAbrev': str}
     program_name: Optional[str] = Field(None, alias="programName")
+
+    @property
+    def volume_value(self) -> Optional[float]:
+        """Extract numeric volume regardless of format."""
+        if self.volume is None:
+            return None
+        if isinstance(self.volume, (int, float)):
+            return float(self.volume)
+        if isinstance(self.volume, dict):
+            return float(self.volume.get("value", 0))
+        return None
+
+    @property
+    def volume_unit(self) -> Optional[str]:
+        """Extract volume unit if available."""
+        if isinstance(self.volume, dict):
+            return self.volume.get("unitAbrev") or self.volume.get("unit")
+        return None
 
     class Config:
         populate_by_name = True

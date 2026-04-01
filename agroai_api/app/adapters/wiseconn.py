@@ -535,6 +535,21 @@ class WiseConnAdapter(ControllerAdapter, DataProviderAdapter):
         parsed = WCIrrigationRaw.model_validate(raw)
         start = self._parse_timestamp(parsed.start) if parsed.start else None
         end = self._parse_timestamp(parsed.end) if parsed.end else None
+
+        # Convert volume to m3 if available
+        vol_m3 = None
+        vol_val = parsed.volume_value
+        if vol_val is not None:
+            vol_unit = (parsed.volume_unit or "").lower()
+            if vol_unit in ("gal", "gallons"):
+                vol_m3 = vol_val * 0.00378541  # gallons → m3
+            elif vol_unit in ("l", "liters"):
+                vol_m3 = vol_val / 1000.0
+            elif vol_unit in ("m3", "m³"):
+                vol_m3 = vol_val
+            else:
+                vol_m3 = vol_val  # pass through if unknown unit
+
         return CanonicalIrrigation(
             provider="wiseconn",
             provider_id=str(parsed.id) if parsed.id else None,
@@ -542,6 +557,7 @@ class WiseConnAdapter(ControllerAdapter, DataProviderAdapter):
             start_time=start,
             end_time=end,
             duration_minutes=parsed.duration_minutes,
+            volume_m3=vol_m3,
             status=ExecutionStatus.APPLIED,
             program_name=parsed.program_name,
             raw=raw,
