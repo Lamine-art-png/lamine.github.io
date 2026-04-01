@@ -11,12 +11,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
-VERSION = "1.1.0"
+VERSION = "1.2.0"
 
 app = FastAPI(
     title="AGRO-AI API",
     version=VERSION,
 )
+
+# WiseConn integration routes
+from app.api.v1.wiseconn import router as wiseconn_router  # noqa: E402
+
+app.include_router(wiseconn_router, prefix="/v1")
 
 # CORS: allow your production site + local dev
 app.add_middleware(

@@ -32,14 +32,17 @@ class Settings(BaseSettings):
     ENABLE_METERING: bool = True
 
     # External Providers
-    WISECONN_API_URL: str = "http://mock-wiseconn"
+    WISECONN_API_URL: str = "https://api.wiseconn.com"
+    WISECONN_API_KEY: str = ""  # Set via env var WISECONN_API_KEY
+    WISECONN_TIMEOUT_SECONDS: int = 30
+    WISECONN_MAX_RETRIES: int = 3
     RAINBIRD_API_URL: str = "http://mock-rainbird"
     OPENET_API_URL: str = "http://mock-openet"
+
+    DEMO_API_KEY: str = "changeme-demo-key"  # override via env in prod
 
     class Config:
         env_file = ".env"
         case_sensitive = True
-
-   DEMO_API_KEY: str = "changeme-demo-key"  # override via env in prod
 
 settings = Settings()
