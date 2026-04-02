@@ -4,15 +4,38 @@
 
 A production-quality WiseConn connector integrated into the AGRO-AI backend, replacing the previous mock adapter with a real HTTP client that supports:
 
-1. **Authentication** — API key auth with automatic header variant detection
+1. **Authentication** — API key auth via `api_key` header (confirmed working)
 2. **Discovery** — Farm → Zone → Measure entity hierarchy
 3. **Telemetry Read** — Historical and current soil moisture, weather, and sensor data
-4. **Irrigation Read** — Historical irrigation events
-5. **Irrigation Write** — Create irrigation actions via API
+4. **Irrigation Read** — Historical irrigation events with volume/duration
+5. **Irrigation Write** — Create irrigation actions via API (blocked: 403, see below)
 6. **Canonical Mapping** — WiseConn entities normalized into AGRO-AI domain models
 7. **Persistence** — Idempotent ingestion into Telemetry, Block, and Schedule tables
 8. **API Endpoints** — REST endpoints under `/v1/wiseconn/` for all operations
 9. **Validation Script** — Standalone CLI tool to prove end-to-end integration
+
+## Live Validation Results (Confirmed)
+
+| Item | Status | Details |
+|------|--------|---------|
+| Auth | **PASS** | `api_key` header works on first try |
+| Base URL | **CONFIRMED** | `https://api.wiseconn.com` (no version prefix) |
+| Farm Discovery | **PASS** | "Demo Ferti & Flush" (id=3973, Fresno CA) |
+| Zone Discovery | **PASS** | Zone 1 (162803, Soil+Irrigation), Zone 2 (162804, Irrigation), CIMIS-Montague (216961, Weather) |
+| Measure Discovery | **PASS** | 18 measures on Zone 1, including 5 soil moisture at 12/24/36/48/60 inches |
+| Telemetry Read | **PASS** | ~1274 points per measure over 14 days, 15-min intervals (6370 total) |
+| Irrigation Read | **PASS** | 3 events, all "Executed OK", 4hr duration, ~2.4M gal each, scheduled by "Api Semios" |
+| Depth Extraction | **PASS** | Regex extracts depths from measure names (HS North → 12in, HS North 24 → 24in, etc.) |
+| Irrigation Write | **BLOCKED** | POST `/zones/162803/irrigations` returns 403 Forbidden |
+
+### Write Path 403 Analysis
+
+The API key (`RfoUUEAex1Isi6bEaBW2`) has **read-only ("Monitoring") permissions**. Evidence:
+- All GET endpoints work (farms, zones, measures, data, irrigations)
+- POST to irrigations returns 403 (not 401, not 400)
+- Existing irrigations were created by "Api Semios" — a different API client with write ("Control") access
+
+**To unblock**: Contact WiseConn (Francisco Jaure) and request "API Control" tier access for this key, or obtain a new key with write permissions.
 
 ## Files Created or Modified
 
@@ -27,7 +50,7 @@ A production-quality WiseConn connector integrated into the AGRO-AI backend, rep
 | `app/api/v1/wiseconn.py` | Created | REST endpoints for all WiseConn operations |
 | `app/main.py` | Modified | Wired WiseConn router into FastAPI app |
 | `scripts/wiseconn_demo.py` | Created | End-to-end validation script |
-| `tests/unit/test_wiseconn.py` | Created | 25+ tests covering schemas, mapping, HTTP, flow |
+| `tests/unit/test_wiseconn.py` | Created | 29 tests covering schemas, mapping, HTTP, flow |
 | `.env.example` | Modified | Added WiseConn credential placeholders |
 
 ## API Endpoints
@@ -45,20 +68,21 @@ A production-quality WiseConn connector integrated into the AGRO-AI backend, rep
 | POST | `/v1/wiseconn/irrigations` | Create test irrigation |
 | POST | `/v1/wiseconn/sync` | Full sync (discover + ingest all) |
 
-## WiseConn API Assumptions
+## WiseConn API — Confirmed Details
 
-The WiseConn developer docs at developers.wiseconn.com were not accessible (403). These assumptions are derived from the wiseconn-node library and common ag-IoT REST patterns. **Each is isolated in code and will produce clear errors if wrong.**
-
-| Assumption | Source | Isolated In |
-|-----------|--------|-------------|
-| Base URL: `https://api.wiseconn.com` | Default, configurable via env | `config.py` |
-| Auth: `api_key` header | wiseconn-node library | `wiseconn.py:_auth_headers()` + auto-detection |
-| Entity path: `/farms`, `/farms/{id}/zones`, etc. | REST convention | `wiseconn.py` GET methods |
-| Time params: `initTime`/`endTime` in `yyyy/MM/dd HH:mm` | wiseconn-node library | `wiseconn.py:WC_DATE_FMT` |
-| Irrigation creation: POST to `/zones/{id}/irrigations` | REST convention | `wiseconn.py:create_irrigation()` |
-| Response format: JSON with camelCase keys | Common for JS-origin APIs | `wiseconn.py` schema aliases |
-
-The `check_auth()` method automatically tries 4 auth header variants (`api_key`, `apikey`, `x-api-key`, `Authorization: Bearer`) and reconfigures the client when one works.
+| Detail | Value | Source |
+|--------|-------|--------|
+| Base URL | `https://api.wiseconn.com` | Live validated |
+| Auth header | `api_key` | Live validated (first try) |
+| Farm endpoint | `GET /farms` | Live validated |
+| Zone endpoint | `GET /farms/{id}/zones` | Live validated |
+| Measure endpoint | `GET /zones/{id}/measures` | Live validated |
+| Data endpoint | `GET /measures/{id}/data?initTime=...&endTime=...` | Live validated |
+| Irrigation endpoint | `GET /zones/{id}/irrigations?initTime=...&endTime=...` | Live validated |
+| Time format | `yyyy/MM/dd HH:mm` | Live validated |
+| Zone type field | Returns list (e.g., `["Soil", "Irrigation"]`) not string | Live validated |
+| Irrigation volume | Returns `{"value": float, "unitAbrev": "gal"}` dict | Live validated |
+| Irrigation times | Uses `initTime`/`endTime` field names | Live validated |
 
 ## How to Run
 
@@ -66,8 +90,7 @@ The `check_auth()` method automatically tries 4 auth header variants (`api_key`,
 ```bash
 cd agroai_api
 export WISECONN_API_KEY="your-key"
-export WISECONN_API_URL="https://api.wiseconn.com"  # adjust if different
-python -m scripts.wiseconn_demo
+python -m scripts.wiseconn_demo              # full run (write will 403 until permissions granted)
 python -m scripts.wiseconn_demo --skip-write  # read-only
 python -m scripts.wiseconn_demo --output report.json
 ```
@@ -85,26 +108,14 @@ WISECONN_API_KEY="your-key" uvicorn app.main:app --reload
 # Then: curl http://localhost:8000/v1/wiseconn/auth
 ```
 
-## What Remains Blocked
+## Next Steps
 
-1. **WiseConn API base URL** — Assumed `https://api.wiseconn.com`. Need confirmation from Francisco Jaure or the docs.
-2. **Auth header name** — Auto-detection built in, but need to confirm which header WiseConn expects.
-3. **Exact endpoint paths** — Built from REST conventions. If WiseConn uses different paths (e.g., `/api/v1/farms` instead of `/farms`), the adapter will get 404s and we adjust.
-4. **Irrigation create payload shape** — Assumed `{start, minutes}`. May need `{startTime, duration}` or other keys.
-5. **Pagination** — Not yet implemented. If WiseConn paginates large result sets, we need to add cursor/offset handling.
-6. **Rate limits** — Unknown. The adapter has retry with exponential backoff but no proactive rate limiting.
-7. **Webhook support** — Designed for but not implemented. The adapter abstraction supports adding webhooks without rewriting the core.
-
-## Next Steps for Production
-
-1. **Get live credentials** → Run `scripts/wiseconn_demo.py` → Adjust any wrong assumptions
-2. **Confirm base URL and auth** → Update `config.py` defaults if different
-3. **Confirm endpoint paths** → The first 404 will tell us what to fix
-4. **Add pagination** → Once we see real response shapes
-5. **Add webhook receiver** → For real-time data push from WiseConn
-6. **Production tenant mapping** → Replace DEMO_TENANT_ID with real tenant onboarding
-7. **Recommendation wiring** → The Recommender already reads from Telemetry table; once we ingest WiseConn data, recommendations work automatically
-8. **Monitoring** → Add Prometheus metrics for sync latency, error rates, data freshness
+1. **Unblock write path** — Get "API Control" tier key from WiseConn
+2. **Add pagination** — Not yet needed (demo farm has small datasets), but will be needed for production farms
+3. **Recommendation wiring verification** — The Recommender already reads from Telemetry table; once telemetry is ingested via `full_sync()`, recommendations should work automatically
+4. **Webhook receiver** — For real-time data push from WiseConn (currently polling only)
+5. **Production tenant mapping** — Replace DEMO_TENANT_ID with real tenant onboarding
+6. **Monitoring** — Add Prometheus metrics for sync latency, error rates, data freshness
 
 ## Security Notes
 
