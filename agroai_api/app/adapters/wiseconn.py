@@ -380,13 +380,15 @@ class WiseConnAdapter(ControllerAdapter, DataProviderAdapter):
         duration_minutes: int,
         metadata: Optional[dict] = None,
     ) -> Dict[str, Any]:
-        """Create a minimal irrigation action in the demo environment.
+        """Create a scheduled irrigation via WiseConn API.
 
-        Designed to be the smallest safe write that proves the path works.
+        Per docs: POST /irrigations with zoneId in body.
+        Body uses initTime + duration (only one of endTime/duration/precipitation).
         """
         payload: Dict[str, Any] = {
-            "start": start_time.strftime(WC_DATE_FMT),
-            "minutes": duration_minutes,
+            "zoneId": int(zone_id),
+            "initTime": start_time.strftime(WC_DATE_FMT),
+            "duration": duration_minutes,
         }
         if metadata:
             payload.update(metadata)
@@ -396,7 +398,7 @@ class WiseConnAdapter(ControllerAdapter, DataProviderAdapter):
             zone_id, start_time.isoformat(), duration_minutes,
         )
 
-        result = await self._post(f"/zones/{zone_id}/irrigations", json_data=payload)
+        result = await self._post("/irrigations", json_data=payload)
         if result is None:
             raise WiseConnClientError("Empty response from irrigation creation")
         return result if isinstance(result, dict) else {"raw": result}
