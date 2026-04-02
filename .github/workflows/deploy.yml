@@ -1,4 +1,4 @@
-name: Build + Push image to GHCR
+name: Build, Push & Deploy to Cloudflare
 
 on:
   push:
@@ -11,19 +11,17 @@ permissions:
 
 env:
   REGISTRY: ghcr.io
-  DOCKERFILE_PATH: terraform/Dockerfile
 
 jobs:
-  build:
-    name: Build + Push image to GHCR
+  build-and-push:
+    name: Build Docker image & push to GHCR
     runs-on: ubuntu-latest
+    outputs:
+      image: ${{ steps.img.outputs.image }}
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -45,11 +43,57 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ${{ env.DOCKERFILE_PATH }}
+          file: Dockerfile
           platforms: linux/amd64
           push: true
           tags: |
             ${{ steps.img.outputs.image }}:${{ github.sha }}
             ${{ steps.img.outputs.image }}:latest
+          build-args: |
+            GIT_SHA=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+
+  deploy:
+    name: Deploy to Cloudflare
+    needs: build-and-push
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install Wrangler
+        run: npm install -g wrangler
+
+      - name: Deploy to Cloudflare Containers
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: wrangler deploy
+
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r agroai_api/requirements.txt
+
+      - name: Run tests
+        working-directory: agroai_api
+        run: python -m pytest tests/ -v

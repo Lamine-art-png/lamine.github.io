@@ -1,0 +1,58 @@
+# Cloudflare Containers deployment for AGRO-AI API
+#
+# Prerequisites:
+#   1. Install wrangler: npm install -g wrangler
+#   2. Login: wrangler login
+#   3. Set secrets: wrangler secret put WISECONN_API_KEY
+#                   wrangler secret put SECRET_KEY
+#                   wrangler secret put DATABASE_URL
+#
+# Deploy:
+#   wrangler deploy
+#
+# The Docker image is built from the root Dockerfile and runs the
+# FastAPI app on port 8000. Cloudflare Containers routes traffic
+# from your custom domain to the container.
+
+name = "agroai-api"
+compatibility_date = "2025-04-01"
+
+# Cloudflare Containers configuration
+[containers]
+image = "ghcr.io/lamine-art-png/lamine.github.io:latest"
+port = 8000
+memory = "512Mi"
+vcpus = 0.5
+
+# Environment variables (non-secret)
+[containers.env]
+PORT = "8000"
+LOG_LEVEL = "INFO"
+ENABLE_METRICS = "true"
+ENABLE_SCHEDULER = "true"
+SYNC_INTERVAL_MINUTES = "15"
+SYNC_LOOKBACK_DAYS = "14"
+ENABLE_WEBHOOKS = "true"
+ENABLE_METERING = "true"
+PYTHONPATH = "/app"
+PYTHONUNBUFFERED = "1"
+
+# Secrets are set via `wrangler secret put <NAME>`:
+#   - WISECONN_API_KEY
+#   - SECRET_KEY
+#   - DATABASE_URL (Neon PostgreSQL connection string)
+
+# Custom domain (configure after first deploy)
+# [routes]
+# pattern = "api.agroai-pilot.com/*"
+# zone_name = "agroai-pilot.com"
+
+# Health check
+[containers.health_check]
+path = "/v1/health"
+interval_seconds = 30
+timeout_seconds = 5
+
+# Observability — logs stream to Cloudflare dashboard
+[observability]
+enabled = true
