@@ -41,3 +41,36 @@ variable "openweather_api_key" {
   }
 }
 
+variable "wiseconn_api_key" {
+  type        = string
+  description = "WiseConn API key"
+  sensitive   = true
+  default     = ""
+}
+
+variable "database_url" {
+  type        = string
+  description = "PostgreSQL connection string"
+  sensitive   = true
+  default     = ""
+}
+
+variable "secret_key" {
+  type        = string
+  description = "Application secret key for JWT signing"
+  sensitive   = true
+  default     = ""
+}
+
+variable "db_subnet_ids" {
+  type        = list(string)
+  description = "Private subnets for RDS"
+  default     = []
+}
+
+variable "sync_interval_minutes" {
+  type        = number
+  description = "WiseConn sync interval in minutes"
+  default     = 15
+}
+

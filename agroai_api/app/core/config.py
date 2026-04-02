@@ -31,6 +31,11 @@ class Settings(BaseSettings):
     ENABLE_WEBHOOKS: bool = True
     ENABLE_METERING: bool = True
 
+    # Scheduler
+    SYNC_INTERVAL_MINUTES: int = 15  # How often to run WiseConn sync
+    SYNC_LOOKBACK_DAYS: int = 14  # How many days of history to sync
+    ENABLE_SCHEDULER: bool = True  # Set False to disable background sync
+
     # External Providers
     WISECONN_API_URL: str = "https://api.wiseconn.com"
     WISECONN_API_KEY: str = ""  # Set via env var WISECONN_API_KEY

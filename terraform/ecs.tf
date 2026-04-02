@@ -47,6 +47,30 @@ resource "aws_ecs_task_definition" "api" {
         {
           "name" : "OPENWEATHER_API_KEY",
           "value" : var.openweather_api_key
+        },
+        {
+          "name" : "DATABASE_URL",
+          "value" : var.database_url
+        },
+        {
+          "name" : "SECRET_KEY",
+          "value" : var.secret_key
+        },
+        {
+          "name" : "WISECONN_API_KEY",
+          "value" : var.wiseconn_api_key
+        },
+        {
+          "name" : "ENABLE_SCHEDULER",
+          "value" : "true"
+        },
+        {
+          "name" : "SYNC_INTERVAL_MINUTES",
+          "value" : tostring(var.sync_interval_minutes)
+        },
+        {
+          "name" : "ENABLE_METRICS",
+          "value" : "true"
         }
       ],
       "logConfiguration" : {

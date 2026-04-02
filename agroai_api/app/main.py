@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import datetime
 import io
+import logging
+from contextlib import asynccontextmanager
 from typing import Any, Dict, List
 
 from fastapi import Body, FastAPI, HTTPException
@@ -11,17 +13,83 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
 
-VERSION = "1.2.0"
+from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+VERSION = "1.3.0"
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup/shutdown lifecycle — starts scheduler, initializes DB."""
+    from app.db.base import init_db
+
+    # Initialize database tables
+    init_db()
+    logger.info("Database initialized")
+
+    # Start background scheduler if enabled
+    if settings.ENABLE_SCHEDULER and settings.WISECONN_API_KEY:
+        from app.core.scheduler import start_scheduler, run_wiseconn_sync
+
+        start_scheduler()
+        # Run an initial sync on startup
+        logger.info("Running initial WiseConn sync...")
+        try:
+            await run_wiseconn_sync()
+        except Exception as e:
+            logger.warning("Initial sync failed (will retry on schedule): %s", e)
+    else:
+        logger.info("Background scheduler disabled (ENABLE_SCHEDULER=%s, API key set=%s)",
+                     settings.ENABLE_SCHEDULER, bool(settings.WISECONN_API_KEY))
+
+    yield  # App is running
+
+    # Shutdown
+    if settings.ENABLE_SCHEDULER:
+        from app.core.scheduler import stop_scheduler
+        stop_scheduler()
+
 
 app = FastAPI(
     title="AGRO-AI API",
     version=VERSION,
+    lifespan=lifespan,
 )
 
 # WiseConn integration routes
 from app.api.v1.wiseconn import router as wiseconn_router  # noqa: E402
 
 app.include_router(wiseconn_router, prefix="/v1")
+
+
+# Prometheus metrics endpoint
+from app.core.metrics import metrics_endpoint  # noqa: E402
+
+app.get("/metrics")(metrics_endpoint)
+
+
+# Request metrics middleware
+import time  # noqa: E402
+from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
+from starlette.requests import Request  # noqa: E402
+from app.core.metrics import api_requests, api_latency  # noqa: E402
+
+
+class MetricsMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        start = time.time()
+        response = await call_next(request)
+        elapsed = time.time() - start
+        endpoint = request.url.path
+        method = request.method
+        api_requests.labels(method=method, endpoint=endpoint, status=response.status_code).inc()
+        api_latency.labels(method=method, endpoint=endpoint).observe(elapsed)
+        return response
+
+
+app.add_middleware(MetricsMiddleware)
 
 # CORS: allow your production site + local dev
 app.add_middleware(
@@ -42,8 +110,16 @@ app.add_middleware(
 # -------------------------
 @app.get("/v1/health")
 async def health() -> Dict[str, Any]:
-    # If you later wire a real DB check, update "database" accordingly.
-    return {"status": "ok", "database": "ok", "version": VERSION}
+    from app.core.scheduler import get_last_sync_result
+
+    sync_status = get_last_sync_result()
+    return {
+        "status": "ok",
+        "database": "ok",
+        "version": VERSION,
+        "scheduler_enabled": settings.ENABLE_SCHEDULER,
+        "last_sync": sync_status,
+    }
 
 
 # -------------------------
