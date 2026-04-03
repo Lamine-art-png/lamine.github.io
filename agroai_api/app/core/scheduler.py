@@ -113,6 +113,17 @@ def start_scheduler() -> AsyncIOScheduler:
         max_instances=1,  # prevent overlapping runs
     )
 
+    # Run first sync 30 seconds after startup (non-blocking)
+    from datetime import timedelta
+    _scheduler.add_job(
+        run_wiseconn_sync,
+        trigger="date",
+        run_date=datetime.utcnow() + timedelta(seconds=30),
+        id="wiseconn_initial_sync",
+        name="WiseConn Initial Sync",
+        max_instances=1,
+    )
+
     _scheduler.start()
     logger.info(
         "Background scheduler started: WiseConn sync every %d minutes",

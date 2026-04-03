@@ -29,17 +29,12 @@ async def lifespan(app: FastAPI):
     init_db()
     logger.info("Database initialized")
 
-    # Start background scheduler if enabled
+    # Start background scheduler if enabled (sync runs on schedule, NOT blocking startup)
     if settings.ENABLE_SCHEDULER and settings.WISECONN_API_KEY:
-        from app.core.scheduler import start_scheduler, run_wiseconn_sync
+        from app.core.scheduler import start_scheduler
 
         start_scheduler()
-        # Run an initial sync on startup
-        logger.info("Running initial WiseConn sync...")
-        try:
-            await run_wiseconn_sync()
-        except Exception as e:
-            logger.warning("Initial sync failed (will retry on schedule): %s", e)
+        logger.info("Scheduler started — first sync will run on next interval")
     else:
         logger.info("Background scheduler disabled (ENABLE_SCHEDULER=%s, API key set=%s)",
                      settings.ENABLE_SCHEDULER, bool(settings.WISECONN_API_KEY))
