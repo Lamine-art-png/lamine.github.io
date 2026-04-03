@@ -18,6 +18,7 @@ from app.adapters.wiseconn import WiseConnAdapter, WiseConnError
 from app.models.block import Block
 from app.models.schedule import Schedule
 from app.models.telemetry import Telemetry
+from app.models.tenant import Tenant
 from app.schemas.wiseconn import (
     CanonicalDataPoint,
     CanonicalFarm,
@@ -327,6 +328,21 @@ class WiseConnSyncService:
     # Phase 5: Map to AGRO-AI domain and wire recommendations
     # ------------------------------------------------------------------
 
+    def _ensure_tenant_exists(self, tenant_id: str) -> None:
+        """Ensure the tenant row exists (required by foreign key on blocks)."""
+        if not self.db:
+            return
+        existing = self.db.query(Tenant).filter(Tenant.id == tenant_id).first()
+        if not existing:
+            self.db.add(Tenant(
+                id=tenant_id,
+                name="WiseConn Demo",
+                tier="standard",
+                active=True,
+            ))
+            self.db.commit()
+            logger.info("Created tenant: %s", tenant_id)
+
     def ensure_block_exists(
         self,
         zone: CanonicalZone,
@@ -336,6 +352,8 @@ class WiseConnSyncService:
         """Ensure an AGRO-AI Block exists for a WiseConn zone. Returns block_id."""
         if not self.db:
             return None
+
+        self._ensure_tenant_exists(tenant_id)
 
         block_id = f"wc-{zone.provider_id}"
         existing = self.db.query(Block).filter(Block.id == block_id).first()
