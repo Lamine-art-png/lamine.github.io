@@ -24,7 +24,7 @@ COPY agroai_api/ /app/agroai_api/
 # COPY agroai_cli.py /app/agroai_cli.py
 
 # Make repo root importable: allows `import agroai` and `import agroai_api`
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app:/app/agroai_api
 
 EXPOSE 8000
 
