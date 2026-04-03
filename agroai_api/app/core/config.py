@@ -1,3 +1,4 @@
+from pydantic import field_validator
 from pydantic_settings import BaseSettings
 from typing import Optional
 
@@ -45,6 +46,14 @@ class Settings(BaseSettings):
     OPENET_API_URL: str = "http://mock-openet"
 
     DEMO_API_KEY: str = "changeme-demo-key"  # override via env in prod
+
+    # Strip whitespace/tabs from env vars that may be copy-pasted with junk
+    @field_validator("*", mode="before")
+    @classmethod
+    def strip_whitespace(cls, v):
+        if isinstance(v, str):
+            return v.strip()
+        return v
 
     class Config:
         env_file = ".env"
