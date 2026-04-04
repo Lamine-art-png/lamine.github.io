@@ -13,6 +13,7 @@ from app.models.ingestion_run import IngestionRun
 from app.models.api_key import APIKey
 from app.models.model_run import ModelRun
 from app.models.invitation_token import InvitationToken
+from app.models.water_state import WaterState
 
 __all__ = [
     "Tenant",
@@ -29,4 +30,5 @@ __all__ = [
     "APIKey",
     "ModelRun",
     "InvitationToken",
+    "WaterState",
 ]

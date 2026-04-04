@@ -71,4 +71,4 @@ def test_recommender_with_targets(db, test_block):
     )
 
     assert result is not None
-    assert result["version"] == "rf-ens-1.0.0"
+    assert result["version"] == "wse-rec-1.0.0"
