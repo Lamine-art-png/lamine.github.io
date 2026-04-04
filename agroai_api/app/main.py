@@ -17,7 +17,7 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-VERSION = "1.3.0"
+VERSION = "1.6.0"
 
 
 @asynccontextmanager
@@ -57,6 +57,16 @@ app = FastAPI(
 from app.api.v1.wiseconn import router as wiseconn_router  # noqa: E402
 
 app.include_router(wiseconn_router, prefix="/v1")
+
+# Decisioning routes (water state + recommendations)
+from app.api.v1.decisioning import router as decisioning_router  # noqa: E402
+
+app.include_router(decisioning_router, prefix="/v1")
+
+# Execution assurance routes (verification + outcome tracking)
+from app.api.v1.execution_assurance import router as execution_router  # noqa: E402
+
+app.include_router(execution_router, prefix="/v1")
 
 
 # Prometheus metrics endpoint
