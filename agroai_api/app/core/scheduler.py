@@ -24,6 +24,7 @@ from app.services.wiseconn_sync import WiseConnSyncService
 from app.services.feature_builder import FeatureBuilder
 from app.services.water_state_engine import WaterStateEngine
 from app.services.recommendation_outcome_tracker import RecommendationOutcomeTracker
+from app.services.schedule_match_runner import ScheduleMatchRunner
 
 logger = logging.getLogger(__name__)
 
@@ -118,6 +119,14 @@ async def run_wiseconn_sync() -> None:
         # Run water state estimation for all blocks after sync
         water_state_count = _run_water_state_estimation(db, "wiseconn-demo")
 
+        # Run schedule matching (must happen before verification)
+        match_summary = {"forward_matched": 0, "retroactive_created": 0}
+        try:
+            match_runner = ScheduleMatchRunner()
+            match_summary = match_runner.run(db, "wiseconn-demo")
+        except Exception as e:
+            logger.warning("Schedule matching failed: %s", e)
+
         # Run outcome tracking for pending decision runs
         outcome_count = 0
         try:
@@ -136,6 +145,8 @@ async def run_wiseconn_sync() -> None:
                 "telemetry_zones": len(result.get("telemetry", [])),
                 "irrigation_zones": len(result.get("irrigations", [])),
                 "water_states_estimated": water_state_count,
+                "schedules_matched": match_summary.get("forward_matched", 0),
+                "retroactive_decisions": match_summary.get("retroactive_created", 0),
                 "verifications_processed": outcome_count,
                 "errors": result.get("errors", []),
             },

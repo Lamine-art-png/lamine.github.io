@@ -224,3 +224,13 @@ def compute_recommendation(
     )
 
     return RecommendationWithStateResponse(**result)
+
+
+@router.post("/lifecycle-proof")
+def run_lifecycle_proof(
+    tenant_id: str = "wiseconn-demo",
+    db: Session = Depends(get_db),
+):
+    """Run a full decision lifecycle proof using live synced data."""
+    from app.services.lifecycle_proof import prove_lifecycle
+    return prove_lifecycle(db, tenant_id)

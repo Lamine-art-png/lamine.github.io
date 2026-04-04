@@ -16,22 +16,24 @@ from app.models.telemetry import Telemetry
 from app.schemas.recommendation import IrrigationConstraints, IrrigationTargets
 from app.services.feature_builder import FeatureBuilder, FeatureSet
 from app.services.water_state_engine import WaterStateEngine, WaterStateEstimate
+from app.services.confidence_adjuster import ConfidenceAdjuster
 
 logger = logging.getLogger(__name__)
 
-MODEL_VERSION = "wse-rec-1.0.0"
+MODEL_VERSION = "wse-rec-1.1.0"
 
 
 class Recommender:
-    """Water-state-aware irrigation recommender.
+    """Water-state-aware irrigation recommender with feedback loop.
 
     Primary path: FeatureSet → WaterStateEstimate → recommendation.
-    Fallback path: direct DB queries (legacy, lower confidence).
+    Confidence is adjusted by recent verification outcomes (ConfidenceAdjuster).
     """
 
     def __init__(self):
         self._feature_builder = FeatureBuilder()
         self._engine = WaterStateEngine()
+        self._confidence_adjuster = ConfidenceAdjuster()
 
     def compute(
         self,
@@ -76,6 +78,10 @@ class Recommender:
         # Blend engine confidence with deficit confidence
         confidence = min(confidence, estimate.confidence)
 
+        # Apply feedback loop: adjust confidence based on verification history
+        adjustment = self._confidence_adjuster.compute(db, block_id)
+        confidence = max(0.0, min(1.0, confidence * adjustment.multiplier))
+
         explanations = []
         water_state_summary = {
             "root_zone_vwc": estimate.root_zone_vwc,
@@ -84,6 +90,11 @@ class Recommender:
             "hours_to_stress": estimate.hours_to_stress,
             "confidence": estimate.confidence,
             "anomaly_flags": estimate.anomaly_flags,
+        }
+        feedback_summary = {
+            "multiplier": adjustment.multiplier,
+            "signals": adjustment.adjustment_signals,
+            "history_count": adjustment.history_count,
         }
 
         if water_deficit_mm < 5:
@@ -130,6 +141,23 @@ class Recommender:
                     f"APPROACHING STRESS — {estimate.hours_to_stress:.0f}h remaining"
                 )
 
+        # Surface feedback signals in explanations
+        if "confidence_severely_reduced" in adjustment.adjustment_signals:
+            explanations.append(
+                f"CONFIDENCE REDUCED — recent verification history poor "
+                f"(multiplier: {adjustment.multiplier:.2f})"
+            )
+        elif "confidence_reduced" in adjustment.adjustment_signals:
+            explanations.append(
+                f"Confidence adjusted down based on recent outcomes "
+                f"(multiplier: {adjustment.multiplier:.2f})"
+            )
+        for sig in adjustment.adjustment_signals:
+            if sig.startswith("repeated_ineffective"):
+                explanations.append(
+                    f"Warning: {sig} — consider adjusting volume or timing"
+                )
+
         return {
             "when": when,
             "duration_min": round(duration_min, 2),
@@ -138,6 +166,7 @@ class Recommender:
             "explanations": explanations,
             "version": MODEL_VERSION,
             "water_state": water_state_summary,
+            "feedback": feedback_summary,
         }
 
     def _calculate_deficit_from_state(

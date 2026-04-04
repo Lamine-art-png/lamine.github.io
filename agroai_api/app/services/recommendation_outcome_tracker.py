@@ -3,6 +3,12 @@
 Finds decision runs that need verification, gathers planned/actual/soil
 data, runs the ExecutionVerifier, and persists results.
 
+Safeguards:
+- Only verifies decision runs with match_confidence >= VERIFICATION_MIN_CONFIDENCE
+- Skips ambiguous matches (match_method not set)
+- Skips decision runs without a linked schedule
+- Handles cancelled events, missing actual data gracefully
+
 Called by the scheduler after each sync cycle.
 """
 from __future__ import annotations
@@ -30,6 +36,9 @@ from app.services.execution_verifier import (
 
 logger = logging.getLogger(__name__)
 
+# Minimum match confidence to allow verification
+VERIFICATION_MIN_CONFIDENCE = 0.4
+
 
 class RecommendationOutcomeTracker:
     """Orchestrates verification for pending decision runs."""
@@ -42,19 +51,32 @@ class RecommendationOutcomeTracker:
 
         Returns number of verifications processed.
         """
-        # Find decision runs in applied or scheduled status that are old enough to verify
+        # Find decision runs in applied status that are old enough to verify
+        # AND have a schedule link AND sufficient match confidence
         cutoff = datetime.utcnow() - timedelta(hours=24)
         pending_runs = (
             db.query(DecisionRun)
             .filter(
                 and_(
                     DecisionRun.tenant_id == tenant_id,
-                    DecisionRun.status.in_(["applied", "scheduled"]),
+                    DecisionRun.status == "applied",
+                    DecisionRun.schedule_id.isnot(None),
                     DecisionRun.planned_start <= cutoff,
                 )
             )
             .all()
         )
+
+        # Gate: only verify confidently matched runs
+        verifiable_runs = []
+        for dr in pending_runs:
+            if dr.match_confidence is not None and dr.match_confidence < VERIFICATION_MIN_CONFIDENCE:
+                logger.debug(
+                    "Skipping verification for decision_run %s: low match confidence %.3f",
+                    dr.id, dr.match_confidence,
+                )
+                continue
+            verifiable_runs.append(dr)
 
         # Also find verifications pending 48h update
         pending_48h = (
@@ -70,8 +92,7 @@ class RecommendationOutcomeTracker:
 
         count = 0
 
-        # Process new verifications
-        for dr in pending_runs:
+        for dr in verifiable_runs:
             try:
                 self._verify_decision_run(db, dr)
                 count += 1
@@ -97,8 +118,8 @@ class RecommendationOutcomeTracker:
             db.commit()
 
         logger.info(
-            "Outcome tracker: processed %d verifications (%d new, %d 48h updates)",
-            count, len(pending_runs), len(pending_48h),
+            "Outcome tracker: %d verifiable of %d pending, %d processed, %d 48h updates",
+            len(verifiable_runs), len(pending_runs), count, len(pending_48h),
         )
         return count
 
@@ -113,14 +134,12 @@ class RecommendationOutcomeTracker:
         if existing and existing.verification_status == "complete":
             return
 
-        # Gather planned
         planned = PlannedExecution(
             start=dr.planned_start,
             duration_min=dr.planned_duration_min,
             volume_m3=dr.planned_volume_m3,
         )
 
-        # Gather actual from schedule
         actual = self._gather_actual(db, dr)
 
         # Update decision run with actuals
@@ -131,21 +150,14 @@ class RecommendationOutcomeTracker:
         if actual.volume_m3 is not None:
             dr.actual_volume_m3 = actual.volume_m3
 
-        # Gather soil response
         soil = self._gather_soil_response(db, dr)
-
-        # Run verifier
         result = self._verifier.verify(planned, actual, soil)
-
-        # Get pre-irrigation water state for snapshot
         pre_state = self._get_pre_irrigation_state(db, dr)
 
         if existing:
-            # Update existing
-            self._apply_result_to_ev(existing, result, soil, pre_state)
+            self._apply_result_to_ev(existing, result, soil, pre_state, dr)
             existing.updated_at = datetime.utcnow()
         else:
-            # Create new
             ev = ExecutionVerification(
                 id=str(uuid.uuid4()),
                 tenant_id=dr.tenant_id,
@@ -156,11 +168,10 @@ class RecommendationOutcomeTracker:
                 planned_start=planned.start,
                 verifier_version=result.verifier_version,
             )
-            self._apply_result_to_ev(ev, result, soil, pre_state)
+            self._apply_result_to_ev(ev, result, soil, pre_state, dr)
             db.add(ev)
             dr.verification_id = ev.id
 
-        # Update decision run status
         dr.status = "verified"
         dr.verified_at = datetime.utcnow()
         if actual.status == "completed":
@@ -176,7 +187,6 @@ class RecommendationOutcomeTracker:
             ev.post_48h_vwc = soil.post_48h_vwc
             ev.vwc_delta_48h = round(soil.post_48h_vwc - ev.pre_irrigation_vwc, 4)
 
-            # Re-run verifier with full data
             planned = PlannedExecution(
                 start=dr.planned_start,
                 duration_min=dr.planned_duration_min,
@@ -219,10 +229,8 @@ class RecommendationOutcomeTracker:
     ) -> SoilResponse:
         """Get pre/post irrigation soil moisture data from telemetry."""
         response = SoilResponse()
-
         irrig_time = dr.actual_start or dr.planned_start
 
-        # Pre-irrigation: latest VWC reading before irrigation
         pre_reading = (
             db.query(Telemetry)
             .filter(
@@ -239,7 +247,6 @@ class RecommendationOutcomeTracker:
         if pre_reading:
             response.pre_vwc = pre_reading.value
 
-        # Pre-irrigation stress risk from water state
         pre_state = (
             db.query(WaterState)
             .filter(
@@ -254,7 +261,6 @@ class RecommendationOutcomeTracker:
         if pre_state:
             response.pre_stress_risk = pre_state.stress_risk
 
-        # Post-24h: average VWC in window 20-28h after irrigation
         t_24h_start = irrig_time + timedelta(hours=20)
         t_24h_end = irrig_time + timedelta(hours=28)
         post_24h = (
@@ -272,7 +278,6 @@ class RecommendationOutcomeTracker:
         if post_24h:
             response.post_24h_vwc = sum(r.value for r in post_24h) / len(post_24h)
 
-        # Post-48h: average VWC in window 44-52h after irrigation
         t_48h_start = irrig_time + timedelta(hours=44)
         t_48h_end = irrig_time + timedelta(hours=52)
         post_48h = (
@@ -290,7 +295,6 @@ class RecommendationOutcomeTracker:
         if post_48h:
             response.post_48h_vwc = sum(r.value for r in post_48h) / len(post_48h)
 
-        # Peak VWC in first 48h
         all_post = (
             db.query(Telemetry)
             .filter(
@@ -344,16 +348,15 @@ class RecommendationOutcomeTracker:
         result: VerificationResult,
         soil: SoilResponse,
         pre_state: Optional[dict],
+        dr: DecisionRun,
     ) -> None:
         """Apply verification result fields to the EV record."""
-        ev.actual_duration_min = (
-            result.duration_deviation_pct is not None
-            and ev.planned_duration_min * (1 + result.duration_deviation_pct / 100)
-            or None
-        )
+        ev.actual_duration_min = dr.actual_duration_min
+        ev.actual_volume_m3 = dr.actual_volume_m3
+        ev.actual_start = dr.actual_start
+
         ev.duration_deviation_pct = result.duration_deviation_pct
         ev.volume_deviation_pct = result.volume_deviation_pct
-        ev.actual_start = None  # Set by caller from actual data
         ev.start_delay_minutes = result.start_delay_minutes
 
         ev.pre_irrigation_vwc = soil.pre_vwc

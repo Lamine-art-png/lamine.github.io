@@ -21,7 +21,7 @@ class DecisionRun(Base):
     # Links
     recommendation_id = Column(String, ForeignKey("recommendations.id"), nullable=False, index=True)
     schedule_id = Column(String, ForeignKey("schedules.id"), nullable=True, index=True)
-    verification_id = Column(String, nullable=True, index=True)  # FK added after verification model exists
+    verification_id = Column(String, nullable=True, index=True)
 
     # Planned values (from recommendation)
     planned_start = Column(DateTime, nullable=False)
@@ -36,6 +36,12 @@ class DecisionRun(Base):
     # Provider info
     provider = Column(String, nullable=True)  # wiseconn, rainbird, etc.
     provider_event_id = Column(String, nullable=True)
+
+    # Schedule match metadata (filled by ScheduleMatcher)
+    match_confidence = Column(Float, nullable=True)       # 0-1
+    match_method = Column(String, nullable=True)          # provider_id | time_block | time_duration | retroactive
+    match_reason = Column(String, nullable=True)          # Human-readable explanation
+    matched_at = Column(DateTime, nullable=True)
 
     # Engine version that produced the recommendation
     engine_version = Column(String, nullable=True)
@@ -54,4 +60,5 @@ class DecisionRun(Base):
         Index('ix_dr_block_status', 'block_id', 'status'),
         Index('ix_dr_tenant_block', 'tenant_id', 'block_id'),
         Index('ix_dr_schedule', 'schedule_id'),
+        Index('ix_dr_provider_event', 'provider_event_id'),
     )

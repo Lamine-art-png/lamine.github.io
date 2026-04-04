@@ -17,7 +17,7 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-VERSION = "1.5.0"
+VERSION = "1.6.0"
 
 
 @asynccontextmanager
