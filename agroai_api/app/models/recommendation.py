@@ -39,6 +39,9 @@ class Recommendation(Base):
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
     expires_at = Column(DateTime, nullable=True, index=True)  # For cache TTL
 
+    # Decision run linkage (set when recommendation enters execution pipeline)
+    decision_run_id = Column(String, nullable=True, index=True)
+
     # Relationships
     block = relationship("Block", back_populates="recommendations")
 

@@ -23,6 +23,7 @@ from app.models.water_state import WaterState
 from app.services.wiseconn_sync import WiseConnSyncService
 from app.services.feature_builder import FeatureBuilder
 from app.services.water_state_engine import WaterStateEngine
+from app.services.recommendation_outcome_tracker import RecommendationOutcomeTracker
 
 logger = logging.getLogger(__name__)
 
@@ -117,6 +118,14 @@ async def run_wiseconn_sync() -> None:
         # Run water state estimation for all blocks after sync
         water_state_count = _run_water_state_estimation(db, "wiseconn-demo")
 
+        # Run outcome tracking for pending decision runs
+        outcome_count = 0
+        try:
+            tracker = RecommendationOutcomeTracker()
+            outcome_count = tracker.run(db, "wiseconn-demo")
+        except Exception as e:
+            logger.warning("Outcome tracking failed: %s", e)
+
         _last_sync_result = {
             "run_id": run_id,
             "completed_at": datetime.utcnow().isoformat(),
@@ -127,6 +136,7 @@ async def run_wiseconn_sync() -> None:
                 "telemetry_zones": len(result.get("telemetry", [])),
                 "irrigation_zones": len(result.get("irrigations", [])),
                 "water_states_estimated": water_state_count,
+                "verifications_processed": outcome_count,
                 "errors": result.get("errors", []),
             },
         }

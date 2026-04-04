@@ -25,6 +25,15 @@ class Schedule(Base):
     provider = Column(String, nullable=True)  # wiseconn, rainbird, etc.
     provider_schedule_id = Column(String, nullable=True)
 
+    # Decision run linkage
+    decision_run_id = Column(String, nullable=True, index=True)
+
+    # Actual execution values (filled after completion)
+    actual_duration_min = Column(Float, nullable=True)
+    actual_volume_m3 = Column(Float, nullable=True)
+    actual_start = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+
     # Metadata
     meta_data = Column(JSON, nullable=True)
 
@@ -34,4 +43,5 @@ class Schedule(Base):
 
     __table_args__ = (
         Index('ix_schedule_status', 'status', 'start_time'),
+        Index('ix_schedule_decision_run', 'decision_run_id'),
     )

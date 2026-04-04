@@ -17,7 +17,7 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-VERSION = "1.4.0"
+VERSION = "1.5.0"
 
 
 @asynccontextmanager
@@ -62,6 +62,11 @@ app.include_router(wiseconn_router, prefix="/v1")
 from app.api.v1.decisioning import router as decisioning_router  # noqa: E402
 
 app.include_router(decisioning_router, prefix="/v1")
+
+# Execution assurance routes (verification + outcome tracking)
+from app.api.v1.execution_assurance import router as execution_router  # noqa: E402
+
+app.include_router(execution_router, prefix="/v1")
 
 
 # Prometheus metrics endpoint
