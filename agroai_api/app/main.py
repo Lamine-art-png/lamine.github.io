@@ -17,7 +17,7 @@ from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-VERSION = "1.6.0"
+VERSION = "2.0.0"
 
 
 @asynccontextmanager
@@ -67,6 +67,11 @@ app.include_router(decisioning_router, prefix="/v1")
 from app.api.v1.execution_assurance import router as execution_router  # noqa: E402
 
 app.include_router(execution_router, prefix="/v1")
+
+# Forecast routes (VWC forecast, accuracy, optimization)
+from app.api.v1.forecast import router as forecast_router  # noqa: E402
+
+app.include_router(forecast_router, prefix="/v1")
 
 
 # Prometheus metrics endpoint

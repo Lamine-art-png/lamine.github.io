@@ -20,9 +20,12 @@ from app.core.metrics import sync_runs_total, sync_duration
 from app.db.base import SessionLocal
 from app.models.block import Block
 from app.models.water_state import WaterState
+from app.models.forecast import Forecast
 from app.services.wiseconn_sync import WiseConnSyncService
 from app.services.feature_builder import FeatureBuilder
 from app.services.water_state_engine import WaterStateEngine
+from app.services.forecast_engine import ForecastEngine
+from app.services.crop_soil_profile import get_profile
 from app.services.recommendation_outcome_tracker import RecommendationOutcomeTracker
 from app.services.schedule_match_runner import ScheduleMatchRunner
 
@@ -87,6 +90,54 @@ def _run_water_state_estimation(db, tenant_id: str) -> int:
     return count
 
 
+def _run_forecasts(db, tenant_id: str) -> int:
+    """Run VWC forecast for all blocks belonging to a tenant.
+
+    Runs after water state estimation to produce forecast trajectories.
+    Returns the number of blocks forecast.
+    """
+    import uuid as _uuid
+
+    blocks = db.query(Block).filter(Block.tenant_id == tenant_id).all()
+    if not blocks:
+        return 0
+
+    builder = FeatureBuilder()
+    engine = ForecastEngine()
+    count = 0
+
+    for block in blocks:
+        try:
+            profile = get_profile(block.crop_type, block.soil_type)
+            fs = builder.build(db, block.id)
+            forecast = engine.forecast(fs, profile)
+
+            fc_record = Forecast(
+                id=str(_uuid.uuid4()),
+                tenant_id=tenant_id,
+                block_id=block.id,
+                computed_at=forecast.computed_at,
+                current_vwc=forecast.current_vwc,
+                points=[p.__dict__ for p in forecast.points],
+                hours_to_stress=forecast.hours_to_stress,
+                optimal_irrigation_window=forecast.optimal_irrigation_window,
+                confidence=forecast.confidence,
+                profile_used=forecast.profile_used,
+                forecast_version=forecast.forecast_version,
+            )
+            db.add(fc_record)
+            count += 1
+        except Exception as e:
+            logger.warning(
+                "Forecast failed for block %s: %s", block.id, e,
+            )
+
+    if count > 0:
+        db.commit()
+    logger.info("Forecasts generated for %d/%d blocks", count, len(blocks))
+    return count
+
+
 async def run_wiseconn_sync() -> None:
     """Execute a full WiseConn sync cycle.
 
@@ -119,6 +170,13 @@ async def run_wiseconn_sync() -> None:
         # Run water state estimation for all blocks after sync
         water_state_count = _run_water_state_estimation(db, "wiseconn-demo")
 
+        # Run VWC forecast for all blocks after water state
+        forecast_count = 0
+        try:
+            forecast_count = _run_forecasts(db, "wiseconn-demo")
+        except Exception as e:
+            logger.warning("Forecast generation failed: %s", e)
+
         # Run schedule matching (must happen before verification)
         match_summary = {"forward_matched": 0, "retroactive_created": 0}
         try:
@@ -145,6 +203,7 @@ async def run_wiseconn_sync() -> None:
                 "telemetry_zones": len(result.get("telemetry", [])),
                 "irrigation_zones": len(result.get("irrigations", [])),
                 "water_states_estimated": water_state_count,
+                "forecasts_generated": forecast_count,
                 "schedules_matched": match_summary.get("forward_matched", 0),
                 "retroactive_decisions": match_summary.get("retroactive_created", 0),
                 "verifications_processed": outcome_count,
