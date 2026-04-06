@@ -16,6 +16,7 @@ from app.models.invitation_token import InvitationToken
 from app.models.water_state import WaterState
 from app.models.decision_run import DecisionRun
 from app.models.execution_verification import ExecutionVerification
+from app.models.forecast import Forecast
 
 __all__ = [
     "Tenant",
@@ -35,4 +36,5 @@ __all__ = [
     "WaterState",
     "DecisionRun",
     "ExecutionVerification",
+    "Forecast",
 ]
