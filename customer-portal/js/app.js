@@ -22,6 +22,15 @@ const panels = {
   reports: document.getElementById("reports"),
 };
 
+function escapeHtml(value) {
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
 function setMessage(text = "", type = "") {
   const el = document.getElementById("global-message");
   if (!text) {
@@ -57,6 +66,17 @@ function selectedZone() {
   return getSelectedZones().find((z) => String(z.id) === String(state.selectedZoneId));
 }
 
+function getBlockIdFromZone(zone) {
+  if (!zone) return "";
+  if (zone.block_id) return String(zone.block_id);
+
+  const providerId = zone.provider_id || zone.id;
+  if (!providerId) return "";
+
+  const providerValue = String(providerId);
+  return providerValue.startsWith("wc-") ? providerValue : `wc-${providerValue}`;
+}
+
 function deriveControllerSource(farm, zones) {
   const sourceSet = new Set();
 
@@ -75,7 +95,7 @@ function deriveControllerSource(farm, zones) {
 
 function updateSelectors() {
   farmSelectEl.innerHTML = state.farms
-    .map((farm) => `<option value="${farm.id}">${farm.name || farm.id}</option>`)
+    .map((farm) => `<option value="${escapeHtml(farm.id)}">${escapeHtml(farm.name || farm.id)}</option>`)
     .join("");
 
   if (!state.selectedFarmId && state.farms.length) {
@@ -86,7 +106,9 @@ function updateSelectors() {
 
   const zones = getSelectedZones();
   zoneSelectEl.innerHTML = zones.length
-    ? zones.map((zone) => `<option value="${zone.id}">${zone.name || zone.id}</option>`).join("")
+    ? zones
+        .map((zone) => `<option value="${escapeHtml(zone.id)}">${escapeHtml(zone.name || zone.id)}</option>`)
+        .join("")
     : '<option value="">No zones available</option>';
 
   if (zones.length && !zones.some((z) => String(z.id) === String(state.selectedZoneId))) {
@@ -98,13 +120,16 @@ function updateSelectors() {
 
 function renderTable(panel, headers, rows, emptyText) {
   if (!rows.length) {
-    panel.innerHTML = `<section class="card empty">${emptyText}</section>`;
+    panel.innerHTML = `<section class="card empty">${escapeHtml(emptyText)}</section>`;
     return;
   }
 
-  const head = headers.map((h) => `<th>${h}</th>`).join("");
+  const head = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("");
   const body = rows
-    .map((row) => `<tr>${row.map((cell) => `<td>${cell ?? "n/a"}</td>`).join("")}</tr>`)
+    .map(
+      (row) =>
+        `<tr>${row.map((cell) => `<td>${escapeHtml(cell ?? "n/a")}</td>`).join("")}</tr>`
+    )
     .join("\n");
 
   panel.innerHTML = `<table class="table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
@@ -113,7 +138,7 @@ function renderTable(panel, headers, rows, emptyText) {
 async function bootstrapFarmsAndZones() {
   const farmsRes = await api.getFarms();
   if (!farmsRes.ok) {
-    setMessage(`Unable to load farms (${farmsRes.status}).`, "error");
+    setMessage(`Unable to load farms (${farmsRes.status || "network"}).`, "error");
     state.farms = [];
     return;
   }
@@ -156,20 +181,20 @@ async function renderOverview() {
       const farmZones = state.zonesByFarm.get(String(farm.id)) || [];
       return `
       <section class="card">
-        <h3>${farm.name || `Farm ${farm.id}`}</h3>
-        <p class="kv"><span>Farm ID:</span>${farm.id}</p>
-        <p class="kv"><span>Zones:</span>${farmZones.length}</p>
-        <p class="kv"><span>Controller source:</span>${deriveControllerSource(farm, farmZones)}</p>
+        <h3>${escapeHtml(farm.name || `Farm ${farm.id}`)}</h3>
+        <p class="kv"><span>Farm ID:</span>${escapeHtml(farm.id)}</p>
+        <p class="kv"><span>Zones:</span>${escapeHtml(farmZones.length)}</p>
+        <p class="kv"><span>Controller source:</span>${escapeHtml(deriveControllerSource(farm, farmZones))}</p>
       </section>`;
     })
     .join("\n");
 
   panel.innerHTML = `
     <section class="kpi-row">
-      <article class="card"><p class="kpi-value">${farms.length}</p><p class="kpi-label">Farms</p></article>
-      <article class="card"><p class="kpi-value">${allZones.length}</p><p class="kpi-label">Zones</p></article>
-      <article class="card"><p class="kpi-value">${portfolioSource}</p><p class="kpi-label">Controller source</p></article>
-      <article class="card"><p class="kpi-value">${selectedFarm ? zones.length : 0}</p><p class="kpi-label">Selected farm zones</p></article>
+      <article class="card"><p class="kpi-value">${escapeHtml(farms.length)}</p><p class="kpi-label">Farms</p></article>
+      <article class="card"><p class="kpi-value">${escapeHtml(allZones.length)}</p><p class="kpi-label">Zones</p></article>
+      <article class="card"><p class="kpi-value">${escapeHtml(portfolioSource)}</p><p class="kpi-label">Controller source</p></article>
+      <article class="card"><p class="kpi-value">${escapeHtml(selectedFarm ? zones.length : 0)}</p><p class="kpi-label">Selected farm zones</p></article>
     </section>
     <section class="grid-two">${cards || '<section class="card empty">No farms available yet.</section>'}</section>
   `;
@@ -185,10 +210,16 @@ async function renderRecommendations() {
     return;
   }
 
+  const blockId = getBlockIdFromZone(zone);
+  if (!blockId) {
+    panel.innerHTML = '<section class="card empty">No block mapping is available for this selected zone.</section>';
+    return;
+  }
+
   const [waterRes, historyRes, decisionsRes] = await Promise.all([
-    api.getWaterState(zone.id),
-    api.getWaterStateHistory(zone.id, 8),
-    api.getDecisionRuns(zone.id, 10),
+    api.getWaterState(blockId),
+    api.getWaterStateHistory(blockId, 8),
+    api.getDecisionRuns(blockId, 10),
   ]);
 
   const latestDecision = decisionsRes.ok ? toArray(decisionsRes.data)[0] : null;
@@ -198,19 +229,19 @@ async function renderRecommendations() {
     <section class="grid-two">
       <article class="card">
         <h3>Latest Recommendation</h3>
-        <p class="kv"><span>Time:</span>${formatDate(latestDecision?.recommended_at)}</p>
-        <p class="kv"><span>Duration:</span>${latestDecision?.planned_duration_min ?? "n/a"} min</p>
-        <p class="kv"><span>Volume:</span>${latestDecision?.planned_volume_m3 ?? "n/a"} m³</p>
-        <p class="kv"><span>Status:</span>${latestDecision?.status || "n/a"}</p>
-        <p class="kv"><span>Provider:</span>${latestDecision?.provider || "WiseConn"}</p>
+        <p class="kv"><span>Time:</span>${escapeHtml(formatDate(latestDecision?.recommended_at))}</p>
+        <p class="kv"><span>Duration:</span>${escapeHtml(latestDecision?.planned_duration_min ?? "n/a")} min</p>
+        <p class="kv"><span>Volume:</span>${escapeHtml(latestDecision?.planned_volume_m3 ?? "n/a")} m³</p>
+        <p class="kv"><span>Status:</span>${escapeHtml(latestDecision?.status || "n/a")}</p>
+        <p class="kv"><span>Provider:</span>${escapeHtml(latestDecision?.provider || "WiseConn")}</p>
       </article>
       <article class="card">
         <h3>Water State</h3>
-        <p class="kv"><span>Estimated at:</span>${formatDate(waterRes.data?.estimated_at)}</p>
-        <p class="kv"><span>Root zone VWC:</span>${waterRes.data?.root_zone_vwc ?? "n/a"}</p>
-        <p class="kv"><span>Stress risk:</span>${waterRes.data?.stress_risk ?? "n/a"}</p>
-        <p class="kv"><span>Hours to stress:</span>${waterRes.data?.hours_to_stress ?? "n/a"}</p>
-        <p class="kv"><span>Confidence:</span>${waterRes.data?.confidence ?? "n/a"}</p>
+        <p class="kv"><span>Estimated at:</span>${escapeHtml(formatDate(waterRes.data?.estimated_at))}</p>
+        <p class="kv"><span>Root zone VWC:</span>${escapeHtml(waterRes.data?.root_zone_vwc ?? "n/a")}</p>
+        <p class="kv"><span>Stress risk:</span>${escapeHtml(waterRes.data?.stress_risk ?? "n/a")}</p>
+        <p class="kv"><span>Hours to stress:</span>${escapeHtml(waterRes.data?.hours_to_stress ?? "n/a")}</p>
+        <p class="kv"><span>Confidence:</span>${escapeHtml(waterRes.data?.confidence ?? "n/a")}</p>
       </article>
     </section>
     <section id="water-state-history"></section>
@@ -244,8 +275,9 @@ async function renderVerification() {
     return;
   }
 
+  const blockId = getBlockIdFromZone(zone);
   const [verificationsRes, irrigationsRes] = await Promise.all([
-    api.getVerifications(zone.id, 20),
+    blockId ? api.getVerifications(blockId, 20) : Promise.resolve({ ok: false, status: 0, data: null }),
     api.getIrrigations(zone.id, 14),
   ]);
 
@@ -299,20 +331,21 @@ async function renderReports() {
   panel.innerHTML = '<section class="card">Loading reports…</section>';
 
   const zone = selectedZone();
+  const blockId = getBlockIdFromZone(zone);
   const { from, to } = defaultDateWindow(30);
-  const reportRes = await api.getRoiReport({ from, to, blockId: zone?.id || "" });
+  const reportRes = await api.getRoiReport({ from, to, blockId: blockId || "" });
 
   if (reportRes.ok) {
     const r = reportRes.data;
     panel.innerHTML = `
       <section class="card">
-        <h3>ROI Report (${from} → ${to})</h3>
-        <p class="kv"><span>Block:</span>${r.block_id || "All"}</p>
-        <p class="kv"><span>Water saved:</span>${r.water_saved_m3} m³</p>
-        <p class="kv"><span>Energy saved:</span>${r.energy_saved_kwh} kWh</p>
-        <p class="kv"><span>Cost saved:</span>$${r.cost_saved_usd}</p>
-        <p class="kv"><span>Yield delta:</span>${r.yield_delta_pct}%</p>
-        <p class="kv"><span>Baseline method:</span>${r.baseline_method}</p>
+        <h3>ROI Report (${escapeHtml(from)} → ${escapeHtml(to)})</h3>
+        <p class="kv"><span>Block:</span>${escapeHtml(r.block_id || "All")}</p>
+        <p class="kv"><span>Water saved:</span>${escapeHtml(r.water_saved_m3)} m³</p>
+        <p class="kv"><span>Energy saved:</span>${escapeHtml(r.energy_saved_kwh)} kWh</p>
+        <p class="kv"><span>Cost saved:</span>$${escapeHtml(r.cost_saved_usd)}</p>
+        <p class="kv"><span>Yield delta:</span>${escapeHtml(r.yield_delta_pct)}%</p>
+        <p class="kv"><span>Baseline method:</span>${escapeHtml(r.baseline_method)}</p>
       </section>
     `;
     return;
@@ -324,7 +357,7 @@ async function renderReports() {
     return;
   }
 
-  panel.innerHTML = `<section class="card empty">Reports unavailable (${reportRes.status || "request failed"}).</section>`;
+  panel.innerHTML = `<section class="card empty">Reports unavailable (${escapeHtml(reportRes.status || "request failed")}).</section>`;
 }
 
 async function renderTab(tab) {

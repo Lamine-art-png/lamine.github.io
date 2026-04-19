@@ -21,28 +21,38 @@ export class ApiClient {
   }
 
   async request(path) {
-    const response = await fetch(`${this.baseUrl}${path}`);
-    const contentType = response.headers.get("content-type") || "";
-    let payload = null;
+    try {
+      const response = await fetch(`${this.baseUrl}${path}`);
+      const contentType = response.headers.get("content-type") || "";
+      let payload = null;
 
-    if (contentType.includes("application/json")) {
-      payload = await response.json();
-    }
+      if (contentType.includes("application/json")) {
+        payload = await response.json();
+      }
 
-    if (!response.ok) {
+      if (!response.ok) {
+        return {
+          ok: false,
+          status: response.status,
+          error: payload?.detail || `HTTP ${response.status}`,
+          data: payload,
+        };
+      }
+
       return {
-        ok: false,
+        ok: true,
         status: response.status,
-        error: payload?.detail || `HTTP ${response.status}`,
+        error: null,
         data: payload,
       };
+    } catch (error) {
+      return {
+        ok: false,
+        status: 0,
+        error: error instanceof Error ? error.message : "Network request failed",
+        data: null,
+      };
     }
-
-    return {
-      ok: true,
-      status: response.status,
-      data: payload,
-    };
   }
 
   getAuth() {
