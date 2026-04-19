@@ -1,0 +1,26 @@
+name = "agroai-api-native"
+main = "src/index.ts"
+compatibility_date = "2024-05-29"
+
+# ── Staging ──────────────────────────────────────────────
+[env.staging]
+name = "agroai-api-staging"
+vars = { ENVIRONMENT = "staging" }
+
+[[env.staging.d1_databases]]
+binding = "DB"
+database_name = "agroai_staging2"
+database_id = "b05f51b7-9aa3-4e9f-ac8c-505f1f6e4cdf"
+
+[env.staging.durable_objects]
+bindings = [
+  { name = "TALGIL_SYNC", class_name = "TalgilSyncDO" }
+]
+
+[[env.staging.migrations]]
+tag = "v1"
+new_sqlite_classes = ["TalgilSyncDO"]
+
+# ── Production ───────────────────────────────────────────
+# [env.production]
+# Uncomment after 48-hour load test passes
