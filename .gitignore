@@ -26,3 +26,13 @@ __pycache__/
 # accidental root init
 __init__.py
 
+
+# Cloudflare worker local/proof artifacts
+agroai-cloudflare-worker/api-native/.dev.vars*
+agroai-cloudflare-worker/api-native/talgil-proof-*/
+agroai-cloudflare-worker/api-native/.wrangler/
+agroai-cloudflare-worker/api-native/*.log
+agroai-cloudflare-worker/api-native/*.dat
+agroai-cloudflare-worker/api-native/serial.txt
+agroai-cloudflare-worker/api-native/connections.dat
+agroai-cloudflare-worker/api-native/fealog.txt
