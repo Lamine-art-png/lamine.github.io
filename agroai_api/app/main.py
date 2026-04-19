@@ -107,8 +107,9 @@ app.add_middleware(
     allow_origins=[
         "https://agroai-pilot.com",
         "https://www.agroai-pilot.com",
-        "http://localhost:5173",
-        "http://localhost:3000",
+        "https://app.agroai-pilot.com",
+        "https://agroai-portal.pages.dev",
+        "http://localhost:4173",
     ],
     allow_credentials=True,
     allow_methods=["*"],
