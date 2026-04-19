@@ -1,0 +1,282 @@
+:root {
+  --bg: #f3f6fb;
+  --panel: #ffffff;
+  --text: #1b2a3a;
+  --muted: #66798f;
+  --line: #d9e3ef;
+  --brand: #146c57;
+  --brand-soft: #e8f4f1;
+  --warn: #9e5c00;
+  --error: #b42318;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.layout {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 250px 1fr;
+}
+
+.sidebar {
+  background: #0f1b2d;
+  color: #d3deed;
+  border-right: 1px solid #223650;
+  padding: 28px 16px;
+}
+
+.brand {
+  color: #fff;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.subtitle {
+  margin: 6px 0 0;
+  color: #9eb1ca;
+  font-size: 13px;
+}
+
+.tabs {
+  margin-top: 22px;
+  display: grid;
+  gap: 8px;
+}
+
+.tab {
+  border: 1px solid #25405d;
+  color: #b6c7dd;
+  background: transparent;
+  border-radius: 8px;
+  padding: 10px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tab.active,
+.tab:hover {
+  background: #1e3550;
+  border-color: #3f6690;
+  color: #fff;
+}
+
+.content {
+  padding: 26px;
+}
+
+.topbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 16px;
+  gap: 16px;
+}
+
+.topbar h1 {
+  margin: 0;
+  font-size: 28px;
+}
+
+.subhead {
+  margin: 6px 0 0;
+  color: var(--muted);
+}
+
+.topbar-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pill {
+  border: 1px solid #c5d5e9;
+  background: #edf4ff;
+  color: #284767;
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 12px;
+}
+
+.pill.ok {
+  border-color: #9bd2c0;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.pill.error {
+  border-color: #edc4c1;
+  background: #fff0ef;
+  color: var(--error);
+}
+
+.card {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 14px;
+}
+
+.filters {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(180px, 1fr));
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.filters label {
+  display: block;
+  font-size: 12px;
+  margin-bottom: 6px;
+  color: var(--muted);
+}
+
+input,
+select,
+button {
+  font: inherit;
+}
+
+select,
+input {
+  width: 100%;
+  border: 1px solid #c8d6e8;
+  border-radius: 8px;
+  background: #fff;
+  padding: 8px 10px;
+}
+
+.inline-input {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+
+.btn {
+  border: 1px solid #aac1dd;
+  border-radius: 8px;
+  background: #f4f8ff;
+  color: #2c4f76;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+
+.btn:hover {
+  background: #eaf2ff;
+}
+
+.message {
+  margin-bottom: 12px;
+  border: 1px solid #c8d8ef;
+  border-radius: 8px;
+  padding: 10px;
+  background: #edf4ff;
+  color: #2a4f73;
+}
+
+.message.warn {
+  border-color: #f1d39e;
+  background: #fff8ea;
+  color: var(--warn);
+}
+
+.message.error {
+  border-color: #edc4c1;
+  background: #fff0ef;
+  color: var(--error);
+}
+
+.panel {
+  display: grid;
+  gap: 12px;
+}
+
+.grid-two {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+}
+
+.kpi-row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+}
+
+.kpi-value {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.kpi-label {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.kv {
+  margin: 6px 0;
+  font-size: 14px;
+}
+
+.kv span {
+  color: var(--muted);
+  margin-right: 6px;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.table th,
+.table td {
+  border-bottom: 1px solid var(--line);
+  padding: 10px;
+  text-align: left;
+  font-size: 14px;
+  vertical-align: top;
+}
+
+.table th {
+  background: #f7faff;
+  color: #355372;
+}
+
+.muted {
+  color: var(--muted);
+}
+
+.hidden {
+  display: none;
+}
+
+@media (max-width: 1020px) {
+  .layout {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    border-right: 0;
+    border-bottom: 1px solid #223650;
+  }
+
+  .filters,
+  .kpi-row,
+  .grid-two {
+    grid-template-columns: 1fr;
+  }
+}
