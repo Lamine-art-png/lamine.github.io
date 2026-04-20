@@ -78,6 +78,11 @@ from app.api.v1.controllers import router as controllers_router  # noqa: E402
 
 app.include_router(controllers_router, prefix="/v1")
 
+# Talgil integration routes (read-path runtime surfaces)
+from app.api.v1.talgil import router as talgil_router  # noqa: E402
+
+app.include_router(talgil_router, prefix="/v1")
+
 
 # Prometheus metrics endpoint
 from app.core.metrics import metrics_endpoint  # noqa: E402

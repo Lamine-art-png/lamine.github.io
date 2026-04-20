@@ -1,23 +1,22 @@
-# Talgil Preservation Note (Internal)
+# Talgil Runtime Note (FastAPI)
 
-## What is preserved in this phase
+## Current state in this branch
 
-- Talgil-specific integration artifacts remain preserved in-repo (notably under `agroai-cloudflare-worker/api-native/`).
-- Portal now consumes a source-aware summary route (`GET /v1/controllers/environments`) to present Talgil truthfully as an integration-ready environment.
+- Talgil worker-era integration artifacts remain preserved under `agroai-cloudflare-worker/api-native/`.
+- FastAPI now includes real Talgil read-path runtime routes under `/v1/talgil` using the same upstream endpoints family (`/mytargets`, `/targets/{id}/`).
+- Controller environment truth (`GET /v1/controllers/environments`) is source-aware for both WiseConn and Talgil:
+  - Talgil is `integration_ready` when `TALGIL_API_KEY` is not configured.
+  - Talgil is `configured` when key exists but auth/read fails.
+  - Talgil is `live` only when runtime auth/read succeeds.
 
-## What is intentionally not live yet
+## What this does not claim
 
-- No Talgil write calls, secrets, or controller provisioning changes are introduced.
-- No Cloudflare Worker or Railway deployment path changes are introduced in this branch.
+- No fabricated Talgil telemetry, recommendations, verification events, or reports.
+- No Talgil write path exposure from this FastAPI deployment.
+- No DNS/networking/secrets-plane changes.
 
-## What remains before Talgil deployment
+## Remaining work for parity
 
-1. Reconcile and cherry-pick only clean Talgil integration commits from the dedicated Talgil workstream/branch (not present in this checkout).
-2. Add tenant-scoped Talgil endpoints in backend API and expose them in OpenAPI.
-3. Connect portal adapters to those finalized endpoints and add end-to-end verification tests.
-
-## What is intentionally not faked
-
-- No fake Talgil telemetry rows are generated.
-- No fake Talgil recommendations or verification events are shown.
-- No Talgil write-path calls are exposed from this FastAPI deployment until real runtime wiring exists.
+1. Persist Talgil reads into AGRO-AI database tables for decisioning/verification/reporting parity.
+2. Add source-aware ingestion + scheduling orchestration equivalent to WiseConn sync service.
+3. Add historical log/event/water-consumption endpoints only when backed by persisted runtime implementation.

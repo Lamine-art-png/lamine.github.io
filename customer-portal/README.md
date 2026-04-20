@@ -30,6 +30,10 @@ You can override without source edits by using one of these:
 - `GET /v1/wiseconn/farms`
 - `GET /v1/wiseconn/farms/{farm_id}/zones`
 - `GET /v1/wiseconn/zones/{zone_id}/irrigations`
+- `GET /v1/talgil/auth`
+- `GET /v1/talgil/targets`
+- `GET /v1/talgil/farms`
+- `GET /v1/talgil/farms/{farm_id}/zones`
 - `GET /v1/decisioning/blocks/{block_id}/water-state`
 - `GET /v1/decisioning/blocks/{block_id}/water-state/history`
 - `GET /v1/execution/blocks/{block_id}/decisions`
@@ -40,7 +44,8 @@ You can override without source edits by using one of these:
 
 - Portal reads controller environment status from `GET /v1/controllers/environments`.
 - WiseConn zone IDs are mapped to decisioning/execution block IDs as `wc-{zone_id}`.
-- Talgil is surfaced as `integration_ready` unless backend runtime endpoints are actually live.
+- Talgil sensor entities are mapped as `tg-{controller_id}-{sensor_uid}` to keep provider-specific block identity stable.
+- Talgil environment state now comes from real `/v1/talgil` runtime reads and only shows `live` when authenticated.
 
 ## Static deploy note (`app.agroai-pilot.com`)
 
