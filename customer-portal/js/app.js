@@ -14,9 +14,6 @@ const titleEl = document.getElementById("page-title");
 const authBadgeEl = document.getElementById("auth-badge");
 const farmSelectEl = document.getElementById("farm-select");
 const zoneSelectEl = document.getElementById("zone-select");
-const apiBaseEl = document.getElementById("api-base");
-const apiBaseInputEl = document.getElementById("api-base-input");
-const apiBaseSaveEl = document.getElementById("api-base-save");
 
 const panels = {
   overview: document.getElementById("overview"),
@@ -25,8 +22,14 @@ const panels = {
   reports: document.getElementById("reports"),
 };
 
-apiBaseEl.textContent = api.baseUrl;
-apiBaseInputEl.value = api.baseUrl;
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
 
 function setMessage(text = "", type = "") {
   const el = document.getElementById("global-message");
@@ -47,7 +50,7 @@ function setAuthBadge({ ok, text }) {
 function formatDate(value) {
   if (!value) return "n/a";
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
+  if (Number.isNaN(date.getTime())) return String(value);
   return date.toLocaleString();
 }
 
@@ -65,7 +68,7 @@ function selectedZone() {
 
 function updateSelectors() {
   farmSelectEl.innerHTML = state.farms
-    .map((farm) => `<option value="${farm.id}">${farm.name || farm.id}</option>`)
+    .map((farm) => `<option value="${escapeHtml(farm.id)}">${escapeHtml(farm.name || farm.id)}</option>`)
     .join("");
 
   if (!state.selectedFarmId && state.farms.length) {
@@ -76,7 +79,9 @@ function updateSelectors() {
 
   const zones = getSelectedZones();
   zoneSelectEl.innerHTML = zones.length
-    ? zones.map((zone) => `<option value="${zone.id}">${zone.name || zone.id}</option>`).join("")
+    ? zones
+        .map((zone) => `<option value="${escapeHtml(zone.id)}">${escapeHtml(zone.name || zone.id)}</option>`)
+        .join("")
     : '<option value="">No zones available</option>';
 
   if (zones.length && !zones.some((z) => String(z.id) === String(state.selectedZoneId))) {
@@ -88,16 +93,19 @@ function updateSelectors() {
 
 function renderTable(panel, headers, rows, emptyText) {
   if (!rows.length) {
-    panel.innerHTML = `<section class="card muted">${emptyText}</section>`;
+    panel.innerHTML = `<section class="empty-state">${escapeHtml(emptyText)}</section>`;
     return;
   }
 
-  const head = headers.map((h) => `<th>${h}</th>`).join("");
+  const head = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("");
   const body = rows
-    .map((row) => `<tr>${row.map((cell) => `<td>${cell ?? "n/a"}</td>`).join("")}</tr>`)
+    .map(
+      (row) =>
+        `<tr>${row.map((cell) => `<td>${escapeHtml(cell ?? "n/a")}</td>`).join("")}</tr>`
+    )
     .join("\n");
 
-  panel.innerHTML = `<table class="table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table>`;
+  panel.innerHTML = `<div class="table-wrap"><table class="table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
 }
 
 async function bootstrapFarmsAndZones() {
@@ -105,6 +113,7 @@ async function bootstrapFarmsAndZones() {
   if (!farmsRes.ok) {
     setMessage(`Unable to load farms (${farmsRes.status}).`, "error");
     state.farms = [];
+    updateSelectors();
     return;
   }
 
@@ -140,6 +149,9 @@ async function renderOverview() {
 
   const selectedFarm = farms.find((f) => String(f.id) === String(state.selectedFarmId));
   const zones = getSelectedZones();
+  const sourceSummary = Object.entries(sourceCounts)
+    .map(([key, count]) => `${key} (${count})`)
+    .join(", ");
 
   const cards = farms
     .slice(0, 8)
@@ -147,22 +159,26 @@ async function renderOverview() {
       const farmZones = state.zonesByFarm.get(String(farm.id)) || [];
       return `
       <section class="card">
-        <h3>${farm.name || `Farm ${farm.id}`}</h3>
-        <p class="kv"><span>Farm ID:</span>${farm.id}</p>
-        <p class="kv"><span>Zones:</span>${farmZones.length}</p>
-        <p class="kv"><span>Controller source:</span>${farm.provider || "unknown"}</p>
+        <h3 class="section-title">${escapeHtml(farm.name || `Farm ${farm.id}`)}</h3>
+        <p class="kv"><span>Farm ID:</span>${escapeHtml(farm.id)}</p>
+        <p class="kv"><span>Zones:</span>${escapeHtml(farmZones.length)}</p>
+        <p class="kv"><span>Controller source:</span>${escapeHtml(farm.provider || "unknown")}</p>
       </section>`;
     })
     .join("\n");
 
   panel.innerHTML = `
     <section class="kpi-row">
-      <article class="card"><p class="kpi-value">${farms.length}</p><p class="kpi-label">Farms</p></article>
-      <article class="card"><p class="kpi-value">${allZones.length}</p><p class="kpi-label">Zones</p></article>
-      <article class="card"><p class="kpi-value">${Object.keys(sourceCounts).join(", ") || "n/a"}</p><p class="kpi-label">Controller source</p></article>
-      <article class="card"><p class="kpi-value">${selectedFarm ? zones.length : 0}</p><p class="kpi-label">Selected farm zones</p></article>
+      <article class="card"><p class="kpi-value">${escapeHtml(farms.length)}</p><p class="kpi-label">Farms</p></article>
+      <article class="card"><p class="kpi-value">${escapeHtml(allZones.length)}</p><p class="kpi-label">Zones</p></article>
+      <article class="card"><p class="kpi-value">${escapeHtml(sourceSummary || "n/a")}</p><p class="kpi-label">Live controller sources</p></article>
+      <article class="card"><p class="kpi-value">${escapeHtml(selectedFarm ? zones.length : 0)}</p><p class="kpi-label">Selected farm zones</p></article>
     </section>
-    <section class="grid-two">${cards || '<section class="card muted">No farms available.</section>'}</section>
+    <section class="card">
+      <h3 class="section-title">Integration Coverage</h3>
+      <p class="muted">Live telemetry currently reflects connected provider data (commonly WiseConn). Talgil is supported as an integration environment when configured.</p>
+    </section>
+    <section class="grid-two">${cards || '<section class="empty-state">No farms available.</section>'}</section>
   `;
 }
 
@@ -172,7 +188,7 @@ async function renderRecommendations() {
 
   const zone = selectedZone();
   if (!zone) {
-    panel.innerHTML = '<section class="card muted">Select a zone/block to view recommendation context.</section>';
+    panel.innerHTML = '<section class="empty-state">Select a zone/block to view recommendation context.</section>';
     return;
   }
 
@@ -188,20 +204,20 @@ async function renderRecommendations() {
   panel.innerHTML = `
     <section class="grid-two">
       <article class="card">
-        <h3>Latest Recommendation Flow</h3>
-        <p class="kv"><span>Recommendation time:</span>${formatDate(latestDecision?.recommended_at)}</p>
-        <p class="kv"><span>Recommended duration:</span>${latestDecision?.planned_duration_min ?? "n/a"} min</p>
-        <p class="kv"><span>Recommended volume:</span>${latestDecision?.planned_volume_m3 ?? "n/a"} m³</p>
-        <p class="kv"><span>Status:</span>${latestDecision?.status || "n/a"}</p>
-        <p class="kv"><span>Provider:</span>${latestDecision?.provider || "n/a"}</p>
+        <h3 class="section-title">Latest Recommendation Flow</h3>
+        <p class="kv"><span>Recommendation time:</span>${escapeHtml(formatDate(latestDecision?.recommended_at))}</p>
+        <p class="kv"><span>Recommended duration:</span>${escapeHtml(latestDecision?.planned_duration_min ?? "n/a")} min</p>
+        <p class="kv"><span>Recommended volume:</span>${escapeHtml(latestDecision?.planned_volume_m3 ?? "n/a")} m³</p>
+        <p class="kv"><span>Status:</span>${escapeHtml(latestDecision?.status || "n/a")}</p>
+        <p class="kv"><span>Provider:</span>${escapeHtml(latestDecision?.provider || "n/a")}</p>
       </article>
       <article class="card">
-        <h3>Water State Context</h3>
-        <p class="kv"><span>Estimated at:</span>${formatDate(waterRes.data?.estimated_at)}</p>
-        <p class="kv"><span>Root zone VWC:</span>${waterRes.data?.root_zone_vwc ?? "n/a"}</p>
-        <p class="kv"><span>Stress risk:</span>${waterRes.data?.stress_risk ?? "n/a"}</p>
-        <p class="kv"><span>Hours to stress:</span>${waterRes.data?.hours_to_stress ?? "n/a"}</p>
-        <p class="kv"><span>Confidence:</span>${waterRes.data?.confidence ?? "n/a"}</p>
+        <h3 class="section-title">Water State Context</h3>
+        <p class="kv"><span>Estimated at:</span>${escapeHtml(formatDate(waterRes.data?.estimated_at))}</p>
+        <p class="kv"><span>Root zone VWC:</span>${escapeHtml(waterRes.data?.root_zone_vwc ?? "n/a")}</p>
+        <p class="kv"><span>Stress risk:</span>${escapeHtml(waterRes.data?.stress_risk ?? "n/a")}</p>
+        <p class="kv"><span>Hours to stress:</span>${escapeHtml(waterRes.data?.hours_to_stress ?? "n/a")}</p>
+        <p class="kv"><span>Confidence:</span>${escapeHtml(waterRes.data?.confidence ?? "n/a")}</p>
       </article>
     </section>
     <section id="water-state-history"></section>
@@ -234,7 +250,7 @@ async function renderVerification() {
 
   const zone = selectedZone();
   if (!zone) {
-    panel.innerHTML = '<section class="card muted">Select a zone/block to view verification.</section>';
+    panel.innerHTML = '<section class="empty-state">Select a zone/block to view verification.</section>';
     return;
   }
 
@@ -254,12 +270,14 @@ async function renderVerification() {
     : [];
 
   const irrigationRows = irrigationsRes.ok
-    ? toArray(irrigationsRes.data).slice(0, 20).map((item) => [
-        formatDate(item.start_time || item.start || item.date),
-        item.duration_minutes || item.duration_min || "n/a",
-        item.depth_mm || item.depth || "n/a",
-        item.volume_m3 || item.volume || "n/a",
-      ])
+    ? toArray(irrigationsRes.data)
+        .slice(0, 20)
+        .map((item) => [
+          formatDate(item.start_time || item.start || item.date),
+          item.duration_minutes || item.duration_min || "n/a",
+          item.depth_mm || item.depth || "n/a",
+          item.volume_m3 || item.volume || "n/a",
+        ])
     : [];
 
   panel.innerHTML = '<section id="verification-table"></section><section id="irrigation-table"></section>';
@@ -300,13 +318,13 @@ async function renderReports() {
     const r = reportRes.data;
     panel.innerHTML = `
       <section class="card">
-        <h3>ROI Report (${from} → ${to})</h3>
-        <p class="kv"><span>Block:</span>${r.block_id || "All"}</p>
-        <p class="kv"><span>Water saved:</span>${r.water_saved_m3} m³</p>
-        <p class="kv"><span>Energy saved:</span>${r.energy_saved_kwh} kWh</p>
-        <p class="kv"><span>Cost saved:</span>$${r.cost_saved_usd}</p>
-        <p class="kv"><span>Yield delta:</span>${r.yield_delta_pct}%</p>
-        <p class="kv"><span>Baseline method:</span>${r.baseline_method}</p>
+        <h3 class="section-title">ROI Report (${escapeHtml(from)} → ${escapeHtml(to)})</h3>
+        <p class="kv"><span>Block:</span>${escapeHtml(r.block_id || "All")}</p>
+        <p class="kv"><span>Water saved:</span>${escapeHtml(r.water_saved_m3)} m³</p>
+        <p class="kv"><span>Energy saved:</span>${escapeHtml(r.energy_saved_kwh)} kWh</p>
+        <p class="kv"><span>Cost saved:</span>$${escapeHtml(r.cost_saved_usd)}</p>
+        <p class="kv"><span>Yield delta:</span>${escapeHtml(r.yield_delta_pct)}%</p>
+        <p class="kv"><span>Baseline method:</span>${escapeHtml(r.baseline_method)}</p>
       </section>
     `;
     return;
@@ -314,13 +332,13 @@ async function renderReports() {
 
   if (reportRes.status === 404) {
     panel.innerHTML =
-      '<section class="card muted">Reports endpoint is not exposed in the live deployment yet. Marked as not yet wired.</section>';
+      '<section class="empty-state">Reports endpoint is not exposed in the live deployment yet. Marked as not yet wired.</section>';
     return;
   }
 
-  panel.innerHTML = `<section class="card muted">Reports unavailable (${reportRes.status || "request failed"}): ${
+  panel.innerHTML = `<section class="empty-state">Reports unavailable (${escapeHtml(reportRes.status || "request failed")}): ${escapeHtml(
     reportRes.error || "unknown error"
-  }</section>`;
+  )}</section>`;
 }
 
 async function renderTab(tab) {
@@ -364,14 +382,6 @@ zoneSelectEl.addEventListener("change", async (event) => {
   state.selectedZoneId = event.target.value;
   const activeTab = tabsEl.querySelector(".tab.active")?.dataset.tab || "overview";
   await renderTab(activeTab);
-});
-
-apiBaseSaveEl.addEventListener("click", () => {
-  const nextBase = apiBaseInputEl.value.trim();
-  if (!nextBase) return;
-  window.localStorage.setItem("AGROAI_API_BASE", nextBase);
-  setMessage("Saved API base override. Reloading portal…");
-  window.setTimeout(() => window.location.reload(), 500);
 });
 
 tabsEl.addEventListener("click", async (event) => {

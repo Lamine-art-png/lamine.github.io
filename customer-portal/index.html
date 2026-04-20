@@ -3,16 +3,21 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>AGRO-AI Portal</title>
+    <title>AGRO-AI Customer Portal</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
     <div class="layout">
       <aside class="sidebar">
-        <div class="brand">AGRO-AI</div>
-        <p class="subtitle">Operations Portal</p>
+        <div class="brand-lockup">
+          <img src="./assets/agro-ai-logo.png" alt="AGRO-AI" class="brand-logo" />
+          <div>
+            <div class="brand">AGRO-AI</div>
+            <p class="subtitle">Customer Portal</p>
+          </div>
+        </div>
 
-        <nav id="tabs" class="tabs">
+        <nav id="tabs" class="tabs" aria-label="Portal sections">
           <button data-tab="overview" class="tab active">Overview</button>
           <button data-tab="recommendations" class="tab">Recommendations</button>
           <button data-tab="verification" class="tab">Verification</button>
@@ -21,18 +26,18 @@
       </aside>
 
       <main class="content">
-        <header class="topbar">
+        <header class="topbar card">
           <div>
+            <p class="eyebrow">AGRO-AI</p>
             <h1 id="page-title">Overview</h1>
-            <p class="subhead">Live operational visibility from AGRO-AI API.</p>
+            <p class="subhead">Operational irrigation intelligence across connected farm controllers.</p>
           </div>
           <div class="topbar-meta">
             <span id="auth-badge" class="pill">Checking API auth…</span>
-            <span class="pill">API <code id="api-base"></code></span>
           </div>
         </header>
 
-        <section class="filters card">
+        <section class="filters card" aria-label="Filters">
           <div>
             <label for="farm-select">Farm</label>
             <select id="farm-select"></select>
@@ -40,13 +45,6 @@
           <div>
             <label for="zone-select">Zone / Block</label>
             <select id="zone-select"></select>
-          </div>
-          <div>
-            <label for="api-base-input">API base override</label>
-            <div class="inline-input">
-              <input id="api-base-input" type="url" placeholder="https://api.agroai-pilot.com" />
-              <button id="api-base-save" class="btn">Save</button>
-            </div>
           </div>
         </section>
 
