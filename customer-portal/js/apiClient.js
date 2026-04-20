@@ -1,4 +1,5 @@
 export const ENDPOINTS = {
+  controllerEnvironments: "/v1/controllers/environments",
   auth: "/v1/wiseconn/auth",
   farms: "/v1/wiseconn/farms",
   zonesByFarm: (farmId) => `/v1/wiseconn/farms/${farmId}/zones`,
@@ -47,6 +48,10 @@ export class ApiClient {
 
   getAuth() {
     return this.request(ENDPOINTS.auth);
+  }
+
+  getControllerEnvironments() {
+    return this.request(ENDPOINTS.controllerEnvironments);
   }
 
   getFarms() {

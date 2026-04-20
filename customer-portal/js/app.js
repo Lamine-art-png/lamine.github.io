@@ -5,6 +5,8 @@ const api = new ApiClient();
 const state = {
   farms: [],
   zonesByFarm: new Map(),
+  controllerEnvironments: [],
+  controllerTotals: {},
   selectedFarmId: "",
   selectedZoneId: "",
 };
@@ -66,6 +68,27 @@ function selectedZone() {
   return getSelectedZones().find((z) => String(z.id) === String(state.selectedZoneId));
 }
 
+function humanizeSource(source) {
+  const key = String(source || "").toLowerCase();
+  if (key === "wiseconn") return "WiseConn";
+  if (key === "talgil") return "Talgil";
+  if (key === "unknown") return "Unknown";
+  if (!key) return "Unknown";
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
+
+function normalizeSourceFromFarm(farm) {
+  return String(farm?.provider || farm?.source || "wiseconn").toLowerCase();
+}
+
+function zoneBlockId(zone) {
+  const source = String(zone?.provider || zone?.source || "wiseconn").toLowerCase();
+  if (source === "wiseconn") {
+    return `wc-${zone.id}`;
+  }
+  return String(zone?.id || "");
+}
+
 function updateSelectors() {
   farmSelectEl.innerHTML = state.farms
     .map((farm) => `<option value="${escapeHtml(farm.id)}">${escapeHtml(farm.name || farm.id)}</option>`)
@@ -109,6 +132,15 @@ function renderTable(panel, headers, rows, emptyText) {
 }
 
 async function bootstrapFarmsAndZones() {
+  const environmentsRes = await api.getControllerEnvironments();
+  if (environmentsRes.ok) {
+    state.controllerEnvironments = toArray(environmentsRes.data?.environments);
+    state.controllerTotals = environmentsRes.data?.totals || {};
+  } else {
+    state.controllerEnvironments = [];
+    state.controllerTotals = {};
+  }
+
   const farmsRes = await api.getFarms();
   if (!farmsRes.ok) {
     setMessage(`Unable to load farms (${farmsRes.status}).`, "error");
@@ -142,7 +174,7 @@ async function renderOverview() {
   const farms = state.farms;
   const allZones = farms.flatMap((farm) => state.zonesByFarm.get(String(farm.id)) || []);
   const sourceCounts = allZones.reduce((acc, zone) => {
-    const key = zone.provider || zone.source || "unknown";
+    const key = String(zone.provider || zone.source || "wiseconn").toLowerCase();
     acc[key] = (acc[key] || 0) + 1;
     return acc;
   }, {});
@@ -150,33 +182,69 @@ async function renderOverview() {
   const selectedFarm = farms.find((f) => String(f.id) === String(state.selectedFarmId));
   const zones = getSelectedZones();
   const sourceSummary = Object.entries(sourceCounts)
-    .map(([key, count]) => `${key} (${count})`)
+    .map(([key, count]) => `${humanizeSource(key)} (${count})`)
     .join(", ");
+
+  const environmentCards = state.controllerEnvironments
+    .map((env) => {
+      const statusLabel =
+        env.status === "live"
+          ? "Live"
+          : env.status === "configured"
+            ? "Configured"
+            : "Integration-ready";
+      const sourceParts = Object.entries(env.sources || {})
+        .map(([source, count]) => `${humanizeSource(source)} ${count}`)
+        .join(" • ");
+
+      return `
+      <section class="card">
+        <div class="card-head">
+          <h3 class="section-title">${escapeHtml(env.label || humanizeSource(env.source))}</h3>
+          <span class="source-chip ${escapeHtml(env.status || "integration_ready")}">${escapeHtml(statusLabel)}</span>
+        </div>
+        <p class="kv"><span>Environment source:</span>${escapeHtml(humanizeSource(env.source))}</p>
+        <p class="kv"><span>Farms:</span>${escapeHtml(env.farms ?? 0)}</p>
+        <p class="kv"><span>Zones:</span>${escapeHtml(env.zones ?? 0)}</p>
+        <p class="kv"><span>Observed sources:</span>${escapeHtml(sourceParts || "n/a")}</p>
+        <p class="muted">${escapeHtml(env.notes || "")}</p>
+      </section>`;
+    })
+    .join("\n");
 
   const cards = farms
     .slice(0, 8)
     .map((farm) => {
       const farmZones = state.zonesByFarm.get(String(farm.id)) || [];
+      const farmSource = humanizeSource(normalizeSourceFromFarm(farm));
       return `
       <section class="card">
+        <div class="card-head">
         <h3 class="section-title">${escapeHtml(farm.name || `Farm ${farm.id}`)}</h3>
+          <span class="source-chip subtle">${escapeHtml(farmSource)}</span>
+        </div>
         <p class="kv"><span>Farm ID:</span>${escapeHtml(farm.id)}</p>
         <p class="kv"><span>Zones:</span>${escapeHtml(farmZones.length)}</p>
-        <p class="kv"><span>Controller source:</span>${escapeHtml(farm.provider || "unknown")}</p>
+        <p class="kv"><span>Controller source:</span>${escapeHtml(farmSource)}</p>
       </section>`;
     })
     .join("\n");
 
   panel.innerHTML = `
     <section class="kpi-row">
-      <article class="card"><p class="kpi-value">${escapeHtml(farms.length)}</p><p class="kpi-label">Farms</p></article>
-      <article class="card"><p class="kpi-value">${escapeHtml(allZones.length)}</p><p class="kpi-label">Zones</p></article>
-      <article class="card"><p class="kpi-value">${escapeHtml(sourceSummary || "n/a")}</p><p class="kpi-label">Live controller sources</p></article>
+      <article class="card"><p class="kpi-value">${escapeHtml(state.controllerTotals.farms ?? farms.length)}</p><p class="kpi-label">Controller farms</p></article>
+      <article class="card"><p class="kpi-value">${escapeHtml(state.controllerTotals.zones ?? allZones.length)}</p><p class="kpi-label">Controller zones</p></article>
+      <article class="card"><p class="kpi-value">${escapeHtml(sourceSummary || "n/a")}</p><p class="kpi-label">Observed zone sources</p></article>
       <article class="card"><p class="kpi-value">${escapeHtml(selectedFarm ? zones.length : 0)}</p><p class="kpi-label">Selected farm zones</p></article>
     </section>
     <section class="card">
-      <h3 class="section-title">Integration Coverage</h3>
-      <p class="muted">Live telemetry currently reflects connected provider data (commonly WiseConn). Talgil is supported as an integration environment when configured.</p>
+      <h3 class="section-title">Controller Environments</h3>
+      <p class="muted">AGRO-AI unifies irrigation intelligence across controller environments. Live telemetry flows from authenticated sources while integration-ready sources remain visible without fabricated operational metrics.</p>
+    </section>
+    <section class="grid-two">${environmentCards || '<section class="empty-state">Controller environment summary is unavailable from the backend right now.</section>'}</section>
+    <section class="card">
+      <h3 class="section-title">Connected Farm Groups</h3>
+      <p class="muted">Operational farms grouped by controller source.</p>
     </section>
     <section class="grid-two">${cards || '<section class="empty-state">No farms available.</section>'}</section>
   `;
@@ -192,10 +260,11 @@ async function renderRecommendations() {
     return;
   }
 
+  const blockId = zoneBlockId(zone);
   const [waterRes, historyRes, decisionsRes] = await Promise.all([
-    api.getWaterState(zone.id),
-    api.getWaterStateHistory(zone.id, 8),
-    api.getDecisionRuns(zone.id, 10),
+    api.getWaterState(blockId),
+    api.getWaterStateHistory(blockId, 8),
+    api.getDecisionRuns(blockId, 10),
   ]);
 
   const latestDecision = decisionsRes.ok ? toArray(decisionsRes.data)[0] : null;
@@ -209,7 +278,7 @@ async function renderRecommendations() {
         <p class="kv"><span>Recommended duration:</span>${escapeHtml(latestDecision?.planned_duration_min ?? "n/a")} min</p>
         <p class="kv"><span>Recommended volume:</span>${escapeHtml(latestDecision?.planned_volume_m3 ?? "n/a")} m³</p>
         <p class="kv"><span>Status:</span>${escapeHtml(latestDecision?.status || "n/a")}</p>
-        <p class="kv"><span>Provider:</span>${escapeHtml(latestDecision?.provider || "n/a")}</p>
+        <p class="kv"><span>Controller source:</span>${escapeHtml(humanizeSource(latestDecision?.provider || zone?.provider || zone?.source || "wiseconn"))}</p>
       </article>
       <article class="card">
         <h3 class="section-title">Water State Context</h3>
@@ -254,8 +323,9 @@ async function renderVerification() {
     return;
   }
 
+  const blockId = zone ? zoneBlockId(zone) : "";
   const [verificationsRes, irrigationsRes] = await Promise.all([
-    api.getVerifications(zone.id, 20),
+    api.getVerifications(blockId, 20),
     api.getIrrigations(zone.id, 14),
   ]);
 
@@ -293,7 +363,7 @@ async function renderVerification() {
     document.getElementById("irrigation-table"),
     ["Irrigation Time", "Duration (min)", "Depth", "Volume (m³)"],
     irrigationRows,
-    "No WiseConn irrigation rows available in the selected 14-day window."
+    "No irrigation rows are available in the selected 14-day window for this controller environment."
   );
 }
 
