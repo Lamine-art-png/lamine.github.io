@@ -10,6 +10,10 @@ This is a drop-in starter to make a **limited pilot** reproducible:
 
 > Assumptions: AWS account in `us-west-1` (N. California), OIDC to GitHub, Dockerized API (e.g., FastAPI).
 
+
+## Product Links
+- **AGRO-AI Portal:** https://app.agroai-pilot.com
+
 ## Quickstart
 ```bash
 make tfinit
