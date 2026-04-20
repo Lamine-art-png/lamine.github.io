@@ -35,30 +35,55 @@ class ControllerEnvironmentResponse(BaseModel):
 @router.get("/environments", response_model=ControllerEnvironmentResponse)
 async def get_controller_environments() -> ControllerEnvironmentResponse:
     """Return source-aware controller environment summary for portal UI."""
-    adapter = AdapterRegistry.get_wiseconn()
+    wiseconn = AdapterRegistry.get_wiseconn()
+    talgil = AdapterRegistry.get_talgil()
+
     wiseconn_live = False
     wiseconn_farms: List[Dict[str, Any]] = []
     zones_by_farm: Dict[str, List[Dict[str, Any]]] = {}
 
     try:
-        wiseconn_live = await adapter.check_auth()
+        wiseconn_live = await wiseconn.check_auth()
         if wiseconn_live:
-            wiseconn_farms = await adapter.list_farms()
+            wiseconn_farms = await wiseconn.list_farms()
             for farm in wiseconn_farms:
                 farm_id = str(farm.get("id", ""))
                 if not farm_id:
                     continue
-                zones_by_farm[farm_id] = await adapter.list_zones(farm_id)
+                zones_by_farm[farm_id] = await wiseconn.list_zones(farm_id)
     except Exception:
         wiseconn_live = False
         wiseconn_farms = []
         zones_by_farm = {}
 
-    all_zones = [zone for zones in zones_by_farm.values() for zone in zones]
-    source_counter = Counter(
+    all_wiseconn_zones = [zone for zones in zones_by_farm.values() for zone in zones]
+    wiseconn_counter = Counter(
         str(zone.get("provider") or zone.get("source") or "unknown").lower()
-        for zone in all_zones
+        for zone in all_wiseconn_zones
     )
+
+    talgil_live = False
+    talgil_targets: List[Dict[str, Any]] = []
+    talgil_zones: List[Dict[str, Any]] = []
+
+    try:
+        talgil_live = await talgil.check_auth()
+        if talgil_live:
+            talgil_targets = await talgil.list_targets()
+            for target in talgil_targets:
+                target_id = str(target.get("id", ""))
+                if not target_id:
+                    continue
+                talgil_zones.extend(await talgil.list_zones(target_id))
+    except Exception:
+        talgil_live = False
+        talgil_targets = []
+        talgil_zones = []
+
+    talgil_status: ControllerStatus = "live" if talgil_live else "configured"
+    talgil_configured = talgil.configured
+    if not talgil_configured:
+        talgil_status = "integration_ready"
 
     wiseconn_env = ControllerEnvironment(
         source="wiseconn",
@@ -67,28 +92,31 @@ async def get_controller_environments() -> ControllerEnvironmentResponse:
         live=bool(wiseconn_live),
         configured=True,
         farms=len(wiseconn_farms),
-        zones=len(all_zones),
+        zones=len(all_wiseconn_zones),
         notes=(
             "Live read path available via /v1/wiseconn endpoints."
             if wiseconn_live
             else "Configured in AGRO-AI API but not authenticated in this runtime."
         ),
-        sources=dict(source_counter),
+        sources=dict(wiseconn_counter),
     )
 
     talgil_env = ControllerEnvironment(
         source="talgil",
         label="Talgil",
-        status="integration_ready",
-        live=False,
-        configured=False,
-        farms=0,
-        zones=0,
+        status=talgil_status,
+        live=bool(talgil_live),
+        configured=talgil_configured,
+        farms=len(talgil_targets),
+        zones=len(talgil_zones),
         notes=(
-            "Preserved integration artifacts are present in-repo, but tenant-scoped "
-            "runtime routes are not wired in this FastAPI deployment yet."
+            "Live read path available via /v1/talgil endpoints (targets/full-image sensors)."
+            if talgil_live
+            else "Talgil adapter is wired; set TALGIL_API_KEY to activate live tenant-scoped runtime reads."
+            if talgil_configured
+            else "Integration code is wired in FastAPI; runtime remains integration-ready until TALGIL_API_KEY is configured."
         ),
-        sources={},
+        sources={"talgil": len(talgil_zones)} if talgil_zones else {},
     )
 
     environments = [wiseconn_env, talgil_env]
@@ -99,7 +127,4 @@ async def get_controller_environments() -> ControllerEnvironmentResponse:
         "configured_environments": sum(1 for item in environments if item.configured),
     }
 
-    return ControllerEnvironmentResponse(
-        environments=environments,
-        totals=totals,
-    )
+    return ControllerEnvironmentResponse(environments=environments, totals=totals)

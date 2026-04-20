@@ -86,6 +86,10 @@ function zoneBlockId(zone) {
   if (source === "wiseconn") {
     return `wc-${zone.id}`;
   }
+  if (source === "talgil") {
+    const controllerId = zone?.controller_id || zone?.farm_id || "unknown";
+    return `tg-${controllerId}-${zone.id}`;
+  }
   return String(zone?.id || "");
 }
 
@@ -141,19 +145,34 @@ async function bootstrapFarmsAndZones() {
     state.controllerTotals = {};
   }
 
-  const farmsRes = await api.getFarms();
-  if (!farmsRes.ok) {
-    setMessage(`Unable to load farms (${farmsRes.status}).`, "error");
+  const [wiseconnFarmsRes, talgilFarmsRes] = await Promise.all([
+    api.getFarms(),
+    api.getTalgilFarms(),
+  ]);
+
+  const wiseconnFarms = wiseconnFarmsRes.ok
+    ? toArray(wiseconnFarmsRes.data).map((farm) => ({ ...farm, provider: "wiseconn", source: "wiseconn" }))
+    : [];
+  const talgilFarms = talgilFarmsRes.ok
+    ? toArray(talgilFarmsRes.data).map((farm) => ({ ...farm, provider: "talgil", source: "talgil" }))
+    : [];
+
+  if (!wiseconnFarmsRes.ok && !talgilFarmsRes.ok) {
+    setMessage(
+      `Unable to load controller farms (WiseConn ${wiseconnFarmsRes.status}, Talgil ${talgilFarmsRes.status}).`,
+      "error"
+    );
     state.farms = [];
     updateSelectors();
     return;
   }
 
-  state.farms = toArray(farmsRes.data);
+  state.farms = [...wiseconnFarms, ...talgilFarms];
 
   await Promise.all(
     state.farms.map(async (farm) => {
-      const zonesRes = await api.getZones(farm.id);
+      const source = String(farm.provider || farm.source || "wiseconn").toLowerCase();
+      const zonesRes = source === "talgil" ? await api.getTalgilZones(farm.id) : await api.getZones(farm.id);
       state.zonesByFarm.set(String(farm.id), zonesRes.ok ? toArray(zonesRes.data) : []);
     })
   );
@@ -324,9 +343,10 @@ async function renderVerification() {
   }
 
   const blockId = zone ? zoneBlockId(zone) : "";
+  const zoneSource = String(zone?.provider || zone?.source || "wiseconn").toLowerCase();
   const [verificationsRes, irrigationsRes] = await Promise.all([
     api.getVerifications(blockId, 20),
-    api.getIrrigations(zone.id, 14),
+    zoneSource === "wiseconn" ? api.getIrrigations(zone.id, 14) : Promise.resolve({ ok: true, data: [] }),
   ]);
 
   const verificationRows = verificationsRes.ok

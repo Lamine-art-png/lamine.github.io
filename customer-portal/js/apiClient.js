@@ -3,6 +3,9 @@ export const ENDPOINTS = {
   auth: "/v1/wiseconn/auth",
   farms: "/v1/wiseconn/farms",
   zonesByFarm: (farmId) => `/v1/wiseconn/farms/${farmId}/zones`,
+  talgilAuth: "/v1/talgil/auth",
+  talgilFarms: "/v1/talgil/farms",
+  talgilZonesByFarm: (farmId) => `/v1/talgil/farms/${farmId}/zones`,
   irrigationsByZone: (zoneId, days = 14) => `/v1/wiseconn/zones/${zoneId}/irrigations?days=${days}`,
   blockWaterState: (blockId) => `/v1/decisioning/blocks/${blockId}/water-state`,
   blockWaterStateHistory: (blockId, limit = 24) =>
@@ -56,6 +59,18 @@ export class ApiClient {
 
   getFarms() {
     return this.request(ENDPOINTS.farms);
+  }
+
+  getTalgilAuth() {
+    return this.request(ENDPOINTS.talgilAuth);
+  }
+
+  getTalgilFarms() {
+    return this.request(ENDPOINTS.talgilFarms);
+  }
+
+  getTalgilZones(farmId) {
+    return this.request(ENDPOINTS.talgilZonesByFarm(farmId));
   }
 
   getZones(farmId) {
