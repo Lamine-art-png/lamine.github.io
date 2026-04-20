@@ -73,6 +73,11 @@ from app.api.v1.forecast import router as forecast_router  # noqa: E402
 
 app.include_router(forecast_router, prefix="/v1")
 
+# Controller environment summary routes (source-aware portal framing)
+from app.api.v1.controllers import router as controllers_router  # noqa: E402
+
+app.include_router(controllers_router, prefix="/v1")
+
 
 # Prometheus metrics endpoint
 from app.core.metrics import metrics_endpoint  # noqa: E402
@@ -314,4 +319,3 @@ def demo_report(payload: DemoRunRequest = Body(...)) -> Response:
         media_type="application/pdf",
         headers={"Content-Disposition": "inline; filename=agroai_demo_report.pdf"},
     )
-

@@ -222,6 +222,52 @@ input {
   font-size: 16px;
 }
 
+.card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.source-chip {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid #c8d8d1;
+  background: #f0f6f3;
+  color: #2d6150;
+}
+
+.source-chip.live {
+  border-color: #9dcdb6;
+  background: var(--brand-soft);
+  color: var(--brand);
+}
+
+.source-chip.configured {
+  border-color: #d8d7bf;
+  background: #fcfaec;
+  color: #786919;
+}
+
+.source-chip.integration_ready {
+  border-color: #c8cde7;
+  background: #f1f4ff;
+  color: #3d4f87;
+}
+
+.source-chip.subtle {
+  border-color: #d6ddd8;
+  background: #f8faf8;
+  color: #516761;
+}
+
 .grid-two {
   display: grid;
   gap: 14px;

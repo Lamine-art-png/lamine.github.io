@@ -25,6 +25,7 @@ You can override without source edits by using one of these:
 
 ## Live endpoints wired in the portal
 
+- `GET /v1/controllers/environments`
 - `GET /v1/wiseconn/auth`
 - `GET /v1/wiseconn/farms`
 - `GET /v1/wiseconn/farms/{farm_id}/zones`
@@ -34,6 +35,12 @@ You can override without source edits by using one of these:
 - `GET /v1/execution/blocks/{block_id}/decisions`
 - `GET /v1/execution/blocks/{block_id}/verifications`
 - `GET /v1/reports/roi` (if enabled in the deployed API)
+
+## Source-aware behavior
+
+- Portal reads controller environment status from `GET /v1/controllers/environments`.
+- WiseConn zone IDs are mapped to decisioning/execution block IDs as `wc-{zone_id}`.
+- Talgil is surfaced as `integration_ready` unless backend runtime endpoints are actually live.
 
 ## Static deploy note (`app.agroai-pilot.com`)
 
