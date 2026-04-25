@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import logging
+import re
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -13,6 +15,22 @@ from app.adapters.base import ControllerAdapter, DataProviderAdapter
 logger = logging.getLogger(__name__)
 
 RETRYABLE_ERRORS = (httpx.TimeoutException, httpx.ConnectError)
+
+
+@dataclass
+class TalgilDiagnostic:
+    error_type: Optional[str] = None
+    error_message_sanitized: Optional[str] = None
+    upstream_status_code: Optional[int] = None
+    upstream_response_preview_sanitized: Optional[str] = None
+    response_shape: Optional[str] = None
+
+
+def _sanitize_text(value: str, max_len: int = 200) -> str:
+    if not value:
+        return ""
+    cleaned = re.sub(r"[\r\n\t]+", " ", value).strip()
+    return cleaned[:max_len]
 
 
 class TalgilAdapter(ControllerAdapter, DataProviderAdapter):
@@ -37,6 +55,7 @@ class TalgilAdapter(ControllerAdapter, DataProviderAdapter):
         self._timeout = timeout
         self._max_retries = max_retries
         self._client: Optional[httpx.AsyncClient] = None
+        self._last_diagnostic = TalgilDiagnostic()
 
         if not api_key:
             logger.info("Talgil adapter initialized without TALGIL_API_KEY")
@@ -44,6 +63,27 @@ class TalgilAdapter(ControllerAdapter, DataProviderAdapter):
     @property
     def configured(self) -> bool:
         return bool(self._api_key)
+
+    @property
+    def last_diagnostic(self) -> TalgilDiagnostic:
+        return self._last_diagnostic
+
+    def _set_last_diagnostic(
+        self,
+        *,
+        error_type: Optional[str] = None,
+        error_message_sanitized: Optional[str] = None,
+        upstream_status_code: Optional[int] = None,
+        upstream_response_preview_sanitized: Optional[str] = None,
+        response_shape: Optional[str] = None,
+    ) -> None:
+        self._last_diagnostic = TalgilDiagnostic(
+            error_type=error_type,
+            error_message_sanitized=error_message_sanitized,
+            upstream_status_code=upstream_status_code,
+            upstream_response_preview_sanitized=upstream_response_preview_sanitized,
+            response_shape=response_shape,
+        )
 
     def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
@@ -73,26 +113,104 @@ class TalgilAdapter(ControllerAdapter, DataProviderAdapter):
         return self._handle_response(resp, "GET", path)
 
     def _handle_response(self, resp: httpx.Response, method: str, path: str) -> Any:
+        preview = _sanitize_text(resp.text)
+        response_shape: Optional[str]
+        if not resp.content:
+            response_shape = "empty"
+        else:
+            try:
+                parsed = resp.json()
+                if isinstance(parsed, list):
+                    response_shape = "list"
+                elif isinstance(parsed, dict):
+                    response_shape = "dict"
+                else:
+                    response_shape = "text"
+            except ValueError:
+                response_shape = "invalid_json"
+
         if resp.status_code in (401, 403):
-            raise TalgilAuthError(f"Talgil auth failed ({method} {path})")
+            error = TalgilAuthError(f"Talgil auth failed ({method} {path})")
+            self._set_last_diagnostic(
+                error_type=error.__class__.__name__,
+                error_message_sanitized=_sanitize_text(str(error)),
+                upstream_status_code=resp.status_code,
+                upstream_response_preview_sanitized=preview,
+                response_shape=response_shape,
+            )
+            raise error
         if resp.status_code == 404:
+            self._set_last_diagnostic(
+                error_type="TalgilNotFound",
+                error_message_sanitized=_sanitize_text(f"Talgil endpoint not found ({method} {path})"),
+                upstream_status_code=resp.status_code,
+                upstream_response_preview_sanitized=preview,
+                response_shape=response_shape,
+            )
             return None
         if resp.status_code >= 500:
-            raise TalgilServerError(f"Talgil server error {resp.status_code}")
+            error = TalgilServerError(f"Talgil server error {resp.status_code}")
+            self._set_last_diagnostic(
+                error_type=error.__class__.__name__,
+                error_message_sanitized=_sanitize_text(str(error)),
+                upstream_status_code=resp.status_code,
+                upstream_response_preview_sanitized=preview,
+                response_shape=response_shape,
+            )
+            raise error
         if resp.status_code >= 400:
-            raise TalgilClientError(f"Talgil client error {resp.status_code}: {resp.text[:200]}")
+            error = TalgilClientError(f"Talgil client error {resp.status_code}")
+            self._set_last_diagnostic(
+                error_type=error.__class__.__name__,
+                error_message_sanitized=_sanitize_text(str(error)),
+                upstream_status_code=resp.status_code,
+                upstream_response_preview_sanitized=preview,
+                response_shape=response_shape,
+            )
+            raise error
 
         if not resp.content:
+            self._set_last_diagnostic(response_shape="empty")
             return None
-        return resp.json()
+
+        try:
+            parsed = resp.json()
+        except ValueError as exc:
+            error = TalgilResponseError(f"Talgil returned invalid JSON ({method} {path})")
+            self._set_last_diagnostic(
+                error_type=error.__class__.__name__,
+                error_message_sanitized=_sanitize_text(str(error)),
+                upstream_status_code=resp.status_code,
+                upstream_response_preview_sanitized=preview,
+                response_shape="invalid_json",
+            )
+            raise error from exc
+
+        shape = "dict" if isinstance(parsed, dict) else "list" if isinstance(parsed, list) else "text"
+        self._set_last_diagnostic(response_shape=shape)
+        return parsed
 
     async def check_auth(self) -> bool:
         if not self._api_key:
+            self._set_last_diagnostic(
+                error_type="MissingApiKey",
+                error_message_sanitized="TALGIL_API_KEY is not configured in this runtime.",
+            )
             return False
         try:
             targets = await self.list_targets()
-            return isinstance(targets, list)
-        except Exception:
+            ok = isinstance(targets, list)
+            if ok:
+                self._set_last_diagnostic(response_shape="list")
+            return ok
+        except Exception as exc:
+            self._set_last_diagnostic(
+                error_type=exc.__class__.__name__,
+                error_message_sanitized=_sanitize_text(str(exc)),
+                upstream_status_code=self._last_diagnostic.upstream_status_code,
+                upstream_response_preview_sanitized=self._last_diagnostic.upstream_response_preview_sanitized,
+                response_shape=self._last_diagnostic.response_shape,
+            )
             return False
 
     async def list_targets(self) -> List[Dict[str, Any]]:
@@ -194,4 +312,8 @@ class TalgilServerError(TalgilError):
 
 
 class TalgilClientError(TalgilError):
+    pass
+
+
+class TalgilResponseError(TalgilError):
     pass
