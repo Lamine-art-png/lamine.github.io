@@ -1,7 +1,7 @@
 """Talgil runtime routes backed by real read-path implementation."""
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -25,55 +25,58 @@ class TalgilStatusResponse(BaseModel):
     targets: int
     sensors: int
     notes: str
+    auth_header_used: str = "TLG-API-Key"
+    auth_check_path: str = "/mytargets"
+    last_error_type: Optional[str] = None
+    last_error_message_sanitized: Optional[str] = None
+    upstream_status_code: Optional[int] = None
+    upstream_response_preview_sanitized: Optional[str] = None
+    response_shape: Optional[str] = None
+    retry_after_seconds: Optional[int] = None
+
+
+class TalgilSensorsResponse(BaseModel):
+    ok: bool
+    status: str
+    live: bool
+    sensors: List[Dict[str, Any]]
+    error_type: Optional[str] = None
+    error_message: Optional[str] = None
+    upstream_status_code: Optional[int] = None
+    retry_after_seconds: Optional[int] = None
 
 
 @router.get("/auth", response_model=TalgilAuthResponse)
 async def check_auth() -> TalgilAuthResponse:
     adapter = AdapterRegistry.get_talgil()
-    ok = await adapter.check_auth()
+    status = await adapter.get_runtime_status(use_cache=True)
     return TalgilAuthResponse(
-        authenticated=ok,
+        authenticated=status.live,
         api_url=adapter.api_url,
-        message="Authentication successful" if ok else "Authentication failed or API key missing",
+        message="Authentication successful" if status.live else "Authentication failed or API key missing",
     )
 
 
 @router.get("/status", response_model=TalgilStatusResponse)
 async def get_status() -> TalgilStatusResponse:
     adapter = AdapterRegistry.get_talgil()
-    configured = adapter.configured
-    live = False
-    targets: List[Dict[str, Any]] = []
-    sensors = 0
-
-    if configured:
-        live = await adapter.check_auth()
-        if live:
-            targets = await adapter.list_targets()
-            for target in targets:
-                target_id = str(target.get("id", ""))
-                if not target_id:
-                    continue
-                sensors += len(await adapter.list_zones(target_id))
-
-    if live:
-        status = "live"
-        notes = "Live runtime checks succeeded against Talgil read endpoints."
-    elif configured:
-        status = "configured"
-        notes = "TALGIL_API_KEY is present but runtime auth/read checks did not succeed."
-    else:
-        status = "integration_ready"
-        notes = "TALGIL_API_KEY is not configured in this runtime."
+    status = await adapter.get_runtime_status(use_cache=True)
+    diagnostic = adapter.last_diagnostic
 
     return TalgilStatusResponse(
-        status=status,
-        configured=configured,
-        live=live,
+        status=status.status,
+        configured=status.configured,
+        live=status.live,
         api_url=adapter.api_url,
-        targets=len(targets),
-        sensors=sensors,
-        notes=notes,
+        targets=status.targets,
+        sensors=0,
+        notes=status.notes,
+        last_error_type=diagnostic.error_type,
+        last_error_message_sanitized=diagnostic.error_message_sanitized,
+        upstream_status_code=diagnostic.upstream_status_code,
+        upstream_response_preview_sanitized=diagnostic.upstream_response_preview_sanitized,
+        response_shape=diagnostic.response_shape,
+        retry_after_seconds=diagnostic.retry_after_seconds,
     )
 
 
@@ -104,16 +107,46 @@ async def list_farm_zones(farm_id: str) -> List[Dict[str, Any]]:
     return await adapter.list_zones(farm_id)
 
 
-@router.get("/sensors", response_model=List[Dict[str, Any]])
-async def list_sensors() -> List[Dict[str, Any]]:
+@router.get("/sensors", response_model=TalgilSensorsResponse)
+async def list_sensors() -> TalgilSensorsResponse:
     adapter = AdapterRegistry.get_talgil()
-    targets = await adapter.list_targets()
-    sensors: List[Dict[str, Any]] = []
+    configured = adapter.configured
 
-    for target in targets:
-        target_id = str(target.get("id", ""))
-        if not target_id:
-            continue
-        sensors.extend(await adapter.list_zones(target_id))
+    try:
+        status = await adapter.get_runtime_status(use_cache=True)
+        if not status.live:
+            diagnostic = adapter.last_diagnostic
+            error_type = "rate_limited" if diagnostic.upstream_status_code == 429 else diagnostic.error_type
+            return TalgilSensorsResponse(
+                ok=False,
+                status=status.status,
+                live=False,
+                sensors=[],
+                error_type=error_type,
+                error_message=diagnostic.error_message_sanitized,
+                upstream_status_code=diagnostic.upstream_status_code,
+                retry_after_seconds=diagnostic.retry_after_seconds,
+            )
 
-    return sensors
+        targets = await adapter.list_targets()
+        sensors: List[Dict[str, Any]] = []
+        for target in targets:
+            target_id = str(target.get("id", ""))
+            if not target_id:
+                continue
+            sensors.extend(await adapter.list_zones(target_id))
+        return TalgilSensorsResponse(ok=True, status="live", live=True, sensors=sensors)
+    except Exception as exc:
+        diagnostic = adapter.last_diagnostic
+        return TalgilSensorsResponse(
+            ok=False,
+            status="configured" if configured else "integration_ready",
+            live=False,
+            sensors=[],
+            error_type=("rate_limited" if diagnostic.upstream_status_code == 429 else None)
+            or diagnostic.error_type
+            or exc.__class__.__name__,
+            error_message=diagnostic.error_message_sanitized or str(exc),
+            upstream_status_code=diagnostic.upstream_status_code,
+            retry_after_seconds=diagnostic.retry_after_seconds,
+        )
