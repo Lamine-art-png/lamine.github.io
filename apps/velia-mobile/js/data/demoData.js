@@ -1,0 +1,26 @@
+export const demoProfile = {
+  role: "farmer",
+  farm: { name: "Demo Farm", location: "Napa Valley", units: "metric", hardware: "connected" },
+  language: "en",
+  fields: [
+    {
+      id: "demo-field-1",
+      name: "Field 1",
+      crop: "Grapes",
+      acreage: 45,
+      irrigationMethod: "Drip",
+      soilType: "Loam",
+      dataSource: "controller",
+      lastIrrigationAt: new Date(Date.now() - 36 * 3600000).toISOString(),
+      usualDurationMin: 90,
+      waterSource: "Borehole",
+      waterStressLevel: "moderate",
+      lastObservation: "Looks dry",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    },
+  ],
+  irrigationLogs: [],
+  fieldNotes: [],
+  observations: [],
+};
