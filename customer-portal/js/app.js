@@ -5,8 +5,10 @@ import { storageService } from "./services/storageService.js";
 import { syncService } from "./services/syncService.js";
 import { voiceAgent } from "./services/voiceAgent.js";
 import { integrationRegistry } from "./services/integrations/adapters.js";
+import { ApiClient } from "./apiClient.js";
 
 const app = document.getElementById("app");
+const apiClient = new ApiClient();
 
 const state = {
   route: "today",
@@ -16,6 +18,8 @@ const state = {
   voiceTranscript: null,
   voiceResponse: "",
   voiceListening: false,
+  runtimeEnvironments: [],
+  runtimeEnvironmentsError: "",
 };
 
 const navItems = ["today", "fields", "alerts", "assistant", "reports", "settings"];
@@ -208,6 +212,15 @@ function renderReports() {
 }
 
 function renderSettings() {
+  const environmentsHtml = state.runtimeEnvironments.length
+    ? `<ul>${state.runtimeEnvironments
+      .map(
+        (env) =>
+          `<li><strong>${env.label}</strong>: ${env.status} • farms ${env.farms} • zones ${env.zones}<br><span class="muted">${env.notes}</span></li>`,
+      )
+      .join("")}</ul>`
+    : `<p class="muted">${state.runtimeEnvironmentsError || "Runtime controller environments are unavailable from API."}</p>`;
+
   return `<section class="card">
     <h2>Settings</h2>
     <p>Farm profile: ${mockFarm.name}, ${mockFarm.location}</p>
@@ -220,6 +233,8 @@ function renderSettings() {
     <p>Offline mode: Enabled with local queue fallback</p>
     <p>Data sources: Manual, Weather, Sensor, Controller</p>
     <p>Integrations: ${integrationRegistry.list().map((item) => item.name).join(", ")}</p>
+    <h3>Runtime integration status</h3>
+    ${environmentsHtml}
     <p>Team members: ${mockUser.name} (${mockUser.role})</p>
     <p>Notification preferences: reminder-ready structure placeholder</p>
   </section>`;
@@ -316,11 +331,24 @@ function render() {
   bindGeneralActions();
 }
 
-function bootstrap() {
+async function bootstrap() {
   const storedLanguage = storageService.get("lang", "en");
   setLanguage(storedLanguage);
+  const environments = await apiClient.getControllerEnvironments();
+  if (environments.ok) {
+    state.runtimeEnvironments = environments.data?.environments || [];
+    state.runtimeEnvironmentsError = "";
+  } else {
+    state.runtimeEnvironments = [];
+    state.runtimeEnvironmentsError = environments.error || "Unable to fetch runtime environments.";
+  }
   window.addEventListener("online", async () => {
     await syncService.syncQueuedActions();
+    const response = await apiClient.getControllerEnvironments();
+    if (response.ok) {
+      state.runtimeEnvironments = response.data?.environments || [];
+      state.runtimeEnvironmentsError = "";
+    }
     render();
   });
   window.addEventListener("offline", render);
