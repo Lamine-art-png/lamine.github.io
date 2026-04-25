@@ -3,10 +3,15 @@ from __future__ import annotations
 
 import logging
 import re
+ codex/fix-talgil-diagnostics-and-sensor-error-handling-lvrhbb
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
+
+from dataclasses import dataclass
+from datetime import datetime
+ main
 from typing import Any, Dict, List, Optional
 
 import httpx
@@ -67,6 +72,22 @@ def _parse_retry_after_seconds(raw_value: Optional[str]) -> Optional[int]:
     return max(seconds, 0)
 
 
+@dataclass
+class TalgilDiagnostic:
+    error_type: Optional[str] = None
+    error_message_sanitized: Optional[str] = None
+    upstream_status_code: Optional[int] = None
+    upstream_response_preview_sanitized: Optional[str] = None
+    response_shape: Optional[str] = None
+
+
+def _sanitize_text(value: str, max_len: int = 200) -> str:
+    if not value:
+        return ""
+    cleaned = re.sub(r"[\r\n\t]+", " ", value).strip()
+    return cleaned[:max_len]
+
+
 class TalgilAdapter(ControllerAdapter, DataProviderAdapter):
     """Talgil read-path adapter.
 
@@ -90,8 +111,11 @@ class TalgilAdapter(ControllerAdapter, DataProviderAdapter):
         self._max_retries = max_retries
         self._client: Optional[httpx.AsyncClient] = None
         self._last_diagnostic = TalgilDiagnostic()
+ codex/fix-talgil-diagnostics-and-sensor-error-handling-lvrhbb
         self._status_cache: Optional[TalgilRuntimeStatus] = None
         self._status_cache_expires_at_monotonic: float = 0.0
+
+ main
 
         if not api_key:
             logger.info("Talgil adapter initialized without TALGIL_API_KEY")
@@ -112,7 +136,10 @@ class TalgilAdapter(ControllerAdapter, DataProviderAdapter):
         upstream_status_code: Optional[int] = None,
         upstream_response_preview_sanitized: Optional[str] = None,
         response_shape: Optional[str] = None,
+ codex/fix-talgil-diagnostics-and-sensor-error-handling-lvrhbb
         retry_after_seconds: Optional[int] = None,
+
+ main
     ) -> None:
         self._last_diagnostic = TalgilDiagnostic(
             error_type=error_type,
@@ -120,7 +147,10 @@ class TalgilAdapter(ControllerAdapter, DataProviderAdapter):
             upstream_status_code=upstream_status_code,
             upstream_response_preview_sanitized=upstream_response_preview_sanitized,
             response_shape=response_shape,
+ codex/fix-talgil-diagnostics-and-sensor-error-handling-lvrhbb
             retry_after_seconds=retry_after_seconds,
+
+ main
         )
 
     def _get_client(self) -> httpx.AsyncClient:
@@ -190,7 +220,10 @@ class TalgilAdapter(ControllerAdapter, DataProviderAdapter):
                 response_shape=response_shape,
             )
             raise error
+ codex/fix-talgil-diagnostics-and-sensor-error-handling-lvrhbb
 
+
+ main
         if resp.status_code == 404:
             self._set_last_diagnostic(
                 error_type="TalgilNotFound",
@@ -224,7 +257,10 @@ class TalgilAdapter(ControllerAdapter, DataProviderAdapter):
                 response_shape=response_shape,
             )
             raise error
+ codex/fix-talgil-diagnostics-and-sensor-error-handling-lvrhbb
 
+
+ main
         if resp.status_code >= 400:
             error = TalgilClientError(f"Talgil client error {resp.status_code}")
             self._set_last_diagnostic(
@@ -239,6 +275,7 @@ class TalgilAdapter(ControllerAdapter, DataProviderAdapter):
         if not resp.content:
             self._set_last_diagnostic(response_shape="empty")
             return None
+ codex/fix-talgil-diagnostics-and-sensor-error-handling-lvrhbb
 
         try:
             parsed = resp.json()
@@ -265,10 +302,33 @@ class TalgilAdapter(ControllerAdapter, DataProviderAdapter):
 
         configured = self.configured
         if not configured:
+
+
+        try:
+            parsed = resp.json()
+        except ValueError as exc:
+            error = TalgilResponseError(f"Talgil returned invalid JSON ({method} {path})")
+            self._set_last_diagnostic(
+                error_type=error.__class__.__name__,
+                error_message_sanitized=_sanitize_text(str(error)),
+                upstream_status_code=resp.status_code,
+                upstream_response_preview_sanitized=preview,
+                response_shape="invalid_json",
+            )
+            raise error from exc
+
+        shape = "dict" if isinstance(parsed, dict) else "list" if isinstance(parsed, list) else "text"
+        self._set_last_diagnostic(response_shape=shape)
+        return parsed
+
+    async def check_auth(self) -> bool:
+        if not self._api_key:
+ main
             self._set_last_diagnostic(
                 error_type="MissingApiKey",
                 error_message_sanitized="TALGIL_API_KEY is not configured in this runtime.",
             )
+ codex/fix-talgil-diagnostics-and-sensor-error-handling-lvrhbb
             payload = TalgilRuntimeStatus(
                 status="integration_ready",
                 configured=False,
@@ -312,6 +372,24 @@ class TalgilAdapter(ControllerAdapter, DataProviderAdapter):
     async def check_auth(self) -> bool:
         status = await self.get_runtime_status(use_cache=True)
         return status.live
+
+            return False
+        try:
+            targets = await self.list_targets()
+            ok = isinstance(targets, list)
+            if ok:
+                self._set_last_diagnostic(response_shape="list")
+            return ok
+        except Exception as exc:
+            self._set_last_diagnostic(
+                error_type=exc.__class__.__name__,
+                error_message_sanitized=_sanitize_text(str(exc)),
+                upstream_status_code=self._last_diagnostic.upstream_status_code,
+                upstream_response_preview_sanitized=self._last_diagnostic.upstream_response_preview_sanitized,
+                response_shape=self._last_diagnostic.response_shape,
+            )
+            return False
+ main
 
     async def list_targets(self) -> List[Dict[str, Any]]:
         payload = await self._get("/mytargets")
@@ -414,11 +492,14 @@ class TalgilClientError(TalgilError):
     pass
 
 
+ codex/fix-talgil-diagnostics-and-sensor-error-handling-lvrhbb
 class TalgilRateLimitError(TalgilClientError):
     def __init__(self, message: str, retry_after_seconds: Optional[int] = None):
         self.retry_after_seconds = retry_after_seconds
         super().__init__(message)
 
 
+
+ main
 class TalgilResponseError(TalgilError):
     pass
