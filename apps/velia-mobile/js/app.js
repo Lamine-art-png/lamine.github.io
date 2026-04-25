@@ -14,7 +14,10 @@ let voiceListening = false;
 let transcript = "";
 let voiceResponse = "";
 let weather = state.weatherCache || null;
+codex/build-foundation-for-velia-voice-agent-biya53
+
 codex/build-foundation-for-velia-voice-agent-q4nmj3
+main
 let onboardingStep = 0;
 let onboardingDraft = {
   role: "farmer",
@@ -34,6 +37,9 @@ let onboardingDraft = {
   usualDurationMin: "",
   waterSource: "",
 };
+codex/build-foundation-for-velia-voice-agent-biya53
+
+main
 main
 
 const nav = ["today", "fields", "alerts", "assistant", "reports", "settings"];
@@ -91,6 +97,75 @@ function recommendationFor(field) {
 function todayContent() {
   const field = state.fields[0];
   if (!field) return `<section class='card'>No fields yet. Complete onboarding.</section>`;
+ codex/build-foundation-for-velia-voice-agent-biya53
+
+  const rec = recommendationFor(field);
+  const attentionFields = state.fields.filter((f) => generateRecommendation(f, weather).urgency !== "low");
+  const recentHistory = state.recommendationHistory.slice(0, 3);
+
+  return `<section class='today-stack'>
+      <article class='card decision-card'>
+        <p class='card-label'>Today’s decision</p>
+        <h2>${field.name}</h2>
+        <p class='decision-main'>${rec.mainRecommendation}</p>
+        <div class='meta-row'>
+          <span>Timing: ${rec.timing}</span>
+          <span>Urgency: ${rec.urgency}</span>
+        </div>
+        <p class='small'>Next best step: ${rec.nextBestAction}</p>
+      </article>
+
+      <section class='today-grid'>
+        <article class='card compact-card'>
+          <p class='card-label'>Confidence</p>
+          <p class='value-pill'>${rec.confidence}</p>
+          <p class='small'>Velia is clearer when field updates are recent.</p>
+        </article>
+
+        <article class='card compact-card'>
+          <p class='card-label'>Weather risk</p>
+          <p>${weather?.forecastSummary || "Using last available weather."}</p>
+          <div class='tag-row'>
+            <span class='tag'>Heat: ${weather?.heatRisk || "unknown"}</span>
+            <span class='tag'>Frost: ${weather?.frostRisk || "unknown"}</span>
+            <span class='tag'>Rain: ${weather?.rainChance ?? "n/a"}%</span>
+          </div>
+          ${!navigator.onLine ? `<p class='small warn'>Using last available weather data.</p>` : ""}
+        </article>
+
+        <article class='card compact-card'>
+          <p class='card-label'>Missing data</p>
+          ${rec.missingData.length
+            ? `<ul class='mini-list'>${rec.missingData.map((item) => `<li>${item}</li>`).join("")}</ul>`
+            : `<p class='small'>No critical data gaps today.</p>`}
+          <p class='small'>Not sure? You can update anytime from Fields.</p>
+        </article>
+
+        <article class='card compact-card'>
+          <p class='card-label'>Fields needing attention</p>
+          ${attentionFields.length
+            ? `<ul class='mini-list'>${attentionFields.map((f) => `<li>${f.name}</li>`).join("")}</ul>`
+            : `<p class='small'>All fields look stable now.</p>`}
+        </article>
+      </section>
+
+      <article class='card compact-card'>
+        <p class='card-label'>Recommendation history</p>
+        ${recentHistory.length
+          ? `<ul class='mini-list'>${recentHistory.map((entry) => `<li>${new Date(entry.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: ${entry.rec.urgency} urgency</li>`).join("")}</ul>`
+          : `<p class='small'>Your recommendation history will appear here.</p>`}
+      </article>
+
+      <article class='card compact-card'>
+        <p class='card-label'>Quick actions</p>
+        <div class='quick-actions-grid'>
+          <button class='btn brand' data-open-log='${field.id}'>Log irrigation</button>
+          <button class='btn' data-act='note' data-field='${field.id}'>Add field note</button>
+          <button class='btn' data-open-condition='${field.id}'>Update field condition</button>
+          <button class='btn' data-nav='assistant'>Ask Velia</button>
+        </div>
+      </article>
+
   const rec = recommendationFor(field);
   const attentionFields = state.fields.filter((f) => generateRecommendation(f, weather).urgency !== "low");
   const yesterday = state.irrigationLogs.find((l) => Date.now() - new Date(l.performedAt).getTime() > 20 * 3600000);
@@ -112,6 +187,7 @@ function todayContent() {
         <button class='btn' data-nav='assistant'>Ask Velia</button>
         <button class='btn' data-open-condition='${field.id}'>Update field condition</button>
       </div>
+ main
     </section>
     ${voiceCard(field.id, rec)}`;
 }
@@ -171,7 +247,10 @@ function voiceCard(fieldId, rec) {
   return `<section class='card'><h3>Voice Agent</h3><button class='btn mic ${voiceListening ? "listening" : ""}' data-voice='${fieldId}'>${voiceListening ? "Listening... tap to stop" : "Start voice input"}</button><p class='small'>Transcript: ${transcript || "No transcript yet"}</p><p class='small'>Velia response: ${voiceResponse || "No response yet"}</p>${rec ? `<p class='small'>Current confidence: ${rec.confidence}</p>` : ""}${!sync.isOnline ? `<p class='warn'>${tr("offlineSaved")}. ${tr("willSync")}.</p>` : ""}</section>`;
 }
 
+ codex/build-foundation-for-velia-voice-agent-biya53
+
 codex/build-foundation-for-velia-voice-agent-q4nmj3
+ main
 function progressDots() {
   const steps = ["Welcome", "Role", "Location", "Field", "Setup"];
   return `<div class='progress-wrap'>${steps.map((s, i) => `<div class='progress-pill ${onboardingStep === i ? "active" : onboardingStep > i ? "done" : ""}'>${s}</div>`).join("")}</div>`;
@@ -251,6 +330,8 @@ function onboardingFlow() {
 
 function content() {
   if (!state.onboarded) return onboardingFlow();
+ codex/build-foundation-for-velia-voice-agent-biya53
+
 
 function onboardingForm() {
   return `<section class='card'><h2>Welcome to Velia</h2><p>${tr("framing")}</p><div class='grid'>
@@ -278,6 +359,7 @@ function onboardingForm() {
 function content() {
   if (!state.onboarded) return onboardingForm();
 main
+ main
   if (route === "today") return todayContent();
   if (route === "fields") return fieldsContent();
   if (route === "alerts") return alertsContent();
@@ -288,7 +370,10 @@ main
 
 function render() {
   const sync = syncService.status();
+ codex/build-foundation-for-velia-voice-agent-biya53
+
 codex/build-foundation-for-velia-voice-agent-q4nmj3
+ main
   app.innerHTML = `<div class='shell ${!state.onboarded ? "shell-onboard" : ""}'><header class='top'><div><p class='small'>AGRO-AI</p><h1>${tr("appName")}</h1><p class='small'>${tr("framing")}</p></div><div><span class='small'>${sync.state}${sync.pending ? ` (${sync.pending})` : ""}</span></div></header>${content()}${state.onboarded ? `<nav class='bottom'>${nav.map((n) => `<button class='btn nav ${route === n ? "active" : ""}' data-nav='${n}'>${n}</button>`).join("")}</nav>` : ""}</div>`;
   bind();
 }
@@ -311,11 +396,14 @@ function readDraftInputs() {
   assign("waterSource");
 }
 
+ codex/build-foundation-for-velia-voice-agent-biya53
+
 
   app.innerHTML = `<div class='shell'><header class='top'><div><p class='small'>AGRO-AI</p><h1>${tr("appName")}</h1><p class='small'>${tr("framing")}</p></div><div><span class='small'>${sync.state}${sync.pending ? ` (${sync.pending})` : ""}</span></div></header>${content()}${state.onboarded ? `<nav class='bottom'>${nav.map((n) => `<button class='btn nav ${route === n ? "active" : ""}' data-nav='${n}'>${n}</button>`).join("")}</nav>` : ""}</div>`;
   bind();
 }
 
+ main
  main
 function bind() {
   app.querySelectorAll("[data-nav]").forEach((b) => (b.onclick = () => { route = b.dataset.nav; selectedField = null; render(); }));
@@ -338,7 +426,10 @@ function bind() {
     route = "today"; selectedField = null; render();
   };
 
+ codex/build-foundation-for-velia-voice-agent-biya53
+
  codex/build-foundation-for-velia-voice-agent-q4nmj3
+ main
   app.querySelectorAll("[data-next-step]").forEach((b) => (b.onclick = () => { onboardingStep = Number(b.dataset.nextStep); render(); }));
   app.querySelectorAll("[data-prev-step]").forEach((b) => (b.onclick = () => { readDraftInputs(); onboardingStep = Math.max(0, onboardingStep - 1); render(); }));
   app.querySelectorAll("[data-onboard-choice]").forEach((b) => (b.onclick = () => { onboardingDraft[b.dataset.onboardChoice] = b.dataset.value; render(); }));
@@ -362,13 +453,21 @@ function bind() {
     render();
   };
 
+ codex/build-foundation-for-velia-voice-agent-biya53
 
+
+ main
  main
   const gpsBtn = document.getElementById("captureGps");
   if (gpsBtn) gpsBtn.onclick = () => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+ codex/build-foundation-for-velia-voice-agent-biya53
+        onboardingDraft.coordinates = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        onboardingDraft.farmLocation = `${pos.coords.latitude.toFixed(3)}, ${pos.coords.longitude.toFixed(3)}`;
+        render();
+
  codex/build-foundation-for-velia-voice-agent-q4nmj3
         onboardingDraft.coordinates = { lat: pos.coords.latitude, lon: pos.coords.longitude };
         onboardingDraft.farmLocation = `${pos.coords.latitude.toFixed(3)}, ${pos.coords.longitude.toFixed(3)}`;
@@ -376,10 +475,13 @@ function bind() {
 
         document.getElementById("farmLocation").value = `${pos.coords.latitude.toFixed(3)}, ${pos.coords.longitude.toFixed(3)}`;
  main
+ main
       },
       () => { /* manual fallback stays available */ }
     );
   };
+
+ codex/build-foundation-for-velia-voice-agent-biya53
 
  codex/build-foundation-for-velia-voice-agent-q4nmj3
 
@@ -398,6 +500,7 @@ function bind() {
     render();
   };
 
+ main
  main
   const demo = document.getElementById("startDemo");
   if (demo) demo.onclick = async () => { state = useDemoMode(state); route = "today"; persist(); await refreshWeather(true); render(); };
