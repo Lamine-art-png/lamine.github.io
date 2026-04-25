@@ -1,8 +1,46 @@
-# AGRO-AI Customer Portal
+# Velia Foundation (AGRO-AI)
 
-Customer portal MVP intended for future deployment at `app.agroai-pilot.com`.
+Velia is a mobile-first irrigation intelligence and water management foundation for global agriculture teams.
 
-## Local preview
+**Product framing:** Velia helps farms make better water decisions, act faster, and understand what happened across their fields.
+
+## What this foundation includes
+
+- Production-style app shell with mobile-first navigation and route-based sections.
+- Screens: Today, Fields, Field Detail, Alerts, Assistant, Reports, Settings.
+- Reusable UI patterns (cards, badges, action buttons, chips, voice controls).
+- Strong mock data layer for daily irrigation decisions and operational context.
+- Offline-first foundation with local queue and sync status model.
+- Multilingual-ready i18n structure (English active, additional languages predeclared).
+- Recommendation engine placeholder service with replaceable business logic.
+- Modular integration adapter system for WiseConn, Talgil, Hortau, Manual, Weather, Satellite, and FutureProvider.
+- Voice Agent module foundation for field-first voice workflows.
+
+## Architecture overview
+
+```text
+customer-portal/
+  index.html
+  styles.css
+  js/
+    app.js                      # Shell, routes, rendering, UI event flow
+    data/
+      models.js                 # Typed JSDoc model contracts
+      mockData.js               # Seed mock farm/field/weather/alerts data
+    i18n/
+      translations.js           # Dictionary structure
+      index.js                  # t(), setLanguage(), language()
+    services/
+      storageService.js         # localStorage abstraction
+      syncService.js            # queue model + mock sync
+      recommendationEngine.js   # recommendationEngine placeholder
+      voiceAgent.js             # voice service placeholder methods
+      integrations/
+        baseAdapter.js          # integration interface
+        adapters.js             # provider registry + adapters
+```
+
+## Run locally
 
 ```bash
 cd customer-portal
@@ -11,45 +49,113 @@ python -m http.server 4173
 
 Open `http://localhost:4173`.
 
-## API base configuration
+## Data model foundation
 
-Default API base is `https://api.agroai-pilot.com`.
+The model layer defines contracts for:
 
-You can override without source edits by using one of these:
+- `User`, `Farm`, `Field`, `Crop`
+- `IrrigationRecommendation`, `IrrigationLog`, `Alert`, `WeatherSummary`
+- `DataSource`, `Integration`, `FieldNote`, `ReportSummary`, `SyncStatus`
+- Voice models: `VoiceSession`, `VoiceTranscript`, `VoiceCommand`, `VoiceIntent`, `VoiceAction`, `VoiceAgentResponse`
 
-1. Query param (one-off):
-   - `http://localhost:4173?apiBase=https://your-api.example.com`
-2. In-browser saved override via the portal header input (stored in `localStorage` as `AGROAI_API_BASE`).
-3. Optional pre-injected global before app load:
-   - `window.AGROAI_API_BASE = "https://your-api.example.com"`
+## Offline-first foundation
 
-## Live endpoints wired in the portal
+- Local persistence abstraction (`storageService`).
+- Queue model for field actions and voice actions.
+- Sync status object (`isOnline`, pending count, last sync, state).
+- Mock sync worker to flush queue when connectivity returns.
+- Graceful offline language for voice requests requiring live data:
+  - “I saved your request. I will update it when connection returns.”
 
-- `GET /v1/controllers/environments`
-- `GET /v1/wiseconn/auth`
-- `GET /v1/wiseconn/farms`
-- `GET /v1/wiseconn/farms/{farm_id}/zones`
-- `GET /v1/wiseconn/zones/{zone_id}/irrigations`
-- `GET /v1/talgil/auth`
-- `GET /v1/talgil/targets`
-- `GET /v1/talgil/farms`
-- `GET /v1/talgil/farms/{farm_id}/zones`
-- `GET /v1/decisioning/blocks/{block_id}/water-state`
-- `GET /v1/decisioning/blocks/{block_id}/water-state/history`
-- `GET /v1/execution/blocks/{block_id}/decisions`
-- `GET /v1/execution/blocks/{block_id}/verifications`
-- `GET /v1/reports/roi` (if enabled in the deployed API)
+## Recommendation engine placeholder
 
-## Source-aware behavior
+`recommendationEngine.generateRecommendation()` currently evaluates mock features:
 
-- Portal reads controller environment status from `GET /v1/controllers/environments`.
-- WiseConn zone IDs are mapped to decisioning/execution block IDs as `wc-{zone_id}`.
-- Talgil sensor entities are mapped as `tg-{controller_id}-{sensor_uid}` to keep provider-specific block identity stable.
-- Talgil environment state now comes from real `/v1/talgil` runtime reads and only shows `live` when authenticated.
+- Crop and stage
+- Weather summary
+- Last irrigation timing
+- Water stress level
+- Field status / data source context
 
-## Static deploy note (`app.agroai-pilot.com`)
+Returns:
 
-1. Deploy `customer-portal/` as static files.
-2. Point `app.agroai-pilot.com` to that static host.
-3. Keep API base set to `https://api.agroai-pilot.com` for production.
-4. Do not alter Railway secrets, DNS, or infra outside explicit change control.
+- Recommendation type
+- Action
+- Timing
+- Confidence
+- Reasoning list
+- Risk flags
+
+This module is intentionally isolated so AGRO-AI production logic can replace it without UI rewrites.
+
+## Integrations adapter system
+
+All integrations conform to a consistent adapter interface:
+
+- `connect()`
+- `fetchFields()`
+- `fetchIrrigationLogs()`
+- `sync()`
+
+Current adapters are placeholders for:
+
+- WiseConn
+- Talgil
+- Hortau
+- Manual
+- Weather
+- Satellite
+- FutureProvider
+
+## Voice agent foundation
+
+### Architecture
+
+- UI entry points in Today, Assistant, and Field Detail (plus note/log workflows).
+- Service methods:
+  - `startListening`
+  - `stopListening`
+  - `transcribe`
+  - `detectIntent`
+  - `executeVoiceAction`
+  - `speakResponse`
+  - `saveOfflineVoiceAction`
+  - `syncQueuedVoiceActions`
+
+### Current mock behavior
+
+1. User taps microphone.
+2. App enters listening state.
+3. Mock transcript appears.
+4. Mock intent is detected.
+5. Mock response appears.
+6. Action is executed or queued based on connectivity.
+
+### Offline voice handling
+
+- Voice notes and actions are saved when offline.
+- User sees clear queue/sync language.
+- No blocking capture flow.
+
+### Future production integration points
+
+- Replace mock `transcribe()` with cloud/on-device STT.
+- Replace mock `speakResponse()` with TTS provider.
+- Add contextual intent model and entity extraction.
+- Add secure voice audit and consent controls.
+
+### Future multilingual roadmap
+
+- English active now.
+- Predeclared expansion path: French, Spanish, Wolof, Arabic, Hindi, Portuguese.
+- Voice models already include `language` fields.
+
+## Next features to build
+
+1. Real authentication and tenant-aware farm switching.
+2. API-backed field data and recommendation history.
+3. Rich reminder scheduling and alert acknowledgement flow.
+4. Production-grade sync conflict resolution.
+5. Real speech-to-text and text-to-speech provider adapters.
+6. Language pack expansion and localized voice prompts.
+7. Report export pipeline and enterprise audit trail.

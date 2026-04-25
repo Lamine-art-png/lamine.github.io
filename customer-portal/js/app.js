@@ -1,494 +1,331 @@
-import { ApiClient } from "./apiClient.js";
+import "./data/models.js";
+import { t, setLanguage, language } from "./i18n/index.js";
+import { alerts, crops, dailyConsistency, fields, generateRecommendations, getCrop, getFieldById, irrigationLogs, mockFarm, mockUser, notes, reportSummary, weather } from "./data/mockData.js";
+import { storageService } from "./services/storageService.js";
+import { syncService } from "./services/syncService.js";
+import { voiceAgent } from "./services/voiceAgent.js";
+import { integrationRegistry } from "./services/integrations/adapters.js";
 
-const api = new ApiClient();
+const app = document.getElementById("app");
 
 const state = {
-  farms: [],
-  zonesByFarm: new Map(),
-  controllerEnvironments: [],
-  controllerTotals: {},
-  selectedFarmId: "",
-  selectedZoneId: "",
+  route: "today",
+  selectedFieldId: fields[0]?.id || "",
+  recommendations: generateRecommendations(),
+  voiceSession: null,
+  voiceTranscript: null,
+  voiceResponse: "",
+  voiceListening: false,
 };
 
-const tabsEl = document.getElementById("tabs");
-const titleEl = document.getElementById("page-title");
-const authBadgeEl = document.getElementById("auth-badge");
-const farmSelectEl = document.getElementById("farm-select");
-const zoneSelectEl = document.getElementById("zone-select");
+const navItems = ["today", "fields", "alerts", "assistant", "reports", "settings"];
 
-const panels = {
-  overview: document.getElementById("overview"),
-  recommendations: document.getElementById("recommendations"),
-  verification: document.getElementById("verification"),
-  reports: document.getElementById("reports"),
-};
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
+function fmtDate(value) {
+  return new Date(value).toLocaleString();
 }
 
-function setMessage(text = "", type = "") {
-  const el = document.getElementById("global-message");
-  if (!text) {
-    el.className = "message hidden";
-    el.textContent = "";
-    return;
-  }
-  el.className = `message ${type}`.trim();
-  el.textContent = text;
+function recommendationFor(fieldId) {
+  return state.recommendations.find((item) => item.fieldId === fieldId);
 }
 
-function setAuthBadge({ ok, text }) {
-  authBadgeEl.className = `pill ${ok ? "ok" : "error"}`;
-  authBadgeEl.textContent = text;
-}
-
-function formatDate(value) {
-  if (!value) return "n/a";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return String(value);
-  return date.toLocaleString();
-}
-
-function toArray(payload) {
-  return Array.isArray(payload) ? payload : [];
-}
-
-function getSelectedZones() {
-  return state.zonesByFarm.get(state.selectedFarmId) || [];
-}
-
-function selectedZone() {
-  return getSelectedZones().find((z) => String(z.id) === String(state.selectedZoneId));
-}
-
-function humanizeSource(source) {
-  const key = String(source || "").toLowerCase();
-  if (key === "wiseconn") return "WiseConn";
-  if (key === "talgil") return "Talgil";
-  if (key === "unknown") return "Unknown";
-  if (!key) return "Unknown";
-  return key.charAt(0).toUpperCase() + key.slice(1);
-}
-
-function normalizeSourceFromFarm(farm) {
-  return String(farm?.provider || farm?.source || "wiseconn").toLowerCase();
-}
-
-function zoneBlockId(zone) {
-  const source = String(zone?.provider || zone?.source || "wiseconn").toLowerCase();
-  if (source === "wiseconn") {
-    return `wc-${zone.id}`;
-  }
-  if (source === "talgil") {
-    const controllerId = zone?.controller_id || zone?.farm_id || "unknown";
-    return `tg-${controllerId}-${zone.id}`;
-  }
-  return String(zone?.id || "");
-}
-
-function updateSelectors() {
-  farmSelectEl.innerHTML = state.farms
-    .map((farm) => `<option value="${escapeHtml(farm.id)}">${escapeHtml(farm.name || farm.id)}</option>`)
-    .join("");
-
-  if (!state.selectedFarmId && state.farms.length) {
-    state.selectedFarmId = String(state.farms[0].id);
-  }
-
-  farmSelectEl.value = state.selectedFarmId;
-
-  const zones = getSelectedZones();
-  zoneSelectEl.innerHTML = zones.length
-    ? zones
-        .map((zone) => `<option value="${escapeHtml(zone.id)}">${escapeHtml(zone.name || zone.id)}</option>`)
-        .join("")
-    : '<option value="">No zones available</option>';
-
-  if (zones.length && !zones.some((z) => String(z.id) === String(state.selectedZoneId))) {
-    state.selectedZoneId = String(zones[0].id);
-  }
-
-  zoneSelectEl.value = state.selectedZoneId || "";
-}
-
-function renderTable(panel, headers, rows, emptyText) {
-  if (!rows.length) {
-    panel.innerHTML = `<section class="empty-state">${escapeHtml(emptyText)}</section>`;
-    return;
-  }
-
-  const head = headers.map((h) => `<th>${escapeHtml(h)}</th>`).join("");
-  const body = rows
-    .map(
-      (row) =>
-        `<tr>${row.map((cell) => `<td>${escapeHtml(cell ?? "n/a")}</td>`).join("")}</tr>`
-    )
-    .join("\n");
-
-  panel.innerHTML = `<div class="table-wrap"><table class="table"><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`;
-}
-
-async function bootstrapFarmsAndZones() {
-  const environmentsRes = await api.getControllerEnvironments();
-  if (environmentsRes.ok) {
-    state.controllerEnvironments = toArray(environmentsRes.data?.environments);
-    state.controllerTotals = environmentsRes.data?.totals || {};
-  } else {
-    state.controllerEnvironments = [];
-    state.controllerTotals = {};
-  }
-
-  const [wiseconnFarmsRes, talgilFarmsRes] = await Promise.all([
-    api.getFarms(),
-    api.getTalgilFarms(),
-  ]);
-
-  const wiseconnFarms = wiseconnFarmsRes.ok
-    ? toArray(wiseconnFarmsRes.data).map((farm) => ({ ...farm, provider: "wiseconn", source: "wiseconn" }))
-    : [];
-  const talgilFarms = talgilFarmsRes.ok
-    ? toArray(talgilFarmsRes.data).map((farm) => ({ ...farm, provider: "talgil", source: "talgil" }))
-    : [];
-
-  if (!wiseconnFarmsRes.ok && !talgilFarmsRes.ok) {
-    setMessage(
-      `Unable to load controller farms (WiseConn ${wiseconnFarmsRes.status}, Talgil ${talgilFarmsRes.status}).`,
-      "error"
-    );
-    state.farms = [];
-    updateSelectors();
-    return;
-  }
-
-  state.farms = [...wiseconnFarms, ...talgilFarms];
-
-  await Promise.all(
-    state.farms.map(async (farm) => {
-      const source = String(farm.provider || farm.source || "wiseconn").toLowerCase();
-      const zonesRes = source === "talgil" ? await api.getTalgilZones(farm.id) : await api.getZones(farm.id);
-      state.zonesByFarm.set(String(farm.id), zonesRes.ok ? toArray(zonesRes.data) : []);
-    })
-  );
-
-  if (state.farms.length && !state.selectedFarmId) {
-    state.selectedFarmId = String(state.farms[0].id);
-    const zones = state.zonesByFarm.get(state.selectedFarmId) || [];
-    state.selectedZoneId = zones.length ? String(zones[0].id) : "";
-  }
-
-  updateSelectors();
-}
-
-async function renderOverview() {
-  const panel = panels.overview;
-  panel.innerHTML = '<section class="card">Loading overview…</section>';
-
-  const farms = state.farms;
-  const allZones = farms.flatMap((farm) => state.zonesByFarm.get(String(farm.id)) || []);
-  const sourceCounts = allZones.reduce((acc, zone) => {
-    const key = String(zone.provider || zone.source || "wiseconn").toLowerCase();
-    acc[key] = (acc[key] || 0) + 1;
-    return acc;
-  }, {});
-
-  const selectedFarm = farms.find((f) => String(f.id) === String(state.selectedFarmId));
-  const zones = getSelectedZones();
-  const sourceSummary = Object.entries(sourceCounts)
-    .map(([key, count]) => `${humanizeSource(key)} (${count})`)
-    .join(", ");
-
-  const environmentCards = state.controllerEnvironments
-    .map((env) => {
-      const statusLabel =
-        env.status === "live"
-          ? "Live"
-          : env.status === "configured"
-            ? "Configured"
-            : "Integration-ready";
-      const sourceParts = Object.entries(env.sources || {})
-        .map(([source, count]) => `${humanizeSource(source)} ${count}`)
-        .join(" • ");
-
-      return `
-      <section class="card">
-        <div class="card-head">
-          <h3 class="section-title">${escapeHtml(env.label || humanizeSource(env.source))}</h3>
-          <span class="source-chip ${escapeHtml(env.status || "integration_ready")}">${escapeHtml(statusLabel)}</span>
+function renderLayout(content) {
+  const sync = syncService.getSyncStatus();
+  app.innerHTML = `
+    <div class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">AGRO-AI</p>
+          <h1>${t("appName")}</h1>
+          <p class="framing">${t("framing")}</p>
         </div>
-        <p class="kv"><span>Environment source:</span>${escapeHtml(humanizeSource(env.source))}</p>
-        <p class="kv"><span>Farms:</span>${escapeHtml(env.farms ?? 0)}</p>
-        <p class="kv"><span>Zones:</span>${escapeHtml(env.zones ?? 0)}</p>
-        <p class="kv"><span>Observed sources:</span>${escapeHtml(sourceParts || "n/a")}</p>
-        <p class="muted">${escapeHtml(env.notes || "")}</p>
-      </section>`;
-    })
-    .join("\n");
-
-  const cards = farms
-    .slice(0, 8)
-    .map((farm) => {
-      const farmZones = state.zonesByFarm.get(String(farm.id)) || [];
-      const farmSource = humanizeSource(normalizeSourceFromFarm(farm));
-      return `
-      <section class="card">
-        <div class="card-head">
-        <h3 class="section-title">${escapeHtml(farm.name || `Farm ${farm.id}`)}</h3>
-          <span class="source-chip subtle">${escapeHtml(farmSource)}</span>
+        <div class="status-stack">
+          <span class="badge ${sync.isOnline ? "ok" : "offline"}">${sync.isOnline ? "Online" : "Offline mode"}</span>
+          <span class="badge">Sync: ${sync.status}${sync.pendingActions ? ` (${sync.pendingActions})` : ""}</span>
         </div>
-        <p class="kv"><span>Farm ID:</span>${escapeHtml(farm.id)}</p>
-        <p class="kv"><span>Zones:</span>${escapeHtml(farmZones.length)}</p>
-        <p class="kv"><span>Controller source:</span>${escapeHtml(farmSource)}</p>
-      </section>`;
-    })
-    .join("\n");
+      </header>
+      <main class="page">${content}</main>
+      <nav class="bottom-nav">
+        ${navItems.map((item) => `<button data-route="${item}" class="nav-btn ${state.route === item ? "active" : ""}">${t(`nav.${item}`)}</button>`).join("")}
+      </nav>
+    </div>`;
 
-  panel.innerHTML = `
-    <section class="kpi-row">
-      <article class="card"><p class="kpi-value">${escapeHtml(state.controllerTotals.farms ?? farms.length)}</p><p class="kpi-label">Controller farms</p></article>
-      <article class="card"><p class="kpi-value">${escapeHtml(state.controllerTotals.zones ?? allZones.length)}</p><p class="kpi-label">Controller zones</p></article>
-      <article class="card"><p class="kpi-value">${escapeHtml(sourceSummary || "n/a")}</p><p class="kpi-label">Observed zone sources</p></article>
-      <article class="card"><p class="kpi-value">${escapeHtml(selectedFarm ? zones.length : 0)}</p><p class="kpi-label">Selected farm zones</p></article>
-    </section>
+  app.querySelectorAll("[data-route]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.route = button.dataset.route;
+      render();
+    });
+  });
+
+  app.querySelectorAll("[data-open-field]").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.selectedFieldId = button.dataset.openField;
+      state.route = "fields";
+      location.hash = `#/fields/${state.selectedFieldId}`;
+      render();
+    });
+  });
+
+  bindVoiceButtons();
+}
+
+function quickActionsHtml(fieldId = state.selectedFieldId) {
+  return `<div class="quick-actions">
+      <button class="action-btn" data-quick="note" data-field="${fieldId}">Add field note</button>
+      <button class="action-btn" data-quick="irrigation" data-field="${fieldId}">Log irrigation</button>
+      <button class="action-btn" data-quick="photo" data-field="${fieldId}">Take field photo</button>
+      <button class="action-btn" data-route="assistant">Ask Velia</button>
+      <button class="action-btn voice-entry" data-voice-entry="${fieldId}">🎙️ Voice</button>
+    </div>`;
+}
+
+function voiceModule(fieldId = state.selectedFieldId) {
+  const sync = syncService.getSyncStatus();
+  return `<section class="card">
+      <h3>Voice Agent</h3>
+      <p>${t("voicePrompt")}</p>
+      <div class="voice-controls">
+        <button class="mic ${state.voiceListening ? "listening" : ""}" data-voice-start="${fieldId}">${state.voiceListening ? "Listening... tap to stop" : "Start voice input"}</button>
+      </div>
+      <p class="muted">Transcript: ${state.voiceTranscript?.text || "No transcript yet"}</p>
+      <p class="muted">Velia response: ${state.voiceResponse || "No response yet"}</p>
+      <div class="quick-actions">
+        <button class="action-btn" data-voice-speak="1">Read response aloud</button>
+        <button class="action-btn" data-voice-save-note="${fieldId}">Save voice note as field note</button>
+      </div>
+      ${!sync.isOnline ? `<p class="offline-msg">${t("offlineSaved")}. ${t("syncPending")}.</p>` : ""}
+    </section>`;
+}
+
+function renderToday() {
+  const topPriority = state.recommendations
+    .filter((r) => r.type === "irrigate_now")
+    .sort((a, b) => (a.confidence < b.confidence ? 1 : -1))[0];
+  const attentionFields = fields.filter((f) => f.status !== "stable");
+  return `
     <section class="card">
-      <h3 class="section-title">Controller Environments</h3>
-      <p class="muted">AGRO-AI unifies irrigation intelligence across controller environments. Live telemetry flows from authenticated sources while integration-ready sources remain visible without fabricated operational metrics.</p>
+      <h2>Today's irrigation decision summary</h2>
+      <p class="priority">Today's priority: ${getFieldById(topPriority?.fieldId)?.name || "No urgent field"}</p>
+      <p>Recommended next action: ${topPriority?.action || "Monitor all fields"}</p>
+      <p>Confidence: ${topPriority?.confidence || "moderate"}</p>
+      <p>Weather: ${weather.condition}, ${weather.temperatureC}°C • ${weather.summary}</p>
+      <p>Water priority status: ${attentionFields.length} field(s) need attention.</p>
+      <p>Daily check-in consistency: ${dailyConsistency.checkInsThisWeek}/7 this week • ${dailyConsistency.streakDays}-day streak placeholder.</p>
+      <p>Field attention queue: ${attentionFields.map((f) => f.name).join(", ")}</p>
+      ${quickActionsHtml()}
     </section>
-    <section class="grid-two">${environmentCards || '<section class="empty-state">Controller environment summary is unavailable from the backend right now.</section>'}</section>
-    <section class="card">
-      <h3 class="section-title">Connected Farm Groups</h3>
-      <p class="muted">Operational farms grouped by controller source.</p>
-    </section>
-    <section class="grid-two">${cards || '<section class="empty-state">No farms available.</section>'}</section>
+    ${voiceModule()}
   `;
 }
 
-async function renderRecommendations() {
-  const panel = panels.recommendations;
-  panel.innerHTML = '<section class="card">Loading recommendation context…</section>';
+function fieldCard(field) {
+  const crop = getCrop(field.cropId);
+  const rec = recommendationFor(field.id);
+  return `<article class="card field-card" data-open-field="${field.id}">
+    <h3>${field.name}</h3>
+    <p>${crop?.name} • ${field.acreage} acres</p>
+    <p>Irrigation status: ${field.status}</p>
+    <p>Water stress: ${field.waterStressLevel}</p>
+    <p>Last irrigation: ${fmtDate(field.lastIrrigationAt)}</p>
+    <p>Next recommended action: ${rec?.action || "Monitor"}</p>
+    <p>Data source: ${field.dataSourceStatus}</p>
+  </article>`;
+}
 
-  const zone = selectedZone();
-  if (!zone) {
-    panel.innerHTML = '<section class="empty-state">Select a zone/block to view recommendation context.</section>';
-    return;
-  }
+function renderFieldDetail(fieldId) {
+  const field = getFieldById(fieldId);
+  if (!field) return `<section class="card"><p>Field not found.</p></section>`;
+  const crop = getCrop(field.cropId);
+  const rec = recommendationFor(field.id);
+  const fieldNotes = notes.filter((note) => note.fieldId === field.id);
+  const activity = irrigationLogs.filter((log) => log.fieldId === field.id);
 
-  const blockId = zoneBlockId(zone);
-  const [waterRes, historyRes, decisionsRes] = await Promise.all([
-    api.getWaterState(blockId),
-    api.getWaterStateHistory(blockId, 8),
-    api.getDecisionRuns(blockId, 10),
-  ]);
-
-  const latestDecision = decisionsRes.ok ? toArray(decisionsRes.data)[0] : null;
-  const states = historyRes.ok ? toArray(historyRes.data?.states) : [];
-
-  panel.innerHTML = `
-    <section class="grid-two">
-      <article class="card">
-        <h3 class="section-title">Latest Recommendation Flow</h3>
-        <p class="kv"><span>Recommendation time:</span>${escapeHtml(formatDate(latestDecision?.recommended_at))}</p>
-        <p class="kv"><span>Recommended duration:</span>${escapeHtml(latestDecision?.planned_duration_min ?? "n/a")} min</p>
-        <p class="kv"><span>Recommended volume:</span>${escapeHtml(latestDecision?.planned_volume_m3 ?? "n/a")} m³</p>
-        <p class="kv"><span>Status:</span>${escapeHtml(latestDecision?.status || "n/a")}</p>
-        <p class="kv"><span>Controller source:</span>${escapeHtml(humanizeSource(latestDecision?.provider || zone?.provider || zone?.source || "wiseconn"))}</p>
-      </article>
-      <article class="card">
-        <h3 class="section-title">Water State Context</h3>
-        <p class="kv"><span>Estimated at:</span>${escapeHtml(formatDate(waterRes.data?.estimated_at))}</p>
-        <p class="kv"><span>Root zone VWC:</span>${escapeHtml(waterRes.data?.root_zone_vwc ?? "n/a")}</p>
-        <p class="kv"><span>Stress risk:</span>${escapeHtml(waterRes.data?.stress_risk ?? "n/a")}</p>
-        <p class="kv"><span>Hours to stress:</span>${escapeHtml(waterRes.data?.hours_to_stress ?? "n/a")}</p>
-        <p class="kv"><span>Confidence:</span>${escapeHtml(waterRes.data?.confidence ?? "n/a")}</p>
-      </article>
+  return `<section class="card">
+      <h2>${field.name}</h2>
+      <p>Crop and acreage: ${crop?.name} • ${field.acreage} acres</p>
+      <p>Soil type: ${field.soilType}</p>
+      <p>Irrigation method: ${field.irrigationMethod}</p>
+      <p>Latest recommendation: ${rec?.action}</p>
+      <p>Reasoning summary: ${(rec?.reasoning || []).join(" • ")}</p>
+      <h3>Recent activity timeline</h3>
+      <ul>${activity.map((log) => `<li>${fmtDate(log.performedAt)} - ${log.amountMm} mm (${log.durationMin} min)</li>`).join("") || "<li>No activity logged.</li>"}</ul>
+      <h3>Notes</h3>
+      <ul>${fieldNotes.map((note) => `<li>${fmtDate(note.createdAt)} - ${note.text}</li>`).join("") || "<li>No notes yet.</li>"}</ul>
+      <p>Photos: placeholder for field photos</p>
+      <div class="quick-actions">
+        <button class="action-btn" data-quick="irrigation" data-field="${field.id}">Manual log</button>
+        <button class="action-btn" data-quick="note" data-field="${field.id}">Add note</button>
+      </div>
+      <p>Recommendation history: placeholder</p>
     </section>
-    <section id="water-state-history"></section>
-  `;
-
-  renderTable(
-    document.getElementById("water-state-history"),
-    ["Estimated", "Root VWC", "Stress", "Refill", "Confidence"],
-    states.map((item) => [
-      formatDate(item.estimated_at),
-      item.root_zone_vwc,
-      item.stress_risk,
-      item.refill_status,
-      item.confidence,
-    ]),
-    "No water-state history returned for this block yet."
-  );
-
-  if (!decisionsRes.ok && !waterRes.ok && !historyRes.ok) {
-    setMessage(
-      "Decisioning/execution data is not available for the selected zone yet. Verify block ID mapping in backend data.",
-      "warn"
-    );
-  }
+    ${voiceModule(field.id)}`;
 }
 
-async function renderVerification() {
-  const panel = panels.verification;
-  panel.innerHTML = '<section class="card">Loading verification data…</section>';
-
-  const zone = selectedZone();
-  if (!zone) {
-    panel.innerHTML = '<section class="empty-state">Select a zone/block to view verification.</section>';
-    return;
-  }
-
-  const blockId = zone ? zoneBlockId(zone) : "";
-  const zoneSource = String(zone?.provider || zone?.source || "wiseconn").toLowerCase();
-  const [verificationsRes, irrigationsRes] = await Promise.all([
-    api.getVerifications(blockId, 20),
-    zoneSource === "wiseconn" ? api.getIrrigations(zone.id, 14) : Promise.resolve({ ok: true, data: [] }),
-  ]);
-
-  const verificationRows = verificationsRes.ok
-    ? toArray(verificationsRes.data).map((item) => [
-        item.outcome || "n/a",
-        item.verification_status || "n/a",
-        item.duration_deviation_pct ?? "n/a",
-        item.volume_deviation_pct ?? "n/a",
-        formatDate(item.verified_at),
-      ])
-    : [];
-
-  const irrigationRows = irrigationsRes.ok
-    ? toArray(irrigationsRes.data)
-        .slice(0, 20)
-        .map((item) => [
-          formatDate(item.start_time || item.start || item.date),
-          item.duration_minutes || item.duration_min || "n/a",
-          item.depth_mm || item.depth || "n/a",
-          item.volume_m3 || item.volume || "n/a",
-        ])
-    : [];
-
-  panel.innerHTML = '<section id="verification-table"></section><section id="irrigation-table"></section>';
-
-  renderTable(
-    document.getElementById("verification-table"),
-    ["Recommended vs Applied", "Status", "Duration Δ%", "Volume Δ%", "Verified At"],
-    verificationRows,
-    "No execution verification rows available yet for this block."
-  );
-
-  renderTable(
-    document.getElementById("irrigation-table"),
-    ["Irrigation Time", "Duration (min)", "Depth", "Volume (m³)"],
-    irrigationRows,
-    "No irrigation rows are available in the selected 14-day window for this controller environment."
-  );
+function renderFields() {
+  const hashField = location.hash.match(/^#\/fields\/(.+)$/)?.[1];
+  if (hashField) return renderFieldDetail(hashField);
+  return `<section class="stack">${fields.map(fieldCard).join("")}</section>`;
 }
 
-function defaultDateWindow(days = 30) {
-  const now = new Date();
-  const from = new Date(now);
-  from.setDate(now.getDate() - days);
-  const toISO = now.toISOString().slice(0, 10);
-  const fromISO = from.toISOString().slice(0, 10);
-  return { from: fromISO, to: toISO };
+function renderAlerts() {
+  return `<section class="stack">${alerts.map((alert) => `<article class="card">
+      <h3>${alert.type}</h3>
+      <p>Severity: <span class="sev ${alert.severity}">${alert.severity}</span></p>
+      <p>Field affected: ${alert.fieldId ? getFieldById(alert.fieldId)?.name : "Farm-wide"}</p>
+      <p>Recommended action: ${alert.action}</p>
+      <p>Time sensitivity: ${alert.timeSensitivity}</p>
+    </article>`).join("")}</section>`;
 }
 
-async function renderReports() {
-  const panel = panels.reports;
-  panel.innerHTML = '<section class="card">Loading report endpoints…</section>';
-
-  const zone = selectedZone();
-  const { from, to } = defaultDateWindow(30);
-  const reportRes = await api.getRoiReport({ from, to, blockId: zone?.id || "" });
-
-  if (reportRes.ok) {
-    const r = reportRes.data;
-    panel.innerHTML = `
-      <section class="card">
-        <h3 class="section-title">ROI Report (${escapeHtml(from)} → ${escapeHtml(to)})</h3>
-        <p class="kv"><span>Block:</span>${escapeHtml(r.block_id || "All")}</p>
-        <p class="kv"><span>Water saved:</span>${escapeHtml(r.water_saved_m3)} m³</p>
-        <p class="kv"><span>Energy saved:</span>${escapeHtml(r.energy_saved_kwh)} kWh</p>
-        <p class="kv"><span>Cost saved:</span>$${escapeHtml(r.cost_saved_usd)}</p>
-        <p class="kv"><span>Yield delta:</span>${escapeHtml(r.yield_delta_pct)}%</p>
-        <p class="kv"><span>Baseline method:</span>${escapeHtml(r.baseline_method)}</p>
-      </section>
-    `;
-    return;
-  }
-
-  if (reportRes.status === 404) {
-    panel.innerHTML =
-      '<section class="empty-state">Reports endpoint is not exposed in the live deployment yet. Marked as not yet wired.</section>';
-    return;
-  }
-
-  panel.innerHTML = `<section class="empty-state">Reports unavailable (${escapeHtml(reportRes.status || "request failed")}): ${escapeHtml(
-    reportRes.error || "unknown error"
-  )}</section>`;
+function renderAssistant() {
+  const prompts = [
+    "Should I irrigate today?",
+    "Which field needs attention?",
+    "Explain this recommendation",
+    "What changed since yesterday?",
+    "Create a water plan for this week",
+  ];
+  return `<section class="card">
+      <h2>Field Decision Assistant</h2>
+      <p>Ask Velia anything about your fields, irrigation, weather risk, or water planning.</p>
+      <div class="chips">${prompts.map((p) => `<button class="chip">${p}</button>`).join("")}</div>
+      <div class="conversation">
+        <p><strong>You:</strong> Which field needs attention?</p>
+        <p><strong>Velia:</strong> Based on current weather and your last logged irrigation, Field 2 is the priority today. I recommend checking soil conditions before irrigating because the confidence is moderate.</p>
+      </div>
+    </section>
+    ${voiceModule()}`;
 }
 
-async function renderTab(tab) {
-  setMessage();
-  Object.entries(panels).forEach(([name, panel]) => {
-    panel.classList.toggle("hidden", name !== tab);
+function renderReports() {
+  return `<section class="card">
+    <h2>Reports</h2>
+    <p>Weekly water summary: ${reportSummary.periodLabel}</p>
+    <p>Recommended vs logged irrigation: ${reportSummary.recommendedMm} mm vs ${reportSummary.loggedMm} mm</p>
+    <p>Estimated water saved: placeholder (calculation pending verified baseline)</p>
+    <p>Field performance: ${reportSummary.fieldPerformanceSummary}</p>
+    <button class="action-btn" disabled>Export report (placeholder)</button>
+  </section>`;
+}
+
+function renderSettings() {
+  return `<section class="card">
+    <h2>Settings</h2>
+    <p>Farm profile: ${mockFarm.name}, ${mockFarm.location}</p>
+    <label>Language
+      <select id="language-select">
+        <option value="en" ${language() === "en" ? "selected" : ""}>English</option>
+      </select>
+    </label>
+    <p>Units: Metric default (placeholder toggle)</p>
+    <p>Offline mode: Enabled with local queue fallback</p>
+    <p>Data sources: Manual, Weather, Sensor, Controller</p>
+    <p>Integrations: ${integrationRegistry.list().map((item) => item.name).join(", ")}</p>
+    <p>Team members: ${mockUser.name} (${mockUser.role})</p>
+    <p>Notification preferences: reminder-ready structure placeholder</p>
+  </section>`;
+}
+
+function bindGeneralActions() {
+  app.querySelectorAll("[data-quick]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const type = button.dataset.quick;
+      const fieldId = button.dataset.field || state.selectedFieldId;
+      if (type === "note") {
+        const note = { id: `n-${Date.now()}`, fieldId, text: "Quick note placeholder captured.", createdAt: new Date().toISOString(), source: "manual", synced: navigator.onLine };
+        notes.unshift(note);
+        if (!navigator.onLine) syncService.enqueue({ kind: "field_note", payload: note });
+      }
+      if (type === "irrigation") {
+        const log = { id: `log-${Date.now()}`, fieldId, amountMm: 8, durationMin: 35, method: getFieldById(fieldId)?.irrigationMethod || "manual", performedAt: new Date().toISOString(), source: "manual" };
+        irrigationLogs.unshift(log);
+        if (!navigator.onLine) syncService.enqueue({ kind: "irrigation_log", payload: log });
+      }
+      render();
+    });
   });
 
-  titleEl.textContent = tab.charAt(0).toUpperCase() + tab.slice(1);
-
-  if (tab === "overview") await renderOverview();
-  if (tab === "recommendations") await renderRecommendations();
-  if (tab === "verification") await renderVerification();
-  if (tab === "reports") await renderReports();
+  const languageSelect = document.getElementById("language-select");
+  if (languageSelect) {
+    languageSelect.addEventListener("change", (event) => {
+      setLanguage(event.target.value);
+      storageService.set("lang", event.target.value);
+      render();
+    });
+  }
 }
 
-async function initAuthStatus() {
-  const authRes = await api.getAuth();
-  if (!authRes.ok) {
-    setAuthBadge({ ok: false, text: `Auth check failed (${authRes.status || "network"})` });
-    return;
-  }
+function bindVoiceButtons() {
+  app.querySelectorAll("[data-voice-start]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const fieldId = button.dataset.voiceStart;
+      if (!state.voiceListening) {
+        state.voiceSession = voiceAgent.startListening(language(), fieldId);
+        state.voiceListening = true;
+      } else {
+        state.voiceSession = voiceAgent.stopListening(state.voiceSession);
+        state.voiceTranscript = voiceAgent.transcribe(state.voiceSession);
+        const command = voiceAgent.detectIntent(state.voiceTranscript);
+        const action = voiceAgent.executeVoiceAction(command, { fieldId, transcript: state.voiceTranscript });
 
-  setAuthBadge({
-    ok: Boolean(authRes.data?.authenticated),
-    text: authRes.data?.authenticated ? "WiseConn API connected" : "WiseConn API not authenticated",
+        if (!navigator.onLine) {
+          voiceAgent.saveOfflineVoiceAction(action);
+          state.voiceResponse = t("gracefulOffline");
+        } else {
+          const field = getFieldById(fieldId);
+          const rec = recommendationFor(fieldId);
+          state.voiceResponse = voiceAgent.composeResponse({ recommendation: { ...rec, fieldName: field?.name }, command: action, offline: false });
+        }
+        state.voiceListening = false;
+      }
+      render();
+    });
+  });
+
+  app.querySelectorAll("[data-voice-save-note]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const fieldId = button.dataset.voiceSaveNote;
+      if (!state.voiceTranscript?.text) return;
+      const note = { id: `n-${Date.now()}`, fieldId, text: state.voiceTranscript.text, createdAt: new Date().toISOString(), source: "voice", synced: navigator.onLine };
+      notes.unshift(note);
+      if (!navigator.onLine) syncService.enqueue({ kind: "field_note", payload: note });
+      render();
+    });
+  });
+
+  app.querySelectorAll("[data-voice-speak]").forEach((button) => {
+    button.addEventListener("click", () => {
+      if (!state.voiceResponse) return;
+      state.voiceResponse = voiceAgent.speakResponse({ text: state.voiceResponse }).text;
+      render();
+    });
   });
 }
 
-farmSelectEl.addEventListener("change", async (event) => {
-  state.selectedFarmId = event.target.value;
-  const zones = getSelectedZones();
-  state.selectedZoneId = zones.length ? String(zones[0].id) : "";
-  updateSelectors();
-
-  const activeTab = tabsEl.querySelector(".tab.active")?.dataset.tab || "overview";
-  await renderTab(activeTab);
-});
-
-zoneSelectEl.addEventListener("change", async (event) => {
-  state.selectedZoneId = event.target.value;
-  const activeTab = tabsEl.querySelector(".tab.active")?.dataset.tab || "overview";
-  await renderTab(activeTab);
-});
-
-tabsEl.addEventListener("click", async (event) => {
-  const button = event.target.closest("button[data-tab]");
-  if (!button) return;
-
-  tabsEl.querySelectorAll(".tab").forEach((tab) => {
-    tab.classList.toggle("active", tab === button);
-  });
-
-  await renderTab(button.dataset.tab);
-});
-
-async function initializePortal() {
-  await initAuthStatus();
-  await bootstrapFarmsAndZones();
-  await renderTab("overview");
+function routeContent() {
+  if (state.route === "today") return renderToday();
+  if (state.route === "fields") return renderFields();
+  if (state.route === "alerts") return renderAlerts();
+  if (state.route === "assistant") return renderAssistant();
+  if (state.route === "reports") return renderReports();
+  if (state.route === "settings") return renderSettings();
+  return renderToday();
 }
 
-initializePortal();
+function render() {
+  renderLayout(routeContent());
+  bindGeneralActions();
+}
+
+function bootstrap() {
+  const storedLanguage = storageService.get("lang", "en");
+  setLanguage(storedLanguage);
+  window.addEventListener("online", async () => {
+    await syncService.syncQueuedActions();
+    render();
+  });
+  window.addEventListener("offline", render);
+  window.addEventListener("hashchange", render);
+  render();
+}
+
+bootstrap();
