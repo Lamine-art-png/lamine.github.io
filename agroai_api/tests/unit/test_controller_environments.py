@@ -41,6 +41,13 @@ class _StubTalgilReadyAdapter:
         return False
 
 
+class _StubTalgilConfiguredButOfflineAdapter:
+    configured = True
+
+    async def check_auth(self):
+        return False
+
+
 def test_controller_environments_endpoint_live_talgil(monkeypatch):
     monkeypatch.setattr(AdapterRegistry, "get_wiseconn", lambda: _StubWiseConnAdapter())
     monkeypatch.setattr(AdapterRegistry, "get_talgil", lambda: _StubTalgilLiveAdapter())
@@ -74,5 +81,23 @@ def test_controller_environments_endpoint_talgil_integration_ready(monkeypatch):
 
     payload = response.json()
     talgil = next(item for item in payload["environments"] if item["source"] == "talgil")
+    wiseconn = next(item for item in payload["environments"] if item["source"] == "wiseconn")
     assert talgil["status"] == "integration_ready"
     assert talgil["live"] is False
+    assert wiseconn["status"] == "live"
+
+
+def test_controller_environments_endpoint_talgil_configured_not_live(monkeypatch):
+    monkeypatch.setattr(AdapterRegistry, "get_wiseconn", lambda: _StubWiseConnAdapter())
+    monkeypatch.setattr(AdapterRegistry, "get_talgil", lambda: _StubTalgilConfiguredButOfflineAdapter())
+
+    client = TestClient(app)
+    response = client.get("/v1/controllers/environments")
+    assert response.status_code == 200
+
+    payload = response.json()
+    talgil = next(item for item in payload["environments"] if item["source"] == "talgil")
+    assert talgil["status"] == "configured"
+    assert talgil["configured"] is True
+    assert talgil["live"] is False
+    assert "auth/read checks failed" in talgil["notes"]
