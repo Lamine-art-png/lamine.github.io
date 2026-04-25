@@ -14,6 +14,27 @@ let voiceListening = false;
 let transcript = "";
 let voiceResponse = "";
 let weather = state.weatherCache || null;
+codex/build-foundation-for-velia-voice-agent-q4nmj3
+let onboardingStep = 0;
+let onboardingDraft = {
+  role: "farmer",
+  language: "en",
+  farmName: "",
+  farmLocation: "",
+  coordinates: null,
+  fieldName: "",
+  crop: "",
+  acreage: "",
+  units: "metric",
+  irrigationMethod: "Drip",
+  dataSource: "neither",
+  hardware: "manual",
+  soilType: "",
+  lastIrrigationAt: "",
+  usualDurationMin: "",
+  waterSource: "",
+};
+main
 
 const nav = ["today", "fields", "alerts", "assistant", "reports", "settings"];
 const tr = (k) => translations[state.language || "en"]?.[k] || translations.en[k] || k;
@@ -150,6 +171,87 @@ function voiceCard(fieldId, rec) {
   return `<section class='card'><h3>Voice Agent</h3><button class='btn mic ${voiceListening ? "listening" : ""}' data-voice='${fieldId}'>${voiceListening ? "Listening... tap to stop" : "Start voice input"}</button><p class='small'>Transcript: ${transcript || "No transcript yet"}</p><p class='small'>Velia response: ${voiceResponse || "No response yet"}</p>${rec ? `<p class='small'>Current confidence: ${rec.confidence}</p>` : ""}${!sync.isOnline ? `<p class='warn'>${tr("offlineSaved")}. ${tr("willSync")}.</p>` : ""}</section>`;
 }
 
+codex/build-foundation-for-velia-voice-agent-q4nmj3
+function progressDots() {
+  const steps = ["Welcome", "Role", "Location", "Field", "Setup"];
+  return `<div class='progress-wrap'>${steps.map((s, i) => `<div class='progress-pill ${onboardingStep === i ? "active" : onboardingStep > i ? "done" : ""}'>${s}</div>`).join("")}</div>`;
+}
+
+function cardOptions(options, key) {
+  return `<div class='choice-grid'>${options.map((option) => `<button type='button' class='choice-card ${onboardingDraft[key] === option.value ? "selected" : ""}' data-onboard-choice='${key}' data-value='${option.value}'><strong>${option.label}</strong>${option.sub ? `<span>${option.sub}</span>` : ""}</button>`).join("")}</div>`;
+}
+
+function onboardingFlow() {
+  if (onboardingStep === 0) {
+    return `<section class='onboard-hero'>
+      <p class='eyebrow'>AGRO-AI</p>
+      <h1 class='onboard-title'>Velia</h1>
+      <p class='onboard-promise'>Know what to do with water today.</p>
+      <p class='small'>Simple daily irrigation guidance for farms of every size.</p>
+      <button class='btn brand xl' data-next-step='1'>Set up my farm</button>
+      <button class='btn xl' id='startDemo'>Try demo mode</button>
+    </section>`;
+  }
+
+  const stepCards = {
+    1: `<section class='card onboard-card'><h2>Who will use Velia?</h2><p class='small'>Pick your role and language.</p>
+      ${cardOptions([
+        { value: "farmer", label: "Farmer" },
+        { value: "farm manager", label: "Farm manager" },
+        { value: "agronomist", label: "Agronomist" },
+        { value: "irrigation professional", label: "Irrigation pro" },
+        { value: "enterprise user", label: "Enterprise" },
+      ], "role")}
+      <label>Language<select id='language'><option value='en' ${onboardingDraft.language === "en" ? "selected" : ""}>English</option><option value='fr'>French</option><option value='es'>Spanish</option><option value='wo'>Wolof</option><option value='ar'>Arabic</option><option value='hi'>Hindi</option><option value='pt'>Portuguese</option></select></label>
+    </section>`,
+    2: `<section class='card onboard-card'><h2>Where is your farm?</h2><p class='small'>Used for local weather context.</p>
+      <label>Farm name<input id='farmName' value='${onboardingDraft.farmName}' placeholder='e.g., North Valley Farm' /></label>
+      <label>Location<input id='farmLocation' value='${onboardingDraft.farmLocation}' placeholder='City or region' /></label>
+      <button class='btn' id='captureGps'>Use GPS location</button>
+      <p class='small'>Low connectivity is okay. You can update location later.</p>
+    </section>`,
+    3: `<section class='card onboard-card'><h2>Add your first field</h2><p class='small'>Just the basics to start recommendations.</p>
+      <label>Field name<input id='fieldName' value='${onboardingDraft.fieldName}' placeholder='Field 1' /></label>
+      <label>Crop<input id='crop' value='${onboardingDraft.crop}' placeholder='Maize, Tomato, Grapes…' /></label>
+      <label>Acreage<input id='acreage' value='${onboardingDraft.acreage}' type='number' min='1' placeholder='10' /></label>
+      <label>Units<select id='units'><option value='metric' ${onboardingDraft.units === "metric" ? "selected" : ""}>Metric</option><option value='imperial' ${onboardingDraft.units === "imperial" ? "selected" : ""}>Imperial</option></select></label>
+    </section>`,
+    4: `<section class='card onboard-card'><h2>Irrigation setup</h2><p class='small'>Not sure? You can skip this and update it later.</p>
+      ${cardOptions([
+        { value: "Drip", label: "Drip" },
+        { value: "Sprinkler", label: "Sprinkler" },
+        { value: "Pivot", label: "Pivot" },
+        { value: "Flood", label: "Flood" },
+      ], "irrigationMethod")}
+      <label>Data availability</label>
+      ${cardOptions([
+        { value: "neither", label: "No sensors/controller", sub: "Manual tracking" },
+        { value: "sensors", label: "Sensors only" },
+        { value: "controller", label: "Controller only" },
+        { value: "both", label: "Sensors + controller" },
+      ], "dataSource")}
+      <label>Hardware mode</label>
+      ${cardOptions([
+        { value: "manual", label: "Manual irrigation" },
+        { value: "connected", label: "Connected hardware" },
+      ], "hardware")}
+      <label>Soil type (optional)<input id='soilType' value='${onboardingDraft.soilType}' placeholder='Loam, clay, sandy…' /></label>
+      <label>Last irrigation date (optional)<input id='lastIrrigationAt' value='${onboardingDraft.lastIrrigationAt}' type='date' /></label>
+      <label>Usual duration min (optional)<input id='usualDurationMin' value='${onboardingDraft.usualDurationMin}' type='number' min='1' /></label>
+      <label>Water source (optional)<input id='waterSource' value='${onboardingDraft.waterSource}' placeholder='Canal, borehole, reservoir' /></label>
+    </section>`,
+  };
+
+  return `${progressDots()}${stepCards[onboardingStep]}
+    <div class='onboard-actions'>
+      <button class='btn' data-prev-step='1'>Back</button>
+      <button class='btn brand' data-onboard-continue='1'>${onboardingStep === 4 ? "Save and continue" : "Save and continue"}</button>
+    </div>`;
+}
+
+function content() {
+  if (!state.onboarded) return onboardingFlow();
+
 function onboardingForm() {
   return `<section class='card'><h2>Welcome to Velia</h2><p>${tr("framing")}</p><div class='grid'>
     <label>Role<select id='role'><option>farmer</option><option>farm manager</option><option>agronomist</option><option>irrigation professional</option><option>enterprise user</option></select></label>
@@ -175,6 +277,7 @@ function onboardingForm() {
 
 function content() {
   if (!state.onboarded) return onboardingForm();
+main
   if (route === "today") return todayContent();
   if (route === "fields") return fieldsContent();
   if (route === "alerts") return alertsContent();
@@ -185,10 +288,35 @@ function content() {
 
 function render() {
   const sync = syncService.status();
+codex/build-foundation-for-velia-voice-agent-q4nmj3
+  app.innerHTML = `<div class='shell ${!state.onboarded ? "shell-onboard" : ""}'><header class='top'><div><p class='small'>AGRO-AI</p><h1>${tr("appName")}</h1><p class='small'>${tr("framing")}</p></div><div><span class='small'>${sync.state}${sync.pending ? ` (${sync.pending})` : ""}</span></div></header>${content()}${state.onboarded ? `<nav class='bottom'>${nav.map((n) => `<button class='btn nav ${route === n ? "active" : ""}' data-nav='${n}'>${n}</button>`).join("")}</nav>` : ""}</div>`;
+  bind();
+}
+
+function readDraftInputs() {
+  const assign = (id, key = id) => {
+    const el = document.getElementById(id);
+    if (el) onboardingDraft[key] = el.value;
+  };
+  assign("language");
+  assign("farmName");
+  assign("farmLocation");
+  assign("fieldName");
+  assign("crop");
+  assign("acreage");
+  assign("units");
+  assign("soilType");
+  assign("lastIrrigationAt");
+  assign("usualDurationMin");
+  assign("waterSource");
+}
+
+
   app.innerHTML = `<div class='shell'><header class='top'><div><p class='small'>AGRO-AI</p><h1>${tr("appName")}</h1><p class='small'>${tr("framing")}</p></div><div><span class='small'>${sync.state}${sync.pending ? ` (${sync.pending})` : ""}</span></div></header>${content()}${state.onboarded ? `<nav class='bottom'>${nav.map((n) => `<button class='btn nav ${route === n ? "active" : ""}' data-nav='${n}'>${n}</button>`).join("")}</nav>` : ""}</div>`;
   bind();
 }
 
+ main
 function bind() {
   app.querySelectorAll("[data-nav]").forEach((b) => (b.onclick = () => { route = b.dataset.nav; selectedField = null; render(); }));
   app.querySelectorAll("[data-open-field]").forEach((b) => (b.onclick = () => { selectedField = { type: "detail", fieldId: b.dataset.openField }; render(); }));
@@ -210,16 +338,50 @@ function bind() {
     route = "today"; selectedField = null; render();
   };
 
+ codex/build-foundation-for-velia-voice-agent-q4nmj3
+  app.querySelectorAll("[data-next-step]").forEach((b) => (b.onclick = () => { onboardingStep = Number(b.dataset.nextStep); render(); }));
+  app.querySelectorAll("[data-prev-step]").forEach((b) => (b.onclick = () => { readDraftInputs(); onboardingStep = Math.max(0, onboardingStep - 1); render(); }));
+  app.querySelectorAll("[data-onboard-choice]").forEach((b) => (b.onclick = () => { onboardingDraft[b.dataset.onboardChoice] = b.dataset.value; render(); }));
+
+  const continueBtn = document.querySelector("[data-onboard-continue='1']");
+  if (continueBtn) continueBtn.onclick = async () => {
+    readDraftInputs();
+    if (onboardingStep < 4) {
+      onboardingStep += 1;
+      render();
+      return;
+    }
+
+    state = applyOnboarding(state, {
+      ...onboardingDraft,
+      coordinates: onboardingDraft.coordinates,
+    });
+    route = "today";
+    persist();
+    await refreshWeather(true);
+    render();
+  };
+
+
+ main
   const gpsBtn = document.getElementById("captureGps");
   if (gpsBtn) gpsBtn.onclick = () => {
     if (!navigator.geolocation) return;
     navigator.geolocation.getCurrentPosition(
       (pos) => {
+ codex/build-foundation-for-velia-voice-agent-q4nmj3
+        onboardingDraft.coordinates = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+        onboardingDraft.farmLocation = `${pos.coords.latitude.toFixed(3)}, ${pos.coords.longitude.toFixed(3)}`;
+        render();
+
         document.getElementById("farmLocation").value = `${pos.coords.latitude.toFixed(3)}, ${pos.coords.longitude.toFixed(3)}`;
+ main
       },
       () => { /* manual fallback stays available */ }
     );
   };
+
+ codex/build-foundation-for-velia-voice-agent-q4nmj3
 
   const finish = document.getElementById("finish");
   if (finish) finish.onclick = async () => {
@@ -236,6 +398,7 @@ function bind() {
     render();
   };
 
+ main
   const demo = document.getElementById("startDemo");
   if (demo) demo.onclick = async () => { state = useDemoMode(state); route = "today"; persist(); await refreshWeather(true); render(); };
 
