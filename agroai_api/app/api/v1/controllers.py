@@ -63,27 +63,29 @@ async def get_controller_environments() -> ControllerEnvironmentResponse:
     )
 
     talgil_live = False
-    talgil_targets: List[Dict[str, Any]] = []
-    talgil_zones: List[Dict[str, Any]] = []
+    talgil_targets_count = 0
+    talgil_zones_count = 0
+    talgil_status: ControllerStatus = "configured"
+    talgil_configured = talgil.configured
+    talgil_notes = (
+        "TALGIL_API_KEY is set, but runtime auth/read checks failed. Verify key scope and Talgil API availability."
+    )
 
     try:
-        talgil_live = await talgil.check_auth()
-        if talgil_live:
-            talgil_targets = await talgil.list_targets()
-            for target in talgil_targets:
-                target_id = str(target.get("id", ""))
-                if not target_id:
-                    continue
-                talgil_zones.extend(await talgil.list_zones(target_id))
+        status_payload = await talgil.get_runtime_status(use_cache=True)
+        talgil_live = bool(status_payload.live)
+        talgil_targets_count = int(status_payload.targets)
+        talgil_configured = bool(status_payload.configured)
+        talgil_status = status_payload.status
+        talgil_notes = status_payload.notes
     except Exception:
         talgil_live = False
-        talgil_targets = []
-        talgil_zones = []
+        talgil_targets_count = 0
+        talgil_zones_count = 0
+        talgil_status = "integration_ready" if not talgil_configured else "configured"
 
-    talgil_status: ControllerStatus = "live" if talgil_live else "configured"
-    talgil_configured = talgil.configured
-    if not talgil_configured:
-        talgil_status = "integration_ready"
+    if talgil_status not in ("live", "configured", "integration_ready"):
+        talgil_status = "configured" if talgil_configured else "integration_ready"
 
     wiseconn_env = ControllerEnvironment(
         source="wiseconn",
@@ -107,16 +109,10 @@ async def get_controller_environments() -> ControllerEnvironmentResponse:
         status=talgil_status,
         live=bool(talgil_live),
         configured=talgil_configured,
-        farms=len(talgil_targets),
-        zones=len(talgil_zones),
-        notes=(
-            "Live read path available via /v1/talgil endpoints (targets/full-image sensors)."
-            if talgil_live
-            else "Talgil adapter is wired; set TALGIL_API_KEY to activate live tenant-scoped runtime reads."
-            if talgil_configured
-            else "Integration code is wired in FastAPI; runtime remains integration-ready until TALGIL_API_KEY is configured."
-        ),
-        sources={"talgil": len(talgil_zones)} if talgil_zones else {},
+        farms=talgil_targets_count,
+        zones=talgil_zones_count,
+        notes=talgil_notes,
+        sources={"talgil": talgil_zones_count} if talgil_zones_count else {},
     )
 
     environments = [wiseconn_env, talgil_env]

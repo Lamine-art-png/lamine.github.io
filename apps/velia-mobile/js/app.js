@@ -3,8 +3,13 @@ import { syncService } from "./services/sync.js";
 import { generateRecommendation } from "./services/recommendationEngine.js";
 import { applyVoiceAction, parseVoiceCommand, saveOfflineVoiceAction } from "./services/voiceAgent.js";
 import { weatherService } from "./services/weatherService.js";
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
 import { applyDemoScenario, applyOnboarding, loadState, recordRecommendationHistory, saveState, useDemoMode } from "./state/store.js";
 import { createIrrigationLog, createObservation, createVoiceTimelineEntry } from "./state/actions.js";
+
+import { applyOnboarding, loadState, saveState, useDemoMode } from "./state/store.js";
+import { createIrrigationLog, createObservation } from "./state/actions.js";
+ main
 
 const app = document.getElementById("app");
 let state = loadState();
@@ -14,7 +19,14 @@ let voiceListening = false;
 let transcript = "";
 let voiceResponse = "";
 let weather = state.weatherCache || null;
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
 let uiMessage = "";
+
+codex/build-foundation-for-velia-voice-agent-biya53
+
+codex/build-foundation-for-velia-voice-agent-q4nmj3
+main
+ main
 let onboardingStep = 0;
 let onboardingDraft = {
   role: "farmer",
@@ -23,8 +35,11 @@ let onboardingDraft = {
   farmLocation: "",
   coordinates: null,
   fieldName: "",
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
   fieldLocation: "",
   fieldCoordinates: null,
+
+ main
   crop: "",
   acreage: "",
   units: "metric",
@@ -36,6 +51,13 @@ let onboardingDraft = {
   usualDurationMin: "",
   waterSource: "",
 };
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
+
+codex/build-foundation-for-velia-voice-agent-biya53
+
+main
+main
+ main
 
 const nav = ["today", "fields", "alerts", "assistant", "reports", "settings"];
 const tr = (k) => translations[state.language || "en"]?.[k] || translations.en[k] || k;
@@ -59,7 +81,10 @@ function addIrrigationLog(payload) {
   }
   if (!navigator.onLine) syncService.queueAction({ kind: "irrigation_log", payload: log });
   persist();
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
   showMessage(navigator.onLine ? "Irrigation log saved." : "Irrigation saved offline. Will sync when connected.");
+
+ main
 }
 
 function addFieldNote(payload) {
@@ -67,7 +92,10 @@ function addFieldNote(payload) {
   state.fieldNotes.unshift(note);
   if (!navigator.onLine) syncService.queueAction({ kind: "field_note", payload: note });
   persist();
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
   showMessage(navigator.onLine ? "Field note added." : "Field note saved offline.");
+
+ main
 }
 
 function updateCondition(payload) {
@@ -80,6 +108,7 @@ function updateCondition(payload) {
   }
   if (!navigator.onLine) syncService.queueAction({ kind: "observation", payload: observation });
   persist();
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
   showMessage(navigator.onLine ? "Field condition updated." : "Condition saved offline.");
 }
 
@@ -91,12 +120,19 @@ function showMessage(text) {
       render();
     }
   }, 2800);
+
+ main
 }
 
 function recommendationFor(field) {
   const recentObservation = state.observations.find((o) => o.fieldId === field.id);
   const rec = generateRecommendation(field, weather, { lastObservation: recentObservation?.condition });
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
   state = recordRecommendationHistory(state, field.id, rec);
+
+  state.recommendationHistory.unshift({ fieldId: field.id, rec, at: new Date().toISOString() });
+  state.recommendationHistory = state.recommendationHistory.slice(0, 30);
+ main
   persist();
   return rec;
 }
@@ -104,6 +140,10 @@ function recommendationFor(field) {
 function todayContent() {
   const field = state.fields[0];
   if (!field) return `<section class='card'>No fields yet. Complete onboarding.</section>`;
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
+
+ codex/build-foundation-for-velia-voice-agent-biya53
+ main
 
   const rec = recommendationFor(field);
   const attentionFields = state.fields.filter((f) => generateRecommendation(f, weather).urgency !== "low");
@@ -162,6 +202,7 @@ function todayContent() {
           : `<p class='small'>Your recommendation history will appear here.</p>`}
       </article>
 
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
 
       <article class='card compact-card'>
         <p class='card-label'>Voice timeline</p>
@@ -170,6 +211,8 @@ function todayContent() {
           : `<p class='small'>Voice activity will appear here.</p>`}
       </article>
 
+
+ main
       <article class='card compact-card'>
         <p class='card-label'>Quick actions</p>
         <div class='quick-actions-grid'>
@@ -179,6 +222,32 @@ function todayContent() {
           <button class='btn' data-nav='assistant'>Ask Velia</button>
         </div>
       </article>
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
+
+
+  const rec = recommendationFor(field);
+  const attentionFields = state.fields.filter((f) => generateRecommendation(f, weather).urgency !== "low");
+  const yesterday = state.irrigationLogs.find((l) => Date.now() - new Date(l.performedAt).getTime() > 20 * 3600000);
+
+  return `<section class='card'>
+      <p class='priority'>${rec.mainRecommendation}</p>
+      <p><strong>Today’s action:</strong> ${rec.nextBestAction}</p>
+      <p><strong>Timing:</strong> ${rec.timing} • <strong>Urgency:</strong> ${rec.urgency}</p>
+      <p><strong>Confidence:</strong> ${rec.confidence}</p>
+      <p><strong>Why:</strong> ${rec.reasonSummary.join(" • ")}</p>
+      <p><strong>Missing data:</strong> ${rec.missingData.length ? rec.missingData.join(", ") : "No critical gaps"}</p>
+      <p><strong>Weather risks:</strong> heat ${weather?.heatRisk || "unknown"}, frost ${weather?.frostRisk || "unknown"}, rain chance ${weather?.rainChance ?? "n/a"}%</p>
+      <p><strong>Fields needing attention:</strong> ${attentionFields.map((f) => f.name).join(", ") || "None"}</p>
+      <p><strong>What changed since yesterday:</strong> ${yesterday ? `Irrigation logged ${Math.round((Date.now() - new Date(yesterday.performedAt).getTime()) / 3600000)}h ago.` : "No previous irrigation log."}</p>
+      ${!navigator.onLine ? `<p class='warn'>Using last available weather data (${weather?.lastUpdated ? new Date(weather.lastUpdated).toLocaleString() : "unknown"}).</p>` : ""}
+      <div class='grid two'>
+        <button class='btn' data-open-log='${field.id}'>Log irrigation</button>
+        <button class='btn' data-act='note' data-field='${field.id}'>Add field note</button>
+        <button class='btn' data-nav='assistant'>Ask Velia</button>
+        <button class='btn' data-open-condition='${field.id}'>Update field condition</button>
+      </div>
+ main
+ main
     </section>
     ${voiceCard(field.id, rec)}`;
 }
@@ -218,7 +287,11 @@ function fieldDetail(fieldId) {
   const observations = state.observations.filter((x) => x.fieldId === fieldId).slice(0, 5);
 
   return `<section class='card'><h2>${f.name}</h2>
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
     <p>Crop and acreage: ${f.crop} • ${f.acreage}</p><p>Field location: ${f.location || "Not set"}</p><p>Soil type: ${f.soilType || "unknown"}</p><p>Irrigation method: ${f.irrigationMethod}</p><p>Last updated: ${f.updatedAt || "n/a"}</p><div class="map-placeholder">Map foundation: ${f.coordinates ? `${f.coordinates.lat?.toFixed?.(3) || f.coordinates.lat}, ${f.coordinates.lon?.toFixed?.(3) || f.coordinates.lon}` : "Add coordinates later"}</div>
+
+    <p>Crop and acreage: ${f.crop} • ${f.acreage}</p><p>Soil type: ${f.soilType || "unknown"}</p><p>Irrigation method: ${f.irrigationMethod}</p><p>Last updated: ${f.updatedAt || "n/a"}</p>
+ main
     <h3>Irrigation logs</h3><ul>${logs.map((l) => `<li>${new Date(l.performedAt).toLocaleString()} - ${l.durationMin} min</li>`).join("") || "<li>No logs</li>"}</ul>
     <h3>Field observations</h3><ul>${observations.map((o) => `<li>${o.condition} (${new Date(o.createdAt).toLocaleString()})</li>`).join("") || "<li>No observations</li>"}</ul>
     <h3>Notes</h3><ul>${notes.map((n) => `<li>${new Date(n.createdAt).toLocaleString()} - ${n.text}</li>`).join("") || "<li>No notes</li>"}</ul>
@@ -231,13 +304,24 @@ function assistantContent() {
   return `<section class='card'><h2>Field Decision Assistant</h2><p>Ask Velia anything about your irrigation decisions.</p><div class='chips'>${chips.map((c) => `<span class='chip'>${c}</span>`).join("")}</div><p><strong>Velia:</strong> I explain recommendation confidence and missing data so you can decide with confidence.</p></section>${voiceCard(state.fields[0]?.id, state.fields[0] ? recommendationFor(state.fields[0]) : null)}`;
 }
 function reportsContent() { return `<section class='card'><h2>Reports</h2><p>Planned for next increment.</p></section>`; }
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
 function settingsContent() { return `<section class='card'><h2>Settings</h2><p>Mode: ${state.mode}</p><button class='btn' data-mode='demo'>Demo mode</button><button class='btn' data-mode='real'>Real mode</button><p>Farm location: ${state.profile?.farm?.location || "not set"}</p><p>Weather provider: ${weather?.provider || "mock"}</p><button class='btn' data-refresh-weather='1'>Refresh weather</button>${state.mode === "demo" ? `<label>Demo scenario<select id='demoScenario'><option value='baseline' ${state.demoScenario === "baseline" ? "selected" : ""}>Baseline</option><option value='hotDry' ${state.demoScenario === "hotDry" ? "selected" : ""}>Hot and dry</option><option value='coolWet' ${state.demoScenario === "coolWet" ? "selected" : ""}>Cool and wet</option></select></label><button class='btn' data-apply-scenario='1'>Apply scenario</button>` : ""}</section>`; }
+
+function settingsContent() { return `<section class='card'><h2>Settings</h2><p>Mode: ${state.mode}</p><button class='btn' data-mode='demo'>Demo mode</button><button class='btn' data-mode='real'>Real mode</button><p>Farm location: ${state.profile?.farm?.location || "not set"}</p><button class='btn' data-refresh-weather='1'>Refresh weather</button></section>`; }
+ main
 
 function voiceCard(fieldId, rec) {
   const sync = syncService.status();
   return `<section class='card'><h3>Voice Agent</h3><button class='btn mic ${voiceListening ? "listening" : ""}' data-voice='${fieldId}'>${voiceListening ? "Listening... tap to stop" : "Start voice input"}</button><p class='small'>Transcript: ${transcript || "No transcript yet"}</p><p class='small'>Velia response: ${voiceResponse || "No response yet"}</p>${rec ? `<p class='small'>Current confidence: ${rec.confidence}</p>` : ""}${!sync.isOnline ? `<p class='warn'>${tr("offlineSaved")}. ${tr("willSync")}.</p>` : ""}</section>`;
 }
 
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
+
+ codex/build-foundation-for-velia-voice-agent-biya53
+
+codex/build-foundation-for-velia-voice-agent-q4nmj3
+ main
+ main
 function progressDots() {
   const steps = ["Welcome", "Role", "Location", "Field", "Setup"];
   return `<div class='progress-wrap'>${steps.map((s, i) => `<div class='progress-pill ${onboardingStep === i ? "active" : onboardingStep > i ? "done" : ""}'>${s}</div>`).join("")}</div>`;
@@ -278,7 +362,10 @@ function onboardingFlow() {
     </section>`,
     3: `<section class='card onboard-card'><h2>Add your first field</h2><p class='small'>Just the basics to start recommendations.</p>
       <label>Field name<input id='fieldName' value='${onboardingDraft.fieldName}' placeholder='Field 1' /></label>
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
       <label>Field location (optional)<input id='fieldLocation' value='${onboardingDraft.fieldLocation}' placeholder='North block, near road' /></label>
+
+ main
       <label>Crop<input id='crop' value='${onboardingDraft.crop}' placeholder='Maize, Tomato, Grapes…' /></label>
       <label>Acreage<input id='acreage' value='${onboardingDraft.acreage}' type='number' min='1' placeholder='10' /></label>
       <label>Units<select id='units'><option value='metric' ${onboardingDraft.units === "metric" ? "selected" : ""}>Metric</option><option value='imperial' ${onboardingDraft.units === "imperial" ? "selected" : ""}>Imperial</option></select></label>
@@ -318,6 +405,39 @@ function onboardingFlow() {
 
 function content() {
   if (!state.onboarded) return onboardingFlow();
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
+
+ codex/build-foundation-for-velia-voice-agent-biya53
+
+
+function onboardingForm() {
+  return `<section class='card'><h2>Welcome to Velia</h2><p>${tr("framing")}</p><div class='grid'>
+    <label>Role<select id='role'><option>farmer</option><option>farm manager</option><option>agronomist</option><option>irrigation professional</option><option>enterprise user</option></select></label>
+    <label>Farm name<input id='farmName' required /></label>
+    <label>Location (city/region)<input id='farmLocation' placeholder='Manual location' /></label>
+    <button class='btn' id='captureGps'>Use GPS location</button>
+    <label>Field name<input id='fieldName' required /></label>
+    <label>Crop type<input id='crop' required /></label>
+    <label>Acreage<input id='acreage' type='number' min='1' required /></label>
+    <label>Irrigation method<input id='irrigationMethod' required /></label>
+    <label>Soil type (optional)<input id='soilType' /></label>
+    <label>Last irrigation date (optional)<input id='lastIrrigationAt' type='date' /></label>
+    <label>Usual irrigation duration minutes (optional)<input id='usualDurationMin' type='number' min='1' /></label>
+    <label>Water source (optional)<input id='waterSource' placeholder='Canal, borehole, reservoir' /></label>
+    <label>Data sources<select id='dataSource'><option value='neither'>Neither</option><option value='sensors'>Sensors</option><option value='controller'>Controller</option><option value='both'>Both</option></select></label>
+    <label>Units<select id='units'><option value='metric'>Metric</option><option value='imperial'>Imperial</option></select></label>
+    <label>Preferred language<select id='language'><option value='en'>English</option><option value='fr'>French</option><option value='es'>Spanish</option><option value='wo'>Wolof</option><option value='ar'>Arabic</option><option value='hi'>Hindi</option><option value='pt'>Portuguese</option></select></label>
+    <label>Hardware<select id='hardware'><option value='manual'>Manual irrigation</option><option value='connected'>Connected hardware</option></select></label>
+    <button class='btn brand' id='finish'>Finish onboarding</button>
+    <button class='btn' id='startDemo'>Use demo mode</button>
+  </div></section>`;
+}
+
+function content() {
+  if (!state.onboarded) return onboardingForm();
+main
+ main
+ main
   if (route === "today") return todayContent();
   if (route === "fields") return fieldsContent();
   if (route === "alerts") return alertsContent();
@@ -328,7 +448,15 @@ function content() {
 
 function render() {
   const sync = syncService.status();
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
   app.innerHTML = `<div class='shell ${!state.onboarded ? "shell-onboard" : ""}'><header class='top'><div><p class='small'>AGRO-AI</p><h1>${tr("appName")}</h1><p class='small'>${tr("framing")}</p></div><div><span class='small'>${sync.state}${sync.pending ? ` (${sync.pending})` : ""}</span></div></header>${!sync.isOnline ? `<div class='offline-banner'>Offline mode active. Actions queue locally and sync when connected.</div>` : ""}${content()}${uiMessage ? `<div class='toast'>${uiMessage}</div>` : ""}${state.onboarded ? `<nav class='bottom'>${nav.map((n) => `<button class='btn nav ${route === n ? "active" : ""}' data-nav='${n}'>${n}</button>`).join("")}</nav>` : ""}</div>`;
+
+ codex/build-foundation-for-velia-voice-agent-biya53
+
+codex/build-foundation-for-velia-voice-agent-q4nmj3
+ main
+  app.innerHTML = `<div class='shell ${!state.onboarded ? "shell-onboard" : ""}'><header class='top'><div><p class='small'>AGRO-AI</p><h1>${tr("appName")}</h1><p class='small'>${tr("framing")}</p></div><div><span class='small'>${sync.state}${sync.pending ? ` (${sync.pending})` : ""}</span></div></header>${content()}${state.onboarded ? `<nav class='bottom'>${nav.map((n) => `<button class='btn nav ${route === n ? "active" : ""}' data-nav='${n}'>${n}</button>`).join("")}</nav>` : ""}</div>`;
+ main
   bind();
 }
 
@@ -341,7 +469,10 @@ function readDraftInputs() {
   assign("farmName");
   assign("farmLocation");
   assign("fieldName");
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
   assign("fieldLocation");
+
+ main
   assign("crop");
   assign("acreage");
   assign("units");
@@ -351,6 +482,18 @@ function readDraftInputs() {
   assign("waterSource");
 }
 
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
+
+ codex/build-foundation-for-velia-voice-agent-biya53
+
+
+  app.innerHTML = `<div class='shell'><header class='top'><div><p class='small'>AGRO-AI</p><h1>${tr("appName")}</h1><p class='small'>${tr("framing")}</p></div><div><span class='small'>${sync.state}${sync.pending ? ` (${sync.pending})` : ""}</span></div></header>${content()}${state.onboarded ? `<nav class='bottom'>${nav.map((n) => `<button class='btn nav ${route === n ? "active" : ""}' data-nav='${n}'>${n}</button>`).join("")}</nav>` : ""}</div>`;
+  bind();
+}
+
+ main
+ main
+ main
 function bind() {
   app.querySelectorAll("[data-nav]").forEach((b) => (b.onclick = () => { route = b.dataset.nav; selectedField = null; render(); }));
   app.querySelectorAll("[data-open-field]").forEach((b) => (b.onclick = () => { selectedField = { type: "detail", fieldId: b.dataset.openField }; render(); }));
@@ -446,9 +589,12 @@ function bind() {
           },
         });
         if (!voiceResponse) voiceResponse = `Intent: ${command.intent}. Action captured.`;
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
         state.voiceTimeline.unshift(createVoiceTimelineEntry({ transcript, intent: command.intent, outcome: voiceResponse, fieldId }));
         state.voiceTimeline = state.voiceTimeline.slice(0, 20);
         persist();
+
+ main
       }
     }
     render();
