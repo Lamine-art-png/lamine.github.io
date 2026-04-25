@@ -17,6 +17,16 @@ class TalgilAuthResponse(BaseModel):
     message: str
 
 
+class TalgilStatusResponse(BaseModel):
+    status: str
+    configured: bool
+    live: bool
+    api_url: str
+    targets: int
+    sensors: int
+    notes: str
+
+
 @router.get("/auth", response_model=TalgilAuthResponse)
 async def check_auth() -> TalgilAuthResponse:
     adapter = AdapterRegistry.get_talgil()
@@ -25,6 +35,45 @@ async def check_auth() -> TalgilAuthResponse:
         authenticated=ok,
         api_url=adapter.api_url,
         message="Authentication successful" if ok else "Authentication failed or API key missing",
+    )
+
+
+@router.get("/status", response_model=TalgilStatusResponse)
+async def get_status() -> TalgilStatusResponse:
+    adapter = AdapterRegistry.get_talgil()
+    configured = adapter.configured
+    live = False
+    targets: List[Dict[str, Any]] = []
+    sensors = 0
+
+    if configured:
+        live = await adapter.check_auth()
+        if live:
+            targets = await adapter.list_targets()
+            for target in targets:
+                target_id = str(target.get("id", ""))
+                if not target_id:
+                    continue
+                sensors += len(await adapter.list_zones(target_id))
+
+    if live:
+        status = "live"
+        notes = "Live runtime checks succeeded against Talgil read endpoints."
+    elif configured:
+        status = "configured"
+        notes = "TALGIL_API_KEY is present but runtime auth/read checks did not succeed."
+    else:
+        status = "integration_ready"
+        notes = "TALGIL_API_KEY is not configured in this runtime."
+
+    return TalgilStatusResponse(
+        status=status,
+        configured=configured,
+        live=live,
+        api_url=adapter.api_url,
+        targets=len(targets),
+        sensors=sensors,
+        notes=notes,
     )
 
 
@@ -53,3 +102,18 @@ async def list_farms() -> List[Dict[str, Any]]:
 async def list_farm_zones(farm_id: str) -> List[Dict[str, Any]]:
     adapter = AdapterRegistry.get_talgil()
     return await adapter.list_zones(farm_id)
+
+
+@router.get("/sensors", response_model=List[Dict[str, Any]])
+async def list_sensors() -> List[Dict[str, Any]]:
+    adapter = AdapterRegistry.get_talgil()
+    targets = await adapter.list_targets()
+    sensors: List[Dict[str, Any]] = []
+
+    for target in targets:
+        target_id = str(target.get("id", ""))
+        if not target_id:
+            continue
+        sensors.extend(await adapter.list_zones(target_id))
+
+    return sensors

@@ -112,9 +112,11 @@ async def get_controller_environments() -> ControllerEnvironmentResponse:
         notes=(
             "Live read path available via /v1/talgil endpoints (targets/full-image sensors)."
             if talgil_live
-            else "Talgil adapter is wired; set TALGIL_API_KEY to activate live tenant-scoped runtime reads."
-            if talgil_configured
-            else "Integration code is wired in FastAPI; runtime remains integration-ready until TALGIL_API_KEY is configured."
+            else (
+                "TALGIL_API_KEY is set, but runtime auth/read checks failed. Verify key scope and Talgil API availability."
+                if talgil_configured
+                else "Integration code is wired in FastAPI; runtime remains integration-ready until TALGIL_API_KEY is configured."
+            )
         ),
         sources={"talgil": len(talgil_zones)} if talgil_zones else {},
     )
