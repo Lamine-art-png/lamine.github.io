@@ -3,11 +3,61 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Velia • AGRO-AI</title>
+    <title>AGRO-AI Customer Portal</title>
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <div id="app"></div>
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="brand-lockup">
+          <img src="./assets/agro-ai-logo.png" alt="AGRO-AI" class="brand-logo" />
+          <div>
+            <div class="brand">AGRO-AI</div>
+            <p class="subtitle">Customer Portal</p>
+          </div>
+        </div>
+
+        <nav id="tabs" class="tabs" aria-label="Portal sections">
+          <button data-tab="overview" class="tab active">Overview</button>
+          <button data-tab="recommendations" class="tab">Recommendations</button>
+          <button data-tab="verification" class="tab">Verification</button>
+          <button data-tab="reports" class="tab">Reports</button>
+        </nav>
+      </aside>
+
+      <main class="content">
+        <header class="topbar card">
+          <div>
+            <p class="eyebrow">AGRO-AI</p>
+            <h1 id="page-title">Overview</h1>
+            <p class="subhead">Multi-controller irrigation intelligence across connected WiseConn and Talgil environments.</p>
+          </div>
+          <div class="topbar-meta">
+            <span id="auth-badge" class="pill">Checking API auth…</span>
+          </div>
+        </header>
+
+        <section class="filters card" aria-label="Filters">
+          <div>
+            <label for="farm-select">Farm</label>
+            <select id="farm-select"></select>
+          </div>
+          <div>
+            <label for="zone-select">Zone / Block</label>
+            <select id="zone-select"></select>
+          </div>
+        </section>
+
+        <section id="global-message" class="message hidden"></section>
+
+        <section id="overview" class="panel"></section>
+        <section id="recommendations" class="panel hidden"></section>
+        <section id="verification" class="panel hidden"></section>
+        <section id="reports" class="panel hidden"></section>
+      </main>
+    </div>
+
+    <script src="./js/config.js"></script>
     <script type="module" src="./js/app.js"></script>
   </body>
 </html>
