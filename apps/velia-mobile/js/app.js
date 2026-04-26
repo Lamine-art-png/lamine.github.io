@@ -176,6 +176,7 @@ function todayContent() {
             ? `<ul class='mini-list'>${rec.missingData.map((item) => `<li>${item}</li>`).join("")}</ul>`
             : `<p class='small'>No critical data gaps today.</p>`}
           <p class='small'>Top uncertainty: ${(rec.uncertainties || ["none"])[0]}</p>
+          <p class='small'>Not sure? You can update anytime from Fields.</p>
         </article>
 
         <article class='card compact-card'>
@@ -193,6 +194,7 @@ function todayContent() {
           : `<p class='small'>Your recommendation history will appear here.</p>`}
       </article>
 
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
 
       <article class='card compact-card'>
         <p class='card-label'>Voice timeline</p>
@@ -207,6 +209,8 @@ function todayContent() {
         <p class='small'>Tools: ${(rec.decisionTrace?.toolsUsed || []).slice(0,4).join(", ")}</p>
       </article>
 
+
+ main
       <article class='card compact-card'>
         <p class='card-label'>Quick actions</p>
         <div class='quick-actions-grid'>
@@ -216,6 +220,32 @@ function todayContent() {
           <button class='btn' data-nav='assistant'>Ask Velia</button>
         </div>
       </article>
+ codex/build-foundation-for-velia-voice-agent-bvfyqx
+
+
+  const rec = recommendationFor(field);
+  const attentionFields = state.fields.filter((f) => generateRecommendation(f, weather).urgency !== "low");
+  const yesterday = state.irrigationLogs.find((l) => Date.now() - new Date(l.performedAt).getTime() > 20 * 3600000);
+
+  return `<section class='card'>
+      <p class='priority'>${rec.mainRecommendation}</p>
+      <p><strong>Today’s action:</strong> ${rec.nextBestAction}</p>
+      <p><strong>Timing:</strong> ${rec.timing} • <strong>Urgency:</strong> ${rec.urgency}</p>
+      <p><strong>Confidence:</strong> ${rec.confidence}</p>
+      <p><strong>Why:</strong> ${rec.reasonSummary.join(" • ")}</p>
+      <p><strong>Missing data:</strong> ${rec.missingData.length ? rec.missingData.join(", ") : "No critical gaps"}</p>
+      <p><strong>Weather risks:</strong> heat ${weather?.heatRisk || "unknown"}, frost ${weather?.frostRisk || "unknown"}, rain chance ${weather?.rainChance ?? "n/a"}%</p>
+      <p><strong>Fields needing attention:</strong> ${attentionFields.map((f) => f.name).join(", ") || "None"}</p>
+      <p><strong>What changed since yesterday:</strong> ${yesterday ? `Irrigation logged ${Math.round((Date.now() - new Date(yesterday.performedAt).getTime()) / 3600000)}h ago.` : "No previous irrigation log."}</p>
+      ${!navigator.onLine ? `<p class='warn'>Using last available weather data (${weather?.lastUpdated ? new Date(weather.lastUpdated).toLocaleString() : "unknown"}).</p>` : ""}
+      <div class='grid two'>
+        <button class='btn' data-open-log='${field.id}'>Log irrigation</button>
+        <button class='btn' data-act='note' data-field='${field.id}'>Add field note</button>
+        <button class='btn' data-nav='assistant'>Ask Velia</button>
+        <button class='btn' data-open-condition='${field.id}'>Update field condition</button>
+      </div>
+ main
+ main
     </section>
     ${voiceCard(field.id, rec)}`;
 }
