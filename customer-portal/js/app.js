@@ -1,56 +1,262 @@
-import "./data/models.js";
-import { t, setLanguage, language } from "./i18n/index.js";
-import { alerts, crops, dailyConsistency, fields, generateRecommendations, getCrop, getFieldById, irrigationLogs, mockFarm, mockUser, notes, reportSummary, weather } from "./data/mockData.js";
+import { t, setLanguage } from "./i18n/index.js";
+import { fields, getCrop, getFieldById, mockFarm, mockUser, weather } from "./data/mockData.js";
 import { storageService } from "./services/storageService.js";
 import { syncService } from "./services/syncService.js";
-import { voiceAgent } from "./services/voiceAgent.js";
-import { integrationRegistry } from "./services/integrations/adapters.js";
 import { ApiClient } from "./apiClient.js";
 
 const app = document.getElementById("app");
 const apiClient = new ApiClient();
+const DEFAULT_WISECONN_ZONE_ID = "162803";
 
 const state = {
-  route: "today",
+  route: "command_center",
   selectedFieldId: fields[0]?.id || "",
-  recommendations: generateRecommendations(),
-  voiceSession: null,
-  voiceTranscript: null,
-  voiceResponse: "",
-  voiceListening: false,
-  runtimeEnvironments: [],
-  runtimeEnvironmentsError: "",
+  recommendation: null,
+  recommendationError: "",
+  environments: [],
+  environmentsError: "",
 };
 
-const navItems = ["today", "fields", "alerts", "assistant", "reports", "settings"];
+const navItems = [
+  { id: "command_center", label: "Command Center" },
+  { id: "intelligence", label: "Intelligence" },
+  { id: "verification", label: "Verification" },
+  { id: "reports", label: "Reports" },
+  { id: "integrations", label: "Integrations" },
+];
 
-function fmtDate(value) {
-  return new Date(value).toLocaleString();
+function activeField() {
+  return getFieldById(state.selectedFieldId) || fields[0] || null;
 }
 
-function recommendationFor(fieldId) {
-  return state.recommendations.find((item) => item.fieldId === fieldId);
+function safeRec() {
+  return state.recommendation;
 }
 
-function renderLayout(content) {
+function fallbackRecommendation() {
+  return {
+    action: "monitor field conditions",
+    confidence_label: "Recommendation confidence: pending",
+    confidence_score: 0,
+    reasoning_summary: "Manual context available while live telemetry is still arriving.",
+    data_quality: { data_quality_label: "Data source pending", data_quality_score: 0 },
+    verification_plan: { expected_field_outcome: "Verification pending." },
+    key_drivers: ["Manual context available"],
+    missing_data: ["Live telemetry feed"],
+    source_trace: {
+      source: "Manual context available",
+      context_origin: "Operator-provided context",
+      live_inputs_used: [],
+      manual_overrides_used: [],
+    },
+    execution_task: {
+      task_title: "Prepare operations team for next irrigation event",
+      task_steps: ["Confirm schedule window", "Validate field readiness", "Capture observed outcome"],
+    },
+    human_readable_explanation: {
+      en: "AGRO-AI is holding a conservative recommendation until richer telemetry arrives.",
+    },
+  };
+}
+
+function titleCase(value) {
+  return String(value || "").replaceAll("_", " ");
+}
+
+function decisionCard() {
+  const rec = safeRec() || fallbackRecommendation();
+  return `<section class="panel panel-highlight">
+      <h2>Today’s Water Decision</h2>
+      <p class="decision-action">${titleCase(rec.action)}</p>
+      <p><strong>Recommendation confidence:</strong> ${rec.confidence_label || "pending"} ${rec.confidence_score ? `(${rec.confidence_score}/100)` : ""}</p>
+      <p><strong>Data quality:</strong> ${rec.data_quality?.data_quality_label || "Data source pending"} ${rec.data_quality?.data_quality_score ? `(${rec.data_quality.data_quality_score}/100)` : ""}</p>
+      <p><strong>Key reason:</strong> ${rec.reasoning_summary || "Awaiting telemetry"}</p>
+      <p><strong>Recommended action:</strong> ${titleCase(rec.action)}</p>
+      <p><strong>Next verification step:</strong> ${rec.verification_plan?.expected_field_outcome || "Verification pending"}</p>
+      <p class="watch-item"><strong>Watch item:</strong> ${(rec.missing_data || []).join(", ") || "No critical watch item at this time."}</p>
+    </section>`;
+}
+
+function headerStatus() {
   const sync = syncService.getSyncStatus();
-  app.innerHTML = `
-    <div class="shell">
-      <header class="topbar">
+  const field = activeField();
+  const rec = safeRec();
+  const source = rec?.source_trace?.source || "Manual context available";
+  return `<header class="top-header">
+      <div class="brand-row">
+        <img class="logo" src="./assets/agro-ai-logo.png" alt="AGRO-AI logo" />
         <div>
-          <p class="eyebrow">AGRO-AI</p>
+          <p class="eyebrow">AGRO-AI Portal</p>
           <h1>${t("appName")}</h1>
-          <p class="framing">${t("framing")}</p>
+          <p class="subhead">Water Command Center</p>
         </div>
-        <div class="status-stack">
-          <span class="badge ${sync.isOnline ? "ok" : "offline"}">${sync.isOnline ? "Online" : "Offline mode"}</span>
-          <span class="badge">Sync: ${sync.status}${sync.pendingActions ? ` (${sync.pendingActions})` : ""}</span>
-        </div>
-      </header>
-      <main class="page">${content}</main>
-      <nav class="bottom-nav">
-        ${navItems.map((item) => `<button data-route="${item}" class="nav-btn ${state.route === item ? "active" : ""}">${t(`nav.${item}`)}</button>`).join("")}
-      </nav>
+      </div>
+      <div class="status-row">
+        <span class="status-pill ${sync.isOnline ? "ok" : "warn"}">${sync.isOnline ? "Connected source live" : "Manual context available"}</span>
+        <span class="status-pill">Selected farm: ${mockFarm.name}</span>
+        <span class="status-pill">Selected block or zone: ${field?.name || "Selection pending"}</span>
+        <span class="status-pill">Live controller source: ${source}</span>
+      </div>
+    </header>`;
+}
+
+function commandCenterScreen() {
+  const field = activeField();
+  const rec = safeRec() || fallbackRecommendation();
+  return `<div class="grid-two">
+      ${decisionCard()}
+      <section class="panel">
+        <h3>Operational Snapshot</h3>
+        <p><strong>Selected farm:</strong> ${mockFarm.name}</p>
+        <p><strong>Selected block or zone:</strong> ${field?.name || "Selection pending"}</p>
+        <p><strong>Live controller source:</strong> ${rec.source_trace?.source || "Manual context available"}</p>
+        <p><strong>Today’s weather:</strong> ${weather.condition}, ${weather.temperatureC}°C</p>
+        <p><strong>Sync status:</strong> ${syncService.getSyncStatus().status}</p>
+      </section>
+      <section class="panel">
+        <h3>Next Operational Verification</h3>
+        <p><strong>Recommended:</strong> ${titleCase(rec.action)}</p>
+        <p><strong>Scheduled:</strong> Not scheduled yet</p>
+        <p><strong>Applied:</strong> Awaiting confirmation</p>
+        <p><strong>Observed:</strong> Observation not recorded yet</p>
+      </section>
+      <section class="panel">
+        <h3>Execution Task</h3>
+        <p>${rec.execution_task?.task_title || "Execution task will appear after recommendation refresh."}</p>
+        <ul>${(rec.execution_task?.task_steps || ["Verification pending"]).map((step) => `<li>${step}</li>`).join("")}</ul>
+      </section>
+      <section class="panel">
+        <h3>Watchboard</h3>
+        <p><strong>Priority watch item:</strong> ${(rec.missing_data || []).join(", ") || "No critical watch item at this time."}</p>
+        <p class="muted">Recommendations stay conservative while AGRO-AI protects water efficiency and crop safety.</p>
+      </section>
+    </div>`;
+}
+
+function intelligenceScreen() {
+  const rec = safeRec() || fallbackRecommendation();
+
+  return `<div class="grid-two">
+      <section class="panel panel-highlight">
+        <h2>Today’s Recommendation</h2>
+        <p><strong>Action:</strong> ${titleCase(rec.action)}</p>
+        <p><strong>Timing:</strong> ${rec.recommended_timing || "Timing pending"}</p>
+        <p><strong>Duration:</strong> ${rec.recommended_duration_minutes || "Duration pending"} min</p>
+        <p><strong>Depth:</strong> ${rec.recommended_depth_mm || "Depth pending"} mm</p>
+        <p><strong>Recommendation confidence:</strong> ${rec.confidence_label || "pending"} ${rec.confidence_score ? `(${rec.confidence_score}/100)` : ""}</p>
+        <p><strong>Data quality:</strong> ${rec.data_quality?.data_quality_label || "Data source pending"}</p>
+      </section>
+      <section class="panel">
+        <h3>Drivers and Coverage</h3>
+        <p><strong>Key drivers:</strong></p>
+        <ul>${(rec.key_drivers || ["Awaiting telemetry"]).map((item) => `<li>${item}</li>`).join("")}</ul>
+        <p><strong>Missing data:</strong> ${(rec.missing_data || []).join(", ") || "No critical gaps reported."}</p>
+        <p><strong>Live inputs used:</strong> ${(rec.source_trace?.live_inputs_used || []).join(", ") || "Awaiting telemetry"}</p>
+        <p><strong>Manual overrides used:</strong> ${(rec.source_trace?.manual_overrides_used || []).join(", ") || "None"}</p>
+        <p><strong>Source trace summary:</strong> ${rec.source_trace?.source || "Manual context available"} • ${rec.source_trace?.context_origin || "Operator context"}</p>
+      </section>
+      <section class="panel">
+        <h3>Explanation</h3>
+        <p>${rec.human_readable_explanation?.en || "Explanation pending."}</p>
+      </section>
+      <section class="panel">
+        <h3>Execution + Verification Plan</h3>
+        <p><strong>Execution task:</strong> ${rec.execution_task?.task_title || "Execution guidance pending"}</p>
+        <ul>${(rec.execution_task?.task_steps || ["Verification pending"]).map((step) => `<li>${step}</li>`).join("")}</ul>
+        <p><strong>Verification plan:</strong> ${rec.verification_plan?.expected_field_outcome || "Verification pending"}</p>
+      </section>
+    </div>`;
+}
+
+function verificationScreen() {
+  const rec = safeRec();
+  return `<section class="panel">
+      <h2>Verification Chain</h2>
+      <div class="chain">
+        <div><h4>Recommended</h4><p>${rec ? titleCase(rec.action) : "Awaiting recommendation"}</p></div>
+        <div><h4>Scheduled</h4><p>Not scheduled yet</p></div>
+        <div><h4>Applied</h4><p>No applied record yet</p></div>
+        <div><h4>Observed</h4><p>Observation not recorded yet</p></div>
+      </div>
+      <p class="muted">AGRO-AI keeps recommendation, scheduling, application, and observation clearly separated for operational trust.</p>
+    </section>`;
+}
+
+function reportsScreen() {
+  const reportCard = (title) => `<article class="panel report-card"><h4>${title}</h4><p>Report generation is coming online for this deployment.</p></article>`;
+  return `<section class="stack">
+      ${reportCard("Daily irrigation intelligence report")}
+      ${reportCard("Verification report")}
+      ${reportCard("Water-use summary")}
+      ${reportCard("Data quality summary")}
+    </section>`;
+}
+
+function integrationsScreen() {
+  const envs = state.environments;
+  if (!envs.length) {
+    return `<section class="panel">
+      <h2>Integrations</h2>
+      <p>${state.environmentsError || "Data source pending"}</p>
+    </section>`;
+  }
+
+  const sorted = [...envs].sort((a, b) => {
+    if (a.label === "WiseConn") return -1;
+    if (b.label === "WiseConn") return 1;
+    if (a.label === "Talgil") return -1;
+    if (b.label === "Talgil") return 1;
+    return a.label.localeCompare(b.label);
+  });
+
+  return `<section class="stack">
+      ${sorted
+        .map(
+          (env) => `<article class="panel">
+            <h3>${env.label}</h3>
+            <p><strong>Status:</strong> ${env.status}</p>
+            <p><strong>Connection state:</strong> ${env.live ? "Connected source live" : "Data source pending"}</p>
+            <p><strong>Farms or targets:</strong> ${env.farms ?? 0}</p>
+            <p><strong>Zones or sensors:</strong> ${env.zones ?? 0}</p>
+            <p><strong>Last check:</strong> ${env.last_check || "Awaiting telemetry"}</p>
+            <p><strong>Current limitation:</strong> ${env.notes || "No current limitation reported."}</p>
+          </article>`,
+        )
+        .join("")}
+    </section>`;
+}
+
+function routeScreen() {
+  if (state.route === "command_center") return commandCenterScreen();
+  if (state.route === "intelligence") return intelligenceScreen();
+  if (state.route === "verification") return verificationScreen();
+  if (state.route === "reports") return reportsScreen();
+  if (state.route === "integrations") return integrationsScreen();
+  return commandCenterScreen();
+}
+
+function layout() {
+  app.innerHTML = `
+    <div class="command-shell">
+      <aside class="sidebar">
+        <div class="sidebar-title">AGRO-AI Water Command Center</div>
+        ${navItems
+          .map(
+            (item) => `<button class="nav-item ${state.route === item.id ? "active" : ""}" data-route="${item.id}">${item.label}</button>`,
+          )
+          .join("")}
+      </aside>
+      <div class="main-area">
+        ${headerStatus()}
+        <section class="context-bar panel">
+          <p><strong>Operator:</strong> ${mockUser.name} (${mockUser.role})</p>
+          <p><strong>Selected context:</strong> ${activeField()?.name || "Selection pending"}</p>
+          <label>Block / Zone
+            <select id="field-select">${fields.map((f) => `<option value="${f.id}" ${f.id === state.selectedFieldId ? "selected" : ""}>${f.name}</option>`).join("")}</select>
+          </label>
+        </section>
+        <main class="screen">${routeScreen()}</main>
+      </div>
     </div>`;
 
   app.querySelectorAll("[data-route]").forEach((button) => {
@@ -60,299 +266,96 @@ function renderLayout(content) {
     });
   });
 
-  app.querySelectorAll("[data-open-field]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.selectedFieldId = button.dataset.openField;
-      state.route = "fields";
-      location.hash = `#/fields/${state.selectedFieldId}`;
-      render();
-    });
-  });
-
-  bindVoiceButtons();
-}
-
-function quickActionsHtml(fieldId = state.selectedFieldId) {
-  return `<div class="quick-actions">
-      <button class="action-btn" data-quick="note" data-field="${fieldId}">Add field note</button>
-      <button class="action-btn" data-quick="irrigation" data-field="${fieldId}">Log irrigation</button>
-      <button class="action-btn" data-quick="photo" data-field="${fieldId}">Take field photo</button>
-      <button class="action-btn" data-route="assistant">Ask Velia</button>
-      <button class="action-btn voice-entry" data-voice-entry="${fieldId}">🎙️ Voice</button>
-    </div>`;
-}
-
-function voiceModule(fieldId = state.selectedFieldId) {
-  const sync = syncService.getSyncStatus();
-  return `<section class="card">
-      <h3>Voice Agent</h3>
-      <p>${t("voicePrompt")}</p>
-      <div class="voice-controls">
-        <button class="mic ${state.voiceListening ? "listening" : ""}" data-voice-start="${fieldId}">${state.voiceListening ? "Listening... tap to stop" : "Start voice input"}</button>
-      </div>
-      <p class="muted">Transcript: ${state.voiceTranscript?.text || "No transcript yet"}</p>
-      <p class="muted">Velia response: ${state.voiceResponse || "No response yet"}</p>
-      <div class="quick-actions">
-        <button class="action-btn" data-voice-speak="1">Read response aloud</button>
-        <button class="action-btn" data-voice-save-note="${fieldId}">Save voice note as field note</button>
-      </div>
-      ${!sync.isOnline ? `<p class="offline-msg">${t("offlineSaved")}. ${t("syncPending")}.</p>` : ""}
-    </section>`;
-}
-
-function renderToday() {
-  const topPriority = state.recommendations
-    .filter((r) => r.type === "irrigate_now")
-    .sort((a, b) => (a.confidence < b.confidence ? 1 : -1))[0];
-  const attentionFields = fields.filter((f) => f.status !== "stable");
-  return `
-    <section class="card">
-      <h2>Today's irrigation decision summary</h2>
-      <p class="priority">Today's priority: ${getFieldById(topPriority?.fieldId)?.name || "No urgent field"}</p>
-      <p>Recommended next action: ${topPriority?.action || "Monitor all fields"}</p>
-      <p>Confidence: ${topPriority?.confidence || "moderate"}</p>
-      <p>Weather: ${weather.condition}, ${weather.temperatureC}°C • ${weather.summary}</p>
-      <p>Water priority status: ${attentionFields.length} field(s) need attention.</p>
-      <p>Daily check-in consistency: ${dailyConsistency.checkInsThisWeek}/7 this week • ${dailyConsistency.streakDays}-day streak placeholder.</p>
-      <p>Field attention queue: ${attentionFields.map((f) => f.name).join(", ")}</p>
-      ${quickActionsHtml()}
-    </section>
-    ${voiceModule()}
-  `;
-}
-
-function fieldCard(field) {
-  const crop = getCrop(field.cropId);
-  const rec = recommendationFor(field.id);
-  return `<article class="card field-card" data-open-field="${field.id}">
-    <h3>${field.name}</h3>
-    <p>${crop?.name} • ${field.acreage} acres</p>
-    <p>Irrigation status: ${field.status}</p>
-    <p>Water stress: ${field.waterStressLevel}</p>
-    <p>Last irrigation: ${fmtDate(field.lastIrrigationAt)}</p>
-    <p>Next recommended action: ${rec?.action || "Monitor"}</p>
-    <p>Data source: ${field.dataSourceStatus}</p>
-  </article>`;
-}
-
-function renderFieldDetail(fieldId) {
-  const field = getFieldById(fieldId);
-  if (!field) return `<section class="card"><p>Field not found.</p></section>`;
-  const crop = getCrop(field.cropId);
-  const rec = recommendationFor(field.id);
-  const fieldNotes = notes.filter((note) => note.fieldId === field.id);
-  const activity = irrigationLogs.filter((log) => log.fieldId === field.id);
-
-  return `<section class="card">
-      <h2>${field.name}</h2>
-      <p>Crop and acreage: ${crop?.name} • ${field.acreage} acres</p>
-      <p>Soil type: ${field.soilType}</p>
-      <p>Irrigation method: ${field.irrigationMethod}</p>
-      <p>Latest recommendation: ${rec?.action}</p>
-      <p>Reasoning summary: ${(rec?.reasoning || []).join(" • ")}</p>
-      <h3>Recent activity timeline</h3>
-      <ul>${activity.map((log) => `<li>${fmtDate(log.performedAt)} - ${log.amountMm} mm (${log.durationMin} min)</li>`).join("") || "<li>No activity logged.</li>"}</ul>
-      <h3>Notes</h3>
-      <ul>${fieldNotes.map((note) => `<li>${fmtDate(note.createdAt)} - ${note.text}</li>`).join("") || "<li>No notes yet.</li>"}</ul>
-      <p>Photos: placeholder for field photos</p>
-      <div class="quick-actions">
-        <button class="action-btn" data-quick="irrigation" data-field="${field.id}">Manual log</button>
-        <button class="action-btn" data-quick="note" data-field="${field.id}">Add note</button>
-      </div>
-      <p>Recommendation history: placeholder</p>
-    </section>
-    ${voiceModule(field.id)}`;
-}
-
-function renderFields() {
-  const hashField = location.hash.match(/^#\/fields\/(.+)$/)?.[1];
-  if (hashField) return renderFieldDetail(hashField);
-  return `<section class="stack">${fields.map(fieldCard).join("")}</section>`;
-}
-
-function renderAlerts() {
-  return `<section class="stack">${alerts.map((alert) => `<article class="card">
-      <h3>${alert.type}</h3>
-      <p>Severity: <span class="sev ${alert.severity}">${alert.severity}</span></p>
-      <p>Field affected: ${alert.fieldId ? getFieldById(alert.fieldId)?.name : "Farm-wide"}</p>
-      <p>Recommended action: ${alert.action}</p>
-      <p>Time sensitivity: ${alert.timeSensitivity}</p>
-    </article>`).join("")}</section>`;
-}
-
-function renderAssistant() {
-  const prompts = [
-    "Should I irrigate today?",
-    "Which field needs attention?",
-    "Explain this recommendation",
-    "What changed since yesterday?",
-    "Create a water plan for this week",
-  ];
-  return `<section class="card">
-      <h2>Field Decision Assistant</h2>
-      <p>Ask Velia anything about your fields, irrigation, weather risk, or water planning.</p>
-      <div class="chips">${prompts.map((p) => `<button class="chip">${p}</button>`).join("")}</div>
-      <div class="conversation">
-        <p><strong>You:</strong> Which field needs attention?</p>
-        <p><strong>Velia:</strong> Based on current weather and your last logged irrigation, Field 2 is the priority today. I recommend checking soil conditions before irrigating because the confidence is moderate.</p>
-      </div>
-    </section>
-    ${voiceModule()}`;
-}
-
-function renderReports() {
-  return `<section class="card">
-    <h2>Reports</h2>
-    <p>Weekly water summary: ${reportSummary.periodLabel}</p>
-    <p>Recommended vs logged irrigation: ${reportSummary.recommendedMm} mm vs ${reportSummary.loggedMm} mm</p>
-    <p>Estimated water saved: placeholder (calculation pending verified baseline)</p>
-    <p>Field performance: ${reportSummary.fieldPerformanceSummary}</p>
-    <button class="action-btn" disabled>Export report (placeholder)</button>
-  </section>`;
-}
-
-function renderSettings() {
-  const environmentsHtml = state.runtimeEnvironments.length
-    ? `<ul>${state.runtimeEnvironments
-      .map(
-        (env) =>
-          `<li><strong>${env.label}</strong>: ${env.status} • farms ${env.farms} • zones ${env.zones}<br><span class="muted">${env.notes}</span></li>`,
-      )
-      .join("")}</ul>`
-    : `<p class="muted">${state.runtimeEnvironmentsError || "Runtime controller environments are unavailable from API."}</p>`;
-
-  return `<section class="card">
-    <h2>Settings</h2>
-    <p>Farm profile: ${mockFarm.name}, ${mockFarm.location}</p>
-    <label>Language
-      <select id="language-select">
-        <option value="en" ${language() === "en" ? "selected" : ""}>English</option>
-      </select>
-    </label>
-    <p>Units: Metric default (placeholder toggle)</p>
-    <p>Offline mode: Enabled with local queue fallback</p>
-    <p>Data sources: Manual, Weather, Sensor, Controller</p>
-    <p>Integrations: ${integrationRegistry.list().map((item) => item.name).join(", ")}</p>
-    <h3>Runtime integration status</h3>
-    ${environmentsHtml}
-    <p>Team members: ${mockUser.name} (${mockUser.role})</p>
-    <p>Notification preferences: reminder-ready structure placeholder</p>
-  </section>`;
-}
-
-function bindGeneralActions() {
-  app.querySelectorAll("[data-quick]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const type = button.dataset.quick;
-      const fieldId = button.dataset.field || state.selectedFieldId;
-      if (type === "note") {
-        const note = { id: `n-${Date.now()}`, fieldId, text: "Quick note placeholder captured.", createdAt: new Date().toISOString(), source: "manual", synced: navigator.onLine };
-        notes.unshift(note);
-        if (!navigator.onLine) syncService.enqueue({ kind: "field_note", payload: note });
-      }
-      if (type === "irrigation") {
-        const log = { id: `log-${Date.now()}`, fieldId, amountMm: 8, durationMin: 35, method: getFieldById(fieldId)?.irrigationMethod || "manual", performedAt: new Date().toISOString(), source: "manual" };
-        irrigationLogs.unshift(log);
-        if (!navigator.onLine) syncService.enqueue({ kind: "irrigation_log", payload: log });
-      }
-      render();
-    });
-  });
-
-  const languageSelect = document.getElementById("language-select");
-  if (languageSelect) {
-    languageSelect.addEventListener("change", (event) => {
-      setLanguage(event.target.value);
-      storageService.set("lang", event.target.value);
+  const select = document.getElementById("field-select");
+  if (select) {
+    select.addEventListener("change", async (e) => {
+      state.selectedFieldId = e.target.value;
+      await loadIntelligence();
       render();
     });
   }
 }
 
-function bindVoiceButtons() {
-  app.querySelectorAll("[data-voice-start]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const fieldId = button.dataset.voiceStart;
-      if (!state.voiceListening) {
-        state.voiceSession = voiceAgent.startListening(language(), fieldId);
-        state.voiceListening = true;
-      } else {
-        state.voiceSession = voiceAgent.stopListening(state.voiceSession);
-        state.voiceTranscript = voiceAgent.transcribe(state.voiceSession);
-        const command = voiceAgent.detectIntent(state.voiceTranscript);
-        const action = voiceAgent.executeVoiceAction(command, { fieldId, transcript: state.voiceTranscript });
-
-        if (!navigator.onLine) {
-          voiceAgent.saveOfflineVoiceAction(action);
-          state.voiceResponse = t("gracefulOffline");
-        } else {
-          const field = getFieldById(fieldId);
-          const rec = recommendationFor(fieldId);
-          state.voiceResponse = voiceAgent.composeResponse({ recommendation: { ...rec, fieldName: field?.name }, command: action, offline: false });
-        }
-        state.voiceListening = false;
-      }
-      render();
-    });
-  });
-
-  app.querySelectorAll("[data-voice-save-note]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const fieldId = button.dataset.voiceSaveNote;
-      if (!state.voiceTranscript?.text) return;
-      const note = { id: `n-${Date.now()}`, fieldId, text: state.voiceTranscript.text, createdAt: new Date().toISOString(), source: "voice", synced: navigator.onLine };
-      notes.unshift(note);
-      if (!navigator.onLine) syncService.enqueue({ kind: "field_note", payload: note });
-      render();
-    });
-  });
-
-  app.querySelectorAll("[data-voice-speak]").forEach((button) => {
-    button.addEventListener("click", () => {
-      if (!state.voiceResponse) return;
-      state.voiceResponse = voiceAgent.speakResponse({ text: state.voiceResponse }).text;
-      render();
-    });
-  });
+async function loadIntegrations() {
+  const response = await apiClient.getControllerEnvironments();
+  if (response.ok) {
+    state.environments = response.data?.environments || [];
+    state.environmentsError = "";
+  } else {
+    state.environments = [];
+    state.environmentsError = response.error || "Data source pending";
+  }
 }
 
-function routeContent() {
-  if (state.route === "today") return renderToday();
-  if (state.route === "fields") return renderFields();
-  if (state.route === "alerts") return renderAlerts();
-  if (state.route === "assistant") return renderAssistant();
-  if (state.route === "reports") return renderReports();
-  if (state.route === "settings") return renderSettings();
-  return renderToday();
+async function loadIntelligence() {
+  const field = activeField();
+  const fallbackPayload = {
+    field_context: {
+      field_id: field?.id || "field-unknown",
+      farm_id: mockFarm.id || "farm-unknown",
+      source: "manual",
+      source_entity_id: field?.id || null,
+      crop_type: getCrop(field?.cropId)?.name || null,
+      irrigation_method: field?.irrigationMethod || null,
+      soil_type: field?.soilType || null,
+      area: field?.acreage || null,
+      location: { region: mockFarm.location || null },
+      weather_context: {
+        eto_mm: weather.et0 || 4.2,
+        precipitation_forecast_mm: weather.rainForecastMm || 0,
+        temperature_c: weather.temperatureC || null,
+      },
+      field_observations: [],
+      confidence_inputs: ["portal_command_center"],
+    },
+    language: "en",
+    user_role: mockUser.role || "farm_manager",
+    time_horizon: "today",
+  };
+
+  let response = await apiClient.request(`/v1/intelligence/recommend/live/wiseconn/${DEFAULT_WISECONN_ZONE_ID}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      crop_type: getCrop(field?.cropId)?.name || null,
+      soil_type: field?.soilType || null,
+      irrigation_method: field?.irrigationMethod || null,
+      area: field?.acreage || null,
+      location: { region: mockFarm.location || null },
+      weather_context: fallbackPayload.field_context.weather_context,
+      field_observations: [],
+      language: "en",
+      user_role: mockUser.role || "farm_manager",
+      time_horizon: "today",
+    }),
+  });
+
+  if (!response.ok) {
+    response = await apiClient.getIntelligenceRecommendation(fallbackPayload);
+  }
+
+  if (response.ok) {
+    state.recommendation = response.data;
+    state.recommendationError = "";
+  } else {
+    state.recommendation = null;
+    state.recommendationError = response.error || "Awaiting telemetry";
+  }
 }
 
 function render() {
-  renderLayout(routeContent());
-  bindGeneralActions();
+  layout();
 }
 
 async function bootstrap() {
-  const storedLanguage = storageService.get("lang", "en");
-  setLanguage(storedLanguage);
-  const environments = await apiClient.getControllerEnvironments();
-  if (environments.ok) {
-    state.runtimeEnvironments = environments.data?.environments || [];
-    state.runtimeEnvironmentsError = "";
-  } else {
-    state.runtimeEnvironments = [];
-    state.runtimeEnvironmentsError = environments.error || "Unable to fetch runtime environments.";
-  }
+  setLanguage(storageService.get("lang", "en"));
+  await Promise.all([loadIntegrations(), loadIntelligence()]);
   window.addEventListener("online", async () => {
     await syncService.syncQueuedActions();
-    const response = await apiClient.getControllerEnvironments();
-    if (response.ok) {
-      state.runtimeEnvironments = response.data?.environments || [];
-      state.runtimeEnvironmentsError = "";
-    }
+    await Promise.all([loadIntegrations(), loadIntelligence()]);
     render();
   });
   window.addEventListener("offline", render);
-  window.addEventListener("hashchange", render);
   render();
 }
 
