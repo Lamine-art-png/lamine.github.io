@@ -1,13 +1,18 @@
-# Velia Foundation (AGRO-AI)
+# AGRO-AI Water Command Center
 
-Velia is a mobile-first irrigation intelligence and water management foundation for global agriculture teams.
-
-**Product framing:** Velia helps farms make better water decisions, act faster, and understand what happened across their fields.
+AGRO-AI Water Command Center is the operator-facing command surface for farm water decisions.
+It is designed around the operational chain:
+**Observe → Recommend → Execute → Verify**.
 
 ## What this foundation includes
 
 - Production-style app shell with mobile-first navigation and route-based sections.
-- Screens: Today, Fields, Field Detail, Alerts, Assistant, Reports, Settings.
+- Primary screens:
+  - Command Center
+  - Intelligence
+  - Verification
+  - Reports
+  - Integrations
 - Reusable UI patterns (cards, badges, action buttons, chips, voice controls).
 - Strong mock data layer for daily irrigation decisions and operational context.
 - Offline-first foundation with local queue and sync status model.
@@ -48,6 +53,20 @@ python -m http.server 4173
 ```
 
 Open `http://localhost:4173`.
+
+## What is real today
+- WiseConn runtime context is connected when tenant/runtime credentials are valid.
+- Talgil runtime context is connected when tenant/runtime credentials are valid.
+- Intelligence engine endpoints are active for manual and live recommendation flows.
+- Live recommendation shortcuts support override-only request bodies.
+
+## What is pending
+- Full report generation rollout by deployment environment.
+- Execution and observation state automation across all controller integrations.
+
+## Hosting note
+- Portal URL target in code/config is: `https://app.agroai-pilot.com`.
+- **Important:** this domain currently has a hosting conflict with Velia and must be corrected in deployment ownership/routing later.
 
 ## Data model foundation
 

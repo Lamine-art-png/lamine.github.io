@@ -103,7 +103,7 @@ def test_source_trace_populated_correctly(monkeypatch):
     client = TestClient(app)
     response = client.post(
         "/v1/intelligence/recommend/live/talgil/6115",
-        json={"source": "talgil", "entity_id": "6115", "language": "en"},
+        json={"language": "en"},
     )
     assert response.status_code == 200
     trace = response.json()["source_trace"]
@@ -126,7 +126,7 @@ def test_live_recommendation_partial_data_still_works(monkeypatch):
     client = TestClient(app)
     response = client.post(
         "/v1/intelligence/recommend/live/wiseconn/z-1",
-        json={"source": "wiseconn", "entity_id": "z-1", "language": "en"},
+        json={"language": "en"},
     )
     assert response.status_code == 200
     assert response.json()["action"] in {"inspect", "wait", "insufficient_data", "irrigate"}
@@ -147,3 +147,38 @@ def test_existing_manual_recommendation_still_works():
         },
     )
     assert response.status_code == 200
+
+
+def test_shortcut_wiseconn_route_works_without_source_entity(monkeypatch):
+    monkeypatch.setattr(AdapterRegistry, "get_wiseconn", lambda: _StubWiseConnLiveAdapter())
+    client = TestClient(app)
+    response = client.post(
+        "/v1/intelligence/recommend/live/wiseconn/z-1",
+        json={
+            "crop_type": "grapes",
+            "soil_type": "loam",
+            "weather_context": {"eto_mm": 4.8, "precipitation_forecast_mm": 0.0},
+            "field_observations": ["dry top layer"],
+            "language": "en",
+        },
+    )
+    assert response.status_code == 200
+
+
+def test_shortcut_talgil_route_works_without_source_entity(monkeypatch):
+    monkeypatch.setattr(AdapterRegistry, "get_talgil", lambda: _StubTalgilLiveAdapter())
+    client = TestClient(app)
+    response = client.post(
+        "/v1/intelligence/recommend/live/talgil/6115",
+        json={"crop_type": "grapes", "language": "en"},
+    )
+    assert response.status_code == 200
+
+
+def test_generic_live_route_still_requires_source_entity():
+    client = TestClient(app)
+    response = client.post(
+        "/v1/intelligence/recommend/live",
+        json={"crop_type": "grapes", "language": "en"},
+    )
+    assert response.status_code == 422

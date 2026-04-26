@@ -34,6 +34,26 @@ class LiveRecommendationRequest(BaseModel):
     area: float | None = None
     location: Dict[str, Any] | None = None
     weather_context: Dict[str, Any] | None = None
+    sensor_context: Dict[str, Any] | None = None
+    controller_context: Dict[str, Any] | None = None
+    recent_irrigation_context: Dict[str, Any] | None = None
+    field_observations: list[str] | None = None
+    language: str = "en"
+    user_role: str | None = None
+    units: str | None = None
+    time_horizon: str = "today"
+
+
+class LiveRecommendationOverridesRequest(BaseModel):
+    crop_type: str | None = None
+    soil_type: str | None = None
+    irrigation_method: str | None = None
+    area: float | None = None
+    location: Dict[str, Any] | None = None
+    weather_context: Dict[str, Any] | None = None
+    sensor_context: Dict[str, Any] | None = None
+    controller_context: Dict[str, Any] | None = None
+    recent_irrigation_context: Dict[str, Any] | None = None
     field_observations: list[str] | None = None
     language: str = "en"
     user_role: str | None = None
@@ -68,7 +88,18 @@ async def recommend(payload: Dict[str, Any]) -> RecommendationResponse:
 def _merge_overrides(base_context: Dict[str, Any], payload: LiveRecommendationRequest) -> tuple[Dict[str, Any], list[str]]:
     overrides: list[str] = []
     merged = dict(base_context)
-    for field_name in ("crop_type", "soil_type", "irrigation_method", "area", "location", "weather_context", "field_observations"):
+    for field_name in (
+        "crop_type",
+        "soil_type",
+        "irrigation_method",
+        "area",
+        "location",
+        "weather_context",
+        "sensor_context",
+        "controller_context",
+        "recent_irrigation_context",
+        "field_observations",
+    ):
         value = getattr(payload, field_name)
         if value is not None:
             merged[field_name] = value
@@ -145,13 +176,49 @@ async def recommend_live(payload: LiveRecommendationRequest) -> RecommendationRe
 
 
 @router.post("/recommend/live/wiseconn/{zone_id}", response_model=RecommendationResponse)
-async def recommend_live_wiseconn(zone_id: str, payload: LiveRecommendationRequest) -> RecommendationResponse:
-    return await _recommend_live("wiseconn", zone_id, payload)
+async def recommend_live_wiseconn(zone_id: str, payload: LiveRecommendationOverridesRequest) -> RecommendationResponse:
+    normalized_payload = LiveRecommendationRequest(
+        source="wiseconn",
+        entity_id=zone_id,
+        crop_type=payload.crop_type,
+        soil_type=payload.soil_type,
+        irrigation_method=payload.irrigation_method,
+        area=payload.area,
+        location=payload.location,
+        weather_context=payload.weather_context,
+        sensor_context=payload.sensor_context,
+        controller_context=payload.controller_context,
+        recent_irrigation_context=payload.recent_irrigation_context,
+        field_observations=payload.field_observations,
+        language=payload.language,
+        user_role=payload.user_role,
+        units=payload.units,
+        time_horizon=payload.time_horizon,
+    )
+    return await _recommend_live("wiseconn", zone_id, normalized_payload)
 
 
 @router.post("/recommend/live/talgil/{target_id}", response_model=RecommendationResponse)
-async def recommend_live_talgil(target_id: str, payload: LiveRecommendationRequest) -> RecommendationResponse:
-    return await _recommend_live("talgil", target_id, payload)
+async def recommend_live_talgil(target_id: str, payload: LiveRecommendationOverridesRequest) -> RecommendationResponse:
+    normalized_payload = LiveRecommendationRequest(
+        source="talgil",
+        entity_id=target_id,
+        crop_type=payload.crop_type,
+        soil_type=payload.soil_type,
+        irrigation_method=payload.irrigation_method,
+        area=payload.area,
+        location=payload.location,
+        weather_context=payload.weather_context,
+        sensor_context=payload.sensor_context,
+        controller_context=payload.controller_context,
+        recent_irrigation_context=payload.recent_irrigation_context,
+        field_observations=payload.field_observations,
+        language=payload.language,
+        user_role=payload.user_role,
+        units=payload.units,
+        time_horizon=payload.time_horizon,
+    )
+    return await _recommend_live("talgil", target_id, normalized_payload)
 
 
 @router.get("/schema")
