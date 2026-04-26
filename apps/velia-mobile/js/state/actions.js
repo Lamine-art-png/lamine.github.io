@@ -4,6 +4,8 @@ export function createField(input) {
     name: input.fieldName,
     crop: input.crop,
     acreage: Number(input.acreage),
+    location: input.fieldLocation || "",
+    coordinates: input.fieldCoordinates || null,
     irrigationMethod: input.irrigationMethod,
     soilType: input.soilType || "",
     lastIrrigationAt: input.lastIrrigationAt || null,
@@ -36,6 +38,17 @@ export function createObservation(payload) {
     condition: payload.condition,
     note: payload.note || "",
     source: payload.source || "manual",
+    createdAt: new Date().toISOString(),
+  };
+}
+
+export function createVoiceTimelineEntry(payload) {
+  return {
+    id: `voice-${Date.now()}`,
+    transcript: payload.transcript,
+    intent: payload.intent,
+    outcome: payload.outcome,
+    fieldId: payload.fieldId || null,
     createdAt: new Date().toISOString(),
   };
 }

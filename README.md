@@ -16,6 +16,8 @@ This is a drop-in starter to make a **limited pilot** reproducible:
 
 > Hosting note: `app.agroai-pilot.com` currently has a hosting conflict with Velia and must be corrected later. This PR/repository change is code-level only and does not modify hosting infrastructure.
 
+> Hosting note: `app.agroai-pilot.com` currently conflicts with Velia hosting and must be resolved in deployment routing. This repository only provides the code-level portal entry point.
+
 ## Quickstart
 ```bash
 make tfinit
@@ -29,3 +31,24 @@ make tfapply
 - `data/processed/evaluation.json`, `feature_importance.csv`, `bias_report.json`
 - `ops/runbooks/*.md` (export PDF)
 <!-- trigger deploy -->
+
+
+## Velia AI backend + mobile wiring
+
+- Backend app: `apps/velia-ai-api` (Express).
+- Mobile app: `apps/velia-mobile` now calls backend-first APIs with local fallback for weather, assistant responses, and voice interpretation.
+
+### Backend quick run
+
+```bash
+cd apps/velia-ai-api
+npm install
+npm run dev
+```
+
+### Backend tests
+
+```bash
+cd apps/velia-ai-api
+npm test
+```
