@@ -12,7 +12,9 @@ This is a drop-in starter to make a **limited pilot** reproducible:
 
 
 ## Product Links
-- **AGRO-AI Portal:** https://app.agroai-pilot.com
+- **AGRO-AI Portal — Water Command Center:** https://app.agroai-pilot.com
+
+> Hosting note: `app.agroai-pilot.com` currently has a hosting conflict with Velia and must be corrected later. This PR/repository change is code-level only and does not modify hosting infrastructure.
 
 > Hosting note: `app.agroai-pilot.com` currently conflicts with Velia hosting and must be resolved in deployment routing. This repository only provides the code-level portal entry point.
 

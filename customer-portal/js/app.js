@@ -33,26 +33,47 @@ function safeRec() {
   return state.recommendation;
 }
 
-function decisionCard() {
-  const rec = safeRec();
-  const fallback = {
-    action: "inspect",
+function fallbackRecommendation() {
+  return {
+    action: "monitor field conditions",
     confidence_label: "Recommendation confidence: pending",
     confidence_score: 0,
-    reasoning_summary: "Awaiting telemetry and manual context refresh.",
+    reasoning_summary: "Manual context available while live telemetry is still arriving.",
     data_quality: { data_quality_label: "Data source pending", data_quality_score: 0 },
     verification_plan: { expected_field_outcome: "Verification pending." },
+    key_drivers: ["Manual context available"],
+    missing_data: ["Live telemetry feed"],
+    source_trace: {
+      source: "Manual context available",
+      context_origin: "Operator-provided context",
+      live_inputs_used: [],
+      manual_overrides_used: [],
+    },
+    execution_task: {
+      task_title: "Prepare operations team for next irrigation event",
+      task_steps: ["Confirm schedule window", "Validate field readiness", "Capture observed outcome"],
+    },
+    human_readable_explanation: {
+      en: "AGRO-AI is holding a conservative recommendation until richer telemetry arrives.",
+    },
   };
-  const current = rec || fallback;
+}
+
+function titleCase(value) {
+  return String(value || "").replaceAll("_", " ");
+}
+
+function decisionCard() {
+  const rec = safeRec() || fallbackRecommendation();
   return `<section class="panel panel-highlight">
       <h2>Today’s Water Decision</h2>
-      <p class="decision-action">${String(current.action || "inspect").replaceAll("_", " ")}</p>
-      <p><strong>Recommendation confidence:</strong> ${current.confidence_label || "pending"} ${current.confidence_score ? `(${current.confidence_score}/100)` : ""}</p>
-      <p><strong>Data quality:</strong> ${current.data_quality?.data_quality_label || "Data source pending"} ${current.data_quality?.data_quality_score ? `(${current.data_quality.data_quality_score}/100)` : ""}</p>
-      <p><strong>Key reason:</strong> ${current.reasoning_summary || "Manual context available; awaiting additional telemetry."}</p>
-      <p><strong>Recommended action:</strong> ${String(current.action || "inspect").replaceAll("_", " ")}</p>
-      <p><strong>Next verification step:</strong> ${current.verification_plan?.expected_field_outcome || "Verification pending"}</p>
-      <p class="watch-item"><strong>Watch item:</strong> ${(current.missing_data || []).join(", ") || "No critical gaps reported"}</p>
+      <p class="decision-action">${titleCase(rec.action)}</p>
+      <p><strong>Recommendation confidence:</strong> ${rec.confidence_label || "pending"} ${rec.confidence_score ? `(${rec.confidence_score}/100)` : ""}</p>
+      <p><strong>Data quality:</strong> ${rec.data_quality?.data_quality_label || "Data source pending"} ${rec.data_quality?.data_quality_score ? `(${rec.data_quality.data_quality_score}/100)` : ""}</p>
+      <p><strong>Key reason:</strong> ${rec.reasoning_summary || "Awaiting telemetry"}</p>
+      <p><strong>Recommended action:</strong> ${titleCase(rec.action)}</p>
+      <p><strong>Next verification step:</strong> ${rec.verification_plan?.expected_field_outcome || "Verification pending"}</p>
+      <p class="watch-item"><strong>Watch item:</strong> ${(rec.missing_data || []).join(", ") || "No critical watch item at this time."}</p>
     </section>`;
 }
 
@@ -60,92 +81,89 @@ function headerStatus() {
   const sync = syncService.getSyncStatus();
   const field = activeField();
   const rec = safeRec();
-  const source = rec?.source_trace?.source || "manual";
+  const source = rec?.source_trace?.source || "Manual context available";
   return `<header class="top-header">
       <div class="brand-row">
         <img class="logo" src="./assets/agro-ai-logo.png" alt="AGRO-AI logo" />
         <div>
-          <p class="eyebrow">AGRO-AI Water Command Center</p>
-          <h1>Observe · Recommend · Execute · Verify</h1>
+          <p class="eyebrow">AGRO-AI Portal</p>
+          <h1>${t("appName")}</h1>
+          <p class="subhead">Water Command Center</p>
         </div>
       </div>
       <div class="status-row">
         <span class="status-pill ${sync.isOnline ? "ok" : "warn"}">${sync.isOnline ? "Connected source live" : "Manual context available"}</span>
-        <span class="status-pill">Farm: ${mockFarm.name}</span>
-        <span class="status-pill">Zone/Block: ${field?.name || "Selection pending"}</span>
-        <span class="status-pill">Live source: ${source}</span>
+        <span class="status-pill">Selected farm: ${mockFarm.name}</span>
+        <span class="status-pill">Selected block or zone: ${field?.name || "Selection pending"}</span>
+        <span class="status-pill">Live controller source: ${source}</span>
       </div>
     </header>`;
 }
 
 function commandCenterScreen() {
   const field = activeField();
-  const rec = safeRec();
+  const rec = safeRec() || fallbackRecommendation();
   return `<div class="grid-two">
       ${decisionCard()}
       <section class="panel">
-        <h3>Operational Context</h3>
-        <p><strong>Current farm:</strong> ${mockFarm.name}</p>
+        <h3>Operational Snapshot</h3>
+        <p><strong>Selected farm:</strong> ${mockFarm.name}</p>
         <p><strong>Selected block or zone:</strong> ${field?.name || "Selection pending"}</p>
-        <p><strong>Live controller source:</strong> ${rec?.source_trace?.source || "Manual context available"}</p>
-        <p><strong>Latest sync status:</strong> ${syncService.getSyncStatus().status}</p>
-        <p><strong>Weather context:</strong> ${weather.condition}, ${weather.temperatureC}°C</p>
+        <p><strong>Live controller source:</strong> ${rec.source_trace?.source || "Manual context available"}</p>
+        <p><strong>Today’s weather:</strong> ${weather.condition}, ${weather.temperatureC}°C</p>
+        <p><strong>Sync status:</strong> ${syncService.getSyncStatus().status}</p>
       </section>
       <section class="panel">
-        <h3>Verification Status</h3>
-        <p>Recommended: ${String(rec?.action || "inspect").replaceAll("_", " ")}</p>
-        <p>Scheduled: ${rec ? "Not scheduled yet" : "Awaiting recommendation"}</p>
-        <p>Applied: Awaiting confirmation</p>
-        <p>Observed: Observation not recorded yet</p>
+        <h3>Next Operational Verification</h3>
+        <p><strong>Recommended:</strong> ${titleCase(rec.action)}</p>
+        <p><strong>Scheduled:</strong> Not scheduled yet</p>
+        <p><strong>Applied:</strong> Awaiting confirmation</p>
+        <p><strong>Observed:</strong> Observation not recorded yet</p>
       </section>
       <section class="panel">
         <h3>Execution Task</h3>
-        <p>${rec?.execution_task?.task_title || "Task generation pending"}</p>
-        <ul>${(rec?.execution_task?.task_steps || ["Recommendation pending."]).map((s) => `<li>${s}</li>`).join("")}</ul>
+        <p>${rec.execution_task?.task_title || "Execution task will appear after recommendation refresh."}</p>
+        <ul>${(rec.execution_task?.task_steps || ["Verification pending"]).map((step) => `<li>${step}</li>`).join("")}</ul>
       </section>
       <section class="panel">
-        <h3>Reports Panel</h3>
-        <p>Daily irrigation intelligence report</p>
-        <p>Verification report</p>
-        <p>Water-use summary</p>
-        <p>Data quality summary</p>
-        <p class="muted">Report generation is coming online for this deployment.</p>
+        <h3>Watchboard</h3>
+        <p><strong>Priority watch item:</strong> ${(rec.missing_data || []).join(", ") || "No critical watch item at this time."}</p>
+        <p class="muted">Recommendations stay conservative while AGRO-AI protects water efficiency and crop safety.</p>
       </section>
     </div>`;
 }
 
 function intelligenceScreen() {
-  const rec = safeRec();
-  if (!rec) {
-    return `<section class="panel"><h2>Intelligence</h2><p>Awaiting telemetry and recommendation context.</p></section>`;
-  }
+  const rec = safeRec() || fallbackRecommendation();
+
   return `<div class="grid-two">
       <section class="panel panel-highlight">
-        <h2>Intelligence Recommendation</h2>
-        <p><strong>Action:</strong> ${String(rec.action).replaceAll("_", " ")}</p>
-        <p><strong>Timing:</strong> ${rec.recommended_timing || "Pending"}</p>
-        <p><strong>Duration:</strong> ${rec.recommended_duration_minutes || "Pending"} min</p>
-        <p><strong>Depth:</strong> ${rec.recommended_depth_mm || "Pending"} mm</p>
-        <p><strong>Confidence score:</strong> ${rec.confidence_score}/100</p>
-        <p><strong>Confidence label:</strong> ${rec.confidence_label}</p>
+        <h2>Today’s Recommendation</h2>
+        <p><strong>Action:</strong> ${titleCase(rec.action)}</p>
+        <p><strong>Timing:</strong> ${rec.recommended_timing || "Timing pending"}</p>
+        <p><strong>Duration:</strong> ${rec.recommended_duration_minutes || "Duration pending"} min</p>
+        <p><strong>Depth:</strong> ${rec.recommended_depth_mm || "Depth pending"} mm</p>
+        <p><strong>Recommendation confidence:</strong> ${rec.confidence_label || "pending"} ${rec.confidence_score ? `(${rec.confidence_score}/100)` : ""}</p>
+        <p><strong>Data quality:</strong> ${rec.data_quality?.data_quality_label || "Data source pending"}</p>
       </section>
       <section class="panel">
-        <h3>Recommendation Drivers</h3>
-        <ul>${(rec.key_drivers || ["Awaiting telemetry"]).map((d) => `<li>${d}</li>`).join("")}</ul>
-        <p><strong>Missing data:</strong> ${(rec.missing_data || []).join(", ") || "No critical gaps"}</p>
+        <h3>Drivers and Coverage</h3>
+        <p><strong>Key drivers:</strong></p>
+        <ul>${(rec.key_drivers || ["Awaiting telemetry"]).map((item) => `<li>${item}</li>`).join("")}</ul>
+        <p><strong>Missing data:</strong> ${(rec.missing_data || []).join(", ") || "No critical gaps reported."}</p>
         <p><strong>Live inputs used:</strong> ${(rec.source_trace?.live_inputs_used || []).join(", ") || "Awaiting telemetry"}</p>
         <p><strong>Manual overrides used:</strong> ${(rec.source_trace?.manual_overrides_used || []).join(", ") || "None"}</p>
-        <p><strong>Source trace summary:</strong> ${rec.source_trace?.source || "manual"} • ${rec.source_trace?.context_origin || "manual"}</p>
-      </section>
-      <section class="panel">
-        <h3>Data Quality</h3>
-        <p>${rec.data_quality?.data_quality_label || "Data source pending"}</p>
-        <p>${rec.data_quality?.data_quality_score || 0}/100</p>
-        <p>${(rec.data_quality?.recommendation_limitations || ["Manual context available"]).join(" • ")}</p>
+        <p><strong>Source trace summary:</strong> ${rec.source_trace?.source || "Manual context available"} • ${rec.source_trace?.context_origin || "Operator context"}</p>
       </section>
       <section class="panel">
         <h3>Explanation</h3>
         <p>${rec.human_readable_explanation?.en || "Explanation pending."}</p>
+      </section>
+      <section class="panel">
+        <h3>Execution + Verification Plan</h3>
+        <p><strong>Execution task:</strong> ${rec.execution_task?.task_title || "Execution guidance pending"}</p>
+        <ul>${(rec.execution_task?.task_steps || ["Verification pending"]).map((step) => `<li>${step}</li>`).join("")}</ul>
+        <p><strong>Verification plan:</strong> ${rec.verification_plan?.expected_field_outcome || "Verification pending"}</p>
       </section>
     </div>`;
 }
@@ -155,40 +173,57 @@ function verificationScreen() {
   return `<section class="panel">
       <h2>Verification Chain</h2>
       <div class="chain">
-        <div><h4>Recommended</h4><p>${rec ? String(rec.action).replaceAll("_", " ") : "Awaiting recommendation"}</p></div>
+        <div><h4>Recommended</h4><p>${rec ? titleCase(rec.action) : "Awaiting recommendation"}</p></div>
         <div><h4>Scheduled</h4><p>Not scheduled yet</p></div>
         <div><h4>Applied</h4><p>No applied record yet</p></div>
         <div><h4>Observed</h4><p>Observation not recorded yet</p></div>
       </div>
-      <p class="muted">AGRO-AI separates recommendation, execution, and verification to keep operations trustworthy.</p>
+      <p class="muted">AGRO-AI keeps recommendation, scheduling, application, and observation clearly separated for operational trust.</p>
     </section>`;
 }
 
 function reportsScreen() {
-  return `<section class="panel">
-      <h2>Reports</h2>
-      <div class="chain">
-        <div><h4>Daily irrigation intelligence report</h4><p>Report generation is coming online for this deployment.</p></div>
-        <div><h4>Verification report</h4><p>Report generation is coming online for this deployment.</p></div>
-        <div><h4>Water-use summary</h4><p>Report generation is coming online for this deployment.</p></div>
-        <div><h4>Data quality summary</h4><p>Report generation is coming online for this deployment.</p></div>
-      </div>
+  const reportCard = (title) => `<article class="panel report-card"><h4>${title}</h4><p>Report generation is coming online for this deployment.</p></article>`;
+  return `<section class="stack">
+      ${reportCard("Daily irrigation intelligence report")}
+      ${reportCard("Verification report")}
+      ${reportCard("Water-use summary")}
+      ${reportCard("Data quality summary")}
     </section>`;
 }
 
 function integrationsScreen() {
   const envs = state.environments;
-  const cards = envs.length
-    ? envs.map((env) => `<article class="panel">
-        <h3>${env.label}</h3>
-        <p><strong>Status:</strong> ${env.status}</p>
-        <p><strong>Connection:</strong> ${env.live ? "Connected source live" : "Data source pending"}</p>
-        <p><strong>Farms/targets:</strong> ${env.farms ?? 0}</p>
-        <p><strong>Zones/sensors:</strong> ${env.zones ?? 0}</p>
-        <p><strong>Current limitation:</strong> ${env.notes || "No active limitation"}</p>
-      </article>`).join("")
-    : `<article class="panel"><h3>Integrations</h3><p>${state.environmentsError || "Awaiting telemetry."}</p></article>`;
-  return `<section class="stack">${cards}</section>`;
+  if (!envs.length) {
+    return `<section class="panel">
+      <h2>Integrations</h2>
+      <p>${state.environmentsError || "Data source pending"}</p>
+    </section>`;
+  }
+
+  const sorted = [...envs].sort((a, b) => {
+    if (a.label === "WiseConn") return -1;
+    if (b.label === "WiseConn") return 1;
+    if (a.label === "Talgil") return -1;
+    if (b.label === "Talgil") return 1;
+    return a.label.localeCompare(b.label);
+  });
+
+  return `<section class="stack">
+      ${sorted
+        .map(
+          (env) => `<article class="panel">
+            <h3>${env.label}</h3>
+            <p><strong>Status:</strong> ${env.status}</p>
+            <p><strong>Connection state:</strong> ${env.live ? "Connected source live" : "Data source pending"}</p>
+            <p><strong>Farms or targets:</strong> ${env.farms ?? 0}</p>
+            <p><strong>Zones or sensors:</strong> ${env.zones ?? 0}</p>
+            <p><strong>Last check:</strong> ${env.last_check || "Awaiting telemetry"}</p>
+            <p><strong>Current limitation:</strong> ${env.notes || "No current limitation reported."}</p>
+          </article>`,
+        )
+        .join("")}
+    </section>`;
 }
 
 function routeScreen() {
@@ -204,7 +239,7 @@ function layout() {
   app.innerHTML = `
     <div class="command-shell">
       <aside class="sidebar">
-        <div class="sidebar-title">AGRO-AI</div>
+        <div class="sidebar-title">AGRO-AI Water Command Center</div>
         ${navItems
           .map(
             (item) => `<button class="nav-item ${state.route === item.id ? "active" : ""}" data-route="${item.id}">${item.label}</button>`,
