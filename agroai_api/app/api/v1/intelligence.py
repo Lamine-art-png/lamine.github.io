@@ -7,6 +7,7 @@ from fastapi import APIRouter
 
 from app.services.intelligence_engine import (
     CanonicalFieldContext,
+    ContextNormalizationResult,
     DataQualityResult,
     IntelligenceEngineV1,
     RecommendationRequest,
@@ -17,8 +18,8 @@ router = APIRouter(prefix="/intelligence", tags=["intelligence"])
 engine = IntelligenceEngineV1()
 
 
-@router.post("/field-context/normalize", response_model=CanonicalFieldContext)
-async def normalize_field_context(payload: Dict[str, Any]) -> CanonicalFieldContext:
+@router.post("/field-context/normalize", response_model=ContextNormalizationResult)
+async def normalize_field_context(payload: Dict[str, Any]) -> ContextNormalizationResult:
     return engine.normalize_field_context(payload)
 
 
@@ -28,8 +29,16 @@ async def evaluate_data_quality(payload: CanonicalFieldContext) -> DataQualityRe
 
 
 @router.post("/recommend", response_model=RecommendationResponse)
-async def recommend(payload: RecommendationRequest) -> RecommendationResponse:
-    return engine.recommend(payload)
+async def recommend(payload: Dict[str, Any]) -> RecommendationResponse:
+    normalized = engine.normalize_field_context(payload.get("field_context") or {})
+    request = RecommendationRequest(
+        field_context=normalized.normalized_context,
+        language=payload.get("language", "en"),
+        user_role=payload.get("user_role"),
+        units=payload.get("units"),
+        time_horizon=payload.get("time_horizon", "today"),
+    )
+    return engine.recommend(request)
 
 
 @router.get("/schema")

@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List, Literal, Optional
+from typing import Any, Dict, List, Literal, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -19,6 +19,8 @@ class LocationContext(BaseModel):
     lat: Optional[float] = None
     lon: Optional[float] = None
     region: Optional[str] = None
+    country: Optional[str] = None
+    county: Optional[str] = None
 
 
 class WeatherContext(BaseModel):
@@ -67,6 +69,13 @@ class CanonicalFieldContext(BaseModel):
     data_quality_score: Optional[int] = None
     missing_inputs: List[str] = Field(default_factory=list)
     confidence_inputs: List[str] = Field(default_factory=list)
+
+
+class ContextNormalizationResult(BaseModel):
+    normalized_context: CanonicalFieldContext
+    aliases_applied: Dict[str, str]
+    ignored_fields: List[str]
+    warnings: List[str]
 
 
 class DataQualityResult(BaseModel):
@@ -133,9 +142,214 @@ class RecommendationResponse(BaseModel):
     verification_plan: VerificationPlan
 
 
+_ALLOWED_TOP_LEVEL_FIELDS = {
+    "field_id",
+    "farm_id",
+    "source",
+    "source_entity_id",
+    "crop_type",
+    "irrigation_method",
+    "soil_type",
+    "area",
+    "location",
+    "weather_context",
+    "sensor_context",
+    "controller_context",
+    "recent_irrigation_context",
+    "field_observations",
+    "data_quality_score",
+    "missing_inputs",
+    "confidence_inputs",
+}
+
+
 class IntelligenceEngineV1:
-    def normalize_field_context(self, payload: Dict[str, Any]) -> CanonicalFieldContext:
-        return CanonicalFieldContext(**payload)
+    def _float_if_numeric(self, value: Any) -> Optional[float]:
+        try:
+            if value is None:
+                return None
+            return float(value)
+        except (TypeError, ValueError):
+            return None
+
+    def _normalize_weather(self, payload: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, str], List[str], List[str]]:
+        aliases_applied: Dict[str, str] = {}
+        ignored: List[str] = []
+        warnings: List[str] = []
+
+        weather = dict(payload.get("weather_context") or {})
+        weather_aliases = {
+            "rain_forecast_mm": "precipitation_forecast_mm",
+            "rainfall_forecast_mm": "precipitation_forecast_mm",
+            "forecast_rain_mm": "precipitation_forecast_mm",
+            "evapotranspiration_mm": "eto_mm",
+            "et_mm": "eto_mm",
+            "et0_mm": "eto_mm",
+        }
+
+        for alias, canonical in weather_aliases.items():
+            if alias in payload and canonical not in weather:
+                weather[canonical] = payload[alias]
+                aliases_applied[f"{alias}"] = f"weather_context.{canonical}"
+            if alias in weather and canonical not in weather:
+                weather[canonical] = weather[alias]
+                aliases_applied[f"weather_context.{alias}"] = f"weather_context.{canonical}"
+
+        payload["weather_context"] = weather
+        return payload, aliases_applied, ignored, warnings
+
+    def _normalize_location(self, payload: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, str], List[str], List[str]]:
+        aliases_applied: Dict[str, str] = {}
+        ignored: List[str] = []
+        warnings: List[str] = []
+
+        location = dict(payload.get("location") or {})
+
+        if "country" in payload and "country" not in location:
+            location["country"] = payload["country"]
+            aliases_applied["country"] = "location.country"
+        if "state" in payload and "region" not in location:
+            location["region"] = payload["state"]
+            aliases_applied["state"] = "location.region"
+        if "province" in payload and "region" not in location:
+            location["region"] = payload["province"]
+            aliases_applied["province"] = "location.region"
+        if "county" in payload and "county" not in location:
+            location["county"] = payload["county"]
+            aliases_applied["county"] = "location.county"
+        if "latitude" in payload and "lat" not in location:
+            location["lat"] = payload["latitude"]
+            aliases_applied["latitude"] = "location.lat"
+        if "longitude" in payload and "lon" not in location:
+            location["lon"] = payload["longitude"]
+            aliases_applied["longitude"] = "location.lon"
+
+        if "state" in location and "region" not in location:
+            location["region"] = location["state"]
+            aliases_applied["location.state"] = "location.region"
+        if "province" in location and "region" not in location:
+            location["region"] = location["province"]
+            aliases_applied["location.province"] = "location.region"
+        if "latitude" in location and "lat" not in location:
+            location["lat"] = location["latitude"]
+            aliases_applied["location.latitude"] = "location.lat"
+        if "longitude" in location and "lon" not in location:
+            location["lon"] = location["longitude"]
+            aliases_applied["location.longitude"] = "location.lon"
+
+        payload["location"] = location
+        return payload, aliases_applied, ignored, warnings
+
+    def _normalize_recent_irrigation(self, payload: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, str], List[str], List[str]]:
+        aliases_applied: Dict[str, str] = {}
+        ignored: List[str] = []
+        warnings: List[str] = []
+
+        recent = dict(payload.get("recent_irrigation_context") or {})
+
+        def use(alias: str, canonical: str):
+            if alias in payload and canonical not in recent:
+                recent[canonical] = payload[alias]
+                aliases_applied[alias] = f"recent_irrigation_context.{canonical}"
+            if alias in recent and canonical not in recent:
+                recent[canonical] = recent[alias]
+                aliases_applied[f"recent_irrigation_context.{alias}"] = f"recent_irrigation_context.{canonical}"
+
+        use("last_irrigation_duration_minutes", "last_duration_minutes")
+        use("last_irrigation_depth_mm", "last_depth_mm")
+        use("irrigations_last_7_days", "events_last_7_days")
+
+        hours_ago = payload.get("last_irrigation_hours_ago", recent.get("last_irrigation_hours_ago"))
+        days_ago = payload.get("last_irrigation_days_ago", recent.get("last_irrigation_days_ago"))
+
+        if hours_ago is not None and "last_irrigation_at" not in recent:
+            h = self._float_if_numeric(hours_ago)
+            if h is not None:
+                recent["last_irrigation_at"] = (datetime.now(timezone.utc) - timedelta(hours=h)).isoformat()
+                aliases_applied["last_irrigation_hours_ago"] = "recent_irrigation_context.last_irrigation_at"
+            else:
+                warnings.append("last_irrigation_hours_ago ignored because value is not numeric")
+
+        if days_ago is not None and "last_irrigation_at" not in recent:
+            d = self._float_if_numeric(days_ago)
+            if d is not None:
+                recent["last_irrigation_at"] = (datetime.now(timezone.utc) - timedelta(days=d)).isoformat()
+                aliases_applied["last_irrigation_days_ago"] = "recent_irrigation_context.last_irrigation_at"
+            else:
+                warnings.append("last_irrigation_days_ago ignored because value is not numeric")
+
+        payload["recent_irrigation_context"] = recent
+        return payload, aliases_applied, ignored, warnings
+
+    def _normalize_sensor_context(self, payload: Dict[str, Any]) -> Tuple[Dict[str, Any], Dict[str, str], List[str], List[str]]:
+        aliases_applied: Dict[str, str] = {}
+        ignored: List[str] = []
+        warnings: List[str] = []
+
+        sensor = dict(payload.get("sensor_context") or {})
+
+        sensor_aliases = {
+            "soil_moisture_percent": "moisture_percent",
+            "moisture_pct": "moisture_percent",
+        }
+
+        for alias, canonical in sensor_aliases.items():
+            if alias in payload and canonical not in sensor:
+                sensor[canonical] = payload[alias]
+                aliases_applied[alias] = f"sensor_context.{canonical}"
+            if alias in sensor and canonical not in sensor:
+                sensor[canonical] = sensor[alias]
+                aliases_applied[f"sensor_context.{alias}"] = f"sensor_context.{canonical}"
+
+        pressure_value = payload.get("pressure", sensor.get("pressure"))
+        if pressure_value is not None and "pressure_kpa" not in sensor:
+            n = self._float_if_numeric(pressure_value)
+            if n is not None:
+                sensor["pressure_kpa"] = n
+                aliases_applied["pressure"] = "sensor_context.pressure_kpa"
+            else:
+                warnings.append("pressure ignored because value is not numeric")
+
+        flow_value = payload.get("flow_rate", sensor.get("flow_rate"))
+        if flow_value is not None and "flow_m3h" not in sensor:
+            n = self._float_if_numeric(flow_value)
+            if n is not None:
+                sensor["flow_m3h"] = n
+                aliases_applied["flow_rate"] = "sensor_context.flow_m3h"
+            else:
+                warnings.append("flow_rate ignored because value is not numeric")
+
+        payload["sensor_context"] = sensor
+        return payload, aliases_applied, ignored, warnings
+
+    def normalize_field_context(self, payload: Dict[str, Any]) -> ContextNormalizationResult:
+        working = dict(payload)
+        aliases_applied: Dict[str, str] = {}
+        warnings: List[str] = []
+
+        for normalizer in (
+            self._normalize_weather,
+            self._normalize_location,
+            self._normalize_recent_irrigation,
+            self._normalize_sensor_context,
+        ):
+            working, applied, _, w = normalizer(working)
+            aliases_applied.update(applied)
+            warnings.extend(w)
+
+        ignored_fields = sorted(
+            key for key in working.keys() if key not in _ALLOWED_TOP_LEVEL_FIELDS and key not in aliases_applied
+        )
+
+        canonical_payload = {k: v for k, v in working.items() if k in _ALLOWED_TOP_LEVEL_FIELDS}
+        normalized = CanonicalFieldContext(**canonical_payload)
+
+        return ContextNormalizationResult(
+            normalized_context=normalized,
+            aliases_applied=aliases_applied,
+            ignored_fields=ignored_fields,
+            warnings=warnings,
+        )
 
     def evaluate_data_quality(self, field: CanonicalFieldContext) -> DataQualityResult:
         missing: List[str] = []
@@ -293,10 +507,7 @@ class IntelligenceEngineV1:
 
         explain = self.build_explainability(field, quality, action, depth)
 
-        if request.language != "en":
-            language_status = f"fallback_to_en:{request.language}"
-        else:
-            language_status = "en_ready"
+        language_status = "en_ready" if request.language == "en" else f"fallback_to_en:{request.language}"
 
         timing = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
         recommended_timing = timing.isoformat()
@@ -335,7 +546,6 @@ class IntelligenceEngineV1:
         )
 
         recommendation_id = f"rec_{uuid.uuid4().hex[:12]}"
-        summary = explain.why
 
         return RecommendationResponse(
             recommendation_id=recommendation_id,
@@ -346,16 +556,13 @@ class IntelligenceEngineV1:
             priority="high" if action == "irrigate" else "medium" if action == "inspect" else "low",
             confidence_score=confidence_score,
             confidence_label=confidence_label,
-            reasoning_summary=summary,
+            reasoning_summary=explain.why,
             key_drivers=explain.key_drivers,
             risk_flags=risk_flags,
             missing_data=quality.missing_inputs,
             verification_required=True,
             human_readable_explanation={
-                "en": (
-                    f"Decision: {action}. Confidence {confidence_label} ({confidence_score}/100). "
-                    f"Reason: {summary}"
-                )
+                "en": f"Decision: {action}. Confidence {confidence_label} ({confidence_score}/100). Reason: {explain.why}"
             },
             language_status=language_status,
             machine_readable_decision={

@@ -26,6 +26,38 @@ This allows one model for:
 - manual/no-hardware fields
 - partial telemetry fields
 
+## Input Normalization and Alias Support
+`POST /v1/intelligence/field-context/normalize` accepts messy integration-shaped inputs and returns:
+- `normalized_context` (strict canonical model)
+- `aliases_applied`
+- `ignored_fields`
+- `warnings`
+
+### Weather aliases
+- `rain_forecast_mm` → `weather_context.precipitation_forecast_mm`
+- `rainfall_forecast_mm` → `weather_context.precipitation_forecast_mm`
+- `forecast_rain_mm` → `weather_context.precipitation_forecast_mm`
+- `evapotranspiration_mm` → `weather_context.eto_mm`
+- `et_mm` → `weather_context.eto_mm`
+- `et0_mm` → `weather_context.eto_mm`
+
+### Location aliases
+- `country` accepted as `location.country`
+- `state` / `province` → `location.region`
+- `county` accepted as `location.county`
+- `latitude` / `longitude` → `location.lat` / `location.lon`
+
+### Recent irrigation aliases
+- `last_irrigation_days_ago` / `last_irrigation_hours_ago` converted to `recent_irrigation_context.last_irrigation_at`
+- `last_irrigation_duration_minutes` → `recent_irrigation_context.last_duration_minutes`
+- `last_irrigation_depth_mm` → `recent_irrigation_context.last_depth_mm`
+- `irrigations_last_7_days` → `recent_irrigation_context.events_last_7_days`
+
+### Sensor aliases
+- `soil_moisture_percent` / `moisture_pct` → `sensor_context.moisture_percent`
+- `pressure` (numeric) → `sensor_context.pressure_kpa`
+- `flow_rate` (numeric) → `sensor_context.flow_m3h`
+
 ## Output Recommendation Schema
 `POST /v1/intelligence/recommend` returns:
 - `recommendation_id`
