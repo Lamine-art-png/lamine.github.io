@@ -3,6 +3,7 @@ import { syncService } from "./services/sync.js";
 import { generateRecommendation } from "./services/recommendationEngine.js";
 import { applyVoiceAction, parseVoiceCommand, saveOfflineVoiceAction } from "./services/voiceAgent.js";
 import { weatherService } from "./services/weatherService.js";
+import { apiClient } from "./services/apiClient.js";
 import { applyDemoScenario, applyOnboarding, loadState, recordRecommendationHistory, saveState, useDemoMode } from "./state/store.js";
 import { createIrrigationLog, createObservation, createVoiceTimelineEntry } from "./state/actions.js";
 import { createAiOrchestrator } from "./ai/aiOrchestrator.js";
@@ -14,6 +15,7 @@ let selectedField = null;
 let voiceListening = false;
 let transcript = "";
 let voiceResponse = "";
+let assistantResponse = "I can explain the latest decision trace.";
 let weather = state.weatherCache || null;
 let uiMessage = "";
 let onboardingStep = 0;
@@ -132,6 +134,19 @@ function recommendationFor(field) {
   return { ...rec, verificationStatus: result.verification?.status || "no_confirmation" };
 }
 
+
+
+async function fetchAssistantText(fieldId) {
+  const fallback = ai().runGoal({ goal: "explain recommendation", fieldId: fieldId || "" }).text || "I can explain the latest decision trace.";
+  if (!navigator.onLine) return fallback;
+  try {
+    const latest = state.recommendationHistory[0]?.rec || null;
+    const result = await apiClient.queryAssistant({ decision: latest, recommendationHistory: state.recommendationHistory, language: state.language || "en" });
+    return result.answer || fallback;
+  } catch {
+    return fallback;
+  }
+}
 function todayContent() {
   const field = state.fields[0];
   if (!field) return `<section class='card'>No fields yet. Complete onboarding.</section>`;
@@ -176,7 +191,6 @@ function todayContent() {
             ? `<ul class='mini-list'>${rec.missingData.map((item) => `<li>${item}</li>`).join("")}</ul>`
             : `<p class='small'>No critical data gaps today.</p>`}
           <p class='small'>Top uncertainty: ${(rec.uncertainties || ["none"])[0]}</p>
-          <p class='small'>Not sure? You can update anytime from Fields.</p>
         </article>
 
         <article class='card compact-card'>
@@ -194,7 +208,6 @@ function todayContent() {
           : `<p class='small'>Your recommendation history will appear here.</p>`}
       </article>
 
- codex/build-foundation-for-velia-voice-agent-bvfyqx
 
       <article class='card compact-card'>
         <p class='card-label'>Voice timeline</p>
@@ -209,8 +222,6 @@ function todayContent() {
         <p class='small'>Tools: ${(rec.decisionTrace?.toolsUsed || []).slice(0,4).join(", ")}</p>
       </article>
 
-
- main
       <article class='card compact-card'>
         <p class='card-label'>Quick actions</p>
         <div class='quick-actions-grid'>
@@ -220,32 +231,6 @@ function todayContent() {
           <button class='btn' data-nav='assistant'>Ask Velia</button>
         </div>
       </article>
- codex/build-foundation-for-velia-voice-agent-bvfyqx
-
-
-  const rec = recommendationFor(field);
-  const attentionFields = state.fields.filter((f) => generateRecommendation(f, weather).urgency !== "low");
-  const yesterday = state.irrigationLogs.find((l) => Date.now() - new Date(l.performedAt).getTime() > 20 * 3600000);
-
-  return `<section class='card'>
-      <p class='priority'>${rec.mainRecommendation}</p>
-      <p><strong>Today’s action:</strong> ${rec.nextBestAction}</p>
-      <p><strong>Timing:</strong> ${rec.timing} • <strong>Urgency:</strong> ${rec.urgency}</p>
-      <p><strong>Confidence:</strong> ${rec.confidence}</p>
-      <p><strong>Why:</strong> ${rec.reasonSummary.join(" • ")}</p>
-      <p><strong>Missing data:</strong> ${rec.missingData.length ? rec.missingData.join(", ") : "No critical gaps"}</p>
-      <p><strong>Weather risks:</strong> heat ${weather?.heatRisk || "unknown"}, frost ${weather?.frostRisk || "unknown"}, rain chance ${weather?.rainChance ?? "n/a"}%</p>
-      <p><strong>Fields needing attention:</strong> ${attentionFields.map((f) => f.name).join(", ") || "None"}</p>
-      <p><strong>What changed since yesterday:</strong> ${yesterday ? `Irrigation logged ${Math.round((Date.now() - new Date(yesterday.performedAt).getTime()) / 3600000)}h ago.` : "No previous irrigation log."}</p>
-      ${!navigator.onLine ? `<p class='warn'>Using last available weather data (${weather?.lastUpdated ? new Date(weather.lastUpdated).toLocaleString() : "unknown"}).</p>` : ""}
-      <div class='grid two'>
-        <button class='btn' data-open-log='${field.id}'>Log irrigation</button>
-        <button class='btn' data-act='note' data-field='${field.id}'>Add field note</button>
-        <button class='btn' data-nav='assistant'>Ask Velia</button>
-        <button class='btn' data-open-condition='${field.id}'>Update field condition</button>
-      </div>
- main
- main
     </section>
     ${voiceCard(field.id, rec)}`;
 }
@@ -295,7 +280,7 @@ function fieldDetail(fieldId) {
 function alertsContent() { return `<section class='card'>No active alerts yet in v0.2.</section>`; }
 function assistantContent() {
   const chips = ["Should I irrigate today?", "Log irrigation for Field 1 for two hours", "Field 1 looks dry", "Why is confidence moderate?", "What changed since yesterday?"];
-  return `<section class='card'><h2>Field Decision Assistant</h2><p>Ask Velia anything about your irrigation decisions.</p><div class='chips'>${chips.map((c) => `<span class='chip'>${c}</span>`).join("")}</div><p><strong>Velia:</strong> ${ai().runGoal({ goal: 'explain recommendation', fieldId: state.fields[0]?.id || '' }).text || 'I can explain the latest decision trace.'}</p></section>${voiceCard(state.fields[0]?.id, state.fields[0] ? recommendationFor(state.fields[0]) : null)}`;
+  return `<section class='card'><h2>Field Decision Assistant</h2><p>Ask Velia anything about your irrigation decisions.</p><div class='chips'>${chips.map((c) => `<span class='chip'>${c}</span>`).join("")}</div><p><strong>Velia:</strong> ${assistantResponse}</p></section>${voiceCard(state.fields[0]?.id, state.fields[0] ? recommendationFor(state.fields[0]) : null)}`;
 }
 function reportsContent() { return `<section class='card'><h2>Reports</h2><p>Planned for next increment.</p></section>`; }
 function settingsContent() { return `<section class='card'><h2>Settings</h2><p>Mode: ${state.mode}</p><button class='btn' data-mode='demo'>Demo mode</button><button class='btn' data-mode='real'>Real mode</button><p>Farm location: ${state.profile?.farm?.location || "not set"}</p><p>Weather provider: ${weather?.provider || "mock"}</p><button class='btn' data-refresh-weather='1'>Refresh weather</button>${state.mode === "demo" ? `<label>Demo scenario<select id='demoScenario'><option value='baseline' ${state.demoScenario === "baseline" ? "selected" : ""}>Baseline</option><option value='hotDry' ${state.demoScenario === "hotDry" ? "selected" : ""}>Hot and dry</option><option value='coolWet' ${state.demoScenario === "coolWet" ? "selected" : ""}>Cool and wet</option></select></label><button class='btn' data-apply-scenario='1'>Apply scenario</button>` : ""}</section>`; }
@@ -419,7 +404,14 @@ function readDraftInputs() {
 }
 
 function bind() {
-  app.querySelectorAll("[data-nav]").forEach((b) => (b.onclick = () => { route = b.dataset.nav; selectedField = null; render(); }));
+  app.querySelectorAll("[data-nav]").forEach((b) => (b.onclick = async () => {
+    route = b.dataset.nav;
+    selectedField = null;
+    if (route === "assistant") {
+      assistantResponse = await fetchAssistantText(state.fields[0]?.id || "");
+    }
+    render();
+  }));
   app.querySelectorAll("[data-open-field]").forEach((b) => (b.onclick = () => { selectedField = { type: "detail", fieldId: b.dataset.openField }; render(); }));
   app.querySelectorAll("[data-open-log]").forEach((b) => (b.onclick = () => { route = "fields"; selectedField = { type: "log", fieldId: b.dataset.openLog }; render(); }));
   app.querySelectorAll("[data-open-condition]").forEach((b) => (b.onclick = () => { route = "fields"; selectedField = { type: "condition", fieldId: b.dataset.openCondition }; render(); }));
@@ -486,7 +478,7 @@ function bind() {
   const demo = document.getElementById("startDemo");
   if (demo) demo.onclick = async () => { state = useDemoMode(state); route = "today"; persist(); await refreshWeather(true); render(); };
 
-  app.querySelectorAll("[data-voice]").forEach((b) => (b.onclick = () => {
+  app.querySelectorAll("[data-voice]").forEach((b) => (b.onclick = async () => {
     const fieldId = b.dataset.voice;
     if (!voiceListening) {
       voiceListening = true;
@@ -494,7 +486,15 @@ function bind() {
     } else {
       voiceListening = false;
       transcript = "Log irrigation for Field 1 for 2 hours";
-      const command = parseVoiceCommand(transcript, { fieldId });
+      let command = parseVoiceCommand(transcript, { fieldId });
+      if (navigator.onLine) {
+        try {
+          const interpreted = await apiClient.interpretVoice({ transcript, fieldId });
+          if (interpreted?.action) command = interpreted;
+        } catch {
+          // local parser fallback
+        }
+      }
       if (!navigator.onLine) {
         saveOfflineVoiceAction(command.action);
         state.voiceTimeline.unshift(createVoiceTimelineEntry({ transcript, intent: command.intent, outcome: "queued_offline", fieldId }));
@@ -513,6 +513,11 @@ function bind() {
           },
         });
         if (!voiceResponse) voiceResponse = `Intent: ${command.intent}. Action captured.`;
+        try {
+          await apiClient.updateMemory({ fieldId, event: { type: "voice", payload: { transcript, intent: command.intent, outcome: voiceResponse } } });
+        } catch {
+          // non-blocking backend memory sync
+        }
         state.voiceTimeline.unshift(createVoiceTimelineEntry({ transcript, intent: command.intent, outcome: voiceResponse, fieldId }));
         state.voiceTimeline = state.voiceTimeline.slice(0, 20);
         persist();
@@ -528,5 +533,6 @@ window.addEventListener("offline", render);
 
 (async () => {
   await refreshWeather(false);
+  assistantResponse = await fetchAssistantText(state.fields[0]?.id || "");
   render();
 })();

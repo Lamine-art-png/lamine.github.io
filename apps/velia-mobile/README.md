@@ -205,3 +205,17 @@ npm test
 3. Replace local vector placeholder with production vector database.
 4. Connect real weather/satellite/integration adapters.
 5. Persist memory and verification events in tenant-safe backend storage.
+
+
+## Backend API fallback wiring
+
+`js/services/apiClient.js` uses `http://localhost:4310` by default and can be overridden with:
+
+```js
+localStorage.setItem("veliaApiBaseUrl", "https://your-api-host");
+```
+
+Runtime behavior is backend-first with local fallback for:
+- weather context
+- assistant query
+- voice intent interpretation
