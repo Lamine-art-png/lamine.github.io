@@ -143,7 +143,10 @@ function renderIntelligence() {
       <p><strong>Confidence:</strong> ${rec.confidence_label} (${rec.confidence_score}/100)</p>
       <p><strong>Reason:</strong> ${rec.reasoning_summary}</p>
       <p><strong>Data quality:</strong> ${rec.data_quality.data_quality_label} (${rec.data_quality.data_quality_score}/100)</p>
+      <p><strong>Live source:</strong> ${rec.source_trace.source || "manual"} (${rec.source_trace.context_origin || "manual"})</p>
       <p><strong>Missing data:</strong> ${(rec.missing_data || []).join(", ") || "none"}</p>
+      <p><strong>Live inputs used:</strong> ${(rec.source_trace.live_inputs_used || []).join(", ") || "none"}</p>
+      <p><strong>Manual overrides used:</strong> ${(rec.source_trace.manual_overrides_used || []).join(", ") || "none"}</p>
       <p><strong>Verification plan:</strong> ${rec.verification_plan.expected_field_outcome}</p>
       <p><strong>Source trace:</strong> ${rec.source_trace.source || "unknown"} / ${rec.source_trace.source_entity_id || "n/a"}</p>
       <p><strong>Language status:</strong> ${rec.language_status}</p>
@@ -405,7 +408,26 @@ async function bootstrap() {
     user_role: mockUser.role || "farm_manager",
     time_horizon: "today",
   };
-  const intelligenceResp = await apiClient.getIntelligenceRecommendation(intelligencePayload);
+  let intelligenceResp = await apiClient.request(`/v1/intelligence/recommend/live/wiseconn/${encodeURIComponent(field?.id || "field-unknown")}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      source: "wiseconn",
+      entity_id: field?.id || "field-unknown",
+      crop_type: getCrop(field?.cropId)?.name || null,
+      soil_type: field?.soilType || null,
+      irrigation_method: field?.irrigationMethod || null,
+      area: field?.acreage || null,
+      location: { region: mockFarm.location || null },
+      weather_context: intelligencePayload.field_context.weather_context,
+      language: language(),
+      user_role: mockUser.role || "farm_manager",
+      time_horizon: "today",
+    }),
+  });
+  if (!intelligenceResp.ok) {
+    intelligenceResp = await apiClient.getIntelligenceRecommendation(intelligencePayload);
+  }
   if (intelligenceResp.ok) {
     state.intelligenceRecommendation = intelligenceResp.data;
     state.intelligenceError = "";

@@ -10,6 +10,11 @@ It is designed to answer:
 - `POST /v1/intelligence/field-context/normalize`
 - `POST /v1/intelligence/data-quality`
 - `POST /v1/intelligence/recommend`
+- `GET /v1/intelligence/live-context/wiseconn/{zone_id}`
+- `GET /v1/intelligence/live-context/talgil/{target_id}`
+- `POST /v1/intelligence/recommend/live`
+- `POST /v1/intelligence/recommend/live/wiseconn/{zone_id}`
+- `POST /v1/intelligence/recommend/live/talgil/{target_id}`
 - `GET /v1/intelligence/schema`
 
 ## Canonical Field Context Input
@@ -74,6 +79,27 @@ This allows one model for:
 - `data_quality`
 - `execution_task`
 - `verification_plan`
+
+### Source trace contract
+Recommendation responses include a source trace with:
+- `source`
+- `source_entity_id`
+- `context_origin` (`live|manual|mixed`)
+- `inputs_used`
+- `live_inputs_used`
+- `manual_overrides_used`
+- `missing_inputs`
+- `telemetry_used`
+- `controller_provider`
+- `confidence_basis`
+
+## Live recommendation flow
+1. Live context is assembled from WiseConn/Talgil adapters using source + entity ID.
+2. Optional manual overrides are merged (`crop_type`, `soil_type`, `irrigation_method`, `area`, `location`, `weather_context`, `field_observations`).
+3. Merged context runs through normalization and canonicalization.
+4. Recommendation, execution task, and verification plan are produced.
+
+If telemetry is missing, the system degrades honestly with warnings and conservative output rather than fabricated readings.
 
 ## Data Quality Logic
 Data quality score (0-100) is computed from evidence availability and critical agronomic metadata.
