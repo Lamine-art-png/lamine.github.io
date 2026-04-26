@@ -14,6 +14,8 @@ This is a drop-in starter to make a **limited pilot** reproducible:
 ## Product Links
 - **AGRO-AI Portal:** https://app.agroai-pilot.com
 
+> Hosting note: `app.agroai-pilot.com` currently conflicts with Velia hosting and must be resolved in deployment routing. This repository only provides the code-level portal entry point.
+
 ## Quickstart
 ```bash
 make tfinit

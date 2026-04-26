@@ -83,6 +83,11 @@ from app.api.v1.talgil import router as talgil_router  # noqa: E402
 
 app.include_router(talgil_router, prefix="/v1")
 
+# Intelligence engine routes (source-aware recommendation layer)
+from app.api.v1.intelligence import router as intelligence_router  # noqa: E402
+
+app.include_router(intelligence_router, prefix="/v1")
+
 
 # Prometheus metrics endpoint
 from app.core.metrics import metrics_endpoint  # noqa: E402
