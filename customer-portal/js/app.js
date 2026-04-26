@@ -20,9 +20,11 @@ const state = {
   voiceListening: false,
   runtimeEnvironments: [],
   runtimeEnvironmentsError: "",
+  intelligenceRecommendation: null,
+  intelligenceError: "",
 };
 
-const navItems = ["today", "fields", "alerts", "assistant", "reports", "settings"];
+const navItems = ["today", "intelligence", "fields", "alerts", "assistant", "reports", "settings"];
 
 function fmtDate(value) {
   return new Date(value).toLocaleString();
@@ -119,6 +121,38 @@ function renderToday() {
     </section>
     ${voiceModule()}
   `;
+}
+
+function renderIntelligence() {
+  if (state.intelligenceError) {
+    return `<section class="card">
+      <h2>Intelligence Engine</h2>
+      <p class="muted">Unable to load intelligence recommendation: ${state.intelligenceError}</p>
+      <p class="muted">Fallback: operate with conservative manual verification workflow.</p>
+    </section>`;
+  }
+
+  const rec = state.intelligenceRecommendation;
+  if (!rec) {
+    return `<section class="card"><h2>Intelligence Engine</h2><p>Loading recommendation...</p></section>`;
+  }
+
+  return `<section class="card">
+      <h2>Intelligence Engine • Today’s Water Decision</h2>
+      <p><strong>Recommended action:</strong> ${rec.action}</p>
+      <p><strong>Confidence:</strong> ${rec.confidence_label} (${rec.confidence_score}/100)</p>
+      <p><strong>Reason:</strong> ${rec.reasoning_summary}</p>
+      <p><strong>Data quality:</strong> ${rec.data_quality.data_quality_label} (${rec.data_quality.data_quality_score}/100)</p>
+      <p><strong>Missing data:</strong> ${(rec.missing_data || []).join(", ") || "none"}</p>
+      <p><strong>Verification plan:</strong> ${rec.verification_plan.expected_field_outcome}</p>
+      <p><strong>Source trace:</strong> ${rec.source_trace.source || "unknown"} / ${rec.source_trace.source_entity_id || "n/a"}</p>
+      <p><strong>Language status:</strong> ${rec.language_status}</p>
+      <h3>Execution Task</h3>
+      <p>${rec.execution_task.task_title} • due ${rec.execution_task.due_window}</p>
+      <ol>${rec.execution_task.task_steps.map((step) => `<li>${step}</li>`).join("")}</ol>
+      <h3>Explanation</h3>
+      <p>${rec.human_readable_explanation.en}</p>
+    </section>`;
 }
 
 function fieldCard(field) {
@@ -318,6 +352,7 @@ function bindVoiceButtons() {
 
 function routeContent() {
   if (state.route === "today") return renderToday();
+  if (state.route === "intelligence") return renderIntelligence();
   if (state.route === "fields") return renderFields();
   if (state.route === "alerts") return renderAlerts();
   if (state.route === "assistant") return renderAssistant();
@@ -341,6 +376,42 @@ async function bootstrap() {
   } else {
     state.runtimeEnvironments = [];
     state.runtimeEnvironmentsError = environments.error || "Unable to fetch runtime environments.";
+  }
+
+  const field = fields[0];
+  const intelligencePayload = {
+    field_context: {
+      field_id: field?.id || "field-unknown",
+      farm_id: mockFarm.id || "farm-unknown",
+      source: "manual",
+      source_entity_id: field?.id || null,
+      crop_type: getCrop(field?.cropId)?.name || null,
+      irrigation_method: field?.irrigationMethod || null,
+      soil_type: field?.soilType || null,
+      area: field?.acreage || null,
+      location: { region: mockFarm.location || null },
+      weather_context: {
+        eto_mm: weather.et0 || 4.2,
+        precipitation_forecast_mm: weather.rainForecastMm || 0,
+        temperature_c: weather.temperatureC || null,
+      },
+      sensor_context: {},
+      controller_context: {},
+      recent_irrigation_context: {},
+      field_observations: [],
+      confidence_inputs: ["portal_bootstrap"],
+    },
+    language: language(),
+    user_role: mockUser.role || "farm_manager",
+    time_horizon: "today",
+  };
+  const intelligenceResp = await apiClient.getIntelligenceRecommendation(intelligencePayload);
+  if (intelligenceResp.ok) {
+    state.intelligenceRecommendation = intelligenceResp.data;
+    state.intelligenceError = "";
+  } else {
+    state.intelligenceRecommendation = null;
+    state.intelligenceError = intelligenceResp.error || "Unknown intelligence API error.";
   }
   window.addEventListener("online", async () => {
     await syncService.syncQueuedActions();
