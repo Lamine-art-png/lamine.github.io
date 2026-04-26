@@ -17,6 +17,7 @@ export const ENDPOINTS = {
     `/v1/reports/roi?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}${
       blockId ? `&blockId=${encodeURIComponent(blockId)}` : ""
     }`,
+  intelligenceRecommend: "/v1/intelligence/recommend",
 };
 
 export class ApiClient {
@@ -24,8 +25,8 @@ export class ApiClient {
     this.baseUrl = baseUrl.replace(/\/$/, "");
   }
 
-  async request(path) {
-    const response = await fetch(`${this.baseUrl}${path}`);
+  async request(path, options = {}) {
+    const response = await fetch(`${this.baseUrl}${path}`, options);
     const contentType = response.headers.get("content-type") || "";
     let payload = null;
 
@@ -99,5 +100,13 @@ export class ApiClient {
 
   getRoiReport(params) {
     return this.request(ENDPOINTS.reportRoi(params));
+  }
+
+  getIntelligenceRecommendation(payload) {
+    return this.request(ENDPOINTS.intelligenceRecommend, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
   }
 }
