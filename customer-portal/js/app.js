@@ -1,359 +1,272 @@
-import "./data/models.js";
-import { t, setLanguage, language } from "./i18n/index.js";
-import { alerts, crops, dailyConsistency, fields, generateRecommendations, getCrop, getFieldById, irrigationLogs, mockFarm, mockUser, notes, reportSummary, weather } from "./data/mockData.js";
-import { storageService } from "./services/storageService.js";
-import { syncService } from "./services/syncService.js";
-import { voiceAgent } from "./services/voiceAgent.js";
-import { integrationRegistry } from "./services/integrations/adapters.js";
-import { ApiClient } from "./apiClient.js";
+import { createStore } from "./v2/state/store.js";
+import { authService } from "./v2/auth/authService.js";
+import { can } from "./v2/auth/rbac.js";
+import { normalizeRoute } from "./v2/routes/router.js";
+import { shellHtml } from "./v2/components/shell.js";
+import { addAuditLog } from "./v2/services/auditService.js";
+import { integrationSetupService } from "./v2/services/integrationSetupService.js";
+import { loginView } from "./v2/views/loginView.js";
+import {
+  auditLogsView,
+  commandCenterView,
+  farmsView,
+  intelligenceView,
+  integrationsView,
+  reportsView,
+  settingsView,
+  verificationView,
+} from "./v2/views/appViews.js";
 
 const app = document.getElementById("app");
-const apiClient = new ApiClient();
+const state = createStore();
+state.session = authService.restore();
 
-const state = {
-  route: "today",
-  selectedFieldId: fields[0]?.id || "",
-  recommendations: generateRecommendations(),
-  voiceSession: null,
-  voiceTranscript: null,
-  voiceResponse: "",
-  voiceListening: false,
-  runtimeEnvironments: [],
-  runtimeEnvironmentsError: "",
-};
-
-const navItems = ["today", "fields", "alerts", "assistant", "reports", "settings"];
-
-function fmtDate(value) {
-  return new Date(value).toLocaleString();
+function routeView() {
+  const route = normalizeRoute(state.app.route);
+  if (route === "command_center") return commandCenterView(state);
+  if (route === "farms") return farmsView(state);
+  if (route === "intelligence") return intelligenceView(state);
+  if (route === "verification") return verificationView(state);
+  if (route === "reports") return reportsView(state);
+  if (route === "integrations") return integrationsView(state);
+  if (route === "settings") return settingsView(state);
+  if (route === "audit_logs") return auditLogsView(state);
+  return commandCenterView(state);
 }
 
-function recommendationFor(fieldId) {
-  return state.recommendations.find((item) => item.fieldId === fieldId);
-}
-
-function renderLayout(content) {
-  const sync = syncService.getSyncStatus();
-  app.innerHTML = `
-    <div class="shell">
-      <header class="topbar">
-        <div>
-          <p class="eyebrow">AGRO-AI</p>
-          <h1>${t("appName")}</h1>
-          <p class="framing">${t("framing")}</p>
-        </div>
-        <div class="status-stack">
-          <span class="badge ${sync.isOnline ? "ok" : "offline"}">${sync.isOnline ? "Online" : "Offline mode"}</span>
-          <span class="badge">Sync: ${sync.status}${sync.pendingActions ? ` (${sync.pendingActions})` : ""}</span>
-        </div>
-      </header>
-      <main class="page">${content}</main>
-      <nav class="bottom-nav">
-        ${navItems.map((item) => `<button data-route="${item}" class="nav-btn ${state.route === item ? "active" : ""}">${t(`nav.${item}`)}</button>`).join("")}
-      </nav>
-    </div>`;
-
-  app.querySelectorAll("[data-route]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.route = button.dataset.route;
-      render();
-    });
-  });
-
-  app.querySelectorAll("[data-open-field]").forEach((button) => {
-    button.addEventListener("click", () => {
-      state.selectedFieldId = button.dataset.openField;
-      state.route = "fields";
-      location.hash = `#/fields/${state.selectedFieldId}`;
-      render();
-    });
-  });
-
-  bindVoiceButtons();
-}
-
-function quickActionsHtml(fieldId = state.selectedFieldId) {
-  return `<div class="quick-actions">
-      <button class="action-btn" data-quick="note" data-field="${fieldId}">Add field note</button>
-      <button class="action-btn" data-quick="irrigation" data-field="${fieldId}">Log irrigation</button>
-      <button class="action-btn" data-quick="photo" data-field="${fieldId}">Take field photo</button>
-      <button class="action-btn" data-route="assistant">Ask Velia</button>
-      <button class="action-btn voice-entry" data-voice-entry="${fieldId}">🎙️ Voice</button>
-    </div>`;
-}
-
-function voiceModule(fieldId = state.selectedFieldId) {
-  const sync = syncService.getSyncStatus();
-  return `<section class="card">
-      <h3>Voice Agent</h3>
-      <p>${t("voicePrompt")}</p>
-      <div class="voice-controls">
-        <button class="mic ${state.voiceListening ? "listening" : ""}" data-voice-start="${fieldId}">${state.voiceListening ? "Listening... tap to stop" : "Start voice input"}</button>
-      </div>
-      <p class="muted">Transcript: ${state.voiceTranscript?.text || "No transcript yet"}</p>
-      <p class="muted">Velia response: ${state.voiceResponse || "No response yet"}</p>
-      <div class="quick-actions">
-        <button class="action-btn" data-voice-speak="1">Read response aloud</button>
-        <button class="action-btn" data-voice-save-note="${fieldId}">Save voice note as field note</button>
-      </div>
-      ${!sync.isOnline ? `<p class="offline-msg">${t("offlineSaved")}. ${t("syncPending")}.</p>` : ""}
-    </section>`;
-}
-
-function renderToday() {
-  const topPriority = state.recommendations
-    .filter((r) => r.type === "irrigate_now")
-    .sort((a, b) => (a.confidence < b.confidence ? 1 : -1))[0];
-  const attentionFields = fields.filter((f) => f.status !== "stable");
-  return `
-    <section class="card">
-      <h2>Today's irrigation decision summary</h2>
-      <p class="priority">Today's priority: ${getFieldById(topPriority?.fieldId)?.name || "No urgent field"}</p>
-      <p>Recommended next action: ${topPriority?.action || "Monitor all fields"}</p>
-      <p>Confidence: ${topPriority?.confidence || "moderate"}</p>
-      <p>Weather: ${weather.condition}, ${weather.temperatureC}°C • ${weather.summary}</p>
-      <p>Water priority status: ${attentionFields.length} field(s) need attention.</p>
-      <p>Daily check-in consistency: ${dailyConsistency.checkInsThisWeek}/7 this week • ${dailyConsistency.streakDays}-day streak placeholder.</p>
-      <p>Field attention queue: ${attentionFields.map((f) => f.name).join(", ")}</p>
-      ${quickActionsHtml()}
-    </section>
-    ${voiceModule()}
-  `;
-}
-
-function fieldCard(field) {
-  const crop = getCrop(field.cropId);
-  const rec = recommendationFor(field.id);
-  return `<article class="card field-card" data-open-field="${field.id}">
-    <h3>${field.name}</h3>
-    <p>${crop?.name} • ${field.acreage} acres</p>
-    <p>Irrigation status: ${field.status}</p>
-    <p>Water stress: ${field.waterStressLevel}</p>
-    <p>Last irrigation: ${fmtDate(field.lastIrrigationAt)}</p>
-    <p>Next recommended action: ${rec?.action || "Monitor"}</p>
-    <p>Data source: ${field.dataSourceStatus}</p>
-  </article>`;
-}
-
-function renderFieldDetail(fieldId) {
-  const field = getFieldById(fieldId);
-  if (!field) return `<section class="card"><p>Field not found.</p></section>`;
-  const crop = getCrop(field.cropId);
-  const rec = recommendationFor(field.id);
-  const fieldNotes = notes.filter((note) => note.fieldId === field.id);
-  const activity = irrigationLogs.filter((log) => log.fieldId === field.id);
-
-  return `<section class="card">
-      <h2>${field.name}</h2>
-      <p>Crop and acreage: ${crop?.name} • ${field.acreage} acres</p>
-      <p>Soil type: ${field.soilType}</p>
-      <p>Irrigation method: ${field.irrigationMethod}</p>
-      <p>Latest recommendation: ${rec?.action}</p>
-      <p>Reasoning summary: ${(rec?.reasoning || []).join(" • ")}</p>
-      <h3>Recent activity timeline</h3>
-      <ul>${activity.map((log) => `<li>${fmtDate(log.performedAt)} - ${log.amountMm} mm (${log.durationMin} min)</li>`).join("") || "<li>No activity logged.</li>"}</ul>
-      <h3>Notes</h3>
-      <ul>${fieldNotes.map((note) => `<li>${fmtDate(note.createdAt)} - ${note.text}</li>`).join("") || "<li>No notes yet.</li>"}</ul>
-      <p>Photos: placeholder for field photos</p>
-      <div class="quick-actions">
-        <button class="action-btn" data-quick="irrigation" data-field="${field.id}">Manual log</button>
-        <button class="action-btn" data-quick="note" data-field="${field.id}">Add note</button>
-      </div>
-      <p>Recommendation history: placeholder</p>
-    </section>
-    ${voiceModule(field.id)}`;
-}
-
-function renderFields() {
-  const hashField = location.hash.match(/^#\/fields\/(.+)$/)?.[1];
-  if (hashField) return renderFieldDetail(hashField);
-  return `<section class="stack">${fields.map(fieldCard).join("")}</section>`;
-}
-
-function renderAlerts() {
-  return `<section class="stack">${alerts.map((alert) => `<article class="card">
-      <h3>${alert.type}</h3>
-      <p>Severity: <span class="sev ${alert.severity}">${alert.severity}</span></p>
-      <p>Field affected: ${alert.fieldId ? getFieldById(alert.fieldId)?.name : "Farm-wide"}</p>
-      <p>Recommended action: ${alert.action}</p>
-      <p>Time sensitivity: ${alert.timeSensitivity}</p>
-    </article>`).join("")}</section>`;
-}
-
-function renderAssistant() {
-  const prompts = [
-    "Should I irrigate today?",
-    "Which field needs attention?",
-    "Explain this recommendation",
-    "What changed since yesterday?",
-    "Create a water plan for this week",
-  ];
-  return `<section class="card">
-      <h2>Field Decision Assistant</h2>
-      <p>Ask Velia anything about your fields, irrigation, weather risk, or water planning.</p>
-      <div class="chips">${prompts.map((p) => `<button class="chip">${p}</button>`).join("")}</div>
-      <div class="conversation">
-        <p><strong>You:</strong> Which field needs attention?</p>
-        <p><strong>Velia:</strong> Based on current weather and your last logged irrigation, Field 2 is the priority today. I recommend checking soil conditions before irrigating because the confidence is moderate.</p>
-      </div>
-    </section>
-    ${voiceModule()}`;
-}
-
-function renderReports() {
-  return `<section class="card">
-    <h2>Reports</h2>
-    <p>Weekly water summary: ${reportSummary.periodLabel}</p>
-    <p>Recommended vs logged irrigation: ${reportSummary.recommendedMm} mm vs ${reportSummary.loggedMm} mm</p>
-    <p>Estimated water saved: placeholder (calculation pending verified baseline)</p>
-    <p>Field performance: ${reportSummary.fieldPerformanceSummary}</p>
-    <button class="action-btn" disabled>Export report (placeholder)</button>
-  </section>`;
-}
-
-function renderSettings() {
-  const environmentsHtml = state.runtimeEnvironments.length
-    ? `<ul>${state.runtimeEnvironments
-      .map(
-        (env) =>
-          `<li><strong>${env.label}</strong>: ${env.status} • farms ${env.farms} • zones ${env.zones}<br><span class="muted">${env.notes}</span></li>`,
-      )
-      .join("")}</ul>`
-    : `<p class="muted">${state.runtimeEnvironmentsError || "Runtime controller environments are unavailable from API."}</p>`;
-
-  return `<section class="card">
-    <h2>Settings</h2>
-    <p>Farm profile: ${mockFarm.name}, ${mockFarm.location}</p>
-    <label>Language
-      <select id="language-select">
-        <option value="en" ${language() === "en" ? "selected" : ""}>English</option>
-      </select>
-    </label>
-    <p>Units: Metric default (placeholder toggle)</p>
-    <p>Offline mode: Enabled with local queue fallback</p>
-    <p>Data sources: Manual, Weather, Sensor, Controller</p>
-    <p>Integrations: ${integrationRegistry.list().map((item) => item.name).join(", ")}</p>
-    <h3>Runtime integration status</h3>
-    ${environmentsHtml}
-    <p>Team members: ${mockUser.name} (${mockUser.role})</p>
-    <p>Notification preferences: reminder-ready structure placeholder</p>
-  </section>`;
-}
-
-function bindGeneralActions() {
-  app.querySelectorAll("[data-quick]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const type = button.dataset.quick;
-      const fieldId = button.dataset.field || state.selectedFieldId;
-      if (type === "note") {
-        const note = { id: `n-${Date.now()}`, fieldId, text: "Quick note placeholder captured.", createdAt: new Date().toISOString(), source: "manual", synced: navigator.onLine };
-        notes.unshift(note);
-        if (!navigator.onLine) syncService.enqueue({ kind: "field_note", payload: note });
-      }
-      if (type === "irrigation") {
-        const log = { id: `log-${Date.now()}`, fieldId, amountMm: 8, durationMin: 35, method: getFieldById(fieldId)?.irrigationMethod || "manual", performedAt: new Date().toISOString(), source: "manual" };
-        irrigationLogs.unshift(log);
-        if (!navigator.onLine) syncService.enqueue({ kind: "irrigation_log", payload: log });
-      }
-      render();
-    });
-  });
-
-  const languageSelect = document.getElementById("language-select");
-  if (languageSelect) {
-    languageSelect.addEventListener("change", (event) => {
-      setLanguage(event.target.value);
-      storageService.set("lang", event.target.value);
-      render();
-    });
-  }
-}
-
-function bindVoiceButtons() {
-  app.querySelectorAll("[data-voice-start]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const fieldId = button.dataset.voiceStart;
-      if (!state.voiceListening) {
-        state.voiceSession = voiceAgent.startListening(language(), fieldId);
-        state.voiceListening = true;
-      } else {
-        state.voiceSession = voiceAgent.stopListening(state.voiceSession);
-        state.voiceTranscript = voiceAgent.transcribe(state.voiceSession);
-        const command = voiceAgent.detectIntent(state.voiceTranscript);
-        const action = voiceAgent.executeVoiceAction(command, { fieldId, transcript: state.voiceTranscript });
-
-        if (!navigator.onLine) {
-          voiceAgent.saveOfflineVoiceAction(action);
-          state.voiceResponse = t("gracefulOffline");
-        } else {
-          const field = getFieldById(fieldId);
-          const rec = recommendationFor(fieldId);
-          state.voiceResponse = voiceAgent.composeResponse({ recommendation: { ...rec, fieldName: field?.name }, command: action, offline: false });
-        }
-        state.voiceListening = false;
-      }
-      render();
-    });
-  });
-
-  app.querySelectorAll("[data-voice-save-note]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const fieldId = button.dataset.voiceSaveNote;
-      if (!state.voiceTranscript?.text) return;
-      const note = { id: `n-${Date.now()}`, fieldId, text: state.voiceTranscript.text, createdAt: new Date().toISOString(), source: "voice", synced: navigator.onLine };
-      notes.unshift(note);
-      if (!navigator.onLine) syncService.enqueue({ kind: "field_note", payload: note });
-      render();
-    });
-  });
-
-  app.querySelectorAll("[data-voice-speak]").forEach((button) => {
-    button.addEventListener("click", () => {
-      if (!state.voiceResponse) return;
-      state.voiceResponse = voiceAgent.speakResponse({ text: state.voiceResponse }).text;
-      render();
-    });
-  });
-}
-
-function routeContent() {
-  if (state.route === "today") return renderToday();
-  if (state.route === "fields") return renderFields();
-  if (state.route === "alerts") return renderAlerts();
-  if (state.route === "assistant") return renderAssistant();
-  if (state.route === "reports") return renderReports();
-  if (state.route === "settings") return renderSettings();
-  return renderToday();
+function guardedRoute(route) {
+  const role = state.session?.user?.role;
+  if (route === "integrations" && !can(role, "manage:integrations")) return false;
+  if (route === "audit_logs" && !can(role, "view:audit")) return false;
+  return true;
 }
 
 function render() {
-  renderLayout(routeContent());
-  bindGeneralActions();
-}
-
-async function bootstrap() {
-  const storedLanguage = storageService.get("lang", "en");
-  setLanguage(storedLanguage);
-  const environments = await apiClient.getControllerEnvironments();
-  if (environments.ok) {
-    state.runtimeEnvironments = environments.data?.environments || [];
-    state.runtimeEnvironmentsError = "";
-  } else {
-    state.runtimeEnvironments = [];
-    state.runtimeEnvironmentsError = environments.error || "Unable to fetch runtime environments.";
+  if (!state.session) {
+    app.innerHTML = loginView(state);
+    bindEvents();
+    return;
   }
-  window.addEventListener("online", async () => {
-    await syncService.syncQueuedActions();
-    const response = await apiClient.getControllerEnvironments();
-    if (response.ok) {
-      state.runtimeEnvironments = response.data?.environments || [];
-      state.runtimeEnvironmentsError = "";
-    }
-    render();
-  });
-  window.addEventListener("offline", render);
-  window.addEventListener("hashchange", render);
-  render();
+  app.innerHTML = shellHtml(state, routeView());
+  bindEvents();
 }
 
-bootstrap();
+function clearBanners() {
+  state.app.error = "";
+  state.app.success = "";
+}
+
+function bindForms() {
+  const loginForm = app.querySelector("form[data-form='login']");
+  if (loginForm) {
+    loginForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      clearBanners();
+      const formData = new FormData(loginForm);
+      const result = authService.login({
+        email: formData.get("email"),
+        password: formData.get("password"),
+        remember: formData.get("remember") === "on",
+      });
+      if (!result.ok) {
+        state.authUi.message = result.error;
+      } else {
+        state.session = result.session;
+        state.authUi.message = "";
+        addAuditLog(state, "login", state.session.user.name, "Enterprise session established");
+      }
+      render();
+    });
+  }
+
+  const forgotForm = app.querySelector("form[data-form='forgot']");
+  if (forgotForm) {
+    forgotForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const formData = new FormData(forgotForm);
+      const result = authService.requestPasswordReset(formData.get("email"));
+      state.authUi.message = result.ok ? result.message : result.error;
+      render();
+    });
+  }
+
+  const resetForm = app.querySelector("form[data-form='reset']");
+  if (resetForm) {
+    resetForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const formData = new FormData(resetForm);
+      const result = authService.completePasswordReset({ token: formData.get("token"), password: formData.get("password") });
+      state.authUi.message = result.ok ? result.message : result.error;
+      render();
+    });
+  }
+
+  const verificationForm = app.querySelector("form[data-form='verification']");
+  if (verificationForm) {
+    verificationForm.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const formData = new FormData(verificationForm);
+      const recommendationId = state.app.selectedRecommendationId;
+      const recommendation = state.app.recommendations.find((r) => r.id === recommendationId);
+      const stage = formData.get("stage");
+
+      recommendation.status = stage;
+      state.app.verificationLogs.unshift({
+        id: `v_${Math.random().toString(36).slice(2, 8)}`,
+        recommendationId,
+        zoneId: recommendation.zoneId,
+        stage,
+        by: state.session.user.name,
+        at: new Date().toISOString(),
+        changed: formData.get("note"),
+        outcome: formData.get("outcome"),
+        note: formData.get("note"),
+      });
+      addAuditLog(state, "verification_submission", state.session.user.name, `Recommendation ${recommendationId} moved to ${stage}`);
+      state.app.success = "Verification event recorded.";
+      render();
+    });
+  }
+}
+
+function bindEvents() {
+  bindForms();
+
+  app.querySelectorAll("[data-action='auth-mode']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.authUi.mode = button.dataset.mode;
+      state.authUi.message = "";
+      render();
+    });
+  });
+
+  app.querySelectorAll("[data-route]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const route = button.dataset.route;
+      if (!guardedRoute(route)) {
+        state.app.error = "Your role does not have access to this module.";
+        render();
+        return;
+      }
+      clearBanners();
+      state.app.route = route;
+      render();
+    });
+  });
+
+  app.querySelectorAll("[data-select='organization']").forEach((select) => {
+    select.addEventListener("change", () => {
+      state.app.organizationId = select.value;
+      const firstFarm = state.app.farms.find((f) => f.organizationId === select.value);
+      if (firstFarm) state.app.farmId = firstFarm.id;
+      clearBanners();
+      render();
+    });
+  });
+
+  app.querySelectorAll("[data-select='farm']").forEach((select) => {
+    select.addEventListener("change", () => {
+      state.app.farmId = select.value;
+      clearBanners();
+      render();
+    });
+  });
+
+  app.querySelectorAll("[data-filter]").forEach((select) => {
+    select.addEventListener("change", () => {
+      state.filters[select.dataset.filter] = select.value;
+      render();
+    });
+  });
+
+  app.querySelectorAll("[data-action='set-farm']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.app.farmId = button.dataset.farm;
+      state.app.route = "command_center";
+      render();
+    });
+  });
+
+  app.querySelectorAll("[data-action='select-recommendation']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.app.selectedRecommendationId = button.dataset.rec;
+      render();
+    });
+  });
+
+  app.querySelectorAll("[data-action='provider-select']").forEach((select) => {
+    select.addEventListener("change", () => {
+      state.app.integrationsSetup = integrationSetupService.setProvider(state.app.integrationsSetup, select.value);
+      render();
+    });
+  });
+
+  app.querySelectorAll("[data-action='provider-state']").forEach((select) => {
+    select.value = state.app.integrationsSetup.state;
+    select.addEventListener("change", () => {
+      state.app.integrationsSetup = integrationSetupService.setState(state.app.integrationsSetup, select.value);
+      state.app.success = `Provider state updated: ${select.value}.`;
+      addAuditLog(state, "provider_connection", state.session.user.name, `${state.app.integrationsSetup.provider} ${select.value}`);
+      render();
+    });
+  });
+
+  app.querySelectorAll("[data-action='integration-next']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.app.integrationsSetup = integrationSetupService.nextStep(state.app.integrationsSetup);
+      render();
+    });
+  });
+
+  app.querySelectorAll("[data-action='integration-prev']").forEach((button) => {
+    button.addEventListener("click", () => {
+      state.app.integrationsSetup = integrationSetupService.previousStep(state.app.integrationsSetup);
+      render();
+    });
+  });
+
+  app.querySelectorAll("[data-action='launch-demo']").forEach((button) => {
+    button.addEventListener("click", () => {
+      clearBanners();
+      state.app.success = "Demo Organization activated in isolated tenant mode.";
+      state.app.organizationId = "org_demo";
+      state.app.farmId = "farm_alpha";
+      state.app.zoneId = "zone_162803";
+      state.app.route = "command_center";
+      render();
+    });
+  });
+
+  app.querySelectorAll("[data-action='logout']").forEach((button) => {
+    button.addEventListener("click", () => {
+      addAuditLog(state, "logout", state.session.user.name, "Session terminated");
+      authService.logout();
+      state.session = null;
+      state.authUi.mode = "login";
+      state.authUi.message = "Session closed.";
+      render();
+    });
+  });
+}
+
+window.addEventListener("online", () => {
+  state.app.success = "Connectivity restored. Live synchronization resumed.";
+  render();
+});
+
+window.addEventListener("offline", () => {
+  state.app.error = "Connection lost. Working in protected offline mode.";
+  render();
+});
+
+setInterval(() => {
+  if (state.session?.expiresAt && Date.now() > state.session.expiresAt) {
+    authService.logout();
+    state.session = null;
+    state.authUi.mode = "login";
+    state.authUi.message = "Session expired. Sign in again to continue.";
+    render();
+  }
+}, 15000);
+
+render();

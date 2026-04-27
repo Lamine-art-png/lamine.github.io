@@ -1,13 +1,18 @@
-export const supportedLanguages = ["en", "fr", "es", "wo", "ar", "hi", "pt"];
+export const supportedLanguages = ["en"];
 
 export const translations = {
   en: {
-    appName: "Velia",
-    framing: "Velia helps farms make better water decisions, act faster, and understand what happened across their fields.",
-    nav: { today: "Today", fields: "Fields", alerts: "Alerts", assistant: "Assistant", reports: "Reports", settings: "Settings" },
-    syncPending: "Will sync when connected",
-    offlineSaved: "Offline voice note saved",
-    gracefulOffline: "I saved your request. I will update it when connection returns.",
-    voicePrompt: "Ask Velia about irrigation, weather risk, or field actions.",
+    appName: "AGRO-AI Portal v2",
+    framing: "Multi-tenant irrigation intelligence operations platform.",
+    nav: {
+      command_center: "Command Center",
+      farms: "Farms",
+      intelligence: "Intelligence",
+      verification: "Verification",
+      reports: "Reports",
+      integrations: "Integrations",
+      settings: "Settings",
+      audit_logs: "Audit Logs",
+    },
   },
 };
