@@ -17,6 +17,11 @@ test('weather service mock output shape', async () => {
   assert.ok(weather.lastUpdated);
 });
 
+test('weather provider adapter structure is exposed', () => {
+  const providers = weatherService.listProviders();
+  assert.ok(providers.includes('mock'));
+});
+
 test('offline cached weather behavior', async () => {
   await weatherService.getWeather({ location:'Dakar', forceRefresh:true });
   Object.defineProperty(global, 'navigator', { value: { onLine: false }, configurable: true });
