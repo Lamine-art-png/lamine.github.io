@@ -1,19 +1,18 @@
-export const supportedLanguages = ["en", "fr", "es", "wo", "ar", "hi", "pt"];
+export const supportedLanguages = ["en"];
 
 export const translations = {
   en: {
-    appName: "AGRO-AI Water Command Center",
-    framing: "Enterprise irrigation operations across command, intelligence, execution, and verification.",
+    appName: "AGRO-AI Portal v2",
+    framing: "Multi-tenant irrigation intelligence operations platform.",
     nav: {
       command_center: "Command Center",
+      farms: "Farms",
       intelligence: "Intelligence",
       verification: "Verification",
       reports: "Reports",
       integrations: "Integrations",
+      settings: "Settings",
+      audit_logs: "Audit Logs",
     },
-    syncPending: "Will sync when connected",
-    offlineSaved: "Offline note saved",
-    gracefulOffline: "Your update is saved and will sync automatically when connection is restored.",
-    voicePrompt: "Ask AGRO-AI about recommendation confidence, telemetry context, and verification priorities.",
   },
 };

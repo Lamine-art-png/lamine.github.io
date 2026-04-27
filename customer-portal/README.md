@@ -1,43 +1,57 @@
-# AGRO-AI Portal — Water Command Center
+# AGRO-AI Portal v2
 
-The customer portal is positioned as an enterprise **AGRO-AI Water Command Center** for day-to-day irrigation operations.
+Production-oriented multi-tenant enterprise irrigation intelligence workspace.
 
-## Product navigation
-- Command Center
-- Intelligence
-- Verification
-- Reports
-- Integrations
+## Architecture
 
-## Screen purpose
-- **Command Center:** operational landing view with selected farm, selected zone/block, live source, today’s decision, confidence, data quality, reason, action, next verification step, and watch item.
-- **Intelligence:** recommendation details including timing, duration/depth, confidence, quality, drivers, missing data, live/manual input trace, explanation, execution task, and verification plan.
-- **Verification:** explicit lifecycle chain — Recommended, Scheduled, Applied, Observed — with polished empty-state language.
-- **Reports:** professional report cards with rollout-safe messaging while generation is coming online.
-- **Integrations:** WiseConn and Talgil integration cards with status, connection state, farms/targets, zones/sensors, last check, and current limitation.
+```text
+customer-portal/js/
+  app.js                      # Bootstrap, event bus, auth guards, route orchestration
+  apiClient.js                # Existing live API client (preserved)
+  v2/
+    auth/
+      authService.js          # login/logout/reset scaffolds + session restore
+      sessionService.js       # persisted session + expiry checks
+      rbac.js                 # role-to-permission mapping
+    routes/
+      router.js               # route registry + route normalization
+    state/
+      store.js                # tenant/app state + seeded operational data
+    services/
+      auditService.js         # audit event writer
+      integrationSetupService.js # provider setup workflow state machine
+      intelligenceOpsService.js  # queue/timeline filters
+    components/
+      shell.js                # enterprise shell layout + selectors/header
+    views/
+      loginView.js            # login/forgot/reset views
+      appViews.js             # command center, farms, intelligence, verification, reports, integrations, settings, audit
+    data/
+      demoTenant.js           # demo organization/farms/zones/recommendations/logs
+```
 
-## Runtime truth reflected in UI
-- WiseConn runtime is live.
-- Talgil runtime is live.
-- Manual Intelligence Engine flow is live.
-- Input normalization and live context routes are live.
+## Product capabilities implemented
 
-## UX direction
-- Premium agriculture technology visual language.
-- Readable large cards and strong information hierarchy.
-- Green/white/deep forest palette with soft neutrals.
-- Responsive desktop/tablet/mobile layouts.
-- No debug-oriented controls or raw JSON output in customer-facing screens.
+- Enterprise authentication scaffold (email/password, remember me, forgot/reset scaffolds, logout, session expiry handling).
+- Multi-tenant model and seeded relationships: Organization → Farm → Field → Zone → Recommendation → Verification Log.
+- Role-aware UI guardrails for `owner`, `admin`, `farm_manager`, `operator`, `advisor`, `viewer`.
+- Provider setup workflow with 5-step onboarding and connection states (`connected`, `syncing`, `error`, `disconnected`).
+- Farm Explorer with table-first hierarchy and zone operational status.
+- Intelligence Operations Center with queue, filters, detail pane, and recommendation timeline.
+- Verification chain with stage progression and manual verification submission.
+- Embedded isolated Demo Organization and “Launch Demo Environment” action.
+- Reporting center with weekly/monthly/quarterly views and PDF/CSV export scaffolds.
+- Enterprise shell including organization/farm selectors, notifications, profile, and audit logs.
 
-## Local run
+## API compatibility
+
+Existing live `apiClient` contract is preserved. The v2 app scaffolds enterprise workflows without breaking current intelligence endpoints.
+
+## Run locally
+
 ```bash
 cd customer-portal
 python -m http.server 4173
 ```
 
-Open: `http://localhost:4173`
-
-## Portal URL note
-- Temporary URL: `https://app.agroai-pilot.com`
-- `app.agroai-pilot.com` currently has a hosting conflict with Velia and must be corrected later.
-- This PR intentionally does not modify hosting, DNS, Cloudflare, Railway, or secrets.
+Open `http://localhost:4173`.
