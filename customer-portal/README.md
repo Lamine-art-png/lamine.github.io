@@ -1,53 +1,87 @@
-# AGRO-AI Portal v2
+# AGRO-AI Enterprise Customer Portal
 
-Production-oriented multi-tenant enterprise irrigation intelligence workspace.
+The customer portal is a static-compatible Enterprise Demo and Customer Portal for AGRO-AI. It is designed for customer demos, investor demos, and integration partner demos at `https://app.agroai-pilot.com` while keeping production data and demo data clearly separated.
 
-## Architecture
+## Portal purpose
 
-```text
-customer-portal/js/
-  app.js                      # Bootstrap, event bus, auth guards, route orchestration
-  apiClient.js                # Existing live API client (preserved)
-  v2/
-    auth/
-      authService.js          # login/logout/reset scaffolds + session restore
-      sessionService.js       # persisted session + expiry checks
-      rbac.js                 # role-to-permission mapping
-    routes/
-      router.js               # route registry + route normalization
-    state/
-      store.js                # tenant/app state + seeded operational data
-    services/
-      auditService.js         # audit event writer
-      integrationSetupService.js # provider setup workflow state machine
-      intelligenceOpsService.js  # queue/timeline filters
-    components/
-      shell.js                # enterprise shell layout + selectors/header
-    views/
-      loginView.js            # login/forgot/reset views
-      appViews.js             # command center, farms, intelligence, verification, reports, integrations, settings, audit
-    data/
-      demoTenant.js           # demo organization/farms/zones/recommendations/logs
-```
+The portal demonstrates AGRO-AI's full irrigation operating chain:
 
-## Product capabilities implemented
+1. Connect controller environments.
+2. Assemble normalized live context.
+3. Generate water recommendations.
+4. Show execution tasks and schedule status.
+5. Track applied controller events and field observations.
+6. Verify outcomes and prepare executive reporting.
 
-- Enterprise authentication scaffold (email/password, remember me, forgot/reset scaffolds, logout, session expiry handling).
-- Multi-tenant model and seeded relationships: Organization → Farm → Field → Zone → Recommendation → Verification Log.
-- Role-aware UI guardrails for `owner`, `admin`, `farm_manager`, `operator`, `advisor`, `viewer`.
-- Provider setup workflow with 5-step onboarding and connection states (`connected`, `syncing`, `error`, `disconnected`).
-- Farm Explorer with table-first hierarchy and zone operational status.
-- Intelligence Operations Center with queue, filters, detail pane, and recommendation timeline.
-- Verification chain with stage progression and manual verification submission.
-- Embedded isolated Demo Organization and “Launch Demo Environment” action.
-- Reporting center with weekly/monthly/quarterly views and PDF/CSV export scaffolds.
-- Enterprise shell including organization/farm selectors, notifications, profile, and audit logs.
+## Demo mode
 
-## API compatibility
+The **Launch Demo Environment** path opens the isolated `AGRO-AI Demo Workspace` without credentials. Demo data is embedded in `customer-portal/js/demoData.js` and is clearly marked as demo data in the UI.
 
-Existing live `apiClient` contract is preserved. The v2 app scaffolds enterprise workflows without breaking current intelligence endpoints.
+Demo mode includes:
 
-## Run locally
+- Demo farms: Alpha Vineyard, Delta Almonds, and West Citrus.
+- Demo zones: Block A North, Block B South, Pump Zone 3, and Citrus East Line.
+- Demo providers: WiseConn demo connection and Talgil demo connection.
+- Demo recommendations, confidence, data quality, scheduled/applied/observed/verified states, warnings, report placeholders, and audit events.
+
+## Live mode
+
+The **Customer Login** path is an auth-ready scaffold for a future backend identity flow. It does not claim production authentication. After entry, live mode loads available runtime information from `https://api.agroai-pilot.com`.
+
+Live mode currently uses:
+
+- `GET /v1/wiseconn/auth`
+- `GET /v1/wiseconn/farms`
+- `GET /v1/wiseconn/farms/{farm_id}/zones`
+- `GET /v1/wiseconn/zones/{zone_id}/irrigations`
+- `GET /v1/decisioning/blocks/{block_id}/water-state`
+- `GET /v1/decisioning/blocks/{block_id}/water-state/history`
+- `GET /v1/execution/blocks/{block_id}/decisions`
+- `GET /v1/execution/blocks/{block_id}/verifications`
+- `POST /v1/intelligence/recommend/live/wiseconn/162803`
+- `GET /v1/integrations/talgil/status`
+- `GET /v1/integrations/talgil/sensors/latest`
+- `GET /v1/integrations/talgil/audit`
+- `GET /v1/reports/roi` when enabled by the deployed API
+
+Live recommendations support optional in-memory overrides for crop type, soil type, irrigation method, ETo, rain forecast, and field observation. Overrides are not stored in browser localStorage.
+
+## Integration onboarding flow
+
+The Integrations screen presents a backend-ready provider activation flow:
+
+1. Select provider.
+2. Enter credentials or API key.
+3. Test connection.
+4. Sync farms/controllers.
+5. Activate intelligence.
+
+Provider credential submission intentionally requires secure backend credential endpoints. The static portal does not store real provider secrets in browser localStorage.
+
+## What is real today
+
+- API base: `https://api.agroai-pilot.com`
+- Portal domain: `https://app.agroai-pilot.com`
+- WiseConn runtime is live.
+- Talgil runtime is live.
+- Intelligence Engine is live.
+- Input normalization is live.
+- Live context endpoints are live.
+- Live WiseConn recommendation is supported for zone `162803`.
+
+## What is simulated demo data
+
+Embedded demo farms, demo zones, demo recommendations, demo report previews, demo audit events, and demo provider cards are simulated and clearly labeled as demo data. They are not mixed with live production telemetry.
+
+## What still requires backend auth or credential storage
+
+- Production customer authentication.
+- Organization selector population after login.
+- User and role administration.
+- Secure provider credential storage and rotation.
+- Production report generation workflows where not yet enabled by the deployed API.
+
+## Local preview
 
 ```bash
 cd customer-portal
@@ -55,3 +89,10 @@ python -m http.server 4173
 ```
 
 Open `http://localhost:4173`.
+
+## Static deploy note (`app.agroai-pilot.com`)
+
+1. Deploy `customer-portal/` as static files.
+2. Point `app.agroai-pilot.com` to that static host through normal infrastructure change control.
+3. Keep API base set to `https://api.agroai-pilot.com` for production.
+4. Do not alter Railway secrets, DNS, Cloudflare settings, or infrastructure outside explicit change control.

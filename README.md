@@ -11,10 +11,11 @@ This is a drop-in starter to make a **limited pilot** reproducible:
 > Assumptions: AWS account in `us-west-1` (N. California), OIDC to GitHub, Dockerized API (e.g., FastAPI).
 
 
-## Product Links
-- **AGRO-AI Portal — Water Command Center:** https://app.agroai-pilot.com
+## AGRO-AI Water Command Center
 
-> Hosting note: `app.agroai-pilot.com` currently has a hosting conflict with Velia and must be corrected later. This PR/repository change is code-level only and does not modify hosting infrastructure.
+- **AGRO-AI Portal:** https://app.agroai-pilot.com
+- **AGRO-AI API:** https://api.agroai-pilot.com
+- **Water Command Center:** Enterprise customer portal for connected controller environments, live context assembly, irrigation recommendations, execution tracking, verification, integrations, reports, audit log, and administration placeholders.
 
 ## Quickstart
 ```bash
