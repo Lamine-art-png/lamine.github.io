@@ -10,6 +10,13 @@ This is a drop-in starter to make a **limited pilot** reproducible:
 
 > Assumptions: AWS account in `us-west-1` (N. California), OIDC to GitHub, Dockerized API (e.g., FastAPI).
 
+
+## AGRO-AI Water Command Center
+
+- **AGRO-AI Portal:** https://app.agroai-pilot.com
+- **AGRO-AI API:** https://api.agroai-pilot.com
+- **Water Command Center:** Enterprise customer portal for connected controller environments, live context assembly, irrigation recommendations, execution tracking, verification, integrations, reports, audit log, and administration placeholders.
+
 ## Quickstart
 ```bash
 make tfinit
