@@ -1,8 +1,10 @@
 """Adapter registry for managing provider adapters."""
 from typing import Dict, Optional
+
 from app.adapters.base import ControllerAdapter, DataProviderAdapter
-from app.adapters.wiseconn import WiseConnAdapter
 from app.adapters.rainbird import RainBirdAdapter
+from app.adapters.talgil import TalgilAdapter
+from app.adapters.wiseconn import WiseConnAdapter
 from app.core.config import settings
 
 
@@ -23,6 +25,15 @@ class AdapterRegistry:
         )
         cls._adapters["wiseconn"] = wiseconn
         cls._data_adapters["wiseconn"] = wiseconn
+
+        talgil = TalgilAdapter(
+            api_url=settings.TALGIL_API_URL,
+            api_key=settings.TALGIL_API_KEY,
+            timeout=settings.TALGIL_TIMEOUT_SECONDS,
+            max_retries=settings.TALGIL_MAX_RETRIES,
+        )
+        cls._adapters["talgil"] = talgil
+        cls._data_adapters["talgil"] = talgil
 
         cls._adapters["rainbird"] = RainBirdAdapter(settings.RAINBIRD_API_URL)
 
@@ -46,6 +57,13 @@ class AdapterRegistry:
         if not cls._adapters:
             cls.initialize()
         return cls._adapters["wiseconn"]  # type: ignore
+
+    @classmethod
+    def get_talgil(cls) -> TalgilAdapter:
+        """Convenience: get the Talgil adapter with full type."""
+        if not cls._adapters:
+            cls.initialize()
+        return cls._adapters["talgil"]  # type: ignore
 
 
 # Initialize on import

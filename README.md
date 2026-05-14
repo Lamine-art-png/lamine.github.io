@@ -30,3 +30,24 @@ make tfapply
 - `data/processed/evaluation.json`, `feature_importance.csv`, `bias_report.json`
 - `ops/runbooks/*.md` (export PDF)
 <!-- trigger deploy -->
+
+
+## Velia AI backend + mobile wiring
+
+- Backend app: `apps/velia-ai-api` (Express).
+- Mobile app: `apps/velia-mobile` now calls backend-first APIs with local fallback for weather, assistant responses, and voice interpretation.
+
+### Backend quick run
+
+```bash
+cd apps/velia-ai-api
+npm install
+npm run dev
+```
+
+### Backend tests
+
+```bash
+cd apps/velia-ai-api
+npm test
+```
