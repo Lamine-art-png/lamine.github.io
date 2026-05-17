@@ -22,26 +22,34 @@ export async function loadLiveSnapshot(api, state) {
   );
 
   const wiseConnZones = [...state.live.zonesByFarm.values()].flat().length;
+  const talgilTargets = talgilStatusRes.ok && talgilStatusRes.data?.integration ? 1 : 0;
+  const talgilSensors = talgilSensorsRes.ok ? asArray(talgilSensorsRes.data?.sensors || talgilSensorsRes.data).length : 0;
   state.live.integrations = [
     {
       id: "wiseconn-live",
       name: "WiseConn",
-      description: "Live WiseConn runtime used for farm, zone, irrigation, and recommendation context.",
-      status: authRes.ok && authRes.data?.authenticated ? "Live" : "Configured / auth status unavailable",
+      description: "Live WiseConn environment available for farm, zone, irrigation, and recommendation context.",
+      status: authRes.ok && authRes.data?.authenticated ? "Connected source live" : "Data source pending",
+      connectionHealth: authRes.ok ? "Live WiseConn environment available" : "Awaiting telemetry",
       farmsOrTargets: `${state.live.farms.length} farms`,
       zonesOrSensors: `${wiseConnZones} zones`,
+      reads: "Farms, zones, irrigation history, and live context",
+      generates: "Recommendations, execution tasks, and verification evidence",
       lastChecked: new Date().toISOString(),
-      limitation: authRes.ok ? "Live status returned by API; customer authentication is separate from controller runtime auth." : `Status check limited: ${authRes.error}`,
+      limitation: authRes.ok ? "Customer portal auth is separate from controller runtime auth." : "Data source pending while the runtime status check completes.",
     },
     {
       id: "talgil-live",
       name: "Talgil",
       description: "Live Talgil runtime status and sensor catalog endpoints when tenant context is configured.",
-      status: talgilStatusRes.ok ? "Live" : "Configured / tenant context required",
-      farmsOrTargets: talgilStatusRes.ok ? `${talgilStatusRes.data?.integration ? 1 : 0} targets` : "Tenant-scoped",
-      zonesOrSensors: talgilSensorsRes.ok ? `${asArray(talgilSensorsRes.data?.sensors || talgilSensorsRes.data).length} sensors` : "Sensor status unavailable",
+      status: talgilStatusRes.ok ? "Connected source live" : "Data source pending",
+      connectionHealth: talgilStatusRes.ok && talgilTargets === 0 ? "Talgil runtime is reachable. No production targets are currently selected for this workspace." : talgilStatusRes.ok ? "Connected source live" : "Awaiting telemetry",
+      farmsOrTargets: talgilStatusRes.ok ? `${talgilTargets} targets` : "No targets selected",
+      zonesOrSensors: talgilSensorsRes.ok ? `${talgilSensors} sensors` : "Awaiting telemetry",
+      reads: "Controller targets, sensor catalog, telemetry, and event context",
+      generates: "Normalized context for recommendations, reports, and verification workflows",
       lastChecked: new Date().toISOString(),
-      limitation: talgilStatusRes.ok ? "Runtime status is live; portal does not store provider credentials." : `Status check limited: ${talgilStatusRes.error}`,
+      limitation: talgilStatusRes.ok && talgilTargets === 0 ? "Talgil runtime is reachable. No production targets are currently selected for this workspace." : "Portal does not store provider credentials; secure backend credential endpoints are required.",
     },
   ];
 

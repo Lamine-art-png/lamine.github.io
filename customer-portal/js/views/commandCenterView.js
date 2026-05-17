@@ -1,16 +1,30 @@
 import { demoChain, demoFarms, demoRecommendation } from "../demoData.js";
 import { escapeHtml } from "../components/dom.js";
-import { metricCard, operatingChain, table, technicalTrace } from "../components/ui.js";
+import { metricCard, operatingChain, recommendationProofCard, table, technicalTrace } from "../components/ui.js";
 
 function liveChainFromState(state) {
   const now = state.live.recommendation ? new Date().toISOString() : "";
   return [
-    { label: "Recommended", status: state.live.recommendation ? "Complete" : "Pending", timestamp: now, owner: "AGRO-AI Intelligence Engine", evidence: state.live.recommendation ? "Live recommendation generated for WiseConn zone 162803." : "Generate live recommendation." },
+    { label: "Recommended", status: state.live.recommendation ? "Complete" : "Data source pending", timestamp: now, owner: "AGRO-AI Intelligence Engine", evidence: state.live.recommendation ? "Live recommendation generated for WiseConn zone 162803." : "Generate live recommendation." },
     { label: "Scheduled", status: "Awaiting schedule", timestamp: "", owner: "Irrigation Manager", evidence: "Awaiting schedule" },
     { label: "Applied", status: "Awaiting controller execution", timestamp: "", owner: "Controller Runtime", evidence: "Awaiting controller execution" },
     { label: "Observed", status: "Awaiting field observation", timestamp: "", owner: "Field Team", evidence: "Awaiting field observation" },
     { label: "Verified", status: "Verification pending", timestamp: "", owner: "AGRO-AI Verification", evidence: "Verification pending" },
   ];
+}
+
+function demoGuideCard() {
+  const steps = [
+    "Connected controller environments",
+    "Farm and zone context",
+    "Today’s water recommendation",
+    "Execution task",
+    "Verification chain",
+    "Reporting layer",
+  ];
+  return `<section class="panel-card demo-guide"><div class="section-heading"><p class="eyebrow">Demo Brief</p><h2>What this workspace is showing</h2><p>Use this guided narrative on customer, partner, and investor calls.</p></div><div class="demo-guide-grid">${steps
+    .map((step, index) => `<article><span>${index + 1}</span><p>${escapeHtml(step)}</p></article>`)
+    .join("")}</div></section>`;
 }
 
 export function renderCommandCenter(state) {
@@ -19,24 +33,28 @@ export function renderCommandCenter(state) {
   const liveZones = [...state.live.zonesByFarm.values()].flat();
   const recommendation = isDemo ? demoRecommendation : state.live.recommendation;
   const chain = isDemo ? demoChain : liveChainFromState(state);
-
   const decision = recommendation?.decision || recommendation?.water_decision || recommendation?.recommendation || "Generate a live recommendation to populate the decision card.";
-  const confidence = recommendation?.confidence || recommendation?.confidence_score || "—";
-  const dataQuality = recommendation?.dataQuality || recommendation?.data_quality || "Live context dependent";
-
+  const confidence = recommendation?.confidence || recommendation?.confidence_score || "Data source pending";
+  const dataQuality = recommendation?.dataQuality || recommendation?.data_quality || "Awaiting telemetry";
   const demoRows = zones.map((zone) => [zone.farm, zone.name, zone.controllerSource, zone.recommendation, zone.verificationStatus]);
   const liveRows = liveZones.slice(0, 8).map((zone) => ["Live WiseConn", zone.name || zone.id, "WiseConn", "Use Intelligence screen to generate", "Verification pending"]);
 
   return `<div class="screen-stack">
+    ${isDemo ? demoGuideCard() : ""}
     <section class="hero-panel">
       <div><p class="eyebrow">Water Command Center</p><h2>${escapeHtml(decision)}</h2><p>${escapeHtml(
-        isDemo ? demoRecommendation.sourceTraceSummary : "Live command view uses available WiseConn endpoints and the live intelligence endpoint for zone 162803."
+        isDemo ? "Demo workspace — simulated data clearly labeled for sales and partner walkthroughs." : "Live WiseConn environment available. Generate a live recommendation for zone 162803 from the Intelligence screen."
       )}</p></div>
       <div class="hero-metrics">${metricCard("Confidence", confidence)}${metricCard("Data quality", dataQuality)}${metricCard(
         "Controller source",
         isDemo ? "Mixed demo" : "Live WiseConn"
       )}</div>
     </section>
+    ${recommendationProofCard(recommendation || {}, {
+      label: isDemo ? "Today’s demo recommendation" : "Live recommendation proof",
+      modeBadge: isDemo ? "Demo data" : state.live.recommendation ? "Live API output" : "Data source pending",
+      badgeTone: isDemo ? "warning" : state.live.recommendation ? "success" : "neutral",
+    })}
     ${operatingChain(chain)}
     <section class="panel-card"><div class="section-heading"><p class="eyebrow">Workspace Activity</p><h2>${isDemo ? "Demo tenant operating view" : "Live WiseConn operating view"}</h2></div>${table(
       ["Farm", "Zone", "Controller", "Latest recommendation", "Verification"],

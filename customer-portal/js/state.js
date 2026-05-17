@@ -12,6 +12,7 @@ export const state = {
     workspace: null,
     authNotice: "Customer login is an auth-ready scaffold until backend authentication and credential storage are enabled.",
     userEmail: "",
+    loginError: "",
   },
   activeView: "command-center",
   live: {
@@ -43,12 +44,18 @@ export function setActiveView(view) {
   notify();
 }
 
+export function setLoginError(message) {
+  state.session.loginError = message;
+  notify();
+}
+
 export function launchDemoSession() {
   state.session = {
     mode: SESSION_MODES.DEMO,
     workspace: demoWorkspace,
     authNotice: "Demo data is embedded and isolated from live production API data.",
     userEmail: "demo@agroai.local",
+    loginError: "",
   };
   state.activeView = "command-center";
   notify();
@@ -66,6 +73,7 @@ export function startLoginScaffold(email) {
     },
     authNotice: "Authentication UI is ready, but production authentication and organization selection require backend auth endpoints.",
     userEmail: email || "customer@example.com",
+    loginError: "",
   };
   state.activeView = "command-center";
   notify();

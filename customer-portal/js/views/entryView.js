@@ -1,41 +1,51 @@
-export function renderEntryView() {
-  return `<main class="entry-screen">
-    <section class="entry-brand">
+import { escapeHtml } from "../components/dom.js";
+
+export function renderEntryView(state) {
+  const error = state.session.loginError;
+  return `<main class="entry-screen entry-premium">
+    <section class="entry-brand value-panel">
       <img src="./assets/agro-ai-logo.png" alt="AGRO-AI" class="entry-logo" />
-      <p class="eyebrow">AGRO-AI Enterprise</p>
-      <h1>Water Command Center for connected irrigation environments.</h1>
-      <p class="entry-copy">Connect controller runtimes, assemble live field context, generate irrigation recommendations, schedule execution tasks, and verify what happened.</p>
-      <div class="truth-stack">
-        <span>WiseConn runtime live</span>
-        <span>Talgil runtime live</span>
-        <span>Intelligence Engine live</span>
-        <span>Input normalization live</span>
+      <p class="eyebrow">AGRO-AI Water Command Center</p>
+      <h1>Recommendation, execution, and verification for connected irrigation environments.</h1>
+      <p class="entry-copy">A customer-facing operations layer for controller environments, live field context, irrigation decisions, planned-vs-applied verification, and executive reporting.</p>
+      <div class="proof-point-grid" aria-label="Portal proof points">
+        <span>WiseConn environment support</span>
+        <span>Talgil environment support</span>
+        <span>Live context intelligence</span>
+        <span>Planned vs applied verification</span>
+        <span>Executive reporting</span>
       </div>
+      <p class="auth-safe-note">Customer authentication is prepared as an enterprise access surface. Production sign-in requires backend identity endpoints.</p>
     </section>
 
-    <section class="entry-actions">
-      <article class="login-card">
-        <p class="eyebrow">Customer Login</p>
-        <h2>Enterprise sign-in</h2>
-        <p class="muted">Auth-ready scaffold. Production authentication and organization selection require backend auth endpoints before customer credentials are accepted.</p>
-        <form id="login-form" class="form-stack">
+    <section class="entry-actions access-panel">
+      <article class="login-card customer-access-card">
+        <p class="eyebrow">Customer Access</p>
+        <h2>Access your workspace</h2>
+        <p class="muted">Use organization-issued credentials when production authentication is enabled. Demo access is available immediately below.</p>
+        <form id="login-form" class="form-stack" novalidate>
           <label>Email<input id="login-email" name="email" type="email" autocomplete="email" placeholder="you@organization.com" required /></label>
           <label>Password<input name="password" type="password" autocomplete="current-password" placeholder="Password" required /></label>
-          <a href="#" class="text-link">Forgot password?</a>
-          <button class="button primary" type="submit">Continue to organization selector</button>
+          <div class="form-row">
+            <label class="checkbox-label"><input name="remember" type="checkbox" /> Remember session</label>
+            <a href="#" class="text-link">Forgot password?</a>
+          </div>
+          <button class="button primary" type="submit">Continue to workspace</button>
+          <p id="login-error" class="form-error ${error ? "" : "hidden"}" role="alert">${escapeHtml(error)}</p>
+          ${error ? '<button id="live-status-preview" class="button secondary" type="button">Open live environment status preview</button>' : ''}
         </form>
         <div class="org-placeholder">
-          <strong>Organization selector placeholder</strong>
-          <span>Enabled after backend authentication returns customer organizations.</span>
+          <strong>Workspace access</strong>
+          <span>Organization selection appears here after backend authentication verifies the user.</span>
         </div>
       </article>
 
-      <article class="demo-card">
-        <p class="eyebrow">Demo Environment</p>
-        <h2>Launch AGRO-AI Demo Workspace</h2>
-        <p>Open an isolated, credential-free demo tenant with embedded demo farms, controller environments, recommendations, execution tasks, verification states, reports, and audit events.</p>
-        <button id="launch-demo" class="button primary wide" type="button">Launch Demo Environment</button>
-        <p class="demo-disclaimer">Demo data is clearly marked and is not mixed with live production API telemetry.</p>
+      <article class="demo-card interactive-demo-card">
+        <p class="eyebrow">Interactive Demo</p>
+        <h2>Explore the AGRO-AI Demo Workspace</h2>
+        <p>Explore a simulated enterprise workspace with WiseConn and Talgil environments, recommendations, verification, and reports.</p>
+        <button id="launch-demo" class="button primary wide demo-launch" type="button">Launch AGRO-AI Demo Workspace</button>
+        <p class="demo-disclaimer">One click. No demo credentials. Demo data is labeled after entering the workspace.</p>
       </article>
     </section>
   </main>`;

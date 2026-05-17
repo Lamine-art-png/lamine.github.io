@@ -11,9 +11,12 @@ export const demoProviders = [
     id: "wiseconn-demo",
     name: "WiseConn",
     description: "Demo connection representing live WiseConn runtime capabilities.",
-    status: "Live demo connection",
+    status: "Connected source live",
+    connectionHealth: "Demo connection healthy",
     farmsOrTargets: "2 farms",
     zonesOrSensors: "3 zones",
+    reads: "Farms, zones, irrigation events, controller context",
+    generates: "Water recommendations, execution tasks, planned-vs-applied verification",
     lastChecked: "2026-05-14T15:30:00Z",
     limitation: "Demo rows are embedded and clearly separated from live WiseConn API calls.",
   },
@@ -21,9 +24,12 @@ export const demoProviders = [
     id: "talgil-demo",
     name: "Talgil",
     description: "Demo connection representing configured Talgil controller environments.",
-    status: "Configured demo connection",
+    status: "Connected source live",
+    connectionHealth: "Demo runtime reachable",
     farmsOrTargets: "1 target",
     zonesOrSensors: "1 irrigation line + sensor catalog",
+    reads: "Controller targets, sensor catalog, telemetry status",
+    generates: "Normalized context for recommendations and verification workflows",
     lastChecked: "2026-05-14T15:24:00Z",
     limitation: "Talgil runtime health is surfaced separately when live status is available; demo records do not claim live telemetry.",
   },
@@ -138,11 +144,12 @@ export const demoChain = [
 ];
 
 export const demoReports = [
-  { name: "Daily Irrigation Intelligence Report", description: "Daily executive summary of water decisions, exceptions, and next actions.", status: "Template ready", coverage: "All demo farms", lastGenerated: "Demo preview", action: "Preview report" },
-  { name: "Water Use Summary", description: "Water use by farm, block, and controller environment.", status: "Report generation is coming online for this deployment.", coverage: "Demo + live-ready", lastGenerated: "", action: "View status" },
-  { name: "Verification Compliance Report", description: "Tracks recommendations through scheduling, application, observation, and verification.", status: "Template ready", coverage: "Decision chain", lastGenerated: "Demo preview", action: "Preview report" },
-  { name: "Recommendation Confidence Report", description: "Confidence trends, data quality, missing inputs, and override impact.", status: "Template ready", coverage: "Intelligence runs", lastGenerated: "Demo preview", action: "Preview report" },
-  { name: "Integration Health Report", description: "Controller environment status, recent syncs, and integration limitations.", status: "Live status dependent", coverage: "WiseConn + Talgil", lastGenerated: "", action: "Check health" },
+  { name: "Irrigation Intelligence Report", purpose: "Daily decision narrative with recommendations, risks, and next actions.", status: "Demo preview available", coverage: "All demo farms", lastGenerated: "Demo preview", action: "Preview report" },
+  { name: "Planned vs Applied Report", purpose: "Compares scheduled tasks against controller-applied evidence.", status: "Demo preview available", coverage: "Operating chain", lastGenerated: "Demo preview", action: "Preview report" },
+  { name: "Water Efficiency Summary", purpose: "Summarizes water use by farm, block, and controller environment.", status: "Report generation is coming online for this deployment.", coverage: "Demo + live-ready", lastGenerated: "", action: "View readiness" },
+  { name: "Verification Compliance Report", purpose: "Shows which recommendations were scheduled, applied, observed, and verified.", status: "Demo preview available", coverage: "Decision chain", lastGenerated: "Demo preview", action: "Preview report" },
+  { name: "Integration Health Report", purpose: "Reviews provider status, sync coverage, limitations, and telemetry freshness.", status: "Runtime status live", coverage: "WiseConn + Talgil", lastGenerated: "", action: "Check integrations" },
+  { name: "Executive ROI Summary", purpose: "Frames water, energy, cost, and operational value for executive stakeholders.", status: "Report generation is coming online for this deployment.", coverage: "Executive layer", lastGenerated: "", action: "View readiness" },
 ];
 
 export const demoAuditLog = [

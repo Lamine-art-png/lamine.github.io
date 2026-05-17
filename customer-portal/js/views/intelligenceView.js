@@ -1,6 +1,6 @@
-import { demoRecommendation } from "../demoData.js";
+import { demoChain, demoRecommendation } from "../demoData.js";
 import { escapeHtml, formatValue } from "../components/dom.js";
-import { badge, metricCard, technicalTrace } from "../components/ui.js";
+import { badge, operatingChain, recommendationProofCard, technicalTrace } from "../components/ui.js";
 
 function extractRecommendation(result, isDemo) {
   if (isDemo) return demoRecommendation;
@@ -10,7 +10,7 @@ function extractRecommendation(result, isDemo) {
     timing: result.timing || result.start_time || result.recommended_start || "See source trace",
     duration: result.duration || result.duration_minutes || result.duration_min || result.irrigation_minutes || "See recommendation details",
     depth: result.depth || result.depth_mm || result.recommended_depth_mm || "See recommendation details",
-    confidence: result.confidence || result.confidence_score || "—",
+    confidence: result.confidence || result.confidence_score || "Data source pending",
     dataQuality: result.data_quality || result.dataQuality || "Live context dependent",
     keyDrivers: result.key_drivers || result.drivers || result.reasons || [],
     sourceTraceSummary: result.source_trace_summary || result.trace_summary || "Live recommendation assembled by AGRO-AI Intelligence Engine.",
@@ -18,36 +18,33 @@ function extractRecommendation(result, isDemo) {
     manualOverridesUsed: result.manual_overrides_used || result.overrides_used || [],
     missingInputs: result.missing_inputs || result.warnings || [],
     executionTask: result.execution_task || result.task || "Schedule review required before controller execution.",
-    verificationPlan: result.verification_plan || "Verify controller-applied event and request field observation.",
+    verificationPlan: result.verification_plan || "Verification required after controller execution and field observation.",
   };
+}
+
+function liveChain(state) {
+  return [
+    { label: "Recommended", status: state.live.recommendation ? "Complete" : "Data source pending", timestamp: state.live.recommendation ? new Date().toISOString() : "", owner: "AGRO-AI Intelligence Engine", evidence: state.live.recommendation ? "Live recommendation generated from WiseConn context." : "Generate live recommendation." },
+    { label: "Scheduled", status: "Awaiting schedule", owner: "Irrigation Manager", evidence: "Awaiting schedule" },
+    { label: "Applied", status: "Awaiting controller execution", owner: "Controller Runtime", evidence: "Awaiting controller execution" },
+    { label: "Observed", status: "Awaiting field observation", owner: "Field Team", evidence: "Awaiting field observation" },
+    { label: "Verified", status: "Verification pending", owner: "AGRO-AI Verification", evidence: "Verification pending" },
+  ];
 }
 
 export function renderIntelligence(state) {
   const isDemo = state.session.mode === "demo";
   const rec = extractRecommendation(state.live.recommendation, isDemo);
   const zoneId = window.AGROAI_PORTAL_CONFIG?.liveWiseConnZoneId || "162803";
-
-  const decisionPanel = rec
-    ? `<section class="decision-panel"><div><p class="eyebrow">Water Decision</p><h2>${escapeHtml(rec.decision)}</h2><p>${escapeHtml(rec.sourceTraceSummary)}</p></div><div class="hero-metrics">${metricCard(
-        "Timing",
-        rec.timing
-      )}${metricCard("Duration", rec.duration)}${metricCard("Depth", rec.depth)}${metricCard("Confidence", rec.confidence)}${metricCard(
-        "Data quality",
-        rec.dataQuality
-      )}</div><div class="two-column"><article><h3>Key drivers</h3><ul>${(rec.keyDrivers || [])
-        .map((item) => `<li>${escapeHtml(item)}</li>`)
-        .join("") || '<li class="muted">No drivers returned yet.</li>'}</ul></article><article><h3>Execution task</h3><p>${escapeHtml(
-        rec.executionTask
-      )}</p><h3>Verification plan</h3><p>${escapeHtml(rec.verificationPlan)}</p></article></div></section>`
-    : `<section class="decision-panel empty"><p class="eyebrow">Live Intelligence</p><h2>Generate a live WiseConn recommendation</h2><p>Live mode calls POST /v1/intelligence/recommend/live/wiseconn/${escapeHtml(
-        zoneId
-      )}. Optional overrides stay in-memory and are not stored in browser localStorage.</p></section>`;
+  const emptyLive = `<section class="decision-panel empty"><p class="eyebrow">Live Intelligence</p><h2>Generate a live WiseConn recommendation</h2><p>Live mode calls POST /v1/intelligence/recommend/live/wiseconn/${escapeHtml(
+    zoneId
+  )}. Optional overrides stay in-memory and are not stored in browser localStorage.</p></section>`;
 
   return `<div class="screen-stack">
     <section class="panel-card"><div class="section-heading"><p class="eyebrow">Intelligence Engine</p><h2>${
       isDemo ? "Demo recommendation context" : `Live WiseConn recommendation for zone ${escapeHtml(zoneId)}`
-    }</h2></div>
-      ${isDemo ? badge("Demo data", "warning") : badge("Live endpoint", "success")}
+    }</h2><p>${isDemo ? "This is demo data for guided walkthroughs." : "Live WiseConn environment available. Add optional context only when it is useful for the decision."}</p></div>
+      ${isDemo ? badge("Demo data", "warning") : badge("Connected source live", "success")}
       ${!isDemo ? `<form id="live-recommendation-form" class="override-grid">
         <label>Crop type<input name="crop_type" type="text" placeholder="e.g. almonds" /></label>
         <label>Soil type<input name="soil_type" type="text" placeholder="e.g. silt loam" /></label>
@@ -60,11 +57,12 @@ export function renderIntelligence(state) {
       ${state.live.recommendationLoading ? '<p class="loading-text">Generating live recommendation…</p>' : ""}
       ${state.live.recommendationError ? `<p class="error-text">${escapeHtml(state.live.recommendationError)}</p>` : ""}
     </section>
-    ${decisionPanel}
+    ${rec ? recommendationProofCard(rec, { label: isDemo ? "Demo recommendation proof" : "Live recommendation proof", modeBadge: isDemo ? "Demo data" : "Live API output", badgeTone: isDemo ? "warning" : "success" }) : emptyLive}
+    ${operatingChain(isDemo ? demoChain : liveChain(state))}
     <section class="panel-card"><div class="section-heading"><p class="eyebrow">Inputs</p><h2>Context used by the decision</h2></div><div class="three-column"><article><h3>Live inputs used</h3><p>${escapeHtml(
-      formatValue(rec?.liveInputsUsed)
-    )}</p></article><article><h3>Manual overrides used</h3><p>${escapeHtml(formatValue(rec?.manualOverridesUsed))}</p></article><article><h3>Missing inputs</h3><p>${escapeHtml(
-      formatValue(rec?.missingInputs)
+      formatValue(rec?.liveInputsUsed, "Data source pending")
+    )}</p></article><article><h3>Manual overrides used</h3><p>${escapeHtml(formatValue(rec?.manualOverridesUsed, "None provided"))}</p></article><article><h3>Missing inputs</h3><p>${escapeHtml(
+      formatValue(rec?.missingInputs, "None reported")
     )}</p></article></div></section>
     ${technicalTrace({
       source: isDemo ? "Demo recommendation" : "POST live WiseConn recommendation",

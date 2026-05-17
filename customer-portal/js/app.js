@@ -1,5 +1,5 @@
 import { ApiClient } from "./apiClient.js";
-import { launchDemoSession, notify, returnToEntry, setActiveView, startLoginScaffold, state, subscribe, SESSION_MODES } from "./state.js";
+import { launchDemoSession, notify, returnToEntry, setActiveView, setLoginError, startLoginScaffold, state, subscribe, SESSION_MODES } from "./state.js";
 import { loadLiveSnapshot, generateWiseConnRecommendation } from "./services/liveData.js";
 import { renderEntryView } from "./views/entryView.js";
 import { renderShell } from "./views/shellView.js";
@@ -15,7 +15,6 @@ import { renderSettings } from "./views/settingsView.js";
 const api = new ApiClient();
 const root = document.getElementById("app");
 let liveSnapshotLoaded = false;
-
 function collectOverrides(form) {
   const data = new FormData(form);
   const overrides = {};
@@ -42,7 +41,7 @@ function renderActiveView() {
 
 function render() {
   if (state.session.mode === SESSION_MODES.ENTRY) {
-    root.innerHTML = renderEntryView();
+    root.innerHTML = renderEntryView(state);
     bindEntryEvents();
     return;
   }
@@ -56,10 +55,13 @@ function bindEntryEvents() {
     launchDemoSession();
   });
 
-  document.getElementById("login-form")?.addEventListener("submit", async (event) => {
+  document.getElementById("login-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
-    const email = document.getElementById("login-email")?.value || "";
-    startLoginScaffold(email);
+    setLoginError("We could not verify those credentials. Check your email and password or launch the demo workspace.");
+  });
+
+  document.getElementById("live-status-preview")?.addEventListener("click", async () => {
+    startLoginScaffold(document.getElementById("login-email")?.value || "");
     if (!liveSnapshotLoaded) {
       await loadLiveSnapshot(api, state);
       liveSnapshotLoaded = true;
