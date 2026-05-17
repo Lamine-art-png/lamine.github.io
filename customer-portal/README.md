@@ -22,7 +22,7 @@ Demo mode includes:
 - Demo farms: Alpha Vineyard, Delta Almonds, and West Citrus.
 - Demo zones: Block A North, Block B South, Pump Zone 3, and Citrus East Line.
 - Demo providers: WiseConn demo connection and Talgil demo connection.
-- Demo recommendations, confidence, data quality, scheduled/applied/observed/verified states, warnings, report placeholders, and audit events.
+- Demo recommendations, confidence, data quality, scheduled/applied/observed/verified states, warnings, report previews, and audit events.
 
 ## Live mode
 

@@ -45,10 +45,10 @@ export function renderCommandCenter(state) {
       <div><p class="eyebrow">Water Command Center</p><h2>${escapeHtml(decision)}</h2><p>${escapeHtml(
         isDemo ? "Demo workspace — simulated data clearly labeled for sales and partner walkthroughs." : "Live WiseConn environment available. Generate a live recommendation for zone 162803 from the Intelligence screen."
       )}</p></div>
-      <div class="hero-metrics">${metricCard("Confidence", confidence)}${metricCard("Data quality", dataQuality)}${metricCard(
-        "Controller source",
-        isDemo ? "Mixed demo" : "Live WiseConn"
-      )}</div>
+      <div class="hero-metrics command-kpis">${metricCard("Today’s decision", decision)}${metricCard("Confidence", confidence)}${metricCard("Data quality", dataQuality)}${metricCard(
+        "Source status",
+        isDemo ? "Demo source active" : "Connected source live"
+      )}${metricCard("Verification state", isDemo ? "Verification pending" : state.live.recommendation ? "Verification pending" : "Data source pending")}</div>
     </section>
     ${recommendationProofCard(recommendation || {}, {
       label: isDemo ? "Today’s demo recommendation" : "Live recommendation proof",

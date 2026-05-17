@@ -24,7 +24,7 @@ export function renderShell(state, content) {
       <nav class="nav-list" aria-label="Portal navigation">${navItems
         .map(([id, label]) => `<button class="nav-item ${state.activeView === id ? "active" : ""}" data-view="${id}" type="button">${label}</button>`)
         .join("")}</nav>
-      <div class="sidebar-note">${escapeHtml(workspace?.label || state.session.authNotice)}</div>
+      <div class="sidebar-footer"><div class="sidebar-mode"><span>${escapeHtml(isDemo ? "Mode" : "Access")}</span>${badge(isDemo ? "Demo Environment" : "Live / Auth-ready", isDemo ? "warning" : "success")}</div><div class="sidebar-note">${escapeHtml(workspace?.label || state.session.authNotice)}</div></div>
     </aside>
     <main class="portal-main">
       <header class="portal-header">
@@ -38,7 +38,7 @@ export function renderShell(state, content) {
         </div>
       </header>
       <section class="session-notice ${isDemo ? "demo" : "live"}">${escapeHtml(state.session.authNotice)}</section>
-      ${!isDemo ? '<section class="org-selector-placeholder"><strong>Organization selector</strong><span>Backend authentication will populate authorized organizations here after real login.</span></section>' : ''}
+      ${!isDemo ? '<section class="org-selector-placeholder"><strong>Workspace access selector</strong><span>Backend authentication will populate authorized organizations here after real login.</span></section>' : ''}
       ${content}
     </main>
   </div>`;
