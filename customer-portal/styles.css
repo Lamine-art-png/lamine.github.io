@@ -474,6 +474,7 @@ body {
   transform: translateY(-1px);
   box-shadow: 0 16px 34px rgba(23, 54, 45, 0.26);
 }
+.org-selector-placeholder strong { color: var(--graphite); }
 
 input,
 textarea,
