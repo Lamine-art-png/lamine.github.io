@@ -3,7 +3,7 @@ import { escapeHtml, formatValue } from "../components/dom.js";
 import { badge, operatingChain, recommendationProofCard, technicalTrace } from "../components/ui.js";
 
 function extractRecommendation(result, isDemo) {
-  if (isDemo) return demoRecommendation;
+  if (isDemo) return result || demoRecommendation;
   if (!result) return null;
   return {
     decision: result.decision || result.water_decision || result.recommendation || result.action || "Live recommendation returned",
@@ -34,7 +34,8 @@ function liveChain(state) {
 
 export function renderIntelligence(state) {
   const isDemo = state.session.mode === "demo";
-  const rec = extractRecommendation(state.live.recommendation, isDemo);
+  const runtime = state.demoRuntime;
+  const rec = extractRecommendation(isDemo ? runtime.activeRecommendation || runtime.scenario.recommendation : state.live.recommendation, isDemo);
   const zoneId = window.AGROAI_PORTAL_CONFIG?.liveWiseConnZoneId || "162803";
   const emptyLive = `<section class="decision-panel empty"><p class="eyebrow">Live Intelligence</p><h2>Generate a live WiseConn recommendation</h2><p>Live mode calls POST /v1/intelligence/recommend/live/wiseconn/${escapeHtml(
     zoneId
@@ -42,9 +43,9 @@ export function renderIntelligence(state) {
 
   return `<div class="screen-stack">
     <section class="panel-card"><div class="section-heading"><p class="eyebrow">Intelligence Engine</p><h2>${
-      isDemo ? "Demo recommendation context" : `Live WiseConn recommendation for zone ${escapeHtml(zoneId)}`
-    }</h2><p>${isDemo ? "This is demo data for guided walkthroughs." : "Live WiseConn environment available. Add optional context only when it is useful for the decision."}</p></div>
-      ${isDemo ? badge("Demo data", "warning") : badge("Connected source live", "success")}
+      isDemo ? `${runtime.activeFarm.name} · ${runtime.activeZone.name}` : `Live WiseConn recommendation for zone ${escapeHtml(zoneId)}`
+    }</h2><p>${isDemo ? `Scenario: ${escapeHtml(runtime.scenario.name)}. Generate and move the recommendation through the operating chain.` : "Live WiseConn environment available. Add optional context only when it is useful for the decision."}</p></div>
+      ${isDemo ? `${badge("Demo data", "warning")} <button class="button primary" data-action="generate-demo-recommendation" type="button">Generate recommendation</button>` : badge("Connected source live", "success")}
       ${!isDemo ? `<form id="live-recommendation-form" class="override-grid">
         <label>Crop type<input name="crop_type" type="text" placeholder="e.g. almonds" /></label>
         <label>Soil type<input name="soil_type" type="text" placeholder="e.g. silt loam" /></label>
@@ -52,13 +53,13 @@ export function renderIntelligence(state) {
         <label>ETo<input name="eto" type="number" step="0.01" placeholder="mm/day" /></label>
         <label>Rain forecast<input name="rain_forecast" type="number" step="0.01" placeholder="mm" /></label>
         <label>Field observation<textarea name="field_observation" placeholder="Optional field note"></textarea></label>
-        <button class="button primary" type="submit">Generate live recommendation</button>
+        <button class="button primary" type="submit">Run Live WiseConn Recommendation</button>
       </form>` : ""}
       ${state.live.recommendationLoading ? '<p class="loading-text">Generating live recommendation…</p>' : ""}
       ${state.live.recommendationError ? `<p class="error-text">${escapeHtml(state.live.recommendationError)}</p>` : ""}
     </section>
-    ${rec ? recommendationProofCard(rec, { label: isDemo ? "Demo recommendation proof" : "Live recommendation proof", modeBadge: isDemo ? "Demo data" : "Live API output", badgeTone: isDemo ? "warning" : "success" }) : emptyLive}
-    ${operatingChain(isDemo ? demoChain : liveChain(state))}
+    ${rec ? recommendationProofCard(rec, { label: isDemo ? "Demo recommendation proof" : "Live recommendation proof", modeBadge: isDemo ? "Demo data" : "Live API output", badgeTone: isDemo ? "warning" : "success", actions: isDemo ? true : "live-disabled" }) : emptyLive}
+    ${operatingChain(isDemo ? runtime.operatingChain : liveChain(state))}
     <section class="panel-card"><div class="section-heading"><p class="eyebrow">Inputs</p><h2>Context used by the decision</h2></div><div class="three-column"><article><h3>Live inputs used</h3><p>${escapeHtml(
       formatValue(rec?.liveInputsUsed, "Data source pending")
     )}</p></article><article><h3>Manual overrides used</h3><p>${escapeHtml(formatValue(rec?.manualOverridesUsed, "None provided"))}</p></article><article><h3>Missing inputs</h3><p>${escapeHtml(
@@ -66,9 +67,9 @@ export function renderIntelligence(state) {
     )}</p></article></div></section>
     ${technicalTrace({
       source: isDemo ? "Demo recommendation" : "POST live WiseConn recommendation",
-      sourceEntityId: isDemo ? "block-a-north" : zoneId,
+      sourceEntityId: isDemo ? runtime.activeZone.id : zoneId,
       contextOrigin: isDemo ? "Embedded demo context" : "Live context endpoints + manual overrides",
-      controllerProvider: isDemo ? "WiseConn demo connection" : "WiseConn",
+      controllerProvider: isDemo ? runtime.activeZone.controllerSource : "WiseConn",
       liveInputsUsed: rec?.liveInputsUsed || [],
       manualOverridesUsed: rec?.manualOverridesUsed || [],
       telemetryUsed: ["Controller runtime", "Weather/context normalization"],

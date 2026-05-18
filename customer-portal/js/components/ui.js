@@ -58,6 +58,12 @@ export function recommendationProofCard(recommendation = {}, options = {}) {
   const executionTask = recommendation.executionTask || recommendation.execution_task || recommendation.task || "Schedule review required before controller execution.";
   const sourceTrace = recommendation.sourceTraceSummary || recommendation.source_trace_summary || recommendation.trace_summary || "Source trace available in Technical Trace.";
 
+  const actionButtons = options.actions === true
+    ? `<div class="artifact-actions"><button class="button secondary" data-action="schedule" type="button">Schedule recommendation</button><button class="button secondary" data-action="mark-applied" type="button">Mark as applied</button><button class="button secondary" data-action="add-observation" type="button">Add observation</button><button class="button secondary" data-action="verify" type="button">Verify outcome</button><button class="button primary" data-action="open-report" type="button">Open report</button></div>`
+    : options.actions === "live-disabled"
+      ? `<div class="artifact-actions"><button class="button secondary" data-action="live-execution-note" type="button">Schedule recommendation</button><button class="button secondary" data-action="live-execution-note" type="button">Mark as applied</button><button class="button secondary" data-action="live-execution-note" type="button">Verify outcome</button></div><p class="muted">Execution capture requires backend execution endpoint. This demo can simulate the verification chain.</p>`
+      : "";
+
   return `<section class="decision-panel recommendation-proof"><div class="proof-head"><div><p class="eyebrow">${escapeHtml(label)}</p><h2>${escapeHtml(decision)}</h2><p class="proof-subtitle">${escapeHtml(sourceTrace)}</p></div>${badge(modeBadge, options.badgeTone || "warning")}</div><div class="hero-metrics proof-metrics">${metricCard(
     "Recommended depth",
     depth
@@ -65,7 +71,7 @@ export function recommendationProofCard(recommendation = {}, options = {}) {
     keyDrivers
   )}</ul></article><article><h3>Live inputs used</h3><ul>${listItems(liveInputs)}</ul><h3>Manual overrides used</h3><ul>${listItems(overrides)}</ul></article><article><h3>Execution task</h3><p>${escapeHtml(executionTask)}</p><h3>Verification required</h3><p>${escapeHtml(
     verification
-  )}</p></article></div></section>`;
+  )}</p></article></div>${actionButtons}</section>`;
 }
 
 export function integrationCard(integration) {
@@ -79,7 +85,7 @@ export function integrationCard(integration) {
     integration.reads || "Controller, telemetry, and context signals"
   )}</dd></div><div><dt>AGRO-AI generates</dt><dd>${escapeHtml(integration.generates || "Recommendations, tasks, and verification evidence")}</dd></div></dl><p class="limitation-note"><strong>Current limitation:</strong> ${escapeHtml(
     integration.limitation
-  )}</p></article>`;
+  )}</p><div class="runtime-actions"><button class="button secondary" data-action="integration-note" data-message="Connection health: ${escapeHtml(integration.connectionHealth || integration.status)}" type="button">View connection health</button><button class="button secondary" data-action="integration-note" data-message="Readable objects: ${escapeHtml(integration.farmsOrTargets)} and ${escapeHtml(integration.zonesOrSensors)}" type="button">View readable objects</button><button class="button secondary" data-action="integration-note" data-message="Latest check: ${escapeHtml(formatDate(integration.lastChecked))}" type="button">Test live status</button></div></article>`;
 }
 
 export function onboardingProviderCard(provider) {
@@ -93,7 +99,7 @@ export function reportCard(report) {
     report.coverage
   )}</dd></div><div><dt>Status</dt><dd>${escapeHtml(report.status)}</dd></div><div><dt>Last generated</dt><dd>${escapeHtml(
     report.lastGenerated || "Report generation is coming online for this deployment."
-  )}</dd></div></dl><button class="button secondary" type="button" disabled title="${escapeHtml(report.status)}">${escapeHtml(report.action)}</button></article>`;
+  )}</dd></div></dl><button class="button secondary" type="button" ${report.actionAttrs || "disabled"} title="${escapeHtml(report.status)}">${escapeHtml(report.action)}</button></article>`;
 }
 
 export function technicalTrace(trace = {}) {

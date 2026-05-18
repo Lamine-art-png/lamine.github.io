@@ -46,6 +46,18 @@ Live mode currently uses:
 
 Live recommendations support optional in-memory overrides for crop type, soil type, irrigation method, ETo, rain forecast, and field observation. Overrides are not stored in browser localStorage.
 
+## Interactive demo runtime
+
+Demo mode includes an in-browser runtime state machine. It can select farms and zones, switch scenarios, generate a demo recommendation, schedule it, mark applied water, record a field observation, verify the outcome, generate report previews, print the report, export CSV, and update the audit log without a page reload. Runtime state is kept in memory and may be mirrored to `sessionStorage`; it is demo-only and is not production telemetry.
+
+## Live WiseConn recommendation behavior
+
+Live mode can call `POST /v1/intelligence/recommend/live/wiseconn/162803` with optional in-memory overrides for crop type, soil type, irrigation method, ETo, rain forecast, and field observation. Successful live calls update the recommendation artifact and live audit events. Failed calls show customer-safe errors and do not break demo mode.
+
+## Backend capabilities still required
+
+Production customer authentication, organization selection, secure provider credential storage, controller execution capture, persisted audit history, and production report generation require backend endpoints before they can be used as live customer operations.
+
 ## Integration onboarding flow
 
 The Integrations screen presents a backend-ready provider activation flow:

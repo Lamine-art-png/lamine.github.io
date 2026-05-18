@@ -69,6 +69,7 @@ export async function generateWiseConnRecommendation(api, state, overrides) {
 
   if (response.ok) {
     state.live.recommendation = response.data;
+    state.live.auditEvents = [{ time: new Date().toISOString(), actor: "Portal", event: "Live WiseConn recommendation generated", source: `WiseConn zone ${zoneId}`, detail: "Live recommendation returned by API." }, ...(state.live.auditEvents || [])];
     return response;
   }
 

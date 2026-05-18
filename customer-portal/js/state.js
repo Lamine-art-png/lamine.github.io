@@ -1,4 +1,5 @@
 import { demoWorkspace } from "./demoData.js";
+import { createDemoRuntime, resetDemo as resetDemoRuntime } from "./services/demoRuntime.js";
 
 export const SESSION_MODES = {
   ENTRY: "entry",
@@ -15,12 +16,14 @@ export const state = {
     loginError: "",
   },
   activeView: "command-center",
+  demoRuntime: createDemoRuntime(),
   live: {
     auth: null,
     farms: [],
     zonesByFarm: new Map(),
     integrations: [],
     recommendation: null,
+    auditEvents: [],
     recommendationError: "",
     recommendationLoading: false,
     selectedFarmId: "",
@@ -49,7 +52,13 @@ export function setLoginError(message) {
   notify();
 }
 
+export function setDemoRuntime(runtime) {
+  state.demoRuntime = runtime;
+  notify();
+}
+
 export function launchDemoSession() {
+  state.demoRuntime = resetDemoRuntime();
   state.session = {
     mode: SESSION_MODES.DEMO,
     workspace: demoWorkspace,
