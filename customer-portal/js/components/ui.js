@@ -44,7 +44,7 @@ export function operatingChain(steps = []) {
 
 export function recommendationProofCard(recommendation = {}, options = {}) {
   const label = options.label || "Recommendation proof";
-  const modeBadge = options.modeBadge || "Demo data";
+  const modeBadge = options.modeBadge || "Telemetry";
   const decision = recommendation.decision || recommendation.water_decision || recommendation.recommendation || recommendation.action || "Data source pending";
   const depth = recommendation.depth || recommendation.depth_mm || recommendation.recommended_depth_mm || "Awaiting telemetry";
   const duration = recommendation.duration || recommendation.duration_minutes || recommendation.duration_min || recommendation.irrigation_minutes || "Awaiting telemetry";
@@ -61,7 +61,7 @@ export function recommendationProofCard(recommendation = {}, options = {}) {
   const actionButtons = options.actions === true
     ? `<div class="artifact-actions"><button class="button secondary" data-action="schedule" type="button">Schedule recommendation</button><button class="button secondary" data-action="mark-applied" type="button">Mark as applied</button><button class="button secondary" data-action="add-observation" type="button">Add observation</button><button class="button secondary" data-action="verify" type="button">Verify outcome</button><button class="button primary" data-action="open-report" type="button">Open report</button></div>`
     : options.actions === "live-disabled"
-      ? `<div class="artifact-actions"><button class="button secondary" data-action="live-execution-note" type="button">Schedule recommendation</button><button class="button secondary" data-action="live-execution-note" type="button">Mark as applied</button><button class="button secondary" data-action="live-execution-note" type="button">Verify outcome</button></div><p class="muted">Execution capture requires backend execution endpoint. This demo can simulate the verification chain.</p>`
+      ? `<div class="artifact-actions"><button class="button secondary" data-action="live-execution-note" type="button">Schedule recommendation</button><button class="button secondary" data-action="live-execution-note" type="button">Mark as applied</button><button class="button secondary" data-action="live-execution-note" type="button">Verify outcome</button></div><p class="muted">Execution capture requires backend execution endpoint. The workspace can simulate the verification chain when running in pilot mode.</p>`
       : "";
 
   return `<section class="decision-panel recommendation-proof"><div class="proof-head"><div><p class="eyebrow">${escapeHtml(label)}</p><h2>${escapeHtml(decision)}</h2><p class="proof-subtitle">${escapeHtml(sourceTrace)}</p></div>${badge(modeBadge, options.badgeTone || "warning")}</div><div class="hero-metrics proof-metrics">${metricCard(
@@ -103,7 +103,7 @@ export function reportCard(report) {
 }
 
 export function technicalTrace(trace = {}) {
-  return `<details class="technical-trace"><summary>Advanced Technical Trace</summary><p class="trace-note">Advanced-only source trace for technical reviewers. Normal demo screens summarize this information above.</p><div class="trace-grid"><div><h4>Source</h4><ul>${listItems([
+  return `<details class="technical-trace"><summary>Advanced Technical Trace</summary><p class="trace-note">Advanced-only source trace for technical reviewers. Normal workspace screens summarize this information above.</p><div class="trace-grid"><div><h4>Source</h4><ul>${listItems([
     `Source: ${formatValue(trace.source)}`,
     `Source entity ID: ${formatValue(trace.sourceEntityId)}`,
     `Context origin: ${formatValue(trace.contextOrigin)}`,
