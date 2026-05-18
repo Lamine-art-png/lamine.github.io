@@ -24,6 +24,17 @@ Demo mode includes:
 - Demo providers: WiseConn demo connection and Talgil demo connection.
 - Demo recommendations, confidence, data quality, scheduled/applied/observed/verified states, warnings, report previews, and audit events.
 
+## Enterprise clarity surfaces
+
+The Command Center now includes buyer-facing explanation surfaces designed for a 90-second sales walkthrough:
+
+- A high-contrast sidebar with an **OPERATIONS** navigation label and readable **Mode: Demo / Alpha Vineyard workspace** footer.
+- An ROI and compliance strip for YTD water saved, avoided dollar value, SGMA-ready posture, evidence completeness, and demo-mode financial assumptions.
+- An **AI Decision Pipeline** showing signal ingest, field-context normalization, source reconciliation, and recommendation generation.
+- A **From noisy data to verified action** panel that shows raw signals, AGRO-AI reconciliation, and clean action.
+- A **Cross-system reconciliation** panel that explicitly marks the Talgil row as available but pending target selection, without making live target telemetry claims.
+- Intelligence Engine framing for normalization, reconciliation, recommendation, and verification planning.
+
 ## Live mode
 
 The **Customer Login** path is an auth-ready scaffold for a future backend identity flow. It does not claim production authentication. After entry, live mode loads available runtime information from `https://api.agroai-pilot.com`.

@@ -23,6 +23,46 @@ export function roiComplianceStrip(kpis = {}, options = {}) {
     .join("")}</div><p class="roi-coverage">Portfolio coverage: ${escapeHtml(kpis.portfolioCoverage || "3 farms / 4 active blocks")}</p></section>`;
 }
 
+
+function statusTone(status = "") {
+  const normalized = String(status).toLowerCase();
+  if (["matched", "reconciled", "recommendation ready", "context assembled", "verified"].some((key) => normalized.includes(key))) return "success";
+  if (["pending", "manual", "target"].some((key) => normalized.includes(key))) return "warning";
+  return statusClass(status);
+}
+
+export function aiDecisionPipeline(stages = [], options = {}) {
+  if (!stages.length) return "";
+  const compact = options.compact ? " compact" : "";
+  return `<section class="panel-card ai-pipeline-card${compact}"><div class="section-heading"><p class="eyebrow">AI Decision Pipeline</p><h2>AI Decision Pipeline</h2><p>AGRO-AI turns controller telemetry, weather, crop context, and field observations into a verified irrigation decision.</p></div><div class="ai-pipeline-grid">${stages
+    .map(
+      (stage) => `<article class="ai-stage"><div class="ai-stage-top"><span class="stage-index">${escapeHtml(stage.stage || "")}</span>${badge(stage.status || "AI context assembled", statusTone(stage.status))}</div><h3>${escapeHtml(stage.title)}</h3><ul>${listItems(stage.items || [])}</ul><p>${escapeHtml(stage.explanation || "Source reconciliation complete.")}</p></article>`
+    )
+    .join("")}</div></section>`;
+}
+
+export function intelligenceTransformationPanel(data = {}) {
+  const columns = [
+    ["Raw signals", data.rawSignals || []],
+    ["AGRO-AI reconciliation", data.reconciliation || []],
+    ["Clean action", data.cleanAction || []],
+  ];
+  return `<section class="panel-card transformation-card"><div class="section-heading"><p class="eyebrow">Decision intelligence</p><h2>From noisy data to verified action</h2><p>AGRO-AI makes the intelligence layer visible by turning fragmented source signals into one schedulable irrigation action.</p></div><div class="transformation-grid">${columns
+    .map(([title, items], index) => `<article class="transformation-column"><span class="transform-step">${index + 1}</span><h3>${escapeHtml(title)}</h3><ul>${listItems(items)}</ul></article>`)
+    .join("")}</div></section>`;
+}
+
+export function reconciliationSummary(rows = []) {
+  if (!rows.length) return "";
+  return `<section class="panel-card reconciliation-card"><div class="section-heading"><p class="eyebrow">Source reconciliation</p><h2>Cross-system reconciliation</h2><p>AGRO-AI compares controller, weather, soil, and field context before issuing a recommendation.</p></div><div class="table-wrap"><table class="data-table reconciliation-table"><thead><tr><th>Source</th><th>Signal</th><th>AGRO-AI interpretation</th><th>Status</th></tr></thead><tbody>${rows
+    .map((row) => `<tr><td>${escapeHtml(row[0])}</td><td>${escapeHtml(row[1])}</td><td>${escapeHtml(row[2])}</td><td>${badge(row[3], statusTone(row[3]))}</td></tr>`)
+    .join("")}</tbody></table></div></section>`;
+}
+
+export function agroAiExplainer(items = []) {
+  return `<section class="panel-card agroai-explainer"><div class="section-heading"><p class="eyebrow">Product readout</p><h2>What AGRO-AI is doing</h2></div><ul>${listItems(items)}</ul></section>`;
+}
+
 export function emptyState(title, detail) {
   return `<section class="empty-state"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(detail)}</p></section>`;
 }

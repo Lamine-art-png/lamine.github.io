@@ -21,16 +21,16 @@ export function renderShell(state, content) {
         <img src="./assets/agro-ai-logo.png" alt="AGRO-AI" class="brand-logo" />
         <div><div class="brand">AGRO-AI</div><p>Enterprise Portal</p></div>
       </div>
-      <nav class="nav-list" aria-label="Portal navigation">${navItems
+      <div class="nav-section-label">OPERATIONS</div><nav class="nav-list" aria-label="Portal navigation">${navItems
         .map(([id, label]) => `<button class="nav-item ${state.activeView === id ? "active" : ""}" data-view="${id}" type="button">${label}</button>`)
         .join("")}</nav>
-      <div class="sidebar-footer"><div class="sidebar-mode"><span>${escapeHtml(isDemo ? "Mode" : "Access")}</span>${badge(isDemo ? "Demo Environment" : "Live / Auth-ready", isDemo ? "warning" : "success")}</div><div class="sidebar-note">${escapeHtml(workspace?.label || state.session.authNotice)}</div></div>
+      <div class="sidebar-footer"><div class="sidebar-mode"><span>Mode: ${escapeHtml(isDemo ? "Demo" : "Live / Auth-ready")}</span><strong>${escapeHtml(isDemo ? "Alpha Vineyard workspace" : workspace?.name || "Customer Workspace")}</strong></div><div class="sidebar-note">${escapeHtml(workspace?.label || state.session.authNotice)}</div></div>
     </aside>
     <main class="portal-main">
       <header class="portal-header">
         <div><p class="eyebrow">Workspace</p><h1>${escapeHtml(workspace?.name || "Customer Workspace")}</h1></div>
         <div class="header-actions">
-          ${badge(isDemo ? "Demo Environment" : "Live / Auth-ready", isDemo ? "warning" : "success")}
+          ${badge(isDemo ? "Mode: Demo" : "Live / Auth-ready", isDemo ? "warning" : "success")}
           ${badge(workspace?.source || "Manual", "neutral")}
           <a class="help-link" href="mailto:support@agroai-pilot.com">Help</a>
           <div class="profile-menu">${escapeHtml(state.session.userEmail || "Profile")}</div>

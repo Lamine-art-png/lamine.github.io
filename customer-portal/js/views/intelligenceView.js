@@ -1,6 +1,6 @@
-import { demoChain, demoRecommendation } from "../demoData.js";
+import { demoAiDecisionPipeline, demoChain, demoRecommendation } from "../demoData.js";
 import { escapeHtml, formatValue } from "../components/dom.js";
-import { badge, operatingChain, recommendationProofCard, technicalTrace } from "../components/ui.js";
+import { aiDecisionPipeline, badge, operatingChain, recommendationProofCard, technicalTrace } from "../components/ui.js";
 
 function extractRecommendation(result, isDemo) {
   if (isDemo) return result || demoRecommendation;
@@ -42,10 +42,10 @@ export function renderIntelligence(state) {
   )}. Optional overrides stay in-memory and are not stored in browser localStorage.</p></section>`;
 
   return `<div class="screen-stack">
-    <section class="panel-card"><div class="section-heading"><p class="eyebrow">Intelligence Engine</p><h2>${
-      isDemo ? `${runtime.activeFarm.name} · ${runtime.activeZone.name}` : `Live WiseConn recommendation for zone ${escapeHtml(zoneId)}`
-    }</h2><p>${isDemo ? `Scenario: ${escapeHtml(runtime.scenario.name)}. Generate and move the recommendation through the operating chain.` : "Live WiseConn environment available. Add optional context only when it is useful for the decision."}</p></div>
-      ${isDemo ? `${badge("Demo data", "warning")} <button class="button primary" data-action="generate-demo-recommendation" type="button">Generate recommendation</button>` : badge("Connected source live", "success")}
+    <section class="panel-card intelligence-engine-card"><div class="section-heading"><p class="eyebrow">Intelligence Engine</p><h2>Intelligence Engine</h2><p>Live context, normalization, reconciliation, recommendation, and verification planning.</p><p class="muted">${
+      isDemo ? `${runtime.activeFarm.name} · ${runtime.activeZone.name} · Scenario: ${escapeHtml(runtime.scenario.name)}` : `Live WiseConn API call target: zone ${escapeHtml(zoneId)}`
+    }</p></div>
+      <div class="runtime-actions">${isDemo ? `${badge("Demo-mode assumptions", "warning")} <button class="button primary" data-action="generate-demo-recommendation" type="button">Run AI analysis</button>` : `${badge("Connected source live", "success")} <span class="muted">Run Live WiseConn Recommendation calls POST /v1/intelligence/recommend/live/wiseconn/${escapeHtml(zoneId)}.</span>`}</div>
       ${!isDemo ? `<form id="live-recommendation-form" class="override-grid">
         <label>Crop type<input name="crop_type" type="text" placeholder="e.g. almonds" /></label>
         <label>Soil type<input name="soil_type" type="text" placeholder="e.g. silt loam" /></label>
@@ -58,17 +58,18 @@ export function renderIntelligence(state) {
       ${state.live.recommendationLoading ? '<p class="loading-text">Generating live recommendation…</p>' : ""}
       ${state.live.recommendationError ? `<p class="error-text">${escapeHtml(state.live.recommendationError)}</p>` : ""}
     </section>
-    ${rec ? recommendationProofCard(rec, { label: isDemo ? "Demo recommendation proof" : "Live recommendation proof", modeBadge: isDemo ? "Demo data" : "Live API output", badgeTone: isDemo ? "warning" : "success", actions: isDemo ? true : "live-disabled" }) : emptyLive}
+    ${aiDecisionPipeline(demoAiDecisionPipeline, { compact: true })}
+    ${rec ? recommendationProofCard(rec, { label: isDemo ? "Recommendation proof" : "Live recommendation proof", modeBadge: isDemo ? "Demo-mode assumptions" : "Live API output", badgeTone: isDemo ? "warning" : "success", actions: isDemo ? true : "live-disabled" }) : emptyLive}
     ${operatingChain(isDemo ? runtime.operatingChain : liveChain(state))}
     <section class="panel-card"><div class="section-heading"><p class="eyebrow">Inputs</p><h2>Context used by the decision</h2></div><div class="three-column"><article><h3>Live inputs used</h3><p>${escapeHtml(
-      formatValue(rec?.liveInputsUsed, "Data source pending")
+      formatValue(rec?.liveInputsUsed, "Source reconciliation pending")
     )}</p></article><article><h3>Manual overrides used</h3><p>${escapeHtml(formatValue(rec?.manualOverridesUsed, "None provided"))}</p></article><article><h3>Missing inputs</h3><p>${escapeHtml(
       formatValue(rec?.missingInputs, "None reported")
     )}</p></article></div></section>
     ${technicalTrace({
-      source: isDemo ? "Demo recommendation" : "POST live WiseConn recommendation",
+      source: isDemo ? "Recommendation proof" : "POST live WiseConn recommendation",
       sourceEntityId: isDemo ? runtime.activeZone.id : zoneId,
-      contextOrigin: isDemo ? "Embedded demo context" : "Live context endpoints + manual overrides",
+      contextOrigin: isDemo ? "AI context assembled" : "Live context endpoints + manual overrides",
       controllerProvider: isDemo ? runtime.activeZone.controllerSource : "WiseConn",
       liveInputsUsed: rec?.liveInputsUsed || [],
       manualOverridesUsed: rec?.manualOverridesUsed || [],

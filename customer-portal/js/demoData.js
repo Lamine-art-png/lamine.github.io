@@ -47,7 +47,7 @@ export const demoFarms = [
         crop: "Cabernet Sauvignon",
         soil: "Clay loam",
         controllerSource: "WiseConn demo connection",
-        dataQuality: "High",
+        dataQuality: "AI context assembled",
         confidence: "86%",
         recommendation: "Irrigate 42 min tonight after ETo peak",
         scheduledStatus: "Scheduled",
@@ -131,20 +131,88 @@ export const demoInstitutionalKpis = {
   assumptionLabel: "Demo-mode financial assumptions",
 };
 
+export const demoAiDecisionPipeline = [
+  {
+    stage: "01",
+    title: "Ingest messy signals",
+    status: "Live and manual",
+    explanation: "Controller events, integration health, weather demand, and field notes are collected without pretending every source is perfect.",
+    items: ["WiseConn controller history", "Talgil runtime status", "ETo 6.4 mm", "Field observation: mild afternoon stress"],
+  },
+  {
+    stage: "02",
+    title: "Normalize field context",
+    status: "Context assembled",
+    explanation: "AGRO-AI maps source data into one block-level agronomic context for the recommendation engine.",
+    items: ["Alpha Vineyard / Block A North", "Cabernet Sauvignon", "Drip irrigation", "30 cm root-zone deficit: 38%"],
+  },
+  {
+    stage: "03",
+    title: "Reconcile sources",
+    status: "Reconciled",
+    explanation: "Signals are checked against controller history and confidence gates before a decision is shown.",
+    items: ["Controller schedule matched", "Applied water checked", "Sensor confidence: 86%", "No critical discrepancy"],
+  },
+  {
+    stage: "04",
+    title: "Generate decision",
+    status: "Recommendation ready",
+    explanation: "The output is an operational recommendation with timing, depth, and verification requirements.",
+    items: ["Irrigate 42 min tonight", "Start 21:00 PT", "Apply 12 mm net", "Verification required"],
+  },
+];
+
+export const demoTransformation = {
+  rawSignals: [
+    "Controller logs: last run 36 min, zone event variance 8%",
+    "Weather: ETo spike 6.4 mm, no rain window",
+    "Soil signal: 38% deficit at 30 cm",
+    "Observation: mild afternoon stress",
+  ],
+  reconciliation: [
+    "normalized units",
+    "duplicate/partial signals removed",
+    "confidence calculated",
+    "applied-vs-scheduled checked",
+  ],
+  cleanAction: [
+    "Irrigate 42 min tonight",
+    "12 mm net",
+    "Start 21:00 PT",
+    "Verify after controller event",
+  ],
+};
+
+export const demoReconciliationRows = [
+  ["WiseConn", "Last irrigation event: 36 min", "Valid recent controller event", "Matched"],
+  ["Talgil", "Runtime reachable, no selected production targets", "Available integration, no target selected", "Pending target"],
+  ["Weather", "ETo 6.4 mm, rain 0 mm", "High water demand", "Matched"],
+  ["Field observation", "Mild afternoon stress", "Supports irrigation recommendation", "Matched"],
+  ["AGRO-AI reconciled view", "12 mm net application, 42 min tonight", "Decision ready with verification required", "Verified"],
+];
+
+export const demoAgroAiExplainer = [
+  "Reads connected controller and field signals",
+  "Normalizes crop, weather, soil, and irrigation context",
+  "Reconciles planned vs applied water",
+  "Generates a block-level recommendation",
+  "Tracks verification evidence for reporting",
+];
+
 export const demoRecommendation = {
-  decision: "Irrigate tonight",
-  timing: "Start after 21:00 local time",
-  duration: "42 minutes",
-  depth: "14 mm",
+  decision: "Irrigate 42 min tonight · start 21:00 PT",
+  timing: "21:00 PT",
+  duration: "42 min",
+  depth: "12 mm net",
   confidence: "86%",
-  dataQuality: "High",
-  keyDrivers: ["Root-zone depletion trending upward", "No meaningful rain expected", "ETo remains elevated", "Controller schedule window is available"],
-  sourceTraceSummary: "Demo context assembled from WiseConn demo connection, crop profile, soil profile, weather forecast, and field observation.",
+  dataQuality: "Source reconciliation complete",
+  keyDrivers: ["ETo 6.4 mm increased water demand", "38% deficit at 30 cm", "No rain window available", "Controller schedule matched"],
+  sourceTraceSummary: "AI context assembled from WiseConn controller history, crop profile, soil profile, weather forecast, and field observation.",
   liveInputsUsed: ["Controller zone", "Recent irrigation history", "Weather forecast", "Crop and soil profile"],
   manualOverridesUsed: ["Field observation: mild canopy stress on west rows"],
   missingInputs: ["Pressure telemetry not available for this demo zone"],
-  executionTask: "Create controller task for Block A North and assign irrigation manager confirmation.",
-  verificationPlan: "Compare scheduled duration with controller-applied event, then request field observation within 12 hours.",
+  executionTask: "Schedule Block A North for 42 min at 21:00 PT and assign irrigation manager confirmation.",
+  verificationPlan: "Verify 12 mm net against the controller-applied event, then request field observation within 12 hours.",
 };
 
 export const demoChain = [

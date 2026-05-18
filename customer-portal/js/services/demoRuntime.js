@@ -1,4 +1,4 @@
-import { demoAuditLog, demoFarms, demoInstitutionalKpis, demoRecommendation, demoWorkspace } from "../demoData.js";
+import { demoAgroAiExplainer, demoAiDecisionPipeline, demoAuditLog, demoFarms, demoInstitutionalKpis, demoReconciliationRows, demoRecommendation, demoTransformation, demoWorkspace } from "../demoData.js";
 
 const STORAGE_KEY = "AGROAI_DEMO_RUNTIME";
 const ACTOR = "Demo Farm Manager";
@@ -84,10 +84,10 @@ function baseChain(active = "recommended") {
   return keys.map((key, index) => ({
     key,
     label: labels[index],
-    status: key === active ? "Active" : "Pending",
+    status: key === active ? "Recommendation ready" : "Pending",
     timestamp: key === "recommended" ? now() : "",
     owner: key === "recommended" ? "AGRO-AI Intelligence Engine" : ACTOR,
-    evidence: key === "recommended" ? "Recommendation ready for review." : `${labels[index]} pending`,
+    evidence: key === "recommended" ? "Recommendation ready with AI context assembled." : `${labels[index]} pending`,
     note: "Demo runtime state",
   }));
 }
@@ -124,6 +124,10 @@ export function resetDemo(shouldPersist = true) {
     activeZone: zone,
     activeRecommendation: null,
     institutionalKpis: { ...demoInstitutionalKpis },
+    aiDecisionPipeline: demoAiDecisionPipeline,
+    intelligenceTransformation: demoTransformation,
+    reconciliationRows: demoReconciliationRows,
+    agroAiExplainer: demoAgroAiExplainer,
     operatingChain: baseChain("recommended"),
     auditEvents: [...demoAuditLog],
     reportSnapshots: [],
@@ -132,7 +136,7 @@ export function resetDemo(shouldPersist = true) {
     guideStarted: false,
     toast: "",
   };
-  addAudit(runtime, "Demo workspace launched", "Demo runtime reset and ready.");
+  addAudit(runtime, "Workspace launched", "Demo-mode runtime reset and ready.");
   return shouldPersist ? persist(runtime) : runtime;
 }
 
@@ -177,12 +181,12 @@ export function generateDemoRecommendation(runtime) {
   };
   runtime.operatingChain = baseChain("scheduled");
   runtime.currentStep = 2;
-  addAudit(runtime, "Recommendation generated", runtime.activeRecommendation.decision);
+  addAudit(runtime, "Recommendation generated", runtime.activeRecommendation.decision || "Recommendation ready");
   return persist(runtime);
 }
 
 export function scheduleRecommendation(runtime) {
-  runtime.operatingChain[0] = { ...runtime.operatingChain[0], status: "Complete", evidence: "Recommendation accepted for schedule." };
+  runtime.operatingChain[0] = { ...runtime.operatingChain[0], status: "Complete", evidence: "Recommendation ready; schedule accepted." };
   runtime.operatingChain[1] = { ...runtime.operatingChain[1], status: "Complete", timestamp: now(), evidence: "Irrigation scheduled in demo controller window.", owner: ACTOR };
   runtime.currentStep = 3;
   addAudit(runtime, "Recommendation scheduled", "Schedule created for selected block.");
