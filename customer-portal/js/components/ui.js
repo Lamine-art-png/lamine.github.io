@@ -55,13 +55,15 @@ export function recommendationProofCard(recommendation = {}, options = {}) {
   const liveInputs = recommendation.liveInputsUsed || recommendation.live_inputs_used || recommendation.inputs_used || [];
   const overrides = recommendation.manualOverridesUsed || recommendation.manual_overrides_used || recommendation.overrides_used || [];
   const verification = recommendation.verificationPlan || recommendation.verification_plan || "Verification required after controller execution and field observation.";
+  const executionTask = recommendation.executionTask || recommendation.execution_task || recommendation.task || "Schedule review required before controller execution.";
+  const sourceTrace = recommendation.sourceTraceSummary || recommendation.source_trace_summary || recommendation.trace_summary || "Source trace available in Technical Trace.";
 
-  return `<section class="decision-panel recommendation-proof"><div class="proof-head"><div><p class="eyebrow">${escapeHtml(label)}</p><h2>${escapeHtml(decision)}</h2></div>${badge(modeBadge, options.badgeTone || "warning")}</div><div class="hero-metrics proof-metrics">${metricCard(
+  return `<section class="decision-panel recommendation-proof"><div class="proof-head"><div><p class="eyebrow">${escapeHtml(label)}</p><h2>${escapeHtml(decision)}</h2><p class="proof-subtitle">${escapeHtml(sourceTrace)}</p></div>${badge(modeBadge, options.badgeTone || "warning")}</div><div class="hero-metrics proof-metrics">${metricCard(
     "Recommended depth",
     depth
   )}${metricCard("Recommended duration", duration)}${metricCard("Timing", timing)}${metricCard("Confidence", confidence)}${metricCard("Data quality", dataQuality)}</div><div class="three-column proof-lists"><article><h3>Key drivers</h3><ul>${listItems(
     keyDrivers
-  )}</ul></article><article><h3>Live inputs used</h3><ul>${listItems(liveInputs)}</ul><h3>Manual overrides used</h3><ul>${listItems(overrides)}</ul></article><article><h3>Verification required</h3><p>${escapeHtml(
+  )}</ul></article><article><h3>Live inputs used</h3><ul>${listItems(liveInputs)}</ul><h3>Manual overrides used</h3><ul>${listItems(overrides)}</ul></article><article><h3>Execution task</h3><p>${escapeHtml(executionTask)}</p><h3>Verification required</h3><p>${escapeHtml(
     verification
   )}</p></article></div></section>`;
 }
@@ -95,7 +97,7 @@ export function reportCard(report) {
 }
 
 export function technicalTrace(trace = {}) {
-  return `<details class="technical-trace"><summary>Technical Trace</summary><div class="trace-grid"><div><h4>Source</h4><ul>${listItems([
+  return `<details class="technical-trace"><summary>Advanced Technical Trace</summary><p class="trace-note">Advanced-only source trace for technical reviewers. Normal demo screens summarize this information above.</p><div class="trace-grid"><div><h4>Source</h4><ul>${listItems([
     `Source: ${formatValue(trace.source)}`,
     `Source entity ID: ${formatValue(trace.sourceEntityId)}`,
     `Context origin: ${formatValue(trace.contextOrigin)}`,
