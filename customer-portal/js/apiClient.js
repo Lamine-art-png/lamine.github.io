@@ -1,4 +1,5 @@
 export const ENDPOINTS = {
+  controllerEnvironments: "/v1/controllers/environments",
   auth: "/v1/wiseconn/auth",
   farms: "/v1/wiseconn/farms",
   zonesByFarm: (farmId) => `/v1/wiseconn/farms/${encodeURIComponent(farmId)}/zones`,
@@ -70,8 +71,24 @@ export class ApiClient {
     return this.request(ENDPOINTS.auth);
   }
 
+  getControllerEnvironments() {
+    return this.request(ENDPOINTS.controllerEnvironments);
+  }
+
   getFarms() {
     return this.request(ENDPOINTS.farms);
+  }
+
+  getTalgilAuth() {
+    return this.request(ENDPOINTS.talgilAuth);
+  }
+
+  getTalgilFarms() {
+    return this.request(ENDPOINTS.talgilFarms);
+  }
+
+  getTalgilZones(farmId) {
+    return this.request(ENDPOINTS.talgilZonesByFarm(farmId));
   }
 
   getZones(farmId) {
