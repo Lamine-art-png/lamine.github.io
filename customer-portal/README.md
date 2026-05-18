@@ -81,6 +81,10 @@ Embedded demo farms, demo zones, demo recommendations, demo report previews, dem
 - Secure provider credential storage and rotation.
 - Production report generation workflows where not yet enabled by the deployed API.
 
+## Typography
+
+The portal CSS uses `"Glacial Indifference", "Inter", "Aptos", "Segoe UI", system-ui, sans-serif` as its primary font stack. No licensed Glacial Indifference font file is committed in this repository; the site owner should add and wire a licensed asset in production if brand typography requires the exact face.
+
 ## Local preview
 
 ```bash
