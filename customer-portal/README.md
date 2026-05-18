@@ -1,6 +1,6 @@
 # AGRO-AI Enterprise Customer Portal
 
-The customer portal is a static-compatible enterprise customer workspace for AGRO-AI at `https://app.agroai-pilot.com`. It supports an institutional buyer walkthrough without making the Command Center feel like a fake page: demo mode remains available, but the active workspace is framed as a tenant operating environment with one discreet mode indicator and one dismissible telemetry notice.
+The customer portal is a static-compatible Enterprise Demo and Customer Portal for AGRO-AI. It is designed for customer demos, investor demos, and integration partner demos at `https://app.agroai-pilot.com` while keeping production data and demo data clearly separated.
 
 ## Portal purpose
 
@@ -15,18 +15,14 @@ The portal demonstrates AGRO-AI's full irrigation operating chain:
 
 ## Demo mode
 
-The **Launch Demo Environment** path opens an isolated tenant workspace without credentials. Embedded simulated telemetry is kept separate from live API data and is now identified with a discreet **Mode: Demo** pill plus a dismissible **Demo mode · simulated telemetry** banner.
+The **Launch Demo Environment** path opens the isolated `AGRO-AI Demo Workspace` without credentials. Demo data is embedded in `customer-portal/js/demoData.js` and is clearly marked as demo data in the UI.
 
 Demo mode includes:
 
-- Pilot farms: Alpha Vineyard, Delta Almonds, and West Citrus.
-- Pilot zones: Block A North, Block B South, Pump Zone 3, and Citrus East Line.
-- Pilot providers: WiseConn pilot connection and Talgil pilot connection.
-- Recommendations, confidence, data quality, scheduled/applied/observed/verified states, warnings, report previews, and audit events for walkthroughs.
-
-## Command Center information architecture
-
-The Command Center is titled **Alpha Vineyard · Command Center** in demo mode and uses the subtitle **Recommendation, execution, and verification for connected irrigation environments.** The former permanent brief has been replaced with a session-dismissible onboarding overlay titled **How to read this workspace**. The operating journey is a passive progress strip, while the recommendation action bar remains the operational control surface for scheduling, applied-water confirmation, observations, verification, and reporting.
+- Demo farms: Alpha Vineyard, Delta Almonds, and West Citrus.
+- Demo zones: Block A North, Block B South, Pump Zone 3, and Citrus East Line.
+- Demo providers: WiseConn demo connection and Talgil demo connection.
+- Demo recommendations, confidence, data quality, scheduled/applied/observed/verified states, warnings, report previews, and audit events.
 
 ## Live mode
 
@@ -50,9 +46,9 @@ Live mode currently uses:
 
 Live recommendations support optional in-memory overrides for crop type, soil type, irrigation method, ETo, rain forecast, and field observation. Overrides are not stored in browser localStorage.
 
-## Interactive runtime
+## Interactive demo runtime
 
-Demo mode includes an in-browser runtime state machine. It can select farms and zones, switch scenarios, generate a recommendation, schedule it, mark applied water, record a field observation, verify the outcome, generate report previews, print the report, export CSV, and update the audit log without a page reload. Runtime state is kept in memory and may be mirrored to `sessionStorage`; it is not production telemetry.
+Demo mode includes an in-browser runtime state machine. It can select farms and zones, switch scenarios, generate a demo recommendation, schedule it, mark applied water, record a field observation, verify the outcome, generate report previews, print the report, export CSV, and update the audit log without a page reload. Runtime state is kept in memory and may be mirrored to `sessionStorage`; it is demo-only and is not production telemetry.
 
 ## Live WiseConn recommendation behavior
 
@@ -85,9 +81,9 @@ Provider credential submission intentionally requires secure backend credential 
 - Live context endpoints are live.
 - Live WiseConn recommendation is supported for zone `162803`.
 
-## What is simulated in demo mode
+## What is simulated demo data
 
-Embedded farms, zones, recommendations, report previews, audit events, and provider cards are simulated and isolated from live production telemetry.
+Embedded demo farms, demo zones, demo recommendations, demo report previews, demo audit events, and demo provider cards are simulated and clearly labeled as demo data. They are not mixed with live production telemetry.
 
 ## What still requires backend auth or credential storage
 

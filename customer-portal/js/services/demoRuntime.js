@@ -1,6 +1,6 @@
 import { demoAuditLog, demoFarms, demoRecommendation, demoWorkspace } from "../demoData.js";
 
-const STORAGE_KEY = "AGROAI_DEMO_RUNTIME";
+const STORAGE_KEY = "AGROAI_DEMO_RUNTIME_QUANT_V1";
 const ACTOR = "Demo Farm Manager";
 
 const scenarios = {
@@ -16,12 +16,21 @@ const scenarios = {
     note: "Rain forecast reduces irrigation need; AGRO-AI recommends waiting.",
     recommendation: {
       ...demoRecommendation,
-      decision: "Wait for forecast rain",
-      timing: "Reassess tomorrow morning",
-      duration: "0 minutes",
-      depth: "0 mm",
+      recommendationHeadline: "Hold irrigation · reassess 07:00 PT",
+      recommendationSubline: "0 mm net across Block A North · rain forecast offsets ETo 4.1 mm and 18% deficit at 30 cm.",
+      decision: "Hold irrigation · reassess 07:00 PT",
+      timing: "07:00 PT",
+      duration: "0 min",
+      depth: "0 mm net",
+      depthMm: 0,
+      durationMin: 0,
+      startTimeLocal: "07:00 PT",
+      etoMm: 4.1,
+      deficit30cm: "18%",
       confidence: "82%",
-      dataQuality: "High",
+      confidenceScore: 82,
+      dataQuality: "Verified telemetry",
+      dataQualityLabel: "Verified telemetry",
       keyDrivers: ["Rain forecast within 12 hours", "Root-zone moisture adequate", "Avoid unnecessary water application"],
       executionTask: "No controller schedule required; review after forecast window.",
       verificationPlan: "Confirm rainfall and inspect canopy condition after forecast window.",
@@ -33,8 +42,21 @@ const scenarios = {
     note: "A missing sensor reading reduces confidence and triggers observation follow-up.",
     recommendation: {
       ...demoRecommendation,
+      recommendationHeadline: "Irrigate 28 min tonight · start 22:00 PT",
+      recommendationSubline: "8 mm net across Block A North · responding to ETo 5.7 mm and 31% deficit at 30 cm with partial telemetry.",
+      decision: "Irrigate 28 min tonight · start 22:00 PT",
+      timing: "22:00 PT",
+      duration: "28 min",
+      depth: "8 mm net",
+      depthMm: 8,
+      durationMin: 28,
+      startTimeLocal: "22:00 PT",
+      etoMm: 5.7,
+      deficit30cm: "31%",
       confidence: "68%",
+      confidenceScore: 68,
       dataQuality: "Partial telemetry",
+      dataQualityLabel: "Partial telemetry",
       keyDrivers: ["Recent irrigation history available", "One moisture sensor stale", "Field observation requested"],
       missingInputs: ["One moisture sensor missing recent reading"],
       executionTask: "Schedule conservative irrigation and request sensor check.",
@@ -46,9 +68,21 @@ const scenarios = {
     note: "Controller application differs from planned duration; verification flags follow-up.",
     recommendation: {
       ...demoRecommendation,
-      decision: "Irrigate with verification watch",
+      recommendationHeadline: "Irrigate 36 min tonight · start 21:30 PT",
+      recommendationSubline: "10 mm net across Block A North · responding to ETo 6.0 mm and 35% deficit at 30 cm with verification watch.",
+      decision: "Irrigate 36 min tonight · start 21:30 PT",
+      timing: "21:30 PT",
+      duration: "36 min",
+      depth: "10 mm net",
+      depthMm: 10,
+      durationMin: 36,
+      startTimeLocal: "21:30 PT",
+      etoMm: 6.0,
+      deficit30cm: "35%",
       confidence: "79%",
-      dataQuality: "Medium",
+      confidenceScore: 79,
+      dataQuality: "Controller variance watch",
+      dataQualityLabel: "Controller variance watch",
       keyDrivers: ["Water deficit present", "Controller history shows prior mismatch", "Verification follow-up required"],
       verificationPlan: "Compare scheduled duration with applied event and flag variance above 10%.",
     },
@@ -60,7 +94,9 @@ const scenarios = {
     recommendation: {
       ...demoRecommendation,
       confidence: "91%",
-      dataQuality: "High",
+      confidenceScore: 91,
+      dataQuality: "Verified telemetry",
+      dataQualityLabel: "Verified telemetry",
       verificationPlan: "Controller event and field observation confirm expected outcome.",
     },
   },
@@ -176,7 +212,7 @@ export function generateDemoRecommendation(runtime) {
   };
   runtime.operatingChain = baseChain("scheduled");
   runtime.currentStep = 2;
-  addAudit(runtime, "Recommendation generated", runtime.activeRecommendation.decision);
+  addAudit(runtime, "Recommendation generated", runtime.activeRecommendation.recommendationHeadline || runtime.activeRecommendation.decision);
   return persist(runtime);
 }
 
@@ -219,13 +255,17 @@ export function generateDemoReport(runtime, type = "Irrigation Intelligence Repo
     block: runtime.activeZone.name,
     crop: runtime.activeZone.crop,
     controllerSource: runtime.activeZone.controllerSource,
-    recommendation: rec.decision,
+    recommendation: rec.recommendationHeadline || rec.decision,
+    recommendationDepth: rec.depth || `${rec.depthMm} mm net`,
+    recommendationDuration: rec.duration || `${rec.durationMin} min`,
+    recommendationTiming: rec.startTimeLocal || rec.timing,
+    recommendationReason: rec.recommendationSubline,
     scheduledAction: runtime.operatingChain[1]?.evidence || "Awaiting schedule",
     appliedAction: runtime.operatingChain[2]?.evidence || "Awaiting controller execution",
     observedOutcome: runtime.operatingChain[3]?.evidence || "Awaiting field observation",
     verificationStatus: runtime.operatingChain[4]?.status || "Verification pending",
-    confidence: rec.confidence,
-    dataQuality: rec.dataQuality,
+    confidence: rec.confidence || `${rec.confidenceScore}%`,
+    dataQuality: rec.dataQualityLabel || rec.dataQuality,
     keyDrivers: rec.keyDrivers || [],
     waterEfficiencyNote: runtime.scenario.id === "rain_wait" ? "Avoided unnecessary irrigation ahead of rainfall." : "Decision supports targeted water application and verification evidence.",
   };
