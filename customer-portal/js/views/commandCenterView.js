@@ -1,6 +1,6 @@
-import { demoChain, demoFarms, demoRecommendation } from "../demoData.js";
+import { demoChain, demoFarms, demoInstitutionalKpis, demoRecommendation } from "../demoData.js";
 import { escapeHtml } from "../components/dom.js";
-import { metricCard, operatingChain, recommendationProofCard, table, technicalTrace } from "../components/ui.js";
+import { metricCard, operatingChain, recommendationProofCard, roiComplianceStrip, table, technicalTrace } from "../components/ui.js";
 
 function liveChainFromState(state) {
   const now = state.live.recommendation ? new Date().toISOString() : "";
@@ -35,18 +35,26 @@ export function renderCommandCenter(state) {
   const zones = demoFarms.flatMap((farm) => farm.zones.map((zone) => ({ ...zone, farm: farm.name })));
   const liveZones = [...state.live.zonesByFarm.values()].flat();
   const recommendation = isDemo ? runtime.activeRecommendation || runtime.scenario.recommendation : state.live.recommendation;
+  const institutionalKpis = isDemo ? runtime.institutionalKpis || demoInstitutionalKpis : {
+    waterSavedYtd: "Awaiting live ROI",
+    waterSavingsRate: "Live baseline pending",
+    dollarValueAvoided: "Awaiting live value",
+    pricingAssumption: "backend ROI endpoint",
+    compliancePosture: "Auth-ready",
+    evidenceCompleteness: "Live evidence pending",
+    portfolioCoverage: liveZones.length ? `Live WiseConn / ${liveZones.length} zones` : "Live workspace pending",
+    freshness: "Updated when live ROI endpoint is enabled",
+    assumptionLabel: "Live ROI endpoint pending",
+  };
   const chain = isDemo ? runtime.operatingChain : liveChainFromState(state);
-  const decision = recommendation?.recommendationHeadline || recommendation?.decision || recommendation?.water_decision || recommendation?.recommendation || "Generate a live recommendation to populate the decision card.";
-  const heroSubline = recommendation?.recommendationSubline || (isDemo ? "12 mm net across Block A North · responding to ETo 6.4 mm and 38% deficit at 30 cm." : "Live WiseConn environment available. Generate a live recommendation for zone 162803 from the Intelligence screen.");
-  const depth = recommendation?.depth || (recommendation?.depthMm ? `${recommendation.depthMm} mm net` : recommendation?.depth_mm ? `${recommendation.depth_mm} mm net` : "Awaiting telemetry");
-  const duration = recommendation?.duration || (recommendation?.durationMin ? `${recommendation.durationMin} min` : recommendation?.duration_min ? `${recommendation.duration_min} min` : recommendation?.duration_minutes || "Awaiting telemetry");
-  const timing = recommendation?.startTimeLocal || recommendation?.timing || recommendation?.start_time || "Awaiting telemetry";
-  const confidence = recommendation?.confidence || recommendation?.confidence_score || (recommendation?.confidenceScore ? `${recommendation.confidenceScore}%` : "Data source pending");
-  const dataQuality = recommendation?.dataQualityLabel || recommendation?.dataQuality || recommendation?.data_quality || "Awaiting telemetry";
+  const decision = recommendation?.decision || recommendation?.water_decision || recommendation?.recommendation || "Generate a live recommendation to populate the decision card.";
+  const confidence = recommendation?.confidence || recommendation?.confidence_score || "Data source pending";
+  const dataQuality = recommendation?.dataQuality || recommendation?.data_quality || "Awaiting telemetry";
   const demoRows = zones.map((zone) => [zone.farm, zone.name, zone.controllerSource, zone.recommendation, zone.verificationStatus]);
   const liveRows = liveZones.slice(0, 8).map((zone) => ["Live WiseConn", zone.name || zone.id, "WiseConn", "Use Intelligence screen to generate", "Verification pending"]);
 
   return `<div class="screen-stack">
+    ${roiComplianceStrip(institutionalKpis, { isDemo })}
     ${isDemo ? demoGuideCard() : ""}
     ${isDemo ? `<section class="panel-card runtime-controls"><div class="section-heading"><p class="eyebrow">AGRO-AI Demo Flow</p><h2>Run the operating journey</h2><p>Scenario: ${escapeHtml(runtime.scenario.name)} · Next action: ${escapeHtml(runtime.operatingChain.find((step) => step.status !== "Complete")?.label || "Open report")}</p></div><div class="guide-steps">${[
       ["Review connected environment", "Current", "Confirm selected farm, block, and provider context."],
@@ -58,11 +66,13 @@ export function renderCommandCenter(state) {
       ["Open report", runtime.reportSnapshots?.length ? "Complete" : "Pending", "Preview, print, or export the result."],
     ].map((step) => `<article><strong>${escapeHtml(step[0])}</strong><span>${escapeHtml(step[1])}</span><p>${escapeHtml(step[2])}</p></article>`).join("")}</div><div class="runtime-actions"><button class="button secondary" data-action="reset-demo" type="button">Reset Demo</button><button class="button secondary" data-action="start-guide" type="button">Start Guided Demo</button><button class="button primary" data-action="next-step" type="button">Next Step</button></div><label>Scenario<select id="scenario-select">${["dry_day", "rain_wait", "partial_telemetry", "mismatch", "verified_success"].map((id) => `<option value="${id}" ${runtime.scenario.id === id ? "selected" : ""}>${escapeHtml({dry_day:"Dry day, irrigation recommended", rain_wait:"Rain forecast, wait recommended", partial_telemetry:"Partial telemetry, confidence reduced", mismatch:"Planned vs applied mismatch", verified_success:"Verification completed successfully"}[id])}</option>`).join("")}</select></label></section>` : ""}
     <section class="hero-panel">
-      <div><p class="eyebrow">Water Command Center</p><h2 class="hero-recommendation-headline">${escapeHtml(decision)}</h2><p class="hero-recommendation-subline">${escapeHtml(heroSubline)}</p></div>
-      <div class="hero-metrics command-kpis quantitative-hero-kpis">${metricCard("Farm / block", isDemo ? `${selectedFarm.name} · ${selectedZone.name}` : "WiseConn zone 162803")}${metricCard(
-        "Duration",
-        duration
-      )}${metricCard("Depth", depth)}${metricCard("Start time", timing)}${metricCard("Confidence", confidence)}${metricCard("Data quality", dataQuality)}</div>
+      <div><p class="eyebrow">Water Command Center</p><h2>${escapeHtml(decision)}</h2><p>${escapeHtml(
+        isDemo ? "Demo workspace — simulated data clearly labeled for sales and partner walkthroughs." : "Live WiseConn environment available. Generate a live recommendation for zone 162803 from the Intelligence screen."
+      )}</p></div>
+      <div class="hero-metrics command-kpis">${metricCard("Farm / block", isDemo ? `${selectedFarm.name} · ${selectedZone.name}` : "WiseConn zone 162803")}${metricCard(
+        "Controller source",
+        isDemo ? selectedZone.controllerSource : "Live WiseConn"
+      )}${metricCard("Today’s decision", decision)}${metricCard("Confidence", confidence)}${metricCard("Data quality", dataQuality)}${metricCard("Verification state", chain[4]?.status || "Verification pending")}</div>
     </section>
     ${recommendationProofCard(recommendation || {}, {
       label: isDemo ? "Today’s demo recommendation" : "Live recommendation proof",

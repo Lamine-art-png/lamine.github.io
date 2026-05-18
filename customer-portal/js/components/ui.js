@@ -8,6 +8,21 @@ export function metricCard(label, value, detail = "") {
   return `<article class="metric-card"><p class="metric-value">${escapeHtml(value)}</p><p class="metric-label">${escapeHtml(label)}</p>${detail ? `<p class="metric-detail">${escapeHtml(detail)}</p>` : ""}</article>`;
 }
 
+
+export function roiComplianceStrip(kpis = {}, options = {}) {
+  const assumption = options.isDemo ? kpis.assumptionLabel || "Demo-mode financial assumptions" : kpis.assumptionLabel || "Financial assumptions";
+  const freshness = kpis.freshness || "Updated 4 min ago";
+  const tiles = [
+    ["YTD water saved", kpis.waterSavedYtd || "41.8 acre-ft", `${kpis.waterSavingsRate || "27%"} reduction vs baseline`],
+    ["$ avoided", kpis.dollarValueAvoided || "$28,400", `Assumes ${kpis.pricingAssumption || "$680 / acre-ft blended cost"}`],
+    ["Compliance posture", kpis.compliancePosture || "SGMA-ready", `${kpis.evidenceCompleteness || "92%"} evidence completeness`],
+  ];
+
+  return `<section class="roi-compliance-strip" aria-label="Institutional ROI and compliance KPIs"><div class="roi-strip-head"><div><p class="eyebrow">Institutional ROI</p><h2>Water value and compliance posture</h2></div><div class="roi-strip-meta"><span>${escapeHtml(freshness)}</span>${badge(assumption, "neutral")}</div></div><div class="roi-kpi-grid">${tiles
+    .map(([label, value, detail]) => `<article class="roi-kpi-tile"><p class="metric-label">${escapeHtml(label)}</p><p class="metric-value">${escapeHtml(value)}</p><p class="metric-detail">${escapeHtml(detail)}</p></article>`)
+    .join("")}</div><p class="roi-coverage">Portfolio coverage: ${escapeHtml(kpis.portfolioCoverage || "3 farms / 4 active blocks")}</p></section>`;
+}
+
 export function emptyState(title, detail) {
   return `<section class="empty-state"><h3>${escapeHtml(title)}</h3><p>${escapeHtml(detail)}</p></section>`;
 }
@@ -45,18 +60,18 @@ export function operatingChain(steps = []) {
 export function recommendationProofCard(recommendation = {}, options = {}) {
   const label = options.label || "Recommendation proof";
   const modeBadge = options.modeBadge || "Demo data";
-  const headline = recommendation.recommendationHeadline || recommendation.decision || recommendation.water_decision || recommendation.recommendation || recommendation.action || "Data source pending";
-  const subline = recommendation.recommendationSubline || recommendation.reason || recommendation.sourceTraceSummary || recommendation.source_trace_summary || recommendation.trace_summary || "Source trace available in Technical Trace.";
-  const duration = recommendation.duration || (recommendation.durationMin || recommendation.duration_min ? `${recommendation.durationMin || recommendation.duration_min} min` : recommendation.duration_minutes || recommendation.irrigation_minutes || "Awaiting telemetry");
-  const depth = recommendation.depth || (recommendation.depthMm || recommendation.depth_mm ? `${recommendation.depthMm || recommendation.depth_mm} mm net` : recommendation.recommended_depth_mm || "Awaiting telemetry");
-  const timing = recommendation.startTimeLocal || recommendation.timing || recommendation.start_time || recommendation.recommended_start || "Awaiting telemetry";
-  const eto = recommendation.etoMm || recommendation.eto_mm ? `ETo ${recommendation.etoMm || recommendation.eto_mm} mm` : "ETo awaiting telemetry";
-  const deficit = recommendation.deficit30cm || recommendation.deficit_30cm ? `${recommendation.deficit30cm || recommendation.deficit_30cm} deficit at 30 cm` : "Deficit awaiting telemetry";
-  const confidence = recommendation.confidence || recommendation.confidence_score || (recommendation.confidenceScore ? `${recommendation.confidenceScore}%` : "Data source pending");
-  const dataQuality = recommendation.dataQualityLabel || recommendation.dataQuality || recommendation.data_quality || "Data source pending";
+  const decision = recommendation.decision || recommendation.water_decision || recommendation.recommendation || recommendation.action || "Data source pending";
+  const depth = recommendation.depth || recommendation.depth_mm || recommendation.recommended_depth_mm || "Awaiting telemetry";
+  const duration = recommendation.duration || recommendation.duration_minutes || recommendation.duration_min || recommendation.irrigation_minutes || "Awaiting telemetry";
+  const timing = recommendation.timing || recommendation.start_time || recommendation.recommended_start || "Awaiting telemetry";
+  const confidence = recommendation.confidence || recommendation.confidence_score || "Data source pending";
+  const dataQuality = recommendation.dataQuality || recommendation.data_quality || "Data source pending";
   const keyDrivers = recommendation.keyDrivers || recommendation.key_drivers || recommendation.drivers || recommendation.reasons || [];
+  const liveInputs = recommendation.liveInputsUsed || recommendation.live_inputs_used || recommendation.inputs_used || [];
+  const overrides = recommendation.manualOverridesUsed || recommendation.manual_overrides_used || recommendation.overrides_used || [];
   const verification = recommendation.verificationPlan || recommendation.verification_plan || "Verification required after controller execution and field observation.";
   const executionTask = recommendation.executionTask || recommendation.execution_task || recommendation.task || "Schedule review required before controller execution.";
+  const sourceTrace = recommendation.sourceTraceSummary || recommendation.source_trace_summary || recommendation.trace_summary || "Source trace available in Technical Trace.";
 
   const actionButtons = options.actions === true
     ? `<div class="artifact-actions"><button class="button secondary" data-action="schedule" type="button">Schedule recommendation</button><button class="button secondary" data-action="mark-applied" type="button">Mark as applied</button><button class="button secondary" data-action="add-observation" type="button">Add observation</button><button class="button secondary" data-action="verify" type="button">Verify outcome</button><button class="button primary" data-action="open-report" type="button">Open report</button></div>`
@@ -64,16 +79,15 @@ export function recommendationProofCard(recommendation = {}, options = {}) {
       ? `<div class="artifact-actions"><button class="button secondary" data-action="live-execution-note" type="button">Schedule recommendation</button><button class="button secondary" data-action="live-execution-note" type="button">Mark as applied</button><button class="button secondary" data-action="live-execution-note" type="button">Verify outcome</button></div><p class="muted">Execution capture requires backend execution endpoint. This demo can simulate the verification chain.</p>`
       : "";
 
-  return `<section class="decision-panel recommendation-proof"><div class="proof-head quantitative-proof-head"><div><p class="eyebrow">${escapeHtml(label)}</p><h2>${escapeHtml(headline)}</h2><p class="proof-subtitle">${escapeHtml(subline)}</p></div><div class="proof-badges">${badge(confidence, "success")}${badge(dataQuality, options.badgeTone || "warning")}${badge(modeBadge, "neutral")}</div></div><div class="hero-metrics proof-metrics quantitative-metrics">${metricCard(
-    "Duration",
-    duration
-  )}${metricCard("Depth", depth)}${metricCard("Start time", timing)}${metricCard("ETo", eto)}${metricCard("Root-zone deficit", deficit)}</div><div class="three-column proof-lists quantitative-proof-lists"><article><h3>Key drivers</h3><ul>${listItems(
+  return `<section class="decision-panel recommendation-proof"><div class="proof-head"><div><p class="eyebrow">${escapeHtml(label)}</p><h2>${escapeHtml(decision)}</h2><p class="proof-subtitle">${escapeHtml(sourceTrace)}</p></div>${badge(modeBadge, options.badgeTone || "warning")}</div><div class="hero-metrics proof-metrics">${metricCard(
+    "Recommended depth",
+    depth
+  )}${metricCard("Recommended duration", duration)}${metricCard("Timing", timing)}${metricCard("Confidence", confidence)}${metricCard("Data quality", dataQuality)}</div><div class="three-column proof-lists"><article><h3>Key drivers</h3><ul>${listItems(
     keyDrivers
-  )}</ul></article><article><h3>Execution task</h3><p>${escapeHtml(executionTask)}</p></article><article><h3>Verification required</h3><p>${escapeHtml(
+  )}</ul></article><article><h3>Live inputs used</h3><ul>${listItems(liveInputs)}</ul><h3>Manual overrides used</h3><ul>${listItems(overrides)}</ul></article><article><h3>Execution task</h3><p>${escapeHtml(executionTask)}</p><h3>Verification required</h3><p>${escapeHtml(
     verification
   )}</p></article></div>${actionButtons}</section>`;
 }
-
 
 export function integrationCard(integration) {
   return `<article class="integration-card"><div class="integration-head"><div><h3>${escapeHtml(integration.name)}</h3><p>${escapeHtml(
