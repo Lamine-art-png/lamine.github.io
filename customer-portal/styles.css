@@ -475,6 +475,34 @@ body {
   box-shadow: 0 16px 34px rgba(23, 54, 45, 0.26);
 }
 
+.panel-card,
+.hero-panel,
+.decision-panel {
+  position: relative;
+  overflow: hidden;
+}
+
+.interactive-demo-card {
+  background:
+    linear-gradient(180deg, #ffffff 0%, #f7fbf7 100%);
+  border-color: rgba(47, 109, 88, 0.32);
+  box-shadow: var(--shadow-strong);
+}
+
+.demo-launch,
+.button.primary {
+  background: linear-gradient(135deg, var(--forest-700), var(--forest-850));
+  box-shadow: 0 12px 26px rgba(23, 54, 45, 0.2);
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.demo-launch:hover,
+.button.primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 16px 34px rgba(23, 54, 45, 0.26);
+}
+.org-selector-placeholder strong { color: var(--graphite); }
+
 input,
 textarea,
 select {
@@ -781,5 +809,14 @@ select:focus {
 @media (max-width: 720px) {
   .command-kpis {
     grid-template-columns: 1fr;
+  }
+  .portal-header,
+  .header-actions {
+    align-items: stretch;
+  }
+  .header-actions > * {
+    width: 100%;
+    justify-content: center;
+    text-align: center;
   }
 }

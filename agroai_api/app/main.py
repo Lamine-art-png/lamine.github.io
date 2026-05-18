@@ -73,6 +73,21 @@ from app.api.v1.forecast import router as forecast_router  # noqa: E402
 
 app.include_router(forecast_router, prefix="/v1")
 
+# Controller environment summary routes (source-aware portal framing)
+from app.api.v1.controllers import router as controllers_router  # noqa: E402
+
+app.include_router(controllers_router, prefix="/v1")
+
+# Talgil integration routes (read-path runtime surfaces)
+from app.api.v1.talgil import router as talgil_router  # noqa: E402
+
+app.include_router(talgil_router, prefix="/v1")
+
+# Intelligence engine routes (source-aware recommendation layer)
+from app.api.v1.intelligence import router as intelligence_router  # noqa: E402
+
+app.include_router(intelligence_router, prefix="/v1")
+
 
 # Prometheus metrics endpoint
 from app.core.metrics import metrics_endpoint  # noqa: E402
@@ -314,4 +329,3 @@ def demo_report(payload: DemoRunRequest = Body(...)) -> Response:
         media_type="application/pdf",
         headers={"Content-Disposition": "inline; filename=agroai_demo_report.pdf"},
     )
-
