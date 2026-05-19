@@ -317,4 +317,3 @@ def demo_report(payload: DemoRunRequest = Body(...)) -> Response:
         media_type="application/pdf",
         headers={"Content-Disposition": "inline; filename=agroai_demo_report.pdf"},
     )
-
