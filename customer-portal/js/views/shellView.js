@@ -1,16 +1,7 @@
 import { escapeHtml } from "../components/dom.js";
 import { badge } from "../components/ui.js";
 
-export const navItems = [
-  ["command-center", "Command Center"],
-  ["farm-explorer", "Farm Explorer"],
-  ["intelligence", "Intelligence"],
-  ["verification", "Verification"],
-  ["reports", "Reports"],
-  ["integrations", "Integrations"],
-  ["audit-log", "Audit Log"],
-  ["settings", "Settings"],
-];
+export const navItems = [["command-center", "AI Workbench"],["farm-explorer", "Farms"],["reports", "Reports"],["integrations", "Integrations"],["audit-log", "Audit Log"],["settings", "Settings"]];
 
 export function renderShell(state, content) {
   const workspace = state.session.workspace;

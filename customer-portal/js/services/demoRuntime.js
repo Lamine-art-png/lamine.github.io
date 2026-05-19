@@ -92,6 +92,44 @@ function baseChain(active = "recommended") {
   }));
 }
 
+
+
+export function getAnalysisSteps() {
+  return [
+    "Reading controller events",
+    "Normalizing units and timestamps",
+    "Matching farm, block, crop, and soil context",
+    "Reconciling planned vs applied water",
+    "Evaluating ETo and root-zone deficit",
+    "Generating recommendation and verification plan",
+  ].map((label) => ({ label, status: "pending", statusLabel: "Pending", detail: "Awaiting analysis" }));
+}
+
+export function resetAnalysis(runtime) {
+  runtime.analysis = { status: "idle", running: false, statusLabel: "AI context assembled", steps: getAnalysisSteps() };
+  runtime.activeRecommendation = null;
+  runtime.operatingChain = baseChain("recommended");
+  return runtime;
+}
+
+export function runAiAnalysis(runtime) {
+  runtime.analysis.running = true;
+  runtime.analysis.status = "running";
+  runtime.analysis.statusLabel = "Analysis in progress";
+  addAudit(runtime, "AI analysis started", "AGRO-AI began processing selected intake context.");
+  return persist(runtime);
+}
+
+export function completeAiAnalysis(runtime) {
+  runtime.analysis.running = false;
+  runtime.analysis.status = "complete";
+  runtime.analysis.statusLabel = "Analysis complete";
+  runtime.analysis.steps = runtime.analysis.steps.map((s)=>({ ...s, status:"complete", statusLabel:"Complete", detail:"Source reconciliation complete" }));
+  generateDemoRecommendation(runtime);
+  addAudit(runtime, "AI analysis completed", "Recommendation ready with verification required.");
+  return persist(runtime);
+}
+
 function addAudit(runtime, event, detail, source = runtime.activeZone?.name || "Demo Workspace") {
   runtime.auditEvents = [{ time: now(), actor: ACTOR, event, source, detail }, ...(runtime.auditEvents || [])].slice(0, 80);
 }
@@ -135,6 +173,9 @@ export function resetDemo(shouldPersist = true) {
     currentStep: 0,
     guideStarted: false,
     toast: "",
+    intakeMode: "",
+    intakeModeLabel: "No intake selected",
+    analysis: { status: "idle", running: false, statusLabel: "Select intake to begin", steps: getAnalysisSteps() },
   };
   addAudit(runtime, "Workspace launched", "Demo-mode runtime reset and ready.");
   return shouldPersist ? persist(runtime) : runtime;
@@ -159,8 +200,7 @@ export function selectZone(runtime, zoneId) {
 
 export function switchScenario(runtime, scenarioId) {
   runtime.scenario = scenarios[scenarioId] || scenarios.dry_day;
-  runtime.activeRecommendation = null;
-  runtime.operatingChain = baseChain("recommended");
+  resetAnalysis(runtime);
   runtime.currentStep = 1;
   addAudit(runtime, "Scenario selected", runtime.scenario.name);
   return persist(runtime);
@@ -260,4 +300,13 @@ export function nextStep(runtime) {
 export function toCsv(snapshot) {
   const rows = Object.entries(snapshot).map(([key, value]) => [key, Array.isArray(value) ? value.join("; ") : value]);
   return rows.map((row) => row.map((cell) => `"${String(cell ?? "").replaceAll('"', '""')}"`).join(",")).join("\n");
+}
+
+
+export function selectIntakeMode(runtime, mode) {
+  runtime.intakeMode = mode;
+  runtime.intakeModeLabel = mode === "connected" ? "Connected field context" : "Demo data package";
+  runtime.analysis.statusLabel = "Intake ready for analysis";
+  addAudit(runtime, "Data intake selected", runtime.intakeModeLabel);
+  return persist(runtime);
 }

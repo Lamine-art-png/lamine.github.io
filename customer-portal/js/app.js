@@ -1,7 +1,7 @@
 import { ApiClient } from "./apiClient.js";
 import { launchDemoSession, notify, returnToEntry, setActiveView, setDemoRuntime, setLoginError, startLoginScaffold, state, subscribe, SESSION_MODES } from "./state.js";
 import { loadLiveSnapshot, generateWiseConnRecommendation } from "./services/liveData.js";
-import { addObservation, generateDemoRecommendation, generateDemoReport, markApplied, nextStep, resetDemo, scheduleRecommendation, selectFarm, selectZone, startGuidedDemo, switchScenario, toCsv, verifyOutcome } from "./services/demoRuntime.js";
+import { addObservation, completeAiAnalysis, generateDemoRecommendation, generateDemoReport, markApplied, nextStep, resetDemo, runAiAnalysis, scheduleRecommendation, selectFarm, selectIntakeMode, selectZone, startGuidedDemo, switchScenario, toCsv, verifyOutcome } from "./services/demoRuntime.js";
 import { renderEntryView } from "./views/entryView.js";
 import { renderShell } from "./views/shellView.js";
 import { renderCommandCenter } from "./views/commandCenterView.js";
@@ -90,6 +90,20 @@ function bindEntryEvents() {
   });
 }
 
+async function animateAnalysis() {
+  const rt = runAiAnalysis(state.demoRuntime);
+  setDemoRuntime(rt);
+  for (let i = 0; i < rt.analysis.steps.length; i += 1) {
+    await new Promise((r) => setTimeout(r, 450));
+    rt.analysis.steps[i] = { ...rt.analysis.steps[i], status: "running", statusLabel: "Running", detail: "Processing" };
+    setDemoRuntime(rt);
+    await new Promise((r) => setTimeout(r, 300));
+    rt.analysis.steps[i] = { ...rt.analysis.steps[i], status: "complete", statusLabel: "Complete", detail: "Complete" };
+    setDemoRuntime(rt);
+  }
+  updateDemo(completeAiAnalysis(rt), "Analysis complete. Recommendation ready.");
+}
+
 function bindShellEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => setActiveView(button.dataset.view));
@@ -123,6 +137,9 @@ function bindShellEvents() {
       if (action === "start-guide") updateDemo(startGuidedDemo(state.demoRuntime), "Guided demo started");
       if (action === "next-step") updateDemo(nextStep(state.demoRuntime), "Demo advanced");
       if (action === "generate-demo-recommendation") updateDemo(generateDemoRecommendation(state.demoRuntime), "Recommendation generated");
+      if (action === "use-connected-field") updateDemo(selectIntakeMode(state.demoRuntime, "connected"), "Connected field context selected");
+      if (action === "load-demo-data-package") updateDemo(selectIntakeMode(state.demoRuntime, "uploaded"), "Demo intake simulation loaded");
+      if (action === "run-ai-analysis") animateAnalysis();
       if (action === "schedule") updateDemo(scheduleRecommendation(state.demoRuntime), "Recommendation scheduled");
       if (action === "mark-applied") updateDemo(markApplied(state.demoRuntime), "Applied water confirmed");
       if (action === "add-observation") updateDemo(addObservation(state.demoRuntime), "Observation recorded");
