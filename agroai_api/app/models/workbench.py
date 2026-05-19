@@ -1,0 +1,84 @@
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any, Dict, List, Literal, Optional
+from pydantic import BaseModel, Field
+
+SourceKind = Literal["controller_logs", "weather", "soil_moisture", "field_notes", "irrigation_records", "unknown"]
+
+class WorkbenchSession(BaseModel):
+    session_id: str
+    workspace_name: str = "AGRO-AI Workbench"
+    mode: Literal["demo", "live", "uploaded"]
+    created_at: datetime
+    updated_at: datetime
+    status: str
+
+class WorkbenchDataArtifact(BaseModel):
+    artifact_id: str
+    session_id: str
+    filename: str
+    content_type: str
+    source_kind: SourceKind
+    rows_detected: int
+    columns_detected: List[str]
+    parse_status: str
+    warnings: List[str] = Field(default_factory=list)
+    parsed_rows: List[Dict[str, Any]] = Field(default_factory=list)
+
+class NormalizedSignal(BaseModel):
+    signal_id: str
+    source_kind: SourceKind
+    field_name: str
+    canonical_name: str
+    value: Any
+    unit: Optional[str] = None
+    timestamp: Optional[str] = None
+    confidence: float = 0.5
+    raw_reference: str
+
+class WorkbenchAnalysisRequest(BaseModel):
+    session_id: str
+    mode: Literal["demo", "live", "uploaded"]
+    live_source: Optional[str] = None
+    live_entity_id: Optional[str] = None
+    crop_type: Optional[str] = None
+    soil_type: Optional[str] = None
+    irrigation_method: Optional[str] = None
+    location: Optional[str] = None
+    notes: Optional[str] = None
+    language: Optional[str] = None
+    user_role: Optional[str] = None
+
+class ReconciliationResult(BaseModel):
+    matched_signals: List[str]
+    conflicts_detected: List[str]
+    missing_inputs: List[str]
+    confidence_score: float
+    confidence_label: str
+    evidence_completeness: str
+    interpretation: str
+
+class ReportArtifact(BaseModel):
+    report_id: str
+    title: str
+    report_type: str
+    summary: str
+    metrics: Dict[str, Any]
+    export_rows: List[Dict[str, Any]]
+
+class WorkbenchAnalysisResult(BaseModel):
+    analysis_id: str
+    session_id: str
+    status: str
+    data_sources: List[Dict[str, Any]]
+    normalized_context: Dict[str, Any]
+    signal_summary: Dict[str, Any]
+    reconciliation: ReconciliationResult
+    recommendation: Dict[str, Any]
+    verification_plan: Dict[str, Any]
+    report_summary: Dict[str, Any]
+    source_trace: List[Dict[str, Any]]
+    limitations: List[str]
+    model_status: str
+    created_at: datetime

@@ -92,6 +92,10 @@ function bindEntryEvents() {
 
 async function animateAnalysis() {
   const rt = runAiAnalysis(state.demoRuntime);
+  if (!rt.analysis.sessionId) {
+    const created = await api.createWorkbenchSession({ mode: rt.intakeMode === "connected" ? "live" : "uploaded" });
+    if (created.ok) rt.analysis.sessionId = created.data.session_id;
+  }
   setDemoRuntime(rt);
   for (let i = 0; i < rt.analysis.steps.length; i += 1) {
     await new Promise((r) => setTimeout(r, 450));
@@ -101,8 +105,21 @@ async function animateAnalysis() {
     rt.analysis.steps[i] = { ...rt.analysis.steps[i], status: "complete", statusLabel: "Complete", detail: "Complete" };
     setDemoRuntime(rt);
   }
-  updateDemo(completeAiAnalysis(rt), "Analysis complete. Recommendation ready.");
+  let backend;
+  if (rt.intakeMode === "connected") {
+    backend = await api.analyzeLiveWorkbench({ source: "wiseconn", entity_id: "162803" });
+  } else if (rt.analysis.sessionId) {
+    backend = await api.analyzeWorkbenchSession(rt.analysis.sessionId, { session_id: rt.analysis.sessionId, mode: "uploaded" });
+  }
+  if (backend?.ok) {
+    rt.analysis.backendResult = backend.data;
+    updateDemo(completeAiAnalysis(rt), "Analysis complete. Recommendation ready.");
+  } else {
+    rt.analysis.running = false;
+    updateDemo(rt, backend?.error || "Analysis failed. You can use demo package fallback.");
+  }
 }
+
 
 function bindShellEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => {
@@ -128,6 +145,23 @@ function bindShellEvents() {
   });
   document.getElementById("zone-select-runtime")?.addEventListener("change", (event) => {
     updateDemo(selectZone(state.demoRuntime, event.target.value), "Zone selected");
+  });
+
+  document.getElementById("workbench-upload-input")?.addEventListener("change", async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const rt = state.demoRuntime;
+    if (!rt.analysis.sessionId) {
+      const created = await api.createWorkbenchSession({ mode: "uploaded" });
+      if (created.ok) rt.analysis.sessionId = created.data.session_id;
+    }
+    const up = await api.uploadWorkbenchFile(rt.analysis.sessionId, file);
+    if (up.ok) {
+      rt.analysis.artifacts = [...(rt.analysis.artifacts || []), up.data];
+      updateDemo(rt, `Uploaded ${file.name}`);
+    } else {
+      updateDemo(rt, up.error || "Upload failed");
+    }
   });
 
   document.querySelectorAll("[data-action]").forEach((button) => {

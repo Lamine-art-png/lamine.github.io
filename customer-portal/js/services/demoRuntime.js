@@ -175,7 +175,7 @@ export function resetDemo(shouldPersist = true) {
     toast: "",
     intakeMode: "",
     intakeModeLabel: "No intake selected",
-    analysis: { status: "idle", running: false, statusLabel: "Select intake to begin", steps: getAnalysisSteps() },
+    analysis: { status: "idle", running: false, statusLabel: "Select intake to begin", steps: getAnalysisSteps(), backendResult: null, sessionId: "", artifacts: [] },
   };
   addAudit(runtime, "Workspace launched", "Demo-mode runtime reset and ready.");
   return shouldPersist ? persist(runtime) : runtime;

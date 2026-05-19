@@ -18,6 +18,13 @@ export const ENDPOINTS = {
   talgilStatus: "/v1/integrations/talgil/status",
   talgilSensorsLatest: "/v1/integrations/talgil/sensors/latest",
   talgilAudit: "/v1/integrations/talgil/audit",
+  workbenchSessions: "/v1/workbench/sessions",
+  workbenchSession: (id) => `/v1/workbench/sessions/${encodeURIComponent(id)}` ,
+  workbenchUpload: (id) => `/v1/workbench/sessions/${encodeURIComponent(id)}/upload`,
+  workbenchAnalyze: (id) => `/v1/workbench/sessions/${encodeURIComponent(id)}/analyze`,
+  workbenchLiveAnalyze: "/v1/workbench/analyze-live",
+  workbenchReport: (id) => `/v1/workbench/sessions/${encodeURIComponent(id)}/report`,
+  workbenchSchema: "/v1/workbench/schema",
 };
 
 export class ApiClient {
@@ -138,3 +145,12 @@ export class ApiClient {
     });
   }
 }
+
+
+ApiClient.prototype.createWorkbenchSession = function(payload={mode:"uploaded"}) { return this.request(ENDPOINTS.workbenchSessions,{method:"POST", body: payload}); };
+ApiClient.prototype.uploadWorkbenchFile = async function(sessionId, file) { const form = new FormData(); form.append("file", file); const res = await fetch(`${this.baseUrl}${ENDPOINTS.workbenchUpload(sessionId)}`, { method:"POST", body: form }); const data = await res.json(); return { ok: res.ok, status: res.status, data, error: res.ok ? null : (data?.detail || "Upload failed")}; };
+ApiClient.prototype.analyzeWorkbenchSession = function(sessionId, payload){ return this.request(ENDPOINTS.workbenchAnalyze(sessionId), {method:"POST", body: payload}); };
+ApiClient.prototype.analyzeLiveWorkbench = function(payload){ return this.request(ENDPOINTS.workbenchLiveAnalyze, {method:"POST", body: payload}); };
+ApiClient.prototype.getWorkbenchSession = function(sessionId){ return this.request(ENDPOINTS.workbenchSession(sessionId)); };
+ApiClient.prototype.getWorkbenchReport = function(sessionId){ return this.request(ENDPOINTS.workbenchReport(sessionId)); };
+ApiClient.prototype.getWorkbenchSchema = function(){ return this.request(ENDPOINTS.workbenchSchema); };

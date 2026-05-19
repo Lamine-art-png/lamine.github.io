@@ -49,3 +49,7 @@ Use this script for customer, integration partner, and investor walkthroughs of 
 ## Talk track
 
 AGRO-AI tells growers what to irrigate, shows what was scheduled, verifies what was actually applied, and makes the result visible in one place.
+
+
+## Workbench Engine v1
+This portal can now create backend workbench sessions, upload files, and run `/v1/workbench` analysis for real compute results.

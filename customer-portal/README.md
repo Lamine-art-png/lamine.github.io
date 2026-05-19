@@ -123,3 +123,7 @@ Open `http://localhost:4173`.
 2. Point `app.agroai-pilot.com` to that static host through normal infrastructure change control.
 3. Keep API base set to `https://api.agroai-pilot.com` for production.
 4. Do not alter Railway secrets, DNS, Cloudflare settings, or infrastructure outside explicit change control.
+
+
+## Workbench Engine v1
+This portal can now create backend workbench sessions, upload files, and run `/v1/workbench` analysis for real compute results.

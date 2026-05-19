@@ -1000,16 +1000,6 @@ textarea { min-height: 92px; resize: vertical; }
 .sidebar-note {
   border-radius: 12px;
 }
-.org-selector-placeholder {
-  margin: -6px 0 18px;
-  border: 1px dashed #c6beb0;
-  background: #fffdf8;
-  padding: 12px 14px;
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  color: var(--muted);
-}
 .org-selector-placeholder strong { color: var(--graphite); }
 
 .sidebar-mode {
@@ -1686,11 +1676,6 @@ select {
 @media (max-width: 760px) {
   .sidebar {
     overflow-x: hidden;
-  }
-  .header-actions > * {
-    width: 100%;
-    justify-content: center;
-    text-align: center;
   }
 }
 

@@ -73,20 +73,8 @@ from app.api.v1.forecast import router as forecast_router  # noqa: E402
 
 app.include_router(forecast_router, prefix="/v1")
 
-# Controller environment summary routes (source-aware portal framing)
-from app.api.v1.controllers import router as controllers_router  # noqa: E402
-
-app.include_router(controllers_router, prefix="/v1")
-
-# Talgil integration routes (read-path runtime surfaces)
-from app.api.v1.talgil import router as talgil_router  # noqa: E402
-
-app.include_router(talgil_router, prefix="/v1")
-
-# Intelligence engine routes (source-aware recommendation layer)
-from app.api.v1.intelligence import router as intelligence_router  # noqa: E402
-
-app.include_router(intelligence_router, prefix="/v1")
+from app.api.v1.workbench import router as workbench_router  # noqa: E402
+app.include_router(workbench_router, prefix="/v1")
 
 
 # Prometheus metrics endpoint
