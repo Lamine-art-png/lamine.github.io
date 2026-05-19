@@ -45,6 +45,11 @@ class Settings(BaseSettings):
     RAINBIRD_API_URL: str = "http://mock-rainbird"
     OPENET_API_URL: str = "http://mock-openet"
 
+    TALGIL_API_URL: str = "https://external.talgil.com/v1"
+    TALGIL_API_KEY: str = ""  # Set via env var TALGIL_API_KEY
+    TALGIL_TIMEOUT_SECONDS: int = 30
+    TALGIL_MAX_RETRIES: int = 3
+
     DEMO_API_KEY: str = "changeme-demo-key"  # override via env in prod
 
     # Strip whitespace/tabs from env vars that may be copy-pasted with junk
