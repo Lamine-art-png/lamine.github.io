@@ -22,13 +22,13 @@ export function renderEntryView(state) {
       <article class="login-card customer-access-card">
         <p class="eyebrow">Customer Access</p>
         <h2>Access your workspace</h2>
-        <p class="muted">Use organization-issued credentials when production authentication is enabled. Demo access is available immediately below.</p>
+        <p class="muted">Use organization-issued credentials when production authentication is enabled. Evaluation access is available immediately below.</p>
         <form id="login-form" class="form-stack" novalidate>
           <label>Email<input id="login-email" name="email" type="email" autocomplete="email" placeholder="you@organization.com" required /></label>
           <label>Password<input name="password" type="password" autocomplete="current-password" placeholder="Password" required /></label>
           <div class="form-row">
             <label class="checkbox-label"><input name="remember" type="checkbox" /> Remember session</label>
-            <a href="#" class="text-link">Forgot password?</a>
+            <a href="mailto:support@agroai-pilot.com?subject=AGRO-AI%20workspace%20password%20reset" class="text-link">Forgot password?</a>
           </div>
           <button class="button primary" type="submit">Continue to workspace</button>
           <p id="login-error" class="form-error ${error ? "" : "hidden"}" role="alert">${escapeHtml(error)}</p>
@@ -41,11 +41,11 @@ export function renderEntryView(state) {
       </article>
 
       <article class="demo-card interactive-demo-card">
-        <p class="eyebrow">Interactive Demo</p>
-        <h2>Explore the AGRO-AI Demo Workspace</h2>
+        <p class="eyebrow">Evaluation Workspace</p>
+        <h2>Open the Water Command Center</h2>
         <p>Explore a simulated enterprise workspace with WiseConn and Talgil environments, recommendations, verification, and reports.</p>
-        <button id="launch-demo" class="button primary wide demo-launch" type="button">Launch AGRO-AI Demo Workspace</button>
-        <p class="demo-disclaimer">One click. No demo credentials. Demo data is labeled after entering the workspace.</p>
+        <button id="launch-demo" class="button primary wide demo-launch" type="button">Open Water Command Center</button>
+        <p class="demo-disclaimer">One click. No production credentials. Sample data is labeled after entering the workspace.</p>
       </article>
     </section>
   </main>`;

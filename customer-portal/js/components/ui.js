@@ -10,7 +10,7 @@ export function metricCard(label, value, detail = "") {
 
 
 export function roiComplianceStrip(kpis = {}, options = {}) {
-  const assumption = options.isDemo ? kpis.assumptionLabel || "Demo-mode financial assumptions" : kpis.assumptionLabel || "Financial assumptions";
+  const assumption = options.isDemo ? kpis.assumptionLabel || "Evaluation-mode financial assumptions" : kpis.assumptionLabel || "Financial assumptions";
   const freshness = kpis.freshness || "Updated 4 min ago";
   const tiles = [
     ["YTD water saved", kpis.waterSavedYtd || "41.8 acre-ft", `${kpis.waterSavingsRate || "27%"} reduction vs baseline`],
@@ -34,9 +34,9 @@ function statusTone(status = "") {
 export function aiDecisionPipeline(stages = [], options = {}) {
   if (!stages.length) return "";
   const compact = options.compact ? " compact" : "";
-  return `<section class="panel-card ai-pipeline-card${compact}"><div class="section-heading"><p class="eyebrow">AI Decision Pipeline</p><h2>AI Decision Pipeline</h2><p>AGRO-AI turns controller telemetry, weather, crop context, and field observations into a verified irrigation decision.</p></div><div class="ai-pipeline-grid">${stages
+  return `<section class="panel-card ai-pipeline-card${compact}"><div class="section-heading"><p class="eyebrow">Decision pipeline</p><h2>Decision pipeline</h2><p>AGRO-AI turns controller telemetry, weather, crop context, and field observations into a verified irrigation decision.</p></div><div class="ai-pipeline-grid">${stages
     .map(
-      (stage) => `<article class="ai-stage"><div class="ai-stage-top"><span class="stage-index">${escapeHtml(stage.stage || "")}</span>${badge(stage.status || "AI context assembled", statusTone(stage.status))}</div><h3>${escapeHtml(stage.title)}</h3><ul>${listItems(stage.items || [])}</ul><p>${escapeHtml(stage.explanation || "Source reconciliation complete.")}</p></article>`
+      (stage) => `<article class="ai-stage"><div class="ai-stage-top"><span class="stage-index">${escapeHtml(stage.stage || "")}</span>${badge(stage.status || "Field context assembled", statusTone(stage.status))}</div><h3>${escapeHtml(stage.title)}</h3><ul>${listItems(stage.items || [])}</ul><p>${escapeHtml(stage.explanation || "Source reconciliation complete.")}</p></article>`
     )
     .join("")}</div></section>`;
 }
@@ -47,7 +47,7 @@ export function intelligenceTransformationPanel(data = {}) {
     ["AGRO-AI reconciliation", data.reconciliation || []],
     ["Clean action", data.cleanAction || []],
   ];
-  return `<section class="panel-card transformation-card"><div class="section-heading"><p class="eyebrow">Decision intelligence</p><h2>From noisy data to verified action</h2><p>AGRO-AI makes the intelligence layer visible by turning fragmented source signals into one schedulable irrigation action.</p></div><div class="transformation-grid">${columns
+  return `<section class="panel-card transformation-card"><div class="section-heading"><p class="eyebrow">Decision intelligence</p><h2>From scattered data to verified action</h2><p>AGRO-AI makes the intelligence layer visible by turning fragmented source signals into one schedulable irrigation action.</p></div><div class="transformation-grid">${columns
     .map(([title, items], index) => `<article class="transformation-column"><span class="transform-step">${index + 1}</span><h3>${escapeHtml(title)}</h3><ul>${listItems(items)}</ul></article>`)
     .join("")}</div></section>`;
 }
@@ -99,7 +99,7 @@ export function operatingChain(steps = []) {
 
 export function recommendationProofCard(recommendation = {}, options = {}) {
   const label = options.label || "Recommendation proof";
-  const modeBadge = options.modeBadge || "Demo data";
+  const modeBadge = options.modeBadge || "Sample data";
   const decision = recommendation.decision || recommendation.water_decision || recommendation.recommendation || recommendation.action || "Data source pending";
   const depth = recommendation.depth || recommendation.depth_mm || recommendation.recommended_depth_mm || "Awaiting telemetry";
   const duration = recommendation.duration || recommendation.duration_minutes || recommendation.duration_min || recommendation.irrigation_minutes || "Awaiting telemetry";
@@ -116,7 +116,7 @@ export function recommendationProofCard(recommendation = {}, options = {}) {
   const actionButtons = options.actions === true
     ? `<div class="artifact-actions"><button class="button secondary" data-action="schedule" type="button">Schedule recommendation</button><button class="button secondary" data-action="mark-applied" type="button">Mark as applied</button><button class="button secondary" data-action="add-observation" type="button">Add observation</button><button class="button secondary" data-action="verify" type="button">Verify outcome</button><button class="button primary" data-action="open-report" type="button">Open report</button></div>`
     : options.actions === "live-disabled"
-      ? `<div class="artifact-actions"><button class="button secondary" data-action="live-execution-note" type="button">Schedule recommendation</button><button class="button secondary" data-action="live-execution-note" type="button">Mark as applied</button><button class="button secondary" data-action="live-execution-note" type="button">Verify outcome</button></div><p class="muted">Execution capture requires backend execution endpoint. This demo can simulate the verification chain.</p>`
+      ? `<div class="artifact-actions"><button class="button secondary" data-action="live-execution-note" type="button">Schedule recommendation</button><button class="button secondary" data-action="live-execution-note" type="button">Mark as applied</button><button class="button secondary" data-action="live-execution-note" type="button">Verify outcome</button></div><p class="muted">Execution capture requires backend execution endpoint. The evaluation workspace can show the verification chain.</p>`
       : "";
 
   return `<section class="decision-panel recommendation-proof"><div class="proof-head"><div><p class="eyebrow">${escapeHtml(label)}</p><h2>${escapeHtml(decision)}</h2><p class="proof-subtitle">${escapeHtml(sourceTrace)}</p></div>${badge(modeBadge, options.badgeTone || "warning")}</div><div class="hero-metrics proof-metrics">${metricCard(
@@ -146,7 +146,7 @@ export function integrationCard(integration) {
 export function onboardingProviderCard(provider) {
   return `<article class="provider-onboarding-card"><p class="eyebrow">Provider onboarding</p><h3>Connect ${escapeHtml(provider)}</h3><p>Prepare ${escapeHtml(
     provider
-  )} credentials, test runtime health, sync farms/controllers, and activate intelligence once secure backend credential endpoints are available.</p><button class="button secondary" type="button" aria-describedby="credential-note" disabled title="Secure backend credential endpoint required">Request backend setup</button></article>`;
+  )} credentials, test runtime health, sync farms/controllers, and activate intelligence once secure backend credential endpoints are available.</p><button class="button secondary" type="button" aria-describedby="credential-note" data-action="request-backend-setup" data-integration="${escapeHtml(provider)}">Request backend setup</button></article>`;
 }
 
 export function reportCard(report) {
@@ -154,11 +154,11 @@ export function reportCard(report) {
     report.coverage
   )}</dd></div><div><dt>Status</dt><dd>${escapeHtml(report.status)}</dd></div><div><dt>Last generated</dt><dd>${escapeHtml(
     report.lastGenerated || "Report generation is coming online for this deployment."
-  )}</dd></div></dl><button class="button secondary" type="button" ${report.actionAttrs || "disabled"} title="${escapeHtml(report.status)}">${escapeHtml(report.action)}</button></article>`;
+  )}</dd></div></dl><button class="button secondary" type="button" ${report.actionAttrs || `data-action="report-readiness" data-message="${escapeHtml(report.status)}"`} title="${escapeHtml(report.status)}">${escapeHtml(report.action)}</button></article>`;
 }
 
 export function technicalTrace(trace = {}) {
-  return `<details class="technical-trace"><summary>Advanced Technical Trace</summary><p class="trace-note">Advanced-only source trace for technical reviewers. Normal demo screens summarize this information above.</p><div class="trace-grid"><div><h4>Source</h4><ul>${listItems([
+  return `<details class="technical-trace"><summary>Advanced Technical Trace</summary><p class="trace-note">Advanced-only source trace for technical reviewers. Normal screens summarize this information above.</p><div class="trace-grid"><div><h4>Source</h4><ul>${listItems([
     `Source: ${formatValue(trace.source)}`,
     `Source entity ID: ${formatValue(trace.sourceEntityId)}`,
     `Context origin: ${formatValue(trace.contextOrigin)}`,

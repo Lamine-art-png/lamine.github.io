@@ -1,55 +1,51 @@
-# AGRO-AI Enterprise Portal Demo Script
+# AGRO-AI Water Command Center Walkthrough Script
 
-Use this script for customer, integration partner, and investor walkthroughs of `https://app.agroai-pilot.com`.
+Use this script for customer, integration partner, investor, OEM, and strategic partner walkthroughs of `https://app.agroai-pilot.com`.
 
-## Five minute interactive demo flow
+## Five Minute Flow
 
 1. **Open the portal** at `https://app.agroai-pilot.com`.
-   - Position AGRO-AI as the Water Command Center: connected signals become reconciled recommendations, execution tasks, verification evidence, and ROI/compliance reporting.
-2. **Launch the demo workspace** with **Launch AGRO-AI Demo Workspace**.
-   - Explain that demo data is isolated and clearly labeled.
-3. **Review ROI and compliance posture** on Command Center.
-   - Point to **41.8 acre-ft** YTD water saved, **$28,400** avoided, **SGMA-ready** posture, **92%** evidence completeness, and the **Demo-mode financial assumptions** label.
-4. **Show the AI Decision Pipeline**.
-   - Walk through signal ingest, normalized field context, source reconciliation, and the generated 42-minute irrigation decision.
-5. **Show the intelligence transformation**.
-   - Use **From noisy data to verified action** and **Cross-system reconciliation** to explain how AGRO-AI turns controller logs, ETo, soil deficit, and observations into a clean schedulable action.
-6. **Select a scenario** on Command Center.
-   - Use Dry day, Rain forecast, Partial telemetry, Planned vs applied mismatch, or Verification completed successfully depending on the audience.
-7. **Generate a recommendation**.
-   - Click **Next Step** or open **Intelligence** and click **Generate recommendation**.
-   - Show decision, timing, depth, duration, confidence, data quality, key drivers, source trace summary, live inputs, manual overrides, execution task, and verification requirement.
-8. **Schedule irrigation**.
-   - Click **Schedule recommendation** and show the Scheduled step update.
-9. **Confirm applied water**.
-   - Click **Mark as applied** and show the Applied step update with evidence.
-10. **Add field observation**.
-   - Click **Add observation** and show the Observed step update.
-11. **Verify outcome**.
-   - Click **Verify outcome** and explain that AGRO-AI tracks the complete recommendation → scheduled → applied → observed → verified chain.
-12. **Generate report**.
-   - Click **Open report** or **Preview Report** in Reports.
-   - Show the report preview, then demonstrate **Export CSV** or **Print Report**.
-13. **Show live WiseConn recommendation**.
-   - Use Customer Access / live status preview, open Intelligence, optionally enter overrides, and click **Run Live WiseConn Recommendation**.
-   - If the API fails, explain that the portal surfaces a customer-safe error and keeps demo mode available.
+   - Position AGRO-AI as the Water Command Center: scattered signals become reconciled recommendations, execution tasks, verification evidence, and reporting.
+2. **Open the evaluation workspace** with **Open Water Command Center**.
+   - Explain that sample data is isolated from production telemetry.
+3. **Introduce the main story**.
+   - Use the hero line: **Scattered irrigation data becomes a verified water decision.**
+4. **Show Source intake**.
+   - Walk through Connected field, Upload records, and Sample data package.
+   - Use **View accepted fields** and **View analysis schema** to show that the backend has a defined contract.
+5. **Run intelligence analysis**.
+   - Click **Run intelligence analysis**.
+   - Show the Intelligence Stream moving through Sources, Normalize, Reconcile, Decide, and Verify.
+6. **Show the backend trace**.
+   - Point out that the visible steps come from Workbench Engine `analysis_trace`, not static cards.
+7. **Review Recommendation**.
+   - Show action, start time, duration, depth, confidence, key drivers, limitations, and verification requirement.
+8. **Review Reconciliation and Verification**.
+   - Walk through planned-vs-applied variance, controller validity, flow-meter agreement, weather demand, soil deficit, field notes, and Earth observation sample layer support.
+9. **Move the Verification Chain**.
+   - Click **Schedule recommendation**, **Mark as applied**, **Add observation**, and **Verify outcome**.
+10. **Open Report preview**.
+   - Show evidence completeness, applied variance, compliance posture, and executive summary.
+   - Use **Export CSV** or **Print report**.
+11. **Show Integrations**.
+   - Open **Request backend setup** for WiseConn or Talgil.
+   - Copy or download the setup brief and point to the audit event.
 
-## 30 second version
+## 30 Second Version
 
-1. Launch the demo workspace.
-2. Show ROI and compliance KPIs: 41.8 acre-ft saved, $28,400 avoided, and SGMA-ready posture.
-3. Show AI Decision Pipeline and From noisy data to verified action.
-4. Show Cross-system reconciliation, including Talgil as pending target selection.
-5. Select a scenario.
-6. Show the recommendation artifact.
-7. Click through schedule, applied, observation, and verification.
-8. Open the report preview.
-9. Show Integrations and explain WiseConn/Talgil runtime status and backend credential requirements.
+1. Open Water Command Center.
+2. Show the three input modes.
+3. Run intelligence analysis.
+4. Show the animated Intelligence Stream and backend trace.
+5. Review the recommendation and Source Reconciliation.
+6. Show the Verification Chain.
+7. Preview the report.
+8. Open Integrations and prepare a backend setup request.
 
-## Talk track
+## Talk Track
 
-AGRO-AI tells growers what to irrigate, shows what was scheduled, verifies what was actually applied, and makes the result visible in one place.
+AGRO-AI reads controller history, weather, soil context, field observations, uploaded records, flow evidence, crop context, water cost context, and earth-observation sample layers, then turns them into a verified water decision that a farm team can schedule, verify, and report.
 
+## Current Limitation Language
 
-## Workbench Engine v1
-This portal can now create backend workbench sessions, upload files, and run `/v1/workbench` analysis for real compute results.
+Provider credentials must be stored server-side through a credential vault and tenant provisioning flow. The static portal does not store provider secrets in browser storage, and the earth-observation layer shown here is a sample layer rather than a live partner integration.

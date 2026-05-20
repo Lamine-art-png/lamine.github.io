@@ -33,7 +33,7 @@ export function shellHtml(state, inner) {
     <aside class="v2-sidebar">
       <div class="brand">AGRO-AI Portal v2</div>
       ${routeItems.map((r) => `<button data-route="${r}" class="nav-btn ${state.app.route === r ? "active" : ""}">${labels[r]}</button>`).join("")}
-      <button class="nav-btn demo-launch" data-action="launch-demo">Launch Demo Environment</button>
+      <button class="nav-btn demo-launch" data-action="launch-demo">Open Evaluation Environment</button>
     </aside>
     <section class="v2-main">
       <header class="v2-header card">

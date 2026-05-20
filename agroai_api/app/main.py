@@ -73,6 +73,9 @@ from app.api.v1.forecast import router as forecast_router  # noqa: E402
 
 app.include_router(forecast_router, prefix="/v1")
 
+from app.api.v1.intelligence import router as intelligence_router  # noqa: E402
+app.include_router(intelligence_router, prefix="/v1")
+
 from app.api.v1.workbench import router as workbench_router  # noqa: E402
 app.include_router(workbench_router, prefix="/v1")
 
@@ -113,6 +116,8 @@ app.add_middleware(
         "https://app.agroai-pilot.com",
         "https://agroai-portal.pages.dev",
         "http://localhost:4173",
+        "http://localhost:4174",
+        "http://127.0.0.1:4174",
     ],
     allow_credentials=True,
     allow_methods=["*"],

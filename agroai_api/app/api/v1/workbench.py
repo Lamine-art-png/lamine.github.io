@@ -11,11 +11,15 @@ MAX_FILE = 10 * 1024 * 1024
 
 class SessionCreate(BaseModel):
     mode: str = "uploaded"
-    workspace_name: str = "AGRO-AI Workbench"
+    workspace_name: str = "Water Command Center"
 
 @router.post("/sessions")
 def create_session(payload: SessionCreate):
     return engine.create_session(payload.mode, payload.workspace_name)
+
+@router.post("/sample-package")
+def create_sample_package():
+    return engine.create_sample_package_session()
 
 @router.get("/sessions/{session_id}")
 def get_session(session_id: str):
@@ -52,7 +56,7 @@ def analyze_session(session_id: str, payload: WorkbenchAnalysisRequest):
 
 @router.post('/analyze-live')
 def analyze_live(payload: dict):
-    session = engine.create_session(mode="live", workspace_name="Live Workbench")
+    session = engine.create_session(mode="live", workspace_name="Water Command Center")
     return engine.analyze_session(session.session_id, "live", payload.get("source","wiseconn"), str(payload.get("entity_id","162803")))
 
 @router.get('/sessions/{session_id}/report')
@@ -64,4 +68,18 @@ def get_report(session_id: str):
 
 @router.get('/schema')
 def schema():
-    return {"supported_file_types": sorted(list(engine.ALLOWED_EXT)), "expected_fields": ["timestamp","zone","duration_min","depth_mm","eto","rain","soil_moisture","notes"], "alias_map": engine.ALIAS, "output_schema": ["reconciliation","recommendation","verification_plan","report_summary"]}
+    return {
+        "supported_file_types": sorted(list(engine.ALLOWED_EXT)),
+        "expected_fields": {
+            "controller_events.csv": ["timestamp", "farm", "block", "zone", "provider", "event_type", "scheduled_duration_min", "applied_duration_min", "flow_m3h", "pressure_kpa", "status"],
+            "weather_summary.csv": ["timestamp", "region", "eto_mm", "rain_forecast_mm", "temperature_c", "humidity_pct", "wind_kph"],
+            "soil_moisture.csv": ["timestamp", "farm", "block", "depth_cm", "moisture_percent", "deficit_percent", "sensor_health"],
+            "field_notes.txt": ["free-text field observations"],
+            "flow_meter.csv": ["timestamp", "farm", "block", "meter_id", "planned_m3", "actual_m3", "variance_percent"],
+            "crop_profile.json": ["farm", "block", "crop", "variety", "soil_type", "irrigation_method", "root_zone_depth_cm", "growth_stage", "management_goal"],
+            "water_costs.csv": ["region", "water_source", "cost_per_acre_ft", "allocation_status", "compliance_context"],
+            "satellite_observation.csv": ["timestamp", "farm", "block", "ndvi", "canopy_temperature_c", "vegetation_stress_index", "source_label"],
+        },
+        "alias_map": engine.ALIAS,
+        "output_schema": ["data_sources", "normalized_context", "signal_summary", "reconciliation", "recommendation", "verification_plan", "report_summary", "analysis_trace"],
+    }

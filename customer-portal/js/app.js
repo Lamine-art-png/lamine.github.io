@@ -1,7 +1,8 @@
 import { ApiClient } from "./apiClient.js";
+import { acceptedWorkbenchFields, sampleDataPackage, workbenchOutputSchema } from "./demoData.js";
 import { launchDemoSession, notify, returnToEntry, setActiveView, setDemoRuntime, setLoginError, startLoginScaffold, state, subscribe, SESSION_MODES } from "./state.js";
 import { loadLiveSnapshot, generateWiseConnRecommendation } from "./services/liveData.js";
-import { addObservation, completeAiAnalysis, generateDemoRecommendation, generateDemoReport, markApplied, nextStep, resetDemo, runAiAnalysis, scheduleRecommendation, selectFarm, selectIntakeMode, selectZone, startGuidedDemo, switchScenario, toCsv, verifyOutcome } from "./services/demoRuntime.js";
+import { addObservation, completeAiAnalysis, generateDemoRecommendation, generateDemoReport, markApplied, nextStep, prepareBackendSetupRequest, resetDemo, runAiAnalysis, scheduleRecommendation, selectFarm, selectIntakeMode, selectZone, startGuidedDemo, switchScenario, toCsv, verifyOutcome } from "./services/demoRuntime.js";
 import { renderEntryView } from "./views/entryView.js";
 import { renderShell } from "./views/shellView.js";
 import { renderCommandCenter } from "./views/commandCenterView.js";
@@ -17,7 +18,7 @@ const api = new ApiClient();
 const root = document.getElementById("app");
 let liveSnapshotLoaded = false;
 
-function updateDemo(runtime, message = "Demo updated") {
+function updateDemo(runtime, message = "Workspace updated") {
   runtime.toast = message;
   setDemoRuntime(runtime);
 }
@@ -33,6 +34,126 @@ function downloadCsv(snapshot) {
   link.click();
   link.remove();
   URL.revokeObjectURL(url);
+}
+
+function downloadText(filename, content, type = "text/plain") {
+  const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function downloadSamplePackage() {
+  sampleDataPackage.forEach((file, index) => {
+    window.setTimeout(() => downloadText(file.filename, file.content, file.mime), index * 120);
+  });
+}
+
+function closeModal() {
+  document.querySelector(".portal-modal-backdrop")?.remove();
+}
+
+function openModal(title, body, footer = "") {
+  closeModal();
+  const wrapper = document.createElement("div");
+  wrapper.className = "portal-modal-backdrop";
+  wrapper.innerHTML = `<section class="portal-modal" role="dialog" aria-modal="true" aria-label="${title}">
+    <div class="modal-head"><h2>${title}</h2><button class="button ghost" data-modal-close type="button">Close</button></div>
+    <div class="modal-body">${body}</div>
+    ${footer ? `<div class="modal-footer">${footer}</div>` : ""}
+  </section>`;
+  document.body.appendChild(wrapper);
+  wrapper.querySelectorAll("[data-modal-close]").forEach((button) => button.addEventListener("click", closeModal));
+  wrapper.addEventListener("click", (event) => {
+    if (event.target === wrapper) closeModal();
+  });
+  return wrapper;
+}
+
+function fieldsMarkup(fields = acceptedWorkbenchFields) {
+  return `<div class="schema-list">${Object.entries(fields)
+    .map(([name, values]) => `<article><h3>${name}</h3><p>${values.join(", ")}</p></article>`)
+    .join("")}</div>`;
+}
+
+async function showAcceptedFields() {
+  const schema = await api.getWorkbenchSchema();
+  const fields = schema.ok && schema.data?.expected_fields ? schema.data.expected_fields : acceptedWorkbenchFields;
+  openModal("Accepted fields", fieldsMarkup(fields));
+}
+
+async function showAnalysisSchema() {
+  const response = await api.getWorkbenchSchema();
+  const schema = response.ok && response.data?.output_schema ? response.data.output_schema : workbenchOutputSchema;
+  openModal(
+    "Analysis schema",
+    `<div class="schema-list">${schema.map((item) => `<article><h3>${item}</h3><p>Returned by the Workbench Engine for portal rendering and report generation.</p></article>`).join("")}</div>`
+  );
+}
+
+function setupBrief(provider = "WiseConn") {
+  return [
+    "Backend setup request",
+    "",
+    "Workspace: Alpha Vineyard",
+    `Integration: ${provider}`,
+    "Required backend endpoint: credential vault and tenant provisioning",
+    "Required access: API key, provider account, farm/block mapping",
+    "Security note: credentials must be stored server-side, not in browser storage",
+    "Next action: send setup brief to AGRO-AI technical team",
+  ].join("\n");
+}
+
+async function copyTextToClipboard(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (_error) {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const copied = document.execCommand("copy");
+    textarea.remove();
+    return copied;
+  }
+}
+
+function openBackendSetupModal(provider = "WiseConn") {
+  const brief = setupBrief(provider);
+  const modal = openModal(
+    "Backend setup request",
+    `<dl class="setup-brief">
+      <div><dt>Workspace</dt><dd>Alpha Vineyard</dd></div>
+      <div><dt>Integration</dt><dd>${provider}</dd></div>
+      <div><dt>Required backend endpoint</dt><dd>Credential vault and tenant provisioning</dd></div>
+      <div><dt>Required access</dt><dd>API key, provider account, farm/block mapping</dd></div>
+      <div><dt>Security note</dt><dd>Credentials must be stored server-side, not in browser storage.</dd></div>
+      <div><dt>Next action</dt><dd>Send setup brief to AGRO-AI technical team.</dd></div>
+    </dl>`,
+    `<button class="button secondary" data-copy-setup type="button">Copy setup brief</button><button class="button primary" data-download-setup type="button">Download setup brief</button><button class="button ghost" data-modal-close type="button">Close</button>`
+  );
+  modal.querySelector("[data-copy-setup]")?.addEventListener("click", async () => {
+    const copied = await copyTextToClipboard(brief);
+    if (copied) {
+      updateDemo(state.demoRuntime, "Setup brief copied.");
+    } else {
+      downloadText(`${provider.toLowerCase()}-backend-setup-brief.txt`, brief);
+      updateDemo(state.demoRuntime, "Clipboard unavailable. Setup brief downloaded.");
+    }
+  });
+  modal.querySelector("[data-download-setup]")?.addEventListener("click", () => {
+    downloadText(`${provider.toLowerCase()}-backend-setup-brief.txt`, brief);
+    updateDemo(state.demoRuntime, "Setup brief downloaded.");
+  });
 }
 
 function collectOverrides(form) {
@@ -77,7 +198,7 @@ function bindEntryEvents() {
 
   document.getElementById("login-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
-    setLoginError("We could not verify those credentials. Check your email and password or launch the demo workspace.");
+    setLoginError("We could not verify those credentials. Check your email and password or open the evaluation workspace.");
   });
 
   document.getElementById("live-status-preview")?.addEventListener("click", async () => {
@@ -92,10 +213,6 @@ function bindEntryEvents() {
 
 async function animateAnalysis() {
   const rt = runAiAnalysis(state.demoRuntime);
-  if (!rt.analysis.sessionId) {
-    const created = await api.createWorkbenchSession({ mode: rt.intakeMode === "connected" ? "live" : "uploaded" });
-    if (created.ok) rt.analysis.sessionId = created.data.session_id;
-  }
   setDemoRuntime(rt);
   for (let i = 0; i < rt.analysis.steps.length; i += 1) {
     await new Promise((r) => setTimeout(r, 450));
@@ -108,15 +225,31 @@ async function animateAnalysis() {
   let backend;
   if (rt.intakeMode === "connected") {
     backend = await api.analyzeLiveWorkbench({ source: "wiseconn", entity_id: "162803" });
-  } else if (rt.analysis.sessionId) {
-    backend = await api.analyzeWorkbenchSession(rt.analysis.sessionId, { session_id: rt.analysis.sessionId, mode: "uploaded" });
+  } else {
+    if (rt.intakeMode === "sample" && !rt.analysis.sampleLoaded) {
+      const sample = await api.createSampleWorkbenchSession();
+      if (sample.ok) {
+        rt.analysis.sessionId = sample.data.session.session_id;
+        rt.analysis.artifacts = sample.data.artifacts || [];
+        rt.analysis.sampleLoaded = true;
+      }
+    }
+    if (!rt.analysis.sessionId) {
+      const created = await api.createWorkbenchSession({ mode: "uploaded", workspace_name: "Alpha Vineyard · Water Command Center" });
+      if (created.ok) rt.analysis.sessionId = created.data.session_id;
+    }
+    if (rt.analysis.sessionId) {
+      backend = await api.analyzeWorkbenchSession(rt.analysis.sessionId, { session_id: rt.analysis.sessionId, mode: "uploaded" });
+    }
   }
   if (backend?.ok) {
     rt.analysis.backendResult = backend.data;
     updateDemo(completeAiAnalysis(rt), "Analysis complete. Recommendation ready.");
   } else {
     rt.analysis.running = false;
-    updateDemo(rt, backend?.error || "Analysis failed. You can use demo package fallback.");
+    rt.analysis.status = "idle";
+    rt.analysis.statusLabel = "Backend intelligence unavailable. Sample package remains available for evaluation.";
+    updateDemo(rt, "Backend intelligence unavailable. Sample package remains available for evaluation.");
   }
 }
 
@@ -150,9 +283,9 @@ function bindShellEvents() {
   document.getElementById("workbench-upload-input")?.addEventListener("change", async (event) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    const rt = state.demoRuntime;
+    const rt = selectIntakeMode(state.demoRuntime, "upload");
     if (!rt.analysis.sessionId) {
-      const created = await api.createWorkbenchSession({ mode: "uploaded" });
+      const created = await api.createWorkbenchSession({ mode: "uploaded", workspace_name: "Alpha Vineyard · Water Command Center" });
       if (created.ok) rt.analysis.sessionId = created.data.session_id;
     }
     const up = await api.uploadWorkbenchFile(rt.analysis.sessionId, file);
@@ -167,12 +300,16 @@ function bindShellEvents() {
   document.querySelectorAll("[data-action]").forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.dataset.action;
-      if (action === "reset-demo") updateDemo(resetDemo(), "Demo reset");
-      if (action === "start-guide") updateDemo(startGuidedDemo(state.demoRuntime), "Guided demo started");
-      if (action === "next-step") updateDemo(nextStep(state.demoRuntime), "Demo advanced");
+      if (action === "reset-demo") updateDemo(resetDemo(), "Evaluation workspace reset");
+      if (action === "start-guide") updateDemo(startGuidedDemo(state.demoRuntime), "Guided evaluation started");
+      if (action === "next-step") updateDemo(nextStep(state.demoRuntime), "Evaluation advanced");
       if (action === "generate-demo-recommendation") updateDemo(generateDemoRecommendation(state.demoRuntime), "Recommendation generated");
       if (action === "use-connected-field") updateDemo(selectIntakeMode(state.demoRuntime, "connected"), "Connected field context selected");
-      if (action === "load-demo-data-package") updateDemo(selectIntakeMode(state.demoRuntime, "uploaded"), "Demo intake simulation loaded");
+      if (action === "use-upload-records") updateDemo(selectIntakeMode(state.demoRuntime, "upload"), "Upload records selected");
+      if (action === "load-sample-data-package") updateDemo(selectIntakeMode(state.demoRuntime, "sample"), "Sample data package selected");
+      if (action === "download-sample-package") downloadSamplePackage();
+      if (action === "view-accepted-fields") showAcceptedFields();
+      if (action === "view-analysis-schema") showAnalysisSchema();
       if (action === "run-ai-analysis") animateAnalysis();
       if (action === "schedule") updateDemo(scheduleRecommendation(state.demoRuntime), "Recommendation scheduled");
       if (action === "mark-applied") updateDemo(markApplied(state.demoRuntime), "Applied water confirmed");
@@ -185,8 +322,15 @@ function bindShellEvents() {
       if (action === "preview-report") updateDemo(generateDemoReport(state.demoRuntime, button.dataset.reportType || "Irrigation Intelligence Report"), "Report preview generated");
       if (action === "print-report") window.print();
       if (action === "export-csv") downloadCsv(state.demoRuntime.reportSnapshots?.[0]);
-      if (action === "live-execution-note") window.alert("Execution capture requires backend execution endpoint. This demo can simulate the verification chain.");
+      if (action === "live-execution-note") window.alert("Execution capture requires backend execution endpoint. The evaluation workspace can show the verification chain.");
       if (action === "integration-note") window.alert(button.dataset.message || "Runtime status details are shown in this card. Secure credential storage requires backend credential endpoints.");
+      if (action === "request-backend-setup") {
+        const provider = button.dataset.integration || "WiseConn";
+        updateDemo(prepareBackendSetupRequest(state.demoRuntime, provider), "Backend setup request prepared");
+        openBackendSetupModal(provider);
+      }
+      if (action === "report-readiness") window.alert(button.dataset.message || "Report generation will activate when the required backend endpoint is available.");
+      if (action === "check-integrations") setActiveView("integrations");
     });
   });
 }
