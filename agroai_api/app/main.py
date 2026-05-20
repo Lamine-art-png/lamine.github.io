@@ -142,10 +142,10 @@ async def health() -> Dict[str, Any]:
 
 
 # -------------------------
-# Existing demo: recommendation (toy)
+# Existing evaluation recommendation route
 # (Keeps your current behavior compatible)
 # -------------------------
-class DemoRequest(BaseModel):
+class EvaluationRequest(BaseModel):
     field_id: str
     crop: str
     acres: float
@@ -153,7 +153,7 @@ class DemoRequest(BaseModel):
     baseline_inches_per_week: float = Field(..., gt=0)
 
 
-class DemoResponse(BaseModel):
+class EvaluationResponse(BaseModel):
     field_id: str
     crop: str
     acres: float
@@ -163,8 +163,9 @@ class DemoResponse(BaseModel):
     savings_pct: float
 
 
-@app.post("/v1/demo/recommendation", response_model=DemoResponse)
-async def demo_recommendation(payload: DemoRequest) -> DemoResponse:
+@app.post("/v1/evaluation/recommendation", response_model=EvaluationResponse)
+@app.post("/v1/demo/recommendation", response_model=EvaluationResponse, include_in_schema=False)
+async def evaluation_recommendation(payload: EvaluationRequest) -> EvaluationResponse:
     # Toy logic: ~25% water savings
     rec = round(payload.baseline_inches_per_week * 0.75, 2)
     savings_pct = round(
@@ -172,7 +173,7 @@ async def demo_recommendation(payload: DemoRequest) -> DemoResponse:
         1,
     )
 
-    return DemoResponse(
+    return EvaluationResponse(
         **payload.dict(),
         recommended_inches_per_week=rec,
         savings_pct=savings_pct,
@@ -183,17 +184,18 @@ async def demo_recommendation(payload: DemoRequest) -> DemoResponse:
 # Optional: simple HTML sample report page
 # (Keeps your existing "/demo/sample-report" idea but self-contained)
 # -------------------------
-@app.get("/demo/sample-report", response_class=HTMLResponse)
+@app.get("/evaluation/sample-report", response_class=HTMLResponse)
+@app.get("/demo/sample-report", response_class=HTMLResponse, include_in_schema=False)
 def sample_report() -> HTMLResponse:
     html = f"""
     <html>
-      <head><title>AGRO-AI Demo Report</title></head>
+      <head><title>AGRO-AI Sample Report</title></head>
       <body style="font-family: system-ui; margin: 32px;">
-        <h2>AGRO-AI — Sample Report (DEMO)</h2>
+        <h2>AGRO-AI — Sample Report</h2>
         <p>API version: <b>{VERSION}</b></p>
-        <p>This is a placeholder HTML report for quick demos.</p>
+        <p>This is a placeholder HTML report for evaluation workflows.</p>
         <hr/>
-        <p><b>Next:</b> use <code>POST /v1/demo/report</code> to generate a PDF from selected blocks.</p>
+        <p><b>Next:</b> use <code>POST /v1/evaluation/report</code> to generate a PDF from selected blocks.</p>
       </body>
     </html>
     """
@@ -202,9 +204,9 @@ def sample_report() -> HTMLResponse:
 
 # -------------------------
 # NEW: Block list + Run + PDF report (Cristobal-proof)
-# These are what your website "live demo" page should call.
+# These are what lightweight website evaluation pages can call.
 # -------------------------
-class DemoBlock(BaseModel):
+class EvaluationBlock(BaseModel):
     id: str
     label: str
     crop: str
@@ -212,34 +214,36 @@ class DemoBlock(BaseModel):
     location: str
 
 
-# Hardcoded demo blocks (reliable, zero dependencies)
-DEMO_BLOCKS: List[DemoBlock] = [
-    DemoBlock(id="B1", label="Block 1", crop="Vineyard", acres=12.4, location="Napa, CA"),
-    DemoBlock(id="B2", label="Block 2", crop="Vineyard", acres=18.1, location="Sonoma, CA"),
-    DemoBlock(id="B3", label="Block 3", crop="Almonds", acres=25.0, location="Fresno, CA"),
+# Hardcoded sample blocks (reliable, zero dependencies)
+EVALUATION_BLOCKS: List[EvaluationBlock] = [
+    EvaluationBlock(id="B1", label="Block 1", crop="Vineyard", acres=12.4, location="Napa, CA"),
+    EvaluationBlock(id="B2", label="Block 2", crop="Vineyard", acres=18.1, location="Sonoma, CA"),
+    EvaluationBlock(id="B3", label="Block 3", crop="Almonds", acres=25.0, location="Fresno, CA"),
 ]
 
 
-class DemoRunRequest(BaseModel):
+class EvaluationRunRequest(BaseModel):
     block_ids: List[str] = Field(..., min_length=1)
     mode: str = "synthetic"
     assumptions: Dict[str, Any] = Field(default_factory=dict)
 
 
-@app.get("/v1/demo/blocks", response_model=List[DemoBlock])
-def demo_blocks() -> List[DemoBlock]:
-    return DEMO_BLOCKS
+@app.get("/v1/evaluation/blocks", response_model=List[EvaluationBlock])
+@app.get("/v1/demo/blocks", response_model=List[EvaluationBlock], include_in_schema=False)
+def evaluation_blocks() -> List[EvaluationBlock]:
+    return EVALUATION_BLOCKS
 
 
-@app.post("/v1/demo/run")
-def demo_run(payload: DemoRunRequest = Body(...)) -> Dict[str, Any]:
-    blocks_by_id = {b.id: b for b in DEMO_BLOCKS}
+@app.post("/v1/evaluation/run")
+@app.post("/v1/demo/run", include_in_schema=False)
+def evaluation_run(payload: EvaluationRunRequest = Body(...)) -> Dict[str, Any]:
+    blocks_by_id = {b.id: b for b in EVALUATION_BLOCKS}
     prescriptions: List[Dict[str, Any]] = []
 
     for bid in payload.block_ids:
         b = blocks_by_id.get(bid)
         if not b:
-            raise HTTPException(status_code=404, detail=f"Unknown demo block: {bid}")
+            raise HTTPException(status_code=404, detail=f"Unknown sample block: {bid}")
 
         # Toy baseline vs recommended (placeholder for your real engine)
         baseline = 1.0  # inches/week (toy)
@@ -257,7 +261,7 @@ def demo_run(payload: DemoRunRequest = Body(...)) -> Dict[str, Any]:
                 "recommended_inches_per_week": recommended,
                 "savings_pct": savings_pct,
                 "mode": "decision-support",
-                "reason": "demo logic: reduce baseline by 25% (placeholder for model)",
+                "reason": "evaluation logic: reduce baseline by 25% (placeholder for model)",
                 "confidence": 0.62,
             }
         )
@@ -266,17 +270,18 @@ def demo_run(payload: DemoRunRequest = Body(...)) -> Dict[str, Any]:
         "generated_at": datetime.datetime.utcnow().isoformat() + "Z",
         "mode": payload.mode,
         "prescriptions": prescriptions,
-        "report_endpoint": "/v1/demo/report",
+        "report_endpoint": "/v1/evaluation/report",
     }
 
 
-@app.post("/v1/demo/report")
-def demo_report(payload: DemoRunRequest = Body(...)) -> Response:
+@app.post("/v1/evaluation/report")
+@app.post("/v1/demo/report", include_in_schema=False)
+def evaluation_report(payload: EvaluationRunRequest = Body(...)) -> Response:
     """
     Bulletproof: generates a PDF on-demand from the request.
     No run_id, no in-memory state, no 404 after restarts.
     """
-    run = demo_run(payload)
+    run = evaluation_run(payload)
 
     # PDF generation (requires reportlab in requirements)
     from reportlab.lib.pagesizes import letter
@@ -287,7 +292,7 @@ def demo_report(payload: DemoRunRequest = Body(...)) -> Response:
     w, h = letter
 
     c.setFont("Helvetica-Bold", 14)
-    c.drawString(50, h - 50, "AGRO-AI — Weekly Proof Report (DEMO)")
+    c.drawString(50, h - 50, "AGRO-AI — Weekly Proof Report")
 
     c.setFont("Helvetica", 11)
     c.drawString(50, h - 80, f"Generated: {run['generated_at']}")
@@ -313,12 +318,12 @@ def demo_report(payload: DemoRunRequest = Body(...)) -> Response:
             c.setFont("Helvetica", 10)
 
     c.setFont("Helvetica-Oblique", 9)
-    c.drawString(50, 55, "Demo report — not a compliance document. For illustration only.")
+    c.drawString(50, 55, "Evaluation report — not a compliance document. For illustration only.")
     c.save()
 
     pdf_bytes = buf.getvalue()
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": "inline; filename=agroai_demo_report.pdf"},
+        headers={"Content-Disposition": "inline; filename=agroai_sample_report.pdf"},
     )

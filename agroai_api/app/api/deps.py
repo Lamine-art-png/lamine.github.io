@@ -7,7 +7,7 @@ async def verify_demo_api_key(
     x_api_key: str | None = Header(None, alias="X-API-Key"),
 ) -> None:
     """
-    Simple API-key guard for demo endpoints.
+    Simple API-key guard for evaluation endpoints.
 
     - If key is missing  -> 401
     - If key is wrong    -> 401
@@ -19,7 +19,7 @@ async def verify_demo_api_key(
     if not expected:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Demo API key not configured",
+            detail="Evaluation API key not configured",
         )
 
     if x_api_key is None:
@@ -33,4 +33,3 @@ async def verify_demo_api_key(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid API key",
         )
-
