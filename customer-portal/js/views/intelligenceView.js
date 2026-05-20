@@ -45,7 +45,7 @@ export function renderIntelligence(state) {
     <section class="panel-card intelligence-engine-card"><div class="section-heading"><p class="eyebrow">Intelligence Engine</p><h2>Intelligence Engine</h2><p>Live context, normalization, reconciliation, recommendation, and verification planning.</p><p class="muted">${
       isDemo ? `${runtime.activeFarm.name} · ${runtime.activeZone.name} · Scenario: ${escapeHtml(runtime.scenario.name)}` : `Live WiseConn API call target: zone ${escapeHtml(zoneId)}`
     }</p></div>
-      <div class="runtime-actions">${isDemo ? `${badge("Demo-mode assumptions", "warning")} <button class="button primary" data-action="generate-demo-recommendation" type="button">Run AI analysis</button>` : `${badge("Connected source live", "success")} <span class="muted">Run Live WiseConn Recommendation calls POST /v1/intelligence/recommend/live/wiseconn/${escapeHtml(zoneId)}.</span>`}</div>
+      <div class="runtime-actions">${isDemo ? `${badge("Evaluation-mode assumptions", "warning")} <button class="button primary" data-action="generate-demo-recommendation" type="button">Run intelligence analysis</button>` : `${badge("Connected source live", "success")} <span class="muted">Run Live WiseConn Recommendation calls POST /v1/intelligence/recommend/live/wiseconn/${escapeHtml(zoneId)}.</span>`}</div>
       ${!isDemo ? `<form id="live-recommendation-form" class="override-grid">
         <label>Crop type<input name="crop_type" type="text" placeholder="e.g. almonds" /></label>
         <label>Soil type<input name="soil_type" type="text" placeholder="e.g. silt loam" /></label>
@@ -59,7 +59,7 @@ export function renderIntelligence(state) {
       ${state.live.recommendationError ? `<p class="error-text">${escapeHtml(state.live.recommendationError)}</p>` : ""}
     </section>
     ${aiDecisionPipeline(demoAiDecisionPipeline, { compact: true })}
-    ${rec ? recommendationProofCard(rec, { label: isDemo ? "Recommendation proof" : "Live recommendation proof", modeBadge: isDemo ? "Demo-mode assumptions" : "Live API output", badgeTone: isDemo ? "warning" : "success", actions: isDemo ? true : "live-disabled" }) : emptyLive}
+    ${rec ? recommendationProofCard(rec, { label: isDemo ? "Recommendation proof" : "Live recommendation proof", modeBadge: isDemo ? "Evaluation-mode assumptions" : "Live API output", badgeTone: isDemo ? "warning" : "success", actions: isDemo ? true : "live-disabled" }) : emptyLive}
     ${operatingChain(isDemo ? runtime.operatingChain : liveChain(state))}
     <section class="panel-card"><div class="section-heading"><p class="eyebrow">Inputs</p><h2>Context used by the decision</h2></div><div class="three-column"><article><h3>Live inputs used</h3><p>${escapeHtml(
       formatValue(rec?.liveInputsUsed, "Source reconciliation pending")
@@ -69,7 +69,7 @@ export function renderIntelligence(state) {
     ${technicalTrace({
       source: isDemo ? "Recommendation proof" : "POST live WiseConn recommendation",
       sourceEntityId: isDemo ? runtime.activeZone.id : zoneId,
-      contextOrigin: isDemo ? "AI context assembled" : "Live context endpoints + manual overrides",
+      contextOrigin: isDemo ? "Field context assembled" : "Live context endpoints + manual overrides",
       controllerProvider: isDemo ? runtime.activeZone.controllerSource : "WiseConn",
       liveInputsUsed: rec?.liveInputsUsed || [],
       manualOverridesUsed: rec?.manualOverridesUsed || [],

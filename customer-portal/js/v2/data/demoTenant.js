@@ -1,5 +1,5 @@
 export function demoSeedData() {
-  const organizations = [{ id: "org_demo", name: "Demo Organization" }];
+  const organizations = [{ id: "org_demo", name: "Evaluation Organization" }];
   const farms = [
     { id: "farm_alpha", organizationId: "org_demo", name: "Alpha Vineyard", provider: "WiseConn", crop: "Grape", soil: "Loam", waterStatus: "Stable", sensorStatus: "Healthy" },
     { id: "farm_delta", organizationId: "org_demo", name: "Delta Almonds", provider: "Talgil", crop: "Almond", soil: "Clay loam", waterStatus: "Watch", sensorStatus: "Partial" },
@@ -17,9 +17,9 @@ export function demoSeedData() {
   ];
 
   const recommendations = [
-    { id: "rec_1", zoneId: "zone_162803", farmId: "farm_alpha", recommendation: "Irrigate at 05:30 for 34 min", priority: "high", confidence: 86, status: "scheduled", source: "WiseConn live", createdAt: "2026-04-27T04:30:00Z", keyDrivers: ["ET rise", "Soil moisture decline"], limitations: ["Wind model pending"], executionSteps: ["Queue irrigation", "Confirm valve pressure"], verificationPlan: "Observe canopy and sensor rebound after 2h." },
-    { id: "rec_2", zoneId: "zone_tg_993", farmId: "farm_delta", recommendation: "Irrigate at 06:10 for 22 min", priority: "medium", confidence: 74, status: "recommended", source: "Talgil live", createdAt: "2026-04-27T03:50:00Z", keyDrivers: ["Temperature increase", "Controller telemetry"], limitations: ["One sensor intermittent"], executionSteps: ["Schedule run", "Verify flow"], verificationPlan: "Capture soil probe trend at +90 min." },
-    { id: "rec_3", zoneId: "zone_98123", farmId: "farm_west", recommendation: "Maintain current schedule", priority: "low", confidence: 91, status: "verified", source: "WiseConn live", createdAt: "2026-04-26T20:10:00Z", keyDrivers: ["Stable ET", "Recent applied event"], limitations: [], executionSteps: ["No new run"], verificationPlan: "Continue daily checks." },
+    { id: "rec_1", zoneId: "zone_162803", farmId: "farm_alpha", recommendation: "Irrigate at 05:30 for 34 min", priority: "high", confidence: 86, status: "scheduled", source: "WiseConn evaluation source", createdAt: "2026-04-27T04:30:00Z", keyDrivers: ["ET rise", "Soil moisture decline"], limitations: ["Wind model pending"], executionSteps: ["Queue irrigation", "Confirm valve pressure"], verificationPlan: "Observe canopy and sensor rebound after 2h." },
+    { id: "rec_2", zoneId: "zone_tg_993", farmId: "farm_delta", recommendation: "Irrigate at 06:10 for 22 min", priority: "medium", confidence: 74, status: "recommended", source: "Talgil evaluation source", createdAt: "2026-04-27T03:50:00Z", keyDrivers: ["Temperature increase", "Controller telemetry"], limitations: ["One sensor intermittent"], executionSteps: ["Schedule run", "Verify flow"], verificationPlan: "Capture soil probe trend at +90 min." },
+    { id: "rec_3", zoneId: "zone_98123", farmId: "farm_west", recommendation: "Maintain current schedule", priority: "low", confidence: 91, status: "verified", source: "WiseConn evaluation source", createdAt: "2026-04-26T20:10:00Z", keyDrivers: ["Stable ET", "Recent applied event"], limitations: [], executionSteps: ["No new run"], verificationPlan: "Continue daily checks." },
   ];
 
   const verificationLogs = [

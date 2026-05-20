@@ -1,37 +1,37 @@
 export const demoWorkspace = {
-  id: "demo-agroai-workspace",
-  name: "AGRO-AI Demo Workspace",
-  mode: "Demo",
-  source: "Mixed",
-  label: "Demo data — not production telemetry",
+  id: "evaluation-agroai-workspace",
+  name: "Alpha Vineyard · Water Command Center",
+  mode: "Evaluation mode",
+  source: "Mixed sources",
+  label: "Sample data package isolated from production telemetry",
 };
 
 export const demoProviders = [
   {
-    id: "wiseconn-demo",
+    id: "wiseconn-evaluation",
     name: "WiseConn",
-    description: "Demo connection representing live WiseConn runtime capabilities.",
-    status: "Connected source live",
-    connectionHealth: "Demo connection healthy",
+    description: "Controller source prepared for credential-backed field onboarding and Workbench analysis.",
+    status: "Runtime status available",
+    connectionHealth: "Evaluation source healthy",
     farmsOrTargets: "2 farms",
     zonesOrSensors: "3 zones",
     reads: "Farms, zones, irrigation events, controller context",
     generates: "Water recommendations, execution tasks, planned-vs-applied verification",
     lastChecked: "2026-05-14T15:30:00Z",
-    limitation: "Demo rows are embedded and clearly separated from live WiseConn API calls.",
+    limitation: "Sample rows are isolated from live WiseConn API calls until tenant provisioning and credential vault setup are complete.",
   },
   {
-    id: "talgil-demo",
+    id: "talgil-evaluation",
     name: "Talgil",
-    description: "Demo connection representing configured Talgil controller environments.",
-    status: "Connected source live",
-    connectionHealth: "Demo runtime reachable",
+    description: "Controller environment prepared for runtime status, target mapping, and source reconciliation.",
+    status: "Runtime status available",
+    connectionHealth: "Evaluation runtime reachable",
     farmsOrTargets: "1 target",
     zonesOrSensors: "1 irrigation line + sensor catalog",
     reads: "Controller targets, sensor catalog, telemetry status",
     generates: "Normalized context for recommendations and verification workflows",
     lastChecked: "2026-05-14T15:24:00Z",
-    limitation: "Talgil runtime health is surfaced separately when live status is available; demo records do not claim live telemetry.",
+    limitation: "Talgil runtime health is surfaced separately when live status is available; sample records do not claim live telemetry.",
   },
 ];
 
@@ -39,15 +39,15 @@ export const demoFarms = [
   {
     id: "alpha-vineyard",
     name: "Alpha Vineyard",
-    provider: "WiseConn demo connection",
+    provider: "WiseConn evaluation source",
     zones: [
       {
         id: "block-a-north",
         name: "Block A North",
         crop: "Cabernet Sauvignon",
         soil: "Clay loam",
-        controllerSource: "WiseConn demo connection",
-        dataQuality: "AI context assembled",
+        controllerSource: "WiseConn evaluation source",
+        dataQuality: "Field context assembled",
         confidence: "86%",
         recommendation: "Irrigate 42 min tonight after ETo peak",
         scheduledStatus: "Scheduled",
@@ -57,11 +57,11 @@ export const demoFarms = [
         warning: "Wind forecast elevated; confirm emitter uniformity after application.",
       },
       {
-        id: "block-b-south",
-        name: "Block B South",
+        id: "block-b-west",
+        name: "Block B West",
         crop: "Merlot",
         soil: "Sandy loam",
-        controllerSource: "WiseConn demo connection",
+        controllerSource: "WiseConn evaluation source",
         dataQuality: "Medium",
         confidence: "78%",
         recommendation: "Hold irrigation; reassess after morning telemetry",
@@ -76,14 +76,14 @@ export const demoFarms = [
   {
     id: "delta-almonds",
     name: "Delta Almonds",
-    provider: "WiseConn demo connection",
+    provider: "WiseConn evaluation source",
     zones: [
       {
-        id: "pump-zone-3",
-        name: "Pump Zone 3",
+        id: "almond-block-4",
+        name: "Almond Block 4",
         crop: "Almonds",
         soil: "Silt loam",
-        controllerSource: "WiseConn demo connection",
+        controllerSource: "WiseConn evaluation source",
         dataQuality: "High",
         confidence: "91%",
         recommendation: "Apply 18 mm before 05:00 local time",
@@ -98,14 +98,14 @@ export const demoFarms = [
   {
     id: "west-citrus",
     name: "West Citrus",
-    provider: "Talgil demo connection",
+    provider: "Talgil evaluation source",
     zones: [
       {
-        id: "citrus-east-line",
-        name: "Citrus East Line",
-        crop: "Citrus",
+        id: "vineyard-block-trial",
+        name: "Vineyard Block Trial",
+        crop: "Trial vineyard",
         soil: "Loam",
-        controllerSource: "Talgil demo connection",
+        controllerSource: "Talgil evaluation source",
         dataQuality: "Medium",
         confidence: "74%",
         recommendation: "Apply short pulse irrigation and verify line pressure",
@@ -113,7 +113,7 @@ export const demoFarms = [
         appliedStatus: "Awaiting controller execution",
         observedOutcome: "Pressure observation required",
         verificationStatus: "Verification pending",
-        warning: "Pressure sensor coverage is partial in this demo scenario.",
+        warning: "Pressure sensor coverage is partial in this evaluation scenario.",
       },
     ],
   },
@@ -128,21 +128,21 @@ export const demoInstitutionalKpis = {
   evidenceCompleteness: "92%",
   portfolioCoverage: "3 farms / 4 active blocks",
   freshness: "Updated 4 min ago",
-  assumptionLabel: "Demo-mode financial assumptions",
+  assumptionLabel: "Evaluation-mode financial assumptions",
 };
 
 export const demoAiDecisionPipeline = [
   {
     stage: "01",
-    title: "Ingest messy signals",
-    status: "Live and manual",
+    title: "Ingest scattered signals",
+    status: "Mixed sources",
     explanation: "Controller events, integration health, weather demand, and field notes are collected without pretending every source is perfect.",
     items: ["WiseConn controller history", "Talgil runtime status", "ETo 6.4 mm", "Field observation: mild afternoon stress"],
   },
   {
     stage: "02",
     title: "Normalize field context",
-    status: "Context assembled",
+    status: "Field context assembled",
     explanation: "AGRO-AI maps source data into one block-level agronomic context for the recommendation engine.",
     items: ["Alpha Vineyard / Block A North", "Cabernet Sauvignon", "Drip irrigation", "30 cm root-zone deficit: 38%"],
   },
@@ -151,7 +151,7 @@ export const demoAiDecisionPipeline = [
     title: "Reconcile sources",
     status: "Reconciled",
     explanation: "Signals are checked against controller history and confidence gates before a decision is shown.",
-    items: ["Controller schedule matched", "Applied water checked", "Sensor confidence: 86%", "No critical discrepancy"],
+    items: ["Controller schedule matched", "Applied water checked", "Sensor confidence: 86%", "Pressure gap flagged"],
   },
   {
     stage: "04",
@@ -185,9 +185,9 @@ export const demoTransformation = {
 
 export const demoReconciliationRows = [
   ["WiseConn", "Last irrigation event: 36 min", "Valid recent controller event", "Matched"],
-  ["Talgil", "Runtime reachable, no selected production targets", "Available integration, no target selected", "Pending target"],
+  ["Flow meter", "Applied volume variance peaked at -13.1%", "Verification watch required", "Review"],
   ["Weather", "ETo 6.4 mm, rain 0 mm", "High water demand", "Matched"],
-  ["Field observation", "Mild afternoon stress", "Supports irrigation recommendation", "Matched"],
+  ["Field observation", "Mild afternoon stress, no visible runoff", "Supports irrigation recommendation", "Matched"],
   ["AGRO-AI reconciled view", "12 mm net application, 42 min tonight", "Decision ready with verification required", "Verified"],
 ];
 
@@ -200,19 +200,25 @@ export const demoAgroAiExplainer = [
 ];
 
 export const demoRecommendation = {
-  decision: "Irrigate 42 min tonight · start 21:00 PT",
+  action: "Irrigate Block A North tonight with verification watch",
+  decision: "Irrigate Block A North tonight with verification watch",
   timing: "21:00 PT",
+  start_time: "21:00 PT",
   duration: "42 min",
+  duration_min: 42,
   depth: "12 mm net",
+  depth_mm: 12,
   confidence: "86%",
   dataQuality: "Source reconciliation complete",
   keyDrivers: ["ETo 6.4 mm increased water demand", "38% deficit at 30 cm", "No rain window available", "Controller schedule matched"],
-  sourceTraceSummary: "AI context assembled from WiseConn controller history, crop profile, soil profile, weather forecast, and field observation.",
+  sourceTraceSummary: "Field context assembled from WiseConn controller history, crop profile, soil profile, weather forecast, and field observation.",
   liveInputsUsed: ["Controller zone", "Recent irrigation history", "Weather forecast", "Crop and soil profile"],
   manualOverridesUsed: ["Field observation: mild canopy stress on west rows"],
-  missingInputs: ["Pressure telemetry not available for this demo zone"],
+  missingInputs: ["Pressure telemetry has gaps for this evaluation block"],
+  limitations: ["Pressure telemetry has gaps for this evaluation block"],
   executionTask: "Schedule Block A North for 42 min at 21:00 PT and assign irrigation manager confirmation.",
   verificationPlan: "Verify 12 mm net against the controller-applied event, then request field observation within 12 hours.",
+  verification_requirement: "Verify 12 mm net against the controller-applied event, then request field observation within 12 hours.",
 };
 
 export const demoChain = [
@@ -224,19 +230,172 @@ export const demoChain = [
 ];
 
 export const demoReports = [
-  { name: "Irrigation Intelligence Report", purpose: "Daily decision narrative with recommendations, risks, and next actions.", status: "Demo preview available", coverage: "All demo farms", lastGenerated: "Demo preview", action: "Preview report" },
-  { name: "Planned vs Applied Report", purpose: "Compares scheduled tasks against controller-applied evidence.", status: "Demo preview available", coverage: "Operating chain", lastGenerated: "Demo preview", action: "Preview report" },
-  { name: "Water Efficiency Summary", purpose: "Summarizes water use by farm, block, and controller environment.", status: "Report generation is coming online for this deployment.", coverage: "Demo + live-ready", lastGenerated: "", action: "View readiness" },
-  { name: "Verification Compliance Report", purpose: "Shows which recommendations were scheduled, applied, observed, and verified.", status: "Demo preview available", coverage: "Decision chain", lastGenerated: "Demo preview", action: "Preview report" },
-  { name: "Integration Health Report", purpose: "Reviews provider status, sync coverage, limitations, and telemetry freshness.", status: "Runtime status live", coverage: "WiseConn + Talgil", lastGenerated: "", action: "Check integrations" },
+  { name: "Irrigation Intelligence Report", purpose: "Daily decision narrative with recommendations, risks, and next actions.", status: "Sample preview available", coverage: "All evaluation farms", lastGenerated: "Sample preview", action: "Preview report" },
+  { name: "Planned vs Applied Report", purpose: "Compares scheduled tasks against controller-applied evidence.", status: "Sample preview available", coverage: "Operating chain", lastGenerated: "Sample preview", action: "Preview report" },
+  { name: "Water Efficiency Summary", purpose: "Summarizes water use by farm, block, and controller environment.", status: "Report generation is coming online for this deployment.", coverage: "Sample + live-ready", lastGenerated: "", action: "View readiness" },
+  { name: "Verification Compliance Report", purpose: "Shows which recommendations were scheduled, applied, observed, and verified.", status: "Sample preview available", coverage: "Decision chain", lastGenerated: "Sample preview", action: "Preview report" },
+  { name: "Integration Health Report", purpose: "Reviews provider status, sync coverage, limitations, and telemetry freshness.", status: "Runtime status available", coverage: "WiseConn + Talgil", lastGenerated: "", action: "Check integrations" },
   { name: "Executive ROI Summary", purpose: "Frames water, energy, cost, and operational value for executive stakeholders.", status: "Report generation is coming online for this deployment.", coverage: "Executive layer", lastGenerated: "", action: "View readiness" },
 ];
 
 export const demoAuditLog = [
-  { time: "2026-05-14T15:01:00Z", actor: "Demo user", event: "user logged in", source: "Demo Environment", detail: "Demo session launched without credentials." },
-  { time: "2026-05-14T15:04:00Z", actor: "Integration service", event: "environment connected", source: "WiseConn demo connection", detail: "Alpha Vineyard and Delta Almonds available in demo tenant." },
-  { time: "2026-05-14T15:08:00Z", actor: "Integration service", event: "environment connected", source: "Talgil demo connection", detail: "West Citrus controller environment configured for demo." },
+  { time: "2026-05-14T15:01:00Z", actor: "Signed-in workspace user", event: "user logged in", source: "Evaluation workspace", detail: "Evaluation session launched without production credentials." },
+  { time: "2026-05-14T15:04:00Z", actor: "Integration service", event: "environment connected", source: "WiseConn evaluation source", detail: "Alpha Vineyard and Delta Almonds available in sample package." },
+  { time: "2026-05-14T15:08:00Z", actor: "Integration service", event: "environment connected", source: "Talgil evaluation source", detail: "West Citrus controller environment configured for evaluation." },
   { time: "2026-05-14T15:15:00Z", actor: "Intelligence Engine", event: "recommendation generated", source: "Block A North", detail: "Irrigate tonight with high confidence." },
   { time: "2026-05-14T15:20:00Z", actor: "Irrigation Manager", event: "execution confirmed", source: "Block A North", detail: "Schedule queued; execution evidence pending." },
-  { time: "2026-05-14T15:26:00Z", actor: "Verification service", event: "verification completed", source: "Block B South", detail: "No-action recommendation verified." },
+  { time: "2026-05-14T15:26:00Z", actor: "Verification service", event: "verification completed", source: "Block B West", detail: "No-action recommendation verified." },
+];
+
+export const sampleDataPackage = [
+  {
+    filename: "controller_events.csv",
+    mime: "text/csv",
+    content: `timestamp,farm,block,zone,provider,event_type,scheduled_duration_min,applied_duration_min,flow_m3h,pressure_kpa,status
+2026-05-12T21:00:00Z,Alpha Vineyard,Block A North,Zone 1,WiseConn,scheduled_irrigation,42,42,28.4,232,complete
+2026-05-13T21:00:00Z,Alpha Vineyard,Block A North,Zone 1,WiseConn,scheduled_irrigation,40,37,27.9,228,variance_watch
+2026-05-14T21:00:00Z,Alpha Vineyard,Block A North,Zone 1,WiseConn,scheduled_irrigation,42,36,27.1,,missing_pressure
+2026-05-15T21:00:00Z,Alpha Vineyard,Block A North,Zone 1,WiseConn,planned_irrigation,42,0,0,231,pending
+2026-05-12T22:30:00Z,Alpha Vineyard,Block B West,Zone 2,WiseConn,scheduled_irrigation,30,30,22.8,218,complete
+2026-05-13T22:30:00Z,Alpha Vineyard,Block B West,Zone 2,WiseConn,scheduled_irrigation,30,28,22.1,,missing_pressure
+2026-05-14T22:30:00Z,Alpha Vineyard,Block B West,Zone 2,WiseConn,scheduled_irrigation,34,34,23.0,221,complete
+2026-05-15T22:30:00Z,Alpha Vineyard,Block B West,Zone 2,WiseConn,planned_irrigation,28,0,0,220,pending
+2026-05-12T03:15:00Z,Delta Almonds,Almond Block 4,Zone 7,WiseConn,scheduled_irrigation,55,55,41.5,245,complete
+2026-05-13T03:15:00Z,Delta Almonds,Almond Block 4,Zone 7,WiseConn,scheduled_irrigation,55,61,42.1,247,planned_applied_mismatch
+2026-05-14T03:15:00Z,Delta Almonds,Almond Block 4,Zone 7,WiseConn,scheduled_irrigation,50,50,40.8,242,complete
+2026-05-15T03:15:00Z,Delta Almonds,Almond Block 4,Zone 7,WiseConn,planned_irrigation,48,0,0,,missing_pressure
+2026-05-12T20:45:00Z,North Ridge,Almond Block East,Zone 9,Talgil,scheduled_irrigation,46,44,36.2,239,complete
+2026-05-13T20:45:00Z,North Ridge,Almond Block East,Zone 9,Talgil,scheduled_irrigation,46,45,35.9,236,complete
+2026-05-14T20:45:00Z,North Ridge,Almond Block East,Zone 9,Talgil,scheduled_irrigation,46,38,31.2,213,variance_watch
+2026-05-15T20:45:00Z,North Ridge,Almond Block East,Zone 9,Talgil,planned_irrigation,44,0,0,238,pending
+2026-05-12T23:10:00Z,West Citrus,Vineyard Block Trial,Zone 11,Talgil,scheduled_irrigation,24,24,18.7,206,complete
+2026-05-13T23:10:00Z,West Citrus,Vineyard Block Trial,Zone 11,Talgil,scheduled_irrigation,26,24,18.3,,missing_pressure
+2026-05-14T23:10:00Z,West Citrus,Vineyard Block Trial,Zone 11,Talgil,scheduled_irrigation,26,32,19.0,207,planned_applied_mismatch
+2026-05-15T23:10:00Z,West Citrus,Vineyard Block Trial,Zone 11,Talgil,planned_irrigation,22,0,0,205,pending
+`,
+  },
+  {
+    filename: "weather_summary.csv",
+    mime: "text/csv",
+    content: `timestamp,region,eto_mm,rain_forecast_mm,temperature_c,humidity_pct,wind_kph
+2026-05-12T12:00:00Z,Central Valley North,5.8,0,29.4,42,14
+2026-05-13T12:00:00Z,Central Valley North,6.1,0,30.2,39,18
+2026-05-14T12:00:00Z,Central Valley North,6.4,0,31.1,36,21
+2026-05-15T12:00:00Z,Central Valley North,6.2,0.4,30.8,38,17
+2026-05-16T12:00:00Z,Central Valley North,5.9,1.2,28.7,44,12
+2026-05-12T12:00:00Z,Delta Almond Region,6.6,0,32.1,34,20
+2026-05-13T12:00:00Z,Delta Almond Region,6.8,0,33.0,32,23
+2026-05-14T12:00:00Z,Delta Almond Region,6.5,0,31.7,35,16
+2026-05-15T12:00:00Z,Delta Almond Region,6.1,0.2,30.9,37,14
+2026-05-16T12:00:00Z,Delta Almond Region,5.7,1.0,29.8,43,11
+`,
+  },
+  {
+    filename: "soil_moisture.csv",
+    mime: "text/csv",
+    content: `timestamp,farm,block,depth_cm,moisture_percent,deficit_percent,sensor_health
+2026-05-12T06:00:00Z,Alpha Vineyard,Block A North,30,24.1,34,healthy
+2026-05-12T06:00:00Z,Alpha Vineyard,Block A North,60,27.8,28,healthy
+2026-05-13T06:00:00Z,Alpha Vineyard,Block A North,30,22.8,37,healthy
+2026-05-13T06:00:00Z,Alpha Vineyard,Block A North,60,26.9,30,healthy
+2026-05-14T06:00:00Z,Alpha Vineyard,Block A North,30,22.2,38,healthy
+2026-05-14T06:00:00Z,Alpha Vineyard,Block A North,60,26.4,31,healthy
+2026-05-15T06:00:00Z,Alpha Vineyard,Block A North,30,21.7,40,healthy
+2026-05-15T06:00:00Z,Alpha Vineyard,Block A North,60,25.9,33,healthy
+2026-05-12T06:00:00Z,Alpha Vineyard,Block B West,30,25.8,26,healthy
+2026-05-12T06:00:00Z,Alpha Vineyard,Block B West,60,29.0,22,healthy
+2026-05-13T06:00:00Z,Alpha Vineyard,Block B West,30,25.1,28,healthy
+2026-05-13T06:00:00Z,Alpha Vineyard,Block B West,60,28.4,23,healthy
+2026-05-14T06:00:00Z,Alpha Vineyard,Block B West,30,24.6,30,stale
+2026-05-14T06:00:00Z,Alpha Vineyard,Block B West,60,27.9,25,healthy
+2026-05-12T06:00:00Z,Delta Almonds,Almond Block 4,30,20.8,42,healthy
+2026-05-12T06:00:00Z,Delta Almonds,Almond Block 4,60,24.4,35,healthy
+2026-05-13T06:00:00Z,Delta Almonds,Almond Block 4,30,20.1,44,healthy
+2026-05-13T06:00:00Z,Delta Almonds,Almond Block 4,60,23.8,37,healthy
+2026-05-14T06:00:00Z,North Ridge,Almond Block East,30,21.5,39,healthy
+2026-05-14T06:00:00Z,North Ridge,Almond Block East,60,24.8,34,healthy
+`,
+  },
+  {
+    filename: "field_notes.txt",
+    mime: "text/plain",
+    content: `Alpha Vineyard / Block A North: mild afternoon stress on west-facing rows after 15:00.
+Alpha Vineyard / Block A North: dry surface crust observed near the headland; no visible runoff near emitters.
+Alpha Vineyard / Block A North: grower wants night irrigation to avoid heat and energy peak.
+Alpha Vineyard / Block A North: pump pressure checked manually at the manifold; pressure looked stable.
+Alpha Vineyard / Block B West: canopy looked balanced; one shallow probe may be stale.
+Delta Almonds / Almond Block 4: leaves showed mild curl at the southwest corner; no ponding after prior set.
+North Ridge / Almond Block East: pressure dip reported during the prior evening set.
+West Citrus / Vineyard Block Trial: trial rows are being watched separately from commercial blocks.
+`,
+  },
+  {
+    filename: "flow_meter.csv",
+    mime: "text/csv",
+    content: `timestamp,farm,block,meter_id,planned_m3,actual_m3,variance_percent
+2026-05-12T22:00:00Z,Alpha Vineyard,Block A North,FM-AV-A1,19.8,19.6,-1.0
+2026-05-13T22:00:00Z,Alpha Vineyard,Block A North,FM-AV-A1,18.9,17.6,-6.9
+2026-05-14T22:00:00Z,Alpha Vineyard,Block A North,FM-AV-A1,19.8,17.2,-13.1
+2026-05-12T23:15:00Z,Alpha Vineyard,Block B West,FM-AV-B2,14.0,13.8,-1.4
+2026-05-13T23:15:00Z,Alpha Vineyard,Block B West,FM-AV-B2,14.0,13.2,-5.7
+2026-05-14T23:15:00Z,Alpha Vineyard,Block B West,FM-AV-B2,15.9,15.8,-0.6
+2026-05-12T04:10:00Z,Delta Almonds,Almond Block 4,FM-DA-04,38.1,38.6,1.3
+2026-05-13T04:10:00Z,Delta Almonds,Almond Block 4,FM-DA-04,38.1,42.8,12.3
+2026-05-14T04:10:00Z,Delta Almonds,Almond Block 4,FM-DA-04,34.6,34.2,-1.2
+2026-05-14T21:40:00Z,North Ridge,Almond Block East,FM-NR-E9,29.5,24.0,-18.6
+`,
+  },
+  {
+    filename: "crop_profile.json",
+    mime: "application/json",
+    content: `[
+  {"farm":"Alpha Vineyard","block":"Block A North","crop":"wine grapes","variety":"Cabernet Sauvignon","soil_type":"clay loam","irrigation_method":"drip","root_zone_depth_cm":60,"growth_stage":"berry set","management_goal":"maintain moderate vine stress while avoiding runoff"},
+  {"farm":"Alpha Vineyard","block":"Block B West","crop":"wine grapes","variety":"Merlot","soil_type":"sandy loam","irrigation_method":"drip","root_zone_depth_cm":55,"growth_stage":"berry set","management_goal":"hold steady moisture and avoid excess vigor"},
+  {"farm":"Delta Almonds","block":"Almond Block 4","crop":"almonds","variety":"Nonpareil","soil_type":"silt loam","irrigation_method":"micro-sprinkler","root_zone_depth_cm":90,"growth_stage":"kernel fill","management_goal":"protect yield while avoiding applied-water variance"}
+]`,
+  },
+  {
+    filename: "water_costs.csv",
+    mime: "text/csv",
+    content: `region,water_source,cost_per_acre_ft,allocation_status,compliance_context
+Central Valley North,Surface allocation,680,constrained,SGMA reporting and allocation tracking required
+Central Valley North,Groundwater pumping,820,watch,Energy cost and groundwater accounting reviewed monthly
+Delta Almond Region,Surface allocation,725,constrained,Allocation banking and district reporting required
+Delta Almond Region,Groundwater pumping,910,restricted,Pumping reductions expected during peak summer period
+`,
+  },
+  {
+    filename: "satellite_observation.csv",
+    mime: "text/csv",
+    content: `timestamp,farm,block,ndvi,canopy_temperature_c,vegetation_stress_index,source_label
+2026-05-12T18:00:00Z,Alpha Vineyard,Block A North,0.71,31.4,0.38,Earth observation sample layer
+2026-05-13T18:00:00Z,Alpha Vineyard,Block A North,0.70,32.0,0.43,Earth observation sample layer
+2026-05-14T18:00:00Z,Alpha Vineyard,Block A North,0.69,32.8,0.47,Earth observation sample layer
+2026-05-12T18:00:00Z,Alpha Vineyard,Block B West,0.76,29.8,0.26,Earth observation sample layer
+2026-05-13T18:00:00Z,Alpha Vineyard,Block B West,0.75,30.4,0.29,Earth observation sample layer
+2026-05-14T18:00:00Z,Delta Almonds,Almond Block 4,0.67,34.2,0.52,Earth observation sample layer
+`,
+  },
+];
+
+export const acceptedWorkbenchFields = {
+  "controller_events.csv": ["timestamp", "farm", "block", "zone", "provider", "event_type", "scheduled_duration_min", "applied_duration_min", "flow_m3h", "pressure_kpa", "status"],
+  "weather_summary.csv": ["timestamp", "region", "eto_mm", "rain_forecast_mm", "temperature_c", "humidity_pct", "wind_kph"],
+  "soil_moisture.csv": ["timestamp", "farm", "block", "depth_cm", "moisture_percent", "deficit_percent", "sensor_health"],
+  "field_notes.txt": ["free-text field observations"],
+  "flow_meter.csv": ["timestamp", "farm", "block", "meter_id", "planned_m3", "actual_m3", "variance_percent"],
+  "crop_profile.json": ["farm", "block", "crop", "variety", "soil_type", "irrigation_method", "root_zone_depth_cm", "growth_stage", "management_goal"],
+  "water_costs.csv": ["region", "water_source", "cost_per_acre_ft", "allocation_status", "compliance_context"],
+  "satellite_observation.csv": ["timestamp", "farm", "block", "ndvi", "canopy_temperature_c", "vegetation_stress_index", "source_label"],
+};
+
+export const workbenchOutputSchema = [
+  "data_sources",
+  "normalized_context",
+  "signal_summary",
+  "reconciliation",
+  "recommendation",
+  "verification_plan",
+  "report_summary",
+  "analysis_trace",
 ];

@@ -62,8 +62,8 @@ export function launchDemoSession() {
   state.session = {
     mode: SESSION_MODES.DEMO,
     workspace: demoWorkspace,
-    authNotice: "Demo data is embedded and isolated from live production API data.",
-    userEmail: "demo@agroai.local",
+    authNotice: "Sample data is embedded and isolated from live production API data.",
+    userEmail: "workspace.user@agroai-pilot.com",
     loginError: "",
   };
   state.activeView = "command-center";

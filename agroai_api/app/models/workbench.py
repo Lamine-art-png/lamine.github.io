@@ -4,11 +4,23 @@ from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
-SourceKind = Literal["controller_logs", "weather", "soil_moisture", "field_notes", "irrigation_records", "unknown"]
+SourceKind = Literal[
+    "controller_events",
+    "controller_logs",
+    "crop_profile",
+    "field_notes",
+    "flow_meter",
+    "irrigation_records",
+    "satellite_observation",
+    "soil_moisture",
+    "water_costs",
+    "weather",
+    "unknown",
+]
 
 class WorkbenchSession(BaseModel):
     session_id: str
-    workspace_name: str = "AGRO-AI Workbench"
+    workspace_name: str = "Water Command Center"
     mode: Literal["demo", "live", "uploaded"]
     created_at: datetime
     updated_at: datetime
@@ -58,6 +70,14 @@ class ReconciliationResult(BaseModel):
     confidence_label: str
     evidence_completeness: str
     interpretation: str
+    planned_vs_applied_variance: Optional[str] = None
+    controller_event_validity: Optional[str] = None
+    flow_meter_agreement: Optional[str] = None
+    weather_demand: Optional[str] = None
+    soil_moisture_deficit: Optional[str] = None
+    field_observation_support: Optional[str] = None
+    satellite_stress_support: Optional[str] = None
+    conflicts_resolved: List[str] = Field(default_factory=list)
 
 class ReportArtifact(BaseModel):
     report_id: str
@@ -71,7 +91,7 @@ class WorkbenchAnalysisResult(BaseModel):
     analysis_id: str
     session_id: str
     status: str
-    data_sources: List[Dict[str, Any]]
+    data_sources: Dict[str, Any]
     normalized_context: Dict[str, Any]
     signal_summary: Dict[str, Any]
     reconciliation: ReconciliationResult
@@ -79,6 +99,7 @@ class WorkbenchAnalysisResult(BaseModel):
     verification_plan: Dict[str, Any]
     report_summary: Dict[str, Any]
     source_trace: List[Dict[str, Any]]
+    analysis_trace: List[Dict[str, Any]] = Field(default_factory=list)
     limitations: List[str]
     model_status: str
     created_at: datetime

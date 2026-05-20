@@ -11,7 +11,7 @@ const liveReports = [
 ];
 
 function reportPreview(snapshot) {
-  if (!snapshot) return '<section class="empty-state"><h3>No report preview yet</h3><p>Generate a demo report to preview customer-ready output, print, or export CSV.</p></section>';
+  if (!snapshot) return '<section class="empty-state"><h3>No report preview yet</h3><p>Generate a report preview to review customer-ready output, print, or export CSV.</p></section>';
   return `<section class="panel-card report-preview"><div class="section-heading"><p class="eyebrow">Report Preview</p><h2>${snapshot.type}</h2><p>${snapshot.farm} · ${snapshot.block} · ${snapshot.generatedAt}</p></div>${table(
     ["Field", "Value"],
     [
@@ -25,6 +25,6 @@ export function renderReports(state) {
   const reports = isDemo ? demoReports : liveReports;
   const snapshot = state.demoRuntime.reportSnapshots?.[0];
   return `<div class="screen-stack"><section class="panel-card"><div class="section-heading"><p class="eyebrow">Report Center</p><h2>Executive-ready reporting</h2><p>Each report explains its purpose, coverage, readiness status, and the next action with customer-ready language.</p></div><div class="report-grid">${reports
-    .map((report) => isDemo ? reportCard({ ...report, action: "Preview Report", status: report.status || "Demo preview available", actionAttrs: `data-action="preview-report" data-report-type="${report.name}"` }) : reportCard(report))
+    .map((report) => isDemo ? reportCard({ ...report, action: "Preview Report", status: report.status || "Sample preview available", actionAttrs: `data-action="preview-report" data-report-type="${report.name}"` }) : reportCard(report))
     .join("")}</div></section>${isDemo ? reportPreview(snapshot) : ""}</div>`;
 }

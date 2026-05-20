@@ -6,6 +6,8 @@ def test_create_session():
 
 def test_detect_source_kind_and_schema():
     assert e.detect_source_kind('weather_summary.csv', ['eto','rain']) == 'weather'
+    assert e.detect_source_kind('flow_meter.csv', ['planned_m3','actual_m3']) == 'flow_meter'
+    assert e.detect_source_kind('crop_profile.json', ['root_zone_depth_cm']) == 'crop_profile'
     schema = e.infer_schema(['ET0','Rainfall','Runtime'])
     assert schema['ET0'] == 'eto'
     assert schema['Rainfall'] == 'rain'
@@ -25,3 +27,20 @@ def test_analyze_uploaded_low_confidence():
     res = e.analyze_session(s.session_id)
     assert res.reconciliation.missing_inputs
     assert res.model_status in ('deterministic_engine','optional_model_assist')
+
+def test_sample_package_analysis_uses_rich_sources():
+    sample = e.create_sample_package_session()
+    sid = sample['session'].session_id
+    res = e.analyze_session(sid)
+
+    assert res.data_sources['file_count'] == 8
+    assert res.data_sources['rows_parsed'] >= 70
+    assert 'flow_meter' in res.data_sources['source_kinds_detected']
+    assert res.normalized_context['farm'] == 'Alpha Vineyard'
+    assert res.normalized_context['block'] == 'Block A North'
+    assert res.signal_summary['controller_events_read'] >= 20
+    assert res.signal_summary['soil_readings_read'] >= 20
+    assert res.reconciliation.flow_meter_agreement
+    assert res.recommendation['action']
+    assert len(res.analysis_trace) == 8
+    assert res.report_summary['executive_summary']

@@ -13,7 +13,7 @@ export function loginView(state) {
         <button data-action="auth-mode" data-mode="forgot">Forgot password</button>
         <button data-action="auth-mode" data-mode="reset">Reset scaffold</button>
       </div>
-      <p class="muted">Demo users: owner@agroai.com, manager@agroai.com, operator@agroai.com, viewer@agroai.com (any password).</p>
+      <p class="muted">Evaluation users: owner@agroai.com, manager@agroai.com, operator@agroai.com, viewer@agroai.com (any password).</p>
     </section>
   </div>`;
 }
