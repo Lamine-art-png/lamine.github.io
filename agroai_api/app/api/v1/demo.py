@@ -27,7 +27,7 @@ class DemoRecommendationRequest(BaseModel):
 )
 async def demo_recommendation(payload: DemoRecommendationRequest):
     """
-    Demo endpoint for OEMs / pilots.
+    Evaluation endpoint for OEMs / pilots.
 
     Takes a simple field payload and returns a mocked
     irrigation recommendation + savings estimate.
@@ -45,7 +45,7 @@ async def demo_recommendation(payload: DemoRecommendationRequest):
         "baseline_inches_per_week": payload.baseline_inches_per_week,
         "recommended_inches_per_week": round(recommended_inches, 2),
         "expected_water_savings_percent": round(target_savings * 100, 1),
-        "notes": "Demo-only recommendation for AGRO-AI OEM integration.",
+        "notes": "Evaluation recommendation for AGRO-AI OEM integration.",
     }
 
     logger.info(
@@ -64,4 +64,3 @@ async def demo_recommendation(payload: DemoRecommendationRequest):
     )
 
     return response
-
