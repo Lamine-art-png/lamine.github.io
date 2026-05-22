@@ -16,7 +16,21 @@
  */
 
 import { TalgilSyncDO } from "./sync/TalgilSyncDO";
-import type { Env } from "./sync/TalgilSyncDO";
+import { handleDecisionAudit } from "./api/routes/decisionAudit";
+import { handleDecisionRead } from "./api/routes/decisionRead";
+import { handleDemoSampleField } from "./api/routes/demoSampleField";
+import { handleDemoSampleResponse } from "./api/routes/demoSampleResponse";
+import { handleEarthDailyDecision } from "./api/routes/earthdailyDecision";
+import { handleEarthDailyEndToEnd } from "./api/routes/earthdailyEndToEnd";
+import { handleEarthDailyNormalize } from "./api/routes/earthdailyNormalize";
+import { handleEarthDailyReport } from "./api/routes/earthdailyReport";
+import { handleEarthDailyStatus } from "./api/routes/earthdailyStatus";
+import { handleHealth } from "./api/routes/health";
+import { attachCors, preflightResponse } from "./lib/cloudflare/cors";
+import { codeFromError, errorEnvelope, readJsonBody, safeErrorMessage, statusFromError } from "./lib/cloudflare/errors";
+import type { Env } from "./lib/cloudflare/env";
+import { checkRateLimit } from "./lib/cloudflare/rateLimit";
+import { requestIdFrom } from "./lib/cloudflare/requestId";
 
 // Re-export Durable Object class for wrangler
 export { TalgilSyncDO };
@@ -26,10 +40,26 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname;
     const method = request.method;
+    const requestId = requestIdFrom(request);
+
+    const finalize = (response: Response) => attachCors(response, request, env, requestId);
+    const json = (data: unknown, status = 200, mode: "demo" | "live" = "demo") =>
+      finalize(Response.json({ ok: true, request_id: requestId, provider: "earthdaily", mode, data }, { status }));
+    const healthJson = (data: ReturnType<typeof handleHealth>) =>
+      finalize(Response.json({ ...data, ok: true, request_id: requestId, provider: "earthdaily", mode: "demo", data }));
+
+    if (method === "OPTIONS") {
+      return preflightResponse(request, env, requestId);
+    }
 
     // ── Health ──────────────────────────────────────────
-    if (path === "/health") {
-      return Response.json({ status: "ok", timestamp: new Date().toISOString() });
+    if (method === "GET" && path === "/health") {
+      return healthJson(handleHealth(env));
+    }
+
+    const earthDailyResponse = await routeEarthDaily(request, env, path, method, requestId, json, finalize);
+    if (earthDailyResponse) {
+      return earthDailyResponse;
     }
 
     // ── Auth guard ──────────────────────────────────────
@@ -37,39 +67,135 @@ export default {
       request.headers.get("Authorization")?.replace("Bearer ", "");
 
     if (adminToken !== env.ADMIN_TOKEN) {
-      return Response.json({ error: "Unauthorized" }, { status: 401 });
+      return finalize(Response.json({ error: "Unauthorized" }, { status: 401 }));
     }
 
     const tenantId = url.searchParams.get("tenantId");
     if (!tenantId && path.startsWith("/v1/integrations/talgil")) {
-      return Response.json({ error: "tenantId query param required" }, { status: 400 });
+      return finalize(Response.json({ error: "tenantId query param required" }, { status: 400 }));
     }
 
     // ── Sync DO routes (POST) ───────────────────────────
     if (method === "POST" && path.startsWith("/v1/integrations/talgil/")) {
       const action = path.replace("/v1/integrations/talgil/", "");
-      return routeToSyncDO(env, tenantId!, action, url);
+      return finalize(await routeToSyncDO(env, tenantId!, action, url));
     }
 
     // ── Read routes (GET) ───────────────────────────────
     if (method === "GET") {
       switch (path) {
         case "/v1/integrations/talgil/status":
-          return handleStatus(env, tenantId!);
+          return finalize(await handleStatus(env, tenantId!));
         case "/v1/integrations/talgil/sensors/latest":
-          return handleSensorsLatest(env, tenantId!);
+          return finalize(await handleSensorsLatest(env, tenantId!));
         case "/v1/integrations/talgil/sensors/history":
-          return handleSensorsHistory(env, tenantId!, url);
+          return finalize(await handleSensorsHistory(env, tenantId!, url));
         case "/v1/integrations/talgil/audit":
-          return handleAuditLog(env, tenantId!);
+          return finalize(await handleAuditLog(env, tenantId!));
         default:
-          return Response.json({ error: "Not found" }, { status: 404 });
+          return finalize(Response.json({ error: "Not found" }, { status: 404 }));
       }
     }
 
-    return Response.json({ error: "Not found" }, { status: 404 });
+    return finalize(Response.json({ error: "Not found" }, { status: 404 }));
   },
 };
+
+async function routeEarthDaily(
+  request: Request,
+  env: Env,
+  path: string,
+  method: string,
+  requestId: string,
+  json: (data: unknown, status?: number, mode?: "demo" | "live") => Response,
+  finalize: (response: Response) => Response,
+): Promise<Response | null> {
+  const maybeDecision = path.match(/^\/api\/v1\/decisions\/([^/]+)$/);
+  const maybeAudit = path.match(/^\/api\/v1\/decisions\/([^/]+)\/audit$/);
+  const isEarthDailyPath = path.startsWith("/api/v1/partners/earthdaily/") ||
+    path.startsWith("/api/v1/demo/earthdaily/") ||
+    Boolean(maybeDecision || maybeAudit);
+  if (!isEarthDailyPath) return null;
+
+  const limit = await checkRateLimit(request, env);
+  if (!limit.allowed) {
+    return finalize(Response.json(errorEnvelope(requestId, {
+      code: limit.code ?? "rate_limited",
+      message: limit.message ?? "Rate limit exceeded.",
+    }), { status: 429 }));
+  }
+
+  try {
+    if (method === "GET" && path === "/api/v1/partners/earthdaily/status") {
+      return json(handleEarthDailyStatus(env), 200, statusMode(env));
+    }
+    if (method === "GET" && path === "/api/v1/demo/earthdaily/sample-field") {
+      return json(handleDemoSampleField(), 200, "demo");
+    }
+    if (method === "GET" && path === "/api/v1/demo/earthdaily/sample-response") {
+      return json(handleDemoSampleResponse(), 200, "demo");
+    }
+    if (method === "GET" && maybeDecision) {
+      return json(await handleDecisionRead(env, decodeURIComponent(maybeDecision[1])), 200, "demo");
+    }
+    if (method === "GET" && maybeAudit) {
+      return json(await handleDecisionAudit(env, decodeURIComponent(maybeAudit[1])), 200, "demo");
+    }
+
+    if (method !== "POST") {
+      throw Object.assign(new Error("Method not allowed."), { code: "method_not_allowed", status: 405 });
+    }
+
+    const body = await readJsonBody(request);
+    if (path === "/api/v1/partners/earthdaily/normalize") {
+      const pack = handleEarthDailyNormalize(body);
+      return json(pack, 200, pack.provider_trace.mode);
+    }
+    if (path === "/api/v1/partners/earthdaily/decision") {
+      const mode = inferMode(body);
+      return json(await handleEarthDailyDecision(body, env, requestId, mode), 200, mode);
+    }
+    if (path === "/api/v1/partners/earthdaily/report") {
+      return json(await handleEarthDailyReport(body, env, requestId), 200, inferMode(body));
+    }
+    if (path === "/api/v1/partners/earthdaily/end-to-end") {
+      const data = await handleEarthDailyEndToEnd(body, env, requestId);
+      return json(data, 200, data.integration_metadata.mode);
+    }
+
+    throw Object.assign(new Error("EarthDaily route not found."), { code: "not_found", status: 404 });
+  } catch (error) {
+    return finalize(Response.json(errorEnvelope(requestId, {
+      code: codeFromError(error),
+      message: safeErrorMessage(error),
+      details: (error as { details?: unknown })?.details,
+    }), { status: statusFromError(error) }));
+  }
+}
+
+function statusMode(env: Env): "demo" | "live" {
+  return env.LIVE_EARTHDAILY_ENABLED === "true" &&
+    Boolean(env.EARTHDAILY_CLIENT_ID && env.EARTHDAILY_SECRET && env.EARTHDAILY_AUTH_URL && env.EARTHDAILY_API_URL)
+    ? "live"
+    : "demo";
+}
+
+function inferMode(body: unknown): "demo" | "live" {
+  const record = body as {
+    mode?: unknown;
+    provider_trace?: { mode?: unknown };
+    earthdaily_raw_input?: { mode?: unknown };
+    raw?: { mode?: unknown };
+    normalized_signal_pack?: { provider_trace?: { mode?: unknown } };
+    decision_output?: { trace?: { provider?: unknown } };
+  };
+  const mode = record?.mode ??
+    record?.earthdaily_raw_input?.mode ??
+    record?.raw?.mode ??
+    record?.provider_trace?.mode ??
+    record?.normalized_signal_pack?.provider_trace?.mode;
+  return mode === "live" ? "live" : "demo";
+}
 
 // ── Route POST actions to Durable Object ────────────────
 
