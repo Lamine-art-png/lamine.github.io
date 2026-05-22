@@ -2,3 +2,14 @@
 TALGIL_API_KEY=your_talgil_dev_api_key
 TALGIL_BASE_URL=https://dev.talgil.com/api
 ADMIN_TOKEN=your_admin_token
+EARTHDAILY_CLIENT_ID=your_earthdaily_client_id
+EARTHDAILY_SECRET=your_earthdaily_secret
+EARTHDAILY_AUTH_URL=https://earthdaily.example/oauth/token
+EARTHDAILY_API_URL=https://earthdaily.example/api
+AGROAI_LLM_API_KEY=your_anthropic_key
+AGROAI_LLM_MODEL=claude-sonnet-4-6
+DEMO_MODE=true
+LIVE_EARTHDAILY_ENABLED=false
+AGROAI_ENV=staging
+AGROAI_API_VERSION=v1
+ALLOWED_ORIGINS=https://app.agroai-pilot.com,https://agroai-portal.pages.dev,http://localhost:4173,http://127.0.0.1:4173

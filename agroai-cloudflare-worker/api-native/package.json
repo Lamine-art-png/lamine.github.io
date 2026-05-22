@@ -3,9 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "dev": "wrangler dev",
+    "dev": "wrangler dev --env staging",
     "deploy:staging": "wrangler deploy --env staging",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "migrate:staging": "wrangler d1 migrations apply agroai_staging2 --env staging --remote",
+    "kv:create": "wrangler kv:namespace create EDS_TOKEN_CACHE --env staging"
   },
   "dependencies": {},
   "devDependencies": {

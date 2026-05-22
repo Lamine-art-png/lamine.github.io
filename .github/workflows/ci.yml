@@ -4,6 +4,7 @@ on:
   pull_request:
     paths:
       - 'terraform/**'
+      - 'agroai-cloudflare-worker/api-native/**'
       - '.github/workflows/ci.yml'
 
 permissions:
@@ -11,6 +12,29 @@ permissions:
   pull-requests: write
 
 jobs:
+  worker_check:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: agroai-cloudflare-worker/api-native
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: agroai-cloudflare-worker/api-native/package-lock.json
+
+      - name: Install Worker dependencies
+        run: npm ci
+
+      - name: Test and typecheck Worker
+        run: npm test && npm run typecheck
+
   tf_check:
     runs-on: ubuntu-latest
     defaults:
