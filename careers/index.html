@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/png" href="/attached_assets/Copy of AGRO-AI (1)_1763408301972.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <title>Careers | AGRO-AI</title>
+    <meta
+      name="description"
+      content="Join AGRO-AI to build precision irrigation software that helps farms save water, protect crops, and make verified operational decisions."
+    />
+    <link rel="canonical" href="https://agroai-pilot.com/careers" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://agroai-pilot.com/careers" />
+    <meta property="og:title" content="Careers | AGRO-AI" />
+    <meta
+      property="og:description"
+      content="Remote, part-time, project-based internships for product, go-to-market, and research contributors building AI precision irrigation."
+    />
+    <meta name="theme-color" content="#2d5a2e" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.cdnfonts.com/css/glacial-indifference-2" rel="stylesheet" />
+    <link rel="stylesheet" crossorigin href="/assets/index-DqDiDnEd.css" />
+    <style>
+      :root {
+        --agro-navy: #0f172a;
+        --agro-text: #334155;
+        --agro-muted: #64748b;
+        --agro-green: #7a8f2f;
+        --agro-green-dark: #2d5a2e;
+        --agro-border: #dfe7cf;
+        --agro-soft: #f7fbef;
+      }
+
+      body {
+        font-family: "Glacial Indifference", system-ui, sans-serif;
+        color: var(--agro-text);
+      }
+
+      .careers-shell {
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 14% 6%, rgba(122, 143, 47, 0.16), transparent 28%),
+          linear-gradient(180deg, #f5f9ef 0%, #ffffff 34%, #ffffff 100%);
+      }
+
+      .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 50;
+        border-bottom: 1px solid rgba(223, 231, 207, 0.88);
+        background: rgba(255, 255, 255, 0.9);
+        backdrop-filter: blur(16px);
+      }
+
+      .site-header-inner {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 18px 0;
+      }
+
+      .brand-link {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--agro-navy);
+        font-size: 18px;
+        font-weight: 800;
+        text-decoration: none;
+      }
+
+      .brand-link img {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        object-fit: contain;
+      }
+
+      .site-nav {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+      }
+
+      .site-nav a {
+        display: inline-flex;
+        align-items: center;
+        min-height: 40px;
+        border-radius: 999px;
+        padding: 9px 14px;
+        color: #475569;
+        font-size: 14px;
+        font-weight: 700;
+        text-decoration: none;
+        transition: background 160ms ease, color 160ms ease, opacity 160ms ease;
+      }
+
+      .site-nav a:hover,
+      .site-nav a.active {
+        background: #f8faf5;
+        color: var(--agro-navy);
+      }
+
+      .site-nav .demo-link {
+        background: var(--agro-green);
+        color: #ffffff;
+      }
+
+      .site-nav .demo-link:hover {
+        background: var(--agro-green-dark);
+        color: #ffffff;
+      }
+
+      .careers-main {
+        width: min(1180px, calc(100% - 32px));
+        margin: 0 auto;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: minmax(0, 1.08fr) minmax(320px, 0.92fr);
+        gap: 28px;
+        align-items: stretch;
+        padding: 74px 0 48px;
+      }
+
+      .hero-copy,
+      .hero-panel,
+      .card,
+      .role-card,
+      .final-cta {
+        border: 1px solid var(--agro-border);
+        border-radius: 28px;
+        background: rgba(255, 255, 255, 0.88);
+        box-shadow: 0 24px 70px rgba(15, 23, 42, 0.08);
+      }
+
+      .hero-copy {
+        display: grid;
+        align-content: center;
+        min-height: 560px;
+        padding: clamp(28px, 5vw, 58px);
+      }
+
+      .eyebrow {
+        margin: 0;
+        color: var(--agro-green);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+      }
+
+      h1,
+      h2,
+      h3 {
+        color: var(--agro-navy);
+        letter-spacing: 0;
+      }
+
+      h1 {
+        max-width: 860px;
+        margin: 12px 0 22px;
+        font-size: clamp(46px, 7vw, 82px);
+        font-weight: 800;
+        line-height: 0.96;
+      }
+
+      .hero-copy p:not(.eyebrow),
+      .section-head p,
+      .card p,
+      .role-card p,
+      .final-cta p {
+        color: var(--agro-text);
+        font-size: 17px;
+        line-height: 1.75;
+      }
+
+      .hero-copy p:not(.eyebrow) {
+        max-width: 780px;
+      }
+
+      .badge-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 28px;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        min-height: 32px;
+        border: 1px solid #d6dfc5;
+        border-radius: 999px;
+        background: #f8faf5;
+        padding: 7px 12px;
+        color: #52651d;
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .hero-panel {
+        display: grid;
+        align-content: end;
+        overflow: hidden;
+        padding: 30px;
+        background:
+          linear-gradient(180deg, rgba(15, 23, 42, 0.08), rgba(15, 23, 42, 0.28)),
+          linear-gradient(135deg, #203d24, #7a8f2f);
+        color: #ffffff;
+      }
+
+      .hero-panel h2 {
+        margin: 10px 0 12px;
+        color: #ffffff;
+        font-size: clamp(34px, 4vw, 54px);
+        font-weight: 800;
+        line-height: 1;
+      }
+
+      .hero-panel p {
+        color: #eef6df;
+        line-height: 1.7;
+      }
+
+      .section {
+        padding: 46px 0;
+      }
+
+      .section.split {
+        display: grid;
+        grid-template-columns: 0.85fr 1.15fr;
+        gap: 28px;
+        align-items: start;
+      }
+
+      .section-head {
+        max-width: 780px;
+        margin-bottom: 24px;
+      }
+
+      .split .section-head {
+        margin-bottom: 0;
+      }
+
+      h2 {
+        margin: 8px 0 0;
+        font-size: clamp(32px, 4vw, 52px);
+        font-weight: 800;
+        line-height: 1.05;
+      }
+
+      h3 {
+        margin: 0 0 10px;
+        font-size: 22px;
+        font-weight: 800;
+        line-height: 1.2;
+      }
+
+      .grid-3,
+      .role-grid,
+      .apply-steps {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 18px;
+      }
+
+      .card,
+      .role-card {
+        padding: 24px;
+      }
+
+      .card {
+        background: #ffffff;
+      }
+
+      .program-card {
+        background: linear-gradient(180deg, #ffffff 0%, var(--agro-soft) 100%);
+      }
+
+      .list {
+        margin: 18px 0 0;
+        padding-left: 20px;
+        color: var(--agro-text);
+        line-height: 1.65;
+      }
+
+      .list li {
+        margin: 8px 0;
+      }
+
+      .role-card {
+        display: grid;
+        align-content: space-between;
+        gap: 20px;
+        min-height: 540px;
+      }
+
+      .role-kicker {
+        margin: 0 0 12px;
+        color: var(--agro-green);
+        font-size: 12px;
+        font-weight: 800;
+        letter-spacing: 0.2em;
+        text-transform: uppercase;
+      }
+
+      .two-column-list {
+        columns: 2;
+        column-gap: 42px;
+        margin-top: 0;
+      }
+
+      .step-number {
+        display: inline-grid;
+        place-items: center;
+        width: 36px;
+        height: 36px;
+        margin-bottom: 16px;
+        border-radius: 999px;
+        background: #edf3df;
+        color: var(--agro-green);
+        font-weight: 900;
+      }
+
+      .final-cta {
+        display: grid;
+        justify-items: start;
+        gap: 18px;
+        margin: 46px 0 82px;
+        padding: clamp(28px, 5vw, 52px);
+        background: linear-gradient(135deg, #f7fbef 0%, #ffffff 100%);
+      }
+
+      .final-cta h2,
+      .final-cta p {
+        max-width: 820px;
+      }
+
+      .button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 48px;
+        border-radius: 999px;
+        background: var(--agro-green);
+        padding: 12px 22px;
+        color: #ffffff;
+        font-size: 15px;
+        font-weight: 800;
+        text-decoration: none;
+        transition: opacity 160ms ease, background 160ms ease;
+      }
+
+      .button:hover {
+        background: var(--agro-green-dark);
+      }
+
+      @media (max-width: 980px) {
+        .hero,
+        .section.split,
+        .grid-3,
+        .role-grid,
+        .apply-steps {
+          grid-template-columns: 1fr;
+        }
+
+        .hero {
+          padding-top: 42px;
+        }
+
+        .hero-copy,
+        .role-card {
+          min-height: auto;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .site-header-inner {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .site-nav {
+          justify-content: flex-start;
+          width: 100%;
+          overflow-x: auto;
+          padding-bottom: 2px;
+        }
+
+        .site-nav a {
+          flex: 0 0 auto;
+        }
+
+        .hero-copy,
+        .hero-panel,
+        .final-cta {
+          border-radius: 22px;
+        }
+
+        h1 {
+          font-size: 44px;
+        }
+
+        .two-column-list {
+          columns: 1;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="careers-shell">
+      <header class="site-header">
+        <div class="site-header-inner">
+          <a class="brand-link" href="/" aria-label="AGRO-AI home">
+            <img src="/assets/Copy of AGRO-AI (1)_1763408301972-IcCnFklR.png" alt="AGRO-AI" />
+            <span>AGRO-AI</span>
+          </a>
+          <nav class="site-nav" aria-label="Primary navigation">
+            <a href="/#platform">Platform</a>
+            <a href="/about">About</a>
+            <a class="active" href="/careers">Careers</a>
+            <a class="demo-link" href="/book-a-demo">Book a Demo</a>
+          </nav>
+        </div>
+      </header>
+
+      <main class="careers-main">
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="eyebrow">Careers at AGRO-AI</p>
+            <h1>Build the intelligence layer for verified water decisions.</h1>
+            <p>
+              AGRO-AI is creating precision irrigation software that helps farms, operators, investors, and technical
+              teams turn controller data, weather, field context, and verification evidence into practical decisions.
+            </p>
+            <div class="badge-row" aria-label="Program attributes">
+              <span class="badge">Remote</span>
+              <span class="badge">Part-time</span>
+              <span class="badge">Project-based</span>
+              <span class="badge">CPT or academic credit welcome</span>
+            </div>
+          </div>
+          <aside class="hero-panel" aria-label="Current hiring focus">
+            <p class="eyebrow">Now opening</p>
+            <h2>Internship program</h2>
+            <p>
+              Three focused roles for builders who want meaningful ownership across product, go-to-market, and applied
+              research.
+            </p>
+          </aside>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
+            <p class="eyebrow">Why AGRO-AI</p>
+            <h2>Work on a hard, grounded problem with real operational value.</h2>
+          </div>
+          <div class="grid-3">
+            <article class="card">
+              <h3>Build for the field</h3>
+              <p>
+                We design around real irrigation workflows, source reconciliation, and the trust needed before a
+                recommendation becomes action.
+              </p>
+            </article>
+            <article class="card">
+              <h3>Learn across disciplines</h3>
+              <p>
+                The work sits at the intersection of enterprise SaaS, agronomy, data quality, climate adaptation, and
+                customer operations.
+              </p>
+            </article>
+            <article class="card">
+              <h3>Own visible projects</h3>
+              <p>
+                Interns work on scoped deliverables that can improve the product, sharpen customer storytelling, or
+                deepen AGRO-AI's research foundation.
+              </p>
+            </article>
+          </div>
+        </section>
+
+        <section class="section split">
+          <div class="section-head">
+            <p class="eyebrow">Internship Program</p>
+            <h2>Structured ownership, flexible execution.</h2>
+          </div>
+          <div class="card program-card">
+            <p>
+              The AGRO-AI internship program is remote, part-time, and project-based. Each intern receives a clear brief,
+              regular product context, and a final deliverable that can be used in customer, investor, or technical
+              conversations.
+            </p>
+            <ul class="list">
+              <li>Recommended commitment: 8-15 hours per week.</li>
+              <li>Typical project length: 6-10 weeks.</li>
+              <li>Academic credit, CPT-aligned internships, and university project structures are welcome.</li>
+              <li>Strong communication and consistent weekly progress matter more than location.</li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="section" id="open-roles">
+          <div class="section-head">
+            <p class="eyebrow">Open Roles</p>
+            <h2>Three internship tracks for high-agency contributors.</h2>
+          </div>
+          <div class="role-grid">
+            <article class="role-card">
+              <div>
+                <p class="role-kicker">Product Intern</p>
+                <h3>Shape workflows for irrigation intelligence.</h3>
+                <p>
+                  Partner on product research, workflow mapping, UX copy, acceptance criteria, and demo readiness for
+                  AGRO-AI's decision surfaces.
+                </p>
+              </div>
+              <ul class="list">
+                <li>Translate farmer, operator, and enterprise stakeholder needs into clear product notes.</li>
+                <li>Audit product flows for clarity, trust, and decision readiness.</li>
+                <li>Help write briefs for dashboard, report, and verification features.</li>
+              </ul>
+              <div class="badge-row">
+                <span class="badge">Remote</span>
+                <span class="badge">Part-time</span>
+                <span class="badge">Project-based</span>
+              </div>
+            </article>
+
+            <article class="role-card">
+              <div>
+                <p class="role-kicker">Go-to-Market Intern</p>
+                <h3>Turn technical value into enterprise-ready messaging.</h3>
+                <p>
+                  Support market research, customer segmentation, sales materials, partner briefs, and campaign assets
+                  for agriculture and water management buyers.
+                </p>
+              </div>
+              <ul class="list">
+                <li>Research growers, asset managers, OEMs, and irrigation ecosystem partners.</li>
+                <li>Draft concise positioning for pilots, demos, and executive conversations.</li>
+                <li>Organize outreach lists and help refine qualification signals.</li>
+              </ul>
+              <div class="badge-row">
+                <span class="badge">Remote</span>
+                <span class="badge">Part-time</span>
+                <span class="badge">CPT or academic credit welcome</span>
+              </div>
+            </article>
+
+            <article class="role-card">
+              <div>
+                <p class="role-kicker">Research Intern</p>
+                <h3>Deepen the evidence behind water decisions.</h3>
+                <p>
+                  Explore irrigation benchmarks, crop-water context, controller systems, verification methods, and
+                  research-backed assumptions that strengthen AGRO-AI's decision layer.
+                </p>
+              </div>
+              <ul class="list">
+                <li>Synthesize public research into usable product and customer notes.</li>
+                <li>Compare irrigation, evapotranspiration, soil moisture, and verification approaches.</li>
+                <li>Help document assumptions, limitations, and evidence standards.</li>
+              </ul>
+              <div class="badge-row">
+                <span class="badge">Remote</span>
+                <span class="badge">Part-time</span>
+                <span class="badge">Project-based</span>
+              </div>
+            </article>
+          </div>
+        </section>
+
+        <section class="section split">
+          <div class="section-head">
+            <p class="eyebrow">Who We Are Looking For</p>
+            <h2>Curious, careful builders who like useful work.</h2>
+          </div>
+          <div class="card">
+            <ul class="list two-column-list">
+              <li>Strong written communication and structured thinking.</li>
+              <li>Interest in agriculture, climate, water, AI, SaaS, or operations.</li>
+              <li>Comfort working independently with a clear weekly rhythm.</li>
+              <li>Bias toward practical outputs: briefs, prototypes, research memos, customer notes, and product specs.</li>
+              <li>Respect for messy real-world data and the trust required in operational software.</li>
+              <li>Willingness to learn fast and ask direct questions when context is missing.</li>
+            </ul>
+          </div>
+        </section>
+
+        <section class="section">
+          <div class="section-head">
+            <p class="eyebrow">How to Apply</p>
+            <h2>Send a concise note with the role you want and the work you are proud of.</h2>
+          </div>
+          <div class="apply-steps">
+            <article class="card">
+              <span class="step-number">1</span>
+              <h3>Choose a track</h3>
+              <p>Product, Go-to-Market, or Research. Include the role name in your subject line.</p>
+            </article>
+            <article class="card">
+              <span class="step-number">2</span>
+              <h3>Share proof of work</h3>
+              <p>Send a resume, LinkedIn, portfolio, writing sample, GitHub, or one project that shows how you think.</p>
+            </article>
+            <article class="card">
+              <span class="step-number">3</span>
+              <h3>Explain your fit</h3>
+              <p>Use a few direct sentences on why AGRO-AI, why this role, and what you can ship in 6-10 weeks.</p>
+            </article>
+          </div>
+        </section>
+
+        <section class="final-cta">
+          <p class="eyebrow">Final CTA</p>
+          <h2>Help build software that makes water decisions more trustworthy.</h2>
+          <p>Send your application to the AGRO-AI team and include the internship track in the subject line.</p>
+          <a class="button" href="mailto:careers@agroai-pilot.com?subject=AGRO-AI%20Internship%20Application">
+            Apply for an internship
+          </a>
+        </section>
+      </main>
+    </div>
+  </body>
+</html>
