@@ -4,8 +4,8 @@ import { normalizeEarthDailyInput } from "../../core/normalization/normalize";
 import { hashEarthDailyInput } from "../../lib/audit/hash";
 import { persistEarthDailyDecision, writeEarthDailyAudit } from "../../lib/audit/trace";
 import { validateEarthDailyRawInput, type EarthDailyRawInput } from "../../schemas/earthdaily";
-import { emptyReportFromDecision } from "../../schemas/report";
 import type { Env } from "../../lib/cloudflare/env";
+import { buildReportObject } from "../../core/reporting/report";
 
 export async function handleEarthDailyEndToEnd(body: unknown, env: Env, requestId: string) {
   const adapterResult = await loadEarthDailyInput(env, resolveAdapterRequest(body));
@@ -25,12 +25,14 @@ export async function handleEarthDailyEndToEnd(body: unknown, env: Env, requestI
   const inputHash = await hashEarthDailyInput(raw);
   const decisionStart = Date.now();
   const decision = runDecisionEngine({ signalPack: normalized, inputHash });
-  const report = emptyReportFromDecision(decision);
+  const reportStart = Date.now();
+  const reportResult = await buildReportObject(decision, normalized, env);
+  const decisionWithReport = reportResult.decision_output;
 
   if (env.DB) {
-    await persistEarthDailyDecision(env.DB, decision, raw.mode);
+    await persistEarthDailyDecision(env.DB, decisionWithReport, raw.mode);
     await writeEarthDailyAudit(env.DB, {
-      decision_id: decision.decision_id,
+      decision_id: decisionWithReport.decision_id,
       step: "normalize",
       status: "ok",
       duration_ms: decisionStart - normalizedStart,
@@ -38,24 +40,24 @@ export async function handleEarthDailyEndToEnd(body: unknown, env: Env, requestI
       meta: { field_id: raw.field.field_id, provider_mode: raw.mode, input_hash: inputHash },
     });
     await writeEarthDailyAudit(env.DB, {
-      decision_id: decision.decision_id,
+      decision_id: decisionWithReport.decision_id,
       step: "decide",
       status: "ok",
       duration_ms: Date.now() - decisionStart,
       request_id: requestId,
-      meta: { action: decision.recommendation.action, priority: decision.recommendation.priority },
+      meta: { action: decisionWithReport.recommendation.action, priority: decisionWithReport.recommendation.priority },
     });
     await writeEarthDailyAudit(env.DB, {
-      decision_id: decision.decision_id,
+      decision_id: decisionWithReport.decision_id,
       step: "report",
-      status: "fallback",
-      duration_ms: 0,
+      status: reportResult.ai_review.used_llm ? "ok" : "fallback",
+      duration_ms: Date.now() - reportStart,
       request_id: requestId,
-      meta: { deterministic_template: true },
+      meta: { deterministic_template: reportResult.ai_review.fallback_used, model: reportResult.ai_review.model ?? "none" },
     });
     if (adapterResult.usedFallback) {
       await writeEarthDailyAudit(env.DB, {
-        decision_id: decision.decision_id,
+        decision_id: decisionWithReport.decision_id,
         step: "demo_fallback",
         status: "fallback",
         duration_ms: 0,
@@ -68,12 +70,9 @@ export async function handleEarthDailyEndToEnd(body: unknown, env: Env, requestI
   return {
     earthdaily_raw_input: raw,
     normalized_signal_pack: normalized,
-    decision_output: decision,
-    ai_review: {
-      skipped: true,
-      reason: "AGROAI_LLM_API_KEY not evaluated in route phase; deterministic fallback report returned.",
-    },
-    report_object: report,
+    decision_output: decisionWithReport,
+    ai_review: reportResult.ai_review,
+    report_object: reportResult.report_object,
     audit_trace: [
       { step: "normalize", status: "ok" },
       { step: "decide", status: "ok" },
@@ -84,7 +83,7 @@ export async function handleEarthDailyEndToEnd(body: unknown, env: Env, requestI
       provider: "earthdaily",
       mode: raw.mode,
       request_id: requestId,
-      decision_id: decision.decision_id,
+      decision_id: decisionWithReport.decision_id,
       live_claim: false,
       source: raw.metadata.source,
       used_fallback: adapterResult.usedFallback,

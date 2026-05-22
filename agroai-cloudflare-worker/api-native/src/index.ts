@@ -133,7 +133,7 @@ async function routeEarthDaily(
       return json(handleDemoSampleField(), 200, "demo");
     }
     if (method === "GET" && path === "/api/v1/demo/earthdaily/sample-response") {
-      return json(handleDemoSampleResponse(), 200, "demo");
+      return json(await handleDemoSampleResponse(), 200, "demo");
     }
     if (method === "GET" && maybeDecision) {
       return json(await handleDecisionRead(env, decodeURIComponent(maybeDecision[1])), 200, "demo");

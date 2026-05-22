@@ -1,6 +1,5 @@
 import { buildPrecomputedSampleResponse } from "../../adapters/demo/sampleResponse";
 
-export function handleDemoSampleResponse() {
+export async function handleDemoSampleResponse() {
   return buildPrecomputedSampleResponse();
 }
-
