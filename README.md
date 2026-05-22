@@ -17,6 +17,21 @@ This is a drop-in starter to make a **limited pilot** reproducible:
 - **AGRO-AI API:** https://api.agroai-pilot.com
 - **Water Command Center:** Enterprise customer portal for connected controller environments, live context assembly, irrigation recommendations, execution tracking, verification, integrations, reports, audit log, and administration placeholders.
 
+## EarthDaily Integration — Quickstart
+
+The EarthDaily integration lives in `agroai-cloudflare-worker/api-native` and returns AGRO-AI irrigation decisions, confidence, risk flags, audit trace, and report-ready output from EarthDaily-style agricultural data products.
+
+Run the Worker checks:
+
+```bash
+cd agroai-cloudflare-worker/api-native
+npm install
+npm run typecheck
+npm test
+```
+
+Use the full demo and staging procedure in [docs/EARTHDAILY_DEMO_RUNBOOK.md](docs/EARTHDAILY_DEMO_RUNBOOK.md).
+
 ## Quickstart
 ```bash
 make tfinit
