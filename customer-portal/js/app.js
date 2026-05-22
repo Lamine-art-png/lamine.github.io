@@ -1,11 +1,12 @@
 import { ApiClient } from "./apiClient.js";
 import { acceptedWorkbenchFields, sampleDataPackage, workbenchOutputSchema } from "./demoData.js";
-import { launchDemoSession, notify, returnToEntry, setActiveView, setDemoRuntime, setLoginError, startLoginScaffold, state, subscribe, SESSION_MODES } from "./state.js";
+import { launchDemoSession, notify, returnToEntry, setActiveView, setDemoRuntime, setEarthDailyRuntime, setLoginError, startLoginScaffold, state, subscribe, SESSION_MODES } from "./state.js";
 import { loadLiveSnapshot, generateWiseConnRecommendation } from "./services/liveData.js";
 import { addObservation, completeAiAnalysis, generateDemoRecommendation, generateDemoReport, markApplied, nextStep, prepareBackendSetupRequest, resetDemo, runAiAnalysis, scheduleRecommendation, selectFarm, selectIntakeMode, selectZone, startGuidedDemo, switchScenario, toCsv, verifyOutcome } from "./services/demoRuntime.js";
 import { renderEntryView } from "./views/entryView.js";
 import { renderShell } from "./views/shellView.js";
 import { renderCommandCenter } from "./views/commandCenterView.js";
+import { renderEarthDaily } from "./views/earthdailyView.js";
 import { renderFarmExplorer } from "./views/farmExplorerView.js";
 import { renderIntelligence } from "./views/intelligenceView.js";
 import { renderVerification } from "./views/verificationView.js";
@@ -170,6 +171,7 @@ function collectOverrides(form) {
 }
 
 function renderActiveView() {
+  if (state.activeView === "earthdaily") return renderEarthDaily(state);
   if (state.activeView === "farm-explorer") return renderFarmExplorer(state);
   if (state.activeView === "intelligence") return renderIntelligence(state);
   if (state.activeView === "verification") return renderVerification(state);
@@ -178,6 +180,52 @@ function renderActiveView() {
   if (state.activeView === "audit-log") return renderAuditLog(state);
   if (state.activeView === "settings") return renderSettings(state);
   return renderCommandCenter(state);
+}
+
+async function runEarthDailyWorkflow() {
+  setEarthDailyRuntime({ loading: true, status: "running", error: "", fallbackUsed: false });
+  const status = await api.getEarthDailyStatus();
+  const sampleField = await api.getEarthDailySampleField();
+  const primary = await api.runEarthDailyEndToEnd();
+
+  if (primary.ok) {
+    const envelope = primary.data || {};
+    setEarthDailyRuntime({
+      loading: false,
+      status: "complete",
+      providerStatus: status.ok ? status.data : null,
+      sampleField: sampleField.ok ? sampleField.data : null,
+      workflow: envelope,
+      httpStatus: primary.status,
+      requestId: envelope.request_id || envelope.data?.integration_metadata?.request_id || "",
+      fallbackUsed: false,
+    });
+    return;
+  }
+
+  const fallback = await api.getEarthDailySampleResponse();
+  if (fallback.ok) {
+    const envelope = fallback.data || {};
+    setEarthDailyRuntime({
+      loading: false,
+      status: "complete",
+      providerStatus: status.ok ? status.data : null,
+      sampleField: sampleField.ok ? sampleField.data : null,
+      workflow: envelope,
+      httpStatus: fallback.status,
+      requestId: envelope.request_id || "",
+      fallbackUsed: true,
+      error: "",
+    });
+    return;
+  }
+
+  setEarthDailyRuntime({
+    loading: false,
+    status: "error",
+    error: "EarthDaily workflow is unavailable. The fallback response could not be loaded.",
+    httpStatus: primary.status || fallback.status,
+  });
 }
 
 function render() {
@@ -311,6 +359,7 @@ function bindShellEvents() {
       if (action === "view-accepted-fields") showAcceptedFields();
       if (action === "view-analysis-schema") showAnalysisSchema();
       if (action === "run-ai-analysis") animateAnalysis();
+      if (action === "run-earthdaily-workflow") runEarthDailyWorkflow();
       if (action === "schedule") updateDemo(scheduleRecommendation(state.demoRuntime), "Recommendation scheduled");
       if (action === "mark-applied") updateDemo(markApplied(state.demoRuntime), "Applied water confirmed");
       if (action === "add-observation") updateDemo(addObservation(state.demoRuntime), "Observation recorded");

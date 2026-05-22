@@ -16,6 +16,17 @@ export const state = {
     loginError: "",
   },
   activeView: "command-center",
+  earthdaily: {
+    status: "idle",
+    loading: false,
+    error: "",
+    httpStatus: null,
+    requestId: "",
+    providerStatus: null,
+    sampleField: null,
+    workflow: null,
+    fallbackUsed: false,
+  },
   demoRuntime: createDemoRuntime(),
   live: {
     auth: null,
@@ -54,6 +65,11 @@ export function setLoginError(message) {
 
 export function setDemoRuntime(runtime) {
   state.demoRuntime = runtime;
+  notify();
+}
+
+export function setEarthDailyRuntime(runtime) {
+  state.earthdaily = { ...state.earthdaily, ...runtime };
   notify();
 }
 

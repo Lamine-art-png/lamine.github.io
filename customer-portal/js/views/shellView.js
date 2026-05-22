@@ -3,6 +3,7 @@ import { badge } from "../components/ui.js";
 
 export const navItems = [
   ["command-center", "Water Command Center"],
+  ["earthdaily", "EarthDaily"],
   ["farm-explorer", "Farms"],
   ["reports", "Reports"],
   ["integrations", "Integrations"],

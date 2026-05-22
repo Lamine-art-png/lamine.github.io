@@ -26,16 +26,23 @@ export const ENDPOINTS = {
   workbenchLiveAnalyze: "/v1/workbench/analyze-live",
   workbenchReport: (id) => `/v1/workbench/sessions/${encodeURIComponent(id)}/report`,
   workbenchSchema: "/v1/workbench/schema",
+  earthdailyStatus: "/api/v1/partners/earthdaily/status",
+  earthdailyEndToEnd: "/api/v1/partners/earthdaily/end-to-end",
+  earthdailySampleField: "/api/v1/demo/earthdaily/sample-field",
+  earthdailySampleResponse: "/api/v1/demo/earthdaily/sample-response",
+  earthdailyDecision: (id) => `/api/v1/decisions/${encodeURIComponent(id)}`,
+  earthdailyAudit: (id) => `/api/v1/decisions/${encodeURIComponent(id)}/audit`,
 };
 
 export class ApiClient {
   constructor(baseUrl = window.AGROAI_PORTAL_CONFIG?.apiBase || "https://api.agroai-pilot.com") {
     this.baseUrl = baseUrl.replace(/\/$/, "");
+    this.edgeBaseUrl = (window.AGROAI_PORTAL_CONFIG?.edgeApiBase || this.baseUrl).replace(/\/$/, "");
   }
 
-  async request(path, options = {}) {
+  async request(path, options = {}, baseUrl = this.baseUrl) {
     try {
-      const response = await fetch(`${this.baseUrl}${path}`, {
+      const response = await fetch(`${baseUrl}${path}`, {
         method: options.method || "GET",
         headers: {
           Accept: "application/json",
@@ -144,6 +151,34 @@ export class ApiClient {
       method: "POST",
       body: overrides,
     });
+  }
+
+  requestEdge(path, options = {}) {
+    return this.request(path, options, this.edgeBaseUrl);
+  }
+
+  getEarthDailyStatus() {
+    return this.requestEdge(ENDPOINTS.earthdailyStatus);
+  }
+
+  runEarthDailyEndToEnd() {
+    return this.requestEdge(ENDPOINTS.earthdailyEndToEnd, { method: "POST", body: {} });
+  }
+
+  getEarthDailySampleField() {
+    return this.requestEdge(ENDPOINTS.earthdailySampleField);
+  }
+
+  getEarthDailySampleResponse() {
+    return this.requestEdge(ENDPOINTS.earthdailySampleResponse);
+  }
+
+  getEarthDailyDecision(id) {
+    return this.requestEdge(ENDPOINTS.earthdailyDecision(id));
+  }
+
+  getEarthDailyAudit(id) {
+    return this.requestEdge(ENDPOINTS.earthdailyAudit(id));
   }
 }
 
