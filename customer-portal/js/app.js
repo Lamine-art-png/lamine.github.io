@@ -18,7 +18,7 @@ const api = new ApiClient();
 const root = document.getElementById("app");
 let liveSnapshotLoaded = false;
 
-function updateDemo(runtime, message = "Workspace updated") {
+function updateDemo(runtime, message = "Command Center updated") {
   runtime.toast = message;
   setDemoRuntime(runtime);
 }
@@ -105,7 +105,7 @@ function setupBrief(provider = "WiseConn") {
     "Required backend endpoint: credential vault and tenant provisioning",
     "Required access: API key, provider account, farm/block mapping",
     "Security note: credentials must be stored server-side, not in browser storage",
-    "Next action: send setup brief to AGRO-AI technical team",
+    "Next action: send setup brief to AGRO-AI technical team for backend provisioning",
   ].join("\n");
 }
 
@@ -144,7 +144,7 @@ function openBackendSetupModal(provider = "WiseConn") {
   modal.querySelector("[data-copy-setup]")?.addEventListener("click", async () => {
     const copied = await copyTextToClipboard(brief);
     if (copied) {
-      updateDemo(state.demoRuntime, "Setup brief copied.");
+    updateDemo(state.demoRuntime, "Setup brief copied.");
     } else {
       downloadText(`${provider.toLowerCase()}-backend-setup-brief.txt`, brief);
       updateDemo(state.demoRuntime, "Clipboard unavailable. Setup brief downloaded.");
@@ -198,7 +198,7 @@ function bindEntryEvents() {
 
   document.getElementById("login-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
-    setLoginError("We could not verify those credentials. Check your email and password or open the evaluation workspace.");
+    setLoginError("We could not verify those credentials. Check your email and password.");
   });
 
   document.getElementById("live-status-preview")?.addEventListener("click", async () => {
@@ -300,9 +300,9 @@ function bindShellEvents() {
   document.querySelectorAll("[data-action]").forEach((button) => {
     button.addEventListener("click", () => {
       const action = button.dataset.action;
-      if (action === "reset-demo") updateDemo(resetDemo(), "Evaluation workspace reset");
-      if (action === "start-guide") updateDemo(startGuidedDemo(state.demoRuntime), "Guided evaluation started");
-      if (action === "next-step") updateDemo(nextStep(state.demoRuntime), "Evaluation advanced");
+      if (action === "reset-demo") updateDemo(resetDemo(), "Command Center reset");
+      if (action === "start-guide") updateDemo(startGuidedDemo(state.demoRuntime), "Guided enterprise workflow started");
+      if (action === "next-step") updateDemo(nextStep(state.demoRuntime), "Workflow advanced");
       if (action === "generate-demo-recommendation") updateDemo(generateDemoRecommendation(state.demoRuntime), "Recommendation generated");
       if (action === "use-connected-field") updateDemo(selectIntakeMode(state.demoRuntime, "connected"), "Connected field context selected");
       if (action === "use-upload-records") updateDemo(selectIntakeMode(state.demoRuntime, "upload"), "Upload records selected");
@@ -322,14 +322,14 @@ function bindShellEvents() {
       if (action === "preview-report") updateDemo(generateDemoReport(state.demoRuntime, button.dataset.reportType || "Irrigation Intelligence Report"), "Report preview generated");
       if (action === "print-report") window.print();
       if (action === "export-csv") downloadCsv(state.demoRuntime.reportSnapshots?.[0]);
-      if (action === "live-execution-note") window.alert("Execution capture requires backend execution endpoint. The evaluation workspace can show the verification chain.");
-      if (action === "integration-note") window.alert(button.dataset.message || "Runtime status details are shown in this card. Secure credential storage requires backend credential endpoints.");
+      if (action === "live-execution-note") openModal("Execution capture", "<p>Execution capture requires backend execution endpoints. Verification chain and reconciliation are available in this workspace.</p>");
+      if (action === "integration-note") openModal("Integration status", `<p>${button.dataset.message || "Runtime status details are shown in this card. Secure credential storage requires backend credential endpoints."}</p>`);
       if (action === "request-backend-setup") {
         const provider = button.dataset.integration || "WiseConn";
         updateDemo(prepareBackendSetupRequest(state.demoRuntime, provider), "Backend setup request prepared");
         openBackendSetupModal(provider);
       }
-      if (action === "report-readiness") window.alert(button.dataset.message || "Report generation will activate when the required backend endpoint is available.");
+      if (action === "report-readiness") openModal("Report readiness", `<p>${button.dataset.message || "Report generation will activate when the required backend endpoint is available."}</p>`);
       if (action === "check-integrations") setActiveView("integrations");
     });
   });
