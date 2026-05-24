@@ -73,6 +73,9 @@ from app.api.v1.forecast import router as forecast_router  # noqa: E402
 
 app.include_router(forecast_router, prefix="/v1")
 
+from app.api.v1.workbench import router as workbench_router  # noqa: E402
+app.include_router(workbench_router, prefix="/v1")
+
 
 # Prometheus metrics endpoint
 from app.core.metrics import metrics_endpoint  # noqa: E402
