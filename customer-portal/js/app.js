@@ -116,7 +116,7 @@ async function animateAnalysis() {
     updateDemo(completeAiAnalysis(rt), "Analysis complete. Decision ready.");
   } else {
     rt.analysis.running = false;
-    updateDemo(rt, backend?.error || "Analysis failed. You can use demo package fallback.");
+    updateDemo(rt, backend?.error || "Analysis failed. You can use pilot data package fallback.");
   }
 }
 
@@ -169,7 +169,7 @@ function bindShellEvents() {
       const action = button.dataset.action;
       if (action === "reset-demo") updateDemo(resetDemo(), "Workspace reset");
       if (action === "start-guide") updateDemo(startGuidedDemo(state.demoRuntime), "Guided run started");
-      if (action === "next-step") updateDemo(nextStep(state.demoRuntime), "Demo advanced");
+      if (action === "next-step") updateDemo(nextStep(state.demoRuntime), "Run advanced");
       if (action === "generate-demo-recommendation") updateDemo(generateDemoRecommendation(state.demoRuntime), "Recommendation generated");
       if (action === "use-connected-field") updateDemo(selectIntakeMode(state.demoRuntime, "connected"), "Connected field context selected");
       if (action === "mode-connected") updateDemo(selectIntakeMode(state.demoRuntime, "connected"), "Connected source selected");
@@ -188,7 +188,7 @@ function bindShellEvents() {
       if (action === "preview-report") updateDemo(generateDemoReport(state.demoRuntime, button.dataset.reportType || "Irrigation Intelligence Report"), "Report preview generated");
       if (action === "print-report") window.print();
       if (action === "export-csv") downloadCsv(state.demoRuntime.reportSnapshots?.[0]);
-      if (action === "live-execution-note") window.alert("Execution capture requires backend execution endpoint. This demo can simulate the verification chain.");
+      if (action === "live-execution-note") window.alert("Execution capture requires backend execution endpoint. This workspace can simulate the verification chain.");
       if (action === "integration-note") window.alert(button.dataset.message || "Runtime status details are shown in this card. Secure credential storage requires backend credential endpoints.");
 
       if (action === "open-setup-brief") { document.getElementById("setup-brief-drawer")?.classList.remove("hidden"); updateDemo(state.demoRuntime, "Integration setup brief prepared"); }
