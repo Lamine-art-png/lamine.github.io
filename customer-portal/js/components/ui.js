@@ -5,7 +5,7 @@ export function badge(label, tone = "neutral") {
 }
 
 export function metricCard(label, value, detail = "") {
-  return `<article class="metric-card"><p class="metric-value">${escapeHtml(value)}</p><p class="metric-label">${escapeHtml(label)}</p>${detail ? `<p class="metric-detail">${escapeHtml(detail)}</p>` : ""}</article>`;
+  return `<article class="metric-card enterprise-metric"><p class="metric-label">${escapeHtml(label)}</p><p class="metric-value">${escapeHtml(value)}</p>${detail ? `<p class="metric-detail">${escapeHtml(detail)}</p>` : ""}</article>`;
 }
 
 
