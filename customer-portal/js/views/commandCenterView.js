@@ -3,34 +3,168 @@ import { metricCard } from "../components/ui.js";
 
 const PROCESS_STAGES = ["Sources", "Normalize", "Reconcile", "Decide", "Verify"];
 
-function statusBadge(status) {
-  const tone = /matched|verified|ready/i.test(status) ? "success" : /pending|required/i.test(status) ? "warning" : "neutral";
+const FALLBACK_RECONCILIATION_ROWS = [
+  ["Controller history", "Last irrigation event: 36 min", "Valid recent controller event", "Matched"],
+  ["Weather demand", "ETo 6.4 mm, rain 0 mm", "High water demand", "Matched"],
+  ["Soil moisture", "38 percent deficit at 30 cm", "Root-zone deficit supports irrigation", "Matched"],
+  ["Flow meter", "Actual flow within 8 percent of plan", "Applied water consistent", "Matched"],
+  ["Field observation", "Mild afternoon stress", "Supports irrigation recommendation", "Matched"],
+  ["Earth observation layer", "Elevated canopy stress index", "Supports water demand signal", "Matched"],
+  ["Talgil", "Runtime reachable, no selected production target", "Integration available, target selection pending", "Pending target"],
+];
+
+function statusBadge(status = "Pending") {
+  const tone = /matched|verified|ready|complete|connected|accepted/i.test(status)
+    ? "success"
+    : /pending|required|review|unavailable/i.test(status)
+      ? "warning"
+      : "neutral";
   return `<span class="badge ${tone}">${escapeHtml(status)}</span>`;
 }
 
-function executiveSummaryStrip() {
+function backendResult(runtime) {
+  return runtime.analysis?.backendResult || null;
+}
+
+function firstSnapshot(runtime) {
+  return runtime.reportSnapshots?.[0] || null;
+}
+
+function percentValue(value, fallback) {
+  if (typeof value === "number") return value <= 1 ? `${Math.round(value * 100)}%` : `${Math.round(value)}%`;
+  if (typeof value === "string" && value.trim()) return value.includes("%") ? value : value;
+  return fallback;
+}
+
+function decisionModel(runtime) {
+  const backend = backendResult(runtime);
+  const summary = backend?.report_summary || {};
+  const rec = runtime.activeRecommendation || backend?.recommendation || {};
+  const snapshot = firstSnapshot(runtime);
+  const drivers = rec.keyDrivers || rec.key_drivers || summary.key_drivers || [];
+  const driver = Array.isArray(drivers) && drivers.length ? drivers[0] : "ETo 6.4 mm and 38 percent root-zone deficit";
+  return {
+    action: rec.action || rec.decision || summary.recommendation || snapshot?.recommendation || "Irrigate 42 min tonight",
+    start: rec.timing || rec.start_time || rec.start || summary.start_time || "21:00 PT",
+    plannedWater: rec.depth || summary.planned_water || snapshot?.plannedWater || "12 mm net",
+    confidence: percentValue(rec.confidence || summary.confidence || snapshot?.confidence, "86%"),
+    evidence: percentValue(rec.dataQuality || summary.evidence_completeness || backend?.reconciliation?.evidence_completeness || snapshot?.evidenceCompleteness, "92%"),
+    savings: percentValue(summary.water_savings_percent || snapshot?.waterSavingsRate || runtime.institutionalKpis?.waterSavingsRate, "27%"),
+    crop: rec.crop || summary.crop || snapshot?.crop || runtime.activeZone?.crop || "Cabernet Sauvignon",
+    block: rec.block || summary.block || snapshot?.block || runtime.activeZone?.name || "Block A North",
+    driver,
+    verification: rec.verificationPlan || rec.verification_requirement || summary.verification_status || snapshot?.verificationStatus || "Required",
+  };
+}
+
+function executiveSummaryStrip(runtime) {
+  const decision = decisionModel(runtime);
   return `<section class="command-summary-strip" aria-label="Executive water decision summary">
-    ${metricCard("Water decision", "Irrigate 42 min tonight", "Primary recommendation ready")}
-    ${metricCard("Confidence", "86%", "Decision confidence score")}
-    ${metricCard("Evidence completeness", "92%", "Cross-source reconciliation coverage")}
-    ${metricCard("Estimated water savings", "27%", "Assumption vs historical baseline")}
+    ${metricCard("Decision", decision.action, runtime.analysis?.status === "complete" ? "Decision ready" : "Run analysis to verify")}
+    ${metricCard("Confidence", decision.confidence, "Decision confidence score")}
+    ${metricCard("Evidence completeness", decision.evidence, "Cross-source reconciliation coverage")}
+    ${metricCard("Estimated water savings", decision.savings, "Assumption vs historical baseline")}
   </section>`;
 }
 
-function sourceIntelligencePanel() {
+function sourceModeSelector(runtime) {
+  const mode = runtime.intakeMode || "";
+  const source = runtime.sourceState || {};
+  const uploadedName = source.uploadedFileName || runtime.analysis?.artifacts?.at?.(-1)?.filename || "";
+  const uploadStatus = uploadedName ? `${uploadedName} · ${source.parseStatus || "Accepted for analysis"}` : "No file selected";
+  const connectedStatus = mode === "connected" ? "Connected source selected" : "WiseConn zone 162803 ready for setup";
+  const pilotStatus = mode === "sample" ? "Pilot package loaded" : "Representative records available";
+
+  return `<section class="command-section-block source-intake-selector" aria-label="Source intake selector">
+    <div class="section-headline command-section-heading">
+      <div>
+        <p class="eyebrow">Source intake</p>
+        <h2>Start with irrigation data</h2>
+      </div>
+      <span class="provenance-pill" title="Representative records are being used until production targets are connected.">Pilot data</span>
+    </div>
+    <div class="source-mode-grid" role="group" aria-label="Choose source mode">
+      <article class="source-mode-control ${mode === "connected" ? "active" : ""}">
+        <div>
+          <h3>Connect source</h3>
+          <p>Use a controller, API, or partner feed as the operating source.</p>
+        </div>
+        <dl>
+          <div><dt>Supported</dt><dd>WiseConn, Talgil, API source, Partner feed</dd></div>
+          <div><dt>Current state</dt><dd>${escapeHtml(connectedStatus)}</dd></div>
+        </dl>
+        <div class="source-mode-actions">
+          <button class="button primary" data-action="use-connected-source" type="button">Use connected source</button>
+          <button class="button secondary" data-action="request-backend-setup" data-integration="WiseConn" type="button">Request backend setup</button>
+        </div>
+      </article>
+      <article class="source-mode-control ${mode === "upload" ? "active" : ""}">
+        <div>
+          <h3>Upload records</h3>
+          <p>Upload irrigation exports, spreadsheets, field notes, or partner files.</p>
+        </div>
+        <dl>
+          <div><dt>Supported</dt><dd>CSV, Excel, JSON, TXT</dd></div>
+          <div><dt>Current state</dt><dd>${escapeHtml(uploadStatus)}</dd></div>
+        </dl>
+        <input class="visually-hidden" id="workbench-upload-input" type="file" accept=".csv,.json,.txt,.xlsx,application/json,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" />
+        <div class="source-mode-actions">
+          <button class="button primary" data-action="choose-upload-records" type="button">Upload records</button>
+          <button class="button secondary" data-action="use-upload-records" type="button">Use uploaded source</button>
+        </div>
+      </article>
+      <article class="source-mode-control ${mode === "sample" ? "active" : ""}">
+        <div>
+          <h3>Use pilot package</h3>
+          <p>Load the representative Alpha Vineyard records for a founder-led walkthrough.</p>
+        </div>
+        <dl>
+          <div><dt>Supported</dt><dd>Controller history, weather, soil, flow, observations</dd></div>
+          <div><dt>Current state</dt><dd>${escapeHtml(pilotStatus)}</dd></div>
+        </dl>
+        <div class="source-mode-actions">
+          <button class="button primary" data-action="load-pilot-package" type="button">Load pilot package</button>
+        </div>
+      </article>
+    </div>
+  </section>`;
+}
+
+function sourceRows(runtime) {
+  const backend = backendResult(runtime);
+  const signals = backend?.signal_summary || {};
+  const source = runtime.sourceState || {};
+  const uploaded = source.uploadedFileName || runtime.analysis?.artifacts?.at?.(-1)?.filename;
   const rows = [
-    ["Controller history", "Matched", "1,248", "Last irrigation event: 36 min", "+0.22"],
-    ["Weather demand", "Matched", "336", "ETo 6.4 mm, rain 0 mm", "+0.18"],
-    ["Soil moisture", "Matched", "412", "38% deficit at 30 cm", "+0.17"],
-    ["Flow meter", "Matched", "298", "Actual flow within 8% of plan", "+0.11"],
-    ["Field observation", "Matched", "26", "Mild afternoon stress", "+0.09"],
-    ["Earth observation layer", "Matched", "84", "Elevated canopy stress index", "+0.09"],
+    ["Controller history", runtime.intakeMode === "connected" ? "Connected source" : "Pilot data", "1,248", signals.controller_history || "Last irrigation event: 36 min", "+0.22"],
+    ["Weather demand", "Matched", "336", signals.weather_demand || "ETo 6.4 mm, rain 0 mm", "+0.18"],
+    ["Soil moisture", "Matched", "412", signals.soil_moisture || "38 percent deficit at 30 cm", "+0.17"],
+    ["Flow meter", "Matched", "298", signals.flow_meter || "Actual flow within 8 percent of plan", "+0.11"],
+    ["Field observation", "Matched", "26", signals.field_observation || "Mild afternoon stress", "+0.09"],
+    ["Earth observation layer", "Matched", "84", signals.earth_observation || signals.satellite_stress || "Elevated canopy stress index", "+0.09"],
+    ["Uploaded records", uploaded ? "Accepted" : "Pending", uploaded ? "1 file" : "0", uploaded || "Awaiting CSV, Excel, JSON, TXT, or notes", uploaded ? "+0.12" : "Pending"],
   ];
 
+  if (Array.isArray(backend?.data_sources) && backend.data_sources.length) {
+    backend.data_sources.slice(0, 3).forEach((item) => {
+      if (typeof item === "string") return;
+      rows.push([
+        item.name || item.source || "Backend source",
+        item.status || "Matched",
+        String(item.records_processed || item.records || "Available"),
+        item.latest_signal || item.signal || "Backend source included in analysis",
+        item.confidence_contribution || item.contribution || "Included",
+      ]);
+    });
+  }
+  return rows;
+}
+
+function sourceLayer(runtime) {
   return `<section class="command-section-block source-intelligence">
-    <div class="section-headline"><p class="eyebrow">Source Intelligence</p><h2>Evidence inputs and confidence contribution</h2></div>
+    <div class="section-headline"><p class="eyebrow">Source layer</p><h2>Connected systems, uploaded records, and partner signals AGRO-AI can organize.</h2></div>
     <div class="source-stack">
-      ${rows
+      ${sourceRows(runtime)
         .map(
           ([source, status, records, signal, contribution]) => `<article class="source-row">
             <div class="source-row-main"><h3>${escapeHtml(source)}</h3><p>${escapeHtml(signal)}</p></div>
@@ -42,32 +176,54 @@ function sourceIntelligencePanel() {
   </section>`;
 }
 
+function stageState(runtime, stage, index) {
+  const step = runtime.analysis?.steps?.find((item) => (item.title || item.label || "").toLowerCase() === stage.toLowerCase()) || runtime.analysis?.steps?.[index];
+  if (runtime.analysis?.status === "complete") return "complete";
+  if (!runtime.intakeMode) return "pending";
+  if (runtime.analysis?.running) return step?.status === "complete" ? "complete" : step?.status === "running" || index === 0 ? "active" : "pending";
+  return index === 0 ? "complete" : "pending";
+}
+
 function intelligenceProcessingPanel(runtime) {
-  return `<section class="command-section-block processing-surface ${runtime.analysis.running ? "running" : ""}">
-    <div class="section-headline"><p class="eyebrow">Intelligence Processing</p><h2>Sources → Normalize → Reconcile → Decide → Verify</h2></div>
+  const running = Boolean(runtime.analysis?.running);
+  const canRun = Boolean(runtime.intakeMode) && !running;
+  const statusText = runtime.analysis?.backendError || runtime.analysis?.statusLabel || (runtime.intakeMode ? "Source selected" : "Waiting for source");
+  return `<section class="command-section-block processing-surface ${running ? "running" : ""}">
+    <div class="section-headline command-section-heading">
+      <div>
+        <p class="eyebrow">Intelligence layer</p>
+        <h2>Normalization, reconciliation, confidence scoring, and decision preparation.</h2>
+      </div>
+      <button class="button primary command-run-button" data-action="run-ai-analysis" ${canRun ? "" : "disabled"} type="button">${running ? "Analyzing…" : "Run intelligence analysis"}</button>
+    </div>
     <div class="processing-track" aria-label="Intelligence processing stages">
       <div class="processing-grid"></div>
-      ${PROCESS_STAGES.map((stage, index) => `<div class="processing-stage stage-${index + 1}"><span class="signal-node"></span><strong>${stage}</strong></div>`).join("")}
+      ${PROCESS_STAGES.map((stage, index) => {
+        const state = stageState(runtime, stage, index);
+        return `<div class="processing-stage stage-${state}"><span class="signal-node"></span><strong>${escapeHtml(stage)}</strong><small>${escapeHtml(state === "active" ? "Active" : state === "complete" ? "Complete" : "Pending")}</small></div>`;
+      }).join("")}
       <span class="water-pulse" aria-hidden="true"></span>
     </div>
-    <p class="muted">${escapeHtml(runtime.analysis.statusLabel || "Intelligence state available")}</p>
+    <p class="processing-status ${runtime.analysis?.backendError ? "warning-text" : ""}">${escapeHtml(statusText)}</p>
   </section>`;
 }
 
 function decisionPanel(runtime) {
-  const ready = runtime.analysis.status === "complete";
+  const ready = runtime.analysis?.status === "complete";
+  const decision = decisionModel(runtime);
   return `<section class="command-section-block decision-panel-enterprise">
-    <div class="section-headline"><p class="eyebrow">Decision Panel</p><h2>Irrigate 42 min tonight</h2></div>
-    <div class="decision-primary">
-      <p><strong>Start</strong><span>21:00 PT</span></p>
-      <p><strong>Apply</strong><span>12 mm net</span></p>
+    <div class="section-headline"><p class="eyebrow">Decision layer</p><h2>Verified water decision</h2></div>
+    <div class="decision-hero">
+      <strong>${escapeHtml(decision.action)}</strong>
+      <span>Start ${escapeHtml(decision.start)} · Apply ${escapeHtml(decision.plannedWater)}</span>
     </div>
     <dl class="decision-context">
-      <div><dt>Crop</dt><dd>Cabernet Sauvignon</dd></div>
-      <div><dt>Block</dt><dd>Block A North</dd></div>
-      <div><dt>Driver</dt><dd>ETo 6.4 mm and 38% deficit at 30 cm</dd></div>
-      <div><dt>Confidence</dt><dd>86%</dd></div>
-      <div><dt>Verification</dt><dd>Required</dd></div>
+      <div><dt>Confidence</dt><dd>${escapeHtml(decision.confidence)}</dd></div>
+      <div><dt>Evidence completeness</dt><dd>${escapeHtml(decision.evidence)}</dd></div>
+      <div><dt>Crop</dt><dd>${escapeHtml(decision.crop)}</dd></div>
+      <div><dt>Block</dt><dd>${escapeHtml(decision.block)}</dd></div>
+      <div><dt>Driver</dt><dd>${escapeHtml(decision.driver)}</dd></div>
+      <div><dt>Verification</dt><dd>${escapeHtml(decision.verification)}</dd></div>
     </dl>
     <div class="decision-actions">
       <button class="button primary" data-action="schedule" ${!ready ? "disabled" : ""} type="button">Approve schedule</button>
@@ -79,44 +235,77 @@ function decisionPanel(runtime) {
   </section>`;
 }
 
-function reconciliationAndVerification(runtime) {
-  const chain = runtime.operatingChain || [];
-  const rows = [
-    ["WiseConn", "Last irrigation event: 36 min", "Valid recent controller event", "Matched"],
-    ["Talgil", "Runtime reachable, no selected production targets", "Available integration, target selection pending", "Pending target"],
-    ["Weather", "ETo 6.4 mm, rain 0 mm", "High water demand", "Matched"],
-    ["Flow meter", "Actual flow within 8% of scheduled plan", "Applied water consistent", "Matched"],
-    ["Field observation", "Mild afternoon stress", "Supports irrigation recommendation", "Matched"],
-    ["Earth observation layer", "Elevated canopy stress index", "Supports water demand signal", "Matched"],
-  ];
+function reconciliationRows(runtime) {
+  const backend = backendResult(runtime);
+  const rows = Array.isArray(backend?.reconciliation)
+    ? backend.reconciliation
+    : backend?.reconciliation?.rows || backend?.reconciliation?.source_reconciliation || runtime.reconciliationRows || FALLBACK_RECONCILIATION_ROWS;
+  return rows.length ? rows : FALLBACK_RECONCILIATION_ROWS;
+}
 
-  return `<section class="command-section-block reconciliation-panel">
-    <div class="section-headline"><p class="eyebrow">Reconciliation and Verification</p><h2>Cross-source interpretation and execution proof</h2></div>
-    <div class="table-wrap"><table class="data-table"><thead><tr><th>Source</th><th>Signal</th><th>Interpretation</th><th>Status</th></tr></thead><tbody>
-      ${rows.map((row) => `<tr>${row.map((cell, idx) => `<td>${idx === 3 ? statusBadge(cell) : escapeHtml(cell)}</td>`).join("")}</tr>`).join("")}
-    </tbody></table></div>
+function evidenceChain(runtime) {
+  const chain = runtime.operatingChain?.length ? runtime.operatingChain : [
+    { label: "Recommended", status: "Pending", timestamp: "", owner: "AGRO-AI Intelligence Engine", evidence: "Recommendation pending" },
+    { label: "Scheduled", status: "Pending", timestamp: "", owner: "Operations Manager", evidence: "Schedule pending" },
+    { label: "Applied", status: "Pending", timestamp: "", owner: "Operations Manager", evidence: "Applied water pending" },
+    { label: "Observed", status: "Pending", timestamp: "", owner: "Operations Manager", evidence: "Field observation pending" },
+    { label: "Verified", status: "Pending", timestamp: "", owner: "AGRO-AI Verification", evidence: "Verification pending" },
+  ];
+  return `<section class="command-section-block evidence-chain-panel">
+    <div class="section-headline"><p class="eyebrow">Evidence chain</p><h2>Recommendation through verified outcome</h2></div>
     <div class="verification-chain-enterprise">
-      ${(chain.length ? chain : [
-        { label: "Recommended", status: "Recommendation ready" },
-        { label: "Scheduled", status: "Pending" },
-        { label: "Applied", status: "Pending" },
-        { label: "Observed", status: "Pending" },
-        { label: "Verified", status: "Pending" },
-      ]).map((step) => `<div class="chain-step"><strong>${escapeHtml(step.label)}</strong><span>${escapeHtml(step.status)}</span></div>`).join("")}
+      ${chain.map((step) => `<div class="chain-step">
+        <strong>${escapeHtml(step.label)}</strong>
+        ${statusBadge(step.status)}
+        <span>${escapeHtml(step.timestamp || "Pending")}</span>
+        <em>${escapeHtml(step.owner || "Operations user")}</em>
+        <p>${escapeHtml(step.evidence || "Evidence pending")}</p>
+      </div>`).join("")}
     </div>
   </section>`;
 }
 
+function sourceReconciliation(runtime) {
+  return `<section class="command-section-block reconciliation-panel">
+    <div class="section-headline"><p class="eyebrow">Source reconciliation</p><h2>How source signals resolve into one decision</h2></div>
+    <div class="table-wrap"><table class="data-table"><thead><tr><th>Source</th><th>Signal</th><th>Interpretation</th><th>Status</th></tr></thead><tbody>
+      ${reconciliationRows(runtime).map((row) => {
+        const cells = Array.isArray(row)
+          ? row
+          : [row.source || row.name, row.signal || row.value, row.interpretation || row.summary, row.status || row.state];
+        return `<tr>${cells.slice(0, 4).map((cell, idx) => `<td>${idx === 3 ? statusBadge(cell) : escapeHtml(cell || "")}</td>`).join("")}</tr>`;
+      }).join("")}
+    </tbody></table></div>
+  </section>`;
+}
+
 function reportPreview(runtime) {
-  const snapshot = runtime.reportSnapshots?.[0];
+  const snapshot = firstSnapshot(runtime);
+  const decision = decisionModel(runtime);
+  const backend = backendResult(runtime);
+  const summary = backend?.report_summary || {};
+  const rows = [
+    ["Farm", snapshot?.farm || summary.farm || runtime.activeFarm?.name || "Alpha Vineyard"],
+    ["Block", snapshot?.block || summary.block || runtime.activeZone?.name || "Block A North"],
+    ["Recommendation", snapshot?.recommendation || decision.action],
+    ["Planned water", snapshot?.plannedWater || summary.planned_water || decision.plannedWater],
+    ["Applied water", snapshot?.appliedAction || summary.applied_water || "Pending confirmation"],
+    ["Variance", snapshot?.variance || summary.variance || "Within 8 percent"],
+    ["Evidence completeness", snapshot?.evidenceCompleteness || decision.evidence],
+    ["Water savings assumption", snapshot?.waterEfficiencyNote || summary.water_saved_assumption || `${decision.savings} vs historical baseline`],
+    ["Verification status", snapshot?.verificationStatus || decision.verification],
+  ];
   return `<section class="command-section-block report-preview-enterprise">
-    <div class="section-headline"><p class="eyebrow">Report Preview</p><h2>Executive-ready irrigation intelligence summary</h2></div>
+    <div class="section-headline command-section-heading">
+      <div><p class="eyebrow">Executive report preview</p><h2>Export-ready decision record</h2></div>
+      <div class="report-actions">
+        <button class="button secondary" data-action="preview-report" type="button">Preview report</button>
+        <button class="button secondary" data-action="export-csv" type="button">Export CSV</button>
+        <button class="button secondary" data-action="print-report" type="button">Print report</button>
+      </div>
+    </div>
     <table class="data-table compact"><tbody>
-      <tr><th>Farm</th><td>${escapeHtml(snapshot?.farm || "Alpha Vineyard")}</td><th>Block</th><td>${escapeHtml(snapshot?.block || "Block A North")}</td></tr>
-      <tr><th>Recommendation</th><td>${escapeHtml(snapshot?.recommendation || "Irrigate 42 min tonight")}</td><th>Planned water</th><td>12 mm net</td></tr>
-      <tr><th>Applied water</th><td>${escapeHtml(snapshot?.appliedAction || "Pending confirmation")}</td><th>Variance</th><td>Within 8%</td></tr>
-      <tr><th>Evidence completeness</th><td>${escapeHtml(snapshot?.evidenceCompleteness || "92%")}</td><th>Water savings assumption</th><td>${escapeHtml(snapshot?.waterEfficiencyNote || "27% reduction vs baseline")}</td></tr>
-      <tr><th>Verification status</th><td colspan="3">${escapeHtml(snapshot?.verificationStatus || "Verification required")}</td></tr>
+      ${rows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join("")}
     </tbody></table>
   </section>`;
 }
@@ -124,11 +313,15 @@ function reportPreview(runtime) {
 export function renderCommandCenter(state) {
   const runtime = state.demoRuntime;
   return `<div class="water-command-center enterprise-command-surface">
-    ${executiveSummaryStrip()}
-    ${sourceIntelligencePanel()}
-    ${intelligenceProcessingPanel(runtime)}
-    ${decisionPanel(runtime)}
-    ${reconciliationAndVerification(runtime)}
+    ${sourceModeSelector(runtime)}
+    ${executiveSummaryStrip(runtime)}
+    <div class="command-canvas">
+      ${sourceLayer(runtime)}
+      ${intelligenceProcessingPanel(runtime)}
+      ${decisionPanel(runtime)}
+    </div>
+    ${sourceReconciliation(runtime)}
+    ${evidenceChain(runtime)}
     ${reportPreview(runtime)}
   </div>`;
 }
