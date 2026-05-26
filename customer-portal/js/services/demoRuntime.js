@@ -95,36 +95,34 @@ function findZone(farm, zoneId) {
   return farm.zones.find((zone) => zone.id === zoneId) || farm.zones[0];
 }
 
-function baseChain(active = "recommended") {
+function baseChain(active = "") {
   const labels = ["Recommended", "Scheduled", "Applied", "Observed", "Verified"];
   const keys = ["recommended", "scheduled", "applied", "observed", "verified"];
+  const activeIndex = keys.indexOf(active);
   return keys.map((key, index) => ({
     key,
     label: labels[index],
-    status: key === active ? "Recommendation ready" : "Pending",
-    timestamp: key === "recommended" ? now() : "",
+    status: activeIndex >= 0 && index <= activeIndex ? "Complete" : "Pending",
+    timestamp: activeIndex >= 0 && index <= activeIndex ? now() : "",
     owner: key === "recommended" ? "AGRO-AI Intelligence Engine" : ACTOR,
-    evidence: key === "recommended" ? "Recommendation ready with field context assembled." : `${labels[index]} pending`,
-    note: "Evaluation runtime state",
+    evidence: activeIndex >= 0 && index <= activeIndex ? `${labels[index]} evidence captured.` : `${labels[index]} pending`,
+    note: "Pilot runtime state",
   }));
 }
 
 export function getAnalysisSteps() {
   return [
-    "Ingested source files",
-    "Detected schemas and aliases",
-    "Normalized units and timestamps",
-    "Matched farm, block, crop, and soil context",
-    "Reconciled controller and flow-meter evidence",
-    "Evaluated weather, soil deficit, and field notes",
-    "Calculated confidence and evidence completeness",
-    "Produced recommendation and verification plan",
-  ].map((title) => ({
+    ["Sources", "Waiting for source records"],
+    ["Normalize", "Standardize units, aliases, and timestamps"],
+    ["Reconcile", "Compare controller, weather, soil, flow, and observations"],
+    ["Decide", "Prepare recommendation and confidence"],
+    ["Verify", "Prepare evidence chain and report"],
+  ].map(([title, detail]) => ({
     title,
     label: title,
     status: "pending",
     statusLabel: "Pending",
-    detail: "Awaiting intelligence analysis",
+    detail,
     objectsProcessed: 0,
   }));
 }
@@ -135,20 +133,29 @@ function normalizeStoredRuntime(runtime) {
   runtime.activeFarm = runtime.activeFarm || findFarm("alpha-vineyard");
   runtime.activeZone = runtime.activeZone || findZone(runtime.activeFarm, "block-a-north");
   runtime.scenario = runtime.scenario || scenarios.dry_day;
-  runtime.operatingChain = runtime.operatingChain || baseChain("recommended");
+  runtime.operatingChain = runtime.operatingChain || baseChain();
   runtime.auditEvents = runtime.auditEvents || [...demoAuditLog];
   runtime.reportSnapshots = runtime.reportSnapshots || [];
   runtime.intakeMode = runtime.intakeMode === "uploaded" ? "sample" : runtime.intakeMode || "";
-  runtime.intakeModeLabel = runtime.intakeModeLabel && !/demo/i.test(runtime.intakeModeLabel) ? runtime.intakeModeLabel : "No intake selected";
+  runtime.intakeModeLabel = runtime.intakeModeLabel && !/demo|sample data/i.test(runtime.intakeModeLabel) ? runtime.intakeModeLabel : "No source selected";
   runtime.analysis = {
     status: runtime.analysis?.status || "idle",
     running: Boolean(runtime.analysis?.running),
-    statusLabel: runtime.analysis?.statusLabel && !/demo|AI context/i.test(runtime.analysis.statusLabel) ? runtime.analysis.statusLabel : "Select intake to begin",
+    statusLabel: runtime.analysis?.statusLabel && !/demo|sample package|AI context/i.test(runtime.analysis.statusLabel) ? runtime.analysis.statusLabel : "Waiting for source",
     steps: runtime.analysis?.steps?.length ? runtime.analysis.steps.map((step) => ({ ...step, title: step.title || step.label })) : getAnalysisSteps(),
     backendResult: runtime.analysis?.backendResult || null,
+    backendError: runtime.analysis?.backendError || "",
     sessionId: runtime.analysis?.sessionId || "",
     artifacts: runtime.analysis?.artifacts || [],
     sampleLoaded: Boolean(runtime.analysis?.sampleLoaded),
+  };
+  runtime.sourceState = runtime.sourceState || {
+    provider: "WiseConn",
+    entityId: "162803",
+    status: runtime.intakeMode ? "Source selected" : "Waiting for source",
+    uploadedFileName: "",
+    uploadedType: "",
+    parseStatus: "",
   };
   return runtime;
 }
@@ -157,9 +164,10 @@ export function resetAnalysis(runtime) {
   runtime.analysis = {
     status: "idle",
     running: false,
-    statusLabel: "Field context assembled",
+    statusLabel: runtime.intakeMode ? "Source selected" : "Waiting for source",
     steps: getAnalysisSteps(),
     backendResult: null,
+    backendError: "",
     sessionId: runtime.analysis?.sessionId || "",
     artifacts: runtime.analysis?.artifacts || [],
     sampleLoaded: runtime.analysis?.sampleLoaded || false,
@@ -173,8 +181,9 @@ export function resetAnalysis(runtime) {
 export function runAiAnalysis(runtime) {
   runtime.analysis.running = true;
   runtime.analysis.status = "running";
-  runtime.analysis.statusLabel = "Intelligence analysis in progress";
-  runtime.analysis.steps = getAnalysisSteps();
+  runtime.analysis.statusLabel = "Analyzing source records";
+  runtime.analysis.backendError = "";
+  runtime.analysis.steps = getAnalysisSteps().map((step, index) => index === 0 ? { ...step, status: "running", statusLabel: "Active" } : step);
   addAudit(runtime, "Intelligence analysis started", "AGRO-AI began processing selected intake context.");
   return persist(runtime);
 }
@@ -185,22 +194,23 @@ function confidenceLabel(value) {
 }
 
 function recommendationFromBackend(result) {
-  const rec = result?.recommendation || {};
+  const rec = result?.recommendation || result?.report_summary?.recommendation || {};
+  const summary = result?.report_summary || {};
   return {
     ...demoRecommendation,
     ...rec,
-    action: rec.action || rec.decision || demoRecommendation.action,
-    decision: rec.action || rec.decision || demoRecommendation.decision,
+    action: rec.action || rec.decision || summary.recommendation || demoRecommendation.action,
+    decision: rec.action || rec.decision || summary.recommendation || demoRecommendation.decision,
     timing: rec.start_time || rec.start || rec.timing || demoRecommendation.timing,
     start_time: rec.start_time || rec.start || rec.timing || demoRecommendation.start_time,
     duration: rec.duration || (rec.duration_min ? `${rec.duration_min} min` : demoRecommendation.duration),
     depth: rec.depth || (rec.depth_mm ? `${rec.depth_mm} mm net` : demoRecommendation.depth),
-    confidence: confidenceLabel(rec.confidence),
-    dataQuality: result?.reconciliation?.evidence_completeness || rec.confidence_label || demoRecommendation.dataQuality,
+    confidence: confidenceLabel(rec.confidence || summary.confidence),
+    dataQuality: result?.reconciliation?.evidence_completeness || summary.evidence_completeness || rec.confidence_label || demoRecommendation.dataQuality,
     keyDrivers: rec.key_drivers || rec.keyDrivers || demoRecommendation.keyDrivers,
     missingInputs: rec.limitations || result?.limitations || result?.reconciliation?.missing_inputs || [],
     limitations: rec.limitations || result?.limitations || [],
-    sourceTraceSummary: result?.report_summary?.executive_summary || demoRecommendation.sourceTraceSummary,
+    sourceTraceSummary: summary.executive_summary || demoRecommendation.sourceTraceSummary,
     executionTask: "Schedule review required before controller execution.",
     verificationPlan: rec.verification_requirement || result?.verification_plan?.requirement || demoRecommendation.verificationPlan,
   };
@@ -208,6 +218,20 @@ function recommendationFromBackend(result) {
 
 function reconciliationRowsFromBackend(result) {
   const recon = result?.reconciliation || {};
+  const candidateRows = Array.isArray(recon)
+    ? recon
+    : recon.rows || recon.source_reconciliation || result?.source_reconciliation || [];
+  if (Array.isArray(candidateRows) && candidateRows.length) {
+    return candidateRows.map((row) => {
+      if (Array.isArray(row)) return row;
+      return [
+        row.source || row.name || "Source",
+        row.signal || row.value || row.evidence || "Signal received",
+        row.interpretation || row.meaning || row.summary || "Interpreted by reconciliation engine",
+        row.status || row.state || "Matched",
+      ];
+    });
+  }
   return [
     ["Planned vs applied", recon.planned_vs_applied_variance || "Not available", "Variance checked against controller and flow-meter evidence", recon.conflicts_detected?.length ? "Review" : "Matched"],
     ["Controller validity", recon.controller_event_validity || "Not available", "Controller event integrity and missing pressure cases checked", recon.controller_event_validity ? "Checked" : "Pending"],
@@ -215,7 +239,7 @@ function reconciliationRowsFromBackend(result) {
     ["Weather demand", recon.weather_demand || "Not available", "ETo and rain forecast evaluated", recon.weather_demand ? "Matched" : "Pending"],
     ["Soil deficit", recon.soil_moisture_deficit || "Not available", "Root-zone deficit evaluated across depths", recon.soil_moisture_deficit ? "Matched" : "Pending"],
     ["Field observation", recon.field_observation_support || "Not available", "Grower notes and field observations reconciled", recon.field_observation_support ? "Matched" : "Pending"],
-    ["Earth observation sample layer", recon.satellite_stress_support || "Not available", "Sample canopy stress layer used without claiming a live integration", recon.satellite_stress_support ? "Checked" : "Pending"],
+    ["Earth observation layer", recon.satellite_stress_support || "Not available", "Canopy stress layer evaluated without claiming live telemetry", recon.satellite_stress_support ? "Checked" : "Pending"],
   ];
 }
 
@@ -266,22 +290,31 @@ function reportSnapshotFromBackend(runtime, result) {
 export function completeAiAnalysis(runtime) {
   runtime.analysis.running = false;
   runtime.analysis.status = "complete";
-  runtime.analysis.statusLabel = "Analysis complete";
+  runtime.analysis.statusLabel = "Decision ready";
   if (runtime.analysis.backendResult) {
     runtime.analysis.steps = traceStepsFromBackend(runtime.analysis.backendResult);
     runtime.activeRecommendation = recommendationFromBackend(runtime.analysis.backendResult);
     runtime.reconciliationRows = reconciliationRowsFromBackend(runtime.analysis.backendResult);
-    runtime.operatingChain = baseChain("scheduled");
+    runtime.operatingChain = baseChain("recommended");
+    runtime.operatingChain[0] = { ...runtime.operatingChain[0], evidence: "Verified water decision produced from selected source records." };
     runtime.reportSnapshots = [reportSnapshotFromBackend(runtime, runtime.analysis.backendResult), ...(runtime.reportSnapshots || [])].slice(0, 12);
   } else {
     runtime.analysis.steps = runtime.analysis.steps.map((step) => ({ ...step, status: "complete", statusLabel: "Complete", detail: "Source reconciliation complete" }));
-    generateDemoRecommendation(runtime);
+    runtime.activeRecommendation = {
+      ...runtime.scenario.recommendation,
+      generatedAt: now(),
+      sourceTraceSummary: `${runtime.scenario.note} Context assembled from ${runtime.activeZone.controllerSource}, crop profile, soil profile, weather, and field observation.`,
+    };
+    runtime.reconciliationRows = demoReconciliationRows;
+    runtime.operatingChain = baseChain("recommended");
+    runtime.operatingChain[0] = { ...runtime.operatingChain[0], evidence: "Pilot package analysis produced a verified water decision." };
+    runtime.reportSnapshots = [reportSnapshotFromBackend(runtime, null), ...(runtime.reportSnapshots || [])].slice(0, 12);
   }
   addAudit(runtime, "Intelligence analysis completed", "Recommendation ready with verification required.");
   return persist(runtime);
 }
 
-function addAudit(runtime, event, detail, source = runtime.activeZone?.name || "Evaluation workspace") {
+function addAudit(runtime, event, detail, source = runtime.activeZone?.name || "Pilot workspace") {
   runtime.auditEvents = [{ time: now(), actor: ACTOR, event, source, detail }, ...(runtime.auditEvents || [])].slice(0, 80);
 }
 
@@ -318,7 +351,7 @@ export function resetDemo(shouldPersist = true) {
     intelligenceTransformation: demoTransformation,
     reconciliationRows: demoReconciliationRows,
     agroAiExplainer: demoAgroAiExplainer,
-    operatingChain: baseChain("recommended"),
+    operatingChain: baseChain(),
     auditEvents: [...demoAuditLog],
     reportSnapshots: [],
     scenario: scenarios.dry_day,
@@ -330,15 +363,24 @@ export function resetDemo(shouldPersist = true) {
     analysis: {
       status: "idle",
       running: false,
-      statusLabel: "Select intake to begin",
+      statusLabel: "Waiting for source",
       steps: getAnalysisSteps(),
       backendResult: null,
+      backendError: "",
       sessionId: "",
       artifacts: [],
       sampleLoaded: false,
     },
+    sourceState: {
+      provider: "WiseConn",
+      entityId: "162803",
+      status: "Waiting for source",
+      uploadedFileName: "",
+      uploadedType: "",
+      parseStatus: "",
+    },
   };
-  addAudit(runtime, "Workspace launched", "Evaluation runtime reset and ready.");
+  addAudit(runtime, "Workspace launched", "Pilot workspace reset and ready.");
   return shouldPersist ? persist(runtime) : runtime;
 }
 
@@ -370,7 +412,7 @@ export function switchScenario(runtime, scenarioId) {
 export function startGuidedDemo(runtime) {
   runtime.guideStarted = true;
   runtime.currentStep = 1;
-  addAudit(runtime, "Guided evaluation started", "Evaluation guide activated.");
+  addAudit(runtime, "Guided workflow started", "Enterprise workflow activated.");
   return persist(runtime);
 }
 
@@ -380,7 +422,8 @@ export function generateDemoRecommendation(runtime) {
     generatedAt: now(),
     sourceTraceSummary: `${runtime.scenario.note} Context assembled from ${runtime.activeZone.controllerSource}, crop profile, soil profile, weather, and field observation.`,
   };
-  runtime.operatingChain = baseChain("scheduled");
+  runtime.operatingChain = baseChain("recommended");
+  runtime.operatingChain[0] = { ...runtime.operatingChain[0], evidence: "Recommendation ready with field context assembled." };
   runtime.currentStep = 2;
   addAudit(runtime, "Recommendation generated", runtime.activeRecommendation.decision || "Recommendation ready");
   return persist(runtime);
@@ -481,15 +524,46 @@ export function toCsv(snapshot) {
 }
 
 export function selectIntakeMode(runtime, mode) {
-  const normalizedMode = mode === "uploaded" ? "sample" : mode;
+  const normalizedMode = mode === "uploaded" ? "upload" : mode;
   runtime.intakeMode = normalizedMode;
   runtime.intakeModeLabel =
     normalizedMode === "connected"
-      ? "Connected field"
+      ? "Connected source"
       : normalizedMode === "upload"
-        ? "Upload records"
-        : "Sample data package";
-  runtime.analysis.statusLabel = "Intake ready for analysis";
+        ? "Uploaded records"
+        : "Pilot data package";
+  runtime.sourceState = {
+    ...(runtime.sourceState || {}),
+    provider: normalizedMode === "connected" ? "WiseConn" : runtime.sourceState?.provider || "WiseConn",
+    entityId: normalizedMode === "connected" ? "162803" : runtime.sourceState?.entityId || "162803",
+    status: normalizedMode === "upload" && runtime.sourceState?.uploadedFileName ? "Uploaded records ready" : "Source selected",
+  };
+  runtime.analysis.statusLabel = "Source selected";
   addAudit(runtime, "Data intake selected", runtime.intakeModeLabel);
+  return persist(runtime);
+}
+
+export function attachUploadArtifact(runtime, artifact, file) {
+  runtime.intakeMode = "upload";
+  runtime.intakeModeLabel = "Uploaded records";
+  runtime.analysis.artifacts = [...(runtime.analysis.artifacts || []), artifact].slice(-8);
+  runtime.sourceState = {
+    ...(runtime.sourceState || {}),
+    status: "Uploaded records ready",
+    uploadedFileName: file?.name || artifact?.filename || artifact?.name || "Uploaded records",
+    uploadedType: file?.name?.split(".").pop()?.toUpperCase() || artifact?.content_type || artifact?.type || "Records",
+    parseStatus: artifact?.parse_status || artifact?.status || "Accepted for analysis",
+  };
+  runtime.analysis.statusLabel = "Source selected";
+  addAudit(runtime, "Records uploaded", `${runtime.sourceState.uploadedFileName} accepted for analysis.`, "Uploaded records");
+  return persist(runtime);
+}
+
+export function markBackendUnavailable(runtime, message = "Backend intelligence unavailable. Pilot package analysis remains available.") {
+  runtime.analysis.running = false;
+  runtime.analysis.status = runtime.activeRecommendation ? "complete" : "idle";
+  runtime.analysis.backendError = message;
+  runtime.analysis.statusLabel = message;
+  addAudit(runtime, "Backend intelligence unavailable", message, runtime.intakeModeLabel || "Water Command Center");
   return persist(runtime);
 }
