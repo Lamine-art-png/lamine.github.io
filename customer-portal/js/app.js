@@ -2,7 +2,7 @@ import { ApiClient } from "./apiClient.js";
 import { acceptedWorkbenchFields, sampleDataPackage, workbenchOutputSchema } from "./demoData.js";
 import { launchDemoSession, notify, returnToEntry, setActiveView, setDemoRuntime, setLoginError, startLoginScaffold, state, subscribe, SESSION_MODES } from "./state.js";
 import { loadLiveSnapshot, generateWiseConnRecommendation } from "./services/liveData.js";
-import { addObservation, completeAiAnalysis, generateDemoRecommendation, generateDemoReport, markApplied, nextStep, prepareBackendSetupRequest, resetDemo, runAiAnalysis, scheduleRecommendation, selectFarm, selectIntakeMode, selectZone, startGuidedDemo, switchScenario, toCsv, verifyOutcome } from "./services/demoRuntime.js";
+import { addObservation, attachUploadArtifact, completeAiAnalysis, generateDemoRecommendation, generateDemoReport, markApplied, markBackendUnavailable, nextStep, prepareBackendSetupRequest, resetDemo, runAiAnalysis, scheduleRecommendation, selectFarm, selectIntakeMode, selectZone, startGuidedDemo, switchScenario, toCsv, verifyOutcome } from "./services/demoRuntime.js";
 import { renderEntryView } from "./views/entryView.js";
 import { renderShell } from "./views/shellView.js";
 import { renderCommandCenter } from "./views/commandCenterView.js";
@@ -24,7 +24,15 @@ function updateDemo(runtime, message = "Command Center updated") {
 }
 
 function downloadCsv(snapshot) {
-  if (!snapshot) return;
+  if (!snapshot) {
+    const rt = generateDemoReport(state.demoRuntime);
+    setDemoRuntime(rt);
+    snapshot = rt.reportSnapshots?.[0];
+  }
+  if (!snapshot) {
+    openModal("Report export unavailable", "<p>A report snapshot is required before CSV export. Preview the report or run intelligence analysis first.</p>");
+    return;
+  }
   const blob = new Blob([toCsv(snapshot)], { type: "text/csv" });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
@@ -100,12 +108,13 @@ function setupBrief(provider = "WiseConn") {
   return [
     "Backend setup request",
     "",
+    `Provider: ${provider}`,
     "Workspace: Alpha Vineyard",
-    `Integration: ${provider}`,
-    "Required backend endpoint: credential vault and tenant provisioning",
-    "Required access: API key, provider account, farm/block mapping",
+    "Credential vault requirement: production credentials must be encrypted and stored server-side",
+    "Tenant provisioning requirement: create a tenant-scoped Workbench session and data namespace",
+    "Farm and block mapping requirement: map provider IDs to AGRO-AI farm, block, crop, soil, and irrigation entities",
     "Security note: credentials must be stored server-side, not in browser storage",
-    "Next action: send setup brief to AGRO-AI technical team for backend provisioning",
+    "Operational next step: provision provider access, select production targets, then enable live source analysis",
   ].join("\n");
 }
 
@@ -132,14 +141,15 @@ function openBackendSetupModal(provider = "WiseConn") {
   const modal = openModal(
     "Backend setup request",
     `<dl class="setup-brief">
+      <div><dt>Provider</dt><dd>${provider}</dd></div>
       <div><dt>Workspace</dt><dd>Alpha Vineyard</dd></div>
-      <div><dt>Integration</dt><dd>${provider}</dd></div>
-      <div><dt>Required backend endpoint</dt><dd>Credential vault and tenant provisioning</dd></div>
-      <div><dt>Required access</dt><dd>API key, provider account, farm/block mapping</dd></div>
+      <div><dt>Credential vault requirement</dt><dd>Production credentials must be encrypted and stored server-side.</dd></div>
+      <div><dt>Tenant provisioning requirement</dt><dd>Create a tenant-scoped Workbench session and data namespace.</dd></div>
+      <div><dt>Farm and block mapping requirement</dt><dd>Map provider IDs to AGRO-AI farm, block, crop, soil, and irrigation entities.</dd></div>
       <div><dt>Security note</dt><dd>Credentials must be stored server-side, not in browser storage.</dd></div>
-      <div><dt>Next action</dt><dd>Send setup brief to AGRO-AI technical team.</dd></div>
+      <div><dt>Operational next step</dt><dd>Provision provider access, select production targets, then enable live source analysis.</dd></div>
     </dl>`,
-    `<button class="button secondary" data-copy-setup type="button">Copy setup brief</button><button class="button primary" data-download-setup type="button">Download setup brief</button><button class="button ghost" data-modal-close type="button">Close</button>`
+    `<button class="button secondary" data-copy-setup type="button">Copy brief</button><button class="button primary" data-download-setup type="button">Download brief</button><button class="button ghost" data-modal-close type="button">Close</button>`
   );
   modal.querySelector("[data-copy-setup]")?.addEventListener("click", async () => {
     const copied = await copyTextToClipboard(brief);
@@ -212,44 +222,72 @@ function bindEntryEvents() {
 }
 
 async function animateAnalysis() {
+  if (!state.demoRuntime.intakeMode) {
+    updateDemo(state.demoRuntime, "Select a source before running intelligence analysis.");
+    return;
+  }
   const rt = runAiAnalysis(state.demoRuntime);
   setDemoRuntime(rt);
   for (let i = 0; i < rt.analysis.steps.length; i += 1) {
     await new Promise((r) => setTimeout(r, 450));
-    rt.analysis.steps[i] = { ...rt.analysis.steps[i], status: "running", statusLabel: "Running", detail: "Processing" };
+    rt.analysis.steps[i] = { ...rt.analysis.steps[i], status: "running", statusLabel: "Active", detail: "Processing selected source records" };
     setDemoRuntime(rt);
     await new Promise((r) => setTimeout(r, 300));
     rt.analysis.steps[i] = { ...rt.analysis.steps[i], status: "complete", statusLabel: "Complete", detail: "Complete" };
     setDemoRuntime(rt);
   }
   let backend;
-  if (rt.intakeMode === "connected") {
-    backend = await api.analyzeLiveWorkbench({ source: "wiseconn", entity_id: "162803" });
-  } else {
-    if (rt.intakeMode === "sample" && !rt.analysis.sampleLoaded) {
-      const sample = await api.createSampleWorkbenchSession();
-      if (sample.ok) {
-        rt.analysis.sessionId = sample.data.session.session_id;
-        rt.analysis.artifacts = sample.data.artifacts || [];
-        rt.analysis.sampleLoaded = true;
+  try {
+    if (rt.intakeMode === "connected") {
+      backend = await api.analyzeLiveWorkbench({
+        source: "wiseconn",
+        entity_id: "162803",
+        crop_type: "Cabernet Sauvignon",
+        soil_type: "loam",
+        irrigation_method: "drip",
+        weather_context: {
+          eto_mm: 6.4,
+          precipitation_forecast_mm: 0,
+        },
+        field_observations: ["Mild afternoon stress"],
+        language: "en",
+        user_role: "operations_manager",
+      });
+    } else {
+      if (rt.intakeMode === "sample" && !rt.analysis.sampleLoaded) {
+        const sample = await api.createSampleWorkbenchSession();
+        if (sample.ok) {
+          rt.analysis.sessionId = sample.data?.session?.session_id || sample.data?.session_id || rt.analysis.sessionId;
+          rt.analysis.artifacts = sample.data?.artifacts || [];
+          rt.analysis.sampleLoaded = true;
+        }
+      }
+      if (rt.intakeMode === "upload" && !rt.analysis.artifacts?.length) {
+        updateDemo(markBackendUnavailable(rt, "Upload records before running production ingestion. Pilot package analysis remains available."), "Upload records before running production ingestion.");
+        return;
+      }
+      if (!rt.analysis.sessionId && rt.intakeMode !== "sample") {
+        const created = await api.createWorkbenchSession({ mode: "uploaded", workspace_name: "Alpha Vineyard · Water Command Center" });
+        if (created.ok) rt.analysis.sessionId = created.data?.session_id || created.data?.session?.session_id || "";
+      }
+      if (rt.analysis.sessionId) {
+        backend = await api.analyzeWorkbenchSession(rt.analysis.sessionId, { session_id: rt.analysis.sessionId, mode: rt.intakeMode === "sample" ? "pilot" : "uploaded" });
       }
     }
-    if (!rt.analysis.sessionId) {
-      const created = await api.createWorkbenchSession({ mode: "uploaded", workspace_name: "Alpha Vineyard · Water Command Center" });
-      if (created.ok) rt.analysis.sessionId = created.data.session_id;
-    }
-    if (rt.analysis.sessionId) {
-      backend = await api.analyzeWorkbenchSession(rt.analysis.sessionId, { session_id: rt.analysis.sessionId, mode: "uploaded" });
-    }
+  } catch (_error) {
+    backend = { ok: false, error: "Backend intelligence unavailable. Pilot package analysis remains available." };
   }
   if (backend?.ok) {
     rt.analysis.backendResult = backend.data;
-    updateDemo(completeAiAnalysis(rt), "Analysis complete. Recommendation ready.");
+    updateDemo(completeAiAnalysis(rt), "Analysis complete. Decision ready.");
   } else {
-    rt.analysis.running = false;
-    rt.analysis.status = "idle";
-    rt.analysis.statusLabel = "Backend intelligence unavailable. Sample package remains available for evaluation.";
-    updateDemo(rt, "Backend intelligence unavailable. Sample package remains available for evaluation.");
+    const message = "Backend intelligence unavailable. Pilot package analysis remains available.";
+    if (rt.intakeMode === "sample") {
+      rt.analysis.backendError = message;
+      updateDemo(completeAiAnalysis(rt), message);
+    } else {
+      updateDemo(markBackendUnavailable(rt, message), message);
+    }
   }
 }
 
@@ -286,31 +324,40 @@ function bindShellEvents() {
     const rt = selectIntakeMode(state.demoRuntime, "upload");
     if (!rt.analysis.sessionId) {
       const created = await api.createWorkbenchSession({ mode: "uploaded", workspace_name: "Alpha Vineyard · Water Command Center" });
-      if (created.ok) rt.analysis.sessionId = created.data.session_id;
+      if (created.ok) rt.analysis.sessionId = created.data?.session_id || created.data?.session?.session_id || "";
+    }
+    if (!rt.analysis.sessionId) {
+      updateDemo(markBackendUnavailable(rt, "Backend upload endpoint required for production ingestion. Pilot package analysis remains available."), "Backend upload endpoint required for production ingestion.");
+      openModal("Backend upload endpoint required", "<p>Production ingestion requires a Workbench session and upload endpoint. Pilot package analysis remains available while the backend path is provisioned.</p>");
+      return;
     }
     const up = await api.uploadWorkbenchFile(rt.analysis.sessionId, file);
     if (up.ok) {
-      rt.analysis.artifacts = [...(rt.analysis.artifacts || []), up.data];
-      updateDemo(rt, `Uploaded ${file.name}`);
+      updateDemo(attachUploadArtifact(rt, up.data || { filename: file.name, status: "Accepted for analysis" }, file), `${file.name} accepted for analysis.`);
     } else {
-      updateDemo(rt, up.error || "Upload failed");
+      updateDemo(markBackendUnavailable(rt, up.error || "Backend upload endpoint required for production ingestion. Pilot package analysis remains available."), "Backend upload endpoint required for production ingestion.");
+      openModal("Backend upload endpoint required", "<p>Production ingestion requires the Workbench upload endpoint. Pilot package analysis remains available while this endpoint is provisioned.</p>");
     }
   });
 
   document.querySelectorAll("[data-action]").forEach((button) => {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       const action = button.dataset.action;
       if (action === "reset-demo") updateDemo(resetDemo(), "Command Center reset");
       if (action === "start-guide") updateDemo(startGuidedDemo(state.demoRuntime), "Guided enterprise workflow started");
       if (action === "next-step") updateDemo(nextStep(state.demoRuntime), "Workflow advanced");
       if (action === "generate-demo-recommendation") updateDemo(generateDemoRecommendation(state.demoRuntime), "Recommendation generated");
-      if (action === "use-connected-field") updateDemo(selectIntakeMode(state.demoRuntime, "connected"), "Connected field context selected");
-      if (action === "use-upload-records") updateDemo(selectIntakeMode(state.demoRuntime, "upload"), "Upload records selected");
-      if (action === "load-sample-data-package") updateDemo(selectIntakeMode(state.demoRuntime, "sample"), "Sample data package selected");
+      if (action === "use-connected-field" || action === "use-connected-source") updateDemo(selectIntakeMode(state.demoRuntime, "connected"), "Connected source selected");
+      if (action === "choose-upload-records") {
+        updateDemo(selectIntakeMode(state.demoRuntime, "upload"), "Upload records selected");
+        window.setTimeout(() => document.getElementById("workbench-upload-input")?.click(), 0);
+      }
+      if (action === "use-upload-records") updateDemo(selectIntakeMode(state.demoRuntime, "upload"), "Uploaded source selected");
+      if (action === "load-sample-data-package" || action === "load-pilot-package") updateDemo(selectIntakeMode(state.demoRuntime, "sample"), "Pilot data package selected");
       if (action === "download-sample-package") downloadSamplePackage();
       if (action === "view-accepted-fields") showAcceptedFields();
       if (action === "view-analysis-schema") showAnalysisSchema();
-      if (action === "run-ai-analysis") animateAnalysis();
+      if (action === "run-ai-analysis") await animateAnalysis();
       if (action === "schedule") updateDemo(scheduleRecommendation(state.demoRuntime), "Recommendation scheduled");
       if (action === "mark-applied") updateDemo(markApplied(state.demoRuntime), "Applied water confirmed");
       if (action === "add-observation") updateDemo(addObservation(state.demoRuntime), "Observation recorded");
