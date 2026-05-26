@@ -145,14 +145,68 @@ export class ApiClient {
       body: overrides,
     });
   }
+
+  createWorkbenchSession(payload = { mode: "uploaded" }) {
+    return this.request(ENDPOINTS.workbenchSessions, { method: "POST", body: payload });
+  }
+
+  async uploadWorkbenchFile(sessionId, file) {
+    if (!sessionId) {
+      return { ok: false, status: 0, data: null, error: "Workbench session required for upload" };
+    }
+    try {
+      const form = new FormData();
+      form.append("file", file);
+      const response = await fetch(`${this.baseUrl}${ENDPOINTS.workbenchUpload(sessionId)}`, {
+        method: "POST",
+        body: form,
+      });
+      const text = await response.text();
+      let payload = null;
+      if (text) {
+        try {
+          payload = JSON.parse(text);
+        } catch (_error) {
+          payload = { message: text };
+        }
+      }
+      return {
+        ok: response.ok,
+        status: response.status,
+        data: payload,
+        error: response.ok ? null : payload?.detail || payload?.message || `HTTP ${response.status}`,
+      };
+    } catch (error) {
+      return {
+        ok: false,
+        status: 0,
+        data: null,
+        error: error?.message || "Upload request failed",
+      };
+    }
+  }
+
+  createSampleWorkbenchSession() {
+    return this.request(ENDPOINTS.workbenchSamplePackage, { method: "POST" });
+  }
+
+  analyzeWorkbenchSession(sessionId, payload = {}) {
+    return this.request(ENDPOINTS.workbenchAnalyze(sessionId), { method: "POST", body: payload });
+  }
+
+  analyzeLiveWorkbench(payload) {
+    return this.request(ENDPOINTS.workbenchLiveAnalyze, { method: "POST", body: payload });
+  }
+
+  getWorkbenchSession(sessionId) {
+    return this.request(ENDPOINTS.workbenchSession(sessionId));
+  }
+
+  getWorkbenchReport(sessionId) {
+    return this.request(ENDPOINTS.workbenchReport(sessionId));
+  }
+
+  getWorkbenchSchema() {
+    return this.request(ENDPOINTS.workbenchSchema);
+  }
 }
-
-
-ApiClient.prototype.createWorkbenchSession = function(payload={mode:"uploaded"}) { return this.request(ENDPOINTS.workbenchSessions,{method:"POST", body: payload}); };
-ApiClient.prototype.uploadWorkbenchFile = async function(sessionId, file) { const form = new FormData(); form.append("file", file); const res = await fetch(`${this.baseUrl}${ENDPOINTS.workbenchUpload(sessionId)}`, { method:"POST", body: form }); const data = await res.json(); return { ok: res.ok, status: res.status, data, error: res.ok ? null : (data?.detail || "Upload failed")}; };
-ApiClient.prototype.createSampleWorkbenchSession = function(){ return this.request(ENDPOINTS.workbenchSamplePackage, {method:"POST"}); };
-ApiClient.prototype.analyzeWorkbenchSession = function(sessionId, payload){ return this.request(ENDPOINTS.workbenchAnalyze(sessionId), {method:"POST", body: payload}); };
-ApiClient.prototype.analyzeLiveWorkbench = function(payload){ return this.request(ENDPOINTS.workbenchLiveAnalyze, {method:"POST", body: payload}); };
-ApiClient.prototype.getWorkbenchSession = function(sessionId){ return this.request(ENDPOINTS.workbenchSession(sessionId)); };
-ApiClient.prototype.getWorkbenchReport = function(sessionId){ return this.request(ENDPOINTS.workbenchReport(sessionId)); };
-ApiClient.prototype.getWorkbenchSchema = function(){ return this.request(ENDPOINTS.workbenchSchema); };
