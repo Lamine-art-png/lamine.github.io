@@ -1,0 +1,14 @@
+{
+  "id": "observation-interpretation",
+  "title": "Observation Interpretation",
+  "topic": "observations",
+  "sourceType": "internal_guidance",
+  "content": "Farmer observations are high-value field evidence. Looks dry, leaf stress, wilting, cracking soil, or dusty topsoil can increase water concern, but Velia should still ask for a practical check when confidence is low. Looks too wet, standing water, or soft saturated soil should reduce irrigation urgency and trigger waterlogging risk language. Observations must be timestamped when possible.",
+  "version": "1.0.0",
+  "lastUpdated": "2026-05-30",
+  "citation": {
+    "label": "Velia Agronomy Guidance",
+    "section": "Observation interpretation",
+    "url": null
+  }
+}

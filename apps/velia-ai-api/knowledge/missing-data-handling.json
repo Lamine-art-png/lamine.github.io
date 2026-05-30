@@ -1,0 +1,14 @@
+{
+  "id": "missing-data-handling",
+  "title": "Missing Data Handling",
+  "topic": "missing_data",
+  "sourceType": "internal_guidance",
+  "content": "Missing data should be named plainly and should lower confidence. Important missing data includes crop, soil type, field coordinates, last irrigation, recent observation, sensor status, controller status, and fresh weather. The next best action should request the smallest useful field check or profile update. Velia must not fill missing facts with invented sensor, weather, satellite, or soil moisture values.",
+  "version": "1.0.0",
+  "lastUpdated": "2026-05-30",
+  "citation": {
+    "label": "Velia Agronomy Guidance",
+    "section": "Missing-data handling",
+    "url": null
+  }
+}

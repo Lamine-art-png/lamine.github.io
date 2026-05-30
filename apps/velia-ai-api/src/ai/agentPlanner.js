@@ -1,6 +1,7 @@
 const planMap = {
   "daily irrigation decision": ["getFarmProfile", "getFieldProfile", "getWeather", "getIrrigationLogs", "getFieldObservations", "retrieveKnowledge", "estimateIrrigationNeed", "calculateConfidence"],
   "explain recommendation": ["getRecommendationHistory", "generateExplanation", "retrieveKnowledge"],
+  "assistant query": ["getRecommendationHistory", "retrieveKnowledge", "verifyRecommendationOutcome"],
   "log irrigation": ["saveIrrigationLog"],
   "update field condition": ["saveFieldObservation"],
   "answer agronomic question": ["retrieveKnowledge"],

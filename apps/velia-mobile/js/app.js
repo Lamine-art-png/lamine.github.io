@@ -17,6 +17,7 @@ let transcript = "";
 let voiceResponse = "";
 let assistantResponse = "I can explain the latest decision trace.";
 let weather = state.weatherCache || null;
+let decisionRefreshInflight = new Set();
 let uiMessage = "";
 let onboardingStep = 0;
 let onboardingDraft = {
@@ -75,9 +76,17 @@ function ai() {
 
 function persist() { saveState(state); }
 
+function weatherAgeLabel(w) {
+  const sourceTs = w?.weatherTimestamp || w?.lastUpdated;
+  const minutes = w?.freshness?.ageMinutes ?? (sourceTs ? Math.max(0, Math.round((Date.now() - new Date(sourceTs).getTime()) / 60000)) : null);
+  if (minutes == null || !Number.isFinite(minutes)) return "unknown age";
+  if (minutes < 60) return `${minutes} min old`;
+  return `${Math.round(minutes / 60)} hr old`;
+}
+
 async function refreshWeather(forceRefresh = false) {
   const location = state.profile?.farm?.location || "farm";
-  weather = await weatherService.getWeather({ location, forceRefresh });
+  weather = await weatherService.getWeather({ location, coordinates: state.profile?.farm?.coordinates || state.fields[0]?.coordinates || null, forceRefresh });
   state.weatherCache = weather;
   persist();
 }
@@ -128,24 +137,65 @@ function showMessage(text) {
 
 function recommendationFor(field) {
   const result = ai().runGoal({ goal: "daily irrigation decision", fieldId: field.id, language: state.language || "en" });
-  const rec = result.decision;
+  const localRec = result.decision;
+  const cached = state.remoteDecisions?.[field.id];
+  const freshCached = cached && Date.now() - new Date(cached.fetchedAt).getTime() < 10 * 60 * 1000;
+  if (navigator.onLine && !freshCached && !decisionRefreshInflight.has(field.id)) refreshRemoteDecision(field);
+  const rec = freshCached ? { ...cached.decision, confidence: cached.decision.confidenceLabel || cached.decision.confidence || "moderate" } : localRec;
   state = recordRecommendationHistory(state, field.id, rec);
   persist();
   return { ...rec, verificationStatus: result.verification?.status || "no_confirmation" };
 }
 
+async function refreshRemoteDecision(field) {
+  decisionRefreshInflight.add(field.id);
+  try {
+    const result = await apiClient.getDailyDecision({
+      field,
+      weather,
+      location: state.profile?.farm || null,
+      logs: state.irrigationLogs.filter((x) => x.fieldId === field.id).slice(0, 10),
+      observations: state.observations.filter((x) => x.fieldId === field.id).slice(0, 10),
+      language: state.language || "en",
+    });
+    if (result?.decision) {
+      state.remoteDecisions = { ...(state.remoteDecisions || {}), [field.id]: { decision: result.decision, fetchedAt: new Date().toISOString() } };
+      state = recordRecommendationHistory(state, field.id, result.decision);
+      persist();
+      render();
+    }
+  } catch {
+    // Local decision remains active when the backend or provider is unavailable.
+  } finally {
+    decisionRefreshInflight.delete(field.id);
+  }
+}
 
-
-async function fetchAssistantText(fieldId) {
+async function fetchAssistantText(fieldId, query = "Why?") {
   const fallback = ai().runGoal({ goal: "explain recommendation", fieldId: fieldId || "" }).text || "I can explain the latest decision trace.";
   if (!navigator.onLine) return fallback;
   try {
     const latest = state.recommendationHistory[0]?.rec || null;
-    const result = await apiClient.queryAssistant({ decision: latest, recommendationHistory: state.recommendationHistory, language: state.language || "en" });
+    const result = await apiClient.queryAssistant({ query, fieldId, decision: latest, recommendationHistory: state.recommendationHistory, language: state.language || "en" });
     return result.answer || fallback;
   } catch {
     return fallback;
   }
+}
+
+function whyVeliaSection(rec) {
+  const p = rec.provenance || {};
+  const sources = p.ragSourcesUsed || rec.knowledgeSources || [];
+  return `<details class='card compact-card provenance-card'>
+    <summary>Why Velia recommended this</summary>
+    <ul class='mini-list'>
+      <li>Mode: ${p.providerMode || "local fallback"}${p.modelUsed ? ` • ${p.modelUsed}` : ""}</li>
+      <li>Weather: ${p.weatherSource || weather?.source || "local"}${p.weatherStale || weather?.stale ? " • stale" : ""} • ${weatherAgeLabel(weather)}</li>
+      <li>Rules: ${(p.deterministicRulesTriggered || rec.decisionTrace?.deterministicRulesTriggered || []).join(", ") || "none"}</li>
+      <li>Fallback: ${p.fallbackStatus?.llmFallbackUsed ? p.fallbackStatus.llmFallbackReason || "local deterministic fallback" : "none"}</li>
+      <li>Sources: ${sources.slice(0, 3).map((s) => s.title || s.id || s.topic).join(", ") || "local guidance"}</li>
+    </ul>
+  </details>`;
 }
 function todayContent() {
   const field = state.fields[0];
@@ -182,6 +232,7 @@ function todayContent() {
             <span class='tag'>Frost: ${weather?.frostRisk || "unknown"}</span>
             <span class='tag'>Rain: ${weather?.rainChance ?? "n/a"}%</span>
           </div>
+          <p class='small'>Weather age: ${weatherAgeLabel(weather)}</p>
           ${!navigator.onLine ? `<p class='small warn'>Using last available weather data.</p>` : ""}
         </article>
 
@@ -221,6 +272,8 @@ function todayContent() {
         <ul class='mini-list'>${(rec.decisionTrace?.dataChecked || []).slice(0,4).map((item) => `<li>${item}</li>`).join("")}</ul>
         <p class='small'>Tools: ${(rec.decisionTrace?.toolsUsed || []).slice(0,4).join(", ")}</p>
       </article>
+
+      ${whyVeliaSection(rec)}
 
       <article class='card compact-card'>
         <p class='card-label'>Quick actions</p>
@@ -280,7 +333,7 @@ function fieldDetail(fieldId) {
 function alertsContent() { return `<section class='card'>No active alerts yet in v0.2.</section>`; }
 function assistantContent() {
   const chips = ["Should I irrigate today?", "Log irrigation for Field 1 for two hours", "Field 1 looks dry", "Why is confidence moderate?", "What changed since yesterday?"];
-  return `<section class='card'><h2>Field Decision Assistant</h2><p>Ask Velia anything about your irrigation decisions.</p><div class='chips'>${chips.map((c) => `<span class='chip'>${c}</span>`).join("")}</div><p><strong>Velia:</strong> ${assistantResponse}</p></section>${voiceCard(state.fields[0]?.id, state.fields[0] ? recommendationFor(state.fields[0]) : null)}`;
+  return `<section class='card'><h2>Field Decision Assistant</h2><p>Ask Velia anything about your irrigation decisions.</p><div class='chips'>${chips.map((c) => `<button class='chip' data-assistant-query='${c}'>${c}</button>`).join("")}</div><p><strong>Velia:</strong> ${assistantResponse}</p></section>${voiceCard(state.fields[0]?.id, state.fields[0] ? recommendationFor(state.fields[0]) : null)}`;
 }
 function reportsContent() { return `<section class='card'><h2>Reports</h2><p>Planned for next increment.</p></section>`; }
 function settingsContent() { return `<section class='card'><h2>Settings</h2><p>Mode: ${state.mode}</p><button class='btn' data-mode='demo'>Demo mode</button><button class='btn' data-mode='real'>Real mode</button><p>Farm location: ${state.profile?.farm?.location || "not set"}</p><p>Weather provider: ${weather?.provider || "mock"}</p><button class='btn' data-refresh-weather='1'>Refresh weather</button>${state.mode === "demo" ? `<label>Demo scenario<select id='demoScenario'><option value='baseline' ${state.demoScenario === "baseline" ? "selected" : ""}>Baseline</option><option value='hotDry' ${state.demoScenario === "hotDry" ? "selected" : ""}>Hot and dry</option><option value='coolWet' ${state.demoScenario === "coolWet" ? "selected" : ""}>Cool and wet</option></select></label><button class='btn' data-apply-scenario='1'>Apply scenario</button>` : ""}</section>`; }
@@ -418,6 +471,10 @@ function bind() {
   app.querySelectorAll("[data-act='note']").forEach((b) => (b.onclick = () => { addFieldNote({ fieldId: b.dataset.field || state.fields[0]?.id, text: "Field note captured.", source: "manual" }); render(); }));
   app.querySelectorAll("[data-mode]").forEach((b) => (b.onclick = async () => { state = b.dataset.mode === "demo" ? useDemoMode(state) : { ...state, mode: "real" }; persist(); await refreshWeather(true); render(); }));
   app.querySelectorAll("[data-refresh-weather]").forEach((b) => (b.onclick = async () => { await refreshWeather(true); render(); }));
+  app.querySelectorAll("[data-assistant-query]").forEach((b) => (b.onclick = async () => {
+    assistantResponse = await fetchAssistantText(state.fields[0]?.id || "", b.dataset.assistantQuery);
+    render();
+  }));
   const applyScenarioBtn = document.querySelector("[data-apply-scenario='1']");
   if (applyScenarioBtn) applyScenarioBtn.onclick = async () => {
     const scenario = document.getElementById("demoScenario")?.value || "baseline";

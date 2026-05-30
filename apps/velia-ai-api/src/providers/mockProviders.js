@@ -6,14 +6,64 @@ import { TranslationProvider } from "./TranslationProvider.js";
 import { SatelliteProvider } from "./SatelliteProvider.js";
 
 export class MockLLMProvider extends LLMProvider {
-  async generate(prompt, options = {}) { return { text: `Mock response for ${options.task || "reasoning"}`, promptPreview: String(prompt).slice(0, 120) }; }
+  constructor(name = "mock", options = {}) {
+    super(name, { ...options, mode: options.mode || "mock", model: options.model || "mock-structured-decision" });
+  }
+
+  async generate(_prompt, options = {}) {
+    if (options.schema) {
+      return {
+        text: JSON.stringify({
+          action: "check field first",
+          timing: "Today before evening",
+          urgency: "medium",
+          estimatedDurationRange: "0-30 min check",
+          reasons: ["Local deterministic signals were used because no live reasoning provider is configured."],
+          uncertainties: ["Live model unavailable; recommendation depends on field checks."],
+          missingData: options.fallbackDecision?.missingData || [],
+          fieldChecks: ["Check topsoil moisture", "Inspect leaf stress", "Confirm recent irrigation log"],
+          risks: options.fallbackDecision?.risks || [],
+          nextBestAction: "Update field condition after the check.",
+          safetyNotes: ["Recommendation support only; validate in-field conditions."],
+          verificationPlan: ["Log the action taken", "Capture field condition after action"],
+        }),
+        provider: this.name,
+        model: this.model,
+        mode: this.mode,
+      };
+    }
+    return { text: "Local fallback response generated from structured context.", provider: this.name, model: this.model, mode: this.mode };
+  }
 }
-export class OpenAIProvider extends LLMProvider {}
-export class GeminiProvider extends LLMProvider {}
-export class AnthropicProvider extends LLMProvider {}
+
+export class AnthropicProvider extends LLMProvider {
+  constructor(name = "anthropic", options = {}) {
+    super(name, { ...options, mode: "placeholder", model: options.model || "future-anthropic-adapter", fallbackReason: "Anthropic adapter placeholder only" });
+  }
+
+  async generate() {
+    throw new Error("Anthropic provider is a future adapter placeholder");
+  }
+}
 
 export class MockEmbeddingProvider extends EmbeddingProvider {
-  async embed(text) { return String(text).split(/\W+/).filter(Boolean).slice(0, 24).map((t) => t.length / 10); }
+  constructor(name = "mock", options = {}) {
+    super(name, { ...options, mode: options.mode || "mock", model: options.model || "mock-hash-embedding" });
+    this.dimensions = options.dimensions || 64;
+  }
+
+  async embed(text) {
+    const vector = new Array(this.dimensions).fill(0);
+    const tokens = String(text || "").toLowerCase().split(/\W+/).filter(Boolean);
+    tokens.forEach((token, index) => {
+      let hash = 0;
+      for (let i = 0; i < token.length; i += 1) hash = ((hash << 5) - hash + token.charCodeAt(i)) | 0;
+      const slot = Math.abs(hash) % this.dimensions;
+      vector[slot] += 1 + Math.min(6, token.length) / 10 + (index % 5) * 0.01;
+    });
+    const norm = Math.sqrt(vector.reduce((sum, n) => sum + n * n, 0)) || 1;
+    return vector.map((n) => n / norm);
+  }
 }
 
 export class InMemoryVectorProvider extends VectorStoreProvider {
@@ -26,11 +76,34 @@ export class InMemoryVectorProvider extends VectorStoreProvider {
 }
 
 export class MockWeatherProvider extends WeatherProvider {
+  constructor(name = "mock", options = {}) {
+    super(name, { ...options, mode: options.mode || "mock" });
+  }
+
   async getContext(location) {
-    return { location, temperature: 33, rainChance: 14, rainfallForecastMm: 1, humidity: 36, wind: 12, evapotranspiration: 5.2, heatRisk: "elevated", frostRisk: "low", forecastSummary: "Hot and dry", lastUpdated: new Date().toISOString(), stale: false, source: "mock" };
+    const now = new Date().toISOString();
+    return {
+      location,
+      temperature: 33,
+      humidity: 36,
+      wind: 12,
+      precipitationProbability: 14,
+      rainChance: 14,
+      rainfallForecastMm: 1,
+      forecastSummary: "Hot and dry",
+      weatherTimestamp: now,
+      lastUpdated: now,
+      weatherSource: "mock",
+      source: "mock",
+      freshness: { ageMinutes: 0, maxAgeMinutes: 45 },
+      stale: false,
+      heatRisk: "elevated",
+      frostRisk: "low",
+      evapotranspiration: 5.2,
+      etLabel: "mock estimate",
+    };
   }
 }
-export class OpenWeatherProvider extends WeatherProvider {}
 export class GoogleWeatherProvider extends WeatherProvider {}
 
 export class MockTranslationProvider extends TranslationProvider {

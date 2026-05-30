@@ -2,7 +2,7 @@
 
 Velia helps farms make better water decisions, act faster, and understand what happened across their fields.
 
-This app now includes a frontend-local **Agentic AI Brain architecture** with clean interfaces and mock providers, designed for future backend/serverless migration.
+This app includes a frontend-local **Agentic AI Brain architecture** for offline fallback, while live intelligence runs backend-first through `apps/velia-ai-api`.
 
 ## AI Brain architecture (`js/ai/`)
 
@@ -217,5 +217,55 @@ localStorage.setItem("veliaApiBaseUrl", "https://your-api-host");
 
 Runtime behavior is backend-first with local fallback for:
 - weather context
+- daily irrigation decisions
 - assistant query
 - voice intent interpretation
+
+The mobile app never stores LLM, embedding, or weather provider API keys. Provider credentials belong only in the backend `.env`.
+
+## Real Intelligence v1 UI behavior
+
+- Today renders immediately using local deterministic fallback.
+- When online, Velia refreshes the current field decision from the backend and caches it briefly.
+- If backend or providers are unavailable, local recommendations, observations, logs, voice actions, and sync queue behavior continue.
+- Weather cards show the age of the weather context.
+- Detailed provenance is tucked into the expandable `Why Velia recommended this` section so the farmer-facing screen stays simple.
+
+## Local run with backend
+
+Terminal 1:
+
+```bash
+cd apps/velia-ai-api
+npm install
+cp .env.example .env
+npm run dev
+```
+
+Terminal 2:
+
+```bash
+cd apps/velia-mobile
+python -m http.server 4174
+```
+
+Open `http://localhost:4174`. To point at another backend:
+
+```js
+localStorage.setItem("veliaApiBaseUrl", "https://your-api-host");
+```
+
+## Testing note
+
+Standard command:
+
+```bash
+cd apps/velia-mobile
+npm test
+```
+
+In the Codex desktop runtime used for this build, `npm` was not available on PATH. The equivalent direct command used was:
+
+```bash
+/Applications/Codex.app/Contents/Resources/node --test tests/*.test.js
+```

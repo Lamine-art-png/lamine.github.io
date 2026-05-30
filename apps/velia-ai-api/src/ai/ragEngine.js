@@ -1,30 +1,111 @@
-import { seedDocs } from "./knowledgeBase.js";
+import { chunkKnowledgeDocument, loadKnowledgeDocuments } from "./knowledgeBase.js";
 import { embeddingService } from "./embeddingService.js";
 import { vectorStore } from "./vectorStore.js";
 
 let initialized = false;
+let indexedChunkCount = 0;
+let lastIngestError = null;
 
-function chunkText(text) {
-  return text.split(/\.\s+/).filter(Boolean);
+function tokenize(text) {
+  return new Set(String(text || "").toLowerCase().split(/\W+/).filter((token) => token.length > 2));
 }
 
-async function initRag() {
-  if (initialized) return;
-  for (const doc of seedDocs) {
-    const chunks = chunkText(doc.text);
-    for (let i = 0; i < chunks.length; i += 1) {
-      const emb = await embeddingService.embed(chunks[i]);
-      await vectorStore.upsert({ id: `${doc.id}-${i}`, docId: doc.id, topic: doc.topic, text: chunks[i], vector: emb.vector });
-    }
+function lexicalOverlap(query, text) {
+  const q = tokenize(query);
+  if (!q.size) return 0;
+  const t = tokenize(text);
+  let hits = 0;
+  for (const token of q) if (t.has(token)) hits += 1;
+  return hits / q.size;
+}
+
+function rerank(query, hits, topK) {
+  return hits
+    .map((hit) => ({
+      ...hit,
+      relevanceScore: Number(((hit.score || 0) * 0.75 + lexicalOverlap(query, hit.text) * 0.25).toFixed(4)),
+    }))
+    .sort((a, b) => b.relevanceScore - a.relevanceScore)
+    .slice(0, topK);
+}
+
+export async function ingestKnowledge(options = {}) {
+  const docs = loadKnowledgeDocuments(options.dir);
+  const chunks = docs.flatMap((doc) => chunkKnowledgeDocument(doc, options.chunkOptions));
+  const rows = [];
+  for (const chunk of chunks) {
+    const embedding = await embeddingService.embed(`${chunk.source.title}\n${chunk.text}`);
+    rows.push({
+      id: chunk.id,
+      text: chunk.text,
+      vector: embedding.vector,
+      source: chunk.source,
+      metadata: {
+        ...chunk.metadata,
+        embeddingProvider: embedding.provider,
+        embeddingModel: embedding.model,
+        embeddingFallbackUsed: embedding.fallbackUsed,
+      },
+    });
   }
+  await vectorStore.upsertMany(rows);
+  indexedChunkCount = rows.length;
   initialized = true;
+  lastIngestError = null;
+  return { documentCount: docs.length, chunkCount: rows.length };
+}
+
+async function ensureInitialized() {
+  if (initialized) return;
+  try {
+    await ingestKnowledge();
+  } catch (error) {
+    lastIngestError = error.message;
+    initialized = true;
+  }
 }
 
 export const ragEngine = {
-  async retrieve(query) {
-    await initRag();
-    const emb = await embeddingService.embed(query || "irrigation");
-    const hits = await vectorStore.search(emb.vector, 4);
-    return hits.map((h) => ({ text: h.text, source: { docId: h.docId, topic: h.topic }, score: h.score }));
+  async ingest(options) {
+    initialized = false;
+    return ingestKnowledge(options);
+  },
+
+  async retrieve(query, options = {}) {
+    await ensureInitialized();
+    if (lastIngestError) {
+      return { chunks: [], fallbackUsed: true, fallbackReason: lastIngestError, sources: [] };
+    }
+
+    try {
+      const topK = options.topK || 4;
+      const embedding = await embeddingService.embed(query || "irrigation decision");
+      const initial = await vectorStore.search(embedding.vector, Math.max(topK * 3, topK), { minScore: options.minScore ?? -1 });
+      const ranked = rerank(query, initial, topK);
+      const chunks = ranked.map((hit) => ({
+        chunkId: hit.id,
+        text: hit.text,
+        score: hit.score,
+        relevanceScore: hit.relevanceScore,
+        source: hit.source,
+        metadata: hit.metadata,
+      }));
+      return {
+        chunks,
+        sources: chunks.map((chunk) => ({ ...chunk.source, score: chunk.relevanceScore })),
+        indexedChunkCount,
+        embeddingProvider: embedding.provider,
+        fallbackUsed: false,
+      };
+    } catch (error) {
+      return { chunks: [], fallbackUsed: true, fallbackReason: error.message, sources: [] };
+    }
+  },
+
+  async resetForTests() {
+    initialized = false;
+    indexedChunkCount = 0;
+    lastIngestError = null;
+    if (typeof vectorStore.clear === "function") await vectorStore.clear();
   },
 };
