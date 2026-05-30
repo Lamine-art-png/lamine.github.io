@@ -1,9 +1,11 @@
 import { demoWorkspace } from "./demoData.js";
-import { createDemoRuntime, resetDemo as resetDemoRuntime } from "./services/demoRuntime.js";
+import { createDemoRuntime, loadRepresentativePackage, resetDemo as resetDemoRuntime } from "./services/demoRuntime.js";
 
 export const SESSION_MODES = {
   ENTRY: "entry",
-  DEMO: "demo",
+  // Internal value kept as "demo" for backward compatibility with stored runtimes;
+  // never shown to users. The workspace is presented as an "Evaluation workspace".
+  EVALUATION: "demo",
   LIVE: "live",
 };
 
@@ -13,6 +15,7 @@ export const state = {
     workspace: null,
     authNotice: "Customer login is an auth-ready scaffold until backend authentication and credential storage are enabled.",
     userEmail: "",
+    userName: "Operations user",
     loginError: "",
   },
   activeView: "command-center",
@@ -58,12 +61,15 @@ export function setDemoRuntime(runtime) {
 }
 
 export function launchDemoSession() {
-  state.demoRuntime = resetDemoRuntime();
+  // Open the Command page with the representative package preloaded so the
+  // workspace is immediately functional in a founder-led customer call.
+  state.demoRuntime = loadRepresentativePackage(resetDemoRuntime(false));
   state.session = {
-    mode: SESSION_MODES.DEMO,
+    mode: SESSION_MODES.EVALUATION,
     workspace: demoWorkspace,
-    authNotice: "Sample data is embedded and isolated from live production API data.",
-    userEmail: "workspace.user@agroai-pilot.com",
+    authNotice: "Representative records are isolated from production telemetry.",
+    userEmail: "",
+    userName: "Operations user",
     loginError: "",
   };
   state.activeView = "command-center";

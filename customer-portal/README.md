@@ -20,24 +20,30 @@ The main product surface is **Water Command Center**. Supporting labels include 
 
 ## Evaluation Mode
 
-The **Open Water Command Center** path opens the isolated evaluation workspace without production credentials. Sample data is embedded in the portal data module and can also be loaded through the backend Workbench sample package route.
+The **Open Water Command Center** path opens the isolated evaluation workspace without production credentials. On entry the **representative data** package is preloaded and a verified decision is rendered immediately, so the portal is functional in a founder-led call before any source is configured. Representative records are embedded in the portal data module and can also be loaded through the backend Workbench sample package route.
+
+A discreet **Representative data** provenance badge in the header signals that representative records are used until production targets are connected.
 
 Evaluation mode includes:
 
+- Workspace scenarios (title switcher): Alpha Vineyard, Almond Orchard, Multi-Farm Portfolio, and Partner Data Validation. Each loads representative records and updates the decision, source intelligence, reconciliation, and report preview.
 - Farms: Alpha Vineyard, Delta Almonds, and West Citrus.
 - Blocks: Block A North, Block B West, Almond Block 4, Almond Block East, and Vineyard Block Trial.
 - Providers: WiseConn and Talgil evaluation sources.
 - Recommendations, confidence, source reconciliation, scheduled/applied/observed/verified states, warnings, report previews, and audit events.
 
-## Input Modes
+## Source Modes
 
-The Water Command Center shows three intake modes:
+Source setup is moved off the primary screen into a right-side drawer opened from **Add or manage sources** in the Source intelligence header. The drawer has four tabs:
 
-- **Connected field** calls `POST /v1/workbench/analyze-live` with default `source: wiseconn` and `entity_id: 162803`. It fails safely when credential-backed telemetry is not provisioned.
-- **Upload records** creates a session, uploads customer files, and calls `POST /v1/workbench/sessions/{session_id}/analyze`.
-- **Sample data package** loads the expanded Workbench package through `POST /v1/workbench/sample-package`, then analyzes the generated session.
+- **Connected systems** — WiseConn (Live-ready), Talgil (Runtime reachable), Generic controller (Available). Each opens an integration setup brief; no live telemetry is claimed.
+- **Upload records** — drag-and-drop / file picker. Creates a session, uploads via `POST /v1/workbench/sessions/{session_id}/upload`, shows detected type, parse status, and warnings, then **Analyze uploaded records** calls `POST /v1/workbench/sessions/{session_id}/analyze`.
+- **API access** — ingestion endpoint, server-side authentication requirement, accepted payload categories, schema link, and a copyable API setup brief.
+- **Partner feeds** — weather provider, Earth observation layer, agronomic data feed, custom partner feed. Partner feed authorization is required for production use.
 
-Supported upload file types are CSV, JSON, TXT, and XLSX when the backend has `openpyxl` available.
+Connected field analysis uses `POST /v1/workbench/analyze-live` with default `source: wiseconn` and `entity_id: 162803` and fails safely when credential-backed telemetry is not provisioned. Supported upload file types are CSV, JSON, TXT, and XLSX when the backend has `openpyxl` available.
+
+Frontend data priority: backend Workbench result → live connected source → uploaded records → representative fallback values.
 
 ## Sample Data Package
 
@@ -60,7 +66,7 @@ The Water Command Center includes a CSS-only Intelligence Stream:
 
 `Sources -> Normalize -> Reconcile -> Decide -> Verify`
 
-When the user runs intelligence analysis, the stream animates, trace steps activate, the Workbench endpoint is called, and backend `analysis_trace` data fills the step list. On success, recommendation, reconciliation, verification, and report preview sections update from the backend result. On backend failure, the UI shows: **Backend intelligence unavailable. Sample package remains available for evaluation.**
+When the user runs intelligence analysis, the pipeline animates, trace steps activate, the Workbench endpoint is called, and backend `analysis_trace` data fills the **Analysis trace** panel. On success, recommendation, reconciliation, verification, and report preview sections update from the backend result. On backend failure, the UI shows: **Backend intelligence unavailable. Representative-data analysis remains available.**
 
 ## Backend Setup Request
 
