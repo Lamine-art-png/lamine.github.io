@@ -1,0 +1,14 @@
+{
+  "id": "et-concepts",
+  "title": "Evapotranspiration Concepts",
+  "topic": "et",
+  "sourceType": "internal_guidance",
+  "content": "Evapotranspiration is a useful water-demand signal when a trusted local ET provider or station is available. If a weather provider does not deliver ET, Velia may describe heat-driven water pressure as an estimate but must not label it exact ET. Estimated water pressure should state its assumptions, such as heat risk, wind, humidity, recent irrigation, and crop context.",
+  "version": "1.0.0",
+  "lastUpdated": "2026-05-30",
+  "citation": {
+    "label": "Velia Agronomy Guidance",
+    "section": "ET concepts",
+    "url": null
+  }
+}

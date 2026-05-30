@@ -1,0 +1,14 @@
+{
+  "id": "irrigation-method-efficiency",
+  "title": "Irrigation Method Efficiency",
+  "topic": "irrigation_method",
+  "sourceType": "internal_guidance",
+  "content": "Irrigation method affects expected application efficiency and the usefulness of duration estimates. Drip systems can apply water precisely when maintained, while sprinklers and pivots are more affected by wind and heat. Flood irrigation is less precise and requires extra attention to waterlogging and distribution uniformity. Duration ranges should stay conservative unless controller flow rate, block size, and application rate are known.",
+  "version": "1.0.0",
+  "lastUpdated": "2026-05-30",
+  "citation": {
+    "label": "Velia Agronomy Guidance",
+    "section": "Irrigation method efficiency",
+    "url": null
+  }
+}

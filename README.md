@@ -35,15 +35,27 @@ make tfapply
 ## Velia AI backend + mobile wiring
 
 - Backend app: `apps/velia-ai-api` (Express).
-- Mobile app: `apps/velia-mobile` now calls backend-first APIs with local fallback for weather, assistant responses, and voice interpretation.
+- Mobile app: `apps/velia-mobile` calls backend-first APIs with local fallback for weather, daily decisions, assistant responses, and voice interpretation.
+- Velia Real Intelligence v1 adds backend-only Gemini/OpenAI reasoning adapters, Gemini/OpenAI embeddings, OpenWeather weather retrieval, local RAG ingestion, JSON memory, provenance, guardrails, and deterministic fallback.
+- Do not put provider keys in frontend code. Configure `apps/velia-ai-api/.env` from `.env.example`.
 
 ### Backend quick run
 
 ```bash
 cd apps/velia-ai-api
 npm install
+cp .env.example .env
 npm run dev
 ```
+
+Optional live providers:
+
+- `LLM_PROVIDER=gemini` with `GEMINI_API_KEY`
+- `LLM_PROVIDER=openai` with `OPENAI_API_KEY`
+- `EMBEDDING_PROVIDER=gemini|openai`
+- `WEATHER_PROVIDER=openweather` with `OPENWEATHER_API_KEY`
+
+Without keys, Velia stays in local deterministic/mock fallback mode.
 
 ### Backend tests
 
@@ -51,3 +63,12 @@ npm run dev
 cd apps/velia-ai-api
 npm test
 ```
+
+### Mobile quick run
+
+```bash
+cd apps/velia-mobile
+python -m http.server 4174
+```
+
+Then open `http://localhost:4174`.

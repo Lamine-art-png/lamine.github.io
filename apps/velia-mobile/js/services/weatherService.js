@@ -5,7 +5,7 @@ import { apiClient } from "./apiClient.js";
 const WK = "weather_cache";
 
 export const weatherService = {
-  async getWeather({ location, forceRefresh = false, provider = "mock" } = {}) {
+  async getWeather({ location, coordinates = null, forceRefresh = false, provider = "mock" } = {}) {
     const cached = storage.get(WK, null);
     if (!forceRefresh && cached) {
       return { ...cached, cached: true, stale: !navigator.onLine, provider: cached.provider || provider };
@@ -13,7 +13,7 @@ export const weatherService = {
 
     try {
       if (navigator.onLine) {
-        const remote = await apiClient.getWeatherContext({ location });
+        const remote = await apiClient.getWeatherContext({ location, coordinates, lat: coordinates?.lat, lon: coordinates?.lon });
         const enrichedRemote = { ...remote, provider: remote.provider || "api" };
         storage.set(WK, enrichedRemote);
         return { ...enrichedRemote, cached: false, stale: false };

@@ -1,0 +1,14 @@
+{
+  "id": "soil-water-holding-concepts",
+  "title": "Soil Water Holding Concepts",
+  "topic": "soil_water_holding",
+  "sourceType": "internal_guidance",
+  "content": "Soil texture affects how quickly fields dry and how much water can be stored in the root zone. Sandy soils tend to hold less plant-available water and may need more frequent checks. Clay soils can hold more water but are more vulnerable to waterlogging and slow infiltration. Loam is a moderate baseline. If soil type is unknown, Velia should lower confidence, avoid exact soil moisture claims, and ask for a topsoil or root-zone check.",
+  "version": "1.0.0",
+  "lastUpdated": "2026-05-30",
+  "citation": {
+    "label": "Velia Agronomy Guidance",
+    "section": "Soil water holding concepts",
+    "url": null
+  }
+}

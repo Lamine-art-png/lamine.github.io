@@ -14,6 +14,7 @@ export function createInitialState() {
     fieldNotes: [],
     observations: [],
     recommendationHistory: [],
+    remoteDecisions: {},
     alertHistory: [],
     voiceTimeline: [],
     weatherCache: null,
