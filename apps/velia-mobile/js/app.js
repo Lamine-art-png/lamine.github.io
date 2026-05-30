@@ -321,16 +321,17 @@ function fieldDetail(fieldId) {
   const logs = state.irrigationLogs.filter((x) => x.fieldId === fieldId).slice(0, 8);
   const notes = state.fieldNotes.filter((x) => x.fieldId === fieldId).slice(0, 8);
   const observations = state.observations.filter((x) => x.fieldId === fieldId).slice(0, 5);
+  const fieldRecHistory = (state.recommendationHistory || []).filter((e) => !e.fieldId || e.fieldId === fieldId).slice(0, 5);
 
   return `<section class='card'><h2>${f.name}</h2>
-    <p>Crop and acreage: ${f.crop} • ${f.acreage}</p><p>Field location: ${f.location || "Not set"}</p><p>Soil type: ${f.soilType || "unknown"}</p><p>Irrigation method: ${f.irrigationMethod}</p><p>Last updated: ${f.updatedAt || "n/a"}</p><div class="map-placeholder">Map foundation: ${f.coordinates ? `${f.coordinates.lat?.toFixed?.(3) || f.coordinates.lat}, ${f.coordinates.lon?.toFixed?.(3) || f.coordinates.lon}` : "Add coordinates later"}</div>
+    <p>Crop and acreage: ${f.crop} • ${f.acreage}</p><p>Field location: ${f.location || "Not set"}</p><p>Soil type: ${f.soilType || "unknown"}</p><p>Irrigation method: ${f.irrigationMethod}</p><p>Last updated: ${f.updatedAt || "n/a"}</p><div class="map-placeholder">Coordinates: ${f.coordinates ? `${f.coordinates.lat?.toFixed?.(3) || f.coordinates.lat}, ${f.coordinates.lon?.toFixed?.(3) || f.coordinates.lon}` : "Not set — add coordinates to enable field mapping"}</div>
     <h3>Irrigation logs</h3><ul>${logs.map((l) => `<li>${new Date(l.performedAt).toLocaleString()} - ${l.durationMin} min</li>`).join("") || "<li>No logs</li>"}</ul>
     <h3>Field observations</h3><ul>${observations.map((o) => `<li>${o.condition} (${new Date(o.createdAt).toLocaleString()})</li>`).join("") || "<li>No observations</li>"}</ul>
     <h3>Notes</h3><ul>${notes.map((n) => `<li>${new Date(n.createdAt).toLocaleString()} - ${n.text}</li>`).join("") || "<li>No notes</li>"}</ul>
-    <p>Recommendation history: placeholder</p><p>Alert history: placeholder</p></section>${voiceCard(f.id, recommendationFor(f))}`;
+    <h3>Recommendation history</h3><ul>${fieldRecHistory.length ? fieldRecHistory.map((e) => `<li>${new Date(e.at).toLocaleString()} — ${e.rec?.urgency || "recorded"} urgency</li>`).join("") : "<li>No recommendations recorded yet</li>"}</ul></section>${voiceCard(f.id, recommendationFor(f))}`;
 }
 
-function alertsContent() { return `<section class='card'>No active alerts yet in v0.2.</section>`; }
+function alertsContent() { return `<section class='card'><p class='card-label'>Alerts</p><p class='small'>No active alerts. Velia surfaces heat, frost, and irrigation risks here as conditions change.</p></section>`; }
 function assistantContent() {
   const chips = ["Should I irrigate today?", "Log irrigation for Field 1 for two hours", "Field 1 looks dry", "Why is confidence moderate?", "What changed since yesterday?"];
   return `<section class='card'><h2>Field Decision Assistant</h2><p>Ask Velia anything about your irrigation decisions.</p><div class='chips'>${chips.map((c) => `<button class='chip' data-assistant-query='${c}'>${c}</button>`).join("")}</div><p><strong>Velia:</strong> ${assistantResponse}</p></section>${voiceCard(state.fields[0]?.id, state.fields[0] ? recommendationFor(state.fields[0]) : null)}`;
