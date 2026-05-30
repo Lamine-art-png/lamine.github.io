@@ -2,7 +2,7 @@ import { ApiClient } from "./apiClient.js";
 import { acceptedWorkbenchFields, sampleDataPackage, workbenchOutputSchema } from "./demoData.js";
 import { launchDemoSession, notify, returnToEntry, setActiveView, setDemoRuntime, setLoginError, startLoginScaffold, state, subscribe, SESSION_MODES } from "./state.js";
 import { loadLiveSnapshot, generateWiseConnRecommendation } from "./services/liveData.js";
-import { addObservation, attachUploadArtifact, completeAiAnalysis, generateDemoRecommendation, generateDemoReport, markApplied, markBackendUnavailable, nextStep, prepareBackendSetupRequest, resetDemo, runAiAnalysis, scheduleRecommendation, selectFarm, selectIntakeMode, selectZone, startGuidedDemo, switchScenario, toCsv, verifyOutcome } from "./services/demoRuntime.js";
+import { addObservation, attachUploadArtifact, completeAiAnalysis, generateDemoRecommendation, generateDemoReport, markApplied, markBackendUnavailable, nextStep, prepareBackendSetupRequest, resetDemo, runAiAnalysis, scheduleRecommendation, selectFarm, selectIntakeMode, selectZone, startGuidedDemo, switchScenario, switchWorkspaceScenario, toCsv, verifyOutcome } from "./services/demoRuntime.js";
 import { renderEntryView } from "./views/entryView.js";
 import { renderShell } from "./views/shellView.js";
 import { renderCommandCenter } from "./views/commandCenterView.js";
@@ -263,7 +263,7 @@ async function animateAnalysis() {
         }
       }
       if (rt.intakeMode === "upload" && !rt.analysis.artifacts?.length) {
-        updateDemo(markBackendUnavailable(rt, "Upload records before running production ingestion. Pilot package analysis remains available."), "Upload records before running production ingestion.");
+        updateDemo(markBackendUnavailable(rt, "Upload records before running production ingestion. Representative-data analysis remains available."), "Upload records before running production ingestion.");
         return;
       }
       if (!rt.analysis.sessionId && rt.intakeMode !== "sample") {
@@ -275,13 +275,13 @@ async function animateAnalysis() {
       }
     }
   } catch (_error) {
-    backend = { ok: false, error: "Backend intelligence unavailable. Pilot package analysis remains available." };
+    backend = { ok: false, error: "Backend intelligence unavailable. Representative-data analysis remains available." };
   }
   if (backend?.ok) {
     rt.analysis.backendResult = backend.data;
     updateDemo(completeAiAnalysis(rt), "Analysis complete. Decision ready.");
   } else {
-    const message = "Backend intelligence unavailable. Pilot package analysis remains available.";
+    const message = "Backend intelligence unavailable. Representative-data analysis remains available.";
     if (rt.intakeMode === "sample") {
       rt.analysis.backendError = message;
       updateDemo(completeAiAnalysis(rt), message);
@@ -291,6 +291,175 @@ async function animateAnalysis() {
   }
 }
 
+
+async function handleWorkbenchUpload(file) {
+  const rt = selectIntakeMode(state.demoRuntime, "upload");
+  if (!rt.analysis.sessionId) {
+    const created = await api.createWorkbenchSession({ mode: "uploaded", workspace_name: "Alpha Vineyard · Water Command Center" });
+    if (created.ok) rt.analysis.sessionId = created.data?.session_id || created.data?.session?.session_id || "";
+  }
+  if (!rt.analysis.sessionId) {
+    updateDemo(markBackendUnavailable(rt, "Backend upload endpoint required for production ingestion. Representative-data analysis remains available."), "Backend upload endpoint required for production ingestion.");
+    updateSourceDrawerStatus(file, "Backend upload endpoint required. Representative-data analysis remains available.");
+    return;
+  }
+  const up = await api.uploadWorkbenchFile(rt.analysis.sessionId, file);
+  if (up.ok) {
+    updateDemo(attachUploadArtifact(rt, up.data || { filename: file.name, status: "Accepted for analysis" }, file), `${file.name} accepted for analysis.`);
+    updateSourceDrawerStatus(file, up.data?.parse_status || "Accepted for analysis", up.data);
+  } else {
+    updateDemo(markBackendUnavailable(rt, up.error || "Backend upload endpoint required for production ingestion. Representative-data analysis remains available."), "Backend upload endpoint required for production ingestion.");
+    updateSourceDrawerStatus(file, "Backend upload endpoint required. Representative-data analysis remains available.");
+  }
+}
+
+function detectSourceType(filename = "") {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  const map = { csv: "Tabular records (CSV)", xlsx: "Spreadsheet export (Excel)", xls: "Spreadsheet export (Excel)", json: "Structured records (JSON)", txt: "Field notes (TXT)" };
+  return map[ext] || "Detected on upload";
+}
+
+function updateSourceDrawerStatus(file, parseStatus, data = null) {
+  const panel = document.getElementById("drawer-upload-status");
+  if (!panel) return;
+  const rows = data?.rows ?? data?.rows_detected ?? "Detected on parse";
+  const fields = data?.fields_mapped ?? data?.fields ?? "Mapped on parse";
+  const warnings = Array.isArray(data?.warnings) && data.warnings.length ? data.warnings.join("; ") : "None";
+  panel.innerHTML = `<dl class="drawer-def">
+      <div><dt>Uploaded file</dt><dd>${escapeHtmlSafe(file?.name || "—")}</dd></div>
+      <div><dt>Detected source type</dt><dd>${escapeHtmlSafe(detectSourceType(file?.name))}</dd></div>
+      <div><dt>Parse status</dt><dd>${escapeHtmlSafe(parseStatus)}</dd></div>
+      <div><dt>Rows detected</dt><dd>${escapeHtmlSafe(String(rows))}</dd></div>
+      <div><dt>Fields mapped</dt><dd>${escapeHtmlSafe(String(fields))}</dd></div>
+      <div><dt>Warnings</dt><dd>${escapeHtmlSafe(warnings)}</dd></div>
+    </dl>
+    <div class="drawer-actions"><button class="button ghost compact" id="drawer-remove-file" type="button">Remove file</button><button class="button primary compact" id="drawer-analyze-upload" type="button">Analyze uploaded records</button></div>`;
+  panel.querySelector("#drawer-remove-file")?.addEventListener("click", () => {
+    panel.innerHTML = '<p class="muted">No file selected.</p>';
+  });
+  panel.querySelector("#drawer-analyze-upload")?.addEventListener("click", async () => {
+    closeSourceDrawer();
+    await animateAnalysis();
+  });
+}
+
+function escapeHtmlSafe(value) {
+  return String(value ?? "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
+}
+
+function closeSourceDrawer() {
+  document.querySelector(".source-drawer-backdrop")?.remove();
+}
+
+const SOURCE_DRAWER_TABS = {
+  connected: `<div class="drawer-tabpanel" data-panel="connected">
+      <article class="drawer-source-row"><div><h4>WiseConn</h4><span class="badge success">Live-ready</span></div><p>Controller environment prepared for credential-backed onboarding.</p><button class="button secondary compact" data-action="request-backend-setup" data-integration="WiseConn" type="button">Connect or configure</button></article>
+      <article class="drawer-source-row"><div><h4>Talgil</h4><span class="badge success">Runtime reachable</span></div><p>Runtime is reachable; production targets are not yet selected.</p><button class="button secondary compact" data-action="request-backend-setup" data-integration="Talgil" type="button">Select production targets</button></article>
+      <article class="drawer-source-row"><div><h4>Generic controller</h4><span class="badge neutral">Available</span></div><p>Connector setup can be requested for other controller environments.</p><button class="button secondary compact" data-action="request-backend-setup" data-integration="Generic controller" type="button">Request connector setup</button></article>
+    </div>`,
+  upload: `<div class="drawer-tabpanel" data-panel="upload">
+      <p class="muted">Accepted: CSV, Excel, JSON, TXT, spreadsheet exports, and field notes.</p>
+      <label class="drawer-dropzone" id="drawer-dropzone"><input class="visually-hidden" id="drawer-upload-input" type="file" accept=".csv,.json,.txt,.xlsx,.xls,application/json,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /><strong>Drop a file or browse</strong><span>Records are processed through the Workbench upload route.</span></label>
+      <div id="drawer-upload-status"><p class="muted">No file selected.</p></div>
+    </div>`,
+  api: `<div class="drawer-tabpanel" data-panel="api">
+      <dl class="drawer-def">
+        <div><dt>Ingestion endpoint</dt><dd><code>POST /v1/workbench/sessions/{session_id}/upload</code></dd></div>
+        <div><dt>Authentication</dt><dd>Server-side credential vault required. Keys are never stored in the browser.</dd></div>
+        <div><dt>Accepted payload categories</dt><dd>Controller events, weather, soil moisture, flow meter, field notes, crop profile, earth observation.</dd></div>
+        <div><dt>Schema</dt><dd><button class="button ghost compact" data-action="view-accepted-fields" type="button">View accepted fields</button></dd></div>
+      </dl>
+      <button class="button primary compact" id="drawer-copy-api" type="button">Copy API setup brief</button>
+    </div>`,
+  partner: `<div class="drawer-tabpanel" data-panel="partner">
+      <article class="drawer-source-row"><div><h4>Weather provider</h4><span class="badge neutral">Authorization required</span></div><p>Demand signals (ETo, rainfall) from a weather provider.</p></article>
+      <article class="drawer-source-row"><div><h4>Earth observation layer</h4><span class="badge neutral">Authorization required</span></div><p>Canopy stress and vegetation indices as a representative layer.</p></article>
+      <article class="drawer-source-row"><div><h4>Agronomic data feed</h4><span class="badge neutral">Authorization required</span></div><p>Third-party agronomic context for reconciliation.</p></article>
+      <article class="drawer-source-row"><div><h4>Custom partner feed</h4><span class="badge neutral">Authorization required</span></div><p>Bring a custom partner signal into the decision pipeline.</p></article>
+      <p class="muted">Partner feed authorization required for production use.</p>
+    </div>`,
+};
+
+function openSourceDrawer() {
+  closeSourceDrawer();
+  const wrapper = document.createElement("div");
+  wrapper.className = "source-drawer-backdrop";
+  wrapper.innerHTML = `<aside class="source-drawer" role="dialog" aria-modal="true" aria-label="Connect irrigation data">
+    <div class="drawer-head"><div><p class="eyebrow">Source intelligence</p><h2>Connect irrigation data</h2></div><button class="button ghost compact" data-drawer-close type="button">Close</button></div>
+    <div class="drawer-tabs" role="tablist">
+      <button class="drawer-tab active" data-tab="connected" type="button">Connected systems</button>
+      <button class="drawer-tab" data-tab="upload" type="button">Upload records</button>
+      <button class="drawer-tab" data-tab="api" type="button">API access</button>
+      <button class="drawer-tab" data-tab="partner" type="button">Partner feeds</button>
+    </div>
+    <div class="drawer-body">${SOURCE_DRAWER_TABS.connected}</div>
+  </aside>`;
+  document.body.appendChild(wrapper);
+  const body = wrapper.querySelector(".drawer-body");
+
+  function bindBodyActions() {
+    body.querySelectorAll("[data-action]").forEach((button) => {
+      button.addEventListener("click", () => {
+        const action = button.dataset.action;
+        if (action === "request-backend-setup") {
+          const provider = button.dataset.integration || "WiseConn";
+          updateDemo(prepareBackendSetupRequest(state.demoRuntime, provider), "Backend setup request prepared");
+          closeSourceDrawer();
+          openBackendSetupModal(provider);
+        }
+        if (action === "view-accepted-fields") showAcceptedFields();
+      });
+    });
+    body.querySelector("#drawer-upload-input")?.addEventListener("change", async (event) => {
+      const file = event.target.files?.[0];
+      if (file) await handleWorkbenchUpload(file);
+    });
+    const dropzone = body.querySelector("#drawer-dropzone");
+    if (dropzone) {
+      ["dragover", "dragenter"].forEach((evt) => dropzone.addEventListener(evt, (e) => { e.preventDefault(); dropzone.classList.add("dragging"); }));
+      ["dragleave", "drop"].forEach((evt) => dropzone.addEventListener(evt, () => dropzone.classList.remove("dragging")));
+      dropzone.addEventListener("drop", async (event) => {
+        event.preventDefault();
+        const file = event.dataTransfer?.files?.[0];
+        if (file) await handleWorkbenchUpload(file);
+      });
+    }
+    body.querySelector("#drawer-copy-api")?.addEventListener("click", async () => {
+      const brief = setupBrief("API ingestion");
+      const copied = await copyTextToClipboard(brief);
+      updateDemo(state.demoRuntime, copied ? "API setup brief copied." : "Clipboard unavailable.");
+    });
+  }
+  bindBodyActions();
+
+  wrapper.querySelectorAll(".drawer-tab").forEach((tab) => {
+    tab.addEventListener("click", () => {
+      wrapper.querySelectorAll(".drawer-tab").forEach((t) => t.classList.remove("active"));
+      tab.classList.add("active");
+      body.innerHTML = SOURCE_DRAWER_TABS[tab.dataset.tab] || "";
+      bindBodyActions();
+    });
+  });
+  wrapper.querySelector("[data-drawer-close]")?.addEventListener("click", closeSourceDrawer);
+  wrapper.addEventListener("click", (event) => {
+    if (event.target === wrapper) closeSourceDrawer();
+  });
+}
+
+function openWorkspaceDetails() {
+  const runtime = state.demoRuntime;
+  openModal(
+    "Workspace details",
+    `<dl class="setup-brief">
+      <div><dt>Workspace</dt><dd>${escapeHtmlSafe(runtime.activeFarm?.name || "Alpha Vineyard")} · Water Command Center</dd></div>
+      <div><dt>Environment</dt><dd>Evaluation workspace</dd></div>
+      <div><dt>Data provenance</dt><dd>Representative data — production targets not yet connected</dd></div>
+      <div><dt>Active block</dt><dd>${escapeHtmlSafe(runtime.activeZone?.name || "Block A North")}</dd></div>
+      <div><dt>Sources</dt><dd>Mixed sources (controller history, weather, soil, flow, observation, earth observation)</dd></div>
+      <div><dt>Backend</dt><dd>Workbench intelligence routes used when available; representative-data analysis as fallback.</dd></div>
+    </dl>`
+  );
+}
 
 function bindShellEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => {
@@ -320,24 +489,11 @@ function bindShellEvents() {
 
   document.getElementById("workbench-upload-input")?.addEventListener("change", async (event) => {
     const file = event.target.files?.[0];
-    if (!file) return;
-    const rt = selectIntakeMode(state.demoRuntime, "upload");
-    if (!rt.analysis.sessionId) {
-      const created = await api.createWorkbenchSession({ mode: "uploaded", workspace_name: "Alpha Vineyard · Water Command Center" });
-      if (created.ok) rt.analysis.sessionId = created.data?.session_id || created.data?.session?.session_id || "";
-    }
-    if (!rt.analysis.sessionId) {
-      updateDemo(markBackendUnavailable(rt, "Backend upload endpoint required for production ingestion. Pilot package analysis remains available."), "Backend upload endpoint required for production ingestion.");
-      openModal("Backend upload endpoint required", "<p>Production ingestion requires a Workbench session and upload endpoint. Pilot package analysis remains available while the backend path is provisioned.</p>");
-      return;
-    }
-    const up = await api.uploadWorkbenchFile(rt.analysis.sessionId, file);
-    if (up.ok) {
-      updateDemo(attachUploadArtifact(rt, up.data || { filename: file.name, status: "Accepted for analysis" }, file), `${file.name} accepted for analysis.`);
-    } else {
-      updateDemo(markBackendUnavailable(rt, up.error || "Backend upload endpoint required for production ingestion. Pilot package analysis remains available."), "Backend upload endpoint required for production ingestion.");
-      openModal("Backend upload endpoint required", "<p>Production ingestion requires the Workbench upload endpoint. Pilot package analysis remains available while this endpoint is provisioned.</p>");
-    }
+    if (file) await handleWorkbenchUpload(file);
+  });
+
+  document.getElementById("workspace-scenario-select")?.addEventListener("change", (event) => {
+    updateDemo(switchWorkspaceScenario(state.demoRuntime, event.target.value), "Workspace scenario loaded");
   });
 
   document.querySelectorAll("[data-action]").forEach((button) => {
@@ -353,7 +509,7 @@ function bindShellEvents() {
         window.setTimeout(() => document.getElementById("workbench-upload-input")?.click(), 0);
       }
       if (action === "use-upload-records") updateDemo(selectIntakeMode(state.demoRuntime, "upload"), "Uploaded source selected");
-      if (action === "load-sample-data-package" || action === "load-pilot-package") updateDemo(selectIntakeMode(state.demoRuntime, "sample"), "Pilot data package selected");
+      if (action === "load-sample-data-package" || action === "load-pilot-package") updateDemo(selectIntakeMode(state.demoRuntime, "sample"), "Representative data selected");
       if (action === "download-sample-package") downloadSamplePackage();
       if (action === "view-accepted-fields") showAcceptedFields();
       if (action === "view-analysis-schema") showAnalysisSchema();
@@ -378,9 +534,18 @@ function bindShellEvents() {
       }
       if (action === "report-readiness") openModal("Report readiness", `<p>${button.dataset.message || "Report generation will activate when the required backend endpoint is available."}</p>`);
       if (action === "check-integrations") setActiveView("integrations");
+      if (action === "open-source-drawer") openSourceDrawer();
+      if (action === "workspace-details") openWorkspaceDetails();
     });
   });
 }
+
+// Close header overflow / user menus when clicking outside of them (registered once).
+document.addEventListener("click", (event) => {
+  document.querySelectorAll(".overflow-menu[open], .user-menu[open]").forEach((menu) => {
+    if (!menu.contains(event.target)) menu.removeAttribute("open");
+  });
+});
 
 subscribe(render);
 render();

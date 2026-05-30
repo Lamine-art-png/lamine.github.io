@@ -11,7 +11,6 @@ import {
 } from "../demoData.js";
 
 const STORAGE_KEY = "AGROAI_EVALUATION_RUNTIME";
-const LEGACY_STORAGE_KEY = "AGROAI_DEMO_RUNTIME";
 const ACTOR = "Operations Manager";
 
 const scenarios = {
@@ -83,6 +82,143 @@ const scenarios = {
   },
 };
 
+// Representative evaluation workspaces used for founder-led sales calls.
+// Each loads representative records and remains clearly marked as representative data.
+export const workspaceScenarios = {
+  "alpha-vineyard": {
+    id: "alpha-vineyard",
+    name: "Alpha Vineyard",
+    farmId: "alpha-vineyard",
+    zoneId: "block-a-north",
+    savings: "27%",
+    evidence: "92%",
+    recommendation: {
+      ...demoRecommendation,
+      action: "Irrigate 42 min tonight",
+      decision: "Irrigate 42 min tonight",
+      timing: "21:00 PT",
+      start_time: "21:00 PT",
+      duration: "42 min",
+      depth: "12 mm net",
+      confidence: "86%",
+      dataQuality: "92%",
+      crop: "Cabernet Sauvignon",
+      block: "Block A North",
+      keyDrivers: ["ETo 6.4 mm and 38 percent root-zone deficit", "No rain window available", "Controller schedule matched"],
+      verificationPlan: "Required",
+    },
+    reconciliation: [
+      ["Controller history", "Last irrigation event: 36 min", "Valid recent controller event", "Matched"],
+      ["Weather demand", "ETo 6.4 mm, rain 0 mm", "High water demand", "Matched"],
+      ["Soil moisture", "38 percent deficit at 30 cm", "Root-zone deficit supports irrigation", "Matched"],
+      ["Flow meter", "Actual flow within 8 percent of plan", "Applied water consistent", "Matched"],
+      ["Field observation", "Mild afternoon stress", "Supports irrigation recommendation", "Matched"],
+      ["Earth observation layer", "Elevated canopy stress index", "Supports water demand signal", "Matched"],
+      ["Talgil", "Runtime reachable, no selected production target", "Integration available, target selection pending", "Pending target"],
+    ],
+  },
+  "almond-orchard": {
+    id: "almond-orchard",
+    name: "Almond Orchard",
+    farmId: "delta-almonds",
+    zoneId: "almond-block-4",
+    savings: "31%",
+    evidence: "94%",
+    recommendation: {
+      ...demoRecommendation,
+      action: "Apply 18 mm before 05:00",
+      decision: "Apply 18 mm before 05:00",
+      timing: "03:15 local",
+      start_time: "03:15 local",
+      duration: "50 min",
+      depth: "18 mm net",
+      confidence: "91%",
+      dataQuality: "94%",
+      crop: "Almonds",
+      block: "Almond Block 4",
+      keyDrivers: ["ETo 6.5 mm and 42 percent root-zone deficit", "Pump tariff peak at 06:00", "Kernel-fill water demand"],
+      verificationPlan: "Required",
+    },
+    reconciliation: [
+      ["Controller history", "Last set 55 min, mild applied variance", "Valid controller event", "Matched"],
+      ["Weather demand", "ETo 6.5 mm, rain 0 mm", "High water demand", "Matched"],
+      ["Soil moisture", "42 percent deficit at 30 cm", "Root-zone deficit supports irrigation", "Matched"],
+      ["Flow meter", "Prior set +12.3 percent over plan", "Applied-water variance flagged", "Review"],
+      ["Field observation", "Mild leaf curl at southwest corner", "Supports irrigation recommendation", "Matched"],
+      ["Earth observation layer", "Vegetation stress index 0.52", "Supports water demand signal", "Matched"],
+      ["Talgil", "Not used for this orchard", "WiseConn-managed orchard", "Pending target"],
+    ],
+  },
+  "multi-farm": {
+    id: "multi-farm",
+    name: "Multi-Farm Portfolio",
+    farmId: "alpha-vineyard",
+    zoneId: "block-a-north",
+    savings: "26%",
+    evidence: "90%",
+    recommendation: {
+      ...demoRecommendation,
+      action: "3 blocks irrigate tonight, 1 hold",
+      decision: "3 blocks irrigate tonight, 1 hold",
+      timing: "Tonight, staggered windows",
+      start_time: "Tonight, staggered windows",
+      duration: "Per-block schedule",
+      depth: "12–18 mm net",
+      confidence: "88%",
+      dataQuality: "90%",
+      crop: "Mixed (vineyard + almond)",
+      block: "4 active blocks",
+      keyDrivers: ["Portfolio root-zone deficit across 3 of 4 blocks", "One block within forecast rain window", "Energy tariff windows respected"],
+      verificationPlan: "Required",
+    },
+    reconciliation: [
+      ["Controller history", "12 controller events across 3 farms", "Recent events validated", "Matched"],
+      ["Weather demand", "ETo 6.0–6.8 mm by region", "High demand in 3 of 4 blocks", "Matched"],
+      ["Soil moisture", "Deficit 28–44 percent by block", "Mixed deficit, one block adequate", "Matched"],
+      ["Flow meter", "One block over plan, others within range", "Applied-water variance localized", "Review"],
+      ["Field observation", "Stress notes on 2 blocks", "Supports irrigation in those blocks", "Matched"],
+      ["Earth observation layer", "Elevated stress on vineyard blocks", "Supports water demand signal", "Matched"],
+      ["Talgil", "North Ridge runtime reachable", "Target selection pending", "Pending target"],
+    ],
+  },
+  "partner-validation": {
+    id: "partner-validation",
+    name: "Partner Data Validation",
+    farmId: "west-citrus",
+    zoneId: "vineyard-block-trial",
+    savings: "—",
+    evidence: "78%",
+    recommendation: {
+      ...demoRecommendation,
+      action: "Validate partner feed before scheduling",
+      decision: "Validate partner feed before scheduling",
+      timing: "Pending partner feed authorization",
+      start_time: "Pending partner feed authorization",
+      duration: "Awaiting validation",
+      depth: "Awaiting validation",
+      confidence: "73%",
+      dataQuality: "78%",
+      crop: "Trial vineyard",
+      block: "Vineyard Block Trial",
+      keyDrivers: ["Partner feed records ingested as representative data", "Pressure sensor coverage is partial", "Production authorization required before scheduling"],
+      verificationPlan: "Partner feed authorization required for production use",
+    },
+    reconciliation: [
+      ["Controller history", "Talgil trial rows ingested", "Trial block, separated from commercial", "Matched"],
+      ["Weather demand", "ETo within seasonal range", "Demand evaluated", "Matched"],
+      ["Soil moisture", "Partial sensor coverage", "Coverage gap flagged", "Review"],
+      ["Flow meter", "Prior set variance +23 percent", "Applied-water variance flagged", "Review"],
+      ["Field observation", "Trial rows watched separately", "Supports cautious recommendation", "Matched"],
+      ["Earth observation layer", "Partner-provided sample layer", "Representative until authorized", "Pending target"],
+      ["Talgil", "Runtime reachable, trial target", "Production authorization required", "Pending target"],
+    ],
+  },
+};
+
+export function getWorkspaceScenarios() {
+  return Object.values(workspaceScenarios);
+}
+
 function now() {
   return new Date().toISOString();
 }
@@ -106,7 +242,7 @@ function baseChain(active = "") {
     timestamp: activeIndex >= 0 && index <= activeIndex ? now() : "",
     owner: key === "recommended" ? "AGRO-AI Intelligence Engine" : ACTOR,
     evidence: activeIndex >= 0 && index <= activeIndex ? `${labels[index]} evidence captured.` : `${labels[index]} pending`,
-    note: "Pilot runtime state",
+    note: "Representative runtime state",
   }));
 }
 
@@ -133,6 +269,7 @@ function normalizeStoredRuntime(runtime) {
   runtime.activeFarm = runtime.activeFarm || findFarm("alpha-vineyard");
   runtime.activeZone = runtime.activeZone || findZone(runtime.activeFarm, "block-a-north");
   runtime.scenario = runtime.scenario || scenarios.dry_day;
+  runtime.workspaceScenarioId = runtime.workspaceScenarioId || "alpha-vineyard";
   runtime.operatingChain = runtime.operatingChain || baseChain();
   runtime.auditEvents = runtime.auditEvents || [...demoAuditLog];
   runtime.reportSnapshots = runtime.reportSnapshots || [];
@@ -299,29 +436,29 @@ export function completeAiAnalysis(runtime) {
     runtime.operatingChain[0] = { ...runtime.operatingChain[0], evidence: "Verified water decision produced from selected source records." };
     runtime.reportSnapshots = [reportSnapshotFromBackend(runtime, runtime.analysis.backendResult), ...(runtime.reportSnapshots || [])].slice(0, 12);
   } else {
+    const workspace = runtime.workspaceScenarioId ? workspaceScenarios[runtime.workspaceScenarioId] : null;
     runtime.analysis.steps = runtime.analysis.steps.map((step) => ({ ...step, status: "complete", statusLabel: "Complete", detail: "Source reconciliation complete" }));
     runtime.activeRecommendation = {
-      ...runtime.scenario.recommendation,
+      ...(workspace ? workspace.recommendation : runtime.scenario.recommendation),
       generatedAt: now(),
-      sourceTraceSummary: `${runtime.scenario.note} Context assembled from ${runtime.activeZone.controllerSource}, crop profile, soil profile, weather, and field observation.`,
+      sourceTraceSummary: `Context assembled from ${runtime.activeZone.controllerSource}, crop profile, soil profile, weather, and field observation.`,
     };
-    runtime.reconciliationRows = demoReconciliationRows;
+    runtime.reconciliationRows = workspace ? workspace.reconciliation : demoReconciliationRows;
     runtime.operatingChain = baseChain("recommended");
-    runtime.operatingChain[0] = { ...runtime.operatingChain[0], evidence: "Pilot package analysis produced a verified water decision." };
-    runtime.reportSnapshots = [reportSnapshotFromBackend(runtime, null), ...(runtime.reportSnapshots || [])].slice(0, 12);
+    runtime.operatingChain[0] = { ...runtime.operatingChain[0], evidence: "Representative-data analysis produced a verified water decision." };
+    runtime.reportSnapshots = [reportSnapshotFromActiveRecommendation(runtime), ...(runtime.reportSnapshots || [])].slice(0, 12);
   }
   addAudit(runtime, "Intelligence analysis completed", "Recommendation ready with verification required.");
   return persist(runtime);
 }
 
-function addAudit(runtime, event, detail, source = runtime.activeZone?.name || "Pilot workspace") {
+function addAudit(runtime, event, detail, source = runtime.activeZone?.name || "Evaluation workspace") {
   runtime.auditEvents = [{ time: now(), actor: ACTOR, event, source, detail }, ...(runtime.auditEvents || [])].slice(0, 80);
 }
 
 function persist(runtime) {
   try {
     window.sessionStorage.setItem(STORAGE_KEY, JSON.stringify(runtime));
-    window.sessionStorage.removeItem(LEGACY_STORAGE_KEY);
   } catch (_error) {
     // Runtime still works in memory when sessionStorage is unavailable.
   }
@@ -380,7 +517,7 @@ export function resetDemo(shouldPersist = true) {
       parseStatus: "",
     },
   };
-  addAudit(runtime, "Workspace launched", "Pilot workspace reset and ready.");
+  addAudit(runtime, "Workspace launched", "Evaluation workspace reset and ready.");
   return shouldPersist ? persist(runtime) : runtime;
 }
 
@@ -531,7 +668,7 @@ export function selectIntakeMode(runtime, mode) {
       ? "Connected source"
       : normalizedMode === "upload"
         ? "Uploaded records"
-        : "Pilot data package";
+        : "Representative data";
   runtime.sourceState = {
     ...(runtime.sourceState || {}),
     provider: normalizedMode === "connected" ? "WiseConn" : runtime.sourceState?.provider || "WiseConn",
@@ -559,7 +696,79 @@ export function attachUploadArtifact(runtime, artifact, file) {
   return persist(runtime);
 }
 
-export function markBackendUnavailable(runtime, message = "Backend intelligence unavailable. Pilot package analysis remains available.") {
+function reportSnapshotFromActiveRecommendation(runtime, type = "Irrigation Intelligence Report") {
+  const rec = runtime.activeRecommendation || runtime.scenario.recommendation;
+  return {
+    id: `report-${Date.now()}`,
+    type,
+    generatedAt: now(),
+    farm: runtime.activeFarm.name,
+    block: rec.block || runtime.activeZone.name,
+    crop: rec.crop || runtime.activeZone.crop,
+    controllerSource: runtime.activeZone.controllerSource,
+    waterSavedYtd: runtime.institutionalKpis?.waterSavedYtd,
+    waterSavingsRate: runtime.institutionalKpis?.waterSavingsRate,
+    dollarValueAvoided: runtime.institutionalKpis?.dollarValueAvoided,
+    pricingAssumption: runtime.institutionalKpis?.pricingAssumption,
+    compliancePosture: runtime.institutionalKpis?.compliancePosture,
+    evidenceCompleteness: runtime.institutionalKpis?.evidenceCompleteness,
+    portfolioCoverage: runtime.institutionalKpis?.portfolioCoverage,
+    plannedWater: rec.depth,
+    recommendation: rec.action || rec.decision,
+    scheduledAction: runtime.operatingChain[1]?.evidence || "Awaiting schedule",
+    appliedAction: runtime.operatingChain[2]?.evidence || "Awaiting controller execution",
+    observedOutcome: runtime.operatingChain[3]?.evidence || "Awaiting field observation",
+    verificationStatus: runtime.operatingChain[4]?.status || "Verification pending",
+    confidence: rec.confidence,
+    dataQuality: rec.dataQuality,
+    keyDrivers: rec.keyDrivers || rec.key_drivers || [],
+    waterEfficiencyNote: "Decision supports targeted water application and verification evidence.",
+  };
+}
+
+// Apply a representative evaluation workspace and produce a ready decision so the
+// Command page is immediately functional. Always marked as representative data.
+export function applyWorkspaceScenario(runtime, key) {
+  const scenario = workspaceScenarios[key] || workspaceScenarios["alpha-vineyard"];
+  runtime.workspaceScenarioId = scenario.id;
+  runtime.activeFarm = findFarm(scenario.farmId);
+  runtime.activeZone = findZone(runtime.activeFarm, scenario.zoneId);
+  runtime.activeRecommendation = { ...scenario.recommendation, generatedAt: now() };
+  runtime.reconciliationRows = scenario.reconciliation;
+  runtime.institutionalKpis = {
+    ...demoInstitutionalKpis,
+    ...(runtime.institutionalKpis || {}),
+    waterSavingsRate: scenario.savings,
+    evidenceCompleteness: scenario.evidence,
+  };
+  runtime.intakeMode = runtime.intakeMode || "sample";
+  runtime.intakeModeLabel = "Representative data";
+  runtime.analysis = {
+    ...runtime.analysis,
+    status: "complete",
+    running: false,
+    statusLabel: "Decision ready",
+    backendError: "",
+    steps: getAnalysisSteps().map((step) => ({ ...step, status: "complete", statusLabel: "Complete", detail: "Source reconciliation complete" })),
+  };
+  runtime.operatingChain = baseChain("recommended");
+  runtime.operatingChain[0] = { ...runtime.operatingChain[0], evidence: "Representative-data analysis produced a verified water decision." };
+  runtime.reportSnapshots = [reportSnapshotFromActiveRecommendation(runtime), ...(runtime.reportSnapshots || [])].slice(0, 12);
+  addAudit(runtime, "Workspace scenario loaded", `${scenario.name} representative records loaded.`, scenario.name);
+  return persist(runtime);
+}
+
+export function loadRepresentativePackage(runtime) {
+  runtime.intakeMode = "sample";
+  runtime.intakeModeLabel = "Representative data";
+  return applyWorkspaceScenario(runtime, runtime.workspaceScenarioId || "alpha-vineyard");
+}
+
+export function switchWorkspaceScenario(runtime, key) {
+  return applyWorkspaceScenario(runtime, key);
+}
+
+export function markBackendUnavailable(runtime, message = "Backend intelligence unavailable. Representative-data analysis remains available.") {
   runtime.analysis.running = false;
   runtime.analysis.status = runtime.activeRecommendation ? "complete" : "idle";
   runtime.analysis.backendError = message;
