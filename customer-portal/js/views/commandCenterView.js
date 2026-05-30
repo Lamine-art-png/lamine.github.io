@@ -271,9 +271,9 @@ function reportPreview(runtime) {
         <button class="button secondary" data-action="print-report" type="button">Print report</button>
       </div>
     </div>
-    <table class="data-table compact"><tbody>
+    <div class="table-wrap"><table class="data-table compact"><tbody>
       ${rows.map(([label, value]) => `<tr><th>${escapeHtml(label)}</th><td>${escapeHtml(value)}</td></tr>`).join("")}
-    </tbody></table>
+    </tbody></table></div>
   </section>`;
 }
 
