@@ -271,7 +271,11 @@ async function animateAnalysis() {
         if (created.ok) rt.analysis.sessionId = created.data?.session_id || created.data?.session?.session_id || "";
       }
       if (rt.analysis.sessionId) {
-        backend = await api.analyzeWorkbenchSession(rt.analysis.sessionId, { session_id: rt.analysis.sessionId, mode: rt.intakeMode === "sample" ? "pilot" : "uploaded" });
+        // The backend WorkbenchAnalysisRequest.mode is a strict Literal
+        // ("demo" | "live" | "uploaded"); the engine branches on artifacts,
+        // not the mode string, so representative (sample) and uploaded
+        // sessions both analyze correctly as "uploaded".
+        backend = await api.analyzeWorkbenchSession(rt.analysis.sessionId, { session_id: rt.analysis.sessionId, mode: "uploaded" });
       }
     }
   } catch (_error) {
@@ -322,8 +326,9 @@ function detectSourceType(filename = "") {
 function updateSourceDrawerStatus(file, parseStatus, data = null) {
   const panel = document.getElementById("drawer-upload-status");
   if (!panel) return;
-  const rows = data?.rows ?? data?.rows_detected ?? "Detected on parse";
-  const fields = data?.fields_mapped ?? data?.fields ?? "Mapped on parse";
+  const rows = data?.rows_detected ?? data?.rows ?? "Detected on parse";
+  const cols = data?.columns_detected;
+  const fields = Array.isArray(cols) ? `${cols.length} (${cols.slice(0, 6).join(", ")}${cols.length > 6 ? "…" : ""})` : data?.fields_mapped ?? data?.fields ?? "Mapped on parse";
   const warnings = Array.isArray(data?.warnings) && data.warnings.length ? data.warnings.join("; ") : "None";
   panel.innerHTML = `<dl class="drawer-def">
       <div><dt>Uploaded file</dt><dd>${escapeHtmlSafe(file?.name || "—")}</dd></div>
