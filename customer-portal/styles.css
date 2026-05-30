@@ -2244,7 +2244,9 @@ select {
 }
 
 /* Enterprise Command Surface redesign */
-.enterprise-command-surface { display: grid; gap: 18px; }
+/* Explicit minmax(0,1fr) column: an implicit `auto` column sizes to the
+   content's max-content and overflows narrow viewports. */
+.enterprise-command-surface { display: grid; grid-template-columns: minmax(0, 1fr); gap: 18px; }
 .command-summary-strip { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 12px; }
 .enterprise-metric { border: 1px solid #dbe4ea; background: #fff; border-radius: 12px; padding: 14px; min-height: 108px; }
 .enterprise-metric .metric-label { color: #5d6f7d; font-weight: 600; margin: 0 0 8px; }
@@ -2260,7 +2262,10 @@ select {
 .source-row-meta strong { font-size: 0.72rem; color: #6a7c89; text-transform: uppercase; letter-spacing: .04em; }
 .source-row-meta em { font-style: normal; color: #173244; }
 .processing-surface { position: relative; overflow: hidden; }
-.processing-track { position: relative; padding: 18px 12px; border: 1px solid #e4ecf2; border-radius: 12px; display: grid; grid-template-columns: repeat(5, minmax(0,1fr)); gap: 8px; }
+.processing-track { position: relative; padding: 18px 12px; border: 1px solid #e4ecf2; border-radius: 12px; display: grid; grid-template-columns: repeat(auto-fit, minmax(68px, 1fr)); gap: 8px; }
+.processing-stage { flex-direction: column; gap: 6px; text-align: center; }
+.processing-stage strong { font-size: 12.5px; }
+.processing-stage small { font-size: 10.5px; color: #6a7c89; }
 .processing-grid { position: absolute; inset: 0; background-image: linear-gradient(rgba(24,66,52,.06) 1px, transparent 1px), linear-gradient(90deg, rgba(24,66,52,.06) 1px, transparent 1px); background-size: 24px 24px; pointer-events: none; }
 .processing-stage { position: relative; z-index: 2; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 10px; border-radius: 10px; background: rgba(247,250,252,.9); border: 1px solid #dce7ee; }
 .signal-node { width: 8px; height: 8px; border-radius: 50%; background: #3f8f6b; box-shadow: 0 0 0 0 rgba(63,143,107,.45); }
@@ -2320,6 +2325,8 @@ select {
 .user-menu > summary { padding: 2px; border-radius: 999px; }
 .avatar { width: 30px; height: 30px; border-radius: 50%; background: #1f3a30; color: #fff; font-size: 12px; font-weight: 750; display: inline-flex; align-items: center; justify-content: center; letter-spacing: .02em; }
 .menu-panel { position: absolute; right: 0; top: calc(100% + 8px); z-index: 60; min-width: 210px; background: #fff; border: 1px solid #e0e6df; border-radius: 12px; box-shadow: 0 16px 42px rgba(16,35,29,.12); padding: 6px; display: grid; gap: 2px; }
+/* Closed dropdowns must take no layout so the absolute panel cannot widen the page. */
+.overflow-menu:not([open]) .menu-panel, .user-menu:not([open]) .menu-panel { display: none; }
 .menu-identity { padding: 8px 10px; display: grid; gap: 2px; border-bottom: 1px solid #eef1ec; margin-bottom: 4px; }
 .menu-identity strong { font-size: 13px; color: #16201c; }
 .menu-identity span { font-size: 11.5px; color: #7a857e; }
@@ -2331,7 +2338,11 @@ select {
 .button.compact { padding: 7px 12px; font-size: 12.5px; font-weight: 700; }
 .button.ghost.compact { background: #fff; }
 .command-section-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.command-section-block { min-width: 0; }
+.command-section-block .table-wrap { max-width: 100%; overflow-x: auto; }
 
+.decision-context div { grid-template-columns: 120px minmax(0, 1fr); }
+.decision-context dd { overflow-wrap: anywhere; }
 .decision-hero { margin: 0 0 14px; }
 .decision-hero span { color: #41524b; font-size: 14px; }
 .decision-panel-enterprise .section-headline h2 { font-size: 20px; letter-spacing: -0.02em; }
@@ -2389,9 +2400,25 @@ select {
 .self-serve-step p { margin: 0; color: #5a665f; font-size: 13px; }
 
 @media (max-width: 720px) {
+  .portal-layout { grid-template-columns: minmax(0, 1fr); }
+  /* Grid items default to min-width:auto and refuse to shrink below their
+     content's min-content, blowing the single column past the viewport.
+     Allow both stacked items to shrink to the available width. */
+  .sidebar, .portal-main { min-width: 0; width: 100%; }
+  /* The 4-column nav grid forces a ~528px minimum; collapse it so the
+     single-column mobile layout cannot overflow horizontally. */
+  .nav-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .portal-header { flex-direction: column; }
-  .header-toolbar { align-self: stretch; justify-content: space-between; }
+  .header-toolbar { align-self: stretch; justify-content: flex-end; gap: 8px; }
+  /* The status row in the title block already conveys this; avoid a non-wrapping chip row. */
+  .toolbar-status { display: none; }
+  .header-title-row { width: 100%; }
+  .header-title-row h1 { font-size: 22px; }
+  .workspace-switcher { flex: 1 1 100%; }
+  .workspace-switcher select { width: 100%; }
   .command-canvas { grid-template-columns: 1fr; }
   .command-canvas .decision-panel-enterprise { order: 0; }
-  .header-title-row h1 { font-size: 22px; }
+}
+@media (max-width: 420px) {
+  .nav-list { grid-template-columns: 1fr; }
 }
