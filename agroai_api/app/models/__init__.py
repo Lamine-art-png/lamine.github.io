@@ -17,6 +17,11 @@ from app.models.water_state import WaterState
 from app.models.decision_run import DecisionRun
 from app.models.execution_verification import ExecutionVerification
 from app.models.forecast import Forecast
+from app.models.compliance import (
+    ComplianceJurisdiction, ComplianceOrganizationRole, ComplianceParcel,
+    ComplianceWell, ComplianceMeter, ComplianceMeasurement, ComplianceExecutionLedger,
+    ComplianceWaterBudget, ComplianceEvidence, ComplianceRulePack, ComplianceReadinessSnapshot,
+)
 
 __all__ = [
     "Tenant",
@@ -37,4 +42,15 @@ __all__ = [
     "DecisionRun",
     "ExecutionVerification",
     "Forecast",
+    "ComplianceJurisdiction",
+    "ComplianceOrganizationRole",
+    "ComplianceParcel",
+    "ComplianceWell",
+    "ComplianceMeter",
+    "ComplianceMeasurement",
+    "ComplianceExecutionLedger",
+    "ComplianceWaterBudget",
+    "ComplianceEvidence",
+    "ComplianceRulePack",
+    "ComplianceReadinessSnapshot",
 ]

@@ -1,6 +1,8 @@
 import { escapeHtml } from "../components/dom.js";
 import { getWorkspaceScenarios, workspaceScenarios } from "../services/demoRuntime.js";
 
+const complianceEnabled = () => Boolean(window.AGROAI_PORTAL_CONFIG?.CALIFORNIA_COMPLIANCE_PACK_ENABLED);
+
 export const navItems = [
   ["command-center", "Command"],
   ["farm-explorer", "Sources"],
@@ -48,7 +50,7 @@ export function renderShell(state, content) {
         <img src="./assets/agro-ai-logo.png" alt="AGRO-AI" class="brand-logo" />
         <div><div class="brand">AGRO-AI</div><p>Water Command Center</p></div>
       </div>
-      <div class="nav-section-label">Primary</div><nav class="nav-list" aria-label="Portal navigation">${navItems.map(([id, label]) => navButton(state, id, label)).join("")}</nav>
+      <div class="nav-section-label">Primary</div><nav class="nav-list" aria-label="Portal navigation">${[...navItems, ...(complianceEnabled() ? [["compliance", "Compliance"]] : [])].map(([id, label]) => navButton(state, id, label)).join("")}</nav>
       <div class="nav-section-label secondary-label">Secondary</div><nav class="nav-list secondary-nav" aria-label="Secondary navigation">${secondaryNavItems.map(([id, label]) => navButton(state, id, label)).join("")}</nav>
       <div class="sidebar-footer"><div class="sidebar-mode"><span>${escapeHtml(isEvaluation ? "Evaluation workspace" : "Live / Auth-ready")}</span><strong>${escapeHtml(isEvaluation ? scenarioName : workspace?.name || "Customer Workspace")}</strong></div><div class="sidebar-note">${escapeHtml(isEvaluation ? "Representative records until production targets are connected." : workspace?.label || state.session.authNotice)}</div></div>
     </aside>
