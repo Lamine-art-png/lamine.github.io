@@ -65,14 +65,71 @@ The trace is intentionally structured for UI animation:
 
 Each step includes title, status, details, objects processed, and optional confidence delta.
 
-## Live Mode
+## Live Mode (real adapter integration)
 
-`POST /v1/workbench/analyze-live` accepts a provider source and entity id. The default portal call uses `source: wiseconn` and `entity_id: 162803`. The route returns a customer-safe limited analysis when provider credential provisioning is not available. It does not fabricate live telemetry.
+`POST /v1/workbench/analyze-live` accepts a provider `source` and `entity_id`. The default portal call uses `source: wiseconn` and `entity_id: 162803`.
+
+The route is now `async` and assembles live context through the existing
+`LiveFieldContextAssembler` (`assemble_wiseconn_zone` / `assemble_talgil_target`)
+rather than a static placeholder:
+
+1. `engine.assemble_live_context(source, entity_id)` calls the assembler.
+2. The returned `CanonicalFieldContext` is mapped onto the Workbench context
+   shape (`_map_live_context`). Only telemetry the provider actually returned is
+   reflected — moisture readings and recent irrigation counts when present.
+   Agronomic profile fields (crop, soil) stay "provider context pending" because
+   live telemetry does not carry them.
+3. When provider reads are unavailable (no credentials, network, or zone match),
+   the assembler degrades safely: truthful `warnings` (for example
+   `wiseconn_telemetry_unavailable`, `live_context_unavailable:*`), empty
+   `live_inputs_used`, and **no fabricated telemetry**. The route still returns
+   `200` with a degraded-but-honest result.
+
+Adapter logic is **not duplicated** — the route reuses the existing assembler.
+
+## Recommendation Origin and Truthful Status Fields
+
+Every analysis result now carries typed status fields:
+
+- `backend_status` — `available` once the engine produced a result.
+- `analysis_mode` — `live` | `uploaded` | `demo`.
+- `context_origin` — `live` | `uploaded` | `representative`.
+- `recommendation_origin` — one of `representative_fallback`,
+  `deterministic_engine`, `live_intelligence_engine`,
+  `uploaded_intelligence_engine`.
+- `live_inputs_used`, `uploaded_artifacts_used`, `warnings`.
+
+### Current recommender behavior
+
+The Workbench recommender is **deterministic**. Above the confidence threshold
+it returns a representative operational shape (42 min / 12 mm net) and below it
+returns a truthful hold state: **"Decision pending source review"**. This fixed
+numeric output is therefore labelled `recommendation_origin: deterministic_engine`
+and must **not** be presented as calibrated agronomic precision.
+
+The frontend labels its embedded evaluation scenarios as
+`representative_fallback` and clearly marks them as representative data.
+
+### Remaining gap (agronomic-calibration sprint)
+
+Routing live and uploaded analysis through `IntelligenceEngineV1` to produce
+calibrated numeric recommendations (which would emit `live_intelligence_engine`
+/ `uploaded_intelligence_engine`) is reserved for a dedicated agronomic
+calibration sprint. Until then the deterministic engine and representative
+fallbacks are the source of recommendation numbers, and that origin is exposed
+honestly through `recommendation_origin`.
 
 ## Current Limitations
 
-- Sessions and artifacts are in memory.
-- Provider credentials must be stored server-side; browser storage is not used for provider secrets.
-- Connected field analysis is limited until credential vault and tenant provisioning are complete.
+- **Evaluation session storage only.** Sessions and artifacts are in memory;
+  tenant-scoped persistence is future work. This limitation is documented here
+  and is not surfaced prominently on the customer-facing Command page.
+- Provider credentials must be stored server-side; browser storage is never used
+  for provider secrets.
+- Connected-field analysis is limited until credential vault and tenant
+  provisioning are complete; live results degrade safely meanwhile.
+- The recommendation numbers are deterministic, not agronomically calibrated
+  (see "Remaining gap" above).
 - XLSX parsing depends on `openpyxl`.
-- Optional model-assisted summary requires provider environment variables; deterministic analysis is always available.
+- Optional model-assisted summary requires provider environment variables;
+  deterministic analysis is always available.
