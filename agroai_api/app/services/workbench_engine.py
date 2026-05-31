@@ -17,6 +17,10 @@ from app.models.workbench import (
     WorkbenchSession,
 )
 from app.services.workbench_sample_data import get_sample_files
+from app.services.live_field_context import (
+    LiveContextAssemblerError,
+    LiveFieldContextAssembler,
+)
 
 try:
     import openpyxl
@@ -391,7 +395,68 @@ def assemble_context_from_live(source: str, entity_id: str) -> Dict[str, Any]:
             "satellite_observations_read": 0,
             "water_cost_records_read": 0,
         },
+        "warnings": [],
+        "live_inputs_used": [],
+        "context_origin": "live",
     }
+
+
+def _map_live_context(assembled: Dict[str, Any], source: str, entity_id: str) -> Dict[str, Any]:
+    """Map a LiveFieldContextAssembler result onto the Workbench context shape.
+
+    Only telemetry the connected source actually returned is reflected; agronomic
+    profile fields stay 'provider context pending' because live telemetry does not
+    include crop/soil profiles. This keeps the result truthful and never fabricates.
+    """
+    field = assembled.get("context")
+    base = assemble_context_from_live(source, entity_id)
+    counts = dict(base["counts"])
+    signals: List[Dict[str, Any]] = []
+
+    moisture = getattr(getattr(field, "sensor_context", None), "moisture_percent", None)
+    if isinstance(moisture, (int, float)):
+        counts["soil_readings_read"] = 1
+        signals.append({"canonical_name": "moisture_percent", "value": moisture, "source_kind": "live_telemetry"})
+        base["moisture_deficit"] = f"{round(100 - float(moisture))}% deficit (live sensor)"
+
+    events = getattr(getattr(field, "recent_irrigation_context", None), "events_last_7_days", None)
+    if isinstance(events, int) and events > 0:
+        counts["controller_events_read"] = events
+
+    farm_id = getattr(field, "farm_id", None)
+    base.update(
+        {
+            "signals": signals,
+            "farm": farm_id or base["farm"],
+            "counts": counts,
+            "warnings": list(assembled.get("warnings", [])),
+            "live_inputs_used": list(assembled.get("live_inputs_used", [])),
+            "context_origin": assembled.get("context_origin", "live"),
+            "provider_context": f"{source} entity {entity_id}",
+        }
+    )
+    return base
+
+
+async def assemble_live_context(source: str, entity_id: str) -> Dict[str, Any]:
+    """Assemble live connected-source context via the real assembler.
+
+    Degrades safely (truthful warnings, no fabricated telemetry) when provider
+    reads are unavailable, so the Workbench live route always returns a result.
+    """
+    try:
+        assembled = await LiveFieldContextAssembler().assemble(source, entity_id)
+        return _map_live_context(assembled, source, entity_id)
+    except LiveContextAssemblerError as exc:
+        context = assemble_context_from_live(source, entity_id)
+        context["warnings"] = [f"live_context_unavailable:{exc}"]
+        context["live_inputs_used"] = []
+        return context
+    except Exception as exc:  # never 500 the live route on adapter faults
+        context = assemble_context_from_live(source, entity_id)
+        context["warnings"] = [f"live_context_error:{type(exc).__name__}"]
+        context["live_inputs_used"] = []
+        return context
 
 
 def _presence_missing(counts: Dict[str, int], live: bool) -> List[str]:
@@ -485,8 +550,8 @@ def reconcile_signals(context: Dict[str, Any]) -> ReconciliationResult:
 def generate_recommendation(reconciliation: ReconciliationResult, context: Dict[str, Any]) -> Dict[str, Any]:
     if reconciliation.confidence_score < 0.55:
         return {
-            "action": "Hold decision until required source evidence is available",
-            "decision": "Hold decision until required source evidence is available",
+            "action": "Decision pending source review",
+            "decision": "Decision pending source review",
             "start_time": "After source review",
             "start": "After source review",
             "duration": "0 min",
@@ -671,15 +736,20 @@ def analyze_session(
     mode: str = "uploaded",
     live_source: str | None = None,
     live_entity_id: str | None = None,
+    live_context: Dict[str, Any] | None = None,
 ) -> WorkbenchAnalysisResult:
     store = SESSIONS[session_id]
     artifacts = store["artifacts"]
-    if live_source and live_entity_id and not artifacts:
-        context = assemble_context_from_live(live_source, live_entity_id)
+    is_live = bool(live_source and live_entity_id and not artifacts)
+    if is_live:
+        # Prefer the real assembler output passed in by the async route; fall
+        # back to the degraded (truthful, empty) live context otherwise.
+        context = live_context if live_context is not None else assemble_context_from_live(live_source, live_entity_id)
     else:
         context = assemble_context_from_artifacts(artifacts)
         if live_source and live_entity_id:
-            context["live_request"] = assemble_context_from_live(live_source, live_entity_id)["live_request"]
+            merged = live_context if live_context is not None else assemble_context_from_live(live_source, live_entity_id)
+            context["live_request"] = merged.get("live_request")
             context["provider_context"] = f"{context.get('provider_context', 'uploaded evidence')} + {live_source} entity {live_entity_id}"
 
     reconciliation = reconcile_signals(context)
@@ -696,6 +766,16 @@ def analyze_session(
     limitations = list(dict.fromkeys(recommendation.get("limitations", [])))
     if live_source and live_entity_id:
         limitations.append("Provider credential storage and tenant provisioning must be completed server-side before expanded live telemetry is available.")
+
+    if is_live:
+        analysis_mode_val = "live"
+        context_origin = "live"
+    elif artifacts:
+        analysis_mode_val = "uploaded"
+        context_origin = "uploaded"
+    else:
+        analysis_mode_val = mode if mode in ("demo", "live", "uploaded") else "uploaded"
+        context_origin = "uploaded"
 
     result = WorkbenchAnalysisResult(
         analysis_id=str(uuid.uuid4()),
@@ -716,6 +796,16 @@ def analyze_session(
         limitations=limitations,
         model_status="optional_model_assist" if os.getenv("OPENAI_API_KEY") else "deterministic_engine",
         created_at=datetime.utcnow(),
+        backend_status="available",
+        analysis_mode=analysis_mode_val,
+        # The Workbench recommender is deterministic. Live/uploaded intelligence
+        # routing through IntelligenceEngineV1 is reserved for the agronomic
+        # calibration sprint; until then we label the true origin.
+        recommendation_origin="deterministic_engine",
+        context_origin=context_origin,
+        live_inputs_used=list(context.get("live_inputs_used", [])),
+        uploaded_artifacts_used=[artifact.filename for artifact in artifacts],
+        warnings=list(context.get("warnings", [])),
     )
     store["analysis"] = result
     store["session"].updated_at = datetime.utcnow()

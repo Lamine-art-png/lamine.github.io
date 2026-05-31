@@ -20,6 +20,37 @@ def test_analyze_live(client):
     r = client.post('/v1/workbench/analyze-live', json={'source':'wiseconn','entity_id':'162803'})
     assert r.status_code == 200
 
+
+def test_analyze_live_returns_truthful_status_fields(client):
+    r = client.post('/v1/workbench/analyze-live', json={'source': 'wiseconn', 'entity_id': '162803'})
+    assert r.status_code == 200
+    body = r.json()
+    # Truthful status fields are present and consistent with a live request.
+    assert body['analysis_mode'] == 'live'
+    assert body['context_origin'] == 'live'
+    assert body['recommendation_origin'] in (
+        'deterministic_engine', 'live_intelligence_engine'
+    )
+    assert 'live_inputs_used' in body
+    assert 'warnings' in body
+    # No provider credentials in the test env => assembler degrades, not fabricates.
+    assert body['uploaded_artifacts_used'] == []
+
+
+def test_uploaded_analysis_status_fields(client):
+    created = client.post('/v1/workbench/sample-package')
+    session_id = created.json()['session']['session_id']
+    analyzed = client.post(
+        f'/v1/workbench/sessions/{session_id}/analyze',
+        json={'session_id': session_id, 'mode': 'uploaded'},
+    )
+    assert analyzed.status_code == 200
+    body = analyzed.json()
+    assert body['analysis_mode'] == 'uploaded'
+    assert body['context_origin'] == 'uploaded'
+    assert body['recommendation_origin'] == 'deterministic_engine'
+    assert len(body['uploaded_artifacts_used']) == 8
+
 def test_sample_package_route(client):
     created = client.post('/v1/workbench/sample-package')
     assert created.status_code == 200
