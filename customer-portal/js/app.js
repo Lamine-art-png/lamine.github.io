@@ -13,6 +13,7 @@ import { renderReports } from "./views/reportsView.js";
 import { renderIntegrations } from "./views/integrationsView.js";
 import { renderAuditLog } from "./views/auditLogView.js";
 import { renderSettings } from "./views/settingsView.js";
+import { renderCompliance } from "./views/complianceView.js";
 
 const api = new ApiClient();
 const root = document.getElementById("app");
@@ -187,6 +188,7 @@ function renderActiveView() {
   if (state.activeView === "integrations") return renderIntegrations(state);
   if (state.activeView === "audit-log") return renderAuditLog(state);
   if (state.activeView === "settings") return renderSettings(state);
+  if (state.activeView === "compliance" && window.AGROAI_PORTAL_CONFIG?.CALIFORNIA_COMPLIANCE_PACK_ENABLED) return renderCompliance(state);
   return renderCommandCenter(state);
 }
 
