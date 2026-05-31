@@ -120,6 +120,17 @@ python -m http.server 4174
 
 Open `http://localhost:4174`.
 
+## Tests
+
+Dependency-free smoke tests guard the enterprise-maturity invariants (no
+scaffold language, representative package auto-load, scenario switching, and
+core render output):
+
+```bash
+cd customer-portal
+node --test
+```
+
 ## Static Deploy Note
 
 1. Deploy `customer-portal/` as static files.
