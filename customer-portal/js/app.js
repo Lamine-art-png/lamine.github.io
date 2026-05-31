@@ -1,6 +1,6 @@
 import { ApiClient } from "./apiClient.js";
 import { acceptedWorkbenchFields, sampleDataPackage, workbenchOutputSchema } from "./demoData.js";
-import { launchDemoSession, notify, returnToEntry, setActiveView, setDemoRuntime, setLoginError, startLoginScaffold, state, subscribe, SESSION_MODES } from "./state.js";
+import { launchDemoSession, notify, returnToEntry, setActiveView, setDemoRuntime, setLoginError, startLoginScaffold, state, subscribe, SESSION_MODES, setComplianceState } from "./state.js";
 import { loadLiveSnapshot, generateWiseConnRecommendation } from "./services/liveData.js";
 import { addObservation, attachUploadArtifact, completeAiAnalysis, generateDemoRecommendation, generateDemoReport, markApplied, markBackendUnavailable, nextStep, prepareBackendSetupRequest, resetDemo, runAiAnalysis, scheduleRecommendation, selectFarm, selectIntakeMode, selectZone, startGuidedDemo, switchScenario, switchWorkspaceScenario, toCsv, verifyOutcome } from "./services/demoRuntime.js";
 import { renderEntryView } from "./views/entryView.js";
@@ -13,6 +13,7 @@ import { renderReports } from "./views/reportsView.js";
 import { renderIntegrations } from "./views/integrationsView.js";
 import { renderAuditLog } from "./views/auditLogView.js";
 import { renderSettings } from "./views/settingsView.js";
+import { renderCompliance } from "./views/complianceView.js";
 
 const api = new ApiClient();
 const root = document.getElementById("app");
@@ -179,6 +180,33 @@ function collectOverrides(form) {
   return overrides;
 }
 
+async function loadComplianceStatus() {
+  if (!window.AGROAI_PORTAL_CONFIG?.CALIFORNIA_COMPLIANCE_PACK_ENABLED) return;
+  setComplianceState({ loading: true, error: "" });
+  const response = await api.getComplianceStatus();
+  if (response.ok) {
+    setComplianceState({ loading: false, status: response.data, error: "" });
+  } else {
+    setComplianceState({ loading: false, error: response.error || "Compliance API unavailable" });
+  }
+}
+
+function downloadComplianceExport(exportPackage) {
+  if (!exportPackage?.content_base64) return;
+  const binary = atob(exportPackage.content_base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  const blob = new Blob([bytes], { type: exportPackage.mime_type || "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = exportPackage.file_name || `compliance-export-${exportPackage.id}`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
 function renderActiveView() {
   if (state.activeView === "farm-explorer") return renderFarmExplorer(state);
   if (state.activeView === "intelligence") return renderIntelligence(state);
@@ -187,6 +215,10 @@ function renderActiveView() {
   if (state.activeView === "integrations") return renderIntegrations(state);
   if (state.activeView === "audit-log") return renderAuditLog(state);
   if (state.activeView === "settings") return renderSettings(state);
+  if (state.activeView === "compliance" && window.AGROAI_PORTAL_CONFIG?.CALIFORNIA_COMPLIANCE_PACK_ENABLED) {
+    if (!state.compliance.status && !state.compliance.loading) window.setTimeout(loadComplianceStatus, 0);
+    return renderCompliance(state);
+  }
   return renderCommandCenter(state);
 }
 
@@ -469,6 +501,20 @@ function openWorkspaceDetails() {
 function bindShellEvents() {
   document.querySelectorAll("[data-view]").forEach((button) => {
     button.addEventListener("click", () => setActiveView(button.dataset.view));
+  });
+
+  document.querySelectorAll("[data-action^=\"export-compliance-\"]").forEach((button) => {
+    button.addEventListener("click", async () => {
+      const exportType = button.dataset.action.replace("export-compliance-", "");
+      setComplianceState({ loading: true, error: "" });
+      const response = await api.createComplianceExport(exportType);
+      if (response.ok) {
+        setComplianceState({ loading: false, lastExport: response.data, error: "" });
+        downloadComplianceExport(response.data);
+      } else {
+        setComplianceState({ loading: false, error: response.error || "Export failed" });
+      }
+    });
   });
 
   document.getElementById("exit-session")?.addEventListener("click", () => {

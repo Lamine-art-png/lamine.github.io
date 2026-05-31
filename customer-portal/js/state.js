@@ -20,6 +20,12 @@ export const state = {
   },
   activeView: "command-center",
   demoRuntime: createDemoRuntime(),
+  compliance: {
+    loading: false,
+    status: null,
+    error: "",
+    lastExport: null,
+  },
   live: {
     auth: null,
     farms: [],
@@ -98,5 +104,10 @@ export function returnToEntry() {
   state.session.mode = SESSION_MODES.ENTRY;
   state.session.workspace = null;
   state.activeView = "command-center";
+  notify();
+}
+
+export function setComplianceState(patch) {
+  state.compliance = { ...state.compliance, ...patch };
   notify();
 }

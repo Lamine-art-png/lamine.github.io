@@ -26,6 +26,12 @@ export const ENDPOINTS = {
   workbenchLiveAnalyze: "/v1/workbench/analyze-live",
   workbenchReport: (id) => `/v1/workbench/sessions/${encodeURIComponent(id)}/report`,
   workbenchSchema: "/v1/workbench/schema",
+  complianceStatus: "/v1/compliance/status",
+  complianceReadiness: "/v1/compliance/readiness",
+  complianceWaterBudgets: "/v1/compliance/water-budgets",
+  complianceReconciliation: "/v1/compliance/reconciliation",
+  complianceMeters: "/v1/compliance/assets/meters",
+  complianceExports: "/v1/compliance/exports",
 };
 
 export class ApiClient {
@@ -42,6 +48,7 @@ export class ApiClient {
           ...(options.body ? { "Content-Type": "application/json" } : {}),
           ...(options.headers || {}),
         },
+        credentials: options.credentials || "include",
         body: options.body ? JSON.stringify(options.body) : undefined,
       });
       const contentType = response.headers.get("content-type") || "";
@@ -208,5 +215,28 @@ export class ApiClient {
 
   getWorkbenchSchema() {
     return this.request(ENDPOINTS.workbenchSchema);
+  }
+
+  getComplianceStatus() {
+    return this.request(ENDPOINTS.complianceStatus, { headers: this.complianceHeaders() });
+  }
+
+  getComplianceReadiness(workflowType = "gears_groundwater_extractor_readiness") {
+    return this.request(`${ENDPOINTS.complianceReadiness}?workflow_type=${encodeURIComponent(workflowType)}`, { headers: this.complianceHeaders() });
+  }
+
+  createComplianceExport(exportType = "json", workflowType = "gears_groundwater_extractor_readiness") {
+    return this.request(ENDPOINTS.complianceExports, { method: "POST", headers: this.complianceHeaders(), body: { export_type: exportType, workflow_type: workflowType } });
+  }
+
+  complianceHeaders() {
+    const headers = {};
+    const demoToken = window.AGROAI_PORTAL_CONFIG?.nonProductionComplianceDemoToken;
+    const orgId = window.AGROAI_PORTAL_CONFIG?.complianceOrganizationId || "org-ca-vineyard-001";
+    if (demoToken) {
+      headers["X-Compliance-Demo-Token"] = demoToken;
+      headers["X-Organization-Id"] = orgId;
+    }
+    return headers;
   }
 }
