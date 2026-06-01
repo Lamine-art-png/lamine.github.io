@@ -1,5 +1,14 @@
 import { useCommandStore } from "../state/commandStore";
 
+const EVIDENCE_TYPE_LABELS: Record<string, string> = {
+  system_generated: "System",
+  operator_attestation: "Operator attestation",
+  controller_confirmed: "Controller confirmed",
+  flow_meter_confirmed: "Flow-meter confirmed",
+  field_observation: "Field observation",
+  verified_outcome: "Verified outcome",
+};
+
 export function EvidenceChain() {
   const evidence = useCommandStore((s) => s.evidence);
   return (
@@ -13,6 +22,11 @@ export function EvidenceChain() {
               <div className="evidence-top">
                 <strong>{step.label}</strong>
                 <span className="evidence-status">{step.status}</span>
+                {step.status === "Complete" && step.evidenceType && (
+                  <span className="evidence-type-badge muted">
+                    {EVIDENCE_TYPE_LABELS[step.evidenceType] ?? step.evidenceType}
+                  </span>
+                )}
               </div>
               <p className="muted value">{step.evidence}</p>
             </div>

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 SourceKind = Literal[
     "controller_events",
@@ -71,13 +71,21 @@ class WorkbenchAnalysisRequest(BaseModel):
 
 
 class WorkbenchLiveAnalysisRequest(BaseModel):
-    source: str = "wiseconn"
-    entity_id: str = "162803"
+    source: str
+    entity_id: str
     crop_type: Optional[str] = None
     soil_type: Optional[str] = None
     irrigation_method: Optional[str] = None
     area: Optional[float] = None
+    area_unit: Optional[str] = None
     location: Optional[Dict[str, Any]] = None
+
+    @field_validator("source", "entity_id")
+    @classmethod
+    def require_non_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("must be a non-empty string")
+        return v
     weather_context: Optional[Dict[str, Any]] = None
     sensor_context: Optional[Dict[str, Any]] = None
     controller_context: Optional[Dict[str, Any]] = None
@@ -92,6 +100,7 @@ class WorkbenchActionRequest(BaseModel):
     actor: str = "Operations user"
     evidence_summary: Optional[str] = None
     payload: Dict[str, Any] = Field(default_factory=dict)
+    override_reason: Optional[str] = None
 
 class ReconciliationResult(BaseModel):
     matched_signals: List[str]

@@ -226,16 +226,28 @@ def _status_verified(status: Any) -> bool:
 def _flow_evidence(controller_rows: List[Dict[str, Any]], flow_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
     positive_controller = [row for row in controller_rows if (_to_float(row.get("flow_m3h")) or 0) > 0]
     latest = _latest_by_timestamp(positive_controller)
+    provenance = "controller_event"
+
+    # Accept flow-meter records that include a flow rate as a validated source when
+    # no positive controller evidence exists.
+    if not latest:
+        positive_fm_rate = [row for row in flow_rows if (_to_float(row.get("flow_m3h")) or 0) > 0]
+        latest = _latest_by_timestamp(positive_fm_rate)
+        if latest:
+            provenance = "flow_meter"
+
     max_variance = _max_abs(row.get("variance_percent") for row in flow_rows)
+
     if not latest:
         return {"status": "unavailable", "notes": ["No positive controller or flow-meter flow evidence found."]}
 
     severe_pressure = False
-    pressure = _to_float(latest.get("pressure_kpa"))
-    if pressure is not None and pressure < 150:
-        severe_pressure = True
-    if str(latest.get("status", "")).lower() in {"pressure_failure", "critical_pressure", "severe_pressure"}:
-        severe_pressure = True
+    if provenance == "controller_event":
+        pressure = _to_float(latest.get("pressure_kpa"))
+        if pressure is not None and pressure < 150:
+            severe_pressure = True
+        if str(latest.get("status", "")).lower() in {"pressure_failure", "critical_pressure", "severe_pressure"}:
+            severe_pressure = True
 
     if max_variance is not None and abs(max_variance) >= 20:
         return {
@@ -250,13 +262,17 @@ def _flow_evidence(controller_rows: List[Dict[str, Any]], flow_rows: List[Dict[s
             "notes": ["Severe pressure warning prevents validated flow use."],
         }
 
+    pressure_state = "partial"
+    if provenance == "controller_event" and latest.get("pressure_kpa") not in ("", None):
+        pressure_state = "stable"
+
     return {
         "status": "validated",
         "value_m3h": _to_float(latest.get("flow_m3h")),
-        "provenance": "controller_event",
+        "provenance": provenance,
         "block": latest.get("block") or latest.get("zone"),
         "timestamp": latest.get("timestamp"),
-        "pressure_state": "stable" if latest.get("pressure_kpa") not in ("", None) else "partial",
+        "pressure_state": pressure_state,
         "notes": [],
     }
 
@@ -285,6 +301,44 @@ def _fmt_number(value: float | None, suffix: str = "", digits: int = 1) -> str:
     if value is None:
         return "not available"
     return f"{value:.{digits}f}{suffix}"
+
+
+_AREA_UNIT_FACTORS: Dict[str, float] = {
+    "ha": 1.0, "hectare": 1.0, "hectares": 1.0,
+    "ac": 0.404686, "acre": 0.404686, "acres": 0.404686,
+    "m2": 1e-4, "sqm": 1e-4, "sq_m": 1e-4,
+    "square_meter": 1e-4, "square_meters": 1e-4,
+}
+
+
+def normalize_area_ha(area: Any, unit: Any) -> tuple[float | None, List[str]]:
+    """Normalize area to hectares. Returns (area_ha, warnings)."""
+    if area is None:
+        return None, []
+    try:
+        area_f = float(area)
+    except (TypeError, ValueError):
+        return None, [f"Area value '{area}' is not a valid number."]
+    if area_f <= 0:
+        return None, [f"Area {area_f} is invalid (must be positive). Estimated volume and duration are withheld."]
+    if not unit:
+        return None, ["Area unit is missing. Estimated volume and duration are withheld until an explicit area unit is provided."]
+    unit_key = str(unit).lower().strip().replace("-", "_").replace(" ", "_")
+    factor = _AREA_UNIT_FACTORS.get(unit_key)
+    if factor is None:
+        return None, [f"Unknown area unit '{unit}'. Estimated volume and duration are withheld."]
+    return round(area_f * factor, 6), []
+
+
+class EvidenceOrderViolation(Exception):
+    def __init__(self, action_type: str, required_step: str) -> None:
+        self.action_type = action_type
+        self.required_step = required_step
+        super().__init__(
+            f"Cannot record '{action_type}' before '{required_step}' is complete. "
+            "Evidence steps must follow: recommended → scheduled → applied → observed → verified. "
+            "Supply override_reason to record an out-of-order step with an audit entry."
+        )
 
 
 def build_artifact(session_id: str, filename: str, content: bytes, content_type: str = "application/octet-stream") -> WorkbenchDataArtifact:
@@ -859,7 +913,11 @@ def _apply_manual_overrides(context: Dict[str, Any], overrides: Dict[str, Any] |
     if "irrigation_method" in safe:
         context["irrigation_method"] = safe["irrigation_method"]
     if "area" in safe:
-        context["area"] = safe["area"]
+        area_ha, area_warnings = normalize_area_ha(safe["area"], safe.get("area_unit"))
+        if area_ha is not None:
+            context["area"] = area_ha
+        if area_warnings:
+            context.setdefault("warnings", []).extend(area_warnings)
     if isinstance(safe.get("weather_context"), dict):
         context.setdefault("metrics", {})
         context["metrics"]["avg_eto_mm"] = safe["weather_context"].get("eto_mm", context["metrics"].get("avg_eto_mm"))
@@ -967,9 +1025,6 @@ def analyze_session(
         created_at=datetime.utcnow(),
         backend_status="available",
         analysis_mode=analysis_mode_val,
-        # The Workbench recommender is deterministic. Live/uploaded intelligence
-        # routing through IntelligenceEngineV1 is reserved for the agronomic
-        # calibration sprint; until then we label the true origin.
         recommendation_origin=recommendation.get("recommendation_origin", "deterministic_engine"),
         context_origin=context_origin,
         live_inputs_used=list(context.get("live_inputs_used", [])),
@@ -990,6 +1045,25 @@ EVIDENCE_LABELS = {
     "observed": "Observed",
     "verified": "Verified",
 }
+EVIDENCE_PREREQUISITES = {
+    "scheduled": "recommended",
+    "applied": "scheduled",
+    "observed": "applied",
+    "verified": "observed",
+}
+EVIDENCE_DEFAULT_TEXT = {
+    "scheduled": "Schedule approval recorded.",
+    "applied": "Operator applied-water confirmation recorded.",
+    "observed": "Field observation recorded.",
+    "verified": "Outcome verification recorded for review.",
+}
+EVIDENCE_TYPES = {
+    "recommended": "system_generated",
+    "scheduled": "operator_attestation",
+    "applied": "operator_attestation",
+    "observed": "field_observation",
+    "verified": "operator_attestation",
+}
 
 
 def get_evidence_chain(session_id: str) -> Dict[str, Any]:
@@ -1005,6 +1079,7 @@ def get_evidence_chain(session_id: str) -> Dict[str, Any]:
         if key == "recommended" and not event and store.get("analysis"):
             event = {
                 "type": "recommended",
+                "evidence_type": "system_generated",
                 "timestamp": getattr(store["analysis"], "created_at", None).isoformat()
                 if getattr(store["analysis"], "created_at", None)
                 else now,
@@ -1019,37 +1094,70 @@ def get_evidence_chain(session_id: str) -> Dict[str, Any]:
                 "owner": event.get("actor", "Operations user") if event else "Operations user",
                 "timestamp": event.get("timestamp", "") if event else "",
                 "evidence": event.get("evidence_summary", f"{EVIDENCE_LABELS[key]} pending") if event else f"{EVIDENCE_LABELS[key]} pending",
+                "evidence_type": event.get("evidence_type", EVIDENCE_TYPES.get(key, "operator_attestation")) if event else None,
             }
         )
     return {"session_id": session_id, "evidence_chain": chain, "audit_events": store.get("audit", [])}
 
 
-def record_evidence_action(session_id: str, action_type: str, actor: str, evidence_summary: str | None = None, payload: Dict[str, Any] | None = None) -> Dict[str, Any]:
+def record_evidence_action(
+    session_id: str,
+    action_type: str,
+    actor: str,
+    evidence_summary: str | None = None,
+    payload: Dict[str, Any] | None = None,
+    override_reason: str | None = None,
+) -> Dict[str, Any]:
     if action_type not in {"scheduled", "applied", "observed", "verified"}:
         raise ValueError("Unsupported evidence action")
     store = SESSIONS.get(session_id)
     if not store:
         raise KeyError("Session not found")
+
+    # Enforce evidence chain ordering.
+    prerequisite = EVIDENCE_PREREQUISITES.get(action_type)
+    if prerequisite:
+        existing = {item["type"] for item in store.get("evidence_actions", [])}
+        if prerequisite == "recommended":
+            has_prerequisite = bool(store.get("analysis"))
+        else:
+            has_prerequisite = prerequisite in existing
+        if not has_prerequisite:
+            if not override_reason:
+                raise EvidenceOrderViolation(action_type, prerequisite)
+            # Override permitted — write audit entry before recording.
+            store["audit"].append({
+                "time": datetime.utcnow().isoformat(),
+                "event": f"Evidence order override: {action_type} recorded before {prerequisite} was complete.",
+                "actor": actor,
+                "override_reason": override_reason,
+                "override_label": "Evidence sequence override applied with supplied reason.",
+            })
+
     timestamp = datetime.utcnow().isoformat()
-    summary = evidence_summary or {
-        "scheduled": "Irrigation schedule approved for the recommended window.",
-        "applied": "Applied-water confirmation recorded for the evaluation session.",
-        "observed": "Field observation recorded for post-irrigation review.",
-        "verified": "Outcome verification recorded against available evidence.",
-    }[action_type]
+    summary = evidence_summary or EVIDENCE_DEFAULT_TEXT[action_type]
+    evidence_type = EVIDENCE_TYPES.get(action_type, "operator_attestation")
+    payload_data = payload or {}
+    if payload_data.get("confirmation_source") == "controller_confirmed":
+        evidence_type = "controller_confirmed"
+    elif payload_data.get("confirmation_source") == "flow_meter_confirmed":
+        evidence_type = "flow_meter_confirmed"
+
     event = {
         "type": action_type,
+        "evidence_type": evidence_type,
         "status": "recorded",
         "timestamp": timestamp,
         "actor": actor,
         "evidence_summary": summary,
-        "payload": payload or {},
+        "payload": payload_data,
     }
     store.setdefault("evidence_actions", []).append(event)
     audit = {
         "time": timestamp,
         "event": f"Evidence action recorded: {action_type}",
         "actor": actor,
+        "evidence_type": evidence_type,
         "evidence_summary": summary,
         "persistence": "evaluation-session",
     }
@@ -1058,6 +1166,7 @@ def record_evidence_action(session_id: str, action_type: str, actor: str, eviden
         "action_status": "recorded",
         "timestamp": timestamp,
         "actor": actor,
+        "evidence_type": evidence_type,
         "evidence_summary": summary,
         "updated_evidence_chain": get_evidence_chain(session_id)["evidence_chain"],
         "audit_event": audit,

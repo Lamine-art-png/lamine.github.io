@@ -41,6 +41,7 @@ export interface EvidenceStep {
   owner: string;
   timestamp: string;
   evidence: string;
+  evidenceType?: string;
 }
 
 export interface TraceStep {

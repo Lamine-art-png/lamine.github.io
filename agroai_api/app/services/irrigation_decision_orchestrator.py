@@ -69,11 +69,16 @@ def _parse_time(value: Any) -> Optional[datetime]:
         return None
 
 
-def _latest_time(*values: Any) -> datetime:
-    parsed = [dt for dt in (_parse_time(value) for value in values if value) if dt is not None]
-    if parsed:
-        return max(parsed)
-    return datetime.now(timezone.utc)
+def _reference_time(metrics: Dict[str, Any]) -> datetime:
+    """Return the recency reference timestamp for evidence age checks.
+
+    Uses an explicit evidence_reference_time from the metrics when available
+    (historical package analysis). Otherwise falls back to current UTC time so
+    live and uploaded evidence are both evaluated against wall-clock age.
+    The evidence timestamp itself is never used as its own reference.
+    """
+    explicit = _parse_time(metrics.get("evidence_reference_time"))
+    return explicit if explicit is not None else datetime.now(timezone.utc)
 
 
 def _hours_old(timestamp: Any, reference: datetime) -> Optional[float]:
@@ -104,7 +109,7 @@ def _flow_validation(merged: Dict[str, Any], field_block: Optional[str]) -> Tupl
     if evidence_block and field_block and str(evidence_block).lower() != str(field_block).lower():
         return None, "inconsistent", ["Flow evidence belongs to a different block."]
 
-    reference = _latest_time(metrics.get("evidence_reference_time"), evidence.get("timestamp"))
+    reference = _reference_time(metrics)
     age = _hours_old(evidence.get("timestamp"), reference)
     if age is None:
         notes.append("Flow evidence timestamp is unavailable.")
@@ -144,7 +149,7 @@ def _recent_credit(merged: Dict[str, Any], field_block: Optional[str]) -> Tuple[
     if confirmation not in {"controller_confirmed", "flow_meter_confirmed", "controller-confirmed", "flow-meter-confirmed", "complete"}:
         return None, "partial", ["Recent irrigation event lacks controller or flow-meter confirmation."]
 
-    reference = _latest_time(metrics.get("evidence_reference_time"), evidence.get("timestamp"))
+    reference = _reference_time(metrics)
     age = _hours_old(evidence.get("timestamp"), reference)
     if age is None:
         return None, "partial", ["Recent irrigation event timestamp is unavailable."]
@@ -262,6 +267,10 @@ class IrrigationDecisionOrchestrator:
         decision["flow_validation_notes"] = flow_notes
         decision["recent_irrigation_credit_notes"] = recent_notes
 
+        ref_time = _reference_time(metrics)
+        evaluation_mode_label = (
+            "historical_package" if metrics.get("evidence_reference_time") else "current_utc"
+        )
         return {
             "normalized_result": normalized,
             "data_quality": quality,
@@ -269,4 +278,6 @@ class IrrigationDecisionOrchestrator:
             "manual_overrides_used": sorted((manual_overrides or {}).keys()),
             "mode": mode,
             "origin": origin,
+            "evaluation_reference_time": ref_time.isoformat(),
+            "evaluation_mode_label": evaluation_mode_label,
         }

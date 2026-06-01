@@ -5,6 +5,7 @@ from pydantic import BaseModel
 
 from app.models.workbench import WorkbenchActionRequest, WorkbenchAnalysisRequest, WorkbenchLiveAnalysisRequest
 from app.services import workbench_engine as engine
+from app.services.workbench_engine import EvidenceOrderViolation
 
 router = APIRouter(prefix="/workbench", tags=["workbench"])
 MAX_FILE = 10 * 1024 * 1024
@@ -85,36 +86,40 @@ def get_report(session_id: str):
     return store["analysis"].report_summary
 
 
-@router.post('/sessions/{session_id}/actions/schedule')
-def schedule_action(session_id: str, payload: WorkbenchActionRequest):
+def _record_action(session_id: str, action_type: str, payload: WorkbenchActionRequest):
     try:
-        return engine.record_evidence_action(session_id, "scheduled", payload.actor, payload.evidence_summary, payload.payload)
+        return engine.record_evidence_action(
+            session_id, action_type, payload.actor,
+            payload.evidence_summary, payload.payload,
+            override_reason=payload.override_reason,
+        )
     except KeyError:
         raise HTTPException(404, "Session not found")
+    except EvidenceOrderViolation as exc:
+        raise HTTPException(
+            409,
+            f"{exc} Supply override_reason in the request body to record this step out of order.",
+        )
+
+
+@router.post('/sessions/{session_id}/actions/schedule')
+def schedule_action(session_id: str, payload: WorkbenchActionRequest):
+    return _record_action(session_id, "scheduled", payload)
 
 
 @router.post('/sessions/{session_id}/actions/applied')
 def applied_action(session_id: str, payload: WorkbenchActionRequest):
-    try:
-        return engine.record_evidence_action(session_id, "applied", payload.actor, payload.evidence_summary, payload.payload)
-    except KeyError:
-        raise HTTPException(404, "Session not found")
+    return _record_action(session_id, "applied", payload)
 
 
 @router.post('/sessions/{session_id}/actions/observe')
 def observe_action(session_id: str, payload: WorkbenchActionRequest):
-    try:
-        return engine.record_evidence_action(session_id, "observed", payload.actor, payload.evidence_summary, payload.payload)
-    except KeyError:
-        raise HTTPException(404, "Session not found")
+    return _record_action(session_id, "observed", payload)
 
 
 @router.post('/sessions/{session_id}/actions/verify')
 def verify_action(session_id: str, payload: WorkbenchActionRequest):
-    try:
-        return engine.record_evidence_action(session_id, "verified", payload.actor, payload.evidence_summary, payload.payload)
-    except KeyError:
-        raise HTTPException(404, "Session not found")
+    return _record_action(session_id, "verified", payload)
 
 
 @router.get('/sessions/{session_id}/evidence-chain')

@@ -43,3 +43,31 @@ Use the generated `pages.dev` URL only.
 
 The Vite config uses `base: "./"` and emits a static `dist/` bundle, preserving
 relative asset paths for preview deployment.
+
+## Required Post-Deployment CORS Step
+
+After Cloudflare assigns the exact preview `pages.dev` URL, open a **separate
+controlled backend PR** that adds that exact origin to the API CORS allowlist.
+Use the full URL (e.g. `https://agroai-command-center-v2-preview.pages.dev`).
+
+Do **not** allow wildcard `*.pages.dev` origins — wildcard coverage would allow
+any Cloudflare Pages deployment to call the production API without authorisation.
+
+## Local Railway API Browser Testing
+
+Browser requests from localhost to the Railway API will be blocked by CORS unless
+the allowlist explicitly includes:
+
+- `http://localhost:4180`
+- `http://127.0.0.1:4180`
+
+Add these to the backend CORS allowlist only in a development/staging configuration,
+never in the production allowlist.
+
+## Current Known Limitations
+
+- Calibration packs are default farm-type baselines, not farm-specific calibrations.
+- Evaluation sessions are in-memory only; durable tenant persistence is future work.
+- Production identity provisioning is not active in the preview environment.
+- Exact preview CORS allowlisting requires a separate controlled backend PR after
+  the `pages.dev` URL is known.

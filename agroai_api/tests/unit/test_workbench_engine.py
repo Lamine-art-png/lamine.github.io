@@ -55,3 +55,111 @@ def test_incomplete_context_does_not_fabricate_duration():
     res = e.analyze_session(s.session_id)
     assert res.recommendation.get('duration_min') is None
     assert res.recommendation.get('no_fabricated_duration') is True
+
+
+# --- Section 5: Flow-meter-only evidence -------------------------------------
+
+def _controller_row(flow_m3h=28.0, block='Block A', farm='Farm X', ts='2026-05-29T10:00:00', pressure='300', status='complete'):
+    return {'farm': farm, 'block': block, 'flow_m3h': str(flow_m3h), 'pressure_kpa': pressure, 'status': status, 'timestamp': ts}
+
+
+def _flow_meter_row(flow_m3h=25.0, block='Block A', farm='Farm X', ts='2026-05-29T10:00:00', variance='3.0', actual_m3='120'):
+    return {'farm': farm, 'block': block, 'flow_m3h': str(flow_m3h), 'actual_m3': actual_m3, 'variance_percent': variance, 'timestamp': ts}
+
+
+def test_flow_meter_only_validates_when_no_controller_rows():
+    result = e._flow_evidence([], [_flow_meter_row()])
+    assert result['status'] == 'validated'
+    assert result['value_m3h'] == 25.0
+    assert result['provenance'] == 'flow_meter'
+
+
+def test_controller_only_validates():
+    result = e._flow_evidence([_controller_row()], [])
+    assert result['status'] == 'validated'
+    assert result['provenance'] == 'controller_event'
+
+
+def test_no_positive_flow_returns_unavailable():
+    result = e._flow_evidence([], [])
+    assert result['status'] == 'unavailable'
+
+
+def test_negative_flow_controller_returns_unavailable():
+    result = e._flow_evidence([_controller_row(flow_m3h=-5)], [])
+    assert result['status'] == 'unavailable'
+
+
+def test_negative_flow_meter_returns_unavailable():
+    result = e._flow_evidence([], [_flow_meter_row(flow_m3h=-3)])
+    assert result['status'] == 'unavailable'
+
+
+def test_inconsistent_flow_variance_returns_inconsistent():
+    result = e._flow_evidence([], [_flow_meter_row(variance='25.0')])
+    assert result['status'] == 'inconsistent'
+
+
+def test_severe_pressure_controller_returns_inconsistent():
+    result = e._flow_evidence([_controller_row(pressure='80')], [])
+    assert result['status'] == 'inconsistent'
+
+
+# --- Section 6: Area normalization -------------------------------------------
+
+def test_hectares_accepted():
+    ha, warnings = e.normalize_area_ha(2.5, 'ha')
+    assert ha == 2.5
+    assert not warnings
+
+
+def test_acres_converted_correctly():
+    ha, warnings = e.normalize_area_ha(1.0, 'acres')
+    assert abs(ha - 0.404686) < 1e-4
+    assert not warnings
+
+
+def test_square_meters_converted_correctly():
+    ha, warnings = e.normalize_area_ha(10000.0, 'm2')
+    assert abs(ha - 1.0) < 1e-5
+    assert not warnings
+
+
+def test_zero_area_rejected():
+    ha, warnings = e.normalize_area_ha(0, 'ha')
+    assert ha is None
+    assert warnings
+
+
+def test_negative_area_rejected():
+    ha, warnings = e.normalize_area_ha(-1.5, 'ha')
+    assert ha is None
+    assert warnings
+
+
+def test_missing_area_unit_withholds():
+    ha, warnings = e.normalize_area_ha(2.0, None)
+    assert ha is None
+    assert any('unit' in w.lower() for w in warnings)
+
+
+def test_unknown_area_unit_rejected():
+    ha, warnings = e.normalize_area_ha(2.0, 'furlongs')
+    assert ha is None
+    assert any('unknown' in w.lower() for w in warnings)
+
+
+def test_area_without_unit_withholds_volume_in_analysis():
+    s = e.create_session()
+    res = e.analyze_session(s.session_id, mode='live', live_source='wiseconn', live_entity_id='162803',
+                             manual_overrides={'area': 2.0})
+    assert res.recommendation.get('estimated_volume_m3') is None
+
+
+def test_area_with_valid_unit_flows_to_context():
+    s = e.create_session()
+    res = e.analyze_session(s.session_id, mode='live', live_source='wiseconn', live_entity_id='162803',
+                             manual_overrides={'area': 5.0, 'area_unit': 'acres'})
+    # A valid area + unit must not produce any area-unit warnings.
+    area_warnings = [w for w in (res.warnings or []) if 'area unit' in str(w).lower() or 'unknown area' in str(w).lower()]
+    assert not area_warnings

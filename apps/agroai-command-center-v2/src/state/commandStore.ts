@@ -308,6 +308,14 @@ function buildTrace(now: string, complete: boolean): TraceStep[] {
   }));
 }
 
+const EVIDENCE_TYPES_UI: Record<EvidenceStep["key"], string> = {
+  recommended: "system_generated",
+  scheduled: "operator_attestation",
+  applied: "operator_attestation",
+  observed: "field_observation",
+  verified: "operator_attestation",
+};
+
 function baseEvidence(now: string): EvidenceStep[] {
   const steps: Array<[EvidenceStep["key"], string, string]> = [
     ["recommended", "Recommended", "AGRO-AI Intelligence Engine"],
@@ -323,6 +331,7 @@ function baseEvidence(now: string): EvidenceStep[] {
     status: i === 0 ? "Complete" : "Pending",
     timestamp: i === 0 ? now : "",
     evidence: i === 0 ? "Verified water decision produced from current source set." : `${label} pending`,
+    evidenceType: i === 0 ? "system_generated" : undefined,
   }));
 }
 
@@ -408,21 +417,26 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
   const origin: RecommendationOrigin = result.recommendation_origin ?? (mode === "live" ? "live_intelligence_engine" : "deterministic_engine");
   const now = new Date().toISOString();
 
-  const action = (rec.action as string) || (rec.decision as string) || (summary.recommendation as string) || sc.decision.action;
+  // Only inherit representative scenario values when the engine explicitly signals
+  // a representative fallback. For live, uploaded, and deterministic results use
+  // honest "pending" labels so representative precision cannot leak into a real result.
+  const useRepresentative = origin === "representative_fallback";
+
+  const action = (rec.action as string) || (rec.decision as string) || (summary.recommendation as string) || (useRepresentative ? sc.decision.action : "Decision pending source review");
   const decision: Decision = {
     action,
-    start: (rec.start_time as string) || (rec.timing as string) || sc.decision.start,
-    appliedWater: (rec.depth as string) || (summary.planned_water as string) || sc.decision.appliedWater,
+    start: (rec.start_time as string) || (rec.timing as string) || (useRepresentative ? sc.decision.start : "Pending evidence"),
+    appliedWater: (rec.depth as string) || (summary.planned_water as string) || (useRepresentative ? sc.decision.appliedWater : "Withheld pending validation"),
     grossWater: (rec.gross_depth as string) || undefined,
     estimatedVolume: (rec.estimated_volume as string) || undefined,
-    duration: (rec.duration as string) || (rec.no_fabricated_duration ? "Withheld until flow is validated" : undefined),
-    crop: (rec.crop as string) || sc.decision.crop,
-    block: (rec.block as string) || sc.decision.block,
-    driver: Array.isArray(rec.key_drivers) && rec.key_drivers.length ? String((rec.key_drivers as unknown[])[0]) : sc.decision.driver,
-    confidence: pct(rec.confidence ?? summary.confidence, sc.decision.confidence),
-    evidenceCompleteness: pct(result.reconciliation?.evidence_completeness ?? summary.evidence_completeness, sc.decision.evidenceCompleteness),
-    estimatedWaterSavings: sc.decision.estimatedWaterSavings,
-    verification: (rec.verification_requirement as string) || sc.decision.verification,
+    duration: (rec.duration as string) || (rec.no_fabricated_duration ? "Withheld until flow is validated" : (useRepresentative ? undefined : "Withheld pending validation")),
+    crop: (rec.crop as string) || (useRepresentative ? sc.decision.crop : "Source context incomplete"),
+    block: (rec.block as string) || (useRepresentative ? sc.decision.block : "Source context incomplete"),
+    driver: Array.isArray(rec.key_drivers) && rec.key_drivers.length ? String((rec.key_drivers as unknown[])[0]) : (useRepresentative ? sc.decision.driver : "Tenant baseline required"),
+    confidence: pct(rec.confidence ?? summary.confidence, useRepresentative ? sc.decision.confidence : "—"),
+    evidenceCompleteness: pct(result.reconciliation?.evidence_completeness ?? summary.evidence_completeness, useRepresentative ? sc.decision.evidenceCompleteness : "—"),
+    estimatedWaterSavings: useRepresentative ? sc.decision.estimatedWaterSavings : "—",
+    verification: (rec.verification_requirement as string) || (useRepresentative ? sc.decision.verification : "Required"),
     recommendationOrigin: origin,
     calibrationStatus: (rec.calibration_status as string) || undefined,
     calibrationPackVersion: (rec.calibration_pack_version as string) || undefined,
@@ -630,13 +644,15 @@ export const actions = {
     const now = new Date().toISOString();
     const evidenceText: Record<EvidenceStep["key"], string> = {
       recommended: "Verified water decision produced from current source set.",
-      scheduled: "Irrigation scheduled in the controller window.",
-      applied: "Applied water confirmed from controller event.",
-      observed: "Field team recorded canopy response after irrigation.",
-      verified: "Outcome verified against controller event and observation.",
+      scheduled: "Schedule approval recorded.",
+      applied: "Operator applied-water confirmation recorded.",
+      observed: "Field observation recorded.",
+      verified: "Outcome verification recorded for review.",
     };
     const evidence = state.evidence.map((step, i) =>
-      i <= idx ? { ...step, status: "Complete" as const, timestamp: step.timestamp || now, evidence: evidenceText[step.key] } : step,
+      i <= idx
+        ? { ...step, status: "Complete" as const, timestamp: step.timestamp || now, evidence: evidenceText[step.key], evidenceType: EVIDENCE_TYPES_UI[step.key] }
+        : step,
     );
     const backendAction: Record<EvidenceStep["key"], "schedule" | "applied" | "observe" | "verify" | null> = {
       recommended: null,
