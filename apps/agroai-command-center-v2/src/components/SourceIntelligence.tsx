@@ -12,7 +12,7 @@ export function SourceIntelligence() {
   const sources = useCommandStore((s) => s.sources);
   const providers = useCommandStore((s) => s.providerStatuses);
   return (
-    <section className="card panel source-intel">
+    <section className="card panel source-intel" data-walkthrough-target="source-intelligence">
       <div className="panel-head">
         <div>
           <p className="eyebrow">Source intelligence</p>

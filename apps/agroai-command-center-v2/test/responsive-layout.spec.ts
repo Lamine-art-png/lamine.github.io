@@ -27,14 +27,17 @@ test.describe("Responsive layout", () => {
     // First data row (skip the header row).
     const cells = page.locator(".source-row").nth(1).locator("[role='cell']");
     const count = await cells.count();
-    let prevRight = -Infinity;
+    const boxes = [];
     for (let i = 0; i < count; i++) {
       const box = await cells.nth(i).boundingBox();
-      if (!box) continue;
-      // Each subsequent cell must start at or after the previous cell's left edge
-      // and not overlap the previous cell's right edge by more than a hairline.
-      expect(box.x + box.width).toBeGreaterThan(prevRight - 1);
-      prevRight = box.x + box.width;
+      if (box) boxes.push(box);
+    }
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        const horizontal = Math.min(boxes[i].x + boxes[i].width, boxes[j].x + boxes[j].width) - Math.max(boxes[i].x, boxes[j].x);
+        const vertical = Math.min(boxes[i].y + boxes[i].height, boxes[j].y + boxes[j].height) - Math.max(boxes[i].y, boxes[j].y);
+        expect(horizontal <= 1 || vertical <= 1).toBeTruthy();
+      }
     }
   });
 

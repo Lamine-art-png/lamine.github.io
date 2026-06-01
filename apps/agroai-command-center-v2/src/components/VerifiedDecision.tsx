@@ -6,7 +6,7 @@ export function VerifiedDecision() {
   const ready = phase === "complete";
 
   return (
-    <section className="card panel decision" aria-label="Verified water decision">
+    <section className="card panel decision" aria-label="Verified water decision" data-walkthrough-target="verified-decision">
       <p className="eyebrow">Verified water decision</p>
       <h2 className="decision-headline">{decision.action}</h2>
       <p className="decision-sub value">

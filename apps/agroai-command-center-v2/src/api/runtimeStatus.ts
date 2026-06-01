@@ -5,32 +5,102 @@ function num(value: unknown): number | null {
   return typeof value === "number" && Number.isFinite(value) ? value : null;
 }
 
-function statusFromEnvironment(env: Record<string, unknown>, lastChecked: string): ProviderStatus {
-  const live = Boolean(env.live);
-  const configured = Boolean(env.configured);
-  const farms = num(env.farms);
-  const zones = num(env.zones);
-  let connectionState: ProviderStatus["connectionState"] = "Unavailable";
-  if (live) connectionState = "Live";
-  else if (configured && (farms || zones)) connectionState = "Target selection required";
-  else if (configured) connectionState = "Configured";
-  else connectionState = "Setup required";
+function bool(value: unknown): boolean {
+  return value === true || value === "true" || value === "configured" || value === "live";
+}
+
+function text(value: unknown, fallback: string): string {
+  return typeof value === "string" && value.trim() ? value : fallback;
+}
+
+function mergeProviderData(primary: Record<string, unknown> | null | undefined, fallback?: Record<string, unknown>) {
+  return { ...(fallback ?? {}), ...(primary ?? {}) };
+}
+
+export function mapWiseConnStatus(result: { ok: boolean; data: Record<string, unknown> | null; error?: string }, env: Record<string, unknown> | undefined, lastChecked: string): ProviderStatus {
+  if (!result.ok) {
+    return {
+      provider: "WiseConn",
+      connectionState: "Unavailable",
+      runtimeState: "request failed",
+      farms: null,
+      targets: null,
+      zones: null,
+      sensors: null,
+      lastChecked,
+      limitations: [result.error || "WiseConn status unavailable."],
+    };
+  }
+
+  const data = mergeProviderData(result.data, env);
+  const farms = num(data.farms ?? data.farm_count);
+  const zones = num(data.zones ?? data.zone_count);
+  const configured = bool(data.configured) || bool(data.authenticated) || bool(data.api_key_configured);
+  const readableTargets = Boolean((farms && farms > 0) || (zones && zones > 0));
+  const degraded = bool(data.degraded) || ["limited", "degraded", "error"].includes(text(data.status, "").toLowerCase());
+  const connectionState: ProviderStatus["connectionState"] = !configured
+    ? "Setup required"
+    : readableTargets && !degraded
+      ? "Live"
+      : "Limited";
 
   return {
-    provider: String(env.label || env.source || "Provider"),
+    provider: "WiseConn",
     connectionState,
-    runtimeState: String(env.status || (live ? "live" : configured ? "configured" : "unavailable")),
+    runtimeState: text(data.status || data.message, connectionState.toLowerCase()),
     farms,
     targets: farms,
     zones,
-    sensors: null,
+    sensors: num(data.sensors ?? data.sensor_count),
     lastChecked,
-    limitations: [String(env.notes || "Runtime status unavailable.")],
+    limitations: [text(data.notes || data.message, connectionState === "Live" ? "Farms or zones readable." : "Read path is not fully available.")],
   };
 }
 
-function byProvider(statuses: ProviderStatus[], name: string): ProviderStatus | undefined {
-  return statuses.find((s) => s.provider.toLowerCase() === name.toLowerCase());
+export function mapTalgilStatus(result: { ok: boolean; data: Record<string, unknown> | null; error?: string }, env: Record<string, unknown> | undefined, lastChecked: string): ProviderStatus {
+  if (!result.ok) {
+    return {
+      provider: "Talgil",
+      connectionState: "Unavailable",
+      runtimeState: "request failed",
+      farms: null,
+      targets: null,
+      zones: null,
+      sensors: null,
+      lastChecked,
+      limitations: [result.error || "Talgil status unavailable."],
+    };
+  }
+
+  const data = mergeProviderData(result.data, env);
+  const configured = bool(data.configured) || bool(data.authenticated) || bool(data.api_key_configured);
+  const live = bool(data.live) || text(data.status, "").toLowerCase() === "live";
+  const targets = num(data.targets ?? data.target_count);
+  const targetCount = targets ?? 0;
+  const degraded = bool(data.degraded) || ["limited", "degraded", "error"].includes(text(data.status, "").toLowerCase());
+  const connectionState: ProviderStatus["connectionState"] = !configured
+    ? "Setup required"
+    : live && targetCount > 0 && !degraded
+      ? "Live"
+      : targetCount <= 0 && !degraded
+        ? "Target selection required"
+        : "Limited";
+
+  return {
+    provider: "Talgil",
+    connectionState,
+    runtimeState: text(data.status || data.message, connectionState.toLowerCase()),
+    farms: num(data.farms ?? data.farm_count),
+    targets,
+    zones: num(data.zones ?? data.zone_count),
+    sensors: num(data.sensors ?? data.sensor_count),
+    lastChecked,
+    limitations: [text(data.notes || data.message, connectionState === "Live" ? "Runtime targets readable." : "Runtime target selection or read path needs review.")],
+  };
+}
+
+function environmentFor(envs: Record<string, unknown>[], provider: string): Record<string, unknown> | undefined {
+  return envs.find((env) => String(env.label || env.source || "").toLowerCase() === provider.toLowerCase());
 }
 
 export async function loadRuntimeStatuses(): Promise<ProviderStatus[]> {
@@ -43,48 +113,8 @@ export async function loadRuntimeStatuses(): Promise<ProviderStatus[]> {
 
   const statuses: ProviderStatus[] = [];
   const envs = Array.isArray(envRes.data?.environments) ? (envRes.data.environments as Record<string, unknown>[]) : [];
-  statuses.push(...envs.map((env) => statusFromEnvironment(env, lastChecked)));
-
-  if (!byProvider(statuses, "WiseConn")) {
-    statuses.push({
-      provider: "WiseConn",
-      connectionState: wiseconnRes.ok && wiseconnRes.data?.authenticated ? "Live" : wiseconnRes.ok ? "Configured" : "Unavailable",
-      runtimeState: wiseconnRes.ok ? String(wiseconnRes.data?.message || "checked") : "unavailable",
-      farms: null,
-      targets: null,
-      zones: null,
-      sensors: null,
-      lastChecked,
-      limitations: wiseconnRes.ok ? [String(wiseconnRes.data?.message || "No farm or zone count returned.")] : [wiseconnRes.error || "WiseConn status unavailable."],
-    });
-  }
-
-  const talgil = byProvider(statuses, "Talgil");
-  if (talgil && talgilRes.ok && talgilRes.data) {
-    talgil.connectionState = talgilRes.data.live
-      ? "Live"
-      : talgilRes.data.configured
-        ? Number(talgilRes.data.targets || 0) > 0
-          ? "Target selection required"
-          : "Configured"
-        : "Setup required";
-    talgil.runtimeState = String(talgilRes.data.status || talgil.runtimeState);
-    talgil.targets = num(talgilRes.data.targets);
-    talgil.sensors = num(talgilRes.data.sensors);
-    talgil.limitations = [String(talgilRes.data.notes || "Talgil runtime checked.")];
-  } else if (!talgil) {
-    statuses.push({
-      provider: "Talgil",
-      connectionState: talgilRes.ok && talgilRes.data?.live ? "Live" : talgilRes.ok && talgilRes.data?.configured ? "Configured" : "Unavailable",
-      runtimeState: talgilRes.ok ? String(talgilRes.data?.status || "checked") : "unavailable",
-      farms: null,
-      targets: num(talgilRes.data?.targets),
-      zones: null,
-      sensors: num(talgilRes.data?.sensors),
-      lastChecked,
-      limitations: talgilRes.ok ? [String(talgilRes.data?.notes || "No target selected.")] : [talgilRes.error || "Talgil status unavailable."],
-    });
-  }
+  statuses.push(mapWiseConnStatus(wiseconnRes, environmentFor(envs, "WiseConn"), lastChecked));
+  statuses.push(mapTalgilStatus(talgilRes, environmentFor(envs, "Talgil"), lastChecked));
 
   statuses.push({
     provider: "Earth observation layer",

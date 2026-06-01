@@ -461,16 +461,37 @@ export const actions = {
   },
 
   async openEvaluationWorkspace() {
-    set({ entryState: "workspace", productionSignInMessage: null });
-    addAudit("Evaluation workspace opened", "Representative package is available for sales-call evaluation.");
+    set({
+      entryState: "workspace",
+      productionSignInMessage: null,
+      analysisPhase: "running",
+      pipelineMessage: "Loading representative source package…",
+      trace: buildTrace(new Date().toISOString(), false),
+    });
+    addAudit("Evaluation workspace opened", "Representative package analysis started for sales-call evaluation.");
     if (state.backend.status !== "unavailable") {
-      const sample = await apiClient.createSamplePackage();
-      const sessionId = sample.data?.session?.session_id || sample.data?.session_id || "";
-      if (sample.ok && sessionId) {
-        set({ sessionId });
-        addAudit("Evaluation session created", "Backend evaluation-session persistence enabled.");
+      try {
+        const sample = await apiClient.createSamplePackage();
+        const sessionId = sample.data?.session?.session_id || sample.data?.session_id || "";
+        if (sample.ok && sessionId) {
+          set({ sessionId, pipelineMessage: "Analyzing representative source package…" });
+          addAudit("Evaluation session created", "Backend evaluation-session persistence enabled.");
+          const analysis = await apiClient.analyzeSession(sessionId);
+          if (analysis.ok && analysis.data) {
+            applyBackendResult(analysis.data, "representative");
+            addAudit("Representative package analyzed", "Decision, evidence chain, reconciliation, and report preview populated.");
+            toast("Evaluation workspace ready.");
+            return;
+          }
+        }
+      } catch {
+        // Falls through to the honest representative fallback.
       }
     }
+    set(scenarioState(state.scenarioId, "representative", "representative_fallback"));
+    set({ pipelineMessage: "Backend analysis unavailable. Representative fallback is active." });
+    addAudit("Representative fallback active", "Backend analysis failed or was unavailable; local representative records remain loaded.");
+    toast("Workspace opened with representative fallback.");
   },
 
   submitProductionSignIn() {

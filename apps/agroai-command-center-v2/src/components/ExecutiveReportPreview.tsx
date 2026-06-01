@@ -42,7 +42,7 @@ export function ExecutiveReportPreview() {
     ["Verification status", report.verification],
   ];
   return (
-    <section className="card panel report-preview">
+    <section className="card panel report-preview" data-walkthrough-target="executive-report">
       <div className="panel-head">
         <div>
           <p className="eyebrow">Executive report preview</p>

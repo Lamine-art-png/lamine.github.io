@@ -57,8 +57,16 @@ test.describe("Command page", () => {
   test("guided walkthrough runs through the sales-call steps", async ({ page }) => {
     await page.getByRole("button", { name: "Start guided walkthrough" }).click();
     await expect(page.locator(".walkthrough")).toHaveText(/Source intelligence/);
+    await expect(page.locator('[data-walkthrough-target="source-intelligence"]')).toHaveClass(/walkthrough-focus-target/);
     await page.getByRole("button", { name: "Next" }).click();
     await expect(page.locator(".walkthrough")).toHaveText(/Decision pipeline/);
+    await expect(page.locator('[data-walkthrough-target="decision-pipeline"]')).toHaveClass(/walkthrough-focus-target/);
+    await page.getByRole("button", { name: "Next" }).click();
+    await expect(page.locator('[data-walkthrough-target="verified-decision"]')).toHaveClass(/walkthrough-focus-target/);
+    await page.getByRole("button", { name: "Next" }).click();
+    await expect(page.locator('[data-walkthrough-target="evidence-chain"]')).toHaveClass(/walkthrough-focus-target/);
+    await page.getByRole("button", { name: "Next" }).click();
+    await expect(page.locator('[data-walkthrough-target="executive-report"]')).toHaveClass(/walkthrough-focus-target/);
     await page.getByRole("button", { name: "Reset walkthrough" }).click();
     await expect(page.locator(".walkthrough")).toHaveCount(0);
   });

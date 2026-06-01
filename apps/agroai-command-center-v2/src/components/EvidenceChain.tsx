@@ -3,7 +3,7 @@ import { useCommandStore } from "../state/commandStore";
 export function EvidenceChain() {
   const evidence = useCommandStore((s) => s.evidence);
   return (
-    <section className="card panel evidence-chain" aria-label="Evidence chain">
+    <section className="card panel evidence-chain" aria-label="Evidence chain" data-walkthrough-target="evidence-chain">
       <p className="eyebrow">Evidence chain</p>
       <ol className="evidence-list">
         {evidence.map((step) => (

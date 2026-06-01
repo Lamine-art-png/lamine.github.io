@@ -811,6 +811,20 @@
   padding: var(--s-5);
   z-index: 95;
 }
+.walkthrough-active .card {
+  transition: opacity 0.18s ease, filter 0.18s ease;
+}
+.walkthrough-active .card:not(.walkthrough-focus-target) {
+  opacity: 0.46;
+  filter: saturate(0.88);
+}
+.walkthrough-focus-target {
+  position: relative;
+  z-index: 20;
+  outline: 2px solid rgba(177, 142, 58, 0.72);
+  outline-offset: 4px;
+  box-shadow: 0 0 0 6px rgba(177, 142, 58, 0.12), var(--shadow-sm);
+}
 .walkthrough h2 {
   margin-top: 4px;
   font-size: 18px;
@@ -1122,5 +1136,29 @@ code {
   }
   .entry-actions {
     display: grid;
+  }
+  .source-table {
+    overflow-x: visible;
+  }
+  .source-row {
+    min-width: 0;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 6px 10px;
+    padding: 12px 0;
+  }
+  .source-row--head {
+    display: none;
+  }
+  .source-row span:nth-child(2) {
+    grid-column: 1 / -1;
+    font-size: 12.5px;
+  }
+  .source-row span:nth-child(3),
+  .source-row span:nth-child(4) {
+    font-size: 12px;
+  }
+  .source-row span:nth-child(5) {
+    grid-column: 2;
+    grid-row: 1;
   }
 }

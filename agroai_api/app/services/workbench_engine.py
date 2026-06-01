@@ -196,6 +196,91 @@ def _max_abs(values: Iterable[Any]) -> float | None:
     return max(numbers, key=lambda value: abs(value))
 
 
+def _parse_dt(value: Any) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value).replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _latest_timestamp(rows: Iterable[Dict[str, Any]]) -> str | None:
+    stamps = [dt for dt in (_parse_dt(row.get("timestamp")) for row in rows) if dt is not None]
+    if not stamps:
+        return None
+    return max(stamps).isoformat()
+
+
+def _latest_by_timestamp(rows: Iterable[Dict[str, Any]]) -> Dict[str, Any] | None:
+    stamped = [(dt, row) for row in rows if (dt := _parse_dt(row.get("timestamp"))) is not None]
+    if not stamped:
+        return None
+    return max(stamped, key=lambda item: item[0])[1]
+
+
+def _status_verified(status: Any) -> bool:
+    return str(status or "").lower() in {"complete", "controller_confirmed", "flow_meter_confirmed", "flow-meter-confirmed"}
+
+
+def _flow_evidence(controller_rows: List[Dict[str, Any]], flow_rows: List[Dict[str, Any]]) -> Dict[str, Any]:
+    positive_controller = [row for row in controller_rows if (_to_float(row.get("flow_m3h")) or 0) > 0]
+    latest = _latest_by_timestamp(positive_controller)
+    max_variance = _max_abs(row.get("variance_percent") for row in flow_rows)
+    if not latest:
+        return {"status": "unavailable", "notes": ["No positive controller or flow-meter flow evidence found."]}
+
+    severe_pressure = False
+    pressure = _to_float(latest.get("pressure_kpa"))
+    if pressure is not None and pressure < 150:
+        severe_pressure = True
+    if str(latest.get("status", "")).lower() in {"pressure_failure", "critical_pressure", "severe_pressure"}:
+        severe_pressure = True
+
+    if max_variance is not None and abs(max_variance) >= 20:
+        return {
+            "status": "inconsistent",
+            "value_m3h": _to_float(latest.get("flow_m3h")),
+            "notes": [f"Flow-meter variance reached {max_variance:.1f}%."],
+        }
+    if severe_pressure:
+        return {
+            "status": "inconsistent",
+            "value_m3h": _to_float(latest.get("flow_m3h")),
+            "notes": ["Severe pressure warning prevents validated flow use."],
+        }
+
+    return {
+        "status": "validated",
+        "value_m3h": _to_float(latest.get("flow_m3h")),
+        "provenance": "controller_event",
+        "block": latest.get("block") or latest.get("zone"),
+        "timestamp": latest.get("timestamp"),
+        "pressure_state": "stable" if latest.get("pressure_kpa") not in ("", None) else "partial",
+        "notes": [],
+    }
+
+
+def _recent_irrigation_evidence(rows: List[Dict[str, Any]], block: str) -> Dict[str, Any]:
+    verified = [
+        row
+        for row in rows
+        if str(row.get("block", row.get("zone", ""))).lower() == block.lower()
+        and (_to_float(row.get("depth_mm")) or 0) > 0
+        and _status_verified(row.get("status") or row.get("confirmation"))
+    ]
+    latest = _latest_by_timestamp(verified)
+    if not latest:
+        return {"status": "unavailable", "notes": ["No verified recent applied-water event with positive depth."]}
+    return {
+        "status": "candidate",
+        "depth_mm": _to_float(latest.get("depth_mm")),
+        "block": latest.get("block") or latest.get("zone"),
+        "timestamp": latest.get("timestamp"),
+        "confirmation": latest.get("confirmation") or latest.get("status") or "complete",
+    }
+
+
 def _fmt_number(value: float | None, suffix: str = "", digits: int = 1) -> str:
     if value is None:
         return "not available"
@@ -312,8 +397,8 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
     rain_total = sum(value for value in (_to_float(row.get("rain_forecast_mm", row.get("rain"))) for row in weather_rows) if value)
     avg_deficit = _avg(row.get("deficit_percent") for row in soil_rows)
     avg_moisture = _avg(row.get("moisture_percent") for row in soil_rows)
-    avg_flow = _avg(row.get("flow_m3h") for row in controller_rows if _to_float(row.get("flow_m3h")) and _to_float(row.get("flow_m3h")) > 0)
-    recent_depth = _avg(row.get("depth_mm") for row in controller_rows + flow_rows)
+    flow_evidence = _flow_evidence(controller_rows, flow_rows)
+    recent_evidence = _recent_irrigation_evidence(controller_rows + flow_rows, block)
     max_flow_variance = _max_abs(row.get("variance_percent") for row in flow_rows)
     controller_variances = []
     for row in controller_rows:
@@ -347,9 +432,15 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
             "rain_forecast_total_mm": rain_total,
             "avg_deficit_percent": avg_deficit,
             "avg_moisture_percent": avg_moisture,
-            "avg_flow_m3h": avg_flow,
-            "validated_flow_m3h": avg_flow,
-            "recent_irrigation_depth_mm": recent_depth,
+            "flow_m3h": flow_evidence.get("value_m3h"),
+            "validated_flow_m3h": flow_evidence.get("value_m3h") if flow_evidence.get("status") == "validated" else None,
+            "flow_validation_status": flow_evidence.get("status"),
+            "flow_evidence": flow_evidence,
+            "recent_irrigation_depth_mm": recent_evidence.get("depth_mm"),
+            "recent_irrigation_evidence": recent_evidence,
+            "recent_irrigation_credit_status": recent_evidence.get("status") if recent_evidence.get("status") != "candidate" else "partial",
+            "recent_irrigation_credit_mm": None,
+            "evidence_reference_time": _latest_timestamp(controller_rows + flow_rows + soil_rows + weather_rows),
             "max_flow_variance_percent": max_flow_variance,
             "max_controller_variance_percent": max_controller_variance,
             "applied_variance_percent": applied_variance,
@@ -596,6 +687,8 @@ def generate_recommendation(reconciliation: ReconciliationResult, context: Dict[
         "calibration_status": decision.get("calibration_status"),
         "calibration_pack_version": decision.get("calibration_pack_version"),
         "recommendation_origin": origin,
+        "flow_validation_status": decision.get("flow_validation_status"),
+        "recent_irrigation_credit_status": decision.get("recent_irrigation_credit_status"),
         "kernel_action": decision.get("action"),
         "duration_basis": decision.get("duration_basis"),
         "no_fabricated_duration": duration is None,
@@ -778,15 +871,26 @@ def _apply_manual_overrides(context: Dict[str, Any], overrides: Dict[str, Any] |
         context.setdefault("metrics", {})
         sensor = safe["sensor_context"]
         context["metrics"]["avg_moisture_percent"] = sensor.get("moisture_percent", context["metrics"].get("avg_moisture_percent"))
-        context["metrics"]["avg_flow_m3h"] = sensor.get("flow_m3h", context["metrics"].get("avg_flow_m3h"))
-        context["metrics"]["validated_flow_m3h"] = sensor.get("flow_m3h", context["metrics"].get("validated_flow_m3h"))
+        if sensor.get("flow_m3h") is not None:
+            context["metrics"]["flow_m3h"] = sensor.get("flow_m3h")
+            context["flow_evidence"] = {
+                "value_m3h": sensor.get("flow_m3h"),
+                "provenance": sensor.get("flow_provenance") or sensor.get("provenance"),
+                "block": sensor.get("block") or context.get("block"),
+                "timestamp": sensor.get("timestamp"),
+                "pressure_state": sensor.get("pressure_state"),
+            }
         context["metrics"]["pressure_kpa"] = sensor.get("pressure_kpa", context["metrics"].get("pressure_kpa"))
     if isinstance(safe.get("recent_irrigation_context"), dict):
         context.setdefault("metrics", {})
-        context["metrics"]["recent_irrigation_depth_mm"] = safe["recent_irrigation_context"].get(
-            "last_depth_mm",
-            context["metrics"].get("recent_irrigation_depth_mm"),
-        )
+        recent = safe["recent_irrigation_context"]
+        if recent.get("last_depth_mm") is not None:
+            context["recent_irrigation_evidence"] = {
+                "depth_mm": recent.get("last_depth_mm"),
+                "block": recent.get("block") or context.get("block"),
+                "timestamp": recent.get("timestamp") or recent.get("last_irrigation_at"),
+                "confirmation": recent.get("confirmation") or recent.get("status"),
+            }
     if safe.get("field_observations"):
         context["field_notes"] = list(context.get("field_notes", [])) + list(safe["field_observations"])
     context["manual_overrides_used"] = sorted(safe.keys())
