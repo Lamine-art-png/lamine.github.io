@@ -1,5 +1,16 @@
 from pydantic import field_validator
-from pydantic_settings import BaseSettings
+try:
+    from pydantic_settings import BaseSettings
+except ModuleNotFoundError:  # pragma: no cover - local minimal env fallback
+    from pydantic import BaseModel
+
+    class BaseSettings(BaseModel):
+        def __init__(self, **values):
+            import os
+            annotations = getattr(self.__class__, "__annotations__", {})
+            env_values = {name: os.getenv(name) for name in annotations if os.getenv(name) is not None}
+            values = {**env_values, **values}
+            super().__init__(**values)
 from typing import Optional
 
 

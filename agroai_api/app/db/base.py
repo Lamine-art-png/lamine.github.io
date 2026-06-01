@@ -41,7 +41,7 @@ def init_db():
     """Initialize database - create all tables and add new columns."""
     from app.models import (
         tenant, client, block, telemetry, event,
-        recommendation, schedule, webhook, usage_metering, audit_log
+        recommendation, schedule, webhook, usage_metering, audit_log, compliance
     )
     # Compliance tables are Alembic-owned in production so startup cannot
     # accidentally create stale compliance_* schemas before migrations run.

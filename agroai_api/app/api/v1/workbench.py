@@ -55,9 +55,20 @@ def analyze_session(session_id: str, payload: WorkbenchAnalysisRequest):
         raise HTTPException(400, f"Live source unavailable. Uploaded-data analysis remains available. {e}")
 
 @router.post('/analyze-live')
-def analyze_live(payload: dict):
+async def analyze_live(payload: dict):
+    source = payload.get("source", "wiseconn")
+    entity_id = str(payload.get("entity_id", "162803"))
     session = engine.create_session(mode="live", workspace_name="Water Command Center")
-    return engine.analyze_session(session.session_id, "live", payload.get("source","wiseconn"), str(payload.get("entity_id","162803")))
+    # Use the real LiveFieldContextAssembler; it degrades safely (truthful
+    # warnings, no fabricated telemetry) so this route always returns a result.
+    live_context = await engine.assemble_live_context(source, entity_id)
+    return engine.analyze_session(
+        session.session_id,
+        "live",
+        live_source=source,
+        live_entity_id=entity_id,
+        live_context=live_context,
+    )
 
 @router.get('/sessions/{session_id}/report')
 def get_report(session_id: str):

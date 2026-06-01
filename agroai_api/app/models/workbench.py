@@ -103,3 +103,16 @@ class WorkbenchAnalysisResult(BaseModel):
     limitations: List[str]
     model_status: str
     created_at: datetime
+    # Truthful status fields (added in the V2 rebuild).
+    backend_status: str = "available"
+    analysis_mode: Literal["demo", "live", "uploaded"] = "uploaded"
+    recommendation_origin: Literal[
+        "representative_fallback",
+        "deterministic_engine",
+        "live_intelligence_engine",
+        "uploaded_intelligence_engine",
+    ] = "deterministic_engine"
+    context_origin: Literal["representative", "uploaded", "live"] = "uploaded"
+    live_inputs_used: List[str] = Field(default_factory=list)
+    uploaded_artifacts_used: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
