@@ -14,6 +14,7 @@ const ORIGIN_LABEL: Record<RecommendationOrigin, string> = {
   deterministic_engine: "Deterministic engine",
   live_intelligence_engine: "Live intelligence engine",
   uploaded_intelligence_engine: "Uploaded intelligence engine",
+  insufficient_context: "Insufficient context",
 };
 
 export function DecisionPipeline() {
@@ -26,7 +27,7 @@ export function DecisionPipeline() {
   const buttonLabel = running ? "Analyzing source records…" : phase === "complete" ? "Refresh intelligence" : "Ready to refresh representative analysis";
 
   return (
-    <section className={`card panel pipeline ${running ? "is-running" : ""}`}>
+    <section className={`card panel pipeline ${running ? "is-running" : ""}`} data-walkthrough-target="decision-pipeline">
       <div className="panel-head">
         <div>
           <p className="eyebrow">Decision pipeline</p>

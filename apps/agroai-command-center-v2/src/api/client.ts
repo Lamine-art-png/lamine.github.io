@@ -1,5 +1,7 @@
 import type {
   ApiResult,
+  EvidenceActionResponse,
+  EvidenceChainResponse,
   WorkbenchAnalysisResult,
   WorkbenchArtifact,
   WorkbenchSchemaResponse,
@@ -7,6 +9,7 @@ import type {
 
 // Production API base. Not switched in this PR.
 export const API_BASE =
+  (import.meta.env?.VITE_API_BASE_URL as string | undefined)?.replace(/\/$/, "") ||
   (import.meta.env?.VITE_AGROAI_API_BASE as string | undefined)?.replace(/\/$/, "") ||
   "https://api.agroai-pilot.com";
 
@@ -43,6 +46,12 @@ export const ENDPOINTS = {
   analyze: (id: string) => `/v1/workbench/sessions/${encodeURIComponent(id)}/analyze`,
   analyzeLive: "/v1/workbench/analyze-live",
   report: (id: string) => `/v1/workbench/sessions/${encodeURIComponent(id)}/report`,
+  controllerEnvironments: "/v1/controllers/environments",
+  wiseconnAuth: "/v1/wiseconn/auth",
+  talgilStatus: "/v1/talgil/status",
+  evidenceChain: (id: string) => `/v1/workbench/sessions/${encodeURIComponent(id)}/evidence-chain`,
+  evidenceAction: (id: string, action: "schedule" | "applied" | "observe" | "verify") =>
+    `/v1/workbench/sessions/${encodeURIComponent(id)}/actions/${action}`,
 } as const;
 
 export const apiClient = {
@@ -72,6 +81,15 @@ export const apiClient = {
     request<WorkbenchAnalysisResult>(ENDPOINTS.analyzeLive, {
       method: "POST",
       body: JSON.stringify({ source, entity_id: entityId }),
+    }),
+  getControllerEnvironments: () => request<Record<string, unknown>>(ENDPOINTS.controllerEnvironments),
+  getWiseconnAuth: () => request<Record<string, unknown>>(ENDPOINTS.wiseconnAuth),
+  getTalgilStatus: () => request<Record<string, unknown>>(ENDPOINTS.talgilStatus),
+  getEvidenceChain: (sessionId: string) => request<EvidenceChainResponse>(ENDPOINTS.evidenceChain(sessionId)),
+  recordEvidenceAction: (sessionId: string, action: "schedule" | "applied" | "observe" | "verify", evidence_summary: string) =>
+    request<EvidenceActionResponse>(ENDPOINTS.evidenceAction(sessionId, action), {
+      method: "POST",
+      body: JSON.stringify({ actor: "Operations user", evidence_summary }),
     }),
 };
 

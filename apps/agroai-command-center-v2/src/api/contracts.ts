@@ -10,7 +10,8 @@ export type RecommendationOrigin =
   | "representative_fallback"
   | "deterministic_engine"
   | "live_intelligence_engine"
-  | "uploaded_intelligence_engine";
+  | "uploaded_intelligence_engine"
+  | "insufficient_context";
 
 export type ContextOrigin = "representative" | "uploaded" | "live";
 
@@ -40,6 +41,7 @@ export interface EvidenceStep {
   owner: string;
   timestamp: string;
   evidence: string;
+  evidenceType?: string;
 }
 
 export interface TraceStep {
@@ -54,6 +56,9 @@ export interface Decision {
   action: string;
   start: string;
   appliedWater: string;
+  grossWater?: string;
+  estimatedVolume?: string;
+  duration?: string;
   crop: string;
   block: string;
   driver: string;
@@ -62,6 +67,23 @@ export interface Decision {
   estimatedWaterSavings: string;
   verification: string;
   recommendationOrigin: RecommendationOrigin;
+  calibrationStatus?: string;
+  calibrationPackVersion?: string;
+  verificationStatus?: string;
+}
+
+export type ProviderConnectionState = "Live" | "Configured" | "Limited" | "Unavailable" | "Setup required" | "Target selection required";
+
+export interface ProviderStatus {
+  provider: string;
+  connectionState: ProviderConnectionState;
+  runtimeState: string;
+  farms: number | null;
+  targets: number | null;
+  zones: number | null;
+  sensors: number | null;
+  lastChecked: string;
+  limitations: string[];
 }
 
 // ---- Raw backend response shapes (subset consumed by the UI) ----------
@@ -119,6 +141,21 @@ export interface WorkbenchAnalysisResult {
   live_inputs_used?: string[];
   uploaded_artifacts_used?: string[];
   warnings?: string[];
+}
+
+export interface EvidenceChainResponse {
+  session_id: string;
+  evidence_chain: EvidenceStep[];
+  audit_events?: Array<Record<string, unknown>>;
+}
+
+export interface EvidenceActionResponse {
+  action_status: string;
+  timestamp: string;
+  actor: string;
+  evidence_summary: string;
+  updated_evidence_chain: EvidenceStep[];
+  audit_event: Record<string, unknown>;
 }
 
 export interface ApiResult<T> {

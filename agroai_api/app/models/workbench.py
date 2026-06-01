@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 SourceKind = Literal[
     "controller_events",
@@ -61,6 +61,49 @@ class WorkbenchAnalysisRequest(BaseModel):
     notes: Optional[str] = None
     language: Optional[str] = None
     user_role: Optional[str] = None
+    area: Optional[float] = None
+    area_unit: Optional[str] = None
+    historical_evaluation: Optional[bool] = None
+    evidence_reference_time: Optional[str] = None
+    weather_context: Optional[Dict[str, Any]] = None
+    sensor_context: Optional[Dict[str, Any]] = None
+    controller_context: Optional[Dict[str, Any]] = None
+    recent_irrigation_context: Optional[Dict[str, Any]] = None
+    field_observations: List[str] = Field(default_factory=list)
+    time_horizon: Optional[str] = None
+
+
+class WorkbenchLiveAnalysisRequest(BaseModel):
+    source: str
+    entity_id: str
+    crop_type: Optional[str] = None
+    soil_type: Optional[str] = None
+    irrigation_method: Optional[str] = None
+    area: Optional[float] = None
+    area_unit: Optional[str] = None
+    location: Optional[Dict[str, Any]] = None
+
+    @field_validator("source", "entity_id")
+    @classmethod
+    def require_non_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("must be a non-empty string")
+        return v
+    weather_context: Optional[Dict[str, Any]] = None
+    sensor_context: Optional[Dict[str, Any]] = None
+    controller_context: Optional[Dict[str, Any]] = None
+    recent_irrigation_context: Optional[Dict[str, Any]] = None
+    field_observations: List[str] = Field(default_factory=list)
+    language: Optional[str] = None
+    user_role: Optional[str] = None
+    time_horizon: Optional[str] = None
+
+
+class WorkbenchActionRequest(BaseModel):
+    actor: str = "Operations user"
+    evidence_summary: Optional[str] = None
+    payload: Dict[str, Any] = Field(default_factory=dict)
+    override_reason: Optional[str] = None
 
 class ReconciliationResult(BaseModel):
     matched_signals: List[str]
@@ -111,6 +154,7 @@ class WorkbenchAnalysisResult(BaseModel):
         "deterministic_engine",
         "live_intelligence_engine",
         "uploaded_intelligence_engine",
+        "insufficient_context",
     ] = "deterministic_engine"
     context_origin: Literal["representative", "uploaded", "live"] = "uploaded"
     live_inputs_used: List[str] = Field(default_factory=list)

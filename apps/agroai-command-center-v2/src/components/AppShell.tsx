@@ -3,6 +3,7 @@ import { Sidebar } from "./Sidebar";
 import { Header } from "./Header";
 import { Toast } from "./Toast";
 import { SourceDrawer } from "./SourceDrawer";
+import { GuidedWalkthrough } from "./GuidedWalkthrough";
 import { useCommandStore } from "../state/commandStore";
 
 export function AppShell({ children }: { children: ReactNode }) {
@@ -15,6 +16,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         <div className="page">{children}</div>
       </main>
       {drawerOpen && <SourceDrawer />}
+      <GuidedWalkthrough />
       <Toast />
     </div>
   );

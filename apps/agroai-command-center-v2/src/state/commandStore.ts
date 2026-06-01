@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { apiClient } from "../api/client";
 import { probeBackend } from "../api/health";
+import { loadRuntimeStatuses } from "../api/runtimeStatus";
 import type {
   AnalysisMode,
   BackendStatus,
@@ -8,6 +9,7 @@ import type {
   EvidenceStep,
   ReconciliationRow,
   RecommendationOrigin,
+  ProviderStatus,
   SourceRow,
   TraceStep,
   WorkbenchAnalysisResult,
@@ -45,8 +47,16 @@ export interface AuditEvent {
 }
 
 export interface CommandState {
+  entryState: "entry" | "workspace";
+  onboardingOpen: boolean;
+  productionSignInMessage: string | null;
+  walkthroughActive: boolean;
+  walkthroughStep: number;
   route: Route;
   backend: { status: BackendStatus; detail: string; checkedAt: string };
+  sessionId: string | null;
+  providerStatuses: ProviderStatus[];
+  providerStatusPhase: "idle" | "loading" | "ready" | "error";
   scenarioId: ScenarioId;
   analysisMode: AnalysisMode;
   analysisPhase: "idle" | "running" | "complete" | "error";
@@ -298,6 +308,14 @@ function buildTrace(now: string, complete: boolean): TraceStep[] {
   }));
 }
 
+const EVIDENCE_TYPES_UI: Record<EvidenceStep["key"], string> = {
+  recommended: "system_generated",
+  scheduled: "operator_attestation",
+  applied: "operator_attestation",
+  observed: "field_observation",
+  verified: "operator_attestation",
+};
+
 function baseEvidence(now: string): EvidenceStep[] {
   const steps: Array<[EvidenceStep["key"], string, string]> = [
     ["recommended", "Recommended", "AGRO-AI Intelligence Engine"],
@@ -313,6 +331,7 @@ function baseEvidence(now: string): EvidenceStep[] {
     status: i === 0 ? "Complete" : "Pending",
     timestamp: i === 0 ? now : "",
     evidence: i === 0 ? "Verified water decision produced from current source set." : `${label} pending`,
+    evidenceType: i === 0 ? "system_generated" : undefined,
   }));
 }
 
@@ -342,8 +361,16 @@ function initialState(): CommandState {
   const seeded = scenarioState("alpha-vineyard", "representative", "representative_fallback");
   return {
     ...seeded,
+    entryState: "entry",
+    onboardingOpen: false,
+    productionSignInMessage: null,
+    walkthroughActive: false,
+    walkthroughStep: 0,
     route: "command",
     backend: { status: "limited", detail: "Checking backend…", checkedAt: "" },
+    sessionId: null,
+    providerStatuses: [],
+    providerStatusPhase: "idle",
     toast: null,
     drawerOpen: false,
     uploaded: null,
@@ -390,19 +417,30 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
   const origin: RecommendationOrigin = result.recommendation_origin ?? (mode === "live" ? "live_intelligence_engine" : "deterministic_engine");
   const now = new Date().toISOString();
 
-  const action = (rec.action as string) || (rec.decision as string) || (summary.recommendation as string) || sc.decision.action;
+  // Only inherit representative scenario values when the engine explicitly signals
+  // a representative fallback. For live, uploaded, and deterministic results use
+  // honest "pending" labels so representative precision cannot leak into a real result.
+  const useRepresentative = origin === "representative_fallback";
+
+  const action = (rec.action as string) || (rec.decision as string) || (summary.recommendation as string) || (useRepresentative ? sc.decision.action : "Decision pending source review");
   const decision: Decision = {
     action,
-    start: (rec.start_time as string) || (rec.timing as string) || sc.decision.start,
-    appliedWater: (rec.depth as string) || (summary.planned_water as string) || sc.decision.appliedWater,
-    crop: (rec.crop as string) || sc.decision.crop,
-    block: (rec.block as string) || sc.decision.block,
-    driver: Array.isArray(rec.key_drivers) && rec.key_drivers.length ? String((rec.key_drivers as unknown[])[0]) : sc.decision.driver,
-    confidence: pct(rec.confidence ?? summary.confidence, sc.decision.confidence),
-    evidenceCompleteness: pct(result.reconciliation?.evidence_completeness ?? summary.evidence_completeness, sc.decision.evidenceCompleteness),
-    estimatedWaterSavings: sc.decision.estimatedWaterSavings,
-    verification: (rec.verification_requirement as string) || sc.decision.verification,
+    start: (rec.start_time as string) || (rec.timing as string) || (useRepresentative ? sc.decision.start : "Pending evidence"),
+    appliedWater: (rec.depth as string) || (summary.planned_water as string) || (useRepresentative ? sc.decision.appliedWater : "Withheld pending validation"),
+    grossWater: (rec.gross_depth as string) || undefined,
+    estimatedVolume: (rec.estimated_volume as string) || undefined,
+    duration: (rec.duration as string) || (rec.no_fabricated_duration ? "Withheld until flow is validated" : (useRepresentative ? undefined : "Withheld pending validation")),
+    crop: (rec.crop as string) || (useRepresentative ? sc.decision.crop : "Source context incomplete"),
+    block: (rec.block as string) || (useRepresentative ? sc.decision.block : "Source context incomplete"),
+    driver: Array.isArray(rec.key_drivers) && rec.key_drivers.length ? String((rec.key_drivers as unknown[])[0]) : (useRepresentative ? sc.decision.driver : "Tenant baseline required"),
+    confidence: pct(rec.confidence ?? summary.confidence, useRepresentative ? sc.decision.confidence : "—"),
+    evidenceCompleteness: pct(result.reconciliation?.evidence_completeness ?? summary.evidence_completeness, useRepresentative ? sc.decision.evidenceCompleteness : "—"),
+    estimatedWaterSavings: useRepresentative ? sc.decision.estimatedWaterSavings : "—",
+    verification: (rec.verification_requirement as string) || (useRepresentative ? sc.decision.verification : "Required"),
     recommendationOrigin: origin,
+    calibrationStatus: (rec.calibration_status as string) || undefined,
+    calibrationPackVersion: (rec.calibration_pack_version as string) || undefined,
+    verificationStatus: "Required",
   };
 
   const trace: TraceStep[] = Array.isArray(result.analysis_trace) && result.analysis_trace.length
@@ -415,6 +453,22 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
       }))
     : buildTrace(now, true);
 
+  const nc = (result.normalized_context ?? {}) as Record<string, unknown>;
+  const recon = (result.reconciliation ?? {}) as Record<string, unknown>;
+  const report: ReportModel = useRepresentative
+    ? { ...sc.report, recommendation: action, plannedWater: decision.grossWater || decision.appliedWater, evidenceCompleteness: decision.evidenceCompleteness }
+    : {
+        farm: (nc.farm as string) || "Source context incomplete",
+        block: (nc.block as string) || "Source context incomplete",
+        recommendation: action,
+        plannedWater: decision.grossWater || decision.appliedWater || "Withheld pending validation",
+        appliedWater: "Pending confirmation",
+        variance: (recon.planned_vs_applied_variance as string) || "Withheld pending validation",
+        evidenceCompleteness: decision.evidenceCompleteness || "—",
+        estimatedWaterSavings: "—",
+        verification: (rec.verification_requirement as string) || "Required",
+      };
+
   set({
     analysisMode: mode,
     analysisPhase: "complete",
@@ -423,7 +477,7 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
     decision,
     trace,
     evidence: baseEvidence(now),
-    report: { ...sc.report, recommendation: action, evidenceCompleteness: decision.evidenceCompleteness },
+    report,
   });
 }
 
@@ -433,6 +487,79 @@ export const actions = {
   async init() {
     const health = await probeBackend();
     set({ backend: { status: health.status, detail: health.detail, checkedAt: health.checkedAt } });
+    void actions.refreshProviderStatuses();
+  },
+
+  async openEvaluationWorkspace() {
+    set({
+      entryState: "workspace",
+      productionSignInMessage: null,
+      analysisPhase: "running",
+      pipelineMessage: "Loading representative source package…",
+      trace: buildTrace(new Date().toISOString(), false),
+    });
+    addAudit("Evaluation workspace opened", "Representative package analysis started for sales-call evaluation.");
+    if (state.backend.status !== "unavailable") {
+      try {
+        const sample = await apiClient.createSamplePackage();
+        const sessionId = sample.data?.session?.session_id || sample.data?.session_id || "";
+        if (sample.ok && sessionId) {
+          set({ sessionId, pipelineMessage: "Analyzing representative source package…" });
+          addAudit("Evaluation session created", "Backend evaluation-session persistence enabled.");
+          const analysis = await apiClient.analyzeSession(sessionId);
+          if (analysis.ok && analysis.data) {
+            applyBackendResult(analysis.data, "representative");
+            addAudit("Representative package analyzed", "Decision, evidence chain, reconciliation, and report preview populated.");
+            toast("Evaluation workspace ready.");
+            return;
+          }
+        }
+      } catch {
+        // Falls through to the honest representative fallback.
+      }
+    }
+    set(scenarioState(state.scenarioId, "representative", "representative_fallback"));
+    set({ pipelineMessage: "Backend analysis unavailable. Representative fallback is active." });
+    addAudit("Representative fallback active", "Backend analysis failed or was unavailable; local representative records remain loaded.");
+    toast("Workspace opened with representative fallback.");
+  },
+
+  submitProductionSignIn() {
+    set({ productionSignInMessage: "Production identity provisioning is required for this workspace." });
+  },
+
+  openOnboarding() {
+    set({ onboardingOpen: true });
+  },
+
+  closeOnboarding() {
+    set({ onboardingOpen: false });
+  },
+
+  startWalkthrough() {
+    set({ walkthroughActive: true, walkthroughStep: 0 });
+  },
+
+  resetWalkthrough() {
+    set({ walkthroughActive: false, walkthroughStep: 0 });
+  },
+
+  nextWalkthrough() {
+    if (state.walkthroughStep >= 4) {
+      set({ walkthroughActive: false, walkthroughStep: 0 });
+    } else {
+      set({ walkthroughStep: state.walkthroughStep + 1 });
+    }
+  },
+
+  async refreshProviderStatuses() {
+    set({ providerStatusPhase: "loading" });
+    try {
+      const providerStatuses = await loadRuntimeStatuses();
+      set({ providerStatuses, providerStatusPhase: "ready" });
+    } catch {
+      set({ providerStatusPhase: "error" });
+    }
   },
 
   navigate(route: Route) {
@@ -456,7 +583,7 @@ export const actions = {
       try {
         const sc = SCENARIOS[state.scenarioId];
         const res = await apiClient.analyzeLive(sc.liveEntity.source, sc.liveEntity.entityId);
-        if (res.ok && res.data) result = res.data;
+      if (res.ok && res.data) result = res.data;
       } catch {
         result = null;
       }
@@ -466,6 +593,7 @@ export const actions = {
     await new Promise((r) => setTimeout(r, 900));
 
     if (result) {
+      set({ sessionId: result.session_id || state.sessionId });
       applyBackendResult(result, "live");
       addAudit("Intelligence analysis completed", "Live Workbench result applied.");
       toast("Analysis complete. Decision ready.");
@@ -493,6 +621,7 @@ export const actions = {
       toast("Backend upload unavailable. Representative analysis remains active.");
       return;
     }
+    set({ sessionId });
     const up = await apiClient.uploadFile(sessionId, file);
     if (up.ok && up.data) {
       const a = up.data;
@@ -525,20 +654,47 @@ export const actions = {
     set({ drawerOpen: false });
   },
 
-  advanceEvidence(key: EvidenceStep["key"]) {
+  async advanceEvidence(key: EvidenceStep["key"]) {
     const order: EvidenceStep["key"][] = ["recommended", "scheduled", "applied", "observed", "verified"];
     const idx = order.indexOf(key);
     const now = new Date().toISOString();
     const evidenceText: Record<EvidenceStep["key"], string> = {
       recommended: "Verified water decision produced from current source set.",
-      scheduled: "Irrigation scheduled in the controller window.",
-      applied: "Applied water confirmed from controller event.",
-      observed: "Field team recorded canopy response after irrigation.",
-      verified: "Outcome verified against controller event and observation.",
+      scheduled: "Schedule approval recorded.",
+      applied: "Operator applied-water confirmation recorded.",
+      observed: "Field observation recorded.",
+      verified: "Outcome verification recorded for review.",
     };
     const evidence = state.evidence.map((step, i) =>
-      i <= idx ? { ...step, status: "Complete" as const, timestamp: step.timestamp || now, evidence: evidenceText[step.key] } : step,
+      i <= idx
+        ? { ...step, status: "Complete" as const, timestamp: step.timestamp || now, evidence: evidenceText[step.key], evidenceType: EVIDENCE_TYPES_UI[step.key] }
+        : step,
     );
+    const backendAction: Record<EvidenceStep["key"], "schedule" | "applied" | "observe" | "verify" | null> = {
+      recommended: null,
+      scheduled: "schedule",
+      applied: "applied",
+      observed: "observe",
+      verified: "verify",
+    };
+    const actionName = backendAction[key];
+    if (state.sessionId && actionName && state.backend.status !== "unavailable") {
+      const res = await apiClient.recordEvidenceAction(state.sessionId, actionName, evidenceText[key]);
+      if (res.ok && res.data?.updated_evidence_chain) {
+        set({ evidence: res.data.updated_evidence_chain });
+        addAudit(`${order[idx]} recorded`, `Backend evidence action recorded in evaluation-session storage.`);
+        toast(`${state.evidence[idx]?.label ?? "Step"} recorded`);
+        return;
+      }
+      // Backend was reachable but rejected the request (e.g. 409 ordering violation).
+      // For live and uploaded origins, do not advance local state — the step was not recorded.
+      if (state.recommendationOrigin !== "representative_fallback") {
+        addAudit("Evidence step not recorded", "Backend rejected the evidence action; local state not advanced.");
+        toast("Evidence step was not recorded. Refresh the workspace and try again.");
+        return;
+      }
+      addAudit("Backend evidence action unavailable", "Local representative evidence fallback used.");
+    }
     set({ evidence });
     addAudit(`${order[idx]} recorded`, evidenceText[key]);
     toast(`${state.evidence[idx]?.label ?? "Step"} recorded`);
