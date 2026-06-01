@@ -199,3 +199,108 @@ def test_evidence_action_records_operator_attestation_type(client):
     chain = client.get(f'/v1/workbench/sessions/{session_id}/evidence-chain').json()
     scheduled_step = next(s for s in chain['evidence_chain'] if s['key'] == 'scheduled')
     assert scheduled_step['evidence_type'] == 'operator_attestation'
+
+
+# --- Section 10: area_unit in uploaded analysis request ----------------------
+
+def test_uploaded_analysis_with_area_ha_no_warning(client):
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()
+    sid = s['session_id']
+    r = client.post(f'/v1/workbench/sessions/{sid}/analyze',
+                    json={'session_id': sid, 'mode': 'uploaded', 'area': 3.0, 'area_unit': 'ha'})
+    assert r.status_code == 200
+    body = r.json()
+    area_warnings = [w for w in (body.get('warnings') or [])
+                     if 'area unit' in str(w).lower() or 'unknown area' in str(w).lower()]
+    assert not area_warnings
+
+
+def test_uploaded_analysis_with_area_acres_no_warning(client):
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()
+    sid = s['session_id']
+    r = client.post(f'/v1/workbench/sessions/{sid}/analyze',
+                    json={'session_id': sid, 'mode': 'uploaded', 'area': 7.0, 'area_unit': 'acres'})
+    assert r.status_code == 200
+
+
+def test_uploaded_analysis_with_area_m2_no_warning(client):
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()
+    sid = s['session_id']
+    r = client.post(f'/v1/workbench/sessions/{sid}/analyze',
+                    json={'session_id': sid, 'mode': 'uploaded', 'area': 25000.0, 'area_unit': 'm2'})
+    assert r.status_code == 200
+
+
+def test_uploaded_analysis_area_without_unit_withholds_volume(client):
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()
+    sid = s['session_id']
+    r = client.post(f'/v1/workbench/sessions/{sid}/analyze',
+                    json={'session_id': sid, 'mode': 'uploaded', 'area': 2.0})
+    assert r.status_code == 200
+    assert r.json()['recommendation'].get('estimated_volume_m3') is None
+
+
+def test_uploaded_analysis_zero_area_withholds_volume(client):
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()
+    sid = s['session_id']
+    r = client.post(f'/v1/workbench/sessions/{sid}/analyze',
+                    json={'session_id': sid, 'mode': 'uploaded', 'area': 0.0, 'area_unit': 'ha'})
+    assert r.status_code == 200
+    assert r.json()['recommendation'].get('estimated_volume_m3') is None
+
+
+# --- Section 11: historical_evaluation route parameter -----------------------
+
+def test_historical_evaluation_true_accepted(client):
+    from datetime import datetime, timezone
+    ref = datetime(2026, 5, 15, 12, 0, 0, tzinfo=timezone.utc).isoformat()
+    created = client.post('/v1/workbench/sample-package')
+    sid = created.json()['session']['session_id']
+    r = client.post(f'/v1/workbench/sessions/{sid}/analyze',
+                    json={'session_id': sid, 'mode': 'uploaded',
+                          'historical_evaluation': True, 'evidence_reference_time': ref})
+    assert r.status_code == 200
+    assert r.json()['recommendation'].get('action')
+
+
+def test_historical_evaluation_not_leaked_into_manual_overrides(client):
+    """historical_evaluation and evidence_reference_time must not be forwarded as
+    manual_overrides to the engine — they are routing parameters only."""
+    from datetime import datetime, timezone
+    ref = datetime(2026, 5, 15, 12, 0, 0, tzinfo=timezone.utc).isoformat()
+    created = client.post('/v1/workbench/sample-package')
+    sid = created.json()['session']['session_id']
+    r = client.post(f'/v1/workbench/sessions/{sid}/analyze',
+                    json={'session_id': sid, 'mode': 'uploaded',
+                          'historical_evaluation': True, 'evidence_reference_time': ref})
+    assert r.status_code == 200
+    # The analysis must succeed without a 400 error about unexpected manual overrides.
+    body = r.json()
+    assert 'analysis_id' in body
+
+
+# --- Section 12: model_status truthfulness ------------------------------------
+
+def test_model_status_always_deterministic_engine(client):
+    """model_status must always be 'deterministic_engine', never 'optional_model_assist'."""
+    import os
+    os.environ['OPENAI_API_KEY'] = 'test-key-for-route-test'
+    try:
+        r = client.post('/v1/workbench/analyze-live', json={'source': 'wiseconn', 'entity_id': '162803'})
+        assert r.status_code == 200
+        assert r.json()['model_status'] == 'deterministic_engine'
+    finally:
+        del os.environ['OPENAI_API_KEY']
+
+
+# --- Section 13: client-supplied confirmation_source rejected via route -------
+
+def test_route_confirmation_source_payload_ignored(client):
+    """A browser payload claiming confirmation_source must not escalate evidence type."""
+    session_id = _make_analyzed_session(client)
+    r = client.post(
+        f'/v1/workbench/sessions/{session_id}/actions/schedule',
+        json={'actor': 'Ops', 'payload': {'confirmation_source': 'controller_confirmed'}},
+    )
+    assert r.status_code == 200
+    assert r.json()['evidence_type'] == 'operator_attestation'

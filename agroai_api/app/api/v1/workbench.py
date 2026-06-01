@@ -51,12 +51,15 @@ def analyze_session(session_id: str, payload: WorkbenchAnalysisRequest):
     if session_id not in engine.SESSIONS:
         raise HTTPException(404, "Session not found")
     try:
+        _ROUTING_KEYS = {"session_id", "mode", "live_source", "live_entity_id", "historical_evaluation", "evidence_reference_time"}
         return engine.analyze_session(
             session_id,
             payload.mode,
             payload.live_source,
             payload.live_entity_id,
-            manual_overrides=payload.model_dump(exclude={"session_id", "mode", "live_source", "live_entity_id"}, exclude_none=True),
+            historical_evaluation=payload.historical_evaluation,
+            evidence_reference_time=payload.evidence_reference_time,
+            manual_overrides=payload.model_dump(exclude=_ROUTING_KEYS, exclude_none=True),
         )
     except Exception as e:
         raise HTTPException(400, f"Live source unavailable. Uploaded-data analysis remains available. {e}")

@@ -361,6 +361,7 @@ def create_sample_package_session(workspace_name: str = "Alpha Vineyard · Water
     session = create_session(mode="uploaded", workspace_name=workspace_name)
     artifacts = [build_artifact(session.session_id, item.filename, item.content, item.content_type) for item in get_sample_files()]
     SESSIONS[session.session_id]["artifacts"].extend(artifacts)
+    SESSIONS[session.session_id]["is_sample_package"] = True
     SESSIONS[session.session_id]["audit"].append(
         {"time": datetime.utcnow().isoformat(), "event": "Sample data package loaded", "artifact_count": len(artifacts)}
     )
@@ -494,7 +495,9 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
             "recent_irrigation_evidence": recent_evidence,
             "recent_irrigation_credit_status": recent_evidence.get("status") if recent_evidence.get("status") != "candidate" else "partial",
             "recent_irrigation_credit_mm": None,
-            "evidence_reference_time": _latest_timestamp(controller_rows + flow_rows + soil_rows + weather_rows),
+            # evidence_reference_time is NOT set automatically; it must be injected
+            # explicitly for historical-package evaluation (sample package or
+            # historical_evaluation=True with an explicit evidence_reference_time).
             "max_flow_variance_percent": max_flow_variance,
             "max_controller_variance_percent": max_controller_variance,
             "applied_variance_percent": applied_variance,
@@ -760,8 +763,6 @@ def generate_recommendation(reconciliation: ReconciliationResult, context: Dict[
     return recommendation
 
 def generate_analysis_summary(reconciliation: ReconciliationResult, recommendation: Dict[str, Any]) -> str:
-    if os.getenv("OPENAI_API_KEY"):
-        return "Model-assisted synthesis available; deterministic Workbench Engine safeguards applied."
     return (
         f"AGRO-AI reconciled available source evidence, resolved {len(reconciliation.conflicts_detected)} conflicts, "
         f"and produced '{recommendation['action']}' with {reconciliation.confidence_label.lower()} confidence."
@@ -962,6 +963,8 @@ def analyze_session(
     live_entity_id: str | None = None,
     live_context: Dict[str, Any] | None = None,
     manual_overrides: Dict[str, Any] | None = None,
+    historical_evaluation: bool | None = None,
+    evidence_reference_time: str | None = None,
 ) -> WorkbenchAnalysisResult:
     store = SESSIONS[session_id]
     artifacts = store["artifacts"]
@@ -972,6 +975,16 @@ def analyze_session(
         context = live_context if live_context is not None else assemble_context_from_live(live_source, live_entity_id)
     else:
         context = assemble_context_from_artifacts(artifacts)
+        # Inject evidence_reference_time for sample packages (fixed dataset with known reference)
+        # or when the caller explicitly requests historical evaluation.
+        if store.get("is_sample_package"):
+            ref = _latest_timestamp(
+                [row for art in artifacts for row in art.parsed_rows if art.source_kind in {"controller_events", "controller_logs", "flow_meter", "soil_moisture", "weather"}]
+            )
+            if ref:
+                context.setdefault("metrics", {})["evidence_reference_time"] = ref
+        elif historical_evaluation and evidence_reference_time:
+            context.setdefault("metrics", {})["evidence_reference_time"] = evidence_reference_time
         if live_source and live_entity_id:
             merged = live_context if live_context is not None else assemble_context_from_live(live_source, live_entity_id)
             context["live_request"] = merged.get("live_request")
@@ -1021,7 +1034,7 @@ def analyze_session(
         source_trace=[{"source": artifact.filename, "warnings": artifact.warnings, "source_kind": artifact.source_kind} for artifact in artifacts],
         analysis_trace=_analysis_trace(context, reconciliation),
         limitations=limitations,
-        model_status="optional_model_assist" if os.getenv("OPENAI_API_KEY") else "deterministic_engine",
+        model_status="deterministic_engine",
         created_at=datetime.utcnow(),
         backend_status="available",
         analysis_mode=analysis_mode_val,
@@ -1138,10 +1151,6 @@ def record_evidence_action(
     summary = evidence_summary or EVIDENCE_DEFAULT_TEXT[action_type]
     evidence_type = EVIDENCE_TYPES.get(action_type, "operator_attestation")
     payload_data = payload or {}
-    if payload_data.get("confirmation_source") == "controller_confirmed":
-        evidence_type = "controller_confirmed"
-    elif payload_data.get("confirmation_source") == "flow_meter_confirmed":
-        evidence_type = "flow_meter_confirmed"
 
     event = {
         "type": action_type,

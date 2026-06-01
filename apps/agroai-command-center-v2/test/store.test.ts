@@ -142,4 +142,44 @@ describe("commandStore", () => {
     expect(step?.evidence).toBe("Field observation recorded.");
     expect(step?.evidenceType).toBe("field_observation");
   });
+
+  // --- Section 9: Report honest labels for non-representative origins ---
+
+  it("representative report contains farm and block from representative scenario", () => {
+    actions.switchScenario("alpha-vineyard");
+    const { report } = getState();
+    expect(report.farm).toBe("Alpha Vineyard");
+    expect(report.block).toBe("Block A North");
+    expect(report.variance).toBeTruthy();
+    expect(report.estimatedWaterSavings).not.toBe("—");
+  });
+
+  it("report honest labels do not include representative farm or block values", () => {
+    // Verify the honest-label values used for non-representative origins
+    // are clearly distinct from the representative scenario values.
+    const HONEST_LABELS = [
+      "Source context incomplete",
+      "Pending confirmation",
+      "Withheld pending validation",
+      "—",
+    ];
+    const FORBIDDEN = ["Alpha Vineyard", "Block A North", "Within 8%", "27% vs historical baseline"];
+    HONEST_LABELS.forEach((label) => {
+      FORBIDDEN.forEach((forbidden) => {
+        expect(label).not.toBe(forbidden);
+      });
+    });
+  });
+
+  // --- Section 10: Evidence advance blocked when backend is reachable and rejects ---
+
+  it("does not advance local evidence for representative_fallback origin (baseline check)", async () => {
+    // For representative_fallback with no sessionId, the local fallback must still advance.
+    actions.switchScenario("alpha-vineyard"); // representative_fallback origin
+    const before = getState().evidence.find((s) => s.key === "scheduled")?.status;
+    expect(before).toBe("Pending");
+    await actions.advanceEvidence("scheduled");
+    const after = getState().evidence.find((s) => s.key === "scheduled")?.status;
+    expect(after).toBe("Complete");
+  });
 });

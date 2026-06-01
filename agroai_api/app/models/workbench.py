@@ -62,6 +62,9 @@ class WorkbenchAnalysisRequest(BaseModel):
     language: Optional[str] = None
     user_role: Optional[str] = None
     area: Optional[float] = None
+    area_unit: Optional[str] = None
+    historical_evaluation: Optional[bool] = None
+    evidence_reference_time: Optional[str] = None
     weather_context: Optional[Dict[str, Any]] = None
     sensor_context: Optional[Dict[str, Any]] = None
     controller_context: Optional[Dict[str, Any]] = None

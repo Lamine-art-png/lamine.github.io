@@ -90,13 +90,15 @@ def _hours_old(timestamp: Any, reference: datetime) -> Optional[float]:
 
 def _flow_validation(merged: Dict[str, Any], field_block: Optional[str]) -> Tuple[Optional[float], str, List[str]]:
     metrics = merged.get("metrics", {})
-    explicit_status = metrics.get("flow_validation_status")
-    explicit_flow = _first_number(metrics.get("validated_flow_m3h"))
-    if explicit_status == "validated" and explicit_flow and explicit_flow > 0:
-        return explicit_flow, "validated", []
-
+    # No early-return bypass: every flow value — including pre-labeled validated_flow_m3h —
+    # must pass the full recency, provenance, block, variance, and pressure gate.
     evidence = merged.get("flow_evidence") or metrics.get("flow_evidence") or {}
-    flow = _first_number(evidence.get("value_m3h"), metrics.get("flow_m3h"), metrics.get("avg_flow_m3h"))
+    flow = _first_number(
+        evidence.get("value_m3h"),
+        metrics.get("validated_flow_m3h"),
+        metrics.get("flow_m3h"),
+        metrics.get("avg_flow_m3h"),
+    )
     notes: List[str] = []
     if flow is None or flow <= 0:
         return None, "unavailable", ["Validated positive flow evidence is unavailable."]

@@ -453,6 +453,22 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
       }))
     : buildTrace(now, true);
 
+  const nc = (result.normalized_context ?? {}) as Record<string, unknown>;
+  const recon = (result.reconciliation ?? {}) as Record<string, unknown>;
+  const report: ReportModel = useRepresentative
+    ? { ...sc.report, recommendation: action, plannedWater: decision.grossWater || decision.appliedWater, evidenceCompleteness: decision.evidenceCompleteness }
+    : {
+        farm: (nc.farm as string) || "Source context incomplete",
+        block: (nc.block as string) || "Source context incomplete",
+        recommendation: action,
+        plannedWater: decision.grossWater || decision.appliedWater || "Withheld pending validation",
+        appliedWater: "Pending confirmation",
+        variance: (recon.planned_vs_applied_variance as string) || "Withheld pending validation",
+        evidenceCompleteness: decision.evidenceCompleteness || "—",
+        estimatedWaterSavings: "—",
+        verification: (rec.verification_requirement as string) || "Required",
+      };
+
   set({
     analysisMode: mode,
     analysisPhase: "complete",
@@ -461,7 +477,7 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
     decision,
     trace,
     evidence: baseEvidence(now),
-    report: { ...sc.report, recommendation: action, plannedWater: decision.grossWater || decision.appliedWater, evidenceCompleteness: decision.evidenceCompleteness },
+    report,
   });
 }
 
@@ -668,6 +684,13 @@ export const actions = {
         set({ evidence: res.data.updated_evidence_chain });
         addAudit(`${order[idx]} recorded`, `Backend evidence action recorded in evaluation-session storage.`);
         toast(`${state.evidence[idx]?.label ?? "Step"} recorded`);
+        return;
+      }
+      // Backend was reachable but rejected the request (e.g. 409 ordering violation).
+      // For live and uploaded origins, do not advance local state — the step was not recorded.
+      if (state.recommendationOrigin !== "representative_fallback") {
+        addAudit("Evidence step not recorded", "Backend rejected the evidence action; local state not advanced.");
+        toast("Evidence step was not recorded. Refresh the workspace and try again.");
         return;
       }
       addAudit("Backend evidence action unavailable", "Local representative evidence fallback used.");
