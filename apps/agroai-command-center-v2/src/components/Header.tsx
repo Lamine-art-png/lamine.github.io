@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useCommandStore } from "../state/commandStore";
+import { actions, useCommandStore } from "../state/commandStore";
 import { SCENARIO_OPTIONS } from "../state/commandStore";
 import { WorkspaceSwitcher } from "./WorkspaceSwitcher";
 import { BackendBadge, StatusBadge } from "./StatusBadge";
@@ -16,12 +16,10 @@ export function Header() {
         <div className="header-title-row">
           <h1 className="value">{scenarioName} · Water Command Center</h1>
           <WorkspaceSwitcher />
-          <span className="provenance" title="Representative records are used until production targets are connected.">
-            Representative data
-          </span>
         </div>
         <p className="header-subtitle">Scattered irrigation data becomes a verified water decision.</p>
         <div className="status-row" aria-label="Workspace status">
+          <StatusBadge label="Representative data" tone="gold" />
           <StatusBadge label="Mixed sources" tone="neutral" />
           <StatusBadge label="Evidence chain active" tone="ok" />
           <BackendBadge status={backend.status} detail={backend.detail} />
@@ -29,6 +27,9 @@ export function Header() {
       </div>
 
       <div className="header-toolbar">
+        <button className="btn compact" onClick={() => actions.startWalkthrough()}>
+          Start guided walkthrough
+        </button>
         <details className="user-menu" open={menuOpen} onToggle={(e) => setMenuOpen((e.target as HTMLDetailsElement).open)}>
           <summary aria-label="Account menu">
             <span className="avatar">OU</span>

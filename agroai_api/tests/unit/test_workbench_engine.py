@@ -42,5 +42,16 @@ def test_sample_package_analysis_uses_rich_sources():
     assert res.signal_summary['soil_readings_read'] >= 20
     assert res.reconciliation.flow_meter_agreement
     assert res.recommendation['action']
+    assert res.recommendation.get('duration_min') != 42
+    assert res.recommendation.get('calibration_pack_version')
     assert len(res.analysis_trace) == 8
     assert res.report_summary['executive_summary']
+
+
+def test_incomplete_context_does_not_fabricate_duration():
+    s = e.create_session()
+    art = e.WorkbenchDataArtifact(artifact_id='1', session_id=s.session_id, filename='weather.csv', content_type='text/csv', source_kind='weather', rows_detected=1, columns_detected=['eto_mm'], parse_status='parsed', parsed_rows=[{'eto_mm': '6.4'}])
+    e.SESSIONS[s.session_id]['artifacts'].append(art)
+    res = e.analyze_session(s.session_id)
+    assert res.recommendation.get('duration_min') is None
+    assert res.recommendation.get('no_fabricated_duration') is True

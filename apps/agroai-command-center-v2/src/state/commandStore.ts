@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { apiClient } from "../api/client";
 import { probeBackend } from "../api/health";
+import { loadRuntimeStatuses } from "../api/runtimeStatus";
 import type {
   AnalysisMode,
   BackendStatus,
@@ -8,6 +9,7 @@ import type {
   EvidenceStep,
   ReconciliationRow,
   RecommendationOrigin,
+  ProviderStatus,
   SourceRow,
   TraceStep,
   WorkbenchAnalysisResult,
@@ -45,8 +47,16 @@ export interface AuditEvent {
 }
 
 export interface CommandState {
+  entryState: "entry" | "workspace";
+  onboardingOpen: boolean;
+  productionSignInMessage: string | null;
+  walkthroughActive: boolean;
+  walkthroughStep: number;
   route: Route;
   backend: { status: BackendStatus; detail: string; checkedAt: string };
+  sessionId: string | null;
+  providerStatuses: ProviderStatus[];
+  providerStatusPhase: "idle" | "loading" | "ready" | "error";
   scenarioId: ScenarioId;
   analysisMode: AnalysisMode;
   analysisPhase: "idle" | "running" | "complete" | "error";
@@ -342,8 +352,16 @@ function initialState(): CommandState {
   const seeded = scenarioState("alpha-vineyard", "representative", "representative_fallback");
   return {
     ...seeded,
+    entryState: "entry",
+    onboardingOpen: false,
+    productionSignInMessage: null,
+    walkthroughActive: false,
+    walkthroughStep: 0,
     route: "command",
     backend: { status: "limited", detail: "Checking backend…", checkedAt: "" },
+    sessionId: null,
+    providerStatuses: [],
+    providerStatusPhase: "idle",
     toast: null,
     drawerOpen: false,
     uploaded: null,
@@ -395,6 +413,9 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
     action,
     start: (rec.start_time as string) || (rec.timing as string) || sc.decision.start,
     appliedWater: (rec.depth as string) || (summary.planned_water as string) || sc.decision.appliedWater,
+    grossWater: (rec.gross_depth as string) || undefined,
+    estimatedVolume: (rec.estimated_volume as string) || undefined,
+    duration: (rec.duration as string) || (rec.no_fabricated_duration ? "Withheld until flow is validated" : undefined),
     crop: (rec.crop as string) || sc.decision.crop,
     block: (rec.block as string) || sc.decision.block,
     driver: Array.isArray(rec.key_drivers) && rec.key_drivers.length ? String((rec.key_drivers as unknown[])[0]) : sc.decision.driver,
@@ -403,6 +424,9 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
     estimatedWaterSavings: sc.decision.estimatedWaterSavings,
     verification: (rec.verification_requirement as string) || sc.decision.verification,
     recommendationOrigin: origin,
+    calibrationStatus: (rec.calibration_status as string) || undefined,
+    calibrationPackVersion: (rec.calibration_pack_version as string) || undefined,
+    verificationStatus: "Required",
   };
 
   const trace: TraceStep[] = Array.isArray(result.analysis_trace) && result.analysis_trace.length
@@ -423,7 +447,7 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
     decision,
     trace,
     evidence: baseEvidence(now),
-    report: { ...sc.report, recommendation: action, evidenceCompleteness: decision.evidenceCompleteness },
+    report: { ...sc.report, recommendation: action, plannedWater: decision.grossWater || decision.appliedWater, evidenceCompleteness: decision.evidenceCompleteness },
   });
 }
 
@@ -433,6 +457,58 @@ export const actions = {
   async init() {
     const health = await probeBackend();
     set({ backend: { status: health.status, detail: health.detail, checkedAt: health.checkedAt } });
+    void actions.refreshProviderStatuses();
+  },
+
+  async openEvaluationWorkspace() {
+    set({ entryState: "workspace", productionSignInMessage: null });
+    addAudit("Evaluation workspace opened", "Representative package is available for sales-call evaluation.");
+    if (state.backend.status !== "unavailable") {
+      const sample = await apiClient.createSamplePackage();
+      const sessionId = sample.data?.session?.session_id || sample.data?.session_id || "";
+      if (sample.ok && sessionId) {
+        set({ sessionId });
+        addAudit("Evaluation session created", "Backend evaluation-session persistence enabled.");
+      }
+    }
+  },
+
+  submitProductionSignIn() {
+    set({ productionSignInMessage: "Production identity provisioning is required for this workspace." });
+  },
+
+  openOnboarding() {
+    set({ onboardingOpen: true });
+  },
+
+  closeOnboarding() {
+    set({ onboardingOpen: false });
+  },
+
+  startWalkthrough() {
+    set({ walkthroughActive: true, walkthroughStep: 0 });
+  },
+
+  resetWalkthrough() {
+    set({ walkthroughActive: false, walkthroughStep: 0 });
+  },
+
+  nextWalkthrough() {
+    if (state.walkthroughStep >= 4) {
+      set({ walkthroughActive: false, walkthroughStep: 0 });
+    } else {
+      set({ walkthroughStep: state.walkthroughStep + 1 });
+    }
+  },
+
+  async refreshProviderStatuses() {
+    set({ providerStatusPhase: "loading" });
+    try {
+      const providerStatuses = await loadRuntimeStatuses();
+      set({ providerStatuses, providerStatusPhase: "ready" });
+    } catch {
+      set({ providerStatusPhase: "error" });
+    }
   },
 
   navigate(route: Route) {
@@ -456,7 +532,7 @@ export const actions = {
       try {
         const sc = SCENARIOS[state.scenarioId];
         const res = await apiClient.analyzeLive(sc.liveEntity.source, sc.liveEntity.entityId);
-        if (res.ok && res.data) result = res.data;
+      if (res.ok && res.data) result = res.data;
       } catch {
         result = null;
       }
@@ -466,6 +542,7 @@ export const actions = {
     await new Promise((r) => setTimeout(r, 900));
 
     if (result) {
+      set({ sessionId: result.session_id || state.sessionId });
       applyBackendResult(result, "live");
       addAudit("Intelligence analysis completed", "Live Workbench result applied.");
       toast("Analysis complete. Decision ready.");
@@ -493,6 +570,7 @@ export const actions = {
       toast("Backend upload unavailable. Representative analysis remains active.");
       return;
     }
+    set({ sessionId });
     const up = await apiClient.uploadFile(sessionId, file);
     if (up.ok && up.data) {
       const a = up.data;
@@ -525,7 +603,7 @@ export const actions = {
     set({ drawerOpen: false });
   },
 
-  advanceEvidence(key: EvidenceStep["key"]) {
+  async advanceEvidence(key: EvidenceStep["key"]) {
     const order: EvidenceStep["key"][] = ["recommended", "scheduled", "applied", "observed", "verified"];
     const idx = order.indexOf(key);
     const now = new Date().toISOString();
@@ -539,6 +617,24 @@ export const actions = {
     const evidence = state.evidence.map((step, i) =>
       i <= idx ? { ...step, status: "Complete" as const, timestamp: step.timestamp || now, evidence: evidenceText[step.key] } : step,
     );
+    const backendAction: Record<EvidenceStep["key"], "schedule" | "applied" | "observe" | "verify" | null> = {
+      recommended: null,
+      scheduled: "schedule",
+      applied: "applied",
+      observed: "observe",
+      verified: "verify",
+    };
+    const actionName = backendAction[key];
+    if (state.sessionId && actionName && state.backend.status !== "unavailable") {
+      const res = await apiClient.recordEvidenceAction(state.sessionId, actionName, evidenceText[key]);
+      if (res.ok && res.data?.updated_evidence_chain) {
+        set({ evidence: res.data.updated_evidence_chain });
+        addAudit(`${order[idx]} recorded`, `Backend evidence action recorded in evaluation-session storage.`);
+        toast(`${state.evidence[idx]?.label ?? "Step"} recorded`);
+        return;
+      }
+      addAudit("Backend evidence action unavailable", "Local representative evidence fallback used.");
+    }
     set({ evidence });
     addAudit(`${order[idx]} recorded`, evidenceText[key]);
     toast(`${state.evidence[idx]?.label ?? "Step"} recorded`);

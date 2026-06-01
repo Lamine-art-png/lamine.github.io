@@ -1,0 +1,45 @@
+# Water Command Center V2 Preview Deploy
+
+This document describes a manual Cloudflare Pages preview deployment for the
+Water Command Center V2 app only. Do not modify the live portal, DNS, custom
+domains, Railway secrets, or existing Pages projects.
+
+## Cloudflare Pages Project
+
+Create a separate Pages project in the Cloudflare dashboard.
+
+- Project name: `agroai-command-center-v2-preview`
+- Root directory: `apps/agroai-command-center-v2`
+- Build command: `npm ci && npm run build`
+- Output directory: `dist`
+- Environment variable:
+  - `VITE_API_BASE_URL=https://api.agroai-pilot.com`
+
+Use the generated `pages.dev` URL only.
+
+## Manual Dashboard Steps
+
+1. Open Cloudflare Dashboard.
+2. Go to Workers & Pages.
+3. Create a new Pages project.
+4. Connect the repository and select the branch for this PR.
+5. Set the project name to `agroai-command-center-v2-preview`.
+6. Set root directory to `apps/agroai-command-center-v2`.
+7. Set build command to `npm ci && npm run build`.
+8. Set output directory to `dist`.
+9. Add environment variable `VITE_API_BASE_URL` with value
+   `https://api.agroai-pilot.com`.
+10. Deploy and use only the generated `pages.dev` preview URL.
+
+## Safety Rules
+
+- Do not modify `app.agroai-pilot.com`.
+- Do not add a custom domain.
+- Do not modify Cloudflare DNS.
+- Do not modify production routing.
+- Do not touch the existing `agroai-portal` Pages project.
+- Do not touch Velia hosting.
+- Do not modify Railway secrets.
+
+The Vite config uses `base: "./"` and emits a static `dist/` bundle, preserving
+relative asset paths for preview deployment.

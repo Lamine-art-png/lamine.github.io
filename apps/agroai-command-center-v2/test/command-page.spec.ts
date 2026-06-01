@@ -3,13 +3,14 @@ import { test, expect } from "@playwright/test";
 test.describe("Command page", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
+    await page.getByRole("button", { name: "Open evaluation workspace" }).click();
     await page.waitForSelector(".command-page");
   });
 
   test("shows the product story above the fold", async ({ page }) => {
     await expect(page.locator("h1")).toHaveText(/Water Command Center/);
     await expect(page.locator(".header-subtitle")).toHaveText(/Scattered irrigation data becomes a verified water decision\./);
-    await expect(page.locator(".provenance")).toHaveText(/Representative data/);
+    await expect(page.locator(".status-row")).toHaveText(/Representative data/);
     // Executive strip: four metrics visible.
     await expect(page.locator(".executive-strip .metric")).toHaveCount(4);
     // Verified decision is present and readable.
@@ -51,5 +52,14 @@ test.describe("Command page", () => {
       page.getByRole("button", { name: "Export CSV" }).click(),
     ]);
     expect(download.suggestedFilename()).toMatch(/\.csv$/);
+  });
+
+  test("guided walkthrough runs through the sales-call steps", async ({ page }) => {
+    await page.getByRole("button", { name: "Start guided walkthrough" }).click();
+    await expect(page.locator(".walkthrough")).toHaveText(/Source intelligence/);
+    await page.getByRole("button", { name: "Next" }).click();
+    await expect(page.locator(".walkthrough")).toHaveText(/Decision pipeline/);
+    await page.getByRole("button", { name: "Reset walkthrough" }).click();
+    await expect(page.locator(".walkthrough")).toHaveCount(0);
   });
 });

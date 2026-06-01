@@ -5,6 +5,7 @@ import { test, expect } from "@playwright/test";
 test.describe("Responsive layout", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
+    await page.getByRole("button", { name: "Open evaluation workspace" }).click();
     await page.waitForSelector(".command-page");
   });
 

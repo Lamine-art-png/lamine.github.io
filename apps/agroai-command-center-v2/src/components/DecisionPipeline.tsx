@@ -14,6 +14,7 @@ const ORIGIN_LABEL: Record<RecommendationOrigin, string> = {
   deterministic_engine: "Deterministic engine",
   live_intelligence_engine: "Live intelligence engine",
   uploaded_intelligence_engine: "Uploaded intelligence engine",
+  insufficient_context: "Insufficient context",
 };
 
 export function DecisionPipeline() {

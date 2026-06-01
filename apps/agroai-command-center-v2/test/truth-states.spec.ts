@@ -3,6 +3,7 @@ import { test, expect } from "@playwright/test";
 test.describe("Truthful states", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto("/");
+    await page.getByRole("button", { name: "Open evaluation workspace" }).click();
     await page.waitForSelector(".command-page");
   });
 
@@ -25,6 +26,6 @@ test.describe("Truthful states", () => {
   });
 
   test("representative data is marked exactly once in the header", async ({ page }) => {
-    await expect(page.locator(".provenance")).toHaveCount(1);
+    await expect(page.locator(".status-row").getByText("Representative data")).toHaveCount(1);
   });
 });

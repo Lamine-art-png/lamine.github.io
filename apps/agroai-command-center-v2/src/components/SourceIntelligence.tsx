@@ -10,6 +10,7 @@ function tone(status: SourceStatus): "ok" | "warn" | "neutral" {
 
 export function SourceIntelligence() {
   const sources = useCommandStore((s) => s.sources);
+  const providers = useCommandStore((s) => s.providerStatuses);
   return (
     <section className="card panel source-intel">
       <div className="panel-head">
@@ -48,6 +49,16 @@ export function SourceIntelligence() {
             </span>
           </div>
         ))}
+      </div>
+      <div className="source-provider-summary" aria-label="Provider runtime summary">
+        {providers.slice(0, 3).map((p) => (
+          <span key={p.provider} className="provider-summary-item">
+            <strong>{p.provider}</strong> {p.connectionState}
+          </span>
+        ))}
+        <button className="btn ghost compact" onClick={() => void actions.refreshProviderStatuses()}>
+          Refresh status
+        </button>
       </div>
     </section>
   );

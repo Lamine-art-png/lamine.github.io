@@ -9,6 +9,7 @@ describe("commandStore", () => {
     expect(s.scenarioId).toBe("alpha-vineyard");
     expect(s.analysisMode).toBe("representative");
     expect(s.recommendationOrigin).toBe("representative_fallback");
+    expect(s.entryState).toBe("entry");
     expect(s.decision.action).toMatch(/Irrigate 42 min tonight/);
     expect(s.analysisPhase).toBe("complete");
     expect(s.sources.length).toBe(7);
@@ -35,11 +36,11 @@ describe("commandStore", () => {
     expect(s.reconciliation.some((r) => r.status === "Review")).toBe(true);
   });
 
-  it("advances the evidence chain and stays truthful about origin", () => {
-    actions.advanceEvidence("scheduled");
-    actions.advanceEvidence("applied");
-    actions.advanceEvidence("observed");
-    actions.advanceEvidence("verified");
+  it("advances the evidence chain and stays truthful about origin", async () => {
+    await actions.advanceEvidence("scheduled");
+    await actions.advanceEvidence("applied");
+    await actions.advanceEvidence("observed");
+    await actions.advanceEvidence("verified");
     const evidence = getState().evidence;
     expect(evidence.every((step) => step.status === "Complete")).toBe(true);
     // Representative load must never claim a live/engine origin.
@@ -49,5 +50,10 @@ describe("commandStore", () => {
   it("navigates between routes", () => {
     actions.navigate("integrations");
     expect(getState().route).toBe("integrations");
+  });
+
+  it("opens the evaluation workspace", async () => {
+    await actions.openEvaluationWorkspace();
+    expect(getState().entryState).toBe("workspace");
   });
 });

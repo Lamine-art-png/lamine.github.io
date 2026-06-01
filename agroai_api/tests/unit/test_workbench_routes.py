@@ -28,9 +28,7 @@ def test_analyze_live_returns_truthful_status_fields(client):
     # Truthful status fields are present and consistent with a live request.
     assert body['analysis_mode'] == 'live'
     assert body['context_origin'] == 'live'
-    assert body['recommendation_origin'] in (
-        'deterministic_engine', 'live_intelligence_engine'
-    )
+    assert body['recommendation_origin'] == 'live_intelligence_engine'
     assert 'live_inputs_used' in body
     assert 'warnings' in body
     # No provider credentials in the test env => assembler degrades, not fabricates.
@@ -48,7 +46,7 @@ def test_uploaded_analysis_status_fields(client):
     body = analyzed.json()
     assert body['analysis_mode'] == 'uploaded'
     assert body['context_origin'] == 'uploaded'
-    assert body['recommendation_origin'] == 'deterministic_engine'
+    assert body['recommendation_origin'] == 'uploaded_intelligence_engine'
     assert len(body['uploaded_artifacts_used']) == 8
 
 def test_sample_package_route(client):
@@ -63,7 +61,7 @@ def test_sample_package_route(client):
     result = analyzed.json()
     assert result['data_sources']['rows_parsed'] >= 70
     assert result['signal_summary']['flow_meter_records_read'] >= 10
-    assert result['analysis_trace'][0]['title'] == 'Ingested source files'
+    assert result['analysis_trace'][0]['title'] == 'Source records ingested'
 
 def test_schema_exposes_rich_workbench_fields(client):
     r = client.get('/v1/workbench/schema')
@@ -71,3 +69,23 @@ def test_schema_exposes_rich_workbench_fields(client):
     body = r.json()
     assert 'controller_events.csv' in body['expected_fields']
     assert 'analysis_trace' in body['output_schema']
+
+
+def test_evidence_chain_action_persistence(client):
+    created = client.post('/v1/workbench/sample-package')
+    session_id = created.json()['session']['session_id']
+    analyzed = client.post(
+        f'/v1/workbench/sessions/{session_id}/analyze',
+        json={'session_id': session_id, 'mode': 'uploaded'},
+    )
+    assert analyzed.status_code == 200
+    scheduled = client.post(
+        f'/v1/workbench/sessions/{session_id}/actions/schedule',
+        json={'actor': 'Operations user', 'evidence_summary': 'Approved test schedule.'},
+    )
+    assert scheduled.status_code == 200
+    chain = client.get(f'/v1/workbench/sessions/{session_id}/evidence-chain')
+    assert chain.status_code == 200
+    body = chain.json()
+    assert body['evidence_chain'][0]['status'] == 'Complete'
+    assert body['evidence_chain'][1]['status'] == 'Complete'

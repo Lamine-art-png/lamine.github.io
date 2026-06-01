@@ -19,14 +19,15 @@ apps/agroai-command-center-v2/
   src/
     main.tsx, App.tsx     # route switch over a typed store
     styles/               # tokens.css, global.css, components.css (native CSS)
-    api/                  # contracts.ts (typed), client.ts, health.ts
+    api/                  # contracts.ts, client.ts, health.ts, runtimeStatus.ts
     state/commandStore.ts # useSyncExternalStore store + representative scenarios
     components/           # AppShell, Header, Sidebar, ExecutiveStrip,
                           # SourceIntelligence, DecisionPipeline, VerifiedDecision,
                           # AnalysisTrace, EvidenceChain, ReconciliationTable,
                           # ExecutiveReportPreview, SourceDrawer,
                           # IntegrationSetupDrawer, WorkspaceSwitcher,
-                          # StatusBadge, Toast
+                          # StatusBadge, EntryScreen, ProviderStatusList,
+                          # GuidedWalkthrough, Toast
     pages/                # Command, Sources, Reports, Integrations, Audit, Settings
   test/                   # *.spec.ts (Playwright e2e) + store.test.ts (vitest)
 ```
@@ -38,7 +39,7 @@ CSS driven by design tokens.
 
 ## Routes used (production API base unchanged)
 
-API base: `https://api.agroai-pilot.com` (override with `VITE_AGROAI_API_BASE`).
+API base: `https://api.agroai-pilot.com` (override with `VITE_API_BASE_URL`).
 
 - `GET /v1/workbench/schema` — backend health probe
 - `GET /openapi.json` — secondary health signal
@@ -47,6 +48,14 @@ API base: `https://api.agroai-pilot.com` (override with `VITE_AGROAI_API_BASE`).
 - `POST /v1/workbench/sessions/{id}/upload` — upload records
 - `POST /v1/workbench/sessions/{id}/analyze` — analyze uploaded records
 - `POST /v1/workbench/analyze-live` — live connected-source analysis
+- `POST /v1/workbench/sessions/{id}/actions/schedule` — evaluation schedule action
+- `POST /v1/workbench/sessions/{id}/actions/applied` — evaluation applied-water action
+- `POST /v1/workbench/sessions/{id}/actions/observe` — evaluation field observation
+- `POST /v1/workbench/sessions/{id}/actions/verify` — evaluation outcome verification
+- `GET /v1/workbench/sessions/{id}/evidence-chain` — evaluation evidence chain
+- `GET /v1/controllers/environments` — provider runtime summary
+- `GET /v1/wiseconn/auth` — WiseConn runtime auth check
+- `GET /v1/talgil/status` — Talgil runtime status
 
 ## Truth states
 
@@ -69,7 +78,26 @@ Network requests carry an 8s timeout so the UI degrades quickly and honestly.
 The decision pipeline distinguishes representative / uploaded / live analysis,
 and the recommendation origin is shown explicitly (`Representative fallback`,
 `Deterministic engine`, `Live intelligence engine`, `Uploaded intelligence
-engine`).
+engine`, or `Insufficient context`).
+
+Provider statuses are also loaded from backend routes and normalized to truthful
+states: `Live`, `Configured`, `Limited`, `Unavailable`, `Setup required`, or
+`Target selection required`. The UI never claims EarthDaily is live; the partner
+surface is labelled **Earth observation layer** until a feed is authorized.
+
+## Entry and Walkthrough
+
+The app opens on a restrained entry screen:
+
+- **Open evaluation workspace** immediately loads representative records for a
+  sales call.
+- **Sign in for production access** does not collect or store credentials; it
+  shows that production identity provisioning is required.
+- **Request enterprise onboarding** opens a production-readiness brief.
+
+The command workspace includes a compact guided walkthrough covering source
+intelligence, decision pipeline, verified water decision, evidence chain, and
+executive report. It can be reset without changing workspace data.
 
 ## Responsive layout
 
@@ -78,10 +106,11 @@ A 12-column command layout:
 - **≥1480px** — left content area (7 cols: source intelligence, decision
   pipeline, analysis trace) + right decision rail (5 cols: verified decision,
   evidence chain). Reconciliation and report preview span below.
-- **900–1479px** — two columns (content + decision rail). The decision rail keeps
+- **1101–1479px** — two columns (content + decision rail). The decision rail keeps
   a `minmax(320px, …)` floor so the verified decision never shrinks below a
   readable width.
-- **<900px** — single column ordered: executive strip → verified decision →
+- **≤1100px** — single-column application shell and command content ordered:
+  executive strip → verified decision →
   decision pipeline → source intelligence → evidence chain → reconciliation →
   report preview.
 
@@ -120,12 +149,14 @@ CSV export works, report preview works.
   backend); tenant persistence is future work.
 - Production authentication, credential vault, and tenant provisioning are
   server-side follow-ups.
-- Recommendation numbers from the backend are **deterministic, not
-  agronomically calibrated** — routing through `IntelligenceEngineV1` is reserved
-  for a later sprint (see `docs/WORKBENCH_ENGINE_V1.md`). Representative scenarios
-  are labelled as representative data.
+- Recommendation numbers from the backend are computed by the v0.2 deterministic
+  agronomic decision kernel. Durations are withheld unless flow or application
+  rate evidence exists. Representative scenarios remain labelled as
+  representative data.
 - Live connected-source analysis degrades safely when provider telemetry is
   unavailable; it never fabricates telemetry.
+- Evidence-chain persistence is evaluation-session storage only, not durable
+  tenant persistence.
 
 ## Cloudflare static-build compatibility
 

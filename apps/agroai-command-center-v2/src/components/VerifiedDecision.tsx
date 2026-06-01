@@ -10,7 +10,7 @@ export function VerifiedDecision() {
       <p className="eyebrow">Verified water decision</p>
       <h2 className="decision-headline">{decision.action}</h2>
       <p className="decision-sub value">
-        Start {decision.start} · Apply {decision.appliedWater}
+        Window {decision.start} · Net {decision.appliedWater}
       </p>
 
       <dl className="decision-grid">
@@ -27,6 +27,18 @@ export function VerifiedDecision() {
           <dd className="value">{decision.driver}</dd>
         </div>
         <div>
+          <dt>Gross depth</dt>
+          <dd className="value">{decision.grossWater || "Pending flow evidence"}</dd>
+        </div>
+        <div>
+          <dt>Duration</dt>
+          <dd className="value">{decision.duration || "Withheld until flow is validated"}</dd>
+        </div>
+        <div>
+          <dt>Estimated volume</dt>
+          <dd className="value">{decision.estimatedVolume || "Requires field area"}</dd>
+        </div>
+        <div>
           <dt>Confidence</dt>
           <dd className="value">{decision.confidence}</dd>
         </div>
@@ -34,9 +46,17 @@ export function VerifiedDecision() {
           <dt>Evidence completeness</dt>
           <dd className="value">{decision.evidenceCompleteness}</dd>
         </div>
+        <div>
+          <dt>Calibration</dt>
+          <dd className="value">{decision.calibrationStatus || "representative_fallback"}</dd>
+        </div>
+        <div>
+          <dt>Origin</dt>
+          <dd className="value">{decision.recommendationOrigin}</dd>
+        </div>
         <div className="span-2">
           <dt>Verification</dt>
-          <dd className="value">{decision.verification}</dd>
+          <dd className="value">{decision.verificationStatus || decision.verification}</dd>
         </div>
       </dl>
 

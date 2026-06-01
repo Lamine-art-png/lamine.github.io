@@ -3,7 +3,7 @@ import uuid
 from fastapi import APIRouter, File, HTTPException, UploadFile
 from pydantic import BaseModel
 
-from app.models.workbench import WorkbenchAnalysisRequest
+from app.models.workbench import WorkbenchActionRequest, WorkbenchAnalysisRequest, WorkbenchLiveAnalysisRequest
 from app.services import workbench_engine as engine
 
 router = APIRouter(prefix="/workbench", tags=["workbench"])
@@ -50,14 +50,20 @@ def analyze_session(session_id: str, payload: WorkbenchAnalysisRequest):
     if session_id not in engine.SESSIONS:
         raise HTTPException(404, "Session not found")
     try:
-        return engine.analyze_session(session_id, payload.mode, payload.live_source, payload.live_entity_id)
+        return engine.analyze_session(
+            session_id,
+            payload.mode,
+            payload.live_source,
+            payload.live_entity_id,
+            manual_overrides=payload.model_dump(exclude={"session_id", "mode", "live_source", "live_entity_id"}, exclude_none=True),
+        )
     except Exception as e:
         raise HTTPException(400, f"Live source unavailable. Uploaded-data analysis remains available. {e}")
 
 @router.post('/analyze-live')
-async def analyze_live(payload: dict):
-    source = payload.get("source", "wiseconn")
-    entity_id = str(payload.get("entity_id", "162803"))
+async def analyze_live(payload: WorkbenchLiveAnalysisRequest):
+    source = payload.source
+    entity_id = str(payload.entity_id)
     session = engine.create_session(mode="live", workspace_name="Water Command Center")
     # Use the real LiveFieldContextAssembler; it degrades safely (truthful
     # warnings, no fabricated telemetry) so this route always returns a result.
@@ -68,6 +74,7 @@ async def analyze_live(payload: dict):
         live_source=source,
         live_entity_id=entity_id,
         live_context=live_context,
+        manual_overrides=payload.model_dump(exclude={"source", "entity_id"}, exclude_none=True),
     )
 
 @router.get('/sessions/{session_id}/report')
@@ -76,6 +83,46 @@ def get_report(session_id: str):
     if not store or not store.get("analysis"):
         raise HTTPException(404, "Report not available")
     return store["analysis"].report_summary
+
+
+@router.post('/sessions/{session_id}/actions/schedule')
+def schedule_action(session_id: str, payload: WorkbenchActionRequest):
+    try:
+        return engine.record_evidence_action(session_id, "scheduled", payload.actor, payload.evidence_summary, payload.payload)
+    except KeyError:
+        raise HTTPException(404, "Session not found")
+
+
+@router.post('/sessions/{session_id}/actions/applied')
+def applied_action(session_id: str, payload: WorkbenchActionRequest):
+    try:
+        return engine.record_evidence_action(session_id, "applied", payload.actor, payload.evidence_summary, payload.payload)
+    except KeyError:
+        raise HTTPException(404, "Session not found")
+
+
+@router.post('/sessions/{session_id}/actions/observe')
+def observe_action(session_id: str, payload: WorkbenchActionRequest):
+    try:
+        return engine.record_evidence_action(session_id, "observed", payload.actor, payload.evidence_summary, payload.payload)
+    except KeyError:
+        raise HTTPException(404, "Session not found")
+
+
+@router.post('/sessions/{session_id}/actions/verify')
+def verify_action(session_id: str, payload: WorkbenchActionRequest):
+    try:
+        return engine.record_evidence_action(session_id, "verified", payload.actor, payload.evidence_summary, payload.payload)
+    except KeyError:
+        raise HTTPException(404, "Session not found")
+
+
+@router.get('/sessions/{session_id}/evidence-chain')
+def evidence_chain(session_id: str):
+    try:
+        return engine.get_evidence_chain(session_id)
+    except KeyError:
+        raise HTTPException(404, "Session not found")
 
 @router.get('/schema')
 def schema():

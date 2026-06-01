@@ -11,6 +11,11 @@ Workbench Engine v1 powers the Water Command Center with real server-side parsin
 - `POST /v1/workbench/sample-package`
 - `GET /v1/workbench/sessions/{session_id}`
 - `GET /v1/workbench/sessions/{session_id}/report`
+- `POST /v1/workbench/sessions/{session_id}/actions/schedule`
+- `POST /v1/workbench/sessions/{session_id}/actions/applied`
+- `POST /v1/workbench/sessions/{session_id}/actions/observe`
+- `POST /v1/workbench/sessions/{session_id}/actions/verify`
+- `GET /v1/workbench/sessions/{session_id}/evidence-chain`
 - `GET /v1/workbench/schema`
 
 ## Supported File Types
@@ -45,7 +50,11 @@ Workbench analysis returns:
 - `normalized_context`: farm, block, crop, variety, soil, irrigation method, root-zone depth, growth stage, weather window, moisture deficit, flow variance, provider context, and field notes used.
 - `signal_summary`: counts for controller events, weather records, soil readings, field notes, flow-meter records, crop profiles, earth-observation rows, and water-cost records.
 - `reconciliation`: planned-vs-applied variance, controller validity, flow-meter agreement, weather demand, soil moisture deficit, field observation support, earth-observation support, missing inputs, conflicts, conflicts resolved, confidence, and evidence completeness.
-- `recommendation`: action, start time, duration, depth, confidence, key drivers, limitations, and verification requirement.
+- `recommendation`: action, start time, net depth, gross depth, estimated
+  volume, duration only when flow evidence exists, confidence, key drivers,
+  assumptions, limitations, missing inputs, calculation trace, calibration
+  status, calibration-pack version, recommendation origin, and verification
+  requirement.
 - `verification_plan`: recommended chain from recommendation through verification.
 - `report_summary`: water saved assumption, evidence completeness, applied variance, compliance posture, executive summary, and export rows.
 - `analysis_trace`: structured trace steps for the portal Intelligence Stream.
@@ -54,14 +63,14 @@ Workbench analysis returns:
 
 The trace is intentionally structured for UI animation:
 
-1. Ingested source files
-2. Detected schemas and aliases
-3. Normalized units and timestamps
-4. Matched farm, block, crop, and soil context
-5. Reconciled controller and flow-meter evidence
-6. Evaluated weather, soil deficit, and field notes
-7. Calculated confidence and evidence completeness
-8. Produced recommendation and verification plan
+1. Source records ingested
+2. Schema detected
+3. Units normalized
+4. Field context assembled
+5. Source conflicts reconciled
+6. Confidence scored
+7. Recommendation prepared
+8. Verification plan prepared
 
 Each step includes title, status, details, objects processed, and optional confidence delta.
 
@@ -101,23 +110,37 @@ Every analysis result now carries typed status fields:
 
 ### Current recommender behavior
 
-The Workbench recommender is **deterministic**. Above the confidence threshold
-it returns a representative operational shape (42 min / 12 mm net) and below it
-returns a truthful hold state: **"Decision pending source review"**. This fixed
-numeric output is therefore labelled `recommendation_origin: deterministic_engine`
-and must **not** be presented as calibrated agronomic precision.
+The Workbench recommender now routes uploaded and live analysis through the v0.2
+irrigation decision orchestrator. The orchestrator normalizes context through
+`IntelligenceEngineV1`, scores missing inputs, resolves transparent calibration
+defaults, and calls the deterministic agronomic decision kernel.
 
-The frontend labels its embedded evaluation scenarios as
-`representative_fallback` and clearly marks them as representative data.
+The kernel uses conservative formulas:
 
-### Remaining gap (agronomic-calibration sprint)
+- crop demand = ETo * crop coefficient
+- net irrigation need = crop demand - effective rainfall + validated root-zone
+  replenishment need - recent verified irrigation credit
+- gross irrigation need = net irrigation need / irrigation efficiency
+- required volume = gross irrigation need * field area
+- duration = required volume / validated system flow
 
-Routing live and uploaded analysis through `IntelligenceEngineV1` to produce
-calibrated numeric recommendations (which would emit `live_intelligence_engine`
-/ `uploaded_intelligence_engine`) is reserved for a dedicated agronomic
-calibration sprint. Until then the deterministic engine and representative
-fallbacks are the source of recommendation numbers, and that origin is exposed
-honestly through `recommendation_origin`.
+Duration is omitted unless validated flow or controller capacity evidence
+exists. Incomplete live context therefore returns `Inspect and collect required
+evidence` or `Decision pending source review` rather than fabricated precision.
+
+`recommendation_origin` is `live_intelligence_engine` for live requests and
+`uploaded_intelligence_engine` for uploaded/session analysis. Representative UI
+scenarios remain labelled `representative_fallback`.
+
+## Evidence Chain Evaluation Persistence
+
+The action routes record schedule approval, applied-water confirmation, field
+observation, and outcome verification in the existing in-memory evaluation
+session store. Responses include action status, timestamp, actor, evidence
+summary, updated evidence chain, and audit event.
+
+This is explicitly **evaluation-session persistence only**. It is not durable
+tenant persistence and must not be described as production audit storage.
 
 ## Current Limitations
 
@@ -128,8 +151,9 @@ honestly through `recommendation_origin`.
   for provider secrets.
 - Connected-field analysis is limited until credential vault and tenant
   provisioning are complete; live results degrade safely meanwhile.
-- The recommendation numbers are deterministic, not agronomically calibrated
-  (see "Remaining gap" above).
+- v0.2 calibration defaults are transparent defaults, not farm-specific
+  calibration. Farm-specific crop coefficients, soil curves, flow validation,
+  and controller application rates are production follow-ups.
 - XLSX parsing depends on `openpyxl`.
 - Optional model-assisted summary requires provider environment variables;
   deterministic analysis is always available.

@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { IntegrationSetupDrawer } from "../components/IntegrationSetupDrawer";
-import { StatusBadge } from "../components/StatusBadge";
+import { ProviderStatusList } from "../components/ProviderStatusList";
 
 const STEPS = [
   ["Choose source type", "Connected system, uploaded records, or API ingestion."],
@@ -10,12 +10,6 @@ const STEPS = [
   ["Run first analysis", "Run the decision pipeline against the connected or uploaded source."],
   ["Review decision", "Review the verified water decision and the evidence chain."],
   ["Export report", "Preview, export CSV, or print the executive report."],
-];
-
-const PROVIDERS = [
-  { name: "WiseConn", status: "Live-ready", tone: "ok" as const },
-  { name: "Talgil", status: "Runtime reachable", tone: "ok" as const },
-  { name: "Generic controller", status: "Available", tone: "neutral" as const },
 ];
 
 export function IntegrationsPage() {
@@ -45,19 +39,10 @@ export function IntegrationsPage() {
       <section className="card panel">
         <p className="eyebrow">Provider onboarding</p>
         <h2>Connect provider environments</h2>
-        <div className="provider-grid">
-          {PROVIDERS.map((p) => (
-            <article className="provider-card" key={p.name}>
-              <div className="drawer-item-head">
-                <h3>{p.name}</h3>
-                <StatusBadge label={p.status} tone={p.tone} />
-              </div>
-              <button className="btn compact" onClick={() => setProvider(p.name)}>
-                Request integration setup
-              </button>
-            </article>
-          ))}
-        </div>
+        <ProviderStatusList />
+        <button className="btn compact" onClick={() => setProvider("Provider runtime")}>
+          Request integration setup
+        </button>
         <p className="muted secure-note">
           Secure credential storage requires backend credential endpoints. This portal never stores provider credentials in
           browser storage.

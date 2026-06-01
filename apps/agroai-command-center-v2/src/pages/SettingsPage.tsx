@@ -1,4 +1,5 @@
 import { API_BASE } from "../api/client";
+import { ProviderStatusList } from "../components/ProviderStatusList";
 import { BackendBadge } from "../components/StatusBadge";
 import { useCommandStore } from "../state/commandStore";
 
@@ -31,6 +32,12 @@ export function SettingsPage() {
             <dd className="value">{backend.detail}</dd>
           </div>
         </dl>
+      </section>
+
+      <section className="card panel">
+        <p className="eyebrow">Provider runtime</p>
+        <h2>Dynamic integration status</h2>
+        <ProviderStatusList />
       </section>
 
       <section className="card panel">

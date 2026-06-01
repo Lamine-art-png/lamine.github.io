@@ -21,6 +21,7 @@ from app.services.live_field_context import (
     LiveContextAssemblerError,
     LiveFieldContextAssembler,
 )
+from app.services.irrigation_decision_orchestrator import IrrigationDecisionOrchestrator
 
 try:
     import openpyxl
@@ -83,7 +84,7 @@ def create_session(mode: str = "uploaded", workspace_name: str = "Water Command 
         updated_at=now,
         status="ready",
     )
-    SESSIONS[sid] = {"session": sess, "artifacts": [], "analysis": None, "audit": []}
+    SESSIONS[sid] = {"session": sess, "artifacts": [], "analysis": None, "audit": [], "evidence_actions": []}
     return sess
 
 
@@ -310,6 +311,9 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
     avg_eto = _avg(row.get("eto_mm", row.get("eto")) for row in weather_rows)
     rain_total = sum(value for value in (_to_float(row.get("rain_forecast_mm", row.get("rain"))) for row in weather_rows) if value)
     avg_deficit = _avg(row.get("deficit_percent") for row in soil_rows)
+    avg_moisture = _avg(row.get("moisture_percent") for row in soil_rows)
+    avg_flow = _avg(row.get("flow_m3h") for row in controller_rows if _to_float(row.get("flow_m3h")) and _to_float(row.get("flow_m3h")) > 0)
+    recent_depth = _avg(row.get("depth_mm") for row in controller_rows + flow_rows)
     max_flow_variance = _max_abs(row.get("variance_percent") for row in flow_rows)
     controller_variances = []
     for row in controller_rows:
@@ -342,6 +346,10 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
             "avg_eto_mm": avg_eto,
             "rain_forecast_total_mm": rain_total,
             "avg_deficit_percent": avg_deficit,
+            "avg_moisture_percent": avg_moisture,
+            "avg_flow_m3h": avg_flow,
+            "validated_flow_m3h": avg_flow,
+            "recent_irrigation_depth_mm": recent_depth,
             "max_flow_variance_percent": max_flow_variance,
             "max_controller_variance_percent": max_controller_variance,
             "applied_variance_percent": applied_variance,
@@ -428,9 +436,9 @@ def _map_live_context(assembled: Dict[str, Any], source: str, entity_id: str) ->
         {
             "signals": signals,
             "farm": farm_id or base["farm"],
-            "counts": counts,
-            "warnings": list(assembled.get("warnings", [])),
-            "live_inputs_used": list(assembled.get("live_inputs_used", [])),
+        "counts": counts,
+        "warnings": list(assembled.get("warnings", [])),
+        "live_inputs_used": list(assembled.get("live_inputs_used", [])),
             "context_origin": assembled.get("context_origin", "live"),
             "provider_context": f"{source} entity {entity_id}",
         }
@@ -548,45 +556,61 @@ def reconcile_signals(context: Dict[str, Any]) -> ReconciliationResult:
 
 
 def generate_recommendation(reconciliation: ReconciliationResult, context: Dict[str, Any]) -> Dict[str, Any]:
-    if reconciliation.confidence_score < 0.55:
-        return {
-            "action": "Decision pending source review",
-            "decision": "Decision pending source review",
-            "start_time": "After source review",
-            "start": "After source review",
-            "duration": "0 min",
-            "duration_min": 0,
-            "depth": "0 mm",
-            "depth_mm": 0,
-            "confidence": reconciliation.confidence_score,
-            "confidence_label": reconciliation.confidence_label,
-            "key_drivers": reconciliation.missing_inputs,
-            "limitations": ["Source package is incomplete for an operational water recommendation"],
-            "verification_requirement": "Load controller, weather, soil, and flow evidence before scheduling.",
-        }
+    origin = "live_intelligence_engine" if context.get("context_origin") == "live" else "uploaded_intelligence_engine"
+    orchestrated = IrrigationDecisionOrchestrator().run(context, mode=context.get("context_origin", "uploaded"), origin=origin)
+    decision = orchestrated["decision"]
+    key_drivers = decision.get("key_drivers") or reconciliation.missing_inputs
+    duration = decision.get("duration_minutes")
+    net_depth = decision.get("net_irrigation_depth_mm")
+    gross_depth = decision.get("gross_irrigation_depth_mm")
+    volume = decision.get("estimated_volume_m3")
+    action_label = decision.get("recommended_action") or "Decision pending source review"
+    if decision.get("action") == "irrigate":
+        if duration is not None:
+            action_label = f"Irrigate {gross_depth:.1f} mm gross in approved window"
+        else:
+            action_label = "Irrigate after validating flow evidence"
 
-    action = f"Irrigate {context.get('block', 'selected block')} tonight with verification watch"
-    return {
-        "action": action,
-        "decision": action,
-        "start_time": "21:00 PT",
-        "start": "21:00 PT",
-        "duration": "42 min",
-        "duration_min": 42,
-        "depth": "12 mm net",
-        "depth_mm": 12,
-        "confidence": reconciliation.confidence_score,
-        "confidence_label": reconciliation.confidence_label,
-        "key_drivers": [
-            reconciliation.weather_demand or "Weather demand evaluated",
-            reconciliation.soil_moisture_deficit or "Soil deficit evaluated",
-            reconciliation.flow_meter_agreement or "Flow-meter agreement evaluated",
-            reconciliation.field_observation_support or "Field notes evaluated",
-        ],
-        "limitations": reconciliation.missing_inputs,
-        "verification_requirement": "Schedule in the controller, compare applied duration and flow-meter volume, and confirm pump pressure after execution.",
+    recommendation = {
+        "action": action_label,
+        "decision": action_label,
+        "start_time": decision.get("timing_window"),
+        "start": decision.get("timing_window"),
+        "duration": f"{duration:.1f} min" if duration is not None else None,
+        "duration_min": duration,
+        "depth": f"{net_depth:.1f} mm net" if net_depth is not None else None,
+        "depth_mm": net_depth,
+        "gross_depth": f"{gross_depth:.1f} mm gross" if gross_depth is not None else None,
+        "gross_depth_mm": gross_depth,
+        "estimated_volume": f"{volume:.1f} m3" if volume is not None else None,
+        "estimated_volume_m3": volume,
+        "confidence": decision.get("confidence_score") / 100 if isinstance(decision.get("confidence_score"), (int, float)) else reconciliation.confidence_score,
+        "confidence_label": decision.get("confidence"),
+        "evidence_completeness": decision.get("evidence_completeness"),
+        "key_drivers": key_drivers,
+        "assumptions": decision.get("assumptions", []),
+        "limitations": decision.get("limitations", []),
+        "missing_inputs": decision.get("missing_inputs", []),
+        "verification_requirement": "; ".join(decision.get("verification_requirements", [])),
+        "calculation_trace": decision.get("calculation_trace", {}),
+        "calibration_status": decision.get("calibration_status"),
+        "calibration_pack_version": decision.get("calibration_pack_version"),
+        "recommendation_origin": origin,
+        "kernel_action": decision.get("action"),
+        "duration_basis": decision.get("duration_basis"),
+        "no_fabricated_duration": duration is None,
     }
 
+    if decision.get("action") in {"insufficient_data", "inspect"} or reconciliation.confidence_score < 0.55:
+        recommendation["limitations"] = list(
+            dict.fromkeys(
+                list(recommendation.get("limitations") or [])
+                + ["Source package is incomplete for an operational water recommendation"]
+            )
+        )
+        return recommendation
+
+    return recommendation
 
 def generate_analysis_summary(reconciliation: ReconciliationResult, recommendation: Dict[str, Any]) -> str:
     if os.getenv("OPENAI_API_KEY"):
@@ -600,10 +624,10 @@ def generate_analysis_summary(reconciliation: ReconciliationResult, recommendati
 def generate_report_artifact(session_id: str, recommendation: Dict[str, Any], reconciliation: ReconciliationResult, context: Dict[str, Any]) -> ReportArtifact:
     summary = generate_analysis_summary(reconciliation, recommendation)
     metrics = {
-        "water_saved_assumption": "Assumes verified scheduling avoids a catch-up cycle and limits the next application to 12 mm net.",
+        "water_saved_assumption": "Water-savings estimate is withheld until tenant-specific baseline and applied-water evidence are available.",
         "evidence_completeness": reconciliation.evidence_completeness,
         "applied_variance": reconciliation.planned_vs_applied_variance,
-        "compliance_posture": "SGMA-ready evidence package when controller execution is verified",
+        "compliance_posture": "Evaluation-session evidence package only; durable tenant persistence is future work.",
         "confidence": recommendation["confidence"],
     }
     return ReportArtifact(
@@ -632,56 +656,56 @@ def _analysis_trace(context: Dict[str, Any], reconciliation: ReconciliationResul
     signal_count = len(context.get("signals", []))
     return [
         {
-            "title": "Ingested source files",
+            "title": "Source records ingested",
             "status": "complete" if source_count else "limited",
             "details": f"{source_count} source kinds available; {signal_count} normalized signals prepared.",
             "objects_processed": signal_count,
             "confidence_delta": 0.08 if source_count >= 4 else -0.05,
         },
         {
-            "title": "Detected schemas and aliases",
+            "title": "Schema detected",
             "status": "complete" if source_count else "limited",
             "details": "Controller, weather, soil, notes, flow, crop, water-cost, and earth-observation schemas checked.",
             "objects_processed": source_count,
             "confidence_delta": 0.06 if source_count >= 6 else -0.03,
         },
         {
-            "title": "Normalized units and timestamps",
+            "title": "Units normalized",
             "status": "complete" if signal_count else "limited",
             "details": "Timestamps, duration fields, ETo, rain, deficit, flow, and variance fields were canonicalized.",
             "objects_processed": signal_count,
             "confidence_delta": 0.05 if signal_count else -0.04,
         },
         {
-            "title": "Matched farm, block, crop, and soil context",
+            "title": "Field context assembled",
             "status": "complete" if counts.get("crop_profile_loaded", 0) else "limited",
             "details": f"{context.get('farm')} / {context.get('block')} matched to {context.get('crop')} on {context.get('soil')} soil.",
             "objects_processed": counts.get("crop_profile_loaded", 0),
             "confidence_delta": 0.07 if counts.get("crop_profile_loaded", 0) else -0.05,
         },
         {
-            "title": "Reconciled controller and flow-meter evidence",
+            "title": "Source conflicts reconciled",
             "status": "review" if reconciliation.conflicts_detected else "complete",
             "details": f"{reconciliation.planned_vs_applied_variance} planned-vs-applied variance; {reconciliation.flow_meter_agreement}.",
             "objects_processed": counts.get("controller_events_read", 0) + counts.get("flow_meter_records_read", 0),
             "confidence_delta": -0.04 if reconciliation.conflicts_detected else 0.08,
         },
         {
-            "title": "Evaluated weather, soil deficit, and field notes",
+            "title": "Confidence scored",
             "status": "complete" if counts.get("weather_records_read", 0) and counts.get("soil_readings_read", 0) else "limited",
             "details": f"{reconciliation.weather_demand}; {reconciliation.soil_moisture_deficit}; {reconciliation.field_observation_support}.",
             "objects_processed": counts.get("weather_records_read", 0) + counts.get("soil_readings_read", 0) + counts.get("field_notes_parsed", 0),
             "confidence_delta": 0.09 if counts.get("weather_records_read", 0) and counts.get("soil_readings_read", 0) else -0.06,
         },
         {
-            "title": "Calculated confidence and evidence completeness",
+            "title": "Recommendation prepared",
             "status": "complete",
             "details": f"{reconciliation.confidence_label} confidence at {reconciliation.confidence_score}; evidence completeness {reconciliation.evidence_completeness}.",
             "objects_processed": len(reconciliation.matched_signals),
             "confidence_delta": 0.04,
         },
         {
-            "title": "Produced recommendation and verification plan",
+            "title": "Verification plan prepared",
             "status": "complete" if reconciliation.confidence_score >= 0.55 else "limited",
             "details": "Recommendation, limitations, report summary, and verification requirement assembled.",
             "objects_processed": 1,
@@ -731,12 +755,51 @@ def _public_context(context: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
+def _apply_manual_overrides(context: Dict[str, Any], overrides: Dict[str, Any] | None) -> Dict[str, Any]:
+    if not overrides:
+        return context
+    safe = {k: v for k, v in overrides.items() if v not in (None, "", {}, [])}
+    if "crop_type" in safe:
+        context["crop"] = safe["crop_type"]
+    if "soil_type" in safe:
+        context["soil"] = safe["soil_type"]
+    if "irrigation_method" in safe:
+        context["irrigation_method"] = safe["irrigation_method"]
+    if "area" in safe:
+        context["area"] = safe["area"]
+    if isinstance(safe.get("weather_context"), dict):
+        context.setdefault("metrics", {})
+        context["metrics"]["avg_eto_mm"] = safe["weather_context"].get("eto_mm", context["metrics"].get("avg_eto_mm"))
+        context["metrics"]["rain_forecast_total_mm"] = safe["weather_context"].get(
+            "precipitation_forecast_mm",
+            context["metrics"].get("rain_forecast_total_mm"),
+        )
+    if isinstance(safe.get("sensor_context"), dict):
+        context.setdefault("metrics", {})
+        sensor = safe["sensor_context"]
+        context["metrics"]["avg_moisture_percent"] = sensor.get("moisture_percent", context["metrics"].get("avg_moisture_percent"))
+        context["metrics"]["avg_flow_m3h"] = sensor.get("flow_m3h", context["metrics"].get("avg_flow_m3h"))
+        context["metrics"]["validated_flow_m3h"] = sensor.get("flow_m3h", context["metrics"].get("validated_flow_m3h"))
+        context["metrics"]["pressure_kpa"] = sensor.get("pressure_kpa", context["metrics"].get("pressure_kpa"))
+    if isinstance(safe.get("recent_irrigation_context"), dict):
+        context.setdefault("metrics", {})
+        context["metrics"]["recent_irrigation_depth_mm"] = safe["recent_irrigation_context"].get(
+            "last_depth_mm",
+            context["metrics"].get("recent_irrigation_depth_mm"),
+        )
+    if safe.get("field_observations"):
+        context["field_notes"] = list(context.get("field_notes", [])) + list(safe["field_observations"])
+    context["manual_overrides_used"] = sorted(safe.keys())
+    return context
+
+
 def analyze_session(
     session_id: str,
     mode: str = "uploaded",
     live_source: str | None = None,
     live_entity_id: str | None = None,
     live_context: Dict[str, Any] | None = None,
+    manual_overrides: Dict[str, Any] | None = None,
 ) -> WorkbenchAnalysisResult:
     store = SESSIONS[session_id]
     artifacts = store["artifacts"]
@@ -751,6 +814,7 @@ def analyze_session(
             merged = live_context if live_context is not None else assemble_context_from_live(live_source, live_entity_id)
             context["live_request"] = merged.get("live_request")
             context["provider_context"] = f"{context.get('provider_context', 'uploaded evidence')} + {live_source} entity {live_entity_id}"
+    context = _apply_manual_overrides(context, manual_overrides)
 
     reconciliation = reconcile_signals(context)
     recommendation = generate_recommendation(reconciliation, context)
@@ -766,6 +830,7 @@ def analyze_session(
     limitations = list(dict.fromkeys(recommendation.get("limitations", [])))
     if live_source and live_entity_id:
         limitations.append("Provider credential storage and tenant provisioning must be completed server-side before expanded live telemetry is available.")
+    limitations.extend(recommendation.get("missing_inputs", []))
 
     if is_live:
         analysis_mode_val = "live"
@@ -801,7 +866,7 @@ def analyze_session(
         # The Workbench recommender is deterministic. Live/uploaded intelligence
         # routing through IntelligenceEngineV1 is reserved for the agronomic
         # calibration sprint; until then we label the true origin.
-        recommendation_origin="deterministic_engine",
+        recommendation_origin=recommendation.get("recommendation_origin", "deterministic_engine"),
         context_origin=context_origin,
         live_inputs_used=list(context.get("live_inputs_used", [])),
         uploaded_artifacts_used=[artifact.filename for artifact in artifacts],
@@ -811,3 +876,85 @@ def analyze_session(
     store["session"].updated_at = datetime.utcnow()
     store["audit"].append({"time": datetime.utcnow().isoformat(), "event": "Workbench analysis completed", "mode": mode})
     return result
+
+
+EVIDENCE_ORDER = ["recommended", "scheduled", "applied", "observed", "verified"]
+EVIDENCE_LABELS = {
+    "recommended": "Recommended",
+    "scheduled": "Scheduled",
+    "applied": "Applied",
+    "observed": "Observed",
+    "verified": "Verified",
+}
+
+
+def get_evidence_chain(session_id: str) -> Dict[str, Any]:
+    store = SESSIONS.get(session_id)
+    if not store:
+        raise KeyError("Session not found")
+    now = datetime.utcnow().isoformat()
+    actions = list(store.get("evidence_actions", []))
+    latest_by_type = {item["type"]: item for item in actions}
+    chain = []
+    for key in EVIDENCE_ORDER:
+        event = latest_by_type.get(key)
+        if key == "recommended" and not event and store.get("analysis"):
+            event = {
+                "type": "recommended",
+                "timestamp": getattr(store["analysis"], "created_at", None).isoformat()
+                if getattr(store["analysis"], "created_at", None)
+                else now,
+                "actor": "AGRO-AI Workbench",
+                "evidence_summary": "Verified water decision prepared from the current source package.",
+            }
+        chain.append(
+            {
+                "key": key,
+                "label": EVIDENCE_LABELS[key],
+                "status": "Complete" if event else "Pending",
+                "owner": event.get("actor", "Operations user") if event else "Operations user",
+                "timestamp": event.get("timestamp", "") if event else "",
+                "evidence": event.get("evidence_summary", f"{EVIDENCE_LABELS[key]} pending") if event else f"{EVIDENCE_LABELS[key]} pending",
+            }
+        )
+    return {"session_id": session_id, "evidence_chain": chain, "audit_events": store.get("audit", [])}
+
+
+def record_evidence_action(session_id: str, action_type: str, actor: str, evidence_summary: str | None = None, payload: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    if action_type not in {"scheduled", "applied", "observed", "verified"}:
+        raise ValueError("Unsupported evidence action")
+    store = SESSIONS.get(session_id)
+    if not store:
+        raise KeyError("Session not found")
+    timestamp = datetime.utcnow().isoformat()
+    summary = evidence_summary or {
+        "scheduled": "Irrigation schedule approved for the recommended window.",
+        "applied": "Applied-water confirmation recorded for the evaluation session.",
+        "observed": "Field observation recorded for post-irrigation review.",
+        "verified": "Outcome verification recorded against available evidence.",
+    }[action_type]
+    event = {
+        "type": action_type,
+        "status": "recorded",
+        "timestamp": timestamp,
+        "actor": actor,
+        "evidence_summary": summary,
+        "payload": payload or {},
+    }
+    store.setdefault("evidence_actions", []).append(event)
+    audit = {
+        "time": timestamp,
+        "event": f"Evidence action recorded: {action_type}",
+        "actor": actor,
+        "evidence_summary": summary,
+        "persistence": "evaluation-session",
+    }
+    store["audit"].append(audit)
+    return {
+        "action_status": "recorded",
+        "timestamp": timestamp,
+        "actor": actor,
+        "evidence_summary": summary,
+        "updated_evidence_chain": get_evidence_chain(session_id)["evidence_chain"],
+        "audit_event": audit,
+    }

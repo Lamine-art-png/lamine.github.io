@@ -3,6 +3,7 @@ import { actions, useCommandStore } from "../state/commandStore";
 import { ENDPOINTS } from "../api/client";
 import { IntegrationSetupDrawer, buildSetupBrief } from "./IntegrationSetupDrawer";
 import { StatusBadge } from "./StatusBadge";
+import { ProviderStatusList } from "./ProviderStatusList";
 
 type Tab = "connected" | "upload" | "api" | "partner";
 
@@ -11,12 +12,6 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "upload", label: "Upload records" },
   { id: "api", label: "API access" },
   { id: "partner", label: "Partner feeds" },
-];
-
-const CONNECTED = [
-  { name: "WiseConn", status: "Live-ready", tone: "ok" as const, action: "Connect or configure" },
-  { name: "Talgil", status: "Runtime reachable", tone: "ok" as const, action: "Select production targets" },
-  { name: "Generic controller", status: "Available", tone: "neutral" as const, action: "Request connector setup" },
 ];
 
 const PARTNER = [
@@ -57,17 +52,10 @@ export function SourceDrawer() {
           <div className="drawer-body">
             {tab === "connected" && (
               <div className="drawer-list">
-                {CONNECTED.map((c) => (
-                  <article className="drawer-item" key={c.name}>
-                    <div className="drawer-item-head">
-                      <h4>{c.name}</h4>
-                      <StatusBadge label={c.status} tone={c.tone} />
-                    </div>
-                    <button className="btn compact" onClick={() => setBriefProvider(c.name)}>
-                      {c.action}
-                    </button>
-                  </article>
-                ))}
+                <ProviderStatusList compact />
+                <button className="btn compact" onClick={() => setBriefProvider("Provider runtime")}>
+                  Request integration setup
+                </button>
               </div>
             )}
 

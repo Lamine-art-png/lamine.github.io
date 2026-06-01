@@ -8,13 +8,13 @@ export default defineConfig({
   fullyParallel: true,
   reporter: [["list"]],
   use: {
-    baseURL: "http://127.0.0.1:4180",
+    baseURL: "http://localhost:4180",
     trace: "off",
     screenshot: "only-on-failure",
   },
   webServer: {
     command: "npm run build && npm run preview",
-    url: "http://127.0.0.1:4180",
+    url: "http://localhost:4180",
     timeout: 120_000,
     reuseExistingServer: !process.env.CI,
   },

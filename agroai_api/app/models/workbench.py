@@ -61,6 +61,37 @@ class WorkbenchAnalysisRequest(BaseModel):
     notes: Optional[str] = None
     language: Optional[str] = None
     user_role: Optional[str] = None
+    area: Optional[float] = None
+    weather_context: Optional[Dict[str, Any]] = None
+    sensor_context: Optional[Dict[str, Any]] = None
+    controller_context: Optional[Dict[str, Any]] = None
+    recent_irrigation_context: Optional[Dict[str, Any]] = None
+    field_observations: List[str] = Field(default_factory=list)
+    time_horizon: Optional[str] = None
+
+
+class WorkbenchLiveAnalysisRequest(BaseModel):
+    source: str = "wiseconn"
+    entity_id: str = "162803"
+    crop_type: Optional[str] = None
+    soil_type: Optional[str] = None
+    irrigation_method: Optional[str] = None
+    area: Optional[float] = None
+    location: Optional[Dict[str, Any]] = None
+    weather_context: Optional[Dict[str, Any]] = None
+    sensor_context: Optional[Dict[str, Any]] = None
+    controller_context: Optional[Dict[str, Any]] = None
+    recent_irrigation_context: Optional[Dict[str, Any]] = None
+    field_observations: List[str] = Field(default_factory=list)
+    language: Optional[str] = None
+    user_role: Optional[str] = None
+    time_horizon: Optional[str] = None
+
+
+class WorkbenchActionRequest(BaseModel):
+    actor: str = "Operations user"
+    evidence_summary: Optional[str] = None
+    payload: Dict[str, Any] = Field(default_factory=dict)
 
 class ReconciliationResult(BaseModel):
     matched_signals: List[str]
@@ -111,6 +142,7 @@ class WorkbenchAnalysisResult(BaseModel):
         "deterministic_engine",
         "live_intelligence_engine",
         "uploaded_intelligence_engine",
+        "insufficient_context",
     ] = "deterministic_engine"
     context_origin: Literal["representative", "uploaded", "live"] = "uploaded"
     live_inputs_used: List[str] = Field(default_factory=list)
