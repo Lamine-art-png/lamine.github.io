@@ -191,16 +191,11 @@ async function loadComplianceStatus() {
   }
 }
 
-function downloadComplianceExport(exportPackage) {
-  if (!exportPackage?.content_base64) return;
-  const binary = atob(exportPackage.content_base64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
-  const blob = new Blob([bytes], { type: exportPackage.mime_type || "application/octet-stream" });
+function downloadComplianceBlob(blob, fileName) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
-  link.download = exportPackage.file_name || `compliance-export-${exportPackage.id}`;
+  link.download = fileName || "compliance-export";
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -509,8 +504,9 @@ function bindShellEvents() {
       setComplianceState({ loading: true, error: "" });
       const response = await api.createComplianceExport(exportType);
       if (response.ok) {
-        setComplianceState({ loading: false, lastExport: response.data, error: "" });
-        downloadComplianceExport(response.data);
+        const download = await api.downloadComplianceExport(response.data.id);
+        if (download.ok) downloadComplianceBlob(download.data.blob, download.data.fileName);
+        setComplianceState({ loading: false, lastExport: response.data, error: download.ok ? "" : download.error });
       } else {
         setComplianceState({ loading: false, error: response.error || "Export failed" });
       }

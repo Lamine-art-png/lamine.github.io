@@ -32,6 +32,7 @@ export const ENDPOINTS = {
   complianceReconciliation: "/v1/compliance/reconciliation",
   complianceMeters: "/v1/compliance/assets/meters",
   complianceExports: "/v1/compliance/exports",
+  complianceExportDownload: (id) => `/v1/compliance/exports/${encodeURIComponent(id)}/download`,
 };
 
 export class ApiClient {
@@ -227,6 +228,33 @@ export class ApiClient {
 
   createComplianceExport(exportType = "json", workflowType = "gears_groundwater_extractor_readiness") {
     return this.request(ENDPOINTS.complianceExports, { method: "POST", headers: this.complianceHeaders(), body: { export_type: exportType, workflow_type: workflowType } });
+  }
+
+
+  async downloadComplianceExport(exportId) {
+    try {
+      const response = await fetch(`${this.baseUrl}${ENDPOINTS.complianceExportDownload(exportId)}`, {
+        method: "GET",
+        credentials: "include",
+        headers: this.complianceHeaders(),
+      });
+      if (!response.ok) {
+        let message = `HTTP ${response.status}`;
+        try {
+          const payload = await response.json();
+          message = payload?.detail || payload?.message || message;
+        } catch (_error) {
+          // ignore non-JSON error bodies
+        }
+        return { ok: false, status: response.status, error: message, data: null };
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("content-disposition") || "";
+      const match = disposition.match(/filename=([^;]+)/i);
+      return { ok: true, status: response.status, data: { blob, fileName: match?.[1]?.replaceAll('"', '') || `compliance-export-${exportId}` } };
+    } catch (error) {
+      return { ok: false, status: 0, error: error?.message || "Download request failed", data: null };
+    }
   }
 
   complianceHeaders() {

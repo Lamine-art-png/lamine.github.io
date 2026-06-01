@@ -33,7 +33,8 @@ class Settings(BaseSettings):
     ENABLE_METERING: bool = True
     CALIFORNIA_COMPLIANCE_PACK_ENABLED: bool = False
     COMPLIANCE_DEMO_FIXTURES_ENABLED: bool = False
-    COMPLIANCE_DEMO_TOKEN: str = "non-production-demo-compliance-token"
+    COMPLIANCE_DEMO_TOKEN: str = ""
+    COMPLIANCE_ALLOW_DATABASE_DEV_FALLBACK: bool = False
     COMPLIANCE_EXPORT_STORAGE_BACKEND: str = "database_dev_fallback"
 
     # Scheduler

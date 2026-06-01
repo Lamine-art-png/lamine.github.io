@@ -31,15 +31,9 @@ def prepare_export_storage(export_id: str, content: bytes, storage_backend: str)
             content_base64=base64.b64encode(content).decode("ascii"),
             content_bytes=len(content),
         )
-    # Object storage integration is intentionally abstract here: callers receive
-    # metadata, while production deployments should replace this with S3/GCS/R2
-    # upload code using server-side credentials.
-    return StoredExportContent(
-        storage_backend=storage_backend,
-        storage_ref=f"object://compliance-exports/{export_id}",
-        checksum_sha256=checksum,
-        content_base64=None,
-        content_bytes=len(content),
+    raise RuntimeError(
+        f"Compliance export storage backend '{storage_backend}' is not implemented. "
+        "Configure object storage before enabling production exports."
     )
 
 

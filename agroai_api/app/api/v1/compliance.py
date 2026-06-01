@@ -43,9 +43,13 @@ def get_compliance_repo(
         if x_organization_id and x_organization_id != tenant_id:
             raise HTTPException(status_code=403, detail="Organization header does not match authenticated tenant")
     elif demo_mode:
+        if not settings.COMPLIANCE_DEMO_TOKEN:
+            raise HTTPException(status_code=500, detail="Compliance demo fixtures enabled without COMPLIANCE_DEMO_TOKEN")
         if x_compliance_demo_token != settings.COMPLIANCE_DEMO_TOKEN:
             raise HTTPException(status_code=401, detail="Missing or invalid non-production demo compliance token")
-        tenant_id = x_organization_id or ORG_ID
+        if x_organization_id and x_organization_id != ORG_ID:
+            raise HTTPException(status_code=403, detail="Demo compliance token is limited to the approved fixture tenant")
+        tenant_id = ORG_ID
         actor = "non-production-demo-fixture"
     else:
         raise HTTPException(status_code=401, detail="Missing API key or authenticated compliance session")
@@ -91,6 +95,10 @@ class EvidenceIn(BaseModel):
         if value not in TRUTH_LABELS:
             raise ValueError(f"truth_label must be one of {sorted(TRUTH_LABELS)}")
         return value
+
+
+def _safe_download_filename(filename: str) -> str:
+    return "".join(ch for ch in filename if ch.isalnum() or ch in ("-", "_", ".")).strip(".") or "compliance-export.bin"
 
 
 class ExportIn(BaseModel):
@@ -148,7 +156,10 @@ def get_water_budgets(repo: ComplianceRepository = Depends(get_compliance_repo))
 
 @router.get("/readiness")
 def get_readiness(workflow_type: str = Query("gears_groundwater_extractor_readiness"), repo: ComplianceRepository = Depends(get_compliance_repo)) -> dict[str, Any]:
-    return services.readiness_from_repository(repo, workflow_type)
+    try:
+        return services.readiness_from_repository(repo, workflow_type)
+    except (ValueError, PermissionError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 @router.post("/evidence", status_code=201)
@@ -166,7 +177,12 @@ def get_audit_log(repo: ComplianceRepository = Depends(get_compliance_repo)) -> 
 
 @router.post("/exports", status_code=201)
 def create_export(payload: ExportIn, repo: ComplianceRepository = Depends(get_compliance_repo)) -> dict[str, Any]:
-    return services.compose_export_from_repository(repo, payload.export_type, payload.workflow_type)
+    try:
+        return services.compose_export_from_repository(repo, payload.export_type, payload.workflow_type)
+    except (ValueError, PermissionError) as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
 
 
 @router.get("/exports/{export_id}")
@@ -179,7 +195,7 @@ def get_export(export_id: str, repo: ComplianceRepository = Depends(get_complian
 
 @router.get("/exports/{export_id}/download")
 def download_export(export_id: str, repo: ComplianceRepository = Depends(get_compliance_repo)) -> Response:
-    package = repo.get_export(export_id)
+    package = repo.get_export(export_id, include_content=True)
     if not package:
         raise HTTPException(status_code=404, detail="Export package not found")
     try:
@@ -189,5 +205,5 @@ def download_export(export_id: str, repo: ComplianceRepository = Depends(get_com
     return Response(
         content=content,
         media_type=package.get("mime_type") or "application/octet-stream",
-        headers={"Content-Disposition": f"attachment; filename={package.get('file_name') or export_id}"},
+        headers={"Content-Disposition": f"attachment; filename={_safe_download_filename(package.get('file_name') or export_id)}"},
     )

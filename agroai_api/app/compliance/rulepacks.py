@@ -12,7 +12,7 @@ CALIFORNIA_PACK = {
     "authority_name": "California SGMA / GEARS reporting authorities",
     "effective_date": "2026-01-01",
     "workflow_types": ["gears_groundwater_extractor_readiness", "sgma_gsa_annual_report_readiness"],
-    "legal_review_status": "approved",
+    "legal_review_status": "internal_alpha_pending_external_validation",
     "enabled": True,
     "required_fields": ["reporting_year", "owner_details", "well_identifier", "well_location", "monthly_groundwater_extraction_volumes", "measurement_method"],
     "conditional_fields": [{"field": "agent_authorization_evidence", "required_when": "reporting_agent_details present"}],
@@ -57,7 +57,7 @@ def research_pack(pack_id: str, country_code: str, region: str, authority: str) 
         "authority": authority,
         "authority_name": authority,
         "effective_date": None,
-        "workflow_types": [],
+        "workflow_types": [f"{pack_id}_readiness"],
         "legal_review_status": "research_only_legal_review_required",
         "enabled": False,
         "required_fields": [],
@@ -82,3 +82,23 @@ RESEARCH_ONLY_PACKS = [
 ]
 
 GLOBAL_PACK_CATALOG = [CALIFORNIA_PACK, ARIZONA_ALPHA_PACK, *RESEARCH_ONLY_PACKS]
+
+CUSTOMER_FACING_LEGAL_STATUSES = {"internal_alpha_pending_external_validation"}
+
+
+def find_pack_for_workflow(workflow_type: str) -> dict | None:
+    for pack in GLOBAL_PACK_CATALOG:
+        if workflow_type in pack.get("workflow_types", []):
+            return pack
+    return None
+
+
+def validate_customer_workflow(workflow_type: str) -> dict:
+    pack = find_pack_for_workflow(workflow_type)
+    if not pack:
+        raise ValueError(f"Unknown compliance workflow_type: {workflow_type}")
+    if not pack.get("enabled"):
+        raise PermissionError(f"Compliance workflow_type '{workflow_type}' is not enabled for customer-facing readiness or exports")
+    if pack.get("legal_review_status") not in CUSTOMER_FACING_LEGAL_STATUSES:
+        raise PermissionError(f"Compliance workflow_type '{workflow_type}' is blocked by legal-review gate")
+    return pack

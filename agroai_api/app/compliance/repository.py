@@ -67,11 +67,13 @@ class ComplianceRepository:
         ))
         for jur in VINEYARD_FIXTURE["jurisdictions"]:
             self.db.add(ComplianceJurisdiction(
-                id=jur["id"], tenant_id=self.tenant_id, country_code="US", state=jur["state"], county=jur["county"],
+                id=jur["id"], tenant_id=self.tenant_id, country_code="US", region_name="California",
+                state=jur["state"], county=jur["county"], admin_area_1=jur["state"], admin_area_2=jur["county"],
                 basin=jur["basin"], subbasin=jur["subbasin"], gsa=jur["gsa"], district=jur["district"],
-                authority_name=jur["gsa"], jurisdiction_pack=jur["jurisdiction_pack"], pack_version=jur["pack_version"],
+                authority_name=jur["gsa"], authority_type="gsa", authority_code=jur["gsa"], jurisdiction_kind="groundwater_reporting",
+                jurisdiction_pack=jur["jurisdiction_pack"], pack_version=jur["pack_version"],
                 reporting_year=str(jur["reporting_year"]), reporting_deadline=date.fromisoformat(jur["reporting_deadline"]),
-                workflow_type=jur["workflow_type"], legal_review_status="approved", enabled=True,
+                workflow_type=jur["workflow_type"], legal_review_status="internal_alpha_pending_external_validation", enabled=True,
             ))
         for parcel in VINEYARD_FIXTURE["parcels"]:
             self.db.add(ComplianceParcel(id=parcel["id"], tenant_id=self.tenant_id, apn=parcel["apn"], geometry_ref=parcel["geometry_ref"], county=parcel["county"]))
@@ -111,7 +113,7 @@ class ComplianceRepository:
 
     def jurisdictions(self) -> list[dict[str, Any]]:
         rows = self.db.query(ComplianceJurisdiction).filter(ComplianceJurisdiction.tenant_id == self.tenant_id).all()
-        return [{"id": r.id, "organization_id": r.tenant_id, "country_code": r.country_code, "state": r.state, "county": r.county, "basin": r.basin, "subbasin": r.subbasin, "gsa": r.gsa, "district": r.district, "authority_name": r.authority_name, "jurisdiction_pack": r.jurisdiction_pack, "pack_version": r.pack_version, "reporting_year": int(r.reporting_year) if str(r.reporting_year).isdigit() else r.reporting_year, "reporting_deadline": r.reporting_deadline.isoformat(), "workflow_type": r.workflow_type, "legal_review_status": r.legal_review_status, "enabled": r.enabled} for r in rows]
+        return [{"id": r.id, "organization_id": r.tenant_id, "country_code": r.country_code, "region_name": r.region_name, "state": r.state, "county": r.county, "admin_area_1": r.admin_area_1, "admin_area_2": r.admin_area_2, "authority_type": r.authority_type, "authority_code": r.authority_code, "jurisdiction_kind": r.jurisdiction_kind, "basin": r.basin, "subbasin": r.subbasin, "gsa": r.gsa, "district": r.district, "authority_name": r.authority_name, "jurisdiction_pack": r.jurisdiction_pack, "pack_version": r.pack_version, "reporting_year": int(r.reporting_year) if str(r.reporting_year).isdigit() else r.reporting_year, "reporting_deadline": r.reporting_deadline.isoformat(), "workflow_type": r.workflow_type, "legal_review_status": r.legal_review_status, "enabled": r.enabled} for r in rows]
 
     def parcels(self) -> list[dict[str, Any]]:
         return [{"id": r.id, "organization_id": r.tenant_id, "apn": r.apn, "geometry_ref": r.geometry_ref, "county": r.county} for r in self.db.query(ComplianceParcel).filter(ComplianceParcel.tenant_id == self.tenant_id).all()]
@@ -126,11 +128,27 @@ class ComplianceRepository:
         rows = self.db.query(ComplianceMeasurement).filter(ComplianceMeasurement.tenant_id == self.tenant_id).order_by(ComplianceMeasurement.source_timestamp).all()
         return [{"id": r.id, "organization_id": r.tenant_id, "asset_type": r.related_asset_type, "asset_id": r.related_asset_id, "measurement_type": r.measurement_type, "value": r.value, "unit": r.unit, "method": r.method, "truth_label": r.truth_label, "source_system": r.source_system, "source_timestamp": r.source_timestamp.isoformat(), "ingestion_timestamp": r.ingestion_timestamp.isoformat(), "quality_status": r.quality_status, "confidence": r.confidence, "reporting_period": r.reporting_period, "correction_lineage": r.correction_lineage or []} for r in rows]
 
+    def _asset_exists(self, asset_type: str, asset_id: str) -> bool:
+        model_by_type = {
+            "parcel": ComplianceParcel, "parcels": ComplianceParcel,
+            "well": ComplianceWell, "wells": ComplianceWell,
+            "meter": ComplianceMeter, "meters": ComplianceMeter,
+        }
+        model = model_by_type.get(asset_type)
+        if not model:
+            return False
+        return self.db.query(model).filter(model.tenant_id == self.tenant_id, model.id == asset_id).first() is not None
+
     def add_measurement(self, payload: dict[str, Any]) -> dict[str, Any]:
         label = payload.get("truth_label")
         if label not in TRUTH_LABELS:
             raise ValueError(f"truth_label must be one of {sorted(TRUTH_LABELS)}")
-        source_ts = datetime.fromisoformat(str(payload["source_timestamp"]).replace("Z", "+00:00")).replace(tzinfo=None)
+        if not self._asset_exists(payload["asset_type"], payload["asset_id"]):
+            raise ValueError("related asset does not exist for authenticated tenant")
+        try:
+            source_ts = datetime.fromisoformat(str(payload["source_timestamp"]).replace("Z", "+00:00")).replace(tzinfo=None)
+        except ValueError as exc:
+            raise ValueError("source_timestamp must be a valid ISO-8601 timestamp") from exc
         row = ComplianceMeasurement(id=payload.get("id") or f"meas-{uuid.uuid4().hex[:12]}", tenant_id=self.tenant_id, measurement_type=payload["measurement_type"], source_system=payload["source_system"], truth_label=label, source_timestamp=source_ts, ingestion_timestamp=datetime.now(timezone.utc).replace(tzinfo=None), value=float(payload["value"]), unit=payload["unit"], method=payload["method"], confidence=payload.get("confidence"), quality_status=payload.get("quality_status", "pending_review"), related_asset_type=payload["asset_type"], related_asset_id=payload["asset_id"], reporting_period=str(payload["reporting_period"]), correction_lineage=payload.get("correction_lineage", []))
         self.db.add(row)
         self.db.commit()
@@ -175,9 +193,9 @@ class ComplianceRepository:
         )
         self.db.add(row)
         self.db.commit()
-        return package
+        return metadata_payload
 
-    def get_export(self, export_id: str) -> dict[str, Any] | None:
+    def get_export(self, export_id: str, include_content: bool = False) -> dict[str, Any] | None:
         row = self.db.query(ComplianceExport).filter(ComplianceExport.tenant_id == self.tenant_id, ComplianceExport.id == export_id).first()
         if not row:
             return None
@@ -187,6 +205,8 @@ class ComplianceRepository:
             "format": row.export_type, "readiness_status": row.readiness_status, "file_name": row.file_name,
             "mime_type": row.mime_type, "storage_backend": row.storage_backend, "storage_ref": row.storage_ref,
             "checksum_sha256": row.checksum_sha256, "content_bytes": row.content_bytes,
-            "content_base64": row.content_base64, "download_available": bool(row.content_base64),
+            "download_available": bool(row.content_base64),
         })
+        if include_content:
+            payload["content_base64"] = row.content_base64
         return payload

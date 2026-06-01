@@ -135,21 +135,29 @@ def readiness(workflow_type: str = "gears_groundwater_extractor_readiness", orga
     warnings = []
     stale_telemetry = []
     anomalies = []
-    if any(m.get("quality_status") == "gap_estimate" for m in measurements):
-        stale_telemetry.append({"asset_id": "well-sv-02", "window": "2026-06-12/2026-06-20", "severity": "blocking", "truth_label": "estimated"})
-        missing_evidence.append("manual_reading_evidence_for_june_gap")
+    now = datetime.now(timezone.utc).date()
+    for measurement in measurements:
+        correction_lineage = measurement.get("correction_lineage") or []
+        gap_lineage = next((item for item in correction_lineage if item.get("missing_window") or "gap" in str(item.get("reason", "")).lower()), None)
+        if measurement.get("quality_status") == "gap_estimate" or gap_lineage:
+            asset_id = measurement.get("asset_id") or measurement.get("related_asset_id")
+            window = (gap_lineage or {}).get("missing_window") or measurement.get("source_timestamp")
+            stale_telemetry.append({"asset_id": asset_id, "window": window, "severity": "blocking", "truth_label": measurement.get("truth_label", "estimated")})
+            missing_evidence.append(f"manual_reading_evidence_for_{asset_id or 'asset'}_{measurement.get('reporting_period', 'period')}")
     for meter in meters:
         cal = date.fromisoformat(meter["calibration_date"])
-        if (date(2026, 7, 1) - cal).days > 365:
-            warnings.append({"code": "stale_calibration", "meter_id": meter["id"], "calibration_date": meter["calibration_date"]})
+        age_days = (now - cal).days
+        if age_days > 365:
+            warnings.append({"code": "stale_calibration", "meter_id": meter["id"], "calibration_date": meter["calibration_date"], "age_days": age_days})
     for budget in water_budget_status(organization_id):
         if budget["threshold_status"] == "alert":
             warnings.append({"code": "water_budget_threshold_alert", "budget_id": budget["id"], "projected_balance_af": budget["projected_balance_af"]})
     for row in reconciliation(organization_id):
         if abs(row["variance_pct"]) > 10:
             anomalies.append({"code": "application_variance", "reconciliation_id": row["id"], "variance_pct": row["variance_pct"]})
-    blocking = missing_fields + [item["code"] if "code" in item else "stale_telemetry" for item in stale_telemetry]
+    blocking = missing_fields + ["stale_telemetry" for _ in stale_telemetry]
     deductions = len(blocking) * 18 + len(warnings) * 6 + len(anomalies) * 5
+    next_action = f"Attach missing evidence: {missing_evidence[0]}." if missing_evidence else "Reviewer can approve the package for export."
     return {
         "workflow_type": workflow_type,
         "readiness_percentage": max(0, 100 - deductions),
@@ -162,9 +170,8 @@ def readiness(workflow_type: str = "gears_groundwater_extractor_readiness", orga
         "unresolved_anomalies": anomalies,
         "upcoming_deadlines": [j for j in list_jurisdictions(organization_id) if j["workflow_type"] == workflow_type],
         "disclaimer": DISCLAIMER,
-        "next_required_action": "Attach manual reading evidence for June telemetry gap before export review." if stale_telemetry else "Reviewer can approve the package for export.",
+        "next_required_action": next_action,
     }
-
 
 def status(organization_id: str | None = None) -> dict[str, Any]:
     return {
@@ -201,8 +208,8 @@ def compose_export(export_type: str, workflow_type: str, organization_id: str | 
         "reconciliation": reconciliation(organization_id),
         "readiness": readiness(workflow_type, organization_id),
         "provenance": {"source": "AGRO-AI compliance kernel", "truth_labels_required": sorted(TRUTH_LABELS), "direct_filing": False},
-        "assumptions": ["Missing June telemetry for SV-WELL-02 is estimated and flagged; not a certified measurement."],
-        "missing_data_flags": ["SV-WELL-02 June telemetry gap"],
+        "assumptions": ["Estimated values are labeled as estimates and are not certified measurements."],
+        "missing_data_flags": [item["window"] for item in readiness(workflow_type, organization_id).get("stale_telemetry", [])],
         "methodology": "Values are reported, measured, estimated, calculated, or AI-inferred according to record-level truth labels. Estimates remain explicitly labeled.",
         "disclaimer": DISCLAIMER,
     }
@@ -230,7 +237,7 @@ def get_export(export_id: str, organization_id: str | None = None) -> dict[str, 
 from app.compliance.exporters import render_export_content  # noqa: E402
 from app.compliance.storage import prepare_export_storage  # noqa: E402
 from app.core.config import settings  # noqa: E402
-from app.compliance.rulepacks import GLOBAL_PACK_CATALOG  # noqa: E402
+from app.compliance.rulepacks import GLOBAL_PACK_CATALOG, validate_customer_workflow  # noqa: E402
 
 
 def water_budget_status_from_records(budgets: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -245,6 +252,10 @@ def water_budget_status_from_records(budgets: list[dict[str, Any]]) -> list[dict
 
 
 def readiness_from_repository(repo, workflow_type: str = "gears_groundwater_extractor_readiness") -> dict[str, Any]:
+    pack = validate_customer_workflow(workflow_type)
+    thresholds = pack.get("warning_thresholds", {})
+    telemetry_gap_days = int(thresholds.get("telemetry_gap_days", 14))
+    stale_calibration_days = int(thresholds.get("stale_calibration_days", 365))
     org = repo.organization()
     wells = repo.wells()
     meters = repo.meters()
@@ -252,6 +263,7 @@ def readiness_from_repository(repo, workflow_type: str = "gears_groundwater_extr
     evidence_rows = repo.evidence()
     budgets = water_budget_status_from_records(repo.water_budgets())
     recons = repo.reconciliation()
+    now = datetime.now(timezone.utc).date()
     missing_fields: list[str] = []
     if not org.get("owner"):
         missing_fields.append("owner_details")
@@ -269,15 +281,21 @@ def readiness_from_repository(repo, workflow_type: str = "gears_groundwater_extr
 
     stale_telemetry = []
     missing_evidence = []
-    if any(m.get("quality_status") == "gap_estimate" for m in measurements):
-        stale_telemetry.append({"asset_id": "well-sv-02", "window": "2026-06-12/2026-06-20", "severity": "blocking", "truth_label": "estimated"})
-        missing_evidence.append("manual_reading_evidence_for_june_gap")
+    for measurement in measurements:
+        correction_lineage = measurement.get("correction_lineage") or []
+        gap_lineage = next((item for item in correction_lineage if item.get("missing_window") or "gap" in str(item.get("reason", "")).lower()), None)
+        if measurement.get("quality_status") == "gap_estimate" or gap_lineage:
+            window = (gap_lineage or {}).get("missing_window") or measurement.get("source_timestamp")
+            asset_id = measurement.get("asset_id") or measurement.get("related_asset_id")
+            stale_telemetry.append({"asset_id": asset_id, "window": window, "severity": "blocking", "truth_label": measurement.get("truth_label", "estimated"), "threshold_days": telemetry_gap_days})
+            missing_evidence.append(f"manual_reading_evidence_for_{asset_id or 'asset'}_{measurement.get('reporting_period', 'period')}")
     warnings = []
     for meter in meters:
         if meter.get("calibration_date"):
             cal = date.fromisoformat(meter["calibration_date"])
-            if (date(2026, 7, 1) - cal).days > 365:
-                warnings.append({"code": "stale_calibration", "meter_id": meter["id"], "calibration_date": meter["calibration_date"]})
+            age_days = (now - cal).days
+            if age_days > stale_calibration_days:
+                warnings.append({"code": "stale_calibration", "meter_id": meter["id"], "calibration_date": meter["calibration_date"], "age_days": age_days, "threshold_days": stale_calibration_days})
     for budget in budgets:
         if budget["threshold_status"] == "alert":
             warnings.append({"code": "water_budget_threshold_alert", "budget_id": budget["id"], "projected_balance_af": budget["projected_balance_af"]})
@@ -290,6 +308,14 @@ def readiness_from_repository(repo, workflow_type: str = "gears_groundwater_extr
             anomalies.append({"code": "application_variance", "reconciliation_id": row["id"], "variance_pct": round(variance_pct, 2)})
     blocking = missing_fields + ["stale_telemetry" for _ in stale_telemetry]
     deductions = len(blocking) * 18 + len(warnings) * 6 + len(anomalies) * 5
+    if missing_evidence:
+        next_action = f"Attach missing evidence: {missing_evidence[0]}."
+    elif anomalies:
+        next_action = "Review unresolved reconciliation anomalies before export review."
+    elif warnings:
+        next_action = "Review compliance warnings before export review."
+    else:
+        next_action = "Reviewer can approve the package for export."
     return {
         "workflow_type": workflow_type,
         "readiness_percentage": max(0, 100 - deductions),
@@ -302,9 +328,8 @@ def readiness_from_repository(repo, workflow_type: str = "gears_groundwater_extr
         "unresolved_anomalies": anomalies,
         "upcoming_deadlines": [j for j in repo.jurisdictions() if j["workflow_type"] == workflow_type],
         "disclaimer": DISCLAIMER,
-        "next_required_action": "Attach manual reading evidence for June telemetry gap before export review." if stale_telemetry else "Reviewer can approve the package for export.",
+        "next_required_action": next_action,
     }
-
 
 def status_from_repository(repo) -> dict[str, Any]:
     return {
@@ -319,6 +344,7 @@ def status_from_repository(repo) -> dict[str, Any]:
 
 
 def compose_export_from_repository(repo, export_type: str, workflow_type: str) -> dict[str, Any]:
+    validate_customer_workflow(workflow_type)
     package = {
         "id": f"export-{uuid.uuid4().hex[:10]}",
         "format": export_type,
@@ -333,11 +359,13 @@ def compose_export_from_repository(repo, export_type: str, workflow_type: str) -
         "readiness": readiness_from_repository(repo, workflow_type),
         "provenance": {"source": "AGRO-AI global compliance kernel", "truth_labels_required": sorted(TRUTH_LABELS), "direct_filing": False},
         "assumptions": ["Estimated values are labeled as estimates and are not certified measurements."],
-        "missing_data_flags": ["SV-WELL-02 June telemetry gap"] if repo.tenant_id == ORG_ID else [],
+        "missing_data_flags": [item["window"] for item in readiness_from_repository(repo, workflow_type).get("stale_telemetry", [])],
         "methodology": "Values are reported, measured, estimated, calculated, or AI-inferred according to record-level truth labels. Estimates remain explicitly labeled.",
         "disclaimer": DISCLAIMER,
     }
     content, mime_type, file_name = render_export_content(package, export_type)
+    if settings.COMPLIANCE_EXPORT_STORAGE_BACKEND == "database_dev_fallback" and not settings.COMPLIANCE_ALLOW_DATABASE_DEV_FALLBACK:
+        raise RuntimeError("COMPLIANCE_ALLOW_DATABASE_DEV_FALLBACK must be true to store export binaries in the database")
     stored = prepare_export_storage(package["id"], content, settings.COMPLIANCE_EXPORT_STORAGE_BACKEND)
     package["mime_type"] = mime_type
     package["file_name"] = file_name

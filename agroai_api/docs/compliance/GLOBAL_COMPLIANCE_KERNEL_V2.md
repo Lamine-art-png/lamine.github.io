@@ -2,7 +2,7 @@
 
 ## Current repository state
 
-The local checkout does not expose a configured Git remote and direct GitHub access returned a 403 tunnel response, so this correction pass could not fetch the latest remote `main`. It was applied to the latest available local branch state. The expected `apps/agroai-command-center-v2/` directory from PR 53 was also absent locally, so this patch adds the native Compliance page files in that path without modifying unknown PR 53 files.
+The local checkout now has `origin` configured for `Lamine-art-png/lamine.github.io`, but direct GitHub fetch/push access returned a `CONNECT tunnel failed, response 403` error in this environment. This correction pass was applied to the latest available local branch state and could not verify or update the remote branch from here.
 
 ## Security model
 
@@ -35,15 +35,24 @@ Rendered CSV, XLSX, JSON, and PDF files are real export artifacts. The relationa
 - SHA-256 checksum;
 - byte length.
 
-`database_dev_fallback` stores base64 content in `compliance_exports.content_base64` only for local development and controlled demos. Production should set `COMPLIANCE_EXPORT_STORAGE_BACKEND` to an object-storage implementation and store rendered files in S3/GCS/R2 or equivalent using server-side credentials. Direct browser-stored API keys are not part of the production design.
+`database_dev_fallback` stores base64 content in `compliance_exports.content_base64` only when `COMPLIANCE_ALLOW_DATABASE_DEV_FALLBACK=true` for local development and controlled demos. Production should keep that setting false and configure a real object-storage backend before enabling exports. If object storage is not implemented, export creation fails closed instead of returning fake storage references. Direct browser-stored API keys are not part of the production design.
 
 ## Jurisdiction packs
 
-- California remains the first approved/enabled pack for SGMA GSA annual-readiness and GEARS groundwater-extractor readiness.
+- California remains the first controlled/enabled reporting-readiness pack for SGMA GSA annual-readiness and GEARS groundwater-extractor readiness, with legal-review status `internal_alpha_pending_external_validation` rather than legal approval.
 - Arizona is the first substantive non-California alpha pack and remains disabled pending legal review.
 - Other U.S. and international packs are disabled research-only skeletons with legal-review gates.
 
 Each pack retains pack ID, version, country code, region, authority, workflow types, legal-review status, enabled status, required fields, conditional fields, validation rules, deadlines, warning thresholds, export schema, disclaimer, source references, and last-reviewed date.
+
+## Deployment order
+
+1. Deploy migration-safe code with `CALIFORNIA_COMPLIANCE_PACK_ENABLED=false`.
+2. Run `alembic upgrade head`.
+3. Verify compliance tables, workflow columns, and `compliance_exports` metadata columns.
+4. Enable `CALIFORNIA_COMPLIANCE_PACK_ENABLED` only after schema verification.
+
+Application startup intentionally excludes `compliance_*` tables from production `Base.metadata.create_all()`; Alembic owns the compliance schema. Isolated tests may still call `Base.metadata.create_all()` directly.
 
 ## Migration safety
 
