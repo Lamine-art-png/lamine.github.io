@@ -20,7 +20,7 @@ from app.models.forecast import Forecast
 from app.models.compliance import (
     ComplianceJurisdiction, ComplianceOrganizationRole, ComplianceParcel,
     ComplianceWell, ComplianceMeter, ComplianceMeasurement, ComplianceExecutionLedger,
-    ComplianceWaterBudget, ComplianceEvidence, ComplianceRulePack, ComplianceReadinessSnapshot,
+    ComplianceWaterBudget, ComplianceEvidence, ComplianceRulePack, ComplianceReadinessSnapshot, ComplianceExport,
 )
 
 __all__ = [
@@ -53,4 +53,5 @@ __all__ = [
     "ComplianceEvidence",
     "ComplianceRulePack",
     "ComplianceReadinessSnapshot",
+    "ComplianceExport",
 ]

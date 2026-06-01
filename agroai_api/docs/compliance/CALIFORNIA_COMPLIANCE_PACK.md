@@ -34,7 +34,7 @@ The attached `AGRO-AI_SGMA_GEARS_Data_Dictionary.xlsx` was requested as the cano
 
 ## Endpoint documentation
 
-All endpoints require the feature flag and are tenant-scoped by `X-Organization-Id` when supplied.
+All endpoints require the feature flag and derive tenant scope from authenticated API-key/session context. `X-Organization-Id` is only a match-check for authenticated tenants or an explicit non-production demo selector.
 
 - `GET /v1/compliance/status`
 - `GET /v1/compliance/jurisdictions`
@@ -77,3 +77,15 @@ CALIFORNIA_COMPLIANCE_PACK_ENABLED=true pytest tests/unit/test_compliance_pack.p
 - The PDF/XLSX composers return structured placeholders for Phase 1 rather than binary rendered files.
 - The workbook field dictionary was unavailable in this repository and should be reconciled before broader rollout.
 - The fixture is representative California vineyard data, not customer production data.
+
+
+## Global kernel v2 update
+
+Production compliance services now use tenant-scoped database repositories. The California fixture remains available only when `COMPLIANCE_DEMO_FIXTURES_ENABLED=true`; otherwise requests require an API key tied to the existing tenant authentication model. CSV, XLSX, JSON, and PDF exports are generated as downloadable evidence packages and persisted in `compliance_exports`.
+
+
+## Correction pass security update
+
+Production portal JavaScript must not embed tenant API keys. Compliance requests now derive tenant scope from an authenticated API key/session or a future short-lived backend-issued token. The `X-Organization-Id` header is accepted only as a match-check for authenticated tenants or for explicitly enabled non-production demo fixtures.
+
+Export binaries are rendered as real CSV/XLSX/PDF/JSON artifacts. The database stores export metadata and a development-only `database_dev_fallback` may store base64 content for local demos; production should use object storage via server-side credentials.

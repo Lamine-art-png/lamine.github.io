@@ -1,6 +1,6 @@
 """SQLAlchemy models for the compliance kernel."""
 from datetime import datetime
-from sqlalchemy import Column, Date, DateTime, Float, ForeignKey, Index, JSON, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, Column, Date, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text, UniqueConstraint
 from app.db.base import Base
 
 
@@ -8,13 +8,24 @@ class ComplianceJurisdiction(Base):
     __tablename__ = "compliance_jurisdictions"
     id = Column(String, primary_key=True)
     tenant_id = Column(String, ForeignKey("tenants.id"), nullable=False, index=True)
-    state = Column(String, nullable=False, index=True)
-    county = Column(String, nullable=False, index=True)
+    country_code = Column(String, nullable=False, default="US", index=True)
+    region_name = Column(String, nullable=True, index=True)
+    state = Column(String, nullable=True, index=True)
+    county = Column(String, nullable=True, index=True)
+    admin_area_1 = Column(String, nullable=True, index=True)
+    admin_area_2 = Column(String, nullable=True, index=True)
+    authority_type = Column(String, nullable=True, index=True)
+    authority_code = Column(String, nullable=True, index=True)
+    jurisdiction_kind = Column(String, nullable=True, index=True)
     basin = Column(String, nullable=True, index=True)
     subbasin = Column(String, nullable=True, index=True)
     gsa = Column(String, nullable=True, index=True)
     district = Column(String, nullable=True)
+    authority_name = Column(String, nullable=True, index=True)
     jurisdiction_pack = Column(String, nullable=False, index=True)
+    pack_version = Column(String, nullable=True, index=True)
+    legal_review_status = Column(String, nullable=False, default="pending_legal_review", index=True)
+    enabled = Column(Boolean, default=False, nullable=False, index=True)
     reporting_year = Column(String, nullable=False, index=True)
     reporting_deadline = Column(Date, nullable=False, index=True)
     workflow_type = Column(String, nullable=False, index=True)
@@ -105,6 +116,7 @@ class ComplianceExecutionLedger(Base):
     variance = Column(Float, nullable=True)
     operator_note = Column(Text, nullable=True)
     truth_labels = Column(JSON, nullable=False)
+    ledger_payload = Column(JSON, nullable=True)
     reporting_period = Column(String, nullable=False, index=True)
 
 
@@ -148,6 +160,10 @@ class ComplianceRulePack(Base):
     warning_thresholds = Column(JSON, nullable=False)
     export_schema = Column(JSON, nullable=False)
     disclaimer_text = Column(Text, nullable=False)
+    country_code = Column(String, nullable=False, default="US", index=True)
+    authority_name = Column(String, nullable=True, index=True)
+    legal_review_status = Column(String, nullable=False, default="pending_legal_review", index=True)
+    enabled = Column(Boolean, default=False, nullable=False, index=True)
 
 
 class ComplianceReadinessSnapshot(Base):
@@ -160,3 +176,25 @@ class ComplianceReadinessSnapshot(Base):
     readiness_percentage = Column(Float, nullable=False)
     payload = Column(JSON, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
+class ComplianceExport(Base):
+    __tablename__ = "compliance_exports"
+    id = Column(String, primary_key=True)
+    tenant_id = Column(String, ForeignKey("tenants.id"), nullable=False, index=True)
+    workflow_type = Column(String, nullable=False, index=True)
+    export_type = Column(String, nullable=False, index=True)
+    readiness_status = Column(String, nullable=False, index=True)
+    file_name = Column(String, nullable=False)
+    mime_type = Column(String, nullable=False)
+    storage_backend = Column(String, nullable=False, default="database_dev_fallback", index=True)
+    storage_ref = Column(Text, nullable=False)
+    checksum_sha256 = Column(String, nullable=False, index=True)
+    content_bytes = Column(Integer, nullable=False, default=0)
+    content_base64 = Column(Text, nullable=True)  # local development/demo fallback only
+    payload = Column(JSON, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (
+        Index("ix_compliance_export_tenant_type", "tenant_id", "export_type", "created_at"),
+    )

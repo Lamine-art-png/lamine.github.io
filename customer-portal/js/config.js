@@ -10,5 +10,8 @@
     portalDomain: "https://app.agroai-pilot.com",
     liveWiseConnZoneId: "162803",
     CALIFORNIA_COMPLIANCE_PACK_ENABLED: false,
+    complianceOrganizationId: "org-ca-vineyard-001",
+    // Non-production only. Production uses authenticated backend session/proxy, not browser API keys.
+    nonProductionComplianceDemoToken: "",
   };
 })();
