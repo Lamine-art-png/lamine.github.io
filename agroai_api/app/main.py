@@ -119,6 +119,7 @@ app.add_middleware(
         "https://app.agroai-pilot.com",
         "https://agroai-portal.pages.dev",
         "https://agroai-command-center-v2-preview.pages.dev",
+        "https://app-v2.agroai-pilot.com",
         "http://localhost:4173",
         "http://localhost:4174",
         "http://127.0.0.1:4174",
