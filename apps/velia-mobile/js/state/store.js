@@ -16,6 +16,7 @@ export function createInitialState() {
     recommendationHistory: [],
     remoteDecisions: {},
     alertHistory: [],
+    dismissedAlerts: {},
     voiceTimeline: [],
     weatherCache: null,
     demoScenario: "baseline",

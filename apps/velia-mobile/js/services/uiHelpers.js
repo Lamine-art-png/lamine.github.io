@@ -21,8 +21,9 @@ export function confidenceText(value) {
 }
 
 export function confidencePresentation(value, rec = {}) {
-  const label = confidenceText(value);
-  const numeric = typeof value === "number" && Number.isFinite(value) ? Math.round(value * 100) : null;
+  const raw = value ?? readConfidence(rec);
+  const label = confidenceText(raw);
+  const numeric = typeof raw === "number" && Number.isFinite(raw) ? Math.round(raw * 100) : null;
   const missing = rec.missingData || [];
   const fieldChecks = rec.fieldChecks || [];
   const explanation = rec.confidenceExplanation
@@ -35,6 +36,15 @@ export function confidencePresentation(value, rec = {}) {
     || fieldChecks[0]
     || (missing.length ? `Add ${missing.slice(0, 2).join(" and ")}.` : "Record a field check to improve today's recommendation.");
   return { label, numeric, explanation, improve };
+}
+
+export function readConfidence(rec = {}) {
+  const value = rec.confidence ?? rec.confidenceLabel ?? rec.confidenceScore;
+  if (typeof value === "number") return Number.isFinite(value) ? value : null;
+  if (value == null || value === "") return null;
+  const text = String(value).trim();
+  if (!text || /^(undefined|null|nan)$/i.test(text)) return null;
+  return text;
 }
 
 export const actionMappings = {
@@ -50,7 +60,7 @@ export function normalizeDecisionAction(action = "") {
   if (text.includes("check") || text.includes("field first")) return "check field first";
   if (text.includes("missing") || text.includes("update data") || text.includes("complete")) return "update missing data";
   if (text.includes("wait")) return "wait";
-  if (text.includes("irrigate") || text.includes("water now")) return "irrigate";
+  if (text === "irrigate" || text === "irrigate now" || text === "water now") return "irrigate";
   return "monitor";
 }
 
@@ -95,6 +105,36 @@ export function sortAlerts(alerts) {
     const pb = alertPriority(b);
     return pb.severity - pa.severity || pb.urgency - pa.urgency || new Date(b.createdAt || 0) - new Date(a.createdAt || 0);
   });
+}
+
+export function alertKey(alert) {
+  return alert.key || `${String(alert.type || "alert").toLowerCase().replace(/\s+/g, "-")}:${alert.fieldId || "farm"}`;
+}
+
+export function alertFingerprint(alert) {
+  return [
+    alertKey(alert),
+    alert.conditionToken || "",
+    alert.severity || "",
+    alert.explanation || "",
+    alert.action || "",
+  ].join("|");
+}
+
+export function isAlertDismissed(alert, dismissed = {}, now = Date.now(), expirationMs = 24 * 60 * 60 * 1000) {
+  const record = dismissed[alertKey(alert)];
+  if (!record) return false;
+  const dismissedAt = new Date(record.dismissedAt || 0).getTime();
+  if (!Number.isFinite(dismissedAt) || now - dismissedAt > expirationMs) return false;
+  return record.fingerprint === alertFingerprint(alert);
+}
+
+export function recommendationContextLabel(rec = {}, weather = {}, mode = "real") {
+  if (mode === "demo") return "Demo preview";
+  if (rec.sourceMode === "backend") return "Synced backend intelligence";
+  if (weather?.stale || rec.sourceMode === "offline") return "Stale offline fallback";
+  if (rec.sourceMode === "refreshing") return "Refreshing intelligence";
+  return "Local fallback with fresh cached context";
 }
 
 export function shortDate(date = new Date()) {

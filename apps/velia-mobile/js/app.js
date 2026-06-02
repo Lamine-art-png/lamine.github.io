@@ -3,7 +3,7 @@ import { syncService } from "./services/sync.js";
 import { applyVoiceAction, parseVoiceCommand, saveOfflineVoiceAction } from "./services/voiceAgent.js";
 import { weatherService } from "./services/weatherService.js";
 import { apiClient } from "./services/apiClient.js";
-import { actionMappingFor, confidencePresentation, dedupeActivityRows, escapeHtml, confidenceText, relativeTime, shortDate, sortAlerts, alertGroup, weatherAgeLabel } from "./services/uiHelpers.js";
+import { actionMappingFor, alertFingerprint, alertGroup, alertKey, confidencePresentation, dedupeActivityRows, escapeHtml, confidenceText, isAlertDismissed, normalizeDecisionAction, readConfidence, recommendationContextLabel, relativeTime, shortDate, sortAlerts, weatherAgeLabel } from "./services/uiHelpers.js";
 import { applyDemoScenario, applyOnboarding, loadState, recordRecommendationHistory, saveState, useDemoMode } from "./state/store.js";
 import { createIrrigationLog, createObservation, createVoiceTimelineEntry } from "./state/actions.js";
 import { createAiOrchestrator } from "./ai/aiOrchestrator.js";
@@ -23,6 +23,7 @@ let assistantResponse = "Ask about irrigation, weather risk, missing data, or wh
 let assistantFieldId = state.fields[0]?.id || "";
 let weather = state.weatherCache || null;
 let decisionRefreshInflight = new Set();
+let renderRecommendationSnapshot = new Map();
 let uiMessage = "";
 let onboardingStep = 0;
 let onboardingDraft = {
@@ -148,21 +149,35 @@ function updateCondition(payload) {
   showMessage(navigator.onLine ? "Condition updated." : "Condition saved offline.");
 }
 
-function recommendationFor(field) {
+function computeRecommendation(field) {
   if (state.mode === "demo" && field.demoRecommendation) {
-    return { ...field.demoRecommendation, sourceMode: "local", verificationStatus: field.verificationStatus || "needs field confirmation" };
+    return { ...field.demoRecommendation, sourceMode: "demo", verificationStatus: field.verificationStatus || "needs field confirmation" };
   }
   const result = ai().runGoal({ goal: "daily irrigation decision", fieldId: field.id, language: state.language || "en" });
   const localRec = result.decision;
   const cached = state.remoteDecisions?.[field.id];
   const freshCached = cached && Date.now() - new Date(cached.fetchedAt).getTime() < 10 * 60 * 1000;
-  if (!acceptanceDemo && navigator.onLine && !freshCached && !decisionRefreshInflight.has(field.id)) refreshRemoteDecision(field);
   const rec = freshCached
-    ? { ...cached.decision, confidence: cached.decision.confidenceLabel || cached.decision.confidence || "moderate", sourceMode: "backend" }
-    : { ...localRec, sourceMode: decisionRefreshInflight.has(field.id) ? "refreshing" : "local" };
-  state = recordRecommendationHistory(state, field.id, rec);
-  persist();
+    ? { ...cached.decision, sourceMode: "backend" }
+    : { ...localRec, sourceMode: decisionRefreshInflight.has(field.id) ? "refreshing" : (weather?.stale ? "offline" : "local") };
   return { ...rec, verificationStatus: field.verificationStatus || result.verification?.status || "needs field confirmation" };
+}
+
+function prepareRecommendationSnapshot() {
+  renderRecommendationSnapshot = new Map(state.fields.map((field) => [field.id, computeRecommendation(field)]));
+}
+
+function recommendationFor(field) {
+  return renderRecommendationSnapshot.get(field.id) || computeRecommendation(field);
+}
+
+function scheduleDecisionRefreshes() {
+  if (acceptanceDemo || state.mode === "demo" || !navigator.onLine) return;
+  for (const field of state.fields) {
+    const cached = state.remoteDecisions?.[field.id];
+    const freshCached = cached && Date.now() - new Date(cached.fetchedAt).getTime() < 10 * 60 * 1000;
+    if (!freshCached && !decisionRefreshInflight.has(field.id)) refreshRemoteDecision(field);
+  }
 }
 
 async function refreshRemoteDecision(field) {
@@ -216,11 +231,11 @@ function confidenceClass(value) {
 }
 
 function actionTitle(rec, field) {
-  const action = String(rec.action || "monitor").toLowerCase();
-  if (action.includes("irrigate")) return `Irrigate ${field.name}`;
-  if (action.includes("wait")) return `Wait before irrigating ${field.name}`;
-  if (action.includes("missing") || action.includes("update")) return `Complete data for ${field.name}`;
-  if (action.includes("check")) return `Check ${field.name} before irrigating`;
+  const action = normalizeDecisionAction(rec.action);
+  if (action === "irrigate") return `Irrigate ${field.name}`;
+  if (action === "wait") return `Wait before irrigating ${field.name}`;
+  if (action === "update missing data") return `Complete data for ${field.name}`;
+  if (action === "check field first") return `Check ${field.name} before irrigating`;
   return `Monitor ${field.name}`;
 }
 
@@ -242,8 +257,8 @@ function actionButtons(rec, field, compact = false) {
 }
 
 function riskFor(field, rec) {
-  if ((weather?.stale) || rec.sourceMode === "local") return "Needs fresh context";
-  if (field.verificationStatus === "overdue" || confidenceText(rec.confidence).toLowerCase() === "low") return "Verify today";
+  if (weather?.stale || rec.sourceMode === "offline") return "Stale offline fallback";
+  if (field.verificationStatus === "overdue" || confidenceText(readConfidence(rec)).toLowerCase() === "low") return "Verify today";
   if (weather?.heatRisk === "high" || weather?.heatRisk === "elevated") return "Heat pressure";
   if ((weather?.rainChance || 0) > 55) return "Rain watch";
   return "Stable";
@@ -260,7 +275,7 @@ function confidenceBadge(confidence) {
 }
 
 function confidenceBlock(rec) {
-  const display = confidencePresentation(rec.confidence ?? rec.confidenceLabel, rec);
+  const display = confidencePresentation(readConfidence(rec), rec);
   return `<div class="confidence-copy"><strong>${h(display.label)} confidence${display.numeric == null ? "" : ` ${display.numeric}%`}</strong><p>${h(display.explanation)}</p><small>${h(display.improve)}</small></div>`;
 }
 
@@ -316,8 +331,8 @@ function fieldCard(field, compact = false) {
       <p>${h(field.crop || "Crop not set")} - ${h(field.acreage || "0")} acres</p>
       <p class="muted">${h(field.irrigationMethod || "Irrigation method missing")} - ${h(field.lastObservation || "No recent condition")}</p>
       <div class="card-metrics">
-        ${confidenceBadge(rec.confidence || rec.confidenceLabel)}
-        <span>${h(rec.action || "monitor")}</span>
+        ${confidenceBadge(readConfidence(rec))}
+        <span>${h(normalizeDecisionAction(rec.action))}</span>
         <span>${h(relativeTime(field.updatedAt || field.lastIrrigationAt))}</span>
       </div>
     </div>
@@ -358,9 +373,9 @@ function todayContent() {
   const rec = recommendationFor(field);
   const attentionFields = state.fields.filter((f) => {
     const r = recommendationFor(f);
-    return r.urgency !== "low" || confidenceText(r.confidence).toLowerCase() === "low" || f.verificationStatus === "overdue";
+    return r.urgency !== "low" || confidenceText(readConfidence(r)).toLowerCase() === "low" || f.verificationStatus === "overdue";
   });
-  const irrigationCount = attentionFields.filter((f) => String(recommendationFor(f).action || "").includes("irrigate")).length;
+  const irrigationCount = attentionFields.filter((f) => normalizeDecisionAction(recommendationFor(f).action) === "irrigate").length;
   return `<section class="screen today-screen">
     <section class="morning-brief">
       <div><p class="eyebrow">Good morning</p><h1>${h(state.profile?.farm?.name || "Your farm")}</h1><p>${h(shortDate())} - ${h(weather?.forecastSummary || "Weather context is loading.")}</p></div>
@@ -368,11 +383,11 @@ function todayContent() {
     </section>
     ${decisionRefreshInflight.has(field.id) ? skeletonDecision() : ""}
     <section class="card hero-card urgency-${h(rec.urgency || "medium")}">
-      <div class="hero-kicker"><span>${h(field.name)}</span>${confidenceBadge(rec.confidence || rec.confidenceLabel)}</div>
+      <div class="hero-kicker"><span>${h(field.name)}</span>${confidenceBadge(readConfidence(rec))}</div>
       <h2>${h(actionTitle(rec, field))}</h2>
       <p class="field-context-line">${h(field.crop || "Crop not set")} - ${h(field.acreage || "0")} acres - ${h(field.irrigationMethod || "Irrigation method missing")}</p>
       <p>${h(rec.reasons?.[0] || rec.nextBestAction || "Velia checked field and weather signals for today's water decision.")}</p>
-      <div class="hero-meta"><span>${h(rec.timing || "Today")}</span><span>${h(riskFor(field, rec))}</span><span>${h(rec.sourceMode === "backend" ? "Synced intelligence" : rec.sourceMode === "refreshing" ? "Refreshing" : "Local fallback ready")}</span></div>
+      <div class="hero-meta"><span>${h(rec.timing || "Today")}</span><span>${h(riskFor(field, rec))}</span><span>${h(recommendationContextLabel(rec, weather, state.mode))}</span></div>
       ${confidenceBlock(rec)}
       ${actionButtons(rec, field)}
     </section>
@@ -474,20 +489,24 @@ function voiceCard(fieldId, rec) {
   return `<section class="voice-card">
     <div class="voice-copy"><p class="card-label">Voice field agent</p><h2>${voiceListening ? "Listening for a field note" : "Speak naturally"}</h2><p>${h(voiceListening ? "Tap again when you are done. Velia will show a confirmation before saving." : "Voice uses local parsing unless browser or provider support is available.")}</p></div>
     <button class="voice-orb ${voiceListening ? "listening" : ""}" data-voice="${h(fieldId)}" aria-label="Voice input"><span></span></button>
-    <div class="voice-preview"><p><strong>Transcript</strong><br>${h(transcript || "No transcript yet")}</p><p><strong>Response</strong><br>${h(voiceResponse)}</p>${rec ? `<p>${confidenceBadge(rec.confidence || rec.confidenceLabel)}</p>` : ""}${pendingVoiceCommand ? `<button class="btn brand" data-confirm-voice="1">Confirm and save</button>` : ""}${!sync.isOnline ? `<p class="warn">Offline-safe: actions will queue locally.</p>` : ""}</div>
+    <div class="voice-preview"><p><strong>Transcript</strong><br>${h(transcript || "No transcript yet")}</p><p><strong>Response</strong><br>${h(voiceResponse)}</p>${rec ? `<p>${confidenceBadge(readConfidence(rec))}</p>` : ""}${pendingVoiceCommand ? `<button class="btn brand" data-confirm-voice="1">Confirm and save</button>` : ""}${!sync.isOnline ? `<p class="warn">Offline-safe: actions will queue locally.</p>` : ""}</div>
   </section>`;
 }
 
 function buildAlerts() {
   const generated = [];
+  const addGeneratedAlert = (alert) => {
+    const keyed = { ...alert, key: alert.key || alertKey(alert), id: alert.id || alert.key || alertKey(alert) };
+    if (!isAlertDismissed(keyed, state.dismissedAlerts || {})) generated.push(keyed);
+  };
   for (const field of state.fields) {
     const rec = recommendationFor(field);
-    if (weather?.heatRisk === "high" || weather?.heatRisk === "elevated") generated.push({ type: "heat", severity: "medium", fieldId: field.id, createdAt: new Date().toISOString(), explanation: "Heat pressure may increase water demand.", action: "Check leaf stress before the afternoon.", resolved: false });
-    if (weather?.frostRisk === "high" || weather?.frostRisk === "elevated") generated.push({ type: "frost", severity: "high", fieldId: field.id, createdAt: new Date().toISOString(), explanation: "Frost risk can change irrigation timing.", action: "Confirm local frost protocol.", resolved: false });
-    if (weather?.stale) generated.push({ type: "stale weather", severity: "medium", fieldId: field.id, createdAt: new Date().toISOString(), explanation: "Weather is cached or stale.", action: "Refresh weather when connected.", resolved: false });
-    if (!field.lastObservation || field.verificationStatus === "overdue") generated.push({ type: "verification", severity: "high", fieldId: field.id, createdAt: field.updatedAt || new Date().toISOString(), explanation: "Velia needs a recent field observation.", action: "Record a field check.", resolved: false });
-    if (!field.sensorData) generated.push({ type: "sensor", severity: "low", fieldId: field.id, createdAt: new Date().toISOString(), explanation: "No sensor reading is available.", action: "Use a manual observation to improve confidence.", resolved: false });
-    if (confidenceText(rec.confidence).toLowerCase() === "low") generated.push({ type: "confidence", severity: "medium", fieldId: field.id, createdAt: new Date().toISOString(), explanation: "Decision confidence is low.", action: "Add crop, soil, weather, or observation data.", resolved: false });
+    if (weather?.heatRisk === "high" || weather?.heatRisk === "elevated") addGeneratedAlert({ type: "heat", severity: "medium", fieldId: field.id, conditionToken: `heat:${weather.heatRisk}`, createdAt: new Date().toISOString(), explanation: "Heat pressure may increase water demand.", action: "Check leaf stress before the afternoon.", resolved: false });
+    if (weather?.frostRisk === "high" || weather?.frostRisk === "elevated") addGeneratedAlert({ type: "frost", severity: "high", fieldId: field.id, conditionToken: `frost:${weather.frostRisk}`, createdAt: new Date().toISOString(), explanation: "Frost risk can change irrigation timing.", action: "Confirm local frost protocol.", resolved: false });
+    if (weather?.stale) addGeneratedAlert({ type: "stale weather", severity: "medium", fieldId: field.id, conditionToken: `weather:${weather.weatherTimestamp || weather.cachedAt || "stale"}`, createdAt: new Date().toISOString(), explanation: "Weather is cached or stale.", action: "Refresh weather when connected.", resolved: false });
+    if (!field.lastObservation || field.verificationStatus === "overdue") addGeneratedAlert({ type: "verification", severity: "high", fieldId: field.id, conditionToken: `verification:${field.verificationStatus || "missing"}:${field.lastObservation || "none"}`, createdAt: field.updatedAt || new Date().toISOString(), explanation: "Velia needs a recent field observation.", action: "Record a field check.", resolved: false });
+    if (!field.sensorData) addGeneratedAlert({ type: "sensor", severity: "low", fieldId: field.id, conditionToken: `sensor:${field.dataSource || "none"}`, createdAt: new Date().toISOString(), explanation: "No sensor reading is available.", action: "Use a manual observation to improve confidence.", resolved: false });
+    if (confidenceText(readConfidence(rec)).toLowerCase() === "low") addGeneratedAlert({ type: "confidence", severity: "medium", fieldId: field.id, conditionToken: `confidence:${readConfidence(rec) || "low"}`, createdAt: new Date().toISOString(), explanation: "Decision confidence is low.", action: "Add crop, soil, weather, or observation data.", resolved: false });
   }
   return sortAlerts([...(state.alertHistory || []), ...generated].filter((a) => !a.resolved)).slice(0, 12);
 }
@@ -505,7 +524,7 @@ function alertRow(alert) {
   return `<article class="alert-row ${h(alert.severity || "low")}">
     <div class="alert-severity"></div>
     <div><div class="field-title-row"><h3>${h(alert.type || "Alert")}</h3><span>${h(fieldName(alert.fieldId))}</span></div><p>${h(alert.explanation)}</p><strong>${h(alert.action)}</strong><time>${h(relativeTime(alert.createdAt))}</time></div>
-    <button class="btn compact" data-resolve-alert="${h(alert.id || `${alert.type}-${alert.fieldId}`)}">Resolve</button>
+    <button class="btn compact" data-resolve-alert="${h(alert.id || alertKey(alert))}" data-alert-fingerprint="${h(alertFingerprint(alert))}">Resolve</button>
   </article>`;
 }
 
@@ -582,8 +601,10 @@ function bottomNav() {
 
 function render() {
   const sync = syncStatus();
+  if (state.onboarded) prepareRecommendationSnapshot();
   app.innerHTML = `<div class="app-bg"><main class="shell ${!state.onboarded ? "shell-onboard" : ""}">${topBar()}${!sync.isOnline ? `<div class="offline-banner">Offline mode active. Logs and observations will sync later.</div>` : ""}${content()}${uiMessage ? `<div class="toast">${h(uiMessage)}</div>` : ""}${state.onboarded ? bottomNav() : ""}</main></div>`;
   bind();
+  scheduleDecisionRefreshes();
 }
 
 function readDraftInputs() {
@@ -637,7 +658,14 @@ function bind() {
     updateCondition({ fieldId: document.getElementById("conditionField").value, condition: document.getElementById("conditionValue").value, source: "manual" });
     route = "today"; selectedField = null; render();
   };
-  app.querySelectorAll("[data-resolve-alert]").forEach((b) => (b.onclick = () => { state.alertHistory = (state.alertHistory || []).map((a) => a.id === b.dataset.resolveAlert ? { ...a, resolved: true } : a); persist(); showMessage("Alert resolved."); render(); }));
+  app.querySelectorAll("[data-resolve-alert]").forEach((b) => (b.onclick = () => {
+    const key = b.dataset.resolveAlert;
+    state.alertHistory = (state.alertHistory || []).map((a) => (a.id === key || a.key === key) ? { ...a, resolved: true } : a);
+    state.dismissedAlerts = { ...(state.dismissedAlerts || {}), [key]: { dismissedAt: new Date().toISOString(), fingerprint: b.dataset.alertFingerprint || "" } };
+    persist();
+    showMessage("Alert resolved.");
+    render();
+  }));
   app.querySelectorAll("[data-next-step]").forEach((b) => (b.onclick = () => { onboardingStep = Number(b.dataset.nextStep); render(); }));
   app.querySelectorAll("[data-prev-step]").forEach((b) => (b.onclick = () => { readDraftInputs(); onboardingStep = Math.max(0, onboardingStep - 1); render(); }));
   app.querySelectorAll("[data-onboard-choice]").forEach((b) => (b.onclick = () => { onboardingDraft[b.dataset.onboardChoice] = b.dataset.value; render(); }));

@@ -2,9 +2,10 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { demoProfile } from '../js/data/demoData.js';
-import { actionMappingFor, alertGroup, confidencePresentation, confidenceText, dedupeActivityRows, escapeHtml, sortAlerts, weatherAgeLabel } from '../js/services/uiHelpers.js';
+import { actionMappingFor, alertFingerprint, alertGroup, alertKey, confidencePresentation, confidenceText, dedupeActivityRows, escapeHtml, isAlertDismissed, normalizeDecisionAction, readConfidence, recommendationContextLabel, sortAlerts, weatherAgeLabel } from '../js/services/uiHelpers.js';
 
 const appSource = fs.readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
+const swSource = fs.readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
 
 test('mobile navigation uses five primary destinations with Ask Velia featured', () => {
   assert.ok(appSource.includes('{ id: "today", label: "Today" }'));
@@ -22,6 +23,9 @@ test('confidence display never renders undefined for empty values', () => {
   assert.equal(confidenceText('undefined'), 'Moderate');
   assert.equal(confidenceText(0.8), 'High');
   assert.equal(confidenceText(0.3), 'Low');
+  assert.equal(readConfidence({ confidenceScore: 0.8 }), 0.8);
+  assert.equal(readConfidence({ confidenceLabel: 'low' }), 'low');
+  assert.equal(readConfidence({ confidence: Number.NaN }), null);
   const display = confidencePresentation(undefined, {});
   assert.equal(display.label, 'Moderate');
   assert.ok(display.explanation);
@@ -60,6 +64,13 @@ test('decision actions map to safe primary and secondary CTAs', () => {
   assert.deepEqual(actionMappingFor('update missing data'), { primary: 'Complete field data', secondary: 'Ask Velia', primaryAction: 'field-detail', secondaryAction: 'assistant' });
 });
 
+test('decision action normalization prevents incidental irrigate wording', () => {
+  assert.equal(normalizeDecisionAction('irrigate'), 'irrigate');
+  assert.equal(normalizeDecisionAction('Check field before irrigating'), 'check field first');
+  assert.equal(normalizeDecisionAction('Wait before irrigating'), 'wait');
+  assert.equal(normalizeDecisionAction('Monitor irrigation risk'), 'monitor');
+});
+
 test('recent activity dedupes duplicate refresh noise and keeps newest first', () => {
   const now = Date.now();
   const rows = dedupeActivityRows([
@@ -84,12 +95,37 @@ test('alerts sort by severity urgency and group into action buckets', () => {
   assert.equal(alertGroup(alerts[2]), 'Monitoring');
 });
 
+test('generated alert keys remain dismissed until the condition changes', () => {
+  const alert = { type: 'heat', fieldId: 'block-a', severity: 'medium', conditionToken: 'heat:elevated', explanation: 'Heat pressure', action: 'Check field' };
+  const dismissed = { [alertKey(alert)]: { dismissedAt: new Date().toISOString(), fingerprint: alertFingerprint(alert) } };
+  assert.equal(isAlertDismissed(alert, dismissed), true);
+  assert.equal(isAlertDismissed({ ...alert, conditionToken: 'heat:high' }, dismissed), false);
+});
+
+test('recommendation context labels separate mode from risk', () => {
+  assert.equal(recommendationContextLabel({ sourceMode: 'demo' }, {}, 'demo'), 'Demo preview');
+  assert.equal(recommendationContextLabel({ sourceMode: 'backend' }, {}, 'real'), 'Synced backend intelligence');
+  assert.equal(recommendationContextLabel({ sourceMode: 'local' }, { stale: false }, 'real'), 'Local fallback with fresh cached context');
+  assert.equal(recommendationContextLabel({ sourceMode: 'offline' }, { stale: true }, 'real'), 'Stale offline fallback');
+});
+
 test('experience source includes safe empty states, provenance, alerts, and loading skeleton', () => {
   assert.ok(appSource.includes('data-testid="provenance-disclosure"'));
   assert.ok(appSource.includes('No urgent alerts'));
   assert.ok(appSource.includes('data-testid="decision-loading"'));
   assert.ok(appSource.includes('Using local intelligence until the backend is reachable.'));
   assert.ok(appSource.includes('Add field location to unlock map-based intelligence.'));
+  assert.ok(appSource.includes('prepareRecommendationSnapshot'));
+  assert.ok(appSource.includes('scheduleDecisionRefreshes'));
+  assert.ok(!appSource.includes('state = recordRecommendationHistory(state, field.id, rec);\\n  persist();\\n  return'));
+});
+
+test('service worker caches mobile modules for offline reload', () => {
+  assert.ok(swSource.includes('velia-v3-module-offline'));
+  assert.ok(swSource.includes('./js/services/weatherService.js'));
+  assert.ok(swSource.includes('./js/ai/aiOrchestrator.js'));
+  assert.ok(swSource.includes('const isModule'));
+  assert.ok(swSource.includes('caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy))'));
 });
 
 test('weather age labels are readable', () => {
