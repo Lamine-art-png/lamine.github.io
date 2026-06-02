@@ -15,7 +15,7 @@ import type {
   WorkbenchAnalysisResult,
 } from "../api/contracts";
 
-export type ScenarioId = "alpha-vineyard" | "almond-orchard" | "multi-farm" | "partner-validation";
+export type ScenarioId = "alpha-vineyard" | "almond-orchard" | "multi-farm" | "partner-validation" | "incomplete-evidence";
 export type Route = "command" | "sources" | "reports" | "integrations" | "audit" | "settings";
 
 export interface ReportModel {
@@ -81,6 +81,7 @@ export interface CommandState {
 interface Scenario {
   id: ScenarioId;
   name: string;
+  customerName: string;
   liveEntity: { source: string; entityId: string };
   decision: Omit<Decision, "recommendationOrigin">;
   sources: SourceRow[];
@@ -106,18 +107,27 @@ const SCENARIOS: Record<ScenarioId, Scenario> = {
   "alpha-vineyard": {
     id: "alpha-vineyard",
     name: "Alpha Vineyard",
+    customerName: "Validated operating block",
     liveEntity: { source: "wiseconn", entityId: "162803" },
     decision: {
-      action: "Irrigate 42 min tonight",
-      start: "21:00 PT",
-      appliedWater: "12 mm net",
+      action: "Irrigate Block A North — 42 min tonight",
+      start: "21:00 – 21:42 PT",
+      appliedWater: "12.2 mm net",
+      grossWater: "14.2 mm gross",
+      duration: "42 min",
+      estimatedVolume: "19.9 m³",
+      area: "3.2 ha",
+      irrigationMethod: "Drip",
+      controller: "WiseConn evaluation connector",
       crop: "Cabernet Sauvignon",
       block: "Block A North",
-      driver: "ETo 6.4 mm and 38% root-zone deficit",
+      driver: "ETo 6.4 mm · 38% root-zone deficit · Canopy stress elevated",
       confidence: "86%",
       evidenceCompleteness: "92%",
-      estimatedWaterSavings: "27%",
+      estimatedWaterSavings: "27% vs evaluation baseline",
       verification: "Required",
+      calibrationStatus: "Calibrated v0.2 — transparent defaults",
+      flowValidationState: "Flow validated for execution timing",
     },
     sources: REP_SOURCES_ALPHA,
     reconciliation: recon([
@@ -132,18 +142,86 @@ const SCENARIOS: Record<ScenarioId, Scenario> = {
     report: {
       farm: "Alpha Vineyard",
       block: "Block A North",
-      recommendation: "Irrigate 42 min tonight",
-      plannedWater: "12 mm net",
+      recommendation: "Irrigate Block A North — 42 min tonight",
+      plannedWater: "14.2 mm gross (12.2 mm net)",
       appliedWater: "Pending confirmation",
-      variance: "Within 8%",
+      variance: "Within 8% of plan",
       evidenceCompleteness: "92%",
-      estimatedWaterSavings: "27% vs historical baseline",
+      estimatedWaterSavings: "27% vs evaluation baseline",
       verification: "Required",
+    },
+  },
+  "incomplete-evidence": {
+    id: "incomplete-evidence",
+    name: "Incomplete evidence review",
+    customerName: "Incomplete evidence review",
+    liveEntity: { source: "wiseconn", entityId: "999999" },
+    decision: {
+      action: "Evidence review required before scheduling",
+      start: "Withheld — timing requires complete evidence",
+      appliedWater: "Withheld — area validation required",
+      grossWater: undefined,
+      duration: undefined,
+      estimatedVolume: undefined,
+      area: "Not provided",
+      irrigationMethod: "Pending block mapping",
+      controller: "Not connected",
+      crop: "Unconfirmed — crop mapping incomplete",
+      block: "Block C South — mapping incomplete",
+      driver: "Missing area, unvalidated flow, incomplete block and crop mapping",
+      confidence: "—",
+      evidenceCompleteness: "41%",
+      estimatedWaterSavings: "—",
+      verification: "Complete evidence before scheduling",
+      calibrationStatus: "Not applicable — evidence incomplete",
+      flowValidationState: "Flow incomplete",
+      limitations: [
+        "Block area not provided — estimated volume and duration withheld",
+        "Crop mapping incomplete — agronomic demand requires crop and growth stage",
+        "Block mapping incomplete — field context cannot be fully assembled",
+        "Flow evidence unvalidated — execution timing withheld",
+      ],
+      nextEvidenceRequired: [
+        "Provide block area with explicit unit (ha or ac)",
+        "Complete crop and variety mapping",
+        "Complete block boundary mapping",
+        "Validate flow evidence for this block",
+      ],
+    },
+    sources: [
+      { source: "Controller history", latestSignal: "No validated controller event for this block", records: "14", contribution: "—", status: "Review" },
+      { source: "Weather demand", latestSignal: "ETo within seasonal range — region-level only", records: "60", contribution: "+0.07", status: "Matched" },
+      { source: "Soil moisture", latestSignal: "Partial sensor coverage — one zone missing", records: "22", contribution: "+0.05", status: "Review" },
+      { source: "Flow meter", latestSignal: "Prior set variance +28% — unvalidated", records: "8", contribution: "—", status: "Review" },
+      { source: "Field observation", latestSignal: "No field observation on record", records: "0", contribution: "—", status: "Pending" },
+      { source: "Earth observation layer", latestSignal: "Block boundary not mapped — layer unavailable", records: "0", contribution: "—", status: "Pending" },
+      { source: "Uploaded records", latestSignal: "Crop profile missing — agronomic context incomplete", records: "0", contribution: "—", status: "Pending" },
+    ],
+    reconciliation: recon([
+      ["Controller history", "No validated event for this block", "Block mapping incomplete — cannot confirm event", "Review"],
+      ["Weather demand", "ETo within seasonal range", "Regional demand available; block-level demand requires crop context", "Matched"],
+      ["Soil moisture", "Partial sensor coverage", "Coverage gap flagged — one zone sensor missing", "Review"],
+      ["Flow meter", "Prior set variance +28%", "Flow evidence unvalidated — exceeds 20% threshold", "Review"],
+      ["Field observation", "No observation on record", "Field observation required before scheduling", "Pending"],
+      ["Earth observation layer", "Block boundary not mapped", "Earth observation layer unavailable without block boundary", "Pending"],
+      ["Crop profile", "Missing — agronomic demand blocked", "Agronomic demand cannot be calculated without crop profile", "Pending"],
+    ]),
+    report: {
+      farm: "Unnamed block",
+      block: "Block C South — mapping incomplete",
+      recommendation: "Evidence review required before scheduling",
+      plannedWater: "Withheld — area validation required",
+      appliedWater: "Withheld",
+      variance: "Flow evidence unvalidated",
+      evidenceCompleteness: "41%",
+      estimatedWaterSavings: "—",
+      verification: "Complete evidence before scheduling",
     },
   },
   "almond-orchard": {
     id: "almond-orchard",
     name: "Almond Orchard",
+    customerName: "Almond Orchard",
     liveEntity: { source: "wiseconn", entityId: "204411" },
     decision: {
       action: "Apply 18 mm before 05:00",
@@ -190,6 +268,7 @@ const SCENARIOS: Record<ScenarioId, Scenario> = {
   "multi-farm": {
     id: "multi-farm",
     name: "Multi-Farm Portfolio",
+    customerName: "Multi-Farm Portfolio",
     liveEntity: { source: "wiseconn", entityId: "162803" },
     decision: {
       action: "3 blocks irrigate tonight, 1 hold",
@@ -236,6 +315,7 @@ const SCENARIOS: Record<ScenarioId, Scenario> = {
   "partner-validation": {
     id: "partner-validation",
     name: "Partner Data Validation",
+    customerName: "Partner Data Validation",
     liveEntity: { source: "talgil", entityId: "trial-11" },
     decision: {
       action: "Validate partner feed before scheduling",
@@ -281,21 +361,27 @@ const SCENARIOS: Record<ScenarioId, Scenario> = {
   },
 };
 
-export const SCENARIO_OPTIONS = Object.values(SCENARIOS).map((s) => ({ id: s.id, name: s.name }));
+export const SCENARIO_OPTIONS: { id: ScenarioId; name: string }[] = [
+  { id: "alpha-vineyard", name: "Validated operating block" },
+  { id: "incomplete-evidence", name: "Incomplete evidence review" },
+];
+
+export function getScenarioFarmName(id: ScenarioId): string {
+  return SCENARIOS[id]?.name ?? "Alpha Vineyard";
+}
 
 // ---------------------------------------------------------------------------
 // Trace + evidence builders
 // ---------------------------------------------------------------------------
 
 const TRACE_TITLES: { title: string; detail: string; records: number }[] = [
-  { title: "Source records ingested", detail: "Controller, weather, soil, flow, observation, and earth-observation records collected", records: 2404 },
-  { title: "Schema detected", detail: "Field schemas and aliases mapped to the canonical model", records: 8 },
-  { title: "Units normalized", detail: "Units, timestamps, and identifiers standardized", records: 2404 },
-  { title: "Field context assembled", detail: "Farm, block, crop, soil, and irrigation context assembled", records: 1 },
-  { title: "Source conflicts reconciled", detail: "Planned vs applied water and cross-source signals reconciled", records: 7 },
-  { title: "Confidence scored", detail: "Evidence completeness and confidence computed", records: 1 },
-  { title: "Recommendation prepared", detail: "Operational recommendation and timing prepared", records: 1 },
-  { title: "Verification plan prepared", detail: "Recommended → Scheduled → Applied → Observed → Verified", records: 5 },
+  { title: "Collecting source records", detail: "Controller, weather, soil, flow, field-observation, and earth-observation records collected from connected sources", records: 2404 },
+  { title: "Normalizing field context", detail: "Field schemas and aliases mapped; units, timestamps, and identifiers standardized to canonical model", records: 2404 },
+  { title: "Reconciling source evidence", detail: "Cross-source signals reconciled; planned vs applied water variance resolved; conflicts flagged for review", records: 7 },
+  { title: "Calculating agronomic demand", detail: "ETo, root-zone deficit, crop growth stage, and soil profile used to compute net irrigation demand", records: 1 },
+  { title: "Validating execution evidence", detail: "Flow validation status, pressure state, applied-water variance, and recent irrigation credit assessed", records: 4 },
+  { title: "Publishing water recommendation", detail: "Recommendation, timing window, gross depth, duration, and estimated volume assembled with confidence score", records: 1 },
+  { title: "Preparing verification plan", detail: "Recommended → Scheduled → Applied → Observed → Verified evidence chain prepared for operator review", records: 5 },
 ];
 
 function buildTrace(now: string, complete: boolean): TraceStep[] {
@@ -342,13 +428,14 @@ function baseEvidence(now: string): EvidenceStep[] {
 function scenarioState(id: ScenarioId, mode: AnalysisMode, origin: RecommendationOrigin): Partial<CommandState> {
   const sc = SCENARIOS[id];
   const now = new Date().toISOString();
+  const effectiveOrigin: RecommendationOrigin = id === "incomplete-evidence" ? "insufficient_context" : origin;
   return {
     scenarioId: id,
     analysisMode: mode,
     analysisPhase: "complete",
-    recommendationOrigin: origin,
-    pipelineMessage: "Decision refreshed",
-    decision: { ...sc.decision, recommendationOrigin: origin },
+    recommendationOrigin: effectiveOrigin,
+    pipelineMessage: id === "incomplete-evidence" ? "Evidence review required — decision withheld" : "Decision refreshed",
+    decision: { ...sc.decision, recommendationOrigin: effectiveOrigin },
     sources: sc.sources,
     reconciliation: sc.reconciliation,
     trace: buildTrace(now, true),
@@ -404,6 +491,22 @@ function toast(message: string) {
 
 // ---- Backend mapping ------------------------------------------------------
 
+export const FLOW_VALIDATION_LABELS: Record<string, string> = {
+  validated: "Flow validated for execution timing",
+  inconsistent: "Flow inconsistent",
+  unavailable: "Flow incomplete",
+  detected: "Flow signal detected",
+  reconciled: "Flow reconciled",
+};
+
+export const ORIGIN_LABEL: Record<string, string> = {
+  representative_fallback: "Representative evaluation mode",
+  deterministic_engine: "Calibrated agronomic context",
+  live_intelligence_engine: "Live connected analysis",
+  uploaded_intelligence_engine: "Evaluation package analysis",
+  insufficient_context: "Evidence incomplete",
+};
+
 function pct(value: unknown, fallback: string): string {
   if (typeof value === "number") return value <= 1 ? `${Math.round(value * 100)}%` : `${Math.round(value)}%`;
   if (typeof value === "string" && value.trim()) return value;
@@ -423,13 +526,20 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
   const useRepresentative = origin === "representative_fallback";
 
   const action = (rec.action as string) || (rec.decision as string) || (summary.recommendation as string) || (useRepresentative ? sc.decision.action : "Decision pending source review");
+  const flowValidationRaw = (rec.flow_validation_status as string) || undefined;
+  const flowValidationState = flowValidationRaw
+    ? FLOW_VALIDATION_LABELS[flowValidationRaw] ?? flowValidationRaw
+    : (useRepresentative ? sc.decision.flowValidationState : "Flow incomplete");
   const decision: Decision = {
     action,
     start: (rec.start_time as string) || (rec.timing as string) || (useRepresentative ? sc.decision.start : "Pending evidence"),
     appliedWater: (rec.depth as string) || (summary.planned_water as string) || (useRepresentative ? sc.decision.appliedWater : "Withheld pending validation"),
-    grossWater: (rec.gross_depth as string) || undefined,
-    estimatedVolume: (rec.estimated_volume as string) || undefined,
-    duration: (rec.duration as string) || (rec.no_fabricated_duration ? "Withheld until flow is validated" : (useRepresentative ? undefined : "Withheld pending validation")),
+    grossWater: (rec.gross_depth as string) || (useRepresentative ? sc.decision.grossWater : undefined),
+    estimatedVolume: (rec.estimated_volume as string) || (useRepresentative ? sc.decision.estimatedVolume : undefined),
+    duration: (rec.duration as string) || (rec.no_fabricated_duration ? "Withheld until flow is validated" : (useRepresentative ? sc.decision.duration : "Withheld pending validation")),
+    area: (useRepresentative ? sc.decision.area : undefined),
+    irrigationMethod: (useRepresentative ? sc.decision.irrigationMethod : undefined),
+    controller: (useRepresentative ? sc.decision.controller : undefined),
     crop: (rec.crop as string) || (useRepresentative ? sc.decision.crop : "Source context incomplete"),
     block: (rec.block as string) || (useRepresentative ? sc.decision.block : "Source context incomplete"),
     driver: Array.isArray(rec.key_drivers) && rec.key_drivers.length ? String((rec.key_drivers as unknown[])[0]) : (useRepresentative ? sc.decision.driver : "Tenant baseline required"),
@@ -438,9 +548,10 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
     estimatedWaterSavings: useRepresentative ? sc.decision.estimatedWaterSavings : "—",
     verification: (rec.verification_requirement as string) || (useRepresentative ? sc.decision.verification : "Required"),
     recommendationOrigin: origin,
-    calibrationStatus: (rec.calibration_status as string) || undefined,
+    calibrationStatus: (rec.calibration_status as string) || (useRepresentative ? sc.decision.calibrationStatus : undefined),
     calibrationPackVersion: (rec.calibration_pack_version as string) || undefined,
     verificationStatus: "Required",
+    flowValidationState,
   };
 
   const trace: TraceStep[] = Array.isArray(result.analysis_trace) && result.analysis_trace.length

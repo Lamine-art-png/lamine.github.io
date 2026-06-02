@@ -10,18 +10,18 @@ describe("commandStore", () => {
     expect(s.analysisMode).toBe("representative");
     expect(s.recommendationOrigin).toBe("representative_fallback");
     expect(s.entryState).toBe("entry");
-    expect(s.decision.action).toMatch(/Irrigate 42 min tonight/);
+    expect(s.decision.action).toMatch(/Irrigate Block A North/);
     expect(s.analysisPhase).toBe("complete");
     expect(s.sources.length).toBe(7);
   });
 
-  it("exposes the four workspace scenarios", () => {
+  it("exposes the two evaluation scenarios", () => {
     expect(SCENARIO_OPTIONS.map((o) => o.id)).toEqual([
       "alpha-vineyard",
-      "almond-orchard",
-      "multi-farm",
-      "partner-validation",
+      "incomplete-evidence",
     ]);
+    expect(SCENARIO_OPTIONS[0].name).toBe("Validated operating block");
+    expect(SCENARIO_OPTIONS[1].name).toBe("Incomplete evidence review");
   });
 
   it("switches scenarios and updates the decision + reconciliation", () => {
@@ -66,7 +66,7 @@ describe("commandStore", () => {
     actions.switchScenario("alpha-vineyard");
     const rep = getState().decision;
     // Representative scenario is correctly seeded.
-    expect(rep.action).toMatch(/Irrigate 42 min tonight/);
+    expect(rep.action).toMatch(/Irrigate Block A North/);
     expect(rep.recommendationOrigin).toBe("representative_fallback");
     expect(rep.start).toBeTruthy();
     expect(rep.appliedWater).toBeTruthy();
@@ -86,8 +86,10 @@ describe("commandStore", () => {
     // Simulate a live analysis result that has no domain values (minimal payload).
     // For live_intelligence_engine origin, missing fields must show honest labels,
     // never the representative values like "21:00 PT" or "12 mm net".
-    const FORBIDDEN_REPRESENTATIVE = ["21:00 PT", "12 mm net", "42 min", "Irrigate 42 min tonight",
-      "ETo 6.4 mm and 38% root-zone deficit", "Cabernet Sauvignon", "Block A North", "27%"];
+    const FORBIDDEN_REPRESENTATIVE = ["21:00 – 21:42 PT", "12.2 mm net", "42 min",
+      "Irrigate Block A North — 42 min tonight",
+      "ETo 6.4 mm · 38% root-zone deficit · Canopy stress elevated",
+      "Cabernet Sauvignon", "Block A North", "27%"];
 
     // Build a minimal result as applyBackendResult would receive it from the live API.
     // We validate by switching to representative first, then checking that the
@@ -163,7 +165,7 @@ describe("commandStore", () => {
       "Withheld pending validation",
       "—",
     ];
-    const FORBIDDEN = ["Alpha Vineyard", "Block A North", "Within 8%", "27% vs historical baseline"];
+    const FORBIDDEN = ["Alpha Vineyard", "Block A North", "Within 8% of plan", "27% vs evaluation baseline"];
     HONEST_LABELS.forEach((label) => {
       FORBIDDEN.forEach((forbidden) => {
         expect(label).not.toBe(forbidden);

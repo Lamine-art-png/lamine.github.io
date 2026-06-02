@@ -9,9 +9,15 @@ export function EntryScreen() {
       <section className="entry-panel" aria-label="Water Command Center entry">
         <p className="eyebrow">Enterprise irrigation intelligence</p>
         <h1>AGRO-AI Water Command Center</h1>
-        <p className="entry-subtitle">Turn scattered irrigation data into verified water decisions.</p>
+        <p className="entry-subtitle">
+          Turn scattered irrigation data into verified water decisions.
+        </p>
+        <p className="entry-description">
+          Normalize source records. Reconcile evidence. Calculate agronomic demand.
+          Publish verified decisions. Track applied water. Confirm outcomes.
+        </p>
         <div className="entry-actions">
-          <button className="btn primary" onClick={() => void actions.openEvaluationWorkspace()}>
+          <button className="btn primary entry-btn-primary" onClick={() => void actions.openEvaluationWorkspace()}>
             Open evaluation workspace
           </button>
           <form
@@ -20,15 +26,32 @@ export function EntryScreen() {
               actions.submitProductionSignIn();
             }}
           >
-            <button className="btn" type="submit">
+            <button className="btn entry-btn-secondary" type="submit">
               Sign in for production access
             </button>
           </form>
-          <button className="btn ghost" onClick={() => actions.openOnboarding()}>
-            Request enterprise onboarding
-          </button>
         </div>
+        <button className="btn ghost entry-btn-ghost" onClick={() => actions.openOnboarding()}>
+          Request enterprise onboarding
+        </button>
         {message && <p className="entry-message">{message}</p>}
+
+        <div className="entry-value-chain">
+          {[
+            "Source records",
+            "Field context",
+            "Reconciliation",
+            "Agronomic demand",
+            "Water decision",
+            "Applied-water verification",
+            "Verified outcome",
+          ].map((step, i, arr) => (
+            <span key={step} className="entry-chain-item">
+              <span className="entry-chain-label">{step}</span>
+              {i < arr.length - 1 && <span className="entry-chain-arrow" aria-hidden="true">→</span>}
+            </span>
+          ))}
+        </div>
       </section>
 
       {onboardingOpen && (

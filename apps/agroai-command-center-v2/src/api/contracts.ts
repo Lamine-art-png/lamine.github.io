@@ -59,6 +59,9 @@ export interface Decision {
   grossWater?: string;
   estimatedVolume?: string;
   duration?: string;
+  area?: string;
+  irrigationMethod?: string;
+  controller?: string;
   crop: string;
   block: string;
   driver: string;
@@ -70,6 +73,9 @@ export interface Decision {
   calibrationStatus?: string;
   calibrationPackVersion?: string;
   verificationStatus?: string;
+  flowValidationState?: string;
+  limitations?: string[];
+  nextEvidenceRequired?: string[];
 }
 
 export type ProviderConnectionState = "Live" | "Configured" | "Limited" | "Unavailable" | "Setup required" | "Target selection required";
