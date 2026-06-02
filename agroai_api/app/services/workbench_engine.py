@@ -16,7 +16,7 @@ from app.models.workbench import (
     WorkbenchDataArtifact,
     WorkbenchSession,
 )
-from app.services.workbench_sample_data import get_sample_files
+from app.services.workbench_sample_data import get_sample_files, get_incomplete_evidence_files
 from app.services.live_field_context import (
     LiveContextAssemblerError,
     LiveFieldContextAssembler,
@@ -368,6 +368,17 @@ def create_sample_package_session(workspace_name: str = "Alpha Vineyard · Water
     return {"session": session, "artifacts": artifacts}
 
 
+def create_incomplete_evidence_session(workspace_name: str = "Incomplete Evidence Review · Water Command Center") -> Dict[str, Any]:
+    session = create_session(mode="uploaded", workspace_name=workspace_name)
+    artifacts = [build_artifact(session.session_id, item.filename, item.content, item.content_type) for item in get_incomplete_evidence_files()]
+    SESSIONS[session.session_id]["artifacts"].extend(artifacts)
+    SESSIONS[session.session_id]["is_sample_package"] = True
+    SESSIONS[session.session_id]["audit"].append(
+        {"time": datetime.utcnow().isoformat(), "event": "Incomplete evidence sample package loaded", "artifact_count": len(artifacts)}
+    )
+    return {"session": session, "artifacts": artifacts}
+
+
 def _rows_by_kind(artifacts: List[WorkbenchDataArtifact]) -> Dict[str, List[Dict[str, Any]]]:
     rows: Dict[str, List[Dict[str, Any]]] = {}
     for artifact in artifacts:
@@ -440,6 +451,12 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
                     ).model_dump()
                 )
 
+    # Extract area from crop profile so the orchestrator can compute volume and duration.
+    area_ha: float | None = None
+    area_warnings_from_profile: List[str] = []
+    if profile.get("area") is not None:
+        area_ha, area_warnings_from_profile = normalize_area_ha(profile.get("area"), profile.get("area_unit"))
+
     controller_rows = _rows_for(rows.get("controller_events", []) + rows.get("controller_logs", []), farm, block)
     flow_rows = _rows_for(rows.get("flow_meter", []), farm, block)
     soil_rows = _rows_for(rows.get("soil_moisture", []), farm, block)
@@ -465,7 +482,7 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
     applied_variance = max_flow_variance if max_flow_variance is not None else max_controller_variance
 
     source_kinds = sorted({artifact.source_kind for artifact in artifacts})
-    context = {
+    context: Dict[str, Any] = {
         "signals": signals,
         "farm": farm,
         "block": block,
@@ -518,6 +535,11 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
             "water_cost_records_read": len(water_cost_rows),
         },
     }
+    # Inject area from crop profile so the orchestrator can compute volume and duration.
+    if area_ha is not None:
+        context["area"] = area_ha
+    if area_warnings_from_profile:
+        context.setdefault("warnings", []).extend(area_warnings_from_profile)
     return context
 
 

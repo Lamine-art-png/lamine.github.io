@@ -10,7 +10,7 @@ test.describe("Command page", () => {
   test("shows the product story above the fold", async ({ page }) => {
     await expect(page.locator("h1")).toHaveText(/Water Command Center/);
     await expect(page.locator(".header-subtitle")).toHaveText(/Scattered irrigation data becomes a verified water decision\./);
-    await expect(page.locator(".status-row")).toHaveText(/Representative data/);
+    await expect(page.locator(".status-row")).toHaveText(/Representative|Offline representative fallback/);
     // Executive strip: four metrics visible.
     await expect(page.locator(".executive-strip .metric")).toHaveCount(4);
     // Verified decision is present and readable.

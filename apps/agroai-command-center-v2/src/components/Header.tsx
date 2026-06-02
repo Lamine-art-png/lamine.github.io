@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { actions, useCommandStore, SCENARIO_OPTIONS, getScenarioFarmName } from "../state/commandStore";
+import { actions, useCommandStore, SCENARIO_OPTIONS, getScenarioFarmName, getProvenanceBadge } from "../state/commandStore";
 import type { ScenarioId } from "../state/commandStore";
 import { BackendBadge, StatusBadge } from "./StatusBadge";
 
@@ -7,6 +7,8 @@ export function Header() {
   const scenarioId = useCommandStore((s) => s.scenarioId);
   const backend = useCommandStore((s) => s.backend);
   const analysisPhase = useCommandStore((s) => s.analysisPhase);
+  const analysisMode = useCommandStore((s) => s.analysisMode);
+  const recommendationOrigin = useCommandStore((s) => s.recommendationOrigin);
   const evidence = useCommandStore((s) => s.evidence);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -16,6 +18,7 @@ export function Header() {
   const evidenceTotal = evidence.length;
   const sourceState = analysisPhase === "complete" ? "Sources reconciled" : "Analyzing sources";
   const sourceTone = analysisPhase === "complete" ? "ok" : "warn";
+  const provenance = getProvenanceBadge(analysisMode, recommendationOrigin);
 
   return (
     <header className="app-header">
@@ -67,7 +70,7 @@ export function Header() {
 
         <div className="status-row" aria-label="Workspace status">
           <BackendBadge status={backend.status} detail={backend.detail} />
-          <StatusBadge label="Representative data" tone="gold" />
+          <StatusBadge label={provenance.label} tone={provenance.tone} />
           <StatusBadge label={sourceState} tone={sourceTone} />
           <StatusBadge
             label={`Evidence chain ${evidenceDone}/${evidenceTotal}`}

@@ -10,7 +10,14 @@ describe("commandStore", () => {
     expect(s.analysisMode).toBe("representative");
     expect(s.recommendationOrigin).toBe("representative_fallback");
     expect(s.entryState).toBe("entry");
-    expect(s.decision.action).toMatch(/Irrigate Block A North/);
+    // Offline fallback action includes "Block A North" but withholds precision values.
+    expect(s.decision.action).toMatch(/Block A North/);
+    // Precision fields are withheld in offline fallback — must come from backend.
+    expect(s.decision.confidence).toBe("—");
+    expect(s.decision.evidenceCompleteness).toBe("—");
+    expect(s.decision.estimatedWaterSavings).toBe("—");
+    expect(s.decision.duration).toBeUndefined();
+    expect(s.decision.estimatedVolume).toBeUndefined();
     expect(s.analysisPhase).toBe("complete");
     expect(s.sources.length).toBe(7);
   });
@@ -24,12 +31,14 @@ describe("commandStore", () => {
     expect(SCENARIO_OPTIONS[1].name).toBe("Incomplete evidence review");
   });
 
-  it("switches scenarios and updates the decision + reconciliation", () => {
-    actions.switchScenario("almond-orchard");
+  it("switches scenarios and updates the decision + reconciliation", async () => {
+    // switchScenario is async; backend will fail in test env and fall back to local data.
+    await actions.switchScenario("almond-orchard");
     expect(getState().decision.crop).toBe("Almonds");
-    expect(getState().decision.confidence).toBe("91%");
+    // almond-orchard uses local fallback data (not backend-driven in this env).
+    expect(getState().scenarioId).toBe("almond-orchard");
 
-    actions.switchScenario("partner-validation");
+    await actions.switchScenario("partner-validation");
     const s = getState();
     expect(s.decision.action).toMatch(/Validate partner feed/);
     expect(s.decision.estimatedWaterSavings).toBe("—");
@@ -59,42 +68,40 @@ describe("commandStore", () => {
 
   // --- Section 7: Representative value leakage ---
 
-  it("does not display representative precision for live engine results", () => {
+  it("does not display representative precision for live engine results", async () => {
     // The initial seeded state uses representative_fallback origin.
-    // We verify the invariant: representative values are present for representative origin,
-    // and the honest-label guard (useRepresentative) is tied to the origin.
-    actions.switchScenario("alpha-vineyard");
+    // We verify the invariant: offline fallback withholds precision but keeps identification.
+    await actions.switchScenario("alpha-vineyard");
     const rep = getState().decision;
-    // Representative scenario is correctly seeded.
-    expect(rep.action).toMatch(/Irrigate Block A North/);
+    // Offline fallback identifies the block without precision.
+    expect(rep.action).toMatch(/Block A North/);
     expect(rep.recommendationOrigin).toBe("representative_fallback");
     expect(rep.start).toBeTruthy();
     expect(rep.appliedWater).toBeTruthy();
     expect(rep.driver).toBeTruthy();
-    // The honest labels for non-representative origins must not equal representative values.
+    // Precision fields are withheld.
+    expect(rep.confidence).toBe("—");
+    expect(rep.evidenceCompleteness).toBe("—");
+    expect(rep.estimatedWaterSavings).toBe("—");
+    // The honest labels for non-representative origins must not equal the offline fallback values.
     const HONEST_LABELS = [
       "Pending evidence", "Withheld pending validation",
       "Source context incomplete", "Tenant baseline required", "—",
     ];
     HONEST_LABELS.forEach((label) => {
       expect(label).not.toBe(rep.action);
-      expect(label).not.toBe(rep.start);
     });
   });
 
   it("uses honest pending labels when live result omits domain fields", () => {
-    // Simulate a live analysis result that has no domain values (minimal payload).
     // For live_intelligence_engine origin, missing fields must show honest labels,
-    // never the representative values like "21:00 PT" or "12 mm net".
-    const FORBIDDEN_REPRESENTATIVE = ["21:00 – 21:42 PT", "12.2 mm net", "42 min",
+    // never precision values injected in the frontend.
+    // The offline fallback for alpha-vineyard now withholds precision.
+    const OFFLINE_FALLBACK_PRECISION_VALUES = [
+      "21:00 – 21:42 PT", "12.2 mm net", "42 min",
       "Irrigate Block A North — 42 min tonight",
-      "ETo 6.4 mm · 38% root-zone deficit · Canopy stress elevated",
-      "Cabernet Sauvignon", "Block A North", "27%"];
-
-    // Build a minimal result as applyBackendResult would receive it from the live API.
-    // We validate by switching to representative first, then checking that the
-    // honest-label guard values do not include forbidden representative strings.
-    actions.switchScenario("alpha-vineyard"); // seed representative
+      "14.2 mm gross", "19.9 m³", "86%", "92%", "27% vs evaluation baseline",
+    ];
     const HONEST_LABELS = [
       "Pending evidence",
       "Withheld pending validation",
@@ -103,17 +110,19 @@ describe("commandStore", () => {
       "—",
       "Decision pending source review",
     ];
-    // If origin is NOT representative_fallback, the honest labels must appear for absent fields.
-    // This is tested by the guard: useRepresentative = (origin === "representative_fallback").
-    // We can verify the guard is wired correctly by checking that the representative scenario
-    // still shows representative values (useRepresentative = true for representative_fallback).
-    expect(getState().recommendationOrigin).toBe("representative_fallback");
-    FORBIDDEN_REPRESENTATIVE.forEach((forbidden) => {
-      // None of the honest-label fallbacks should equal representative values.
+    // Verify the guard: honest labels must not equal any previously hardcoded precision value.
+    OFFLINE_FALLBACK_PRECISION_VALUES.forEach((forbidden) => {
       HONEST_LABELS.forEach((label) => {
         expect(label).not.toBe(forbidden);
       });
     });
+    // The offline fallback state must also not contain the removed precision values.
+    const s = getState().decision;
+    expect(s.action).not.toBe("Irrigate Block A North — 42 min tonight");
+    expect(s.duration).toBeUndefined();
+    expect(s.estimatedVolume).toBeUndefined();
+    expect(s.confidence).toBe("—");
+    expect(s.estimatedWaterSavings).toBe("—");
   });
 
   // --- Section 8: Evidence action truth states ---
@@ -147,13 +156,13 @@ describe("commandStore", () => {
 
   // --- Section 9: Report honest labels for non-representative origins ---
 
-  it("representative report contains farm and block from representative scenario", () => {
-    actions.switchScenario("alpha-vineyard");
+  it("representative report contains farm and block from representative scenario", async () => {
+    await actions.switchScenario("alpha-vineyard");
     const { report } = getState();
     expect(report.farm).toBe("Alpha Vineyard");
     expect(report.block).toBe("Block A North");
-    expect(report.variance).toBeTruthy();
-    expect(report.estimatedWaterSavings).not.toBe("—");
+    // estimatedWaterSavings is withheld in offline fallback — must come from backend.
+    // The report still identifies farm and block correctly.
   });
 
   it("report honest labels do not include representative farm or block values", () => {
@@ -177,7 +186,7 @@ describe("commandStore", () => {
 
   it("does not advance local evidence for representative_fallback origin (baseline check)", async () => {
     // For representative_fallback with no sessionId, the local fallback must still advance.
-    actions.switchScenario("alpha-vineyard"); // representative_fallback origin
+    await actions.switchScenario("alpha-vineyard"); // representative_fallback origin
     const before = getState().evidence.find((s) => s.key === "scheduled")?.status;
     expect(before).toBe("Pending");
     await actions.advanceEvidence("scheduled");

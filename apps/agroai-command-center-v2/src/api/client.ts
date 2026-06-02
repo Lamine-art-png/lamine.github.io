@@ -62,10 +62,10 @@ export const apiClient = {
       method: "POST",
       body: JSON.stringify({ mode, workspace_name: "Alpha Vineyard · Water Command Center" }),
     }),
-  createSamplePackage: () =>
+  createSamplePackage: (scenario?: string) =>
     request<{ session?: { session_id?: string }; session_id?: string; artifacts?: WorkbenchArtifact[] }>(
       ENDPOINTS.samplePackage,
-      { method: "POST" },
+      { method: "POST", body: JSON.stringify({ scenario: scenario ?? "validated_operating_block" }) },
     ),
   uploadFile: (sessionId: string, file: File) => {
     const form = new FormData();

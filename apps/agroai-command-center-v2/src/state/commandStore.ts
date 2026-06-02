@@ -110,31 +110,32 @@ const SCENARIOS: Record<ScenarioId, Scenario> = {
     customerName: "Validated operating block",
     liveEntity: { source: "wiseconn", entityId: "162803" },
     decision: {
-      action: "Irrigate Block A North — 42 min tonight",
-      start: "21:00 – 21:42 PT",
-      appliedWater: "12.2 mm net",
-      grossWater: "14.2 mm gross",
-      duration: "42 min",
-      estimatedVolume: "19.9 m³",
+      // Offline fallback — precision fields are withheld until backend analysis completes.
+      action: "Irrigate Block A North — pending backend analysis for timing",
+      start: "Pending — backend analysis required",
+      appliedWater: "Pending — backend analysis required",
+      grossWater: undefined,
+      duration: undefined,
+      estimatedVolume: undefined,
       area: "3.2 ha",
       irrigationMethod: "Drip",
       controller: "WiseConn evaluation connector",
       crop: "Cabernet Sauvignon",
       block: "Block A North",
-      driver: "ETo 6.4 mm · 38% root-zone deficit · Canopy stress elevated",
-      confidence: "86%",
-      evidenceCompleteness: "92%",
-      estimatedWaterSavings: "27% vs evaluation baseline",
+      driver: "ETo · root-zone deficit · Canopy stress — backend analysis required for values",
+      confidence: "—",
+      evidenceCompleteness: "—",
+      estimatedWaterSavings: "—",
       verification: "Required",
       calibrationStatus: "Calibrated v0.2 — transparent defaults",
-      flowValidationState: "Flow validated for execution timing",
+      flowValidationState: "Pending analysis",
     },
     sources: REP_SOURCES_ALPHA,
     reconciliation: recon([
       ["Controller history", "Last irrigation event: 36 min", "Valid recent controller event", "Matched"],
-      ["Weather demand", "ETo 6.4 mm, rain 0 mm", "High water demand", "Matched"],
-      ["Soil moisture", "38% deficit at 30 cm", "Root-zone deficit supports irrigation", "Matched"],
-      ["Flow meter", "Actual flow within 8% of plan", "Applied water consistent", "Matched"],
+      ["Weather demand", "ETo within range — backend analysis required for values", "Water demand signal available", "Matched"],
+      ["Soil moisture", "Root-zone deficit — backend analysis required for values", "Deficit signal supports irrigation", "Matched"],
+      ["Flow meter", "Flow signal present — backend analysis required for values", "Flow evidence available", "Matched"],
       ["Field observation", "Mild afternoon stress", "Supports irrigation recommendation", "Matched"],
       ["Earth observation layer", "Elevated canopy stress index", "Supports water demand signal", "Matched"],
       ["Talgil", "Runtime reachable, no selected production target", "Integration available, target selection pending", "Pending target"],
@@ -142,12 +143,12 @@ const SCENARIOS: Record<ScenarioId, Scenario> = {
     report: {
       farm: "Alpha Vineyard",
       block: "Block A North",
-      recommendation: "Irrigate Block A North — 42 min tonight",
-      plannedWater: "14.2 mm gross (12.2 mm net)",
+      recommendation: "Irrigate Block A North — pending backend analysis for timing",
+      plannedWater: "Pending backend analysis",
       appliedWater: "Pending confirmation",
-      variance: "Within 8% of plan",
-      evidenceCompleteness: "92%",
-      estimatedWaterSavings: "27% vs evaluation baseline",
+      variance: "Pending backend analysis",
+      evidenceCompleteness: "—",
+      estimatedWaterSavings: "—",
       verification: "Required",
     },
   },
@@ -677,9 +678,38 @@ export const actions = {
     set({ route });
   },
 
-  switchScenario(id: ScenarioId) {
-    set(scenarioState(id, "representative", "representative_fallback"));
-    addAudit("Workspace scenario loaded", `${SCENARIOS[id].name} representative records loaded.`);
+  async switchScenario(id: ScenarioId) {
+    // Set local representative state immediately so the UI reflects the new scenario
+    // without a blank loading flash. Backend analysis will override this if reachable.
+    const immediateOrigin: RecommendationOrigin = id === "incomplete-evidence" ? "insufficient_context" : "representative_fallback";
+    set({
+      ...scenarioState(id, "representative", immediateOrigin),
+      analysisPhase: "running",
+      pipelineMessage: "Loading scenario source package…",
+    });
+
+    if (state.backend.status !== "unavailable") {
+      try {
+        const backendScenario = id === "incomplete-evidence" ? "incomplete_evidence_review" : "validated_operating_block";
+        const sample = await apiClient.createSamplePackage(backendScenario);
+        const sessionId = sample.data?.session?.session_id || sample.data?.session_id || "";
+        if (sample.ok && sessionId) {
+          set({ sessionId, pipelineMessage: "Analyzing scenario source package…" });
+          const analysis = await apiClient.analyzeSession(sessionId);
+          if (analysis.ok && analysis.data) {
+            applyBackendResult(analysis.data, "representative");
+            addAudit("Scenario loaded via backend", `${SCENARIOS[id].name} analyzed from backend.`);
+            toast(`${SCENARIOS[id].name} loaded`);
+            return;
+          }
+        }
+      } catch {
+        // Falls through to the local representative fallback.
+      }
+    }
+
+    set({ ...scenarioState(id, "representative", immediateOrigin), pipelineMessage: "Backend unavailable. Offline representative fallback active." });
+    addAudit("Workspace scenario loaded", `${SCENARIOS[id].name} offline representative records loaded.`);
     toast(`${SCENARIOS[id].name} loaded`);
   },
 
@@ -837,6 +867,15 @@ export function useCommandStore<T>(selector: (s: CommandState) => T): T {
 
 export function getState(): CommandState {
   return state;
+}
+
+export function getProvenanceBadge(mode: AnalysisMode, origin: RecommendationOrigin): { label: string; tone: "gold" | "ok" | "warn" | "neutral" } {
+  if (origin === "representative_fallback") return { label: "Offline representative fallback", tone: "gold" };
+  if (origin === "insufficient_context") return { label: "Offline representative fallback", tone: "gold" };
+  if (mode === "representative") return { label: "Representative evaluation records", tone: "gold" };
+  if (mode === "uploaded") return { label: "Uploaded package", tone: "ok" };
+  if (mode === "live") return { label: "Live connected sources", tone: "ok" };
+  return { label: "Representative evaluation records", tone: "gold" };
 }
 
 // Test seam: reset store to a clean initial state.

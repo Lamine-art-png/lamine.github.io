@@ -14,12 +14,17 @@ class SessionCreate(BaseModel):
     mode: str = "uploaded"
     workspace_name: str = "Water Command Center"
 
+class SamplePackageCreate(BaseModel):
+    scenario: str = "validated_operating_block"
+
 @router.post("/sessions")
 def create_session(payload: SessionCreate):
     return engine.create_session(payload.mode, payload.workspace_name)
 
 @router.post("/sample-package")
-def create_sample_package():
+def create_sample_package(payload: SamplePackageCreate = SamplePackageCreate()):
+    if payload.scenario == "incomplete_evidence_review":
+        return engine.create_incomplete_evidence_session()
     return engine.create_sample_package_session()
 
 @router.get("/sessions/{session_id}")

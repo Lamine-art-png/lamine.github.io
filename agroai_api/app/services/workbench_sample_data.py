@@ -103,6 +103,8 @@ SAMPLE_CROP_PROFILE = """[
     "irrigation_method": "drip",
     "root_zone_depth_cm": 60,
     "growth_stage": "berry set",
+    "area": 3.2,
+    "area_unit": "ha",
     "management_goal": "maintain moderate vine stress while avoiding runoff"
   },
   {
@@ -144,6 +146,57 @@ SAMPLE_SATELLITE_OBSERVATION = """timestamp,farm,block,ndvi,canopy_temperature_c
 2026-05-13T18:00:00Z,Alpha Vineyard,Block B West,0.75,30.4,0.29,Earth observation sample layer
 2026-05-14T18:00:00Z,Delta Almonds,Almond Block 4,0.67,34.2,0.52,Earth observation sample layer
 """
+
+
+# ---------------------------------------------------------------------------
+# Incomplete evidence scenario — missing area, high flow variance, partial soil
+# ---------------------------------------------------------------------------
+
+INCOMPLETE_EVIDENCE_CONTROLLER_EVENTS = """timestamp,farm,block,zone,provider,event_type,scheduled_duration_min,applied_duration_min,flow_m3h,pressure_kpa,status
+2026-05-12T22:00:00Z,Unnamed Block,Block C South,Zone 3,WiseConn,scheduled_irrigation,38,28,21.4,198,variance_watch
+2026-05-13T22:00:00Z,Unnamed Block,Block C South,Zone 3,WiseConn,scheduled_irrigation,38,49,27.8,,missing_pressure
+2026-05-14T22:00:00Z,Unnamed Block,Block C South,Zone 3,WiseConn,planned_irrigation,38,0,0,,missing_pressure
+"""
+
+INCOMPLETE_EVIDENCE_FLOW_METER = """timestamp,farm,block,meter_id,planned_m3,actual_m3,variance_percent
+2026-05-12T23:00:00Z,Unnamed Block,Block C South,FM-UC-C3,15.2,19.5,28.3
+2026-05-13T23:00:00Z,Unnamed Block,Block C South,FM-UC-C3,15.2,11.1,-27.0
+"""
+
+INCOMPLETE_EVIDENCE_SOIL_MOISTURE = """timestamp,farm,block,depth_cm,moisture_percent,deficit_percent,sensor_health
+2026-05-12T06:00:00Z,Unnamed Block,Block C South,30,21.4,36,healthy
+2026-05-13T06:00:00Z,Unnamed Block,Block C South,30,20.8,38,healthy
+"""
+
+INCOMPLETE_EVIDENCE_WEATHER_SUMMARY = """timestamp,region,eto_mm,rain_forecast_mm,temperature_c,humidity_pct,wind_kph
+2026-05-12T12:00:00Z,Central Valley North,5.8,0,29.4,42,14
+2026-05-13T12:00:00Z,Central Valley North,6.1,0,30.2,39,18
+2026-05-14T12:00:00Z,Central Valley North,6.4,0,31.1,36,21
+"""
+
+INCOMPLETE_EVIDENCE_CROP_PROFILE = """[
+  {
+    "farm": "Unnamed Block",
+    "block": "Block C South",
+    "crop": "unknown",
+    "variety": null,
+    "soil_type": null,
+    "irrigation_method": null,
+    "root_zone_depth_cm": null,
+    "growth_stage": null,
+    "management_goal": null
+  }
+]"""
+
+
+def get_incomplete_evidence_files() -> List[SampleWorkbenchFile]:
+    return [
+        SampleWorkbenchFile("controller_events.csv", "text/csv", INCOMPLETE_EVIDENCE_CONTROLLER_EVENTS.encode("utf-8")),
+        SampleWorkbenchFile("weather_summary.csv", "text/csv", INCOMPLETE_EVIDENCE_WEATHER_SUMMARY.encode("utf-8")),
+        SampleWorkbenchFile("soil_moisture.csv", "text/csv", INCOMPLETE_EVIDENCE_SOIL_MOISTURE.encode("utf-8")),
+        SampleWorkbenchFile("flow_meter.csv", "text/csv", INCOMPLETE_EVIDENCE_FLOW_METER.encode("utf-8")),
+        SampleWorkbenchFile("crop_profile.json", "application/json", INCOMPLETE_EVIDENCE_CROP_PROFILE.encode("utf-8")),
+    ]
 
 
 def get_sample_files() -> List[SampleWorkbenchFile]:

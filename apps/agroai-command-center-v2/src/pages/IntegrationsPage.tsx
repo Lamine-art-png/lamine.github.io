@@ -1,6 +1,8 @@
 import { useState } from "react";
+import { useCommandStore } from "../state/commandStore";
 import { IntegrationSetupDrawer } from "../components/IntegrationSetupDrawer";
 import { StatusBadge } from "../components/StatusBadge";
+import type { ProviderStatus } from "../api/contracts";
 
 interface SystemRow {
   name: string;
@@ -13,7 +15,7 @@ interface SystemRow {
   nextAction: string;
 }
 
-const CONNECTED_SYSTEMS: SystemRow[] = [
+const FALLBACK_CONNECTED_SYSTEMS: SystemRow[] = [
   {
     name: "WiseConn",
     type: "controller",
@@ -42,7 +44,7 @@ const CONNECTED_SYSTEMS: SystemRow[] = [
   },
 ];
 
-const PARTNER_FEEDS: SystemRow[] = [
+const FALLBACK_PARTNER_FEEDS: SystemRow[] = [
   {
     name: "Weather",
     type: "partner",
@@ -82,6 +84,23 @@ const PARTNER_FEEDS: SystemRow[] = [
     nextAction: "Complete farm-specific calibration during production onboarding",
   },
 ];
+
+const CONTROLLER_NAMES = new Set(["wiseconn", "talgil"]);
+const PARTNER_NAMES = new Set(["weather", "earth observation", "agronomic context"]);
+
+function mapProviderStatus(ps: ProviderStatus): SystemRow {
+  const isController = CONTROLLER_NAMES.has(ps.provider.toLowerCase());
+  return {
+    name: ps.provider,
+    type: isController ? "controller" : "partner",
+    state: ps.connectionState as SystemRow["state"],
+    lastChecked: ps.lastChecked,
+    records: ps.runtimeState,
+    targets: ps.targets != null ? `${ps.targets} target${ps.targets !== 1 ? "s" : ""} mapped` : "Target selection required",
+    limitations: ps.limitations,
+    nextAction: ps.limitations.length > 0 ? ps.limitations[0] : "No action required",
+  };
+}
 
 function stateTone(state: SystemRow["state"]): "ok" | "warn" | "danger" | "neutral" {
   if (state === "Live" || state === "Configured") return "ok";
@@ -142,6 +161,33 @@ const SETUP_STEPS = [
 
 export function IntegrationsPage() {
   const [provider, setProvider] = useState<string | null>(null);
+  const providerStatuses = useCommandStore((s) => s.providerStatuses);
+  const providerStatusPhase = useCommandStore((s) => s.providerStatusPhase);
+
+  // Use real backend statuses when available; fall back to known limited state.
+  const hasRealStatuses = providerStatusPhase === "ready" && providerStatuses.length > 0;
+  const connectedSystems: SystemRow[] = hasRealStatuses
+    ? providerStatuses
+        .filter((ps) => CONTROLLER_NAMES.has(ps.provider.toLowerCase()))
+        .map(mapProviderStatus)
+    : FALLBACK_CONNECTED_SYSTEMS;
+  const partnerFeeds: SystemRow[] = hasRealStatuses
+    ? providerStatuses
+        .filter((ps) => PARTNER_NAMES.has(ps.provider.toLowerCase()))
+        .map(mapProviderStatus)
+    : FALLBACK_PARTNER_FEEDS;
+
+  // Always include fallback rows for known providers not returned by the backend.
+  const connectedSystemNames = new Set(connectedSystems.map((r) => r.name.toLowerCase()));
+  const mergedControllers = [
+    ...connectedSystems,
+    ...FALLBACK_CONNECTED_SYSTEMS.filter((r) => !connectedSystemNames.has(r.name.toLowerCase())),
+  ];
+  const partnerNames = new Set(partnerFeeds.map((r) => r.name.toLowerCase()));
+  const mergedPartners = [
+    ...partnerFeeds,
+    ...FALLBACK_PARTNER_FEEDS.filter((r) => !partnerNames.has(r.name.toLowerCase())),
+  ];
 
   return (
     <div className="stack">
@@ -154,7 +200,7 @@ export function IntegrationsPage() {
           completes only when credentials are stored server-side through the credential vault.
         </p>
         <div className="integration-list">
-          {CONNECTED_SYSTEMS.map((row) => (
+          {mergedControllers.map((row) => (
             <SystemCard key={row.name} row={row} onSetup={setProvider} />
           ))}
         </div>
@@ -168,7 +214,7 @@ export function IntegrationsPage() {
           External data feeds that enrich source intelligence. Each feed has explicit state and limitations.
         </p>
         <div className="integration-list">
-          {PARTNER_FEEDS.map((row) => (
+          {mergedPartners.map((row) => (
             <SystemCard key={row.name} row={row} onSetup={setProvider} />
           ))}
         </div>

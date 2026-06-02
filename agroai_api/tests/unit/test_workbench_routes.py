@@ -304,3 +304,121 @@ def test_route_confirmation_source_payload_ignored(client):
     )
     assert r.status_code == 200
     assert r.json()['evidence_type'] == 'operator_attestation'
+
+
+# --- Section 14: Evaluation scenario routes ----------------------------------
+
+def test_validated_operating_block_returns_computed_fields(client):
+    """The validated_operating_block scenario must return backend-computed fields from the
+    full 8-file sample package. Area is injected from the crop profile so the orchestrator
+    can compute volume and duration."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'validated_operating_block'})
+    assert created.status_code == 200
+    session_id = created.json()['session']['session_id']
+
+    analyzed = client.post(
+        f'/v1/workbench/sessions/{session_id}/analyze',
+        json={'session_id': session_id, 'mode': 'uploaded'},
+    )
+    assert analyzed.status_code == 200
+    body = analyzed.json()
+
+    # Farm and block must be from the crop profile, not hardcoded.
+    ctx = body['normalized_context']
+    assert ctx['farm'] == 'Alpha Vineyard'
+    assert ctx['block'] == 'Block A North'
+    assert ctx['crop'] == 'wine grapes'
+
+    rec = body['recommendation']
+    # Action must be a non-empty string produced by the orchestrator.
+    assert rec['action']
+    assert isinstance(rec['action'], str)
+
+    # Confidence and completeness come from backend scoring.
+    assert body['reconciliation']['confidence_score'] > 0
+    assert body['reconciliation']['evidence_completeness']
+
+    # Flow validation must be determined from the data, not hardcoded.
+    assert rec.get('flow_validation_status') in ('validated', 'inconsistent', 'unavailable')
+
+    # Volume and duration must be computed from area (3.2 ha from crop profile).
+    # The orchestrator produces these when flow is validated and area is known.
+    assert rec.get('estimated_volume_m3') is not None or rec.get('no_fabricated_duration') is True
+
+    # Recommendation origin must be deterministic engine, not representative fallback.
+    assert body['recommendation_origin'] == 'uploaded_intelligence_engine'
+
+    # Verification plan must be present.
+    assert body['verification_plan']['steps']
+
+    # No hardcoded string must appear in the backend response.
+    body_str = str(body)
+    for forbidden in ['42 min tonight', '27% vs evaluation baseline', '86%\', \'evidenceCompleteness']:
+        assert forbidden not in body_str
+
+
+def test_incomplete_evidence_review_withholds_precision(client):
+    """The incomplete_evidence_review scenario must withhold precision fields
+    (volume, duration) when area is missing and flow variance exceeds 20%."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'incomplete_evidence_review'})
+    assert created.status_code == 200
+    payload = created.json()
+    session_id = payload['session']['session_id']
+
+    # Incomplete evidence package has fewer files than the full sample.
+    assert len(payload['artifacts']) == 5
+
+    analyzed = client.post(
+        f'/v1/workbench/sessions/{session_id}/analyze',
+        json={'session_id': session_id, 'mode': 'uploaded'},
+    )
+    assert analyzed.status_code == 200
+    body = analyzed.json()
+
+    rec = body['recommendation']
+
+    # No area in crop profile — volume must be withheld.
+    assert rec.get('estimated_volume_m3') is None
+
+    # Flow variance > 20% — flow must be inconsistent, duration withheld.
+    flow_status = rec.get('flow_validation_status')
+    assert flow_status in ('inconsistent', 'unavailable')
+    assert rec.get('no_fabricated_duration') is True or rec.get('duration_min') is None
+
+    # Limitations must be present for an incomplete evidence package.
+    assert body['limitations']
+
+    # Confidence must be lower than the validated operating block (< 0.8).
+    assert body['reconciliation']['confidence_score'] < 0.8
+
+
+def test_sample_package_scenario_parameter_accepted(client):
+    """The sample-package endpoint must accept the scenario parameter without error."""
+    r1 = client.post('/v1/workbench/sample-package', json={'scenario': 'validated_operating_block'})
+    assert r1.status_code == 200
+    assert r1.json()['session']['session_id']
+
+    r2 = client.post('/v1/workbench/sample-package', json={'scenario': 'incomplete_evidence_review'})
+    assert r2.status_code == 200
+    assert r2.json()['session']['session_id']
+
+    # Default (no scenario param) must return validated operating block.
+    r3 = client.post('/v1/workbench/sample-package', json={})
+    assert r3.status_code == 200
+    assert len(r3.json()['artifacts']) == 8
+
+
+def test_validated_operating_block_area_from_crop_profile(client):
+    """Area injected from crop profile (3.2 ha) must enable volume/duration computation
+    when flow is validated — the orchestrator must not require area as a manual override."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'validated_operating_block'})
+    session_id = created.json()['session']['session_id']
+
+    analyzed = client.post(
+        f'/v1/workbench/sessions/{session_id}/analyze',
+        json={'session_id': session_id, 'mode': 'uploaded'},
+    )
+    body = analyzed.json()
+    # No area_unit warning must appear (area is now provided via crop profile).
+    area_warnings = [w for w in (body.get('warnings') or []) if 'area unit' in str(w).lower() or 'area value' in str(w).lower()]
+    assert not area_warnings
