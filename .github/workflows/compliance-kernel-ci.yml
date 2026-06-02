@@ -1,0 +1,74 @@
+name: Compliance Kernel PR Validation
+
+on:
+  pull_request:
+    paths:
+      - 'agroai_api/**'
+      - 'apps/agroai-command-center-v2/**'
+      - 'customer-portal/**'
+      - '.github/workflows/compliance-kernel-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+          cache-dependency-path: |
+            agroai_api/requirements*.txt
+      - name: Install backend dependencies
+        run: |
+          python -m pip install --upgrade pip
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+          pip install httpx httpx2 pytest
+      - name: Compile backend modules
+        run: python -m compileall app tests
+      - name: Check migration syntax
+        run: python -m py_compile alembic/versions/002_california_compliance_pack.py alembic/versions/003_global_compliance_kernel.py
+      - name: Run compliance tests
+        run: pytest tests/unit/test_compliance_pack.py
+      - name: Run Talgil route tests
+        run: pytest tests/unit/test_talgil_routes.py
+
+  command-center-v2:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        shell: bash
+        working-directory: apps/agroai-command-center-v2
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: apps/agroai-command-center-v2/package-lock.json
+      - name: Install V2 dependencies
+        run: npm ci
+      - name: Build V2
+        run: npm run build
+      - name: Test V2
+        run: npm run test
+
+  legacy-portal:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check legacy portal JavaScript syntax
+        run: |
+          node --check customer-portal/js/apiClient.js
+          node --check customer-portal/js/app.js
+          node --check customer-portal/js/views/complianceView.js

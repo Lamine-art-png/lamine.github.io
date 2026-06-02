@@ -1,0 +1,1 @@
+export function SettingsPage() { return <main className="page"><h1>Settings</h1><section className="card"><p>Production configuration remains server-side. Compliance demo tokens are explicitly non-production only.</p></section></main>; }
