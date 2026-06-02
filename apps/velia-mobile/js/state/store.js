@@ -31,12 +31,12 @@ export function recordRecommendationHistory(state, fieldId, rec) {
   const last = state.recommendationHistory.find((entry) => entry.fieldId === fieldId);
   const now = Date.now();
   const lastAt = last ? new Date(last.at).getTime() : 0;
-  const changedUrgency = !last || last.rec.urgency !== rec.urgency;
-  if (!changedUrgency && now - lastAt < 30 * 60 * 1000) return state;
+  const changed = !last || last.rec.urgency !== rec.urgency || last.rec.action !== rec.action;
+  if (!changed && now - lastAt < 45 * 60 * 1000) return state;
 
   return {
     ...state,
-    recommendationHistory: [{ fieldId, rec, at: new Date().toISOString() }, ...state.recommendationHistory].slice(0, 40),
+    recommendationHistory: [{ fieldId, rec, at: new Date().toISOString(), eventType: changed ? "recommendation changed" : "recommendation refreshed" }, ...state.recommendationHistory].slice(0, 40),
   };
 }
 
@@ -78,6 +78,9 @@ export function applyOnboarding(state, onboarding) {
         location: onboarding.farmLocation,
         coordinates: onboarding.coordinates || null,
         hardware: onboarding.hardware,
+        units: onboarding.units,
+        waterSource: onboarding.waterSource || "",
+        dataSourceMode: onboarding.dataSource || "neither",
       },
     },
     fields: [field],

@@ -3,7 +3,7 @@ import { syncService } from "./services/sync.js";
 import { applyVoiceAction, parseVoiceCommand, saveOfflineVoiceAction } from "./services/voiceAgent.js";
 import { weatherService } from "./services/weatherService.js";
 import { apiClient } from "./services/apiClient.js";
-import { escapeHtml, confidenceText, relativeTime, shortDate, weatherAgeLabel } from "./services/uiHelpers.js";
+import { actionMappingFor, confidencePresentation, dedupeActivityRows, escapeHtml, confidenceText, relativeTime, shortDate, sortAlerts, alertGroup, weatherAgeLabel } from "./services/uiHelpers.js";
 import { applyDemoScenario, applyOnboarding, loadState, recordRecommendationHistory, saveState, useDemoMode } from "./state/store.js";
 import { createIrrigationLog, createObservation, createVoiceTimelineEntry } from "./state/actions.js";
 import { createAiOrchestrator } from "./ai/aiOrchestrator.js";
@@ -149,6 +149,9 @@ function updateCondition(payload) {
 }
 
 function recommendationFor(field) {
+  if (state.mode === "demo" && field.demoRecommendation) {
+    return { ...field.demoRecommendation, sourceMode: "local", verificationStatus: field.verificationStatus || "needs field confirmation" };
+  }
   const result = ai().runGoal({ goal: "daily irrigation decision", fieldId: field.id, language: state.language || "en" });
   const localRec = result.decision;
   const cached = state.remoteDecisions?.[field.id];
@@ -216,8 +219,26 @@ function actionTitle(rec, field) {
   const action = String(rec.action || "monitor").toLowerCase();
   if (action.includes("irrigate")) return `Irrigate ${field.name}`;
   if (action.includes("wait")) return `Wait before irrigating ${field.name}`;
+  if (action.includes("missing") || action.includes("update")) return `Complete data for ${field.name}`;
   if (action.includes("check")) return `Check ${field.name} before irrigating`;
   return `Monitor ${field.name}`;
+}
+
+function actionAttribute(kind, fieldId) {
+  const id = h(fieldId);
+  if (kind === "log") return `data-open-log="${id}"`;
+  if (kind === "condition") return `data-open-condition="${id}"`;
+  if (kind === "assistant") return `data-nav="assistant" data-assistant-field="${id}"`;
+  if (kind === "reasoning") return `data-scroll-provenance="1"`;
+  if (kind === "weather") return `data-nav="alerts"`;
+  if (kind === "field-detail") return `data-open-field="${id}"`;
+  if (kind === "reminder") return `data-set-reminder="${id}"`;
+  return `data-open-condition="${id}"`;
+}
+
+function actionButtons(rec, field, compact = false) {
+  const mapping = actionMappingFor(rec.action);
+  return `<div class="${compact ? "card-actions" : "hero-actions"}"><button class="btn brand" ${actionAttribute(mapping.primaryAction, field.id)}>${h(mapping.primary)}</button><button class="btn" ${actionAttribute(mapping.secondaryAction, field.id)}>${h(mapping.secondary)}</button></div>`;
 }
 
 function riskFor(field, rec) {
@@ -233,8 +254,14 @@ function emptyState(title, body, action = "") {
 }
 
 function confidenceBadge(confidence) {
-  const text = confidenceText(confidence);
-  return `<span class="confidence ${confidenceClass(text)}">${h(text)} confidence</span>`;
+  const display = confidencePresentation(confidence);
+  const score = display.numeric == null ? "" : ` ${display.numeric}%`;
+  return `<span class="confidence ${confidenceClass(display.label)}">${h(display.label)} confidence${h(score)}</span>`;
+}
+
+function confidenceBlock(rec) {
+  const display = confidencePresentation(rec.confidence ?? rec.confidenceLabel, rec);
+  return `<div class="confidence-copy"><strong>${h(display.label)} confidence${display.numeric == null ? "" : ` ${display.numeric}%`}</strong><p>${h(display.explanation)}</p><small>${h(display.improve)}</small></div>`;
 }
 
 function riskBadge(label, severity = "normal") {
@@ -299,12 +326,12 @@ function fieldCard(field, compact = false) {
 }
 
 function recentActivity(limit = 5) {
-  const rows = [
-    ...state.irrigationLogs.map((x) => ({ at: x.performedAt, title: "Irrigation logged", body: `${fieldName(x.fieldId)} - ${x.durationMin} min` })),
-    ...state.observations.map((x) => ({ at: x.createdAt, title: "Condition updated", body: `${fieldName(x.fieldId)} - ${x.condition}` })),
-    ...state.fieldNotes.map((x) => ({ at: x.createdAt, title: "Note captured", body: `${fieldName(x.fieldId)} - ${x.text}` })),
-    ...state.recommendationHistory.map((x) => ({ at: x.at, title: "Recommendation refreshed", body: `${fieldName(x.fieldId)} - ${x.rec?.action || x.rec?.urgency || "review"}` })),
-  ].sort((a, b) => new Date(b.at) - new Date(a.at)).slice(0, limit);
+  const rows = dedupeActivityRows([
+    ...state.irrigationLogs.map((x) => ({ at: x.performedAt, title: "Irrigation logged", body: `${fieldName(x.fieldId)} - ${x.durationMin} min`, fieldId: x.fieldId })),
+    ...state.observations.map((x) => ({ at: x.createdAt, title: "Condition updated", body: `${fieldName(x.fieldId)} - ${x.condition}`, fieldId: x.fieldId })),
+    ...state.fieldNotes.map((x) => ({ at: x.createdAt, title: "Note captured", body: `${fieldName(x.fieldId)} - ${x.text}`, fieldId: x.fieldId })),
+    ...state.recommendationHistory.map((x) => ({ at: x.at, title: x.eventType === "recommendation changed" ? "Recommendation changed" : "Recommendation refreshed", body: `${fieldName(x.fieldId)} - ${x.rec?.action || x.rec?.urgency || "review"}`, fieldId: x.fieldId })),
+  ], { limit });
   if (!rows.length) return emptyState("No activity yet", "Logs, field checks, and verified recommendations will appear here.");
   return `<div class="activity-list">${rows.map((row) => `<div class="activity-row"><span></span><div><strong>${h(row.title)}</strong><p>${h(row.body)}</p></div><time>${h(relativeTime(row.at))}</time></div>`).join("")}</div>`;
 }
@@ -343,9 +370,11 @@ function todayContent() {
     <section class="card hero-card urgency-${h(rec.urgency || "medium")}">
       <div class="hero-kicker"><span>${h(field.name)}</span>${confidenceBadge(rec.confidence || rec.confidenceLabel)}</div>
       <h2>${h(actionTitle(rec, field))}</h2>
+      <p class="field-context-line">${h(field.crop || "Crop not set")} - ${h(field.acreage || "0")} acres - ${h(field.irrigationMethod || "Irrigation method missing")}</p>
       <p>${h(rec.reasons?.[0] || rec.nextBestAction || "Velia checked field and weather signals for today's water decision.")}</p>
       <div class="hero-meta"><span>${h(rec.timing || "Today")}</span><span>${h(riskFor(field, rec))}</span><span>${h(rec.sourceMode === "backend" ? "Synced intelligence" : rec.sourceMode === "refreshing" ? "Refreshing" : "Local fallback ready")}</span></div>
-      <div class="hero-actions"><button class="btn brand" data-open-log="${h(field.id)}">Log irrigation</button><button class="btn" data-open-condition="${h(field.id)}">Record field check</button></div>
+      ${confidenceBlock(rec)}
+      ${actionButtons(rec, field)}
     </section>
     ${buildChanges(field, rec)}
     <section class="section-card unframed"><div class="section-heading"><p class="card-label">Fields needing attention</p><button class="link-button" data-nav="fields">View all</button></div><div class="field-carousel">${attentionFields.length ? attentionFields.map((f) => fieldCard(f, true)).join("") : emptyState("No field needs urgent attention", "Velia will surface changes when weather, logs, or observations shift.")}</div></section>
@@ -408,12 +437,12 @@ function fieldDetail(fieldId) {
     <section class="field-hero"><div><p class="eyebrow">${h(f.crop || "Field")}</p><h1>${h(f.name)}</h1><p>${h(f.location || "Location not set")} - ${h(f.acreage || "0")} acres</p></div>${riskBadge(riskFor(f, rec), "watch")}</section>
     ${mapPlaceholder(f)}
     <section class="detail-grid">
-      <article class="card"><p class="card-label">Today's recommendation</p><h2>${h(actionTitle(rec, f))}</h2><p>${h(rec.nextBestAction || rec.reasons?.[0] || "Check the field and log what you see.")}</p>${confidenceBadge(rec.confidence || rec.confidenceLabel)}</article>
+      <article class="card"><p class="card-label">Today's recommendation</p><h2>${h(actionTitle(rec, f))}</h2><p>${h(rec.nextBestAction || rec.reasons?.[0] || "Check the field and log what you see.")}</p>${confidenceBlock(rec)}</article>
       <article class="card"><p class="card-label">Weather context</p><p>${h(weather?.forecastSummary || "Weather context unavailable.")}</p><div class="card-metrics"><span>Rain ${h(weather?.rainChance ?? "n/a")}%</span><span>Heat ${h(weather?.heatRisk || "unknown")}</span></div></article>
       <article class="card"><p class="card-label">Data sources</p><div class="data-source-list"><span>Sensor: ${h(f.sensorData ? "available" : "not connected")}</span><span>Controller: ${h(f.controllerStatus || f.dataSource || "not connected")}</span><span>Verification: ${h(f.verificationStatus || "not confirmed")}</span></div></article>
     </section>
     <section class="card section-card"><p class="card-label">Timeline</p>${timelineRows([...logs.map((x) => ["Irrigation", `${x.durationMin} min`, x.performedAt]), ...observations.map((x) => ["Observation", x.condition, x.createdAt]), ...notes.map((x) => ["Note", x.text, x.createdAt])])}</section>
-    <section class="field-actions"><button class="btn brand" data-open-log="${h(f.id)}">Log irrigation</button><button class="btn" data-open-condition="${h(f.id)}">Update condition</button><button class="btn" data-nav="assistant" data-assistant-field="${h(f.id)}">Ask Velia about this field</button></section>
+    <section class="field-actions">${actionButtons(rec, f, true)}<button class="btn" data-nav="assistant" data-assistant-field="${h(f.id)}">Ask Velia about this field</button></section>
     ${provenanceSection(rec)}
   </section>`;
 }
@@ -460,14 +489,15 @@ function buildAlerts() {
     if (!field.sensorData) generated.push({ type: "sensor", severity: "low", fieldId: field.id, createdAt: new Date().toISOString(), explanation: "No sensor reading is available.", action: "Use a manual observation to improve confidence.", resolved: false });
     if (confidenceText(rec.confidence).toLowerCase() === "low") generated.push({ type: "confidence", severity: "medium", fieldId: field.id, createdAt: new Date().toISOString(), explanation: "Decision confidence is low.", action: "Add crop, soil, weather, or observation data.", resolved: false });
   }
-  return [...(state.alertHistory || []), ...generated].filter((a) => !a.resolved).slice(0, 12);
+  return sortAlerts([...(state.alertHistory || []), ...generated].filter((a) => !a.resolved)).slice(0, 12);
 }
 
 function alertsContent() {
   const alerts = buildAlerts();
+  const groups = ["Act now", "Review today", "Monitoring"].map((name) => [name, alerts.filter((alert) => alertGroup(alert) === name)]).filter(([, rows]) => rows.length);
   return `<section class="screen alerts-screen">
     <div class="screen-heading"><div><p class="eyebrow">Alerts</p><h1>Only what needs action</h1></div></div>
-    <section class="alert-list">${alerts.length ? alerts.map((alert) => alertRow(alert)).join("") : emptyState("No urgent alerts", "Velia is monitoring your fields.")}</section>
+    <section class="alert-list">${groups.length ? groups.map(([name, rows]) => `<div class="alert-group"><h2>${h(name)}</h2>${rows.map((alert) => alertRow(alert)).join("")}</div>`).join("") : emptyState("No urgent alerts", "Velia is monitoring your fields.")}</section>
   </section>`;
 }
 
@@ -585,6 +615,8 @@ function bind() {
   const sendAssistant = document.querySelector("[data-send-assistant]");
   if (sendAssistant) sendAssistant.onclick = async () => { const q = document.getElementById("assistantInput")?.value || "Should I irrigate today?"; assistantResponse = await fetchAssistantText(assistantFieldId || state.fields[0]?.id || "", q); render(); };
   app.querySelectorAll("[data-refresh-weather]").forEach((b) => (b.onclick = async () => { await refreshWeather(true); showMessage("Weather refreshed."); render(); }));
+  app.querySelectorAll("[data-set-reminder]").forEach((b) => (b.onclick = () => showMessage(`Reminder set for ${fieldName(b.dataset.setReminder)}.`)));
+  app.querySelectorAll("[data-scroll-provenance]").forEach((b) => (b.onclick = () => document.querySelector("[data-testid='provenance-disclosure']")?.scrollIntoView({ behavior: "smooth", block: "start" })));
   app.querySelectorAll("[data-mode]").forEach((b) => (b.onclick = async () => { state = b.dataset.mode === "demo" ? useDemoMode(state) : { ...state, mode: "real" }; persist(); await refreshWeather(true); render(); }));
 
   const applyScenarioBtn = document.querySelector("[data-apply-scenario]");
