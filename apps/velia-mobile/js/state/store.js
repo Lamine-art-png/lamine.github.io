@@ -57,6 +57,9 @@ export function useDemoMode(state) {
     irrigationLogs: demoProfile.irrigationLogs,
     fieldNotes: demoProfile.fieldNotes,
     observations: demoProfile.observations || [],
+    recommendationHistory: demoProfile.recommendationHistory || [],
+    alertHistory: demoProfile.alertHistory || [],
+    voiceTimeline: demoProfile.voiceTimeline || [],
     language: demoProfile.language,
     units: demoProfile.farm.units,
   };
