@@ -1,3 +1,4 @@
+import "dotenv/config";
 import http from "http";
 import { config } from "./config.js";
 import { aiOrchestrator } from "./ai/aiOrchestrator.js";

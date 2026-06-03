@@ -47,28 +47,60 @@ Provider API keys are backend-only. Do not place these values in `apps/velia-mob
 
 ## Intelligence pipeline
 
-`irrigationDecisionAgent` now builds a hybrid recommendation:
+`irrigationDecisionAgent` builds a hybrid recommendation in layers:
 
-- normalizes field, log, observation, weather, and memory context
-- retrieves weather from OpenWeather when configured, with cached stale fallback
-- calculates deterministic water-pressure signals and safety rules
-- retrieves local RAG knowledge from `knowledge/*.json`
-- calls Gemini or OpenAI for strict structured JSON when configured
-- retries malformed model output once with a repair instruction
-- falls back to deterministic logic when providers are unavailable
-- applies guardrails and returns provenance
+1. Normalize field, log, observation, weather, and memory context
+2. Calculate deterministic water-pressure signals (`deterministicIrrigation.js`)
+3. Score evidence quality independently via `confidenceEngine.js` (evidence-based, not need-score-derived)
+4. Retrieve local RAG knowledge from `knowledge/*.json`
+5. Call Gemini or OpenAI for strict structured JSON when configured
+6. Retry malformed model output once with a repair instruction
+7. Fall back to deterministic logic when providers are unavailable
+8. Apply safety guardrails and return decision with provenance
 
-The deterministic layer remains authoritative for safety constraints. The model may explain, identify uncertainty, and choose field checks, but it must not invent sensor data, exact soil moisture, weather, satellite evidence, yield guarantees, or water-savings guarantees.
+**Deterministic safety is fully authoritative.** The model may explain reasoning, identify uncertainty, or choose field checks — but it cannot escalate to "irrigate" unless the deterministic engine also permits it. Specific blocking rules (frost risk, rain forecast, wet observation, recent irrigation) are checked before the generic authority block so their named guardrail keys are always recorded.
 
-## Local persistence
+**Confidence scoring is evidence-quality based**, not need-score derived. `confidenceEngine.scoreEvidence()` scores 11 evidence dimensions (weather freshness, crop type, soil type, irrigation method, field coordinates, irrigation log, recent observation, soil moisture sensor, irrigation controller, ET source, satellite evidence) and detects conflicting signals. This gives an honest representation of what the system actually knows.
+
+**Agronomic guardrails** block 9 prohibited claim types: exact soil moisture, satellite evidence, exact ET values, exact duration, exact application volume, verified water savings, guaranteed yield, unverified water-savings percentages, and specific stress-index values.
+
+## Evaluation
+
+40 executable evaluation fixtures test the deterministic engine end-to-end:
+
+```bash
+npm run eval
+```
+
+Fixtures cover high heat, frost risk, wet field, dry field, expected rain, stale weather, missing crop/soil/method, recent irrigation, no history, sensor conflicts, controller unavailable, low/high confidence, offline fallback, conflicting signals, unsupported ET/satellite/duration claims, boundary values, and more.
+
+## Smoke tests (live providers only)
+
+```bash
+npm run smoke:llm        # requires GEMINI_API_KEY or OPENAI_API_KEY
+npm run smoke:embedding  # requires EMBEDDING_PROVIDER + key
+npm run smoke:weather    # requires OPENWEATHER_API_KEY
+```
+
+Smoke tests fail clearly when credentials are not configured and never log keys or prompts.
+
+## CI
+
+GitHub Actions runs on push to `main`, `claude/**`, `codex/**`, and PRs to `main`:
+- Syntax check all source files
+- Backend tests with mocked providers (no secrets required)
+- Evaluation harness (40 fixtures)
+- Mobile syntax check and tests
+
+## Local persistence (development only)
 
 Development mode uses JSON files under `src/storage/`:
 
-- memory events and recurring patterns
-- local vector index
+- memory events and recurring patterns (`MEMORY_PROVIDER=json`)
+- local vector index (`VECTOR_PROVIDER=local`)
 - weather cache
 
-These files are ignored by git. Production should migrate memory to Postgres with tenant-scoped tables, and vector search to Postgres + `pgvector` or a managed vector database.
+These files are git-ignored. `MemoryProvider` is an interface — production should migrate to Postgres with tenant-scoped tables; vector search to `pgvector` or a managed vector database. The JSON implementation is labelled dev-only and is not suitable for multi-tenant or production use.
 
 ## Privacy expectations
 
@@ -78,11 +110,6 @@ Live LLM and embedding calls send structured field context to the selected backe
 
 ```bash
 cd apps/velia-ai-api
-npm test
-```
-
-In the Codex desktop runtime used for this build, `npm` was not available on PATH. The equivalent direct command used was:
-
-```bash
-/Applications/Codex.app/Contents/Resources/node --test src/tests/*.test.js
+npm test        # 32 tests (intelligence + routes)
+npm run eval    # 40 evaluation fixtures
 ```
