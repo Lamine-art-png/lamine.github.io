@@ -7,6 +7,7 @@ import { actionMappingFor, alertFingerprint, alertGroup, alertKey, confidencePre
 import { applyDemoScenario, applyOnboarding, loadState, recordRecommendationHistory, saveState, useDemoMode } from "./state/store.js";
 import { createIrrigationLog, createObservation, createVoiceTimelineEntry } from "./state/actions.js";
 import { createAiOrchestrator } from "./ai/aiOrchestrator.js";
+import { memoryStore } from "./ai/memoryStore.js";
 
 const app = document.getElementById("app");
 const h = escapeHtml;
@@ -68,7 +69,7 @@ const nav = [
 ];
 const tr = (k) => translations[state.language || "en"]?.[k] || translations.en[k] || k;
 
-function buildAiContext() {
+function buildAiContext({ preview = true } = {}) {
   return {
     getFarmProfile: () => state.profile?.farm || {},
     getFieldProfile: (fieldId) => state.fields.find((f) => f.id === fieldId) || state.fields[0] || {},
@@ -91,11 +92,11 @@ function buildAiContext() {
     },
     calculateConfidence: ({ missingData, needScore }) => Math.max(0.2, Math.min(0.95, (needScore || 0.6) - ((missingData?.length || 0) * 0.08))),
     generateExplanation: ({ decision }) => `Velia checked weather, field profile, observations, and recent irrigation before recommending ${decision?.action || "monitoring"}.`,
-    isPreviewRender: () => true,
+    isPreviewRender: () => preview,
   };
 }
 
-function ai() { return createAiOrchestrator(buildAiContext()); }
+function ai() { return createAiOrchestrator(buildAiContext({ preview: true })); }
 function persist() { saveState(state); }
 function syncStatus() { return syncService.status(); }
 
@@ -196,6 +197,7 @@ async function refreshRemoteDecision(field) {
     if (result?.decision) {
       state.remoteDecisions = { ...(state.remoteDecisions || {}), [field.id]: { decision: result.decision, fetchedAt: new Date().toISOString() } };
       state = recordRecommendationHistory(state, field.id, result.decision);
+      memoryStore.updateFieldMemory(field.id, { type: "decision", payload: result.decision });
       persist();
     }
   } catch {

@@ -154,7 +154,9 @@ export function relativeTime(value) {
 
 export function weatherAgeLabel(weather) {
   const sourceTs = weather?.weatherTimestamp || weather?.lastUpdated || weather?.cachedAt;
-  const minutes = weather?.freshness?.ageMinutes ?? (sourceTs ? Math.max(0, Math.round((Date.now() - new Date(sourceTs).getTime()) / 60000)) : null);
+  const minutes = sourceTs
+    ? Math.max(0, Math.round((Date.now() - new Date(sourceTs).getTime()) / 60000))
+    : (weather?.freshness?.ageMinutes ?? null);
   if (minutes == null || !Number.isFinite(minutes)) return "Weather age unknown";
   if (minutes < 60) return `${minutes} min old`;
   return `${Math.round(minutes / 60)} hr old`;

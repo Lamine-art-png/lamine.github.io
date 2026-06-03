@@ -136,3 +136,49 @@ test('weather age labels are readable', () => {
   assert.equal(weatherAgeLabel({ freshness: { ageMinutes: 120 } }), '2 hr old');
   assert.equal(weatherAgeLabel({}), 'Weather age unknown');
 });
+
+test('weatherAgeLabel uses live timestamp age instead of frozen freshness.ageMinutes', () => {
+  const staleTs = new Date(Date.now() - 90 * 60000).toISOString();
+  const age = weatherAgeLabel({ weatherTimestamp: staleTs, freshness: { ageMinutes: 5 } });
+  assert.ok(age.includes('hr'), `Expected hours-based age from timestamp, got: ${age}`);
+  const match = age.match(/^(\d+) hr old$/);
+  assert.ok(match && Number(match[1]) >= 1);
+});
+
+test('alert fingerprint is stable for same condition and changes when condition token changes', () => {
+  const alert = { type: 'frost', fieldId: 'field-2', severity: 'high', conditionToken: 'frost:elevated', explanation: 'Frost risk', action: 'Confirm protocol' };
+  assert.equal(alertFingerprint(alert), alertFingerprint({ ...alert }));
+  assert.notEqual(alertFingerprint(alert), alertFingerprint({ ...alert, conditionToken: 'frost:high' }));
+});
+
+test('alert firstSeenAt is pinned to first occurrence and reset only on condition change', () => {
+  const seen = {};
+  const pin = (a) => {
+    const k = alertKey(a);
+    const fp = alertFingerprint(a);
+    if (!seen[k] || seen[k].fingerprint !== fp) seen[k] = { firstSeenAt: a.createdAt || new Date().toISOString(), fingerprint: fp };
+    return { ...a, createdAt: seen[k].firstSeenAt };
+  };
+
+  const base = { type: 'heat', fieldId: 'field-1', severity: 'medium', conditionToken: 'heat:elevated', explanation: 'Heat pressure', action: 'Check field', createdAt: '2026-06-01T08:00:00.000Z' };
+  const first = pin(base);
+  assert.equal(first.createdAt, '2026-06-01T08:00:00.000Z');
+
+  const second = pin({ ...base, createdAt: '2026-06-02T10:00:00.000Z' });
+  assert.equal(second.createdAt, '2026-06-01T08:00:00.000Z', 'same condition should keep original firstSeenAt');
+
+  const changed = pin({ ...base, conditionToken: 'heat:high', createdAt: '2026-06-02T12:00:00.000Z' });
+  assert.equal(changed.createdAt, '2026-06-02T12:00:00.000Z', 'changed condition should get new firstSeenAt');
+});
+
+test('alert firstSeenAt defaults to current time when alert has no createdAt', () => {
+  const alert = { type: 'sensor', fieldId: 'field-3', severity: 'low', conditionToken: 'sensor:none', explanation: 'No sensor', action: 'Use manual observation' };
+  const seen = {};
+  const k = alertKey(alert);
+  const fp = alertFingerprint(alert);
+  const before = Date.now();
+  if (!seen[k] || seen[k].fingerprint !== fp) seen[k] = { firstSeenAt: alert.createdAt || new Date().toISOString(), fingerprint: fp };
+  const after = Date.now();
+  const ts = new Date(seen[k].firstSeenAt).getTime();
+  assert.ok(ts >= before && ts <= after);
+});
