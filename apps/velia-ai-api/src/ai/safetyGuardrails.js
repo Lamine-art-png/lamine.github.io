@@ -34,11 +34,27 @@ export function containsUnsupportedClaim(text) {
   return prohibitedPatterns.some((item) => item.pattern.test(String(text || "")));
 }
 
+export function containsUnsupportedClaimForContext(text, context = {}) {
+  if (containsUnsupportedClaim(text)) return true;
+  const t = String(text || "");
+  const sensorMoisture = context?.sensorData?.soilMoisturePercent ?? context?.sensorData?.soilMoisture ?? null;
+  if (typeof sensorMoisture !== "number" && /soil moisture\s+(?:is|of|at|was)\s+[\d.]+\s*%?/i.test(t)) return true;
+  const hasEt = Boolean(context?.etProvenance || context?.weather?.evapotranspiration);
+  if (!hasEt && /\bET\s+(?:rate\s+)?(?:is|of|at|was|=)\s+[\d.]+\s*mm/i.test(t)) return true;
+  const hasFlowRate = Boolean(context?.flowRateLph || context?.applicationRateMmPerHour);
+  if (!hasFlowRate && /irrigate\s+for\s+[\d.]+\s*(?:hours?|minutes?)/i.test(t)) return true;
+  if (!hasFlowRate && /apply\s+[\d.]+\s*(?:mm|liters?|gallons?|m³)/i.test(t)) return true;
+  const hasSatellite = Boolean(context?.satelliteEvidence || context?.ndvi != null);
+  if (!hasSatellite && /satellite\s+(?:data|imagery|shows?|indicates?|confirms?|detected?)/i.test(t)) return true;
+  return false;
+}
+
 export const safetyGuardrails = {
   enforce(decision, context = {}) {
     const triggered = [...(decision.guardrailsTriggered || [])];
     const weather = context.weather || {};
     const deterministic = context.deterministicSignals || {};
+    const fieldContext = context.fieldContext || null;
     const patched = { ...decision };
 
     for (const key of ["reasons", "uncertainties", "fieldChecks", "risks", "safetyNotes"]) {
@@ -70,6 +86,18 @@ export const safetyGuardrails = {
     if ((deterministic.rulesTriggered || []).includes("recent_irrigation") && patched.action === "irrigate" && (deterministic.needScore || 0) < 0.82) {
       patched.action = "check field first";
       triggered.push("recent_irrigation_requires_field_check");
+    }
+    if (weather.stale && patched.action === "irrigate") {
+      patched.action = "check field first";
+      triggered.push("stale_weather_downgrade_irrigate");
+    }
+    if (fieldContext && !fieldContext.irrigationMethod && patched.action === "irrigate") {
+      patched.action = "update missing data";
+      triggered.push("missing_irrigation_method_blocks_irrigate");
+    }
+    if ((patched.confidenceScore || 0) < 0.45 && patched.action === "irrigate") {
+      patched.action = "check field first";
+      triggered.push("low_confidence_blocks_irrigate");
     }
 
     const deterministicAction = deterministic.action || (deterministic.needScore >= 0.72 ? "irrigate" : deterministic.needScore >= 0.45 ? "check field first" : "monitor");

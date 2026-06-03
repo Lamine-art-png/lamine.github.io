@@ -22,6 +22,7 @@ export function daysSince(dateValue) {
 export function buildNormalizedFieldContext({ field = {}, weather = {}, logs = [], observations = [], memory = {} }) {
   const recentObservation = observations[0] || memory.recentObservations?.[0] || {};
   const lastLog = logs[0] || memory.recentLogs?.[0] || null;
+  const rawCoords = field.coordinates || (field.lat != null && field.lon != null ? { lat: field.lat, lon: field.lon } : null);
   return {
     fieldId: field.id || field.fieldId || "unknown-field",
     name: field.name || "Field",
@@ -35,6 +36,17 @@ export function buildNormalizedFieldContext({ field = {}, weather = {}, logs = [
     controllerStatus: field.controllerStatus || field.controller || null,
     lastIrrigationAt: field.lastIrrigationAt || lastLog?.performedAt || null,
     recentObservation: recentObservation.condition || recentObservation.note || field.lastObservation || null,
+    observationTimestamp: recentObservation.createdAt || recentObservation.observedAt || recentObservation.timestamp || recentObservation.ts || null,
+    coordinates: rawCoords,
+    lat: field.lat ?? field.latitude ?? rawCoords?.lat ?? null,
+    lon: field.lon ?? field.longitude ?? rawCoords?.lon ?? null,
+    satelliteEvidence: field.satelliteEvidence || null,
+    ndvi: field.ndvi != null ? field.ndvi : null,
+    flowRateLph: field.flowRateLph ?? field.flowRate ?? null,
+    applicationRateMmPerHour: field.applicationRateMmPerHour ?? field.applicationRate ?? null,
+    sensorProvenance: field.sensorProvenance || (field.sensorData || field.sensors ? "field_sensor" : null),
+    etProvenance: field.etProvenance || (weather?.evapotranspiration ? "weather_provider" : null),
+    controllerProvenance: field.controllerProvenance || (field.controllerStatus && field.controllerStatus !== "not connected" ? "controller" : null),
     weather,
     logs,
     observations,
@@ -166,7 +178,11 @@ export function deterministicDecisionFromSignals(signals, context) {
     action,
     timing: action === "irrigate" ? "Next 2-4 hours after a field check" : action === "wait" ? "Recheck after forecast rain window" : "Today before evening",
     urgency: signals.urgency,
-    estimatedDurationRange: action === "irrigate" ? "45-90 min, adjust to system flow and field check" : "0-30 min field check",
+    estimatedDurationRange: action === "irrigate"
+      ? (context.flowRateLph || context.applicationRateMmPerHour
+          ? "45-90 min, adjust to system flow and field check"
+          : "Add flow rate and system details to calculate a duration.")
+      : "0-30 min field check",
     reasons: [
       `Estimated water pressure is ${signals.pressureLabel} (${signals.needScore.toFixed(2)}) from field, weather, and observation signals.`,
       `Weather: ${context.weather?.forecastSummary || "not available"}`,

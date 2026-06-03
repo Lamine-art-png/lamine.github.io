@@ -34,7 +34,7 @@ export async function ingestKnowledge(options = {}) {
   const chunks = docs.flatMap((doc) => chunkKnowledgeDocument(doc, options.chunkOptions));
   const rows = [];
   for (const chunk of chunks) {
-    const embedding = await embeddingService.embed(`${chunk.source.title}\n${chunk.text}`);
+    const embedding = await embeddingService.embed(`${chunk.source.title}\n${chunk.text}`, { taskType: "RETRIEVAL_DOCUMENT" });
     rows.push({
       id: chunk.id,
       text: chunk.text,
@@ -79,7 +79,7 @@ export const ragEngine = {
 
     try {
       const topK = options.topK || 4;
-      const embedding = await embeddingService.embed(query || "irrigation decision");
+      const embedding = await embeddingService.embed(query || "irrigation decision", { taskType: "RETRIEVAL_QUERY" });
       const initial = await vectorStore.search(embedding.vector, Math.max(topK * 3, topK), { minScore: options.minScore ?? -1 });
       const ranked = rerank(query, initial, topK);
       const chunks = ranked.map((hit) => ({

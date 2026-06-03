@@ -14,8 +14,8 @@ import { detectRecurringPatterns, memoryStore } from "../ai/memoryStore.js";
 import { scenarios, runFixtureEvaluation } from "../ai/evaluationHarness.js";
 import { fetchJsonWithRetry } from "../services/httpClient.js";
 import { scoreEvidence } from "../ai/confidenceEngine.js";
-import { calculateDeterministicSignals, buildNormalizedFieldContext } from "../ai/deterministicIrrigation.js";
-import { safetyGuardrails, containsUnsupportedClaim } from "../ai/safetyGuardrails.js";
+import { calculateDeterministicSignals, buildNormalizedFieldContext, deterministicDecisionFromSignals } from "../ai/deterministicIrrigation.js";
+import { safetyGuardrails, containsUnsupportedClaim, containsUnsupportedClaimForContext } from "../ai/safetyGuardrails.js";
 import { getConfig } from "../config.js";
 
 const sampleField = {
@@ -170,8 +170,10 @@ test("malformed model JSON falls back to deterministic decision with provenance"
 });
 
 test("hybrid decision output, assistant grounding, offline fallback, and recurring memory patterns", async () => {
+  // Use a unique field ID per run to avoid stale-state failures from prior test runs.
+  const patternFieldId = `pattern-field-${Date.now()}`;
   const decision = await irrigationDecisionAgent.decide({
-    field: { ...sampleField, id: "pattern-field" },
+    field: { ...sampleField, id: patternFieldId },
     weather: { ...sampleWeather, stale: true },
     observations: [{ condition: "Looks dry" }],
     logs: [],
@@ -180,12 +182,12 @@ test("hybrid decision output, assistant grounding, offline fallback, and recurri
   assert.ok(decision.provenance.weatherStale);
   assert.ok(decision.guardrailWarnings.length > 0);
 
-  memoryStore.updateFieldMemory("pattern-field", { type: "observation", payload: { condition: "Looks dry" } });
-  memoryStore.updateFieldMemory("pattern-field", { type: "observation", payload: { condition: "Leaves look stressed" } });
-  const patterns = memoryStore.summarizeFieldMemory("pattern-field").recurringPatterns;
+  memoryStore.updateFieldMemory(patternFieldId, { type: "observation", payload: { condition: "Looks dry" } });
+  memoryStore.updateFieldMemory(patternFieldId, { type: "observation", payload: { condition: "Leaves look stressed" } });
+  const patterns = memoryStore.summarizeFieldMemory(patternFieldId).recurringPatterns;
   assert.ok(patterns.some((p) => p.type === "repeated_dryness"));
 
-  const assistant = await aiOrchestrator.run("assistant query", { query: "What are you missing?", fieldId: "pattern-field", decision });
+  const assistant = await aiOrchestrator.run("assistant query", { query: "What are you missing?", fieldId: patternFieldId, decision });
   assert.equal(assistant.type, "assistant");
   assert.ok(/missing/i.test(assistant.answer));
   assert.ok(Array.isArray(assistant.sources));
@@ -404,6 +406,203 @@ test("guardrails: blocks guaranteed outcome language", () => {
   assert.ok(containsUnsupportedClaim("guaranteed yield improvement with this plan"));
   assert.ok(containsUnsupportedClaim("water savings of 30%"));
   assert.ok(!containsUnsupportedClaim("potential water savings (not yet verified)"));
+});
+
+// ── Evidence normalization ──────────────────────────────────────────────────
+
+test("buildNormalizedFieldContext: preserves observation timestamp", () => {
+  const ts = new Date(Date.now() - 3600000).toISOString();
+  const ctx = buildNormalizedFieldContext({ field: {}, observations: [{ condition: "Dry", createdAt: ts }] });
+  assert.equal(ctx.observationTimestamp, ts);
+  assert.equal(ctx.recentObservation, "Dry");
+});
+
+test("buildNormalizedFieldContext: preserves coordinate and satellite fields", () => {
+  const ctx = buildNormalizedFieldContext({ field: { lat: 36.7, lon: -119.4, satelliteEvidence: { ndvi: 0.8 }, ndvi: 0.7 } });
+  assert.equal(ctx.lat, 36.7);
+  assert.equal(ctx.lon, -119.4);
+  assert.ok(ctx.satelliteEvidence);
+  assert.equal(ctx.ndvi, 0.7);
+});
+
+test("buildNormalizedFieldContext: preserves flow rate and application rate", () => {
+  const ctx = buildNormalizedFieldContext({ field: { flowRateLph: 200, applicationRateMmPerHour: 4.5 } });
+  assert.equal(ctx.flowRateLph, 200);
+  assert.equal(ctx.applicationRateMmPerHour, 4.5);
+});
+
+test("buildNormalizedFieldContext: infers provenance fields from data presence", () => {
+  const ctx = buildNormalizedFieldContext({
+    field: { sensorData: { soilMoisturePercent: 22 }, controllerStatus: "connected" },
+    weather: { evapotranspiration: 4.2 },
+  });
+  assert.equal(ctx.sensorProvenance, "field_sensor");
+  assert.equal(ctx.controllerProvenance, "controller");
+  assert.equal(ctx.etProvenance, "weather_provider");
+});
+
+test("deterministicDecisionFromSignals: uses honest duration message when flow rate absent", () => {
+  const ctxNoFlow = buildNormalizedFieldContext({ field: { id: "f", crop: "tomato", soilType: "loam", irrigationMethod: "Drip", waterStressLevel: "high" }, weather: { heatRisk: "high", rainChance: 5, weatherTimestamp: new Date().toISOString(), stale: false }, observations: [{ condition: "Dry" }] });
+  const signals = calculateDeterministicSignals(ctxNoFlow);
+  const dec = deterministicDecisionFromSignals(signals, ctxNoFlow);
+  if (dec.action === "irrigate") {
+    assert.ok(dec.estimatedDurationRange.includes("flow rate"), `expected honest duration message when flow rate absent, got: ${dec.estimatedDurationRange}`);
+  }
+  const ctxWithFlow = buildNormalizedFieldContext({ field: { id: "f", crop: "tomato", soilType: "loam", irrigationMethod: "Drip", waterStressLevel: "high", flowRateLph: 300 }, weather: { heatRisk: "high", rainChance: 5, weatherTimestamp: new Date().toISOString(), stale: false }, observations: [{ condition: "Dry" }] });
+  const dec2 = deterministicDecisionFromSignals(calculateDeterministicSignals(ctxWithFlow), ctxWithFlow);
+  if (dec2.action === "irrigate") {
+    assert.ok(dec2.estimatedDurationRange.includes("45-90"), `expected range message when flow rate present, got: ${dec2.estimatedDurationRange}`);
+  }
+});
+
+// ── Confidence recalibration ────────────────────────────────────────────────
+
+test("confidence engine: hardware-free farmer with all core evidence reaches high confidence", () => {
+  const ctx = buildNormalizedFieldContext({
+    field: { crop: "tomato", soilType: "loam", irrigationMethod: "Drip", lat: 36.7, lon: -119.4, lastIrrigationAt: new Date(Date.now() - 3 * 86400000).toISOString() },
+    weather: { weatherTimestamp: new Date().toISOString(), stale: false },
+    observations: [{ condition: "Looks dry" }],
+  });
+  const result = scoreEvidence(ctx);
+  assert.ok(result.confidenceScore >= 0.9, `hardware-free farmer with full core should reach >=0.9, got ${result.confidenceScore}`);
+  assert.equal(result.confidenceLabel, "high");
+  assert.ok(!result.missingEvidence.includes("crop type"));
+  assert.ok(!result.missingEvidence.includes("soil type"));
+  assert.ok(!result.missingEvidence.includes("irrigation method"));
+});
+
+test("confidence engine: empty sensor object does not count as sensor evidence", () => {
+  const base = { crop: "tomato", soilType: "loam", irrigationMethod: "Drip", weather: { weatherTimestamp: new Date().toISOString(), stale: false } };
+  const withEmpty = scoreEvidence({ ...base, sensorData: {} });
+  const withNumeric = scoreEvidence({ ...base, sensorData: { soilMoisturePercent: 14 } });
+  assert.ok(withEmpty.missingEvidence.includes("soil moisture sensor"), "empty sensor object must not count as evidence");
+  assert.ok(withNumeric.evidenceChecked.includes("soil moisture sensor"), "numeric sensor must count as evidence");
+  assert.ok(withNumeric.confidenceScore > withEmpty.confidenceScore);
+});
+
+test("confidence engine: observation recency — recent beats old beats none", () => {
+  const recentTs = new Date(Date.now() - 3600000).toISOString();
+  const oldTs = new Date(Date.now() - 20 * 86400000).toISOString();
+  const base = { crop: "tomato", soilType: "loam", irrigationMethod: "Drip", weather: { weatherTimestamp: new Date().toISOString(), stale: false } };
+  const withRecent = scoreEvidence({ ...base, recentObservation: "Dry", observationTimestamp: recentTs });
+  const withOld = scoreEvidence({ ...base, recentObservation: "Dry", observationTimestamp: oldTs });
+  const withNone = scoreEvidence({ ...base });
+  assert.ok(withRecent.confidenceScore > withOld.confidenceScore, `recent obs should beat old obs`);
+  assert.ok(withOld.confidenceScore > withNone.confidenceScore, `any obs should beat none`);
+});
+
+test("confidence engine: observation without timestamp gets generous score (not penalized)", () => {
+  const ctx = buildNormalizedFieldContext({ field: { crop: "tomato", soilType: "loam" }, observations: [{ condition: "Looks fine" }] });
+  assert.equal(ctx.observationTimestamp, null, "no timestamp in observation object");
+  const result = scoreEvidence(ctx);
+  assert.ok(result.evidenceChecked.includes("recent field observation"), "observation without timestamp should still count");
+});
+
+// ── Safety gates ────────────────────────────────────────────────────────────
+
+test("safety gate: stale weather blocks irrigate escalation", () => {
+  const signals = { rulesTriggered: [], needScore: 0.78, action: "irrigate", urgency: "high", missingData: [] };
+  const decision = { action: "irrigate", confidenceScore: 0.8, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: true }, deterministicSignals: signals });
+  assert.notEqual(enforced.action, "irrigate", "stale weather must block irrigate");
+  assert.ok(enforced.guardrailsTriggered.includes("stale_weather_downgrade_irrigate"));
+});
+
+test("safety gate: missing irrigation method blocks irrigate", () => {
+  const signals = { rulesTriggered: [], needScore: 0.78, action: "irrigate", urgency: "high", missingData: [] };
+  const decision = { action: "irrigate", confidenceScore: 0.8, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: { irrigationMethod: null } });
+  assert.notEqual(enforced.action, "irrigate", "missing irrigation method must block irrigate");
+  assert.ok(enforced.guardrailsTriggered.includes("missing_irrigation_method_blocks_irrigate"));
+});
+
+test("safety gate: low confidence blocks irrigate", () => {
+  const signals = { rulesTriggered: [], needScore: 0.78, action: "irrigate", urgency: "high", missingData: [] };
+  const decision = { action: "irrigate", confidenceScore: 0.35, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals });
+  assert.notEqual(enforced.action, "irrigate", "low confidence must block irrigate");
+  assert.ok(enforced.guardrailsTriggered.includes("low_confidence_blocks_irrigate"));
+});
+
+test("safety gate: valid irrigate passes through when conditions are clear", () => {
+  const signals = { rulesTriggered: [], needScore: 0.78, action: "irrigate", urgency: "high", missingData: [] };
+  const decision = { action: "irrigate", confidenceScore: 0.85, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: { irrigationMethod: "Drip" } });
+  assert.equal(enforced.action, "irrigate", "valid irrigate with full context must not be blocked by new gates");
+});
+
+// ── Evidence-conditional guardrails ────────────────────────────────────────
+
+test("containsUnsupportedClaimForContext: soil moisture % blocked without sensor", () => {
+  assert.ok(containsUnsupportedClaimForContext("soil moisture is 14%", {}));
+  assert.ok(containsUnsupportedClaimForContext("soil moisture of 22%", { sensorData: {} }));
+});
+
+test("containsUnsupportedClaimForContext: soil moisture % allowed with numeric sensor", () => {
+  assert.ok(!containsUnsupportedClaimForContext("soil moisture is 14%", { sensorData: { soilMoisturePercent: 14 } }));
+});
+
+test("containsUnsupportedClaimForContext: satellite claim blocked without satellite evidence", () => {
+  assert.ok(containsUnsupportedClaimForContext("satellite data shows stress in north block", { satelliteEvidence: null }));
+  assert.ok(!containsUnsupportedClaimForContext("Satellite evidence is not available for this recommendation", {}));
+});
+
+test("containsUnsupportedClaimForContext: duration blocked without flow rate", () => {
+  assert.ok(containsUnsupportedClaimForContext("irrigate for 90 minutes", {}));
+  assert.ok(!containsUnsupportedClaimForContext("Add flow rate to calculate a duration", {}));
+});
+
+test("containsUnsupportedClaimForContext: always-block patterns still trigger regardless of context", () => {
+  assert.ok(containsUnsupportedClaimForContext("exact soil moisture is 32%", { sensorData: { soilMoisturePercent: 32 } }));
+  assert.ok(containsUnsupportedClaimForContext("guaranteed yield improvement", {}));
+});
+
+// ── Integration pipeline ────────────────────────────────────────────────────
+
+test("integration: frost risk decision never produces irrigate", async () => {
+  const result = await irrigationDecisionAgent.decide({
+    field: { id: "f", crop: "tomato", soilType: "loam", irrigationMethod: "Drip", waterStressLevel: "high" },
+    weather: { frostRisk: "high", rainChance: 5, weatherTimestamp: new Date().toISOString(), stale: false },
+  });
+  assert.notEqual(result.action, "irrigate", "frost risk must block irrigate");
+  assert.ok(result.provenance?.deterministicRulesTriggered?.includes("frost_risk"), "frost_risk must appear in deterministic rules");
+});
+
+test("integration: rain forecast decision never produces irrigate", async () => {
+  const result = await irrigationDecisionAgent.decide({
+    field: { id: "f", crop: "tomato", soilType: "loam", irrigationMethod: "Drip", waterStressLevel: "high" },
+    weather: { rainChance: 75, rainfallForecastMm: 12, weatherTimestamp: new Date().toISOString(), stale: false },
+  });
+  assert.notEqual(result.action, "irrigate", "rain forecast must block irrigate");
+});
+
+test("integration: wet observation decision never produces irrigate", async () => {
+  const result = await irrigationDecisionAgent.decide({
+    field: { id: "f", crop: "tomato", soilType: "loam", irrigationMethod: "Drip", waterStressLevel: "high" },
+    weather: { heatRisk: "low", rainChance: 5, weatherTimestamp: new Date().toISOString(), stale: false },
+    observations: [{ condition: "Too wet — standing water visible" }],
+  });
+  assert.notEqual(result.action, "irrigate", "wet observation must block irrigate");
+});
+
+test("integration: recent irrigation decision never produces irrigate", async () => {
+  const result = await irrigationDecisionAgent.decide({
+    field: { id: "f", crop: "tomato", soilType: "loam", irrigationMethod: "Drip", waterStressLevel: "high", lastIrrigationAt: new Date(Date.now() - 2 * 3600000).toISOString() },
+    weather: { heatRisk: "high", rainChance: 5, weatherTimestamp: new Date().toISOString(), stale: false },
+  });
+  assert.notEqual(result.action, "irrigate", "recent irrigation must block irrigate");
+});
+
+test("integration: decision always has valid provenance and safety fields", async () => {
+  const result = await irrigationDecisionAgent.decide({
+    field: { id: "f", crop: "tomato", soilType: "loam", irrigationMethod: "Drip", waterStressLevel: "moderate" },
+    weather: { heatRisk: "low", rainChance: 10, weatherTimestamp: new Date().toISOString(), stale: false },
+  });
+  assert.ok(result.action, "decision must have an action");
+  assert.ok(result.provenance?.decisionTimestamp, "decision must have a timestamp");
+  assert.ok(Array.isArray(result.guardrailWarnings), "guardrailWarnings must be an array");
+  assert.ok(result.disclaimer, "disclaimer must be present");
+  assert.ok(typeof result.confidenceScore === "number", "confidenceScore must be a number");
 });
 
 test("environment-backed config loading works from env variables", () => {

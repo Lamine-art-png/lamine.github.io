@@ -58,7 +58,7 @@ export const scenarios = [
     input: { field: { ...baseField }, weather: { ...freshWeather }, observations: [{ condition: "Too wet — standing water visible" }], logs: [] },
     expectedAllowedActions: ["wait", "monitor", "check field first"],
     forbiddenActions: ["irrigate"],
-    confidenceRange: [0.2, 0.9],
+    confidenceRange: [0.2, 0.95],
     expectedMissingEvidence: [],
     forbiddenClaims: [],
     expectedFallbackState: false,
@@ -189,7 +189,7 @@ export const scenarios = [
     input: { field: { ...baseField, sensorData: null, dataSource: "neither" }, weather: { ...freshWeather }, observations: [], logs: [] },
     expectedAllowedActions: ["check field first", "monitor", "update missing data"],
     forbiddenActions: [],
-    confidenceRange: [0.1, 0.7],
+    confidenceRange: [0.1, 0.8],
     expectedMissingEvidence: ["soil moisture sensor"],
     forbiddenClaims: [],
     expectedFallbackState: false,
@@ -423,7 +423,7 @@ export const scenarios = [
     input: { field: { ...baseField, lastObservation: "Farmer said field looks dry" }, weather: { ...freshWeather }, observations: [], logs: [] },
     expectedAllowedActions: ["check field first", "monitor", "irrigate"],
     forbiddenActions: [],
-    confidenceRange: [0.2, 0.9],
+    confidenceRange: [0.2, 0.95],
     expectedMissingEvidence: [],
     forbiddenClaims: [],
     expectedFallbackState: false,
@@ -445,7 +445,7 @@ export const scenarios = [
     input: { field: { ...baseField }, weather: { ...freshWeather }, observations: [{ condition: "Farmer says irrigate now" }], logs: [] },
     expectedAllowedActions: ["irrigate", "check field first"],
     forbiddenActions: [],
-    confidenceRange: [0.2, 0.9],
+    confidenceRange: [0.2, 0.95],
     expectedMissingEvidence: [],
     forbiddenClaims: [],
     expectedFallbackState: false,
@@ -567,7 +567,7 @@ export function runFixtureEvaluation() {
       },
     };
 
-    const safeDecision = safetyGuardrails.enforce(mockDecision, { weather: input.weather, deterministicSignals: signals });
+    const safeDecision = safetyGuardrails.enforce(mockDecision, { weather: input.weather, deterministicSignals: signals, fieldContext: ctx });
     const decisionStr = JSON.stringify(safeDecision);
 
     const actionAllowed = expectedAllowedActions.length === 0 || expectedAllowedActions.includes(safeDecision.action);

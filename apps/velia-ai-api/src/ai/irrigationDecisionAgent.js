@@ -243,7 +243,7 @@ function mergeDecision({ modelDecision, fallbackDecision, signals, context, rag,
       : merged.verificationPlan,
   };
 
-  const safeDecision = safetyGuardrails.enforce(finalDecision, { weather: context.weather, deterministicSignals: signals });
+  const safeDecision = safetyGuardrails.enforce(finalDecision, { weather: context.weather, deterministicSignals: signals, fieldContext: context });
   safeDecision.provenance = {
     ...safeDecision.provenance,
     guardrailsTriggered: safeDecision.guardrailsTriggered || [],
