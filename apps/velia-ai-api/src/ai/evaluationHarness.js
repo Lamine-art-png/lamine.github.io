@@ -94,7 +94,7 @@ export const scenarios = [
     confidenceRange: [0.1, 0.65],
     expectedMissingEvidence: ["weather freshness"],
     forbiddenClaims: [],
-    expectedFallbackState: false,
+    expectedFallbackState: true,
   },
   {
     id: "missing-crop",
@@ -214,7 +214,7 @@ export const scenarios = [
     confidenceRange: [0.1, 0.5],
     expectedMissingEvidence: ["crop type", "soil type", "irrigation method"],
     forbiddenClaims: [],
-    expectedFallbackState: false,
+    expectedFallbackState: true,
   },
   {
     id: "high-confidence-case",
@@ -415,7 +415,7 @@ export const scenarios = [
     confidenceRange: [0.1, 0.6],
     expectedMissingEvidence: ["weather freshness"],
     forbiddenClaims: [],
-    expectedFallbackState: false,
+    expectedFallbackState: true,
   },
   {
     id: "manual-voice-note",
@@ -503,7 +503,7 @@ export const scenarios = [
     confidenceRange: [0.1, 0.9],
     expectedMissingEvidence: [],
     forbiddenClaims: [],
-    expectedFallbackState: false,
+    expectedFallbackState: true,
   },
 ];
 
@@ -576,7 +576,7 @@ export function runFixtureEvaluation() {
     const missingEvidencePresent = expectedMissingEvidence.every((m) => evidenceScore.missingEvidence.includes(m));
     const noForbiddenClaims = forbiddenClaims.every((claim) => !decisionStr.toLowerCase().includes(claim.toLowerCase()));
     const fallbackState = Boolean(input.weather?.stale || input.weather?.fallbackStatus?.includes("stale") || input.weather?.fallbackStatus?.includes("unavailable"));
-    const fallbackMatchesExpected = !scenario.expectedFallbackState || fallbackState === scenario.expectedFallbackState;
+    const fallbackMatchesExpected = !Object.hasOwn(scenario, "expectedFallbackState") || fallbackState === scenario.expectedFallbackState;
 
     const passed = actionAllowed && actionNotForbidden && confidenceInRange && missingEvidencePresent && noForbiddenClaims && fallbackMatchesExpected;
 

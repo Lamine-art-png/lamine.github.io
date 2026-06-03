@@ -448,10 +448,10 @@ test("deterministicDecisionFromSignals: uses honest duration message when flow r
   if (dec.action === "irrigate") {
     assert.ok(dec.estimatedDurationRange.includes("flow rate"), `expected honest duration message when flow rate absent, got: ${dec.estimatedDurationRange}`);
   }
-  const ctxWithFlow = buildNormalizedFieldContext({ field: { id: "f", crop: "tomato", soilType: "loam", irrigationMethod: "Drip", waterStressLevel: "high", flowRateLph: 300 }, weather: { heatRisk: "high", rainChance: 5, weatherTimestamp: new Date().toISOString(), stale: false }, observations: [{ condition: "Dry" }] });
+  const ctxWithFlow = buildNormalizedFieldContext({ field: { id: "f", crop: "tomato", soilType: "loam", irrigationMethod: "Drip", waterStressLevel: "high", flowRateLph: 300, applicationRateMmPerHour: 4.5 }, weather: { heatRisk: "high", rainChance: 5, weatherTimestamp: new Date().toISOString(), stale: false }, observations: [{ condition: "Dry" }] });
   const dec2 = deterministicDecisionFromSignals(calculateDeterministicSignals(ctxWithFlow), ctxWithFlow);
   if (dec2.action === "irrigate") {
-    assert.ok(dec2.estimatedDurationRange.includes("45-90"), `expected range message when flow rate present, got: ${dec2.estimatedDurationRange}`);
+    assert.ok(dec2.estimatedDurationRange.includes("45-90"), `expected range message when both flow rate fields present, got: ${dec2.estimatedDurationRange}`);
   }
 });
 
@@ -491,11 +491,15 @@ test("confidence engine: observation recency — recent beats old beats none", (
   assert.ok(withOld.confidenceScore > withNone.confidenceScore, `any obs should beat none`);
 });
 
-test("confidence engine: observation without timestamp gets generous score (not penalized)", () => {
+test("confidence engine: observation without timestamp gets partial credit and flags missing timestamp", () => {
   const ctx = buildNormalizedFieldContext({ field: { crop: "tomato", soilType: "loam" }, observations: [{ condition: "Looks fine" }] });
   assert.equal(ctx.observationTimestamp, null, "no timestamp in observation object");
   const result = scoreEvidence(ctx);
   assert.ok(result.evidenceChecked.includes("recent field observation"), "observation without timestamp should still count");
+  assert.ok(result.missingEvidence.includes("observation timestamp"), "missing timestamp should appear in missingEvidence");
+  assert.ok(result.improvementSuggestions.some((s) => s.includes("Observation timestamp is unknown")), "improvement suggestions should include timestamp hint");
+  const withTs = scoreEvidence({ ...ctx, observationTimestamp: new Date().toISOString() });
+  assert.ok(withTs.confidenceScore > result.confidenceScore, "timestamped observation should score higher than untimestamped");
 });
 
 // ── Safety gates ────────────────────────────────────────────────────────────
@@ -616,4 +620,138 @@ test("environment-backed config loading works from env variables", () => {
   process.env.LOG_LEVEL = saved.LOG_LEVEL || "";
   delete process.env.PORT;
   delete process.env.LOG_LEVEL;
+});
+
+// ── Fallback assertion regression tests ───────────────────────────────────────
+
+test("eval harness: expectedFallbackState:false fails when actual fallback is true", () => {
+  const scenario = { id: "test-stale", expectedFallbackState: false };
+  const fallbackState = true;
+  const fallbackMatchesExpected = !Object.hasOwn(scenario, "expectedFallbackState") || fallbackState === scenario.expectedFallbackState;
+  assert.equal(fallbackMatchesExpected, false, "expectedFallbackState:false must fail when actual is true");
+});
+
+test("eval harness: expectedFallbackState:true fails when actual fallback is false", () => {
+  const scenario = { id: "test-fresh", expectedFallbackState: true };
+  const fallbackState = false;
+  const fallbackMatchesExpected = !Object.hasOwn(scenario, "expectedFallbackState") || fallbackState === scenario.expectedFallbackState;
+  assert.equal(fallbackMatchesExpected, false, "expectedFallbackState:true must fail when actual is false");
+});
+
+test("eval harness: fixture without expectedFallbackState always passes fallback check", () => {
+  const scenario = { id: "no-fallback-key" };
+  const fallbackMatchesExpected = !Object.hasOwn(scenario, "expectedFallbackState") || false === scenario.expectedFallbackState;
+  assert.equal(fallbackMatchesExpected, true, "fixture without expectedFallbackState must always pass");
+});
+
+// ── Evidence-conditional scrubbing E2E ───────────────────────────────────────
+
+test("enforce scrubs soil moisture % when no sensor in fieldContext", () => {
+  const signals = { rulesTriggered: [], needScore: 0.6, action: "check field first", urgency: "medium", missingData: [] };
+  const decision = { action: "check field first", confidenceScore: 0.6, reasons: ["Soil moisture is 32% based on recent data"], uncertainties: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: {} });
+  assert.ok(!enforced.reasons.join(" ").includes("32%"), "soil moisture % must be scrubbed when no sensor");
+  assert.ok(enforced.reasons.join(" ").includes("sensor not connected"), "replacement text must appear");
+});
+
+test("enforce allows soil moisture % when numeric sensor is present", () => {
+  const signals = { rulesTriggered: [], needScore: 0.6, action: "check field first", urgency: "medium", missingData: [] };
+  const decision = { action: "check field first", confidenceScore: 0.6, reasons: ["Soil moisture is 32% based on sensor reading"], uncertainties: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: { sensorData: { soilMoisturePercent: 32 } } });
+  assert.ok(enforced.reasons.join(" ").includes("32%"), "soil moisture % must be kept when sensor is connected");
+});
+
+test("enforce scrubs ET value when no ET source in fieldContext", () => {
+  const signals = { rulesTriggered: [], needScore: 0.6, action: "check field first", urgency: "medium", missingData: [] };
+  const decision = { action: "check field first", confidenceScore: 0.6, reasons: ["ET is 4.5 mm today"], uncertainties: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: {} });
+  assert.ok(!enforced.reasons.join(" ").includes("4.5 mm"), "ET value must be scrubbed when no ET source");
+});
+
+test("enforce scrubs duration claim when no flow rate in fieldContext", () => {
+  const signals = { rulesTriggered: [], needScore: 0.6, action: "check field first", urgency: "medium", missingData: [] };
+  const decision = { action: "check field first", confidenceScore: 0.6, reasons: [], uncertainties: [], fieldChecks: ["Irrigate for 90 minutes then check"], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: {} });
+  assert.ok(!enforced.fieldChecks.join(" ").includes("90 minutes"), "duration claim must be scrubbed when no flow rate");
+});
+
+test("enforce scrubs satellite claim when no satellite evidence in fieldContext", () => {
+  const signals = { rulesTriggered: [], needScore: 0.6, action: "check field first", urgency: "medium", missingData: [] };
+  const decision = { action: "check field first", confidenceScore: 0.6, reasons: ["Satellite detected crop stress in north block"], uncertainties: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: {} });
+  assert.ok(!enforced.reasons.join(" ").toLowerCase().includes("satellite detected"), "satellite claim must be scrubbed without satellite evidence");
+});
+
+// ── sensor_high_moisture safety gate ─────────────────────────────────────────
+
+test("safety gate: sensor_high_moisture blocks irrigate even with high stress and dry observation", () => {
+  const signals = { rulesTriggered: ["sensor_high_moisture"], needScore: 0.78, action: "irrigate", urgency: "high", missingData: [] };
+  const decision = { action: "irrigate", confidenceScore: 0.8, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals });
+  assert.notEqual(enforced.action, "irrigate", "sensor_high_moisture must block irrigate");
+  assert.ok(enforced.guardrailsTriggered.includes("sensor_high_moisture_blocks_irrigate"));
+  assert.ok(["wait", "check field first"].includes(enforced.action), `action should be wait or check field first, got: ${enforced.action}`);
+});
+
+// ── Recent irrigation tightened gate ─────────────────────────────────────────
+
+test("safety gate: recent irrigation without any sensor blocks irrigate", () => {
+  const signals = { rulesTriggered: ["recent_irrigation"], needScore: 0.85, action: "irrigate", urgency: "high", missingData: [] };
+  const decision = { action: "irrigate", confidenceScore: 0.8, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: {} });
+  assert.notEqual(enforced.action, "irrigate", "recent irrigation without sensor must block irrigate");
+  assert.ok(enforced.guardrailsTriggered.includes("recent_irrigation_requires_field_check"));
+});
+
+test("safety gate: recent irrigation with high-moisture sensor blocks irrigate", () => {
+  const signals = { rulesTriggered: ["recent_irrigation"], needScore: 0.85, action: "irrigate", urgency: "high", missingData: [] };
+  const decision = { action: "irrigate", confidenceScore: 0.8, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: { sensorData: { soilMoisturePercent: 42 } } });
+  assert.notEqual(enforced.action, "irrigate", "recent irrigation with high sensor moisture must block irrigate");
+  assert.ok(enforced.guardrailsTriggered.includes("recent_irrigation_requires_field_check"));
+});
+
+test("safety gate: recent irrigation with dry sensor (≤18%) may proceed", () => {
+  const signals = { rulesTriggered: ["recent_irrigation"], needScore: 0.85, action: "irrigate", urgency: "high", missingData: [] };
+  const decision = { action: "irrigate", confidenceScore: 0.8, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: { irrigationMethod: "Drip", sensorData: { soilMoisturePercent: 15 } } });
+  assert.ok(!enforced.guardrailsTriggered.includes("recent_irrigation_requires_field_check"), "dry sensor (≤18%) should allow irrigate through the recent_irrigation gate");
+});
+
+// ── Duration both-required tests ──────────────────────────────────────────────
+
+test("duration: neither flowRateLph nor applicationRateMmPerHour returns honest message", () => {
+  const ctx = buildNormalizedFieldContext({ field: { id: "f", crop: "tomato", soilType: "loam", irrigationMethod: "Drip", waterStressLevel: "high" }, weather: { heatRisk: "high", rainChance: 5, weatherTimestamp: new Date().toISOString(), stale: false }, observations: [{ condition: "Dry" }] });
+  const signals = calculateDeterministicSignals(ctx);
+  const dec = deterministicDecisionFromSignals(signals, ctx);
+  if (dec.action === "irrigate") {
+    assert.ok(dec.estimatedDurationRange.includes("flow rate"), `expected honest message when neither flow rate field present, got: ${dec.estimatedDurationRange}`);
+  }
+});
+
+test("duration: only flowRateLph present returns honest message (AND required)", () => {
+  const ctx = buildNormalizedFieldContext({ field: { id: "f", crop: "tomato", soilType: "loam", irrigationMethod: "Drip", waterStressLevel: "high", flowRateLph: 300 }, weather: { heatRisk: "high", rainChance: 5, weatherTimestamp: new Date().toISOString(), stale: false }, observations: [{ condition: "Dry" }] });
+  const signals = calculateDeterministicSignals(ctx);
+  const dec = deterministicDecisionFromSignals(signals, ctx);
+  if (dec.action === "irrigate") {
+    assert.ok(dec.estimatedDurationRange.includes("flow rate"), `expected honest message when only flowRateLph present, got: ${dec.estimatedDurationRange}`);
+  }
+});
+
+test("duration: only applicationRateMmPerHour present returns honest message (AND required)", () => {
+  const ctx = buildNormalizedFieldContext({ field: { id: "f", crop: "tomato", soilType: "loam", irrigationMethod: "Drip", waterStressLevel: "high", applicationRateMmPerHour: 4.5 }, weather: { heatRisk: "high", rainChance: 5, weatherTimestamp: new Date().toISOString(), stale: false }, observations: [{ condition: "Dry" }] });
+  const signals = calculateDeterministicSignals(ctx);
+  const dec = deterministicDecisionFromSignals(signals, ctx);
+  if (dec.action === "irrigate") {
+    assert.ok(dec.estimatedDurationRange.includes("flow rate"), `expected honest message when only applicationRateMmPerHour present, got: ${dec.estimatedDurationRange}`);
+  }
+});
+
+test("duration: both flowRateLph and applicationRateMmPerHour present returns range estimate", () => {
+  const ctx = buildNormalizedFieldContext({ field: { id: "f", crop: "tomato", soilType: "loam", irrigationMethod: "Drip", waterStressLevel: "high", flowRateLph: 300, applicationRateMmPerHour: 4.5 }, weather: { heatRisk: "high", rainChance: 5, weatherTimestamp: new Date().toISOString(), stale: false }, observations: [{ condition: "Dry" }] });
+  const signals = calculateDeterministicSignals(ctx);
+  const dec = deterministicDecisionFromSignals(signals, ctx);
+  if (dec.action === "irrigate") {
+    assert.ok(dec.estimatedDurationRange.includes("45-90"), `expected range estimate when both flow rate fields present, got: ${dec.estimatedDurationRange}`);
+  }
 });

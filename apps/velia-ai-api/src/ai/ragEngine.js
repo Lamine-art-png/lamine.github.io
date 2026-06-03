@@ -34,7 +34,7 @@ export async function ingestKnowledge(options = {}) {
   const chunks = docs.flatMap((doc) => chunkKnowledgeDocument(doc, options.chunkOptions));
   const rows = [];
   for (const chunk of chunks) {
-    const embedding = await embeddingService.embed(`${chunk.source.title}\n${chunk.text}`, { taskType: "RETRIEVAL_DOCUMENT" });
+    const embedding = await embeddingService.embed(chunk.text, { taskType: "RETRIEVAL_DOCUMENT", title: chunk.source.title });
     rows.push({
       id: chunk.id,
       text: chunk.text,

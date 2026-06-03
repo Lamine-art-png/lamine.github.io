@@ -32,7 +32,9 @@ Copy `.env.example` to `.env` for local configuration. If no provider keys are s
 - `GEMINI_API_KEY`, `GEMINI_MODEL`
 - `OPENAI_API_KEY`, `OPENAI_MODEL`
 - `EMBEDDING_PROVIDER`: `mock`, `gemini`, or `openai`
-- `GEMINI_EMBEDDING_MODEL`, `OPENAI_EMBEDDING_MODEL`
+- `GEMINI_EMBEDDING_MODEL` (default `gemini-embedding-2`), `OPENAI_EMBEDDING_MODEL`
+  - `gemini-embedding-2`: uses text prefixes (`title: … | text: …` for documents; `task: search result | query: …` for retrieval); does not send `taskType` field
+  - `text-embedding-004` and earlier: uses `taskType` field in request body
 - `WEATHER_PROVIDER`: `mock` or `openweather`
 - `OPENWEATHER_API_KEY`
 - `TRANSLATION_PROVIDER` (default `mock`)

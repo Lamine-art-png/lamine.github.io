@@ -36,7 +36,7 @@ export class OpenAIEmbeddingProvider extends EmbeddingProvider {
 
 export class GeminiEmbeddingProvider extends EmbeddingProvider {
   constructor(options = {}) {
-    super("gemini", { model: options.model || "text-embedding-004", mode: options.apiKey ? "live" : "mock", fallbackReason: options.apiKey ? null : "GEMINI_API_KEY not configured" });
+    super("gemini", { model: options.model || "gemini-embedding-2", mode: options.apiKey ? "live" : "mock", fallbackReason: options.apiKey ? null : "GEMINI_API_KEY not configured" });
     this.apiKey = options.apiKey || "";
     this.defaultTaskType = options.taskType || "RETRIEVAL_DOCUMENT";
     this.timeoutMs = options.timeoutMs;
@@ -44,21 +44,35 @@ export class GeminiEmbeddingProvider extends EmbeddingProvider {
     this.fetchImpl = options.fetchImpl;
   }
 
+  isGeminiEmbedding2() {
+    return this.model.includes("gemini-embedding-2");
+  }
+
   async embed(text, options = {}) {
     if (!this.apiKey) throw new Error("GEMINI_API_KEY not configured");
     const taskType = options.taskType || this.defaultTaskType;
     const modelName = this.model.startsWith("models/") ? this.model : `models/${this.model}`;
+    let requestBody;
+    if (this.isGeminiEmbedding2()) {
+      let finalText = String(text || " ");
+      if (taskType === "RETRIEVAL_DOCUMENT" && options.title) {
+        finalText = `title: ${options.title} | text: ${finalText}`;
+      } else if (taskType === "RETRIEVAL_QUERY") {
+        finalText = `task: search result | query: ${finalText}`;
+      }
+      requestBody = { model: modelName, content: { parts: [{ text: finalText }] } };
+    } else {
+      const titlePrefix = options.title ? `${options.title}\n` : "";
+      const finalText = `${titlePrefix}${String(text || " ")}`;
+      requestBody = { model: modelName, content: { parts: [{ text: finalText }] }, taskType };
+    }
     const response = await fetchJsonWithRetry(`https://generativelanguage.googleapis.com/v1beta/${encodeURIComponent(modelName).replaceAll("%2F", "/")}:embedContent`, {
       method: "POST",
       headers: {
         "x-goog-api-key": this.apiKey,
         "content-type": "application/json",
       },
-      body: JSON.stringify({
-        model: modelName,
-        content: { parts: [{ text: String(text || " ") }] },
-        taskType,
-      }),
+      body: JSON.stringify(requestBody),
       timeoutMs: this.timeoutMs,
       retries: this.retries,
       fetchImpl: this.fetchImpl,

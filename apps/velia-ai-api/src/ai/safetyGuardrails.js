@@ -24,6 +24,41 @@ function scrubText(text, triggered) {
   return safe;
 }
 
+function makeConditionalPatterns(ctx) {
+  const patterns = [];
+  const sensorMoisture = ctx?.sensorData?.soilMoisturePercent ?? ctx?.sensorData?.soilMoisture ?? null;
+  if (typeof sensorMoisture !== "number") {
+    patterns.push({ pattern: /soil moisture\s+(?:is|of|at|was)\s+[\d.]+\s*%?/i, reason: "removed unsupported soil moisture value (no sensor)", replacement: "estimated soil moisture (sensor not connected)" });
+  }
+  const hasEt = Boolean(ctx?.etProvenance || ctx?.weather?.evapotranspiration);
+  if (!hasEt) {
+    patterns.push({ pattern: /\bET\s+(?:rate\s+)?(?:is|of|at|was|=)\s+[\d.]+\s*mm/i, reason: "removed unsupported ET value (no ET source)", replacement: "estimated evapotranspiration (ET source not connected)" });
+  }
+  const hasFlowRate = Boolean(ctx?.flowRateLph || ctx?.applicationRateMmPerHour);
+  if (!hasFlowRate) {
+    patterns.push(
+      { pattern: /irrigate\s+for\s+[\d.]+\s*(?:hours?|minutes?)/i, reason: "removed duration claim (no flow rate)", replacement: "Add flow rate and system details to calculate a duration." },
+      { pattern: /apply\s+[\d.]+\s*(?:mm|liters?|gallons?|m³)/i, reason: "removed volume claim (no flow rate)", replacement: "Add flow rate to calculate a target volume" },
+    );
+  }
+  const hasSatellite = Boolean(ctx?.satelliteEvidence || ctx?.ndvi != null);
+  if (!hasSatellite) {
+    patterns.push({ pattern: /satellite\s+(?:data|imagery|shows?|indicates?|confirms?|detected?)/i, reason: "removed unsupported satellite claim", replacement: "Satellite evidence is not available for this recommendation" });
+  }
+  return patterns;
+}
+
+function scrubTextWithContext(text, triggered, ctx) {
+  let safe = scrubText(text, triggered);
+  for (const item of makeConditionalPatterns(ctx)) {
+    if (item.pattern.test(safe)) {
+      triggered.push(item.reason);
+      safe = safe.replace(item.pattern, item.replacement);
+    }
+  }
+  return safe;
+}
+
 function confidenceLabel(score) {
   if (score >= 0.75) return "high";
   if (score >= 0.5) return "moderate";
@@ -58,17 +93,21 @@ export const safetyGuardrails = {
     const patched = { ...decision };
 
     for (const key of ["reasons", "uncertainties", "fieldChecks", "risks", "safetyNotes"]) {
-      if (Array.isArray(patched[key])) patched[key] = patched[key].map((text) => scrubText(text, triggered));
+      if (Array.isArray(patched[key])) patched[key] = patched[key].map((text) => scrubTextWithContext(text, triggered, fieldContext));
     }
     if (Array.isArray(patched.verificationPlan?.checks)) {
-      patched.verificationPlan = { ...patched.verificationPlan, checks: patched.verificationPlan.checks.map((text) => scrubText(text, triggered)) };
+      patched.verificationPlan = { ...patched.verificationPlan, checks: patched.verificationPlan.checks.map((text) => scrubTextWithContext(text, triggered, fieldContext)) };
     } else if (Array.isArray(patched.verificationPlan)) {
-      patched.verificationPlan = patched.verificationPlan.map((text) => scrubText(text, triggered));
+      patched.verificationPlan = patched.verificationPlan.map((text) => scrubTextWithContext(text, triggered, fieldContext));
     }
-    patched.nextBestAction = scrubText(patched.nextBestAction, triggered);
+    patched.nextBestAction = scrubTextWithContext(patched.nextBestAction, triggered, fieldContext);
 
     // Specific rule checks run first so their named guardrail keys are always recorded.
     // The generic authority block is a final catch-all for any remaining irrigate escalation.
+    if ((deterministic.rulesTriggered || []).includes("sensor_high_moisture") && patched.action === "irrigate") {
+      patched.action = "wait";
+      triggered.push("sensor_high_moisture_blocks_irrigate");
+    }
     if ((deterministic.rulesTriggered || []).includes("frost_risk") && patched.action === "irrigate") {
       patched.action = "check field first";
       patched.fieldChecks = [...(patched.fieldChecks || []), "Confirm frost-specific local protocol before applying water"];
@@ -83,9 +122,13 @@ export const safetyGuardrails = {
       patched.action = "wait";
       triggered.push("rain_forecast_blocks_irrigate");
     }
-    if ((deterministic.rulesTriggered || []).includes("recent_irrigation") && patched.action === "irrigate" && (deterministic.needScore || 0) < 0.82) {
-      patched.action = "check field first";
-      triggered.push("recent_irrigation_requires_field_check");
+    if ((deterministic.rulesTriggered || []).includes("recent_irrigation") && patched.action === "irrigate") {
+      const sensorMoisture = fieldContext?.sensorData?.soilMoisturePercent ?? fieldContext?.sensorData?.soilMoisture ?? null;
+      const sensorConfirmsDry = typeof sensorMoisture === "number" && sensorMoisture <= 18;
+      if (!sensorConfirmsDry) {
+        patched.action = "check field first";
+        triggered.push("recent_irrigation_requires_field_check");
+      }
     }
     if (weather.stale && patched.action === "irrigate") {
       patched.action = "check field first";

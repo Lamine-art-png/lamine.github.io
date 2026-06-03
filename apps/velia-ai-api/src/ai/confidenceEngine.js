@@ -15,7 +15,7 @@ function observationRecencyPoints(context) {
   const hasObs = Boolean(context.recentObservation || (context.observations || []).length > 0);
   if (!hasObs) return 0;
   const ts = context.observationTimestamp;
-  if (!ts) return 10;
+  if (!ts) return 6; // partial credit — timestamp unknown
   const ageMs = Date.now() - new Date(ts).getTime();
   if (!Number.isFinite(ageMs) || ageMs < 0) return 10;
   const ageDays = ageMs / 86400000;
@@ -61,8 +61,14 @@ export function scoreEvidence(context = {}) {
   }
 
   const obsPts = observationRecencyPoints(context);
-  if (obsPts > 0) { coreScore += obsPts; evidenceChecked.push("recent field observation"); }
-  else missingEvidence.push("recent field observation");
+  if (obsPts > 0) {
+    coreScore += obsPts;
+    evidenceChecked.push("recent field observation");
+    const hasObs = Boolean(context.recentObservation || (context.observations || []).length > 0);
+    if (hasObs && !context.observationTimestamp) missingEvidence.push("observation timestamp");
+  } else {
+    missingEvidence.push("recent field observation");
+  }
 
   // Optional precision boosters — additive, not penalized when absent
   let optionalBoost = 0;
@@ -117,6 +123,7 @@ export function scoreEvidence(context = {}) {
   if (missingEvidence.includes("soil type")) improve.push("Add soil type to improve confidence.");
   if (missingEvidence.includes("crop type")) improve.push("Set crop type for better water demand estimates.");
   if (missingEvidence.includes("recent field observation")) improve.push("Record a field check observation.");
+  if (missingEvidence.includes("observation timestamp")) improve.push("Observation timestamp is unknown.");
   if (missingEvidence.includes("soil moisture sensor")) improve.push("Connect a soil sensor for measured moisture readings.");
   if (missingEvidence.includes("ET source")) improve.push("Enable an ET provider for evapotranspiration data.");
   if (missingEvidence.includes("satellite evidence")) improve.push("Satellite evidence is not available for this recommendation.");
