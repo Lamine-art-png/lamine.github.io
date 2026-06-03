@@ -341,6 +341,30 @@ class EvidenceOrderViolation(Exception):
         )
 
 
+class SchedulingNotAllowed(Exception):
+    def __init__(self, reasons: List[str]) -> None:
+        self.reasons = reasons
+        super().__init__(
+            "Scheduling is not allowed because the recommendation does not meet the scheduling gate. "
+            f"Reasons: {'; '.join(reasons)}"
+        )
+
+
+def _is_schedulable(recommendation: Dict[str, Any]) -> Tuple[bool, List[str]]:
+    reasons: List[str] = []
+    if recommendation.get("kernel_action") != "irrigate":
+        reasons.append("Kernel action is not 'irrigate'")
+    if recommendation.get("estimated_volume_m3") is None:
+        reasons.append("Estimated volume is unavailable — area required")
+    if recommendation.get("flow_validation_status") != "validated":
+        reasons.append("Flow evidence is not validated for execution timing")
+    if recommendation.get("gross_depth_mm") is None:
+        reasons.append("Gross irrigation depth is unavailable")
+    if recommendation.get("duration_min") is None:
+        reasons.append("Duration is unavailable — validated flow evidence required")
+    return len(reasons) == 0, reasons
+
+
 def build_artifact(session_id: str, filename: str, content: bytes, content_type: str = "application/octet-stream") -> WorkbenchDataArtifact:
     rows, columns, warnings = parse_uploaded_file(filename, content)
     return WorkbenchDataArtifact(
@@ -466,13 +490,18 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
     region = str(profile.get("region") or "").strip()
     all_weather_rows = rows.get("weather", [])
     all_water_cost_rows = rows.get("water_costs", [])
+    region_warnings: List[str] = []
     if region:
         weather_rows = [r for r in all_weather_rows if str(r.get("region", "")).strip().lower() == region.lower()]
         water_cost_rows = [r for r in all_water_cost_rows if str(r.get("region", "")).strip().lower() == region.lower()]
         if not weather_rows:
-            weather_rows = all_weather_rows
+            region_warnings.append(
+                f"No weather records matched region '{region}'. Weather demand is withheld to avoid cross-region data mix."
+            )
         if not water_cost_rows:
-            water_cost_rows = all_water_cost_rows
+            region_warnings.append(
+                f"No water-cost records matched region '{region}'. Water-cost context is withheld."
+            )
     else:
         weather_rows = all_weather_rows
         water_cost_rows = all_water_cost_rows
@@ -560,6 +589,8 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
         context["area"] = area_ha
     if area_warnings_from_profile:
         context.setdefault("warnings", []).extend(area_warnings_from_profile)
+    if region_warnings:
+        context.setdefault("warnings", []).extend(region_warnings)
     return context
 
 
@@ -815,8 +846,14 @@ def generate_recommendation(reconciliation: ReconciliationResult, context: Dict[
         "baseline_value_mm": baseline_mm,
         "recommended_gross_depth_mm": gross_depth,
         "baseline_calculation_note": baseline_calculation_note,
+        "baseline_limitation": "This is a representative evaluation-baseline estimate, not a verified tenant-specific production saving." if estimated_water_savings_pct is not None else None,
         "evaluation_reference_time": orchestrated.get("evaluation_reference_time"),
     }
+
+    schedulable, scheduling_reasons = _is_schedulable(recommendation)
+    recommendation["schedulable"] = schedulable
+    recommendation["scheduling_block_reason"] = scheduling_reasons[0] if scheduling_reasons else None
+    recommendation["scheduling_block_reasons"] = scheduling_reasons
 
     if decision.get("action") in {"insufficient_data", "inspect"} or reconciliation.confidence_score < 0.55:
         recommendation["limitations"] = list(
@@ -838,30 +875,51 @@ def generate_analysis_summary(reconciliation: ReconciliationResult, recommendati
 
 def generate_report_artifact(session_id: str, recommendation: Dict[str, Any], reconciliation: ReconciliationResult, context: Dict[str, Any]) -> ReportArtifact:
     summary = generate_analysis_summary(reconciliation, recommendation)
+    savings_pct = recommendation.get("estimated_water_savings_percent")
+    has_savings = savings_pct is not None
     metrics = {
-        "water_saved_assumption": "Water-savings estimate is withheld until tenant-specific baseline and applied-water evidence are available.",
+        "water_saved_assumption": (
+            recommendation.get("baseline_limitation") or
+            "Water-savings estimate is withheld until tenant-specific baseline and applied-water evidence are available."
+        ),
         "evidence_completeness": reconciliation.evidence_completeness,
         "applied_variance": reconciliation.planned_vs_applied_variance,
         "compliance_posture": "Evaluation-session evidence package only; durable tenant persistence is future work.",
         "confidence": recommendation["confidence"],
+        "estimated_water_savings_percent": savings_pct,
+        "baseline_label": recommendation.get("baseline_label"),
+        "baseline_value_mm": recommendation.get("baseline_value_mm"),
+        "recommended_gross_depth_mm": recommendation.get("recommended_gross_depth_mm"),
+        "baseline_calculation_note": recommendation.get("baseline_calculation_note"),
     }
+    export_row = {
+        "session_id": session_id,
+        "farm": context.get("farm"),
+        "block": context.get("block"),
+        "action": recommendation["action"],
+        "confidence": recommendation["confidence"],
+        "evidence_completeness": reconciliation.evidence_completeness,
+        "applied_variance": reconciliation.planned_vs_applied_variance,
+        "schedulable": recommendation.get("schedulable"),
+        "flow_validation_status": recommendation.get("flow_validation_status"),
+        "recent_irrigation_credit_status": recommendation.get("recent_irrigation_credit_status"),
+    }
+    if has_savings:
+        export_row.update({
+            "estimated_water_savings_percent": savings_pct,
+            "baseline_label": recommendation.get("baseline_label"),
+            "baseline_value_mm": recommendation.get("baseline_value_mm"),
+            "recommended_gross_depth_mm": recommendation.get("recommended_gross_depth_mm"),
+            "baseline_calculation_note": recommendation.get("baseline_calculation_note"),
+            "baseline_limitation": recommendation.get("baseline_limitation"),
+        })
     return ReportArtifact(
         report_id=str(uuid.uuid4()),
         title="Irrigation Intelligence Report",
         report_type="workbench_v1",
         summary=summary,
         metrics=metrics,
-        export_rows=[
-            {
-                "session_id": session_id,
-                "farm": context.get("farm"),
-                "block": context.get("block"),
-                "action": recommendation["action"],
-                "confidence": recommendation["confidence"],
-                "evidence_completeness": reconciliation.evidence_completeness,
-                "applied_variance": reconciliation.planned_vs_applied_variance,
-            }
-        ],
+        export_rows=[export_row],
     )
 
 
@@ -1220,6 +1278,16 @@ def record_evidence_action(
                 "override_reason": override_reason,
                 "override_label": "Evidence sequence override applied with supplied reason.",
             })
+
+    # Scheduling gate: only allow "scheduled" when the recommendation is schedulable.
+    if action_type == "scheduled":
+        analysis = store.get("analysis")
+        if analysis is not None:
+            rec = getattr(analysis, "recommendation", None) or {}
+            if isinstance(rec, dict) and not rec.get("schedulable", False):
+                reasons = rec.get("scheduling_block_reasons") or ["Recommendation does not meet scheduling gate"]
+                if not override_reason:
+                    raise SchedulingNotAllowed(reasons)
 
     timestamp = datetime.utcnow().isoformat()
     summary = evidence_summary or EVIDENCE_DEFAULT_TEXT[action_type]

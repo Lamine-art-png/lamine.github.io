@@ -52,9 +52,14 @@ export function DecisionPipeline() {
           <p className="eyebrow">Decision processing</p>
           <h2>Source normalization, reconciliation, and recommendation</h2>
         </div>
-        <button className="btn primary" onClick={() => actions.refreshIntelligence()} disabled={running}>
-          {buttonLabel}
-        </button>
+        <div className="pipeline-toolbar">
+          <button className="btn primary" onClick={() => actions.refreshIntelligence()} disabled={running}>
+            {buttonLabel}
+          </button>
+          <button className="btn ghost compact" onClick={() => actions.runLiveRefresh()} disabled={running} title="Replace evaluation session with a live connected-source request">
+            Run live refresh
+          </button>
+        </div>
       </div>
 
       <div className="pipeline-track" aria-label="Decision processing stages" role="list">

@@ -144,6 +144,8 @@ const SCENARIOS: Record<ScenarioId, Scenario> = {
       verification: "Required",
       calibrationStatus: "Calibrated v0.2 — transparent defaults",
       flowValidationState: "Pending analysis",
+      // Representative value: validated operating block is always designed to be schedulable.
+      schedulable: true,
     },
     sources: REP_SOURCES_ALPHA,
     reconciliation: recon([
@@ -191,6 +193,8 @@ const SCENARIOS: Record<ScenarioId, Scenario> = {
       verification: "Complete evidence before scheduling",
       calibrationStatus: "Not applicable — evidence incomplete",
       flowValidationState: "Flow incomplete",
+      schedulable: false,
+      schedulingBlockReasons: ["Kernel action is not 'irrigate'", "Flow evidence is not validated for execution timing"],
       limitations: [
         "Block area not provided — estimated volume and duration withheld",
         "Crop mapping incomplete — agronomic demand requires crop and growth stage",
@@ -457,6 +461,10 @@ function scenarioState(id: ScenarioId, mode: AnalysisMode, origin: Recommendatio
     trace: buildTrace(now, true),
     evidence: baseEvidence(now),
     report: sc.report,
+    // Clear stale backend-driven state on scenario transition
+    displayFarmName: sc.name || "Alpha Vineyard",
+    backendMeta: null,
+    sessionId: null,
   };
 }
 
@@ -525,6 +533,118 @@ export const ORIGIN_LABEL: Record<string, string> = {
   uploaded_intelligence_engine: "Evaluation package analysis",
   insufficient_context: "Evidence incomplete",
 };
+
+function buildBackendSources(result: WorkbenchAnalysisResult): SourceRow[] {
+  const recon = (result.reconciliation ?? {}) as Record<string, unknown>;
+  const nc = (result.normalized_context ?? {}) as Record<string, unknown>;
+  const counts = (result.signal_summary ?? {}) as Record<string, unknown>;
+
+  const flowStatus = (recon.flow_meter_agreement as string) || "";
+  const soilStatus = (recon.soil_moisture_deficit as string) || "";
+  const weatherStatus = (recon.weather_demand as string) || "";
+  const satelliteStatus = (recon.satellite_stress_support as string) || "";
+  const fieldNoteStatus = (recon.field_observation_support as string) || "";
+
+  const flowTone: SourceRow["status"] =
+    flowStatus.includes("unavailable") ? "Pending" :
+    flowStatus.includes("inconsistent") ? "Review" :
+    "Matched";
+
+  const rows: SourceRow[] = [
+    {
+      source: "Controller history",
+      latestSignal: (recon.controller_event_validity as string) || "Controller events analyzed",
+      records: String(counts.controller_events_read ?? "—"),
+      contribution: "Not scored",
+      status: "Matched",
+    },
+    {
+      source: "Weather demand",
+      latestSignal: weatherStatus || "Weather demand analyzed",
+      records: String(counts.weather_records_read ?? "—"),
+      contribution: "Not scored",
+      status: weatherStatus.includes("not available") ? "Pending" : "Matched",
+    },
+    {
+      source: "Soil moisture",
+      latestSignal: soilStatus || "Soil deficit analyzed",
+      records: String(counts.soil_readings_read ?? "—"),
+      contribution: "Not scored",
+      status: soilStatus.includes("not available") ? "Pending" : "Matched",
+    },
+    {
+      source: "Flow meter",
+      latestSignal: flowStatus || "Flow evidence analyzed",
+      records: String(counts.flow_meter_records_read ?? "—"),
+      contribution: "Not scored",
+      status: flowTone,
+    },
+    {
+      source: "Field observation",
+      latestSignal: fieldNoteStatus || "Field notes analyzed",
+      records: String(counts.field_notes_parsed ?? "—"),
+      contribution: "Not scored",
+      status: counts.field_notes_parsed ? "Matched" : "Pending",
+    },
+    {
+      source: "Earth observation layer",
+      latestSignal: satelliteStatus || "Earth observation layer analyzed",
+      records: String(counts.satellite_observations_read ?? "—"),
+      contribution: "Not scored",
+      status: counts.satellite_observations_read ? "Matched" : "Pending",
+    },
+  ];
+
+  if (nc.live_request) {
+    rows.push({
+      source: "Live provider",
+      latestSignal: (nc.provider_context as string) || "Live provider request",
+      records: "Live",
+      contribution: "Not scored",
+      status: "Connected source",
+    });
+  }
+
+  return rows;
+}
+
+function buildBackendReconciliation(result: WorkbenchAnalysisResult): ReconciliationRow[] {
+  const recon = (result.reconciliation ?? {}) as Record<string, unknown>;
+  const matched = Array.isArray(recon.matched_signals) ? recon.matched_signals as string[] : [];
+  const conflicts = Array.isArray(recon.conflicts_detected) ? recon.conflicts_detected as string[] : [];
+  const missing = Array.isArray(recon.missing_inputs) ? recon.missing_inputs as string[] : [];
+
+  const rows: ReconciliationRow[] = [];
+
+  if (typeof recon.controller_event_validity === "string") {
+    rows.push({ source: "Controller history", signal: recon.controller_event_validity, interpretation: "Controller telemetry processed", status: "Matched" });
+  }
+  if (typeof recon.weather_demand === "string") {
+    rows.push({ source: "Weather demand", signal: recon.weather_demand, interpretation: "ETo and rainfall demand computed", status: recon.weather_demand.includes("not available") ? "Pending" : "Matched" });
+  }
+  if (typeof recon.soil_moisture_deficit === "string") {
+    rows.push({ source: "Soil moisture", signal: recon.soil_moisture_deficit, interpretation: "Root-zone deficit assessed", status: recon.soil_moisture_deficit.includes("not available") ? "Pending" : "Matched" });
+  }
+  if (typeof recon.flow_meter_agreement === "string") {
+    const flowStatus: ReconciliationRow["status"] = recon.flow_meter_agreement.includes("unavailable") ? "Pending" : recon.flow_meter_agreement.includes("inconsistent") ? "Review" : "Matched";
+    rows.push({ source: "Flow meter", signal: recon.flow_meter_agreement, interpretation: "Applied-water variance assessed", status: flowStatus });
+  }
+  if (typeof recon.field_observation_support === "string") {
+    rows.push({ source: "Field observation", signal: recon.field_observation_support, interpretation: "Field note corroboration assessed", status: recon.field_observation_support.includes("missing") ? "Pending" : "Matched" });
+  }
+  if (typeof recon.satellite_stress_support === "string") {
+    rows.push({ source: "Earth observation layer", signal: recon.satellite_stress_support, interpretation: "Vegetation stress index assessed", status: recon.satellite_stress_support.includes("not available") ? "Pending" : "Matched" });
+  }
+
+  for (const conflict of conflicts) {
+    rows.push({ source: "Conflict flagged", signal: conflict, interpretation: "Source conflict detected during reconciliation", status: "Review" });
+  }
+  for (const miss of missing.slice(0, 3)) {
+    rows.push({ source: "Missing input", signal: miss, interpretation: "Required input not available in uploaded package", status: "Pending" });
+  }
+
+  return rows.length > 0 ? rows : matched.slice(0, 6).map((m) => ({ source: m, signal: "Signal matched", interpretation: "Reconciled from uploaded package", status: "Matched" as ReconciliationRow["status"] }));
+}
 
 function pct(value: unknown, fallback: string): string {
   if (typeof value === "number") return value <= 1 ? `${Math.round(value * 100)}%` : `${Math.round(value)}%`;
@@ -626,6 +746,9 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
     baselineLabel: (rec.baseline_label as string) || undefined,
     baselineValueMm: typeof rec.baseline_value_mm === "number" ? rec.baseline_value_mm : undefined,
     baselineCalculationNote: (rec.baseline_calculation_note as string) || undefined,
+    schedulable: rec.schedulable === true,
+    schedulingBlockReason: (rec.scheduling_block_reason as string) || undefined,
+    schedulingBlockReasons: Array.isArray(rec.scheduling_block_reasons) ? rec.scheduling_block_reasons as string[] : undefined,
   };
 
   const trace: TraceStep[] = Array.isArray(result.analysis_trace) && result.analysis_trace.length
@@ -666,6 +789,10 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
     sessionId: result.session_id || null,
   };
 
+  // Build source and reconciliation rows from backend response when not in representative fallback.
+  const backendSources = useRepresentative ? null : buildBackendSources(result);
+  const backendReconciliation = useRepresentative ? null : buildBackendReconciliation(result);
+
   set({
     analysisMode: mode,
     analysisPhase: "complete",
@@ -677,6 +804,8 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
     report,
     displayFarmName,
     backendMeta,
+    ...(backendSources ? { sources: backendSources } : {}),
+    ...(backendReconciliation ? { reconciliation: backendReconciliation } : {}),
   });
 }
 
@@ -828,7 +957,7 @@ export const actions = {
     await new Promise((r) => setTimeout(r, 900));
 
     if (result) {
-      applyBackendResult(result, state.analysisMode === "live" ? "live" : "representative");
+      applyBackendResult(result, state.analysisMode);
       addAudit("Evaluation refresh completed", "Decision refreshed from evaluation session.");
       toast("Decision refreshed.");
     } else {
@@ -836,6 +965,32 @@ export const actions = {
       set({ pipelineMessage: "Backend unavailable. Representative analysis remains active." });
       addAudit("Evaluation refresh completed", "Representative-data analysis applied.");
       toast("Representative analysis remains active.");
+    }
+  },
+
+  async runLiveRefresh() {
+    if (state.analysisPhase === "running") return;
+    set({ analysisPhase: "running", pipelineMessage: "Connecting to live provider sources…", trace: buildTrace(new Date().toISOString(), false) });
+    addAudit("Live refresh started", "Requesting live connected-source intelligence from backend.");
+    let result: WorkbenchAnalysisResult | null = null;
+    if (state.backend.status !== "unavailable") {
+      try {
+        const sc = SCENARIOS[state.scenarioId];
+        const liveRes = await apiClient.analyzeLive(sc.liveEntity.source, sc.liveEntity.entityId);
+        if (liveRes.ok && liveRes.data) result = liveRes.data;
+      } catch {
+        result = null;
+      }
+    }
+    await new Promise((r) => setTimeout(r, 900));
+    if (result) {
+      applyBackendResult(result, "live");
+      addAudit("Live refresh completed", "Decision updated from live connected-source intelligence.");
+      toast("Live intelligence refreshed.");
+    } else {
+      set({ analysisPhase: "complete", pipelineMessage: "Live provider unavailable. Evaluation session remains active." });
+      addAudit("Live refresh failed", "Live provider unreachable; evaluation session analysis remains active.");
+      toast("Live provider unavailable. Evaluation session remains active.");
     }
   },
 

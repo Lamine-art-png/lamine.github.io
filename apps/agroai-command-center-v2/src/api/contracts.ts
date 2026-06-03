@@ -85,6 +85,9 @@ export interface Decision {
   baselineLabel?: string;
   baselineValueMm?: number;
   baselineCalculationNote?: string;
+  schedulable?: boolean;
+  schedulingBlockReason?: string;
+  schedulingBlockReasons?: string[];
 }
 
 export type ProviderConnectionState = "Live" | "Configured" | "Limited" | "Unavailable" | "Setup required" | "Target selection required";

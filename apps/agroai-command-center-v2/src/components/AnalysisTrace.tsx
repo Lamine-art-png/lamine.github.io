@@ -1,5 +1,4 @@
-import { useCommandStore } from "../state/commandStore";
-import { ORIGIN_LABEL } from "../state/commandStore";
+import { useCommandStore, ORIGIN_LABEL } from "../state/commandStore";
 
 function fmt(ts: string): string {
   if (!ts || ts === "—") return "—";
@@ -23,6 +22,8 @@ export function AnalysisTrace() {
   const origin = useCommandStore((s) => s.recommendationOrigin);
   const mode = useCommandStore((s) => s.analysisMode);
   const backendMeta = useCommandStore((s) => s.backendMeta);
+  const schedulable = decision.schedulable;
+  const schedulingBlockReasons = decision.schedulingBlockReasons;
 
   const reviewSteps = trace.filter((s) => s.status === "review");
   const originLabel = ORIGIN_LABEL[origin] ?? origin;
@@ -79,6 +80,18 @@ export function AnalysisTrace() {
             <div>
               <p className="trace-meta-label">Recent irrigation credit</p>
               <p className="trace-meta-value muted">{decision.recentIrrigationCreditStatus}</p>
+            </div>
+          )}
+          {schedulable !== undefined && (
+            <div>
+              <p className="trace-meta-label">Schedulable</p>
+              <p className="trace-meta-value muted">{schedulable ? "Yes — scheduling gate passed" : "No — scheduling gate blocked"}</p>
+            </div>
+          )}
+          {!schedulable && schedulingBlockReasons && schedulingBlockReasons.length > 0 && (
+            <div style={{ gridColumn: "1 / -1" }}>
+              <p className="trace-meta-label">Scheduling block reasons</p>
+              <p className="trace-meta-value muted">{schedulingBlockReasons.join("; ")}</p>
             </div>
           )}
           {typeof nc.region === "string" && nc.region && (

@@ -11,27 +11,27 @@ class SampleWorkbenchFile:
     content: bytes
 
 
-SAMPLE_CONTROLLER_EVENTS = """timestamp,farm,block,zone,provider,event_type,scheduled_duration_min,applied_duration_min,flow_m3h,pressure_kpa,status
-2026-05-12T21:00:00Z,Alpha Vineyard,Block A North,Zone 1,WiseConn,scheduled_irrigation,42,42,28.4,232,complete
-2026-05-13T21:00:00Z,Alpha Vineyard,Block A North,Zone 1,WiseConn,scheduled_irrigation,40,37,27.9,228,variance_watch
-2026-05-14T21:00:00Z,Alpha Vineyard,Block A North,Zone 1,WiseConn,scheduled_irrigation,42,36,27.1,,missing_pressure
-2026-05-15T21:00:00Z,Alpha Vineyard,Block A North,Zone 1,WiseConn,planned_irrigation,42,0,0,231,pending
-2026-05-12T22:30:00Z,Alpha Vineyard,Block B West,Zone 2,WiseConn,scheduled_irrigation,30,30,22.8,218,complete
+SAMPLE_CONTROLLER_EVENTS = """timestamp,farm,block,zone,provider,event_type,scheduled_duration_min,applied_duration_min,flow_m3h,pressure_kpa,depth_mm,status
+2026-05-12T21:00:00Z,Alpha Vineyard,Block A North,Zone 1,WiseConn,scheduled_irrigation,42,42,28.4,232,0.67,complete
+2026-05-13T21:00:00Z,Alpha Vineyard,Block A North,Zone 1,WiseConn,scheduled_irrigation,40,37,27.9,228,0.58,variance_watch
+2026-05-14T21:00:00Z,Alpha Vineyard,Block A North,Zone 1,WiseConn,scheduled_irrigation,42,42,27.1,229,0.60,complete
+2026-05-15T21:00:00Z,Alpha Vineyard,Block A North,Zone 1,WiseConn,scheduled_irrigation,42,42,27.8,231,0.58,complete
+2026-05-12T22:30:00Z,Alpha Vineyard,Block B West,Zone 2,WiseConn,scheduled_irrigation,30,30,22.8,218,,complete
 2026-05-13T22:30:00Z,Alpha Vineyard,Block B West,Zone 2,WiseConn,scheduled_irrigation,30,28,22.1,,missing_pressure
-2026-05-14T22:30:00Z,Alpha Vineyard,Block B West,Zone 2,WiseConn,scheduled_irrigation,34,34,23.0,221,complete
-2026-05-15T22:30:00Z,Alpha Vineyard,Block B West,Zone 2,WiseConn,planned_irrigation,28,0,0,220,pending
-2026-05-12T03:15:00Z,Delta Almonds,Almond Block 4,Zone 7,WiseConn,scheduled_irrigation,55,55,41.5,245,complete
-2026-05-13T03:15:00Z,Delta Almonds,Almond Block 4,Zone 7,WiseConn,scheduled_irrigation,55,61,42.1,247,planned_applied_mismatch
-2026-05-14T03:15:00Z,Delta Almonds,Almond Block 4,Zone 7,WiseConn,scheduled_irrigation,50,50,40.8,242,complete
-2026-05-15T03:15:00Z,Delta Almonds,Almond Block 4,Zone 7,WiseConn,planned_irrigation,48,0,0,,missing_pressure
-2026-05-12T20:45:00Z,North Ridge,Almond Block East,Zone 9,Talgil,scheduled_irrigation,46,44,36.2,239,complete
-2026-05-13T20:45:00Z,North Ridge,Almond Block East,Zone 9,Talgil,scheduled_irrigation,46,45,35.9,236,complete
-2026-05-14T20:45:00Z,North Ridge,Almond Block East,Zone 9,Talgil,scheduled_irrigation,46,38,31.2,213,variance_watch
-2026-05-15T20:45:00Z,North Ridge,Almond Block East,Zone 9,Talgil,planned_irrigation,44,0,0,238,pending
-2026-05-12T23:10:00Z,West Citrus,Vineyard Block Trial,Zone 11,Talgil,scheduled_irrigation,24,24,18.7,206,complete
-2026-05-13T23:10:00Z,West Citrus,Vineyard Block Trial,Zone 11,Talgil,scheduled_irrigation,26,24,18.3,,missing_pressure
-2026-05-14T23:10:00Z,West Citrus,Vineyard Block Trial,Zone 11,Talgil,scheduled_irrigation,26,32,19.0,207,planned_applied_mismatch
-2026-05-15T23:10:00Z,West Citrus,Vineyard Block Trial,Zone 11,Talgil,planned_irrigation,22,0,0,205,pending
+2026-05-14T22:30:00Z,Alpha Vineyard,Block B West,Zone 2,WiseConn,scheduled_irrigation,34,34,23.0,221,,complete
+2026-05-15T22:30:00Z,Alpha Vineyard,Block B West,Zone 2,WiseConn,planned_irrigation,28,0,0,220,,pending
+2026-05-12T03:15:00Z,Delta Almonds,Almond Block 4,Zone 7,WiseConn,scheduled_irrigation,55,55,41.5,245,,complete
+2026-05-13T03:15:00Z,Delta Almonds,Almond Block 4,Zone 7,WiseConn,scheduled_irrigation,55,61,42.1,247,,planned_applied_mismatch
+2026-05-14T03:15:00Z,Delta Almonds,Almond Block 4,Zone 7,WiseConn,scheduled_irrigation,50,50,40.8,242,,complete
+2026-05-15T03:15:00Z,Delta Almonds,Almond Block 4,Zone 7,WiseConn,planned_irrigation,48,0,0,,,missing_pressure
+2026-05-12T20:45:00Z,North Ridge,Almond Block East,Zone 9,Talgil,scheduled_irrigation,46,44,36.2,239,,complete
+2026-05-13T20:45:00Z,North Ridge,Almond Block East,Zone 9,Talgil,scheduled_irrigation,46,45,35.9,236,,complete
+2026-05-14T20:45:00Z,North Ridge,Almond Block East,Zone 9,Talgil,scheduled_irrigation,46,38,31.2,213,,variance_watch
+2026-05-15T20:45:00Z,North Ridge,Almond Block East,Zone 9,Talgil,planned_irrigation,44,0,0,238,,pending
+2026-05-12T23:10:00Z,West Citrus,Vineyard Block Trial,Zone 11,Talgil,scheduled_irrigation,24,24,18.7,206,,complete
+2026-05-13T23:10:00Z,West Citrus,Vineyard Block Trial,Zone 11,Talgil,scheduled_irrigation,26,24,18.3,,,missing_pressure
+2026-05-14T23:10:00Z,West Citrus,Vineyard Block Trial,Zone 11,Talgil,scheduled_irrigation,26,32,19.0,207,,planned_applied_mismatch
+2026-05-15T23:10:00Z,West Citrus,Vineyard Block Trial,Zone 11,Talgil,planned_irrigation,22,0,0,205,,pending
 """
 
 SAMPLE_WEATHER_SUMMARY = """timestamp,region,eto_mm,rain_forecast_mm,temperature_c,humidity_pct,wind_kph
@@ -48,14 +48,14 @@ SAMPLE_WEATHER_SUMMARY = """timestamp,region,eto_mm,rain_forecast_mm,temperature
 """
 
 SAMPLE_SOIL_MOISTURE = """timestamp,farm,block,depth_cm,moisture_percent,deficit_percent,sensor_health
-2026-05-12T06:00:00Z,Alpha Vineyard,Block A North,30,24.1,34,healthy
-2026-05-12T06:00:00Z,Alpha Vineyard,Block A North,60,27.8,28,healthy
-2026-05-13T06:00:00Z,Alpha Vineyard,Block A North,30,22.8,37,healthy
-2026-05-13T06:00:00Z,Alpha Vineyard,Block A North,60,26.9,30,healthy
-2026-05-14T06:00:00Z,Alpha Vineyard,Block A North,30,22.2,38,healthy
-2026-05-14T06:00:00Z,Alpha Vineyard,Block A North,60,26.4,31,healthy
-2026-05-15T06:00:00Z,Alpha Vineyard,Block A North,30,21.7,40,healthy
-2026-05-15T06:00:00Z,Alpha Vineyard,Block A North,60,25.9,33,healthy
+2026-05-12T06:00:00Z,Alpha Vineyard,Block A North,30,27.2,46,healthy
+2026-05-12T06:00:00Z,Alpha Vineyard,Block A North,60,28.5,38,healthy
+2026-05-13T06:00:00Z,Alpha Vineyard,Block A North,30,26.7,49,healthy
+2026-05-13T06:00:00Z,Alpha Vineyard,Block A North,60,28.0,41,healthy
+2026-05-14T06:00:00Z,Alpha Vineyard,Block A North,30,26.2,52,healthy
+2026-05-14T06:00:00Z,Alpha Vineyard,Block A North,60,27.5,44,healthy
+2026-05-15T06:00:00Z,Alpha Vineyard,Block A North,30,25.7,55,healthy
+2026-05-15T06:00:00Z,Alpha Vineyard,Block A North,60,27.0,47,healthy
 2026-05-12T06:00:00Z,Alpha Vineyard,Block B West,30,25.8,26,healthy
 2026-05-12T06:00:00Z,Alpha Vineyard,Block B West,60,29.0,22,healthy
 2026-05-13T06:00:00Z,Alpha Vineyard,Block B West,30,25.1,28,healthy
@@ -83,7 +83,8 @@ West Citrus / Vineyard Block Trial: trial rows are being watched separately from
 SAMPLE_FLOW_METER = """timestamp,farm,block,meter_id,planned_m3,actual_m3,variance_percent
 2026-05-12T22:00:00Z,Alpha Vineyard,Block A North,FM-AV-A1,19.8,19.6,-1.0
 2026-05-13T22:00:00Z,Alpha Vineyard,Block A North,FM-AV-A1,18.9,17.6,-6.9
-2026-05-14T22:00:00Z,Alpha Vineyard,Block A North,FM-AV-A1,19.8,17.2,-13.1
+2026-05-14T22:00:00Z,Alpha Vineyard,Block A North,FM-AV-A1,19.5,17.2,-11.8
+2026-05-15T22:00:00Z,Alpha Vineyard,Block A North,FM-AV-A1,19.5,19.2,-1.5
 2026-05-12T23:15:00Z,Alpha Vineyard,Block B West,FM-AV-B2,14.0,13.8,-1.4
 2026-05-13T23:15:00Z,Alpha Vineyard,Block B West,FM-AV-B2,14.0,13.2,-5.7
 2026-05-14T23:15:00Z,Alpha Vineyard,Block B West,FM-AV-B2,15.9,15.8,-0.6

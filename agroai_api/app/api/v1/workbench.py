@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from app.models.workbench import WorkbenchActionRequest, WorkbenchAnalysisRequest, WorkbenchLiveAnalysisRequest
 from app.services import workbench_engine as engine
-from app.services.workbench_engine import EvidenceOrderViolation
+from app.services.workbench_engine import EvidenceOrderViolation, SchedulingNotAllowed
 
 router = APIRouter(prefix="/workbench", tags=["workbench"])
 MAX_FILE = 10 * 1024 * 1024
@@ -107,6 +107,11 @@ def _record_action(session_id: str, action_type: str, payload: WorkbenchActionRe
         raise HTTPException(
             409,
             f"{exc} Supply override_reason in the request body to record this step out of order.",
+        )
+    except SchedulingNotAllowed as exc:
+        raise HTTPException(
+            409,
+            f"Scheduling not allowed: {'; '.join(exc.reasons)}. Supply override_reason to record with an audit entry.",
         )
 
 

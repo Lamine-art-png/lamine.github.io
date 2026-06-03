@@ -439,3 +439,99 @@ def test_validated_operating_block_area_from_crop_profile(client):
     # No area_unit warning must appear (area is now provided via crop profile).
     area_warnings = [w for w in (body.get('warnings') or []) if 'area unit' in str(w).lower() or 'area value' in str(w).lower()]
     assert not area_warnings
+
+
+# --- Section 15: Fourth-pass truthfulness gates --------------------------------
+
+def test_validated_block_schedulable_true(client):
+    """The validated operating block must have schedulable=True once flow and area are known."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'validated_operating_block'})
+    session_id = created.json()['session']['session_id']
+    analyzed = client.post(
+        f'/v1/workbench/sessions/{session_id}/analyze',
+        json={'session_id': session_id, 'mode': 'uploaded'},
+    )
+    body = analyzed.json()
+    rec = body['recommendation']
+    assert rec.get('kernel_action') == 'irrigate'
+    assert rec.get('schedulable') is True, f"Expected schedulable=True, got {rec.get('schedulable')!r}"
+    assert rec.get('scheduling_block_reasons') == []
+    # Scheduling the validated block must succeed (200, not 409)
+    schedule_r = client.post(
+        f'/v1/workbench/sessions/{session_id}/actions/schedule',
+        json={'actor': 'Ops'},
+    )
+    assert schedule_r.status_code == 200
+
+
+def test_validated_block_verified_recent_credit(client):
+    """The validated operating block must return recent_irrigation_credit_status='verified_recent'."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'validated_operating_block'})
+    session_id = created.json()['session']['session_id']
+    analyzed = client.post(
+        f'/v1/workbench/sessions/{session_id}/analyze',
+        json={'session_id': session_id, 'mode': 'uploaded'},
+    )
+    rec = analyzed.json()['recommendation']
+    assert rec.get('recent_irrigation_credit_status') == 'verified_recent', (
+        f"Expected 'verified_recent' but got: {rec.get('recent_irrigation_credit_status')!r}"
+    )
+    assert rec.get('flow_validation_status') == 'validated'
+
+
+def test_validated_block_savings_in_report(client):
+    """Savings fields must be present in the report artifact export rows."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'validated_operating_block'})
+    session_id = created.json()['session']['session_id']
+    client.post(f'/v1/workbench/sessions/{session_id}/analyze',
+                json={'session_id': session_id, 'mode': 'uploaded'})
+    report = client.get(f'/v1/workbench/sessions/{session_id}/report').json()
+    metrics = report.get('metrics', {})
+    assert metrics.get('estimated_water_savings_percent') is not None
+    assert metrics.get('baseline_value_mm') == 4.9
+    export_rows = report.get('export_rows', [{}])
+    assert export_rows[0].get('estimated_water_savings_percent') is not None
+    assert export_rows[0].get('baseline_limitation')
+
+
+def test_incomplete_block_schedulable_false(client):
+    """The incomplete evidence scenario must have schedulable=False."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'incomplete_evidence_review'})
+    session_id = created.json()['session']['session_id']
+    analyzed = client.post(
+        f'/v1/workbench/sessions/{session_id}/analyze',
+        json={'session_id': session_id, 'mode': 'uploaded'},
+    )
+    rec = analyzed.json()['recommendation']
+    assert rec.get('schedulable') is False
+    assert rec.get('scheduling_block_reasons')
+    # Scheduling the incomplete block must return 409
+    schedule_r = client.post(
+        f'/v1/workbench/sessions/{session_id}/actions/schedule',
+        json={'actor': 'Ops'},
+    )
+    assert schedule_r.status_code == 409
+    assert 'scheduling' in schedule_r.json()['detail'].lower()
+
+
+def test_region_isolation_no_silent_fallback(client):
+    """When no weather rows match the crop profile region, a warning must be emitted
+    and the result must NOT silently mix weather from other regions."""
+    # Use a custom session with weather from a different region than the crop profile.
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()
+    sid = s['session_id']
+    import csv, io
+    # Crop profile with region="NonExistent Region"
+    crop_data = b'[{"farm":"Test Farm","block":"Test Block","crop":"wine grapes","soil_type":"clay loam","irrigation_method":"drip","root_zone_depth_cm":60,"growth_stage":"berry set","area":2.0,"area_unit":"ha","region":"NonExistent Region"}]'
+    # Weather data with region="Other Region" only
+    weather_data = b'timestamp,region,eto_mm,rain_forecast_mm,temperature_c,humidity_pct,wind_kph\n2026-05-15T12:00:00Z,Other Region,6.5,0,30,40,15\n'
+    from io import BytesIO
+    client.post(f'/v1/workbench/sessions/{sid}/upload', files={'file': ('crop_profile.json', BytesIO(crop_data), 'application/json')})
+    client.post(f'/v1/workbench/sessions/{sid}/upload', files={'file': ('weather_summary.csv', BytesIO(weather_data), 'text/csv')})
+    r = client.post(f'/v1/workbench/sessions/{sid}/analyze', json={'session_id': sid, 'mode': 'uploaded'})
+    assert r.status_code == 200
+    body = r.json()
+    # A warning must be emitted about the missing region weather
+    warnings = body.get('warnings', [])
+    region_warn = [w for w in warnings if 'nonexistent region' in str(w).lower() or 'no weather records matched' in str(w).lower()]
+    assert region_warn, f"Expected region isolation warning, got warnings: {warnings}"

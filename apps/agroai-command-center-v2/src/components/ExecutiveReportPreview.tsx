@@ -36,6 +36,11 @@ export function ExecutiveReportPreview() {
   const isIncomplete = scenarioId === "incomplete-evidence";
   const now = new Date().toLocaleString();
 
+  const hasBaseline = typeof decision.baselineValueMm === "number";
+  const savingsRow = hasBaseline
+    ? `${report.estimatedWaterSavings} (vs ${decision.baselineValueMm} mm evaluation baseline)`
+    : report.estimatedWaterSavings;
+
   const mainRows: [string, string][] = [
     ["Farm", report.farm],
     ["Block", report.block],
@@ -47,7 +52,9 @@ export function ExecutiveReportPreview() {
     ["Planned vs applied variance", report.variance],
     ["Field observation", isIncomplete ? "Withheld" : "Pending — add field observation"],
     ["Verification status", report.verification],
-    ["Estimated water savings", report.estimatedWaterSavings],
+    ["Estimated water savings", savingsRow],
+    ...(hasBaseline && decision.baselineLabel ? [["Baseline", decision.baselineLabel] as [string, string]] : []),
+    ...(decision.baselineCalculationNote ? [["Savings calculation", decision.baselineCalculationNote] as [string, string]] : []),
     ["Calibration status", decision.calibrationStatus || "Defaults applied — not farm-specific"],
     ["Evidence completeness", report.evidenceCompleteness],
   ];
@@ -56,12 +63,20 @@ export function ExecutiveReportPreview() {
     ? decision.limitations.map((l, i) => [`Limitation ${i + 1}`, l])
     : [];
 
-  const extraCsvFields = {
+  const extraCsvFields: Record<string, string> = {
     "Crop": decision.crop,
     "Timing window": decision.start,
     "Calibration status": decision.calibrationStatus || "Defaults applied",
     "Report generated": now,
   };
+  if (hasBaseline) {
+    extraCsvFields["Baseline value mm"] = String(decision.baselineValueMm);
+    extraCsvFields["Baseline label"] = decision.baselineLabel || "";
+    extraCsvFields["Baseline limitation"] = "This is a representative evaluation-baseline estimate, not a verified tenant-specific production saving.";
+  }
+  if (decision.baselineCalculationNote) {
+    extraCsvFields["Savings calculation"] = decision.baselineCalculationNote;
+  }
 
   return (
     <section className="card panel report-preview" data-walkthrough-target="executive-report">

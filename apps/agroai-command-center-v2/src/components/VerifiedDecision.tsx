@@ -18,7 +18,7 @@ export function VerifiedDecision() {
   const isIncomplete = scenarioId === "incomplete-evidence";
 
   const byKey = Object.fromEntries(evidence.map((s) => [s.key, s]));
-  const canSchedule = ready && !isIncomplete && byKey.recommended?.status === "Complete";
+  const canSchedule = ready && decision.schedulable === true && byKey.recommended?.status === "Complete";
   const canApply = ready && byKey.scheduled?.status === "Complete";
   const canObserve = ready && byKey.applied?.status === "Complete";
   const canVerify = ready && byKey.observed?.status === "Complete";
