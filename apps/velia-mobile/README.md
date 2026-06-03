@@ -1,8 +1,21 @@
-# Velia Mobile + Agentic AI Brain v0.1 (AGRO-AI)
+# Velia Mobile Experience (AGRO-AI)
 
 Velia helps farms make better water decisions, act faster, and understand what happened across their fields.
 
-This app includes a frontend-local **Agentic AI Brain architecture** for offline fallback, while live intelligence runs backend-first through `apps/velia-ai-api`.
+This app is a mobile-first agricultural intelligence companion. It keeps the frontend-local **Agentic AI Brain architecture** for offline fallback, while live intelligence runs backend-first through `apps/velia-ai-api`.
+
+## Mobile experience
+
+- Premium mobile shell with Velia wordmark, farm selector, sync/offline indicator, notifications, and profile access.
+- Five primary destinations: Today, Fields, Ask Velia, Alerts, and More.
+- Today is a daily field briefing with a hero recommendation, overnight changes, fields needing attention, water outlook, Ask Velia entry, recent activity, and farmer-friendly provenance.
+- Fields includes search, status filters, compact field cards, map-ready field visuals, detail timelines, field observations, irrigation history, and data-source status.
+- Ask Velia uses a chat-style interface, contextual field selector, suggested questions, voice orb, transcript preview, confirmation before saving actions, and source/confidence details.
+- Alerts are actionable and cover heat, frost, rain, stale weather, missing observations, unavailable sensors/controllers, overdue verification, and recommendation changes.
+- More contains reports, farm profile, field setup, data sources, integrations, notifications, language, units, offline/sync, help, and About Velia. Demo controls are only shown in demo mode.
+- Dynamic model/user text is escaped before HTML insertion.
+
+Demo mode uses realistic Napa Valley vineyard blocks so the product value is visible immediately without claiming live satellite or production automation.
 
 ## AI Brain architecture (`js/ai/`)
 
@@ -197,6 +210,24 @@ python -m http.server 4174
 cd apps/velia-mobile
 npm test
 ```
+
+Browser acceptance requires the app to be served locally and Playwright browsers to be installed:
+
+```bash
+cd apps/velia-mobile
+npm install --save-dev playwright
+npx playwright install chromium
+python3 -m http.server 4174
+```
+
+In a second terminal:
+
+```bash
+cd apps/velia-mobile
+npm run test:browser
+```
+
+The browser suite validates onboarding persistence, CTA alignment, navigation, generated-alert resolution persistence, demo mode labels, offline banner behavior, and offline reload/navigation after one online visit.
 
 ## Future production deployment path
 

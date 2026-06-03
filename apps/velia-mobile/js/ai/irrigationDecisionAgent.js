@@ -60,7 +60,9 @@ export const irrigationDecisionAgent = {
     };
 
     decision = safetyGuardrails.apply(decision, { weather });
-    memoryStore.updateFieldMemory(fieldId, { type: "decision", payload: decision });
+    if (!tools.get("isPreviewRender")?.execute?.()) {
+      memoryStore.updateFieldMemory(fieldId, { type: "decision", payload: decision });
+    }
     return decision;
   },
 };

@@ -32,6 +32,7 @@ export function createToolRegistry(context) {
     generateExplanation: { name: "generateExplanation", description: "Generate concise explanation", inputSchema: schema({ decision: { type: "object" } }), outputSchema: schema({ explanation: { type: "string" } }), mode: "mock", execute: ({ decision }) => context.generateExplanation(decision) },
     verifyRecommendationOutcome: { name: "verifyRecommendationOutcome", description: "Verify recommendation outcome", inputSchema: schema({ recommendation: { type: "object" }, fieldId: { type: "string" } }), outputSchema: schema({ verification: { type: "object" } }), mode: "mock", execute: ({ recommendation, fieldId }) => verificationAgent.verify({ recommendation, irrigationLogs: context.getIrrigationLogs(fieldId), observations: context.getFieldObservations(fieldId) }) },
     translateText: { name: "translateText", description: "Translate output", inputSchema: schema({ text: { type: "string" }, language: { type: "string" } }), outputSchema: schema({ translated: { type: "string" } }), mode: "mock", execute: ({ text, language }) => translationAgent.translate(text, language) },
+    isPreviewRender: { name: "isPreviewRender", description: "Identify UI preview-only rendering", inputSchema: schema({}), outputSchema: schema({ preview: { type: "boolean" } }), mode: "mock", execute: () => Boolean(context.isPreviewRender?.()) },
   };
 
   return {

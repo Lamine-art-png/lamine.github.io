@@ -1,23 +1,30 @@
 import { translations } from "./i18n/translations.js";
 import { syncService } from "./services/sync.js";
-import { generateRecommendation } from "./services/recommendationEngine.js";
 import { applyVoiceAction, parseVoiceCommand, saveOfflineVoiceAction } from "./services/voiceAgent.js";
 import { weatherService } from "./services/weatherService.js";
 import { apiClient } from "./services/apiClient.js";
+import { actionMappingFor, alertFingerprint, alertGroup, alertKey, confidencePresentation, dedupeActivityRows, escapeHtml, confidenceText, isAlertDismissed, normalizeDecisionAction, readConfidence, recommendationContextLabel, relativeTime, shortDate, sortAlerts, weatherAgeLabel } from "./services/uiHelpers.js";
 import { applyDemoScenario, applyOnboarding, loadState, recordRecommendationHistory, saveState, useDemoMode } from "./state/store.js";
 import { createIrrigationLog, createObservation, createVoiceTimelineEntry } from "./state/actions.js";
 import { createAiOrchestrator } from "./ai/aiOrchestrator.js";
+import { memoryStore } from "./ai/memoryStore.js";
 
 const app = document.getElementById("app");
+const h = escapeHtml;
 let state = loadState();
 let route = "today";
 let selectedField = null;
+let fieldSearch = "";
+let fieldFilter = "all";
 let voiceListening = false;
 let transcript = "";
-let voiceResponse = "";
-let assistantResponse = "I can explain the latest decision trace.";
+let pendingVoiceCommand = null;
+let voiceResponse = "Tap the orb and Velia will prepare a local transcript preview.";
+let assistantResponse = "Ask about irrigation, weather risk, missing data, or what changed since yesterday.";
+let assistantFieldId = state.fields[0]?.id || "";
 let weather = state.weatherCache || null;
 let decisionRefreshInflight = new Set();
+let renderRecommendationSnapshot = new Map();
 let uiMessage = "";
 let onboardingStep = 0;
 let onboardingDraft = {
@@ -28,7 +35,6 @@ let onboardingDraft = {
   coordinates: null,
   fieldName: "",
   fieldLocation: "",
-  fieldCoordinates: null,
   crop: "",
   acreage: "",
   units: "metric",
@@ -41,10 +47,29 @@ let onboardingDraft = {
   waterSource: "",
 };
 
-const nav = ["today", "fields", "alerts", "assistant", "reports", "settings"];
+const bootParams = new URLSearchParams(window.location.search);
+const acceptanceDemo = bootParams.get("demo") === "1";
+if (acceptanceDemo) {
+  state = useDemoMode(state);
+  route = bootParams.get("screen") || "today";
+  assistantFieldId = bootParams.get("field") || state.fields[0]?.id || "";
+  if (bootParams.get("screen") === "field-detail") {
+    route = "fields";
+    selectedField = { type: "detail", fieldId: bootParams.get("field") || state.fields[0]?.id };
+  }
+  saveState(state);
+}
+
+const nav = [
+  { id: "today", label: "Today" },
+  { id: "fields", label: "Fields" },
+  { id: "assistant", label: "Ask Velia", featured: true },
+  { id: "alerts", label: "Alerts" },
+  { id: "more", label: "More" },
+];
 const tr = (k) => translations[state.language || "en"]?.[k] || translations.en[k] || k;
 
-function buildAiContext() {
+function buildAiContext({ preview = true } = {}) {
   return {
     getFarmProfile: () => state.profile?.farm || {},
     getFieldProfile: (fieldId) => state.fields.find((f) => f.id === fieldId) || state.fields[0] || {},
@@ -59,36 +84,37 @@ function buildAiContext() {
     estimateIrrigationNeed: ({ field, weather: weatherData, observations }) => {
       const obs = observations?.[0]?.condition || field?.lastObservation || "";
       let score = field?.waterStressLevel === "high" ? 0.8 : field?.waterStressLevel === "moderate" ? 0.6 : 0.3;
-      if ((weatherData?.heatRisk || "") === "elevated") score += 0.15;
+      if ((weatherData?.heatRisk || "") === "elevated" || (weatherData?.heatRisk || "") === "high") score += 0.15;
       if ((weatherData?.rainChance || 0) > 55) score -= 0.2;
-      if (/dry|stressed/i.test(obs)) score += 0.1;
-      if (/too wet/i.test(obs)) score -= 0.2;
+      if (/dry|stress|wilting/i.test(obs)) score += 0.1;
+      if (/too wet|damp|moist/i.test(obs)) score -= 0.2;
       return { needScore: Math.max(0, Math.min(1, score)) };
     },
     calculateConfidence: ({ missingData, needScore }) => Math.max(0.2, Math.min(0.95, (needScore || 0.6) - ((missingData?.length || 0) * 0.08))),
-    generateExplanation: ({ decision }) => `Recommendation leans ${decision?.urgency || "moderate"} because weather and recent field signals were checked.`,
+    generateExplanation: ({ decision }) => `Velia checked weather, field profile, observations, and recent irrigation before recommending ${decision?.action || "monitoring"}.`,
+    isPreviewRender: () => preview,
   };
 }
 
-function ai() {
-  return createAiOrchestrator(buildAiContext());
-}
-
+function ai() { return createAiOrchestrator(buildAiContext({ preview: true })); }
 function persist() { saveState(state); }
-
-function weatherAgeLabel(w) {
-  const sourceTs = w?.weatherTimestamp || w?.lastUpdated;
-  const minutes = w?.freshness?.ageMinutes ?? (sourceTs ? Math.max(0, Math.round((Date.now() - new Date(sourceTs).getTime()) / 60000)) : null);
-  if (minutes == null || !Number.isFinite(minutes)) return "unknown age";
-  if (minutes < 60) return `${minutes} min old`;
-  return `${Math.round(minutes / 60)} hr old`;
-}
+function syncStatus() { return syncService.status(); }
 
 async function refreshWeather(forceRefresh = false) {
   const location = state.profile?.farm?.location || "farm";
   weather = await weatherService.getWeather({ location, coordinates: state.profile?.farm?.coordinates || state.fields[0]?.coordinates || null, forceRefresh });
   state.weatherCache = weather;
   persist();
+}
+
+function showMessage(text) {
+  uiMessage = text;
+  setTimeout(() => {
+    if (uiMessage === text) {
+      uiMessage = "";
+      render();
+    }
+  }, 2800);
 }
 
 function addIrrigationLog(payload) {
@@ -101,7 +127,7 @@ function addIrrigationLog(payload) {
   }
   if (!navigator.onLine) syncService.queueAction({ kind: "irrigation_log", payload: log });
   persist();
-  showMessage(navigator.onLine ? "Irrigation log saved." : "Irrigation saved offline. Will sync when connected.");
+  showMessage(navigator.onLine ? "Irrigation log saved." : "Saved offline. Velia will sync when connected.");
 }
 
 function addFieldNote(payload) {
@@ -122,33 +148,43 @@ function updateCondition(payload) {
   }
   if (!navigator.onLine) syncService.queueAction({ kind: "observation", payload: observation });
   persist();
-  showMessage(navigator.onLine ? "Field condition updated." : "Condition saved offline.");
+  showMessage(navigator.onLine ? "Condition updated." : "Condition saved offline.");
 }
 
-function showMessage(text) {
-  uiMessage = text;
-  setTimeout(() => {
-    if (uiMessage === text) {
-      uiMessage = "";
-      render();
-    }
-  }, 2800);
-}
-
-function recommendationFor(field) {
+function computeRecommendation(field) {
+  if (state.mode === "demo" && field.demoRecommendation) {
+    return { ...field.demoRecommendation, sourceMode: "demo", verificationStatus: field.verificationStatus || "needs field confirmation" };
+  }
   const result = ai().runGoal({ goal: "daily irrigation decision", fieldId: field.id, language: state.language || "en" });
   const localRec = result.decision;
   const cached = state.remoteDecisions?.[field.id];
   const freshCached = cached && Date.now() - new Date(cached.fetchedAt).getTime() < 10 * 60 * 1000;
-  if (navigator.onLine && !freshCached && !decisionRefreshInflight.has(field.id)) refreshRemoteDecision(field);
-  const rec = freshCached ? { ...cached.decision, confidence: cached.decision.confidenceLabel || cached.decision.confidence || "moderate" } : localRec;
-  state = recordRecommendationHistory(state, field.id, rec);
-  persist();
-  return { ...rec, verificationStatus: result.verification?.status || "no_confirmation" };
+  const rec = freshCached
+    ? { ...cached.decision, sourceMode: "backend" }
+    : { ...localRec, sourceMode: decisionRefreshInflight.has(field.id) ? "refreshing" : (weather?.stale ? "offline" : "local") };
+  return { ...rec, verificationStatus: field.verificationStatus || result.verification?.status || "needs field confirmation" };
+}
+
+function prepareRecommendationSnapshot() {
+  renderRecommendationSnapshot = new Map(state.fields.map((field) => [field.id, computeRecommendation(field)]));
+}
+
+function recommendationFor(field) {
+  return renderRecommendationSnapshot.get(field.id) || computeRecommendation(field);
+}
+
+function scheduleDecisionRefreshes() {
+  if (acceptanceDemo || state.mode === "demo" || !navigator.onLine) return;
+  for (const field of state.fields) {
+    const cached = state.remoteDecisions?.[field.id];
+    const freshCached = cached && Date.now() - new Date(cached.fetchedAt).getTime() < 10 * 60 * 1000;
+    if (!freshCached && !decisionRefreshInflight.has(field.id)) refreshRemoteDecision(field);
+  }
 }
 
 async function refreshRemoteDecision(field) {
   decisionRefreshInflight.add(field.id);
+  renderSoon();
   try {
     const result = await apiClient.getDailyDecision({
       field,
@@ -161,281 +197,430 @@ async function refreshRemoteDecision(field) {
     if (result?.decision) {
       state.remoteDecisions = { ...(state.remoteDecisions || {}), [field.id]: { decision: result.decision, fetchedAt: new Date().toISOString() } };
       state = recordRecommendationHistory(state, field.id, result.decision);
+      memoryStore.updateFieldMemory(field.id, { type: "decision", payload: result.decision });
       persist();
-      render();
     }
   } catch {
-    // Local decision remains active when the backend or provider is unavailable.
+    showMessage("Using local intelligence until the backend is reachable.");
   } finally {
     decisionRefreshInflight.delete(field.id);
+    render();
   }
 }
 
-async function fetchAssistantText(fieldId, query = "Why?") {
-  const fallback = ai().runGoal({ goal: "explain recommendation", fieldId: fieldId || "" }).text || "I can explain the latest decision trace.";
-  if (!navigator.onLine) return fallback;
+let renderTimer = null;
+function renderSoon() {
+  clearTimeout(renderTimer);
+  renderTimer = setTimeout(render, 60);
+}
+
+async function fetchAssistantText(fieldId, query = "Should I irrigate today?") {
+  const fallback = ai().runGoal({ goal: "explain recommendation", fieldId: fieldId || state.fields[0]?.id || "" }).text || "Velia can explain the latest recommendation using local field context.";
+  if (!navigator.onLine) return `${fallback} Offline mode is active, so this answer used local context.`;
   try {
-    const latest = state.recommendationHistory[0]?.rec || null;
+    const latest = state.recommendationHistory.find((x) => !fieldId || x.fieldId === fieldId)?.rec || null;
     const result = await apiClient.queryAssistant({ query, fieldId, decision: latest, recommendationHistory: state.recommendationHistory, language: state.language || "en" });
     return result.answer || fallback;
   } catch {
-    return fallback;
+    return `${fallback} Backend was unavailable, so Velia used local fallback.`;
   }
 }
 
-function whyVeliaSection(rec) {
+function confidenceClass(value) {
+  const c = confidenceText(value).toLowerCase();
+  if (c.includes("high")) return "high";
+  if (c.includes("low")) return "low";
+  return "moderate";
+}
+
+function actionTitle(rec, field) {
+  const action = normalizeDecisionAction(rec.action);
+  if (action === "irrigate") return `Irrigate ${field.name}`;
+  if (action === "wait") return `Wait before irrigating ${field.name}`;
+  if (action === "update missing data") return `Complete data for ${field.name}`;
+  if (action === "check field first") return `Check ${field.name} before irrigating`;
+  return `Monitor ${field.name}`;
+}
+
+function actionAttribute(kind, fieldId) {
+  const id = h(fieldId);
+  if (kind === "log") return `data-open-log="${id}"`;
+  if (kind === "condition") return `data-open-condition="${id}"`;
+  if (kind === "assistant") return `data-nav="assistant" data-assistant-field="${id}"`;
+  if (kind === "reasoning") return `data-scroll-provenance="1"`;
+  if (kind === "weather") return `data-nav="alerts"`;
+  if (kind === "field-detail") return `data-open-field="${id}"`;
+  if (kind === "reminder") return `data-set-reminder="${id}"`;
+  return `data-open-condition="${id}"`;
+}
+
+function actionButtons(rec, field, compact = false) {
+  const mapping = actionMappingFor(rec.action);
+  return `<div class="${compact ? "card-actions" : "hero-actions"}"><button class="btn brand" ${actionAttribute(mapping.primaryAction, field.id)}>${h(mapping.primary)}</button><button class="btn" ${actionAttribute(mapping.secondaryAction, field.id)}>${h(mapping.secondary)}</button></div>`;
+}
+
+function riskFor(field, rec) {
+  if (weather?.stale || rec.sourceMode === "offline") return "Stale offline fallback";
+  if (field.verificationStatus === "overdue" || confidenceText(readConfidence(rec)).toLowerCase() === "low") return "Verify today";
+  if (weather?.heatRisk === "high" || weather?.heatRisk === "elevated") return "Heat pressure";
+  if ((weather?.rainChance || 0) > 55) return "Rain watch";
+  return "Stable";
+}
+
+function emptyState(title, body, action = "") {
+  return `<section class="empty-state"><div class="empty-mark"></div><h3>${h(title)}</h3><p>${h(body)}</p>${action}</section>`;
+}
+
+function confidenceBadge(confidence) {
+  const display = confidencePresentation(confidence);
+  const score = display.numeric == null ? "" : ` ${display.numeric}%`;
+  return `<span class="confidence ${confidenceClass(display.label)}">${h(display.label)} confidence${h(score)}</span>`;
+}
+
+function confidenceBlock(rec) {
+  const display = confidencePresentation(readConfidence(rec), rec);
+  return `<div class="confidence-copy"><strong>${h(display.label)} confidence${display.numeric == null ? "" : ` ${display.numeric}%`}</strong><p>${h(display.explanation)}</p><small>${h(display.improve)}</small></div>`;
+}
+
+function riskBadge(label, severity = "normal") {
+  return `<span class="risk-badge ${h(severity)}">${h(label)}</span>`;
+}
+
+function skeletonDecision() {
+  return `<section class="card hero-card skeleton-card" data-testid="decision-loading">
+    <div class="skeleton line wide"></div><div class="skeleton line title"></div><div class="skeleton line"></div><div class="skeleton row"><span></span><span></span></div>
+  </section>`;
+}
+
+function mapPlaceholder(field) {
+  if (field.coordinates) {
+    const lat = Number(field.coordinates.lat).toFixed(3);
+    const lon = Number(field.coordinates.lon).toFixed(3);
+    return `<section class="map-card">
+      <div class="map-grid"></div>
+      <div><p class="card-label">Map-ready field</p><h3>${h(field.name)}</h3><p>${h(lat)}, ${h(lon)}</p><p class="muted">Boundary-ready foundation. Satellite imagery is not live yet.</p></div>
+    </section>`;
+  }
+  return `<section class="map-card empty-map">
+    <div class="map-pin"></div>
+    <div><p class="card-label">Map-ready field</p><h3>Add field location to unlock map-based intelligence.</h3><p class="muted">Velia will use coordinates for weather context and future field-boundary workflows.</p></div>
+  </section>`;
+}
+
+function provenanceSection(rec) {
   const p = rec.provenance || {};
   const sources = p.ragSourcesUsed || rec.knowledgeSources || [];
-  return `<details class='card compact-card provenance-card'>
+  const data = p.dataSourcesChecked || rec.decisionTrace?.dataChecked || ["field profile", "weather", "recent logs", "observations"];
+  const missing = p.missingData || rec.missingData || [];
+  return `<details class="accordion provenance-card" data-testid="provenance-disclosure">
     <summary>Why Velia recommended this</summary>
-    <ul class='mini-list'>
-      <li>Mode: ${p.providerMode || "local fallback"}${p.modelUsed ? ` • ${p.modelUsed}` : ""}</li>
-      <li>Weather: ${p.weatherSource || weather?.source || "local"}${p.weatherStale || weather?.stale ? " • stale" : ""} • ${weatherAgeLabel(weather)}</li>
-      <li>Rules: ${(p.deterministicRulesTriggered || rec.decisionTrace?.deterministicRulesTriggered || []).join(", ") || "none"}</li>
-      <li>Fallback: ${p.fallbackStatus?.llmFallbackUsed ? p.fallbackStatus.llmFallbackReason || "local deterministic fallback" : "none"}</li>
-      <li>Sources: ${sources.slice(0, 3).map((s) => s.title || s.id || s.topic).join(", ") || "local guidance"}</li>
-    </ul>
+    <div class="provenance-grid">
+      <div><span>Data checked</span><p>${h(data.slice(0, 5).map((x) => String(x).replaceAll("_", " ")).join(", "))}</p></div>
+      <div><span>Weather</span><p>${h(p.weatherSource || weather?.weatherSource || weather?.source || "Weather context")} - ${h(weatherAgeLabel(weather))}${p.weatherStale || weather?.stale ? " - stale" : ""}</p></div>
+      <div><span>Uncertainty</span><p>${h((missing.length ? missing : rec.uncertainties || ["No major gap reported"]).slice(0, 3).join(", "))}</p></div>
+      <div><span>Improve confidence</span><p>${h((rec.fieldChecks || ["Record a field observation"]).slice(0, 2).join(", "))}</p></div>
+      <div><span>Guidance</span><p>${h(sources.slice(0, 3).map((s) => s.title || s.topic || "Irrigation guidance").join(", ") || "Local irrigation guidance")}</p></div>
+    </div>
   </details>`;
 }
+
+function fieldCard(field, compact = false) {
+  const rec = recommendationFor(field);
+  const risk = riskFor(field, rec);
+  return `<article class="field-card ${compact ? "compact" : ""}" data-status="${h(rec.urgency || "medium")}">
+    <div class="field-status-dot ${h(rec.urgency || "medium")}"></div>
+    <div class="field-card-main">
+      <div class="field-title-row"><h3>${h(field.name)}</h3>${riskBadge(risk, risk.includes("Verify") || risk.includes("fresh") ? "watch" : "normal")}</div>
+      <p>${h(field.crop || "Crop not set")} - ${h(field.acreage || "0")} acres</p>
+      <p class="muted">${h(field.irrigationMethod || "Irrigation method missing")} - ${h(field.lastObservation || "No recent condition")}</p>
+      <div class="card-metrics">
+        ${confidenceBadge(readConfidence(rec))}
+        <span>${h(normalizeDecisionAction(rec.action))}</span>
+        <span>${h(relativeTime(field.updatedAt || field.lastIrrigationAt))}</span>
+      </div>
+    </div>
+    <button class="icon-button" data-open-field="${h(field.id)}" aria-label="Open ${h(field.name)}">View</button>
+  </article>`;
+}
+
+function recentActivity(limit = 5) {
+  const rows = dedupeActivityRows([
+    ...state.irrigationLogs.map((x) => ({ at: x.performedAt, title: "Irrigation logged", body: `${fieldName(x.fieldId)} - ${x.durationMin} min`, fieldId: x.fieldId })),
+    ...state.observations.map((x) => ({ at: x.createdAt, title: "Condition updated", body: `${fieldName(x.fieldId)} - ${x.condition}`, fieldId: x.fieldId })),
+    ...state.fieldNotes.map((x) => ({ at: x.createdAt, title: "Note captured", body: `${fieldName(x.fieldId)} - ${x.text}`, fieldId: x.fieldId })),
+    ...state.recommendationHistory.map((x) => ({ at: x.at, title: x.eventType === "recommendation changed" ? "Recommendation changed" : "Recommendation refreshed", body: `${fieldName(x.fieldId)} - ${x.rec?.action || x.rec?.urgency || "review"}`, fieldId: x.fieldId })),
+  ], { limit });
+  if (!rows.length) return emptyState("No activity yet", "Logs, field checks, and verified recommendations will appear here.");
+  return `<div class="activity-list">${rows.map((row) => `<div class="activity-row"><span></span><div><strong>${h(row.title)}</strong><p>${h(row.body)}</p></div><time>${h(relativeTime(row.at))}</time></div>`).join("")}</div>`;
+}
+
+function fieldName(fieldId) {
+  return state.fields.find((f) => f.id === fieldId)?.name || "Field";
+}
+
+function buildChanges(field, rec) {
+  const changes = [];
+  if (weather?.stale) changes.push(["Weather needs refresh", "Using cached weather until the connection improves."]);
+  if ((weather?.rainChance || 0) >= 50) changes.push(["Rain probability increased", `${weather.rainChance}% rain chance is now part of the decision.`]);
+  if (weather?.heatRisk === "high" || weather?.heatRisk === "elevated") changes.push(["Heat pressure elevated", "Velia is weighing afternoon demand more carefully."]);
+  const lastObs = state.observations.find((o) => o.fieldId === field.id);
+  if (lastObs) changes.push(["New field observation", `${field.name}: ${lastObs.condition}.`]);
+  if (rec.sourceMode === "backend") changes.push(["Backend decision synced", "Velia refreshed the recommendation with server-side intelligence."]);
+  if (!changes.length) changes.push(["No major overnight shift", "Weather, logs, and observations remain consistent."]);
+  return `<section class="card section-card"><div class="section-heading"><p class="card-label">What changed overnight</p></div>${changes.slice(0, 4).map(([title, body]) => `<div class="change-row"><strong>${h(title)}</strong><p>${h(body)}</p></div>`).join("")}</section>`;
+}
+
 function todayContent() {
   const field = state.fields[0];
-  if (!field) return `<section class='card'>No fields yet. Complete onboarding.</section>`;
-
+  if (!field) return emptyState("Set up your first field", "Velia needs at least one field profile before it can brief you.", `<button class="btn brand" data-next-step="1">Start setup</button>`);
   const rec = recommendationFor(field);
-  const attentionFields = state.fields.filter((f) => ai().runGoal({ goal: "daily irrigation decision", fieldId: f.id, language: state.language || "en" }).decision.urgency !== "low");
-  const recentHistory = state.recommendationHistory.slice(0, 3);
-
-  return `<section class='today-stack'>
-      <article class='card decision-card'>
-        <p class='card-label'>Today’s decision</p>
-        <h2>${field.name}</h2>
-        <p class='decision-main'>Action: ${rec.action}. ${rec.reasons?.[0] || ''}</p>
-        <div class='meta-row'>
-          <span>Timing: ${rec.timing}</span>
-          <span>Urgency: ${rec.urgency}</span>
-        </div>
-        <p class='small'>Next best step: ${rec.nextBestAction}</p><p class='small'>Verification: ${rec.verificationStatus}</p>
-      </article>
-
-      <section class='today-grid'>
-        <article class='card compact-card'>
-          <p class='card-label'>Confidence</p>
-          <p class='value-pill'>${rec.confidence}</p>
-          <p class='small'>Top driver: ${(rec.decisionTrace?.confidenceDrivers || ["data quality"])[0]}</p>
-        </article>
-
-        <article class='card compact-card'>
-          <p class='card-label'>Weather risk</p>
-          <p>${weather?.forecastSummary || "Using last available weather."}</p>
-          <div class='tag-row'>
-            <span class='tag'>Heat: ${weather?.heatRisk || "unknown"}</span>
-            <span class='tag'>Frost: ${weather?.frostRisk || "unknown"}</span>
-            <span class='tag'>Rain: ${weather?.rainChance ?? "n/a"}%</span>
-          </div>
-          <p class='small'>Weather age: ${weatherAgeLabel(weather)}</p>
-          ${!navigator.onLine ? `<p class='small warn'>Using last available weather data.</p>` : ""}
-        </article>
-
-        <article class='card compact-card'>
-          <p class='card-label'>Missing data</p>
-          ${rec.missingData.length
-            ? `<ul class='mini-list'>${rec.missingData.map((item) => `<li>${item}</li>`).join("")}</ul>`
-            : `<p class='small'>No critical data gaps today.</p>`}
-          <p class='small'>Top uncertainty: ${(rec.uncertainties || ["none"])[0]}</p>
-        </article>
-
-        <article class='card compact-card'>
-          <p class='card-label'>Fields needing attention</p>
-          ${attentionFields.length
-            ? `<ul class='mini-list'>${attentionFields.map((f) => `<li>${f.name}</li>`).join("")}</ul>`
-            : `<p class='small'>All fields look stable now.</p>`}
-        </article>
-      </section>
-
-      <article class='card compact-card'>
-        <p class='card-label'>Recommendation history</p>
-        ${recentHistory.length
-          ? `<ul class='mini-list'>${recentHistory.map((entry) => `<li>${new Date(entry.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: ${entry.rec.urgency} urgency</li>`).join("")}</ul>`
-          : `<p class='small'>Your recommendation history will appear here.</p>`}
-      </article>
-
-
-      <article class='card compact-card'>
-        <p class='card-label'>Voice timeline</p>
-        ${state.voiceTimeline.length
-          ? `<ul class='mini-list'>${state.voiceTimeline.slice(0, 4).map((entry) => `<li>${new Date(entry.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}: ${entry.intent}</li>`).join("")}</ul>`
-          : `<p class='small'>Voice activity will appear here.</p>`}
-      </article>
-
-      <article class='card compact-card'>
-        <p class='card-label'>Decision trace</p>
-        <ul class='mini-list'>${(rec.decisionTrace?.dataChecked || []).slice(0,4).map((item) => `<li>${item}</li>`).join("")}</ul>
-        <p class='small'>Tools: ${(rec.decisionTrace?.toolsUsed || []).slice(0,4).join(", ")}</p>
-      </article>
-
-      ${whyVeliaSection(rec)}
-
-      <article class='card compact-card'>
-        <p class='card-label'>Quick actions</p>
-        <div class='quick-actions-grid'>
-          <button class='btn brand' data-open-log='${field.id}'>Log irrigation</button>
-          <button class='btn' data-act='note' data-field='${field.id}'>Add field note</button>
-          <button class='btn' data-open-condition='${field.id}'>Update field condition</button>
-          <button class='btn' data-nav='assistant'>Ask Velia</button>
-        </div>
-      </article>
+  const attentionFields = state.fields.filter((f) => {
+    const r = recommendationFor(f);
+    return r.urgency !== "low" || confidenceText(readConfidence(r)).toLowerCase() === "low" || f.verificationStatus === "overdue";
+  });
+  const irrigationCount = attentionFields.filter((f) => normalizeDecisionAction(recommendationFor(f).action) === "irrigate").length;
+  return `<section class="screen today-screen">
+    <section class="morning-brief">
+      <div><p class="eyebrow">Good morning</p><h1>${h(state.profile?.farm?.name || "Your farm")}</h1><p>${h(shortDate())} - ${h(weather?.forecastSummary || "Weather context is loading.")}</p></div>
+      <div class="weather-pill"><strong>${h(weather?.temperature ?? "--")}°</strong><span>${h(weatherAgeLabel(weather))}</span></div>
     </section>
-    ${voiceCard(field.id, rec)}`;
+    ${decisionRefreshInflight.has(field.id) ? skeletonDecision() : ""}
+    <section class="card hero-card urgency-${h(rec.urgency || "medium")}">
+      <div class="hero-kicker"><span>${h(field.name)}</span>${confidenceBadge(readConfidence(rec))}</div>
+      <h2>${h(actionTitle(rec, field))}</h2>
+      <p class="field-context-line">${h(field.crop || "Crop not set")} - ${h(field.acreage || "0")} acres - ${h(field.irrigationMethod || "Irrigation method missing")}</p>
+      <p>${h(rec.reasons?.[0] || rec.nextBestAction || "Velia checked field and weather signals for today's water decision.")}</p>
+      <div class="hero-meta"><span>${h(rec.timing || "Today")}</span><span>${h(riskFor(field, rec))}</span><span>${h(recommendationContextLabel(rec, weather, state.mode))}</span></div>
+      ${confidenceBlock(rec)}
+      ${actionButtons(rec, field)}
+    </section>
+    ${buildChanges(field, rec)}
+    <section class="section-card unframed"><div class="section-heading"><p class="card-label">Fields needing attention</p><button class="link-button" data-nav="fields">View all</button></div><div class="field-carousel">${attentionFields.length ? attentionFields.map((f) => fieldCard(f, true)).join("") : emptyState("No field needs urgent attention", "Velia will surface changes when weather, logs, or observations shift.")}</div></section>
+    <section class="outlook-grid">
+      <div class="outlook-ring"><span>${h(irrigationCount)}</span><p>irrigation priorities</p></div>
+      <div class="card outlook-card"><p class="card-label">Daily water outlook</p><div class="water-strip"><span style="width:${Math.min(100, Math.max(8, (weather?.rainChance || 0)))}%"></span></div><p>Rain ${h(weather?.rainChance ?? "n/a")}% - Heat ${h(weather?.heatRisk || "unknown")} - ${h(attentionFields.length)} fields to review</p></div>
+    </section>
+    <section class="ask-entry" data-nav="assistant"><p>What do you need help with today?</p><button class="btn brand" data-nav="assistant">Ask Velia</button></section>
+    <section class="card section-card"><p class="card-label">Recent activity</p>${recentActivity(4)}</section>
+    ${provenanceSection(rec)}
+  </section>`;
 }
 
 function quickLogForm(fieldId) {
-  return `<section class='card'><h3>Log irrigation</h3>
-    <label>Field<select id='logField'>${state.fields.map((f) => `<option value='${f.id}' ${f.id === fieldId ? "selected" : ""}>${f.name}</option>`).join("")}</select></label>
-    <label>Date and time<input id='logDate' type='datetime-local' /></label>
-    <label>Duration (minutes)<input id='logDuration' type='number' min='1' placeholder='60'/></label>
-    <label>Water amount mm (optional)<input id='logAmount' type='number' min='0' /></label>
-    <label>Note (optional)<input id='logNote' /></label>
-    <button class='btn brand' data-save-log='1'>Save irrigation log</button>
-  </section>`;
+  return `<section class="screen"><button class="link-button back" data-back-fields="1">Back to fields</button><section class="card form-card"><h2>Log irrigation</h2>
+    <label>Field<select id="logField">${state.fields.map((f) => `<option value="${h(f.id)}" ${f.id === fieldId ? "selected" : ""}>${h(f.name)}</option>`).join("")}</select></label>
+    <label>Date and time<input id="logDate" type="datetime-local" /></label>
+    <label>Duration (minutes)<input id="logDuration" type="number" min="1" placeholder="60"/></label>
+    <label>Water amount mm (optional)<input id="logAmount" type="number" min="0" /></label>
+    <label>Note (optional)<input id="logNote" /></label>
+    <button class="btn brand" data-save-log="1">Save irrigation log</button>
+  </section></section>`;
 }
 
 function conditionForm(fieldId) {
   const options = ["Looks normal", "Looks dry", "Looks too wet", "Leaves look stressed", "I am not sure"];
-  return `<section class='card'><h3>Update field condition</h3>
-    <label>Field<select id='conditionField'>${state.fields.map((f) => `<option value='${f.id}' ${f.id === fieldId ? "selected" : ""}>${f.name}</option>`).join("")}</select></label>
-    <label>Condition<select id='conditionValue'>${options.map((o) => `<option>${o}</option>`).join("")}</select></label>
-    <button class='btn brand' data-save-condition='1'>Save condition</button>
-  </section>`;
+  return `<section class="screen"><button class="link-button back" data-back-fields="1">Back to fields</button><section class="card form-card"><h2>Update field condition</h2>
+    <label>Field<select id="conditionField">${state.fields.map((f) => `<option value="${h(f.id)}" ${f.id === fieldId ? "selected" : ""}>${h(f.name)}</option>`).join("")}</select></label>
+    <label>Condition<select id="conditionValue">${options.map((o) => `<option>${h(o)}</option>`).join("")}</select></label>
+    <button class="btn brand" data-save-condition="1">Save condition</button>
+  </section></section>`;
 }
 
 function fieldsContent() {
   if (selectedField?.type === "log") return quickLogForm(selectedField.fieldId);
   if (selectedField?.type === "condition") return conditionForm(selectedField.fieldId);
   if (selectedField?.type === "detail") return fieldDetail(selectedField.fieldId);
-
-  return `<section class='grid'>${state.fields.map((f) => `<article class='card'><h3>${f.name}</h3><p>${f.crop} • ${f.acreage} acres</p><p>${f.irrigationMethod} • ${f.soilType || "Soil unknown"}</p><p>Last irrigation: ${f.lastIrrigationAt ? new Date(f.lastIrrigationAt).toLocaleString() : "not logged"}</p><button class='btn' data-open-field='${f.id}'>Open field</button></article>`).join("")}</section>`;
+  const filtered = state.fields.filter((field) => {
+    const rec = recommendationFor(field);
+    const matches = `${field.name} ${field.crop} ${field.location}`.toLowerCase().includes(fieldSearch.toLowerCase());
+    const status = fieldFilter === "all" || String(rec.urgency || "").toLowerCase() === fieldFilter || riskFor(field, rec).toLowerCase().includes(fieldFilter);
+    return matches && status;
+  });
+  return `<section class="screen fields-screen">
+    <div class="screen-heading"><div><p class="eyebrow">Fields</p><h1>Every block, one calm view</h1></div><button class="btn compact" data-open-condition="${h(state.fields[0]?.id || "")}">Add check</button></div>
+    <section class="toolbar-card"><input id="fieldSearch" value="${h(fieldSearch)}" placeholder="Search fields" /><div class="segmented">${["all", "high", "medium", "low", "verify"].map((x) => `<button class="${fieldFilter === x ? "active" : ""}" data-filter="${h(x)}">${h(x)}</button>`).join("")}</div></section>
+    <section class="field-list">${filtered.length ? filtered.map((f) => fieldCard(f)).join("") : emptyState("No fields match", "Try a different status filter or search term.")}</section>
+  </section>`;
 }
 
 function fieldDetail(fieldId) {
-  const f = state.fields.find((x) => x.id === fieldId);
-  const logs = state.irrigationLogs.filter((x) => x.fieldId === fieldId).slice(0, 8);
-  const notes = state.fieldNotes.filter((x) => x.fieldId === fieldId).slice(0, 8);
-  const observations = state.observations.filter((x) => x.fieldId === fieldId).slice(0, 5);
-  const fieldRecHistory = (state.recommendationHistory || []).filter((e) => !e.fieldId || e.fieldId === fieldId).slice(0, 5);
-
-  return `<section class='card'><h2>${f.name}</h2>
-    <p>Crop and acreage: ${f.crop} • ${f.acreage}</p><p>Field location: ${f.location || "Not set"}</p><p>Soil type: ${f.soilType || "unknown"}</p><p>Irrigation method: ${f.irrigationMethod}</p><p>Last updated: ${f.updatedAt || "n/a"}</p><div class="map-placeholder">Coordinates: ${f.coordinates ? `${f.coordinates.lat?.toFixed?.(3) || f.coordinates.lat}, ${f.coordinates.lon?.toFixed?.(3) || f.coordinates.lon}` : "Not set — add coordinates to enable field mapping"}</div>
-    <h3>Irrigation logs</h3><ul>${logs.map((l) => `<li>${new Date(l.performedAt).toLocaleString()} - ${l.durationMin} min</li>`).join("") || "<li>No logs</li>"}</ul>
-    <h3>Field observations</h3><ul>${observations.map((o) => `<li>${o.condition} (${new Date(o.createdAt).toLocaleString()})</li>`).join("") || "<li>No observations</li>"}</ul>
-    <h3>Notes</h3><ul>${notes.map((n) => `<li>${new Date(n.createdAt).toLocaleString()} - ${n.text}</li>`).join("") || "<li>No notes</li>"}</ul>
-    <h3>Recommendation history</h3><ul>${fieldRecHistory.length ? fieldRecHistory.map((e) => `<li>${new Date(e.at).toLocaleString()} — ${e.rec?.urgency || "recorded"} urgency</li>`).join("") : "<li>No recommendations recorded yet</li>"}</ul></section>${voiceCard(f.id, recommendationFor(f))}`;
+  const f = state.fields.find((x) => x.id === fieldId) || state.fields[0];
+  if (!f) return emptyState("Field not found", "Return to fields and choose another block.");
+  const rec = recommendationFor(f);
+  const logs = state.irrigationLogs.filter((x) => x.fieldId === fieldId).slice(0, 6);
+  const notes = state.fieldNotes.filter((x) => x.fieldId === fieldId).slice(0, 6);
+  const observations = state.observations.filter((x) => x.fieldId === fieldId).slice(0, 6);
+  return `<section class="screen field-detail-screen">
+    <button class="link-button back" data-back-fields="1">Back to fields</button>
+    <section class="field-hero"><div><p class="eyebrow">${h(f.crop || "Field")}</p><h1>${h(f.name)}</h1><p>${h(f.location || "Location not set")} - ${h(f.acreage || "0")} acres</p></div>${riskBadge(riskFor(f, rec), "watch")}</section>
+    ${mapPlaceholder(f)}
+    <section class="detail-grid">
+      <article class="card"><p class="card-label">Today's recommendation</p><h2>${h(actionTitle(rec, f))}</h2><p>${h(rec.nextBestAction || rec.reasons?.[0] || "Check the field and log what you see.")}</p>${confidenceBlock(rec)}</article>
+      <article class="card"><p class="card-label">Weather context</p><p>${h(weather?.forecastSummary || "Weather context unavailable.")}</p><div class="card-metrics"><span>Rain ${h(weather?.rainChance ?? "n/a")}%</span><span>Heat ${h(weather?.heatRisk || "unknown")}</span></div></article>
+      <article class="card"><p class="card-label">Data sources</p><div class="data-source-list"><span>Sensor: ${h(f.sensorData ? "available" : "not connected")}</span><span>Controller: ${h(f.controllerStatus || f.dataSource || "not connected")}</span><span>Verification: ${h(f.verificationStatus || "not confirmed")}</span></div></article>
+    </section>
+    <section class="card section-card"><p class="card-label">Timeline</p>${timelineRows([...logs.map((x) => ["Irrigation", `${x.durationMin} min`, x.performedAt]), ...observations.map((x) => ["Observation", x.condition, x.createdAt]), ...notes.map((x) => ["Note", x.text, x.createdAt])])}</section>
+    <section class="field-actions">${actionButtons(rec, f, true)}<button class="btn" data-nav="assistant" data-assistant-field="${h(f.id)}">Ask Velia about this field</button></section>
+    ${provenanceSection(rec)}
+  </section>`;
 }
 
-function alertsContent() { return `<section class='card'><p class='card-label'>Alerts</p><p class='small'>No active alerts. Velia surfaces heat, frost, and irrigation risks here as conditions change.</p></section>`; }
+function timelineRows(rows) {
+  const sorted = rows.sort((a, b) => new Date(b[2]) - new Date(a[2])).slice(0, 8);
+  if (!sorted.length) return emptyState("No field timeline yet", "Logs, notes, and observations will appear here.");
+  return `<div class="timeline">${sorted.map(([type, body, at]) => `<div class="timeline-row"><span></span><div><strong>${h(type)}</strong><p>${h(body)}</p></div><time>${h(relativeTime(at))}</time></div>`).join("")}</div>`;
+}
+
 function assistantContent() {
-  const chips = ["Should I irrigate today?", "Log irrigation for Field 1 for two hours", "Field 1 looks dry", "Why is confidence moderate?", "What changed since yesterday?"];
-  return `<section class='card'><h2>Field Decision Assistant</h2><p>Ask Velia anything about your irrigation decisions.</p><div class='chips'>${chips.map((c) => `<button class='chip' data-assistant-query='${c}'>${c}</button>`).join("")}</div><p><strong>Velia:</strong> ${assistantResponse}</p></section>${voiceCard(state.fields[0]?.id, state.fields[0] ? recommendationFor(state.fields[0]) : null)}`;
+  const field = state.fields.find((f) => f.id === assistantFieldId) || state.fields[0];
+  const suggestions = ["Should I irrigate today?", "Which field needs attention first?", "Why did the recommendation change?", "What information are you missing?", "What should I check in the field?", "Did yesterday's irrigation help?", "What is the rain risk this week?"];
+  return `<section class="screen assistant-screen">
+    <div class="screen-heading"><div><p class="eyebrow">Ask Velia</p><h1>Field intelligence, in conversation</h1></div></div>
+    <section class="chat-panel">
+      <label class="field-select">Context field<select id="assistantField">${state.fields.map((f) => `<option value="${h(f.id)}" ${f.id === field?.id ? "selected" : ""}>${h(f.name)}</option>`).join("")}</select></label>
+      <div class="message assistant"><span>Velia</span><p>${h(assistantResponse)}</p><details><summary>Source and confidence</summary><p>${h(field ? `${field.name}, weather context, recent logs, and local fallback when needed.` : "Farm context will appear after setup.")}</p></details></div>
+      <div class="suggestions">${suggestions.map((q) => `<button class="chip" data-assistant-query="${h(q)}">${h(q)}</button>`).join("")}</div>
+      <div class="ask-box"><input id="assistantInput" placeholder="Ask about water, weather, or a field check" /><button class="btn brand" data-send-assistant="1">Send</button></div>
+    </section>
+    ${voiceCard(field?.id || "", field ? recommendationFor(field) : null)}
+    <section class="card section-card"><p class="card-label">Recent conversations</p>${state.voiceTimeline.length ? timelineRows(state.voiceTimeline.map((x) => ["Voice", x.transcript || x.intent, x.createdAt])) : emptyState("No conversations yet", "Questions and voice notes will appear here.")}</section>
+  </section>`;
 }
-function reportsContent() { return `<section class='card'><h2>Reports</h2><p>Planned for next increment.</p></section>`; }
-function settingsContent() { return `<section class='card'><h2>Settings</h2><p>Mode: ${state.mode}</p><button class='btn' data-mode='demo'>Demo mode</button><button class='btn' data-mode='real'>Real mode</button><p>Farm location: ${state.profile?.farm?.location || "not set"}</p><p>Weather provider: ${weather?.provider || "mock"}</p><button class='btn' data-refresh-weather='1'>Refresh weather</button>${state.mode === "demo" ? `<label>Demo scenario<select id='demoScenario'><option value='baseline' ${state.demoScenario === "baseline" ? "selected" : ""}>Baseline</option><option value='hotDry' ${state.demoScenario === "hotDry" ? "selected" : ""}>Hot and dry</option><option value='coolWet' ${state.demoScenario === "coolWet" ? "selected" : ""}>Cool and wet</option></select></label><button class='btn' data-apply-scenario='1'>Apply scenario</button>` : ""}</section>`; }
 
 function voiceCard(fieldId, rec) {
-  const sync = syncService.status();
-  return `<section class='card'><h3>Voice Agent</h3><button class='btn mic ${voiceListening ? "listening" : ""}' data-voice='${fieldId}'>${voiceListening ? "Listening... tap to stop" : "Start voice input"}</button><p class='small'>Transcript: ${transcript || "No transcript yet"}</p><p class='small'>Velia response: ${voiceResponse || "No response yet"}</p>${rec ? `<p class='small'>Current confidence: ${rec.confidence}</p>` : ""}${!sync.isOnline ? `<p class='warn'>${tr("offlineSaved")}. ${tr("willSync")}.</p>` : ""}</section>`;
+  const sync = syncStatus();
+  return `<section class="voice-card">
+    <div class="voice-copy"><p class="card-label">Voice field agent</p><h2>${voiceListening ? "Listening for a field note" : "Speak naturally"}</h2><p>${h(voiceListening ? "Tap again when you are done. Velia will show a confirmation before saving." : "Voice uses local parsing unless browser or provider support is available.")}</p></div>
+    <button class="voice-orb ${voiceListening ? "listening" : ""}" data-voice="${h(fieldId)}" aria-label="Voice input"><span></span></button>
+    <div class="voice-preview"><p><strong>Transcript</strong><br>${h(transcript || "No transcript yet")}</p><p><strong>Response</strong><br>${h(voiceResponse)}</p>${rec ? `<p>${confidenceBadge(readConfidence(rec))}</p>` : ""}${pendingVoiceCommand ? `<button class="btn brand" data-confirm-voice="1">Confirm and save</button>` : ""}${!sync.isOnline ? `<p class="warn">Offline-safe: actions will queue locally.</p>` : ""}</div>
+  </section>`;
+}
+
+function buildAlerts() {
+  const generated = [];
+  const seenAlerts = { ...(state.alertFirstSeen || {}) };
+  let firstSeenChanged = false;
+  const addGeneratedAlert = (alert) => {
+    const keyed = { ...alert, key: alert.key || alertKey(alert), id: alert.id || alert.key || alertKey(alert) };
+    const fingerprint = alertFingerprint(keyed);
+    const previous = seenAlerts[keyed.key];
+    if (!previous || previous.fingerprint !== fingerprint) {
+      seenAlerts[keyed.key] = { firstSeenAt: keyed.createdAt || new Date().toISOString(), fingerprint };
+      firstSeenChanged = true;
+    }
+    keyed.createdAt = seenAlerts[keyed.key].firstSeenAt;
+    if (!isAlertDismissed(keyed, state.dismissedAlerts || {})) generated.push(keyed);
+  };
+  for (const field of state.fields) {
+    const rec = recommendationFor(field);
+    if (weather?.heatRisk === "high" || weather?.heatRisk === "elevated") addGeneratedAlert({ type: "heat", severity: "medium", fieldId: field.id, conditionToken: `heat:${weather.heatRisk}`, createdAt: new Date().toISOString(), explanation: "Heat pressure may increase water demand.", action: "Check leaf stress before the afternoon.", resolved: false });
+    if (weather?.frostRisk === "high" || weather?.frostRisk === "elevated") addGeneratedAlert({ type: "frost", severity: "high", fieldId: field.id, conditionToken: `frost:${weather.frostRisk}`, createdAt: new Date().toISOString(), explanation: "Frost risk can change irrigation timing.", action: "Confirm local frost protocol.", resolved: false });
+    if (weather?.stale) addGeneratedAlert({ type: "stale weather", severity: "medium", fieldId: field.id, conditionToken: `weather:${weather.weatherTimestamp || weather.cachedAt || "stale"}`, createdAt: new Date().toISOString(), explanation: "Weather is cached or stale.", action: "Refresh weather when connected.", resolved: false });
+    if (!field.lastObservation || field.verificationStatus === "overdue") addGeneratedAlert({ type: "verification", severity: "high", fieldId: field.id, conditionToken: `verification:${field.verificationStatus || "missing"}:${field.lastObservation || "none"}`, createdAt: field.updatedAt || new Date().toISOString(), explanation: "Velia needs a recent field observation.", action: "Record a field check.", resolved: false });
+    if (!field.sensorData) addGeneratedAlert({ type: "sensor", severity: "low", fieldId: field.id, conditionToken: `sensor:${field.dataSource || "none"}`, createdAt: new Date().toISOString(), explanation: "No sensor reading is available.", action: "Use a manual observation to improve confidence.", resolved: false });
+    if (confidenceText(readConfidence(rec)).toLowerCase() === "low") addGeneratedAlert({ type: "confidence", severity: "medium", fieldId: field.id, conditionToken: `confidence:${readConfidence(rec) || "low"}`, createdAt: new Date().toISOString(), explanation: "Decision confidence is low.", action: "Add crop, soil, weather, or observation data.", resolved: false });
+  }
+  if (firstSeenChanged) {
+    state.alertFirstSeen = seenAlerts;
+    persist();
+  }
+  return sortAlerts([...(state.alertHistory || []), ...generated].filter((a) => !a.resolved)).slice(0, 12);
+}
+
+function alertsContent() {
+  const alerts = buildAlerts();
+  const groups = ["Act now", "Review today", "Monitoring"].map((name) => [name, alerts.filter((alert) => alertGroup(alert) === name)]).filter(([, rows]) => rows.length);
+  return `<section class="screen alerts-screen">
+    <div class="screen-heading"><div><p class="eyebrow">Alerts</p><h1>Only what needs action</h1></div></div>
+    <section class="alert-list">${groups.length ? groups.map(([name, rows]) => `<div class="alert-group"><h2>${h(name)}</h2>${rows.map((alert) => alertRow(alert)).join("")}</div>`).join("") : emptyState("No urgent alerts", "Velia is monitoring your fields.")}</section>
+  </section>`;
+}
+
+function alertRow(alert) {
+  return `<article class="alert-row ${h(alert.severity || "low")}">
+    <div class="alert-severity"></div>
+    <div><div class="field-title-row"><h3>${h(alert.type || "Alert")}</h3><span>${h(fieldName(alert.fieldId))}</span></div><p>${h(alert.explanation)}</p><strong>${h(alert.action)}</strong><time>${h(relativeTime(alert.createdAt))}</time></div>
+    <button class="btn compact" data-resolve-alert="${h(alert.id || alertKey(alert))}" data-alert-fingerprint="${h(alertFingerprint(alert))}">Resolve</button>
+  </article>`;
+}
+
+function moreContent() {
+  const items = ["Reports", "Farm profile", "Fields setup", "Data sources", "Integrations", "Notifications", "Language", "Units", "Offline and sync", "Help", "About Velia"];
+  return `<section class="screen more-screen">
+    <div class="screen-heading"><div><p class="eyebrow">More</p><h1>Farm controls</h1></div></div>
+    <section class="settings-list">${items.map((item) => `<button class="settings-row"><span>${h(item)}</span><small>${h(settingSubtitle(item))}</small></button>`).join("")}</section>
+    <section class="card section-card"><p class="card-label">Offline and sync</p><p>${h(syncStatus().state)}${syncStatus().pending ? ` - ${h(syncStatus().pending)} queued` : ""}</p><button class="btn" data-refresh-weather="1">Refresh weather</button></section>
+    ${state.mode === "demo" ? `<section class="card internal-card"><p class="card-label">Internal demo controls</p><label>Demo scenario<select id="demoScenario"><option value="baseline" ${state.demoScenario === "baseline" ? "selected" : ""}>Napa baseline</option><option value="hotDry" ${state.demoScenario === "hotDry" ? "selected" : ""}>Hot and dry</option><option value="coolWet" ${state.demoScenario === "coolWet" ? "selected" : ""}>Rain watch</option></select></label><button class="btn" data-apply-scenario="1">Apply scenario</button><button class="btn" data-mode="real">Leave demo mode</button></section>` : ""}
+  </section>`;
+}
+
+function settingSubtitle(item) {
+  const map = {
+    Reports: "Season summaries and verification history",
+    "Farm profile": state.profile?.farm?.name || "Farm identity",
+    "Fields setup": `${state.fields.length} fields configured`,
+    "Data sources": "Sensors, controllers, and manual checks",
+    Integrations: "Connectors prepared for future setup",
+    Notifications: "Alert preferences",
+    Language: state.language || "English",
+    Units: state.units || "metric",
+    "Offline and sync": syncStatus().isOnline ? "Online" : "Offline",
+    Help: "Field-ready support",
+    "About Velia": "Agricultural intelligence companion",
+  };
+  return map[item] || "";
 }
 
 function progressDots() {
   const steps = ["Welcome", "Role", "Location", "Field", "Setup"];
-  return `<div class='progress-wrap'>${steps.map((s, i) => `<div class='progress-pill ${onboardingStep === i ? "active" : onboardingStep > i ? "done" : ""}'>${s}</div>`).join("")}</div>`;
+  return `<div class="progress-wrap">${steps.map((s, i) => `<div class="progress-pill ${onboardingStep === i ? "active" : onboardingStep > i ? "done" : ""}">${h(s)}</div>`).join("")}</div>`;
 }
 
 function cardOptions(options, key) {
-  return `<div class='choice-grid'>${options.map((option) => `<button type='button' class='choice-card ${onboardingDraft[key] === option.value ? "selected" : ""}' data-onboard-choice='${key}' data-value='${option.value}'><strong>${option.label}</strong>${option.sub ? `<span>${option.sub}</span>` : ""}</button>`).join("")}</div>`;
+  return `<div class="choice-grid">${options.map((option) => `<button type="button" class="choice-card ${onboardingDraft[key] === option.value ? "selected" : ""}" data-onboard-choice="${h(key)}" data-value="${h(option.value)}"><strong>${h(option.label)}</strong>${option.sub ? `<span>${h(option.sub)}</span>` : ""}</button>`).join("")}</div>`;
 }
 
 function onboardingFlow() {
   if (onboardingStep === 0) {
-    return `<section class='onboard-hero'>
-      <p class='eyebrow'>AGRO-AI</p>
-      <h1 class='onboard-title'>Velia</h1>
-      <p class='onboard-promise'>Know what to do with water today.</p>
-      <p class='small'>Simple daily irrigation guidance for farms of every size.</p>
-      <button class='btn brand xl' data-next-step='1'>Set up my farm</button>
-      <button class='btn xl' id='startDemo'>Try demo mode</button>
+    return `<section class="onboard-hero">
+      <p class="eyebrow">Velia</p><h1>Know what to do with water today.</h1><p>A calm agricultural intelligence companion for every field decision.</p>
+      <button class="btn brand xl" data-next-step="1">Set up my farm</button><button class="btn xl" id="startDemo">Preview with Napa vineyard data</button>
     </section>`;
   }
-
   const stepCards = {
-    1: `<section class='card onboard-card'><h2>Who will use Velia?</h2><p class='small'>Pick your role and language.</p>
-      ${cardOptions([
-        { value: "farmer", label: "Farmer" },
-        { value: "farm manager", label: "Farm manager" },
-        { value: "agronomist", label: "Agronomist" },
-        { value: "irrigation professional", label: "Irrigation pro" },
-        { value: "enterprise user", label: "Enterprise" },
-      ], "role")}
-      <label>Language<select id='language'><option value='en' ${onboardingDraft.language === "en" ? "selected" : ""}>English</option><option value='fr'>French</option><option value='es'>Spanish</option><option value='wo'>Wolof</option><option value='ar'>Arabic</option><option value='hi'>Hindi</option><option value='pt'>Portuguese</option></select></label>
-    </section>`,
-    2: `<section class='card onboard-card'><h2>Where is your farm?</h2><p class='small'>Used for local weather context.</p>
-      <label>Farm name<input id='farmName' value='${onboardingDraft.farmName}' placeholder='e.g., North Valley Farm' /></label>
-      <label>Location<input id='farmLocation' value='${onboardingDraft.farmLocation}' placeholder='City or region' /></label>
-      <button class='btn' id='captureGps'>Use GPS location</button>
-      <p class='small'>Low connectivity is okay. You can update location later.</p>
-    </section>`,
-    3: `<section class='card onboard-card'><h2>Add your first field</h2><p class='small'>Just the basics to start recommendations.</p>
-      <label>Field name<input id='fieldName' value='${onboardingDraft.fieldName}' placeholder='Field 1' /></label>
-      <label>Field location (optional)<input id='fieldLocation' value='${onboardingDraft.fieldLocation}' placeholder='North block, near road' /></label>
-      <label>Crop<input id='crop' value='${onboardingDraft.crop}' placeholder='Maize, Tomato, Grapes…' /></label>
-      <label>Acreage<input id='acreage' value='${onboardingDraft.acreage}' type='number' min='1' placeholder='10' /></label>
-      <label>Units<select id='units'><option value='metric' ${onboardingDraft.units === "metric" ? "selected" : ""}>Metric</option><option value='imperial' ${onboardingDraft.units === "imperial" ? "selected" : ""}>Imperial</option></select></label>
-    </section>`,
-    4: `<section class='card onboard-card'><h2>Irrigation setup</h2><p class='small'>Not sure? You can skip this and update it later.</p>
-      ${cardOptions([
-        { value: "Drip", label: "Drip" },
-        { value: "Sprinkler", label: "Sprinkler" },
-        { value: "Pivot", label: "Pivot" },
-        { value: "Flood", label: "Flood" },
-      ], "irrigationMethod")}
-      <label>Data availability</label>
-      ${cardOptions([
-        { value: "neither", label: "No sensors/controller", sub: "Manual tracking" },
-        { value: "sensors", label: "Sensors only" },
-        { value: "controller", label: "Controller only" },
-        { value: "both", label: "Sensors + controller" },
-      ], "dataSource")}
-      <label>Hardware mode</label>
-      ${cardOptions([
-        { value: "manual", label: "Manual irrigation" },
-        { value: "connected", label: "Connected hardware" },
-      ], "hardware")}
-      <label>Soil type (optional)<input id='soilType' value='${onboardingDraft.soilType}' placeholder='Loam, clay, sandy…' /></label>
-      <label>Last irrigation date (optional)<input id='lastIrrigationAt' value='${onboardingDraft.lastIrrigationAt}' type='date' /></label>
-      <label>Usual duration min (optional)<input id='usualDurationMin' value='${onboardingDraft.usualDurationMin}' type='number' min='1' /></label>
-      <label>Water source (optional)<input id='waterSource' value='${onboardingDraft.waterSource}' placeholder='Canal, borehole, reservoir' /></label>
-    </section>`,
+    1: `<section class="card onboard-card"><h2>Who will use Velia?</h2>${cardOptions([{ value: "farmer", label: "Farmer" }, { value: "farm manager", label: "Farm manager" }, { value: "agronomist", label: "Agronomist" }, { value: "irrigation professional", label: "Irrigation pro" }], "role")}<label>Language<select id="language"><option value="en" ${onboardingDraft.language === "en" ? "selected" : ""}>English</option><option value="fr">French</option><option value="es">Spanish</option><option value="wo">Wolof</option><option value="ar">Arabic</option><option value="hi">Hindi</option><option value="pt">Portuguese</option></select></label></section>`,
+    2: `<section class="card onboard-card"><h2>Where is your farm?</h2><label>Farm name<input id="farmName" value="${h(onboardingDraft.farmName)}" placeholder="e.g., North Valley Farm" /></label><label>Location<input id="farmLocation" value="${h(onboardingDraft.farmLocation)}" placeholder="City or region" /></label><button class="btn" id="captureGps">Use GPS location</button></section>`,
+    3: `<section class="card onboard-card"><h2>Add your first field</h2><label>Field name<input id="fieldName" value="${h(onboardingDraft.fieldName)}" placeholder="North Block" /></label><label>Field location<input id="fieldLocation" value="${h(onboardingDraft.fieldLocation)}" placeholder="North block, near road" /></label><label>Crop<input id="crop" value="${h(onboardingDraft.crop)}" placeholder="Grapes, maize, tomato" /></label><label>Acreage<input id="acreage" value="${h(onboardingDraft.acreage)}" type="number" min="1" placeholder="10" /></label><label>Units<select id="units"><option value="metric" ${onboardingDraft.units === "metric" ? "selected" : ""}>Metric</option><option value="imperial" ${onboardingDraft.units === "imperial" ? "selected" : ""}>Imperial</option></select></label></section>`,
+    4: `<section class="card onboard-card"><h2>Irrigation setup</h2>${cardOptions([{ value: "Drip", label: "Drip" }, { value: "Sprinkler", label: "Sprinkler" }, { value: "Pivot", label: "Pivot" }, { value: "Flood", label: "Flood" }], "irrigationMethod")}<label>Data availability</label>${cardOptions([{ value: "neither", label: "No sensors/controller", sub: "Manual tracking" }, { value: "sensors", label: "Sensors only" }, { value: "controller", label: "Controller only" }, { value: "both", label: "Sensors + controller" }], "dataSource")}<label>Soil type<input id="soilType" value="${h(onboardingDraft.soilType)}" placeholder="Loam, clay, sandy" /></label><label>Last irrigation date<input id="lastIrrigationAt" value="${h(onboardingDraft.lastIrrigationAt)}" type="date" /></label><label>Usual duration min<input id="usualDurationMin" value="${h(onboardingDraft.usualDurationMin)}" type="number" min="1" /></label><label>Water source<input id="waterSource" value="${h(onboardingDraft.waterSource)}" placeholder="Canal, well, reservoir" /></label></section>`,
   };
+  return `${progressDots()}${stepCards[onboardingStep]}<div class="onboard-actions"><button class="btn" data-prev-step="1">Back</button><button class="btn brand" data-onboard-continue="1">Save and continue</button></div>`;
+}
 
-  return `${progressDots()}${stepCards[onboardingStep]}
-    <div class='onboard-actions'>
-      <button class='btn' data-prev-step='1'>Back</button>
-      <button class='btn brand' data-onboard-continue='1'>${onboardingStep === 4 ? "Save and continue" : "Save and continue"}</button>
-    </div>`;
+function topBar() {
+  const sync = syncStatus();
+  const farm = state.profile?.farm?.name || "Velia";
+  return `<header class="app-topbar"><div class="wordmark"><span></span><strong>Velia</strong></div>${state.onboarded ? `<button class="farm-selector">${h(farm)}</button><div class="top-actions"><span class="sync-dot ${sync.isOnline ? "online" : "offline"}"></span><button class="icon-button" data-nav="alerts" aria-label="Notifications">!</button><button class="profile-button" data-nav="more">Me</button></div>` : ""}</header>`;
 }
 
 function content() {
   if (!state.onboarded) return onboardingFlow();
   if (route === "today") return todayContent();
   if (route === "fields") return fieldsContent();
-  if (route === "alerts") return alertsContent();
   if (route === "assistant") return assistantContent();
-  if (route === "reports") return reportsContent();
-  return settingsContent();
+  if (route === "alerts") return alertsContent();
+  return moreContent();
+}
+
+function bottomNav() {
+  return `<nav class="bottom-nav">${nav.map((n) => `<button class="${route === n.id ? "active" : ""} ${n.featured ? "featured" : ""}" data-nav="${h(n.id)}"><span>${h(n.label)}</span></button>`).join("")}</nav>`;
 }
 
 function render() {
-  const sync = syncService.status();
-  app.innerHTML = `<div class='shell ${!state.onboarded ? "shell-onboard" : ""}'><header class='top'><div><p class='small'>AGRO-AI</p><h1>${tr("appName")}</h1><p class='small'>${tr("framing")}</p></div><div><span class='small'>${sync.state}${sync.pending ? ` (${sync.pending})` : ""}</span></div></header>${!sync.isOnline ? `<div class='offline-banner'>Offline mode active. Actions queue locally and sync when connected.</div>` : ""}${content()}${uiMessage ? `<div class='toast'>${uiMessage}</div>` : ""}${state.onboarded ? `<nav class='bottom'>${nav.map((n) => `<button class='btn nav ${route === n ? "active" : ""}' data-nav='${n}'>${n}</button>`).join("")}</nav>` : ""}</div>`;
+  const sync = syncStatus();
+  if (state.onboarded) prepareRecommendationSnapshot();
+  app.innerHTML = `<div class="app-bg"><main class="shell ${!state.onboarded ? "shell-onboard" : ""}">${topBar()}${!sync.isOnline ? `<div class="offline-banner">Offline mode active. Logs and observations will sync later.</div>` : ""}${content()}${uiMessage ? `<div class="toast">${h(uiMessage)}</div>` : ""}${state.onboarded ? bottomNav() : ""}</main></div>`;
   bind();
+  scheduleDecisionRefreshes();
 }
 
 function readDraftInputs() {
@@ -443,40 +628,35 @@ function readDraftInputs() {
     const el = document.getElementById(id);
     if (el) onboardingDraft[key] = el.value;
   };
-  assign("language");
-  assign("farmName");
-  assign("farmLocation");
-  assign("fieldName");
-  assign("fieldLocation");
-  assign("crop");
-  assign("acreage");
-  assign("units");
-  assign("soilType");
-  assign("lastIrrigationAt");
-  assign("usualDurationMin");
-  assign("waterSource");
+  ["language", "farmName", "farmLocation", "fieldName", "fieldLocation", "crop", "acreage", "units", "soilType", "lastIrrigationAt", "usualDurationMin", "waterSource"].forEach((id) => assign(id));
 }
 
 function bind() {
   app.querySelectorAll("[data-nav]").forEach((b) => (b.onclick = async () => {
     route = b.dataset.nav;
     selectedField = null;
-    if (route === "assistant") {
-      assistantResponse = await fetchAssistantText(state.fields[0]?.id || "");
-    }
+    if (b.dataset.assistantField) assistantFieldId = b.dataset.assistantField;
+    if (route === "assistant") assistantResponse = await fetchAssistantText(assistantFieldId || state.fields[0]?.id || "");
     render();
   }));
-  app.querySelectorAll("[data-open-field]").forEach((b) => (b.onclick = () => { selectedField = { type: "detail", fieldId: b.dataset.openField }; render(); }));
+  app.querySelectorAll("[data-open-field]").forEach((b) => (b.onclick = () => { route = "fields"; selectedField = { type: "detail", fieldId: b.dataset.openField }; render(); }));
   app.querySelectorAll("[data-open-log]").forEach((b) => (b.onclick = () => { route = "fields"; selectedField = { type: "log", fieldId: b.dataset.openLog }; render(); }));
   app.querySelectorAll("[data-open-condition]").forEach((b) => (b.onclick = () => { route = "fields"; selectedField = { type: "condition", fieldId: b.dataset.openCondition }; render(); }));
-  app.querySelectorAll("[data-act='note']").forEach((b) => (b.onclick = () => { addFieldNote({ fieldId: b.dataset.field || state.fields[0]?.id, text: "Field note captured.", source: "manual" }); render(); }));
+  app.querySelectorAll("[data-back-fields]").forEach((b) => (b.onclick = () => { selectedField = null; route = "fields"; render(); }));
+  app.querySelectorAll("[data-filter]").forEach((b) => (b.onclick = () => { fieldFilter = b.dataset.filter; render(); }));
+  const search = document.getElementById("fieldSearch");
+  if (search) search.oninput = () => { fieldSearch = search.value; renderSoon(); };
+  const assistantField = document.getElementById("assistantField");
+  if (assistantField) assistantField.onchange = async () => { assistantFieldId = assistantField.value; assistantResponse = await fetchAssistantText(assistantFieldId); render(); };
+  app.querySelectorAll("[data-assistant-query]").forEach((b) => (b.onclick = async () => { assistantResponse = await fetchAssistantText(assistantFieldId || state.fields[0]?.id || "", b.dataset.assistantQuery); render(); }));
+  const sendAssistant = document.querySelector("[data-send-assistant]");
+  if (sendAssistant) sendAssistant.onclick = async () => { const q = document.getElementById("assistantInput")?.value || "Should I irrigate today?"; assistantResponse = await fetchAssistantText(assistantFieldId || state.fields[0]?.id || "", q); render(); };
+  app.querySelectorAll("[data-refresh-weather]").forEach((b) => (b.onclick = async () => { await refreshWeather(true); showMessage("Weather refreshed."); render(); }));
+  app.querySelectorAll("[data-set-reminder]").forEach((b) => (b.onclick = () => showMessage(`Reminder set for ${fieldName(b.dataset.setReminder)}.`)));
+  app.querySelectorAll("[data-scroll-provenance]").forEach((b) => (b.onclick = () => document.querySelector("[data-testid='provenance-disclosure']")?.scrollIntoView({ behavior: "smooth", block: "start" })));
   app.querySelectorAll("[data-mode]").forEach((b) => (b.onclick = async () => { state = b.dataset.mode === "demo" ? useDemoMode(state) : { ...state, mode: "real" }; persist(); await refreshWeather(true); render(); }));
-  app.querySelectorAll("[data-refresh-weather]").forEach((b) => (b.onclick = async () => { await refreshWeather(true); render(); }));
-  app.querySelectorAll("[data-assistant-query]").forEach((b) => (b.onclick = async () => {
-    assistantResponse = await fetchAssistantText(state.fields[0]?.id || "", b.dataset.assistantQuery);
-    render();
-  }));
-  const applyScenarioBtn = document.querySelector("[data-apply-scenario='1']");
+
+  const applyScenarioBtn = document.querySelector("[data-apply-scenario]");
   if (applyScenarioBtn) applyScenarioBtn.onclick = async () => {
     const scenario = document.getElementById("demoScenario")?.value || "baseline";
     state = applyDemoScenario(state, scenario);
@@ -484,105 +664,70 @@ function bind() {
     await refreshWeather(true);
     render();
   };
-
-  const saveLogBtn = document.querySelector("[data-save-log='1']");
+  const saveLogBtn = document.querySelector("[data-save-log]");
   if (saveLogBtn) saveLogBtn.onclick = () => {
     addIrrigationLog({ fieldId: document.getElementById("logField").value, performedAt: new Date(document.getElementById("logDate").value || Date.now()).toISOString(), durationMin: document.getElementById("logDuration").value || 45, amountMm: document.getElementById("logAmount").value || null, note: document.getElementById("logNote").value || "", source: "manual" });
     route = "today"; selectedField = null; render();
   };
-
-  const saveConditionBtn = document.querySelector("[data-save-condition='1']");
+  const saveConditionBtn = document.querySelector("[data-save-condition]");
   if (saveConditionBtn) saveConditionBtn.onclick = () => {
     updateCondition({ fieldId: document.getElementById("conditionField").value, condition: document.getElementById("conditionValue").value, source: "manual" });
     route = "today"; selectedField = null; render();
   };
-
+  app.querySelectorAll("[data-resolve-alert]").forEach((b) => (b.onclick = () => {
+    const key = b.dataset.resolveAlert;
+    state.alertHistory = (state.alertHistory || []).map((a) => (a.id === key || a.key === key) ? { ...a, resolved: true } : a);
+    state.dismissedAlerts = { ...(state.dismissedAlerts || {}), [key]: { dismissedAt: new Date().toISOString(), fingerprint: b.dataset.alertFingerprint || "" } };
+    persist();
+    showMessage("Alert resolved.");
+    render();
+  }));
   app.querySelectorAll("[data-next-step]").forEach((b) => (b.onclick = () => { onboardingStep = Number(b.dataset.nextStep); render(); }));
   app.querySelectorAll("[data-prev-step]").forEach((b) => (b.onclick = () => { readDraftInputs(); onboardingStep = Math.max(0, onboardingStep - 1); render(); }));
   app.querySelectorAll("[data-onboard-choice]").forEach((b) => (b.onclick = () => { onboardingDraft[b.dataset.onboardChoice] = b.dataset.value; render(); }));
-
-  const continueBtn = document.querySelector("[data-onboard-continue='1']");
+  const continueBtn = document.querySelector("[data-onboard-continue]");
   if (continueBtn) continueBtn.onclick = async () => {
     readDraftInputs();
-    if (onboardingStep < 4) {
-      onboardingStep += 1;
-      render();
-      return;
-    }
-
-    state = applyOnboarding(state, {
-      ...onboardingDraft,
-      coordinates: onboardingDraft.coordinates,
-    });
-    route = "today";
-    persist();
-    await refreshWeather(true);
-    render();
+    if (onboardingStep < 4) { onboardingStep += 1; render(); return; }
+    state = applyOnboarding(state, { ...onboardingDraft, coordinates: onboardingDraft.coordinates });
+    route = "today"; persist(); await refreshWeather(true); render();
   };
-
   const gpsBtn = document.getElementById("captureGps");
   if (gpsBtn) gpsBtn.onclick = () => {
     if (!navigator.geolocation) return;
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        onboardingDraft.coordinates = { lat: pos.coords.latitude, lon: pos.coords.longitude };
-        onboardingDraft.farmLocation = `${pos.coords.latitude.toFixed(3)}, ${pos.coords.longitude.toFixed(3)}`;
-        render();
-      },
-      () => { /* manual fallback stays available */ }
-    );
+    navigator.geolocation.getCurrentPosition((pos) => {
+      onboardingDraft.coordinates = { lat: pos.coords.latitude, lon: pos.coords.longitude };
+      onboardingDraft.farmLocation = `${pos.coords.latitude.toFixed(3)}, ${pos.coords.longitude.toFixed(3)}`;
+      render();
+    }, () => showMessage("GPS unavailable. You can add location manually."));
   };
-
   const demo = document.getElementById("startDemo");
   if (demo) demo.onclick = async () => { state = useDemoMode(state); route = "today"; persist(); await refreshWeather(true); render(); };
-
   app.querySelectorAll("[data-voice]").forEach((b) => (b.onclick = async () => {
-    const fieldId = b.dataset.voice;
+    const fieldId = b.dataset.voice || state.fields[0]?.id || "";
     if (!voiceListening) {
-      voiceListening = true;
-      transcript = "";
-    } else {
-      voiceListening = false;
-      transcript = "Log irrigation for Field 1 for 2 hours";
-      let command = parseVoiceCommand(transcript, { fieldId });
-      if (navigator.onLine) {
-        try {
-          const interpreted = await apiClient.interpretVoice({ transcript, fieldId });
-          if (interpreted?.action) command = interpreted;
-        } catch {
-          // local parser fallback
-        }
-      }
-      if (!navigator.onLine) {
-        saveOfflineVoiceAction(command.action);
-        state.voiceTimeline.unshift(createVoiceTimelineEntry({ transcript, intent: command.intent, outcome: "queued_offline", fieldId }));
-        state.voiceTimeline = state.voiceTimeline.slice(0, 20);
-        persist();
-        voiceResponse = tr("graceOffline");
-      } else {
-        applyVoiceAction(command, {
-          onIrrigation: (payload) => addIrrigationLog(payload),
-          onCondition: (payload) => updateCondition(payload),
-          onNote: (payload) => addFieldNote(payload),
-          onNoop: (_payload, intent) => {
-            if (intent === "ASK_RECOMMENDATION") voiceResponse = ai().runGoal({ goal: "daily irrigation decision", fieldId: state.fields[0]?.id || "" }).decision.reasons[0];
-            if (intent === "EXPLAIN_RECOMMENDATION") voiceResponse = ai().runGoal({ goal: "explain recommendation", fieldId: state.fields[0]?.id || "" }).text;
-            if (intent === "WHAT_CHANGED") voiceResponse = "Last change: check latest irrigation and observation entries on Today.";
-          },
-        });
-        if (!voiceResponse) voiceResponse = `Intent: ${command.intent}. Action captured.`;
-        try {
-          await apiClient.updateMemory({ fieldId, event: { type: "voice", payload: { transcript, intent: command.intent, outcome: voiceResponse } } });
-        } catch {
-          // non-blocking backend memory sync
-        }
-        state.voiceTimeline.unshift(createVoiceTimelineEntry({ transcript, intent: command.intent, outcome: voiceResponse, fieldId }));
-        state.voiceTimeline = state.voiceTimeline.slice(0, 20);
-        persist();
-      }
+      voiceListening = true; transcript = ""; pendingVoiceCommand = null; voiceResponse = "Listening locally. Tap the orb again to review."; render(); return;
     }
+    voiceListening = false;
+    transcript = `Field ${fieldName(fieldId)} looks dry`;
+    const command = parseVoiceCommand(transcript, { fieldId });
+    pendingVoiceCommand = command;
+    voiceResponse = `I heard: ${command.intent.replaceAll("_", " ").toLowerCase()}. Confirm before saving.`;
     render();
   }));
+  const confirmVoice = document.querySelector("[data-confirm-voice]");
+  if (confirmVoice) confirmVoice.onclick = () => {
+    const command = pendingVoiceCommand;
+    if (!command) return;
+    if (!navigator.onLine) saveOfflineVoiceAction(command.action);
+    applyVoiceAction(command, { onIrrigation: addIrrigationLog, onCondition: updateCondition, onNote: addFieldNote, onNoop: () => {} });
+    state.voiceTimeline.unshift(createVoiceTimelineEntry({ transcript, intent: command.intent, outcome: "confirmed", fieldId: command.action?.payload?.fieldId || state.fields[0]?.id }));
+    state.voiceTimeline = state.voiceTimeline.slice(0, 20);
+    pendingVoiceCommand = null;
+    voiceResponse = navigator.onLine ? "Voice action saved." : "Voice action queued offline.";
+    persist();
+    render();
+  };
 }
 
 if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js"));
@@ -591,6 +736,6 @@ window.addEventListener("offline", render);
 
 (async () => {
   await refreshWeather(false);
-  assistantResponse = await fetchAssistantText(state.fields[0]?.id || "");
+  assistantFieldId = state.fields[0]?.id || "";
   render();
 })();

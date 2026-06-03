@@ -1,4 +1,15 @@
 const fieldMemory = new Map();
+const MAX_MEMORY_ITEMS = 50;
+
+function decisionKey(decision = {}) {
+  return [decision.fieldId, decision.action, decision.urgency, decision.timing, decision.confidenceLabel ?? decision.confidenceScore].join("|");
+}
+
+function addCappedUnique(list, item, keyFn = (value) => JSON.stringify(value), cap = MAX_MEMORY_ITEMS) {
+  const key = keyFn(item);
+  const next = [item, ...list.filter((existing) => keyFn(existing) !== key)];
+  return next.slice(0, cap);
+}
 
 function initFieldMemory(fieldId) {
   if (!fieldMemory.has(fieldId)) {
@@ -26,12 +37,12 @@ export const memoryStore = {
   },
   updateFieldMemory(fieldId, event) {
     const memory = initFieldMemory(fieldId);
-    memory.events.unshift({ ...event, ts: new Date().toISOString() });
-    if (event.type === "decision") memory.recommendationHistory.unshift(event.payload);
-    if (event.type === "irrigation_log") memory.irrigationLogs.unshift(event.payload);
-    if (event.type === "observation") memory.observations.unshift(event.payload);
-    if (event.type === "voice_note") memory.voiceNotes.unshift(event.payload);
-    if (event.type === "verification") memory.verificationOutcomes.unshift(event.payload);
+    memory.events = addCappedUnique(memory.events, { ...event, ts: new Date().toISOString() }, (value) => `${value.type}:${JSON.stringify(value.payload)}`, 100);
+    if (event.type === "decision") memory.recommendationHistory = addCappedUnique(memory.recommendationHistory, event.payload, decisionKey);
+    if (event.type === "irrigation_log") memory.irrigationLogs = addCappedUnique(memory.irrigationLogs, event.payload, (value) => value.id || JSON.stringify(value));
+    if (event.type === "observation") memory.observations = addCappedUnique(memory.observations, event.payload, (value) => value.id || JSON.stringify(value));
+    if (event.type === "voice_note") memory.voiceNotes = addCappedUnique(memory.voiceNotes, event.payload, (value) => value.id || JSON.stringify(value));
+    if (event.type === "verification") memory.verificationOutcomes = addCappedUnique(memory.verificationOutcomes, event.payload, (value) => value.id || JSON.stringify(value));
     return memory;
   },
   summarizeFieldMemory(fieldId) {
