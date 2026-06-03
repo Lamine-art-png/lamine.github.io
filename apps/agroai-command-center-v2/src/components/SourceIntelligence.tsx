@@ -26,7 +26,7 @@ export function SourceIntelligence() {
         <div className="source-row source-row--head" role="row">
           <span role="columnheader">Source</span>
           <span role="columnheader">Latest signal</span>
-          <span role="columnheader">Records</span>
+          <span role="columnheader">Selected / pkg</span>
           <span role="columnheader">Contribution</span>
           <span role="columnheader">Status</span>
         </div>

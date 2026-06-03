@@ -14,11 +14,12 @@ export function VerifiedDecision() {
   const phase = useCommandStore((s) => s.analysisPhase);
   const evidence = useCommandStore((s) => s.evidence);
   const ready = phase === "complete";
-  const showGuidance =
-    decision.schedulable === false ||
+  const isRepresentative = decision.recommendationOrigin === "representative_fallback";
+  // Only a hard scheduling block (schedulable === false) makes the card read as incomplete.
+  const isIncomplete = decision.schedulable === false;
+  const hasGuidance =
     (Array.isArray(decision.limitations) && decision.limitations.length > 0) ||
     (Array.isArray(decision.nextEvidenceRequired) && decision.nextEvidenceRequired.length > 0);
-  const isIncomplete = showGuidance;
 
   const byKey = Object.fromEntries(evidence.map((s) => [s.key, s]));
   const canSchedule = ready && decision.schedulable === true && byKey.recommended?.status === "Complete";
@@ -47,7 +48,7 @@ export function VerifiedDecision() {
         </p>
       )}
 
-      {isIncomplete && decision.limitations && decision.limitations.length > 0 && (
+      {(isIncomplete || hasGuidance) && decision.limitations && decision.limitations.length > 0 && (
         <div className="decision-limitations">
           <p className="eyebrow" style={{ marginBottom: "8px" }}>Limitations</p>
           <ul className="limitations-list">
@@ -131,7 +132,7 @@ export function VerifiedDecision() {
         </div>
       </dl>
 
-      {isIncomplete && decision.nextEvidenceRequired && decision.nextEvidenceRequired.length > 0 && (
+      {(isIncomplete || hasGuidance) && decision.nextEvidenceRequired && decision.nextEvidenceRequired.length > 0 && (
         <div className="next-evidence">
           <p className="eyebrow" style={{ marginBottom: "8px" }}>Next evidence required</p>
           <ol className="next-evidence-list">
@@ -143,7 +144,22 @@ export function VerifiedDecision() {
       )}
 
       <div className="decision-actions">
-        {!isIncomplete && (
+        {isRepresentative ? (
+          <>
+            <button className="btn" onClick={() => actions.advanceEvidence("scheduled")}>
+              Simulate schedule
+            </button>
+            <button className="btn" onClick={() => actions.advanceEvidence("applied")}>
+              Simulate applied water
+            </button>
+            <button className="btn" onClick={() => actions.advanceEvidence("observed")}>
+              Simulate field observation
+            </button>
+            <button className="btn" onClick={() => actions.advanceEvidence("verified")}>
+              Simulate verification
+            </button>
+          </>
+        ) : !isIncomplete ? (
           <>
             <button className="btn primary" disabled={!canSchedule} onClick={() => actions.advanceEvidence("scheduled")}>
               Approve schedule
@@ -158,7 +174,7 @@ export function VerifiedDecision() {
               Verify outcome
             </button>
           </>
-        )}
+        ) : null}
         <button className="btn ghost" onClick={() => actions.navigate("reports")}>
           Open report
         </button>

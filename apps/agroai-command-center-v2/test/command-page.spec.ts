@@ -37,10 +37,11 @@ test.describe("Command page", () => {
   });
 
   test("evidence chain actions complete the chain", async ({ page }) => {
-    await page.getByRole("button", { name: "Approve schedule" }).click();
-    await page.getByRole("button", { name: "Confirm applied water" }).click();
-    await page.getByRole("button", { name: "Add field observation" }).click();
-    await page.getByRole("button", { name: "Verify outcome" }).click();
+    // e2e runs in representative fallback mode (no backend) — buttons are walkthrough simulations.
+    await page.getByRole("button", { name: "Simulate schedule" }).click();
+    await page.getByRole("button", { name: "Simulate applied water" }).click();
+    await page.getByRole("button", { name: "Simulate field observation" }).click();
+    await page.getByRole("button", { name: "Simulate verification" }).click();
     const done = page.locator(".evidence-step.done");
     await expect(done).toHaveCount(5);
   });

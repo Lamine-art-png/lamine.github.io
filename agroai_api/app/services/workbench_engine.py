@@ -442,7 +442,28 @@ def _field_note_support(notes: List[Dict[str, Any]], farm: str, block: str) -> L
         lowered = note.lower()
         if farm.lower() in lowered or block.lower() in lowered:
             selected.append(note)
-    return selected or [str(row.get("notes", "")) for row in notes[:3]]
+    return selected
+
+
+_CUSTOMER_READABLE_NEXT_EVIDENCE: Dict[str, str] = {
+    "eto_mm": "Upload or connect weather data for the block's region.",
+    "crop_type": "Complete crop mapping — specify the crop species for this block.",
+    "soil_type": "Complete soil mapping — specify the soil type for this block.",
+    "irrigation_method": "Confirm the irrigation method for this block.",
+    "field_area_ha": "Provide the block area with an explicit unit (hectares or acres).",
+    "validated_flow_or_application_rate": "Upload or connect validated flow evidence for this block.",
+}
+
+
+def _customer_readable_next_evidence(missing_inputs: List[str]) -> List[str]:
+    readable: List[str] = []
+    seen: set = set()
+    for key in missing_inputs:
+        msg = _CUSTOMER_READABLE_NEXT_EVIDENCE.get(key)
+        if msg and msg not in seen:
+            readable.append(msg)
+            seen.add(msg)
+    return readable
 
 
 def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> Dict[str, Any]:
@@ -597,6 +618,7 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
         rows, farm, block, region or None,
         context["metrics"], context["counts"], flow_evidence,
     )
+    context["_rows"] = rows
     return context
 
 
@@ -812,7 +834,7 @@ def generate_recommendation(reconciliation: ReconciliationResult, context: Dict[
             f"Savings = (baseline {baseline_mm} mm − recommended {gross_depth:.1f} mm gross) / baseline × 100 = {estimated_water_savings_pct}%"
         )
 
-    next_evidence_required = list(decision.get("missing_inputs", []))
+    next_evidence_required = _customer_readable_next_evidence(decision.get("missing_inputs", []))
 
     recommendation = {
         "action": action_label,
@@ -1008,11 +1030,13 @@ def _build_source_rows(
     sel_ctrl = _rows_for(all_ctrl, farm, block)
     ctrl_ts = _latest_timestamp(sel_ctrl)
     ctrl_summary = f"{len(sel_ctrl)} events for {block}"
-    if flow_evidence.get("value_m3h"):
-        ctrl_summary += f"; flow {flow_evidence['value_m3h']:.1f} m³/h"
-    if flow_evidence.get("pressure_state") == "stable":
+    ctrl_flow = flow_evidence.get("value_m3h") if flow_evidence.get("provenance") == "controller_event" else None
+    ctrl_pressure = flow_evidence.get("pressure_state") if flow_evidence.get("provenance") == "controller_event" else None
+    if ctrl_flow:
+        ctrl_summary += f"; flow {ctrl_flow:.1f} m³/h"
+    if ctrl_pressure == "stable":
         ctrl_summary += "; pressure stable"
-    ctrl_status = flow_evidence.get("status", "unavailable")
+    ctrl_status = "accepted" if sel_ctrl else "unavailable"
     result.append({
         "source_label": "Controller history",
         "source_kind": "controller_events",
@@ -1021,7 +1045,7 @@ def _build_source_rows(
         "latest_timestamp": ctrl_ts,
         "latest_signal_summary": ctrl_summary,
         "status": ctrl_status,
-        "limitations": list(flow_evidence.get("notes", [])),
+        "limitations": [],
         "contribution_label": "Not scored",
     })
 
@@ -1067,19 +1091,24 @@ def _build_source_rows(
 
     all_flow = rows.get("flow_meter", [])
     sel_flow = _rows_for(all_flow, farm, block)
-    flow_meter_status = flow_evidence.get("status", "unavailable")
-    flow_summary = f"{len(sel_flow)} records for {block}"
-    if flow_evidence.get("value_m3h"):
-        flow_summary += f"; {flow_evidence['value_m3h']:.1f} m³/h"
+    if not sel_flow:
+        fm_status = "unavailable"
+        fm_notes = ["No flow meter records for this block"]
+        fm_summary = "No flow meter records for this block"
+    else:
+        fm_max_variance = _max_abs(row.get("variance_percent") for row in sel_flow)
+        fm_status = "inconsistent" if (fm_max_variance is not None and abs(fm_max_variance) >= 20) else "accepted"
+        fm_notes = [f"Flow-meter variance {fm_max_variance:.1f}%"] if fm_status == "inconsistent" else []
+        fm_summary = f"{len(sel_flow)} records for {block}"
     result.append({
         "source_label": "Flow meter",
         "source_kind": "flow_meter",
         "selected_scope_record_count": len(sel_flow),
         "package_record_count": len(all_flow),
         "latest_timestamp": _latest_timestamp(sel_flow),
-        "latest_signal_summary": flow_summary,
-        "status": flow_meter_status,
-        "limitations": list(flow_evidence.get("notes", [])),
+        "latest_signal_summary": fm_summary,
+        "status": fm_status,
+        "limitations": fm_notes,
         "contribution_label": "Not scored",
     })
 
@@ -1120,7 +1149,7 @@ def _build_source_rows(
         "package_record_count": len(all_profile),
         "latest_timestamp": None,
         "latest_signal_summary": f"Profile for {farm} / {block}",
-        "status": "accepted" if all_profile else "unavailable",
+        "status": "accepted" if sel_profile else "unavailable",
         "limitations": [],
         "contribution_label": "Not scored",
     })
@@ -1166,12 +1195,15 @@ def _mapping_completeness(
     method_known = method not in unknown_values
 
     satellite_available = bool(_rows_for(rows.get("satellite_observation", []), farm, block))
-    field_notes_available = counts.get("field_notes_parsed", 0) > 0
+    sel_profile_for_block = _rows_for(rows.get("crop_profile", []), farm, block)
+    explicit_boundary_mapped = any(bool(p.get("block_boundary_mapped")) for p in sel_profile_for_block)
+    sel_field_notes = _rows_for(rows.get("field_notes", []), farm, block) if farm and block else []
+    field_notes_available = len(sel_field_notes) > 0 or counts.get("field_notes_parsed", 0) > 0
 
     return {
         "farm_mapping_complete": farm_known,
-        "block_mapping_complete": block_known and crop_known and soil_known and method_known,
-        "block_boundary_mapped": satellite_available,
+        "block_mapping_complete": block_known,
+        "block_boundary_mapped": explicit_boundary_mapped,
         "crop_mapping_complete": crop_known,
         "variety_mapping_complete": variety_known,
         "soil_mapping_complete": soil_known,
@@ -1317,6 +1349,8 @@ def analyze_session(
             context["live_request"] = merged.get("live_request")
             context["provider_context"] = f"{context.get('provider_context', 'uploaded evidence')} + {live_source} entity {live_entity_id}"
     context = _apply_manual_overrides(context, manual_overrides)
+    if not is_live and context.get("_rows") is not None:
+        context["mapping_completeness"] = _mapping_completeness(context, context["_rows"])
 
     reconciliation = reconcile_signals(context)
     recommendation = generate_recommendation(reconciliation, context)
@@ -1455,6 +1489,17 @@ def record_evidence_action(
     if not store:
         raise KeyError("Session not found")
 
+    # Scheduling gate — must run BEFORE any evidence-order override audit is written.
+    # override_reason cannot bypass this gate.
+    if action_type == "scheduled":
+        analysis = store.get("analysis")
+        if analysis is None:
+            raise SchedulingNotAllowed(["No analysis exists for this session — run analysis before scheduling"])
+        rec = getattr(analysis, "recommendation", None) or {}
+        if not isinstance(rec, dict) or not rec.get("schedulable", False):
+            reasons = (rec.get("scheduling_block_reasons") if isinstance(rec, dict) else []) or ["Recommendation does not meet scheduling gate"]
+            raise SchedulingNotAllowed(reasons)
+
     # Enforce evidence chain ordering.
     prerequisite = EVIDENCE_PREREQUISITES.get(action_type)
     if prerequisite:
@@ -1474,15 +1519,6 @@ def record_evidence_action(
                 "override_reason": override_reason,
                 "override_label": "Evidence sequence override applied with supplied reason.",
             })
-
-    # Scheduling gate: unconditional — override_reason cannot bypass this gate.
-    if action_type == "scheduled":
-        analysis = store.get("analysis")
-        if analysis is not None:
-            rec = getattr(analysis, "recommendation", None) or {}
-            if isinstance(rec, dict) and not rec.get("schedulable", False):
-                reasons = rec.get("scheduling_block_reasons") or ["Recommendation does not meet scheduling gate"]
-                raise SchedulingNotAllowed(reasons)
 
     timestamp = datetime.utcnow().isoformat()
     summary = evidence_summary or EVIDENCE_DEFAULT_TEXT[action_type]

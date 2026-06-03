@@ -36,3 +36,14 @@ agroai-cloudflare-worker/api-native/*.dat
 agroai-cloudflare-worker/api-native/serial.txt
 agroai-cloudflare-worker/api-native/connections.dat
 agroai-cloudflare-worker/api-native/fealog.txt
+
+# Runtime SQLite databases
+*.db
+agroai.db
+test.db
+
+# Playwright test-results
+test-results/
+
+# IDE/tool storage artifacts
+src/storage/

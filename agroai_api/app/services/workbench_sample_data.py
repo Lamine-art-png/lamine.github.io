@@ -110,7 +110,8 @@ SAMPLE_CROP_PROFILE = """[
     "operating_window": "21:00 – 23:00 local",
     "evaluation_baseline_mm": 4.9,
     "evaluation_baseline_label": "Unaided ETo-only calendar estimate — Central Valley North Cabernet Sauvignon at berry set (no soil-moisture adjustment)",
-    "management_goal": "maintain moderate vine stress while avoiding runoff"
+    "management_goal": "maintain moderate vine stress while avoiding runoff",
+    "block_boundary_mapped": true
   },
   {
     "farm": "Alpha Vineyard",

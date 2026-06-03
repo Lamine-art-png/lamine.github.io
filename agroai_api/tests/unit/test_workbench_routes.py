@@ -622,19 +622,25 @@ def test_report_savings_match_recommendation(client):
 
 
 def test_mapping_booleans_all_false_for_incomplete(client):
-    """All mapping completeness booleans must be False for the incomplete evidence scenario."""
+    """Incomplete evidence scenario: domain flags must be False; block_mapping_complete reflects block name specificity."""
     created = client.post('/v1/workbench/sample-package', json={'scenario': 'incomplete_evidence_review'})
     session_id = created.json()['session']['session_id']
     analyzed = client.post(f'/v1/workbench/sessions/{session_id}/analyze',
                            json={'session_id': session_id, 'mode': 'uploaded'})
     nc = analyzed.json()['normalized_context']
-    mapping_keys = [
-        'farm_mapping_complete', 'block_mapping_complete', 'block_boundary_mapped',
+    # Domain fields missing — all false.
+    domain_false_keys = [
+        'farm_mapping_complete', 'block_boundary_mapped',
         'crop_mapping_complete', 'variety_mapping_complete', 'soil_mapping_complete',
         'irrigation_method_mapping_complete', 'field_observation_available', 'earth_observation_available',
     ]
-    for key in mapping_keys:
+    for key in domain_false_keys:
         assert nc.get(key) is False, f"Expected {key}=False for incomplete scenario, got {nc.get(key)!r}"
+    # block_mapping_complete reflects whether the block name is specific (not unnamed/unknown).
+    # "Block C South" is a specific name, so block_mapping_complete is True even for incomplete evidence.
+    assert nc.get('block_mapping_complete') is True, (
+        f"Expected block_mapping_complete=True for 'Block C South' (specific block name), got {nc.get('block_mapping_complete')!r}"
+    )
 
 
 def test_mapping_booleans_present_for_validated(client):

@@ -197,7 +197,7 @@ describe("commandStore", () => {
   // --- Section 11: Fifth-pass surgical corrections ---
 
   it("no 'Runtime reachable' string in any reconciliation row", async () => {
-    for (const scenarioId of ["alpha-vineyard", "partner-validation"] as const) {
+    for (const scenarioId of ["alpha-vineyard", "partner-validation", "multi-farm", "almond-orchard", "incomplete-evidence"] as const) {
       await actions.switchScenario(scenarioId);
       const { reconciliation } = getState();
       reconciliation.forEach((row) => {

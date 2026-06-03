@@ -144,8 +144,8 @@ const SCENARIOS: Record<ScenarioId, Scenario> = {
       verification: "Required",
       calibrationStatus: "Calibrated v0.2 — transparent defaults",
       flowValidationState: "Pending analysis",
-      // Representative value: validated operating block is always designed to be schedulable.
-      schedulable: true,
+      // Scheduling requires backend analysis — not pre-set in representative fallback.
+      schedulable: undefined,
     },
     sources: REP_SOURCES_ALPHA,
     reconciliation: recon([
@@ -318,7 +318,7 @@ const SCENARIOS: Record<ScenarioId, Scenario> = {
       ["Flow meter", "One block over plan, others in range", "Applied-water variance localized", "Review"],
       ["Field observation", "Stress notes on 2 blocks", "Supports irrigation in those blocks", "Matched"],
       ["Earth observation layer", "Elevated stress on vineyard blocks", "Supports water demand signal", "Matched"],
-      ["Talgil", "North Ridge runtime reachable", "Target selection pending", "Pending target"],
+      ["Talgil", "Target selection pending — runtime status not verified in offline evaluation", "Target selection pending", "Pending target"],
     ]),
     report: {
       farm: "Portfolio (3 farms)",
@@ -784,7 +784,7 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
   const trace: TraceStep[] = Array.isArray(result.analysis_trace) && result.analysis_trace.length
     ? result.analysis_trace.map((t) => ({
         title: t.title,
-        status: t.status === "review" ? "review" : "complete",
+        status: (["complete", "running", "pending", "review", "limited"].includes(t.status ?? "") ? t.status : "complete") as TraceStep["status"],
         recordsProcessed: t.objects_processed ?? 0,
         detail: t.details ?? "",
         timestamp: now,
@@ -1097,6 +1097,13 @@ export const actions = {
       verified: "verify",
     };
     const actionName = backendAction[key];
+    // For representative fallback: always simulate locally — never call backend.
+    if (state.recommendationOrigin === "representative_fallback") {
+      set({ evidence });
+      addAudit(`Walkthrough simulation: ${order[idx]}`, "Walkthrough simulation — not an operational evidence record.");
+      toast(`${state.evidence[idx]?.label ?? "Step"} (walkthrough simulation)`);
+      return;
+    }
     if (state.sessionId && actionName && state.backend.status !== "unavailable") {
       const res = await apiClient.recordEvidenceAction(state.sessionId, actionName, evidenceText[key]);
       if (res.ok && res.data?.updated_evidence_chain) {
@@ -1107,12 +1114,9 @@ export const actions = {
       }
       // Backend was reachable but rejected the request (e.g. 409 ordering violation).
       // For live and uploaded origins, do not advance local state — the step was not recorded.
-      if (state.recommendationOrigin !== "representative_fallback") {
-        addAudit("Evidence step not recorded", "Backend rejected the evidence action; local state not advanced.");
-        toast("Evidence step was not recorded. Refresh the workspace and try again.");
-        return;
-      }
-      addAudit("Backend evidence action unavailable", "Local representative evidence fallback used.");
+      addAudit("Evidence step not recorded", "Backend rejected the evidence action; local state not advanced.");
+      toast("Evidence step was not recorded. Refresh the workspace and try again.");
+      return;
     }
     set({ evidence });
     addAudit(`${order[idx]} recorded`, evidenceText[key]);
