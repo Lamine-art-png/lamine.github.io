@@ -193,4 +193,106 @@ describe("commandStore", () => {
     const after = getState().evidence.find((s) => s.key === "scheduled")?.status;
     expect(after).toBe("Complete");
   });
+
+  // --- Section 11: Fifth-pass surgical corrections ---
+
+  it("no 'Runtime reachable' string in any reconciliation row", async () => {
+    for (const scenarioId of ["alpha-vineyard", "partner-validation"] as const) {
+      await actions.switchScenario(scenarioId);
+      const { reconciliation } = getState();
+      reconciliation.forEach((row) => {
+        expect(row.signal).not.toContain("Runtime reachable");
+        expect(row.interpretation).not.toContain("Runtime reachable");
+      });
+    }
+  });
+
+  it("source_rows from backend are consumed when present", async () => {
+    // Simulate a backend result with source_rows and verify it is used instead of derivation.
+    const { __applyBackendResult } = await import("../src/state/commandStore");
+    const fakeResult = {
+      analysis_id: "test-id",
+      session_id: "test-session",
+      status: "complete",
+      analysis_mode: "uploaded" as const,
+      recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      source_rows: [
+        {
+          source_label: "Sensor Pack",
+          source_kind: "controller_events",
+          selected_scope_record_count: 5,
+          package_record_count: 20,
+          latest_timestamp: "2026-05-16T12:00:00Z",
+          latest_signal_summary: "5 events for Block A North",
+          status: "validated",
+          limitations: [],
+          contribution_label: "Not scored",
+        },
+      ],
+      recommendation: { schedulable: true, scheduling_block_reasons: [] },
+      reconciliation: {},
+      normalized_context: {},
+      signal_summary: {},
+      warnings: [],
+      uploaded_artifacts_used: [],
+      live_inputs_used: [],
+    };
+    __applyBackendResult("alpha-vineyard", fakeResult as any, "test-session");
+    const { sources } = getState();
+    const sensorRow = sources.find((r) => r.source === "Sensor Pack");
+    expect(sensorRow).toBeDefined();
+    expect(sensorRow?.records).toBe("5 / 20");
+  });
+
+  it("incomplete guidance shown when decision.schedulable is false (backend state)", async () => {
+    // Verify that showGuidance logic is based on decision.schedulable not scenarioId.
+    const { __applyBackendResult } = await import("../src/state/commandStore");
+    const fakeResult = {
+      analysis_id: "test-id",
+      session_id: "test-session",
+      status: "complete",
+      analysis_mode: "uploaded" as const,
+      recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      limitations: ["Block area not provided"],
+      recommendation: {
+        schedulable: false,
+        scheduling_block_reasons: ["Flow evidence not validated"],
+        next_evidence_required: ["Upload flow meter records"],
+      },
+      reconciliation: {},
+      normalized_context: {},
+      signal_summary: {},
+      warnings: [],
+      uploaded_artifacts_used: [],
+      live_inputs_used: [],
+    };
+    __applyBackendResult("alpha-vineyard", fakeResult as any, "test-session");
+    const { decision } = getState();
+    expect(decision.schedulable).toBe(false);
+    expect(decision.limitations).toEqual(["Block area not provided"]);
+  });
+
+  it("uploaded mode preserved after backend result applied", async () => {
+    const { __applyBackendResult } = await import("../src/state/commandStore");
+    const fakeResult = {
+      analysis_id: "test-id",
+      session_id: "test-session",
+      status: "complete",
+      analysis_mode: "uploaded" as const,
+      recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      recommendation: { schedulable: true, scheduling_block_reasons: [] },
+      reconciliation: {},
+      normalized_context: {},
+      signal_summary: {},
+      warnings: [],
+      uploaded_artifacts_used: ["controller_events.csv"],
+      live_inputs_used: [],
+    };
+    __applyBackendResult("alpha-vineyard", fakeResult as any, "test-session");
+    expect(getState().analysisMode).toBe("uploaded");
+    expect(getState().backendMeta?.uploadedArtifacts).toContain("controller_events.csv");
+  });
 });

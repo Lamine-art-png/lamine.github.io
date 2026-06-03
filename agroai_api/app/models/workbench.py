@@ -160,3 +160,4 @@ class WorkbenchAnalysisResult(BaseModel):
     live_inputs_used: List[str] = Field(default_factory=list)
     uploaded_artifacts_used: List[str] = Field(default_factory=list)
     warnings: List[str] = Field(default_factory=list)
+    source_rows: List[Dict[str, Any]] = Field(default_factory=list)

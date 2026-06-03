@@ -155,7 +155,7 @@ const SCENARIOS: Record<ScenarioId, Scenario> = {
       ["Flow meter", "Flow signal present — backend analysis required for values", "Flow evidence available", "Matched"],
       ["Field observation", "Mild afternoon stress", "Supports irrigation recommendation", "Matched"],
       ["Earth observation layer", "Elevated canopy stress index", "Supports water demand signal", "Matched"],
-      ["Talgil", "Runtime reachable, no selected production target", "Integration available, target selection pending", "Pending target"],
+      ["Talgil", "Target selection pending — runtime status not verified in offline evaluation", "Integration available, target selection pending", "Pending target"],
     ]),
     report: {
       farm: "Alpha Vineyard",
@@ -365,7 +365,7 @@ const SCENARIOS: Record<ScenarioId, Scenario> = {
       ["Flow meter", "Prior set variance +23%", "Applied-water variance flagged", "Review"],
       ["Field observation", "Trial rows watched separately", "Supports cautious recommendation", "Matched"],
       ["Earth observation layer", "Partner-provided sample layer", "Representative until authorized", "Pending target"],
-      ["Talgil", "Runtime reachable, trial target", "Production authorization required", "Pending target"],
+      ["Talgil", "Target selection pending — runtime status not verified in offline evaluation", "Production authorization required", "Pending target"],
     ]),
     report: {
       farm: "West Citrus",
@@ -534,7 +534,37 @@ export const ORIGIN_LABEL: Record<string, string> = {
   insufficient_context: "Evidence incomplete",
 };
 
+function mapSourceStatus(raw: string): SourceRow["status"] {
+  const s = (raw || "").toLowerCase();
+  if (s === "validated" || s === "accepted" || s === "matched") return "Matched";
+  if (s === "inconsistent" || s === "review") return "Review";
+  if (s === "unavailable" || s === "pending") return "Pending";
+  if (s === "connected source") return "Connected source";
+  return "Pending";
+}
+
 function buildBackendSources(result: WorkbenchAnalysisResult): SourceRow[] {
+  if (Array.isArray(result.source_rows) && result.source_rows.length > 0) {
+    const rows: SourceRow[] = result.source_rows.map((r) => ({
+      source: r.source_label,
+      latestSignal: r.latest_signal_summary,
+      records: `${r.selected_scope_record_count} / ${r.package_record_count}`,
+      contribution: r.contribution_label,
+      status: mapSourceStatus(r.status),
+    }));
+    const nc = (result.normalized_context ?? {}) as Record<string, unknown>;
+    if (nc.live_request) {
+      rows.push({
+        source: "Live provider",
+        latestSignal: (nc.provider_context as string) || "Live provider request",
+        records: "Live",
+        contribution: "Not scored",
+        status: "Connected source",
+      });
+    }
+    return rows;
+  }
+
   const recon = (result.reconciliation ?? {}) as Record<string, unknown>;
   const nc = (result.normalized_context ?? {}) as Record<string, unknown>;
   const counts = (result.signal_summary ?? {}) as Record<string, unknown>;
@@ -1129,5 +1159,18 @@ export function getProvenanceBadge(mode: AnalysisMode, origin: RecommendationOri
 // Test seam: reset store to a clean initial state.
 export function __resetForTest() {
   state = initialState();
+  emit();
+}
+
+export function __applyBackendResult(
+  scenarioId: ScenarioId,
+  result: WorkbenchAnalysisResult,
+  sessionId: string | null,
+) {
+  state = { ...state, scenarioId };
+  applyBackendResult(result, (result.analysis_mode as AnalysisMode) ?? "uploaded");
+  if (sessionId) {
+    state = { ...state, backendMeta: state.backendMeta ? { ...state.backendMeta, sessionId } : null };
+  }
   emit();
 }

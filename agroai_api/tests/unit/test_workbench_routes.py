@@ -535,3 +535,169 @@ def test_region_isolation_no_silent_fallback(client):
     warnings = body.get('warnings', [])
     region_warn = [w for w in warnings if 'nonexistent region' in str(w).lower() or 'no weather records matched' in str(w).lower()]
     assert region_warn, f"Expected region isolation warning, got warnings: {warnings}"
+
+
+# --- Section 16: Fifth-pass surgical corrections --------------------------------
+
+def test_scheduling_gate_override_rejected(client):
+    """Scheduling gate must reject even when override_reason is supplied."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'incomplete_evidence_review'})
+    session_id = created.json()['session']['session_id']
+    client.post(f'/v1/workbench/sessions/{session_id}/analyze', json={'session_id': session_id, 'mode': 'uploaded'})
+    r = client.post(
+        f'/v1/workbench/sessions/{session_id}/actions/schedule',
+        json={'actor': 'Ops', 'override_reason': 'Attempting to bypass scheduling gate.'},
+    )
+    assert r.status_code == 409
+    assert 'scheduling' in r.json()['detail'].lower()
+    assert 'override' not in r.json()['detail'].lower()
+
+
+def test_incomplete_schedule_no_override_returns_409(client):
+    """Incomplete evidence session must return 409 on schedule without override_reason."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'incomplete_evidence_review'})
+    session_id = created.json()['session']['session_id']
+    client.post(f'/v1/workbench/sessions/{session_id}/analyze', json={'session_id': session_id, 'mode': 'uploaded'})
+    r = client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule', json={'actor': 'Ops'})
+    assert r.status_code == 409
+
+
+def test_evidence_chain_unchanged_after_gate_rejection(client):
+    """Evidence chain must not advance after a scheduling gate rejection (with or without override_reason)."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'incomplete_evidence_review'})
+    session_id = created.json()['session']['session_id']
+    client.post(f'/v1/workbench/sessions/{session_id}/analyze', json={'session_id': session_id, 'mode': 'uploaded'})
+    chain_before = client.get(f'/v1/workbench/sessions/{session_id}/evidence-chain').json()['evidence_chain']
+    scheduled_before = next((s for s in chain_before if s['key'] == 'scheduled'), {}).get('status')
+    client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule', json={'actor': 'Ops'})
+    client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule',
+                json={'actor': 'Ops', 'override_reason': 'Force attempt'})
+    chain_after = client.get(f'/v1/workbench/sessions/{session_id}/evidence-chain').json()['evidence_chain']
+    scheduled_after = next((s for s in chain_after if s['key'] == 'scheduled'), {}).get('status')
+    assert scheduled_after == scheduled_before
+
+
+def test_validated_schedule_still_succeeds(client):
+    """Validated operating block must still schedule successfully (gate passes)."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'validated_operating_block'})
+    session_id = created.json()['session']['session_id']
+    client.post(f'/v1/workbench/sessions/{session_id}/analyze', json={'session_id': session_id, 'mode': 'uploaded'})
+    r = client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule', json={'actor': 'Ops'})
+    assert r.status_code == 200
+
+
+def test_validated_no_flow_warnings(client):
+    """Validated scenario must have no flow-related warnings."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'validated_operating_block'})
+    session_id = created.json()['session']['session_id']
+    analyzed = client.post(f'/v1/workbench/sessions/{session_id}/analyze',
+                           json={'session_id': session_id, 'mode': 'uploaded'})
+    warnings = analyzed.json().get('warnings', [])
+    flow_warns = [w for w in warnings if 'flow' in str(w).lower()]
+    assert not flow_warns, f"Unexpected flow warnings: {flow_warns}"
+
+
+def test_validated_pressure_stable(client):
+    """Validated scenario must report pressure stable in flow evidence notes."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'validated_operating_block'})
+    session_id = created.json()['session']['session_id']
+    analyzed = client.post(f'/v1/workbench/sessions/{session_id}/analyze',
+                           json={'session_id': session_id, 'mode': 'uploaded'})
+    rec = analyzed.json()['recommendation']
+    assert rec.get('flow_validation_status') == 'validated'
+    assert rec.get('duration_min') is not None
+    assert rec.get('estimated_volume_m3') is not None
+
+
+def test_report_savings_match_recommendation(client):
+    """Report export_rows savings must match recommendation savings."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'validated_operating_block'})
+    session_id = created.json()['session']['session_id']
+    analyzed = client.post(f'/v1/workbench/sessions/{session_id}/analyze',
+                           json={'session_id': session_id, 'mode': 'uploaded'})
+    rec = analyzed.json()['recommendation']
+    report = client.get(f'/v1/workbench/sessions/{session_id}/report').json()
+    assert report['metrics']['estimated_water_savings_percent'] == rec['estimated_water_savings_percent']
+    assert report['export_rows'][0]['estimated_water_savings_percent'] == rec['estimated_water_savings_percent']
+
+
+def test_mapping_booleans_all_false_for_incomplete(client):
+    """All mapping completeness booleans must be False for the incomplete evidence scenario."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'incomplete_evidence_review'})
+    session_id = created.json()['session']['session_id']
+    analyzed = client.post(f'/v1/workbench/sessions/{session_id}/analyze',
+                           json={'session_id': session_id, 'mode': 'uploaded'})
+    nc = analyzed.json()['normalized_context']
+    mapping_keys = [
+        'farm_mapping_complete', 'block_mapping_complete', 'block_boundary_mapped',
+        'crop_mapping_complete', 'variety_mapping_complete', 'soil_mapping_complete',
+        'irrigation_method_mapping_complete', 'field_observation_available', 'earth_observation_available',
+    ]
+    for key in mapping_keys:
+        assert nc.get(key) is False, f"Expected {key}=False for incomplete scenario, got {nc.get(key)!r}"
+
+
+def test_mapping_booleans_present_for_validated(client):
+    """Validated operating block must have farm, crop, soil mapping complete."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'validated_operating_block'})
+    session_id = created.json()['session']['session_id']
+    analyzed = client.post(f'/v1/workbench/sessions/{session_id}/analyze',
+                           json={'session_id': session_id, 'mode': 'uploaded'})
+    nc = analyzed.json()['normalized_context']
+    assert nc.get('farm_mapping_complete') is True
+    assert nc.get('crop_mapping_complete') is True
+    assert nc.get('soil_mapping_complete') is True
+    assert nc.get('irrigation_method_mapping_complete') is True
+
+
+def test_source_rows_returned_by_backend(client):
+    """Backend must return source_rows in the analysis result."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'validated_operating_block'})
+    session_id = created.json()['session']['session_id']
+    analyzed = client.post(f'/v1/workbench/sessions/{session_id}/analyze',
+                           json={'session_id': session_id, 'mode': 'uploaded'})
+    body = analyzed.json()
+    source_rows = body.get('source_rows', [])
+    assert isinstance(source_rows, list) and len(source_rows) > 0, "source_rows must be a non-empty list"
+    for row in source_rows:
+        assert 'source_label' in row
+        assert 'source_kind' in row
+        assert 'selected_scope_record_count' in row
+        assert 'package_record_count' in row
+        assert 'latest_signal_summary' in row
+        assert 'contribution_label' in row
+
+
+def test_source_rows_scope_vs_package_counts_differ(client):
+    """selected_scope_record_count must be <= package_record_count for each source row."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'validated_operating_block'})
+    session_id = created.json()['session']['session_id']
+    analyzed = client.post(f'/v1/workbench/sessions/{session_id}/analyze',
+                           json={'session_id': session_id, 'mode': 'uploaded'})
+    for row in analyzed.json().get('source_rows', []):
+        assert row['selected_scope_record_count'] <= row['package_record_count'], (
+            f"{row['source_label']}: selected {row['selected_scope_record_count']} > package {row['package_record_count']}"
+        )
+
+
+def test_incomplete_savings_duration_volume_withheld(client):
+    """Incomplete evidence scenario must withhold savings, duration, and volume."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'incomplete_evidence_review'})
+    session_id = created.json()['session']['session_id']
+    analyzed = client.post(f'/v1/workbench/sessions/{session_id}/analyze',
+                           json={'session_id': session_id, 'mode': 'uploaded'})
+    rec = analyzed.json()['recommendation']
+    assert rec.get('estimated_water_savings_percent') is None
+    assert rec.get('duration_min') is None
+    assert rec.get('estimated_volume_m3') is None
+
+
+def test_scheduling_409_message_no_override_hint(client):
+    """Scheduling 409 error message must not suggest that override_reason can bypass the gate."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'incomplete_evidence_review'})
+    session_id = created.json()['session']['session_id']
+    client.post(f'/v1/workbench/sessions/{session_id}/analyze', json={'session_id': session_id, 'mode': 'uploaded'})
+    r = client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule', json={'actor': 'Ops'})
+    detail = r.json()['detail']
+    assert 'supply override_reason' not in detail.lower()
+    assert 'scheduling gate' in detail.lower() or 'scheduling not allowed' in detail.lower()

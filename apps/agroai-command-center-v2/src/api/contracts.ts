@@ -159,6 +159,17 @@ export interface WorkbenchAnalysisResult {
   live_inputs_used?: string[];
   uploaded_artifacts_used?: string[];
   warnings?: string[];
+  source_rows?: Array<{
+    source_label: string;
+    source_kind: string;
+    selected_scope_record_count: number;
+    package_record_count: number;
+    latest_timestamp: string | null;
+    latest_signal_summary: string;
+    status: string;
+    limitations: string[];
+    contribution_label: string;
+  }>;
 }
 
 export interface EvidenceChainResponse {

@@ -13,9 +13,12 @@ export function VerifiedDecision() {
   const decision = useCommandStore((s) => s.decision);
   const phase = useCommandStore((s) => s.analysisPhase);
   const evidence = useCommandStore((s) => s.evidence);
-  const scenarioId = useCommandStore((s) => s.scenarioId);
   const ready = phase === "complete";
-  const isIncomplete = scenarioId === "incomplete-evidence";
+  const showGuidance =
+    decision.schedulable === false ||
+    (Array.isArray(decision.limitations) && decision.limitations.length > 0) ||
+    (Array.isArray(decision.nextEvidenceRequired) && decision.nextEvidenceRequired.length > 0);
+  const isIncomplete = showGuidance;
 
   const byKey = Object.fromEntries(evidence.map((s) => [s.key, s]));
   const canSchedule = ready && decision.schedulable === true && byKey.recommended?.status === "Complete";

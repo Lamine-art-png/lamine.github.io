@@ -32,8 +32,10 @@ function download(name: string, content: string, type: string) {
 export function ExecutiveReportPreview() {
   const report = useCommandStore((s) => s.report);
   const decision = useCommandStore((s) => s.decision);
-  const scenarioId = useCommandStore((s) => s.scenarioId);
-  const isIncomplete = scenarioId === "incomplete-evidence";
+  const isIncomplete =
+    decision.schedulable === false ||
+    (Array.isArray(decision.limitations) && decision.limitations.length > 0) ||
+    (Array.isArray(decision.nextEvidenceRequired) && decision.nextEvidenceRequired.length > 0);
   const now = new Date().toLocaleString();
 
   const hasBaseline = typeof decision.baselineValueMm === "number";
@@ -55,6 +57,7 @@ export function ExecutiveReportPreview() {
     ["Estimated water savings", savingsRow],
     ...(hasBaseline && decision.baselineLabel ? [["Baseline", decision.baselineLabel] as [string, string]] : []),
     ...(decision.baselineCalculationNote ? [["Savings calculation", decision.baselineCalculationNote] as [string, string]] : []),
+    ...(hasBaseline ? [["Savings note", "This is a representative evaluation-baseline estimate, not a verified tenant-specific production saving."] as [string, string]] : []),
     ["Calibration status", decision.calibrationStatus || "Defaults applied — not farm-specific"],
     ["Evidence completeness", report.evidenceCompleteness],
   ];

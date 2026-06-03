@@ -591,6 +591,12 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
         context.setdefault("warnings", []).extend(area_warnings_from_profile)
     if region_warnings:
         context.setdefault("warnings", []).extend(region_warnings)
+
+    context["mapping_completeness"] = _mapping_completeness(context, rows)
+    context["source_rows"] = _build_source_rows(
+        rows, farm, block, region or None,
+        context["metrics"], context["counts"], flow_evidence,
+    )
     return context
 
 
@@ -987,6 +993,194 @@ def _analysis_trace(context: Dict[str, Any], reconciliation: ReconciliationResul
     ]
 
 
+def _build_source_rows(
+    rows: Dict[str, List[Dict[str, Any]]],
+    farm: str,
+    block: str,
+    region: str | None,
+    metrics: Dict[str, Any],
+    counts: Dict[str, Any],
+    flow_evidence: Dict[str, Any],
+) -> List[Dict[str, Any]]:
+    result = []
+
+    all_ctrl = rows.get("controller_events", []) + rows.get("controller_logs", [])
+    sel_ctrl = _rows_for(all_ctrl, farm, block)
+    ctrl_ts = _latest_timestamp(sel_ctrl)
+    ctrl_summary = f"{len(sel_ctrl)} events for {block}"
+    if flow_evidence.get("value_m3h"):
+        ctrl_summary += f"; flow {flow_evidence['value_m3h']:.1f} m³/h"
+    if flow_evidence.get("pressure_state") == "stable":
+        ctrl_summary += "; pressure stable"
+    ctrl_status = flow_evidence.get("status", "unavailable")
+    result.append({
+        "source_label": "Controller history",
+        "source_kind": "controller_events",
+        "selected_scope_record_count": len(sel_ctrl),
+        "package_record_count": len(all_ctrl),
+        "latest_timestamp": ctrl_ts,
+        "latest_signal_summary": ctrl_summary,
+        "status": ctrl_status,
+        "limitations": list(flow_evidence.get("notes", [])),
+        "contribution_label": "Not scored",
+    })
+
+    all_weather = rows.get("weather", [])
+    sel_weather = (
+        [r for r in all_weather if str(r.get("region", "")).strip().lower() == region.lower()]
+        if region else all_weather
+    )
+    avg_eto = metrics.get("avg_eto_mm")
+    weather_summary = f"{len(sel_weather)} records"
+    if avg_eto is not None:
+        weather_summary += f"; avg ETo {avg_eto:.2f} mm/day"
+    weather_lims = ([f"No weather records matched region '{region}'"] if not sel_weather and region else [])
+    result.append({
+        "source_label": "Weather demand",
+        "source_kind": "weather",
+        "selected_scope_record_count": len(sel_weather),
+        "package_record_count": len(all_weather),
+        "latest_timestamp": _latest_timestamp(sel_weather),
+        "latest_signal_summary": weather_summary,
+        "status": "accepted" if sel_weather else "unavailable",
+        "limitations": weather_lims,
+        "contribution_label": "Not scored",
+    })
+
+    all_soil = rows.get("soil_moisture", [])
+    sel_soil = _rows_for(all_soil, farm, block)
+    avg_deficit = metrics.get("avg_deficit_percent")
+    soil_summary = f"{len(sel_soil)} readings for {block}"
+    if avg_deficit is not None:
+        soil_summary += f"; avg deficit {avg_deficit:.1f}%"
+    result.append({
+        "source_label": "Soil moisture",
+        "source_kind": "soil_moisture",
+        "selected_scope_record_count": len(sel_soil),
+        "package_record_count": len(all_soil),
+        "latest_timestamp": _latest_timestamp(sel_soil),
+        "latest_signal_summary": soil_summary,
+        "status": "accepted" if sel_soil else "unavailable",
+        "limitations": [],
+        "contribution_label": "Not scored",
+    })
+
+    all_flow = rows.get("flow_meter", [])
+    sel_flow = _rows_for(all_flow, farm, block)
+    flow_meter_status = flow_evidence.get("status", "unavailable")
+    flow_summary = f"{len(sel_flow)} records for {block}"
+    if flow_evidence.get("value_m3h"):
+        flow_summary += f"; {flow_evidence['value_m3h']:.1f} m³/h"
+    result.append({
+        "source_label": "Flow meter",
+        "source_kind": "flow_meter",
+        "selected_scope_record_count": len(sel_flow),
+        "package_record_count": len(all_flow),
+        "latest_timestamp": _latest_timestamp(sel_flow),
+        "latest_signal_summary": flow_summary,
+        "status": flow_meter_status,
+        "limitations": list(flow_evidence.get("notes", [])),
+        "contribution_label": "Not scored",
+    })
+
+    all_notes = rows.get("field_notes", [])
+    notes_count = counts.get("field_notes_parsed", 0)
+    result.append({
+        "source_label": "Field observation",
+        "source_kind": "field_notes",
+        "selected_scope_record_count": notes_count,
+        "package_record_count": len(all_notes),
+        "latest_timestamp": None,
+        "latest_signal_summary": f"{notes_count} field observation{'s' if notes_count != 1 else ''}",
+        "status": "accepted" if notes_count > 0 else "unavailable",
+        "limitations": [],
+        "contribution_label": "Not scored",
+    })
+
+    all_sat = rows.get("satellite_observation", [])
+    sel_sat = _rows_for(all_sat, farm, block)
+    result.append({
+        "source_label": "Earth observation layer",
+        "source_kind": "satellite_observation",
+        "selected_scope_record_count": len(sel_sat),
+        "package_record_count": len(all_sat),
+        "latest_timestamp": _latest_timestamp(sel_sat),
+        "latest_signal_summary": f"{len(sel_sat)} observations for {block}",
+        "status": "accepted" if sel_sat else "unavailable",
+        "limitations": [],
+        "contribution_label": "Not scored",
+    })
+
+    all_profile = rows.get("crop_profile", [])
+    sel_profile = _rows_for(all_profile, farm, block)
+    result.append({
+        "source_label": "Crop profile",
+        "source_kind": "crop_profile",
+        "selected_scope_record_count": len(sel_profile),
+        "package_record_count": len(all_profile),
+        "latest_timestamp": None,
+        "latest_signal_summary": f"Profile for {farm} / {block}",
+        "status": "accepted" if all_profile else "unavailable",
+        "limitations": [],
+        "contribution_label": "Not scored",
+    })
+
+    all_costs = rows.get("water_costs", [])
+    sel_costs = (
+        [r for r in all_costs if str(r.get("region", "")).strip().lower() == region.lower()]
+        if region else all_costs
+    )
+    result.append({
+        "source_label": "Water costs",
+        "source_kind": "water_costs",
+        "selected_scope_record_count": len(sel_costs),
+        "package_record_count": len(all_costs),
+        "latest_timestamp": None,
+        "latest_signal_summary": f"{len(sel_costs)} cost record{'s' if len(sel_costs) != 1 else ''}",
+        "status": "accepted" if sel_costs else "unavailable",
+        "limitations": [],
+        "contribution_label": "Not scored",
+    })
+
+    return result
+
+
+def _mapping_completeness(
+    context: Dict[str, Any],
+    rows: Dict[str, List[Dict[str, Any]]],
+) -> Dict[str, bool]:
+    unknown_values = {"", "unknown", "not available", "null", "none", "provider context pending"}
+    farm = str(context.get("farm") or "").strip()
+    block = str(context.get("block") or "").strip()
+    crop = str(context.get("crop") or "").strip().lower()
+    variety = str(context.get("variety") or "").strip().lower()
+    soil = str(context.get("soil") or "").strip().lower()
+    method = str(context.get("irrigation_method") or "").strip().lower()
+    counts = context.get("counts", {})
+
+    farm_known = farm.lower() not in unknown_values and "unnamed" not in farm.lower()
+    block_known = block.lower() not in unknown_values
+    crop_known = crop not in unknown_values
+    variety_known = variety not in unknown_values
+    soil_known = soil not in unknown_values
+    method_known = method not in unknown_values
+
+    satellite_available = bool(_rows_for(rows.get("satellite_observation", []), farm, block))
+    field_notes_available = counts.get("field_notes_parsed", 0) > 0
+
+    return {
+        "farm_mapping_complete": farm_known,
+        "block_mapping_complete": block_known and crop_known and soil_known and method_known,
+        "block_boundary_mapped": satellite_available,
+        "crop_mapping_complete": crop_known,
+        "variety_mapping_complete": variety_known,
+        "soil_mapping_complete": soil_known,
+        "irrigation_method_mapping_complete": method_known,
+        "field_observation_available": field_notes_available,
+        "earth_observation_available": satellite_available,
+    }
+
+
 def _data_source_summary(artifacts: List[WorkbenchDataArtifact], live_source: str | None = None) -> Dict[str, Any]:
     source_kinds = sorted({artifact.source_kind for artifact in artifacts})
     if live_source and not source_kinds:
@@ -1032,6 +1226,7 @@ def _public_context(context: Dict[str, Any]) -> Dict[str, Any]:
         "field_notes_used": context.get("field_notes", []),
         "live_request": context.get("live_request"),
         "normalized_signal_count": len(context.get("signals", [])),
+        **(context.get("mapping_completeness") or {}),
     }
 
 
@@ -1175,6 +1370,7 @@ def analyze_session(
         live_inputs_used=list(context.get("live_inputs_used", [])),
         uploaded_artifacts_used=[artifact.filename for artifact in artifacts],
         warnings=list(context.get("warnings", [])),
+        source_rows=list(context.get("source_rows", [])),
     )
     store["analysis"] = result
     store["session"].updated_at = datetime.utcnow()
@@ -1279,15 +1475,14 @@ def record_evidence_action(
                 "override_label": "Evidence sequence override applied with supplied reason.",
             })
 
-    # Scheduling gate: only allow "scheduled" when the recommendation is schedulable.
+    # Scheduling gate: unconditional — override_reason cannot bypass this gate.
     if action_type == "scheduled":
         analysis = store.get("analysis")
         if analysis is not None:
             rec = getattr(analysis, "recommendation", None) or {}
             if isinstance(rec, dict) and not rec.get("schedulable", False):
                 reasons = rec.get("scheduling_block_reasons") or ["Recommendation does not meet scheduling gate"]
-                if not override_reason:
-                    raise SchedulingNotAllowed(reasons)
+                raise SchedulingNotAllowed(reasons)
 
     timestamp = datetime.utcnow().isoformat()
     summary = evidence_summary or EVIDENCE_DEFAULT_TEXT[action_type]

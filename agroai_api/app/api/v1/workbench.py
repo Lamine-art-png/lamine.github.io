@@ -111,7 +111,7 @@ def _record_action(session_id: str, action_type: str, payload: WorkbenchActionRe
     except SchedulingNotAllowed as exc:
         raise HTTPException(
             409,
-            f"Scheduling not allowed: {'; '.join(exc.reasons)}. Supply override_reason to record with an audit entry.",
+            f"Scheduling not allowed: {'; '.join(exc.reasons)}. The recommendation does not meet the scheduling gate and cannot be scheduled.",
         )
 
 
