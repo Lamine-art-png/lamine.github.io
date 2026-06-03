@@ -57,7 +57,12 @@ self.addEventListener("fetch", (event) => {
       const copy = response.clone();
       caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
       return response;
-    }).catch(() => caches.match(event.request)));
+    }).catch(async () => {
+      const exact = await caches.match(event.request);
+      if (exact) return exact;
+      if (event.request.mode === "navigate") return caches.match("./index.html");
+      return caches.match(event.request);
+    }));
     return;
   }
   if (isModule) {

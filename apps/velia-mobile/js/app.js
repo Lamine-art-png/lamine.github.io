@@ -91,6 +91,7 @@ function buildAiContext() {
     },
     calculateConfidence: ({ missingData, needScore }) => Math.max(0.2, Math.min(0.95, (needScore || 0.6) - ((missingData?.length || 0) * 0.08))),
     generateExplanation: ({ decision }) => `Velia checked weather, field profile, observations, and recent irrigation before recommending ${decision?.action || "monitoring"}.`,
+    isPreviewRender: () => true,
   };
 }
 
@@ -495,8 +496,17 @@ function voiceCard(fieldId, rec) {
 
 function buildAlerts() {
   const generated = [];
+  const seenAlerts = { ...(state.alertFirstSeen || {}) };
+  let firstSeenChanged = false;
   const addGeneratedAlert = (alert) => {
     const keyed = { ...alert, key: alert.key || alertKey(alert), id: alert.id || alert.key || alertKey(alert) };
+    const fingerprint = alertFingerprint(keyed);
+    const previous = seenAlerts[keyed.key];
+    if (!previous || previous.fingerprint !== fingerprint) {
+      seenAlerts[keyed.key] = { firstSeenAt: keyed.createdAt || new Date().toISOString(), fingerprint };
+      firstSeenChanged = true;
+    }
+    keyed.createdAt = seenAlerts[keyed.key].firstSeenAt;
     if (!isAlertDismissed(keyed, state.dismissedAlerts || {})) generated.push(keyed);
   };
   for (const field of state.fields) {
@@ -507,6 +517,10 @@ function buildAlerts() {
     if (!field.lastObservation || field.verificationStatus === "overdue") addGeneratedAlert({ type: "verification", severity: "high", fieldId: field.id, conditionToken: `verification:${field.verificationStatus || "missing"}:${field.lastObservation || "none"}`, createdAt: field.updatedAt || new Date().toISOString(), explanation: "Velia needs a recent field observation.", action: "Record a field check.", resolved: false });
     if (!field.sensorData) addGeneratedAlert({ type: "sensor", severity: "low", fieldId: field.id, conditionToken: `sensor:${field.dataSource || "none"}`, createdAt: new Date().toISOString(), explanation: "No sensor reading is available.", action: "Use a manual observation to improve confidence.", resolved: false });
     if (confidenceText(readConfidence(rec)).toLowerCase() === "low") addGeneratedAlert({ type: "confidence", severity: "medium", fieldId: field.id, conditionToken: `confidence:${readConfidence(rec) || "low"}`, createdAt: new Date().toISOString(), explanation: "Decision confidence is low.", action: "Add crop, soil, weather, or observation data.", resolved: false });
+  }
+  if (firstSeenChanged) {
+    state.alertFirstSeen = seenAlerts;
+    persist();
   }
   return sortAlerts([...(state.alertHistory || []), ...generated].filter((a) => !a.resolved)).slice(0, 12);
 }

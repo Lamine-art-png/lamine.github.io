@@ -18,14 +18,18 @@ function ageMinutes(weather, now = Date.now()) {
 
 function withCacheMetadata(weather, { cached, stale, provider, fallbackStatus } = {}) {
   const age = ageMinutes(weather);
+  const freshness = {
+    ...(weather?.freshness || {}),
+    ...(age == null ? {} : { ageMinutes: age }),
+  };
   return {
     ...weather,
     provider: weather?.provider || provider,
     cached,
     stale: Boolean(stale ?? weather?.stale),
-    freshness: weather?.freshness || (age == null ? undefined : { ageMinutes: age }),
+    freshness: Object.keys(freshness).length ? freshness : undefined,
     weatherTimestamp: weather?.weatherTimestamp || weather?.lastUpdated || weather?.cachedAt,
-    fallbackStatus: weather?.fallbackStatus || fallbackStatus,
+    fallbackStatus: fallbackStatus ?? weather?.fallbackStatus,
   };
 }
 
@@ -42,10 +46,11 @@ export const weatherService = {
         cached: true,
         stale: true,
         provider: cached.provider || provider,
-        fallbackStatus: cached.fallbackStatus || "offline cached weather",
+        fallbackStatus: "offline cached weather",
       });
     }
 
+    let backendFailure = null;
     try {
       if (navigator.onLine) {
         const remote = await apiClient.getWeatherContext({ location, coordinates, lat: coordinates?.lat, lon: coordinates?.lon });
@@ -58,16 +63,17 @@ export const weatherService = {
         storage.set(WK, enrichedRemote);
         return withCacheMetadata(enrichedRemote, { cached: false, stale: remote.stale, provider: enrichedRemote.provider });
       }
-    } catch {
+    } catch (error) {
+      backendFailure = error;
       // fallback to local provider adapter
     }
 
-    if (!forceRefresh && cached) {
+    if (cached) {
       return withCacheMetadata(cached, {
         cached: true,
         stale: true,
         provider: cached.provider || provider,
-        fallbackStatus: cached.fallbackStatus || "expired cached weather",
+        fallbackStatus: backendFailure ? `stale cached weather: ${backendFailure.message || "backend refresh failed"}` : "expired cached weather",
       });
     }
 

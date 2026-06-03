@@ -211,6 +211,24 @@ cd apps/velia-mobile
 npm test
 ```
 
+Browser acceptance requires the app to be served locally and Playwright browsers to be installed:
+
+```bash
+cd apps/velia-mobile
+npm install --save-dev playwright
+npx playwright install chromium
+python3 -m http.server 4174
+```
+
+In a second terminal:
+
+```bash
+cd apps/velia-mobile
+npm run test:browser
+```
+
+The browser suite validates onboarding persistence, CTA alignment, navigation, generated-alert resolution persistence, demo mode labels, offline banner behavior, and offline reload/navigation after one online visit.
+
 ## Future production deployment path
 
 1. Move AI orchestrator and tool execution to backend/serverless APIs.

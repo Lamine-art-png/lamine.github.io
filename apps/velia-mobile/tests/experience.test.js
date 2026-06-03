@@ -117,6 +117,8 @@ test('experience source includes safe empty states, provenance, alerts, and load
   assert.ok(appSource.includes('Add field location to unlock map-based intelligence.'));
   assert.ok(appSource.includes('prepareRecommendationSnapshot'));
   assert.ok(appSource.includes('scheduleDecisionRefreshes'));
+  assert.ok(appSource.includes('alertFirstSeen'));
+  assert.ok(appSource.includes('previous.fingerprint !== fingerprint'));
   assert.ok(!appSource.includes('state = recordRecommendationHistory(state, field.id, rec);\\n  persist();\\n  return'));
 });
 
@@ -125,6 +127,7 @@ test('service worker caches mobile modules for offline reload', () => {
   assert.ok(swSource.includes('./js/services/weatherService.js'));
   assert.ok(swSource.includes('./js/ai/aiOrchestrator.js'));
   assert.ok(swSource.includes('const isModule'));
+  assert.ok(swSource.includes('event.request.mode === "navigate") return caches.match("./index.html")'));
   assert.ok(swSource.includes('caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy))'));
 });
 

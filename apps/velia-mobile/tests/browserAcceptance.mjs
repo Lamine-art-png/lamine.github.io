@@ -102,6 +102,9 @@ await page.context().setOffline(true);
 await page.reload({ waitUntil: "domcontentloaded" });
 await expectText("Offline mode active");
 await expectText("Silverado Vineyard");
+await page.goto(`${baseUrl}/?demo=1&offline-nav=${Date.now()}`, { waitUntil: "domcontentloaded" });
+await expectText("Offline mode active");
+await expectText("Silverado Vineyard");
 
 await browser.close();
 console.log("Velia mobile browser acceptance passed");

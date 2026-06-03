@@ -85,14 +85,15 @@ test('weather service preserves stale backend metadata', async () => {
     rainChance: 30,
     forecastSummary: 'Backend stale',
     weatherTimestamp: '2026-06-02T10:00:00.000Z',
-    freshness: { ageMinutes: 180 },
+    freshness: { ageMinutes: 180, source: 'backend' },
     stale: true,
     fallbackStatus: 'stale provider cache',
   });
   const weather = await weatherService.getWeather({ location:'Napa', forceRefresh:true });
   assert.equal(weather.stale, true);
   assert.equal(weather.fallbackStatus, 'stale provider cache');
-  assert.deepEqual(weather.freshness, { ageMinutes: 180 });
+  assert.ok(weather.freshness.ageMinutes > 180);
+  assert.equal(weather.freshness.source, 'backend');
   assert.equal(weather.weatherTimestamp, '2026-06-02T10:00:00.000Z');
 });
 
@@ -106,4 +107,43 @@ test('offline cached response is honest about staleness and age', async () => {
   assert.equal(weather.stale, true);
   assert.equal(weather.fallbackStatus, 'offline cached weather');
   assert.ok(weather.freshness.ageMinutes >= 89);
+});
+
+test('cached weather age is recomputed instead of frozen', async () => {
+  resetWeather();
+  const old = new Date(Date.now() - 65 * 60000).toISOString();
+  global.localStorage.setItem('velia-mobile:weather_cache', JSON.stringify({
+    temperature: 64,
+    forecastSummary: 'Cached',
+    weatherTimestamp: old,
+    cachedAt: old,
+    freshness: { ageMinutes: 1, source: 'backend' },
+    stale: false,
+  }));
+  Object.defineProperty(global, 'navigator', { value: { onLine: false }, configurable: true });
+  const weather = await weatherService.getWeather({ location:'Napa' });
+  assert.ok(weather.freshness.ageMinutes >= 64);
+  assert.equal(weather.freshness.source, 'backend');
+});
+
+test('force refresh prefers stale real cache over mock after backend failure', async () => {
+  resetWeather();
+  const old = new Date(Date.now() - 45 * 60000).toISOString();
+  global.localStorage.setItem('velia-mobile:weather_cache', JSON.stringify({
+    temperature: 62,
+    rainChance: 40,
+    forecastSummary: 'Real cached provider weather',
+    weatherTimestamp: old,
+    cachedAt: old,
+    fallbackStatus: 'live',
+    stale: false,
+  }));
+  apiClient.getWeatherContext = async () => { throw new Error('backend unavailable'); };
+  const weather = await weatherService.getWeather({ location:'Napa', forceRefresh:true });
+  assert.equal(weather.temperature, 62);
+  assert.equal(weather.cached, true);
+  assert.equal(weather.stale, true);
+  assert.equal(weather.weatherTimestamp, old);
+  assert.ok(weather.freshness.ageMinutes >= 44);
+  assert.match(weather.fallbackStatus, /stale cached weather: backend unavailable/);
 });
