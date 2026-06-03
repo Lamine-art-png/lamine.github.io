@@ -34,7 +34,7 @@ const FALLBACK_CONNECTED_SYSTEMS: SystemRow[] = [
     type: "controller",
     state: "Limited",
     lastChecked: "Checked on workspace open",
-    records: "Runtime reachable",
+    records: "Status is unavailable or limited — runtime connectivity not confirmed",
     targets: "Target selection required",
     limitations: [
       "Production target selection requires authorized farm mapping",
@@ -58,7 +58,7 @@ const FALLBACK_PARTNER_FEEDS: SystemRow[] = [
     nextAction: "Add farm coordinates to improve weather resolution",
   },
   {
-    name: "Earth observation",
+    name: "Earth observation layer",
     type: "partner",
     state: "Limited",
     lastChecked: "Checked on workspace open",
@@ -86,7 +86,7 @@ const FALLBACK_PARTNER_FEEDS: SystemRow[] = [
 ];
 
 const CONTROLLER_NAMES = new Set(["wiseconn", "talgil"]);
-const PARTNER_NAMES = new Set(["weather", "earth observation", "agronomic context"]);
+const PARTNER_NAMES = new Set(["weather", "earth observation layer", "agronomic context"]);
 
 function mapProviderStatus(ps: ProviderStatus): SystemRow {
   const isController = CONTROLLER_NAMES.has(ps.provider.toLowerCase());

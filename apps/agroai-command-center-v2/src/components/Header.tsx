@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { actions, useCommandStore, SCENARIO_OPTIONS, getScenarioFarmName, getProvenanceBadge } from "../state/commandStore";
+import { actions, useCommandStore, SCENARIO_OPTIONS, getProvenanceBadge } from "../state/commandStore";
 import type { ScenarioId } from "../state/commandStore";
 import { BackendBadge, StatusBadge } from "./StatusBadge";
 
@@ -10,9 +10,10 @@ export function Header() {
   const analysisMode = useCommandStore((s) => s.analysisMode);
   const recommendationOrigin = useCommandStore((s) => s.recommendationOrigin);
   const evidence = useCommandStore((s) => s.evidence);
+  const displayFarmName = useCommandStore((s) => s.displayFarmName);
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const farmName = getScenarioFarmName(scenarioId);
+  const farmName = displayFarmName;
   const currentScenarioLabel = SCENARIO_OPTIONS.find((s) => s.id === scenarioId)?.name ?? "Validated operating block";
   const evidenceDone = evidence.filter((s) => s.status === "Complete").length;
   const evidenceTotal = evidence.length;

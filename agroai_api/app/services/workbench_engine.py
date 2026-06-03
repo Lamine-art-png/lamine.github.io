@@ -462,8 +462,20 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
     soil_rows = _rows_for(rows.get("soil_moisture", []), farm, block)
     satellite_rows = _rows_for(rows.get("satellite_observation", []), farm, block)
     field_notes = _field_note_support(rows.get("field_notes", []), farm, block)
-    weather_rows = rows.get("weather", [])
-    water_cost_rows = rows.get("water_costs", [])
+    # Filter weather and water-cost rows to the profile region when available.
+    region = str(profile.get("region") or "").strip()
+    all_weather_rows = rows.get("weather", [])
+    all_water_cost_rows = rows.get("water_costs", [])
+    if region:
+        weather_rows = [r for r in all_weather_rows if str(r.get("region", "")).strip().lower() == region.lower()]
+        water_cost_rows = [r for r in all_water_cost_rows if str(r.get("region", "")).strip().lower() == region.lower()]
+        if not weather_rows:
+            weather_rows = all_weather_rows
+        if not water_cost_rows:
+            water_cost_rows = all_water_cost_rows
+    else:
+        weather_rows = all_weather_rows
+        water_cost_rows = all_water_cost_rows
 
     avg_eto = _avg(row.get("eto_mm", row.get("eto")) for row in weather_rows)
     rain_total = sum(value for value in (_to_float(row.get("rain_forecast_mm", row.get("rain"))) for row in weather_rows) if value)
@@ -482,6 +494,10 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
     applied_variance = max_flow_variance if max_flow_variance is not None else max_controller_variance
 
     source_kinds = sorted({artifact.source_kind for artifact in artifacts})
+    operating_window = str(profile.get("operating_window") or "").strip() or None
+    evaluation_baseline_mm = profile.get("evaluation_baseline_mm")
+    evaluation_baseline_label = str(profile.get("evaluation_baseline_label") or "").strip() or None
+
     context: Dict[str, Any] = {
         "signals": signals,
         "farm": farm,
@@ -493,6 +509,10 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
         "root_zone_depth_cm": profile.get("root_zone_depth_cm", "not available"),
         "growth_stage": profile.get("growth_stage", "not available"),
         "management_goal": profile.get("management_goal", "not available"),
+        "region": region or None,
+        "operating_window": operating_window,
+        "evaluation_baseline_mm": evaluation_baseline_mm,
+        "evaluation_baseline_label": evaluation_baseline_label,
         "weather_window": _date_window(weather_rows),
         "moisture_deficit": _fmt_number(avg_deficit, "%", 1),
         "flow_variance": _fmt_number(applied_variance, "%", 1),
@@ -734,19 +754,35 @@ def generate_recommendation(reconciliation: ReconciliationResult, context: Dict[
     net_depth = decision.get("net_irrigation_depth_mm")
     gross_depth = decision.get("gross_irrigation_depth_mm")
     volume = decision.get("estimated_volume_m3")
+    block = str(context.get("block") or "")
+    block_label = f" {block}" if block and block not in ("not available", "") else ""
     action_label = decision.get("recommended_action") or "Decision pending source review"
     if decision.get("action") == "irrigate":
         if duration is not None:
-            action_label = f"Irrigate {gross_depth:.1f} mm gross in approved window"
+            action_label = f"Irrigate{block_label} — {gross_depth:.1f} mm gross ({duration:.0f} min) in approved window"
         else:
-            action_label = "Irrigate after validating flow evidence"
+            action_label = f"Irrigate{block_label} — validate flow evidence before scheduling"
+
+    # Compute savings against evaluation baseline if available and action is irrigate.
+    estimated_water_savings_pct: float | None = None
+    baseline_mm = _to_float(context.get("evaluation_baseline_mm"))
+    baseline_label = context.get("evaluation_baseline_label")
+    baseline_calculation_note: str | None = None
+    if decision.get("action") == "irrigate" and gross_depth is not None and baseline_mm and baseline_mm > 0:
+        savings = max(0.0, (baseline_mm - gross_depth) / baseline_mm * 100.0)
+        estimated_water_savings_pct = round(savings, 1)
+        baseline_calculation_note = (
+            f"Savings = (baseline {baseline_mm} mm − recommended {gross_depth:.1f} mm gross) / baseline × 100 = {estimated_water_savings_pct}%"
+        )
+
+    next_evidence_required = list(decision.get("missing_inputs", []))
 
     recommendation = {
         "action": action_label,
         "decision": action_label,
         "start_time": decision.get("timing_window"),
         "start": decision.get("timing_window"),
-        "duration": f"{duration:.1f} min" if duration is not None else None,
+        "duration": f"{duration:.0f} min" if duration is not None else None,
         "duration_min": duration,
         "depth": f"{net_depth:.1f} mm net" if net_depth is not None else None,
         "depth_mm": net_depth,
@@ -761,16 +797,25 @@ def generate_recommendation(reconciliation: ReconciliationResult, context: Dict[
         "assumptions": decision.get("assumptions", []),
         "limitations": decision.get("limitations", []),
         "missing_inputs": decision.get("missing_inputs", []),
+        "next_evidence_required": next_evidence_required,
         "verification_requirement": "; ".join(decision.get("verification_requirements", [])),
         "calculation_trace": decision.get("calculation_trace", {}),
         "calibration_status": decision.get("calibration_status"),
         "calibration_pack_version": decision.get("calibration_pack_version"),
         "recommendation_origin": origin,
         "flow_validation_status": decision.get("flow_validation_status"),
+        "flow_validation_notes": decision.get("flow_validation_notes", []),
         "recent_irrigation_credit_status": decision.get("recent_irrigation_credit_status"),
+        "recent_irrigation_credit_notes": decision.get("recent_irrigation_credit_notes", []),
         "kernel_action": decision.get("action"),
         "duration_basis": decision.get("duration_basis"),
         "no_fabricated_duration": duration is None,
+        "estimated_water_savings_percent": estimated_water_savings_pct,
+        "baseline_label": baseline_label,
+        "baseline_value_mm": baseline_mm,
+        "recommended_gross_depth_mm": gross_depth,
+        "baseline_calculation_note": baseline_calculation_note,
+        "evaluation_reference_time": orchestrated.get("evaluation_reference_time"),
     }
 
     if decision.get("action") in {"insufficient_data", "inspect"} or reconciliation.confidence_score < 0.55:
@@ -905,6 +950,7 @@ def _data_source_summary(artifacts: List[WorkbenchDataArtifact], live_source: st
 
 
 def _public_context(context: Dict[str, Any]) -> Dict[str, Any]:
+    area_ha = context.get("area")
     return {
         "farm": context.get("farm"),
         "block": context.get("block"),
@@ -915,6 +961,12 @@ def _public_context(context: Dict[str, Any]) -> Dict[str, Any]:
         "root_zone_depth_cm": context.get("root_zone_depth_cm"),
         "growth_stage": context.get("growth_stage"),
         "management_goal": context.get("management_goal"),
+        "region": context.get("region"),
+        "operating_window": context.get("operating_window"),
+        "area_ha": area_ha,
+        "area_unit": "ha" if area_ha is not None else None,
+        "evaluation_baseline_mm": context.get("evaluation_baseline_mm"),
+        "evaluation_baseline_label": context.get("evaluation_baseline_label"),
         "weather_window": context.get("weather_window"),
         "moisture_deficit": context.get("moisture_deficit"),
         "flow_variance": context.get("flow_variance"),

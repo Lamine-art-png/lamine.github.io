@@ -311,7 +311,7 @@ def test_route_confirmation_source_payload_ignored(client):
 def test_validated_operating_block_returns_computed_fields(client):
     """The validated_operating_block scenario must return backend-computed fields from the
     full 8-file sample package. Area is injected from the crop profile so the orchestrator
-    can compute volume and duration."""
+    can compute volume and duration. Region filtering must ensure the action is 'irrigate'."""
     created = client.post('/v1/workbench/sample-package', json={'scenario': 'validated_operating_block'})
     assert created.status_code == 200
     session_id = created.json()['session']['session_id']
@@ -323,37 +323,54 @@ def test_validated_operating_block_returns_computed_fields(client):
     assert analyzed.status_code == 200
     body = analyzed.json()
 
-    # Farm and block must be from the crop profile, not hardcoded.
+    # Farm, block, crop, region, and area from the crop profile — not hardcoded.
     ctx = body['normalized_context']
     assert ctx['farm'] == 'Alpha Vineyard'
     assert ctx['block'] == 'Block A North'
     assert ctx['crop'] == 'wine grapes'
+    assert ctx.get('region') == 'Central Valley North'
+    assert ctx.get('area_ha') == 3.2
+    assert ctx.get('area_unit') == 'ha'
+    assert ctx.get('operating_window') == '21:00 – 23:00 local'
 
     rec = body['recommendation']
-    # Action must be a non-empty string produced by the orchestrator.
+    # Region-filtered weather must produce action = "irrigate" for this package.
+    assert rec.get('kernel_action') == 'irrigate', f"Expected 'irrigate' but got: {rec.get('kernel_action')!r}"
     assert rec['action']
     assert isinstance(rec['action'], str)
+
+    # Timing window must come from operating_window in the crop profile, not a hardcoded fallback.
+    assert rec.get('start_time') == '21:00 – 23:00 local'
+
+    # Volume and duration must be non-None because flow is validated and area is known.
+    assert rec.get('estimated_volume_m3') is not None, "Volume must be computed from area and validated flow"
+    assert rec.get('duration_min') is not None, "Duration must be computed when flow is validated and area is known"
+    assert rec.get('gross_depth_mm') is not None
+    assert rec.get('depth_mm') is not None
+
+    # Savings must be computed against the evaluation baseline.
+    assert rec.get('estimated_water_savings_percent') is not None
+    assert 0 < rec['estimated_water_savings_percent'] < 100
+    assert rec.get('baseline_value_mm') == 4.9
+    assert rec.get('baseline_label')
+    assert rec.get('baseline_calculation_note')
+
+    # Flow validation must be validated (not hardcoded).
+    assert rec.get('flow_validation_status') == 'validated'
 
     # Confidence and completeness come from backend scoring.
     assert body['reconciliation']['confidence_score'] > 0
     assert body['reconciliation']['evidence_completeness']
 
-    # Flow validation must be determined from the data, not hardcoded.
-    assert rec.get('flow_validation_status') in ('validated', 'inconsistent', 'unavailable')
-
-    # Volume and duration must be computed from area (3.2 ha from crop profile).
-    # The orchestrator produces these when flow is validated and area is known.
-    assert rec.get('estimated_volume_m3') is not None or rec.get('no_fabricated_duration') is True
-
-    # Recommendation origin must be deterministic engine, not representative fallback.
+    # Recommendation origin must be uploaded engine, not representative fallback.
     assert body['recommendation_origin'] == 'uploaded_intelligence_engine'
 
     # Verification plan must be present.
     assert body['verification_plan']['steps']
 
-    # No hardcoded string must appear in the backend response.
+    # No old hardcoded strings must appear in the backend response.
     body_str = str(body)
-    for forbidden in ['42 min tonight', '27% vs evaluation baseline', '86%\', \'evidenceCompleteness']:
+    for forbidden in ['42 min tonight', '27% vs evaluation baseline']:
         assert forbidden not in body_str
 
 

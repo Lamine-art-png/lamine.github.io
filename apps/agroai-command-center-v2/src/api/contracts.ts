@@ -74,8 +74,17 @@ export interface Decision {
   calibrationPackVersion?: string;
   verificationStatus?: string;
   flowValidationState?: string;
+  flowValidationNotes?: string[];
+  recentIrrigationCreditStatus?: string;
+  recentIrrigationCreditNotes?: string[];
   limitations?: string[];
   nextEvidenceRequired?: string[];
+  variety?: string;
+  farmName?: string;
+  region?: string;
+  baselineLabel?: string;
+  baselineValueMm?: number;
+  baselineCalculationNote?: string;
 }
 
 export type ProviderConnectionState = "Live" | "Configured" | "Limited" | "Unavailable" | "Setup required" | "Target selection required";

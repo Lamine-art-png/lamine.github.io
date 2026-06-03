@@ -46,6 +46,19 @@ export interface AuditEvent {
   detail: string;
 }
 
+export interface BackendMeta {
+  normalizedContext: Record<string, unknown>;
+  warnings: string[];
+  uploadedArtifacts: string[];
+  liveInputsUsed: string[];
+  flowValidationNotes: string[];
+  recentIrrigationCreditNotes: string[];
+  baselineCalculationNote: string | null;
+  baselineLabel: string | null;
+  evaluationReferenceTime: string | null;
+  sessionId: string | null;
+}
+
 export interface CommandState {
   entryState: "entry" | "workspace";
   onboardingOpen: boolean;
@@ -72,6 +85,8 @@ export interface CommandState {
   drawerOpen: boolean;
   uploaded: UploadedFileState | null;
   audit: AuditEvent[];
+  displayFarmName: string;
+  backendMeta: BackendMeta | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -463,11 +478,14 @@ function initialState(): CommandState {
     drawerOpen: false,
     uploaded: null,
     audit: [{ time: new Date().toISOString(), actor: "Operations user", event: "Workspace launched", detail: "Representative package loaded." }],
+    displayFarmName: "Alpha Vineyard",
+    backendMeta: null,
   } as CommandState;
 }
 
 let state: CommandState = initialState();
 const listeners = new Set<() => void>();
+let switchGen = 0; // incremented each time switchScenario is called; guards stale async results
 
 function emit() {
   for (const l of listeners) l();
@@ -520,6 +538,8 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
   const summary = (result.report_summary ?? {}) as Record<string, unknown>;
   const origin: RecommendationOrigin = result.recommendation_origin ?? (mode === "live" ? "live_intelligence_engine" : "deterministic_engine");
   const now = new Date().toISOString();
+  const nc = (result.normalized_context ?? {}) as Record<string, unknown>;
+  const recon = (result.reconciliation ?? {}) as Record<string, unknown>;
 
   // Only inherit representative scenario values when the engine explicitly signals
   // a representative fallback. For live, uploaded, and deterministic results use
@@ -531,6 +551,48 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
   const flowValidationState = flowValidationRaw
     ? FLOW_VALIDATION_LABELS[flowValidationRaw] ?? flowValidationRaw
     : (useRepresentative ? sc.decision.flowValidationState : "Flow incomplete");
+
+  // Savings: use backend computed value if action is irrigate, else "—"
+  let estimatedWaterSavings = useRepresentative ? sc.decision.estimatedWaterSavings : "—";
+  const savingsPct = rec.estimated_water_savings_percent;
+  if (typeof savingsPct === "number" && savingsPct >= 0) {
+    estimatedWaterSavings = `${Math.round(savingsPct)}% vs evaluation baseline`;
+  }
+
+  // Area: prefer backend normalized_context area_ha; fall back to scenario representative value
+  let areaDisplay: string | undefined = useRepresentative ? sc.decision.area : undefined;
+  const areaHa = nc.area_ha;
+  const areaUnit = nc.area_unit;
+  if (typeof areaHa === "number") {
+    areaDisplay = `${areaHa} ${areaUnit ?? "ha"}`;
+  }
+
+  // Irrigation method: from normalized context
+  const irrigationMethod = (nc.irrigation_method as string) || (useRepresentative ? sc.decision.irrigationMethod : undefined);
+  const method = irrigationMethod && irrigationMethod !== "not available"
+    ? irrigationMethod.charAt(0).toUpperCase() + irrigationMethod.slice(1)
+    : (useRepresentative ? sc.decision.irrigationMethod : undefined);
+
+  // Provider context from normalized_context
+  const providerCtx = (nc.provider_context as string) || undefined;
+  const controller = providerCtx && providerCtx !== "not available"
+    ? providerCtx
+    : (useRepresentative ? sc.decision.controller : undefined);
+
+  // Crop and variety
+  const crop = (nc.crop as string) && (nc.crop as string) !== "not available"
+    ? (nc.crop as string)
+    : (useRepresentative ? sc.decision.crop : "Source context incomplete");
+  const variety = (nc.variety as string) || undefined;
+  const displayCrop = variety && variety !== "not available" ? variety : crop;
+
+  // Block
+  const block = (nc.block as string) || (useRepresentative ? sc.decision.block : "Source context incomplete");
+
+  // Farm name — data-driven from backend; use scenario representative as offline fallback
+  const backendFarm = (nc.farm as string) || null;
+  const displayFarmName = backendFarm && !useRepresentative ? backendFarm : (sc.name || "Alpha Vineyard");
+
   const decision: Decision = {
     action,
     start: (rec.start_time as string) || (rec.timing as string) || (useRepresentative ? sc.decision.start : "Pending evidence"),
@@ -538,21 +600,32 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
     grossWater: (rec.gross_depth as string) || (useRepresentative ? sc.decision.grossWater : undefined),
     estimatedVolume: (rec.estimated_volume as string) || (useRepresentative ? sc.decision.estimatedVolume : undefined),
     duration: (rec.duration as string) || (rec.no_fabricated_duration ? "Withheld until flow is validated" : (useRepresentative ? sc.decision.duration : "Withheld pending validation")),
-    area: (useRepresentative ? sc.decision.area : undefined),
-    irrigationMethod: (useRepresentative ? sc.decision.irrigationMethod : undefined),
-    controller: (useRepresentative ? sc.decision.controller : undefined),
-    crop: (rec.crop as string) || (useRepresentative ? sc.decision.crop : "Source context incomplete"),
-    block: (rec.block as string) || (useRepresentative ? sc.decision.block : "Source context incomplete"),
+    area: areaDisplay,
+    irrigationMethod: method,
+    controller,
+    crop: displayCrop,
+    block,
     driver: Array.isArray(rec.key_drivers) && rec.key_drivers.length ? String((rec.key_drivers as unknown[])[0]) : (useRepresentative ? sc.decision.driver : "Tenant baseline required"),
     confidence: pct(rec.confidence ?? summary.confidence, useRepresentative ? sc.decision.confidence : "—"),
     evidenceCompleteness: pct(result.reconciliation?.evidence_completeness ?? summary.evidence_completeness, useRepresentative ? sc.decision.evidenceCompleteness : "—"),
-    estimatedWaterSavings: useRepresentative ? sc.decision.estimatedWaterSavings : "—",
+    estimatedWaterSavings,
     verification: (rec.verification_requirement as string) || (useRepresentative ? sc.decision.verification : "Required"),
     recommendationOrigin: origin,
     calibrationStatus: (rec.calibration_status as string) || (useRepresentative ? sc.decision.calibrationStatus : undefined),
     calibrationPackVersion: (rec.calibration_pack_version as string) || undefined,
     verificationStatus: "Required",
     flowValidationState,
+    flowValidationNotes: Array.isArray(rec.flow_validation_notes) ? rec.flow_validation_notes as string[] : undefined,
+    recentIrrigationCreditStatus: (rec.recent_irrigation_credit_status as string) || undefined,
+    recentIrrigationCreditNotes: Array.isArray(rec.recent_irrigation_credit_notes) ? rec.recent_irrigation_credit_notes as string[] : undefined,
+    limitations: Array.isArray(result.limitations) ? result.limitations : undefined,
+    nextEvidenceRequired: Array.isArray(rec.next_evidence_required) ? rec.next_evidence_required as string[] : undefined,
+    variety: variety && variety !== "not available" ? variety : undefined,
+    farmName: backendFarm || undefined,
+    region: (nc.region as string) || undefined,
+    baselineLabel: (rec.baseline_label as string) || undefined,
+    baselineValueMm: typeof rec.baseline_value_mm === "number" ? rec.baseline_value_mm : undefined,
+    baselineCalculationNote: (rec.baseline_calculation_note as string) || undefined,
   };
 
   const trace: TraceStep[] = Array.isArray(result.analysis_trace) && result.analysis_trace.length
@@ -565,8 +638,6 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
       }))
     : buildTrace(now, true);
 
-  const nc = (result.normalized_context ?? {}) as Record<string, unknown>;
-  const recon = (result.reconciliation ?? {}) as Record<string, unknown>;
   const report: ReportModel = useRepresentative
     ? { ...sc.report, recommendation: action, plannedWater: decision.grossWater || decision.appliedWater, evidenceCompleteness: decision.evidenceCompleteness }
     : {
@@ -577,9 +648,23 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
         appliedWater: "Pending confirmation",
         variance: (recon.planned_vs_applied_variance as string) || "Withheld pending validation",
         evidenceCompleteness: decision.evidenceCompleteness || "—",
-        estimatedWaterSavings: "—",
+        estimatedWaterSavings,
         verification: (rec.verification_requirement as string) || "Required",
       };
+
+  // Persist backend metadata for technical trace expansion.
+  const backendMeta: BackendMeta = {
+    normalizedContext: nc,
+    warnings: Array.isArray(result.warnings) ? result.warnings : [],
+    uploadedArtifacts: Array.isArray(result.uploaded_artifacts_used) ? result.uploaded_artifacts_used : [],
+    liveInputsUsed: Array.isArray(result.live_inputs_used) ? result.live_inputs_used : [],
+    flowValidationNotes: Array.isArray(rec.flow_validation_notes) ? rec.flow_validation_notes as string[] : [],
+    recentIrrigationCreditNotes: Array.isArray(rec.recent_irrigation_credit_notes) ? rec.recent_irrigation_credit_notes as string[] : [],
+    baselineCalculationNote: (rec.baseline_calculation_note as string) || null,
+    baselineLabel: (rec.baseline_label as string) || null,
+    evaluationReferenceTime: (rec.evaluation_reference_time as string) || null,
+    sessionId: result.session_id || null,
+  };
 
   set({
     analysisMode: mode,
@@ -590,6 +675,8 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
     trace,
     evidence: baseEvidence(now),
     report,
+    displayFarmName,
+    backendMeta,
   });
 }
 
@@ -679,6 +766,10 @@ export const actions = {
   },
 
   async switchScenario(id: ScenarioId) {
+    // Increment generation so any in-flight backend calls from the prior scenario are discarded.
+    switchGen++;
+    const gen = switchGen;
+
     // Set local representative state immediately so the UI reflects the new scenario
     // without a blank loading flash. Backend analysis will override this if reachable.
     const immediateOrigin: RecommendationOrigin = id === "incomplete-evidence" ? "insufficient_context" : "representative_fallback";
@@ -692,10 +783,12 @@ export const actions = {
       try {
         const backendScenario = id === "incomplete-evidence" ? "incomplete_evidence_review" : "validated_operating_block";
         const sample = await apiClient.createSamplePackage(backendScenario);
+        if (gen !== switchGen) return; // superseded by a later switchScenario call
         const sessionId = sample.data?.session?.session_id || sample.data?.session_id || "";
         if (sample.ok && sessionId) {
           set({ sessionId, pipelineMessage: "Analyzing scenario source package…" });
           const analysis = await apiClient.analyzeSession(sessionId);
+          if (gen !== switchGen) return; // superseded by a later switchScenario call
           if (analysis.ok && analysis.data) {
             applyBackendResult(analysis.data, "representative");
             addAudit("Scenario loaded via backend", `${SCENARIOS[id].name} analyzed from backend.`);
@@ -708,6 +801,7 @@ export const actions = {
       }
     }
 
+    if (gen !== switchGen) return;
     set({ ...scenarioState(id, "representative", immediateOrigin), pipelineMessage: "Backend unavailable. Offline representative fallback active." });
     addAudit("Workspace scenario loaded", `${SCENARIOS[id].name} offline representative records loaded.`);
     toast(`${SCENARIOS[id].name} loaded`);
@@ -715,16 +809,16 @@ export const actions = {
 
   async refreshIntelligence() {
     if (state.analysisPhase === "running") return;
-    set({ analysisPhase: "running", pipelineMessage: "Analyzing source records…", trace: buildTrace(new Date().toISOString(), false) });
-    addAudit("Intelligence analysis started", `Mode: ${state.analysisMode}.`);
+    set({ analysisPhase: "running", pipelineMessage: "Re-analyzing evaluation source records…", trace: buildTrace(new Date().toISOString(), false) });
+    addAudit("Evaluation refresh started", `Re-running analyzeSession for session: ${state.sessionId ?? "none"}.`);
 
-    // Prefer a real backend result when reachable; otherwise representative.
+    // For evaluation mode, re-run the existing session rather than switching to a live provider.
+    // Live-provider refresh is a separate explicit action the user must invoke.
     let result: WorkbenchAnalysisResult | null = null;
-    if (state.backend.status !== "unavailable") {
+    if (state.backend.status !== "unavailable" && state.sessionId) {
       try {
-        const sc = SCENARIOS[state.scenarioId];
-        const res = await apiClient.analyzeLive(sc.liveEntity.source, sc.liveEntity.entityId);
-      if (res.ok && res.data) result = res.data;
+        const res = await apiClient.analyzeSession(state.sessionId);
+        if (res.ok && res.data) result = res.data;
       } catch {
         result = null;
       }
@@ -734,15 +828,14 @@ export const actions = {
     await new Promise((r) => setTimeout(r, 900));
 
     if (result) {
-      set({ sessionId: result.session_id || state.sessionId });
-      applyBackendResult(result, "live");
-      addAudit("Intelligence analysis completed", "Live Workbench result applied.");
-      toast("Analysis complete. Decision ready.");
+      applyBackendResult(result, state.analysisMode === "live" ? "live" : "representative");
+      addAudit("Evaluation refresh completed", "Decision refreshed from evaluation session.");
+      toast("Decision refreshed.");
     } else {
       set(scenarioState(state.scenarioId, "representative", "representative_fallback"));
       set({ pipelineMessage: "Backend unavailable. Representative analysis remains active." });
-      addAudit("Intelligence analysis completed", "Representative-data analysis applied.");
-      toast("Representative analysis refreshed.");
+      addAudit("Evaluation refresh completed", "Representative-data analysis applied.");
+      toast("Representative analysis remains active.");
     }
   },
 

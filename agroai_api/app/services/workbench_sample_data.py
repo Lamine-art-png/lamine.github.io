@@ -105,6 +105,10 @@ SAMPLE_CROP_PROFILE = """[
     "growth_stage": "berry set",
     "area": 3.2,
     "area_unit": "ha",
+    "region": "Central Valley North",
+    "operating_window": "21:00 – 23:00 local",
+    "evaluation_baseline_mm": 4.9,
+    "evaluation_baseline_label": "Unaided ETo-only calendar estimate — Central Valley North Cabernet Sauvignon at berry set (no soil-moisture adjustment)",
     "management_goal": "maintain moderate vine stress while avoiding runoff"
   },
   {

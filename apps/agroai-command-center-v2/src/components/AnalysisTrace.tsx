@@ -22,9 +22,11 @@ export function AnalysisTrace() {
   const sessionId = useCommandStore((s) => s.sessionId);
   const origin = useCommandStore((s) => s.recommendationOrigin);
   const mode = useCommandStore((s) => s.analysisMode);
+  const backendMeta = useCommandStore((s) => s.backendMeta);
 
   const reviewSteps = trace.filter((s) => s.status === "review");
   const originLabel = ORIGIN_LABEL[origin] ?? origin;
+  const nc = backendMeta?.normalizedContext ?? {};
 
   return (
     <details className="card panel technical-trace">
@@ -73,7 +75,70 @@ export function AnalysisTrace() {
               <p className="trace-meta-value muted">{decision.flowValidationState}</p>
             </div>
           )}
+          {decision.recentIrrigationCreditStatus && (
+            <div>
+              <p className="trace-meta-label">Recent irrigation credit</p>
+              <p className="trace-meta-value muted">{decision.recentIrrigationCreditStatus}</p>
+            </div>
+          )}
+          {typeof nc.region === "string" && nc.region && (
+            <div>
+              <p className="trace-meta-label">Region</p>
+              <p className="trace-meta-value muted">{nc.region}</p>
+            </div>
+          )}
+          {typeof nc.weather_window === "string" && nc.weather_window && (
+            <div>
+              <p className="trace-meta-label">Weather window</p>
+              <p className="trace-meta-value muted">{nc.weather_window}</p>
+            </div>
+          )}
+          {nc.area_ha !== undefined && nc.area_ha !== null && (
+            <div>
+              <p className="trace-meta-label">Field area</p>
+              <p className="trace-meta-value muted">{String(nc.area_ha)} {String(nc.area_unit ?? "ha")}</p>
+            </div>
+          )}
+          {backendMeta?.evaluationReferenceTime && (
+            <div>
+              <p className="trace-meta-label">Evaluation reference time</p>
+              <p className="trace-meta-value muted">{fmt(backendMeta.evaluationReferenceTime)}</p>
+            </div>
+          )}
+          {backendMeta?.baselineCalculationNote && (
+            <div style={{ gridColumn: "1 / -1" }}>
+              <p className="trace-meta-label">Baseline calculation</p>
+              <p className="trace-meta-value muted">{backendMeta.baselineCalculationNote}</p>
+            </div>
+          )}
         </div>
+
+        {backendMeta?.uploadedArtifacts && backendMeta.uploadedArtifacts.length > 0 && (
+          <div className="trace-section">
+            <p className="trace-section-label eyebrow">Uploaded artifacts used</p>
+            <ul className="trace-artifact-list muted">
+              {backendMeta.uploadedArtifacts.map((f) => <li key={f}>{f}</li>)}
+            </ul>
+          </div>
+        )}
+
+        {backendMeta?.flowValidationNotes && backendMeta.flowValidationNotes.length > 0 && (
+          <div className="trace-section">
+            <p className="trace-section-label eyebrow">Flow validation notes</p>
+            <ul className="trace-limitation-list muted">
+              {backendMeta.flowValidationNotes.map((n) => <li key={n}>{n}</li>)}
+            </ul>
+          </div>
+        )}
+
+        {backendMeta?.recentIrrigationCreditNotes && backendMeta.recentIrrigationCreditNotes.length > 0 && (
+          <div className="trace-section">
+            <p className="trace-section-label eyebrow">Recent irrigation credit notes</p>
+            <ul className="trace-limitation-list muted">
+              {backendMeta.recentIrrigationCreditNotes.map((n) => <li key={n}>{n}</li>)}
+            </ul>
+          </div>
+        )}
 
         <div className="trace-rows">
           {trace.map((step, i) => (
@@ -96,12 +161,15 @@ export function AnalysisTrace() {
           ))}
         </div>
 
-        {decision.limitations && decision.limitations.length > 0 && (
+        {(decision.limitations ?? (backendMeta?.warnings ?? []).filter(Boolean)).length > 0 && (
           <div className="trace-limitations">
             <p className="eyebrow" style={{ marginBottom: "8px" }}>Limitations and warnings</p>
             <ul className="trace-limitation-list">
-              {decision.limitations.map((l) => (
+              {(decision.limitations ?? []).map((l) => (
                 <li key={l} className="muted">{l}</li>
+              ))}
+              {(backendMeta?.warnings ?? []).map((w) => (
+                <li key={w} className="muted">{w}</li>
               ))}
             </ul>
           </div>
