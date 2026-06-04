@@ -1,4 +1,4 @@
-import "dotenv/config";
+import "./loadEnv.js";
 import http from "http";
 import { config } from "./config.js";
 import { aiOrchestrator } from "./ai/aiOrchestrator.js";
@@ -65,7 +65,7 @@ function readJson(req) {
   });
 }
 
-function createFallbackApp() {
+export function createFallbackApp() {
   return async function fallbackApp(req, res) {
     const requestId = `req-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
     const url = new URL(req.url, "http://localhost");
