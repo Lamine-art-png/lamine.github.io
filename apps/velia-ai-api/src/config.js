@@ -11,7 +11,7 @@ export function getConfig() {
     openaiModel: process.env.OPENAI_MODEL || "gpt-4.1-mini",
 
     embeddingProvider: (process.env.EMBEDDING_PROVIDER || "mock").toLowerCase(),
-    geminiEmbeddingModel: process.env.GEMINI_EMBEDDING_MODEL || "text-embedding-004",
+    geminiEmbeddingModel: process.env.GEMINI_EMBEDDING_MODEL || "gemini-embedding-2",
     openaiEmbeddingModel: process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-small",
 
     weatherProvider: (process.env.WEATHER_PROVIDER || "mock").toLowerCase(),

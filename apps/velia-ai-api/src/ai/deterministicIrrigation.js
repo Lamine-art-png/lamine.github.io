@@ -179,9 +179,7 @@ export function deterministicDecisionFromSignals(signals, context) {
     timing: action === "irrigate" ? "Next 2-4 hours after a field check" : action === "wait" ? "Recheck after forecast rain window" : "Today before evening",
     urgency: signals.urgency,
     estimatedDurationRange: action === "irrigate"
-      ? (context.flowRateLph && context.applicationRateMmPerHour
-          ? "45-90 min, adjust to system flow and field check"
-          : "Add flow rate and system details to calculate a duration.")
+      ? "Add flow rate, application rate, target depth, and field details to calculate a duration."
       : "0-30 min field check",
     reasons: [
       `Estimated water pressure is ${signals.pressureLabel} (${signals.needScore.toFixed(2)}) from field, weather, and observation signals.`,

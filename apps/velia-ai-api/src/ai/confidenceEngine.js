@@ -1,5 +1,26 @@
 const WEATHER_FRESHNESS_CUTOFF_MINUTES = 90;
 const CORE_MAX = 56;
+export const SENSOR_FRESHNESS_MINUTES = 240; // 4 hours
+
+// Returns true when sensorData contains a usable (numeric + not stale) moisture value.
+export function isSensorUsable(sensorData) {
+  if (!sensorData) return false;
+  const moisture = sensorData.soilMoisturePercent ?? sensorData.soilMoisture ?? null;
+  if (typeof moisture !== "number") return false;
+  const ts = sensorData.timestamp || sensorData.lastUpdated || null;
+  if (ts) {
+    const ageMs = Date.now() - new Date(ts).getTime();
+    if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > SENSOR_FRESHNESS_MINUTES * 60000) return false;
+  }
+  return true;
+}
+
+// Adds provenance requirement on top of isSensorUsable — for safety-gate bypass decisions.
+export function isSensorHardenedForBypass(sensorData, ctx = {}) {
+  if (!isSensorUsable(sensorData)) return false;
+  const provenance = sensorData?.provenance || ctx?.sensorProvenance || null;
+  return Boolean(provenance);
+}
 
 function weatherFreshnessScore(weather) {
   if (!weather || weather.stale) return 0;
@@ -13,16 +34,18 @@ function weatherFreshnessScore(weather) {
 
 function observationRecencyPoints(context) {
   const hasObs = Boolean(context.recentObservation || (context.observations || []).length > 0);
-  if (!hasObs) return 0;
+  if (!hasObs) return { points: 0, flagged: false };
   const ts = context.observationTimestamp;
-  if (!ts) return 6; // partial credit — timestamp unknown
+  if (!ts) return { points: 6, flagged: false }; // partial credit — timestamp unknown
   const ageMs = Date.now() - new Date(ts).getTime();
-  if (!Number.isFinite(ageMs) || ageMs < 0) return 10;
+  if (!Number.isFinite(ageMs)) return { points: 3, flagged: true }; // unparseable timestamp
+  const CLOCK_SKEW_MS = 5 * 60 * 1000; // 5-minute tolerance for minor clock differences
+  if (ageMs < -CLOCK_SKEW_MS) return { points: 3, flagged: true }; // future timestamp beyond skew
   const ageDays = ageMs / 86400000;
-  if (ageDays < 1) return 10;
-  if (ageDays < 7) return 7;
-  if (ageDays < 30) return 4;
-  return 1;
+  if (ageDays < 1) return { points: 10, flagged: false };
+  if (ageDays < 7) return { points: 7, flagged: false };
+  if (ageDays < 30) return { points: 4, flagged: false };
+  return { points: 1, flagged: false };
 }
 
 export function scoreEvidence(context = {}) {
@@ -60,12 +83,12 @@ export function scoreEvidence(context = {}) {
     missingEvidence.push("recent irrigation log");
   }
 
-  const obsPts = observationRecencyPoints(context);
-  if (obsPts > 0) {
-    coreScore += obsPts;
+  const obsResult = observationRecencyPoints(context);
+  if (obsResult.points > 0) {
+    coreScore += obsResult.points;
     evidenceChecked.push("recent field observation");
-    const hasObs = Boolean(context.recentObservation || (context.observations || []).length > 0);
-    if (hasObs && !context.observationTimestamp) missingEvidence.push("observation timestamp");
+    if (!context.observationTimestamp) missingEvidence.push("observation timestamp");
+    if (obsResult.flagged) missingEvidence.push("observation timestamp (invalid or future)");
   } else {
     missingEvidence.push("recent field observation");
   }
@@ -73,9 +96,11 @@ export function scoreEvidence(context = {}) {
   // Optional precision boosters — additive, not penalized when absent
   let optionalBoost = 0;
   const sensorMoisture = context.sensorData?.soilMoisturePercent ?? context.sensorData?.soilMoisture ?? null;
-  if (typeof sensorMoisture === "number") {
+  if (isSensorUsable(context.sensorData)) {
     optionalBoost += 0.10;
     evidenceChecked.push("soil moisture sensor");
+  } else if (typeof sensorMoisture === "number") {
+    missingEvidence.push("soil moisture sensor (stale)");
   } else {
     missingEvidence.push("soil moisture sensor");
   }
@@ -124,7 +149,8 @@ export function scoreEvidence(context = {}) {
   if (missingEvidence.includes("crop type")) improve.push("Set crop type for better water demand estimates.");
   if (missingEvidence.includes("recent field observation")) improve.push("Record a field check observation.");
   if (missingEvidence.includes("observation timestamp")) improve.push("Observation timestamp is unknown.");
-  if (missingEvidence.includes("soil moisture sensor")) improve.push("Connect a soil sensor for measured moisture readings.");
+  if (missingEvidence.some((m) => m.includes("invalid or future"))) improve.push("Observation timestamp is invalid or future — verify the recorded date.");
+  if (missingEvidence.includes("soil moisture sensor") || missingEvidence.some((m) => m.startsWith("soil moisture sensor"))) improve.push("Connect a soil sensor for measured moisture readings.");
   if (missingEvidence.includes("ET source")) improve.push("Enable an ET provider for evapotranspiration data.");
   if (missingEvidence.includes("satellite evidence")) improve.push("Satellite evidence is not available for this recommendation.");
   if (missingEvidence.includes("weather freshness")) improve.push("Refresh weather data before acting.");

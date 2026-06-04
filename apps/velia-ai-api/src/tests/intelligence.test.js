@@ -13,7 +13,8 @@ import { aiOrchestrator } from "../ai/aiOrchestrator.js";
 import { detectRecurringPatterns, memoryStore } from "../ai/memoryStore.js";
 import { scenarios, runFixtureEvaluation } from "../ai/evaluationHarness.js";
 import { fetchJsonWithRetry } from "../services/httpClient.js";
-import { scoreEvidence } from "../ai/confidenceEngine.js";
+import { scoreEvidence, isSensorUsable, isSensorHardenedForBypass } from "../ai/confidenceEngine.js";
+import { GeminiEmbeddingProvider } from "../providers/realEmbeddingProviders.js";
 import { calculateDeterministicSignals, buildNormalizedFieldContext, deterministicDecisionFromSignals } from "../ai/deterministicIrrigation.js";
 import { safetyGuardrails, containsUnsupportedClaim, containsUnsupportedClaimForContext } from "../ai/safetyGuardrails.js";
 import { getConfig } from "../config.js";
@@ -451,7 +452,7 @@ test("deterministicDecisionFromSignals: uses honest duration message when flow r
   const ctxWithFlow = buildNormalizedFieldContext({ field: { id: "f", crop: "tomato", soilType: "loam", irrigationMethod: "Drip", waterStressLevel: "high", flowRateLph: 300, applicationRateMmPerHour: 4.5 }, weather: { heatRisk: "high", rainChance: 5, weatherTimestamp: new Date().toISOString(), stale: false }, observations: [{ condition: "Dry" }] });
   const dec2 = deterministicDecisionFromSignals(calculateDeterministicSignals(ctxWithFlow), ctxWithFlow);
   if (dec2.action === "irrigate") {
-    assert.ok(dec2.estimatedDurationRange.includes("45-90"), `expected range message when both flow rate fields present, got: ${dec2.estimatedDurationRange}`);
+    assert.ok(dec2.estimatedDurationRange.toLowerCase().includes("flow rate") || dec2.estimatedDurationRange.toLowerCase().includes("application rate"), `expected honest duration message even with flow rate fields present, got: ${dec2.estimatedDurationRange}`);
   }
 });
 
@@ -711,11 +712,11 @@ test("safety gate: recent irrigation with high-moisture sensor blocks irrigate",
   assert.ok(enforced.guardrailsTriggered.includes("recent_irrigation_requires_field_check"));
 });
 
-test("safety gate: recent irrigation with dry sensor (≤18%) may proceed", () => {
+test("safety gate: recent irrigation with fresh provenanced dry sensor (≤18%) may proceed", () => {
   const signals = { rulesTriggered: ["recent_irrigation"], needScore: 0.85, action: "irrigate", urgency: "high", missingData: [] };
   const decision = { action: "irrigate", confidenceScore: 0.8, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
-  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: { irrigationMethod: "Drip", sensorData: { soilMoisturePercent: 15 } } });
-  assert.ok(!enforced.guardrailsTriggered.includes("recent_irrigation_requires_field_check"), "dry sensor (≤18%) should allow irrigate through the recent_irrigation gate");
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: { irrigationMethod: "Drip", sensorData: { soilMoisturePercent: 15 }, sensorProvenance: "field_sensor" } });
+  assert.ok(!enforced.guardrailsTriggered.includes("recent_irrigation_requires_field_check"), "fresh provenanced dry sensor (≤18%) should allow irrigate through the recent_irrigation gate");
 });
 
 // ── Duration both-required tests ──────────────────────────────────────────────
@@ -747,11 +748,212 @@ test("duration: only applicationRateMmPerHour present returns honest message (AN
   }
 });
 
-test("duration: both flowRateLph and applicationRateMmPerHour present returns range estimate", () => {
+test("duration: both flowRateLph and applicationRateMmPerHour present returns honest message (no calculator yet)", () => {
   const ctx = buildNormalizedFieldContext({ field: { id: "f", crop: "tomato", soilType: "loam", irrigationMethod: "Drip", waterStressLevel: "high", flowRateLph: 300, applicationRateMmPerHour: 4.5 }, weather: { heatRisk: "high", rainChance: 5, weatherTimestamp: new Date().toISOString(), stale: false }, observations: [{ condition: "Dry" }] });
   const signals = calculateDeterministicSignals(ctx);
   const dec = deterministicDecisionFromSignals(signals, ctx);
   if (dec.action === "irrigate") {
-    assert.ok(dec.estimatedDurationRange.includes("45-90"), `expected range estimate when both flow rate fields present, got: ${dec.estimatedDurationRange}`);
+    assert.ok(dec.estimatedDurationRange.toLowerCase().includes("flow rate") || dec.estimatedDurationRange.toLowerCase().includes("application rate"), `expected honest message (no calculator), got: ${dec.estimatedDurationRange}`);
+    assert.ok(!dec.estimatedDurationRange.includes("45-90"), "must not return hardcoded 45-90 range without a real calculator");
   }
+});
+
+// ── modelRouter Gemini embedding default ─────────────────────────────────────
+
+test("modelRouter: gemini embedding default is gemini-embedding-2 when GEMINI_EMBEDDING_MODEL absent", () => {
+  const saved = { EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER, GEMINI_API_KEY: process.env.GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL: process.env.GEMINI_EMBEDDING_MODEL };
+  process.env.EMBEDDING_PROVIDER = "gemini";
+  process.env.GEMINI_API_KEY = "test-key-do-not-use";
+  delete process.env.GEMINI_EMBEDDING_MODEL;
+  const provider = modelRouter.embeddingProvider();
+  assert.equal(provider.model, "gemini-embedding-2", "default gemini embedding model must be gemini-embedding-2");
+  process.env.EMBEDDING_PROVIDER = saved.EMBEDDING_PROVIDER || "";
+  process.env.GEMINI_API_KEY = saved.GEMINI_API_KEY || "";
+  if (saved.GEMINI_EMBEDDING_MODEL != null) process.env.GEMINI_EMBEDDING_MODEL = saved.GEMINI_EMBEDDING_MODEL;
+  else delete process.env.GEMINI_EMBEDDING_MODEL;
+});
+
+test("modelRouter: explicit GEMINI_EMBEDDING_MODEL override is respected (backwards compat)", () => {
+  const saved = { EMBEDDING_PROVIDER: process.env.EMBEDDING_PROVIDER, GEMINI_API_KEY: process.env.GEMINI_API_KEY, GEMINI_EMBEDDING_MODEL: process.env.GEMINI_EMBEDDING_MODEL };
+  process.env.EMBEDDING_PROVIDER = "gemini";
+  process.env.GEMINI_API_KEY = "test-key-do-not-use";
+  process.env.GEMINI_EMBEDDING_MODEL = "text-embedding-004";
+  const provider = modelRouter.embeddingProvider();
+  assert.equal(provider.model, "text-embedding-004", "explicit GEMINI_EMBEDDING_MODEL must override default");
+  process.env.EMBEDDING_PROVIDER = saved.EMBEDDING_PROVIDER || "";
+  process.env.GEMINI_API_KEY = saved.GEMINI_API_KEY || "";
+  if (saved.GEMINI_EMBEDDING_MODEL != null) process.env.GEMINI_EMBEDDING_MODEL = saved.GEMINI_EMBEDDING_MODEL;
+  else delete process.env.GEMINI_EMBEDDING_MODEL;
+});
+
+// ── Text-field sanitization — timing / estimatedDurationRange / verificationPlan ──
+
+test("enforce scrubs unsupported duration from timing field", () => {
+  const signals = { rulesTriggered: [], needScore: 0.6, action: "check field first", urgency: "medium", missingData: [] };
+  const decision = { action: "check field first", confidenceScore: 0.6, timing: "Irrigate for 45 minutes at dawn", reasons: [], uncertainties: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: {} });
+  assert.ok(!enforced.timing.includes("45 minutes"), "duration claim must be scrubbed from timing field");
+});
+
+test("enforce scrubs unsupported duration from estimatedDurationRange field", () => {
+  const signals = { rulesTriggered: [], needScore: 0.6, action: "check field first", urgency: "medium", missingData: [] };
+  const decision = { action: "check field first", confidenceScore: 0.6, estimatedDurationRange: "Irrigate for 90 minutes based on field size", reasons: [], uncertainties: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: {} });
+  assert.ok(!enforced.estimatedDurationRange.includes("90 minutes"), "duration claim must be scrubbed from estimatedDurationRange field");
+});
+
+test("enforce scrubs unsupported duration from nextBestAction field", () => {
+  const signals = { rulesTriggered: [], needScore: 0.6, action: "check field first", urgency: "medium", missingData: [] };
+  const decision = { action: "check field first", confidenceScore: 0.6, nextBestAction: "Irrigate for 60 minutes then check leaves", reasons: [], uncertainties: [], fieldChecks: [], risks: [], nextBestAction: "Irrigate for 60 minutes then check leaves", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: {} });
+  assert.ok(!enforced.nextBestAction.includes("60 minutes"), "duration claim must be scrubbed from nextBestAction field");
+});
+
+test("enforce scrubs unsupported duration from verificationPlan", () => {
+  const signals = { rulesTriggered: [], needScore: 0.6, action: "check field first", urgency: "medium", missingData: [] };
+  const decision = { action: "check field first", confidenceScore: 0.6, reasons: [], uncertainties: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: ["Irrigate for 45 minutes", "Record result"], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: {} });
+  assert.ok(!enforced.verificationPlan.join(" ").includes("45 minutes"), "duration claim must be scrubbed from verificationPlan");
+});
+
+// ── Flow rate AND required for duration/volume claims ────────────────────────
+
+test("containsUnsupportedClaimForContext: duration blocked when only flowRateLph present", () => {
+  assert.ok(containsUnsupportedClaimForContext("irrigate for 90 minutes", { flowRateLph: 300 }), "only flowRateLph must not be sufficient to allow duration claim");
+});
+
+test("containsUnsupportedClaimForContext: duration blocked when only applicationRateMmPerHour present", () => {
+  assert.ok(containsUnsupportedClaimForContext("irrigate for 90 minutes", { applicationRateMmPerHour: 4.5 }), "only applicationRateMmPerHour must not be sufficient to allow duration claim");
+});
+
+test("containsUnsupportedClaimForContext: duration allowed when both flowRateLph and applicationRateMmPerHour present", () => {
+  assert.ok(!containsUnsupportedClaimForContext("irrigate for 90 minutes", { flowRateLph: 300, applicationRateMmPerHour: 4.5 }), "both fields present must allow duration claim");
+});
+
+// ── US irrigation volume units ────────────────────────────────────────────────
+
+test("containsUnsupportedClaimForContext: 'Apply 0.8 inches' blocked without system evidence", () => {
+  assert.ok(containsUnsupportedClaimForContext("Apply 0.8 inches to the field", {}), "inches must be blocked without flow rate and application rate");
+});
+
+test("containsUnsupportedClaimForContext: 'Apply 1 inch' blocked without system evidence", () => {
+  assert.ok(containsUnsupportedClaimForContext("Apply 1 inch of water", {}), "inch must be blocked without system evidence");
+});
+
+test("containsUnsupportedClaimForContext: 'Apply 0.4 acre-feet' blocked without system evidence", () => {
+  assert.ok(containsUnsupportedClaimForContext("Apply 0.4 acre-feet to each block", {}), "acre-feet must be blocked without system evidence");
+});
+
+test("enforce scrubs 'Apply 0.8 inches' from reasons when no system evidence", () => {
+  const signals = { rulesTriggered: [], needScore: 0.6, action: "check field first", urgency: "medium", missingData: [] };
+  const decision = { action: "check field first", confidenceScore: 0.6, reasons: ["Apply 0.8 inches based on crop needs"], uncertainties: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: {} });
+  assert.ok(!enforced.reasons.join(" ").includes("0.8 inches"), "Apply 0.8 inches must be scrubbed from reasons");
+});
+
+// ── Observation timestamp hardening ──────────────────────────────────────────
+
+test("confidence engine: invalid (unparseable) observation timestamp does not get maximum credit", () => {
+  const withInvalid = scoreEvidence({ recentObservation: "Dry", observationTimestamp: "not-a-date" });
+  const withValid = scoreEvidence({ recentObservation: "Dry", observationTimestamp: new Date().toISOString() });
+  assert.ok(withInvalid.confidenceScore < withValid.confidenceScore, "invalid timestamp must score less than valid recent timestamp");
+  assert.ok(withInvalid.missingEvidence.some((m) => m.includes("observation timestamp")), "invalid timestamp must be flagged in missingEvidence");
+  assert.ok(withInvalid.improvementSuggestions.some((s) => s.includes("invalid or future")), "improvement suggestion must mention invalid/future timestamp");
+});
+
+test("confidence engine: future observation timestamp beyond clock skew does not get maximum credit", () => {
+  const futureTs = new Date(Date.now() + 60 * 60 * 1000).toISOString(); // 1 hour in future
+  const withFuture = scoreEvidence({ recentObservation: "Dry", observationTimestamp: futureTs });
+  const withValid = scoreEvidence({ recentObservation: "Dry", observationTimestamp: new Date().toISOString() });
+  assert.ok(withFuture.confidenceScore < withValid.confidenceScore, "future timestamp must score less than valid recent timestamp");
+  assert.ok(withFuture.missingEvidence.some((m) => m.includes("observation timestamp")), "future timestamp must be flagged in missingEvidence");
+});
+
+// ── Sensor evidence hardening ─────────────────────────────────────────────────
+
+test("isSensorUsable: fresh numeric sensor without timestamp is usable", () => {
+  assert.ok(isSensorUsable({ soilMoisturePercent: 22 }), "numeric sensor with no timestamp should be usable");
+});
+
+test("isSensorUsable: sensor with stale timestamp is not usable", () => {
+  const staleTs = new Date(Date.now() - 5 * 60 * 60 * 1000).toISOString(); // 5 hours ago
+  assert.ok(!isSensorUsable({ soilMoisturePercent: 22, timestamp: staleTs }), "sensor stale beyond 4h must not be usable");
+});
+
+test("isSensorUsable: sensor with fresh timestamp is usable", () => {
+  const freshTs = new Date(Date.now() - 30 * 60 * 1000).toISOString(); // 30 minutes ago
+  assert.ok(isSensorUsable({ soilMoisturePercent: 22, timestamp: freshTs }), "sensor with fresh timestamp must be usable");
+});
+
+test("isSensorUsable: non-numeric moisture is not usable", () => {
+  assert.ok(!isSensorUsable({ soilMoisturePercent: "22%" }), "string moisture value must not be usable");
+  assert.ok(!isSensorUsable({}), "empty sensor object must not be usable");
+  assert.ok(!isSensorUsable(null), "null sensor must not be usable");
+});
+
+test("isSensorHardenedForBypass: requires provenance", () => {
+  const sensor = { soilMoisturePercent: 15 };
+  assert.ok(!isSensorHardenedForBypass(sensor, {}), "sensor without provenance must not be hardened for bypass");
+  assert.ok(isSensorHardenedForBypass(sensor, { sensorProvenance: "field_sensor" }), "sensor with sensorProvenance should be hardened for bypass");
+  assert.ok(isSensorHardenedForBypass({ ...sensor, provenance: "field_sensor" }, {}), "sensor with inline provenance should be hardened for bypass");
+});
+
+test("safety gate: recent irrigation without sensor provenance is blocked even when moisture is dry", () => {
+  const signals = { rulesTriggered: ["recent_irrigation"], needScore: 0.85, action: "irrigate", urgency: "high", missingData: [] };
+  const decision = { action: "irrigate", confidenceScore: 0.8, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: { irrigationMethod: "Drip", sensorData: { soilMoisturePercent: 15 } } });
+  assert.ok(enforced.guardrailsTriggered.includes("recent_irrigation_requires_field_check"), "unprovenanced sensor must not bypass recent_irrigation gate");
+});
+
+test("safety gate: recent irrigation with stale sensor is blocked", () => {
+  const staleTs = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString(); // 6 hours ago
+  const signals = { rulesTriggered: ["recent_irrigation"], needScore: 0.85, action: "irrigate", urgency: "high", missingData: [] };
+  const decision = { action: "irrigate", confidenceScore: 0.8, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: { irrigationMethod: "Drip", sensorData: { soilMoisturePercent: 15, timestamp: staleTs }, sensorProvenance: "field_sensor" } });
+  assert.ok(enforced.guardrailsTriggered.includes("recent_irrigation_requires_field_check"), "stale sensor must not bypass recent_irrigation gate");
+});
+
+test("safety gate: stale sensor_high_moisture triggers field check rather than wait", () => {
+  const staleTs = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+  const signals = { rulesTriggered: ["sensor_high_moisture"], needScore: 0.78, action: "irrigate", urgency: "high", missingData: [] };
+  const decision = { action: "irrigate", confidenceScore: 0.8, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: { sensorData: { soilMoisturePercent: 42, timestamp: staleTs } } });
+  assert.equal(enforced.action, "check field first", "stale sensor_high_moisture must trigger field check, not wait");
+  assert.ok(enforced.guardrailsTriggered.includes("sensor_high_moisture_stale_requires_field_check"));
+});
+
+test("confidence engine: stale sensor does not boost confidence", () => {
+  const staleTs = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+  const withStale = scoreEvidence({ crop: "tomato", soilType: "loam", sensorData: { soilMoisturePercent: 22, timestamp: staleTs } });
+  const withFresh = scoreEvidence({ crop: "tomato", soilType: "loam", sensorData: { soilMoisturePercent: 22 } });
+  assert.ok(withStale.missingEvidence.some((m) => m.includes("soil moisture sensor")), "stale sensor should appear in missingEvidence");
+  assert.ok(withFresh.evidenceChecked.includes("soil moisture sensor"), "fresh sensor must count as evidence");
+  assert.ok(withFresh.confidenceScore > withStale.confidenceScore, "stale sensor must not boost confidence");
+});
+
+// ── Gemini Embedding 2 formatting edge cases ─────────────────────────────────
+
+test("GeminiEmbeddingProvider: RETRIEVAL_DOCUMENT with no title uses title:none prefix", async () => {
+  let capturedBody = null;
+  const fakeFetch = async (_url, opts) => {
+    capturedBody = JSON.parse(opts.body);
+    return { ok: true, status: 200, text: async () => JSON.stringify({ embedding: { values: [0.1, 0.2, 0.3] } }) };
+  };
+  const provider = new GeminiEmbeddingProvider({ apiKey: "test-key", model: "gemini-embedding-2", fetchImpl: fakeFetch });
+  await provider.embed("Tomato field in loam soil", { taskType: "RETRIEVAL_DOCUMENT" });
+  const text = capturedBody?.content?.parts?.[0]?.text || "";
+  assert.ok(text.startsWith("title: none | text:"), `RETRIEVAL_DOCUMENT with no title must use 'title: none | text:' prefix, got: ${text}`);
+});
+
+test("GeminiEmbeddingProvider: RETRIEVAL_DOCUMENT with title uses title prefix", async () => {
+  let capturedBody = null;
+  const fakeFetch = async (_url, opts) => {
+    capturedBody = JSON.parse(opts.body);
+    return { ok: true, status: 200, text: async () => JSON.stringify({ embedding: { values: [0.1, 0.2, 0.3] } }) };
+  };
+  const provider = new GeminiEmbeddingProvider({ apiKey: "test-key", model: "gemini-embedding-2", fetchImpl: fakeFetch });
+  await provider.embed("Irrigation decision guide", { taskType: "RETRIEVAL_DOCUMENT", title: "Irrigation Guide" });
+  const text = capturedBody?.content?.parts?.[0]?.text || "";
+  assert.ok(text.startsWith("title: Irrigation Guide | text:"), `RETRIEVAL_DOCUMENT with title must include title prefix, got: ${text}`);
+  assert.ok(!capturedBody.taskType, "gemini-embedding-2 must not send taskType field");
 });

@@ -55,8 +55,8 @@ export class GeminiEmbeddingProvider extends EmbeddingProvider {
     let requestBody;
     if (this.isGeminiEmbedding2()) {
       let finalText = String(text || " ");
-      if (taskType === "RETRIEVAL_DOCUMENT" && options.title) {
-        finalText = `title: ${options.title} | text: ${finalText}`;
+      if (taskType === "RETRIEVAL_DOCUMENT") {
+        finalText = `title: ${options.title || "none"} | text: ${finalText}`;
       } else if (taskType === "RETRIEVAL_QUERY") {
         finalText = `task: search result | query: ${finalText}`;
       }

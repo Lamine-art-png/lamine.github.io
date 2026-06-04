@@ -1,9 +1,11 @@
+import { isSensorUsable, isSensorHardenedForBypass } from "./confidenceEngine.js";
+
 const prohibitedPatterns = [
   { pattern: /guarantee(?:d)?\s+(yield|savings|water savings)/i, reason: "removed guaranteed outcome language", replacement: "available data suggests" },
   { pattern: /exact soil moisture/i, reason: "removed unsupported exact soil moisture claim", replacement: "estimated soil moisture" },
   { pattern: /satellite (?:shows|detected|confirms|indicates)/i, reason: "removed unsupported satellite claim", replacement: "Satellite evidence is not available for this recommendation" },
   { pattern: /\bET\s+(?:of|is|=|was)\s+[\d.]+\s*mm/i, reason: "removed unsupported exact ET value claim", replacement: "estimated evapotranspiration (ET source not connected)" },
-  { pattern: /apply\s+exactly\s+[\d.]+\s*(?:mm|liters?|gallons?|m³)/i, reason: "removed exact application volume claim", replacement: "Add flow rate to calculate a target volume" },
+  { pattern: /apply\s+exactly\s+[\d.]+\s*(?:mm|liters?|gallons?|m³|inch(?:es)?|acre-f(?:eet|oot)|in\b)/i, reason: "removed exact application volume claim", replacement: "Add flow rate to calculate a target volume" },
   { pattern: /irrigate\s+for\s+exactly\s+[\d.]+\s*(?:hours?|minutes?)/i, reason: "removed exact duration claim", replacement: "Add flow rate to calculate a duration" },
   { pattern: /water savings?\s+of\s+[\d]+%/i, reason: "removed unverified water-savings percentage claim", replacement: "potential water savings (not yet verified)" },
   { pattern: /verified\s+water\s+savings/i, reason: "removed unverified savings claim", replacement: "unverified potential savings" },
@@ -26,19 +28,19 @@ function scrubText(text, triggered) {
 
 function makeConditionalPatterns(ctx) {
   const patterns = [];
-  const sensorMoisture = ctx?.sensorData?.soilMoisturePercent ?? ctx?.sensorData?.soilMoisture ?? null;
-  if (typeof sensorMoisture !== "number") {
-    patterns.push({ pattern: /soil moisture\s+(?:is|of|at|was)\s+[\d.]+\s*%?/i, reason: "removed unsupported soil moisture value (no sensor)", replacement: "estimated soil moisture (sensor not connected)" });
+  if (!isSensorUsable(ctx?.sensorData)) {
+    patterns.push({ pattern: /soil moisture\s+(?:is|of|at|was)\s+[\d.]+\s*%?/i, reason: "removed unsupported soil moisture value (no usable sensor)", replacement: "estimated soil moisture (sensor not connected)" });
   }
   const hasEt = Boolean(ctx?.etProvenance || ctx?.weather?.evapotranspiration);
   if (!hasEt) {
     patterns.push({ pattern: /\bET\s+(?:rate\s+)?(?:is|of|at|was|=)\s+[\d.]+\s*mm/i, reason: "removed unsupported ET value (no ET source)", replacement: "estimated evapotranspiration (ET source not connected)" });
   }
-  const hasFlowRate = Boolean(ctx?.flowRateLph || ctx?.applicationRateMmPerHour);
-  if (!hasFlowRate) {
+  // Both fields required — one alone is insufficient to validate duration or volume claims
+  const hasSystemEvidence = Boolean(ctx?.flowRateLph && ctx?.applicationRateMmPerHour);
+  if (!hasSystemEvidence) {
     patterns.push(
-      { pattern: /irrigate\s+for\s+[\d.]+\s*(?:hours?|minutes?)/i, reason: "removed duration claim (no flow rate)", replacement: "Add flow rate and system details to calculate a duration." },
-      { pattern: /apply\s+[\d.]+\s*(?:mm|liters?|gallons?|m³)/i, reason: "removed volume claim (no flow rate)", replacement: "Add flow rate to calculate a target volume" },
+      { pattern: /irrigate\s+for\s+[\d.]+\s*(?:hours?|minutes?)/i, reason: "removed duration claim (incomplete system evidence)", replacement: "Add flow rate, application rate, target depth, and field details to calculate a duration." },
+      { pattern: /apply\s+[\d.]+\s*(?:mm|liters?|gallons?|m³|inch(?:es)?|acre-f(?:eet|oot)|in\b)/i, reason: "removed volume claim (incomplete system evidence)", replacement: "Add flow rate to calculate a target volume" },
     );
   }
   const hasSatellite = Boolean(ctx?.satelliteEvidence || ctx?.ndvi != null);
@@ -72,13 +74,13 @@ export function containsUnsupportedClaim(text) {
 export function containsUnsupportedClaimForContext(text, context = {}) {
   if (containsUnsupportedClaim(text)) return true;
   const t = String(text || "");
-  const sensorMoisture = context?.sensorData?.soilMoisturePercent ?? context?.sensorData?.soilMoisture ?? null;
-  if (typeof sensorMoisture !== "number" && /soil moisture\s+(?:is|of|at|was)\s+[\d.]+\s*%?/i.test(t)) return true;
+  if (!isSensorUsable(context?.sensorData) && /soil moisture\s+(?:is|of|at|was)\s+[\d.]+\s*%?/i.test(t)) return true;
   const hasEt = Boolean(context?.etProvenance || context?.weather?.evapotranspiration);
   if (!hasEt && /\bET\s+(?:rate\s+)?(?:is|of|at|was|=)\s+[\d.]+\s*mm/i.test(t)) return true;
-  const hasFlowRate = Boolean(context?.flowRateLph || context?.applicationRateMmPerHour);
-  if (!hasFlowRate && /irrigate\s+for\s+[\d.]+\s*(?:hours?|minutes?)/i.test(t)) return true;
-  if (!hasFlowRate && /apply\s+[\d.]+\s*(?:mm|liters?|gallons?|m³)/i.test(t)) return true;
+  // Both fields required for duration/volume claims
+  const hasSystemEvidence = Boolean(context?.flowRateLph && context?.applicationRateMmPerHour);
+  if (!hasSystemEvidence && /irrigate\s+for\s+[\d.]+\s*(?:hours?|minutes?)/i.test(t)) return true;
+  if (!hasSystemEvidence && /apply\s+[\d.]+\s*(?:mm|liters?|gallons?|m³|inch(?:es)?|acre-f(?:eet|oot)|in\b)/i.test(t)) return true;
   const hasSatellite = Boolean(context?.satelliteEvidence || context?.ndvi != null);
   if (!hasSatellite && /satellite\s+(?:data|imagery|shows?|indicates?|confirms?|detected?)/i.test(t)) return true;
   return false;
@@ -92,6 +94,7 @@ export const safetyGuardrails = {
     const fieldContext = context.fieldContext || null;
     const patched = { ...decision };
 
+    // Scrub every user-visible model-generated string field
     for (const key of ["reasons", "uncertainties", "fieldChecks", "risks", "safetyNotes"]) {
       if (Array.isArray(patched[key])) patched[key] = patched[key].map((text) => scrubTextWithContext(text, triggered, fieldContext));
     }
@@ -100,13 +103,22 @@ export const safetyGuardrails = {
     } else if (Array.isArray(patched.verificationPlan)) {
       patched.verificationPlan = patched.verificationPlan.map((text) => scrubTextWithContext(text, triggered, fieldContext));
     }
+    if (typeof patched.timing === "string") patched.timing = scrubTextWithContext(patched.timing, triggered, fieldContext);
+    if (typeof patched.estimatedDurationRange === "string") patched.estimatedDurationRange = scrubTextWithContext(patched.estimatedDurationRange, triggered, fieldContext);
     patched.nextBestAction = scrubTextWithContext(patched.nextBestAction, triggered, fieldContext);
 
     // Specific rule checks run first so their named guardrail keys are always recorded.
     // The generic authority block is a final catch-all for any remaining irrigate escalation.
+    const sensorData = fieldContext?.sensorData || null;
     if ((deterministic.rulesTriggered || []).includes("sensor_high_moisture") && patched.action === "irrigate") {
-      patched.action = "wait";
-      triggered.push("sensor_high_moisture_blocks_irrigate");
+      if (sensorData && !isSensorUsable(sensorData)) {
+        // Stale high-moisture reading — require field verification rather than trusting stale value
+        patched.action = "check field first";
+        triggered.push("sensor_high_moisture_stale_requires_field_check");
+      } else {
+        patched.action = "wait";
+        triggered.push("sensor_high_moisture_blocks_irrigate");
+      }
     }
     if ((deterministic.rulesTriggered || []).includes("frost_risk") && patched.action === "irrigate") {
       patched.action = "check field first";
@@ -123,8 +135,8 @@ export const safetyGuardrails = {
       triggered.push("rain_forecast_blocks_irrigate");
     }
     if ((deterministic.rulesTriggered || []).includes("recent_irrigation") && patched.action === "irrigate") {
-      const sensorMoisture = fieldContext?.sensorData?.soilMoisturePercent ?? fieldContext?.sensorData?.soilMoisture ?? null;
-      const sensorConfirmsDry = typeof sensorMoisture === "number" && sensorMoisture <= 18;
+      const sensorMoisture = sensorData?.soilMoisturePercent ?? sensorData?.soilMoisture ?? null;
+      const sensorConfirmsDry = isSensorHardenedForBypass(sensorData, fieldContext) && typeof sensorMoisture === "number" && sensorMoisture <= 18;
       if (!sensorConfirmsDry) {
         patched.action = "check field first";
         triggered.push("recent_irrigation_requires_field_check");
