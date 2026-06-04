@@ -437,10 +437,24 @@ def _date_window(rows: List[Dict[str, Any]]) -> str:
 
 def _field_note_support(notes: List[Dict[str, Any]], farm: str, block: str) -> List[str]:
     selected = []
+    farm_l = farm.lower()
+    block_l = block.lower()
     for row in notes:
+        row_farm = str(row.get("farm", "")).strip()
+        row_block = str(row.get("block", "")).strip()
         note = str(row.get("notes", ""))
-        lowered = note.lower()
-        if farm.lower() in lowered or block.lower() in lowered:
+        if row_farm and row_block:
+            # Structured columns present: require both to match.
+            if row_farm.lower() == farm_l and row_block.lower() == block_l:
+                if note:
+                    selected.append(note)
+            # Structured columns present but don't match — do not include.
+            continue
+        # Unstructured note: require BOTH identifiers to appear in the text.
+        if farm_l and block_l:
+            if farm_l in note.lower() and block_l in note.lower():
+                selected.append(note)
+        elif farm_l and farm_l in note.lower():
             selected.append(note)
     return selected
 
@@ -452,6 +466,12 @@ _CUSTOMER_READABLE_NEXT_EVIDENCE: Dict[str, str] = {
     "irrigation_method": "Confirm the irrigation method for this block.",
     "field_area_ha": "Provide the block area with an explicit unit (hectares or acres).",
     "validated_flow_or_application_rate": "Upload or connect validated flow evidence for this block.",
+    "recent_verified_applied_water_credit": "Upload or connect a recent controller-confirmed or flow-meter-confirmed applied-water event for this block.",
+    "block_boundary_mapping": "Map the block boundary before enabling earth observation.",
+    "current_field_observation": "Add a current field observation for this block.",
+    "block_mapping": "Complete block mapping before scheduling.",
+    "farm_mapping": "Complete farm mapping before scheduling.",
+    "variety_mapping": "Complete variety mapping for this crop.",
 }
 
 
@@ -467,7 +487,6 @@ def _customer_readable_next_evidence(missing_inputs: List[str]) -> List[str]:
 
 
 def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> Dict[str, Any]:
-    signals = []
     rows = _rows_by_kind(artifacts)
     profile_rows = rows.get("crop_profile", [])
     preferred_farm = "Alpha Vineyard"
@@ -476,10 +495,28 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
     farm = str(profile.get("farm") or preferred_farm)
     block = str(profile.get("block") or preferred_block)
 
+    # Source kinds that carry farm+block columns — filter to selected scope.
+    _farm_block_scope_kinds = {
+        "controller_events", "controller_logs", "flow_meter", "soil_moisture",
+        "satellite_observation", "crop_profile", "field_notes",
+    }
+    # Source kinds filtered by region — handled below after region is determined.
+    _region_scope_kinds = {"weather", "water_costs"}
+
+    # Build scoped signals: only records from the selected farm/block (or matching region).
+    # Package-wide signals inflate confidence and are excluded from the decision score.
+    farm_l = farm.lower()
+    block_l = block.lower()
+    signals: List[Any] = []
     for artifact in artifacts:
         schema = infer_schema(artifact.columns_detected)
         for index, row in enumerate(artifact.parsed_rows):
             normalized_row = normalize_units(row, schema)
+            if artifact.source_kind in _farm_block_scope_kinds:
+                row_farm = str(normalized_row.get("farm", "")).strip().lower()
+                row_block = str(normalized_row.get("block", normalized_row.get("zone", ""))).strip().lower()
+                if row_farm and row_block and (row_farm != farm_l or row_block != block_l):
+                    continue  # Skip records from other farms or blocks.
             for key, value in normalized_row.items():
                 unit = "mm" if key in {"eto", "rain", "depth_mm"} else None
                 signals.append(
@@ -595,14 +632,22 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
             "water_cost_per_acre_ft": _avg(row.get("cost_per_acre_ft") for row in water_cost_rows),
         },
         "counts": {
-            "controller_events_read": len(rows.get("controller_events", [])) + len(rows.get("controller_logs", [])),
+            # Selected-scope counts — used for presence checks, confidence, completeness.
+            "controller_events_read": len(controller_rows),
             "weather_records_read": len(weather_rows),
-            "soil_readings_read": len(rows.get("soil_moisture", [])),
-            "field_notes_parsed": len(rows.get("field_notes", [])),
-            "flow_meter_records_read": len(rows.get("flow_meter", [])),
-            "crop_profile_loaded": len(profile_rows),
-            "satellite_observations_read": len(rows.get("satellite_observation", [])),
+            "soil_readings_read": len(soil_rows),
+            "field_notes_parsed": len(field_notes),
+            "flow_meter_records_read": len(flow_rows),
+            "crop_profile_loaded": len(_rows_for(profile_rows, farm, block)),
+            "satellite_observations_read": len(satellite_rows),
             "water_cost_records_read": len(water_cost_rows),
+            # Package-wide counts — kept for source-row reporting only.
+            "pkg_controller_events_read": len(rows.get("controller_events", [])) + len(rows.get("controller_logs", [])),
+            "pkg_soil_readings_read": len(rows.get("soil_moisture", [])),
+            "pkg_field_notes_parsed": len(rows.get("field_notes", [])),
+            "pkg_flow_meter_records_read": len(rows.get("flow_meter", [])),
+            "pkg_crop_profile_loaded": len(profile_rows),
+            "pkg_satellite_observations_read": len(rows.get("satellite_observation", [])),
         },
     }
     # Inject area from crop profile so the orchestrator can compute volume and duration.
@@ -1114,11 +1159,12 @@ def _build_source_rows(
 
     all_notes = rows.get("field_notes", [])
     notes_count = counts.get("field_notes_parsed", 0)
+    pkg_notes_count = counts.get("pkg_field_notes_parsed", len(all_notes))
     result.append({
         "source_label": "Field observation",
         "source_kind": "field_notes",
         "selected_scope_record_count": notes_count,
-        "package_record_count": len(all_notes),
+        "package_record_count": pkg_notes_count,
         "latest_timestamp": None,
         "latest_signal_summary": f"{notes_count} field observation{'s' if notes_count != 1 else ''}",
         "status": "accepted" if notes_count > 0 else "unavailable",
@@ -1196,13 +1242,16 @@ def _mapping_completeness(
 
     satellite_available = bool(_rows_for(rows.get("satellite_observation", []), farm, block))
     sel_profile_for_block = _rows_for(rows.get("crop_profile", []), farm, block)
+    # block_mapping_complete: explicit field from crop profile only.
+    # Do not infer from a non-empty block label — that would claim mapping for arbitrary uploaded data.
+    explicit_block_mapped = any(bool(p.get("block_mapping_complete")) for p in sel_profile_for_block)
     explicit_boundary_mapped = any(bool(p.get("block_boundary_mapped")) for p in sel_profile_for_block)
-    sel_field_notes = _rows_for(rows.get("field_notes", []), farm, block) if farm and block else []
-    field_notes_available = len(sel_field_notes) > 0 or counts.get("field_notes_parsed", 0) > 0
+    # field_observation_available: selected scope only (package-wide fallback removed).
+    field_notes_available = counts.get("field_notes_parsed", 0) > 0
 
     return {
         "farm_mapping_complete": farm_known,
-        "block_mapping_complete": block_known,
+        "block_mapping_complete": explicit_block_mapped,
         "block_boundary_mapped": explicit_boundary_mapped,
         "crop_mapping_complete": crop_known,
         "variety_mapping_complete": variety_known,

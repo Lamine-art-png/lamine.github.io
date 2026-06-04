@@ -60,7 +60,9 @@ def test_sample_package_route(client):
     assert analyzed.status_code == 200
     result = analyzed.json()
     assert result['data_sources']['rows_parsed'] >= 70
-    assert result['signal_summary']['flow_meter_records_read'] >= 10
+    # Selected-scope flow records (Block A North only); package-wide preserved separately.
+    assert result['signal_summary']['flow_meter_records_read'] >= 1
+    assert result['signal_summary']['pkg_flow_meter_records_read'] >= 10
     assert result['analysis_trace'][0]['title'] == 'Source records ingested'
 
 def test_schema_exposes_rich_workbench_fields(client):
@@ -622,25 +624,20 @@ def test_report_savings_match_recommendation(client):
 
 
 def test_mapping_booleans_all_false_for_incomplete(client):
-    """Incomplete evidence scenario: domain flags must be False; block_mapping_complete reflects block name specificity."""
+    """Incomplete evidence: all mapping flags must be False — block_mapping_complete requires explicit field, not just a label."""
     created = client.post('/v1/workbench/sample-package', json={'scenario': 'incomplete_evidence_review'})
     session_id = created.json()['session']['session_id']
     analyzed = client.post(f'/v1/workbench/sessions/{session_id}/analyze',
                            json={'session_id': session_id, 'mode': 'uploaded'})
     nc = analyzed.json()['normalized_context']
-    # Domain fields missing — all false.
-    domain_false_keys = [
-        'farm_mapping_complete', 'block_boundary_mapped',
+    # block_mapping_complete requires an explicit crop profile field, not inference from the block label.
+    all_false_keys = [
+        'farm_mapping_complete', 'block_mapping_complete', 'block_boundary_mapped',
         'crop_mapping_complete', 'variety_mapping_complete', 'soil_mapping_complete',
         'irrigation_method_mapping_complete', 'field_observation_available', 'earth_observation_available',
     ]
-    for key in domain_false_keys:
+    for key in all_false_keys:
         assert nc.get(key) is False, f"Expected {key}=False for incomplete scenario, got {nc.get(key)!r}"
-    # block_mapping_complete reflects whether the block name is specific (not unnamed/unknown).
-    # "Block C South" is a specific name, so block_mapping_complete is True even for incomplete evidence.
-    assert nc.get('block_mapping_complete') is True, (
-        f"Expected block_mapping_complete=True for 'Block C South' (specific block name), got {nc.get('block_mapping_complete')!r}"
-    )
 
 
 def test_mapping_booleans_present_for_validated(client):
@@ -707,3 +704,165 @@ def test_scheduling_409_message_no_override_hint(client):
     detail = r.json()['detail']
     assert 'supply override_reason' not in detail.lower()
     assert 'scheduling gate' in detail.lower() or 'scheduling not allowed' in detail.lower()
+
+
+# --- Section 8: New regression tests ------------------------------------------
+
+def test_scheduling_empty_session_fails_409(client):
+    """Empty session (no analysis) must return 409 when trying to schedule."""
+    session = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()
+    sid = session['session_id']
+    r = client.post(f'/v1/workbench/sessions/{sid}/actions/schedule', json={'actor': 'Ops'})
+    assert r.status_code == 409
+    assert 'no analysis' in r.json()['detail'].lower() or 'scheduling not allowed' in r.json()['detail'].lower()
+
+
+def test_scheduling_empty_session_with_override_reason_still_fails_409(client):
+    """override_reason must not bypass the scheduling gate for an empty session."""
+    session = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()
+    sid = session['session_id']
+    r = client.post(f'/v1/workbench/sessions/{sid}/actions/schedule',
+                    json={'actor': 'Ops', 'override_reason': 'Emergency override'})
+    assert r.status_code == 409
+
+
+def test_empty_session_schedule_leaves_evidence_unchanged(client):
+    """A rejected scheduling attempt must leave evidence_actions unchanged."""
+    session = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()
+    sid = session['session_id']
+    r = client.post(f'/v1/workbench/sessions/{sid}/actions/schedule', json={'actor': 'Ops'})
+    assert r.status_code == 409
+    chain = client.get(f'/v1/workbench/sessions/{sid}/evidence-chain').json()
+    # Evidence steps exist (pre-seeded) but none should be recorded after a rejected gate.
+    assert all(s.get('status') == 'Pending' for s in chain.get('evidence_chain', [])), (
+        "Rejected scheduling must not advance any evidence step"
+    )
+    assert chain.get('audit_events', []) == [], "Rejected scheduling must not write audit events"
+
+
+def test_farm_a_field_notes_do_not_satisfy_farm_b(client):
+    """Field notes for Farm A must not appear as selected-scope for Farm B."""
+    from io import BytesIO
+    from app.services import workbench_engine as e
+
+    sid = e.create_session().session_id
+    # Field notes only for Farm A / Block A
+    notes_csv = b"farm,block,notes\nFarm A,Block 1,Great stress on Farm A Block 1 vines\n"
+    art = e.WorkbenchDataArtifact(
+        artifact_id='n1', session_id=sid, filename='notes.txt', content_type='text/plain',
+        source_kind='field_notes', rows_detected=1, columns_detected=['farm', 'block', 'notes'],
+        parse_status='parsed', parsed_rows=[{'farm': 'Farm A', 'block': 'Block 1', 'notes': 'Stress on Block 1'}],
+    )
+    e.SESSIONS[sid]['artifacts'].append(art)
+    # Override context farm/block to Farm B / Block 2
+    ctx = e.assemble_context_from_artifacts(e.SESSIONS[sid]['artifacts'])
+    # Manually set farm/block as if Farm B is selected
+    ctx['farm'] = 'Farm B'
+    ctx['block'] = 'Block 2'
+    # Recompute field notes for the wrong farm — must return empty
+    from app.services.workbench_engine import _field_note_support, _rows_by_kind
+    rows = _rows_by_kind(e.SESSIONS[sid]['artifacts'])
+    notes_for_farm_b = _field_note_support(rows.get('field_notes', []), 'Farm B', 'Block 2')
+    assert notes_for_farm_b == [], f"Farm A notes leaked into Farm B scope: {notes_for_farm_b}"
+
+
+def test_farm_a_soil_readings_do_not_satisfy_farm_b():
+    """Soil readings for Farm A / Block A must not appear in selected-scope for Farm B / Block B."""
+    from app.services import workbench_engine as e
+    sid = e.create_session().session_id
+    art = e.WorkbenchDataArtifact(
+        artifact_id='s1', session_id=sid, filename='soil.csv', content_type='text/csv',
+        source_kind='soil_moisture', rows_detected=2, columns_detected=['farm', 'block', 'deficit_percent'],
+        parse_status='parsed',
+        parsed_rows=[
+            {'farm': 'Farm A', 'block': 'Block 1', 'deficit_percent': '40'},
+            {'farm': 'Farm A', 'block': 'Block 1', 'deficit_percent': '38'},
+        ],
+    )
+    e.SESSIONS[sid]['artifacts'].append(art)
+    # Manually call _rows_for to check isolation
+    from app.services.workbench_engine import _rows_for, _rows_by_kind
+    rows = _rows_by_kind(e.SESSIONS[sid]['artifacts'])
+    farm_b_soil = _rows_for(rows.get('soil_moisture', []), 'Farm B', 'Block 2')
+    assert farm_b_soil == [], "Farm A soil readings leaked into Farm B scope"
+
+
+def test_controller_only_flow_does_not_make_flow_meter_available(client):
+    """When only controller events exist, the Flow meter source row must be unavailable."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'validated_operating_block'})
+    session_id = created.json()['session']['session_id']
+    from app.services import workbench_engine as e
+    # Remove all flow_meter artifacts from the session
+    e.SESSIONS[session_id]['artifacts'] = [
+        a for a in e.SESSIONS[session_id]['artifacts'] if a.source_kind != 'flow_meter'
+    ]
+    analyzed = client.post(f'/v1/workbench/sessions/{session_id}/analyze',
+                           json={'session_id': session_id, 'mode': 'uploaded'})
+    source_rows = analyzed.json().get('source_rows', [])
+    fm_row = next((r for r in source_rows if r['source_kind'] == 'flow_meter'), None)
+    assert fm_row is not None, "Flow meter source row missing"
+    assert fm_row['status'] == 'unavailable', f"Expected unavailable, got {fm_row['status']!r}"
+    assert fm_row['selected_scope_record_count'] == 0
+
+
+def test_incomplete_scenario_returns_customer_readable_next_actions(client):
+    """Incomplete evidence scenario must return customer-readable next evidence instructions."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'incomplete_evidence_review'})
+    session_id = created.json()['session']['session_id']
+    analyzed = client.post(f'/v1/workbench/sessions/{session_id}/analyze',
+                           json={'session_id': session_id, 'mode': 'uploaded'})
+    rec = analyzed.json().get('recommendation', {})
+    next_evidence = rec.get('next_evidence_required', [])
+    # Customer-readable messages must not expose raw internal keys.
+    raw_keys = {'eto_mm', 'crop_type', 'soil_type', 'irrigation_method', 'field_area_ha',
+                'validated_flow_or_application_rate', 'recent_verified_applied_water_credit'}
+    for item in next_evidence:
+        assert item not in raw_keys, f"Raw internal key exposed as next evidence: {item!r}"
+    # Any human-readable instruction must contain at least one space (not a bare key).
+    for item in next_evidence:
+        assert ' ' in item, f"Next evidence item appears to be a raw key: {item!r}"
+
+
+def test_block_mapping_complete_false_when_only_label_exists(client):
+    """block_mapping_complete must be False when the crop profile has a block label but no explicit field."""
+    from io import BytesIO
+    session = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()
+    sid = session['session_id']
+    # Upload a crop profile with a block label but no block_mapping_complete field
+    profile_json = b'[{"farm": "Test Farm", "block": "Test Block", "crop": "grapes"}]'
+    client.post(f'/v1/workbench/sessions/{sid}/upload',
+                files={'file': ('crop_profile.json', BytesIO(profile_json), 'application/json')})
+    analyzed = client.post(f'/v1/workbench/sessions/{sid}/analyze',
+                           json={'session_id': sid, 'mode': 'uploaded'})
+    nc = analyzed.json()['normalized_context']
+    assert nc.get('block_mapping_complete') is False, (
+        f"block_mapping_complete must be False when no explicit field exists, got {nc.get('block_mapping_complete')!r}"
+    )
+
+
+def test_validated_block_mapping_complete_true(client):
+    """Validated operating block sample must have block_mapping_complete=True from explicit crop profile field."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'validated_operating_block'})
+    session_id = created.json()['session']['session_id']
+    analyzed = client.post(f'/v1/workbench/sessions/{session_id}/analyze',
+                           json={'session_id': session_id, 'mode': 'uploaded'})
+    nc = analyzed.json()['normalized_context']
+    assert nc.get('block_mapping_complete') is True, (
+        f"Validated scenario must have block_mapping_complete=True, got {nc.get('block_mapping_complete')!r}"
+    )
+
+
+def test_package_wide_counts_visible_separately(client):
+    """Package-wide counts must be accessible separately from selected-scope counts."""
+    created = client.post('/v1/workbench/sample-package', json={'scenario': 'validated_operating_block'})
+    session_id = created.json()['session']['session_id']
+    analyzed = client.post(f'/v1/workbench/sessions/{session_id}/analyze',
+                           json={'session_id': session_id, 'mode': 'uploaded'})
+    ss = analyzed.json()['signal_summary']
+    # Package-wide counts must be present and >= selected-scope counts
+    assert ss.get('pkg_controller_events_read', 0) >= ss.get('controller_events_read', 0)
+    assert ss.get('pkg_soil_readings_read', 0) >= ss.get('soil_readings_read', 0)
+    assert ss.get('pkg_flow_meter_records_read', 0) >= ss.get('flow_meter_records_read', 0)
+    # Package-wide must be strictly greater (sample data has multiple farms/blocks)
+    assert ss.get('pkg_controller_events_read', 0) > ss.get('controller_events_read', 0)
+    assert ss.get('pkg_soil_readings_read', 0) > ss.get('soil_readings_read', 0)

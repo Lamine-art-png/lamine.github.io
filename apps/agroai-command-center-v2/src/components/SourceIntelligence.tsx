@@ -34,9 +34,16 @@ export function SourceIntelligence() {
           <div className="source-row" role="row" key={row.source}>
             <span className="source-name value" role="cell">
               {row.source}
+              {row.sourceKind && <span className="source-kind-label muted"> · {row.sourceKind.replace(/_/g, " ")}</span>}
             </span>
             <span className="value" role="cell">
               {row.latestSignal}
+              {row.latestTimestamp && <span className="source-ts muted"> · {new Date(row.latestTimestamp).toLocaleDateString()}</span>}
+              {row.limitations && row.limitations.length > 0 && (
+                <ul className="source-limitations-inline muted">
+                  {row.limitations.map((l) => <li key={l}>{l}</li>)}
+                </ul>
+              )}
             </span>
             <span className="num" role="cell">
               {row.records}

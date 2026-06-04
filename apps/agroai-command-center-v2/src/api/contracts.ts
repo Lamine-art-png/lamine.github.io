@@ -23,6 +23,12 @@ export interface SourceRow {
   records: string;
   contribution: string;
   status: SourceStatus;
+  // Extended metadata preserved from backend source_rows
+  sourceKind?: string;
+  selectedScopeRecordCount?: number;
+  packageRecordCount?: number;
+  latestTimestamp?: string | null;
+  limitations?: string[];
 }
 
 export interface ReconciliationRow {
@@ -46,7 +52,7 @@ export interface EvidenceStep {
 
 export interface TraceStep {
   title: string;
-  status: "complete" | "running" | "pending" | "review";
+  status: "complete" | "running" | "pending" | "review" | "limited";
   recordsProcessed: number;
   detail: string;
   timestamp: string;

@@ -38,8 +38,12 @@ def test_sample_package_analysis_uses_rich_sources():
     assert 'flow_meter' in res.data_sources['source_kinds_detected']
     assert res.normalized_context['farm'] == 'Alpha Vineyard'
     assert res.normalized_context['block'] == 'Block A North'
-    assert res.signal_summary['controller_events_read'] >= 20
-    assert res.signal_summary['soil_readings_read'] >= 20
+    # Selected-scope counts: only Block A North records.
+    assert res.signal_summary['controller_events_read'] >= 1
+    assert res.signal_summary['soil_readings_read'] >= 1
+    # Package-wide counts: all records across all farms/blocks.
+    assert res.signal_summary['pkg_controller_events_read'] >= 20
+    assert res.signal_summary['pkg_soil_readings_read'] >= 20
     assert res.reconciliation.flow_meter_agreement
     assert res.recommendation['action']
     assert res.recommendation.get('duration_min') != 42

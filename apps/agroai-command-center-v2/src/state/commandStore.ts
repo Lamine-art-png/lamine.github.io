@@ -551,6 +551,12 @@ function buildBackendSources(result: WorkbenchAnalysisResult): SourceRow[] {
       records: `${r.selected_scope_record_count} / ${r.package_record_count}`,
       contribution: r.contribution_label,
       status: mapSourceStatus(r.status),
+      // Preserve full backend metadata — do not discard after receiving.
+      sourceKind: r.source_kind,
+      selectedScopeRecordCount: r.selected_scope_record_count,
+      packageRecordCount: r.package_record_count,
+      latestTimestamp: r.latest_timestamp,
+      limitations: r.limitations,
     }));
     const nc = (result.normalized_context ?? {}) as Record<string, unknown>;
     if (nc.live_request) {
@@ -1104,23 +1110,27 @@ export const actions = {
       toast(`${state.evidence[idx]?.label ?? "Step"} (walkthrough simulation)`);
       return;
     }
-    if (state.sessionId && actionName && state.backend.status !== "unavailable") {
-      const res = await apiClient.recordEvidenceAction(state.sessionId, actionName, evidenceText[key]);
-      if (res.ok && res.data?.updated_evidence_chain) {
-        set({ evidence: res.data.updated_evidence_chain });
-        addAudit(`${order[idx]} recorded`, `Backend evidence action recorded in evaluation-session storage.`);
-        toast(`${state.evidence[idx]?.label ?? "Step"} recorded`);
-        return;
-      }
-      // Backend was reachable but rejected the request (e.g. 409 ordering violation).
-      // For live and uploaded origins, do not advance local state — the step was not recorded.
-      addAudit("Evidence step not recorded", "Backend rejected the evidence action; local state not advanced.");
-      toast("Evidence step was not recorded. Refresh the workspace and try again.");
+    // Uploaded and live origins must never advance local state without backend persistence.
+    if (!state.sessionId) {
+      addAudit("Evidence step not recorded", "No session ID — backend persistence required for uploaded/live origins.");
+      toast("Evidence step was not recorded. A backend session is required.");
       return;
     }
-    set({ evidence });
-    addAudit(`${order[idx]} recorded`, evidenceText[key]);
-    toast(`${state.evidence[idx]?.label ?? "Step"} recorded`);
+    if (state.backend.status === "unavailable" || !actionName) {
+      addAudit("Evidence step not recorded", "Backend unavailable — local evidence advance blocked for uploaded/live origins.");
+      toast("Evidence step was not recorded. Backend is unavailable.");
+      return;
+    }
+    const res = await apiClient.recordEvidenceAction(state.sessionId, actionName, evidenceText[key]);
+    if (res.ok && res.data?.updated_evidence_chain) {
+      set({ evidence: res.data.updated_evidence_chain });
+      addAudit(`${order[idx]} recorded`, `Backend evidence action recorded in evaluation-session storage.`);
+      toast(`${state.evidence[idx]?.label ?? "Step"} recorded`);
+      return;
+    }
+    // Backend was reachable but rejected (e.g. 409 ordering violation or scheduling gate).
+    addAudit("Evidence step not recorded", "Backend rejected the evidence action; local state not advanced.");
+    toast("Evidence step was not recorded. Refresh the workspace and try again.");
   },
 
   dismissToast() {

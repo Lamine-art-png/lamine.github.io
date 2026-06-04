@@ -26,17 +26,28 @@ export function AnalysisTrace() {
   const schedulingBlockReasons = decision.schedulingBlockReasons;
 
   const reviewSteps = trace.filter((s) => s.status === "review");
+  const limitedSteps = trace.filter((s) => s.status === "limited");
+  const pendingSteps = trace.filter((s) => s.status === "pending");
+  const runningSteps = trace.filter((s) => s.status === "running");
   const originLabel = ORIGIN_LABEL[origin] ?? origin;
   const nc = backendMeta?.normalizedContext ?? {};
+
+  function traceSummaryText(): string {
+    const parts: string[] = [];
+    if (reviewSteps.length > 0) parts.push(`${reviewSteps.length} item${reviewSteps.length > 1 ? "s" : ""} require review`);
+    if (limitedSteps.length > 0) parts.push(`${limitedSteps.length} stage${limitedSteps.length > 1 ? "s" : ""} limited`);
+    if (pendingSteps.length > 0) parts.push(`${pendingSteps.length} stage${pendingSteps.length > 1 ? "s" : ""} pending`);
+    if (runningSteps.length > 0) parts.push(`${runningSteps.length} stage${runningSteps.length > 1 ? "s" : ""} running`);
+    if (parts.length > 0) return parts.join(" · ");
+    return `${trace.length} stages complete`;
+  }
 
   return (
     <details className="card panel technical-trace">
       <summary className="trace-summary">
         <span className="eyebrow">Technical trace</span>
         <span className="trace-summary-detail muted">
-          {reviewSteps.length > 0
-            ? `${reviewSteps.length} item${reviewSteps.length > 1 ? "s" : ""} require review`
-            : `${trace.length} stages complete`}
+          {traceSummaryText()}
           {" · "}Expand for technical review
         </span>
       </summary>
