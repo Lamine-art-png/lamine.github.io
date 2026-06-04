@@ -72,10 +72,15 @@ export const apiClient = {
     form.append("file", file);
     return request<WorkbenchArtifact>(ENDPOINTS.upload(sessionId), { method: "POST", body: form });
   },
-  analyzeSession: (sessionId: string) =>
+  analyzeSession: (sessionId: string, selectedFarm?: string, selectedBlock?: string) =>
     request<WorkbenchAnalysisResult>(ENDPOINTS.analyze(sessionId), {
       method: "POST",
-      body: JSON.stringify({ session_id: sessionId, mode: "uploaded" }),
+      body: JSON.stringify({
+        session_id: sessionId,
+        mode: "uploaded",
+        ...(selectedFarm ? { selected_farm: selectedFarm } : {}),
+        ...(selectedBlock ? { selected_block: selectedBlock } : {}),
+      }),
     }),
   analyzeLive: (source: string, entityId: string) =>
     request<WorkbenchAnalysisResult>(ENDPOINTS.analyzeLive, {

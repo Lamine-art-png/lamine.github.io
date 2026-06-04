@@ -56,7 +56,7 @@ def analyze_session(session_id: str, payload: WorkbenchAnalysisRequest):
     if session_id not in engine.SESSIONS:
         raise HTTPException(404, "Session not found")
     try:
-        _ROUTING_KEYS = {"session_id", "mode", "live_source", "live_entity_id", "historical_evaluation", "evidence_reference_time"}
+        _ROUTING_KEYS = {"session_id", "mode", "live_source", "live_entity_id", "historical_evaluation", "evidence_reference_time", "selected_farm", "selected_block"}
         return engine.analyze_session(
             session_id,
             payload.mode,
@@ -64,6 +64,8 @@ def analyze_session(session_id: str, payload: WorkbenchAnalysisRequest):
             payload.live_entity_id,
             historical_evaluation=payload.historical_evaluation,
             evidence_reference_time=payload.evidence_reference_time,
+            selected_farm=payload.selected_farm,
+            selected_block=payload.selected_block,
             manual_overrides=payload.model_dump(exclude=_ROUTING_KEYS, exclude_none=True),
         )
     except Exception as e:

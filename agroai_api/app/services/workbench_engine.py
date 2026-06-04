@@ -486,25 +486,66 @@ def _customer_readable_next_evidence(missing_inputs: List[str]) -> List[str]:
     return readable
 
 
-def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> Dict[str, Any]:
+def assemble_context_from_artifacts(
+    artifacts: List[WorkbenchDataArtifact],
+    selected_farm: str | None = None,
+    selected_block: str | None = None,
+) -> Dict[str, Any]:
     rows = _rows_by_kind(artifacts)
     profile_rows = rows.get("crop_profile", [])
+
+    extra_warnings: List[str] = []
     preferred_farm = "Alpha Vineyard"
     preferred_block = "Block A North"
-    profile = _first_profile(profile_rows, preferred_farm, preferred_block)
-    farm = str(profile.get("farm") or preferred_farm)
-    block = str(profile.get("block") or preferred_block)
 
-    # Source kinds that carry farm+block columns — filter to selected scope.
+    if selected_farm and selected_block:
+        # Explicit scope requested — honor it; disclose gap if no matching profile.
+        scoped_profiles = _rows_for(profile_rows, selected_farm, selected_block)
+        if scoped_profiles:
+            profile = scoped_profiles[0]
+        else:
+            profile = {}
+            extra_warnings.append(
+                f"No crop profile matched the requested scope '{selected_farm} / {selected_block}'. "
+                "Agronomic context is incomplete; recommendation withheld."
+            )
+        farm = selected_farm
+        block = selected_block
+    else:
+        # No explicit scope — default to sample-package selection or first profile with disclosure.
+        scoped_profiles = _rows_for(profile_rows, preferred_farm, preferred_block)
+        if scoped_profiles:
+            profile = scoped_profiles[0]
+            farm = str(profile.get("farm") or preferred_farm)
+            block = str(profile.get("block") or preferred_block)
+        elif profile_rows:
+            profile = profile_rows[0]
+            farm = str(profile.get("farm") or preferred_farm)
+            block = str(profile.get("block") or preferred_block)
+            if farm != preferred_farm or block != preferred_block:
+                extra_warnings.append(
+                    f"No explicit farm/block scope was supplied. Analysis defaulted to the first crop profile "
+                    f"entry ('{farm} / {block}'). Supply selected_farm and selected_block for precise analysis."
+                )
+        else:
+            profile = {}
+            farm = preferred_farm
+            block = preferred_block
+
+    # Extract region early — needed to scope regional signals in the loop below.
+    region = str(profile.get("region") or "").strip()
+    region_l = region.lower() if region else None
+
+    # Source kinds that carry farm+block columns — require exact attribution for selected scope.
     _farm_block_scope_kinds = {
         "controller_events", "controller_logs", "flow_meter", "soil_moisture",
         "satellite_observation", "crop_profile", "field_notes",
     }
-    # Source kinds filtered by region — handled below after region is determined.
+    # Source kinds filtered by region — include only matching-region rows for operational signals.
     _region_scope_kinds = {"weather", "water_costs"}
 
-    # Build scoped signals: only records from the selected farm/block (or matching region).
-    # Package-wide signals inflate confidence and are excluded from the decision score.
+    # Build selected-scope signals: only records with exact farm+block attribution or region match.
+    # Unattributed rows (no farm/block columns) are excluded — they cannot be confirmed on-scope.
     farm_l = farm.lower()
     block_l = block.lower()
     signals: List[Any] = []
@@ -515,8 +556,13 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
             if artifact.source_kind in _farm_block_scope_kinds:
                 row_farm = str(normalized_row.get("farm", "")).strip().lower()
                 row_block = str(normalized_row.get("block", normalized_row.get("zone", ""))).strip().lower()
-                if row_farm and row_block and (row_farm != farm_l or row_block != block_l):
-                    continue  # Skip records from other farms or blocks.
+                # Require both identifiers to be present and match the selected scope.
+                if not (row_farm and row_block and row_farm == farm_l and row_block == block_l):
+                    continue
+            elif artifact.source_kind in _region_scope_kinds and region_l:
+                row_region = str(normalized_row.get("region", "")).strip().lower()
+                if row_region and row_region != region_l:
+                    continue  # Skip records from other regions.
             for key, value in normalized_row.items():
                 unit = "mm" if key in {"eto", "rain", "depth_mm"} else None
                 signals.append(
@@ -533,6 +579,10 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
                     ).model_dump()
                 )
 
+    # Derive source kind sets after scope filtering.
+    selected_source_kinds = sorted({sig["source_kind"] for sig in signals if sig.get("source_kind")})
+    package_source_kinds = sorted({artifact.source_kind for artifact in artifacts})
+
     # Extract area from crop profile so the orchestrator can compute volume and duration.
     area_ha: float | None = None
     area_warnings_from_profile: List[str] = []
@@ -544,8 +594,7 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
     soil_rows = _rows_for(rows.get("soil_moisture", []), farm, block)
     satellite_rows = _rows_for(rows.get("satellite_observation", []), farm, block)
     field_notes = _field_note_support(rows.get("field_notes", []), farm, block)
-    # Filter weather and water-cost rows to the profile region when available.
-    region = str(profile.get("region") or "").strip()
+    # Filter weather and water-cost rows to the profile region (region already extracted above).
     all_weather_rows = rows.get("weather", [])
     all_water_cost_rows = rows.get("water_costs", [])
     region_warnings: List[str] = []
@@ -580,7 +629,6 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
     max_controller_variance = _max_abs(controller_variances)
     applied_variance = max_flow_variance if max_flow_variance is not None else max_controller_variance
 
-    source_kinds = sorted({artifact.source_kind for artifact in artifacts})
     operating_window = str(profile.get("operating_window") or "").strip() or None
     evaluation_baseline_mm = profile.get("evaluation_baseline_mm")
     evaluation_baseline_label = str(profile.get("evaluation_baseline_label") or "").strip() or None
@@ -605,7 +653,11 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
         "flow_variance": _fmt_number(applied_variance, "%", 1),
         "provider_context": ", ".join(sorted({str(row.get("provider")) for row in controller_rows if row.get("provider")})) or "not available",
         "field_notes": field_notes,
-        "source_kinds": source_kinds,
+        "source_kinds": package_source_kinds,
+        "selected_source_kinds": selected_source_kinds,
+        "package_source_kinds": package_source_kinds,
+        "selected_farm": selected_farm,
+        "selected_block": selected_block,
         "metrics": {
             "avg_eto_mm": avg_eto,
             "rain_forecast_total_mm": rain_total,
@@ -653,6 +705,8 @@ def assemble_context_from_artifacts(artifacts: List[WorkbenchDataArtifact]) -> D
     # Inject area from crop profile so the orchestrator can compute volume and duration.
     if area_ha is not None:
         context["area"] = area_ha
+    if extra_warnings:
+        context.setdefault("warnings", []).extend(extra_warnings)
     if area_warnings_from_profile:
         context.setdefault("warnings", []).extend(area_warnings_from_profile)
     if region_warnings:
@@ -790,13 +844,17 @@ def reconcile_signals(context: Dict[str, Any]) -> ReconciliationResult:
     missing = _presence_missing(counts, live)
     conflicts = []
     applied_variance = metrics.get("applied_variance_percent")
-    if applied_variance is not None and abs(applied_variance) >= 10:
+    has_variance_conflict = applied_variance is not None and abs(applied_variance) >= 10
+    has_pressure_conflict = metrics.get("missing_pressure_count", 0) > 0
+    if has_variance_conflict:
         conflicts.append("Planned vs applied variance exceeded 10%")
-    if metrics.get("missing_pressure_count", 0) > 0:
+    if has_pressure_conflict:
         conflicts.append("Pressure telemetry has gaps")
 
-    confidence, label = compute_confidence(len(signals), missing, conflicts, len(context.get("source_kinds", [])))
-    source_count = max(len(context.get("source_kinds", [])), 1)
+    # Use selected_source_kinds for confidence and completeness — not package-wide source count.
+    selected_source_kinds = context.get("selected_source_kinds", context.get("source_kinds", []))
+    confidence, label = compute_confidence(len(signals), missing, conflicts, len(selected_source_kinds))
+    source_count = max(len(selected_source_kinds), 1)
     completeness = max(35, min(96, int(52 + source_count * 6 - len(missing) * 7 - len(conflicts) * 3)))
     avg_eto = metrics.get("avg_eto_mm")
     avg_deficit = metrics.get("avg_deficit_percent")
@@ -805,6 +863,34 @@ def reconcile_signals(context: Dict[str, Any]) -> ReconciliationResult:
     valid_total = metrics.get("valid_controller_events", 0)
     missing_pressure = metrics.get("missing_pressure_count", 0)
 
+    # Derive interpretation from actual reconciliation state.
+    if live:
+        interpretation = "Live provider request accepted; expanded telemetry remains pending"
+    elif missing and conflicts:
+        interpretation = "Sources reconciled, but scheduling remains blocked pending additional evidence and conflict resolution"
+    elif missing:
+        interpretation = "Sources reconciled, but scheduling remains blocked pending additional evidence"
+    elif conflicts:
+        interpretation = "Sources reconciled with conflicts detected; verification required before scheduling"
+    else:
+        interpretation = "Sources reconciled and ready for scheduling review"
+
+    # Summarize field observation support conservatively — no fabricated claims.
+    field_obs_count = counts.get("field_notes_parsed", 0)
+    if field_obs_count > 0:
+        field_obs_support = f"Selected-block field observations are available ({field_obs_count} note{'s' if field_obs_count != 1 else ''})."
+    else:
+        field_obs_support = "No selected-block field observation is available."
+
+    # Build conflicts_resolved from actual conflict types — do not emit generic pressure claims.
+    conflicts_resolved: List[str] = []
+    if has_variance_conflict:
+        conflicts_resolved.append("Controller and flow-meter variance reconciled with verification watch")
+    if has_pressure_conflict:
+        conflicts_resolved.append("Missing pressure cases lowered confidence and added a pump-pressure verification requirement")
+    if not conflicts_resolved:
+        conflicts_resolved = ["No material source conflict required escalation"]
+
     return ReconciliationResult(
         matched_signals=sorted({signal.get("canonical_name") for signal in signals if signal.get("canonical_name")})[:35],
         conflicts_detected=conflicts,
@@ -812,7 +898,7 @@ def reconcile_signals(context: Dict[str, Any]) -> ReconciliationResult:
         confidence_score=confidence,
         confidence_label=label,
         evidence_completeness=f"{completeness}%",
-        interpretation="Sources reconciled into a schedulable water decision" if not live else "Live provider request accepted; provider credential provisioning is still required",
+        interpretation=interpretation,
         planned_vs_applied_variance=_fmt_number(applied_variance, "%", 1),
         controller_event_validity=f"{valid_total}/{controller_total} controller events usable; {missing_pressure} missing pressure cases",
         flow_meter_agreement=(
@@ -830,22 +916,13 @@ def reconcile_signals(context: Dict[str, Any]) -> ReconciliationResult:
             if avg_deficit is not None
             else "Soil deficit not available"
         ),
-        field_observation_support=(
-            "Field notes support night irrigation and show no visible runoff"
-            if counts.get("field_notes_parsed", 0)
-            else "Field observation missing"
-        ),
+        field_observation_support=field_obs_support,
         satellite_stress_support=(
             f"Earth observation sample layer stress index {_fmt_number(satellite_stress, '', 2)}"
             if satellite_stress is not None
             else "Earth observation sample layer not available"
         ),
-        conflicts_resolved=[
-            "Controller and flow-meter variance reconciled with verification watch",
-            "Missing pressure cases lowered confidence and added a pump-pressure verification requirement",
-        ]
-        if conflicts
-        else ["No material source conflict required escalation"],
+        conflicts_resolved=conflicts_resolved,
     )
 
 
@@ -1233,8 +1310,6 @@ def _mapping_completeness(
     method = str(context.get("irrigation_method") or "").strip().lower()
     counts = context.get("counts", {})
 
-    farm_known = farm.lower() not in unknown_values and "unnamed" not in farm.lower()
-    block_known = block.lower() not in unknown_values
     crop_known = crop not in unknown_values
     variety_known = variety not in unknown_values
     soil_known = soil not in unknown_values
@@ -1242,15 +1317,16 @@ def _mapping_completeness(
 
     satellite_available = bool(_rows_for(rows.get("satellite_observation", []), farm, block))
     sel_profile_for_block = _rows_for(rows.get("crop_profile", []), farm, block)
+    # farm_mapping_complete: explicit field from crop profile only — not inferred from a non-empty label.
+    explicit_farm_mapped = any(bool(p.get("farm_mapping_complete")) for p in sel_profile_for_block)
     # block_mapping_complete: explicit field from crop profile only.
-    # Do not infer from a non-empty block label — that would claim mapping for arbitrary uploaded data.
     explicit_block_mapped = any(bool(p.get("block_mapping_complete")) for p in sel_profile_for_block)
     explicit_boundary_mapped = any(bool(p.get("block_boundary_mapped")) for p in sel_profile_for_block)
     # field_observation_available: selected scope only (package-wide fallback removed).
     field_notes_available = counts.get("field_notes_parsed", 0) > 0
 
     return {
-        "farm_mapping_complete": farm_known,
+        "farm_mapping_complete": explicit_farm_mapped,
         "block_mapping_complete": explicit_block_mapped,
         "block_boundary_mapped": explicit_boundary_mapped,
         "crop_mapping_complete": crop_known,
@@ -1307,6 +1383,10 @@ def _public_context(context: Dict[str, Any]) -> Dict[str, Any]:
         "field_notes_used": context.get("field_notes", []),
         "live_request": context.get("live_request"),
         "normalized_signal_count": len(context.get("signals", [])),
+        "selected_farm": context.get("selected_farm"),
+        "selected_block": context.get("selected_block"),
+        "selected_source_kinds": context.get("selected_source_kinds", []),
+        "package_source_kinds": context.get("package_source_kinds", []),
         **(context.get("mapping_completeness") or {}),
     }
 
@@ -1373,6 +1453,8 @@ def analyze_session(
     manual_overrides: Dict[str, Any] | None = None,
     historical_evaluation: bool | None = None,
     evidence_reference_time: str | None = None,
+    selected_farm: str | None = None,
+    selected_block: str | None = None,
 ) -> WorkbenchAnalysisResult:
     store = SESSIONS[session_id]
     artifacts = store["artifacts"]
@@ -1382,7 +1464,7 @@ def analyze_session(
         # back to the degraded (truthful, empty) live context otherwise.
         context = live_context if live_context is not None else assemble_context_from_live(live_source, live_entity_id)
     else:
-        context = assemble_context_from_artifacts(artifacts)
+        context = assemble_context_from_artifacts(artifacts, selected_farm=selected_farm, selected_block=selected_block)
         # Inject evidence_reference_time for sample packages (fixed dataset with known reference)
         # or when the caller explicitly requests historical evaluation.
         if store.get("is_sample_package"):
@@ -1415,7 +1497,6 @@ def analyze_session(
     limitations = list(dict.fromkeys(recommendation.get("limitations", [])))
     if live_source and live_entity_id:
         limitations.append("Provider credential storage and tenant provisioning must be completed server-side before expanded live telemetry is available.")
-    limitations.extend(recommendation.get("missing_inputs", []))
 
     if is_live:
         analysis_mode_val = "live"

@@ -57,6 +57,8 @@ class WorkbenchAnalysisRequest(BaseModel):
     crop_type: Optional[str] = None
     soil_type: Optional[str] = None
     irrigation_method: Optional[str] = None
+    selected_farm: Optional[str] = None
+    selected_block: Optional[str] = None
     location: Optional[str] = None
     notes: Optional[str] = None
     language: Optional[str] = None
