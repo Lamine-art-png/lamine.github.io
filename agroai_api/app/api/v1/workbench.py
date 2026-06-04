@@ -69,7 +69,7 @@ def analyze_session(session_id: str, payload: WorkbenchAnalysisRequest):
             manual_overrides=payload.model_dump(exclude=_ROUTING_KEYS, exclude_none=True),
         )
     except Exception as e:
-        raise HTTPException(400, f"Live source unavailable. Uploaded-data analysis remains available. {e}")
+        raise HTTPException(400, f"Analysis unavailable: {e}")
 
 @router.post('/analyze-live')
 async def analyze_live(payload: WorkbenchLiveAnalysisRequest):

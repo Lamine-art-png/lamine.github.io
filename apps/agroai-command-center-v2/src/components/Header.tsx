@@ -11,6 +11,11 @@ export function Header() {
   const recommendationOrigin = useCommandStore((s) => s.recommendationOrigin);
   const evidence = useCommandStore((s) => s.evidence);
   const displayFarmName = useCommandStore((s) => s.displayFarmName);
+  const selectedFarm = useCommandStore((s) => s.selectedFarm);
+  const selectedBlock = useCommandStore((s) => s.selectedBlock);
+  const availableFarms = useCommandStore((s) => s.availableFarms);
+  const availableBlocksByFarm = useCommandStore((s) => s.availableBlocksByFarm);
+  const scopeDefaulted = useCommandStore((s) => s.scopeDefaulted);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const farmName = displayFarmName;
@@ -20,6 +25,25 @@ export function Header() {
   const sourceState = analysisPhase === "complete" ? "Sources reconciled" : "Analyzing sources";
   const sourceTone = analysisPhase === "complete" ? "ok" : "warn";
   const provenance = getProvenanceBadge(analysisMode, recommendationOrigin);
+
+  // Show scope selectors only when uploaded data has multiple farms/blocks available.
+  const showScopeSelectors = analysisMode !== "representative" && availableFarms.length > 0;
+  // Blocks available for the currently selected farm.
+  const availableBlocks = selectedFarm
+    ? (availableBlocksByFarm[selectedFarm] ?? [])
+    : Object.values(availableBlocksByFarm).flat().filter((b, i, arr) => arr.indexOf(b) === i).sort();
+
+  function handleFarmChange(farm: string) {
+    actions.setSelectedFarm(farm || null);
+  }
+
+  function handleBlockChange(block: string) {
+    actions.setSelectedBlock(block || null);
+    // Immediately trigger re-analysis when a block is selected.
+    if (block) {
+      void actions.reanalyzeSelectedScope();
+    }
+  }
 
   return (
     <header className="app-header">
@@ -69,6 +93,45 @@ export function Header() {
           {currentScenarioLabel} · Scattered irrigation data becomes a verified water decision.
         </p>
 
+        {showScopeSelectors && (
+          <div className="scope-selector-row" aria-label="Farm and block scope selection">
+            <label className="scope-selector" title="Select farm">
+              <span className="scope-selector-label">Farm</span>
+              <select
+                aria-label="Select farm"
+                value={selectedFarm ?? ""}
+                onChange={(e) => handleFarmChange(e.target.value)}
+              >
+                <option value="">{scopeDefaulted ? "Defaulted (no selection)" : "Select farm…"}</option>
+                {availableFarms.map((f) => (
+                  <option key={f} value={f}>{f}</option>
+                ))}
+              </select>
+            </label>
+            <label className="scope-selector" title="Select block">
+              <span className="scope-selector-label">Block</span>
+              <select
+                aria-label="Select block"
+                value={selectedBlock ?? ""}
+                onChange={(e) => handleBlockChange(e.target.value)}
+                disabled={availableBlocks.length === 0}
+              >
+                <option value="">
+                  {selectedFarm ? "Select block…" : "Select farm first"}
+                </option>
+                {availableBlocks.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
+            </label>
+            {scopeDefaulted && !selectedFarm && (
+              <span className="scope-default-disclosure" role="note">
+                Analysis defaulted to first available scope. Select farm and block for precise analysis.
+              </span>
+            )}
+          </div>
+        )}
+
         <div className="status-row" aria-label="Workspace status">
           <BackendBadge status={backend.status} detail={backend.detail} />
           <StatusBadge label={provenance.label} tone={provenance.tone} />
@@ -79,6 +142,9 @@ export function Header() {
           />
           {scenarioId === "incomplete-evidence" && (
             <StatusBadge label="Evidence review mode" tone="warn" />
+          )}
+          {selectedFarm && selectedBlock && (
+            <StatusBadge label={`Scope: ${selectedFarm} / ${selectedBlock}`} tone="ok" />
           )}
         </div>
       </div>

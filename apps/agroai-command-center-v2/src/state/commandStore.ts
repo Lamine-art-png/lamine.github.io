@@ -57,6 +57,8 @@ export interface BackendMeta {
   baselineLabel: string | null;
   evaluationReferenceTime: string | null;
   sessionId: string | null;
+  availableFarms: string[];
+  availableBlocksByFarm: Record<string, string[]>;
 }
 
 export interface CommandState {
@@ -87,6 +89,12 @@ export interface CommandState {
   audit: AuditEvent[];
   displayFarmName: string;
   backendMeta: BackendMeta | null;
+  // Farm / block scope selectors
+  selectedFarm: string | null;
+  selectedBlock: string | null;
+  availableFarms: string[];
+  availableBlocksByFarm: Record<string, string[]>;
+  scopeDefaulted: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -465,6 +473,11 @@ function scenarioState(id: ScenarioId, mode: AnalysisMode, origin: Recommendatio
     displayFarmName: sc.name || "Alpha Vineyard",
     backendMeta: null,
     sessionId: null,
+    selectedFarm: null,
+    selectedBlock: null,
+    availableFarms: [],
+    availableBlocksByFarm: {},
+    scopeDefaulted: false,
   };
 }
 
@@ -488,6 +501,11 @@ function initialState(): CommandState {
     audit: [{ time: new Date().toISOString(), actor: "Operations user", event: "Workspace launched", detail: "Representative package loaded." }],
     displayFarmName: "Alpha Vineyard",
     backendMeta: null,
+    selectedFarm: null,
+    selectedBlock: null,
+    availableFarms: [],
+    availableBlocksByFarm: {},
+    scopeDefaulted: false,
   } as CommandState;
 }
 
@@ -644,6 +662,24 @@ function buildBackendSources(result: WorkbenchAnalysisResult): SourceRow[] {
   return rows;
 }
 
+const _RAW_INTERNAL_KEY_LABELS: Record<string, string> = {
+  field_area_ha: "Provide the block area with an explicit unit (hectares or acres)",
+  validated_flow_or_application_rate: "Upload or connect validated flow evidence for this block",
+  recent_verified_applied_water_credit: "Upload or connect a recent controller-confirmed or flow-meter-confirmed applied-water event for this block",
+  crop_type: "Complete crop mapping — specify the crop species for this block",
+  soil_type: "Complete soil mapping — specify the soil type for this block",
+  irrigation_method: "Confirm the irrigation method for this block",
+  block_boundary_mapping: "Map the block boundary before enabling earth observation",
+  current_field_observation: "Add a current field observation for this block",
+  block_mapping: "Complete block mapping before scheduling",
+  farm_mapping: "Complete farm mapping before scheduling",
+  variety_mapping: "Complete variety mapping for this crop",
+};
+
+function _readableMissingInput(raw: string): string {
+  return _RAW_INTERNAL_KEY_LABELS[raw] ?? (raw.includes(" ") ? raw : `Address: ${raw}`);
+}
+
 function buildBackendReconciliation(result: WorkbenchAnalysisResult): ReconciliationRow[] {
   const recon = (result.reconciliation ?? {}) as Record<string, unknown>;
   const matched = Array.isArray(recon.matched_signals) ? recon.matched_signals as string[] : [];
@@ -675,8 +711,13 @@ function buildBackendReconciliation(result: WorkbenchAnalysisResult): Reconcilia
   for (const conflict of conflicts) {
     rows.push({ source: "Conflict flagged", signal: conflict, interpretation: "Source conflict detected during reconciliation", status: "Review" });
   }
-  for (const miss of missing.slice(0, 3)) {
-    rows.push({ source: "Missing input", signal: miss, interpretation: "Required input not available in uploaded package", status: "Pending" });
+  // Prefer next_evidence_required (already customer-readable) over raw missing_inputs.
+  const nextEvidence = Array.isArray((result.recommendation as Record<string, unknown>)?.next_evidence_required)
+    ? (result.recommendation as Record<string, unknown>).next_evidence_required as string[]
+    : [];
+  const missingItems = nextEvidence.length > 0 ? nextEvidence : missing;
+  for (const miss of missingItems.slice(0, 3)) {
+    rows.push({ source: "Action required", signal: _readableMissingInput(miss), interpretation: "Required input not available in uploaded package", status: "Pending" });
   }
 
   return rows.length > 0 ? rows : matched.slice(0, 6).map((m) => ({ source: m, signal: "Signal matched", interpretation: "Reconciled from uploaded package", status: "Matched" as ReconciliationRow["status"] }));
@@ -811,6 +852,13 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
         verification: (rec.verification_requirement as string) || "Required",
       };
 
+  // Extract available scope options from normalized context for farm/block selectors.
+  const availableFarms = Array.isArray(nc.available_farms) ? nc.available_farms as string[] : [];
+  const availableBlocksByFarm = (nc.available_blocks_by_farm && typeof nc.available_blocks_by_farm === "object")
+    ? nc.available_blocks_by_farm as Record<string, string[]>
+    : {};
+  const scopeDefaulted = nc.scope_defaulted === true;
+
   // Persist backend metadata for technical trace expansion.
   const backendMeta: BackendMeta = {
     normalizedContext: nc,
@@ -823,6 +871,8 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
     baselineLabel: (rec.baseline_label as string) || null,
     evaluationReferenceTime: (rec.evaluation_reference_time as string) || null,
     sessionId: result.session_id || null,
+    availableFarms,
+    availableBlocksByFarm,
   };
 
   // Build source and reconciliation rows from backend response when not in representative fallback.
@@ -840,6 +890,9 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
     report,
     displayFarmName,
     backendMeta,
+    availableFarms,
+    availableBlocksByFarm,
+    scopeDefaulted,
     ...(backendSources ? { sources: backendSources } : {}),
     ...(backendReconciliation ? { reconciliation: backendReconciliation } : {}),
   });
@@ -982,7 +1035,7 @@ export const actions = {
     let result: WorkbenchAnalysisResult | null = null;
     if (state.backend.status !== "unavailable" && state.sessionId) {
       try {
-        const res = await apiClient.analyzeSession(state.sessionId);
+        const res = await apiClient.analyzeSession(state.sessionId, state.selectedFarm ?? undefined, state.selectedBlock ?? undefined);
         if (res.ok && res.data) result = res.data;
       } catch {
         result = null;
@@ -1060,7 +1113,7 @@ export const actions = {
           warnings: a.warnings?.length ? a.warnings.join("; ") : "None",
         },
       });
-      const analysis = await apiClient.analyzeSession(sessionId);
+      const analysis = await apiClient.analyzeSession(sessionId, state.selectedFarm ?? undefined, state.selectedBlock ?? undefined);
       if (analysis.ok && analysis.data) {
         applyBackendResult(analysis.data, "uploaded");
         addAudit("Uploaded records analyzed", `${file.name} analyzed via Workbench.`);
@@ -1077,6 +1130,42 @@ export const actions = {
   },
   closeDrawer() {
     set({ drawerOpen: false });
+  },
+
+  setSelectedFarm(farm: string | null) {
+    // Changing farm clears the block selection and stale backend metadata.
+    set({ selectedFarm: farm, selectedBlock: null, backendMeta: null });
+    addAudit("Farm scope selected", `Selected farm: ${farm ?? "none"}`);
+  },
+
+  setSelectedBlock(block: string | null) {
+    set({ selectedBlock: block });
+    addAudit("Block scope selected", `Selected block: ${block ?? "none"}`);
+  },
+
+  async reanalyzeSelectedScope() {
+    if (!state.sessionId || state.analysisPhase === "running") return;
+    // Clear stale backend metadata before re-analysis with new scope.
+    set({ analysisPhase: "running", backendMeta: null, pipelineMessage: "Re-analyzing with selected scope…", trace: buildTrace(new Date().toISOString(), false) });
+    addAudit("Scope re-analysis started", `Farm: ${state.selectedFarm ?? "default"}, Block: ${state.selectedBlock ?? "default"}`);
+    if (state.backend.status === "unavailable") {
+      set({ analysisPhase: "complete", pipelineMessage: "Backend unavailable — scope re-analysis blocked." });
+      toast("Backend unavailable. Scope re-analysis blocked.");
+      return;
+    }
+    try {
+      const res = await apiClient.analyzeSession(state.sessionId, state.selectedFarm ?? undefined, state.selectedBlock ?? undefined);
+      if (res.ok && res.data) {
+        applyBackendResult(res.data, state.analysisMode);
+        addAudit("Scope re-analysis completed", `Analysis updated for ${state.selectedFarm ?? "default"} / ${state.selectedBlock ?? "default"}.`);
+        toast("Analysis updated for selected scope.");
+        return;
+      }
+    } catch {
+      // fall through
+    }
+    set({ analysisPhase: "complete", pipelineMessage: "Scope re-analysis failed. Previous result remains active." });
+    toast("Scope re-analysis failed.");
   },
 
   async advanceEvidence(key: EvidenceStep["key"]) {
@@ -1184,7 +1273,19 @@ export function __applyBackendResult(
   state = { ...state, scenarioId };
   applyBackendResult(result, (result.analysis_mode as AnalysisMode) ?? "uploaded");
   if (sessionId) {
-    state = { ...state, backendMeta: state.backendMeta ? { ...state.backendMeta, sessionId } : null };
+    state = { ...state, sessionId, backendMeta: state.backendMeta ? { ...state.backendMeta, sessionId } : null };
   }
+  emit();
+}
+
+// Test seam: set backend status directly (without going through the async health check).
+export function __setBackendStatusForTest(status: BackendStatus) {
+  state = { ...state, backend: { ...state.backend, status } };
+  emit();
+}
+
+// Test seam: set selected farm/block directly.
+export function __setSelectedScopeForTest(farm: string | null, block: string | null) {
+  state = { ...state, selectedFarm: farm, selectedBlock: block };
   emit();
 }

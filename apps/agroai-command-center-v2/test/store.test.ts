@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach } from "vitest";
-import { actions, getState, __resetForTest, SCENARIO_OPTIONS } from "../src/state/commandStore";
+import { actions, getState, __resetForTest, __applyBackendResult, __setBackendStatusForTest, __setSelectedScopeForTest, SCENARIO_OPTIONS } from "../src/state/commandStore";
 
 describe("commandStore", () => {
   beforeEach(() => __resetForTest());
@@ -426,6 +426,153 @@ describe("commandStore", () => {
     const fmRow = sources.find((r) => r.source === "Flow meter");
     expect(fmRow?.status).toBe("Pending"); // "unavailable" maps to Pending
     expect(fmRow?.limitations).toContain("No flow meter records for this block");
+  });
+
+  // --- Section 13 (ninth pass): Farm / block scope selection ---
+
+  it("live origin with backend unavailable cannot complete Applied", async () => {
+    // Apply a live backend result with a valid session ID
+    const fakeResult = {
+      analysis_id: "live-id", session_id: "live-session", status: "complete",
+      analysis_mode: "live" as const, recommendation_origin: "live_intelligence_engine" as const,
+      context_origin: "live" as const,
+      recommendation: { schedulable: true, scheduling_block_reasons: [] },
+      reconciliation: {}, normalized_context: {}, signal_summary: {},
+      warnings: [], uploaded_artifacts_used: [], live_inputs_used: [],
+    };
+    __applyBackendResult("alpha-vineyard", fakeResult as any, "live-session");
+    // Confirm we have a live origin with a session
+    expect(getState().recommendationOrigin).toBe("live_intelligence_engine");
+    expect(getState().sessionId).toBe("live-session");
+    // Mark backend as unavailable
+    __setBackendStatusForTest("unavailable");
+    expect(getState().backend.status).toBe("unavailable");
+    // Advance evidence to scheduled first, then try applied
+    const scheduledBefore = getState().evidence.find((s) => s.key === "scheduled")?.status;
+    await actions.advanceEvidence("scheduled");
+    // Must not advance — backend unavailable guard should block it
+    expect(getState().evidence.find((s) => s.key === "scheduled")?.status).toBe(scheduledBefore);
+    await actions.advanceEvidence("applied");
+    expect(getState().evidence.find((s) => s.key === "applied")?.status).not.toBe("Complete");
+    // Audit must record the block reason
+    const blockEntry = getState().audit.find((a) => a.event === "Evidence step not recorded");
+    expect(blockEntry).toBeDefined();
+    expect(blockEntry?.detail).toMatch(/unavailable/i);
+  });
+
+  it("setting selectedFarm clears selectedBlock and stale backend metadata", async () => {
+    // Apply a backend result to populate backendMeta
+    const fakeResult = {
+      analysis_id: "t-id", session_id: "t-session", status: "complete",
+      analysis_mode: "uploaded" as const, recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      recommendation: { schedulable: true, scheduling_block_reasons: [] },
+      reconciliation: {}, normalized_context: {}, signal_summary: {},
+      warnings: [], uploaded_artifacts_used: [], live_inputs_used: [],
+    };
+    __applyBackendResult("alpha-vineyard", fakeResult as any, "t-session");
+    // Set a block scope first so it can be cleared
+    __setSelectedScopeForTest("Alpha Vineyard", "Block A North");
+    expect(getState().selectedFarm).toBe("Alpha Vineyard");
+    expect(getState().selectedBlock).toBe("Block A North");
+    expect(getState().backendMeta).not.toBeNull();
+    // Changing farm must clear block and backendMeta
+    actions.setSelectedFarm("Beta Farm");
+    expect(getState().selectedFarm).toBe("Beta Farm");
+    expect(getState().selectedBlock).toBeNull();
+    expect(getState().backendMeta).toBeNull();
+    // Audit must record the farm selection
+    const farmAudit = getState().audit.find((a) => a.event === "Farm scope selected");
+    expect(farmAudit).toBeDefined();
+    expect(farmAudit?.detail).toContain("Beta Farm");
+  });
+
+  it("selecting Block B sets selectedBlock and preserves selectedFarm", () => {
+    __setSelectedScopeForTest("Beta Farm", null);
+    actions.setSelectedBlock("Block B");
+    expect(getState().selectedFarm).toBe("Beta Farm");
+    expect(getState().selectedBlock).toBe("Block B");
+    const blockAudit = getState().audit.find((a) => a.event === "Block scope selected");
+    expect(blockAudit).toBeDefined();
+    expect(blockAudit?.detail).toContain("Block B");
+  });
+
+  it("reanalyzeSelectedScope records farm and block in audit and preserves scope after failure", async () => {
+    // Apply uploaded result with a real session so reanalyzeSelectedScope proceeds
+    const fakeResult = {
+      analysis_id: "s-id", session_id: "scope-session", status: "complete",
+      analysis_mode: "uploaded" as const, recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      recommendation: { schedulable: true, scheduling_block_reasons: [] },
+      reconciliation: {}, normalized_context: {}, signal_summary: {},
+      warnings: [], uploaded_artifacts_used: [], live_inputs_used: [],
+    };
+    __applyBackendResult("alpha-vineyard", fakeResult as any, "scope-session");
+    expect(getState().sessionId).toBe("scope-session");
+    // Set scope before reanalysis
+    __setSelectedScopeForTest("Beta Farm", "Block B");
+    // Trigger scope re-analysis — will fail (no real backend) and fall through
+    await actions.reanalyzeSelectedScope();
+    // Audit must record the scope attempt with the correct farm/block
+    const reanalysisAudit = getState().audit.find((a) => a.event === "Scope re-analysis started");
+    expect(reanalysisAudit).toBeDefined();
+    expect(reanalysisAudit?.detail).toContain("Beta Farm");
+    expect(reanalysisAudit?.detail).toContain("Block B");
+    // Scope must be preserved after failure
+    expect(getState().selectedFarm).toBe("Beta Farm");
+    expect(getState().selectedBlock).toBe("Block B");
+  });
+
+  it("reanalyzeSelectedScope is blocked when backend is unavailable", async () => {
+    const fakeResult = {
+      analysis_id: "b-id", session_id: "bk-session", status: "complete",
+      analysis_mode: "uploaded" as const, recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      recommendation: { schedulable: true, scheduling_block_reasons: [] },
+      reconciliation: {}, normalized_context: {}, signal_summary: {},
+      warnings: [], uploaded_artifacts_used: [], live_inputs_used: [],
+    };
+    __applyBackendResult("alpha-vineyard", fakeResult as any, "bk-session");
+    __setSelectedScopeForTest("Beta Farm", "Block B");
+    __setBackendStatusForTest("unavailable");
+    await actions.reanalyzeSelectedScope();
+    // Pipeline message must explain the block
+    expect(getState().pipelineMessage).toContain("unavailable");
+    // Analysis phase must be complete (not stuck in running)
+    expect(getState().analysisPhase).toBe("complete");
+    // Scope must not have been silently cleared
+    expect(getState().selectedFarm).toBe("Beta Farm");
+    expect(getState().selectedBlock).toBe("Block B");
+  });
+
+  it("reanalyzeSelectedScope is a no-op when sessionId is null", async () => {
+    // No sessionId means representative/offline — reanalyze must not set analysisPhase to running
+    __resetForTest();
+    expect(getState().sessionId).toBeNull();
+    const phaseBefore = getState().analysisPhase;
+    await actions.reanalyzeSelectedScope();
+    expect(getState().analysisPhase).toBe(phaseBefore);
+  });
+
+  it("applyBackendResult populates availableFarms and availableBlocksByFarm in state", async () => {
+    const fakeResult = {
+      analysis_id: "af-id", session_id: "af-session", status: "complete",
+      analysis_mode: "uploaded" as const, recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      recommendation: { schedulable: true, scheduling_block_reasons: [] },
+      reconciliation: {},
+      normalized_context: {
+        available_farms: ["Alpha Vineyard", "Beta Farm"],
+        available_blocks_by_farm: { "Alpha Vineyard": ["Block A North", "Block A South"], "Beta Farm": ["Block B"] },
+        scope_defaulted: true,
+      },
+      signal_summary: {},
+      warnings: [], uploaded_artifacts_used: [], live_inputs_used: [],
+    };
+    __applyBackendResult("alpha-vineyard", fakeResult as any, "af-session");
+    expect(getState().availableFarms).toEqual(["Alpha Vineyard", "Beta Farm"]);
+    expect(getState().availableBlocksByFarm["Beta Farm"]).toEqual(["Block B"]);
+    expect(getState().scopeDefaulted).toBe(true);
   });
 
   it("trace summary reflects limited stages, not all-complete", async () => {

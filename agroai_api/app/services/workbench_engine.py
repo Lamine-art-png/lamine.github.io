@@ -507,10 +507,50 @@ def assemble_context_from_artifacts(
             profile = {}
             extra_warnings.append(
                 f"No crop profile matched the requested scope '{selected_farm} / {selected_block}'. "
-                "Agronomic context is incomplete; recommendation withheld."
+                "Agronomic context is incomplete; scheduling withheld pending complete evidence."
             )
         farm = selected_farm
         block = selected_block
+    elif selected_farm and not selected_block:
+        # Partial scope: farm supplied without block — find first block for this farm.
+        farm_profiles = [p for p in profile_rows if str(p.get("farm", "")).strip().lower() == selected_farm.lower()]
+        if farm_profiles:
+            profile = farm_profiles[0]
+            block = str(profile.get("block") or preferred_block)
+            extra_warnings.append(
+                f"'selected_farm' was provided without 'selected_block'. "
+                f"Defaulted to the first available block ('{block}'). "
+                "Supply both selected_farm and selected_block for precise analysis."
+            )
+        else:
+            profile = {}
+            block = preferred_block
+            extra_warnings.append(
+                f"'selected_farm' was provided without 'selected_block', "
+                f"and no crop profile exists for farm '{selected_farm}'. "
+                "Context is incomplete; scheduling withheld."
+            )
+        farm = selected_farm
+    elif not selected_farm and selected_block:
+        # Partial scope: block supplied without farm — cannot safely resolve scope.
+        extra_warnings.append(
+            f"'selected_block' was provided without 'selected_farm'. "
+            "Both are required for explicit scope analysis. "
+            "Defaulting to representative scope."
+        )
+        scoped_profiles = _rows_for(profile_rows, preferred_farm, preferred_block)
+        if scoped_profiles:
+            profile = scoped_profiles[0]
+            farm = str(profile.get("farm") or preferred_farm)
+            block = str(profile.get("block") or preferred_block)
+        elif profile_rows:
+            profile = profile_rows[0]
+            farm = str(profile.get("farm") or preferred_farm)
+            block = str(profile.get("block") or preferred_block)
+        else:
+            profile = {}
+            farm = preferred_farm
+            block = preferred_block
     else:
         # No explicit scope — default to sample-package selection or first profile with disclosure.
         scoped_profiles = _rows_for(profile_rows, preferred_farm, preferred_block)
@@ -561,8 +601,8 @@ def assemble_context_from_artifacts(
                     continue
             elif artifact.source_kind in _region_scope_kinds and region_l:
                 row_region = str(normalized_row.get("region", "")).strip().lower()
-                if row_region and row_region != region_l:
-                    continue  # Skip records from other regions.
+                if not row_region or row_region != region_l:
+                    continue  # Exclude unattributed or non-matching region records from selected scope.
             for key, value in normalized_row.items():
                 unit = "mm" if key in {"eto", "rain", "depth_mm"} else None
                 signals.append(
@@ -700,6 +740,8 @@ def assemble_context_from_artifacts(
             "pkg_flow_meter_records_read": len(rows.get("flow_meter", [])),
             "pkg_crop_profile_loaded": len(profile_rows),
             "pkg_satellite_observations_read": len(rows.get("satellite_observation", [])),
+            "pkg_weather_records_read": len(all_weather_rows),
+            "pkg_water_cost_records_read": len(all_water_cost_rows),
         },
     }
     # Inject area from crop profile so the orchestrator can compute volume and duration.
@@ -711,6 +753,32 @@ def assemble_context_from_artifacts(
         context.setdefault("warnings", []).extend(area_warnings_from_profile)
     if region_warnings:
         context.setdefault("warnings", []).extend(region_warnings)
+
+    # Derive available scope options from crop-profile rows for frontend selectors.
+    available_farms: List[str] = sorted({str(p.get("farm", "")).strip() for p in profile_rows if str(p.get("farm", "")).strip()})
+    available_blocks_by_farm: Dict[str, List[str]] = {}
+    for _p in profile_rows:
+        _f = str(_p.get("farm", "")).strip()
+        _b = str(_p.get("block", "")).strip()
+        if _f and _b:
+            blk_list = available_blocks_by_farm.setdefault(_f, [])
+            if _b not in blk_list:
+                blk_list.append(_b)
+    for _f_key in available_blocks_by_farm:
+        available_blocks_by_farm[_f_key] = sorted(available_blocks_by_farm[_f_key])
+    _scope_dim_keys = [("farm", "farm"), ("block", "block"), ("crop", "crop"), ("variety", "variety"), ("region", "region")]
+    _scope_flag_keys = [("farm_mapping_complete", "farm_mapping_complete"), ("block_mapping_complete", "block_mapping_complete"), ("block_boundary_mapped", "block_boundary_mapped")]
+    available_scope_dimensions: List[str] = []
+    for _dim, _key in _scope_dim_keys:
+        if any(str(_p.get(_key, "")).strip() for _p in profile_rows):
+            available_scope_dimensions.append(_dim)
+    for _dim, _key in _scope_flag_keys:
+        if any(bool(_p.get(_key)) for _p in profile_rows):
+            available_scope_dimensions.append(_dim)
+    context["available_farms"] = available_farms
+    context["available_blocks_by_farm"] = available_blocks_by_farm
+    context["available_scopes"] = available_scope_dimensions
+    context["scope_defaulted"] = bool(len(available_farms) > 1 and not selected_farm)
 
     context["mapping_completeness"] = _mapping_completeness(context, rows)
     context["source_rows"] = _build_source_rows(
@@ -924,6 +992,31 @@ def reconcile_signals(context: Dict[str, Any]) -> ReconciliationResult:
         ),
         conflicts_resolved=conflicts_resolved,
     )
+
+
+def _postprocess_reconciliation_interpretation(
+    reconciliation: ReconciliationResult,
+    recommendation: Dict[str, Any],
+    context: Dict[str, Any],
+) -> ReconciliationResult:
+    """Update reconciliation interpretation to reflect the final recommendation kernel state."""
+    live = bool(context.get("live_request")) and not context.get("signals")
+    if live:
+        interp = "Live provider request accepted; expanded telemetry remains pending"
+    else:
+        kernel = recommendation.get("kernel_action")
+        schedulable = recommendation.get("schedulable", False)
+        if kernel == "irrigate" and schedulable:
+            interp = "Sources reconciled into a schedulable water decision"
+        elif kernel == "irrigate" and not schedulable:
+            interp = "Sources reconciled, but scheduling remains blocked pending additional evidence"
+        elif kernel in {"wait", "wait_and_monitor", "monitor"}:
+            interp = "Sources reconciled into a wait-and-monitor recommendation"
+        elif kernel in {"inspect", "insufficient_data"}:
+            interp = "Sources reconciled into an inspection recommendation"
+        else:
+            return reconciliation  # Unknown kernel — preserve existing interpretation
+    return reconciliation.model_copy(update={"interpretation": interp})
 
 
 def generate_recommendation(reconciliation: ReconciliationResult, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -1387,6 +1480,10 @@ def _public_context(context: Dict[str, Any]) -> Dict[str, Any]:
         "selected_block": context.get("selected_block"),
         "selected_source_kinds": context.get("selected_source_kinds", []),
         "package_source_kinds": context.get("package_source_kinds", []),
+        "available_farms": context.get("available_farms", []),
+        "available_blocks_by_farm": context.get("available_blocks_by_farm", {}),
+        "available_scopes": context.get("available_scopes", []),
+        "scope_defaulted": context.get("scope_defaulted", False),
         **(context.get("mapping_completeness") or {}),
     }
 
@@ -1485,6 +1582,7 @@ def analyze_session(
 
     reconciliation = reconcile_signals(context)
     recommendation = generate_recommendation(reconciliation, context)
+    reconciliation = _postprocess_reconciliation_interpretation(reconciliation, recommendation, context)
     report = generate_report_artifact(session_id, recommendation, reconciliation, context)
     report_summary = {
         **report.model_dump(),
