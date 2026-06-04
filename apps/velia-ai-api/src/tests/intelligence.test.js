@@ -13,7 +13,7 @@ import { aiOrchestrator } from "../ai/aiOrchestrator.js";
 import { detectRecurringPatterns, memoryStore } from "../ai/memoryStore.js";
 import { scenarios, runFixtureEvaluation } from "../ai/evaluationHarness.js";
 import { fetchJsonWithRetry } from "../services/httpClient.js";
-import { scoreEvidence, isSensorUsable, isSensorHardenedForBypass } from "../ai/confidenceEngine.js";
+import { scoreEvidence, isSensorUsable, isSensorHardenedForBypass, validateSensor } from "../ai/confidenceEngine.js";
 import { GeminiEmbeddingProvider } from "../providers/realEmbeddingProviders.js";
 import { calculateDeterministicSignals, buildNormalizedFieldContext, deterministicDecisionFromSignals } from "../ai/deterministicIrrigation.js";
 import { safetyGuardrails, containsUnsupportedClaim, containsUnsupportedClaimForContext } from "../ai/safetyGuardrails.js";
@@ -228,7 +228,7 @@ test("confidence engine: low irrigation need with high evidence produces high co
     irrigationMethod: "Drip",
     lastIrrigationAt: new Date(Date.now() - 2 * 86400000).toISOString(),
     recentObservation: "Looks normal",
-    sensorData: { soilMoisturePercent: 32 },
+    sensorData: { soilMoisturePercent: 32, timestamp: new Date(Date.now() - 30 * 60000).toISOString(), provenance: "field_sensor" },
     controllerStatus: "connected",
     coordinates: { lat: 36.7, lon: -119.4 },
     weather: { temperature: 22, rainChance: 10, weatherTimestamp: new Date().toISOString(), stale: false },
@@ -264,7 +264,7 @@ test("confidence engine: high irrigation need with high evidence produces high c
     irrigationMethod: "Drip",
     lastIrrigationAt: new Date(Date.now() - 6 * 86400000).toISOString(),
     recentObservation: "Leaves wilting, looks dry",
-    sensorData: { soilMoisturePercent: 14 },
+    sensorData: { soilMoisturePercent: 14, timestamp: new Date(Date.now() - 30 * 60000).toISOString(), provenance: "field_sensor" },
     controllerStatus: "connected",
     coordinates: { lat: 38.5, lon: -122.5 },
     weather: { temperature: 36, rainChance: 5, heatRisk: "high", weatherTimestamp: new Date().toISOString(), stale: false },
@@ -300,7 +300,7 @@ test("confidence engine: stale weather reduces confidence", () => {
 test("confidence engine: sensors increase confidence without overriding safety", () => {
   const withSensor = scoreEvidence({
     crop: "tomato", soilType: "loam", irrigationMethod: "Drip",
-    sensorData: { soilMoisturePercent: 14 },
+    sensorData: { soilMoisturePercent: 14, timestamp: new Date(Date.now() - 30 * 60000).toISOString(), provenance: "field_sensor" },
     weather: { weatherTimestamp: new Date().toISOString(), stale: false },
   });
   const withoutSensor = scoreEvidence({
@@ -432,12 +432,12 @@ test("buildNormalizedFieldContext: preserves flow rate and application rate", ()
   assert.equal(ctx.applicationRateMmPerHour, 4.5);
 });
 
-test("buildNormalizedFieldContext: infers provenance fields from data presence", () => {
+test("buildNormalizedFieldContext: does not infer sensorProvenance from data presence alone", () => {
   const ctx = buildNormalizedFieldContext({
     field: { sensorData: { soilMoisturePercent: 22 }, controllerStatus: "connected" },
     weather: { evapotranspiration: 4.2 },
   });
-  assert.equal(ctx.sensorProvenance, "field_sensor");
+  assert.equal(ctx.sensorProvenance, null, "sensorProvenance must not be inferred from data presence — must be explicitly supplied");
   assert.equal(ctx.controllerProvenance, "controller");
   assert.equal(ctx.etProvenance, "weather_provider");
 });
@@ -475,9 +475,9 @@ test("confidence engine: hardware-free farmer with all core evidence reaches hig
 test("confidence engine: empty sensor object does not count as sensor evidence", () => {
   const base = { crop: "tomato", soilType: "loam", irrigationMethod: "Drip", weather: { weatherTimestamp: new Date().toISOString(), stale: false } };
   const withEmpty = scoreEvidence({ ...base, sensorData: {} });
-  const withNumeric = scoreEvidence({ ...base, sensorData: { soilMoisturePercent: 14 } });
+  const withNumeric = scoreEvidence({ ...base, sensorData: { soilMoisturePercent: 14, timestamp: new Date(Date.now() - 30 * 60000).toISOString(), provenance: "field_sensor" } });
   assert.ok(withEmpty.missingEvidence.includes("soil moisture sensor"), "empty sensor object must not count as evidence");
-  assert.ok(withNumeric.evidenceChecked.includes("soil moisture sensor"), "numeric sensor must count as evidence");
+  assert.ok(withNumeric.evidenceChecked.includes("soil moisture sensor"), "fully validated sensor must count as evidence");
   assert.ok(withNumeric.confidenceScore > withEmpty.confidenceScore);
 });
 
@@ -543,8 +543,9 @@ test("containsUnsupportedClaimForContext: soil moisture % blocked without sensor
   assert.ok(containsUnsupportedClaimForContext("soil moisture of 22%", { sensorData: {} }));
 });
 
-test("containsUnsupportedClaimForContext: soil moisture % allowed with numeric sensor", () => {
-  assert.ok(!containsUnsupportedClaimForContext("soil moisture is 14%", { sensorData: { soilMoisturePercent: 14 } }));
+test("containsUnsupportedClaimForContext: soil moisture % allowed with fully validated sensor", () => {
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
+  assert.ok(!containsUnsupportedClaimForContext("soil moisture is 14%", { sensorData: { soilMoisturePercent: 14, timestamp: freshTs, provenance: "field_sensor" } }));
 });
 
 test("containsUnsupportedClaimForContext: satellite claim blocked without satellite evidence", () => {
@@ -655,11 +656,12 @@ test("enforce scrubs soil moisture % when no sensor in fieldContext", () => {
   assert.ok(enforced.reasons.join(" ").includes("sensor not connected"), "replacement text must appear");
 });
 
-test("enforce allows soil moisture % when numeric sensor is present", () => {
+test("enforce allows soil moisture % when sensor passes strict validation", () => {
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
   const signals = { rulesTriggered: [], needScore: 0.6, action: "check field first", urgency: "medium", missingData: [] };
   const decision = { action: "check field first", confidenceScore: 0.6, reasons: ["Soil moisture is 32% based on sensor reading"], uncertainties: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
-  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: { sensorData: { soilMoisturePercent: 32 } } });
-  assert.ok(enforced.reasons.join(" ").includes("32%"), "soil moisture % must be kept when sensor is connected");
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: { sensorData: { soilMoisturePercent: 32, timestamp: freshTs, provenance: "field_sensor" } } });
+  assert.ok(enforced.reasons.join(" ").includes("32%"), "soil moisture % must be kept when sensor passes strict validation");
 });
 
 test("enforce scrubs ET value when no ET source in fieldContext", () => {
@@ -713,9 +715,10 @@ test("safety gate: recent irrigation with high-moisture sensor blocks irrigate",
 });
 
 test("safety gate: recent irrigation with fresh provenanced dry sensor (≤18%) may proceed", () => {
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
   const signals = { rulesTriggered: ["recent_irrigation"], needScore: 0.85, action: "irrigate", urgency: "high", missingData: [] };
   const decision = { action: "irrigate", confidenceScore: 0.8, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
-  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: { irrigationMethod: "Drip", sensorData: { soilMoisturePercent: 15 }, sensorProvenance: "field_sensor" } });
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: { irrigationMethod: "Drip", sensorData: { soilMoisturePercent: 15, timestamp: freshTs }, sensorProvenance: "field_sensor" } });
   assert.ok(!enforced.guardrailsTriggered.includes("recent_irrigation_requires_field_check"), "fresh provenanced dry sensor (≤18%) should allow irrigate through the recent_irrigation gate");
 });
 
@@ -871,8 +874,8 @@ test("confidence engine: future observation timestamp beyond clock skew does not
 
 // ── Sensor evidence hardening ─────────────────────────────────────────────────
 
-test("isSensorUsable: fresh numeric sensor without timestamp is usable", () => {
-  assert.ok(isSensorUsable({ soilMoisturePercent: 22 }), "numeric sensor with no timestamp should be usable");
+test("isSensorUsable: numeric sensor without timestamp is not usable", () => {
+  assert.ok(!isSensorUsable({ soilMoisturePercent: 22 }), "numeric sensor without timestamp must not be usable — timestamp is required");
 });
 
 test("isSensorUsable: sensor with stale timestamp is not usable", () => {
@@ -880,9 +883,10 @@ test("isSensorUsable: sensor with stale timestamp is not usable", () => {
   assert.ok(!isSensorUsable({ soilMoisturePercent: 22, timestamp: staleTs }), "sensor stale beyond 4h must not be usable");
 });
 
-test("isSensorUsable: sensor with fresh timestamp is usable", () => {
-  const freshTs = new Date(Date.now() - 30 * 60 * 1000).toISOString(); // 30 minutes ago
-  assert.ok(isSensorUsable({ soilMoisturePercent: 22, timestamp: freshTs }), "sensor with fresh timestamp must be usable");
+test("isSensorUsable: sensor with fresh timestamp and provenance is usable", () => {
+  const freshTs = new Date(Date.now() - 30 * 60 * 1000).toISOString();
+  assert.ok(!isSensorUsable({ soilMoisturePercent: 22, timestamp: freshTs }), "fresh sensor without provenance must not be usable");
+  assert.ok(isSensorUsable({ soilMoisturePercent: 22, timestamp: freshTs, provenance: "field_sensor" }), "fresh sensor with provenance must be usable");
 });
 
 test("isSensorUsable: non-numeric moisture is not usable", () => {
@@ -891,11 +895,14 @@ test("isSensorUsable: non-numeric moisture is not usable", () => {
   assert.ok(!isSensorUsable(null), "null sensor must not be usable");
 });
 
-test("isSensorHardenedForBypass: requires provenance", () => {
+test("isSensorHardenedForBypass: requires timestamp and provenance", () => {
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
   const sensor = { soilMoisturePercent: 15 };
-  assert.ok(!isSensorHardenedForBypass(sensor, {}), "sensor without provenance must not be hardened for bypass");
-  assert.ok(isSensorHardenedForBypass(sensor, { sensorProvenance: "field_sensor" }), "sensor with sensorProvenance should be hardened for bypass");
-  assert.ok(isSensorHardenedForBypass({ ...sensor, provenance: "field_sensor" }, {}), "sensor with inline provenance should be hardened for bypass");
+  const freshSensor = { soilMoisturePercent: 15, timestamp: freshTs };
+  assert.ok(!isSensorHardenedForBypass(sensor, {}), "sensor without timestamp or provenance must not be hardened for bypass");
+  assert.ok(!isSensorHardenedForBypass(sensor, { sensorProvenance: "field_sensor" }), "sensor without timestamp must not be hardened for bypass even with context provenance");
+  assert.ok(isSensorHardenedForBypass(freshSensor, { sensorProvenance: "field_sensor" }), "fresh sensor with context sensorProvenance should be hardened for bypass");
+  assert.ok(isSensorHardenedForBypass({ ...freshSensor, provenance: "field_sensor" }, {}), "fresh sensor with inline provenance should be hardened for bypass");
 });
 
 test("safety gate: recent irrigation without sensor provenance is blocked even when moisture is dry", () => {
@@ -924,10 +931,11 @@ test("safety gate: stale sensor_high_moisture triggers field check rather than w
 
 test("confidence engine: stale sensor does not boost confidence", () => {
   const staleTs = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
   const withStale = scoreEvidence({ crop: "tomato", soilType: "loam", sensorData: { soilMoisturePercent: 22, timestamp: staleTs } });
-  const withFresh = scoreEvidence({ crop: "tomato", soilType: "loam", sensorData: { soilMoisturePercent: 22 } });
+  const withFresh = scoreEvidence({ crop: "tomato", soilType: "loam", sensorData: { soilMoisturePercent: 22, timestamp: freshTs, provenance: "field_sensor" } });
   assert.ok(withStale.missingEvidence.some((m) => m.includes("soil moisture sensor")), "stale sensor should appear in missingEvidence");
-  assert.ok(withFresh.evidenceChecked.includes("soil moisture sensor"), "fresh sensor must count as evidence");
+  assert.ok(withFresh.evidenceChecked.includes("soil moisture sensor"), "fresh provenanced sensor must count as evidence");
   assert.ok(withFresh.confidenceScore > withStale.confidenceScore, "stale sensor must not boost confidence");
 });
 
@@ -956,4 +964,111 @@ test("GeminiEmbeddingProvider: RETRIEVAL_DOCUMENT with title uses title prefix",
   const text = capturedBody?.content?.parts?.[0]?.text || "";
   assert.ok(text.startsWith("title: Irrigation Guide | text:"), `RETRIEVAL_DOCUMENT with title must include title prefix, got: ${text}`);
   assert.ok(!capturedBody.taskType, "gemini-embedding-2 must not send taskType field");
+});
+
+// ── Strict sensor validation (validateSensor) ─────────────────────────────────
+
+test("validateSensor: no-data, non-numeric, no-timestamp, no-provenance cases", () => {
+  assert.equal(validateSensor(null).usable, false);
+  assert.equal(validateSensor({}).usable, false);
+  assert.equal(validateSensor({ soilMoisturePercent: "22%" }).usable, false);
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
+  // numeric but no timestamp
+  const noTs = validateSensor({ soilMoisturePercent: 22 });
+  assert.equal(noTs.usable, false);
+  assert.equal(noTs.reason, "no sensor timestamp");
+  assert.equal(noTs.moisture, 22);
+  // numeric + timestamp but no provenance
+  const noProv = validateSensor({ soilMoisturePercent: 22, timestamp: freshTs });
+  assert.equal(noProv.usable, false);
+  assert.equal(noProv.reason, "no sensor provenance");
+  assert.equal(noProv.moisture, 22);
+});
+
+test("validateSensor: sensor with mismatched fieldId has hardenedForBypass false", () => {
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
+  const sensor = { soilMoisturePercent: 12, timestamp: freshTs, provenance: "field_sensor", fieldId: "field-b" };
+  const ctx = { fieldId: "field-a", sensorProvenance: "field_sensor" };
+  const result = validateSensor(sensor, ctx);
+  assert.equal(result.usable, true, "sensor passes basic validity checks");
+  assert.equal(result.fieldMappingValid, false, "fieldId mismatch must set fieldMappingValid false");
+  assert.equal(result.hardenedForBypass, false, "mismatched fieldId must prevent hardenedForBypass");
+});
+
+test("validateSensor: fresh mapped provenanced sensor has hardenedForBypass true", () => {
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
+  const sensor = { soilMoisturePercent: 12, timestamp: freshTs, provenance: "field_sensor", fieldId: "field-a" };
+  const ctx = { fieldId: "field-a", sensorProvenance: "field_sensor" };
+  const result = validateSensor(sensor, ctx);
+  assert.equal(result.usable, true);
+  assert.equal(result.fieldMappingValid, true);
+  assert.equal(result.hardenedForBypass, true);
+});
+
+test("validateSensor: stale low-moisture sensor does not raise needScore", () => {
+  const staleTs = new Date(Date.now() - 6 * 60 * 60000).toISOString();
+  const base = buildNormalizedFieldContext({
+    field: { id: "f", crop: "tomato", soilType: "loam", irrigationMethod: "Drip", waterStressLevel: "moderate" },
+    weather: { heatRisk: "low", rainChance: 5, weatherTimestamp: new Date().toISOString(), stale: false },
+  });
+  const withStale = calculateDeterministicSignals({ ...base, sensorData: { soilMoisturePercent: 14, timestamp: staleTs } });
+  const withNone = calculateDeterministicSignals({ ...base, sensorData: null });
+  assert.equal(withStale.needScore, withNone.needScore, "stale low-moisture sensor must not raise needScore");
+  assert.ok(!withStale.rulesTriggered.includes("sensor_low_moisture"), "stale sensor must not trigger sensor_low_moisture rule");
+});
+
+test("validateSensor: untimestamped sensor does not increase confidence", () => {
+  const base = { crop: "tomato", soilType: "loam", irrigationMethod: "Drip", weather: { weatherTimestamp: new Date().toISOString(), stale: false } };
+  const withUntimed = scoreEvidence({ ...base, sensorData: { soilMoisturePercent: 14 } });
+  const withNone = scoreEvidence(base);
+  assert.ok(withUntimed.missingEvidence.some((m) => m.startsWith("soil moisture sensor")), "untimestamped sensor must appear in missingEvidence");
+  assert.equal(withUntimed.confidenceScore, withNone.confidenceScore, "untimestamped sensor must not change confidence score");
+});
+
+test("validateSensor: unprovenanced sensor does not increase confidence", () => {
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
+  const base = { crop: "tomato", soilType: "loam", irrigationMethod: "Drip", weather: { weatherTimestamp: new Date().toISOString(), stale: false } };
+  const withNoProv = scoreEvidence({ ...base, sensorData: { soilMoisturePercent: 14, timestamp: freshTs } });
+  const withNone = scoreEvidence(base);
+  assert.ok(withNoProv.missingEvidence.some((m) => m.startsWith("soil moisture sensor")), "unprovenanced sensor must appear in missingEvidence");
+  assert.equal(withNoProv.confidenceScore, withNone.confidenceScore, "unprovenanced sensor must not change confidence score");
+});
+
+test("validateSensor: untimestamped low-moisture sensor cannot bypass recent-irrigation gate", () => {
+  const signals = { rulesTriggered: ["recent_irrigation"], needScore: 0.85, action: "irrigate", urgency: "high", missingData: [] };
+  const decision = { action: "irrigate", confidenceScore: 0.8, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: { irrigationMethod: "Drip", sensorData: { soilMoisturePercent: 15 }, sensorProvenance: "field_sensor" } });
+  assert.ok(enforced.guardrailsTriggered.includes("recent_irrigation_requires_field_check"), "untimestamped sensor must not bypass recent_irrigation gate even when provenance is present");
+});
+
+test("validateSensor: soil moisture claim scrubbed when sensor lacks timestamp", () => {
+  const signals = { rulesTriggered: [], needScore: 0.6, action: "check field first", urgency: "medium", missingData: [] };
+  const decision = { action: "check field first", confidenceScore: 0.6, reasons: ["Soil moisture is 22% based on sensor"], uncertainties: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: { sensorData: { soilMoisturePercent: 22 } } });
+  assert.ok(!enforced.reasons.join(" ").includes("22%"), "soil moisture claim must be scrubbed when sensor has no timestamp");
+});
+
+test("validateSensor: soil moisture claim permitted only when strict validation passes", () => {
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
+  const signals = { rulesTriggered: [], needScore: 0.6, action: "check field first", urgency: "medium", missingData: [] };
+  const decision = { action: "check field first", confidenceScore: 0.6, reasons: ["Soil moisture is 22% based on sensor"], uncertainties: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: { sensorData: { soilMoisturePercent: 22, timestamp: freshTs, provenance: "field_sensor" } } });
+  assert.ok(enforced.reasons.join(" ").includes("22%"), "soil moisture claim must be preserved when sensor passes strict validation");
+});
+
+// ── Weather timestamp hardening ───────────────────────────────────────────────
+
+test("weatherFreshnessScore: invalid weather timestamp yields no freshness credit", () => {
+  const withInvalid = scoreEvidence({ crop: "tomato", soilType: "loam", irrigationMethod: "Drip", weather: { weatherTimestamp: "not-a-date", stale: false } });
+  const withMissing = scoreEvidence({ crop: "tomato", soilType: "loam", irrigationMethod: "Drip", weather: { stale: false } });
+  assert.ok(withInvalid.missingEvidence.includes("weather freshness"), "invalid weather timestamp must appear in missingEvidence");
+  assert.equal(withInvalid.confidenceScore, withMissing.confidenceScore, "invalid weather timestamp must not grant freshness credit");
+});
+
+test("weatherFreshnessScore: future weather timestamp beyond clock skew yields no freshness credit", () => {
+  const futureTs = new Date(Date.now() + 60 * 60000).toISOString(); // 1 hour in future
+  const withFuture = scoreEvidence({ crop: "tomato", soilType: "loam", irrigationMethod: "Drip", weather: { weatherTimestamp: futureTs, stale: false } });
+  const withMissing = scoreEvidence({ crop: "tomato", soilType: "loam", irrigationMethod: "Drip", weather: { stale: false } });
+  assert.ok(withFuture.missingEvidence.includes("weather freshness"), "future weather timestamp beyond clock skew must appear in missingEvidence");
+  assert.equal(withFuture.confidenceScore, withMissing.confidenceScore, "future weather timestamp must not grant freshness credit");
 });

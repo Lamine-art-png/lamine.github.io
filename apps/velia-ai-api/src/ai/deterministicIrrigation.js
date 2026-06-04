@@ -1,3 +1,5 @@
+import { validateSensor } from "./confidenceEngine.js";
+
 const soilModifiers = {
   sand: 0.1,
   sandy: 0.1,
@@ -44,7 +46,7 @@ export function buildNormalizedFieldContext({ field = {}, weather = {}, logs = [
     ndvi: field.ndvi != null ? field.ndvi : null,
     flowRateLph: field.flowRateLph ?? field.flowRate ?? null,
     applicationRateMmPerHour: field.applicationRateMmPerHour ?? field.applicationRate ?? null,
-    sensorProvenance: field.sensorProvenance || (field.sensorData || field.sensors ? "field_sensor" : null),
+    sensorProvenance: field.sensorProvenance || field.sensorData?.provenance || null,
     etProvenance: field.etProvenance || (weather?.evapotranspiration ? "weather_provider" : null),
     controllerProvenance: field.controllerProvenance || (field.controllerStatus && field.controllerStatus !== "not connected" ? "controller" : null),
     weather,
@@ -72,11 +74,11 @@ function observationSignal(observation) {
   return { delta: 0, rule: null, label: "no strong observation signal" };
 }
 
-function sensorSignal(sensorData) {
-  const moisture = sensorData?.soilMoisturePercent ?? sensorData?.soilMoisture ?? null;
-  if (typeof moisture !== "number") return { delta: 0, rule: null, label: "no soil moisture sensor value" };
-  if (moisture <= 18) return { delta: 0.24, rule: "sensor_low_moisture", label: "sensor reports low moisture" };
-  if (moisture >= 38) return { delta: -0.25, rule: "sensor_high_moisture", label: "sensor reports high moisture" };
+function sensorSignal(sensorData, ctx = {}) {
+  const v = validateSensor(sensorData, ctx);
+  if (!v.usable) return { delta: 0, rule: null, label: "no trusted soil moisture sensor value" };
+  if (v.moisture <= 18) return { delta: 0.24, rule: "sensor_low_moisture", label: "sensor reports low moisture" };
+  if (v.moisture >= 38) return { delta: -0.25, rule: "sensor_high_moisture", label: "sensor reports high moisture" };
   return { delta: 0.02, rule: "sensor_moderate_moisture", label: "sensor moisture is moderate" };
 }
 
@@ -122,7 +124,7 @@ export function calculateDeterministicSignals(context) {
     confidenceDrivers.push(obs.label);
   }
 
-  const sensor = sensorSignal(ctx.sensorData);
+  const sensor = sensorSignal(ctx.sensorData, ctx);
   needScore += sensor.delta;
   if (sensor.rule) {
     rulesTriggered.push(sensor.rule);

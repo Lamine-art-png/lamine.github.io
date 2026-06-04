@@ -1,32 +1,52 @@
 const WEATHER_FRESHNESS_CUTOFF_MINUTES = 90;
 const CORE_MAX = 56;
 export const SENSOR_FRESHNESS_MINUTES = 240; // 4 hours
+const WEATHER_CLOCK_SKEW_MS = 5 * 60 * 1000;
 
-// Returns true when sensorData contains a usable (numeric + not stale) moisture value.
-export function isSensorUsable(sensorData) {
-  if (!sensorData) return false;
+// Strict sensor validation — requires numeric moisture, explicit timestamp, freshness, and explicit provenance.
+// No timestamp → unusable. No provenance → unusable. Field mapping checked when sensor fieldId/blockId/zoneId present.
+export function validateSensor(sensorData, ctx = {}) {
+  const base = { usable: false, hardenedForBypass: false, moisture: null, reason: null, ageMinutes: null, provenance: null, fieldMappingValid: null };
+  if (!sensorData) return { ...base, reason: "no sensor data" };
   const moisture = sensorData.soilMoisturePercent ?? sensorData.soilMoisture ?? null;
-  if (typeof moisture !== "number") return false;
+  if (typeof moisture !== "number") return { ...base, reason: "non-numeric moisture" };
   const ts = sensorData.timestamp || sensorData.lastUpdated || null;
-  if (ts) {
-    const ageMs = Date.now() - new Date(ts).getTime();
-    if (!Number.isFinite(ageMs) || ageMs < 0 || ageMs > SENSOR_FRESHNESS_MINUTES * 60000) return false;
+  if (!ts) return { ...base, moisture, reason: "no sensor timestamp" };
+  const ageMs = Date.now() - new Date(ts).getTime();
+  if (!Number.isFinite(ageMs)) return { ...base, moisture, reason: "invalid sensor timestamp" };
+  if (ageMs < 0) return { ...base, moisture, reason: "future sensor timestamp" };
+  const ageMinutes = ageMs / 60000;
+  if (ageMinutes > SENSOR_FRESHNESS_MINUTES) return { ...base, moisture, reason: "stale sensor", ageMinutes };
+  const provenance = sensorData.provenance || ctx?.sensorProvenance || null;
+  if (!provenance) return { ...base, moisture, reason: "no sensor provenance", ageMinutes };
+  // Field mapping: if sensor carries fieldId/blockId/zoneId validate it against context
+  const sensorFieldId = sensorData.fieldId || sensorData.blockId || sensorData.zoneId || null;
+  let fieldMappingValid = null; // null = not applicable (sensor carries no field identifier)
+  if (sensorFieldId) {
+    const ctxFieldId = ctx?.fieldId || ctx?.id || null;
+    fieldMappingValid = ctxFieldId != null ? String(sensorFieldId) === String(ctxFieldId) : false;
   }
-  return true;
+  const hardenedForBypass = fieldMappingValid !== false;
+  return { usable: true, hardenedForBypass, moisture, reason: "valid", ageMinutes, provenance, fieldMappingValid };
 }
 
-// Adds provenance requirement on top of isSensorUsable — for safety-gate bypass decisions.
+// Backward-compatible wrappers — delegate to validateSensor.
+export function isSensorUsable(sensorData) {
+  return validateSensor(sensorData).usable;
+}
+
 export function isSensorHardenedForBypass(sensorData, ctx = {}) {
-  if (!isSensorUsable(sensorData)) return false;
-  const provenance = sensorData?.provenance || ctx?.sensorProvenance || null;
-  return Boolean(provenance);
+  return validateSensor(sensorData, ctx).hardenedForBypass;
 }
 
 function weatherFreshnessScore(weather) {
   if (!weather || weather.stale) return 0;
   const ts = weather.weatherTimestamp || weather.lastUpdated;
   if (!ts) return 0;
-  const ageMinutes = Math.max(0, (Date.now() - new Date(ts).getTime()) / 60000);
+  const ageMs = Date.now() - new Date(ts).getTime();
+  if (!Number.isFinite(ageMs)) return 0; // invalid timestamp
+  if (ageMs < -WEATHER_CLOCK_SKEW_MS) return 0; // future timestamp beyond clock-skew tolerance
+  const ageMinutes = Math.max(0, ageMs / 60000);
   if (ageMinutes <= 30) return 1;
   if (ageMinutes <= WEATHER_FRESHNESS_CUTOFF_MINUTES) return 0.6;
   return 0;
@@ -95,12 +115,13 @@ export function scoreEvidence(context = {}) {
 
   // Optional precision boosters — additive, not penalized when absent
   let optionalBoost = 0;
-  const sensorMoisture = context.sensorData?.soilMoisturePercent ?? context.sensorData?.soilMoisture ?? null;
-  if (isSensorUsable(context.sensorData)) {
+  const validated = validateSensor(context.sensorData, context);
+  const rawMoisture = context.sensorData?.soilMoisturePercent ?? context.sensorData?.soilMoisture ?? null;
+  if (validated.usable) {
     optionalBoost += 0.10;
     evidenceChecked.push("soil moisture sensor");
-  } else if (typeof sensorMoisture === "number") {
-    missingEvidence.push("soil moisture sensor (stale)");
+  } else if (typeof rawMoisture === "number") {
+    missingEvidence.push(validated.reason === "stale sensor" ? "soil moisture sensor (stale)" : "soil moisture sensor (unverified)");
   } else {
     missingEvidence.push("soil moisture sensor");
   }
@@ -128,6 +149,8 @@ export function scoreEvidence(context = {}) {
     missingEvidence.push("satellite evidence");
   }
 
+  // Conflict detection uses only validated sensor moisture
+  const sensorMoisture = validated.usable ? validated.moisture : null;
   const obsText = String(context.recentObservation || "").toLowerCase();
   const weatherWet = (context.weather?.rainChance || 0) >= 60 || (context.weather?.rainfallForecastMm || 0) >= 6;
   const obsDry = /dry|stress|wilting|crack/i.test(obsText);

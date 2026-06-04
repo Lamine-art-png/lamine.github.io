@@ -1,4 +1,4 @@
-import { isSensorUsable, isSensorHardenedForBypass } from "./confidenceEngine.js";
+import { validateSensor } from "./confidenceEngine.js";
 
 const prohibitedPatterns = [
   { pattern: /guarantee(?:d)?\s+(yield|savings|water savings)/i, reason: "removed guaranteed outcome language", replacement: "available data suggests" },
@@ -28,7 +28,7 @@ function scrubText(text, triggered) {
 
 function makeConditionalPatterns(ctx) {
   const patterns = [];
-  if (!isSensorUsable(ctx?.sensorData)) {
+  if (!validateSensor(ctx?.sensorData, ctx).usable) {
     patterns.push({ pattern: /soil moisture\s+(?:is|of|at|was)\s+[\d.]+\s*%?/i, reason: "removed unsupported soil moisture value (no usable sensor)", replacement: "estimated soil moisture (sensor not connected)" });
   }
   const hasEt = Boolean(ctx?.etProvenance || ctx?.weather?.evapotranspiration);
@@ -74,7 +74,7 @@ export function containsUnsupportedClaim(text) {
 export function containsUnsupportedClaimForContext(text, context = {}) {
   if (containsUnsupportedClaim(text)) return true;
   const t = String(text || "");
-  if (!isSensorUsable(context?.sensorData) && /soil moisture\s+(?:is|of|at|was)\s+[\d.]+\s*%?/i.test(t)) return true;
+  if (!validateSensor(context?.sensorData, context).usable && /soil moisture\s+(?:is|of|at|was)\s+[\d.]+\s*%?/i.test(t)) return true;
   const hasEt = Boolean(context?.etProvenance || context?.weather?.evapotranspiration);
   if (!hasEt && /\bET\s+(?:rate\s+)?(?:is|of|at|was|=)\s+[\d.]+\s*mm/i.test(t)) return true;
   // Both fields required for duration/volume claims
@@ -111,7 +111,7 @@ export const safetyGuardrails = {
     // The generic authority block is a final catch-all for any remaining irrigate escalation.
     const sensorData = fieldContext?.sensorData || null;
     if ((deterministic.rulesTriggered || []).includes("sensor_high_moisture") && patched.action === "irrigate") {
-      if (sensorData && !isSensorUsable(sensorData)) {
+      if (sensorData && !validateSensor(sensorData, fieldContext).usable) {
         // Stale high-moisture reading — require field verification rather than trusting stale value
         patched.action = "check field first";
         triggered.push("sensor_high_moisture_stale_requires_field_check");
@@ -135,8 +135,8 @@ export const safetyGuardrails = {
       triggered.push("rain_forecast_blocks_irrigate");
     }
     if ((deterministic.rulesTriggered || []).includes("recent_irrigation") && patched.action === "irrigate") {
-      const sensorMoisture = sensorData?.soilMoisturePercent ?? sensorData?.soilMoisture ?? null;
-      const sensorConfirmsDry = isSensorHardenedForBypass(sensorData, fieldContext) && typeof sensorMoisture === "number" && sensorMoisture <= 18;
+      const validated = validateSensor(sensorData, fieldContext);
+      const sensorConfirmsDry = validated.hardenedForBypass && typeof validated.moisture === "number" && validated.moisture <= 18;
       if (!sensorConfirmsDry) {
         patched.action = "check field first";
         triggered.push("recent_irrigation_requires_field_check");
