@@ -1,4 +1,4 @@
-import { validateSensor } from "./confidenceEngine.js";
+import { validateSensor, validateWeather } from "./confidenceEngine.js";
 
 const prohibitedPatterns = [
   { pattern: /guarantee(?:d)?\s+(yield|savings|water savings)/i, reason: "removed guaranteed outcome language", replacement: "available data suggests" },
@@ -112,7 +112,7 @@ export const safetyGuardrails = {
     const sensorData = fieldContext?.sensorData || null;
     if ((deterministic.rulesTriggered || []).includes("sensor_high_moisture") && patched.action === "irrigate") {
       if (sensorData && !validateSensor(sensorData, fieldContext).usable) {
-        // Stale high-moisture reading — require field verification rather than trusting stale value
+        // Stale/unusable high-moisture reading — require field verification rather than trusting unverified value
         patched.action = "check field first";
         triggered.push("sensor_high_moisture_stale_requires_field_check");
       } else {
@@ -142,9 +142,15 @@ export const safetyGuardrails = {
         triggered.push("recent_irrigation_requires_field_check");
       }
     }
-    if (weather.stale && patched.action === "irrigate") {
-      patched.action = "check field first";
-      triggered.push("stale_weather_downgrade_irrigate");
+    // Raw high-moisture from any unusable sensor (stale, no timestamp, no provenance, mismatched) must not
+    // silently allow irrigate — downgrade and require field verification.
+    if (patched.action === "irrigate" && !triggered.includes("sensor_high_moisture_stale_requires_field_check")) {
+      const rawMoisture = sensorData?.soilMoisturePercent ?? sensorData?.soilMoisture ?? null;
+      if (Number.isFinite(rawMoisture) && rawMoisture >= 38 && !validateSensor(sensorData, fieldContext).usable) {
+        patched.action = "check field first";
+        patched.fieldChecks = [...(patched.fieldChecks || []), "An older or unverified wet reading requires field verification before irrigating."];
+        triggered.push("unverified_high_moisture_requires_field_check");
+      }
     }
     if (fieldContext && !fieldContext.irrigationMethod && patched.action === "irrigate") {
       patched.action = "update missing data";
@@ -153,6 +159,14 @@ export const safetyGuardrails = {
     if ((patched.confidenceScore || 0) < 0.45 && patched.action === "irrigate") {
       patched.action = "check field first";
       triggered.push("low_confidence_blocks_irrigate");
+    }
+    // Weather validation runs after the specific safety checks above so those named keys are always recorded.
+    // missing, invalid, future-dated, stale, or expired weather must downgrade irrigate.
+    const weatherCheck = validateWeather(weather);
+    if (!weatherCheck.usable && patched.action === "irrigate") {
+      patched.action = "check field first";
+      patched.fieldChecks = [...(patched.fieldChecks || []), "Weather data must be refreshed before irrigation can be authorized."];
+      triggered.push(weather.stale ? "stale_weather_downgrade_irrigate" : "weather_validation_failed_blocks_irrigate");
     }
 
     const deterministicAction = deterministic.action || (deterministic.needScore >= 0.72 ? "irrigate" : deterministic.needScore >= 0.45 ? "check field first" : "monitor");
@@ -165,6 +179,7 @@ export const safetyGuardrails = {
     const warnings = [];
     if ((patched.missingData || []).length) warnings.push("Data is incomplete.");
     if (weather.stale) warnings.push("Weather data is stale. Refresh before acting.");
+    else if (!weatherCheck.usable) warnings.push(`Weather data is not valid (${weatherCheck.reason}). Refresh before acting.`);
     if (patched.confidenceScore < 0.5) warnings.push("Low confidence: check field before action.");
     if (weather.etLabel === "not provided by OpenWeather") warnings.push("ET source is not connected yet.");
     if (!patched.evidenceQuality?.evidenceChecked?.includes("satellite evidence") && JSON.stringify(patched).toLowerCase().includes("satellite")) {

@@ -1,4 +1,4 @@
-import { validateSensor } from "./confidenceEngine.js";
+import { validateSensor, validateWeather } from "./confidenceEngine.js";
 
 const soilModifiers = {
   sand: 0.1,
@@ -27,6 +27,8 @@ export function buildNormalizedFieldContext({ field = {}, weather = {}, logs = [
   const rawCoords = field.coordinates || (field.lat != null && field.lon != null ? { lat: field.lat, lon: field.lon } : null);
   return {
     fieldId: field.id || field.fieldId || "unknown-field",
+    blockId: field.blockId || null,
+    zoneId: field.zoneId || null,
     name: field.name || "Field",
     crop: field.crop || null,
     acreage: field.acreage || field.area || null,
@@ -145,15 +147,16 @@ export function calculateDeterministicSignals(context) {
     rulesTriggered.push("rain_likely");
     confidenceDrivers.push("rain forecast reduces irrigation urgency");
   }
-  if (ctx.weather?.stale) {
-    rulesTriggered.push("stale_weather");
-    assumptions.push("Weather is stale; confidence is reduced and field checks are prioritized.");
+  const weatherValidation = validateWeather(ctx.weather);
+  if (!weatherValidation.usable) {
+    rulesTriggered.push(ctx.weather?.stale ? "stale_weather" : "invalid_weather");
+    assumptions.push(`Weather is not valid (${weatherValidation.reason}); confidence is reduced and field checks are prioritized.`);
   }
 
   needScore = Math.max(0.05, Math.min(0.95, needScore));
   const pressureLabel = needScore >= 0.72 ? "high" : needScore >= 0.45 ? "moderate" : "low";
   const action = needScore >= 0.72 ? "irrigate" : needScore >= 0.45 ? "check field first" : ((ctx.weather?.rainChance || 0) >= 60 ? "wait" : "monitor");
-  const confidenceScore = Math.max(0.2, Math.min(0.95, needScore - missingData.length * 0.055 - (ctx.weather?.stale ? 0.12 : 0)));
+  const confidenceScore = Math.max(0.2, Math.min(0.95, needScore - missingData.length * 0.055 - (!weatherValidation.usable ? 0.12 : 0)));
 
   return {
     needScore,

@@ -13,7 +13,7 @@ import { aiOrchestrator } from "../ai/aiOrchestrator.js";
 import { detectRecurringPatterns, memoryStore } from "../ai/memoryStore.js";
 import { scenarios, runFixtureEvaluation } from "../ai/evaluationHarness.js";
 import { fetchJsonWithRetry } from "../services/httpClient.js";
-import { scoreEvidence, isSensorUsable, isSensorHardenedForBypass, validateSensor } from "../ai/confidenceEngine.js";
+import { scoreEvidence, isSensorUsable, isSensorHardenedForBypass, validateSensor, validateWeather } from "../ai/confidenceEngine.js";
 import { GeminiEmbeddingProvider } from "../providers/realEmbeddingProviders.js";
 import { calculateDeterministicSignals, buildNormalizedFieldContext, deterministicDecisionFromSignals } from "../ai/deterministicIrrigation.js";
 import { safetyGuardrails, containsUnsupportedClaim, containsUnsupportedClaimForContext } from "../ai/safetyGuardrails.js";
@@ -532,7 +532,7 @@ test("safety gate: low confidence blocks irrigate", () => {
 test("safety gate: valid irrigate passes through when conditions are clear", () => {
   const signals = { rulesTriggered: [], needScore: 0.78, action: "irrigate", urgency: "high", missingData: [] };
   const decision = { action: "irrigate", confidenceScore: 0.85, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
-  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: { irrigationMethod: "Drip" } });
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false, weatherTimestamp: new Date().toISOString() }, deterministicSignals: signals, fieldContext: { irrigationMethod: "Drip" } });
   assert.equal(enforced.action, "irrigate", "valid irrigate with full context must not be blocked by new gates");
 });
 
@@ -718,8 +718,9 @@ test("safety gate: recent irrigation with fresh provenanced dry sensor (≤18%) 
   const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
   const signals = { rulesTriggered: ["recent_irrigation"], needScore: 0.85, action: "irrigate", urgency: "high", missingData: [] };
   const decision = { action: "irrigate", confidenceScore: 0.8, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
-  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false }, deterministicSignals: signals, fieldContext: { irrigationMethod: "Drip", sensorData: { soilMoisturePercent: 15, timestamp: freshTs }, sensorProvenance: "field_sensor" } });
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false, weatherTimestamp: new Date().toISOString() }, deterministicSignals: signals, fieldContext: { irrigationMethod: "Drip", sensorData: { soilMoisturePercent: 15, timestamp: freshTs }, sensorProvenance: "field_sensor" } });
   assert.ok(!enforced.guardrailsTriggered.includes("recent_irrigation_requires_field_check"), "fresh provenanced dry sensor (≤18%) should allow irrigate through the recent_irrigation gate");
+  assert.equal(enforced.action, "irrigate", "fresh provenanced dry sensor after recent irrigation must allow irrigate through");
 });
 
 // ── Duration both-required tests ──────────────────────────────────────────────
@@ -985,12 +986,13 @@ test("validateSensor: no-data, non-numeric, no-timestamp, no-provenance cases", 
   assert.equal(noProv.moisture, 22);
 });
 
-test("validateSensor: sensor with mismatched fieldId has hardenedForBypass false", () => {
+test("validateSensor: sensor with mismatched fieldId is not usable", () => {
   const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
   const sensor = { soilMoisturePercent: 12, timestamp: freshTs, provenance: "field_sensor", fieldId: "field-b" };
   const ctx = { fieldId: "field-a", sensorProvenance: "field_sensor" };
   const result = validateSensor(sensor, ctx);
-  assert.equal(result.usable, true, "sensor passes basic validity checks");
+  assert.equal(result.usable, false, "mismatched fieldId must make sensor unusable");
+  assert.equal(result.reason, "sensor mapping mismatch", "mismatch reason must be reported");
   assert.equal(result.fieldMappingValid, false, "fieldId mismatch must set fieldMappingValid false");
   assert.equal(result.hardenedForBypass, false, "mismatched fieldId must prevent hardenedForBypass");
 });
@@ -1071,4 +1073,241 @@ test("weatherFreshnessScore: future weather timestamp beyond clock skew yields n
   const withMissing = scoreEvidence({ crop: "tomato", soilType: "loam", irrigationMethod: "Drip", weather: { stale: false } });
   assert.ok(withFuture.missingEvidence.includes("weather freshness"), "future weather timestamp beyond clock skew must appear in missingEvidence");
   assert.equal(withFuture.confidenceScore, withMissing.confidenceScore, "future weather timestamp must not grant freshness credit");
+});
+
+// ── Sensor mapping mismatch regression tests ────────────────────────────────
+
+test("mismatch: mismatched fieldId sensor does not raise needScore", () => {
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
+  const base = buildNormalizedFieldContext({
+    field: { id: "field-a", crop: "tomato", soilType: "loam", irrigationMethod: "Drip", waterStressLevel: "moderate" },
+    weather: { heatRisk: "low", rainChance: 5, weatherTimestamp: new Date().toISOString(), stale: false },
+  });
+  const withMismatched = calculateDeterministicSignals({ ...base, sensorData: { soilMoisturePercent: 14, timestamp: freshTs, provenance: "field_sensor", fieldId: "field-b" } });
+  const withNone = calculateDeterministicSignals({ ...base, sensorData: null });
+  assert.equal(withMismatched.needScore, withNone.needScore, "mismatched fieldId sensor must not raise needScore");
+  assert.ok(!withMismatched.rulesTriggered.includes("sensor_low_moisture"), "mismatched sensor must not trigger sensor_low_moisture");
+});
+
+test("mismatch: mismatched blockId sensor does not raise needScore", () => {
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
+  const base = buildNormalizedFieldContext({
+    field: { id: "f", blockId: "block-1", crop: "tomato", soilType: "loam", irrigationMethod: "Drip", waterStressLevel: "moderate" },
+    weather: { heatRisk: "low", rainChance: 5, weatherTimestamp: new Date().toISOString(), stale: false },
+  });
+  const withMismatched = calculateDeterministicSignals({ ...base, sensorData: { soilMoisturePercent: 14, timestamp: freshTs, provenance: "field_sensor", blockId: "block-2" } });
+  const withNone = calculateDeterministicSignals({ ...base, sensorData: null });
+  assert.equal(withMismatched.needScore, withNone.needScore, "mismatched blockId sensor must not raise needScore");
+});
+
+test("mismatch: mismatched zoneId sensor does not raise needScore", () => {
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
+  const base = buildNormalizedFieldContext({
+    field: { id: "f", zoneId: "zone-1", crop: "tomato", soilType: "loam", irrigationMethod: "Drip", waterStressLevel: "moderate" },
+    weather: { heatRisk: "low", rainChance: 5, weatherTimestamp: new Date().toISOString(), stale: false },
+  });
+  const withMismatched = calculateDeterministicSignals({ ...base, sensorData: { soilMoisturePercent: 14, timestamp: freshTs, provenance: "field_sensor", zoneId: "zone-2" } });
+  const withNone = calculateDeterministicSignals({ ...base, sensorData: null });
+  assert.equal(withMismatched.needScore, withNone.needScore, "mismatched zoneId sensor must not raise needScore");
+});
+
+test("mismatch: mismatched sensor does not boost confidence", () => {
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
+  const base = { crop: "tomato", soilType: "loam", irrigationMethod: "Drip", fieldId: "field-a", weather: { weatherTimestamp: new Date().toISOString(), stale: false } };
+  const withMismatched = scoreEvidence({ ...base, sensorData: { soilMoisturePercent: 14, timestamp: freshTs, provenance: "field_sensor", fieldId: "field-b" } });
+  const withNone = scoreEvidence({ ...base });
+  assert.ok(withMismatched.missingEvidence.some((m) => m.startsWith("soil moisture sensor")), "mismatched sensor must appear in missingEvidence");
+  assert.equal(withMismatched.confidenceScore, withNone.confidenceScore, "mismatched sensor must not boost confidence");
+});
+
+test("mismatch: mismatched sensor exact-moisture claim is scrubbed", () => {
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
+  const signals = { rulesTriggered: [], needScore: 0.6, action: "check field first", urgency: "medium", missingData: [] };
+  const decision = { action: "check field first", confidenceScore: 0.6, reasons: ["Soil moisture is 14% based on sensor"], uncertainties: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const fieldCtx = { fieldId: "field-a", sensorData: { soilMoisturePercent: 14, timestamp: freshTs, provenance: "field_sensor", fieldId: "field-b" } };
+  const enforced = safetyGuardrails.enforce(decision, { weather: { stale: false, weatherTimestamp: new Date().toISOString() }, deterministicSignals: signals, fieldContext: fieldCtx });
+  assert.ok(!enforced.reasons.join(" ").includes("14%"), "exact moisture claim must be scrubbed for mismatched sensor");
+});
+
+test("validateSensor: NaN moisture is unusable", () => {
+  const result = validateSensor({ soilMoisturePercent: NaN });
+  assert.equal(result.usable, false);
+  assert.equal(result.reason, "non-numeric moisture");
+});
+
+test("validateSensor: Infinity moisture is unusable", () => {
+  const result = validateSensor({ soilMoisturePercent: Infinity });
+  assert.equal(result.usable, false);
+  assert.equal(result.reason, "non-numeric moisture");
+});
+
+test("validateSensor: negative Infinity moisture is unusable", () => {
+  const result = validateSensor({ soilMoisturePercent: -Infinity });
+  assert.equal(result.usable, false);
+  assert.equal(result.reason, "non-numeric moisture");
+});
+
+test("safety gate: stale high-moisture raw sensor downgrades irrigate to check field first", () => {
+  const staleTs = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString();
+  const signals = { rulesTriggered: [], needScore: 0.78, action: "irrigate", urgency: "high", missingData: [] };
+  const decision = { action: "irrigate", confidenceScore: 0.8, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, {
+    weather: { stale: false, weatherTimestamp: new Date().toISOString() },
+    deterministicSignals: signals,
+    fieldContext: { irrigationMethod: "Drip", sensorData: { soilMoisturePercent: 45, timestamp: staleTs, provenance: "field_sensor" } },
+  });
+  assert.equal(enforced.action, "check field first", "stale high-moisture raw sensor must downgrade irrigate to check field first");
+  assert.ok(enforced.guardrailsTriggered.includes("unverified_high_moisture_requires_field_check"));
+  assert.ok(enforced.fieldChecks.some((c) => /unverified|older/i.test(c)), "field check must explain why verification is needed");
+});
+
+test("safety gate: unprovenanced high-moisture raw sensor downgrades irrigate to check field first", () => {
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
+  const signals = { rulesTriggered: [], needScore: 0.78, action: "irrigate", urgency: "high", missingData: [] };
+  const decision = { action: "irrigate", confidenceScore: 0.8, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, {
+    weather: { stale: false, weatherTimestamp: new Date().toISOString() },
+    deterministicSignals: signals,
+    fieldContext: { irrigationMethod: "Drip", sensorData: { soilMoisturePercent: 45, timestamp: freshTs } },
+  });
+  assert.equal(enforced.action, "check field first", "unprovenanced high-moisture sensor must downgrade irrigate to check field first");
+  assert.ok(enforced.guardrailsTriggered.includes("unverified_high_moisture_requires_field_check"));
+});
+
+// ── Strict weather validation tests ─────────────────────────────────────────
+
+test("validateWeather: valid recent timestamp is usable", () => {
+  const result = validateWeather({ weatherTimestamp: new Date().toISOString(), stale: false });
+  assert.equal(result.usable, true);
+  assert.equal(result.reason, "valid");
+  assert.ok(result.ageMinutes >= 0);
+});
+
+test("validateWeather: missing timestamp is not usable", () => {
+  const result = validateWeather({ stale: false });
+  assert.equal(result.usable, false);
+  assert.equal(result.reason, "no weather timestamp");
+});
+
+test("validateWeather: invalid timestamp is not usable", () => {
+  const result = validateWeather({ weatherTimestamp: "not-a-date", stale: false });
+  assert.equal(result.usable, false);
+  assert.equal(result.reason, "invalid weather timestamp");
+});
+
+test("validateWeather: future timestamp beyond clock skew is not usable", () => {
+  const futureTs = new Date(Date.now() + 60 * 60000).toISOString();
+  const result = validateWeather({ weatherTimestamp: futureTs, stale: false });
+  assert.equal(result.usable, false);
+  assert.equal(result.reason, "future weather timestamp");
+});
+
+test("validateWeather: expired timestamp is not usable", () => {
+  const expiredTs = new Date(Date.now() - 120 * 60000).toISOString(); // 120 min > 90 min threshold
+  const result = validateWeather({ weatherTimestamp: expiredTs, stale: false });
+  assert.equal(result.usable, false);
+  assert.equal(result.reason, "weather expired");
+});
+
+test("validateWeather: stale flag overrides valid timestamp", () => {
+  const result = validateWeather({ weatherTimestamp: new Date().toISOString(), stale: true });
+  assert.equal(result.usable, false);
+  assert.equal(result.reason, "stale weather");
+});
+
+test("safety gate: invalid weather timestamp blocks irrigate", () => {
+  const signals = { rulesTriggered: [], needScore: 0.78, action: "irrigate", urgency: "high", missingData: [] };
+  const decision = { action: "irrigate", confidenceScore: 0.85, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, {
+    weather: { weatherTimestamp: "not-a-date", stale: false },
+    deterministicSignals: signals,
+    fieldContext: { irrigationMethod: "Drip" },
+  });
+  assert.notEqual(enforced.action, "irrigate", "invalid weather timestamp must block irrigate");
+  assert.ok(enforced.guardrailsTriggered.includes("weather_validation_failed_blocks_irrigate"));
+  assert.ok(enforced.fieldChecks.some((c) => /weather|refresh/i.test(c)), "field checks must explain weather refresh");
+});
+
+test("safety gate: future weather timestamp blocks irrigate", () => {
+  const futureTs = new Date(Date.now() + 60 * 60000).toISOString();
+  const signals = { rulesTriggered: [], needScore: 0.78, action: "irrigate", urgency: "high", missingData: [] };
+  const decision = { action: "irrigate", confidenceScore: 0.85, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, {
+    weather: { weatherTimestamp: futureTs, stale: false },
+    deterministicSignals: signals,
+    fieldContext: { irrigationMethod: "Drip" },
+  });
+  assert.notEqual(enforced.action, "irrigate", "future weather timestamp must block irrigate");
+  assert.ok(enforced.guardrailsTriggered.includes("weather_validation_failed_blocks_irrigate"));
+});
+
+test("safety gate: expired weather timestamp blocks irrigate", () => {
+  const expiredTs = new Date(Date.now() - 120 * 60000).toISOString();
+  const signals = { rulesTriggered: [], needScore: 0.78, action: "irrigate", urgency: "high", missingData: [] };
+  const decision = { action: "irrigate", confidenceScore: 0.85, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, {
+    weather: { weatherTimestamp: expiredTs, stale: false },
+    deterministicSignals: signals,
+    fieldContext: { irrigationMethod: "Drip" },
+  });
+  assert.notEqual(enforced.action, "irrigate", "expired weather timestamp must block irrigate");
+  assert.ok(enforced.guardrailsTriggered.includes("weather_validation_failed_blocks_irrigate"));
+});
+
+test("safety gate: valid recent weather permits normal deterministic processing", () => {
+  const signals = { rulesTriggered: [], needScore: 0.78, action: "irrigate", urgency: "high", missingData: [] };
+  const decision = { action: "irrigate", confidenceScore: 0.85, missingData: [], uncertainties: [], reasons: [], fieldChecks: [], risks: [], nextBestAction: "", safetyNotes: [], verificationPlan: [], guardrailsTriggered: [], disclaimer: "" };
+  const enforced = safetyGuardrails.enforce(decision, {
+    weather: { weatherTimestamp: new Date().toISOString(), stale: false },
+    deterministicSignals: signals,
+    fieldContext: { irrigationMethod: "Drip" },
+  });
+  assert.equal(enforced.action, "irrigate", "valid recent weather must not block irrigate");
+  assert.ok(!enforced.guardrailsTriggered.includes("weather_validation_failed_blocks_irrigate"), "no weather validation guardrail must fire for valid weather");
+  assert.ok(!enforced.guardrailsTriggered.includes("stale_weather_downgrade_irrigate"), "no stale weather guardrail must fire for valid weather");
+});
+
+test("buildNormalizedFieldContext: preserves blockId and zoneId", () => {
+  const ctx = buildNormalizedFieldContext({ field: { id: "f", blockId: "b-1", zoneId: "z-2" } });
+  assert.equal(ctx.blockId, "b-1");
+  assert.equal(ctx.zoneId, "z-2");
+});
+
+test("validateSensor: sensor with mismatched blockId is not usable", () => {
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
+  const sensor = { soilMoisturePercent: 22, timestamp: freshTs, provenance: "field_sensor", blockId: "block-2" };
+  const ctx = { fieldId: "f", blockId: "block-1" };
+  const result = validateSensor(sensor, ctx);
+  assert.equal(result.usable, false);
+  assert.equal(result.reason, "sensor mapping mismatch");
+  assert.equal(result.fieldMappingValid, false);
+});
+
+test("validateSensor: sensor with mismatched zoneId is not usable", () => {
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
+  const sensor = { soilMoisturePercent: 22, timestamp: freshTs, provenance: "field_sensor", zoneId: "zone-2" };
+  const ctx = { fieldId: "f", zoneId: "zone-1" };
+  const result = validateSensor(sensor, ctx);
+  assert.equal(result.usable, false);
+  assert.equal(result.reason, "sensor mapping mismatch");
+});
+
+test("validateSensor: sensor with matching fieldId, blockId, and zoneId is usable and hardened", () => {
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
+  const sensor = { soilMoisturePercent: 22, timestamp: freshTs, provenance: "field_sensor", fieldId: "f", blockId: "b-1", zoneId: "z-1" };
+  const ctx = { fieldId: "f", blockId: "b-1", zoneId: "z-1" };
+  const result = validateSensor(sensor, ctx);
+  assert.equal(result.usable, true);
+  assert.equal(result.fieldMappingValid, true);
+  assert.equal(result.hardenedForBypass, true);
+});
+
+test("validateSensor: sensor with no mapping identifiers has null fieldMappingValid", () => {
+  const freshTs = new Date(Date.now() - 30 * 60000).toISOString();
+  const sensor = { soilMoisturePercent: 22, timestamp: freshTs, provenance: "field_sensor" };
+  const ctx = { fieldId: "f", blockId: "b-1", zoneId: "z-1" };
+  const result = validateSensor(sensor, ctx);
+  assert.equal(result.usable, true);
+  assert.equal(result.fieldMappingValid, null, "no mapping identifiers must yield null fieldMappingValid");
+  assert.equal(result.hardenedForBypass, true, "no mapping identifiers must not prevent hardenedForBypass");
 });
