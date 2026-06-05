@@ -613,6 +613,21 @@
   border-color: var(--warn-soft);
   background: linear-gradient(180deg, #ffffff, #fdfaf4);
 }
+.decision--stale {
+  border-color: var(--warn-soft);
+  background: linear-gradient(180deg, #ffffff, #fdf8f0);
+  opacity: 0.88;
+}
+.decision-stale-warning {
+  font-size: 12.5px;
+  color: var(--warn-strong, #8a5800);
+  background: var(--warn-soft, #fef9ec);
+  border: 1px solid var(--warn-line, #f0d080);
+  border-radius: var(--r-sm, 4px);
+  padding: 6px 10px;
+  margin: 4px 0 8px;
+  font-weight: 500;
+}
 .decision-headline {
   font-size: 22px;
   font-weight: 800;

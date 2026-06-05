@@ -553,10 +553,12 @@ def assemble_context_from_artifacts(
     # Source kinds that carry farm+block columns — require exact attribution for selected scope.
     _farm_block_scope_kinds = {
         "controller_events", "controller_logs", "flow_meter", "soil_moisture",
-        "satellite_observation", "crop_profile", "field_notes",
+        "satellite_observation", "crop_profile", "field_notes", "irrigation_records",
     }
     # Source kinds filtered by region — include only matching-region rows for operational signals.
     _region_scope_kinds = {"weather", "water_costs"}
+    # Source kinds that are package-wide reporting only — never enter operational selected-scope signals.
+    _package_only_kinds = {"unknown"}
 
     # Build selected-scope signals: only records with exact farm+block attribution or region match.
     # Unattributed rows (no farm/block columns) are excluded — they cannot be confirmed on-scope.
@@ -581,6 +583,8 @@ def assemble_context_from_artifacts(
                 row_region = str(normalized_row.get("region", "")).strip().lower()
                 if not row_region or row_region != region_l:
                     continue  # Exclude unattributed or non-matching region records from selected scope.
+            elif artifact.source_kind in _package_only_kinds:
+                continue  # Unknown source kind — package-wide reporting only, not operational signals.
             for key, value in normalized_row.items():
                 unit = "mm" if key in {"eto", "rain", "depth_mm"} else None
                 signals.append(
@@ -784,7 +788,13 @@ def assemble_context_from_artifacts(
     context["available_farms"] = available_farms
     context["available_blocks_by_farm"] = available_blocks_by_farm
     context["available_scopes"] = available_scope_dimensions
-    context["scope_defaulted"] = bool(len(available_farms) > 1 and not selected_farm)
+    # scope_defaulted is true when analysis selected a default from more than one available
+    # farm/block profile without an explicit scope pair — covers both multi-farm and
+    # single-farm / multi-block packages.
+    _total_profiles = sum(len(blks) for blks in available_blocks_by_farm.values())
+    context["scope_defaulted"] = bool(_total_profiles > 1 and not selected_farm)
+    context["scope_defaulted_farm"] = farm if context["scope_defaulted"] else None
+    context["scope_defaulted_block"] = block if context["scope_defaulted"] else None
 
     context["mapping_completeness"] = _mapping_completeness(context, rows)
     context["source_rows"] = _build_source_rows(
@@ -1272,15 +1282,19 @@ def _build_source_rows(
     })
 
     all_weather = rows.get("weather", [])
-    sel_weather = (
-        [r for r in all_weather if str(r.get("region", "")).strip().lower() == region.lower()]
-        if region else all_weather
-    )
+    if region:
+        sel_weather = [r for r in all_weather if str(r.get("region", "")).strip().lower() == region.lower()]
+        weather_lims = [f"No weather records matched region '{region}'"] if not sel_weather and all_weather else []
+    else:
+        sel_weather = []
+        weather_lims = (
+            ["Region mapping is required for weather demand records. Selected count is 0 until region is specified in the crop profile."]
+            if all_weather else []
+        )
     avg_eto = metrics.get("avg_eto_mm")
     weather_summary = f"{len(sel_weather)} records"
     if avg_eto is not None:
         weather_summary += f"; avg ETo {avg_eto:.2f} mm/day"
-    weather_lims = ([f"No weather records matched region '{region}'"] if not sel_weather and region else [])
     result.append({
         "source_label": "Weather demand",
         "source_kind": "weather",
@@ -1378,10 +1392,15 @@ def _build_source_rows(
     })
 
     all_costs = rows.get("water_costs", [])
-    sel_costs = (
-        [r for r in all_costs if str(r.get("region", "")).strip().lower() == region.lower()]
-        if region else all_costs
-    )
+    if region:
+        sel_costs = [r for r in all_costs if str(r.get("region", "")).strip().lower() == region.lower()]
+        cost_lims: list = []
+    else:
+        sel_costs = []
+        cost_lims = (
+            ["Region mapping is required for water-cost records. Selected count is 0 until region is specified in the crop profile."]
+            if all_costs else []
+        )
     result.append({
         "source_label": "Water costs",
         "source_kind": "water_costs",
@@ -1390,7 +1409,7 @@ def _build_source_rows(
         "latest_timestamp": None,
         "latest_signal_summary": f"{len(sel_costs)} cost record{'s' if len(sel_costs) != 1 else ''}",
         "status": "accepted" if sel_costs else "unavailable",
-        "limitations": [],
+        "limitations": cost_lims,
         "contribution_label": "Not scored",
     })
 
@@ -1491,6 +1510,8 @@ def _public_context(context: Dict[str, Any]) -> Dict[str, Any]:
         "available_blocks_by_farm": context.get("available_blocks_by_farm", {}),
         "available_scopes": context.get("available_scopes", []),
         "scope_defaulted": context.get("scope_defaulted", False),
+        "scope_defaulted_farm": context.get("scope_defaulted_farm"),
+        "scope_defaulted_block": context.get("scope_defaulted_block"),
         **(context.get("mapping_completeness") or {}),
     }
 

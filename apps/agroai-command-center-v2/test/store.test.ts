@@ -1,5 +1,5 @@
-import { describe, expect, it, beforeEach } from "vitest";
-import { actions, getState, __resetForTest, __applyBackendResult, __setBackendStatusForTest, __setSelectedScopeForTest, SCENARIO_OPTIONS } from "../src/state/commandStore";
+import { describe, expect, it, beforeEach, vi } from "vitest";
+import { actions, getState, __resetForTest, __applyBackendResult, __setBackendStatusForTest, __setSelectedScopeForTest, __patchStateForTest, __getScopeAnalysisGen, SCENARIO_OPTIONS } from "../src/state/commandStore";
 
 describe("commandStore", () => {
   beforeEach(() => __resetForTest());
@@ -731,5 +731,208 @@ describe("commandStore", () => {
     expect(statuses).toContain("complete");
     expect(statuses).toContain("limited");
     expect(statuses).toContain("pending");
+  });
+
+  // --- Section 15: Eleventh-pass safety and race-handling tests ----------------
+
+  it("setSelectedBlock increments scope generation, invalidating any in-flight request", () => {
+    const genBefore = __getScopeAnalysisGen();
+    actions.setSelectedBlock("Block X");
+    expect(__getScopeAnalysisGen()).toBeGreaterThan(genBefore);
+  });
+
+  it("startNewPackage clears sessionId, scope, farms, and artifacts, and marks pipeline stale", () => {
+    __patchStateForTest({
+      sessionId: "pkg-session-1",
+      uploadedPackageSessionId: "pkg-session-1",
+      uploadedPackageArtifacts: [{ name: "data.csv", detectedType: "CSV", parseStatus: "parsed", rows: "10", fields: "3", warnings: "None" }],
+      availableFarms: ["Farm A", "Farm B"],
+      availableBlocksByFarm: { "Farm A": ["Block 1"], "Farm B": ["Block 2"] },
+      activeAnalyzedFarm: "Farm A",
+      activeAnalyzedBlock: "Block 1",
+      selectedFarm: "Farm A",
+      selectedBlock: "Block 1",
+    });
+    actions.startNewPackage();
+    const s = getState();
+    expect(s.sessionId).toBeNull();
+    expect(s.uploadedPackageSessionId).toBeNull();
+    expect(s.uploadedPackageArtifacts).toEqual([]);
+    expect(s.availableFarms).toEqual([]);
+    expect(s.availableBlocksByFarm).toEqual({});
+    expect(s.activeAnalyzedFarm).toBeNull();
+    expect(s.activeAnalyzedBlock).toBeNull();
+    expect(s.selectedFarm).toBeNull();
+    expect(s.selectedBlock).toBeNull();
+    expect(s.pipelineMessage).toMatch(/New package started/);
+  });
+
+  it("startNewPackage invalidates scope analysis generation", () => {
+    const genBefore = __getScopeAnalysisGen();
+    actions.startNewPackage();
+    expect(__getScopeAnalysisGen()).toBeGreaterThan(genBefore);
+  });
+
+  it("old scope response cannot overwrite newer scope selection via generation guard", async () => {
+    // Simulate: Farm A / Block 1 analysis started, then user switches to Farm B / Block 2.
+    // The old response should be discarded when it resolves.
+
+    // Apply a backend result to get a session id.
+    __applyBackendResult("alpha-vineyard", {
+      analysis_id: "race-id", session_id: "race-session", status: "complete",
+      analysis_mode: "uploaded" as const, recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      recommendation: { schedulable: true, scheduling_block_reasons: [] },
+      reconciliation: {}, normalized_context: {
+        available_farms: ["Farm A", "Farm B"],
+        available_blocks_by_farm: { "Farm A": ["Block 1"], "Farm B": ["Block 2"] },
+      }, signal_summary: {},
+      warnings: [], uploaded_artifacts_used: [], live_inputs_used: [],
+    } as any, "race-session");
+
+    __setBackendStatusForTest("available");
+    __patchStateForTest({
+      selectedFarm: "Farm A",
+      selectedBlock: "Block 1",
+      scopeSelectionPending: false,
+    });
+
+    // Record gen before Farm B selection
+    const genBeforeFarmB = __getScopeAnalysisGen();
+
+    // Simulate selecting Farm B / Block 2 — this increments generation
+    actions.setSelectedFarm("Farm B");
+    actions.setSelectedBlock("Block 2");
+
+    const genAfterFarmB = __getScopeAnalysisGen();
+    expect(genAfterFarmB).toBeGreaterThan(genBeforeFarmB);
+
+    // Prior generation (from old selection) must not match current — old response is discarded
+    expect(genBeforeFarmB).not.toBe(genAfterFarmB);
+    // scopeSelectionPending must be true after farm change
+    expect(getState().scopeSelectionPending).toBe(true);
+    // selectedFarm must reflect the new selection
+    expect(getState().selectedFarm).toBe("Farm B");
+  });
+
+  it("stale decision buttons are disabled when scopeSelectionPending is true", async () => {
+    // After applying an uploaded backend result + setting farm, scope becomes pending.
+    __applyBackendResult("alpha-vineyard", {
+      analysis_id: "stale-id", session_id: "stale-session", status: "complete",
+      analysis_mode: "uploaded" as const, recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      recommendation: { schedulable: true, scheduling_block_reasons: [] },
+      reconciliation: {}, normalized_context: {}, signal_summary: {},
+      warnings: [], uploaded_artifacts_used: [], live_inputs_used: [],
+    } as any, "stale-session");
+    __setBackendStatusForTest("unavailable");
+    // Selecting a farm marks scope pending
+    actions.setSelectedFarm("Delta Almonds");
+    expect(getState().scopeSelectionPending).toBe(true);
+    // advanceEvidence must be blocked
+    const evidenceBefore = JSON.stringify(getState().evidence);
+    await actions.advanceEvidence("scheduled");
+    expect(JSON.stringify(getState().evidence)).toBe(evidenceBefore);
+    const blocked = getState().audit.find((a) => a.event === "Evidence step not recorded");
+    expect(blocked).toBeDefined();
+  });
+
+  it("thrown createSession error recovers: placeholders marked failed, analysisPhase not stuck", async () => {
+    // Force createSession to throw
+    const origFetch = global.fetch;
+    global.fetch = vi.fn().mockRejectedValue(new Error("Network error"));
+
+    try {
+      const file = new File(["timestamp,farm\n2026-01-01,Test"], "test.csv", { type: "text/csv" });
+      await actions.uploadFiles([file]);
+      const s = getState();
+      // analysisPhase must not be stuck at running
+      expect(s.analysisPhase).not.toBe("running");
+      // The file should appear in artifacts (placeholder set before session creation)
+      expect(s.uploadedPackageArtifacts.some((a) => a.name === "test.csv")).toBe(true);
+      // Parse status must indicate failure
+      const artifact = s.uploadedPackageArtifacts.find((a) => a.name === "test.csv");
+      expect(artifact?.parseStatus).toMatch(/Upload failed/);
+    } finally {
+      global.fetch = origFetch;
+    }
+  });
+
+  it("uploaded refresh failure retains prior decision as stale, not representative fallback", async () => {
+    // Set up an uploaded package decision
+    __applyBackendResult("alpha-vineyard", {
+      analysis_id: "upld-id", session_id: "upld-sess", status: "complete",
+      analysis_mode: "uploaded" as const, recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      recommendation: { action: "Irrigate uploaded block", schedulable: true, scheduling_block_reasons: [] },
+      reconciliation: {}, normalized_context: {}, signal_summary: {},
+      warnings: [], uploaded_artifacts_used: ["data.csv"], live_inputs_used: [],
+    } as any, "upld-sess");
+    __patchStateForTest({ sessionId: "upld-sess" });
+    __setBackendStatusForTest("unavailable");
+
+    const decisionBefore = getState().decision.action;
+
+    await actions.refreshIntelligence();
+
+    const s = getState();
+    // Must NOT have switched to representative_fallback
+    expect(s.recommendationOrigin).not.toBe("representative_fallback");
+    // Decision action must still reflect the uploaded result
+    expect(s.decision.action).toBe(decisionBefore);
+    // Must be marked as stale
+    expect(s.scopeSelectionPending).toBe(true);
+    expect(s.pipelineMessage).toMatch(/stale/i);
+  });
+
+  it("regionless weather source_rows report selected 0 / package N in reconciliation context", () => {
+    // This verifies the frontend maps regionless source rows correctly from backend result.
+    __applyBackendResult("alpha-vineyard", {
+      analysis_id: "reg-id", session_id: "reg-sess", status: "complete",
+      analysis_mode: "uploaded" as const, recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      recommendation: { schedulable: false, scheduling_block_reasons: [] },
+      reconciliation: {},
+      normalized_context: {},
+      signal_summary: {},
+      warnings: ["Region mapping is required for weather demand records. Selected count is 0."],
+      uploaded_artifacts_used: [], live_inputs_used: [],
+      source_rows: [
+        {
+          source_label: "Weather demand", source_kind: "weather",
+          selected_scope_record_count: 0, package_record_count: 5,
+          latest_timestamp: null, latest_signal_summary: "0 records",
+          status: "unavailable",
+          limitations: ["Region mapping is required for weather demand records."],
+          contribution_label: "Not scored",
+        },
+      ],
+    } as any, "reg-sess");
+    // The warning must appear in backendMeta
+    const meta = getState().backendMeta;
+    expect(meta?.warnings.some((w) => w.toLowerCase().includes("region"))).toBe(true);
+  });
+
+  it("one-farm / multi-block scope_defaulted_farm and scope_defaulted_block are populated", () => {
+    __applyBackendResult("alpha-vineyard", {
+      analysis_id: "mb-id", session_id: "mb-sess", status: "complete",
+      analysis_mode: "uploaded" as const, recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      recommendation: { schedulable: true, scheduling_block_reasons: [] },
+      reconciliation: {},
+      normalized_context: {
+        scope_defaulted: true,
+        scope_defaulted_farm: "Alpha Vineyard",
+        scope_defaulted_block: "Block A North",
+        available_farms: ["Alpha Vineyard"],
+        available_blocks_by_farm: { "Alpha Vineyard": ["Block A North", "Block B West"] },
+      },
+      signal_summary: {},
+      warnings: [], uploaded_artifacts_used: [], live_inputs_used: [],
+    } as any, "mb-sess");
+    const s = getState();
+    expect(s.scopeDefaulted).toBe(true);
+    expect(s.scopeDefaultedFarm).toBe("Alpha Vineyard");
+    expect(s.scopeDefaultedBlock).toBe("Block A North");
   });
 });

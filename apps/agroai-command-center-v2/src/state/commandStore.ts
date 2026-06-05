@@ -95,6 +95,8 @@ export interface CommandState {
   availableFarms: string[];
   availableBlocksByFarm: Record<string, string[]>;
   scopeDefaulted: boolean;
+  scopeDefaultedFarm: string | null;
+  scopeDefaultedBlock: string | null;
   // Scope selection pending: true after farm selection until both are analyzed by the backend
   scopeSelectionPending: boolean;
   activeAnalyzedFarm: string | null;
@@ -485,6 +487,8 @@ function scenarioState(id: ScenarioId, mode: AnalysisMode, origin: Recommendatio
     availableFarms: [],
     availableBlocksByFarm: {},
     scopeDefaulted: false,
+    scopeDefaultedFarm: null,
+    scopeDefaultedBlock: null,
     scopeSelectionPending: false,
     activeAnalyzedFarm: null,
     activeAnalyzedBlock: null,
@@ -518,6 +522,8 @@ function initialState(): CommandState {
     availableFarms: [],
     availableBlocksByFarm: {},
     scopeDefaulted: false,
+    scopeDefaultedFarm: null,
+    scopeDefaultedBlock: null,
     scopeSelectionPending: false,
     activeAnalyzedFarm: null,
     activeAnalyzedBlock: null,
@@ -528,7 +534,8 @@ function initialState(): CommandState {
 
 let state: CommandState = initialState();
 const listeners = new Set<() => void>();
-// Monotonic counter — older scope responses cannot overwrite newer scope selections.
+// Monotonic counter — incremented on every selection change (farm, block, reset, scenario switch).
+// Any in-flight scope request whose captured gen no longer matches is discarded.
 let _scopeAnalysisGen = 0;
 let switchGen = 0; // incremented each time switchScenario is called; guards stale async results
 
@@ -886,6 +893,8 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
     ? nc.available_blocks_by_farm as Record<string, string[]>
     : {};
   const scopeDefaulted = nc.scope_defaulted === true;
+  const scopeDefaultedFarm = typeof nc.scope_defaulted_farm === "string" ? nc.scope_defaulted_farm : null;
+  const scopeDefaultedBlock = typeof nc.scope_defaulted_block === "string" ? nc.scope_defaulted_block : null;
 
   // Persist backend metadata for technical trace expansion.
   const backendMeta: BackendMeta = {
@@ -921,6 +930,8 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
     availableFarms,
     availableBlocksByFarm,
     scopeDefaulted,
+    scopeDefaultedFarm,
+    scopeDefaultedBlock,
     ...(backendSources ? { sources: backendSources } : {}),
     ...(backendReconciliation ? { reconciliation: backendReconciliation } : {}),
   });
@@ -1012,8 +1023,9 @@ export const actions = {
   },
 
   async switchScenario(id: ScenarioId) {
-    // Increment generation so any in-flight backend calls from the prior scenario are discarded.
+    // Increment both generations so any in-flight scope or switch calls from prior scenario are discarded.
     switchGen++;
+    _scopeAnalysisGen++;
     const gen = switchGen;
 
     // Set local representative state immediately so the UI reflects the new scenario
@@ -1080,6 +1092,16 @@ export const actions = {
       applyBackendResult(result, state.analysisMode);
       addAudit("Evaluation refresh completed", "Decision refreshed from evaluation session.");
       toast("Decision refreshed.");
+    } else if (state.analysisMode === "uploaded" || state.analysisMode === "live") {
+      // For uploaded and live origins: retain the prior visible decision as stale.
+      // Never replace a real package with a representative simulation on refresh failure.
+      set({
+        analysisPhase: "complete",
+        pipelineMessage: "Refresh failed. Prior uploaded decision is stale — re-upload or reconnect to update.",
+        scopeSelectionPending: true,
+      });
+      addAudit("Evaluation refresh failed", "Backend unavailable; prior uploaded/live decision retained as stale.");
+      toast("Refresh failed. Prior decision is stale. Re-upload to update.");
     } else {
       set(scenarioState(state.scenarioId, "representative", "representative_fallback"));
       set({ pipelineMessage: "Backend unavailable. Representative analysis remains active." });
@@ -1133,22 +1155,35 @@ export const actions = {
       uploadedPackageArtifacts: [...state.uploadedPackageArtifacts, ...placeholders],
     });
 
+    // Helper: mark all pending placeholders as failed and unblock the phase.
+    function failAllPending(reason: string) {
+      const failedArtifacts = placeholders.map(p => ({ ...p, parseStatus: "Upload failed", warnings: reason }));
+      const prevArtifacts = state.uploadedPackageArtifacts.filter(a => !files.some(f => f.name === a.name && a.parseStatus === "Uploading…"));
+      set({
+        analysisPhase: "complete",
+        pipelineMessage: `Upload failed: ${reason}`,
+        uploadedPackageArtifacts: [...prevArtifacts, ...failedArtifacts],
+        uploaded: failedArtifacts[failedArtifacts.length - 1],
+        scopeSelectionPending: false,
+      });
+    }
+
     // Reuse the existing uploaded-package session rather than creating a new one per file.
     // Never mix a representative sample session with a user-uploaded package session.
     let sessionId = state.uploadedPackageSessionId ?? "";
     if (!sessionId) {
-      const created = await apiClient.createSession("uploaded");
+      let created;
+      try {
+        created = await apiClient.createSession("uploaded");
+      } catch {
+        failAllPending("Network error creating session.");
+        toast("Upload session unavailable. Network error.");
+        return;
+      }
       if (created.ok) sessionId = created.data?.session_id || created.data?.session?.session_id || "";
       if (!sessionId) {
-        const failedArtifacts = placeholders.map(p => ({ ...p, parseStatus: "Upload failed", warnings: "Backend unavailable." }));
-        const prevArtifacts = state.uploadedPackageArtifacts.filter(a => !files.some(f => f.name === a.name && a.parseStatus === "Uploading…"));
-        set({
-          analysisPhase: "complete",
-          pipelineMessage: "Backend unavailable. Representative analysis remains active.",
-          uploadedPackageArtifacts: [...prevArtifacts, ...failedArtifacts],
-          uploaded: failedArtifacts[failedArtifacts.length - 1],
-        });
-        toast("Backend upload unavailable. Representative analysis remains active.");
+        failAllPending("Backend unavailable.");
+        toast("Backend upload unavailable. Check backend connectivity.");
         return;
       }
       set({ sessionId, uploadedPackageSessionId: sessionId });
@@ -1162,8 +1197,13 @@ export const actions = {
       const placeholder = placeholders.find(p => p.name === file.name) ?? placeholders[0];
       set({ uploaded: placeholder });
 
-      const up = await apiClient.uploadFile(sessionId, file);
-      const artifact: UploadedFileState = up.ok && up.data
+      let up;
+      try {
+        up = await apiClient.uploadFile(sessionId, file);
+      } catch {
+        up = null;
+      }
+      const artifact: UploadedFileState = up && up.ok && up.data
         ? {
             name: up.data.filename || file.name,
             detectedType: up.data.source_kind || detectType(file.name),
@@ -1178,36 +1218,64 @@ export const actions = {
     }
 
     // Replace the placeholder entries with final artifact records.
+    // Preserve any previously-successful artifacts in the package.
     const prevArtifacts = state.uploadedPackageArtifacts.filter(a => !files.some(f => f.name === a.name && a.parseStatus === "Uploading…"));
     set({ uploadedPackageArtifacts: [...prevArtifacts, ...newArtifacts] });
+
+    // Check if all files failed — if so, session is unusable for analysis.
+    const allFailed = newArtifacts.every(a => a.parseStatus === "Upload failed");
+    if (allFailed) {
+      set({ analysisPhase: "complete", pipelineMessage: "All files failed to upload. Package is empty.", scopeSelectionPending: false });
+      toast("All files failed to upload. Check file formats and try again.");
+      return;
+    }
 
     // Only pass scope if both farm and block are selected — never partial scope.
     const scopeFarm = (state.selectedFarm && state.selectedBlock) ? state.selectedFarm : undefined;
     const scopeBlock = (state.selectedFarm && state.selectedBlock) ? state.selectedBlock : undefined;
-    const analysis = await apiClient.analyzeSession(sessionId, scopeFarm, scopeBlock);
-    if (analysis.ok && analysis.data) {
+    let analysis;
+    try {
+      analysis = await apiClient.analyzeSession(sessionId, scopeFarm, scopeBlock);
+    } catch {
+      analysis = null;
+    }
+    if (analysis && analysis.ok && analysis.data) {
       applyBackendResult(analysis.data, "uploaded");
       addAudit("Uploaded package analyzed", `${files.map(f => f.name).join(", ")} analyzed via Workbench.`);
       toast(`${files.length === 1 ? files[0].name : `${files.length} files`} analyzed.`);
       return;
     }
-    set({ analysisPhase: "complete", pipelineMessage: "Backend unavailable. Representative analysis remains active." });
-    toast("Upload analysis unavailable. Representative analysis remains active.");
+    // Analysis failed but files were uploaded — preserve the package, mark decision stale.
+    set({
+      analysisPhase: "complete",
+      pipelineMessage: "Files uploaded but analysis unavailable. Prior decision is stale.",
+      scopeSelectionPending: true,
+    });
+    toast("Files uploaded. Analysis unavailable — prior decision is stale.");
   },
 
-  // Reset the upload package — the next upload will create a fresh session.
+  // Reset the upload package — all prior decisions are invalidated until a new package is uploaded and analyzed.
   startNewPackage() {
+    // Invalidate any in-flight scope request so it cannot apply a result from the old package.
+    _scopeAnalysisGen++;
     set({
+      sessionId: null,
       uploadedPackageSessionId: null,
       uploadedPackageArtifacts: [],
       uploaded: null,
       selectedFarm: null,
       selectedBlock: null,
+      availableFarms: [],
+      availableBlocksByFarm: {},
+      activeAnalyzedFarm: null,
+      activeAnalyzedBlock: null,
       backendMeta: null,
       scopeSelectionPending: false,
+      analysisPhase: "complete",
+      pipelineMessage: "New package started. Upload source files before analysis can run.",
     });
-    addAudit("Upload package reset", "New package session will be created on next upload.");
-    toast("Upload package cleared. Drop files to start a new package.");
+    addAudit("Upload package reset", "Session and all scope data cleared. New package session will be created on next upload.");
+    toast("New package started. Upload source files before analysis can run.");
   },
 
   openDrawer() {
@@ -1218,12 +1286,15 @@ export const actions = {
   },
 
   setSelectedFarm(farm: string | null) {
-    // Changing farm clears the block selection, stale backend metadata, and marks scope pending.
+    // Changing farm clears block, stale metadata, marks scope pending, and invalidates in-flight scope requests.
+    _scopeAnalysisGen++;
     set({ selectedFarm: farm, selectedBlock: null, backendMeta: null, scopeSelectionPending: farm !== null });
     addAudit("Farm scope selected", `Selected farm: ${farm ?? "none"}`);
   },
 
   setSelectedBlock(block: string | null) {
+    // Block change invalidates any in-flight scope request for the prior block.
+    _scopeAnalysisGen++;
     set({ selectedBlock: block });
     addAudit("Block scope selected", `Selected block: ${block ?? "none"}`);
   },
@@ -1234,22 +1305,33 @@ export const actions = {
       addAudit("Scope re-analysis blocked", "Both farm and block must be selected before re-analysis.");
       return;
     }
-    if (!state.sessionId || state.analysisPhase === "running") return;
-    // Capture scope and generation before any async work to guard against race conditions.
+    if (!state.sessionId) return;
+    // Capture scope, sessionId, and generation before any async work.
+    // The gen check + field checks together guard against all race conditions:
+    // stale farm/block selections, session resets, and concurrent requests.
     const capturedFarm = state.selectedFarm;
     const capturedBlock = state.selectedBlock;
+    const capturedSessionId = state.sessionId;
     const gen = ++_scopeAnalysisGen;
+
+    const isCurrentRequest = () =>
+      gen === _scopeAnalysisGen &&
+      state.selectedFarm === capturedFarm &&
+      state.selectedBlock === capturedBlock &&
+      state.sessionId === capturedSessionId;
+
     set({ analysisPhase: "running", backendMeta: null, pipelineMessage: "Re-analyzing with selected scope…", trace: buildTrace(new Date().toISOString(), false) });
     addAudit("Scope re-analysis started", `Farm: ${capturedFarm}, Block: ${capturedBlock}`);
     if (state.backend.status === "unavailable") {
-      set({ analysisPhase: "complete", pipelineMessage: "Backend unavailable — scope re-analysis blocked.", scopeSelectionPending: true });
-      toast("Backend unavailable. Scope re-analysis blocked.");
+      if (isCurrentRequest()) {
+        set({ analysisPhase: "complete", pipelineMessage: "Backend unavailable — scope re-analysis blocked.", scopeSelectionPending: true });
+        toast("Backend unavailable. Scope re-analysis blocked.");
+      }
       return;
     }
     try {
-      const res = await apiClient.analyzeSession(state.sessionId, capturedFarm, capturedBlock);
-      // Discard stale responses — a newer scope selection was made while this request was in flight.
-      if (gen !== _scopeAnalysisGen) return;
+      const res = await apiClient.analyzeSession(capturedSessionId, capturedFarm, capturedBlock);
+      if (!isCurrentRequest()) return; // discard — superseded by newer selection
       if (res.ok && res.data) {
         applyBackendResult(res.data, state.analysisMode);
         set({ activeAnalyzedFarm: capturedFarm, activeAnalyzedBlock: capturedBlock, scopeSelectionPending: false });
@@ -1258,8 +1340,9 @@ export const actions = {
         return;
       }
     } catch {
-      if (gen !== _scopeAnalysisGen) return;
+      if (!isCurrentRequest()) return; // discard — superseded
     }
+    if (!isCurrentRequest()) return;
     // On failure keep scopeSelectionPending so operational actions remain blocked.
     set({ analysisPhase: "complete", pipelineMessage: "Scope re-analysis failed. Previous result remains active.", scopeSelectionPending: true });
     toast("Scope re-analysis failed.");
@@ -1390,4 +1473,15 @@ export function __setBackendStatusForTest(status: BackendStatus) {
 export function __setSelectedScopeForTest(farm: string | null, block: string | null) {
   state = { ...state, selectedFarm: farm, selectedBlock: block, scopeSelectionPending: false };
   emit();
+}
+
+// Test seam: patch arbitrary state fields directly (for tests only).
+export function __patchStateForTest(patch: Partial<CommandState>) {
+  state = { ...state, ...patch };
+  emit();
+}
+
+// Test seam: expose the current scope analysis generation counter.
+export function __getScopeAnalysisGen() {
+  return _scopeAnalysisGen;
 }

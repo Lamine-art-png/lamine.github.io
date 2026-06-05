@@ -16,6 +16,8 @@ export function Header() {
   const availableFarms = useCommandStore((s) => s.availableFarms);
   const availableBlocksByFarm = useCommandStore((s) => s.availableBlocksByFarm);
   const scopeDefaulted = useCommandStore((s) => s.scopeDefaulted);
+  const scopeDefaultedFarm = useCommandStore((s) => s.scopeDefaultedFarm);
+  const scopeDefaultedBlock = useCommandStore((s) => s.scopeDefaultedBlock);
   const scopeSelectionPending = useCommandStore((s) => s.scopeSelectionPending);
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -126,7 +128,9 @@ export function Header() {
             </label>
             {scopeDefaulted && !selectedFarm && (
               <span className="scope-default-disclosure" role="note">
-                Analysis defaulted to first available scope. Select farm and block for precise analysis.
+                {scopeDefaultedFarm && scopeDefaultedBlock
+                  ? `Analysis defaulted to ${scopeDefaultedFarm} / ${scopeDefaultedBlock}. Select farm and block for precise analysis.`
+                  : "Analysis defaulted to first available scope. Select farm and block for precise analysis."}
               </span>
             )}
             {scopeSelectionPending && selectedFarm && (

@@ -13,6 +13,7 @@ export function VerifiedDecision() {
   const decision = useCommandStore((s) => s.decision);
   const phase = useCommandStore((s) => s.analysisPhase);
   const evidence = useCommandStore((s) => s.evidence);
+  const scopeSelectionPending = useCommandStore((s) => s.scopeSelectionPending);
   const ready = phase === "complete";
   const isRepresentative = decision.recommendationOrigin === "representative_fallback";
   // Only a hard scheduling block (schedulable === false) makes the card read as incomplete.
@@ -22,10 +23,11 @@ export function VerifiedDecision() {
     (Array.isArray(decision.nextEvidenceRequired) && decision.nextEvidenceRequired.length > 0);
 
   const byKey = Object.fromEntries(evidence.map((s) => [s.key, s]));
-  const canSchedule = ready && decision.schedulable === true && byKey.recommended?.status === "Complete";
-  const canApply = ready && byKey.scheduled?.status === "Complete";
-  const canObserve = ready && byKey.applied?.status === "Complete";
-  const canVerify = ready && byKey.observed?.status === "Complete";
+  // Stale scope disables all operational evidence actions — analysis must run for the selected block first.
+  const canSchedule = ready && !scopeSelectionPending && decision.schedulable === true && byKey.recommended?.status === "Complete";
+  const canApply = ready && !scopeSelectionPending && byKey.scheduled?.status === "Complete";
+  const canObserve = ready && !scopeSelectionPending && byKey.applied?.status === "Complete";
+  const canVerify = ready && !scopeSelectionPending && byKey.observed?.status === "Complete";
 
   const originLabel = ORIGIN_LABEL[decision.recommendationOrigin] ?? decision.recommendationOrigin;
   const flowLabel = decision.flowValidationState ?? "Flow status unknown";
@@ -33,13 +35,22 @@ export function VerifiedDecision() {
 
   return (
     <section
-      className={`card panel decision ${isIncomplete ? "decision--review" : ""}`}
+      className={`card panel decision ${isIncomplete ? "decision--review" : ""} ${scopeSelectionPending && !isRepresentative ? "decision--stale" : ""}`}
       aria-label="Verified water decision"
       data-walkthrough-target="verified-decision"
     >
       <p className="eyebrow">
-        {isIncomplete ? "Evidence review" : "Verified water decision"}
+        {scopeSelectionPending && !isRepresentative
+          ? "Prior decision — stale"
+          : isIncomplete
+          ? "Evidence review"
+          : "Verified water decision"}
       </p>
+      {scopeSelectionPending && !isRepresentative && (
+        <p className="decision-stale-warning" role="alert">
+          Prior decision is stale until the selected farm and block are analyzed.
+        </p>
+      )}
       <h2 className="decision-headline">{decision.action}</h2>
 
       {!isIncomplete && (

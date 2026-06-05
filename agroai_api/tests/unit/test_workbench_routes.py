@@ -1626,3 +1626,186 @@ def test_selected_source_kinds_used_in_trace_not_package_wide(client):
         f"Farm A soil must not appear in Farm B selected_source_kinds, got: {selected}")
     assert 'soil_moisture' in package, (
         f"soil_moisture should still appear in package_source_kinds, got: {package}")
+
+
+# --- Section 11: Regionless source rows show selected 0 / package N ----------
+
+def test_regionless_weather_source_row_shows_selected_zero_package_n(client):
+    """_build_source_rows must report selected_scope_record_count=0 when profile has no region."""
+    from io import BytesIO
+    profile = b'[{"farm":"Test Farm","block":"Test Block","crop":"grapes"}]'
+    weather = b'timestamp,region,eto_mm,rain_forecast_mm\n2026-05-15T12:00:00Z,Region A,6.5,0\n2026-05-16T12:00:00Z,Region A,5.8,2\n'
+
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('weather_summary.csv', BytesIO(weather), 'text/csv')})
+    r = client.post(f'/v1/workbench/sessions/{s}/analyze', json={'session_id': s, 'mode': 'uploaded'})
+    assert r.status_code == 200
+
+    source_rows = r.json().get('source_rows', [])
+    weather_row = next((sr for sr in source_rows if sr.get('source_kind') == 'weather'), None)
+    assert weather_row is not None, "Weather source row must be present"
+    assert weather_row['selected_scope_record_count'] == 0, (
+        f"Regionless weather must have selected_scope_record_count=0, got {weather_row['selected_scope_record_count']}")
+    assert weather_row['package_record_count'] == 2, (
+        f"Package count must reflect all 2 weather rows, got {weather_row['package_record_count']}")
+    assert weather_row['status'] == 'unavailable', (
+        f"Regionless weather status must be unavailable, got {weather_row['status']}")
+    lims = weather_row.get('limitations', [])
+    assert any('region' in l.lower() for l in lims), (
+        f"Weather limitations must mention region mapping, got {lims}")
+
+
+def test_regionless_water_cost_source_row_shows_selected_zero_package_n(client):
+    """_build_source_rows must report selected_scope_record_count=0 for water_costs when no region."""
+    from io import BytesIO
+    profile = b'[{"farm":"Test Farm","block":"Test Block","crop":"grapes"}]'
+    costs = b'region,water_source,cost_per_acre_ft\nRegion A,Canal,85\nRegion A,Well,62\n'
+
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('water_costs.csv', BytesIO(costs), 'text/csv')})
+    r = client.post(f'/v1/workbench/sessions/{s}/analyze', json={'session_id': s, 'mode': 'uploaded'})
+    assert r.status_code == 200
+
+    source_rows = r.json().get('source_rows', [])
+    cost_row = next((sr for sr in source_rows if sr.get('source_kind') == 'water_costs'), None)
+    assert cost_row is not None, "Water costs source row must be present"
+    assert cost_row['selected_scope_record_count'] == 0, (
+        f"Regionless water costs must have selected_scope_record_count=0, got {cost_row['selected_scope_record_count']}")
+    assert cost_row['package_record_count'] == 2, (
+        f"Package count must reflect all 2 cost rows, got {cost_row['package_record_count']}")
+    assert cost_row['status'] == 'unavailable', (
+        f"Regionless water costs status must be unavailable, got {cost_row['status']}")
+    lims = cost_row.get('limitations', [])
+    assert any('region' in l.lower() for l in lims), (
+        f"Water cost limitations must mention region mapping, got {lims}")
+
+
+def test_region_present_weather_source_row_shows_matched_selected(client):
+    """When region matches, selected_scope_record_count must equal the matched rows."""
+    from io import BytesIO
+    profile = b'[{"farm":"Test Farm","block":"Test Block","crop":"grapes","region":"Valley A"}]'
+    weather = (
+        b'timestamp,region,eto_mm,rain_forecast_mm\n'
+        b'2026-05-15T12:00:00Z,Valley A,6.5,0\n'
+        b'2026-05-16T12:00:00Z,Valley A,5.8,2\n'
+        b'2026-05-16T12:00:00Z,Other Region,4.0,0\n'
+    )
+
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('weather_summary.csv', BytesIO(weather), 'text/csv')})
+    r = client.post(f'/v1/workbench/sessions/{s}/analyze', json={'session_id': s, 'mode': 'uploaded'})
+    assert r.status_code == 200
+
+    source_rows = r.json().get('source_rows', [])
+    weather_row = next((sr for sr in source_rows if sr.get('source_kind') == 'weather'), None)
+    assert weather_row is not None, "Weather source row must be present"
+    assert weather_row['selected_scope_record_count'] == 2, (
+        f"Two Valley A rows must be selected, got {weather_row['selected_scope_record_count']}")
+    assert weather_row['package_record_count'] == 3, (
+        f"Package count must reflect all 3 weather rows, got {weather_row['package_record_count']}")
+    assert weather_row['status'] == 'accepted', (
+        f"Matched weather status must be accepted, got {weather_row['status']}")
+
+
+# --- Section 12: Unknown source rows must not affect operational confidence ---
+
+def test_unknown_source_rows_do_not_enter_selected_scope_signals(client):
+    """Unknown artifacts must not contribute to selected_source_kinds or normalized_signal_count."""
+    from io import BytesIO
+    profile = b'[{"farm":"Test Farm","block":"Test Block","crop":"grapes"}]'
+    # A file that won't match any known source kind
+    unknown_data = b'colA,colB\nvalue1,value2\n'
+
+    s_with = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    client.post(f'/v1/workbench/sessions/{s_with}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
+    client.post(f'/v1/workbench/sessions/{s_with}/upload', files={'file': ('arbitrary_data.csv', BytesIO(unknown_data), 'text/csv')})
+    r_with = client.post(f'/v1/workbench/sessions/{s_with}/analyze', json={'session_id': s_with, 'mode': 'uploaded'})
+
+    s_without = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    client.post(f'/v1/workbench/sessions/{s_without}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
+    r_without = client.post(f'/v1/workbench/sessions/{s_without}/analyze', json={'session_id': s_without, 'mode': 'uploaded'})
+
+    assert r_with.status_code == 200
+    assert r_without.status_code == 200
+
+    nc_with = r_with.json()['normalized_context']
+    nc_without = r_without.json()['normalized_context']
+
+    assert nc_with.get('normalized_signal_count', 0) == nc_without.get('normalized_signal_count', 0), (
+        f"Unknown artifact must not inflate signal count: with={nc_with.get('normalized_signal_count')}, without={nc_without.get('normalized_signal_count')}")
+    assert 'unknown' not in nc_with.get('selected_source_kinds', []), (
+        f"Unknown must not appear in selected_source_kinds, got {nc_with.get('selected_source_kinds')}")
+    assert 'unknown' in nc_with.get('package_source_kinds', []), (
+        f"Unknown must still appear in package_source_kinds for reporting, got {nc_with.get('package_source_kinds')}")
+
+
+def test_unattributed_irrigation_records_do_not_enter_selected_scope(client):
+    """irrigation_records without matching farm+block must not appear in selected_source_kinds."""
+    from io import BytesIO
+    profile = b'[{"farm":"Farm A","block":"Block 1","crop":"grapes"},{"farm":"Farm B","block":"Block 2","crop":"almonds"}]'
+    # Irrigation records for Farm A only
+    irrig = (
+        b'timestamp,farm,block,duration_min,depth_mm\n'
+        b'2026-05-15T06:00:00Z,Farm A,Block 1,45,24\n'
+    )
+
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('irrigation_records.csv', BytesIO(irrig), 'text/csv')})
+    r = client.post(f'/v1/workbench/sessions/{s}/analyze',
+                    json={'session_id': s, 'mode': 'uploaded', 'selected_farm': 'Farm B', 'selected_block': 'Block 2'})
+    assert r.status_code == 200
+    nc = r.json()['normalized_context']
+    selected = nc.get('selected_source_kinds', [])
+    package = nc.get('package_source_kinds', [])
+    assert 'irrigation_records' not in selected, (
+        f"Farm A irrigation must not appear in Farm B selected_source_kinds, got {selected}")
+    assert 'irrigation_records' in package, (
+        f"irrigation_records should still appear in package_source_kinds, got {package}")
+
+
+# --- Section 13: One-farm / multi-block default disclosure -------------------
+
+def test_one_farm_multi_block_scope_defaulted_is_true(client):
+    """scope_defaulted must be True when a package has one farm with multiple blocks and no explicit scope."""
+    from io import BytesIO
+    profile = (
+        b'[{"farm":"Alpha Vineyard","block":"Block A North","crop":"cabernet sauvignon"},'
+        b'{"farm":"Alpha Vineyard","block":"Block B West","crop":"chardonnay"}]'
+    )
+
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
+    r = client.post(f'/v1/workbench/sessions/{s}/analyze', json={'session_id': s, 'mode': 'uploaded'})
+    assert r.status_code == 200
+    nc = r.json()['normalized_context']
+    assert nc.get('scope_defaulted') is True, (
+        f"scope_defaulted must be True for one-farm / two-block package, got {nc.get('scope_defaulted')}")
+    assert nc.get('scope_defaulted_farm') is not None, (
+        f"scope_defaulted_farm must be set, got {nc.get('scope_defaulted_farm')}")
+    assert nc.get('scope_defaulted_block') is not None, (
+        f"scope_defaulted_block must be set, got {nc.get('scope_defaulted_block')}")
+
+
+def test_explicit_scope_clears_scope_defaulted(client):
+    """scope_defaulted must be False when explicit selected_farm and selected_block are supplied."""
+    from io import BytesIO
+    profile = (
+        b'[{"farm":"Alpha Vineyard","block":"Block A North","crop":"cabernet sauvignon"},'
+        b'{"farm":"Alpha Vineyard","block":"Block B West","crop":"chardonnay"}]'
+    )
+
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
+    r = client.post(f'/v1/workbench/sessions/{s}/analyze',
+                    json={'session_id': s, 'mode': 'uploaded',
+                          'selected_farm': 'Alpha Vineyard', 'selected_block': 'Block B West'})
+    assert r.status_code == 200
+    nc = r.json()['normalized_context']
+    assert nc.get('scope_defaulted') is False, (
+        f"scope_defaulted must be False when explicit scope supplied, got {nc.get('scope_defaulted')}")
+    assert nc.get('scope_defaulted_farm') is None, (
+        f"scope_defaulted_farm must be None when explicit scope supplied, got {nc.get('scope_defaulted_farm')}")
