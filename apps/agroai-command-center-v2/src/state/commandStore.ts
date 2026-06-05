@@ -95,6 +95,13 @@ export interface CommandState {
   availableFarms: string[];
   availableBlocksByFarm: Record<string, string[]>;
   scopeDefaulted: boolean;
+  // Scope selection pending: true after farm selection until both are analyzed by the backend
+  scopeSelectionPending: boolean;
+  activeAnalyzedFarm: string | null;
+  activeAnalyzedBlock: string | null;
+  // Multi-file upload package tracking
+  uploadedPackageSessionId: string | null;
+  uploadedPackageArtifacts: UploadedFileState[];
 }
 
 // ---------------------------------------------------------------------------
@@ -478,6 +485,11 @@ function scenarioState(id: ScenarioId, mode: AnalysisMode, origin: Recommendatio
     availableFarms: [],
     availableBlocksByFarm: {},
     scopeDefaulted: false,
+    scopeSelectionPending: false,
+    activeAnalyzedFarm: null,
+    activeAnalyzedBlock: null,
+    uploadedPackageSessionId: null,
+    uploadedPackageArtifacts: [],
   };
 }
 
@@ -506,11 +518,18 @@ function initialState(): CommandState {
     availableFarms: [],
     availableBlocksByFarm: {},
     scopeDefaulted: false,
+    scopeSelectionPending: false,
+    activeAnalyzedFarm: null,
+    activeAnalyzedBlock: null,
+    uploadedPackageSessionId: null,
+    uploadedPackageArtifacts: [],
   } as CommandState;
 }
 
 let state: CommandState = initialState();
 const listeners = new Set<() => void>();
+// Monotonic counter — older scope responses cannot overwrite newer scope selections.
+let _scopeAnalysisGen = 0;
 let switchGen = 0; // incremented each time switchScenario is called; guards stale async results
 
 function emit() {
@@ -677,7 +696,9 @@ const _RAW_INTERNAL_KEY_LABELS: Record<string, string> = {
 };
 
 function _readableMissingInput(raw: string): string {
-  return _RAW_INTERNAL_KEY_LABELS[raw] ?? (raw.includes(" ") ? raw : `Address: ${raw}`);
+  return _RAW_INTERNAL_KEY_LABELS[raw]
+    // If the string already reads like a sentence, use it directly.
+    ?? (raw.includes(" ") ? raw : "Additional evidence is required before scheduling is enabled.");
 }
 
 function buildBackendReconciliation(result: WorkbenchAnalysisResult): ReconciliationRow[] {
@@ -688,24 +709,31 @@ function buildBackendReconciliation(result: WorkbenchAnalysisResult): Reconcilia
 
   const rows: ReconciliationRow[] = [];
 
+  const _PENDING_PATTERNS = ["not available", "missing", "no selected-block", "no field", "unavailable", "none on record", "0 record", "withheld"];
+  function _signalStatus(signal: string, extraReviewPatterns: string[] = []): ReconciliationRow["status"] {
+    const low = signal.toLowerCase();
+    if (extraReviewPatterns.some(p => low.includes(p))) return "Review";
+    if (_PENDING_PATTERNS.some(p => low.includes(p))) return "Pending";
+    return "Matched";
+  }
+
   if (typeof recon.controller_event_validity === "string") {
-    rows.push({ source: "Controller history", signal: recon.controller_event_validity, interpretation: "Controller telemetry processed", status: "Matched" });
+    rows.push({ source: "Controller history", signal: recon.controller_event_validity, interpretation: "Controller telemetry processed", status: _signalStatus(recon.controller_event_validity) });
   }
   if (typeof recon.weather_demand === "string") {
-    rows.push({ source: "Weather demand", signal: recon.weather_demand, interpretation: "ETo and rainfall demand computed", status: recon.weather_demand.includes("not available") ? "Pending" : "Matched" });
+    rows.push({ source: "Weather demand", signal: recon.weather_demand, interpretation: "ETo and rainfall demand computed", status: _signalStatus(recon.weather_demand) });
   }
   if (typeof recon.soil_moisture_deficit === "string") {
-    rows.push({ source: "Soil moisture", signal: recon.soil_moisture_deficit, interpretation: "Root-zone deficit assessed", status: recon.soil_moisture_deficit.includes("not available") ? "Pending" : "Matched" });
+    rows.push({ source: "Soil moisture", signal: recon.soil_moisture_deficit, interpretation: "Root-zone deficit assessed", status: _signalStatus(recon.soil_moisture_deficit) });
   }
   if (typeof recon.flow_meter_agreement === "string") {
-    const flowStatus: ReconciliationRow["status"] = recon.flow_meter_agreement.includes("unavailable") ? "Pending" : recon.flow_meter_agreement.includes("inconsistent") ? "Review" : "Matched";
-    rows.push({ source: "Flow meter", signal: recon.flow_meter_agreement, interpretation: "Applied-water variance assessed", status: flowStatus });
+    rows.push({ source: "Flow meter", signal: recon.flow_meter_agreement, interpretation: "Applied-water variance assessed", status: _signalStatus(recon.flow_meter_agreement, ["inconsistent"]) });
   }
   if (typeof recon.field_observation_support === "string") {
-    rows.push({ source: "Field observation", signal: recon.field_observation_support, interpretation: "Field note corroboration assessed", status: recon.field_observation_support.includes("missing") ? "Pending" : "Matched" });
+    rows.push({ source: "Field observation", signal: recon.field_observation_support, interpretation: "Field note corroboration assessed", status: _signalStatus(recon.field_observation_support) });
   }
   if (typeof recon.satellite_stress_support === "string") {
-    rows.push({ source: "Earth observation layer", signal: recon.satellite_stress_support, interpretation: "Vegetation stress index assessed", status: recon.satellite_stress_support.includes("not available") ? "Pending" : "Matched" });
+    rows.push({ source: "Earth observation layer", signal: recon.satellite_stress_support, interpretation: "Vegetation stress index assessed", status: _signalStatus(recon.satellite_stress_support) });
   }
 
   for (const conflict of conflicts) {
@@ -1035,7 +1063,10 @@ export const actions = {
     let result: WorkbenchAnalysisResult | null = null;
     if (state.backend.status !== "unavailable" && state.sessionId) {
       try {
-        const res = await apiClient.analyzeSession(state.sessionId, state.selectedFarm ?? undefined, state.selectedBlock ?? undefined);
+        // Only pass scope when both are set — never issue a partial-scope request.
+        const scopeFarm = (state.selectedFarm && state.selectedBlock) ? state.selectedFarm : undefined;
+        const scopeBlock = (state.selectedFarm && state.selectedBlock) ? state.selectedBlock : undefined;
+        const res = await apiClient.analyzeSession(state.sessionId, scopeFarm, scopeBlock);
         if (res.ok && res.data) result = res.data;
       } catch {
         result = null;
@@ -1083,46 +1114,100 @@ export const actions = {
     }
   },
 
+  // Single-file convenience wrapper — delegates to uploadFiles.
   async uploadRecords(file: File) {
-    // Optimistically surface the file so the drawer always shows status.
+    return actions.uploadFiles([file]);
+  },
+
+  // Upload multiple files to the current package session (or create a new one if none exists).
+  async uploadFiles(files: File[]) {
+    if (!files.length) return;
+    set({ pipelineMessage: "Uploading source records…", analysisPhase: "running" });
+
+    // Show placeholders immediately so filenames are visible before any API call.
+    const placeholders: UploadedFileState[] = files.map(file => ({
+      name: file.name, detectedType: detectType(file.name), parseStatus: "Uploading…", rows: "—", fields: "—", warnings: "—",
+    }));
     set({
-      pipelineMessage: "Analyzing source records…",
-      analysisPhase: "running",
-      uploaded: { name: file.name, detectedType: detectType(file.name), parseStatus: "Uploading…", rows: "—", fields: "—", warnings: "—" },
+      uploaded: placeholders[placeholders.length - 1],
+      uploadedPackageArtifacts: [...state.uploadedPackageArtifacts, ...placeholders],
     });
-    let sessionId = "";
-    const created = await apiClient.createSession("uploaded");
-    if (created.ok) sessionId = created.data?.session_id || created.data?.session?.session_id || "";
+
+    // Reuse the existing uploaded-package session rather than creating a new one per file.
+    // Never mix a representative sample session with a user-uploaded package session.
+    let sessionId = state.uploadedPackageSessionId ?? "";
     if (!sessionId) {
-      set({ analysisPhase: "complete", pipelineMessage: "Backend unavailable. Representative analysis remains active." });
-      set({ uploaded: { name: file.name, detectedType: detectType(file.name), parseStatus: "Backend upload endpoint unavailable", rows: "—", fields: "—", warnings: "Representative analysis remains active." } });
-      toast("Backend upload unavailable. Representative analysis remains active.");
-      return;
-    }
-    set({ sessionId });
-    const up = await apiClient.uploadFile(sessionId, file);
-    if (up.ok && up.data) {
-      const a = up.data;
-      set({
-        uploaded: {
-          name: a.filename || file.name,
-          detectedType: a.source_kind || detectType(file.name),
-          parseStatus: a.parse_status || "parsed",
-          rows: String(a.rows_detected ?? "—"),
-          fields: Array.isArray(a.columns_detected) ? String(a.columns_detected.length) : "—",
-          warnings: a.warnings?.length ? a.warnings.join("; ") : "None",
-        },
-      });
-      const analysis = await apiClient.analyzeSession(sessionId, state.selectedFarm ?? undefined, state.selectedBlock ?? undefined);
-      if (analysis.ok && analysis.data) {
-        applyBackendResult(analysis.data, "uploaded");
-        addAudit("Uploaded records analyzed", `${file.name} analyzed via Workbench.`);
-        toast("Uploaded records analyzed.");
+      const created = await apiClient.createSession("uploaded");
+      if (created.ok) sessionId = created.data?.session_id || created.data?.session?.session_id || "";
+      if (!sessionId) {
+        const failedArtifacts = placeholders.map(p => ({ ...p, parseStatus: "Upload failed", warnings: "Backend unavailable." }));
+        const prevArtifacts = state.uploadedPackageArtifacts.filter(a => !files.some(f => f.name === a.name && a.parseStatus === "Uploading…"));
+        set({
+          analysisPhase: "complete",
+          pipelineMessage: "Backend unavailable. Representative analysis remains active.",
+          uploadedPackageArtifacts: [...prevArtifacts, ...failedArtifacts],
+          uploaded: failedArtifacts[failedArtifacts.length - 1],
+        });
+        toast("Backend upload unavailable. Representative analysis remains active.");
         return;
       }
+      set({ sessionId, uploadedPackageSessionId: sessionId });
+      addAudit("Upload package session created", `New uploaded package session: ${sessionId}`);
+    } else {
+      set({ sessionId });
+    }
+
+    const newArtifacts: UploadedFileState[] = [];
+    for (const file of files) {
+      const placeholder = placeholders.find(p => p.name === file.name) ?? placeholders[0];
+      set({ uploaded: placeholder });
+
+      const up = await apiClient.uploadFile(sessionId, file);
+      const artifact: UploadedFileState = up.ok && up.data
+        ? {
+            name: up.data.filename || file.name,
+            detectedType: up.data.source_kind || detectType(file.name),
+            parseStatus: up.data.parse_status || "parsed",
+            rows: String(up.data.rows_detected ?? "—"),
+            fields: Array.isArray(up.data.columns_detected) ? String(up.data.columns_detected.length) : "—",
+            warnings: up.data.warnings?.length ? up.data.warnings.join("; ") : "None",
+          }
+        : { ...placeholder, parseStatus: "Upload failed", warnings: "File could not be uploaded." };
+      newArtifacts.push(artifact);
+      set({ uploaded: artifact });
+    }
+
+    // Replace the placeholder entries with final artifact records.
+    const prevArtifacts = state.uploadedPackageArtifacts.filter(a => !files.some(f => f.name === a.name && a.parseStatus === "Uploading…"));
+    set({ uploadedPackageArtifacts: [...prevArtifacts, ...newArtifacts] });
+
+    // Only pass scope if both farm and block are selected — never partial scope.
+    const scopeFarm = (state.selectedFarm && state.selectedBlock) ? state.selectedFarm : undefined;
+    const scopeBlock = (state.selectedFarm && state.selectedBlock) ? state.selectedBlock : undefined;
+    const analysis = await apiClient.analyzeSession(sessionId, scopeFarm, scopeBlock);
+    if (analysis.ok && analysis.data) {
+      applyBackendResult(analysis.data, "uploaded");
+      addAudit("Uploaded package analyzed", `${files.map(f => f.name).join(", ")} analyzed via Workbench.`);
+      toast(`${files.length === 1 ? files[0].name : `${files.length} files`} analyzed.`);
+      return;
     }
     set({ analysisPhase: "complete", pipelineMessage: "Backend unavailable. Representative analysis remains active." });
     toast("Upload analysis unavailable. Representative analysis remains active.");
+  },
+
+  // Reset the upload package — the next upload will create a fresh session.
+  startNewPackage() {
+    set({
+      uploadedPackageSessionId: null,
+      uploadedPackageArtifacts: [],
+      uploaded: null,
+      selectedFarm: null,
+      selectedBlock: null,
+      backendMeta: null,
+      scopeSelectionPending: false,
+    });
+    addAudit("Upload package reset", "New package session will be created on next upload.");
+    toast("Upload package cleared. Drop files to start a new package.");
   },
 
   openDrawer() {
@@ -1133,8 +1218,8 @@ export const actions = {
   },
 
   setSelectedFarm(farm: string | null) {
-    // Changing farm clears the block selection and stale backend metadata.
-    set({ selectedFarm: farm, selectedBlock: null, backendMeta: null });
+    // Changing farm clears the block selection, stale backend metadata, and marks scope pending.
+    set({ selectedFarm: farm, selectedBlock: null, backendMeta: null, scopeSelectionPending: farm !== null });
     addAudit("Farm scope selected", `Selected farm: ${farm ?? "none"}`);
   },
 
@@ -1144,27 +1229,39 @@ export const actions = {
   },
 
   async reanalyzeSelectedScope() {
+    // Require both farm and block — never issue a partial-scope request.
+    if (!state.selectedFarm || !state.selectedBlock) {
+      addAudit("Scope re-analysis blocked", "Both farm and block must be selected before re-analysis.");
+      return;
+    }
     if (!state.sessionId || state.analysisPhase === "running") return;
-    // Clear stale backend metadata before re-analysis with new scope.
+    // Capture scope and generation before any async work to guard against race conditions.
+    const capturedFarm = state.selectedFarm;
+    const capturedBlock = state.selectedBlock;
+    const gen = ++_scopeAnalysisGen;
     set({ analysisPhase: "running", backendMeta: null, pipelineMessage: "Re-analyzing with selected scope…", trace: buildTrace(new Date().toISOString(), false) });
-    addAudit("Scope re-analysis started", `Farm: ${state.selectedFarm ?? "default"}, Block: ${state.selectedBlock ?? "default"}`);
+    addAudit("Scope re-analysis started", `Farm: ${capturedFarm}, Block: ${capturedBlock}`);
     if (state.backend.status === "unavailable") {
-      set({ analysisPhase: "complete", pipelineMessage: "Backend unavailable — scope re-analysis blocked." });
+      set({ analysisPhase: "complete", pipelineMessage: "Backend unavailable — scope re-analysis blocked.", scopeSelectionPending: true });
       toast("Backend unavailable. Scope re-analysis blocked.");
       return;
     }
     try {
-      const res = await apiClient.analyzeSession(state.sessionId, state.selectedFarm ?? undefined, state.selectedBlock ?? undefined);
+      const res = await apiClient.analyzeSession(state.sessionId, capturedFarm, capturedBlock);
+      // Discard stale responses — a newer scope selection was made while this request was in flight.
+      if (gen !== _scopeAnalysisGen) return;
       if (res.ok && res.data) {
         applyBackendResult(res.data, state.analysisMode);
-        addAudit("Scope re-analysis completed", `Analysis updated for ${state.selectedFarm ?? "default"} / ${state.selectedBlock ?? "default"}.`);
+        set({ activeAnalyzedFarm: capturedFarm, activeAnalyzedBlock: capturedBlock, scopeSelectionPending: false });
+        addAudit("Scope re-analysis completed", `Analysis updated for ${capturedFarm} / ${capturedBlock}.`);
         toast("Analysis updated for selected scope.");
         return;
       }
     } catch {
-      // fall through
+      if (gen !== _scopeAnalysisGen) return;
     }
-    set({ analysisPhase: "complete", pipelineMessage: "Scope re-analysis failed. Previous result remains active." });
+    // On failure keep scopeSelectionPending so operational actions remain blocked.
+    set({ analysisPhase: "complete", pipelineMessage: "Scope re-analysis failed. Previous result remains active.", scopeSelectionPending: true });
     toast("Scope re-analysis failed.");
   },
 
@@ -1203,6 +1300,11 @@ export const actions = {
     if (!state.sessionId) {
       addAudit("Evidence step not recorded", "No session ID — backend persistence required for uploaded/live origins.");
       toast("Evidence step was not recorded. A backend session is required.");
+      return;
+    }
+    if (state.scopeSelectionPending) {
+      addAudit("Evidence step not recorded", "Scope selection pending — analyze the selected block before recording evidence.");
+      toast("Evidence step was not recorded. Analyze the selected block first.");
       return;
     }
     if (state.backend.status === "unavailable" || !actionName) {
@@ -1286,6 +1388,6 @@ export function __setBackendStatusForTest(status: BackendStatus) {
 
 // Test seam: set selected farm/block directly.
 export function __setSelectedScopeForTest(farm: string | null, block: string | null) {
-  state = { ...state, selectedFarm: farm, selectedBlock: block };
+  state = { ...state, selectedFarm: farm, selectedBlock: block, scopeSelectionPending: false };
   emit();
 }

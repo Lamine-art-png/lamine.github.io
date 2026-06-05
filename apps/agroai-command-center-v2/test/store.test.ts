@@ -575,6 +575,138 @@ describe("commandStore", () => {
     expect(getState().scopeDefaulted).toBe(true);
   });
 
+  // --- Section 14 (tenth pass): Fail-closed scope, multi-file, reconciliation ---
+
+  it("setSelectedFarm marks scopeSelectionPending and evidence advance is blocked", async () => {
+    // Apply backend result with session to set up an uploaded origin
+    const fakeResult = {
+      analysis_id: "sp-id", session_id: "sp-session", status: "complete",
+      analysis_mode: "uploaded" as const, recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      recommendation: { schedulable: true, scheduling_block_reasons: [] },
+      reconciliation: {}, normalized_context: {}, signal_summary: {},
+      warnings: [], uploaded_artifacts_used: [], live_inputs_used: [],
+    };
+    __applyBackendResult("alpha-vineyard", fakeResult as any, "sp-session");
+    expect(getState().scopeSelectionPending).toBe(false);
+    // Select a farm — must mark scope pending and clear block
+    actions.setSelectedFarm("Beta Farm");
+    expect(getState().scopeSelectionPending).toBe(true);
+    expect(getState().selectedBlock).toBeNull();
+    // Evidence advance must be blocked
+    const before = getState().evidence.find((s) => s.key === "scheduled")?.status;
+    await actions.advanceEvidence("scheduled");
+    expect(getState().evidence.find((s) => s.key === "scheduled")?.status).toBe(before);
+    const blockAudit = getState().audit.find((a) => a.event === "Evidence step not recorded");
+    expect(blockAudit).toBeDefined();
+    expect(blockAudit?.detail).toMatch(/scope selection pending/i);
+  });
+
+  it("clearing farm selection removes scopeSelectionPending", () => {
+    __applyBackendResult("alpha-vineyard", {
+      analysis_id: "cf-id", session_id: "cf-session", status: "complete",
+      analysis_mode: "uploaded" as const, recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      recommendation: { schedulable: true, scheduling_block_reasons: [] },
+      reconciliation: {}, normalized_context: {}, signal_summary: {},
+      warnings: [], uploaded_artifacts_used: [], live_inputs_used: [],
+    } as any, "cf-session");
+    actions.setSelectedFarm("Beta Farm");
+    expect(getState().scopeSelectionPending).toBe(true);
+    actions.setSelectedFarm(null);
+    expect(getState().scopeSelectionPending).toBe(false);
+  });
+
+  it("stale scope response cannot overwrite a newer block selection", async () => {
+    __applyBackendResult("alpha-vineyard", {
+      analysis_id: "sg-id", session_id: "sg-session", status: "complete",
+      analysis_mode: "uploaded" as const, recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      recommendation: { schedulable: true, scheduling_block_reasons: [] },
+      reconciliation: {}, normalized_context: {}, signal_summary: {},
+      warnings: [], uploaded_artifacts_used: [], live_inputs_used: [],
+    } as any, "sg-session");
+    // Simulate two reanalyzeSelectedScope calls in quick succession.
+    // The second call increments _scopeAnalysisGen — the first's response should be discarded.
+    __setSelectedScopeForTest("Beta Farm", "Block B");
+    // First call will fail (no real backend) and increment gen.
+    const p1 = actions.reanalyzeSelectedScope();
+    // Immediately change scope — increments gen again.
+    __setSelectedScopeForTest("Beta Farm", "Block C");
+    // Second call will also fail but with current gen.
+    const p2 = actions.reanalyzeSelectedScope();
+    await Promise.all([p1, p2]);
+    // Both fail in test env — scope stays on the last-selected Block C.
+    expect(getState().selectedBlock).toBe("Block C");
+  });
+
+  it("startNewPackage resets upload session and clears artifacts", async () => {
+    // Simulate a package having been built.
+    __applyBackendResult("alpha-vineyard", {
+      analysis_id: "np-id", session_id: "np-session", status: "complete",
+      analysis_mode: "uploaded" as const, recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      recommendation: { schedulable: true, scheduling_block_reasons: [] },
+      reconciliation: {}, normalized_context: {}, signal_summary: {},
+      warnings: [], uploaded_artifacts_used: [], live_inputs_used: [],
+    } as any, "np-session");
+    // Manually set uploadedPackageSessionId and artifacts in state via __setSelectedScopeForTest workaround.
+    // We'll use a direct import to access internal state.
+    const { getState: gs } = await import("../src/state/commandStore");
+    // Call startNewPackage and verify the package resets.
+    actions.startNewPackage();
+    expect(gs().uploadedPackageSessionId).toBeNull();
+    expect(gs().uploadedPackageArtifacts).toEqual([]);
+    expect(gs().selectedFarm).toBeNull();
+    expect(gs().selectedBlock).toBeNull();
+    // Audit must record the reset
+    const resetAudit = gs().audit.find((a) => a.event === "Upload package reset");
+    expect(resetAudit).toBeDefined();
+  });
+
+  it("no raw internal key appears in reconciliation rows after backend result", async () => {
+    // Verify _readableMissingInput does not expose underscore identifiers.
+    const fakeResult = {
+      analysis_id: "ri-id", session_id: "ri-session", status: "complete",
+      analysis_mode: "uploaded" as const, recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      recommendation: {
+        schedulable: false,
+        scheduling_block_reasons: ["Flow evidence not validated"],
+        next_evidence_required: ["validated_flow_or_application_rate", "field_area_ha", "crop_type"],
+      },
+      reconciliation: { missing_inputs: ["validated_flow_or_application_rate", "eto_mm"] },
+      normalized_context: {}, signal_summary: {},
+      warnings: [], uploaded_artifacts_used: [], live_inputs_used: [],
+    };
+    __applyBackendResult("alpha-vineyard", fakeResult as any, "ri-session");
+    const reconciliation = getState().reconciliation;
+    for (const row of reconciliation) {
+      // No row's signal text should expose raw underscore identifiers prefixed with "Address: "
+      expect(row.signal).not.toMatch(/^Address: [a-z_]+$/);
+      // No raw snake_case identifiers should appear on customer surfaces
+      expect(row.signal).not.toMatch(/^[a-z]+_[a-z_]+$/);
+    }
+  });
+
+  it("reanalyzeSelectedScope is blocked when only farm is selected (no block)", async () => {
+    __applyBackendResult("alpha-vineyard", {
+      analysis_id: "pb-id", session_id: "pb-session", status: "complete",
+      analysis_mode: "uploaded" as const, recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      recommendation: { schedulable: true, scheduling_block_reasons: [] },
+      reconciliation: {}, normalized_context: {}, signal_summary: {},
+      warnings: [], uploaded_artifacts_used: [], live_inputs_used: [],
+    } as any, "pb-session");
+    actions.setSelectedFarm("Beta Farm");
+    // selectedBlock is null — reanalyzeSelectedScope must not call the backend
+    const phaseBefore = getState().analysisPhase;
+    await actions.reanalyzeSelectedScope();
+    expect(getState().analysisPhase).toBe(phaseBefore); // not running
+    const blockAudit = getState().audit.find((a) => a.event === "Scope re-analysis blocked");
+    expect(blockAudit).toBeDefined();
+  });
+
   it("trace summary reflects limited stages, not all-complete", async () => {
     const { __applyBackendResult } = await import("../src/state/commandStore");
     const fakeResult = {

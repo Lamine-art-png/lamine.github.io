@@ -512,45 +512,19 @@ def assemble_context_from_artifacts(
         farm = selected_farm
         block = selected_block
     elif selected_farm and not selected_block:
-        # Partial scope: farm supplied without block — find first block for this farm.
-        farm_profiles = [p for p in profile_rows if str(p.get("farm", "")).strip().lower() == selected_farm.lower()]
-        if farm_profiles:
-            profile = farm_profiles[0]
-            block = str(profile.get("block") or preferred_block)
-            extra_warnings.append(
-                f"'selected_farm' was provided without 'selected_block'. "
-                f"Defaulted to the first available block ('{block}'). "
-                "Supply both selected_farm and selected_block for precise analysis."
-            )
-        else:
-            profile = {}
-            block = preferred_block
-            extra_warnings.append(
-                f"'selected_farm' was provided without 'selected_block', "
-                f"and no crop profile exists for farm '{selected_farm}'. "
-                "Context is incomplete; scheduling withheld."
-            )
-        farm = selected_farm
+        # Partial scope: fail closed — do not default to any block.
+        raise ValueError(
+            f"'selected_farm' was provided without 'selected_block'. "
+            "Both are required for explicit scope analysis. "
+            "Omit both to use the default scope."
+        )
     elif not selected_farm and selected_block:
-        # Partial scope: block supplied without farm — cannot safely resolve scope.
-        extra_warnings.append(
+        # Partial scope: fail closed — do not fall back to any representative scope.
+        raise ValueError(
             f"'selected_block' was provided without 'selected_farm'. "
             "Both are required for explicit scope analysis. "
-            "Defaulting to representative scope."
+            "Omit both to use the default scope."
         )
-        scoped_profiles = _rows_for(profile_rows, preferred_farm, preferred_block)
-        if scoped_profiles:
-            profile = scoped_profiles[0]
-            farm = str(profile.get("farm") or preferred_farm)
-            block = str(profile.get("block") or preferred_block)
-        elif profile_rows:
-            profile = profile_rows[0]
-            farm = str(profile.get("farm") or preferred_farm)
-            block = str(profile.get("block") or preferred_block)
-        else:
-            profile = {}
-            farm = preferred_farm
-            block = preferred_block
     else:
         # No explicit scope — default to sample-package selection or first profile with disclosure.
         scoped_profiles = _rows_for(profile_rows, preferred_farm, preferred_block)
@@ -599,7 +573,11 @@ def assemble_context_from_artifacts(
                 # Require both identifiers to be present and match the selected scope.
                 if not (row_farm and row_block and row_farm == farm_l and row_block == block_l):
                     continue
-            elif artifact.source_kind in _region_scope_kinds and region_l:
+            elif artifact.source_kind in _region_scope_kinds:
+                # Regional signals require an explicit region match.
+                # Without a profile region no regional rows are operationally admitted.
+                if not region_l:
+                    continue
                 row_region = str(normalized_row.get("region", "")).strip().lower()
                 if not row_region or row_region != region_l:
                     continue  # Exclude unattributed or non-matching region records from selected scope.
@@ -634,6 +612,23 @@ def assemble_context_from_artifacts(
     soil_rows = _rows_for(rows.get("soil_moisture", []), farm, block)
     satellite_rows = _rows_for(rows.get("satellite_observation", []), farm, block)
     field_notes = _field_note_support(rows.get("field_notes", []), farm, block)
+    # Add synthetic signals for safely-attributed text-only field notes (TXT files often lack
+    # structured farm/block columns and bypass the signal loop). Attribution was verified by
+    # _field_note_support — only include notes that matched the selected farm and block.
+    if field_notes and "field_notes" not in selected_source_kinds:
+        for _note in field_notes:
+            signals.append(
+                NormalizedSignal(
+                    signal_id=str(uuid.uuid4()),
+                    source_kind="field_notes",
+                    field_name="field_observation",
+                    canonical_name="field_observation",
+                    value=_note,
+                    confidence=0.75,
+                    raw_reference="field_notes:txt",
+                ).model_dump()
+            )
+        selected_source_kinds = sorted(set(selected_source_kinds) | {"field_notes"})
     # Filter weather and water-cost rows to the profile region (region already extracted above).
     all_weather_rows = rows.get("weather", [])
     all_water_cost_rows = rows.get("water_costs", [])
@@ -641,17 +636,28 @@ def assemble_context_from_artifacts(
     if region:
         weather_rows = [r for r in all_weather_rows if str(r.get("region", "")).strip().lower() == region.lower()]
         water_cost_rows = [r for r in all_water_cost_rows if str(r.get("region", "")).strip().lower() == region.lower()]
-        if not weather_rows:
+        if not weather_rows and all_weather_rows:
             region_warnings.append(
                 f"No weather records matched region '{region}'. Weather demand is withheld to avoid cross-region data mix."
             )
-        if not water_cost_rows:
+        if not water_cost_rows and all_water_cost_rows:
             region_warnings.append(
                 f"No water-cost records matched region '{region}'. Water-cost context is withheld."
             )
     else:
-        weather_rows = all_weather_rows
-        water_cost_rows = all_water_cost_rows
+        # Region mapping required — withhold both regional evidence types operationally.
+        weather_rows = []
+        water_cost_rows = []
+        if all_weather_rows:
+            region_warnings.append(
+                "Region mapping is required before using weather demand records. "
+                "Weather ETo and rainfall are withheld until region is specified in the crop profile."
+            )
+        if all_water_cost_rows:
+            region_warnings.append(
+                "Region mapping is required before using water-cost context. "
+                "Water-cost records are withheld until region is specified in the crop profile."
+            )
 
     avg_eto = _avg(row.get("eto_mm", row.get("eto")) for row in weather_rows)
     rain_total = sum(value for value in (_to_float(row.get("rain_forecast_mm", row.get("rain"))) for row in weather_rows) if value)
@@ -1168,7 +1174,8 @@ def generate_report_artifact(session_id: str, recommendation: Dict[str, Any], re
 
 def _analysis_trace(context: Dict[str, Any], reconciliation: ReconciliationResult) -> List[Dict[str, Any]]:
     counts = context.get("counts", {})
-    source_count = len(context.get("source_kinds", []))
+    # Use selected_source_kinds — unavailable package sources must not improve trace completion.
+    source_count = len(context.get("selected_source_kinds", context.get("source_kinds", [])))
     signal_count = len(context.get("signals", []))
     return [
         {

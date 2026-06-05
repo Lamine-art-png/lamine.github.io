@@ -16,6 +16,7 @@ export function Header() {
   const availableFarms = useCommandStore((s) => s.availableFarms);
   const availableBlocksByFarm = useCommandStore((s) => s.availableBlocksByFarm);
   const scopeDefaulted = useCommandStore((s) => s.scopeDefaulted);
+  const scopeSelectionPending = useCommandStore((s) => s.scopeSelectionPending);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const farmName = displayFarmName;
@@ -26,12 +27,11 @@ export function Header() {
   const sourceTone = analysisPhase === "complete" ? "ok" : "warn";
   const provenance = getProvenanceBadge(analysisMode, recommendationOrigin);
 
-  // Show scope selectors only when uploaded data has multiple farms/blocks available.
-  const showScopeSelectors = analysisMode !== "representative" && availableFarms.length > 0;
-  // Blocks available for the currently selected farm.
-  const availableBlocks = selectedFarm
-    ? (availableBlocksByFarm[selectedFarm] ?? [])
-    : Object.values(availableBlocksByFarm).flat().filter((b, i, arr) => arr.indexOf(b) === i).sort();
+  // Show scope selectors whenever the backend has provided customer-safe available scopes.
+  // Hide only for a true local offline representative fallback (representationOrigin_fallback with no backend scopes).
+  const showScopeSelectors = availableFarms.length > 0 && recommendationOrigin !== "representative_fallback";
+  // Block selector only enabled after farm is selected. Never flatten blocks across farms before selection.
+  const availableBlocks = selectedFarm ? (availableBlocksByFarm[selectedFarm] ?? []) : [];
 
   function handleFarmChange(farm: string) {
     actions.setSelectedFarm(farm || null);
@@ -114,7 +114,7 @@ export function Header() {
                 aria-label="Select block"
                 value={selectedBlock ?? ""}
                 onChange={(e) => handleBlockChange(e.target.value)}
-                disabled={availableBlocks.length === 0}
+                disabled={!selectedFarm || availableBlocks.length === 0}
               >
                 <option value="">
                   {selectedFarm ? "Select block…" : "Select farm first"}
@@ -127,6 +127,11 @@ export function Header() {
             {scopeDefaulted && !selectedFarm && (
               <span className="scope-default-disclosure" role="note">
                 Analysis defaulted to first available scope. Select farm and block for precise analysis.
+              </span>
+            )}
+            {scopeSelectionPending && selectedFarm && (
+              <span className="scope-default-disclosure scope-pending-note" role="alert">
+                Prior decision is stale. Select a block and analyze to update.
               </span>
             )}
           </div>
@@ -143,8 +148,11 @@ export function Header() {
           {scenarioId === "incomplete-evidence" && (
             <StatusBadge label="Evidence review mode" tone="warn" />
           )}
-          {selectedFarm && selectedBlock && (
+          {selectedFarm && selectedBlock && !scopeSelectionPending && (
             <StatusBadge label={`Scope: ${selectedFarm} / ${selectedBlock}`} tone="ok" />
+          )}
+          {scopeSelectionPending && (
+            <StatusBadge label="Scope selection pending — select block to analyze" tone="warn" />
           )}
         </div>
       </div>

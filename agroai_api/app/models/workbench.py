@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 SourceKind = Literal[
     "controller_events",
@@ -60,6 +60,20 @@ class WorkbenchAnalysisRequest(BaseModel):
     selected_farm: Optional[str] = None
     selected_block: Optional[str] = None
     location: Optional[str] = None
+
+    @model_validator(mode="after")
+    def validate_scope_pair(self) -> "WorkbenchAnalysisRequest":
+        farm = (self.selected_farm or "").strip()
+        block = (self.selected_block or "").strip()
+        if bool(farm) != bool(block):
+            provided = "selected_farm" if farm else "selected_block"
+            missing = "selected_block" if farm else "selected_farm"
+            raise ValueError(
+                f"Partial scope is not allowed. '{provided}' was supplied without '{missing}'. "
+                "Supply both selected_farm and selected_block for explicit scope analysis, "
+                "or omit both to use the default scope."
+            )
+        return self
     notes: Optional[str] = None
     language: Optional[str] = None
     user_role: Optional[str] = None

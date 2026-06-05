@@ -7,6 +7,11 @@ import { ProviderStatusList } from "./ProviderStatusList";
 
 type Tab = "connected" | "upload" | "api" | "partner";
 
+function handleFiles(files: FileList | null) {
+  if (!files || files.length === 0) return;
+  void actions.uploadFiles(Array.from(files));
+}
+
 const TABS: { id: Tab; label: string }[] = [
   { id: "connected", label: "Connected systems" },
   { id: "upload", label: "Upload records" },
@@ -25,6 +30,7 @@ export function SourceDrawer() {
   const [tab, setTab] = useState<Tab>("connected");
   const [briefProvider, setBriefProvider] = useState<string | null>(null);
   const uploaded = useCommandStore((s) => s.uploaded);
+  const uploadedPackageArtifacts = useCommandStore((s) => s.uploadedPackageArtifacts);
   const fileRef = useRef<HTMLInputElement>(null);
 
   return (
@@ -61,55 +67,53 @@ export function SourceDrawer() {
 
             {tab === "upload" && (
               <div className="drawer-upload">
-                <p className="muted">Accepted: CSV, XLSX, JSON, TXT.</p>
+                <p className="muted">Accepted: CSV, XLSX, JSON, TXT. Select multiple files to build a package.</p>
                 <label
                   className="dropzone"
                   onDragOver={(e) => e.preventDefault()}
                   onDrop={(e) => {
                     e.preventDefault();
-                    const f = e.dataTransfer.files?.[0];
-                    if (f) actions.uploadRecords(f);
+                    handleFiles(e.dataTransfer.files);
                   }}
                 >
                   <input
                     ref={fileRef}
                     type="file"
+                    multiple
                     className="visually-hidden"
                     accept=".csv,.json,.txt,.xlsx,text/csv,application/json,text/plain"
                     onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      if (f) actions.uploadRecords(f);
+                      handleFiles(e.target.files);
+                      // Reset so the same file can be re-selected after a package reset.
+                      if (fileRef.current) fileRef.current.value = "";
                     }}
                   />
-                  <strong>Drop a file or browse</strong>
-                  <span className="muted">Records are processed through the Workbench upload route.</span>
+                  <strong>Drop files or browse</strong>
+                  <span className="muted">All files are appended to the current package session.</span>
                 </label>
-                {uploaded && (
+                {uploadedPackageArtifacts.length > 0 && (
+                  <div className="upload-package-list">
+                    <p className="upload-package-heading">Package ({uploadedPackageArtifacts.length} {uploadedPackageArtifacts.length === 1 ? "file" : "files"})</p>
+                    {uploadedPackageArtifacts.map((a, i) => (
+                      <div key={i} className="upload-package-item">
+                        <span className="identifier upload-package-name">{a.name}</span>
+                        <span className="muted">{a.detectedType}</span>
+                        <span className="muted">{a.parseStatus}</span>
+                        {a.rows !== "—" && <span className="muted">{a.rows} rows</span>}
+                      </div>
+                    ))}
+                    <button className="btn ghost compact upload-new-package-btn" onClick={() => actions.startNewPackage()}>
+                      Start new package
+                    </button>
+                  </div>
+                )}
+                {!uploadedPackageArtifacts.length && uploaded && (
                   <dl className="brief-def">
-                    <div>
-                      <dt>Uploaded file</dt>
-                      <dd className="identifier">{uploaded.name}</dd>
-                    </div>
-                    <div>
-                      <dt>Detected source type</dt>
-                      <dd>{uploaded.detectedType}</dd>
-                    </div>
-                    <div>
-                      <dt>Parse status</dt>
-                      <dd>{uploaded.parseStatus}</dd>
-                    </div>
-                    <div>
-                      <dt>Rows detected</dt>
-                      <dd>{uploaded.rows}</dd>
-                    </div>
-                    <div>
-                      <dt>Fields mapped</dt>
-                      <dd>{uploaded.fields}</dd>
-                    </div>
-                    <div>
-                      <dt>Warnings</dt>
-                      <dd>{uploaded.warnings}</dd>
-                    </div>
+                    <div><dt>File</dt><dd className="identifier">{uploaded.name}</dd></div>
+                    <div><dt>Type</dt><dd>{uploaded.detectedType}</dd></div>
+                    <div><dt>Status</dt><dd>{uploaded.parseStatus}</dd></div>
+                    <div><dt>Rows</dt><dd>{uploaded.rows}</dd></div>
+                    <div><dt>Warnings</dt><dd>{uploaded.warnings}</dd></div>
                   </dl>
                 )}
               </div>

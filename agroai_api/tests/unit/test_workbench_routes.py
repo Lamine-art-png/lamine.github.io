@@ -1275,8 +1275,8 @@ def test_farm_a_satellite_never_satisfies_farm_b(client):
 
 # --- Section 9 (ninth pass): partial scope, regional isolation, reconciliation, error message ---
 
-def test_only_selected_farm_without_block_returns_warning(client):
-    """Providing selected_farm without selected_block must produce a warning, not a silent fallback."""
+def test_only_selected_farm_without_block_is_rejected(client):
+    """selected_farm without selected_block must be rejected with HTTP 422 — fail closed, no silent fallback."""
     from io import BytesIO
     profile = b'''[
         {"farm": "Farm A", "block": "Block 1", "crop": "grapes"},
@@ -1286,27 +1286,30 @@ def test_only_selected_farm_without_block_returns_warning(client):
     client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
     r = client.post(f'/v1/workbench/sessions/{s}/analyze',
                     json={'session_id': s, 'mode': 'uploaded', 'selected_farm': 'Farm A'})
-    assert r.status_code == 200
-    warnings = r.json().get('warnings', [])
-    assert any('selected_farm' in w and 'selected_block' in w for w in warnings), (
-        f"Expected partial-scope warning, got: {warnings}")
-    # Must not silently use default Alpha Vineyard
-    ctx = r.json()['normalized_context']
-    assert ctx['farm'] == 'Farm A', f"Farm must be the explicitly requested Farm A, got: {ctx['farm']!r}"
+    # Must be rejected — not silently defaulted to first block or Alpha Vineyard.
+    assert r.status_code == 422, (
+        f"Partial scope (farm only) must be rejected with 422, got {r.status_code}: {r.text[:200]}")
+    body = r.json()
+    err_text = str(body).lower()
+    assert 'selected_block' in err_text or 'partial scope' in err_text, (
+        f"Error must explain partial scope requirement, got: {body}")
 
 
-def test_only_selected_block_without_farm_returns_warning(client):
-    """Providing selected_block without selected_farm must produce a warning."""
+def test_only_selected_block_without_farm_is_rejected(client):
+    """selected_block without selected_farm must be rejected with HTTP 422 — fail closed, no representative fallback."""
     from io import BytesIO
     profile = b'[{"farm": "Farm A", "block": "Block 1", "crop": "grapes"}]'
     s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
     client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
     r = client.post(f'/v1/workbench/sessions/{s}/analyze',
                     json={'session_id': s, 'mode': 'uploaded', 'selected_block': 'Block 1'})
-    assert r.status_code == 200
-    warnings = r.json().get('warnings', [])
-    assert any('selected_block' in w or 'Both are required' in w for w in warnings), (
-        f"Expected partial-scope warning, got: {warnings}")
+    # Must be rejected — not silently defaulted to Alpha Vineyard or any other representative.
+    assert r.status_code == 422, (
+        f"Partial scope (block only) must be rejected with 422, got {r.status_code}: {r.text[:200]}")
+    body = r.json()
+    err_text = str(body).lower()
+    assert 'selected_farm' in err_text or 'partial scope' in err_text, (
+        f"Error must explain partial scope requirement, got: {body}")
 
 
 def test_available_farms_and_blocks_returned_in_normalized_context(client):
@@ -1471,3 +1474,155 @@ def test_live_reconciliation_interpretation_is_pending(client):
     assert 'live provider request' in interp.lower(), (
         f"Live result must contain 'live provider request' in interpretation, got: {interp!r}"
     )
+
+
+# ===========================================================================
+# Section 10 (tenth pass): Fail-closed scope, regional withholding, field notes
+# ===========================================================================
+
+def test_partial_scope_farm_only_rejects_with_422(client):
+    """selected_farm without selected_block must return 422, not silently default."""
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    r = client.post(f'/v1/workbench/sessions/{s}/analyze',
+                    json={'session_id': s, 'mode': 'uploaded', 'selected_farm': 'Farm A'})
+    assert r.status_code == 422, f"Expected 422 for farm-only scope, got {r.status_code}"
+
+
+def test_partial_scope_block_only_rejects_with_422(client):
+    """selected_block without selected_farm must return 422, not fall back to representative."""
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    r = client.post(f'/v1/workbench/sessions/{s}/analyze',
+                    json={'session_id': s, 'mode': 'uploaded', 'selected_block': 'Block 1'})
+    assert r.status_code == 422, f"Expected 422 for block-only scope, got {r.status_code}"
+
+
+def test_regionless_weather_withheld_when_profile_has_no_region(client):
+    """Weather rows must not enter operational context when crop profile has no region."""
+    from io import BytesIO
+    # Profile with NO region
+    profile = b'[{"farm":"Test Farm","block":"Test Block","crop":"grapes"}]'
+    weather = b'timestamp,region,eto_mm,rain_forecast_mm\n2026-05-15T12:00:00Z,Region A,6.5,0\n'
+
+    s_with = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    client.post(f'/v1/workbench/sessions/{s_with}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
+    client.post(f'/v1/workbench/sessions/{s_with}/upload', files={'file': ('weather_summary.csv', BytesIO(weather), 'text/csv')})
+    r_with = client.post(f'/v1/workbench/sessions/{s_with}/analyze', json={'session_id': s_with, 'mode': 'uploaded'})
+
+    s_without = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    client.post(f'/v1/workbench/sessions/{s_without}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
+    r_without = client.post(f'/v1/workbench/sessions/{s_without}/analyze', json={'session_id': s_without, 'mode': 'uploaded'})
+
+    sig_with = r_with.json()['normalized_context']['normalized_signal_count']
+    sig_without = r_without.json()['normalized_context']['normalized_signal_count']
+    assert sig_with == sig_without, (
+        f"Regionless weather must not enter signal count: with={sig_with}, without={sig_without}")
+    # Must include a warning about region mapping
+    warnings = r_with.json().get('warnings', [])
+    assert any('region mapping' in w.lower() for w in warnings), (
+        f"Must warn about region mapping requirement, got: {warnings}")
+
+
+def test_regionless_water_cost_withheld_when_profile_has_no_region(client):
+    """Water-cost rows must not enter operational context when crop profile has no region."""
+    from io import BytesIO
+    profile = b'[{"farm":"Test Farm","block":"Test Block","crop":"grapes"}]'
+    costs = b'region,water_source,cost_per_acre_ft\nRegion A,Canal,85\n'
+
+    s_with = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    client.post(f'/v1/workbench/sessions/{s_with}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
+    client.post(f'/v1/workbench/sessions/{s_with}/upload', files={'file': ('water_costs.csv', BytesIO(costs), 'text/csv')})
+    r_with = client.post(f'/v1/workbench/sessions/{s_with}/analyze', json={'session_id': s_with, 'mode': 'uploaded'})
+
+    s_without = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    client.post(f'/v1/workbench/sessions/{s_without}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
+    r_without = client.post(f'/v1/workbench/sessions/{s_without}/analyze', json={'session_id': s_without, 'mode': 'uploaded'})
+
+    sig_with = r_with.json()['normalized_context']['normalized_signal_count']
+    sig_without = r_without.json()['normalized_context']['normalized_signal_count']
+    assert sig_with == sig_without, (
+        f"Regionless water costs must not enter signal count: with={sig_with}, without={sig_without}")
+    warnings = r_with.json().get('warnings', [])
+    assert any('region mapping' in w.lower() for w in warnings), (
+        f"Must warn about region mapping requirement, got: {warnings}")
+
+
+def test_matched_field_note_contributes_to_selected_source_kinds(client):
+    """A TXT field note containing both farm and block must appear in selected_source_kinds."""
+    from io import BytesIO
+    profile = b'[{"farm":"Farm A","block":"Block 1","crop":"grapes"}]'
+    # Note contains both farm and block identifiers
+    note = b'Farm A Block 1: Plant stress observed in east rows, afternoon wilting.'
+
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('field_notes.txt', BytesIO(note), 'text/plain')})
+    r = client.post(f'/v1/workbench/sessions/{s}/analyze',
+                    json={'session_id': s, 'mode': 'uploaded', 'selected_farm': 'Farm A', 'selected_block': 'Block 1'})
+    assert r.status_code == 200
+    nc = r.json()['normalized_context']
+    selected_kinds = nc.get('selected_source_kinds', [])
+    assert 'field_notes' in selected_kinds, (
+        f"Matched field note must appear in selected_source_kinds, got: {selected_kinds}")
+
+
+def test_unmatched_farm_field_note_does_not_contribute(client):
+    """A TXT field note from Farm A must not contribute to a Farm B / Block B analysis."""
+    from io import BytesIO
+    profile = b'[{"farm":"Farm A","block":"Block A","crop":"grapes"},{"farm":"Farm B","block":"Block B","crop":"almonds"}]'
+    # Note mentions Farm A only
+    note = b'Farm A Block A: minor stress, no irrigation needed.'
+
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('field_notes.txt', BytesIO(note), 'text/plain')})
+    r = client.post(f'/v1/workbench/sessions/{s}/analyze',
+                    json={'session_id': s, 'mode': 'uploaded', 'selected_farm': 'Farm B', 'selected_block': 'Block B'})
+    assert r.status_code == 200
+    nc = r.json()['normalized_context']
+    selected_kinds = nc.get('selected_source_kinds', [])
+    assert 'field_notes' not in selected_kinds, (
+        f"Farm A field note must not appear in Farm B selected_source_kinds, got: {selected_kinds}")
+
+
+def test_unattributed_field_note_does_not_contribute(client):
+    """A TXT note without farm or block identifiers must not appear in selected_source_kinds."""
+    from io import BytesIO
+    profile = b'[{"farm":"Farm A","block":"Block 1","crop":"grapes"}]'
+    note = b'General observation: some stress noted in the field today.'
+
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('field_notes.txt', BytesIO(note), 'text/plain')})
+    r = client.post(f'/v1/workbench/sessions/{s}/analyze',
+                    json={'session_id': s, 'mode': 'uploaded', 'selected_farm': 'Farm A', 'selected_block': 'Block 1'})
+    assert r.status_code == 200
+    nc = r.json()['normalized_context']
+    selected_kinds = nc.get('selected_source_kinds', [])
+    assert 'field_notes' not in selected_kinds, (
+        f"Unattributed field note must not appear in selected_source_kinds, got: {selected_kinds}")
+
+
+def test_selected_source_kinds_used_in_trace_not_package_wide(client):
+    """_analysis_trace source_count must use selected_source_kinds, not package_source_kinds."""
+    from io import BytesIO
+    # Upload profile for Farm B only; include Farm A weather that won't match scope
+    profile = b'[{"farm":"Farm A","block":"Block 1","crop":"grapes"},{"farm":"Farm B","block":"Block 2","crop":"almonds"}]'
+    # Soil from Farm A only — should not contribute to Farm B selected_source_kinds
+    soil_a = (
+        b'timestamp,farm,block,depth_cm,moisture_percent,deficit_percent,sensor_health\n'
+        b'2026-05-15T06:00:00Z,Farm A,Block 1,30,28.0,40,healthy\n'
+    )
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('soil_moisture.csv', BytesIO(soil_a), 'text/csv')})
+    r = client.post(f'/v1/workbench/sessions/{s}/analyze',
+                    json={'session_id': s, 'mode': 'uploaded', 'selected_farm': 'Farm B', 'selected_block': 'Block 2'})
+    assert r.status_code == 200
+    nc = r.json()['normalized_context']
+    # Farm B has no soil data — soil_moisture must not appear in selected_source_kinds
+    selected = nc.get('selected_source_kinds', [])
+    package = nc.get('package_source_kinds', [])
+    assert 'soil_moisture' not in selected, (
+        f"Farm A soil must not appear in Farm B selected_source_kinds, got: {selected}")
+    assert 'soil_moisture' in package, (
+        f"soil_moisture should still appear in package_source_kinds, got: {package}")

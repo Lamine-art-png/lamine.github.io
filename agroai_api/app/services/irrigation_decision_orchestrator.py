@@ -192,7 +192,7 @@ def _manual_payload_from_workbench(context: Dict[str, Any]) -> Dict[str, Any]:
             "events_last_7_days": metrics.get("controller_event_count"),
         },
         "field_observations": context.get("field_notes", []),
-        "confidence_inputs": context.get("source_kinds", []),
+        "confidence_inputs": context.get("selected_source_kinds", context.get("source_kinds", [])),
     }
 
 
