@@ -1311,3 +1311,42 @@ test("validateSensor: sensor with no mapping identifiers has null fieldMappingVa
   assert.equal(result.fieldMappingValid, null, "no mapping identifiers must yield null fieldMappingValid");
   assert.equal(result.hardenedForBypass, true, "no mapping identifiers must not prevent hardenedForBypass");
 });
+
+// ── config: app-local storage paths ──────────────────────────────────────────
+
+test("config: default storage paths are inside apps/velia-ai-api/src/storage regardless of cwd", () => {
+  const cfg = getConfig();
+  const appStorageMarker = ["apps", "velia-ai-api", "src", "storage"].join(path.sep);
+  assert.ok(cfg.memoryFile.includes(appStorageMarker), `memoryFile ${cfg.memoryFile} must be under apps/velia-ai-api/src/storage`);
+  assert.ok(cfg.vectorIndexFile.includes(appStorageMarker), `vectorIndexFile ${cfg.vectorIndexFile} must be under apps/velia-ai-api/src/storage`);
+  assert.ok(cfg.weatherCacheFile.includes(appStorageMarker), `weatherCacheFile ${cfg.weatherCacheFile} must be under apps/velia-ai-api/src/storage`);
+});
+
+test("config: default storage paths are absolute", () => {
+  const cfg = getConfig();
+  assert.ok(path.isAbsolute(cfg.memoryFile), "memoryFile default must be absolute");
+  assert.ok(path.isAbsolute(cfg.vectorIndexFile), "vectorIndexFile default must be absolute");
+  assert.ok(path.isAbsolute(cfg.weatherCacheFile), "weatherCacheFile default must be absolute");
+});
+
+test("config: MEMORY_FILE env-var override is respected", () => {
+  const original = process.env.MEMORY_FILE;
+  try {
+    process.env.MEMORY_FILE = "/tmp/test-override/memory.json";
+    assert.equal(getConfig().memoryFile, "/tmp/test-override/memory.json");
+  } finally {
+    if (original === undefined) delete process.env.MEMORY_FILE;
+    else process.env.MEMORY_FILE = original;
+  }
+});
+
+test("config: VECTOR_INDEX_FILE env-var override is respected", () => {
+  const original = process.env.VECTOR_INDEX_FILE;
+  try {
+    process.env.VECTOR_INDEX_FILE = "/tmp/test-override/vector-index.json";
+    assert.equal(getConfig().vectorIndexFile, "/tmp/test-override/vector-index.json");
+  } finally {
+    if (original === undefined) delete process.env.VECTOR_INDEX_FILE;
+    else process.env.VECTOR_INDEX_FILE = original;
+  }
+});

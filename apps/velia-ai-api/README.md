@@ -40,9 +40,9 @@ Copy `.env.example` to `.env` for local configuration. If no provider keys are s
 - `TRANSLATION_PROVIDER` (default `mock`)
 - `VECTOR_PROVIDER` (default `local`)
 - `MEMORY_PROVIDER` (default `json`)
-- `MEMORY_FILE` (default `./src/storage/memory.json`)
-- `VECTOR_INDEX_FILE` (default `./src/storage/vector-index.json`)
-- `WEATHER_CACHE_FILE` (default `./src/storage/weather-cache.json`)
+- `MEMORY_FILE` (default `<app-root>/src/storage/memory.json`, absolute path derived from module location — not cwd-dependent)
+- `VECTOR_INDEX_FILE` (default `<app-root>/src/storage/vector-index.json`)
+- `WEATHER_CACHE_FILE` (default `<app-root>/src/storage/weather-cache.json`)
 - `PROVIDER_TIMEOUT_MS`, `PROVIDER_RETRY_COUNT`
 
 Provider API keys are backend-only. Do not place these values in `apps/velia-mobile`, service worker code, static HTML, or frontend local storage.
@@ -94,9 +94,18 @@ GitHub Actions runs on push to `main`, `claude/**`, `codex/**`, and PRs to `main
 - Evaluation harness (40 fixtures)
 - Mobile syntax check and tests
 
+## Boot sequence
+
+`server.js` explicitly awaits optional dotenv loading before any config properties are read:
+
+1. `loadDotenv()` — resolves `dotenv/config` in two steps (resolve then import). If dotenv/config is absent, the step is skipped silently. Transitive dependency errors and module-evaluation failures propagate. Config-dependent modules use lazy singletons so env-var overrides remain effective even when set via `.env`.
+2. Express app is created; if unavailable, the process falls back to a built-in Node.js handler that serves the same API surface.
+
 ## Local persistence (development only)
 
-Development mode uses JSON files under `src/storage/`:
+Development storage defaults resolve relative to `apps/velia-ai-api/src/storage/` regardless of the shell's working directory. Use the env-var overrides to relocate them.
+
+JSON files written in development:
 
 - memory events and recurring patterns (`MEMORY_PROVIDER=json`)
 - local vector index (`VECTOR_PROVIDER=local`)

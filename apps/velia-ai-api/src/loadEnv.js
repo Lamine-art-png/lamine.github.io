@@ -1,16 +1,25 @@
-// Optional dotenv loader — keeps the fallback server bootable when node_modules are absent.
-// Exported for unit testing with a mock importFn; the default uses the real dynamic import.
+import { createRequire } from "module";
 
-export async function loadDotenv(importFn = async (specifier) => import(specifier)) {
+// Two-step design:
+//   resolveFn — checks whether dotenv/config itself exists; MODULE_NOT_FOUND here means dotenv is absent.
+//   importFn  — executes the resolved module; any error here (transitive deps, eval failures) propagates.
+// Does not auto-run; server.js awaits loadDotenv() explicitly before importing config-dependent modules.
+const _defaultResolve = createRequire(import.meta.url).resolve;
+
+export async function loadDotenv({
+  resolveFn = (s) => _defaultResolve(s),
+  importFn = async (url) => import(url),
+} = {}) {
+  let resolved;
   try {
-    await importFn("dotenv/config");
+    resolved = resolveFn("dotenv/config");
   } catch (err) {
-    // MODULE_NOT_FOUND  — CJS resolution (Node ≤18 compat)
-    // ERR_MODULE_NOT_FOUND — ESM resolution (Node 20+)
+    // MODULE_NOT_FOUND  — CJS resolver (Node ≤18 compat, require.resolve)
+    // ERR_MODULE_NOT_FOUND — ESM resolver (Node 20+, import.meta.resolve)
+    // Both mean dotenv/config itself is absent — tolerated gracefully.
     if (err?.code === "MODULE_NOT_FOUND" || err?.code === "ERR_MODULE_NOT_FOUND") return;
     throw err;
   }
+  // dotenv/config is present — execute it. Transitive MODULE_NOT_FOUND and eval errors propagate.
+  await importFn(resolved);
 }
-
-// Run at module evaluation so env vars are populated before any config property is accessed.
-await loadDotenv();

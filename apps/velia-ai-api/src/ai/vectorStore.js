@@ -9,4 +9,11 @@ function createVectorStore() {
   return new LocalVectorStoreProvider({ filePath: config.vectorIndexFile });
 }
 
-export const vectorStore = createVectorStore();
+// Lazy singleton — config (including VECTOR_INDEX_FILE) is read on first use, not at module eval.
+let _instance = null;
+export const vectorStore = new Proxy({}, {
+  get(_t, prop) {
+    if (!_instance) _instance = createVectorStore();
+    return _instance[prop];
+  },
+});
