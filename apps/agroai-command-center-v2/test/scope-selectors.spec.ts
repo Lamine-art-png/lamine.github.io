@@ -61,6 +61,9 @@ function makeAnalysisResult(
       area_unit: "ha",
       selected_farm: farm,
       selected_block: block,
+      // Canonical scope fields — mimic 13th-pass backend for all analyses.
+      canonical_analyzed_farm: farm,
+      canonical_analyzed_block: block,
       scope_defaulted: false,
       scope_defaulted_farm: null,
       scope_defaulted_block: null,
@@ -165,6 +168,54 @@ async function mockWorkbenchRoutes(page: import("@playwright/test").Page) {
   });
   await page.route("**/v1/workbench/sessions/*/upload", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(MOCK_UPLOAD_ARTIFACT) });
+  });
+  // Evidence-chain GET: return a scoped evidence chain.
+  await page.route("**/v1/workbench/sessions/*/evidence-chain**", async (route) => {
+    const url = new URL(route.request().url());
+    const farm = url.searchParams.get("selected_farm") ?? "Alpha Vineyard";
+    const block = url.searchParams.get("selected_block") ?? "Block A North";
+    await route.fulfill({
+      status: 200, contentType: "application/json",
+      body: JSON.stringify({
+        session_id: "mock-session-1",
+        scope: { selected_farm: farm, selected_block: block },
+        scope_status: "analyzed",
+        evidence_chain: [
+          { key: "recommended", label: "Recommended", status: "Complete", owner: "AGRO-AI Workbench", timestamp: "2026-06-05T10:00:00Z", evidence: "Verified water decision prepared from the current source package.", evidence_type: "system_generated" },
+          { key: "scheduled", label: "Scheduled", status: "Pending", owner: "Operations user", timestamp: "", evidence: "Scheduled pending" },
+          { key: "applied", label: "Applied", status: "Pending", owner: "Operations user", timestamp: "", evidence: "Applied pending" },
+          { key: "observed", label: "Observed", status: "Pending", owner: "Operations user", timestamp: "", evidence: "Observed pending" },
+          { key: "verified", label: "Verified", status: "Pending", owner: "Operations user", timestamp: "", evidence: "Verified pending" },
+        ],
+        audit_events: [],
+      }),
+    });
+  });
+  // Actions (schedule/applied/observe/verify): return a success response with scope echoed.
+  await page.route("**/v1/workbench/sessions/*/actions/**", async (route) => {
+    let body: Record<string, unknown> = {};
+    try { body = JSON.parse(route.request().postData() || "{}"); } catch { /* use empty */ }
+    const farm = (body.selected_farm as string) || "";
+    const block = (body.selected_block as string) || "";
+    await route.fulfill({
+      status: 200, contentType: "application/json",
+      body: JSON.stringify({
+        action_status: "recorded", timestamp: "2026-06-05T10:01:00Z",
+        actor: body.actor || "Operations user",
+        evidence_type: "operator_attestation",
+        evidence_summary: "Schedule approval recorded.",
+        selected_farm: farm,
+        selected_block: block,
+        updated_evidence_chain: [
+          { key: "recommended", label: "Recommended", status: "Complete", owner: "AGRO-AI Workbench", timestamp: "2026-06-05T10:00:00Z", evidence: "Verified water decision." },
+          { key: "scheduled", label: "Scheduled", status: "Complete", owner: body.actor || "Operations user", timestamp: "2026-06-05T10:01:00Z", evidence: "Schedule approval recorded." },
+          { key: "applied", label: "Applied", status: "Pending", owner: "Operations user", timestamp: "", evidence: "Applied pending" },
+          { key: "observed", label: "Observed", status: "Pending", owner: "Operations user", timestamp: "", evidence: "Observed pending" },
+          { key: "verified", label: "Verified", status: "Pending", owner: "Operations user", timestamp: "", evidence: "Verified pending" },
+        ],
+        audit_event: { time: "2026-06-05T10:01:00Z", event: "Evidence action recorded: scheduled", actor: body.actor || "Operations user", selected_farm: farm, selected_block: block },
+      }),
+    });
   });
   await page.route("**/v1/health**", async (route) => {
     await route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ status: "available" }) });
@@ -357,6 +408,44 @@ test.describe("Scope selectors (mocked backend — deterministic)", () => {
       await expect(page.locator(".upload-package-item")).toHaveCount(0);
       // Decision card must show empty-package notice
       await expect(page.locator("[data-testid='empty-package-notice']")).toBeVisible({ timeout: 5000 });
+    }
+  });
+
+  test("Approve schedule POST body includes correct farm and block scope", async ({ page }) => {
+    // Intercept the schedule action POST to verify it sends selected_farm + selected_block.
+    const scheduleRequests: Array<{ farm: string; block: string }> = [];
+    await page.route("**/v1/workbench/sessions/*/actions/schedule", async (route) => {
+      let body: Record<string, unknown> = {};
+      try { body = JSON.parse(route.request().postData() || "{}"); } catch { /* empty */ }
+      scheduleRequests.push({
+        farm: (body.selected_farm as string) || "",
+        block: (body.selected_block as string) || "",
+      });
+      await route.fulfill({
+        status: 200, contentType: "application/json",
+        body: JSON.stringify({
+          action_status: "recorded", timestamp: "2026-06-05T10:01:00Z",
+          actor: "Operations user", evidence_type: "operator_attestation",
+          evidence_summary: "Schedule approval recorded.",
+          selected_farm: body.selected_farm, selected_block: body.selected_block,
+          updated_evidence_chain: [],
+          audit_event: { time: "2026-06-05T10:01:00Z", event: "Evidence action recorded: scheduled" },
+        }),
+      });
+    });
+    // Select Block A North (schedulable) and wait for analysis.
+    await page.getByRole("combobox", { name: "Select farm" }).selectOption("Alpha Vineyard");
+    await page.getByRole("combobox", { name: "Select block" }).selectOption("Block A North");
+    await expect(page.locator(".decision-headline")).toContainText(/Block A North/, { timeout: 10000 });
+    // Click Approve schedule if it's enabled.
+    const approveBtn = page.getByRole("button", { name: "Approve schedule" });
+    if (await approveBtn.count() > 0 && !(await approveBtn.isDisabled())) {
+      await approveBtn.click();
+      await page.waitForTimeout(500);
+      // Verify the intercepted request included the correct scope.
+      expect(scheduleRequests.length).toBeGreaterThan(0);
+      expect(scheduleRequests[0].farm).toBe("Alpha Vineyard");
+      expect(scheduleRequests[0].block).toBe("Block A North");
     }
   });
 

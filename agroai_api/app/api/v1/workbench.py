@@ -145,8 +145,14 @@ def verify_action(session_id: str, payload: WorkbenchActionRequest):
 
 @router.get('/sessions/{session_id}/evidence-chain')
 def evidence_chain(session_id: str, selected_farm: str | None = None, selected_block: str | None = None):
+    farm = (selected_farm or "").strip() or None
+    block = (selected_block or "").strip() or None
+    if bool(farm) != bool(block):
+        provided = "selected_farm" if farm else "selected_block"
+        missing = "selected_block" if farm else "selected_farm"
+        raise HTTPException(422, f"Partial scope: '{provided}' provided without '{missing}'. Supply both or neither.")
     try:
-        return engine.get_evidence_chain(session_id, selected_farm=selected_farm, selected_block=selected_block)
+        return engine.get_evidence_chain(session_id, selected_farm=farm, selected_block=block)
     except KeyError:
         raise HTTPException(404, "Session not found")
 

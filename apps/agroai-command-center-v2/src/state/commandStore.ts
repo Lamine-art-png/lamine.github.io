@@ -594,6 +594,9 @@ const listeners = new Set<() => void>();
 // Monotonic counter — incremented on every selection change (farm, block, reset, scenario switch).
 // Any in-flight scope request whose captured gen no longer matches is discarded.
 let _scopeAnalysisGen = 0;
+// Package-level generation counter — incremented on startNewPackage, switchScenario,
+// setSelectedFarm, and new-package upload starts. Guards stale async responses.
+let _packageGen = 0;
 let switchGen = 0; // incremented each time switchScenario is called; guards stale async results
 
 function emit() {
@@ -615,6 +618,27 @@ function toast(message: string) {
   setTimeout(() => {
     if (state.toast === message) set({ toast: null });
   }, 3200);
+}
+
+// Fetch the scoped evidence chain from the backend and update both the active
+// evidence display and the per-scope cache. Safe to call speculatively — ignored
+// when the session or scope no longer matches the current state.
+async function hydrateEvidenceChain(sessionId: string, farm: string, block: string) {
+  if (!sessionId || !farm || !block) return;
+  try {
+    const res = await apiClient.getEvidenceChain(sessionId, farm, block);
+    if (!res.ok || !res.data?.evidence_chain) return;
+    const chain = res.data.evidence_chain as EvidenceStep[];
+    const scopeKey = `${farm}||${block}`;
+    // Only apply if this session/scope is still current.
+    if (state.sessionId !== sessionId) return;
+    set({ blockEvidenceChains: { ...state.blockEvidenceChains, [scopeKey]: chain } });
+    if (state.activeAnalyzedFarm === farm && state.activeAnalyzedBlock === block) {
+      set({ evidence: chain });
+    }
+  } catch {
+    // Hydration failure is non-fatal; cached or base evidence remains.
+  }
 }
 
 // ---- Backend mapping ------------------------------------------------------
@@ -973,6 +997,12 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
   const backendSources = useRepresentative ? null : buildBackendSources(result);
   const backendReconciliation = useRepresentative ? null : buildBackendReconciliation(result);
 
+  // Derive canonical analyzed farm/block from the backend's normalized context.
+  // canonical_analyzed_farm/block are always set by the 13th-pass backend even when
+  // selected_farm/selected_block were omitted from the analysis request.
+  const canonicalFarm = (nc.canonical_analyzed_farm as string) || (nc.farm as string) || null;
+  const canonicalBlock = (nc.canonical_analyzed_block as string) || (nc.block as string) || null;
+
   set({
     analysisMode: mode,
     analysisPhase: "complete",
@@ -989,9 +1019,23 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
     scopeDefaulted,
     scopeDefaultedFarm,
     scopeDefaultedBlock,
+    // Set canonical analyzed scope from backend response — clears stale/pending flags.
+    ...(canonicalFarm && canonicalBlock ? {
+      activeAnalyzedFarm: canonicalFarm,
+      activeAnalyzedBlock: canonicalBlock,
+      resultStale: false,
+      packageAwaitingAnalysis: false,
+      scopeSelectionPending: false,
+    } : {}),
     ...(backendSources ? { sources: backendSources } : {}),
     ...(backendReconciliation ? { reconciliation: backendReconciliation } : {}),
   });
+
+  // Hydrate evidence chain from backend for the canonical scope.
+  const hydrateSessionId = result.session_id || state.sessionId;
+  if (canonicalFarm && canonicalBlock && hydrateSessionId) {
+    void hydrateEvidenceChain(hydrateSessionId, canonicalFarm, canonicalBlock);
+  }
 }
 
 // ---- Public actions -------------------------------------------------------
@@ -1080,9 +1124,10 @@ export const actions = {
   },
 
   async switchScenario(id: ScenarioId) {
-    // Increment both generations so any in-flight scope or switch calls from prior scenario are discarded.
+    // Increment all generations so any in-flight scope or switch calls from prior scenario are discarded.
     switchGen++;
     _scopeAnalysisGen++;
+    _packageGen++;
     const gen = switchGen;
 
     // Set local representative state immediately so the UI reflects the new scenario
@@ -1276,6 +1321,7 @@ export const actions = {
     // Never mix a representative sample session with a user-uploaded package session.
     let sessionId = state.uploadedPackageSessionId ?? "";
     if (!sessionId) {
+      _packageGen++; // new package start — invalidate any prior async responses
       let created;
       try {
         created = await apiClient.createSession("uploaded");
@@ -1388,6 +1434,7 @@ export const actions = {
   // Reset the upload package — all prior decisions are withheld until a new package is uploaded and analyzed.
   startNewPackage() {
     _scopeAnalysisGen++;
+    _packageGen++;
     set({
       sessionId: null,
       uploadedPackageSessionId: null,
@@ -1407,7 +1454,10 @@ export const actions = {
       resultStale: true,
       packageAwaitingAnalysis: true,
       blockEvidenceChains: {},
-      // Replace prior decision with withheld empty-package state.
+      // Truthful empty-package state: no package loaded, awaiting source files.
+      analysisMode: "uploaded",
+      recommendationOrigin: "insufficient_context",
+      displayFarmName: "No package loaded",
       decision: EMPTY_PACKAGE_DECISION,
       evidence: emptyPackageEvidence(),
       sources: [],
@@ -1431,6 +1481,7 @@ export const actions = {
   setSelectedFarm(farm: string | null) {
     // Changing farm clears block, stale metadata, marks scope pending, and invalidates in-flight scope requests.
     _scopeAnalysisGen++;
+    _packageGen++;
     set({ selectedFarm: farm, selectedBlock: null, backendMeta: null, scopeSelectionPending: farm !== null });
     addAudit("Farm scope selected", `Selected farm: ${farm ?? "none"}`);
   },
@@ -1477,6 +1528,8 @@ export const actions = {
       if (!isCurrentRequest()) return; // discard — superseded by newer selection
       if (res.ok && res.data) {
         applyBackendResult(res.data, state.analysisMode);
+        // applyBackendResult sets activeAnalyzedFarm/Block from canonical context;
+        // also override with the explicitly requested scope to be safe.
         set({
           activeAnalyzedFarm: capturedFarm,
           activeAnalyzedBlock: capturedBlock,
@@ -1488,6 +1541,8 @@ export const actions = {
         const scopeKey = `${capturedFarm}||${capturedBlock}`;
         const cachedChain = state.blockEvidenceChains[scopeKey];
         if (cachedChain) set({ evidence: cachedChain });
+        // Hydrate evidence chain from backend for the re-analyzed scope.
+        void hydrateEvidenceChain(capturedSessionId, capturedFarm, capturedBlock);
         addAudit("Scope re-analysis completed", `Analysis updated for ${capturedFarm} / ${capturedBlock}.`);
         toast("Analysis updated for selected scope.");
         return;
@@ -1533,6 +1588,21 @@ export const actions = {
       return;
     }
     // Uploaded and live origins must never advance local state without backend persistence.
+    if (state.packageAwaitingAnalysis) {
+      addAudit("Evidence step not recorded", "No package analyzed — upload source files and run analysis before recording evidence.");
+      toast("Evidence step was not recorded. Upload source files first.");
+      return;
+    }
+    if (state.resultStale) {
+      addAudit("Evidence step not recorded", "Decision is stale — re-analyze before recording evidence.");
+      toast("Evidence step was not recorded. Re-analyze to refresh the decision.");
+      return;
+    }
+    if (!state.activeAnalyzedFarm || !state.activeAnalyzedBlock) {
+      addAudit("Evidence step not recorded", "No analyzed scope — run analysis for a specific farm and block before recording evidence.");
+      toast("Evidence step was not recorded. Analyze a specific scope first.");
+      return;
+    }
     if (!state.sessionId) {
       addAudit("Evidence step not recorded", "No session ID — backend persistence required for uploaded/live origins.");
       toast("Evidence step was not recorded. A backend session is required.");
@@ -1562,6 +1632,8 @@ export const actions = {
       if (state.activeAnalyzedFarm && state.activeAnalyzedBlock) {
         const scopeKey = `${state.activeAnalyzedFarm}||${state.activeAnalyzedBlock}`;
         set({ blockEvidenceChains: { ...state.blockEvidenceChains, [scopeKey]: chain } });
+        // Hydrate from backend to ensure chain reflects server-authoritative state.
+        void hydrateEvidenceChain(state.sessionId!, state.activeAnalyzedFarm, state.activeAnalyzedBlock);
       }
       addAudit(`${order[idx]} recorded`, `Backend evidence action recorded in evaluation-session storage.`);
       toast(`${state.evidence[idx]?.label ?? "Step"} recorded`);
@@ -1602,7 +1674,7 @@ export function getState(): CommandState {
 
 export function getProvenanceBadge(mode: AnalysisMode, origin: RecommendationOrigin): { label: string; tone: "gold" | "ok" | "warn" | "neutral" } {
   if (origin === "representative_fallback") return { label: "Offline representative fallback", tone: "gold" };
-  if (origin === "insufficient_context") return { label: "Offline representative fallback", tone: "gold" };
+  if (origin === "insufficient_context") return { label: "No package loaded — evidence incomplete", tone: "warn" };
   if (mode === "representative") return { label: "Representative evaluation records", tone: "gold" };
   if (mode === "uploaded") return { label: "Uploaded package", tone: "ok" };
   if (mode === "live") return { label: "Live connected sources", tone: "ok" };
@@ -1649,4 +1721,9 @@ export function __patchStateForTest(patch: Partial<CommandState>) {
 // Test seam: expose the current scope analysis generation counter.
 export function __getScopeAnalysisGen() {
   return _scopeAnalysisGen;
+}
+
+// Test seam: expose the current package generation counter.
+export function __getPackageGen() {
+  return _packageGen;
 }

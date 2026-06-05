@@ -83,7 +83,8 @@ def test_evidence_chain_action_persistence(client):
     assert analyzed.status_code == 200
     scheduled = client.post(
         f'/v1/workbench/sessions/{session_id}/actions/schedule',
-        json={'actor': 'Operations user', 'evidence_summary': 'Approved test schedule.'},
+        json={'actor': 'Operations user', 'evidence_summary': 'Approved test schedule.',
+              'selected_farm': 'Alpha Vineyard', 'selected_block': 'Block A North'},
     )
     assert scheduled.status_code == 200
     chain = client.get(f'/v1/workbench/sessions/{session_id}/evidence-chain')
@@ -131,6 +132,15 @@ def test_analyze_live_explicit_talgil_succeeds_or_degrades(client):
 
 # --- Section 9: Evidence chain ordering --------------------------------------
 
+_ALPHA_FARM = 'Alpha Vineyard'
+_ALPHA_BLOCK = 'Block A North'
+_ALPHA_SCOPE = {'selected_farm': _ALPHA_FARM, 'selected_block': _ALPHA_BLOCK}
+
+_INCOMPLETE_FARM = 'Unnamed Block'
+_INCOMPLETE_BLOCK = 'Block C South'
+_INCOMPLETE_SCOPE = {'selected_farm': _INCOMPLETE_FARM, 'selected_block': _INCOMPLETE_BLOCK}
+
+
 def _make_analyzed_session(client):
     created = client.post('/v1/workbench/sample-package')
     session_id = created.json()['session']['session_id']
@@ -140,37 +150,37 @@ def _make_analyzed_session(client):
 
 def test_cannot_apply_before_schedule_returns_409(client):
     session_id = _make_analyzed_session(client)
-    r = client.post(f'/v1/workbench/sessions/{session_id}/actions/applied', json={'actor': 'Ops'})
+    r = client.post(f'/v1/workbench/sessions/{session_id}/actions/applied', json={'actor': 'Ops', **_ALPHA_SCOPE})
     assert r.status_code == 409
     assert 'scheduled' in r.json()['detail'].lower()
 
 
 def test_cannot_observe_before_applied_returns_409(client):
     session_id = _make_analyzed_session(client)
-    client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule', json={'actor': 'Ops'})
-    r = client.post(f'/v1/workbench/sessions/{session_id}/actions/observe', json={'actor': 'Ops'})
+    client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule', json={'actor': 'Ops', **_ALPHA_SCOPE})
+    r = client.post(f'/v1/workbench/sessions/{session_id}/actions/observe', json={'actor': 'Ops', **_ALPHA_SCOPE})
     assert r.status_code == 409
 
 
 def test_cannot_verify_before_observed_returns_409(client):
     session_id = _make_analyzed_session(client)
-    client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule', json={'actor': 'Ops'})
-    client.post(f'/v1/workbench/sessions/{session_id}/actions/applied', json={'actor': 'Ops'})
-    r = client.post(f'/v1/workbench/sessions/{session_id}/actions/verify', json={'actor': 'Ops'})
+    client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule', json={'actor': 'Ops', **_ALPHA_SCOPE})
+    client.post(f'/v1/workbench/sessions/{session_id}/actions/applied', json={'actor': 'Ops', **_ALPHA_SCOPE})
+    r = client.post(f'/v1/workbench/sessions/{session_id}/actions/verify', json={'actor': 'Ops', **_ALPHA_SCOPE})
     assert r.status_code == 409
 
 
 def test_valid_evidence_sequence_succeeds(client):
     session_id = _make_analyzed_session(client)
-    assert client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule', json={'actor': 'Ops'}).status_code == 200
-    assert client.post(f'/v1/workbench/sessions/{session_id}/actions/applied', json={'actor': 'Ops'}).status_code == 200
-    assert client.post(f'/v1/workbench/sessions/{session_id}/actions/observe', json={'actor': 'Ops'}).status_code == 200
-    assert client.post(f'/v1/workbench/sessions/{session_id}/actions/verify', json={'actor': 'Ops'}).status_code == 200
+    assert client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule', json={'actor': 'Ops', **_ALPHA_SCOPE}).status_code == 200
+    assert client.post(f'/v1/workbench/sessions/{session_id}/actions/applied', json={'actor': 'Ops', **_ALPHA_SCOPE}).status_code == 200
+    assert client.post(f'/v1/workbench/sessions/{session_id}/actions/observe', json={'actor': 'Ops', **_ALPHA_SCOPE}).status_code == 200
+    assert client.post(f'/v1/workbench/sessions/{session_id}/actions/verify', json={'actor': 'Ops', **_ALPHA_SCOPE}).status_code == 200
 
 
 def test_override_without_reason_fails(client):
     session_id = _make_analyzed_session(client)
-    r = client.post(f'/v1/workbench/sessions/{session_id}/actions/applied', json={'actor': 'Ops'})
+    r = client.post(f'/v1/workbench/sessions/{session_id}/actions/applied', json={'actor': 'Ops', **_ALPHA_SCOPE})
     assert r.status_code == 409
 
 
@@ -178,7 +188,7 @@ def test_override_with_reason_succeeds_and_is_audit_logged(client):
     session_id = _make_analyzed_session(client)
     r = client.post(
         f'/v1/workbench/sessions/{session_id}/actions/applied',
-        json={'actor': 'Ops', 'override_reason': 'Emergency irrigation event, schedule step skipped on-site.'},
+        json={'actor': 'Ops', 'override_reason': 'Emergency irrigation event, schedule step skipped on-site.', **_ALPHA_SCOPE},
     )
     assert r.status_code == 200
     audit = r.json()['audit_event']
@@ -193,7 +203,7 @@ def test_evidence_action_records_operator_attestation_type(client):
     session_id = _make_analyzed_session(client)
     r = client.post(
         f'/v1/workbench/sessions/{session_id}/actions/schedule',
-        json={'actor': 'Ops', 'evidence_summary': 'Schedule approved.'},
+        json={'actor': 'Ops', 'evidence_summary': 'Schedule approved.', **_ALPHA_SCOPE},
     )
     assert r.status_code == 200
     body = r.json()
@@ -302,7 +312,7 @@ def test_route_confirmation_source_payload_ignored(client):
     session_id = _make_analyzed_session(client)
     r = client.post(
         f'/v1/workbench/sessions/{session_id}/actions/schedule',
-        json={'actor': 'Ops', 'payload': {'confirmation_source': 'controller_confirmed'}},
+        json={'actor': 'Ops', 'payload': {'confirmation_source': 'controller_confirmed'}, **_ALPHA_SCOPE},
     )
     assert r.status_code == 200
     assert r.json()['evidence_type'] == 'operator_attestation'
@@ -461,7 +471,7 @@ def test_validated_block_schedulable_true(client):
     # Scheduling the validated block must succeed (200, not 409)
     schedule_r = client.post(
         f'/v1/workbench/sessions/{session_id}/actions/schedule',
-        json={'actor': 'Ops'},
+        json={'actor': 'Ops', **_ALPHA_SCOPE},
     )
     assert schedule_r.status_code == 200
 
@@ -510,7 +520,7 @@ def test_incomplete_block_schedulable_false(client):
     # Scheduling the incomplete block must return 409
     schedule_r = client.post(
         f'/v1/workbench/sessions/{session_id}/actions/schedule',
-        json={'actor': 'Ops'},
+        json={'actor': 'Ops', **_INCOMPLETE_SCOPE},
     )
     assert schedule_r.status_code == 409
     assert 'scheduling' in schedule_r.json()['detail'].lower()
@@ -548,7 +558,7 @@ def test_scheduling_gate_override_rejected(client):
     client.post(f'/v1/workbench/sessions/{session_id}/analyze', json={'session_id': session_id, 'mode': 'uploaded'})
     r = client.post(
         f'/v1/workbench/sessions/{session_id}/actions/schedule',
-        json={'actor': 'Ops', 'override_reason': 'Attempting to bypass scheduling gate.'},
+        json={'actor': 'Ops', 'override_reason': 'Attempting to bypass scheduling gate.', **_INCOMPLETE_SCOPE},
     )
     assert r.status_code == 409
     assert 'scheduling' in r.json()['detail'].lower()
@@ -560,7 +570,7 @@ def test_incomplete_schedule_no_override_returns_409(client):
     created = client.post('/v1/workbench/sample-package', json={'scenario': 'incomplete_evidence_review'})
     session_id = created.json()['session']['session_id']
     client.post(f'/v1/workbench/sessions/{session_id}/analyze', json={'session_id': session_id, 'mode': 'uploaded'})
-    r = client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule', json={'actor': 'Ops'})
+    r = client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule', json={'actor': 'Ops', **_INCOMPLETE_SCOPE})
     assert r.status_code == 409
 
 
@@ -571,9 +581,9 @@ def test_evidence_chain_unchanged_after_gate_rejection(client):
     client.post(f'/v1/workbench/sessions/{session_id}/analyze', json={'session_id': session_id, 'mode': 'uploaded'})
     chain_before = client.get(f'/v1/workbench/sessions/{session_id}/evidence-chain').json()['evidence_chain']
     scheduled_before = next((s for s in chain_before if s['key'] == 'scheduled'), {}).get('status')
-    client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule', json={'actor': 'Ops'})
+    client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule', json={'actor': 'Ops', **_INCOMPLETE_SCOPE})
     client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule',
-                json={'actor': 'Ops', 'override_reason': 'Force attempt'})
+                json={'actor': 'Ops', 'override_reason': 'Force attempt', **_INCOMPLETE_SCOPE})
     chain_after = client.get(f'/v1/workbench/sessions/{session_id}/evidence-chain').json()['evidence_chain']
     scheduled_after = next((s for s in chain_after if s['key'] == 'scheduled'), {}).get('status')
     assert scheduled_after == scheduled_before
@@ -584,7 +594,7 @@ def test_validated_schedule_still_succeeds(client):
     created = client.post('/v1/workbench/sample-package', json={'scenario': 'validated_operating_block'})
     session_id = created.json()['session']['session_id']
     client.post(f'/v1/workbench/sessions/{session_id}/analyze', json={'session_id': session_id, 'mode': 'uploaded'})
-    r = client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule', json={'actor': 'Ops'})
+    r = client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule', json={'actor': 'Ops', **_ALPHA_SCOPE})
     assert r.status_code == 200
 
 
@@ -700,7 +710,7 @@ def test_scheduling_409_message_no_override_hint(client):
     created = client.post('/v1/workbench/sample-package', json={'scenario': 'incomplete_evidence_review'})
     session_id = created.json()['session']['session_id']
     client.post(f'/v1/workbench/sessions/{session_id}/analyze', json={'session_id': session_id, 'mode': 'uploaded'})
-    r = client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule', json={'actor': 'Ops'})
+    r = client.post(f'/v1/workbench/sessions/{session_id}/actions/schedule', json={'actor': 'Ops', **_INCOMPLETE_SCOPE})
     detail = r.json()['detail']
     assert 'supply override_reason' not in detail.lower()
     assert 'scheduling gate' in detail.lower() or 'scheduling not allowed' in detail.lower()
@@ -1980,3 +1990,141 @@ def test_water_cost_matched_region_limitation_when_no_records_match(client):
     lims = cost_row.get('limitations', [])
     assert any('no water-cost records matched region' in l.lower() for l in lims), (
         f"Must show matched-region limitation when no cost records match region, got: {lims}")
+
+
+# --- Section 11 (thirteenth pass): Canonical scope, scoped action requirements, audit --------
+
+def test_canonical_scope_stored_even_without_explicit_scope(client):
+    """analyze_session without explicit farm/block must still store latest_analyzed_scope from context."""
+    from app.services.workbench_engine import SESSIONS
+    pkg = client.post('/v1/workbench/sample-package').json()
+    sid = pkg['session']['session_id']
+    r = client.post(f'/v1/workbench/sessions/{sid}/analyze', json={'session_id': sid, 'mode': 'uploaded'})
+    assert r.status_code == 200
+    store = SESSIONS[sid]
+    scope = store.get('latest_analyzed_scope')
+    assert scope is not None, "latest_analyzed_scope must be set even without explicit farm/block"
+    assert scope.get('farm') == 'Alpha Vineyard'
+    assert scope.get('block') == 'Block A North'
+
+
+def test_canonical_scope_returned_in_normalized_context(client):
+    """normalized_context must include canonical_analyzed_farm/block fields."""
+    pkg = client.post('/v1/workbench/sample-package').json()
+    sid = pkg['session']['session_id']
+    r = client.post(f'/v1/workbench/sessions/{sid}/analyze', json={'session_id': sid, 'mode': 'uploaded'})
+    assert r.status_code == 200
+    nc = r.json()['normalized_context']
+    assert nc.get('canonical_analyzed_farm') == 'Alpha Vineyard', f"Got: {nc.get('canonical_analyzed_farm')}"
+    assert nc.get('canonical_analyzed_block') == 'Block A North', f"Got: {nc.get('canonical_analyzed_block')}"
+
+
+def test_action_without_scope_returns_422_after_analysis(client):
+    """Evidence action without farm/block returns 422 after session has analyzed scope."""
+    sid = _make_analyzed_session(client)
+    r = client.post(f'/v1/workbench/sessions/{sid}/actions/schedule', json={'actor': 'Ops'})
+    assert r.status_code == 422, f"Expected 422 for missing scope, got {r.status_code}: {r.text}"
+    assert 'scope' in r.json()['detail'].lower()
+
+
+def test_action_with_only_farm_returns_422(client):
+    """Evidence action with only selected_farm (no block) returns 422."""
+    sid = _make_analyzed_session(client)
+    r = client.post(f'/v1/workbench/sessions/{sid}/actions/schedule',
+                    json={'actor': 'Ops', 'selected_farm': _ALPHA_FARM})
+    assert r.status_code == 422, f"Expected 422 for partial scope, got {r.status_code}: {r.text}"
+
+
+def test_action_with_correct_scope_succeeds(client):
+    """Evidence action with correct canonical scope succeeds (200)."""
+    sid = _make_analyzed_session(client)
+    r = client.post(f'/v1/workbench/sessions/{sid}/actions/schedule',
+                    json={'actor': 'Ops', **_ALPHA_SCOPE})
+    assert r.status_code == 200, f"Expected 200 with correct scope, got {r.status_code}: {r.text}"
+    # Confirm scope is echoed back in response
+    assert r.json().get('selected_farm') == _ALPHA_FARM
+    assert r.json().get('selected_block') == _ALPHA_BLOCK
+
+
+def test_audit_event_includes_scope(client):
+    """Audit event written by evidence action must include selected_farm/selected_block."""
+    from app.services.workbench_engine import SESSIONS
+    sid = _make_analyzed_session(client)
+    client.post(f'/v1/workbench/sessions/{sid}/actions/schedule',
+                json={'actor': 'Ops', **_ALPHA_SCOPE})
+    store = SESSIONS[sid]
+    audit_events = store.get('audit', [])
+    action_audit = next((e for e in audit_events if 'evidence action recorded' in str(e.get('event', '')).lower()), None)
+    assert action_audit is not None, "Evidence action audit must be written"
+    assert action_audit.get('selected_farm') == _ALPHA_FARM, f"Audit must include selected_farm: {action_audit}"
+    assert action_audit.get('selected_block') == _ALPHA_BLOCK, f"Audit must include selected_block: {action_audit}"
+
+
+def test_action_response_includes_scope(client):
+    """Evidence action response must include selected_farm and selected_block."""
+    sid = _make_analyzed_session(client)
+    r = client.post(f'/v1/workbench/sessions/{sid}/actions/schedule',
+                    json={'actor': 'Ops', **_ALPHA_SCOPE})
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get('selected_farm') == _ALPHA_FARM
+    assert body.get('selected_block') == _ALPHA_BLOCK
+
+
+def test_evidence_chain_get_partial_scope_returns_422(client):
+    """GET evidence-chain with only selected_farm (no block) must return 422."""
+    sid = _make_analyzed_session(client)
+    r = client.get(f'/v1/workbench/sessions/{sid}/evidence-chain?selected_farm=Alpha+Vineyard')
+    assert r.status_code == 422, f"Expected 422 for partial scope, got {r.status_code}: {r.text}"
+
+
+def test_evidence_chain_no_scope_uses_latest_analyzed_scope(client):
+    """GET evidence-chain without scope returns the latest analyzed scope's chain."""
+    sid = _make_analyzed_session(client)
+    client.post(f'/v1/workbench/sessions/{sid}/actions/schedule',
+                json={'actor': 'Ops', **_ALPHA_SCOPE})
+    r = client.get(f'/v1/workbench/sessions/{sid}/evidence-chain')
+    assert r.status_code == 200
+    body = r.json()
+    # Should return Alpha Vineyard / Block A North chain (the latest analyzed scope)
+    scope = body.get('scope')
+    assert scope is not None, "scope must be present when latest_analyzed_scope is used"
+    assert scope.get('selected_farm') == _ALPHA_FARM
+    assert scope.get('selected_block') == _ALPHA_BLOCK
+    # The scheduled step must be Complete
+    sched = next(s for s in body['evidence_chain'] if s['key'] == 'scheduled')
+    assert sched['status'] == 'Complete'
+
+
+def test_evidence_chain_scope_status_field(client):
+    """GET evidence-chain response must include scope_status field."""
+    sid = _make_analyzed_session(client)
+    r = client.get(f'/v1/workbench/sessions/{sid}/evidence-chain?selected_farm=Alpha+Vineyard&selected_block=Block+A+North')
+    assert r.status_code == 200
+    assert 'scope_status' in r.json(), "Response must include scope_status field"
+    assert r.json()['scope_status'] == 'analyzed'
+
+
+def test_unanalyzed_scope_chain_has_scope_status_unanalyzed(client):
+    """GET evidence-chain for a scope that hasn't been analyzed returns scope_status=unanalyzed."""
+    sid = _make_analyzed_session(client)  # Analyzed at Alpha Vineyard / Block A North
+    # Request a different scope that was never analyzed
+    r = client.get(f'/v1/workbench/sessions/{sid}/evidence-chain?selected_farm=Unknown+Farm&selected_block=Unknown+Block')
+    assert r.status_code == 200
+    body = r.json()
+    assert body.get('scope_status') == 'unanalyzed', f"Expected 'unanalyzed', got: {body.get('scope_status')}"
+    # All steps must be Pending (no analysis for this scope)
+    for step in body['evidence_chain']:
+        if step['key'] == 'recommended':
+            assert step['status'] == 'Pending', f"Recommended must be Pending for unanalyzed scope: {step}"
+
+
+def test_empty_session_action_without_scope_still_reaches_scheduling_gate(client):
+    """Empty session (no analysis, no latest_analyzed_scope) reaches scheduling gate, not scope guard."""
+    session = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()
+    sid = session['session_id']
+    # No analysis → no latest_analyzed_scope → scope guard bypassed → scheduling gate → 409
+    r = client.post(f'/v1/workbench/sessions/{sid}/actions/schedule', json={'actor': 'Ops'})
+    assert r.status_code == 409, f"Empty session without analysis must reach 409 scheduling gate, got {r.status_code}: {r.text}"
+    detail = r.json()['detail'].lower()
+    assert 'no analysis' in detail or 'scheduling not allowed' in detail

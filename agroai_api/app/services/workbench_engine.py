@@ -1535,6 +1535,8 @@ def _public_context(context: Dict[str, Any]) -> Dict[str, Any]:
         "normalized_signal_count": len(context.get("signals", [])),
         "selected_farm": context.get("selected_farm"),
         "selected_block": context.get("selected_block"),
+        "canonical_analyzed_farm": context.get("farm"),
+        "canonical_analyzed_block": context.get("block"),
         "selected_source_kinds": context.get("selected_source_kinds", []),
         "package_source_kinds": context.get("package_source_kinds", []),
         "available_farms": context.get("available_farms", []),
@@ -1694,10 +1696,15 @@ def analyze_session(
         source_rows=list(context.get("source_rows", [])),
     )
     store["analysis"] = result
-    if selected_farm and selected_block:
-        scope_key = f"{selected_farm}||{selected_block}"
+    # Use canonical farm/block from the assembled context — the context assembler
+    # normalises aliases and defaults, so this is the authoritative scope even when
+    # selected_farm/selected_block were not explicitly provided by the caller.
+    canonical_farm = str(context.get("farm") or "").strip()
+    canonical_block = str(context.get("block") or "").strip()
+    if canonical_farm and canonical_block:
+        scope_key = f"{canonical_farm}||{canonical_block}"
         store.setdefault("analyses_by_scope", {})[scope_key] = result
-        store["latest_analyzed_scope"] = {"farm": selected_farm, "block": selected_block}
+        store["latest_analyzed_scope"] = {"farm": canonical_farm, "block": canonical_block}
     store["session"].updated_at = datetime.utcnow()
     store["audit"].append({"time": datetime.utcnow().isoformat(), "event": "Workbench analysis completed", "mode": mode})
     return result
@@ -1750,10 +1757,27 @@ def get_evidence_chain(
             if a.get("selected_farm") == selected_farm and a.get("selected_block") == selected_block
         ]
         scope_key = f"{selected_farm}||{selected_block}"
-        scope_analysis = store.get("analyses_by_scope", {}).get(scope_key) or store.get("analysis")
+        scope_analysis = store.get("analyses_by_scope", {}).get(scope_key)
+        scope_status = "analyzed" if scope_analysis else "unanalyzed"
     else:
-        scope_actions = all_actions
-        scope_analysis = store.get("analysis")
+        # No scope provided: use latest_analyzed_scope if available.
+        latest_scope = store.get("latest_analyzed_scope")
+        if latest_scope:
+            lf = latest_scope.get("farm", "")
+            lb = latest_scope.get("block", "")
+            scope_actions = [
+                a for a in all_actions
+                if a.get("selected_farm") == lf and a.get("selected_block") == lb
+            ]
+            scope_key = f"{lf}||{lb}"
+            scope_analysis = store.get("analyses_by_scope", {}).get(scope_key)
+            scope_status = "analyzed" if scope_analysis else "unanalyzed"
+            selected_farm = lf or None
+            selected_block = lb or None
+        else:
+            scope_actions = []
+            scope_analysis = None
+            scope_status = "no_analysis"
 
     latest_by_type = {item["type"]: item for item in scope_actions}
     chain = []
@@ -1780,7 +1804,12 @@ def get_evidence_chain(
                 "evidence_type": event.get("evidence_type", EVIDENCE_TYPES.get(key, "operator_attestation")) if event else None,
             }
         )
-    response: Dict[str, Any] = {"session_id": session_id, "evidence_chain": chain, "audit_events": store.get("audit", [])}
+    response: Dict[str, Any] = {
+        "session_id": session_id,
+        "evidence_chain": chain,
+        "audit_events": store.get("audit", []),
+        "scope_status": scope_status,
+    }
     if selected_farm and selected_block:
         response["scope"] = {"selected_farm": selected_farm, "selected_block": selected_block}
     return response
@@ -1802,36 +1831,29 @@ def record_evidence_action(
     if not store:
         raise KeyError("Session not found")
 
-    # Scope enforcement: when the session has an analyzed scope, the action must match it.
+    # Scope enforcement: sessions that have an analyzed scope always require farm+block on actions.
+    req_farm = (selected_farm or "").strip()
+    req_block = (selected_block or "").strip()
     latest_scope = store.get("latest_analyzed_scope")
     if latest_scope:
         exp_farm = latest_scope.get("farm", "")
         exp_block = latest_scope.get("block", "")
-        req_farm = (selected_farm or "").strip()
-        req_block = (selected_block or "").strip()
         if not req_farm or not req_block:
             raise ScopeMissingError(
                 f"Evidence action '{action_type}' requires selected_farm and selected_block. "
                 f"Latest analyzed scope is {exp_farm} / {exp_block}. "
-                "Include selected_farm and selected_block in the request body."
+                "Include both in the request body."
             )
         if req_farm != exp_farm or req_block != exp_block:
             raise ScopeMismatchError(action_type, exp_farm, exp_block, req_farm, req_block)
 
     # Resolve the analysis and prior actions for this scope.
-    req_farm = (selected_farm or "").strip()
-    req_block = (selected_block or "").strip()
-    if req_farm and req_block:
-        scope_key = f"{req_farm}||{req_block}"
-        scope_analysis = store.get("analyses_by_scope", {}).get(scope_key) or store.get("analysis")
-        scope_actions = [
-            a for a in store.get("evidence_actions", [])
-            if a.get("selected_farm") == req_farm and a.get("selected_block") == req_block
-        ]
-    else:
-        scope_key = None
-        scope_analysis = store.get("analysis")
-        scope_actions = store.get("evidence_actions", [])
+    scope_key = f"{req_farm}||{req_block}"
+    scope_analysis = store.get("analyses_by_scope", {}).get(scope_key)
+    scope_actions = [
+        a for a in store.get("evidence_actions", [])
+        if a.get("selected_farm") == req_farm and a.get("selected_block") == req_block
+    ]
 
     # Scheduling gate — must run BEFORE any evidence-order override audit is written.
     # override_reason cannot bypass this gate.
@@ -1861,6 +1883,8 @@ def record_evidence_action(
                 "actor": actor,
                 "override_reason": override_reason,
                 "override_label": "Evidence sequence override applied with supplied reason.",
+                "selected_farm": req_farm,
+                "selected_block": req_block,
             })
 
     timestamp = datetime.utcnow().isoformat()
@@ -1887,6 +1911,8 @@ def record_evidence_action(
         "evidence_type": evidence_type,
         "evidence_summary": summary,
         "persistence": "evaluation-session",
+        "selected_farm": req_farm,
+        "selected_block": req_block,
     }
     store["audit"].append(audit)
     return {
@@ -1895,6 +1921,8 @@ def record_evidence_action(
         "actor": actor,
         "evidence_type": evidence_type,
         "evidence_summary": summary,
-        "updated_evidence_chain": get_evidence_chain(session_id, selected_farm=req_farm or None, selected_block=req_block or None)["evidence_chain"],
+        "selected_farm": req_farm,
+        "selected_block": req_block,
+        "updated_evidence_chain": get_evidence_chain(session_id, selected_farm=req_farm, selected_block=req_block)["evidence_chain"],
         "audit_event": audit,
     }
