@@ -1,0 +1,1198 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AGRO-AI Water Intelligence Copilot · Fox Canyon Applied-Water Mission Control</title>
+  <style>
+    :root {
+      --forest-950: #10231d;
+      --forest-900: #17362d;
+      --forest-700: #285446;
+      --forest-500: #3a7a66;
+      --graphite: #222826;
+      --muted: #66736e;
+      --stone-50: #f6f5f1;
+      --stone-100: #ece9e1;
+      --stone-200: #ded9ce;
+      --white: #ffffff;
+      --success: #2f6f54;
+      --warning: #8a6324;
+      --danger: #9f3529;
+      --danger-light: #fff8f8;
+      --info: #3d5a68;
+      --shadow: 0 2px 16px rgba(16,35,29,0.07);
+      --shadow-lg: 0 8px 32px rgba(16,35,29,0.10);
+      --radius: 10px;
+      --radius-sm: 6px;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: var(--stone-50);
+      color: var(--graphite);
+      min-height: 100vh;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    button, input, textarea, select { font: inherit; cursor: pointer; }
+    a { color: var(--forest-700); text-decoration: none; }
+
+    /* ── TRUTHFULNESS BANNER ── */
+    .truth-banner {
+      background: var(--forest-950);
+      color: #b9d8ca;
+      padding: 9px 24px;
+      font-size: 12px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      border-bottom: 1px solid var(--forest-900);
+    }
+    .truth-banner strong { color: #e2f0eb; }
+    .truth-chip {
+      background: rgba(255,255,255,0.1);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 4px;
+      padding: 3px 8px;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+
+    /* ── HEADER ── */
+    .app-header {
+      background: linear-gradient(135deg, var(--forest-950) 0%, var(--forest-700) 100%);
+      color: var(--white);
+      padding: 20px 28px 18px;
+    }
+    .header-inner { max-width: 1400px; margin: 0 auto; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
+    .header-brand { display: flex; align-items: center; gap: 14px; }
+    .header-logo {
+      width: 44px; height: 44px; background: rgba(255,255,255,0.12);
+      border-radius: 10px; display: flex; align-items: center; justify-content: center;
+      font-weight: 900; font-size: 16px; letter-spacing: -0.05em; color: #fff;
+      border: 1px solid rgba(255,255,255,0.2);
+    }
+    .header-title { font-size: 20px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.2; }
+    .header-subtitle { font-size: 12px; color: #b9d8ca; margin-top: 2px; }
+    .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 4px; }
+    .btn {
+      border: none; border-radius: var(--radius-sm);
+      padding: 8px 14px; font-weight: 700; font-size: 13px;
+      transition: opacity .15s, transform .1s; display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn:hover { opacity: .88; }
+    .btn:active { transform: scale(.97); }
+    .btn-primary { background: var(--forest-700); color: #fff; }
+    .btn-secondary { background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.2); }
+    .btn-ghost { background: transparent; color: var(--forest-700); border: 1px solid var(--stone-200); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-sm { padding: 5px 10px; font-size: 12px; }
+
+    /* ── MAIN LAYOUT ── */
+    .app-body { display: flex; min-height: calc(100vh - 120px); }
+    .main-content { flex: 1; min-width: 0; padding: 20px 24px; max-width: 100%; }
+    .copilot-panel {
+      width: 380px; flex-shrink: 0;
+      background: var(--white);
+      border-left: 1px solid var(--stone-200);
+      display: flex; flex-direction: column;
+      position: sticky; top: 0; height: 100vh; overflow: hidden;
+    }
+
+    /* ── METRIC CARDS ── */
+    .metric-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
+    .metric-card {
+      background: var(--white); border: 1px solid var(--stone-200);
+      border-radius: var(--radius); padding: 14px 16px;
+      box-shadow: var(--shadow);
+    }
+    .metric-card.attention { border-left: 3px solid var(--danger); }
+    .metric-card.ready { border-left: 3px solid var(--success); }
+    .metric-card.info { border-left: 3px solid var(--info); }
+    .metric-eyebrow { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); margin-bottom: 6px; }
+    .metric-value { font-size: 26px; font-weight: 800; letter-spacing: -0.04em; color: var(--graphite); line-height: 1; }
+    .metric-value.danger { color: var(--danger); }
+    .metric-value.success { color: var(--success); }
+    .metric-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+    /* ── INTELLIGENCE CARD ── */
+    .intelligence-card {
+      background: var(--white); border: 1px solid var(--stone-200);
+      border-radius: var(--radius); padding: 20px 24px;
+      box-shadow: var(--shadow); margin-bottom: 20px;
+    }
+    .intelligence-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+    .intelligence-eyebrow { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .09em; color: var(--forest-700); margin-bottom: 4px; }
+    .intelligence-title { font-size: 16px; font-weight: 700; letter-spacing: -0.03em; color: var(--graphite); }
+    .intelligence-narrative { font-size: 14px; color: var(--graphite); line-height: 1.65; margin-bottom: 16px; }
+    .intelligence-narrative strong { color: var(--forest-700); }
+    .action-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+    /* ── SOURCE HEALTH CHIPS ── */
+    .source-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+    .source-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      border-radius: 5px; padding: 5px 10px; font-size: 12px; font-weight: 600;
+      border: 1px solid transparent;
+    }
+    .source-chip.connected { background: #e8f5ef; border-color: #b6ddc8; color: var(--success); }
+    .source-chip.unavailable { background: #fff8ee; border-color: #f0dcaa; color: var(--warning); }
+    .source-chip.disabled { background: var(--stone-100); border-color: var(--stone-200); color: var(--muted); }
+    .source-dot { width: 7px; height: 7px; border-radius: 50%; }
+    .connected .source-dot { background: var(--success); }
+    .unavailable .source-dot { background: var(--warning); }
+    .disabled .source-dot { background: var(--muted); }
+
+    /* ── SECTION ── */
+    .section { margin-bottom: 24px; }
+    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+    .section-title { font-size: 14px; font-weight: 700; color: var(--graphite); letter-spacing: -0.02em; }
+    .section-count { font-size: 12px; color: var(--muted); font-weight: 600; }
+
+    /* ── FILTER BAR ── */
+    .filter-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .filter-btn {
+      background: var(--stone-100); border: 1px solid var(--stone-200);
+      border-radius: 5px; padding: 5px 10px; font-size: 12px; font-weight: 600;
+      color: var(--graphite); cursor: pointer; transition: all .15s;
+    }
+    .filter-btn.active, .filter-btn:hover { background: var(--forest-700); border-color: var(--forest-700); color: #fff; }
+
+    /* ── REVIEW TABLE ── */
+    .review-table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--stone-200); box-shadow: var(--shadow); }
+    table { width: 100%; border-collapse: collapse; background: var(--white); font-size: 12.5px; }
+    thead tr { background: var(--stone-100); }
+    th { padding: 10px 12px; text-align: left; font-weight: 700; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .07em; border-bottom: 1px solid var(--stone-200); white-space: nowrap; }
+    td { padding: 10px 12px; border-bottom: 1px solid var(--stone-100); vertical-align: middle; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: var(--stone-50); }
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      border-radius: 4px; padding: 3px 7px; font-size: 11px; font-weight: 700;
+    }
+    .badge.danger { background: #fde8e8; color: var(--danger); }
+    .badge.warning { background: #fef3dd; color: var(--warning); }
+    .badge.success { background: #e7f5ed; color: var(--success); }
+    .badge.muted { background: var(--stone-100); color: var(--muted); }
+    .badge.info { background: #e3edf2; color: var(--info); }
+    .record-link { background: none; border: none; color: var(--forest-700); font-weight: 700; cursor: pointer; font-size: 12.5px; text-decoration: underline; text-underline-offset: 2px; }
+    .scenario-chip { font-size: 10px; background: #f3e8ff; color: #6b21a8; border-radius: 3px; padding: 1px 5px; font-weight: 700; }
+
+    /* ── DRAWER ── */
+    .drawer-overlay {
+      position: fixed; inset: 0; background: rgba(16,35,29,0.4);
+      z-index: 100; display: none; align-items: stretch; justify-content: flex-end;
+    }
+    .drawer-overlay.open { display: flex; }
+    .drawer {
+      width: min(660px, 96vw); background: var(--white);
+      height: 100vh; overflow-y: auto;
+      box-shadow: -8px 0 32px rgba(16,35,29,0.12);
+      display: flex; flex-direction: column;
+      animation: slideIn .2s ease;
+    }
+    @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
+    .drawer-header {
+      padding: 20px 24px 16px;
+      border-bottom: 1px solid var(--stone-200);
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+      position: sticky; top: 0; background: var(--white); z-index: 1;
+    }
+    .drawer-close { background: none; border: 1px solid var(--stone-200); border-radius: 6px; padding: 4px 10px; font-size: 18px; color: var(--muted); cursor: pointer; }
+    .drawer-close:hover { color: var(--graphite); }
+    .drawer-body { padding: 20px 24px; flex: 1; }
+    .drawer-section { margin-bottom: 20px; }
+    .drawer-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); margin-bottom: 6px; }
+    .drawer-value { font-size: 13px; color: var(--graphite); }
+    .drawer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .calc-step {
+      background: var(--stone-50); border: 1px solid var(--stone-200);
+      border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 8px;
+    }
+    .calc-step-name { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: var(--forest-700); margin-bottom: 3px; }
+    .exception-row {
+      background: var(--danger-light); border: 1px solid #f7d0d0;
+      border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 8px;
+    }
+    .exception-type { font-size: 11px; font-weight: 700; color: var(--danger); }
+    .exception-detail { font-size: 12px; color: var(--graphite); margin-top: 3px; line-height: 1.5; }
+    .lineage-block {
+      background: #f0f7f4; border: 1px solid #cde4d8;
+      border-radius: var(--radius-sm); padding: 10px 12px; font-size: 11px;
+      font-family: monospace; line-height: 1.7; white-space: pre-wrap; word-break: break-all;
+    }
+    .model-disclaimer {
+      background: #fffbeb; border: 1px solid #f0dcaa;
+      border-radius: var(--radius-sm); padding: 10px 12px; font-size: 12px;
+      color: var(--warning); line-height: 1.5; margin-top: 10px;
+    }
+    .audit-event { border-bottom: 1px solid var(--stone-100); padding: 7px 0; font-size: 12px; }
+    .audit-event:last-child { border-bottom: none; }
+    .audit-ts { color: var(--muted); font-size: 11px; }
+
+    /* ── COPILOT PANEL ── */
+    .copilot-header {
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid var(--stone-200);
+      background: var(--forest-950); color: var(--white);
+    }
+    .copilot-title { font-size: 14px; font-weight: 800; letter-spacing: -0.03em; }
+    .copilot-sub { font-size: 11px; color: #b9d8ca; margin-top: 2px; }
+    .copilot-messages { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+    .copilot-msg { border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.6; max-width: 100%; }
+    .copilot-msg.user { background: var(--forest-700); color: #fff; align-self: flex-end; max-width: 88%; }
+    .copilot-msg.assistant { background: var(--stone-100); color: var(--graphite); align-self: flex-start; }
+    .copilot-msg.system { background: #f0f7f4; border: 1px solid #cde4d8; color: var(--forest-700); font-size: 12px; }
+    .copilot-msg pre { white-space: pre-wrap; word-break: break-word; font-family: inherit; }
+    .copilot-msg .badge { display: inline-flex; }
+    .copilot-citations { font-size: 11px; color: var(--muted); margin-top: 6px; border-top: 1px solid var(--stone-200); padding-top: 5px; }
+    .copilot-input-area {
+      padding: 12px 14px; border-top: 1px solid var(--stone-200);
+      background: var(--white);
+    }
+    .preset-pills { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
+    .preset-pill {
+      background: var(--stone-100); border: 1px solid var(--stone-200);
+      border-radius: 5px; padding: 4px 8px; font-size: 11px; font-weight: 600;
+      color: var(--graphite); cursor: pointer; transition: all .15s;
+    }
+    .preset-pill:hover { background: var(--forest-700); color: #fff; border-color: var(--forest-700); }
+    .copilot-input-row { display: flex; gap: 6px; }
+    .copilot-input {
+      flex: 1; border: 1px solid var(--stone-200); border-radius: var(--radius-sm);
+      padding: 9px 12px; font-size: 13px; resize: none; min-height: 40px; max-height: 120px;
+    }
+    .copilot-input:focus { outline: 2px solid var(--forest-700); }
+    .voice-btn {
+      background: var(--stone-100); border: 1px solid var(--stone-200);
+      border-radius: var(--radius-sm); padding: 0 10px; font-size: 16px;
+    }
+    .voice-btn.recording { background: var(--danger); color: #fff; border-color: var(--danger); }
+    .send-btn { background: var(--forest-700); color: #fff; border: none; border-radius: var(--radius-sm); padding: 0 14px; font-weight: 700; font-size: 13px; }
+    .speak-btn { background: var(--stone-100); border: 1px solid var(--stone-200); border-radius: 5px; padding: 3px 8px; font-size: 11px; color: var(--muted); margin-top: 4px; }
+
+    /* ── REPORT SECTION ── */
+    .report-card {
+      background: var(--white); border: 1px solid var(--stone-200);
+      border-radius: var(--radius); padding: 18px 20px;
+      box-shadow: var(--shadow); margin-bottom: 16px;
+    }
+    .report-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+    .download-link {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--stone-100); border: 1px solid var(--stone-200);
+      border-radius: var(--radius-sm); padding: 7px 12px; font-size: 12px; font-weight: 700;
+      color: var(--graphite); cursor: pointer; transition: all .15s;
+    }
+    .download-link:hover { background: var(--forest-700); color: #fff; border-color: var(--forest-700); }
+
+    /* ── TOAST ── */
+    .toast-area { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 200; }
+    .toast {
+      background: var(--graphite); color: #fff; border-radius: var(--radius-sm);
+      padding: 10px 16px; font-size: 13px; box-shadow: var(--shadow-lg);
+      animation: toastIn .2s ease; max-width: 320px;
+    }
+    .toast.success { background: var(--success); }
+    .toast.error { background: var(--danger); }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
+
+    /* ── LOADING ── */
+    .loading-state { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
+    .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--stone-200); border-top-color: var(--forest-700); border-radius: 50%; animation: spin .8s linear infinite; margin-bottom: 8px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── EMPTY STATE ── */
+    .empty-state { text-align: center; padding: 48px 24px; color: var(--muted); }
+    .empty-icon { font-size: 36px; margin-bottom: 10px; }
+    .empty-title { font-size: 15px; font-weight: 700; color: var(--graphite); margin-bottom: 6px; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 900px) {
+      .copilot-panel { display: none; }
+      .app-body { flex-direction: column; }
+    }
+
+    /* ── TABS ── */
+    .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--stone-200); margin-bottom: 20px; }
+    .tab { background: none; border: none; border-bottom: 2px solid transparent; padding: 10px 16px; font-size: 13px; font-weight: 700; color: var(--muted); cursor: pointer; transition: all .15s; margin-bottom: -1px; }
+    .tab.active { color: var(--forest-700); border-bottom-color: var(--forest-700); }
+    .tab:hover:not(.active) { color: var(--graphite); }
+
+    /* ── VIEW PANELS ── */
+    .view-panel { display: none; }
+    .view-panel.active { display: block; }
+  </style>
+</head>
+<body>
+
+<!-- TRUTHFULNESS BANNER -->
+<div class="truth-banner">
+  <strong>Demonstration environment</strong>
+  <span class="truth-chip">Authorized telemetry where connected</span>
+  <span class="truth-chip">Public contextual sources</span>
+  <span class="truth-chip">Clearly labeled injected scenarios</span>
+  <span class="truth-chip" style="color:#f87171;background:rgba(159,53,41,.25);border-color:rgba(159,53,41,.4);">Not an official Fox Canyon reporting system</span>
+</div>
+
+<!-- APP HEADER -->
+<header class="app-header">
+  <div class="header-inner">
+    <div class="header-brand">
+      <div class="header-logo">AI</div>
+      <div>
+        <div class="header-title">AGRO-AI Water Intelligence Copilot</div>
+        <div class="header-subtitle">Fox Canyon Applied-Water Mission Control &mdash; Turn fragmented meter data into trusted applied-water intelligence, actionable exceptions, and reporting-ready outputs.</div>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button class="btn btn-secondary btn-sm" onclick="loadDashboard()">&#8635; Refresh</button>
+      <button class="btn btn-secondary btn-sm" onclick="resetScenarios()">&#8617; Reset Scenarios</button>
+      <button class="btn btn-primary btn-sm" onclick="generateReport()">&#8659; Generate Report</button>
+    </div>
+  </div>
+</header>
+
+<!-- MAIN APP BODY -->
+<div class="app-body">
+  <div class="main-content">
+
+    <!-- SOURCE HEALTH CHIPS -->
+    <div class="source-row" id="sourceRow">
+      <div class="source-chip unavailable"><span class="source-dot"></span>Loading sources…</div>
+    </div>
+
+    <!-- METRIC STRIP -->
+    <div class="metric-strip" id="metricStrip">
+      <div class="metric-card"><div class="metric-eyebrow">Sources Connected</div><div class="metric-value" id="mSources">—</div><div class="metric-sub">active adapters</div></div>
+      <div class="metric-card info"><div class="metric-eyebrow">Records Processed</div><div class="metric-value" id="mRecords">—</div><div class="metric-sub">this period</div></div>
+      <div class="metric-card attention"><div class="metric-eyebrow">Requires Attention</div><div class="metric-value danger" id="mAttention">—</div><div class="metric-sub">open exceptions</div></div>
+      <div class="metric-card ready"><div class="metric-eyebrow">Ready for Review</div><div class="metric-value success" id="mReady">—</div><div class="metric-sub">records</div></div>
+      <div class="metric-card info"><div class="metric-eyebrow">Open Exceptions</div><div class="metric-value" id="mExceptions">—</div><div class="metric-sub">pending resolution</div></div>
+      <div class="metric-card"><div class="metric-eyebrow">Provisional AF</div><div class="metric-value" id="mProvisionalAF">—</div><div class="metric-sub">acre-feet (provisional)</div></div>
+      <div class="metric-card"><div class="metric-eyebrow">Reporting Period</div><div class="metric-value" style="font-size:16px" id="mPeriod">2026-Q1</div><div class="metric-sub" id="mRefresh">loading…</div></div>
+    </div>
+
+    <!-- INTELLIGENCE CARD -->
+    <div class="intelligence-card" id="intelligenceCard">
+      <div class="intelligence-card-header">
+        <div>
+          <div class="intelligence-eyebrow">AI Intelligence Summary</div>
+          <div class="intelligence-title">Loading intelligence summary…</div>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="showCopilot()">Ask AGRO-AI</button>
+      </div>
+      <div class="intelligence-narrative" id="intelligenceNarrative">
+        <div class="spinner"></div>
+      </div>
+      <div class="action-row">
+        <button class="btn btn-primary btn-sm" onclick="setFilter('review_required'); showTab('queue')">&#9741; Review Priority Records</button>
+        <button class="btn btn-ghost btn-sm" onclick="showCopilot()">&#128172; Ask AGRO-AI</button>
+        <button class="btn btn-ghost btn-sm" onclick="generateReport()">&#8659; Generate Report</button>
+        <button class="btn btn-ghost btn-sm" onclick="showTab('sources')">&#128275; Source Health</button>
+        <button class="btn btn-ghost btn-sm" onclick="showTab('audit')">&#128196; Audit Trail</button>
+      </div>
+    </div>
+
+    <!-- TABS -->
+    <div class="tabs">
+      <button class="tab active" onclick="showTab('queue')" id="tab-queue">Review Queue</button>
+      <button class="tab" onclick="showTab('sources')" id="tab-sources">Source Health</button>
+      <button class="tab" onclick="showTab('reports')" id="tab-reports">Reports</button>
+      <button class="tab" onclick="showTab('rules')" id="tab-rules">Rule Pack</button>
+      <button class="tab" onclick="showTab('audit')" id="tab-audit">Audit Trail</button>
+    </div>
+
+    <!-- QUEUE TAB -->
+    <div class="view-panel active" id="panel-queue">
+      <div class="section">
+        <div class="section-header">
+          <div class="section-title">Priority Review Queue</div>
+          <span class="section-count" id="queueCount">Loading…</span>
+        </div>
+        <div class="filter-bar" id="filterBar">
+          <button class="filter-btn active" onclick="setFilter(null)" data-filter="">All</button>
+          <button class="filter-btn" onclick="setFilter('ready')" data-filter="ready">Ready</button>
+          <button class="filter-btn" onclick="setFilter('review_required')" data-filter="review_required">Review Required</button>
+          <button class="filter-btn" onclick="setFilter('missing_mapping')" data-filter="missing_mapping">Missing Mapping</button>
+          <button class="filter-btn" onclick="setFilter('meter_gap')" data-filter="meter_gap">Meter Gap</button>
+          <button class="filter-btn" onclick="setFilter('possible_reset')" data-filter="possible_reset">Possible Reset</button>
+          <button class="filter-btn" onclick="setFilter('pump_without_meter')" data-filter="pump_without_meter">Pump ∅ Meter</button>
+          <button class="filter-btn" onclick="setFilter('duplicate')" data-filter="duplicate">Duplicate</button>
+          <button class="filter-btn" onclick="setFilter('backup_estimate')" data-filter="backup_estimate">Backup Estimate</button>
+        </div>
+        <div class="review-table-wrap">
+          <table id="reviewTable">
+            <thead>
+              <tr>
+                <th>Well / Meter</th>
+                <th>Evidence Class</th>
+                <th>Provider</th>
+                <th>Period</th>
+                <th>CombCode</th>
+                <th>Interval AF</th>
+                <th>Exceptions</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="reviewBody">
+              <tr><td colspan="9" class="loading-state"><div class="spinner"></div><br>Loading records…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- SOURCES TAB -->
+    <div class="view-panel" id="panel-sources">
+      <div class="section">
+        <div class="section-header"><div class="section-title">Provider Health</div></div>
+        <div id="sourceHealthCards">
+          <div class="loading-state"><div class="spinner"></div><br>Loading provider health…</div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="section-header"><div class="section-title">Fox Canyon Rule Pack</div></div>
+        <div id="rulePackMeta" class="report-card" style="font-size:12px;color:var(--muted);"></div>
+      </div>
+    </div>
+
+    <!-- REPORTS TAB -->
+    <div class="view-panel" id="panel-reports">
+      <div class="section">
+        <div class="section-header"><div class="section-title">Report Generation</div></div>
+        <div class="report-card">
+          <div class="intelligence-eyebrow">Executive Report Bundle</div>
+          <div style="font-size:14px;font-weight:700;margin:6px 0 8px;">Generate reporting-ready outputs</div>
+          <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">
+            Generates: Executive PDF · Detailed Records CSV · Exceptions CSV · Audit JSON · Data-Lineage Manifest · Downloadable ZIP bundle.
+            All outputs carry a prominent demonstration disclaimer.
+          </div>
+          <button class="btn btn-primary" onclick="generateReport()" id="genReportBtn">&#8659; Generate Full Report</button>
+          <div class="report-actions" id="reportActions" style="display:none;"></div>
+        </div>
+        <div id="reportHistory"></div>
+      </div>
+    </div>
+
+    <!-- RULES TAB -->
+    <div class="view-panel" id="panel-rules">
+      <div class="section">
+        <div class="section-header"><div class="section-title">Fox Canyon Public Context Rule Pack</div></div>
+        <div class="intelligence-card" style="margin-bottom:12px;">
+          <div style="font-size:12px;color:var(--warning);background:#fffbeb;border:1px solid #f0dcaa;border-radius:6px;padding:10px;margin-bottom:12px;">
+            <strong>Rule pack status:</strong> Provisional — NOT validated by Fox Canyon Groundwater Management Agency.
+            Rules are derived from public documents for demonstration context only.
+            Must be validated by agency staff before operational use.
+          </div>
+          <div id="rulePack">
+            <div class="loading-state"><div class="spinner"></div><br>Loading rule pack…</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- AUDIT TAB -->
+    <div class="view-panel" id="panel-audit">
+      <div class="section">
+        <div class="section-header"><div class="section-title">System Audit Trail</div></div>
+        <div id="auditContent" class="report-card" style="font-size:12px;">
+          <div class="loading-state"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div>
+
+  </div><!-- end main-content -->
+
+  <!-- COPILOT PANEL -->
+  <aside class="copilot-panel" id="copilotPanel">
+    <div class="copilot-header">
+      <div class="copilot-title">&#128172; Ask AGRO-AI</div>
+      <div class="copilot-sub">Grounded answers · Visible citations · Provisional distinctions</div>
+    </div>
+    <div class="copilot-messages" id="copilotMessages">
+      <div class="copilot-msg system">
+        Welcome to the AGRO-AI Water Intelligence Copilot. Ask any operational question about this dataset.
+        Answers are grounded in deterministic backend tools. I will not generate unsupported quantities or approve records.
+      </div>
+    </div>
+    <div class="copilot-input-area">
+      <div class="preset-pills" id="presetPills">
+        <button class="preset-pill" onclick="sendPreset('attention','What requires my attention today?')">Attention today</button>
+        <button class="preset-pill" onclick="sendPreset('reporting','Ready for reporting?')">Ready for reporting</button>
+        <button class="preset-pill" onclick="sendPreset('pump_without_meter','Pump without meter')">Pump ∅ meter</button>
+        <button class="preset-pill" onclick="sendPreset('provider_health','Provider health')">Provider health</button>
+        <button class="preset-pill" onclick="sendPreset('assumptions','Unvalidated assumptions')">Assumptions</button>
+        <button class="preset-pill" onclick="sendPreset('fox_canyon_data','Data request')">Data needed</button>
+        <button class="preset-pill" onclick="sendPreset('reporting_summary','Reporting summary')">Full summary</button>
+      </div>
+      <div class="copilot-input-row">
+        <button class="voice-btn" id="voiceBtn" onclick="toggleVoice()" title="Voice input (if supported)">&#127908;</button>
+        <textarea
+          class="copilot-input"
+          id="copilotInput"
+          rows="1"
+          placeholder="Ask about records, exceptions, calculations…"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendCopilot();}"
+        ></textarea>
+        <button class="send-btn" onclick="sendCopilot()">&#8593;</button>
+      </div>
+    </div>
+  </aside>
+</div><!-- end app-body -->
+
+<!-- RECORD DRAWER -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer(event)">
+  <div class="drawer" id="recordDrawer">
+    <div class="drawer-header">
+      <div>
+        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:3px;">Water Ledger Detail</div>
+        <div style="font-size:16px;font-weight:700;" id="drawerTitle">Record</div>
+      </div>
+      <button class="drawer-close" onclick="closeDrawer(null)">&times;</button>
+    </div>
+    <div class="drawer-body" id="drawerBody">
+      <div class="loading-state"><div class="spinner"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST AREA -->
+<div class="toast-area" id="toastArea"></div>
+
+<script>
+// ─────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────
+const API_BASE = (() => {
+  const injected = typeof window.AGROAI_API_BASE === 'string' ? window.AGROAI_API_BASE.trim() : '';
+  const local = ['localhost','127.0.0.1','::1'].includes(window.location.hostname);
+  return injected || (local ? 'http://127.0.0.1:8000' : 'https://api.agroai-pilot.com');
+})();
+const API = `${API_BASE}/v1/fcgma-demo`;
+
+// ─────────────────────────────────────────────
+// STATE
+// ─────────────────────────────────────────────
+let currentFilter = null;
+let lastReportId = null;
+let voiceRecognition = null;
+let voiceActive = false;
+
+// ─────────────────────────────────────────────
+// API HELPERS
+// ─────────────────────────────────────────────
+async function apiFetch(path, opts = {}) {
+  const url = path.startsWith('http') ? path : `${API}${path}`;
+  const res = await fetch(url, { headers: { 'Content-Type': 'application/json', ...opts.headers }, ...opts });
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`API ${res.status}: ${text}`);
+  }
+  return res.json();
+}
+
+// ─────────────────────────────────────────────
+// INITIALIZATION
+// ─────────────────────────────────────────────
+async function loadDashboard() {
+  try {
+    const [statusData, dashData] = await Promise.all([
+      apiFetch('/status'),
+      apiFetch('/dashboard'),
+    ]);
+    renderSourceChips(statusData.providers || []);
+    renderMetrics(statusData.ledger_stats || {}, statusData);
+    renderIntelligence(dashData);
+    document.getElementById('mRefresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
+  } catch(e) {
+    showToast('Backend unavailable: ' + e.message, 'error');
+    renderOfflineState();
+  }
+}
+
+function renderOfflineState() {
+  document.getElementById('sourceRow').innerHTML = `
+    <div class="source-chip unavailable"><span class="source-dot"></span>API unavailable — start backend with scripts/run_fcgma_demo.sh</div>`;
+  document.getElementById('intelligenceNarrative').innerHTML = `
+    <div style="color:var(--muted);font-size:13px;">
+      ⚠ Backend not reachable at <code>${API_BASE}</code>.<br>
+      Run: <code>cd agroai_api && uvicorn app.main:app --reload</code>
+    </div>`;
+}
+
+function renderSourceChips(providers) {
+  const row = document.getElementById('sourceRow');
+  row.innerHTML = providers.map(p => `
+    <span class="source-chip ${p.status}">
+      <span class="source-dot"></span>${p.label}
+    </span>`).join('');
+}
+
+function renderMetrics(stats, status) {
+  const connected = (status.providers || []).filter(p => p.status === 'connected').length;
+  document.getElementById('mSources').textContent = connected;
+  document.getElementById('mRecords').textContent = stats.total_records || 0;
+  document.getElementById('mAttention').textContent = stats.requires_attention || 0;
+  document.getElementById('mReady').textContent = stats.ready_for_export || 0;
+  document.getElementById('mExceptions').textContent = stats.open_exceptions || 0;
+  document.getElementById('mProvisionalAF').textContent = (stats.provisional_af || 0).toFixed(3);
+}
+
+function renderIntelligence(dashData) {
+  const card = document.getElementById('intelligenceCard');
+  const narr = document.getElementById('intelligenceNarrative');
+  const exec = dashData.executive_summary || {};
+  const stats = dashData.stats || {};
+
+  card.querySelector('.intelligence-title').textContent = 'Applied-Water Intelligence Summary';
+  const narrative = exec.narrative || 'No summary available.';
+  narr.innerHTML = `<p>${escHtml(narrative)}</p>`;
+
+  // Priority exceptions
+  const pex = dashData.recent_priority_exceptions || [];
+  if (pex.length > 0) {
+    narr.innerHTML += '<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">'
+      + pex.map(e => `
+        <div style="background:#fff8f8;border:1px solid #f7d0d0;border-radius:6px;padding:8px 10px;font-size:12px;">
+          <span class="badge danger">${escHtml(e.exception_type.replace(/_/g,' '))}</span>
+          <span style="margin-left:6px;color:var(--graphite);">${escHtml(e.well_id)} — ${escHtml((e.detail||'').slice(0,100))}</span>
+        </div>`).join('')
+      + '</div>';
+  }
+}
+
+// ─────────────────────────────────────────────
+// TABS
+// ─────────────────────────────────────────────
+function showTab(name) {
+  document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.getElementById(`panel-${name}`).classList.add('active');
+  document.getElementById(`tab-${name}`).classList.add('active');
+
+  if (name === 'queue') loadQueue();
+  if (name === 'sources') loadSourceHealth();
+  if (name === 'rules') loadRules();
+  if (name === 'audit') loadAudit();
+}
+
+// ─────────────────────────────────────────────
+// REVIEW QUEUE
+// ─────────────────────────────────────────────
+async function loadQueue() {
+  const body = document.getElementById('reviewBody');
+  body.innerHTML = '<tr><td colspan="9" class="loading-state"><div class="spinner"></div></td></tr>';
+  try {
+    const params = currentFilter ? `?filter=${currentFilter}` : '';
+    const data = await apiFetch(`/review-queue${params}`);
+    renderQueue(data.records || [], data.total || 0);
+  } catch(e) {
+    body.innerHTML = `<tr><td colspan="9" class="empty-state">
+      <div class="empty-icon">⚠</div>
+      <div class="empty-title">Could not load queue</div>
+      <div>${escHtml(e.message)}</div>
+    </td></tr>`;
+  }
+}
+
+function renderQueue(records, total) {
+  document.getElementById('queueCount').textContent = `${total} record(s)`;
+  const body = document.getElementById('reviewBody');
+  if (!records.length) {
+    body.innerHTML = `<tr><td colspan="9" class="empty-state">
+      <div class="empty-icon">✓</div>
+      <div class="empty-title">No records match this filter</div>
+    </td></tr>`;
+    return;
+  }
+  body.innerHTML = records.map(r => {
+    const excs = r.open_exceptions || [];
+    const excBadge = excs.length
+      ? excs.slice(0,2).map(e => `<span class="badge ${e.severity === 'high' ? 'danger' : e.severity === 'medium' ? 'warning' : 'muted'}">${escHtml(e.type.replace(/_/g,' ').slice(0,22))}</span>`).join(' ')
+      : '<span class="badge success">None</span>';
+
+    const statusBadge = {
+      requires_attention: '<span class="badge danger">Requires Attention</span>',
+      ready_for_export: '<span class="badge success">Ready</span>',
+      reviewer_approved: '<span class="badge success">Approved</span>',
+      pending_review: '<span class="badge muted">Pending</span>',
+      under_review: '<span class="badge info">Under Review</span>',
+    }[r.review_status] || `<span class="badge muted">${escHtml(r.review_status)}</span>`;
+
+    const scenarioChip = r.scenario_injected ? '<span class="scenario-chip">DEMO</span> ' : '';
+
+    return `<tr>
+      <td>${scenarioChip}<button class="record-link" onclick="openRecord('${escHtml(r.id)}')">${escHtml(r.well_id)}</button><br>
+          <span style="font-size:10px;color:var(--muted);">${escHtml(r.meter_id)}</span></td>
+      <td><span style="font-size:11px;">${escHtml(r.evidence_class.replace(/_/g,' '))}</span></td>
+      <td><span style="font-size:11px;">${escHtml(r.provider)}</span></td>
+      <td style="font-size:11px;">${escHtml(r.reporting_period)}</td>
+      <td><span class="badge ${r.combcode_status === 'resolved' ? 'success' : 'danger'}">${escHtml(r.combcode || 'None')}</span></td>
+      <td style="font-family:monospace;">${r.interval_volume_af != null ? r.interval_volume_af.toFixed(4) : '—'}</td>
+      <td>${excBadge}</td>
+      <td>${statusBadge}</td>
+      <td>
+        <button class="btn btn-ghost btn-sm" onclick="openRecord('${escHtml(r.id)}')">Inspect</button>
+      </td>
+    </tr>`;
+  }).join('');
+}
+
+function setFilter(f) {
+  currentFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.classList.toggle('active', (btn.dataset.filter || null) === f);
+  });
+  loadQueue();
+}
+
+// ─────────────────────────────────────────────
+// RECORD DRAWER
+// ─────────────────────────────────────────────
+async function openRecord(id) {
+  document.getElementById('drawerOverlay').classList.add('open');
+  document.getElementById('drawerTitle').textContent = id;
+  document.getElementById('drawerBody').innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+  try {
+    const r = await apiFetch(`/records/${id}/ledger`);
+    renderDrawer(r.record, r.calculation_explanation);
+  } catch(e) {
+    document.getElementById('drawerBody').innerHTML = `<div class="empty-state">Could not load record: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function closeDrawer(e) {
+  if (!e || e.target === document.getElementById('drawerOverlay')) {
+    document.getElementById('drawerOverlay').classList.remove('open');
+  }
+}
+
+function renderDrawer(r, calc) {
+  const open_excs = (r.exceptions || []).filter(e => e.status !== 'resolved');
+  document.getElementById('drawerTitle').textContent = r.well_id + ' — ' + r.id;
+
+  const scenarioBanner = r.scenario_injected
+    ? `<div style="background:#f3e8ff;border:1px solid #d8b4fe;border-radius:6px;padding:10px;font-size:12px;color:#6b21a8;margin-bottom:14px;">
+        <strong>DEMONSTRATION SCENARIO</strong><br>${escHtml(r.scenario_label || '')}
+       </div>`
+    : '';
+
+  const excsHtml = open_excs.length
+    ? open_excs.map(e => `
+        <div class="exception-row">
+          <div class="exception-type">
+            <span class="badge ${e.severity === 'high' ? 'danger' : e.severity === 'medium' ? 'warning' : 'muted'}">${escHtml(e.severity)}</span>
+            ${escHtml(e.exception_type.replace(/_/g,' '))}
+          </div>
+          <div class="exception-detail">${escHtml(e.detail)}</div>
+          ${e.rule_id ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;">Rule: ${escHtml(e.rule_id)}</div>` : ''}
+        </div>`).join('')
+    : '<div class="badge success" style="margin-bottom:6px;">No open exceptions</div>';
+
+  const stepsHtml = (calc && calc.steps && calc.steps.length)
+    ? calc.steps.map(s => `
+        <div class="calc-step">
+          <div class="calc-step-name">${escHtml(s.step.replace(/_/g,' '))}</div>
+          <div style="font-size:12px;color:var(--graphite);">${escHtml(s.description)}</div>
+          ${s.rule_id ? `<div style="font-size:10px;color:var(--muted);margin-top:2px;">Rule: ${escHtml(s.rule_id)}</div>` : ''}
+        </div>`).join('')
+    : '<div style="color:var(--muted);font-size:12px;">No calculation steps recorded.</div>';
+
+  const lineageJson = JSON.stringify(r.source_lineage || {}, null, 2);
+
+  const auditHtml = (r.audit_events || []).slice().reverse().slice(0, 10).map(ev => `
+    <div class="audit-event">
+      <span style="font-weight:700;">${escHtml(ev.event_type.replace(/_/g,' '))}</span>
+      — <span class="audit-ts">${escHtml(ev.timestamp ? ev.timestamp.slice(0,19) : '')}</span>
+      — <span style="color:var(--muted);">${escHtml(ev.actor)}</span><br>
+      <span style="color:var(--graphite);">${escHtml(ev.detail || '')}</span>
+    </div>`).join('');
+
+  document.getElementById('drawerBody').innerHTML = `
+    ${scenarioBanner}
+
+    <div class="drawer-grid" style="margin-bottom:16px;">
+      <div><div class="drawer-label">Evidence Class</div><div class="drawer-value"><span class="badge info">${escHtml(r.evidence_class.replace(/_/g,' '))}</span></div></div>
+      <div><div class="drawer-label">Provider</div><div class="drawer-value">${escHtml(r.provider)}</div></div>
+      <div><div class="drawer-label">Well ID</div><div class="drawer-value">${escHtml(r.well_id)}</div></div>
+      <div><div class="drawer-label">Meter ID</div><div class="drawer-value">${escHtml(r.meter_id)}</div></div>
+      <div><div class="drawer-label">Reporting Period</div><div class="drawer-value">${escHtml(r.reporting_period)}</div></div>
+      <div><div class="drawer-label">Event Timestamp</div><div class="drawer-value" style="font-size:11px;">${escHtml((r.event_timestamp||'').slice(0,19))}</div></div>
+      <div><div class="drawer-label">CombCode</div><div class="drawer-value"><span class="badge ${r.combcode ? 'success' : 'danger'}">${escHtml(r.combcode || 'Unresolved')}</span></div></div>
+      <div><div class="drawer-label">Parcel IDs</div><div class="drawer-value">${(r.parcel_ids||[]).length ? escHtml(r.parcel_ids.join(', ')) : '<span class="badge danger">Unmapped</span>'}</div></div>
+    </div>
+
+    <div class="drawer-grid" style="margin-bottom:16px;">
+      <div><div class="drawer-label">Cumulative Volume</div><div class="drawer-value" style="font-family:monospace;">${r.cumulative_volume != null ? r.cumulative_volume.toFixed(4) + ' AF' : '—'}</div></div>
+      <div><div class="drawer-label">Interval Volume</div><div class="drawer-value" style="font-family:monospace;">${r.interval_volume != null ? r.interval_volume.toFixed(4) + ' AF' : '—'}</div></div>
+      <div><div class="drawer-label">Unit (original)</div><div class="drawer-value">${escHtml(r.unit_original||'—')} → acre-feet</div></div>
+      <div><div class="drawer-label">Multiplier</div><div class="drawer-value" style="font-family:monospace;">${r.multiplier}</div></div>
+      <div><div class="drawer-label">Pump Status</div><div class="drawer-value">${r.pump_status ? `<span class="badge ${r.pump_status==='running'?'success':'muted'}">${escHtml(r.pump_status)}</span>` : '—'}</div></div>
+      <div><div class="drawer-label">Source Quality</div><div class="drawer-value"><span class="badge ${r.source_quality==='ok'?'success':'danger'}">${escHtml(r.source_quality||'ok')}</span></div></div>
+    </div>
+
+    <div class="drawer-section">
+      <div class="drawer-label">Provisional Applied-Water Attribution</div>
+      ${r.attribution_provisional
+        ? `<div class="model-disclaimer">
+            <strong>Applied-water model: DEMO RULESET v0.1</strong> — Status: <strong>Provisional</strong><br>
+            Purpose: Workflow demonstration. Requires Fox Canyon validation.<br>
+            Provisional AF: ${r.provisional_applied_water_af != null ? r.provisional_applied_water_af.toFixed(4) + ' AF' : 'N/A'}
+           </div>`
+        : `<span class="badge success">Not provisional — ${r.confirmed_applied_water_af != null ? r.confirmed_applied_water_af.toFixed(4) + ' AF confirmed' : 'no extraction quantity'}</span>`
+      }
+    </div>
+
+    <div class="drawer-section">
+      <div class="drawer-label">Open Exceptions (${open_excs.length})</div>
+      ${excsHtml}
+    </div>
+
+    <div class="drawer-section">
+      <details>
+        <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--forest-700);padding:6px 0;">
+          ▶ How was this calculated? (${(calc&&calc.steps||[]).length} steps)
+        </summary>
+        <div style="margin-top:8px;">
+          ${stepsHtml}
+          ${calc && calc.model_disclaimer ? `<div class="model-disclaimer">${escHtml(calc.model_disclaimer)}</div>` : ''}
+          ${calc && calc.rule_sources ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">
+            Sources: ${calc.rule_sources.map(u => `<a href="${escHtml(u)}" target="_blank">${escHtml(u)}</a>`).join(' · ')}</div>` : ''}
+        </div>
+      </details>
+    </div>
+
+    <div class="drawer-section">
+      <details>
+        <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--forest-700);padding:6px 0;">&#128200; Source Lineage</summary>
+        <div style="margin-top:8px;">
+          <div class="lineage-block">${escHtml(lineageJson)}</div>
+          <div style="font-size:10px;color:var(--muted);margin-top:4px;">
+            Sanitized source hash: <code>${escHtml(r.sanitized_source_hash||'')}</code> |
+            Calc version: <code>${escHtml(r.calculation_version||'')}</code>
+          </div>
+        </div>
+      </details>
+    </div>
+
+    <div class="drawer-section">
+      <details>
+        <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--forest-700);padding:6px 0;">&#128196; Audit Events</summary>
+        <div style="margin-top:8px;">${auditHtml || '<div style="color:var(--muted);font-size:12px;">No audit events.</div>'}</div>
+      </details>
+    </div>
+
+    <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-ghost btn-sm" onclick="askAboutRecord('${escHtml(r.id)}')">Ask AGRO-AI about this record</button>
+      <button class="btn btn-ghost btn-sm" onclick="recomputeRecord('${escHtml(r.id)}')">Recompute</button>
+    </div>`;
+}
+
+async function recomputeRecord(id) {
+  try {
+    await apiFetch(`/records/${id}/recompute`, { method: 'POST' });
+    showToast('Record recomputed successfully.', 'success');
+    openRecord(id);
+  } catch(e) { showToast('Recompute failed: ' + e.message, 'error'); }
+}
+
+function askAboutRecord(id) {
+  closeDrawer(null);
+  document.getElementById('copilotInput').value = `Explain record ${id}`;
+  sendCopilot(id);
+}
+
+// ─────────────────────────────────────────────
+// SOURCE HEALTH
+// ─────────────────────────────────────────────
+async function loadSourceHealth() {
+  try {
+    const data = await apiFetch('/source-health');
+    renderSourceHealthCards(data.provider_health?.providers || []);
+    renderRulePackMeta(data.rule_pack || {});
+  } catch(e) {
+    document.getElementById('sourceHealthCards').innerHTML = `<div class="empty-state">Error: ${escHtml(e.message)}</div>`;
+  }
+}
+
+function renderSourceHealthCards(providers) {
+  const el = document.getElementById('sourceHealthCards');
+  el.innerHTML = providers.map(p => `
+    <div class="report-card" style="margin-bottom:10px;">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
+        <span class="source-chip ${p.status}"><span class="source-dot"></span>${escHtml(p.label)}</span>
+        <span style="font-size:11px;color:var(--muted);">Records: ${p.record_count}</span>
+      </div>
+      <div style="font-size:12px;color:var(--graphite);">${escHtml(p.message)}</div>
+      ${p.note ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;">${escHtml(p.note)}</div>` : ''}
+    </div>`).join('');
+}
+
+function renderRulePackMeta(pack) {
+  document.getElementById('rulePackMeta').innerHTML = `
+    <div style="margin-bottom:6px;"><strong>${escHtml(pack.pack_id||'')}</strong> v${escHtml(pack.pack_version||'')} — ${escHtml(pack.pack_status||'')}</div>
+    <div style="color:var(--warning);font-size:11px;margin-bottom:6px;">${escHtml(pack.validation_status||'')}</div>
+    <div style="font-size:11px;color:var(--muted);">${escHtml(pack.disclaimer||'')}</div>`;
+}
+
+// ─────────────────────────────────────────────
+// RULES
+// ─────────────────────────────────────────────
+async function loadRules() {
+  try {
+    const data = await apiFetch('/rules');
+    const rules = data.rules || [];
+    document.getElementById('rulePack').innerHTML = rules.map(rule => `
+      <div class="report-card" style="margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
+          <code style="font-size:11px;background:var(--stone-100);padding:2px 6px;border-radius:3px;">${escHtml(rule.rule_id)}</code>
+          <span class="badge ${rule.status==='provisional'?'warning':'info'}">${escHtml(rule.status)}</span>
+          ${rule.validation_required ? '<span class="badge danger">Requires Validation</span>' : ''}
+        </div>
+        <div style="font-weight:700;font-size:13px;margin-bottom:4px;">${escHtml(rule.title)}</div>
+        <div style="font-size:12px;color:var(--graphite);margin-bottom:6px;">${escHtml(rule.summary)}</div>
+        <a href="${escHtml(rule.source_url)}" target="_blank" style="font-size:11px;color:var(--forest-700);">Source ↗</a>
+        ${rule.notes ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;">${escHtml(rule.notes)}</div>` : ''}
+      </div>`).join('');
+  } catch(e) {
+    document.getElementById('rulePack').innerHTML = `<div class="empty-state">Error loading rules: ${escHtml(e.message)}</div>`;
+  }
+}
+
+// ─────────────────────────────────────────────
+// AUDIT
+// ─────────────────────────────────────────────
+async function loadAudit() {
+  try {
+    const data = await apiFetch('/review-queue');
+    const records = data.records || [];
+    let events = [];
+    for (const r of records.slice(0,20)) {
+      const detail = await apiFetch(`/records/${r.id}/audit`);
+      events.push(...(detail.audit_events||[]).map(ev => ({...ev, record_id: r.id, well_id: r.well_id})));
+    }
+    events.sort((a,b) => (b.timestamp||'').localeCompare(a.timestamp||''));
+    document.getElementById('auditContent').innerHTML = events.slice(0,50).map(ev => `
+      <div class="audit-event">
+        <span class="audit-ts">${escHtml((ev.timestamp||'').slice(0,19))}</span> —
+        <strong>${escHtml(ev.event_type.replace(/_/g,' '))}</strong> —
+        <code style="font-size:11px;">${escHtml(ev.record_id||'')}</code>
+        (${escHtml(ev.well_id||'')})<br>
+        <span style="color:var(--muted);">${escHtml(ev.actor||'')}:</span> ${escHtml(ev.detail||'')}
+      </div>`).join('') || '<div class="empty-state">No audit events found.</div>';
+  } catch(e) {
+    document.getElementById('auditContent').innerHTML = `<div class="empty-state">Error: ${escHtml(e.message)}</div>`;
+  }
+}
+
+// ─────────────────────────────────────────────
+// REPORTS
+// ─────────────────────────────────────────────
+async function generateReport() {
+  const btn = document.getElementById('genReportBtn');
+  btn.disabled = true; btn.textContent = 'Generating…';
+  try {
+    const data = await apiFetch('/reports/generate', { method: 'POST', body: JSON.stringify({ report_type: 'full', reporting_period: '2026-Q1' }) });
+    lastReportId = data.report_id;
+    showToast('Report generated successfully!', 'success');
+    renderReportActions(data);
+    showTab('reports');
+    btn.disabled = false; btn.textContent = '↙ Generate Full Report';
+  } catch(e) {
+    showToast('Report generation failed: ' + e.message, 'error');
+    btn.disabled = false; btn.textContent = '↙ Generate Full Report';
+  }
+}
+
+function renderReportActions(data) {
+  const el = document.getElementById('reportActions');
+  el.style.display = 'flex';
+  el.innerHTML = `
+    <a class="download-link" href="${API}/reports/${data.report_id}/pdf" target="_blank">&#128196; Executive PDF</a>
+    <a class="download-link" href="${API}/reports/${data.report_id}/csv?type=records" target="_blank">&#128196; Records CSV</a>
+    <a class="download-link" href="${API}/reports/${data.report_id}/csv?type=exceptions" target="_blank">&#128196; Exceptions CSV</a>
+    <a class="download-link" href="${API}/reports/${data.report_id}/bundle" target="_blank">&#128230; Download ZIP Bundle</a>
+  `;
+  const hist = document.getElementById('reportHistory');
+  hist.innerHTML = `<div class="report-card">
+    <div class="intelligence-eyebrow">Generated Report</div>
+    <div style="font-size:13px;margin:6px 0;font-weight:700;">${escHtml(data.report_id)}</div>
+    <div style="font-size:11px;color:var(--muted);">
+      ${data.record_count} records · ${data.exception_count} exceptions ·
+      Calc: ${escHtml(data.stats?.calculation_version||'')}
+    </div>
+    <div style="font-size:11px;color:var(--danger);margin-top:6px;">${escHtml(data.disclaimer||'')}</div>
+  </div>`;
+}
+
+// ─────────────────────────────────────────────
+// COPILOT
+// ─────────────────────────────────────────────
+function showCopilot() {
+  document.getElementById('copilotPanel').style.display = 'flex';
+  document.getElementById('copilotInput').focus();
+}
+
+function addMsg(role, text) {
+  const el = document.getElementById('copilotMessages');
+  const div = document.createElement('div');
+  div.className = `copilot-msg ${role}`;
+  div.innerHTML = `<pre>${escHtml(text)}</pre>`;
+
+  if (role === 'assistant') {
+    const speakBtn = document.createElement('button');
+    speakBtn.className = 'speak-btn';
+    speakBtn.textContent = '🔊 Read aloud';
+    speakBtn.onclick = () => speakText(text);
+    div.appendChild(speakBtn);
+  }
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+function addCitationMsg(result) {
+  const el = document.getElementById('copilotMessages');
+  const div = document.createElement('div');
+  div.className = 'copilot-msg assistant';
+  div.innerHTML = `<pre>${escHtml(result.answer || '')}</pre>`;
+
+  // Citations
+  const sr = result.structured_result || {};
+  const cites = [];
+  if (sr.calculation_version) cites.push(`Calc: ${sr.calculation_version}`);
+  if (result.answer_type) cites.push(`Type: ${result.answer_type}`);
+  if (!result.llm_enhanced) cites.push('Deterministic fallback (no LLM key required)');
+
+  if (cites.length) {
+    div.innerHTML += `<div class="copilot-citations">${cites.map(escHtml).join(' · ')}</div>`;
+  }
+
+  const speakBtn = document.createElement('button');
+  speakBtn.className = 'speak-btn';
+  speakBtn.textContent = '🔊 Read aloud';
+  speakBtn.onclick = () => speakText(result.answer || '');
+  div.appendChild(speakBtn);
+
+  el.appendChild(div);
+  el.scrollTop = el.scrollHeight;
+}
+
+async function sendCopilot(recordIdOverride = null) {
+  const input = document.getElementById('copilotInput');
+  const query = input.value.trim();
+  if (!query) return;
+  input.value = '';
+
+  addMsg('user', query);
+
+  // Thinking indicator
+  const el = document.getElementById('copilotMessages');
+  const thinking = document.createElement('div');
+  thinking.className = 'copilot-msg system';
+  thinking.textContent = 'Querying backend tools…';
+  el.appendChild(thinking);
+  el.scrollTop = el.scrollHeight;
+
+  try {
+    const payload = { query };
+    if (recordIdOverride) payload.record_id = recordIdOverride;
+    const data = await apiFetch('/copilot/query', { method: 'POST', body: JSON.stringify(payload) });
+    thinking.remove();
+    addCitationMsg(data);
+  } catch(e) {
+    thinking.remove();
+    addMsg('assistant', `Error: ${e.message}\n\nCheck that the backend is running.`);
+  }
+}
+
+async function sendPreset(key, label) {
+  const input = document.getElementById('copilotInput');
+  input.value = label;
+  await sendCopilot();
+}
+
+// ─────────────────────────────────────────────
+// VOICE
+// ─────────────────────────────────────────────
+function toggleVoice() {
+  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+    showToast('Speech recognition not supported in this browser.', 'error');
+    return;
+  }
+  const btn = document.getElementById('voiceBtn');
+  if (voiceActive) {
+    voiceRecognition && voiceRecognition.stop();
+    voiceActive = false;
+    btn.classList.remove('recording');
+    return;
+  }
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  voiceRecognition = new SR();
+  voiceRecognition.lang = 'en-US';
+  voiceRecognition.onresult = (e) => {
+    document.getElementById('copilotInput').value = e.results[0][0].transcript;
+  };
+  voiceRecognition.onend = () => { voiceActive = false; btn.classList.remove('recording'); };
+  voiceRecognition.start();
+  voiceActive = true;
+  btn.classList.add('recording');
+}
+
+function speakText(text) {
+  if (!('speechSynthesis' in window)) { showToast('Speech synthesis not supported.', 'error'); return; }
+  const clean = text.replace(/[*_#`]/g, '').replace(/\[.*?\]\(.*?\)/g, '').slice(0, 1000);
+  const utter = new SpeechSynthesisUtterance(clean);
+  utter.lang = 'en-US';
+  utter.rate = 0.95;
+  window.speechSynthesis.cancel();
+  window.speechSynthesis.speak(utter);
+}
+
+// ─────────────────────────────────────────────
+// SCENARIOS
+// ─────────────────────────────────────────────
+async function resetScenarios() {
+  if (!confirm('Reset demonstration dataset? This will clear all records and re-inject the standard scenario set.')) return;
+  try {
+    await apiFetch('/scenarios/reset', { method: 'POST' });
+    showToast('Demonstration dataset reset.', 'success');
+    loadDashboard();
+    loadQueue();
+  } catch(e) { showToast('Reset failed: ' + e.message, 'error'); }
+}
+
+// ─────────────────────────────────────────────
+// UTILS
+// ─────────────────────────────────────────────
+function escHtml(str) {
+  if (str == null) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function showToast(msg, type = '') {
+  const area = document.getElementById('toastArea');
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+  toast.textContent = msg;
+  area.appendChild(toast);
+  setTimeout(() => toast.remove(), 4000);
+}
+
+// ─────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────
+loadDashboard();
+loadQueue();
+</script>
+</body>
+</html>

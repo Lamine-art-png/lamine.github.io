@@ -64,6 +64,11 @@ class Settings(BaseSettings):
 
     DEMO_API_KEY: str = "changeme-demo-key"  # override via env in prod
 
+    # FCGMA Water Intelligence Copilot
+    CIMIS_APP_KEY: str = ""          # Set via env var CIMIS_APP_KEY — never commit real value
+    CIMIS_TARGET: str = "Cimis Station 152"  # Ventura County station (configurable)
+    ANTHROPIC_API_KEY: str = ""      # Optional LLM for copilot — deterministic fallback used if absent
+
     # Strip whitespace/tabs from env vars that may be copy-pasted with junk
     @field_validator("*", mode="before")
     @classmethod

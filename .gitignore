@@ -46,3 +46,11 @@ agroai-cloudflare-worker/api-native/fealog.txt
 
 # IDE/tool storage artifacts
 /src/storage/
+
+# FCGMA Water Intelligence Copilot — replay captures and sensitive artifacts
+# WiseConn sanitized replay captures (never commit raw captures)
+agroai_api/app/services/fcgma/captures/
+agroai_api/app/services/fcgma/replays/*.json
+agroai_api/app/services/fcgma/replays/raw_*
+# Generated FCGMA reports (runtime artifacts)
+/fcgma_reports/

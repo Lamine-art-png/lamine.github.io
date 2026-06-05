@@ -82,6 +82,10 @@ app.include_router(workbench_router, prefix="/v1")
 from app.api.v1.compliance import router as compliance_router  # noqa: E402
 app.include_router(compliance_router, prefix="/v1")
 
+# FCGMA Water Intelligence Copilot (isolated demo namespace)
+from app.api.v1.fcgma_demo import router as fcgma_router  # noqa: E402
+app.include_router(fcgma_router, prefix="/v1")
+
 
 # Prometheus metrics endpoint
 from app.core.metrics import metrics_endpoint  # noqa: E402
@@ -125,6 +129,10 @@ app.add_middleware(
         "http://127.0.0.1:4174",
         "http://localhost:4180",
         "http://127.0.0.1:4180",
+        "http://localhost:8080",
+        "http://127.0.0.1:8080",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
     ],
     allow_credentials=True,
     allow_methods=["*"],
