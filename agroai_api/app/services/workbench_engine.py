@@ -84,7 +84,15 @@ def create_session(mode: str = "uploaded", workspace_name: str = "Water Command 
         updated_at=now,
         status="ready",
     )
-    SESSIONS[sid] = {"session": sess, "artifacts": [], "analysis": None, "audit": [], "evidence_actions": []}
+    SESSIONS[sid] = {
+        "session": sess,
+        "artifacts": [],
+        "analysis": None,
+        "analyses_by_scope": {},
+        "latest_analyzed_scope": None,
+        "audit": [],
+        "evidence_actions": [],
+    }
     return sess
 
 
@@ -347,6 +355,26 @@ class SchedulingNotAllowed(Exception):
         super().__init__(
             "Scheduling is not allowed because the recommendation does not meet the scheduling gate. "
             f"Reasons: {'; '.join(reasons)}"
+        )
+
+
+class ScopeMissingError(Exception):
+    """Evidence action submitted without required farm/block scope."""
+    pass
+
+
+class ScopeMismatchError(Exception):
+    """Evidence action scope does not match the latest analyzed scope for this session."""
+    def __init__(self, action_type: str, required_farm: str, required_block: str, provided_farm: str, provided_block: str) -> None:
+        self.action_type = action_type
+        self.required_farm = required_farm
+        self.required_block = required_block
+        self.provided_farm = provided_farm
+        self.provided_block = provided_block
+        super().__init__(
+            f"Scope mismatch for '{action_type}': action scope ({provided_farm} / {provided_block}) does not match "
+            f"the latest analyzed scope ({required_farm} / {required_block}). "
+            "Re-analyze the selected scope before recording evidence actions."
         )
 
 
@@ -1394,7 +1422,10 @@ def _build_source_rows(
     all_costs = rows.get("water_costs", [])
     if region:
         sel_costs = [r for r in all_costs if str(r.get("region", "")).strip().lower() == region.lower()]
-        cost_lims: list = []
+        if not sel_costs and all_costs:
+            cost_lims: list = [f"No water-cost records matched region '{region}'. Water-cost context is withheld."]
+        else:
+            cost_lims = []
     else:
         sel_costs = []
         cost_lims = (
@@ -1663,6 +1694,10 @@ def analyze_session(
         source_rows=list(context.get("source_rows", [])),
     )
     store["analysis"] = result
+    if selected_farm and selected_block:
+        scope_key = f"{selected_farm}||{selected_block}"
+        store.setdefault("analyses_by_scope", {})[scope_key] = result
+        store["latest_analyzed_scope"] = {"farm": selected_farm, "block": selected_block}
     store["session"].updated_at = datetime.utcnow()
     store["audit"].append({"time": datetime.utcnow().isoformat(), "event": "Workbench analysis completed", "mode": mode})
     return result
@@ -1697,22 +1732,39 @@ EVIDENCE_TYPES = {
 }
 
 
-def get_evidence_chain(session_id: str) -> Dict[str, Any]:
+def get_evidence_chain(
+    session_id: str,
+    selected_farm: str | None = None,
+    selected_block: str | None = None,
+) -> Dict[str, Any]:
     store = SESSIONS.get(session_id)
     if not store:
         raise KeyError("Session not found")
     now = datetime.utcnow().isoformat()
-    actions = list(store.get("evidence_actions", []))
-    latest_by_type = {item["type"]: item for item in actions}
+    all_actions = list(store.get("evidence_actions", []))
+
+    # When farm+block are supplied, return only that scope's chain.
+    if selected_farm and selected_block:
+        scope_actions = [
+            a for a in all_actions
+            if a.get("selected_farm") == selected_farm and a.get("selected_block") == selected_block
+        ]
+        scope_key = f"{selected_farm}||{selected_block}"
+        scope_analysis = store.get("analyses_by_scope", {}).get(scope_key) or store.get("analysis")
+    else:
+        scope_actions = all_actions
+        scope_analysis = store.get("analysis")
+
+    latest_by_type = {item["type"]: item for item in scope_actions}
     chain = []
     for key in EVIDENCE_ORDER:
         event = latest_by_type.get(key)
-        if key == "recommended" and not event and store.get("analysis"):
+        if key == "recommended" and not event and scope_analysis:
             event = {
                 "type": "recommended",
                 "evidence_type": "system_generated",
-                "timestamp": getattr(store["analysis"], "created_at", None).isoformat()
-                if getattr(store["analysis"], "created_at", None)
+                "timestamp": getattr(scope_analysis, "created_at", None).isoformat()
+                if getattr(scope_analysis, "created_at", None)
                 else now,
                 "actor": "AGRO-AI Workbench",
                 "evidence_summary": "Verified water decision prepared from the current source package.",
@@ -1728,7 +1780,10 @@ def get_evidence_chain(session_id: str) -> Dict[str, Any]:
                 "evidence_type": event.get("evidence_type", EVIDENCE_TYPES.get(key, "operator_attestation")) if event else None,
             }
         )
-    return {"session_id": session_id, "evidence_chain": chain, "audit_events": store.get("audit", [])}
+    response: Dict[str, Any] = {"session_id": session_id, "evidence_chain": chain, "audit_events": store.get("audit", [])}
+    if selected_farm and selected_block:
+        response["scope"] = {"selected_farm": selected_farm, "selected_block": selected_block}
+    return response
 
 
 def record_evidence_action(
@@ -1738,6 +1793,8 @@ def record_evidence_action(
     evidence_summary: str | None = None,
     payload: Dict[str, Any] | None = None,
     override_reason: str | None = None,
+    selected_farm: str | None = None,
+    selected_block: str | None = None,
 ) -> Dict[str, Any]:
     if action_type not in {"scheduled", "applied", "observed", "verified"}:
         raise ValueError("Unsupported evidence action")
@@ -1745,23 +1802,53 @@ def record_evidence_action(
     if not store:
         raise KeyError("Session not found")
 
+    # Scope enforcement: when the session has an analyzed scope, the action must match it.
+    latest_scope = store.get("latest_analyzed_scope")
+    if latest_scope:
+        exp_farm = latest_scope.get("farm", "")
+        exp_block = latest_scope.get("block", "")
+        req_farm = (selected_farm or "").strip()
+        req_block = (selected_block or "").strip()
+        if not req_farm or not req_block:
+            raise ScopeMissingError(
+                f"Evidence action '{action_type}' requires selected_farm and selected_block. "
+                f"Latest analyzed scope is {exp_farm} / {exp_block}. "
+                "Include selected_farm and selected_block in the request body."
+            )
+        if req_farm != exp_farm or req_block != exp_block:
+            raise ScopeMismatchError(action_type, exp_farm, exp_block, req_farm, req_block)
+
+    # Resolve the analysis and prior actions for this scope.
+    req_farm = (selected_farm or "").strip()
+    req_block = (selected_block or "").strip()
+    if req_farm and req_block:
+        scope_key = f"{req_farm}||{req_block}"
+        scope_analysis = store.get("analyses_by_scope", {}).get(scope_key) or store.get("analysis")
+        scope_actions = [
+            a for a in store.get("evidence_actions", [])
+            if a.get("selected_farm") == req_farm and a.get("selected_block") == req_block
+        ]
+    else:
+        scope_key = None
+        scope_analysis = store.get("analysis")
+        scope_actions = store.get("evidence_actions", [])
+
     # Scheduling gate — must run BEFORE any evidence-order override audit is written.
     # override_reason cannot bypass this gate.
     if action_type == "scheduled":
-        analysis = store.get("analysis")
-        if analysis is None:
+        if scope_analysis is None:
             raise SchedulingNotAllowed(["No analysis exists for this session — run analysis before scheduling"])
-        rec = getattr(analysis, "recommendation", None) or {}
+        rec = getattr(scope_analysis, "recommendation", None) or {}
         if not isinstance(rec, dict) or not rec.get("schedulable", False):
             reasons = (rec.get("scheduling_block_reasons") if isinstance(rec, dict) else []) or ["Recommendation does not meet scheduling gate"]
             raise SchedulingNotAllowed(reasons)
 
-    # Enforce evidence chain ordering.
+    # Enforce evidence chain ordering within this scope.
     prerequisite = EVIDENCE_PREREQUISITES.get(action_type)
     if prerequisite:
-        existing = {item["type"] for item in store.get("evidence_actions", [])}
+        existing = {item["type"] for item in scope_actions}
         if prerequisite == "recommended":
-            has_prerequisite = bool(store.get("analysis"))
+            has_prerequisite = bool(scope_analysis)
         else:
             has_prerequisite = prerequisite in existing
         if not has_prerequisite:
@@ -1781,7 +1868,7 @@ def record_evidence_action(
     evidence_type = EVIDENCE_TYPES.get(action_type, "operator_attestation")
     payload_data = payload or {}
 
-    event = {
+    event: Dict[str, Any] = {
         "type": action_type,
         "evidence_type": evidence_type,
         "status": "recorded",
@@ -1789,6 +1876,8 @@ def record_evidence_action(
         "actor": actor,
         "evidence_summary": summary,
         "payload": payload_data,
+        "selected_farm": req_farm or None,
+        "selected_block": req_block or None,
     }
     store.setdefault("evidence_actions", []).append(event)
     audit = {
@@ -1806,6 +1895,6 @@ def record_evidence_action(
         "actor": actor,
         "evidence_type": evidence_type,
         "evidence_summary": summary,
-        "updated_evidence_chain": get_evidence_chain(session_id)["evidence_chain"],
+        "updated_evidence_chain": get_evidence_chain(session_id, selected_farm=req_farm or None, selected_block=req_block or None)["evidence_chain"],
         "audit_event": audit,
     }

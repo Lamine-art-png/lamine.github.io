@@ -618,6 +618,11 @@
   background: linear-gradient(180deg, #ffffff, #fdf8f0);
   opacity: 0.88;
 }
+.decision--awaiting-package {
+  border-color: var(--neutral-line, #ddd);
+  background: linear-gradient(180deg, #fafafa, #f3f4f6);
+  opacity: 0.82;
+}
 .decision-stale-warning {
   font-size: 12.5px;
   color: var(--warn-strong, #8a5800);

@@ -120,6 +120,8 @@ class WorkbenchActionRequest(BaseModel):
     evidence_summary: Optional[str] = None
     payload: Dict[str, Any] = Field(default_factory=dict)
     override_reason: Optional[str] = None
+    selected_farm: Optional[str] = None
+    selected_block: Optional[str] = None
 
 class ReconciliationResult(BaseModel):
     matched_signals: List[str]

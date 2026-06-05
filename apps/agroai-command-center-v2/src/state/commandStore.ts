@@ -101,6 +101,13 @@ export interface CommandState {
   scopeSelectionPending: boolean;
   activeAnalyzedFarm: string | null;
   activeAnalyzedBlock: string | null;
+  // Explicit stale / empty-package state — separate from scopeSelectionPending.
+  // resultStale: the current displayed decision does not reflect the current package state.
+  // packageAwaitingAnalysis: no package has been analyzed for the current session.
+  resultStale: boolean;
+  packageAwaitingAnalysis: boolean;
+  // Per-block evidence chain cache: preserved across scope switches within a session.
+  blockEvidenceChains: Record<string, EvidenceStep[]>;
   // Multi-file upload package tracking
   uploadedPackageSessionId: string | null;
   uploadedPackageArtifacts: UploadedFileState[];
@@ -458,6 +465,50 @@ function baseEvidence(now: string): EvidenceStep[] {
   }));
 }
 
+// Empty-package sentinel values — displayed after startNewPackage until analysis runs.
+const EMPTY_PACKAGE_DECISION: Decision = {
+  action: "No package loaded — upload source files before analysis can run.",
+  start: "Withheld",
+  appliedWater: "Withheld",
+  crop: "Withheld",
+  block: "Withheld",
+  driver: "No source package active",
+  confidence: "—",
+  evidenceCompleteness: "—",
+  estimatedWaterSavings: "—",
+  verification: "Upload source files",
+  recommendationOrigin: "insufficient_context",
+  schedulable: false,
+  schedulingBlockReasons: ["No package has been analyzed for this session"],
+  flowValidationState: "Withheld",
+};
+
+const EMPTY_PACKAGE_REPORT: ReportModel = {
+  farm: "No package loaded",
+  block: "No package loaded",
+  recommendation: "Upload source files before analysis can run.",
+  plannedWater: "Withheld",
+  appliedWater: "Withheld",
+  variance: "Withheld",
+  evidenceCompleteness: "—",
+  estimatedWaterSavings: "—",
+  verification: "Upload source files",
+};
+
+function emptyPackageEvidence(): EvidenceStep[] {
+  const steps: Array<[EvidenceStep["key"], string, string]> = [
+    ["recommended", "Recommended", "AGRO-AI Intelligence Engine"],
+    ["scheduled", "Scheduled", "Operations user"],
+    ["applied", "Applied", "Operations user"],
+    ["observed", "Observed", "Operations user"],
+    ["verified", "Verified", "AGRO-AI Verification"],
+  ];
+  return steps.map(([key, label, owner]) => ({
+    key, label, owner, status: "Pending",
+    timestamp: "", evidence: `${label} pending — upload source files before analysis can run.`,
+  }));
+}
+
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
@@ -492,6 +543,9 @@ function scenarioState(id: ScenarioId, mode: AnalysisMode, origin: Recommendatio
     scopeSelectionPending: false,
     activeAnalyzedFarm: null,
     activeAnalyzedBlock: null,
+    resultStale: false,
+    packageAwaitingAnalysis: false,
+    blockEvidenceChains: {},
     uploadedPackageSessionId: null,
     uploadedPackageArtifacts: [],
   };
@@ -527,6 +581,9 @@ function initialState(): CommandState {
     scopeSelectionPending: false,
     activeAnalyzedFarm: null,
     activeAnalyzedBlock: null,
+    resultStale: false,
+    packageAwaitingAnalysis: false,
+    blockEvidenceChains: {},
     uploadedPackageSessionId: null,
     uploadedPackageArtifacts: [],
   } as CommandState;
@@ -1067,6 +1124,12 @@ export const actions = {
 
   async refreshIntelligence() {
     if (state.analysisPhase === "running") return;
+    // Block refresh when scope selection is partial (one of farm/block is set but not the other).
+    if ((state.selectedFarm && !state.selectedBlock) || (!state.selectedFarm && state.selectedBlock)) {
+      addAudit("Refresh blocked", "Partial scope selection: both farm and block must be set before refreshing.");
+      toast("Select both farm and block before refreshing this scope.");
+      return;
+    }
     set({ analysisPhase: "running", pipelineMessage: "Re-analyzing evaluation source records…", trace: buildTrace(new Date().toISOString(), false) });
     addAudit("Evaluation refresh started", `Re-running analyzeSession for session: ${state.sessionId ?? "none"}.`);
 
@@ -1089,7 +1152,13 @@ export const actions = {
     await new Promise((r) => setTimeout(r, 900));
 
     if (result) {
+      // Preserve the evidence chain for the active scope — do not reset on refresh.
+      const prevActiveScope = (state.activeAnalyzedFarm && state.activeAnalyzedBlock)
+        ? `${state.activeAnalyzedFarm}||${state.activeAnalyzedBlock}` : null;
+      const prevChain = prevActiveScope ? state.blockEvidenceChains[prevActiveScope] : undefined;
       applyBackendResult(result, state.analysisMode);
+      if (prevChain) set({ evidence: prevChain });
+      set({ resultStale: false });
       addAudit("Evaluation refresh completed", "Decision refreshed from evaluation session.");
       toast("Decision refreshed.");
     } else if (state.analysisMode === "uploaded" || state.analysisMode === "live") {
@@ -1099,6 +1168,7 @@ export const actions = {
         analysisPhase: "complete",
         pipelineMessage: "Refresh failed. Prior uploaded decision is stale — re-upload or reconnect to update.",
         scopeSelectionPending: true,
+        resultStale: true,
       });
       addAudit("Evaluation refresh failed", "Backend unavailable; prior uploaded/live decision retained as stale.");
       toast("Refresh failed. Prior decision is stale. Re-upload to update.");
@@ -1127,8 +1197,26 @@ export const actions = {
     await new Promise((r) => setTimeout(r, 900));
     if (result) {
       applyBackendResult(result, "live");
+      set({ resultStale: false });
       addAudit("Live refresh completed", "Decision updated from live connected-source intelligence.");
       toast("Live intelligence refreshed.");
+    } else if (state.analysisMode === "live") {
+      // Prior live analysis — preserve as stale, disable operational actions.
+      set({
+        analysisPhase: "complete",
+        pipelineMessage: "Live telemetry could not be refreshed. Prior live decision is stale.",
+        resultStale: true,
+      });
+      addAudit("Live refresh failed", "Live provider unreachable; prior live decision retained as stale.");
+      toast("Live provider unavailable. Prior live decision is stale.");
+    } else if (state.analysisMode === "uploaded") {
+      // Evaluation package remains valid — live request failed, don't corrupt the uploaded state.
+      set({
+        analysisPhase: "complete",
+        pipelineMessage: "Live provider request failed. Evaluation package analysis remains active.",
+      });
+      addAudit("Live refresh failed", "Live provider unreachable; evaluation package analysis remains active.");
+      toast("Live provider unavailable. Evaluation package remains active.");
     } else {
       set({ analysisPhase: "complete", pipelineMessage: "Live provider unavailable. Evaluation session remains active." });
       addAudit("Live refresh failed", "Live provider unreachable; evaluation session analysis remains active.");
@@ -1144,6 +1232,8 @@ export const actions = {
   // Upload multiple files to the current package session (or create a new one if none exists).
   async uploadFiles(files: File[]) {
     if (!files.length) return;
+    // Detect whether a prior analyzed package is already active — affects failure semantics.
+    const hadPriorAnalysis = !!(state.activeAnalyzedFarm && state.activeAnalyzedBlock);
     set({ pipelineMessage: "Uploading source records…", analysisPhase: "running" });
 
     // Show placeholders immediately so filenames are visible before any API call.
@@ -1155,17 +1245,31 @@ export const actions = {
       uploadedPackageArtifacts: [...state.uploadedPackageArtifacts, ...placeholders],
     });
 
-    // Helper: mark all pending placeholders as failed and unblock the phase.
+    // Helper: mark all pending placeholders as failed.
+    // Distinguishes failed append (prior package preserved) from failed new-package upload.
     function failAllPending(reason: string) {
       const failedArtifacts = placeholders.map(p => ({ ...p, parseStatus: "Upload failed", warnings: reason }));
       const prevArtifacts = state.uploadedPackageArtifacts.filter(a => !files.some(f => f.name === a.name && a.parseStatus === "Uploading…"));
-      set({
-        analysisPhase: "complete",
-        pipelineMessage: `Upload failed: ${reason}`,
-        uploadedPackageArtifacts: [...prevArtifacts, ...failedArtifacts],
-        uploaded: failedArtifacts[failedArtifacts.length - 1],
-        scopeSelectionPending: false,
-      });
+      if (hadPriorAnalysis) {
+        // Append to prior package failed — prior analyzed decision is preserved and still usable.
+        set({
+          analysisPhase: "complete",
+          pipelineMessage: `Failed to append files to package. Prior analysis for ${state.activeAnalyzedFarm} / ${state.activeAnalyzedBlock} remains active.`,
+          uploadedPackageArtifacts: [...prevArtifacts, ...failedArtifacts],
+          uploaded: failedArtifacts[failedArtifacts.length - 1],
+        });
+      } else {
+        // New empty package — stay in awaiting-analysis state; do not show old decision.
+        set({
+          analysisPhase: "complete",
+          pipelineMessage: `Upload failed: ${reason}. Upload source files to begin analysis.`,
+          uploadedPackageArtifacts: [...prevArtifacts, ...failedArtifacts],
+          uploaded: failedArtifacts[failedArtifacts.length - 1],
+          resultStale: true,
+          packageAwaitingAnalysis: true,
+          scopeSelectionPending: false,
+        });
+      }
     }
 
     // Reuse the existing uploaded-package session rather than creating a new one per file.
@@ -1225,8 +1329,19 @@ export const actions = {
     // Check if all files failed — if so, session is unusable for analysis.
     const allFailed = newArtifacts.every(a => a.parseStatus === "Upload failed");
     if (allFailed) {
-      set({ analysisPhase: "complete", pipelineMessage: "All files failed to upload. Package is empty.", scopeSelectionPending: false });
-      toast("All files failed to upload. Check file formats and try again.");
+      if (hadPriorAnalysis) {
+        set({ analysisPhase: "complete", pipelineMessage: "All new files failed to upload. Prior package analysis remains active." });
+        toast("All files failed. Prior package analysis remains active.");
+      } else {
+        set({
+          analysisPhase: "complete",
+          pipelineMessage: "All files failed to upload. Upload source files to begin analysis.",
+          scopeSelectionPending: false,
+          resultStale: true,
+          packageAwaitingAnalysis: true,
+        });
+        toast("All files failed to upload. Check file formats and try again.");
+      }
       return;
     }
 
@@ -1241,22 +1356,37 @@ export const actions = {
     }
     if (analysis && analysis.ok && analysis.data) {
       applyBackendResult(analysis.data, "uploaded");
+      // Clear stale / awaiting flags — successful analysis for this package.
+      set({ resultStale: false, packageAwaitingAnalysis: false });
       addAudit("Uploaded package analyzed", `${files.map(f => f.name).join(", ")} analyzed via Workbench.`);
       toast(`${files.length === 1 ? files[0].name : `${files.length} files`} analyzed.`);
       return;
     }
-    // Analysis failed but files were uploaded — preserve the package, mark decision stale.
-    set({
-      analysisPhase: "complete",
-      pipelineMessage: "Files uploaded but analysis unavailable. Prior decision is stale.",
-      scopeSelectionPending: true,
-    });
-    toast("Files uploaded. Analysis unavailable — prior decision is stale.");
+    // Analysis failed after successful uploads.
+    if (hadPriorAnalysis) {
+      // Prior decision preserved; new files appended but not yet analyzed.
+      set({
+        analysisPhase: "complete",
+        pipelineMessage: "Files uploaded. Analysis unavailable — prior decision is stale. Re-analyze when backend is available.",
+        resultStale: true,
+        scopeSelectionPending: true,
+      });
+      toast("Files uploaded. Analysis unavailable — prior decision is stale.");
+    } else {
+      // New package — no prior decision to show; stay in awaiting-analysis state.
+      set({
+        analysisPhase: "complete",
+        pipelineMessage: "Files uploaded but analysis unavailable. Upload additional files or retry analysis.",
+        resultStale: true,
+        packageAwaitingAnalysis: true,
+        scopeSelectionPending: false,
+      });
+      toast("Files uploaded. Analysis unavailable — retry to get a decision.");
+    }
   },
 
-  // Reset the upload package — all prior decisions are invalidated until a new package is uploaded and analyzed.
+  // Reset the upload package — all prior decisions are withheld until a new package is uploaded and analyzed.
   startNewPackage() {
-    // Invalidate any in-flight scope request so it cannot apply a result from the old package.
     _scopeAnalysisGen++;
     set({
       sessionId: null,
@@ -1267,14 +1397,27 @@ export const actions = {
       selectedBlock: null,
       availableFarms: [],
       availableBlocksByFarm: {},
+      scopeDefaulted: false,
+      scopeDefaultedFarm: null,
+      scopeDefaultedBlock: null,
       activeAnalyzedFarm: null,
       activeAnalyzedBlock: null,
       backendMeta: null,
       scopeSelectionPending: false,
+      resultStale: true,
+      packageAwaitingAnalysis: true,
+      blockEvidenceChains: {},
+      // Replace prior decision with withheld empty-package state.
+      decision: EMPTY_PACKAGE_DECISION,
+      evidence: emptyPackageEvidence(),
+      sources: [],
+      reconciliation: [],
+      trace: [],
+      report: EMPTY_PACKAGE_REPORT,
       analysisPhase: "complete",
       pipelineMessage: "New package started. Upload source files before analysis can run.",
     });
-    addAudit("Upload package reset", "Session and all scope data cleared. New package session will be created on next upload.");
+    addAudit("Upload package reset", "Session and all scope data cleared. Upload source files to begin a new package analysis.");
     toast("New package started. Upload source files before analysis can run.");
   },
 
@@ -1334,7 +1477,17 @@ export const actions = {
       if (!isCurrentRequest()) return; // discard — superseded by newer selection
       if (res.ok && res.data) {
         applyBackendResult(res.data, state.analysisMode);
-        set({ activeAnalyzedFarm: capturedFarm, activeAnalyzedBlock: capturedBlock, scopeSelectionPending: false });
+        set({
+          activeAnalyzedFarm: capturedFarm,
+          activeAnalyzedBlock: capturedBlock,
+          scopeSelectionPending: false,
+          resultStale: false,
+          packageAwaitingAnalysis: false,
+        });
+        // Restore the persisted evidence chain for this scope if available.
+        const scopeKey = `${capturedFarm}||${capturedBlock}`;
+        const cachedChain = state.blockEvidenceChains[scopeKey];
+        if (cachedChain) set({ evidence: cachedChain });
         addAudit("Scope re-analysis completed", `Analysis updated for ${capturedFarm} / ${capturedBlock}.`);
         toast("Analysis updated for selected scope.");
         return;
@@ -1395,9 +1548,21 @@ export const actions = {
       toast("Evidence step was not recorded. Backend is unavailable.");
       return;
     }
-    const res = await apiClient.recordEvidenceAction(state.sessionId, actionName, evidenceText[key]);
+    const res = await apiClient.recordEvidenceAction(
+      state.sessionId,
+      actionName,
+      evidenceText[key],
+      state.activeAnalyzedFarm ?? undefined,
+      state.activeAnalyzedBlock ?? undefined,
+    );
     if (res.ok && res.data?.updated_evidence_chain) {
-      set({ evidence: res.data.updated_evidence_chain });
+      const chain = res.data.updated_evidence_chain as EvidenceStep[];
+      set({ evidence: chain });
+      // Cache the updated chain for this scope so it can be restored when switching blocks.
+      if (state.activeAnalyzedFarm && state.activeAnalyzedBlock) {
+        const scopeKey = `${state.activeAnalyzedFarm}||${state.activeAnalyzedBlock}`;
+        set({ blockEvidenceChains: { ...state.blockEvidenceChains, [scopeKey]: chain } });
+      }
       addAudit(`${order[idx]} recorded`, `Backend evidence action recorded in evaluation-session storage.`);
       toast(`${state.evidence[idx]?.label ?? "Step"} recorded`);
       return;

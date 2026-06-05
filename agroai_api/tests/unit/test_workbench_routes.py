@@ -1809,3 +1809,174 @@ def test_explicit_scope_clears_scope_defaulted(client):
         f"scope_defaulted must be False when explicit scope supplied, got {nc.get('scope_defaulted')}")
     assert nc.get('scope_defaulted_farm') is None, (
         f"scope_defaulted_farm must be None when explicit scope supplied, got {nc.get('scope_defaulted_farm')}")
+
+
+# --- Section 7: Scoped evidence actions and per-block chains -------------------
+
+def _make_scoped_session(client, farm, block):
+    """Create a session using the full sample package (which is schedulable for Block A North) and analyze at the given scope."""
+    pkg = client.post('/v1/workbench/sample-package').json()
+    sid = pkg['session']['session_id']
+    client.post(f'/v1/workbench/sessions/{sid}/analyze',
+                json={'session_id': sid, 'mode': 'uploaded', 'selected_farm': farm, 'selected_block': block})
+    return sid
+
+
+def test_scoped_evidence_action_without_scope_returns_422(client):
+    """Action without farm/block scope when session has analyzed scope must return 422."""
+    sid = _make_scoped_session(client, 'Alpha Vineyard', 'Block A North')
+    r = client.post(f'/v1/workbench/sessions/{sid}/actions/schedule',
+                    json={'actor': 'Ops'})
+    assert r.status_code == 422, f"Expected 422, got {r.status_code}: {r.text}"
+    assert 'scope' in r.json()['detail'].lower()
+
+
+def test_scoped_evidence_action_with_mismatched_farm_returns_409(client):
+    """Action with wrong farm (scope mismatch) must return 409."""
+    sid = _make_scoped_session(client, 'Alpha Vineyard', 'Block A North')
+    r = client.post(f'/v1/workbench/sessions/{sid}/actions/schedule',
+                    json={'actor': 'Ops', 'selected_farm': 'Wrong Farm', 'selected_block': 'Block A North'})
+    assert r.status_code == 409, f"Expected 409, got {r.status_code}: {r.text}"
+    assert 'mismatch' in r.json()['detail'].lower()
+
+
+def test_block_a_scheduled_not_visible_in_block_b_chain(client):
+    """Scheduling Block A must not appear in Block B's evidence chain."""
+    sid = _make_scoped_session(client, 'Alpha Vineyard', 'Block A North')
+    # Schedule for Block A.
+    sched = client.post(f'/v1/workbench/sessions/{sid}/actions/schedule',
+                        json={'actor': 'Ops', 'selected_farm': 'Alpha Vineyard', 'selected_block': 'Block A North'})
+    assert sched.status_code == 200
+
+    # Switch analysis to Block B.
+    client.post(f'/v1/workbench/sessions/{sid}/analyze',
+                json={'session_id': sid, 'mode': 'uploaded', 'selected_farm': 'Alpha Vineyard', 'selected_block': 'Block B West'})
+
+    # Block B's chain must NOT have Scheduled=Complete.
+    chain_b = client.get(f'/v1/workbench/sessions/{sid}/evidence-chain?selected_farm=Alpha+Vineyard&selected_block=Block+B+West')
+    assert chain_b.status_code == 200
+    b_chain = chain_b.json()['evidence_chain']
+    scheduled_b = next((s for s in b_chain if s['key'] == 'scheduled'), None)
+    assert scheduled_b is not None
+    assert scheduled_b['status'] == 'Pending', (
+        f"Block B must have Scheduled=Pending (Block A's action must not bleed through), got {scheduled_b['status']}")
+
+
+def test_block_a_scheduled_does_not_satisfy_block_b_applied_prerequisite(client):
+    """Scheduling Block A must not satisfy Applied prerequisite for Block B."""
+    sid = _make_scoped_session(client, 'Alpha Vineyard', 'Block A North')
+    # Schedule for Block A.
+    client.post(f'/v1/workbench/sessions/{sid}/actions/schedule',
+                json={'actor': 'Ops', 'selected_farm': 'Alpha Vineyard', 'selected_block': 'Block A North'})
+
+    # Switch analysis to Block B.
+    client.post(f'/v1/workbench/sessions/{sid}/analyze',
+                json={'session_id': sid, 'mode': 'uploaded', 'selected_farm': 'Alpha Vineyard', 'selected_block': 'Block B West'})
+
+    # Trying to Apply for Block B without Block B being scheduled must fail.
+    r = client.post(f'/v1/workbench/sessions/{sid}/actions/applied',
+                    json={'actor': 'Ops', 'selected_farm': 'Alpha Vineyard', 'selected_block': 'Block B West'})
+    assert r.status_code == 409, (
+        f"Block B Applied must fail (Block A Scheduled must not satisfy Block B Applied prerequisite), got {r.status_code}")
+    assert 'scheduled' in r.json()['detail'].lower()
+
+
+def test_block_a_and_b_chains_persist_independently(client):
+    """Block A Scheduled must not bleed into Block B's chain (chains are independent per scope)."""
+    sid = _make_scoped_session(client, 'Alpha Vineyard', 'Block A North')
+    # Schedule Block A North (sample package guarantees this is schedulable).
+    r_a = client.post(f'/v1/workbench/sessions/{sid}/actions/schedule',
+                      json={'actor': 'Ops', 'selected_farm': 'Alpha Vineyard', 'selected_block': 'Block A North'})
+    assert r_a.status_code == 200, f"Block A schedule must succeed: {r_a.text}"
+
+    # Switch analysis context to Block B West (not schedulable — different scope, no bleeding required).
+    client.post(f'/v1/workbench/sessions/{sid}/analyze',
+                json={'session_id': sid, 'mode': 'uploaded', 'selected_farm': 'Alpha Vineyard', 'selected_block': 'Block B West'})
+
+    # Block A chain: Scheduled=Complete (evidence persists after scope switch).
+    chain_a = client.get(f'/v1/workbench/sessions/{sid}/evidence-chain?selected_farm=Alpha+Vineyard&selected_block=Block+A+North')
+    assert chain_a.status_code == 200
+    a_sched = next(s for s in chain_a.json()['evidence_chain'] if s['key'] == 'scheduled')
+    assert a_sched['status'] == 'Complete', f"Block A Scheduled must remain Complete after switching scope: {a_sched}"
+
+    # Block B chain: Scheduled=Pending (Block A's schedule must not bleed into Block B).
+    chain_b = client.get(f'/v1/workbench/sessions/{sid}/evidence-chain?selected_farm=Alpha+Vineyard&selected_block=Block+B+West')
+    assert chain_b.status_code == 200
+    b_sched = next(s for s in chain_b.json()['evidence_chain'] if s['key'] == 'scheduled')
+    assert b_sched['status'] == 'Pending', f"Block B Scheduled must be Pending (no bleed from Block A): {b_sched}"
+
+    # Block A Applied must still be Pending (only Scheduled was done on Block A).
+    a_applied = next(s for s in chain_a.json()['evidence_chain'] if s['key'] == 'applied')
+    assert a_applied['status'] == 'Pending', f"Block A Applied must still be Pending: {a_applied}"
+
+
+def test_switching_back_to_block_a_restores_its_scheduled_state(client):
+    """After switching to Block B and back to Block A, Block A's Scheduled state must be restored."""
+    sid = _make_scoped_session(client, 'Alpha Vineyard', 'Block A North')
+    # Schedule Block A.
+    client.post(f'/v1/workbench/sessions/{sid}/actions/schedule',
+                json={'actor': 'Ops', 'selected_farm': 'Alpha Vineyard', 'selected_block': 'Block A North'})
+
+    # Switch to Block B and back to Block A.
+    client.post(f'/v1/workbench/sessions/{sid}/analyze',
+                json={'session_id': sid, 'mode': 'uploaded', 'selected_farm': 'Alpha Vineyard', 'selected_block': 'Block B West'})
+    client.post(f'/v1/workbench/sessions/{sid}/analyze',
+                json={'session_id': sid, 'mode': 'uploaded', 'selected_farm': 'Alpha Vineyard', 'selected_block': 'Block A North'})
+
+    # Block A chain must still have Scheduled=Complete.
+    chain_a = client.get(f'/v1/workbench/sessions/{sid}/evidence-chain?selected_farm=Alpha+Vineyard&selected_block=Block+A+North')
+    a_sched = next(s for s in chain_a.json()['evidence_chain'] if s['key'] == 'scheduled')
+    assert a_sched['status'] == 'Complete', (
+        f"Block A Scheduled must survive a scope switch and return to Block A: {a_sched}")
+
+
+def test_scoped_scheduling_gate_blocks_non_schedulable_scope(client):
+    """Scheduling gate must reject when the scope-specific analysis is not schedulable (no flow validation)."""
+    from io import BytesIO
+    # Minimal upload: just a crop profile and weather — no flow meter or soil moisture.
+    # This will result in schedulable=False (no flow validation).
+    profile = b'[{"farm":"Test Farm","block":"Test Block","crop":"grapes"}]'
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
+    client.post(f'/v1/workbench/sessions/{s}/analyze',
+                json={'session_id': s, 'mode': 'uploaded', 'selected_farm': 'Test Farm', 'selected_block': 'Test Block'})
+    r = client.post(f'/v1/workbench/sessions/{s}/actions/schedule',
+                    json={'actor': 'Ops', 'selected_farm': 'Test Farm', 'selected_block': 'Test Block'})
+    assert r.status_code == 409, f"Scheduling gate must reject non-schedulable scope, got {r.status_code}: {r.text}"
+    assert 'scheduling' in r.json()['detail'].lower()
+
+
+def test_evidence_chain_scope_filter_returns_scope_field(client):
+    """evidence_chain with farm+block returns a scope field confirming the filter."""
+    sid = _make_scoped_session(client, 'Alpha Vineyard', 'Block A North')
+    r = client.get(f'/v1/workbench/sessions/{sid}/evidence-chain?selected_farm=Alpha+Vineyard&selected_block=Block+A+North')
+    assert r.status_code == 200
+    body = r.json()
+    assert 'scope' in body, "Response must include scope field when farm/block provided"
+    assert body['scope']['selected_farm'] == 'Alpha Vineyard'
+    assert body['scope']['selected_block'] == 'Block A North'
+
+
+# --- Section 10: Water-cost matched-region limitation -------------------------
+
+def test_water_cost_matched_region_limitation_when_no_records_match(client):
+    """_build_source_rows must add a limitation when region exists but no cost records match it."""
+    from io import BytesIO
+    profile = b'[{"farm":"Test Farm","block":"Test Block","crop":"grapes","soil_type":"sandy loam","region":"Central Valley"}]'
+    region_csv = b'timestamp,region,eto_mm,rain_forecast_mm\n2026-05-15T12:00:00Z,Central Valley,6.5,0\n'
+    costs_csv = b'region,water_source,cost_per_acre_ft\nNorthern Valley,district,200\n'  # different region → no match
+
+    s = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()['session_id']
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('crop_profile.json', BytesIO(profile), 'application/json')})
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('weather_summary.csv', BytesIO(region_csv), 'text/csv')})
+    client.post(f'/v1/workbench/sessions/{s}/upload', files={'file': ('water_costs.csv', BytesIO(costs_csv), 'text/csv')})
+    r = client.post(f'/v1/workbench/sessions/{s}/analyze', json={'session_id': s, 'mode': 'uploaded'})
+    assert r.status_code == 200
+
+    source_rows = r.json().get('source_rows', [])
+    cost_row = next((sr for sr in source_rows if sr.get('source_kind') == 'water_costs'), None)
+    assert cost_row is not None, "Water costs source row must be present"
+    assert cost_row['selected_scope_record_count'] == 0
+    lims = cost_row.get('limitations', [])
+    assert any('no water-cost records matched region' in l.lower() for l in lims), (
+        f"Must show matched-region limitation when no cost records match region, got: {lims}")

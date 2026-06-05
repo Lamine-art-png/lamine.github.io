@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from app.models.workbench import WorkbenchActionRequest, WorkbenchAnalysisRequest, WorkbenchLiveAnalysisRequest
 from app.services import workbench_engine as engine
-from app.services.workbench_engine import EvidenceOrderViolation, SchedulingNotAllowed
+from app.services.workbench_engine import EvidenceOrderViolation, SchedulingNotAllowed, ScopeMissingError, ScopeMismatchError
 
 router = APIRouter(prefix="/workbench", tags=["workbench"])
 MAX_FILE = 10 * 1024 * 1024
@@ -102,9 +102,15 @@ def _record_action(session_id: str, action_type: str, payload: WorkbenchActionRe
             session_id, action_type, payload.actor,
             payload.evidence_summary, payload.payload,
             override_reason=payload.override_reason,
+            selected_farm=payload.selected_farm,
+            selected_block=payload.selected_block,
         )
     except KeyError:
         raise HTTPException(404, "Session not found")
+    except ScopeMissingError as exc:
+        raise HTTPException(422, f"Scope required: {exc}")
+    except ScopeMismatchError as exc:
+        raise HTTPException(409, f"Scope mismatch: {exc}")
     except EvidenceOrderViolation as exc:
         raise HTTPException(
             409,
@@ -138,9 +144,9 @@ def verify_action(session_id: str, payload: WorkbenchActionRequest):
 
 
 @router.get('/sessions/{session_id}/evidence-chain')
-def evidence_chain(session_id: str):
+def evidence_chain(session_id: str, selected_farm: str | None = None, selected_block: str | None = None):
     try:
-        return engine.get_evidence_chain(session_id)
+        return engine.get_evidence_chain(session_id, selected_farm=selected_farm, selected_block=selected_block)
     except KeyError:
         raise HTTPException(404, "Session not found")
 

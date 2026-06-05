@@ -14,8 +14,11 @@ export function VerifiedDecision() {
   const phase = useCommandStore((s) => s.analysisPhase);
   const evidence = useCommandStore((s) => s.evidence);
   const scopeSelectionPending = useCommandStore((s) => s.scopeSelectionPending);
+  const packageAwaitingAnalysis = useCommandStore((s) => s.packageAwaitingAnalysis);
+  const resultStale = useCommandStore((s) => s.resultStale);
   const ready = phase === "complete";
   const isRepresentative = decision.recommendationOrigin === "representative_fallback";
+  const isAwaitingPackage = packageAwaitingAnalysis;
   // Only a hard scheduling block (schedulable === false) makes the card read as incomplete.
   const isIncomplete = decision.schedulable === false;
   const hasGuidance =
@@ -23,11 +26,12 @@ export function VerifiedDecision() {
     (Array.isArray(decision.nextEvidenceRequired) && decision.nextEvidenceRequired.length > 0);
 
   const byKey = Object.fromEntries(evidence.map((s) => [s.key, s]));
-  // Stale scope disables all operational evidence actions — analysis must run for the selected block first.
-  const canSchedule = ready && !scopeSelectionPending && decision.schedulable === true && byKey.recommended?.status === "Complete";
-  const canApply = ready && !scopeSelectionPending && byKey.scheduled?.status === "Complete";
-  const canObserve = ready && !scopeSelectionPending && byKey.applied?.status === "Complete";
-  const canVerify = ready && !scopeSelectionPending && byKey.observed?.status === "Complete";
+  // Stale scope, awaiting package, or resultStale disables all operational evidence actions.
+  const operationalBlocked = scopeSelectionPending || isAwaitingPackage || (resultStale && !isRepresentative);
+  const canSchedule = ready && !operationalBlocked && decision.schedulable === true && byKey.recommended?.status === "Complete";
+  const canApply = ready && !operationalBlocked && byKey.scheduled?.status === "Complete";
+  const canObserve = ready && !operationalBlocked && byKey.applied?.status === "Complete";
+  const canVerify = ready && !operationalBlocked && byKey.observed?.status === "Complete";
 
   const originLabel = ORIGIN_LABEL[decision.recommendationOrigin] ?? decision.recommendationOrigin;
   const flowLabel = decision.flowValidationState ?? "Flow status unknown";
@@ -35,18 +39,27 @@ export function VerifiedDecision() {
 
   return (
     <section
-      className={`card panel decision ${isIncomplete ? "decision--review" : ""} ${scopeSelectionPending && !isRepresentative ? "decision--stale" : ""}`}
+      className={`card panel decision ${isIncomplete ? "decision--review" : ""} ${(scopeSelectionPending || (resultStale && !isRepresentative)) && !isAwaitingPackage ? "decision--stale" : ""} ${isAwaitingPackage ? "decision--awaiting-package" : ""}`}
       aria-label="Verified water decision"
       data-walkthrough-target="verified-decision"
     >
       <p className="eyebrow">
-        {scopeSelectionPending && !isRepresentative
+        {isAwaitingPackage
+          ? "No package loaded"
+          : scopeSelectionPending && !isRepresentative
+          ? "Prior decision — stale"
+          : resultStale && !isRepresentative
           ? "Prior decision — stale"
           : isIncomplete
           ? "Evidence review"
           : "Verified water decision"}
       </p>
-      {scopeSelectionPending && !isRepresentative && (
+      {isAwaitingPackage && (
+        <p className="decision-stale-warning" role="alert" data-testid="empty-package-notice">
+          No package is loaded. Upload source files before analysis can run.
+        </p>
+      )}
+      {!isAwaitingPackage && (scopeSelectionPending || resultStale) && !isRepresentative && (
         <p className="decision-stale-warning" role="alert">
           Prior decision is stale until the selected farm and block are analyzed.
         </p>

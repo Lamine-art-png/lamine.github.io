@@ -90,11 +90,27 @@ export const apiClient = {
   getControllerEnvironments: () => request<Record<string, unknown>>(ENDPOINTS.controllerEnvironments),
   getWiseconnAuth: () => request<Record<string, unknown>>(ENDPOINTS.wiseconnAuth),
   getTalgilStatus: () => request<Record<string, unknown>>(ENDPOINTS.talgilStatus),
-  getEvidenceChain: (sessionId: string) => request<EvidenceChainResponse>(ENDPOINTS.evidenceChain(sessionId)),
-  recordEvidenceAction: (sessionId: string, action: "schedule" | "applied" | "observe" | "verify", evidence_summary: string) =>
+  getEvidenceChain: (sessionId: string, selectedFarm?: string, selectedBlock?: string) => {
+    const qs = selectedFarm && selectedBlock
+      ? `?selected_farm=${encodeURIComponent(selectedFarm)}&selected_block=${encodeURIComponent(selectedBlock)}`
+      : "";
+    return request<EvidenceChainResponse>(`${ENDPOINTS.evidenceChain(sessionId)}${qs}`);
+  },
+  recordEvidenceAction: (
+    sessionId: string,
+    action: "schedule" | "applied" | "observe" | "verify",
+    evidence_summary: string,
+    selectedFarm?: string,
+    selectedBlock?: string,
+  ) =>
     request<EvidenceActionResponse>(ENDPOINTS.evidenceAction(sessionId, action), {
       method: "POST",
-      body: JSON.stringify({ actor: "Operations user", evidence_summary }),
+      body: JSON.stringify({
+        actor: "Operations user",
+        evidence_summary,
+        ...(selectedFarm ? { selected_farm: selectedFarm } : {}),
+        ...(selectedBlock ? { selected_block: selectedBlock } : {}),
+      }),
     }),
 };
 

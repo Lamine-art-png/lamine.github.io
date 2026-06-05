@@ -935,4 +935,118 @@ describe("commandStore", () => {
     expect(s.scopeDefaultedFarm).toBe("Alpha Vineyard");
     expect(s.scopeDefaultedBlock).toBe("Block A North");
   });
+
+  // --- Section 16 (twelfth pass): Package-reset integrity, safe recovery, scoped evidence chains ---
+
+  it("startNewPackage sets resultStale true, packageAwaitingAnalysis true, and clears blockEvidenceChains", () => {
+    __patchStateForTest({
+      resultStale: false,
+      packageAwaitingAnalysis: false,
+      blockEvidenceChains: {
+        "Farm A||Block 1": [{ key: "scheduled" as const, status: "Complete" as const, label: "Schedule approved", owner: "Ops", evidence: "done", evidenceType: "operator_attestation" as const, timestamp: "2026-05-01T00:00:00Z" }],
+      },
+      sessionId: "pkg-1",
+    });
+    actions.startNewPackage();
+    const s = getState();
+    expect(s.resultStale).toBe(true);
+    expect(s.packageAwaitingAnalysis).toBe(true);
+    expect(s.blockEvidenceChains).toEqual({});
+  });
+
+  it("startNewPackage sets EMPTY_PACKAGE_DECISION: schedulable false, withheld action text", () => {
+    __patchStateForTest({ sessionId: "pkg-2" });
+    actions.startNewPackage();
+    const s = getState();
+    expect(s.decision.schedulable).toBe(false);
+    expect(s.decision.action).toMatch(/No package loaded/i);
+    expect(s.decision.recommendationOrigin).toBe("insufficient_context");
+  });
+
+  it("startNewPackage resets all evidence steps to Pending", () => {
+    __patchStateForTest({ sessionId: "pkg-3" });
+    actions.startNewPackage();
+    const evidence = getState().evidence;
+    expect(evidence.length).toBeGreaterThan(0);
+    expect(evidence.every((step) => step.status === "Pending")).toBe(true);
+  });
+
+  it("blockEvidenceChains keeps Block A and Block B chains independent", () => {
+    __patchStateForTest({
+      blockEvidenceChains: {
+        "Alpha Vineyard||Block A North": [
+          { key: "scheduled" as const, status: "Complete" as const, label: "Schedule approved", owner: "Ops", evidence: "done", evidenceType: "operator_attestation" as const, timestamp: "2026-05-01T00:00:00Z" },
+        ],
+        "Alpha Vineyard||Block B West": [
+          { key: "scheduled" as const, status: "Pending" as const, label: "Schedule", owner: "Ops", evidence: "", evidenceType: "operator_attestation" as const, timestamp: "" },
+        ],
+      },
+    });
+    const chains = getState().blockEvidenceChains;
+    expect(chains["Alpha Vineyard||Block A North"]?.[0]?.status).toBe("Complete");
+    expect(chains["Alpha Vineyard||Block B West"]?.[0]?.status).toBe("Pending");
+    // startNewPackage must erase both chains
+    actions.startNewPackage();
+    expect(getState().blockEvidenceChains).toEqual({});
+  });
+
+  it("refreshIntelligence with farm selected but no block adds Refresh blocked audit", async () => {
+    __applyBackendResult("alpha-vineyard", {
+      analysis_id: "rf-id", session_id: "rf-session", status: "complete",
+      analysis_mode: "uploaded" as const, recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      recommendation: { schedulable: true, scheduling_block_reasons: [] },
+      reconciliation: {}, normalized_context: {}, signal_summary: {},
+      warnings: [], uploaded_artifacts_used: [], live_inputs_used: [],
+    } as any, "rf-session");
+    __patchStateForTest({ selectedFarm: "Alpha Vineyard", selectedBlock: null });
+    await actions.refreshIntelligence();
+    const blockedAudit = getState().audit.find((a) => a.event === "Refresh blocked");
+    expect(blockedAudit).toBeDefined();
+    expect(blockedAudit?.detail).toMatch(/both farm and block/i);
+    // Pipeline message must not have changed (returned early)
+    expect(getState().analysisPhase).not.toBe("running");
+  });
+
+  it("runLiveRefresh marks resultStale when prior analysis is live and provider is unavailable", async () => {
+    __applyBackendResult("alpha-vineyard", {
+      analysis_id: "lr-id", session_id: "lr-session", status: "complete",
+      analysis_mode: "live" as const, recommendation_origin: "live_intelligence_engine" as const,
+      context_origin: "live" as const,
+      recommendation: { schedulable: true, scheduling_block_reasons: [] },
+      reconciliation: {}, normalized_context: {}, signal_summary: {},
+      warnings: [], uploaded_artifacts_used: [], live_inputs_used: [],
+    } as any, "lr-session");
+    expect(getState().analysisMode).toBe("live");
+    __setBackendStatusForTest("unavailable");
+    await actions.runLiveRefresh();
+    const s = getState();
+    expect(s.resultStale).toBe(true);
+    expect(s.pipelineMessage).toMatch(/stale/i);
+    const audit = s.audit.find((a) => a.event === "Live refresh failed");
+    expect(audit).toBeDefined();
+  });
+
+  it("runLiveRefresh does not corrupt uploaded package state when live provider fails", async () => {
+    __applyBackendResult("alpha-vineyard", {
+      analysis_id: "lu-id", session_id: "lu-session", status: "complete",
+      analysis_mode: "uploaded" as const, recommendation_origin: "uploaded_intelligence_engine" as const,
+      context_origin: "uploaded" as const,
+      recommendation: { schedulable: true, scheduling_block_reasons: [] },
+      reconciliation: {}, normalized_context: {}, signal_summary: {},
+      warnings: [], uploaded_artifacts_used: ["data.csv"], live_inputs_used: [],
+    } as any, "lu-session");
+    const decisionBefore = getState().decision.action;
+    __setBackendStatusForTest("unavailable");
+    await actions.runLiveRefresh();
+    const s = getState();
+    // Must not have flipped to representative or empty-package
+    expect(s.decision.action).toBe(decisionBefore);
+    expect(s.recommendationOrigin).toBe("uploaded_intelligence_engine");
+    // resultStale must remain false — uploaded package is still valid
+    expect(s.resultStale).toBe(false);
+    const audit = s.audit.find((a) => a.event === "Live refresh failed");
+    expect(audit).toBeDefined();
+    expect(audit?.detail).toMatch(/evaluation package/i);
+  });
 });
