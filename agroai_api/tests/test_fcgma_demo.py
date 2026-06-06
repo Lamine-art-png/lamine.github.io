@@ -2401,3 +2401,373 @@ def test_get_reconciliation_status_tool_no_snapshot():
         assert result["status"] == "no_snapshot"
     finally:
         _SNAPSHOTS.update(old)
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Eighth-pass tests: Connected Intelligence Hardening
+# Covers: env loading, diagnostic endpoint, OpenAI config, configure script
+#         validation, agent loop routing, follow-up safety, verify script path
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────
+# LLM config: four-tuple with reasoning effort
+# ─────────────────────────────────────────────
+
+def test_get_llm_config_returns_four_tuple(monkeypatch):
+    """_get_llm_config() must return (api_key, provider, model, reasoning_effort)."""
+    monkeypatch.setenv("TERRIS_LLM_PROVIDER", "openai")
+    monkeypatch.setenv("TERRIS_LLM_MODEL", "gpt-5.5")
+    monkeypatch.setenv("TERRIS_LLM_API_KEY", "sk-test-key")
+    monkeypatch.setenv("TERRIS_LLM_REASONING_EFFORT", "high")
+    from app.services.fcgma.conversation import _get_llm_config
+    result = _get_llm_config()
+    assert len(result) == 4, "Expected 4-tuple from _get_llm_config"
+    api_key, provider, model, effort = result
+    assert api_key == "sk-test-key"
+    assert provider == "openai"
+    assert model == "gpt-5.5"
+    assert effort == "high"
+
+
+def test_get_llm_config_default_reasoning_effort(monkeypatch):
+    """Default reasoning effort must be 'xhigh' when not configured."""
+    monkeypatch.delenv("TERRIS_LLM_REASONING_EFFORT", raising=False)
+    monkeypatch.setenv("TERRIS_LLM_API_KEY", "sk-test-key")
+    from app.services.fcgma.conversation import _get_llm_config
+    _, _, _, effort = _get_llm_config()
+    assert effort == "xhigh", f"Expected default effort 'xhigh', got {effort!r}"
+
+
+def test_get_llm_config_no_key_returns_none(monkeypatch):
+    """_get_llm_config() must return api_key=None when no key is set."""
+    monkeypatch.delenv("TERRIS_LLM_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    from app.services.fcgma.conversation import _get_llm_config
+    api_key, _, _, _ = _get_llm_config()
+    assert api_key is None
+
+
+def test_get_llm_config_openai_default_model(monkeypatch):
+    """When provider=openai and no model set, default must not be a chat model."""
+    monkeypatch.setenv("TERRIS_LLM_PROVIDER", "openai")
+    monkeypatch.delenv("TERRIS_LLM_MODEL", raising=False)
+    monkeypatch.setenv("TERRIS_LLM_API_KEY", "sk-test-key")
+    from app.services.fcgma.conversation import _get_llm_config
+    _, provider, model, _ = _get_llm_config()
+    assert provider == "openai"
+    assert model, "Model must not be empty for openai provider"
+    assert model != "gpt-4o", "Default OpenAI model should not be gpt-4o in the hardened config"
+
+
+# ─────────────────────────────────────────────
+# Diagnostic endpoint
+# ─────────────────────────────────────────────
+
+def test_terris_diagnostic_endpoint_exists(client):
+    """GET /terris/diagnostic must return 200 with mode and provider fields."""
+    resp = client.get("/v1/fcgma-demo/terris/diagnostic")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert "mode" in data, "diagnostic missing 'mode'"
+    assert "provider" in data, "diagnostic missing 'provider'"
+    assert "key_configured" in data, "diagnostic missing 'key_configured'"
+    assert "checked_at" in data, "diagnostic missing 'checked_at'"
+
+
+def test_terris_diagnostic_mode_is_valid(client):
+    """Diagnostic mode must be one of the defined states."""
+    resp = client.get("/v1/fcgma-demo/terris/diagnostic")
+    assert resp.status_code == 200
+    mode = resp.json()["mode"]
+    assert mode in ("connected_intelligence", "structured_safe"), (
+        f"Unexpected diagnostic mode: {mode!r}"
+    )
+
+
+def test_terris_diagnostic_does_not_expose_key(client):
+    """Diagnostic response must never include the raw API key."""
+    resp = client.get("/v1/fcgma-demo/terris/diagnostic")
+    assert resp.status_code == 200
+    body = resp.text
+    # Must not include a string that looks like an API key value
+    import json
+    data = json.loads(body)
+    for field, value in data.items():
+        if isinstance(value, str) and value.startswith("sk-"):
+            pytest.fail(f"Diagnostic field {field!r} appears to expose an API key")
+
+
+def test_terris_diagnostic_structured_safe_without_key(monkeypatch):
+    """Without an API key the diagnostic must report structured_safe."""
+    import importlib
+    monkeypatch.delenv("TERRIS_LLM_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    # Re-import to pick up monkeypatched env
+    from fastapi.testclient import TestClient
+    from app.main import app
+    with TestClient(app) as c:
+        resp = c.get("/v1/fcgma-demo/terris/diagnostic")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["mode"] == "structured_safe"
+    assert data["key_configured"] is False
+
+
+# ─────────────────────────────────────────────
+# OpenAI tool list builder
+# ─────────────────────────────────────────────
+
+def test_build_openai_tool_list_format():
+    """_build_openai_tool_list() must return OpenAI Responses API format."""
+    from app.services.fcgma.conversation import _build_openai_tool_list
+    tools = _build_openai_tool_list()
+    assert len(tools) >= 15, f"Only {len(tools)} tools in OpenAI list"
+    for t in tools:
+        assert t.get("type") == "function", f"Tool missing type=function: {t!r}"
+        assert "name" in t
+        assert "description" in t
+        assert "parameters" in t
+        assert t["parameters"]["type"] == "object"
+
+
+def test_openai_tool_names_match_anthropic_tool_names():
+    """OpenAI and Anthropic tool lists must expose the same tool names."""
+    from app.services.fcgma.conversation import _build_openai_tool_list, _build_anthropic_tool_list
+    openai_names = {t["name"] for t in _build_openai_tool_list()}
+    anthropic_names = {t["name"] for t in _build_anthropic_tool_list()}
+    assert openai_names == anthropic_names, (
+        f"Tool name mismatch.\n"
+        f"  OpenAI-only: {openai_names - anthropic_names}\n"
+        f"  Anthropic-only: {anthropic_names - openai_names}"
+    )
+
+
+# ─────────────────────────────────────────────
+# Structured Safe fallback with all providers
+# ─────────────────────────────────────────────
+
+def test_add_message_structured_safe_openai_no_key(monkeypatch):
+    """Without a key, even with provider=openai, mode must be structured_safe."""
+    monkeypatch.setenv("TERRIS_LLM_PROVIDER", "openai")
+    monkeypatch.delenv("TERRIS_LLM_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.conversation import create_conversation, add_message
+    clear_ledger()
+    inject_all_scenarios()
+    conv = create_conversation()
+    result = add_message(conv["thread_id"], "Where does the cycle stand?")
+    assert result is not None
+    assert result["llm_mode"] == "structured_safe"
+
+
+# ─────────────────────────────────────────────
+# run_fcgma_demo.sh env loading
+# ─────────────────────────────────────────────
+
+def test_run_fcgma_demo_script_has_env_local_loading():
+    """run_fcgma_demo.sh must load .env.local before starting uvicorn."""
+    import os
+    script_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "scripts", "run_fcgma_demo.sh"
+    )
+    script_path = os.path.abspath(script_path)
+    assert os.path.exists(script_path), f"Script not found: {script_path}"
+    with open(script_path) as f:
+        content = f.read()
+    assert ".env.local" in content, "run_fcgma_demo.sh does not reference .env.local"
+    # Must source or load the file, not just reference it in a comment
+    assert "source" in content or "set -a" in content, (
+        "run_fcgma_demo.sh must source .env.local (use 'source' or 'set -a')"
+    )
+
+
+# ─────────────────────────────────────────────
+# configure_terris_llm.sh validation rules
+# ─────────────────────────────────────────────
+
+def test_configure_script_exists():
+    """configure_terris_llm.sh must exist and be executable."""
+    import os, stat
+    script_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "scripts", "configure_terris_llm.sh"
+    )
+    script_path = os.path.abspath(script_path)
+    assert os.path.exists(script_path), f"Script not found: {script_path}"
+    mode = os.stat(script_path).st_mode
+    assert mode & stat.S_IXUSR, "configure_terris_llm.sh is not executable"
+
+
+def test_configure_script_rejects_numeric_model():
+    """configure_terris_llm.sh must have validation logic rejecting numeric-only model IDs."""
+    import os
+    script_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "scripts", "configure_terris_llm.sh"
+    )
+    with open(os.path.abspath(script_path)) as f:
+        content = f.read()
+    assert "numeric" in content.lower() or "^[0-9]" in content, (
+        "configure_terris_llm.sh must reject numeric-only model IDs"
+    )
+
+
+def test_configure_script_has_chmod_600():
+    """configure_terris_llm.sh must set file permissions to 600."""
+    import os
+    script_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "scripts", "configure_terris_llm.sh"
+    )
+    with open(os.path.abspath(script_path)) as f:
+        content = f.read()
+    assert "chmod 600" in content, (
+        "configure_terris_llm.sh must set .env.local permissions to 600"
+    )
+
+
+def test_configure_script_writes_reasoning_effort():
+    """configure_terris_llm.sh must write TERRIS_LLM_REASONING_EFFORT."""
+    import os
+    script_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "scripts", "configure_terris_llm.sh"
+    )
+    with open(os.path.abspath(script_path)) as f:
+        content = f.read()
+    assert "TERRIS_LLM_REASONING_EFFORT" in content, (
+        "configure_terris_llm.sh must write TERRIS_LLM_REASONING_EFFORT"
+    )
+
+
+def test_configure_script_deduplicates_terris_lines():
+    """configure_terris_llm.sh must remove old TERRIS_LLM lines before writing."""
+    import os
+    script_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "scripts", "configure_terris_llm.sh"
+    )
+    with open(os.path.abspath(script_path)) as f:
+        content = f.read()
+    assert "grep -v" in content and "TERRIS_LLM" in content, (
+        "configure_terris_llm.sh must deduplicate TERRIS_LLM lines via grep -v"
+    )
+
+
+# ─────────────────────────────────────────────
+# verify_terris_connected.sh existence
+# ─────────────────────────────────────────────
+
+def test_verify_terris_connected_script_exists():
+    """verify_terris_connected.sh must exist and be executable."""
+    import os, stat
+    script_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "scripts", "verify_terris_connected.sh"
+    )
+    script_path = os.path.abspath(script_path)
+    assert os.path.exists(script_path), f"Script not found: {script_path}"
+    mode = os.stat(script_path).st_mode
+    assert mode & stat.S_IXUSR, "verify_terris_connected.sh is not executable"
+
+
+def test_verify_script_checks_connected_intelligence():
+    """verify_terris_connected.sh must check for connected_intelligence mode."""
+    import os
+    script_path = os.path.join(
+        os.path.dirname(__file__), "..", "..", "scripts", "verify_terris_connected.sh"
+    )
+    with open(os.path.abspath(script_path)) as f:
+        content = f.read()
+    assert "connected_intelligence" in content, (
+        "verify_terris_connected.sh must check for connected_intelligence mode"
+    )
+    assert "diagnostic" in content, (
+        "verify_terris_connected.sh must query the diagnostic endpoint"
+    )
+
+
+# ─────────────────────────────────────────────
+# llm_mode field propagated in conversation turn
+# ─────────────────────────────────────────────
+
+def test_conversation_turn_has_investigation_meta(client):
+    """Each assistant turn must carry investigation_meta with intent and calc version."""
+    resp = client.post("/v1/fcgma-demo/terris/conversation", json={})
+    thread_id = resp.json()["thread_id"]
+    resp2 = client.post(
+        f"/v1/fcgma-demo/terris/conversation/{thread_id}/message",
+        json={"query": "What requires my attention today?"}
+    )
+    assert resp2.status_code == 200
+    data = resp2.json()
+    assert "investigation_meta" in data, "assistant turn missing investigation_meta"
+    meta = data["investigation_meta"]
+    assert "intent" in meta
+    assert "calculation_version" in meta
+    assert meta["calculation_version"].startswith("fcgma-"), (
+        f"Unexpected calculation_version: {meta['calculation_version']!r}"
+    )
+
+
+def test_max_agent_iterations_is_configurable(monkeypatch):
+    """TERRIS_MAX_AGENT_ITERATIONS env var must override the default iteration cap."""
+    monkeypatch.setenv("TERRIS_MAX_AGENT_ITERATIONS", "8")
+    import importlib
+    import app.services.fcgma.conversation as conv_mod
+    importlib.reload(conv_mod)
+    assert conv_mod._MAX_AGENT_ITERATIONS == 8, (
+        f"Expected 8, got {conv_mod._MAX_AGENT_ITERATIONS}"
+    )
+
+
+def test_follow_up_suggestions_are_not_empty(client):
+    """Conversation response must include non-empty follow_up_suggestions list."""
+    resp = client.post("/v1/fcgma-demo/terris/conversation", json={})
+    thread_id = resp.json()["thread_id"]
+    resp2 = client.post(
+        f"/v1/fcgma-demo/terris/conversation/{thread_id}/message",
+        json={"query": "Where does the reporting cycle stand?"}
+    )
+    assert resp2.status_code == 200
+    data = resp2.json()
+    suggestions = data.get("follow_up_suggestions", [])
+    assert isinstance(suggestions, list), "follow_up_suggestions must be a list"
+    assert len(suggestions) > 0, "follow_up_suggestions must not be empty"
+    for s in suggestions:
+        assert isinstance(s, str) and s.strip(), f"Suggestion must be non-empty string: {s!r}"
+
+
+def test_agent_audit_log_in_response(client):
+    """Assistant response must include agent_audit_log field (may be empty list)."""
+    resp = client.post("/v1/fcgma-demo/terris/conversation", json={})
+    thread_id = resp.json()["thread_id"]
+    resp2 = client.post(
+        f"/v1/fcgma-demo/terris/conversation/{thread_id}/message",
+        json={"query": "What requires my attention today?"}
+    )
+    assert resp2.status_code == 200
+    data = resp2.json()
+    assert "agent_audit_log" in data, "assistant turn missing agent_audit_log"
+    assert isinstance(data["agent_audit_log"], list), "agent_audit_log must be a list"
+
+
+def test_diagnostic_note_mentions_env_local(client):
+    """Diagnostic note must mention .env.local to guide the user on restart."""
+    resp = client.get("/v1/fcgma-demo/terris/diagnostic")
+    assert resp.status_code == 200
+    data = resp.json()
+    note = data.get("note", "")
+    assert ".env.local" in note, (
+        "Diagnostic note must mention .env.local so users know what to configure"
+    )
+
+
+def test_terris_reasoning_effort_env_values():
+    """TERRIS_LLM_REASONING_EFFORT must accept medium, high, and xhigh."""
+    import os
+    for effort in ("medium", "high", "xhigh"):
+        os.environ["TERRIS_LLM_REASONING_EFFORT"] = effort
+        os.environ["TERRIS_LLM_API_KEY"] = "sk-test-key"
+        from app.services.fcgma.conversation import _get_llm_config
+        _, _, _, got = _get_llm_config()
+        assert got == effort, f"Expected {effort!r}, got {got!r}"
+    del os.environ["TERRIS_LLM_REASONING_EFFORT"]
+    del os.environ["TERRIS_LLM_API_KEY"]
+

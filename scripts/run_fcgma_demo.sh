@@ -52,6 +52,25 @@ fi
 export DATABASE_URL="${DATABASE_URL:-sqlite:///./fcgma_demo.db}"
 export ENABLE_SCHEDULER="${ENABLE_SCHEDULER:-false}"
 
+# Load local environment overrides — Terris LLM credentials, etc.
+# This file is git-ignored and never committed.
+ENV_LOCAL="${API_DIR}/.env.local"
+if [[ -f "${ENV_LOCAL}" ]]; then
+  set -a
+  # shellcheck source=/dev/null
+  source "${ENV_LOCAL}"
+  set +a
+  echo "→ Loaded local configuration (.env.local)"
+  # Report Terris mode without printing the key
+  if [[ -n "${TERRIS_LLM_API_KEY:-}" ]]; then
+    echo "→ Terris: Connected Intelligence mode (${TERRIS_LLM_PROVIDER:-anthropic} / ${TERRIS_LLM_MODEL:-default})"
+  else
+    echo "→ Terris: Structured Safe mode (no LLM key — run scripts/configure_terris_llm.sh to enable)"
+  fi
+else
+  echo "→ Terris: Structured Safe mode (.env.local not found)"
+fi
+
 echo "→ Starting API server on port ${API_PORT}…"
 echo "→ Demo portal: http://localhost:${PORTAL_PORT}/fcgma-demo.html"
 echo ""

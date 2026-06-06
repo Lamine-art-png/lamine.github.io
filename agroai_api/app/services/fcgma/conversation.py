@@ -156,8 +156,8 @@ def _update_context_from_cases(ctx: dict[str, Any], cases: list[dict]) -> None:
 # LLM abstraction
 # ─────────────────────────────────────────────────────────────────────────────
 
-def _get_llm_config() -> tuple[str | None, str, str]:
-    """Return (api_key, provider, model). api_key is None when unconfigured."""
+def _get_llm_config() -> tuple[str | None, str, str, str]:
+    """Return (api_key, provider, model, reasoning_effort). api_key is None when unconfigured."""
     provider = os.getenv("TERRIS_LLM_PROVIDER", "anthropic").lower()
     api_key = (
         os.getenv("TERRIS_LLM_API_KEY")
@@ -168,10 +168,11 @@ def _get_llm_config() -> tuple[str | None, str, str]:
 
     default_models = {
         "anthropic": "claude-sonnet-4-6",
-        "openai": "gpt-4o",
+        "openai": "gpt-5.5",
     }
     model = os.getenv("TERRIS_LLM_MODEL", default_models.get(provider, "claude-sonnet-4-6"))
-    return api_key, provider, model
+    reasoning_effort = os.getenv("TERRIS_LLM_REASONING_EFFORT", "xhigh")
+    return api_key, provider, model, reasoning_effort
 
 
 _TERRIS_SYSTEM = """\
@@ -250,12 +251,12 @@ def _llm_narrate(
     api_key: str,
     provider: str,
     model: str,
+    reasoning_effort: str = "xhigh",
 ) -> str:
     """Call the configured LLM to narrate the deterministic investigation result."""
     tool_context = _format_tool_context(investigation)
 
     messages: list[dict[str, str]] = []
-    # Include last 6 turns for multi-turn context
     for turn in conversation_history[-6:]:
         if turn["role"] in ("user", "assistant"):
             messages.append({"role": turn["role"], "content": turn["content"]})
@@ -276,7 +277,7 @@ def _llm_narrate(
             client = openai.OpenAI(api_key=api_key)
             resp = client.chat.completions.create(
                 model=model,
-                max_tokens=700,
+                max_tokens=1200,
                 messages=[{"role": "system", "content": _TERRIS_SYSTEM}] + messages,  # type: ignore
             )
             return resp.choices[0].message.content or investigation.get("direct_answer", "")
@@ -285,7 +286,7 @@ def _llm_narrate(
             client = anthropic.Anthropic(api_key=api_key)
             resp = client.messages.create(
                 model=model,
-                max_tokens=700,
+                max_tokens=1200,
                 system=_TERRIS_SYSTEM,
                 messages=messages,  # type: ignore
             )
@@ -321,7 +322,7 @@ _AGENT_TOOL_SCHEMAS: list[dict[str, Any]] = [
     {"name": "run_applied_water_scenario", "description": "Run and explain the applied-water attribution scenario."},
 ]
 
-_MAX_AGENT_ITERATIONS = 4
+_MAX_AGENT_ITERATIONS = int(os.getenv("TERRIS_MAX_AGENT_ITERATIONS", "6"))
 
 
 def _build_anthropic_tool_list() -> list[dict[str, Any]]:
@@ -340,6 +341,178 @@ def _build_anthropic_tool_list() -> list[dict[str, Any]]:
     return tools
 
 
+def _build_openai_tool_list() -> list[dict[str, Any]]:
+    """Convert tool schemas to OpenAI function/tool format."""
+    tools = []
+    for t in _AGENT_TOOL_SCHEMAS:
+        tools.append({
+            "type": "function",
+            "name": t["name"],
+            "description": t["description"],
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        })
+    return tools
+
+
+def _run_openai_agent_loop(
+    user_query: str,
+    conversation_history: list[dict[str, Any]],
+    api_key: str,
+    model: str,
+    reasoning_effort: str,
+    on_progress: Callable[[dict], None] | None = None,
+) -> tuple[str, list[dict[str, Any]]]:
+    """
+    Bounded tool-using agent loop using the OpenAI Responses API.
+
+    Uses reasoning with configurable effort, previous_response_id for
+    conversation continuity, and deterministic backend tools.
+    Returns (final_answer, audit_log).
+    """
+    import json
+    from .terris import TERRIS_TOOL_MAP
+
+    try:
+        import openai  # type: ignore
+    except ImportError:
+        return ("OpenAI library not installed.", [])
+
+    client = openai.OpenAI(api_key=api_key)
+    tools = _build_openai_tool_list()
+    audit_log: list[dict[str, Any]] = []
+
+    # Build initial input from conversation history + current query
+    input_messages: list[dict[str, Any]] = [
+        {"role": "system", "content": _TERRIS_SYSTEM}
+    ]
+    for turn in conversation_history[-6:]:
+        if turn["role"] in ("user", "assistant") and isinstance(turn.get("content"), str):
+            input_messages.append({"role": turn["role"], "content": turn["content"]})
+    input_messages.append({"role": "user", "content": user_query})
+
+    previous_response_id: str | None = None
+    tool_results_for_narration: dict[str, Any] = {}
+    max_iterations = max(_MAX_AGENT_ITERATIONS, 6)
+
+    for iteration in range(max_iterations):
+        try:
+            create_kwargs: dict[str, Any] = {
+                "model": model,
+                "tools": tools,
+                "input": input_messages if previous_response_id is None else None,
+            }
+            if previous_response_id:
+                create_kwargs["previous_response_id"] = previous_response_id
+            # Remove None values
+            create_kwargs = {k: v for k, v in create_kwargs.items() if v is not None}
+
+            # Add reasoning if supported by the model
+            if any(m in model for m in ("o1", "o3", "o4", "gpt-5")):
+                create_kwargs["reasoning"] = {"effort": reasoning_effort, "summary": "auto"}
+
+            resp = client.responses.create(**create_kwargs)  # type: ignore
+            previous_response_id = resp.id
+
+        except (AttributeError, Exception) as exc:
+            # Responses API unavailable — fall back to chat completions
+            logger.warning("OpenAI Responses API unavailable (%s), falling back to chat.completions", exc)
+            try:
+                chat_messages = [{"role": "system", "content": _TERRIS_SYSTEM}]
+                for turn in conversation_history[-6:]:
+                    if turn["role"] in ("user", "assistant") and isinstance(turn.get("content"), str):
+                        chat_messages.append({"role": turn["role"], "content": turn["content"]})
+                chat_messages.append({"role": "user", "content": user_query})
+                fallback_resp = client.chat.completions.create(
+                    model=model,
+                    max_tokens=1200,
+                    messages=chat_messages,  # type: ignore
+                )
+                return fallback_resp.choices[0].message.content or "", audit_log
+            except Exception as fb_exc:
+                return (f"LLM call failed: {str(fb_exc)[:120]}", audit_log)
+
+        # Collect tool calls from response output
+        tool_calls = []
+        final_text_parts: list[str] = []
+
+        for item in resp.output:  # type: ignore
+            item_type = getattr(item, "type", None)
+            if item_type == "function_call":
+                tool_calls.append(item)
+            elif item_type in ("text", "message"):
+                content = getattr(item, "text", None) or getattr(item, "content", None)
+                if isinstance(content, str):
+                    final_text_parts.append(content)
+                elif isinstance(content, list):
+                    for part in content:
+                        if hasattr(part, "text"):
+                            final_text_parts.append(part.text)
+
+        if not tool_calls:
+            # No tool calls — LLM produced final answer
+            final_text = " ".join(final_text_parts).strip()
+            if final_text:
+                return final_text, audit_log
+            # Empty text but no tool calls — synthesise from investigation
+            break
+
+        # Execute tool calls and collect results for next turn
+        tool_output_items: list[dict[str, Any]] = []
+        for tc in tool_calls:
+            tool_name = getattr(tc, "name", "")
+            call_id = getattr(tc, "call_id", getattr(tc, "id", ""))
+            fn = TERRIS_TOOL_MAP.get(tool_name)
+            label = STAGE_PROGRESS_LABELS.get(f"invoke_{tool_name}", f"Running {tool_name}…")
+
+            if on_progress:
+                on_progress({"stage": f"agent_invoke_{tool_name}", "label": label, "status": "started"})
+
+            try:
+                result = fn() if fn else {"error": f"Unknown tool: {tool_name}"}
+                brief = _brief_tool_result(tool_name, result)
+                audit_log.append({
+                    "iteration": iteration + 1,
+                    "tool": tool_name,
+                    "status": "completed",
+                    "brief": brief,
+                })
+                tool_results_for_narration[tool_name] = result
+                tool_output_items.append({
+                    "type": "function_call_output",
+                    "call_id": call_id,
+                    "output": json.dumps(result),
+                })
+                if on_progress:
+                    on_progress({"stage": f"agent_invoke_{tool_name}", "label": label, "status": "completed"})
+            except Exception as exc:
+                audit_log.append({
+                    "iteration": iteration + 1,
+                    "tool": tool_name,
+                    "status": "error",
+                    "error": str(exc)[:120],
+                })
+                tool_output_items.append({
+                    "type": "function_call_output",
+                    "call_id": call_id,
+                    "output": json.dumps({"error": str(exc)[:80]}),
+                })
+
+        # Feed tool results back as next input
+        input_messages = tool_output_items  # type: ignore
+
+    # Max iterations hit — fall back to deterministic answer
+    if tool_results_for_narration:
+        from .terris import run_terris_investigation
+        inv = run_terris_investigation(user_query)
+        return inv.get("direct_answer", "Investigation complete. See evidence trail."), audit_log
+
+    return "Investigation complete. See evidence trail.", audit_log
+
+
 def _run_agent_loop(
     user_query: str,
     conversation_history: list[dict[str, Any]],
@@ -356,9 +529,6 @@ def _run_agent_loop(
     Returns (final_answer, audit_log).
     """
     from .terris import TERRIS_TOOL_MAP
-
-    if provider != "anthropic":
-        return ("Agent loop requires Anthropic provider.", [])
 
     import anthropic  # type: ignore
 
@@ -588,7 +758,7 @@ def add_message(
         pass
 
     # Try LLM narration (Connected Intelligence Mode)
-    api_key, provider, model = _get_llm_config()
+    api_key, provider, model, reasoning_effort = _get_llm_config()
     llm_mode = "structured_safe"
     narrated_answer = investigation.get("direct_answer", "")
     agent_audit_log: list[dict[str, Any]] = []
@@ -598,13 +768,16 @@ def add_message(
             on_progress({"stage": "llm_synthesis", "label": "Synthesizing findings…", "status": "started"})
         try:
             if provider == "anthropic":
-                # Use bounded tool-using agent loop for richer responses
                 narrated_answer, agent_audit_log = _run_agent_loop(
                     user_query, history, api_key, provider, model, on_progress=on_progress,
                 )
+            elif provider == "openai":
+                narrated_answer, agent_audit_log = _run_openai_agent_loop(
+                    user_query, history, api_key, model, reasoning_effort, on_progress=on_progress,
+                )
             else:
                 narrated_answer = _llm_narrate(
-                    user_query, investigation, history, api_key, provider, model,
+                    user_query, investigation, history, api_key, provider, model, reasoning_effort,
                 )
             llm_mode = "connected_intelligence"
             if on_progress:

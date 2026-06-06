@@ -881,7 +881,7 @@ function renderGateCard(g) {
     (metrics ? '<div class="gate-metrics">' + metrics + '</div>' : '') +
     (caseHtml ? caseHtml : '') +
     '<div class="gate-action-row">' +
-    (g.next_action ? '<button class="btn-sm" style="border-color:var(--forest);color:var(--forest)" onclick="askTerrisContext(' + JSON.stringify(askQuery) + ')">✎ Ask Terris</button>' : '') +
+    (g.next_action ? '<button class="btn-sm" style="border-color:var(--forest);color:var(--forest)" data-terris-ask="' + encAttr(askQuery) + '">✎ Ask Terris</button>' : '') +
     (g.gate === 4 ? '<button class="btn-sm" style="border-color:var(--forest);color:var(--forest)" onclick="switchView(\'reports\');generateReport()">Generate Brief</button>' : '') +
     '</div>' +
     '</div>' +
@@ -968,7 +968,7 @@ async function loadBriefing() {
     if (textEl) textEl.textContent = brief.briefing || 'Briefing unavailable.';
     if (actionsEl && brief.suggested_actions) {
       actionsEl.innerHTML = (brief.suggested_actions || []).slice(0, 4).map(a =>
-        '<button class="terris-briefing-action" onclick="askTerrisContext(' + JSON.stringify(a.query) + ')">' + esc(a.label) + '</button>'
+        '<button class="terris-briefing-action" data-terris-ask="' + encAttr(a.query) + '">' + esc(a.label) + '</button>'
       ).join('');
     }
   } catch(e) {
@@ -1475,6 +1475,8 @@ async function sendTerrisMessage(query, contextHint) {
 
   const btn = document.getElementById('terris-submit');
   btn.disabled = true;
+  // Disable follow-up pills and ask buttons during request to prevent double-submit
+  document.querySelectorAll('[data-terris-send],[data-terris-ask]').forEach(b => { b.disabled = true; });
   const thread = document.getElementById('terris-thread');
 
   // User bubble
@@ -1568,7 +1570,7 @@ async function sendTerrisMessage(query, contextHint) {
     const progressLabels = response.progress_labels || [];
     const reviewedSummary = response.reviewed_summary || '';
     const followUps = (response.follow_up_suggestions || []).map(s =>
-      '<button class="terris-followup-pill" onclick="sendTerrisMessage(' + JSON.stringify(s) + ')">' + esc(s) + '</button>'
+      '<button class="terris-followup-pill" data-terris-send="' + encAttr(s) + '">' + esc(s) + '</button>'
     ).join('');
 
     // Evidence trail drawer content: stages + reviewed summary + tool details
@@ -1613,12 +1615,15 @@ async function sendTerrisMessage(query, contextHint) {
       '<div class="terris-msg-terris-header"><div class="terris-msg-terris-dot" style="background:var(--danger)"></div>' +
       '<span class="terris-msg-terris-label">Terris</span></div>' +
       '<div class="terris-msg-terris-body" style="color:var(--danger)">Investigation failed: ' + esc(e.message) +
-      ' <button onclick="sendTerrisMessage(' + JSON.stringify(query) + ')" ' +
+      ' <button class="terris-retry-btn" ' +
       'style="background:none;border:none;color:var(--forest);cursor:pointer;text-decoration:underline;font-size:13px">Retry</button></div>';
+    const retryBtn = errEl.querySelector('.terris-retry-btn');
+    if (retryBtn) retryBtn.onclick = function() { sendTerrisMessage(query); };
     thread.appendChild(errEl);
     scrollTerrisBottom();
   }
   btn.disabled = false;
+  document.querySelectorAll('[data-terris-send],[data-terris-ask]').forEach(b => { b.disabled = false; });
 }
 
 function escNewlines(s) {
@@ -1985,7 +1990,29 @@ function closeAll() {
 function esc(s) {
   return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
+// Encode a string for safe embedding inside an HTML attribute value (double-quoted)
+function encAttr(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── Event delegation for Terris action buttons ────────────────
+// Handles data-terris-send (follow-up pills, retry) and
+// data-terris-ask (gate buttons, briefing actions) so that
+// interpolated query strings never appear inside onclick="..." attributes.
+document.addEventListener('click', function(e) {
+  const sendBtn = e.target.closest('[data-terris-send]');
+  if (sendBtn && !sendBtn.disabled) {
+    const q = sendBtn.getAttribute('data-terris-send');
+    if (q) sendTerrisMessage(q);
+    return;
+  }
+  const askBtn = e.target.closest('[data-terris-ask]');
+  if (askBtn && !askBtn.disabled) {
+    const q = askBtn.getAttribute('data-terris-ask');
+    if (q) askTerrisContext(q);
+  }
+});
 
 // ── Boot ──────────────────────────────────────────────────────
 loadOverview();

@@ -646,6 +646,41 @@ def get_cycle_gates() -> dict[str, Any]:
     return compute_all_gates()
 
 
+@router.get("/terris/diagnostic")
+def get_terris_diagnostic() -> dict[str, Any]:
+    """Runtime diagnostic for Terris LLM configuration state.
+
+    Reports mode, provider, model, and whether a key is configured.
+    Never exposes the key value.
+    """
+    import os
+    from datetime import datetime, timezone
+
+    provider = os.getenv("TERRIS_LLM_PROVIDER", "anthropic")
+    model = os.getenv("TERRIS_LLM_MODEL", "")
+    key_raw = os.getenv("TERRIS_LLM_API_KEY") or os.getenv("ANTHROPIC_API_KEY", "")
+    key_configured = bool(key_raw and key_raw.strip())
+    reasoning_effort = os.getenv("TERRIS_LLM_REASONING_EFFORT", "xhigh")
+
+    mode = "connected_intelligence" if key_configured else "structured_safe"
+
+    return {
+        "mode": mode,
+        "llm_mode": mode,
+        "provider": provider,
+        "model": model if model else f"(default for {provider})",
+        "reasoning_effort": reasoning_effort,
+        "key_configured": key_configured,
+        "last_error": None,
+        "checked_at": datetime.now(timezone.utc).isoformat(),
+        "note": (
+            "Key value is never returned by this endpoint. "
+            "If mode is structured_safe despite .env.local being configured, "
+            "restart the backend: bash scripts/run_fcgma_demo.sh"
+        ),
+    }
+
+
 @router.get("/terris/briefing")
 def get_terris_briefing() -> dict[str, Any]:
     """Proactive Terris briefing generated from current evidence."""
