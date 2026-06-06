@@ -63,6 +63,14 @@ def get_report_meta(report_id: str) -> dict[str, Any] | None:
     return _REPORTS.get(report_id)
 
 
+def list_reports() -> list[dict[str, Any]]:
+    """Return all generated reports (public metadata only), newest first."""
+    return [
+        {k: v for k, v in r.items() if not k.startswith("_")}
+        for r in sorted(_REPORTS.values(), key=lambda r: r["generated_at"], reverse=True)
+    ]
+
+
 # ─────────────────────────────────────────────
 # PDF generation
 # ─────────────────────────────────────────────

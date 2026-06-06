@@ -344,9 +344,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-seri
 
     <!-- Reporting Cycle -->
     <div id="view-reporting-cycle" class="view">
-      <div class="page-header">
-        <h1>Reporting Cycle</h1>
-        <p>2026-Q1 &middot; Submission deadline: 2026-04-30</p>
+      <div class="page-header" style="display:flex;align-items:flex-start;justify-content:space-between">
+        <div>
+          <h1>Reporting Cycle</h1>
+          <p>2026-Q1 &middot; Submission deadline: 2026-04-30</p>
+        </div>
+        <div style="display:flex;gap:8px;flex-shrink:0">
+          <button class="btn-sm" style="border-color:var(--forest);color:var(--forest)" onclick="switchView('reports');generateReport()">Generate Brief</button>
+        </div>
       </div>
       <div class="two-col">
         <div>
@@ -505,6 +510,7 @@ function loadView(v) {
   else if (v === 'water-ledger') loadLedger();
   else if (v === 'sources') loadSources();
   else if (v === 'rules') loadRules();
+  else if (v === 'reports') loadReports();
   else if (v === 'terris') loadTerrisPresets();
 }
 
@@ -516,6 +522,7 @@ async function apiFetch(path, opts) {
 }
 const apiGet = path => apiFetch(path);
 const apiPost = (path, body) => apiFetch(path, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+const apiPatch = (path, body) => apiFetch(path, {method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
 
 // ── Overview ─────────────────────────────────────────────────
 async function loadOverview() {
@@ -588,7 +595,7 @@ async function overviewAskTerris() {
     ansEl.innerHTML = '<strong>Terris:</strong> ' + esc(r.direct_answer || '') +
       (r.recommended_action ? '<div style="margin-top:8px;font-size:12px;color:var(--text-muted)">' + esc(r.recommended_action) + '</div>' : '');
   } catch(e) {
-    ansEl.innerHTML = '<span style="color:var(--danger)">Request failed. Is the API running?</span>';
+    ansEl.innerHTML = '<span style="color:var(--danger)">Investigation failed: ' + esc(e.message) + ' — <button onclick="overviewAskTerris()" style="background:none;border:none;color:var(--forest);cursor:pointer;font-size:13px;text-decoration:underline">Retry</button></span>';
   }
 }
 
@@ -618,9 +625,10 @@ async function loadReportingCycle() {
     const bl = blocking.records || [];
     document.getElementById('cycle-blocking').innerHTML = bl.length
       ? bl.map(r =>
-          '<div style="padding:10px 0;border-bottom:1px solid var(--border-light)">' +
+          '<div style="padding:10px 0;border-bottom:1px solid var(--border-light);cursor:pointer" onclick="openRecord(\'' + r.record_id + '\')">' +
           '<span style="font-weight:700;font-family:monospace;color:var(--forest)">' + esc(r.well_id) + '</span>' +
-          '<span style="margin-left:10px;font-size:12px;color:var(--text-muted)">' + (r.blocking_reasons||[]).join(', ').replace(/_/g,' ') + '</span></div>'
+          '<span class="badge badge-danger" style="margin-left:10px">' + (r.exception_count||0) + ' exception(s)</span>' +
+          '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">' + (r.blocking_reasons||[]).join(' · ').replace(/_/g,' ') + '</div></div>'
         ).join('')
       : '<div style="font-size:13px;color:var(--text-muted)">No blocking records.</div>';
   } catch(e) { console.error('Cycle error', e); }
@@ -786,34 +794,62 @@ async function loadRules() {
 }
 
 // ── Reports ───────────────────────────────────────────────────
-const reportsList = [];
+const sessionReports = [];
 
 async function generateReport() {
   const btn = document.getElementById('generate-report-btn');
   btn.disabled = true; btn.textContent = 'Generating…';
   try {
     const r = await apiPost('/reports/generate', {report_type:'full', reporting_period:'2026-Q1'});
-    reportsList.unshift(r);
-    renderReports();
-  } catch(e) { alert('Report failed: ' + e.message); }
+    sessionReports.unshift(r);
+    renderReportsList(sessionReports);
+  } catch(e) {
+    document.getElementById('reports-list').innerHTML =
+      '<div style="color:var(--danger);font-size:13px;padding:12px 0">Report failed: ' + esc(e.message) + '</div>';
+  }
   btn.textContent = 'Generate Reporting Readiness Brief'; btn.disabled = false;
 }
 
-function renderReports() {
-  document.getElementById('reports-list').innerHTML = reportsList.map(r =>
-    '<div class="report-item">' +
+async function loadReports() {
+  document.getElementById('reports-list').innerHTML = '<div class="loading"><span class="spinner"></span>Loading…</div>';
+  try {
+    const data = await apiGet('/reports');
+    const combined = [...sessionReports];
+    // Merge backend reports not already in session
+    for (const r of (data.reports || [])) {
+      if (!combined.find(s => s.report_id === r.report_id)) combined.push(r);
+    }
+    combined.sort((a, b) => b.generated_at.localeCompare(a.generated_at));
+    renderReportsList(combined);
+  } catch(e) {
+    renderReportsList(sessionReports);
+  }
+}
+
+function renderReportsList(list) {
+  if (!list.length) {
+    document.getElementById('reports-list').innerHTML =
+      '<div style="font-size:13px;color:var(--text-muted);padding:12px 0">No reports generated yet. Click Generate above.</div>';
+    return;
+  }
+  document.getElementById('reports-list').innerHTML = list.map(r => {
+    const pct = r.stats ? r.stats.readiness_percentage || '—' : '—';
+    return '<div class="report-item">' +
     '<div class="report-icon">&#128203;</div>' +
     '<div class="report-meta">' +
-    '<div style="font-size:13px;font-weight:500">Reporting Readiness Brief</div>' +
+    '<div style="font-size:13px;font-weight:600">Reporting Readiness Brief</div>' +
     '<div class="report-id">' + esc(r.report_id) + '</div>' +
     '<div class="report-date">' + new Date(r.generated_at).toLocaleString() + '</div>' +
-    '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">' + r.record_count + ' records \xb7 ' + r.exception_count + ' exceptions</div>' +
+    '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">' +
+    r.record_count + ' records · ' + r.exception_count + ' exceptions' +
+    '</div>' +
     '</div>' +
     '<div class="report-actions">' +
     '<a href="' + BASE + '/reports/' + r.report_id + '/pdf" target="_blank" class="btn-sm">PDF</a>' +
     '<a href="' + BASE + '/reports/' + r.report_id + '/bundle" class="btn-sm">Bundle</a>' +
-    '</div></div>'
-  ).join('');
+    '<a href="' + BASE + '/reports/' + r.report_id + '/csv?type=records" class="btn-sm">CSV</a>' +
+    '</div></div>';
+  }).join('');
 }
 
 // ── Terris ─────────────────────────────────────────────────────
@@ -831,7 +867,7 @@ function submitTerris() {
   if (q) submitTerrisQuery(q);
 }
 
-async function submitTerrisQuery(query) {
+async function submitTerrisQuery(query, recordId) {
   document.getElementById('terris-input').value = query;
   const btn = document.getElementById('terris-send');
   btn.disabled = true;
@@ -846,7 +882,9 @@ async function submitTerrisQuery(query) {
   el.appendChild(stagesEl);
 
   try {
-    const result = await apiPost('/terris/query', {query});
+    const payload = {query};
+    if (recordId) payload.record_id = recordId;
+    const result = await apiPost('/terris/query', payload);
     btn.disabled = false;
     const stages = result.investigation_stages || [];
     const stageList = document.getElementById('stage-list');
@@ -867,7 +905,8 @@ async function submitTerrisQuery(query) {
     el.appendChild(resEl);
   } catch(e) {
     btn.disabled = false;
-    el.innerHTML += '<div style="color:var(--danger);font-size:13px;margin-top:12px">Investigation failed: ' + esc(e.message) + '</div>';
+    el.innerHTML += '<div style="color:var(--danger);font-size:13px;margin-top:12px">Investigation failed: ' + esc(e.message) +
+      ' <button onclick="submitTerrisQuery(document.getElementById(\'terris-input\').value)" style="background:none;border:none;color:var(--forest);cursor:pointer;text-decoration:underline;font-size:13px">Retry</button></div>';
   }
 }
 
@@ -890,8 +929,28 @@ function buildResponse(r) {
 
 function terrisAction(target) {
   if (target === 'action_queue') switchView('action-queue');
-  else if (target === 'reports') switchView('reports');
+  else if (target === 'reports') { closeAll(); switchView('reports'); }
+  else if (target === 'reporting_cycle') switchView('reporting-cycle');
+  else if (target === 'water_ledger') switchView('water-ledger');
   else document.getElementById('terris-input').focus();
+}
+
+async function resetWorkspace() {
+  if (!confirm('Reset the illustrative workspace? This will clear in-memory records and re-inject demonstration scenarios. Not a production action.')) return;
+  const btn = document.querySelector('#provenance-body button');
+  if (btn) { btn.disabled = true; btn.textContent = 'Resetting…'; }
+  try {
+    await apiPost('/scenarios/reset', {});
+    closeAll();
+    // Reset provenance drawer so it reloads next open
+    const pb = document.getElementById('provenance-body');
+    if (pb) delete pb.dataset.loaded;
+    // Reload current view
+    loadView(currentView);
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Reset illustrative workspace'; }
+    console.error('Reset failed:', e);
+  }
 }
 
 function formatStage(s) {
@@ -899,37 +958,63 @@ function formatStage(s) {
 }
 
 // ── Record Drawer ────────────────────────────────────────────
+let _drawerRecordId = null;
+
 async function openRecord(id) {
+  if (!id) return;
+  _drawerRecordId = id;
   document.getElementById('overlay').classList.add('open');
   document.getElementById('record-drawer').classList.add('open');
   document.getElementById('record-drawer-title').textContent = 'Loading…';
   document.getElementById('record-drawer-body').innerHTML =
     '<div class="loading" style="padding:24px"><span class="spinner"></span>Loading record…</div>';
+  await _loadDrawerRecord(id);
+}
+
+async function _loadDrawerRecord(id) {
   try {
-    const data = await apiGet('/records/' + id + '/ledger');
-    renderRecord(data);
+    const [ledger, audit] = await Promise.all([
+      apiGet('/records/' + id + '/ledger'),
+      apiGet('/records/' + id + '/audit').catch(() => null),
+    ]);
+    renderRecord(ledger, audit);
   } catch(e) {
     document.getElementById('record-drawer-body').innerHTML =
-      '<div style="padding:24px;color:var(--danger)">Failed: ' + esc(e.message) + '</div>';
+      '<div style="padding:24px;color:var(--danger)">Failed to load record: ' + esc(e.message) +
+      ' <button onclick="_loadDrawerRecord(\'' + id + '\')" style="background:none;border:none;color:var(--forest);cursor:pointer;text-decoration:underline;font-size:13px">Retry</button></div>';
   }
 }
 
-function renderRecord(data) {
+function renderRecord(data, auditData) {
   const r = data.record || {};
   const expl = data.calculation_explanation || {};
   document.getElementById('record-drawer-title').textContent = r.well_id || r.id || 'Record';
-  const openExcs = (r.exceptions||[]).filter(e => e.status !== 'resolved');
+  const allExcs = r.exceptions || [];
+  const openExcs = allExcs.filter(e => e.status !== 'resolved');
+  const resolvedExcs = allExcs.filter(e => e.status === 'resolved');
   const steps = expl.steps || [];
+  const auditEvents = (auditData && auditData.audit_events) || r.audit_events || [];
+
   document.getElementById('record-drawer-body').innerHTML =
     '<div style="padding:0 24px 24px">' +
+
+    // Action row at top
+    '<div style="display:flex;gap:8px;margin-bottom:20px;padding-top:4px">' +
+    '<button class="btn-sm" onclick="recomputeRecord()" style="border-color:var(--forest);color:var(--forest)">⟳ Recompute</button>' +
+    '<button class="btn-sm" onclick="askTerrisAboutRecord(\'' + r.id + '\')" style="border-color:var(--forest-light);color:var(--forest-light)">Ask Terris</button>' +
+    '</div>' +
+
     section('Identity', [
+      field('Record ID', '<span class="mono">' + esc(r.id||'—') + '</span>'),
       field('Well', '<span class="mono">' + esc(r.well_id||'—') + '</span>'),
       field('Meter', '<span class="mono">' + esc(r.meter_id||'—') + '</span>'),
       field('Evidence class', esc((r.evidence_class||'').replace(/_/g,' '))),
       field('Provider', esc(r.provider||'—')),
       field('Event timestamp', esc((r.event_timestamp||'').slice(0,16).replace('T',' '))),
       field('Reporting period', esc(r.reporting_period||'—')),
+      field('Review status', '<span class="badge badge-' + statusBadge(r.review_status) + '">' + esc((r.review_status||'').replace(/_/g,' ')) + '</span>'),
     ]) +
+
     section('Measurement', [
       field('Interval volume', r.interval_volume != null ? Number(r.interval_volume).toFixed(3)+' AF' : '—'),
       field('Cumulative volume', r.cumulative_volume != null ? Number(r.cumulative_volume).toFixed(3) : '—'),
@@ -937,23 +1022,135 @@ function renderRecord(data) {
       field('Multiplier', r.multiplier != null ? r.multiplier : '—'),
       field('Attribution', '<span class="badge badge-' + (r.attribution_provisional?'warn':'success') + '">' + (r.attribution_provisional?'provisional':'supported') + '</span>'),
     ]) +
+
+    // Open exceptions with resolve buttons
     (openExcs.length ? '<div class="record-detail-section"><div class="record-detail-label">Open Exceptions (' + openExcs.length + ')</div>' +
       openExcs.map(e =>
-        '<div class="exc-item"><div class="exc-type">' + esc(e.exception_type.replace(/_/g,' ')) + '</div>' +
+        '<div class="exc-item" id="exc-' + e.id + '">' +
+        '<div style="display:flex;justify-content:space-between;align-items:flex-start">' +
+        '<div class="exc-type">' + esc(e.exception_type.replace(/_/g,' ')) + '</div>' +
+        '<span class="badge badge-' + (e.severity==='high'?'danger':'warn') + '">' + esc(e.severity||'') + '</span>' +
+        '</div>' +
         '<div class="exc-detail">' + esc(e.detail||'') + '</div>' +
-        (e.rule_id ? '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Rule: ' + esc(e.rule_id) + '</div>' : '') +
+        (e.rule_id ? '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">Rule: ' + esc(e.rule_id) + '</div>' : '') +
+        '<div id="resolve-form-' + e.id + '" style="margin-top:8px">' +
+        '<button class="btn-sm" style="font-size:11px" onclick="showResolveForm(\'' + e.id + '\')">Mark resolved (illustrative)</button>' +
+        '</div>' +
         '</div>'
       ).join('') + '</div>' : '') +
+
+    // Resolved exceptions (collapsed)
+    (resolvedExcs.length ? '<div class="record-detail-section"><div class="record-detail-label" style="color:var(--success)">Resolved Exceptions (' + resolvedExcs.length + ')</div>' +
+      resolvedExcs.map(e =>
+        '<div style="padding:8px 10px;background:var(--success-bg);border-radius:var(--radius-sm);margin-bottom:6px">' +
+        '<div style="font-size:12px;font-weight:600;color:var(--success)">' + esc(e.exception_type.replace(/_/g,' ')) + '</div>' +
+        (e.resolution ? '<div style="font-size:11px;color:var(--text-muted);margin-top:2px">Resolution: ' + esc(e.resolution) + '</div>' : '') +
+        '</div>'
+      ).join('') + '</div>' : '') +
+
+    // Calculation steps
     (steps.length ? '<div class="record-detail-section"><div class="record-detail-label">Calculation Steps</div>' +
-      steps.map(s => '<div class="calc-step"><span class="calc-step-icon">→</span><span>' + esc(s.description||s.step||'') + (s.value != null ? ' <strong>' + s.value + '</strong>' : '') + '</span></div>').join('') +
+      steps.map(s => '<div class="calc-step"><span class="calc-step-icon">→</span><span>' +
+        esc(s.description||s.step||'') + (s.value != null ? ' <strong>' + s.value + '</strong>' : '') +
+        '</span></div>').join('') +
+      (expl.rule_sources && expl.rule_sources.length ?
+        '<div style="margin-top:8px;font-size:11px;color:var(--text-muted)">Rule sources: ' + expl.rule_sources.map(x=>esc(x)).join(', ') + '</div>' : '') +
+      '<div style="font-size:11px;color:var(--text-faint);margin-top:6px">' + esc(expl.model_disclaimer||'') + '</div>' +
       '</div>' : '') +
+
+    // Source lineage
     section('Source Lineage', [
       field('Source hash', '<span class="mono">' + esc(r.sanitized_source_hash||'—') + '</span>'),
-      field('Scenario injected', r.scenario_injected ? 'Yes' : 'No'),
+      field('Scenario injected', r.scenario_injected ? '<span class="badge badge-warn">Yes — illustrative</span>' : 'No'),
     ]) +
-    (r.scenario_label ? '<div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">' + esc(r.scenario_label) + '</div>' : '') +
-    '<div style="font-size:11px;color:var(--text-faint);line-height:1.4">' + esc(data.disclaimer||'') + '</div>' +
+    (r.scenario_label ? '<div style="font-size:11px;color:var(--text-muted);margin-bottom:16px;padding:8px;background:var(--warn-bg);border-radius:var(--radius-sm)">' + esc(r.scenario_label) + '</div>' : '') +
+
+    // Reviewer note form
+    '<div class="record-detail-section"><div class="record-detail-label">Reviewer Notes</div>' +
+    (r.reviewer_notes ? '<div style="font-size:13px;color:var(--text);background:var(--stone);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:10px">' + esc(r.reviewer_notes) + '</div>' : '') +
+    '<div id="reviewer-note-form">' +
+    '<textarea id="reviewer-note-input" rows="3" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:13px;resize:vertical;font-family:inherit" placeholder="Add a reviewer note (illustrative action)…"></textarea>' +
+    '<button class="btn-sm" style="margin-top:6px;border-color:var(--forest);color:var(--forest)" onclick="submitReviewerNote()">Save Note</button>' +
+    '</div></div>' +
+
+    // Audit history
+    (auditEvents.length ? '<div class="record-detail-section"><div class="record-detail-label">Audit History</div>' +
+      auditEvents.slice().reverse().map(ev =>
+        '<div style="display:flex;gap:10px;padding:7px 0;border-bottom:1px solid var(--border-light);font-size:12px">' +
+        '<div style="color:var(--text-faint);min-width:130px;flex-shrink:0">' + esc((ev.timestamp||'').slice(0,19).replace('T',' ')) + '</div>' +
+        '<div><span style="font-weight:600;color:var(--text)">' + esc(ev.event_type||'') + '</span> — ' + esc(ev.detail||'') + '</div>' +
+        '</div>'
+      ).join('') + '</div>' : '') +
+
+    '<div style="font-size:11px;color:var(--text-faint);line-height:1.4;margin-top:10px">' + esc(data.disclaimer||'') + '</div>' +
     '</div>';
+}
+
+function showResolveForm(excId) {
+  const formEl = document.getElementById('resolve-form-' + excId);
+  if (!formEl) return;
+  formEl.innerHTML =
+    '<textarea id="resolve-text-' + excId + '" rows="2" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:var(--radius-sm);font-size:12px;resize:none;font-family:inherit;margin-top:6px" placeholder="Describe resolution (illustrative action)…"></textarea>' +
+    '<div style="display:flex;gap:8px;margin-top:4px">' +
+    '<button class="btn-sm" style="font-size:11px;border-color:var(--forest);color:var(--forest)" onclick="submitResolve(\'' + excId + '\')">Confirm resolve</button>' +
+    '<button class="btn-sm" style="font-size:11px" onclick="cancelResolve(\'' + excId + '\')">Cancel</button>' +
+    '</div>';
+}
+
+function cancelResolve(excId) {
+  const formEl = document.getElementById('resolve-form-' + excId);
+  if (formEl) formEl.innerHTML = '<button class="btn-sm" style="font-size:11px" onclick="showResolveForm(\'' + excId + '\')">Mark resolved (illustrative)</button>';
+}
+
+async function submitResolve(excId) {
+  const txt = (document.getElementById('resolve-text-' + excId)||{}).value || 'Resolved by reviewer (illustrative action).';
+  const formEl = document.getElementById('resolve-form-' + excId);
+  if (formEl) formEl.innerHTML = '<span style="font-size:11px;color:var(--text-muted)">Resolving…</span>';
+  try {
+    await apiPost('/exceptions/' + excId + '/resolve', {resolution: txt, actor: 'reviewer'});
+    if (_drawerRecordId) await _loadDrawerRecord(_drawerRecordId);
+  } catch(e) {
+    if (formEl) formEl.innerHTML = '<span style="font-size:11px;color:var(--danger)">Failed: ' + esc(e.message) + '</span>';
+  }
+}
+
+async function submitReviewerNote() {
+  const note = (document.getElementById('reviewer-note-input')||{}).value || '';
+  if (!note.trim() || !_drawerRecordId) return;
+  const btn = document.querySelector('#reviewer-note-form .btn-sm');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    await apiPatch('/records/' + _drawerRecordId + '/review', {
+      status: 'requires_attention',
+      notes: note.trim(),
+      actor: 'reviewer',
+    });
+    await _loadDrawerRecord(_drawerRecordId);
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Save Note'; }
+    console.error('Failed to save note:', e);
+  }
+}
+
+async function recomputeRecord() {
+  if (!_drawerRecordId) return;
+  document.getElementById('record-drawer-body').innerHTML =
+    '<div class="loading" style="padding:24px"><span class="spinner"></span>Recomputing…</div>';
+  try {
+    await apiPost('/records/' + _drawerRecordId + '/recompute');
+    await _loadDrawerRecord(_drawerRecordId);
+  } catch(e) {
+    document.getElementById('record-drawer-body').innerHTML =
+      '<div style="padding:24px;color:var(--danger)">Recompute failed: ' + esc(e.message) + '</div>';
+  }
+}
+
+function askTerrisAboutRecord(recordId) {
+  closeAll();
+  switchView('terris');
+  const q = 'Explain the applied-water calculation for ' + recordId;
+  document.getElementById('terris-input').value = q;
+  submitTerrisQuery(q, recordId);
 }
 
 function section(title, fields) {
@@ -1035,6 +1232,11 @@ function renderProvenance(status, health) {
     '<div style="margin-top:16px;padding:12px;background:var(--stone);border-radius:6px;font-size:12px;color:var(--text-muted);line-height:1.4">' +
     'Calculation version: <strong>' + esc(status.calculation_version||'fcgma-calc-v0.1') + '</strong> \xb7 ' +
     'Rule pack: <strong>' + esc(status.rule_pack_version||'0.1.0') + '</strong> — ' + esc(status.rule_pack_status||'provisional') +
+    '</div>' +
+    '<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border-light)">' +
+    '<div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px">Local Workspace Controls</div>' +
+    '<button class="btn-sm" style="border-color:var(--warn);color:var(--warn)" onclick="resetWorkspace()">Reset illustrative workspace</button>' +
+    '<div style="font-size:11px;color:var(--text-faint);margin-top:6px">Clears in-memory ledger and re-injects all demonstration scenarios. Not a production action.</div>' +
     '</div>';
 }
 

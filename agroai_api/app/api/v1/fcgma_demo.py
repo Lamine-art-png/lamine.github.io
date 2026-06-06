@@ -617,6 +617,14 @@ def get_blocking_records() -> dict[str, Any]:
 # Reports
 # ─────────────────────────────────────────────
 
+@router.get("/reports")
+def list_reports() -> dict[str, Any]:
+    """List all generated reports in this session (newest first)."""
+    from app.services.fcgma.reports import list_reports as do_list
+    reports = do_list()
+    return {"reports": reports, "total": len(reports)}
+
+
 @router.post("/reports/generate")
 def generate_report(payload: ReportRequest) -> dict[str, Any]:
     """Generate a full report bundle (PDF, CSV, audit JSON, lineage manifest, ZIP)."""
