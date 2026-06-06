@@ -608,17 +608,23 @@ async function loadOverview() {
       const pct = cycle.readiness_percentage ?? 0;
       const ready = cycle.ready_for_export ?? 0;
       const total = cycle.total_records ?? 0;
-      const blocking = cycle.blocking_exceptions ?? 0;
       document.getElementById('kpi-ready').textContent = pct + '%';
       document.getElementById('kpi-ready-card').className = 'kpi-card ' + (pct < 50 ? 'warn' : pct >= 80 ? 'success' : '');
-      document.getElementById('kpi-exc').textContent = blocking;
-      document.getElementById('kpi-exc-card').className = 'kpi-card ' + (blocking > 0 ? 'danger' : 'success');
       document.getElementById('readiness-pct').textContent = pct + '%';
       document.getElementById('readiness-bar').style.width = pct + '%';
       document.getElementById('readiness-label').textContent = cycle.status_label || '';
       const readySub = ready + ' of ' + total + ' records cleared for reporting';
-      const blockSub = blocking > 0 ? ' \xb7 ' + blocking + ' case' + (blocking === 1 ? '' : 's') + ' blocking cycle close' : '';
-      document.getElementById('readiness-sub').textContent = readySub + blockSub;
+      document.getElementById('readiness-sub').textContent = readySub;
+    }
+    // KPI: use grouped case count (consistent with Overview case cards and Reporting Cycle)
+    if (cases) {
+      const caseCount = cases.total ?? 0;
+      document.getElementById('kpi-exc').textContent = caseCount;
+      document.getElementById('kpi-exc-card').className = 'kpi-card ' + (caseCount > 0 ? 'danger' : 'success');
+      const sub = document.getElementById('readiness-sub');
+      if (sub && caseCount > 0) {
+        sub.textContent = sub.textContent + ' \xb7 ' + caseCount + (caseCount === 1 ? ' case' : ' cases') + ' requiring review';
+      }
     }
     document.getElementById('kpi-prov').textContent =
       stats.provisional_af != null ? Number(stats.provisional_af).toFixed(1) + ' AF' : '—';
@@ -858,8 +864,8 @@ let allActions = [], activeFilter = '';
 async function loadActionQueue() {
   document.getElementById('action-queue-list').innerHTML = '<div class="loading"><span class="spinner"></span>Loading&hellip;</div>';
   try {
-    const data = await apiGet('/terris/priority-actions');
-    allActions = data.actions || [];
+    const data = await apiGet('/terris/cases');
+    allActions = data.cases || [];
     renderActions();
     document.querySelectorAll('#action-filters .filter-btn').forEach(btn => {
       btn.addEventListener('click', () => {
@@ -876,22 +882,28 @@ async function loadActionQueue() {
 
 function renderActions() {
   const el = document.getElementById('action-queue-list');
-  const filtered = activeFilter ? allActions.filter(a => a.exception_type === activeFilter) : allActions;
+  // Filter by issue_categories array (canonical taxonomy matches filter data-filter values)
+  const filtered = activeFilter
+    ? allActions.filter(c => (c.issue_categories || []).includes(activeFilter))
+    : allActions;
   if (!filtered.length) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✓</div><div>No actions match this filter.</div></div>';
+    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✓</div><div>No cases match this filter.</div></div>';
     return;
   }
-  el.innerHTML = filtered.map(a =>
-    '<div class="action-card" onclick="openRecord(\'' + a.record_id + '\')">' +
-    '<div class="action-priority-num ' + (a.severity||'') + '">' + a.priority_rank + '</div>' +
+  el.innerHTML = filtered.map((c, i) =>
+    '<div class="action-card" onclick="askTerrisContext(\'Tell me about: ' + esc(c.title) + '\')">' +
+    '<div class="action-priority-num ' + (c.severity === 'high' ? 'high' : 'medium') + '">' + (i + 1) + '</div>' +
     '<div class="action-card-body">' +
     '<div style="display:flex;align-items:center;gap:10px">' +
-    '<div class="action-well">' + esc(a.well_id) + '</div>' +
-    '<span class="badge badge-' + sevBadge(a.severity) + '">' + esc(a.severity||'') + '</span>' +
+    '<div class="action-well">' + esc(c.well_id) + '</div>' +
+    '<span class="badge badge-' + sevBadge(c.severity) + '">' + esc(c.severity || '') + '</span>' +
     '</div>' +
-    '<div class="action-exc-type" style="margin-top:3px">' + esc(a.exception_type.replace(/_/g,' ')) + '</div>' +
-    '<div class="action-detail">' + esc((a.detail||'').slice(0,140)) + '</div>' +
-    '<div style="margin-top:6px;font-size:11px;color:var(--forest)">' + esc((a.recommended_action||'').slice(0,120)) + '</div>' +
+    '<div class="action-exc-type" style="margin-top:3px">' + esc((c.title || '').split(' — ')[0]) + '</div>' +
+    '<div class="action-detail">' + esc((c.primary_issue || '').slice(0, 140)) + '</div>' +
+    (c.affected_quantity_af > 0
+      ? '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">' + Number(c.affected_quantity_af).toFixed(2) + ' AF under review</div>'
+      : '') +
+    '<div style="margin-top:6px;font-size:11px;color:var(--forest)">' + esc((c.recommended_action || '').slice(0, 120)) + '</div>' +
     '</div><div class="action-arrow">›</div></div>'
   ).join('');
 }
@@ -962,7 +974,7 @@ async function loadSources() {
         '<div class="provider-status-dot ' + p.status + '"></div>' +
         '<strong style="font-size:14px">' + esc(p.label) + '</strong>' +
         '<span class="badge badge-' + (p.status === 'connected' ? 'success' : p.status === 'disabled' ? 'muted' : 'warn') + '">' + p.status + '</span>' +
-        '<span style="font-size:11px;color:var(--text-muted);margin-left:auto">' + p.record_count + ' record(s)</span>' +
+        '<span style="font-size:11px;color:var(--text-muted);margin-left:auto">' + p.record_count + (p.record_count === 1 ? ' record' : ' records') + '</span>' +
         '</div>' +
         '<div style="font-size:12px;color:var(--text-muted)">' + esc(p.message||'') + '</div>' +
         (p.note ? '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">' + esc(p.note) + '</div>' : '') +
@@ -1143,12 +1155,24 @@ async function sendTerrisMessage(query, contextHint) {
   scrollTerrisBottom();
 
   try {
-    const tid = await ensureTerrisThread();
+    let tid = await ensureTerrisThread();
     const msgBody = {query};
     if (contextHint) msgBody.context_hint = contextHint;
 
-    // Start async job — enables real progress streaming
-    const job = await apiPost('/terris/conversation/' + tid + '/message-start', msgBody);
+    // Start async job — enables real progress streaming.
+    // On 404 (thread expired after server restart), clear and create a new thread.
+    let job;
+    try {
+      job = await apiPost('/terris/conversation/' + tid + '/message-start', msgBody);
+    } catch (threadErr) {
+      if (String(threadErr.message).startsWith('404')) {
+        _terrisThreadId = null;
+        tid = await ensureTerrisThread();
+        job = await apiPost('/terris/conversation/' + tid + '/message-start', msgBody);
+      } else {
+        throw threadErr;
+      }
+    }
     const jobId = job.job_id;
 
     // Show progress container (replaces static spinner)
@@ -1550,7 +1574,7 @@ function renderProvenance(status, health) {
     '<div class="provenance-section">' +
     '<div class="provenance-section-title">What Is Live</div>' +
     (live.length
-      ? live.map(p => '<div class="provenance-item">' + dot('#3a9463') + '<span>' + esc(p.label) + ' — <strong>' + p.record_count + '</strong> record(s)</span></div>').join('')
+      ? live.map(p => '<div class="provenance-item">' + dot('#3a9463') + '<span>' + esc(p.label) + ' — <strong>' + p.record_count + '</strong> ' + (p.record_count === 1 ? 'record' : 'records') + '</span></div>').join('')
       : '<div style="font-size:13px;color:var(--text-muted)">No live sources connected. Configure API keys to enable.</div>') +
     '</div>' +
 

@@ -431,6 +431,25 @@ def run_full_calculation_pass() -> dict[str, Any]:
     pump_excs = detect_pump_without_meter(pump_records, meter_records)
     exceptions_raised += len(pump_excs)
 
+    # Embed pump exceptions into their respective pump state records so that
+    # list_priority_actions() (which reads record-embedded exceptions) can surface them.
+    for exc in _EXCEPTIONS.values():
+        if exc.get("exception_type") != "pump_activity_without_meter_movement":
+            continue
+        rid = exc.get("record_id")
+        if not rid:
+            continue
+        r = _LEDGER.get(rid)
+        if not r:
+            continue
+        already = {e.get("id") for e in r.get("exceptions", [])}
+        if exc["id"] not in already:
+            stripped = {k: exc[k] for k in ("id", "exception_type", "severity", "detail", "rule_id", "status")}
+            r.setdefault("exceptions", []).append(stripped)
+            r["review_status"] = "requires_attention"
+            r["updated_at"] = _now()
+            _LEDGER[rid] = r
+
     return {
         "calculation_version": CALCULATION_VERSION,
         "records_processed": processed,

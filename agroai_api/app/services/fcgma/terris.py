@@ -123,18 +123,35 @@ def list_priority_actions() -> dict[str, Any]:
         "negative_delta": 12,
     }
 
+    # Build map of record_id → global open exceptions to catch exceptions that
+    # are in the global store but not yet embedded in the record (e.g. pump_activity
+    # detected by run_full_calculation_pass after initial record creation)
+    global_exc_by_record: dict[str, list[dict]] = {}
+    for exc in list_exceptions():
+        if exc.get("status") != "resolved":
+            rid = exc.get("record_id")
+            if rid:
+                global_exc_by_record.setdefault(rid, []).append(exc)
+
+    seen_exc_ids: set[str] = set()
     actions = []
     for r in records:
-        open_excs = [e for e in r.get("exceptions", []) if e.get("status") != "resolved"]
-        for e in open_excs:
+        # Merge embedded + global exceptions, deduplicating by exception id
+        embedded = {e["id"]: e for e in r.get("exceptions", []) if e.get("status") != "resolved"}
+        global_excs = {e["id"]: e for e in global_exc_by_record.get(r["id"], [])}
+        merged = {**global_excs, **embedded}
+        for exc_id, e in merged.items():
+            if exc_id in seen_exc_ids:
+                continue
+            seen_exc_ids.add(exc_id)
             priority = PRIORITY_ORDER.get(e["exception_type"], 20)
             actions.append({
                 "record_id": r["id"],
                 "well_id": r["well_id"],
                 "exception_type": e["exception_type"],
-                "severity": e["severity"],
+                "severity": e.get("severity", "medium"),
                 "priority_rank": priority,
-                "detail": e["detail"][:120],
+                "detail": (e.get("detail") or "")[:120],
                 "recommended_action": _recommend_action(e["exception_type"]),
                 "scenario_injected": r["scenario_injected"],
             })
@@ -153,9 +170,23 @@ def list_priority_actions() -> dict[str, Any]:
 def list_records_blocking_reporting() -> dict[str, Any]:
     """Returns records that block the current reporting cycle close."""
     blocking = list_records(review_status="requires_attention")
+
+    # Build a map of record_id → global open exceptions (catches exceptions that
+    # were detected after initial record creation, e.g. pump_activity_without_meter_movement)
+    global_exc_by_record: dict[str, list[dict]] = {}
+    for exc in list_exceptions():
+        if exc.get("status") != "resolved":
+            rid = exc.get("record_id")
+            if rid:
+                global_exc_by_record.setdefault(rid, []).append(exc)
+
     summary = []
     for r in blocking:
-        open_excs = [e for e in r.get("exceptions", []) if e.get("status") != "resolved"]
+        # Merge embedded exceptions with global exceptions for this record
+        embedded = {e["id"]: e for e in r.get("exceptions", []) if e.get("status") != "resolved"}
+        global_excs = {e["id"]: e for e in global_exc_by_record.get(r["id"], [])}
+        merged = {**global_excs, **embedded}  # embedded takes precedence on collision
+        open_excs = list(merged.values())
         summary.append({
             "record_id": r["id"],
             "well_id": r["well_id"],
