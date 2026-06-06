@@ -1489,3 +1489,504 @@ def test_conversation_evidence_trail_structure(client):
         "list_priority_actions", "get_reporting_cycle_status",
         "get_executive_summary", "generate_reporting_brief",
     )
+
+
+# ─────────────────────────────────────────────
+# Fifth-pass: pluralization helper
+# ─────────────────────────────────────────────
+
+def test_n_helper_singular():
+    from app.services.fcgma.terris import _n
+    result = _n(1, "record")
+    assert result == "1 record", f"Expected '1 record', got '{result}'"
+    assert "(s)" not in result
+
+
+def test_n_helper_plural():
+    from app.services.fcgma.terris import _n
+    result = _n(4, "case")
+    assert result == "4 cases", f"Expected '4 cases', got '{result}'"
+    assert "(s)" not in result
+
+
+def test_n_helper_custom_plural():
+    from app.services.fcgma.terris import _n
+    result_one = _n(1, "case", "cases")
+    result_many = _n(3, "case", "cases")
+    assert result_one == "1 case"
+    assert result_many == "3 cases"
+    assert "(s)" not in result_one
+    assert "(s)" not in result_many
+
+
+def test_n_helper_zero():
+    from app.services.fcgma.terris import _n
+    result = _n(0, "exception")
+    assert result == "0 exceptions"
+    assert "(s)" not in result
+
+
+def test_n_helper_gates_version():
+    """gates.py has its own _n() — verify it also never uses (s) form."""
+    from app.services.fcgma.gates import _n as gates_n
+    assert "(s)" not in gates_n(1, "source")
+    assert "(s)" not in gates_n(5, "source")
+    assert gates_n(1, "source") == "1 source"
+    assert gates_n(2, "source") == "2 sources"
+
+
+# ─────────────────────────────────────────────
+# Fifth-pass: ReviewCase grouping
+# ─────────────────────────────────────────────
+
+def test_build_cases_no_duplicate_well_period_pairs():
+    """Each (well_id, reporting_period) pair must appear at most once in the case list."""
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.cases import build_cases
+    clear_ledger()
+    inject_all_scenarios()
+    cases = build_cases()
+    seen = set()
+    for c in cases:
+        key = (c["well_id"], c["reporting_period"])
+        assert key not in seen, (
+            f"Duplicate (well_id, reporting_period) pair in cases: {key}"
+        )
+        seen.add(key)
+
+
+def test_build_cases_has_affected_quantity():
+    """Each case must report affected_quantity_af — no case should omit it."""
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.cases import build_cases
+    clear_ledger()
+    inject_all_scenarios()
+    cases = build_cases()
+    assert cases, "Expected at least one case after injecting scenarios"
+    for c in cases:
+        assert "affected_quantity_af" in c, f"Case {c['case_id']} missing affected_quantity_af"
+        assert c["affected_quantity_af"] >= 0, (
+            f"Case {c['case_id']} has negative affected_quantity_af: {c['affected_quantity_af']}"
+        )
+
+
+def test_blocking_reporting_groups_not_repeats():
+    """list_records_blocking_reporting must return one entry per record, not one per exception."""
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.terris import list_records_blocking_reporting
+    clear_ledger()
+    inject_all_scenarios()
+    result = list_records_blocking_reporting()
+    records = result["records"]
+    record_ids = [r["record_id"] for r in records]
+    assert len(record_ids) == len(set(record_ids)), (
+        "list_records_blocking_reporting returned duplicate record_ids — "
+        "it must group by record, not repeat one row per exception"
+    )
+
+
+# ─────────────────────────────────────────────
+# Fifth-pass: five-gate reporting cycle
+# ─────────────────────────────────────────────
+
+def test_compute_all_gates_structure():
+    """compute_all_gates() must return an envelope with exactly 5 gates."""
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.gates import compute_all_gates
+    clear_ledger()
+    inject_all_scenarios()
+    result = compute_all_gates()
+    assert "gates" in result
+    assert len(result["gates"]) == 5, f"Expected 5 gates, got {len(result['gates'])}"
+    for i, g in enumerate(result["gates"], start=1):
+        assert g["gate"] == i, f"Gate at index {i-1} has gate={g['gate']}"
+        assert "name" in g
+        assert "status" in g
+        assert "status_label" in g
+        assert "what_remains" in g
+        assert "next_action" in g
+
+
+def test_gate_1_valid_status():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.gates import compute_gate_1_source_coverage
+    clear_ledger()
+    inject_all_scenarios()
+    g1 = compute_gate_1_source_coverage()
+    assert g1["status"] in ("complete", "attention_required", "incomplete"), (
+        f"Gate 1 has unexpected status: {g1['status']}"
+    )
+    assert g1["what_remains"]
+    assert g1["next_action"]
+
+
+def test_gate_2_valid_status():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.gates import compute_gate_2_accounting
+    clear_ledger()
+    inject_all_scenarios()
+    g2 = compute_gate_2_accounting()
+    assert g2["status"] in ("cleared", "action_required", "blocked"), (
+        f"Gate 2 has unexpected status: {g2['status']}"
+    )
+    assert g2["records_assessed"] >= 0
+    assert g2["material_case_count"] >= 0
+
+
+def test_gate_3_valid_status():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.gates import compute_gate_3_governance
+    clear_ledger()
+    inject_all_scenarios()
+    g3 = compute_gate_3_governance()
+    assert g3["status"] in ("cleared", "awaiting_confirmation", "blocked"), (
+        f"Gate 3 has unexpected status: {g3['status']}"
+    )
+
+
+def test_gate_5_aggregates_prerequisites():
+    """Gate 5 status must be derivable from gates 1-4 — not_ready when any gate is blocked."""
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.gates import compute_gate_5_submission_readiness
+    clear_ledger()
+    inject_all_scenarios()
+    g5 = compute_gate_5_submission_readiness()
+    assert g5["status"] in ("ready_to_close", "awaiting_approval", "not_ready"), (
+        f"Gate 5 has unexpected status: {g5['status']}"
+    )
+    # With scenarios injected there are open cases — must not be ready_to_close
+    assert g5["status"] != "ready_to_close", (
+        "Gate 5 must not report ready_to_close when open cases exist"
+    )
+    assert "gate_statuses" in g5
+    assert len(g5["gate_statuses"]) == 4
+
+
+def test_cycle_gates_endpoint(client):
+    resp = client.get("/v1/fcgma-demo/terris/cycle-gates")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "gates" in data
+    assert len(data["gates"]) == 5
+    assert "reporting_period" in data
+    assert "generated_at" in data
+    # No gate should have "(s)" in any text field
+    for g in data["gates"]:
+        for field in ("what_remains", "next_action", "status_label"):
+            val = g.get(field, "")
+            assert "(s)" not in val, (
+                f"Gate {g['gate']} field '{field}' contains '(s)': {val!r}"
+            )
+
+
+# ─────────────────────────────────────────────
+# Fifth-pass: Terris briefing
+# ─────────────────────────────────────────────
+
+def test_generate_terris_briefing_has_narrative():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.briefing import generate_terris_briefing
+    clear_ledger()
+    inject_all_scenarios()
+    briefing = generate_terris_briefing()
+    # The briefing text is stored under the "briefing" key
+    text_key = "briefing" if "briefing" in briefing else "narrative"
+    assert text_key in briefing
+    narrative = briefing[text_key]
+    assert len(narrative) > 20, "Briefing narrative is too short"
+    assert "(s)" not in narrative, "Briefing narrative contains '(s)'"
+
+
+def test_generate_terris_briefing_has_suggested_actions():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.briefing import generate_terris_briefing
+    clear_ledger()
+    inject_all_scenarios()
+    briefing = generate_terris_briefing()
+    assert "suggested_actions" in briefing
+    assert isinstance(briefing["suggested_actions"], list)
+    assert len(briefing["suggested_actions"]) > 0
+    for action in briefing["suggested_actions"]:
+        assert "label" in action
+        assert "query" in action
+        assert "type" in action
+        assert action["type"] in ("investigate", "request", "simulate", "generate")
+
+
+def test_briefing_endpoint(client):
+    resp = client.get("/v1/fcgma-demo/terris/briefing")
+    assert resp.status_code == 200
+    data = resp.json()
+    # briefing text is stored under "briefing" or "narrative" key
+    text_key = "briefing" if "briefing" in data else "narrative"
+    assert text_key in data
+    assert "suggested_actions" in data
+    assert "generated_at" in data
+    assert len(data[text_key]) > 10
+
+
+# ─────────────────────────────────────────────
+# Fifth-pass: deep investigation and progress
+# ─────────────────────────────────────────────
+
+def test_is_deep_query_triggers_on_keywords():
+    from app.services.fcgma.terris import _is_deep_query
+    assert _is_deep_query("What is going on with the reporting cycle?", "other") is True
+    assert _is_deep_query("Give me an executive summary.", "other") is True
+    assert _is_deep_query("Prepare a brief for the Executive Officer.", "other") is True
+
+
+def test_is_deep_query_triggers_on_intents():
+    from app.services.fcgma.terris import _is_deep_query
+    assert _is_deep_query("Some simple question", "executive_summary") is True
+    assert _is_deep_query("Some simple question", "reporting_cycle") is True
+    assert _is_deep_query("Some simple question", "review_queue") is True
+
+
+def test_is_deep_query_false_for_simple():
+    from app.services.fcgma.terris import _is_deep_query
+    assert _is_deep_query("Show provider health.", "provider_health") is False
+
+
+def test_progress_labels_are_not_raw_stage_names():
+    """STAGE_PROGRESS_LABELS values must be natural language, not internal identifiers."""
+    from app.services.fcgma.terris import STAGE_PROGRESS_LABELS
+    for stage, label in STAGE_PROGRESS_LABELS.items():
+        assert not label.startswith("invoke_"), (
+            f"Label for {stage!r} starts with 'invoke_': {label!r}"
+        )
+        assert "_" not in label.replace("…", ""), (
+            f"Label for {stage!r} looks like a raw identifier: {label!r}"
+        )
+        assert len(label) > 5, f"Label for {stage!r} is too short: {label!r}"
+
+
+def test_investigation_returns_progress_labels():
+    """run_terris_investigation must return progress_labels list."""
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.terris import run_terris_investigation
+    clear_ledger()
+    inject_all_scenarios()
+    result = run_terris_investigation("Where does the reporting cycle stand?")
+    assert "progress_labels" in result, "investigation result missing progress_labels"
+    assert isinstance(result["progress_labels"], list)
+
+
+def test_investigation_progress_callback_fires():
+    """on_progress callback must be called at least once during investigation."""
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.terris import run_terris_investigation
+    clear_ledger()
+    inject_all_scenarios()
+    events = []
+    run_terris_investigation(
+        "What requires my attention today?",
+        on_progress=lambda e: events.append(e),
+    )
+    assert len(events) > 0, "on_progress callback was never called"
+    for evt in events:
+        assert "stage" in evt
+        assert "label" in evt
+        assert "status" in evt
+
+
+def test_investigation_evidence_trail_has_user_label():
+    """evidence_reviewed items must have a user_label field, not just raw tool name."""
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.terris import run_terris_investigation
+    clear_ledger()
+    inject_all_scenarios()
+    result = run_terris_investigation("What requires my attention today?")
+    evidence = result.get("evidence_reviewed", [])
+    assert evidence, "evidence_reviewed is empty"
+    for item in evidence:
+        assert "user_label" in item, f"evidence item missing user_label: {item}"
+        assert item["user_label"], "user_label is empty string"
+
+
+# ─────────────────────────────────────────────
+# Fifth-pass: conversation layer
+# ─────────────────────────────────────────────
+
+def test_add_message_returns_progress_labels():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.conversation import create_conversation, add_message
+    clear_ledger()
+    inject_all_scenarios()
+    conv = create_conversation()
+    result = add_message(conv["thread_id"], "Where does the cycle stand?")
+    assert result is not None
+    assert "progress_labels" in result
+    assert isinstance(result["progress_labels"], list)
+
+
+def test_add_message_returns_reviewed_summary():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.conversation import create_conversation, add_message
+    clear_ledger()
+    inject_all_scenarios()
+    conv = create_conversation()
+    result = add_message(conv["thread_id"], "What requires my attention today?")
+    assert result is not None
+    assert "reviewed_summary" in result
+
+
+def test_add_message_returns_llm_mode():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.conversation import create_conversation, add_message
+    clear_ledger()
+    inject_all_scenarios()
+    conv = create_conversation()
+    result = add_message(conv["thread_id"], "Where does the cycle stand?")
+    assert result is not None
+    assert "llm_mode" in result
+    assert result["llm_mode"] in ("connected_intelligence", "structured_safe")
+
+
+def test_structured_safe_mode_without_api_key(monkeypatch):
+    """Without any API key, mode must be structured_safe, not connected_intelligence."""
+    import os
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.conversation import create_conversation, add_message
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("TERRIS_LLM_API_KEY", raising=False)
+    clear_ledger()
+    inject_all_scenarios()
+    conv = create_conversation()
+    result = add_message(conv["thread_id"], "What requires my attention today?")
+    assert result is not None
+    assert result["llm_mode"] == "structured_safe", (
+        f"Expected structured_safe without API key, got {result['llm_mode']}"
+    )
+
+
+# ─────────────────────────────────────────────
+# Fifth-pass: reference resolution
+# ─────────────────────────────────────────────
+
+def test_resolve_references_that_well():
+    from app.services.fcgma.conversation import _resolve_references
+    ctx = {"last_well_id": "FC-WELL-07"}
+    resolved, _, _ = _resolve_references("Tell me more about that well.", ctx)
+    assert "FC-WELL-07" in resolved
+
+
+def test_resolve_references_first_case():
+    from app.services.fcgma.conversation import _resolve_references
+    ctx = {
+        "last_cases": [
+            {"case_id": "case-abc", "well_id": "FC-WELL-01"},
+            {"case_id": "case-def", "well_id": "FC-WELL-02"},
+        ]
+    }
+    resolved, _, case_id = _resolve_references("Explain the first case.", ctx)
+    assert case_id == "case-abc", f"Expected case_id='case-abc', got '{case_id}'"
+
+
+def test_resolve_references_those_records():
+    from app.services.fcgma.conversation import _resolve_references
+    ctx = {"last_record_ids": ["rec-001", "rec-002", "rec-003"]}
+    resolved, record_id, _ = _resolve_references("Show me those records.", ctx)
+    assert record_id == "rec-001"
+
+
+# ─────────────────────────────────────────────
+# Fifth-pass: streaming job API
+# ─────────────────────────────────────────────
+
+def test_message_start_returns_job_id(client):
+    # Create thread first
+    resp = client.post("/v1/fcgma-demo/terris/conversation", json={})
+    assert resp.status_code == 200
+    thread_id = resp.json()["thread_id"]
+
+    resp2 = client.post(
+        f"/v1/fcgma-demo/terris/conversation/{thread_id}/message-start",
+        json={"query": "What requires my attention today?"}
+    )
+    assert resp2.status_code == 200
+    data = resp2.json()
+    assert "job_id" in data
+    assert data["job_id"].startswith("job-")
+    assert data["status"] == "running"
+
+
+def test_poll_job_unknown_returns_404(client):
+    resp = client.get("/v1/fcgma-demo/terris/job/job-doesnotexist")
+    assert resp.status_code == 404
+
+
+def test_poll_job_completes(client):
+    import time
+    # Create thread
+    resp = client.post("/v1/fcgma-demo/terris/conversation", json={})
+    thread_id = resp.json()["thread_id"]
+
+    # Start job
+    start_resp = client.post(
+        f"/v1/fcgma-demo/terris/conversation/{thread_id}/message-start",
+        json={"query": "Where does the reporting cycle stand?"}
+    )
+    job_id = start_resp.json()["job_id"]
+
+    # Poll until complete (max 10 seconds)
+    result_data = None
+    for _ in range(25):
+        poll = client.get(f"/v1/fcgma-demo/terris/job/{job_id}").json()
+        if poll["status"] == "complete":
+            result_data = poll
+            break
+        time.sleep(0.4)
+
+    assert result_data is not None, "Job did not complete within 10 seconds"
+    assert result_data["status"] == "complete"
+    assert result_data["result"] is not None
+    assert result_data["result"]["role"] == "assistant"
+    assert "content" in result_data["result"]
+
+
+def test_poll_job_events_are_natural_language(client):
+    """Progress events from a streaming job must have user-readable labels."""
+    import time
+    resp = client.post("/v1/fcgma-demo/terris/conversation", json={})
+    thread_id = resp.json()["thread_id"]
+
+    start_resp = client.post(
+        f"/v1/fcgma-demo/terris/conversation/{thread_id}/message-start",
+        json={"query": "What requires my attention today?"}
+    )
+    job_id = start_resp.json()["job_id"]
+
+    all_events = []
+    for _ in range(25):
+        poll = client.get(f"/v1/fcgma-demo/terris/job/{job_id}?since={len(all_events)}").json()
+        all_events.extend(poll.get("events", []))
+        if poll["status"] in ("complete", "error"):
+            break
+        time.sleep(0.4)
+
+    # Filter real progress events (not __done__ sentinel)
+    progress_events = [e for e in all_events if e.get("stage") != "__done__"]
+    assert len(progress_events) > 0, "No progress events emitted during job"
+    for evt in progress_events:
+        label = evt.get("label", "")
+        assert not label.startswith("invoke_"), (
+            f"Event label looks like a raw stage name: {label!r}"
+        )

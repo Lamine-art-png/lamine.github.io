@@ -235,17 +235,60 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-seri
 .btn-primary{padding:9px 20px;background:var(--forest);color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s}
 .btn-primary:hover{background:var(--forest-light)}
 
-/* Cycle timeline */
-.cycle-timeline{display:flex;gap:0;margin:16px 0}
-.cycle-step{flex:1;text-align:center;position:relative}
-.cycle-step::before{content:'';position:absolute;top:14px;left:-50%;right:50%;height:2px;background:var(--border)}
-.cycle-step:first-child::before{display:none}
-.cycle-step-dot{width:28px;height:28px;border-radius:50%;background:var(--border);border:2px solid var(--border);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;position:relative;z-index:1;color:var(--text-muted)}
-.cycle-step.done .cycle-step-dot{background:var(--forest);border-color:var(--forest);color:white}
-.cycle-step.active .cycle-step-dot{background:white;border-color:var(--forest);color:var(--forest)}
-.cycle-step-label{font-size:11px;color:var(--text-muted);margin-top:6px}
-.cycle-step.done .cycle-step-label{color:var(--forest)}
-.cycle-step.active .cycle-step-label{color:var(--text);font-weight:600}
+/* Five-gate reporting cycle */
+.cycle-header-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px 24px;margin-bottom:20px;box-shadow:var(--shadow)}
+.cycle-position-label{font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.cycle-position-value{font-size:22px;font-weight:700;color:var(--text)}
+.cycle-position-sub{font-size:13px;color:var(--text-muted);margin-top:4px;line-height:1.5;max-width:720px}
+.gate-list{display:flex;flex-direction:column;gap:12px}
+.gate-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.gate-card.gate-clear{border-left:4px solid var(--success)}
+.gate-card.gate-attention{border-left:4px solid var(--warn)}
+.gate-card.gate-blocked{border-left:4px solid var(--danger)}
+.gate-card.gate-pending{border-left:4px solid var(--border)}
+.gate-header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;cursor:pointer;user-select:none}
+.gate-header:hover{background:var(--stone)}
+.gate-title-wrap{display:flex;align-items:center;gap:10px}
+.gate-num{font-size:11px;font-weight:700;color:var(--text-muted);background:var(--stone);border-radius:50%;width:22px;height:22px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.gate-title{font-size:14px;font-weight:600;color:var(--text)}
+.gate-status-badge{font-size:11px;font-weight:600;padding:3px 9px;border-radius:12px}
+.gate-status-badge.clear{background:var(--success-bg);color:var(--success)}
+.gate-status-badge.attention{background:var(--warn-bg);color:var(--warn)}
+.gate-status-badge.blocked{background:var(--danger-bg);color:var(--danger)}
+.gate-status-badge.pending{background:var(--stone);color:var(--text-muted)}
+.gate-expand-icon{font-size:13px;color:var(--text-faint);transition:transform .2s}
+.gate-body{display:none;padding:14px 18px 18px;border-top:1px solid var(--border-light)}
+.gate-body.open{display:block}
+.gate-metrics{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:14px}
+.gate-metric{background:var(--stone);border-radius:var(--radius-sm);padding:10px 12px}
+.gate-metric-label{font-size:11px;color:var(--text-muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em}
+.gate-metric-value{font-size:17px;font-weight:700;color:var(--text);margin-top:3px}
+.gate-metric-value.warn{color:var(--warn)}
+.gate-metric-value.danger{color:var(--danger)}
+.gate-metric-value.success{color:var(--success)}
+.gate-remains{font-size:13px;color:var(--text);margin-bottom:10px;line-height:1.5}
+.gate-action-row{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+/* Case groups in cycle view */
+.case-group{background:var(--card);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;margin-bottom:8px;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.case-group:hover{border-color:var(--forest);box-shadow:var(--shadow)}
+.case-group-title{font-size:13px;font-weight:600;color:var(--text)}
+.case-group-meta{font-size:12px;color:var(--text-muted);margin-top:3px}
+.case-group-badges{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+/* Terris briefing */
+.terris-briefing-card{background:linear-gradient(135deg,var(--navy) 0%,#1a3a2a 100%);border-radius:var(--radius);padding:20px 24px;color:white;margin-bottom:20px}
+.terris-briefing-header{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.terris-briefing-dot{width:8px;height:8px;border-radius:50%;background:#6dd5a8;flex-shrink:0}
+.terris-briefing-label{font-size:11px;font-weight:700;color:#6dd5a8;text-transform:uppercase;letter-spacing:.08em}
+.terris-briefing-text{font-size:13px;line-height:1.7;color:rgba(255,255,255,.88);white-space:pre-line}
+.terris-briefing-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:14px}
+.terris-briefing-action{padding:6px 14px;border:1px solid rgba(109,213,168,.4);border-radius:16px;background:rgba(109,213,168,.08);color:#6dd5a8;font-size:12px;cursor:pointer;transition:background .15s;font-family:inherit}
+.terris-briefing-action:hover{background:rgba(109,213,168,.18)}
+/* Progress events in Terris chat */
+.terris-progress-list{display:flex;flex-direction:column;gap:4px;padding:8px 0 4px;max-width:90%}
+.terris-progress-item{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text-muted)}
+.terris-progress-item.done{color:var(--success)}
+.terris-progress-check{width:14px;height:14px;border-radius:50%;background:var(--success-bg);color:var(--success);font-size:9px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.terris-reviewed-summary{font-size:11px;color:var(--text-faint);margin-top:2px;padding:2px 0}
 </style>
 </head>
 <body>
@@ -322,6 +365,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-seri
         <div class="kpi-card"><div class="kpi-label">Water Quantity Under Review</div><div class="kpi-value" id="kpi-prov">—</div><div class="kpi-sub">Provisional, pending validation</div></div>
         <div class="kpi-card"><div class="kpi-label">Total Records</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-sub">In ledger</div></div>
       </div>
+      <!-- Terris Briefing -->
+      <div id="terris-briefing-section" style="margin-bottom:4px">
+        <div class="terris-briefing-card" id="terris-briefing-card">
+          <div class="terris-briefing-header">
+            <div class="terris-briefing-dot"></div>
+            <div class="terris-briefing-label">Terris Briefing</div>
+          </div>
+          <div class="terris-briefing-text" id="terris-briefing-text"><div class="loading"><span class="spinner" style="border-top-color:#6dd5a8"></span><span style="color:rgba(255,255,255,.6);font-size:13px">Generating briefing from current evidence…</span></div></div>
+          <div class="terris-briefing-actions" id="terris-briefing-actions"></div>
+        </div>
+      </div>
       <div class="two-col">
         <div>
           <div class="section-title">Reporting Position</div>
@@ -351,27 +405,19 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-seri
           <p>2026-Q1 &middot; Submission deadline: 2026-04-30</p>
         </div>
         <div style="display:flex;gap:8px;flex-shrink:0">
-          <button class="btn-ask-terris" onclick="askTerrisContext('Is the 2026-Q1 reporting cycle ready to close?')">&#9998; Ask Terris</button>
+          <button class="btn-ask-terris" onclick="askTerrisContext('What is the risk of closing the 2026-Q1 reporting cycle now?')">&#9998; Ask Terris</button>
           <button class="btn-sm" style="border-color:var(--forest);color:var(--forest)" onclick="switchView('reports');generateReport()">Generate Brief</button>
         </div>
       </div>
-      <div class="two-col">
-        <div>
-          <div class="card" style="margin-bottom:18px">
-            <div class="card-title">Cycle Progress</div>
-            <div class="cycle-timeline">
-              <div class="cycle-step done"><div class="cycle-step-dot">&#10003;</div><div class="cycle-step-label">Data ingested</div></div>
-              <div class="cycle-step active"><div class="cycle-step-dot">2</div><div class="cycle-step-label">Review &amp; resolve</div></div>
-              <div class="cycle-step"><div class="cycle-step-dot">3</div><div class="cycle-step-label">Export ready</div></div>
-              <div class="cycle-step"><div class="cycle-step-dot">4</div><div class="cycle-step-label">Submitted</div></div>
-            </div>
-            <div id="cycle-status-card" style="margin-top:14px"></div>
-          </div>
-          <div class="card"><div class="card-title">Readiness Breakdown</div><div id="cycle-breakdown"></div></div>
-        </div>
-        <div>
-          <div class="card"><div class="card-title">Records Blocking Cycle Close</div><div id="cycle-blocking"></div></div>
-        </div>
+
+      <!-- Cycle position summary card -->
+      <div class="cycle-header-card" id="cycle-position-card">
+        <div class="loading"><span class="spinner"></span>Loading cycle status&hellip;</div>
+      </div>
+
+      <!-- Five gates -->
+      <div class="gate-list" id="cycle-gates-list">
+        <div class="loading" style="padding:20px 0"><span class="spinner"></span>Loading gates&hellip;</div>
       </div>
     </div>
 
@@ -551,30 +597,56 @@ const apiPatch = (path, body) => apiFetch(path, {method:'PATCH',headers:{'Conten
 // ── Overview ─────────────────────────────────────────────────
 async function loadOverview() {
   try {
-    const [dash, cycle, actions] = await Promise.all([
+    const [dash, cycle, cases] = await Promise.all([
       apiGet('/dashboard'),
       apiGet('/terris/reporting-cycle').catch(() => null),
-      apiGet('/terris/priority-actions').catch(() => null),
+      apiGet('/terris/cases').catch(() => null),
     ]);
     const stats = dash.stats || {};
     document.getElementById('kpi-total').textContent = stats.total_records ?? '—';
     if (cycle) {
       const pct = cycle.readiness_percentage ?? 0;
+      const ready = cycle.ready_for_export ?? 0;
+      const total = cycle.total_records ?? 0;
+      const blocking = cycle.blocking_exceptions ?? 0;
       document.getElementById('kpi-ready').textContent = pct + '%';
       document.getElementById('kpi-ready-card').className = 'kpi-card ' + (pct < 50 ? 'warn' : pct >= 80 ? 'success' : '');
-      document.getElementById('kpi-exc').textContent = cycle.blocking_exceptions ?? '—';
-      document.getElementById('kpi-exc-card').className = 'kpi-card ' + (cycle.blocking_exceptions > 0 ? 'danger' : 'success');
+      document.getElementById('kpi-exc').textContent = blocking;
+      document.getElementById('kpi-exc-card').className = 'kpi-card ' + (blocking > 0 ? 'danger' : 'success');
       document.getElementById('readiness-pct').textContent = pct + '%';
       document.getElementById('readiness-bar').style.width = pct + '%';
       document.getElementById('readiness-label').textContent = cycle.status_label || '';
-      document.getElementById('readiness-sub').textContent =
-        cycle.ready_for_export + ' of ' + cycle.total_records + ' records ready \xb7 ' + cycle.blocking_exceptions + ' exception(s) blocking';
+      const readySub = ready + ' of ' + total + ' records cleared for reporting';
+      const blockSub = blocking > 0 ? ' \xb7 ' + blocking + ' case' + (blocking === 1 ? '' : 's') + ' blocking cycle close' : '';
+      document.getElementById('readiness-sub').textContent = readySub + blockSub;
     }
     document.getElementById('kpi-prov').textContent =
       stats.provisional_af != null ? Number(stats.provisional_af).toFixed(1) + ' AF' : '—';
     loadOverviewProviders();
-    if (actions && actions.actions) renderOverviewActions(actions.actions.slice(0, 5));
+    if (cases && cases.cases) renderOverviewCases(cases.cases.slice(0, 5));
+    // Load Terris briefing asynchronously (non-blocking)
+    loadBriefing();
   } catch(e) { console.error('Overview error', e); }
+}
+
+function renderOverviewCases(cases) {
+  const el = document.getElementById('overview-actions');
+  if (!cases.length) {
+    el.innerHTML = '<div style="font-size:13px;color:var(--text-muted);padding:12px 0">No cases requiring review. All records are cleared.</div>';
+    return;
+  }
+  el.innerHTML = cases.map((c, i) =>
+    '<div class="action-card" onclick="askTerrisContext(\'Investigate this case: ' + esc(c.title) + '\')">' +
+    '<div class="action-priority-num ' + (c.severity === 'high' ? 'high' : 'medium') + '">' + (i+1) + '</div>' +
+    '<div class="action-card-body">' +
+    '<div style="display:flex;align-items:center;gap:8px">' +
+    '<div class="action-well">' + esc(c.well_id) + '</div>' +
+    '<span class="badge badge-' + (c.severity === 'high' ? 'danger' : 'warn') + '">' + esc(c.severity) + '</span>' +
+    '</div>' +
+    '<div class="action-exc-type">' + esc(c.title.split(' — ')[0]) + '</div>' +
+    '<div class="action-detail">' + esc(c.primary_issue) + '</div>' +
+    '</div><div class="action-arrow">›</div></div>'
+  ).join('');
 }
 
 async function loadOverviewProviders() {
@@ -612,36 +684,172 @@ function renderOverviewActions(actions) {
 // ── Reporting Cycle ──────────────────────────────────────────
 async function loadReportingCycle() {
   try {
-    const [cycle, blocking] = await Promise.all([
-      apiGet('/terris/reporting-cycle'),
-      apiGet('/terris/blocking-records'),
-    ]);
-    document.getElementById('cycle-status-card').innerHTML =
-      '<div style="font-size:13px;font-weight:600;color:var(--text)">' + esc(cycle.status_label) + '</div>' +
-      '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">Deadline: ' + cycle.submission_deadline +
-      ' \xb7 ' + cycle.ready_for_export + '/' + cycle.total_records + ' records ready' +
-      ' \xb7 ' + cycle.blocking_exceptions + ' exception(s) blocking</div>';
+    const gates = await apiGet('/terris/cycle-gates');
+    renderCycleGates(gates);
+  } catch(e) {
+    document.getElementById('cycle-gates-list').innerHTML =
+      '<div style="color:var(--danger);font-size:13px;padding:12px 0">Failed to load cycle gates: ' + esc(e.message) + '</div>';
+    console.error('Cycle error', e);
+  }
+}
 
-    document.getElementById('cycle-breakdown').innerHTML = [
-      ['Total records', cycle.total_records],
-      ['Ready for export', cycle.ready_for_export],
-      ['Requires attention', cycle.requires_attention],
-      ['Blocking exceptions', cycle.blocking_exceptions],
-      ['Readiness', cycle.readiness_percentage + '%'],
-      ['Supported extraction', Number(cycle.supported_extraction_af).toFixed(2) + ' AF'],
-      ['Provisional AF', Number(cycle.provisional_af).toFixed(2) + ' AF'],
-    ].map(([k,v]) => '<div class="record-field-row"><span class="record-field-key">' + k + '</span><span class="record-field-val">' + v + '</span></div>').join('');
+function renderCycleGates(data) {
+  const posEl = document.getElementById('cycle-position-card');
+  posEl.innerHTML =
+    '<div class="cycle-position-label">Current position</div>' +
+    '<div style="display:flex;align-items:baseline;gap:16px;flex-wrap:wrap">' +
+    '<div class="cycle-position-value">' + esc(data.summary_position || 'Review required') + '</div>' +
+    '</div>' +
+    '<div class="cycle-position-sub" id="cycle-pos-sub" style="margin-top:8px"></div>';
 
-    const bl = blocking.records || [];
-    document.getElementById('cycle-blocking').innerHTML = bl.length
-      ? bl.map(r =>
-          '<div style="padding:10px 0;border-bottom:1px solid var(--border-light);cursor:pointer" onclick="openRecord(\'' + r.record_id + '\')">' +
-          '<span style="font-weight:700;font-family:monospace;color:var(--forest)">' + esc(r.well_id) + '</span>' +
-          '<span class="badge badge-danger" style="margin-left:10px">' + (r.exception_count||0) + ' exception(s)</span>' +
-          '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">' + (r.blocking_reasons||[]).join(' · ').replace(/_/g,' ') + '</div></div>'
-        ).join('')
-      : '<div style="font-size:13px;color:var(--text-muted)">No blocking records.</div>';
-  } catch(e) { console.error('Cycle error', e); }
+  const gates = data.gates || [];
+  const listEl = document.getElementById('cycle-gates-list');
+  if (!gates.length) { listEl.innerHTML = '<div style="color:var(--text-muted);font-size:13px">No gate data available.</div>'; return; }
+
+  listEl.innerHTML = gates.map(g => renderGateCard(g)).join('');
+
+  // Expand gates that need attention
+  gates.forEach((g, i) => {
+    if (g.status !== 'complete' && g.status !== 'ready') {
+      const body = document.getElementById('gate-body-' + i);
+      const icon = document.getElementById('gate-icon-' + i);
+      if (body) body.classList.add('open');
+      if (icon) icon.textContent = '▲';
+    }
+  });
+}
+
+function _gateStatusClass(status) {
+  if (status === 'complete' || status === 'cleared' || status === 'ready') return 'clear';
+  if (status === 'blocked' || status === 'not_ready' || status === 'not_generated') return 'blocked';
+  if (status === 'attention_required' || status === 'action_required' || status === 'awaiting_approval') return 'attention';
+  return 'pending';
+}
+
+function _gateBadgeClass(status) {
+  const cls = _gateStatusClass(status);
+  return cls === 'clear' ? 'clear' : cls === 'blocked' ? 'blocked' : cls === 'attention' ? 'attention' : 'pending';
+}
+
+function renderGateCard(g) {
+  const idx = g.gate - 1;
+  const cls = _gateStatusClass(g.status);
+  const badgeCls = _gateBadgeClass(g.status);
+  const metrics = buildGateMetrics(g);
+  const caseHtml = buildGateCases(g);
+  const askQuery = gateAskQuery(g);
+
+  return '<div class="gate-card gate-' + cls + '">' +
+    '<div class="gate-header" onclick="toggleGate(' + idx + ')">' +
+    '<div class="gate-title-wrap">' +
+    '<div class="gate-num">' + g.gate + '</div>' +
+    '<div class="gate-title">' + esc(g.name) + '</div>' +
+    '</div>' +
+    '<div style="display:flex;align-items:center;gap:10px">' +
+    '<span class="gate-status-badge ' + badgeCls + '">' + esc(g.status_label) + '</span>' +
+    '<span class="gate-expand-icon" id="gate-icon-' + idx + '">▼</span>' +
+    '</div>' +
+    '</div>' +
+    '<div class="gate-body" id="gate-body-' + idx + '">' +
+    (g.what_remains ? '<div class="gate-remains">' + esc(g.what_remains) + '</div>' : '') +
+    (metrics ? '<div class="gate-metrics">' + metrics + '</div>' : '') +
+    (caseHtml ? caseHtml : '') +
+    '<div class="gate-action-row">' +
+    (g.next_action ? '<button class="btn-sm" style="border-color:var(--forest);color:var(--forest)" onclick="askTerrisContext(' + JSON.stringify(askQuery) + ')">✎ Ask Terris</button>' : '') +
+    (g.gate === 4 ? '<button class="btn-sm" style="border-color:var(--forest);color:var(--forest)" onclick="switchView(\'reports\');generateReport()">Generate Brief</button>' : '') +
+    '</div>' +
+    '</div>' +
+    '</div>';
+}
+
+function toggleGate(idx) {
+  const body = document.getElementById('gate-body-' + idx);
+  const icon = document.getElementById('gate-icon-' + idx);
+  if (!body) return;
+  const open = body.classList.toggle('open');
+  if (icon) icon.textContent = open ? '▲' : '▼';
+}
+
+function gateAskQuery(g) {
+  const queries = {
+    1: 'What is the current source coverage status?',
+    2: 'Which accounting cases are still open and what do they affect?',
+    3: 'What governance items are blocking cycle close?',
+    4: 'Has the reporting package been generated? What does it reflect?',
+    5: 'What is the risk of closing the 2026-Q1 reporting cycle now?',
+  };
+  return queries[g.gate] || 'Tell me about gate ' + g.gate + ': ' + g.name;
+}
+
+function buildGateMetrics(g) {
+  const pairs = [];
+  if (g.gate === 1) {
+    if (g.connected_sources != null) pairs.push(['Connected sources', g.connected_sources + '/' + g.expected_sources, g.connected_sources < g.expected_sources ? 'warn' : 'success']);
+    if (g.records_received != null) pairs.push(['Records received', g.records_received, '']);
+    if (g.missing_interval_count != null && g.missing_interval_count > 0) pairs.push(['Telemetry gaps', g.missing_interval_count, 'warn']);
+  } else if (g.gate === 2) {
+    if (g.records_cleared != null) pairs.push(['Records cleared', g.records_cleared, 'success']);
+    if (g.records_under_review != null) pairs.push(['Under review', g.records_under_review, g.records_under_review > 0 ? 'warn' : '']);
+    if (g.supported_quantity_af != null) pairs.push(['Supported extraction', Number(g.supported_quantity_af).toFixed(2) + ' AF', '']);
+    if (g.quantity_under_review_af != null && g.quantity_under_review_af > 0) pairs.push(['Quantity under review', Number(g.quantity_under_review_af).toFixed(2) + ' AF', 'warn']);
+  } else if (g.gate === 3) {
+    if (g.combcode_pending_count != null) pairs.push(['CombCode pending', g.combcode_pending_count, g.combcode_pending_count > 0 ? 'danger' : 'success']);
+    if (g.operator_confirmations_pending != null && g.operator_confirmations_pending > 0) pairs.push(['Operator confirmations', g.operator_confirmations_pending, 'warn']);
+    if (g.unvalidated_assumptions != null) pairs.push(['Governance assumptions', g.unvalidated_assumptions, g.unvalidated_assumptions > 0 ? 'warn' : '']);
+  } else if (g.gate === 4) {
+    if (g.evidence_bundle_count != null) pairs.push(['Records ready for bundle', g.evidence_bundle_count, '']);
+    const briefStatus = g.latest_brief ? 'Generated' : 'Not generated';
+    pairs.push(['Reporting brief', briefStatus, g.latest_brief ? 'success' : 'warn']);
+    const packetStatus = g.exception_packet ? 'Generated' : 'Not generated';
+    pairs.push(['Exception packet', packetStatus, g.exception_packet ? 'success' : 'pending']);
+  } else if (g.gate === 5) {
+    if (g.blocking_case_count != null) pairs.push(['Blocking cases', g.blocking_case_count, g.blocking_case_count > 0 ? 'danger' : 'success']);
+    if (g.quantity_affected_af != null && g.quantity_affected_af > 0) pairs.push(['Quantity affected', Number(g.quantity_affected_af).toFixed(2) + ' AF', 'warn']);
+    if (g.evidence_requests_outstanding != null && g.evidence_requests_outstanding > 0) pairs.push(['Evidence requests', g.evidence_requests_outstanding, 'warn']);
+  }
+  return pairs.map(([label, value, cls]) =>
+    '<div class="gate-metric">' +
+    '<div class="gate-metric-label">' + esc(label) + '</div>' +
+    '<div class="gate-metric-value ' + cls + '">' + esc(String(value)) + '</div>' +
+    '</div>'
+  ).join('');
+}
+
+function buildGateCases(g) {
+  const cases = g.material_cases || [];
+  if (!cases.length) return '';
+  return '<div style="margin-bottom:10px">' +
+    '<div style="font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Material cases</div>' +
+    cases.map(c =>
+      '<div class="case-group" onclick="askTerrisContext(\'Tell me about the case: ' + esc(c.title) + '\')">' +
+      '<div class="case-group-title">' + esc(c.title) + '</div>' +
+      '<div class="case-group-meta">' + esc(c.primary_issue) +
+      (c.affected_quantity_af > 0 ? ' · ' + Number(c.affected_quantity_af).toFixed(2) + ' AF under review' : '') + '</div>' +
+      '<div class="case-group-badges">' +
+      '<span class="badge badge-' + (c.severity === 'high' ? 'danger' : 'warn') + '">' + esc(c.severity) + '</span>' +
+      (c.issue_categories || []).slice(0,2).map(t => '<span class="badge badge-muted">' + esc(t.replace(/_/g,' ')) + '</span>').join('') +
+      '</div>' +
+      '</div>'
+    ).join('') +
+    '</div>';
+}
+
+async function loadBriefing() {
+  try {
+    const brief = await apiGet('/terris/briefing');
+    const textEl = document.getElementById('terris-briefing-text');
+    const actionsEl = document.getElementById('terris-briefing-actions');
+    if (textEl) textEl.textContent = brief.briefing || 'Briefing unavailable.';
+    if (actionsEl && brief.suggested_actions) {
+      actionsEl.innerHTML = (brief.suggested_actions || []).slice(0, 4).map(a =>
+        '<button class="terris-briefing-action" onclick="askTerrisContext(' + JSON.stringify(a.query) + ')">' + esc(a.label) + '</button>'
+      ).join('');
+    }
+  } catch(e) {
+    const textEl = document.getElementById('terris-briefing-text');
+    if (textEl) textEl.textContent = 'Briefing unavailable. Start a Terris conversation to investigate.';
+    console.warn('Briefing load failed:', e);
+  }
 }
 
 // ── Action Queue ─────────────────────────────────────────────
@@ -936,51 +1144,123 @@ async function sendTerrisMessage(query, contextHint) {
 
   try {
     const tid = await ensureTerrisThread();
-    const body = {query};
-    if (contextHint) body.context_hint = contextHint;
-    const response = await apiPost('/terris/conversation/' + tid + '/message', body);
+    const msgBody = {query};
+    if (contextHint) msgBody.context_hint = contextHint;
 
-    // Remove thinking indicator
-    thread.removeChild(thinkEl);
+    // Start async job — enables real progress streaming
+    const job = await apiPost('/terris/conversation/' + tid + '/message-start', msgBody);
+    const jobId = job.job_id;
 
-    // Render response
+    // Show progress container (replaces static spinner)
+    const progressId = 'prog-' + Date.now();
+    const progressWrap = thinkEl.querySelector('.terris-thinking');
+    if (progressWrap) progressWrap.id = progressId;
+
+    // Poll for progress events
+    let since = 0;
+    let result = null;
+    while (true) {
+      const poll = await apiGet('/terris/job/' + jobId + '?since=' + since);
+      since += (poll.events || []).length;
+      const progEl = document.getElementById(progressId);
+
+      for (const evt of (poll.events || [])) {
+        if (evt.stage === '__done__' || !evt.label) continue;
+        if (evt.status === 'started') {
+          if (progEl) {
+            progEl.innerHTML =
+              '<div class="terris-thinking-dots" style="display:inline-flex"><span></span><span></span><span></span></div>' +
+              '<span style="margin-left:8px;font-size:13px;color:var(--text-muted)">' + esc(evt.label) + '</span>';
+          }
+          scrollTerrisBottom();
+        } else if (evt.status === 'completed' && progEl) {
+          progEl.innerHTML =
+            '<div class="terris-progress-check">&#10003;</div>' +
+            '<span style="margin-left:6px;font-size:12px;color:var(--success)">' + esc(evt.label) + '</span>';
+          scrollTerrisBottom();
+        }
+      }
+
+      if (poll.status === 'complete') { result = poll.result; break; }
+      if (poll.status === 'error') throw new Error(poll.error || 'Investigation failed.');
+      await new Promise(r => setTimeout(r, 400));
+    }
+
+    // Remove thinking container
+    if (thinkEl.parentNode) thinkEl.remove();
+    const response = result;
+
+    // Build response element
     const eId = 'ev-' + (++_evidenceCounter);
     const respEl = document.createElement('div');
     respEl.className = 'terris-msg-terris';
-    const evidenceTrail = (response.evidence_trail || []).map(e =>
-      '<div class="terris-evidence-row"><span class="terris-evidence-row-tool">' + esc(e.tool.replace(/_/g,' ')) + '</span><span style="font-size:11px;color:var(--text-muted)">' + esc(e.summary||'') + '</span></div>'
+
+    // Evidence trail — show user-friendly labels, not raw tool names
+    const evidenceRows = (response.evidence_trail || []).map(e =>
+      '<div class="terris-evidence-row">' +
+      '<span class="terris-evidence-row-tool">' + esc(e.user_label || e.tool.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase())) + '</span>' +
+      '<span style="font-size:11px;color:var(--text-muted)">' + esc(e.summary||'') + '</span>' +
+      '</div>'
     ).join('');
+
+    const progressLabels = response.progress_labels || [];
+    const reviewedSummary = response.reviewed_summary || '';
     const followUps = (response.follow_up_suggestions || []).map(s =>
       '<button class="terris-followup-pill" onclick="sendTerrisMessage(' + JSON.stringify(s) + ')">' + esc(s) + '</button>'
     ).join('');
+
+    // Evidence trail drawer content: stages + reviewed summary + tool details
+    const trailInner =
+      (progressLabels.length ?
+        '<div class="terris-progress-list" style="margin-bottom:8px">' +
+        progressLabels.map(l =>
+          '<div class="terris-progress-item done"><div class="terris-progress-check">&#10003;</div><span>' + esc(l) + '</span></div>'
+        ).join('') + '</div>' : '') +
+      (reviewedSummary ? '<div class="terris-reviewed-summary">Reviewed: ' + esc(reviewedSummary) + '</div>' : '') +
+      (evidenceRows ? '<div style="margin-top:8px">' + evidenceRows + '</div>' : '');
+
+    const modeLabel = response.llm_mode === 'connected_intelligence' ? 'Connected Intelligence' : 'Structured Safe';
+    const hasTrail = !!(progressLabels.length || evidenceRows);
+
     respEl.innerHTML =
-      '<div class="terris-msg-terris-header"><div class="terris-msg-terris-dot"></div><span class="terris-msg-terris-label">Terris</span></div>' +
-      '<div class="terris-msg-terris-body">' + esc(response.content || '') + '</div>' +
-      (response.recommended_action ? '<div class="terris-msg-terris-action">&#8594; ' + esc(response.recommended_action) + '</div>' : '') +
-      (evidenceTrail ? '<button class="terris-evidence-toggle" onclick="toggleEvidence(\'' + eId + '\')">&#9656; View evidence trail</button>' +
-        '<div class="terris-evidence-trail" id="' + eId + '">' + evidenceTrail + '</div>' : '') +
+      '<div class="terris-msg-terris-header">' +
+      '<div class="terris-msg-terris-dot"></div>' +
+      '<span class="terris-msg-terris-label">Terris</span>' +
+      '<span style="font-size:10px;color:var(--text-faint);margin-left:8px">' + modeLabel + '</span>' +
+      '</div>' +
+      '<div class="terris-msg-terris-body">' + escNewlines(response.content || '') + '</div>' +
+      (response.recommended_action && !response.content.includes(response.recommended_action.slice(0,30))
+        ? '<div class="terris-msg-terris-action">&#8594; ' + esc(response.recommended_action) + '</div>' : '') +
+      (hasTrail ?
+        '<button class="terris-evidence-toggle" onclick="toggleEvidence(\'' + eId + '\')">&#9656; View evidence trail</button>' +
+        '<div class="terris-evidence-trail" id="' + eId + '">' + trailInner + '</div>' : '') +
       (followUps ? '<div class="terris-followups">' + followUps + '</div>' : '');
+
     thread.appendChild(respEl);
 
-    // Update mode label
     if (response.llm_mode === 'connected_intelligence') {
       document.getElementById('terris-mode-label').textContent = 'Water Intelligence Agent · Connected Intelligence mode';
     }
-
     _terrisMessageCount++;
     scrollTerrisBottom();
   } catch(e) {
-    thread.removeChild(thinkEl);
+    if (thinkEl.parentNode) thinkEl.remove();
     const errEl = document.createElement('div');
     errEl.className = 'terris-msg-terris';
     errEl.innerHTML =
-      '<div class="terris-msg-terris-header"><div class="terris-msg-terris-dot" style="background:var(--danger)"></div><span class="terris-msg-terris-label">Terris</span></div>' +
+      '<div class="terris-msg-terris-header"><div class="terris-msg-terris-dot" style="background:var(--danger)"></div>' +
+      '<span class="terris-msg-terris-label">Terris</span></div>' +
       '<div class="terris-msg-terris-body" style="color:var(--danger)">Investigation failed: ' + esc(e.message) +
-      ' <button onclick="sendTerrisMessage(' + JSON.stringify(query) + ')" style="background:none;border:none;color:var(--forest);cursor:pointer;text-decoration:underline;font-size:13px">Retry</button></div>';
+      ' <button onclick="sendTerrisMessage(' + JSON.stringify(query) + ')" ' +
+      'style="background:none;border:none;color:var(--forest);cursor:pointer;text-decoration:underline;font-size:13px">Retry</button></div>';
     thread.appendChild(errEl);
     scrollTerrisBottom();
   }
   btn.disabled = false;
+}
+
+function escNewlines(s) {
+  return esc(s).replace(/\n/g, '<br>');
 }
 
 function toggleEvidence(id) {
@@ -988,7 +1268,7 @@ function toggleEvidence(id) {
   const btn = el ? el.previousElementSibling : null;
   if (!el) return;
   el.classList.toggle('open');
-  if (btn) btn.textContent = el.classList.contains('open') ? '▾ Hide evidence trail' : '▸ View evidence trail';
+  if (btn) btn.textContent = el.classList.contains('open') ? '▾ Hide evidence trail' : '▶ View evidence trail';
 }
 
 function scrollTerrisBottom() {

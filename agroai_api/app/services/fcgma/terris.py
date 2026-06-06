@@ -382,16 +382,66 @@ def _tools_for_intent(intent: str) -> list[str]:
 
 
 # ─────────────────────────────────────────────
+# Pluralization helper
+# ─────────────────────────────────────────────
+
+def _n(count: int, singular: str, plural: str | None = None) -> str:
+    """Return natural singular/plural: '1 record', '4 cases'. Never '(s)'."""
+    pl = plural if plural is not None else singular + "s"
+    return f"{count} {singular if count == 1 else pl}"
+
+
+# ─────────────────────────────────────────────
+# Natural-language stage labels shown to users
+# ─────────────────────────────────────────────
+
+STAGE_PROGRESS_LABELS: dict[str, str] = {
+    "invoke_list_priority_actions": "Reviewing priority cases…",
+    "invoke_get_reporting_cycle_status": "Reviewing the current reporting cycle…",
+    "invoke_list_records_blocking_reporting": "Identifying records blocking cycle close…",
+    "invoke_compare_provider_health": "Checking provider coverage and source health…",
+    "invoke_run_applied_water_scenario": "Reconciling applied-water calculations…",
+    "invoke_generate_exception_packet": "Compiling the exception packet…",
+    "invoke_list_unvalidated_assumptions": "Reviewing governance assumptions…",
+    "invoke_draft_follow_up_request": "Drafting follow-up requests…",
+    "invoke_generate_reporting_brief": "Preparing reporting readiness brief…",
+    "invoke_get_executive_summary": "Reviewing the ledger summary…",
+    "invoke_generate_reporting_summary": "Checking reporting summary…",
+    "invoke_add_records_to_evidence_bundle": "Staging evidence bundle…",
+    "inspect_records": "Reconciling affected meter records…",
+    "identify_assumptions": "Checking calculation assumptions…",
+    "inspect_record": "Inspecting meter record…",
+    "reconcile_calculations": "Verifying calculation lineage…",
+    "inspect_lineage": "Reviewing source provenance…",
+    "synthesize_answer": "Preparing a recommendation…",
+}
+
+
+def _user_stage_label(stage_name: str) -> str | None:
+    """Return user-friendly label for a stage, or None to hide it."""
+    hidden = {"classify_intent", "identify_tools", "llm_formatting", "synthesize_answer"}
+    if stage_name in hidden:
+        return None
+    if stage_name.startswith("invoke_"):
+        return STAGE_PROGRESS_LABELS.get(stage_name, "Gathering evidence…")
+    return STAGE_PROGRESS_LABELS.get(stage_name)
+
+
+# ─────────────────────────────────────────────
 # Structured response builders
 # ─────────────────────────────────────────────
 
 def _brief_tool_result(tool_name: str, result: dict) -> str:
     if tool_name == "get_reporting_cycle_status":
-        return f"Cycle: {result.get('status_label', '?')} | {result.get('readiness_percentage', 0)}% ready | {result.get('blocking_exceptions', 0)} exception(s)"
+        pct = result.get("readiness_percentage", 0)
+        blocking = result.get("blocking_exceptions", 0)
+        return f"Cycle: {result.get('status_label', '?')} · {pct}% ready · {_n(blocking, 'exception')} open"
     if tool_name == "list_priority_actions":
-        return f"{result.get('total_actions', 0)} priority action(s) requiring attention"
+        n = result.get("total_actions", 0)
+        return f"{_n(n, 'priority case')} requiring attention"
     if tool_name == "list_records_blocking_reporting":
-        return f"{result.get('blocking_count', 0)} record(s) blocking reporting cycle"
+        n = result.get("blocking_count", 0)
+        return f"{_n(n, 'record')} blocking reporting cycle"
     if tool_name == "get_executive_summary":
         return (result.get("narrative", "") or "")[:120]
     if tool_name == "compare_provider_health":
@@ -399,19 +449,26 @@ def _brief_tool_result(tool_name: str, result: dict) -> str:
         connected = sum(1 for p in providers if p["status"] == "connected")
         return f"{connected}/{len(providers)} providers connected"
     if tool_name == "generate_exception_packet":
-        return f"{result.get('total_exceptions', 0)} exception(s) across {result.get('exception_types', 0)} type(s)"
+        total = result.get("total_exceptions", 0)
+        types = result.get("exception_types", 0)
+        return f"{_n(total, 'exception')} across {_n(types, 'type')}"
     if tool_name == "run_applied_water_scenario":
         return f"{result.get('total_interval_af', 0):.2f} AF metered ({result.get('model_status', 'provisional')})"
     if tool_name == "list_unvalidated_assumptions":
-        return f"{result.get('assumption_count', 0)} unvalidated assumption(s)"
+        n = result.get("assumption_count", 0)
+        return f"{_n(n, 'unvalidated assumption')}"
     if tool_name == "generate_reporting_summary":
         return f"Readiness: {result.get('reporting_readiness', '?')}"
     if tool_name == "generate_reporting_brief":
-        return f"{result.get('readiness_percentage', 0)}% ready | {result.get('blocking_count', 0)} blocking"
+        pct = result.get("readiness_percentage", 0)
+        n = result.get("blocking_count", 0)
+        return f"{pct}% ready · {_n(n, 'case')} blocking"
     if tool_name == "draft_follow_up_request":
-        return f"{result.get('item_count', 0)} follow-up item(s) drafted"
+        n = result.get("item_count", 0)
+        return f"{_n(n, 'follow-up request')} drafted"
     if tool_name == "add_records_to_evidence_bundle":
-        return f"{result.get('staged_count', 0)} record(s) staged for bundle"
+        n = result.get("staged_count", 0)
+        return f"{_n(n, 'record')} staged for bundle"
     return "Tool completed"
 
 
@@ -419,19 +476,25 @@ def _build_direct_answer(primary_tool: str, primary_result: dict, all_results: d
     if primary_tool == "list_priority_actions":
         n = primary_result.get("total_actions", 0)
         if n == 0:
-            return "No priority actions are currently open. All records are ready or pending review."
+            return "No priority cases are currently open. All records are ready or pending review."
         actions = primary_result.get("actions", [])
         top = actions[:3]
         wells = ", ".join(a["well_id"] for a in top)
-        return f"{n} priority action(s) require attention. Most urgent: {wells}."
+        return (
+            f"{_n(n, 'priority case')} require attention. "
+            f"Most urgent: {wells}."
+        )
 
     if primary_tool == "get_reporting_cycle_status":
         pct = primary_result.get("readiness_percentage", 0)
         blocking = primary_result.get("blocking_exceptions", 0)
         status = primary_result.get("status_label", "")
+        total = primary_result.get("total_records", 0)
+        ready = primary_result.get("ready_for_export", 0)
         return (
             f"The 2026-Q1 reporting cycle is {status.lower()}. "
-            f"{pct}% of records are ready for export, with {blocking} open exception(s) blocking close."
+            f"{ready} of {total} records are cleared for reporting, "
+            f"with {_n(blocking, 'open exception')} blocking cycle close."
         )
 
     if primary_tool == "list_records_blocking_reporting":
@@ -439,15 +502,19 @@ def _build_direct_answer(primary_tool: str, primary_result: dict, all_results: d
         if n == 0:
             return "No records are blocking the reporting cycle. All records are ready or approved."
         records = primary_result.get("records", [])
-        wells = ", ".join(r["well_id"] for r in records[:3])
-        return f"{n} record(s) are blocking the reporting cycle: {wells}."
+        wells = ", ".join(dict.fromkeys(r["well_id"] for r in records[:5]))
+        return f"{_n(n, 'record')} are blocking the reporting cycle, affecting {wells}."
 
     if primary_tool == "generate_reporting_brief":
+        pct = primary_result.get("readiness_percentage", 0)
+        n = primary_result.get("blocking_count", 0)
+        period = primary_result.get("reporting_period", "2026-Q1")
+        deadline = primary_result.get("submission_deadline", "")
         return (
-            f"Reporting period {primary_result.get('reporting_period', '2026-Q1')}: "
-            f"{primary_result.get('cycle_status', '').lower()}. "
-            f"{primary_result.get('readiness_percentage', 0)}% ready. "
-            f"{primary_result.get('blocking_count', 0)} record(s) blocking."
+            f"{period} reporting brief: {primary_result.get('cycle_status', '').lower()}. "
+            f"{pct}% of records are ready for export. "
+            + (f"{_n(n, 'case')} blocking close. " if n else "")
+            + (f"Submission deadline: {deadline}." if deadline else "")
         )
 
     if primary_tool == "get_executive_summary":
@@ -456,26 +523,32 @@ def _build_direct_answer(primary_tool: str, primary_result: dict, all_results: d
     if primary_tool == "compare_provider_health":
         providers = primary_result.get("providers", [])
         disabled = [p for p in providers if p["status"] == "disabled"]
-        unavail = [p for p in providers if p["status"] == "unavailable"]
+        unavail = [p for p in providers if p["status"] in ("unavailable", "pending_key")]
         if not disabled and not unavail:
             return "All configured providers are connected and operational."
         parts = []
         if disabled:
-            parts.append(f"{len(disabled)} disabled (authorization pending)")
+            parts.append(f"{_n(len(disabled), 'provider')} disabled (authorization pending)")
         if unavail:
-            parts.append(f"{len(unavail)} unavailable (API key required)")
-        return f"Provider status: {'; '.join(parts)}."
+            parts.append(f"{_n(len(unavail), 'provider')} unavailable (API key required)")
+        return f"Provider coverage gaps: {'; '.join(parts)}."
 
     if primary_tool == "list_unvalidated_assumptions":
         n = primary_result.get("assumption_count", 0)
-        return f"{n} assumption(s) require Fox Canyon validation before the applied-water model can be confirmed."
+        return (
+            f"{_n(n, 'assumption')} require Fox Canyon validation "
+            "before the applied-water model can be confirmed."
+        )
 
     if primary_tool == "generate_exception_packet":
         total = primary_result.get("total_exceptions", 0)
         types = primary_result.get("exception_types", 0)
         if total == 0:
             return "No open exceptions found. The dataset is clean."
-        return f"{total} open exception(s) across {types} type(s) require resolution before reporting."
+        return (
+            f"{_n(total, 'open exception')} across {_n(types, 'category')} "
+            "require resolution before reporting."
+        )
 
     if primary_tool == "run_applied_water_scenario":
         af = primary_result.get("total_interval_af", 0)
@@ -483,15 +556,15 @@ def _build_direct_answer(primary_tool: str, primary_result: dict, all_results: d
         total = primary_result.get("total_meter_records", 0)
         return (
             f"Applied-water attribution (DEMO RULESET v0.1, provisional): "
-            f"{af:.2f} AF metered across {total} record(s). "
-            f"{prov} provisional pending further validation."
+            f"{af:.2f} AF metered across {_n(total, 'record')}. "
+            + (f"{_n(prov, 'record')} remain provisional pending further validation." if prov else "")
         )
 
     if primary_tool == "draft_follow_up_request":
         n = primary_result.get("item_count", 0)
-        return f"Drafted {n} follow-up item(s) for operator or agency notification."
+        return f"Drafted {_n(n, 'follow-up request')} for operator or agency notification."
 
-    return "Investigation complete. See Evidence Reviewed below."
+    return "Investigation complete. See evidence trail for details."
 
 
 def _build_why_it_matters(primary_tool: str, all_results: dict) -> str:
@@ -500,7 +573,7 @@ def _build_why_it_matters(primary_tool: str, all_results: dict) -> str:
         deadline = all_results.get("get_reporting_cycle_status", {}).get("submission_deadline", "")
         if blocking:
             return (
-                f"{blocking} record(s) cannot be included in the reporting export until resolved. "
+                f"{_n(blocking, 'record')} cannot be included in the reporting export until resolved. "
                 + (f"Submission deadline: {deadline}. " if deadline else "")
                 + "Unresolved records risk incomplete reporting."
             )
@@ -550,7 +623,7 @@ def _build_recommended_action(primary_tool: str, primary_result: dict, all_resul
         blocking = primary_result.get("requires_attention", 0)
         if blocking:
             return (
-                f"Resolve {blocking} blocking exception(s) before the reporting cycle can close. "
+                f"Resolve {_n(blocking, 'blocking exception')} before the reporting cycle can close. "
                 "Use the Action Queue to prioritize by exception type and severity."
             )
         return "Review and export the ready record set. No blocking exceptions remain."
@@ -572,7 +645,7 @@ def _build_recommended_action(primary_tool: str, primary_result: dict, all_resul
         return "Configure missing API keys to enable live data sources."
 
     if primary_tool == "draft_follow_up_request":
-        return "Review the drafted follow-up items. Submit agency notifications through official FCGMA channels."
+        return "Review the drafted requests. Submit agency notifications through official FCGMA channels."
 
     return "Review evidence in the Action Queue and resolve open exceptions before export."
 
@@ -583,15 +656,15 @@ def _build_remaining_uncertainty(all_results: dict) -> str:
         if tool_name == "list_unvalidated_assumptions":
             n = result.get("assumption_count", 0)
             if n:
-                parts.append(f"{n} unvalidated model assumption(s)")
+                parts.append(f"{_n(n, 'unvalidated model assumption')}")
         if tool_name in ("list_priority_actions", "list_records_blocking_reporting"):
             n = result.get("total_actions") or result.get("blocking_count") or 0
             if n:
-                parts.append(f"{n} open exception(s) pending resolution")
+                parts.append(f"{_n(n, 'open exception')} pending resolution")
     if not parts:
         return "No significant uncertainties identified in the current dataset."
     return (
-        " | ".join(parts)
+        " · ".join(parts)
         + " — all figures are provisional until Fox Canyon validates the applied-water model."
     )
 
@@ -610,6 +683,43 @@ def _build_available_actions(intent: str, all_results: dict) -> list[dict]:
 
 
 # ─────────────────────────────────────────────
+# Deep investigation mode
+# ─────────────────────────────────────────────
+
+_DEEP_KEYWORDS = {
+    "what is going on", "what's going on", "summary", "overview", "executive",
+    "before the cycle", "cycle close", "risk of closing", "fastest path",
+    "what would you focus", "what should we", "what changed", "since the last",
+    "prepare", "generate", "draft", "brief", "report", "internal summary",
+    "what happens if", "simulate", "if we clear", "resolve",
+}
+
+_DEEP_INTENTS = {"executive_summary", "reporting_cycle", "review_queue"}
+
+
+def _is_deep_query(query: str, intent: str) -> bool:
+    q = query.lower()
+    return intent in _DEEP_INTENTS or any(kw in q for kw in _DEEP_KEYWORDS)
+
+
+def _tools_for_deep_investigation(intent: str) -> list[str]:
+    """Extended tool set for deep investigations — covers all major evidence areas."""
+    base = _tools_for_intent(intent)
+    extras = []
+    if "get_reporting_cycle_status" not in base:
+        extras.append("get_reporting_cycle_status")
+    if "list_priority_actions" not in base:
+        extras.append("list_priority_actions")
+    if "list_records_blocking_reporting" not in base:
+        extras.append("list_records_blocking_reporting")
+    if "compare_provider_health" not in base:
+        extras.append("compare_provider_health")
+    if "list_unvalidated_assumptions" not in base:
+        extras.append("list_unvalidated_assumptions")
+    return base + extras
+
+
+# ─────────────────────────────────────────────
 # Main investigation runner
 # ─────────────────────────────────────────────
 
@@ -617,67 +727,60 @@ def run_terris_investigation(
     query: str,
     record_id: str | None = None,
     tool_override: str | None = None,
+    on_progress: Any | None = None,
 ) -> dict[str, Any]:
     """
     Run a complete Terris investigation.
 
     Returns a structured response with investigation stages (all real — based
-    on tools actually invoked) and six answer sections.
+    on tools actually invoked). LLM narration is handled by the conversation layer,
+    not here — keeps this function pure deterministic.
+
+    on_progress: optional callable(stage_name, user_label) called as each stage completes.
     """
+
+    def _emit(stage_name: str, detail: str, status: str = "completed") -> None:
+        label = _user_stage_label(stage_name)
+        if on_progress and label:
+            on_progress({"stage": stage_name, "label": label, "status": status})
+
     stages: list[dict[str, Any]] = []
     tool_results: dict[str, Any] = {}
 
-    # ── Stage 1: Classify intent ──
+    # ── Classify intent ──
     intent = classify_intent(query)
-    stages.append({
-        "stage": "classify_intent",
-        "status": "completed",
-        "detail": f"Understood as: {intent.replace('_', ' ')}",
-    })
+    stages.append({"stage": "classify_intent", "status": "completed",
+                   "detail": f"Understood as: {intent.replace('_', ' ')}"})
 
-    # ── Stage 2: Identify tools ──
+    # ── Select tools ──
+    deep = _is_deep_query(query, intent)
     if record_id:
         tools_to_run: list[str] = []
-        stages.append({
-            "stage": "identify_tools",
-            "status": "completed",
-            "detail": f"Record-specific investigation: {record_id}",
-        })
+        stages.append({"stage": "identify_tools", "status": "completed",
+                       "detail": f"Record-specific investigation: {record_id}"})
     elif tool_override:
         tools_to_run = [tool_override]
-        stages.append({
-            "stage": "identify_tools",
-            "status": "completed",
-            "detail": f"Explicit tool: {tool_override}",
-        })
+        stages.append({"stage": "identify_tools", "status": "completed",
+                       "detail": f"Explicit tool: {tool_override}"})
     else:
-        tools_to_run = _tools_for_intent(intent)
-        stages.append({
-            "stage": "identify_tools",
-            "status": "completed",
-            "detail": f"Selected: {', '.join(tools_to_run)}",
-        })
+        tools_to_run = _tools_for_deep_investigation(intent) if deep else _tools_for_intent(intent)
+        stages.append({"stage": "identify_tools", "status": "completed",
+                       "detail": f"{'Deep' if deep else 'Focused'} investigation: {len(tools_to_run)} tool(s)"})
 
-    # ── Stage 3: Record-specific or general investigation ──
+    # ── Record-specific investigation ──
     if record_id:
         r = get_record(record_id)
         if r:
-            stages.append({
-                "stage": "inspect_record",
-                "status": "completed",
-                "detail": f"Loaded {record_id}: {r['evidence_class']}, status={r['review_status']}",
-            })
+            _emit("inspect_record", f"Loaded {record_id}")
+            stages.append({"stage": "inspect_record", "status": "completed",
+                           "detail": f"Loaded {record_id}: {r['evidence_class']}, status={r['review_status']}"})
             explanation = get_calculation_explanation(r)
-            stages.append({
-                "stage": "reconcile_calculations",
-                "status": "completed",
-                "detail": f"Verified {len(explanation.get('steps', []))} calculation step(s)",
-            })
-            stages.append({
-                "stage": "inspect_lineage",
-                "status": "completed",
-                "detail": f"Source: {r['provider']} | Hash: {r['sanitized_source_hash']}",
-            })
+            _emit("reconcile_calculations", f"Verified {len(explanation.get('steps', []))} steps")
+            stages.append({"stage": "reconcile_calculations", "status": "completed",
+                           "detail": f"Verified {_n(len(explanation.get('steps', [])), 'calculation step')}"})
+            _emit("inspect_lineage", f"Source: {r['provider']}")
+            stages.append({"stage": "inspect_lineage", "status": "completed",
+                           "detail": f"Source: {r['provider']} | Hash: {r['sanitized_source_hash']}"})
             open_excs = [e for e in r.get("exceptions", []) if e.get("status") != "resolved"]
             tool_results["explain_record"] = {
                 "tool": "explain_record",
@@ -696,73 +799,58 @@ def run_terris_investigation(
                 "answer_type": "fact+calculation",
             }
         else:
-            stages.append({
-                "stage": "inspect_record",
-                "status": "failed",
-                "detail": f"Record {record_id} not found in ledger",
-            })
+            stages.append({"stage": "inspect_record", "status": "failed",
+                           "detail": f"Record {record_id} not found in ledger"})
             tool_results["error"] = {
                 "tool": "explain_record",
                 "answer_type": "missing_information",
                 "message": f"Record '{record_id}' not found.",
             }
+
     else:
-        # Invoke each selected tool
+        # ── General investigation ──
         for tool_name in tools_to_run:
             fn = TERRIS_TOOL_MAP.get(tool_name)
             if fn is None:
-                stages.append({
-                    "stage": f"invoke_{tool_name}",
-                    "status": "skipped",
-                    "detail": f"Unknown tool: {tool_name}",
-                })
+                stages.append({"stage": f"invoke_{tool_name}", "status": "skipped",
+                               "detail": f"Unknown tool: {tool_name}"})
                 continue
+            stage_key = f"invoke_{tool_name}"
+            _emit(stage_key, tool_name)
             try:
                 result = fn()
                 tool_results[tool_name] = result
-                stages.append({
-                    "stage": f"invoke_{tool_name}",
-                    "status": "completed",
-                    "detail": _brief_tool_result(tool_name, result),
-                })
+                brief = _brief_tool_result(tool_name, result)
+                stages.append({"stage": stage_key, "status": "completed", "detail": brief})
             except Exception as exc:
                 logger.exception("Terris tool %s failed: %s", tool_name, exc)
-                stages.append({
-                    "stage": f"invoke_{tool_name}",
-                    "status": "failed",
-                    "detail": str(exc)[:120],
-                })
+                stages.append({"stage": stage_key, "status": "failed", "detail": str(exc)[:120]})
 
-        # Inspect records count across results
+        # ── Summary of records reviewed ──
         records_reviewed = sum(
             r.get("total_records") or r.get("count") or r.get("total_actions") or 0
             for r in tool_results.values()
         )
         if records_reviewed:
-            stages.append({
-                "stage": "inspect_records",
-                "status": "completed",
-                "detail": f"Reviewed {records_reviewed} item(s) across tool results",
-            })
+            _emit("inspect_records", f"Reviewed {records_reviewed} items")
+            stages.append({"stage": "inspect_records", "status": "completed",
+                           "detail": f"Reviewed {_n(records_reviewed, 'item')} across tool results"})
 
-        # Add assumption scan for higher-level intents
+        # ── Assumption scan ──
         if "list_unvalidated_assumptions" not in tool_results and intent in (
             "reporting_cycle", "applied_water", "executive_summary"
         ):
+            _emit("identify_assumptions", "checking assumptions")
             assump = list_unvalidated_assumptions()
             tool_results["list_unvalidated_assumptions"] = assump
-            stages.append({
-                "stage": "identify_assumptions",
-                "status": "completed",
-                "detail": f"{assump.get('assumption_count', 0)} unvalidated assumption(s) noted",
-            })
+            n_assump = assump.get("assumption_count", 0)
+            stages.append({"stage": "identify_assumptions", "status": "completed",
+                           "detail": f"{_n(n_assump, 'unvalidated assumption')} noted"})
 
-    # ── Stage: Synthesize ──
-    stages.append({
-        "stage": "synthesize_answer",
-        "status": "completed",
-        "detail": f"Built structured response from {len(tool_results)} tool result(s)",
-    })
+    # ── Synthesize ──
+    _emit("synthesize_answer", "synthesis")
+    stages.append({"stage": "synthesize_answer", "status": "completed",
+                   "detail": f"Built response from {len(tool_results)} tool result(s)"})
 
     # Build structured sections
     primary_tool = next(iter(tool_results), "get_executive_summary")
@@ -774,29 +862,39 @@ def run_terris_investigation(
     remaining_uncertainty = _build_remaining_uncertainty(tool_results)
     available_actions = _build_available_actions(intent, tool_results)
 
+    # Build evidence trail with user-friendly labels (no raw tool names in main trail)
     evidence_reviewed = [
         {
             "tool": tn,
             "summary": _brief_tool_result(tn, tr),
+            "user_label": STAGE_PROGRESS_LABELS.get(f"invoke_{tn}", tn.replace("_", " ").title()),
         }
         for tn, tr in tool_results.items()
     ]
 
-    # Optional LLM enhancement of direct_answer only
-    llm_enhanced = False
-    api_key = os.getenv("ANTHROPIC_API_KEY", "").strip()
-    if api_key and tool_results:
-        try:
-            det_text = _format_deterministic_answer(primary_result)
-            direct_answer = _llm_format_terris(query, det_text, api_key)
-            llm_enhanced = True
-            stages.append({
-                "stage": "llm_formatting",
-                "status": "completed",
-                "detail": "LLM formatting applied to direct answer",
-            })
-        except Exception as exc:
-            logger.warning("Terris LLM formatting failed: %s", exc)
+    # Count reviewed items for "Reviewed X records · Y cases · Z providers"
+    total_records = tool_results.get("get_reporting_cycle_status", {}).get("total_records", 0)
+    total_cases = len(tool_results.get("list_priority_actions", {}).get("actions", []))
+    providers = tool_results.get("compare_provider_health", {}).get("providers", [])
+    gov_refs = tool_results.get("list_unvalidated_assumptions", {}).get("assumption_count", 0)
+
+    reviewed_summary_parts = []
+    if total_records:
+        reviewed_summary_parts.append(_n(total_records, "record"))
+    if total_cases:
+        reviewed_summary_parts.append(_n(total_cases, "case"))
+    if providers:
+        reviewed_summary_parts.append(_n(len(providers), "provider"))
+    if gov_refs:
+        reviewed_summary_parts.append(_n(gov_refs, "governance reference"))
+    reviewed_summary = " · ".join(reviewed_summary_parts) if reviewed_summary_parts else ""
+
+    # User-visible investigation progress labels (no internal names)
+    progress_labels = [
+        _user_stage_label(s["stage"])
+        for s in stages
+        if _user_stage_label(s["stage"]) and s["status"] == "completed"
+    ]
 
     answer_type = primary_result.get("answer_type", "fact") if tool_results else "missing_information"
 
@@ -805,6 +903,8 @@ def run_terris_investigation(
         "query": query,
         "intent": intent,
         "investigation_stages": stages,
+        "progress_labels": progress_labels,
+        "reviewed_summary": reviewed_summary,
         "direct_answer": direct_answer,
         "why_it_matters": why_it_matters,
         "evidence_reviewed": evidence_reviewed,
@@ -812,7 +912,6 @@ def run_terris_investigation(
         "remaining_uncertainty": remaining_uncertainty,
         "available_actions": available_actions,
         "tool_results": tool_results,
-        "llm_enhanced": llm_enhanced,
         "answer_type": answer_type,
         "calculation_version": CALCULATION_VERSION,
         "disclaimer": (
@@ -821,23 +920,3 @@ def run_terris_investigation(
             "All quantities are from demonstration scenarios only."
         ),
     }
-
-
-def _llm_format_terris(query: str, deterministic_text: str, api_key: str) -> str:
-    """Optional LLM layer — formats the deterministic answer, adds no new facts."""
-    import anthropic  # type: ignore
-    client = anthropic.Anthropic(api_key=api_key)
-    system = (
-        "You are Terris, an AGRO-AI Water Intelligence Agent for Fox Canyon GMA. "
-        "Elaborate only on the deterministic tool result provided. "
-        "Do NOT generate quantities, facts, or conclusions not present in it. "
-        "Do NOT approve records, file reports, or claim compliance. "
-        "Be executive-appropriate: clear, specific, three sentences maximum."
-    )
-    msg = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=400,
-        system=system,
-        messages=[{"role": "user", "content": f"Question: {query}\n\nTool result:\n{deterministic_text}"}],
-    )
-    return msg.content[0].text

@@ -638,6 +638,22 @@ def get_review_cases(
     }
 
 
+@router.get("/terris/cycle-gates")
+def get_cycle_gates() -> dict[str, Any]:
+    """Five reporting-cycle gates with status, what remains, and next actions."""
+    _ensure_initialized()
+    from app.services.fcgma.gates import compute_all_gates
+    return compute_all_gates()
+
+
+@router.get("/terris/briefing")
+def get_terris_briefing() -> dict[str, Any]:
+    """Proactive Terris briefing generated from current evidence."""
+    _ensure_initialized()
+    from app.services.fcgma.briefing import generate_terris_briefing
+    return generate_terris_briefing()
+
+
 # ── Conversational Terris ──────────────────────────────────────────────────
 
 @router.post("/terris/conversation")
@@ -687,6 +703,31 @@ def list_conversations() -> dict[str, Any]:
     from app.services.fcgma.conversation import list_conversations as do_list
     convs = do_list()
     return {"conversations": convs, "total": len(convs)}
+
+
+@router.post("/terris/conversation/{thread_id}/message-start")
+def start_message_stream(thread_id: str, payload: ConversationMessage) -> dict[str, Any]:
+    """Start an async investigation job. Returns job_id for polling."""
+    _ensure_initialized()
+    from app.services.fcgma.conversation import start_message_job, get_conversation
+    conv = get_conversation(thread_id)
+    if not conv:
+        raise HTTPException(404, f"Conversation '{thread_id}' not found.")
+    jid = start_message_job(thread_id, payload.query, context_hint=payload.context_hint)
+    if not jid:
+        raise HTTPException(500, "Failed to start investigation.")
+    return {"job_id": jid, "thread_id": thread_id, "status": "running"}
+
+
+@router.get("/terris/job/{job_id}")
+def poll_job(job_id: str, since: int = Query(default=0)) -> dict[str, Any]:
+    """Poll an async investigation job for progress events and result."""
+    _ensure_initialized()
+    from app.services.fcgma.conversation import poll_job as do_poll
+    result = do_poll(job_id, since_index=since)
+    if not result:
+        raise HTTPException(404, f"Job '{job_id}' not found.")
+    return result
 
 
 # ─────────────────────────────────────────────
