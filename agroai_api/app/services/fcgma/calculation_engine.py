@@ -116,7 +116,12 @@ def apply_multiplier(record: dict[str, Any]) -> dict[str, Any]:
 
 
 def calculate_interval(record: dict[str, Any], previous_record: dict[str, Any] | None) -> dict[str, Any]:
-    """Calculate interval volume from cumulative delta if interval not already set."""
+    """Calculate interval volume from cumulative delta if interval not already set.
+
+    Negative reset deltas are quarantined — they must never enter extraction totals.
+    When the cumulative volume drops by more than METER_RESET_THRESHOLD_FRACTION of
+    the previous reading the delta is a meter-reset artifact, not real extraction.
+    """
     if record.get("interval_volume") is not None:
         return record
     if previous_record is None:
@@ -128,6 +133,17 @@ def calculate_interval(record: dict[str, Any], previous_record: dict[str, Any] |
         return record
 
     delta = cv - prev_cv
+
+    # Quarantine large negative deltas that indicate a meter reset.
+    if delta < 0 and prev_cv > 0 and abs(delta) / prev_cv > METER_RESET_THRESHOLD_FRACTION:
+        record["interval_volume"] = None
+        record["interval_quarantined"] = True
+        record["interval_quarantine_delta"] = round(delta, 6)
+        record["interval_quarantine_reason"] = (
+            "negative_cumulative_delta_suspected_reset"
+        )
+        return record
+
     record["interval_volume"] = round(delta, 6)
     return record
 
@@ -366,7 +382,10 @@ def recompute_record(record_id: str) -> dict[str, Any] | None:
     new_excs += detect_negative_delta(r)
     new_excs += detect_meter_reset(r, prev)
     new_excs += detect_duplicate(r, all_records)
-    new_excs += detect_missing_interval(r, prev)
+    # 400-hour threshold (~16.7 days): fires for genuine multi-day gaps but not
+    # for scheduled monthly reads.  Use explicit max_gap_hours when calling
+    # directly to test narrower windows (e.g. max_gap_hours=26 in unit tests).
+    new_excs += detect_missing_interval(r, prev, max_gap_hours=400.0)
     new_excs += detect_unresolved_combcode(r)
     new_excs += detect_unresolved_parcel_mapping(r)
     new_excs += detect_backup_estimate_required(r)

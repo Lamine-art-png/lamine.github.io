@@ -1230,3 +1230,262 @@ def test_well_ids_have_fc_prefix():
     for r in list_records():
         assert r["well_id"].startswith("FC-WELL-"), \
             f"Expected FC-WELL- prefix, got: {r['well_id']}"
+
+
+# ─────────────────────────────────────────────
+# Fourth-pass: negative-delta quarantine
+# ─────────────────────────────────────────────
+
+def test_negative_reset_delta_never_in_interval_volume():
+    """A meter-reset record must have interval_volume=None, not a large negative."""
+    from app.services.fcgma.calculation_engine import calculate_interval
+    pre = {"id": "r-pre", "cumulative_volume": 9850.4, "interval_volume": None}
+    post = {"id": "r-post", "cumulative_volume": 14.2, "interval_volume": None}
+    result = calculate_interval(post, pre)
+    assert result["interval_volume"] is None, (
+        f"Expected None after quarantine, got {result['interval_volume']}"
+    )
+    assert result.get("interval_quarantined") is True
+    assert result.get("interval_quarantine_delta") is not None
+    assert result["interval_quarantine_delta"] < 0
+
+
+def test_small_negative_delta_not_quarantined():
+    """A tiny negative delta (sub-threshold) should not be quarantined — only resets are."""
+    from app.services.fcgma.calculation_engine import calculate_interval
+    pre = {"id": "r-pre", "cumulative_volume": 100.0, "interval_volume": None}
+    post = {"id": "r-post", "cumulative_volume": 99.5, "interval_volume": None}  # -0.5%, below 10% threshold
+    result = calculate_interval(post, pre)
+    # Not quarantined (drop is only 0.5%)
+    assert result.get("interval_quarantined") is None or result.get("interval_quarantined") is False
+    assert result["interval_volume"] is not None
+
+
+def test_dashboard_total_af_excludes_quarantined_delta():
+    """ledger_stats must never include a quarantined reset delta in provisional_af."""
+    from app.services.fcgma.ledger import clear_ledger, ledger_stats
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    clear_ledger()
+    inject_all_scenarios()
+    stats = ledger_stats()
+    assert stats["provisional_af"] >= 0, (
+        f"provisional_af should never be negative, got {stats['provisional_af']}"
+    )
+    assert stats["supported_extraction_af"] >= 0
+
+
+def test_terris_query_does_not_report_negative_af():
+    """Terris must never surface a negative metered total in any answer."""
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.terris import run_terris_investigation
+    clear_ledger()
+    inject_all_scenarios()
+    result = run_terris_investigation("How much water has been metered?")
+    direct = result.get("direct_answer", "")
+    # Must not contain a negative AF value
+    import re
+    neg_pattern = re.compile(r"-\s*\d+[\.,]\d+\s*AF", re.IGNORECASE)
+    assert not neg_pattern.search(direct), (
+        f"Terris reported a negative AF value: {direct}"
+    )
+
+
+def test_applied_water_scenario_total_never_negative():
+    """run_applied_water_scenario must return non-negative total_interval_af."""
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.copilot import run_applied_water_scenario
+    clear_ledger()
+    inject_all_scenarios()
+    result = run_applied_water_scenario()
+    assert result["total_interval_af"] >= 0, (
+        f"total_interval_af should never be negative, got {result['total_interval_af']}"
+    )
+
+
+def test_meter_reset_exception_raised_for_reset_record():
+    """A meter reset scenario must produce a meter_reset_detected exception."""
+    from app.services.fcgma.ledger import clear_ledger, list_exceptions
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    clear_ledger()
+    inject_all_scenarios()
+    exceptions = list_exceptions()
+    reset_excs = [e for e in exceptions if e["exception_type"] == "meter_reset_detected"]
+    assert len(reset_excs) >= 1, "Expected at least one meter_reset_detected exception"
+
+
+# ─────────────────────────────────────────────
+# Fourth-pass: realistic workspace
+# ─────────────────────────────────────────────
+
+def test_workspace_readiness_above_70_percent():
+    """Default workspace must have at least 70% of records ready or clean."""
+    from app.services.fcgma.ledger import clear_ledger, list_records
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    clear_ledger()
+    inject_all_scenarios()
+    records = list_records(evidence_class="groundwater_meter_reading")
+    total = len(records)
+    ready = sum(1 for r in records if r["review_status"] in ("ready_for_export", "reviewer_approved"))
+    assert total > 0
+    pct = ready / total * 100
+    assert pct >= 70, f"Expected >=70% ready, got {pct:.1f}% ({ready}/{total})"
+
+
+def test_workspace_has_at_least_30_records():
+    """Default workspace must have at least 30 records total."""
+    from app.services.fcgma.ledger import clear_ledger, list_records
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    clear_ledger()
+    inject_all_scenarios()
+    records = list_records()
+    assert len(records) >= 30, f"Expected >=30 records, got {len(records)}"
+
+
+def test_workspace_has_material_review_cases():
+    """Default workspace must have at least 3 open exceptions for review."""
+    from app.services.fcgma.ledger import clear_ledger, list_exceptions
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    clear_ledger()
+    inject_all_scenarios()
+    exceptions = list_exceptions()
+    open_excs = [e for e in exceptions if e.get("status") == "open"]
+    assert len(open_excs) >= 3, f"Expected >=3 open exceptions, got {len(open_excs)}"
+
+
+# ─────────────────────────────────────────────
+# Fourth-pass: ReviewCase model
+# ─────────────────────────────────────────────
+
+def test_build_cases_returns_list():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.cases import build_cases
+    clear_ledger()
+    inject_all_scenarios()
+    cases = build_cases()
+    assert isinstance(cases, list)
+
+
+def test_build_cases_groups_by_well_and_period():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.cases import build_cases
+    clear_ledger()
+    inject_all_scenarios()
+    cases = build_cases()
+    assert len(cases) >= 1, "Expected at least 1 review case"
+    for case in cases:
+        assert "case_id" in case
+        assert "well_id" in case
+        assert "reporting_period" in case
+        assert "record_ids" in case
+        assert "severity" in case
+        assert "primary_issue" in case
+        assert "why_it_matters" in case
+        assert "recommended_action" in case
+        assert "required_evidence" in case
+
+
+def test_cases_sorted_by_severity():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.cases import build_cases
+    clear_ledger()
+    inject_all_scenarios()
+    cases = build_cases()
+    severity_rank = {"high": 0, "medium": 1, "low": 2}
+    ranks = [severity_rank.get(c["severity"], 3) for c in cases]
+    assert ranks == sorted(ranks), "Cases must be sorted by severity (high first)"
+
+
+def test_cases_endpoint(client):
+    resp = client.get("/v1/fcgma-demo/terris/cases")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "cases" in data
+    assert "total" in data
+    assert isinstance(data["cases"], list)
+
+
+# ─────────────────────────────────────────────
+# Fourth-pass: conversation endpoints
+# ─────────────────────────────────────────────
+
+def test_conversation_create_returns_thread_id(client):
+    resp = client.post("/v1/fcgma-demo/terris/conversation",
+                       json={"title": "Test conversation"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "thread_id" in data
+    assert data["thread_id"].startswith("thread-")
+
+
+def test_conversation_message_returns_response(client):
+    # Create thread
+    resp = client.post("/v1/fcgma-demo/terris/conversation", json={})
+    assert resp.status_code == 200
+    thread_id = resp.json()["thread_id"]
+
+    # Send message
+    resp2 = client.post(
+        f"/v1/fcgma-demo/terris/conversation/{thread_id}/message",
+        json={"query": "What requires my attention today?"}
+    )
+    assert resp2.status_code == 200
+    data = resp2.json()
+    assert data["role"] == "assistant"
+    assert "content" in data
+    assert len(data["content"]) > 0
+    assert "evidence_trail" in data
+    assert "follow_up_suggestions" in data
+
+
+def test_conversation_history_persists_turns(client):
+    resp = client.post("/v1/fcgma-demo/terris/conversation", json={})
+    thread_id = resp.json()["thread_id"]
+
+    client.post(f"/v1/fcgma-demo/terris/conversation/{thread_id}/message",
+                json={"query": "What requires my attention today?"})
+    client.post(f"/v1/fcgma-demo/terris/conversation/{thread_id}/message",
+                json={"query": "Which records are blocking the cycle?"})
+
+    hist_resp = client.get(f"/v1/fcgma-demo/terris/conversation/{thread_id}")
+    assert hist_resp.status_code == 200
+    data = hist_resp.json()
+    assert data["message_count"] == 2
+    turns = data["turns"]
+    # 2 user messages + 2 assistant responses = 4 turns
+    assert len(turns) == 4
+    roles = [t["role"] for t in turns]
+    assert roles == ["user", "assistant", "user", "assistant"]
+
+
+def test_conversation_unknown_thread_404(client):
+    resp = client.post(
+        "/v1/fcgma-demo/terris/conversation/thread-doesnotexist/message",
+        json={"query": "Hello?"}
+    )
+    assert resp.status_code == 404
+
+
+def test_conversation_evidence_trail_structure(client):
+    resp = client.post("/v1/fcgma-demo/terris/conversation", json={})
+    thread_id = resp.json()["thread_id"]
+    resp2 = client.post(
+        f"/v1/fcgma-demo/terris/conversation/{thread_id}/message",
+        json={"query": "Where does the reporting cycle stand?"}
+    )
+    data = resp2.json()
+    for item in data.get("evidence_trail", []):
+        assert "tool" in item
+        assert "summary" in item
+        # Raw tool names should not be surfaced as the visible answer
+        # (they can appear in evidence_trail but not the main content)
+    # The main content must not consist solely of a raw tool name
+    content = data.get("content", "")
+    assert content and content not in (
+        "list_priority_actions", "get_reporting_cycle_status",
+        "get_executive_summary", "generate_reporting_brief",
+    )

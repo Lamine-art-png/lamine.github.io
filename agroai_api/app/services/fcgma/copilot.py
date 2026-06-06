@@ -289,13 +289,13 @@ def list_unvalidated_assumptions() -> dict[str, Any]:
 
 def run_applied_water_scenario() -> dict[str, Any]:
     meter_records = list_records(evidence_class="groundwater_meter_reading")
+    # Only positive intervals — quarantined reset deltas must never enter totals.
     total_interval_af = sum(
-        r.get("interval_volume") or 0
-        for r in meter_records
-        if r.get("interval_volume") is not None
+        iv for r in meter_records
+        if (iv := (r.get("interval_volume") or 0)) > 0
     )
     provisional_records = [r for r in meter_records if r.get("attribution_provisional")]
-    confirmed_records = [r for r in meter_records if not r.get("attribution_provisional") and r.get("interval_volume")]
+    confirmed_records = [r for r in meter_records if not r.get("attribution_provisional") and (r.get("interval_volume") or 0) > 0]
 
     return {
         "tool": "run_applied_water_scenario",

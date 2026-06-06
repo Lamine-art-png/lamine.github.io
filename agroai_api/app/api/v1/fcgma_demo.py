@@ -50,6 +50,16 @@ class TerrisQuery(BaseModel):
     tool_override: Optional[str] = None
 
 
+class ConversationCreate(BaseModel):
+    title: Optional[str] = None
+    initial_context: Optional[dict] = None
+
+
+class ConversationMessage(BaseModel):
+    query: str = Field(..., min_length=1, max_length=4000)
+    context_hint: Optional[dict] = None
+
+
 class ResolveException(BaseModel):
     resolution: str = Field(..., min_length=1, max_length=1000)
     actor: str = Field(default="reviewer")
@@ -613,6 +623,72 @@ def get_blocking_records() -> dict[str, Any]:
     return list_records_blocking_reporting()
 
 
+@router.get("/terris/cases")
+def get_review_cases(
+    reporting_period: Optional[str] = Query(default=None),
+) -> dict[str, Any]:
+    """List ReviewCases — exceptions grouped by well and reporting period."""
+    _ensure_initialized()
+    from app.services.fcgma.cases import build_cases
+    cases = build_cases(reporting_period=reporting_period)
+    return {
+        "cases": cases,
+        "total": len(cases),
+        "reporting_period": reporting_period or "all",
+    }
+
+
+# ── Conversational Terris ──────────────────────────────────────────────────
+
+@router.post("/terris/conversation")
+def create_conversation(payload: ConversationCreate) -> dict[str, Any]:
+    """Create a new Terris conversation thread."""
+    _ensure_initialized()
+    from app.services.fcgma.conversation import create_conversation as do_create
+    return do_create(title=payload.title, initial_context=payload.initial_context)
+
+
+@router.post("/terris/conversation/{thread_id}/message")
+def send_message(thread_id: str, payload: ConversationMessage) -> dict[str, Any]:
+    """Send a message to Terris in an existing conversation thread."""
+    _ensure_initialized()
+    from app.services.fcgma.conversation import add_message, get_conversation
+    conv = get_conversation(thread_id)
+    if not conv:
+        raise HTTPException(404, f"Conversation '{thread_id}' not found. Create a conversation first.")
+    result = add_message(thread_id, payload.query, context_hint=payload.context_hint)
+    if not result:
+        raise HTTPException(500, "Failed to generate response.")
+    return result
+
+
+@router.get("/terris/conversation/{thread_id}")
+def get_conversation_history(thread_id: str) -> dict[str, Any]:
+    """Get the full conversation history for a thread."""
+    _ensure_initialized()
+    from app.services.fcgma.conversation import get_conversation, get_history
+    conv = get_conversation(thread_id)
+    if not conv:
+        raise HTTPException(404, f"Conversation '{thread_id}' not found.")
+    return {
+        "thread_id": thread_id,
+        "title": conv.get("title"),
+        "created_at": conv.get("created_at"),
+        "updated_at": conv.get("updated_at"),
+        "message_count": conv.get("message_count", 0),
+        "llm_mode": conv.get("llm_mode", "structured_safe"),
+        "turns": get_history(thread_id),
+    }
+
+
+@router.get("/terris/conversations")
+def list_conversations() -> dict[str, Any]:
+    """List all Terris conversation threads in this session."""
+    from app.services.fcgma.conversation import list_conversations as do_list
+    convs = do_list()
+    return {"conversations": convs, "total": len(convs)}
+
+
 # ─────────────────────────────────────────────
 # Reports
 # ─────────────────────────────────────────────
@@ -716,4 +792,5 @@ def get_rule_pack() -> dict[str, Any]:
     return {
         "metadata": PACK_METADATA,
         "rules": get_rules(),
+        "rule_pack": PACK_METADATA,  # alias for compatibility
     }
