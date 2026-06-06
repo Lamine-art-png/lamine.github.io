@@ -17,13 +17,13 @@ from .calculation_engine import run_full_calculation_pass
 SCENARIO_LABEL = "Demonstration scenario injected to illustrate exception handling."
 REPORTING_PERIOD = "2026-Q1"
 
-# Anonymized well/meter IDs for demonstration
+# Neutral anonymized well/meter IDs for demonstration
 _WELLS = {
-    "W001": {"well_id": "well-anon-001", "meter_id": "meter-anon-001", "combcode": "FC-ZN-07-001"},
-    "W002": {"well_id": "well-anon-002", "meter_id": "meter-anon-002", "combcode": "FC-ZN-07-002"},
-    "W003": {"well_id": "well-anon-003", "meter_id": "meter-anon-003", "combcode": None},  # unresolved CombCode
-    "W004": {"well_id": "well-anon-004", "meter_id": "meter-anon-004", "combcode": "FC-ZN-12-001"},
-    "W005": {"well_id": "well-anon-005", "meter_id": "meter-anon-005", "combcode": "FC-ZN-12-002"},
+    "W001": {"well_id": "FC-WELL-001", "meter_id": "FC-MTR-001", "combcode": "FC-ZN-07-001"},
+    "W002": {"well_id": "FC-WELL-002", "meter_id": "FC-MTR-002", "combcode": "FC-ZN-07-002"},
+    "W003": {"well_id": "FC-WELL-003", "meter_id": "FC-MTR-003", "combcode": None},  # unresolved CombCode
+    "W004": {"well_id": "FC-WELL-004", "meter_id": "FC-MTR-004", "combcode": "FC-ZN-12-001"},
+    "W005": {"well_id": "FC-WELL-005", "meter_id": "FC-MTR-005", "combcode": "FC-ZN-12-002"},
 }
 
 
@@ -50,7 +50,7 @@ def inject_all_scenarios() -> dict[str, Any]:
         meter_id=_WELLS["W001"]["meter_id"],
         meter_serial="SN-ANON-0001",
         combcode=_WELLS["W001"]["combcode"],
-        parcel_ids=["parcel-anon-101"],
+        parcel_ids=["FC-PCL-101"],
         cumulative_volume=1250.0,
         interval_volume=12.4,
         unit="acre-feet",
@@ -80,7 +80,7 @@ def inject_all_scenarios() -> dict[str, Any]:
         well_id=_WELLS["W001"]["well_id"],
         meter_id=_WELLS["W001"]["meter_id"],
         combcode=_WELLS["W001"]["combcode"],
-        parcel_ids=["parcel-anon-101"],
+        parcel_ids=["FC-PCL-101"],
         cumulative_volume=1256.0,
         interval_volume=6.0,
         unit="acre-feet",
@@ -106,7 +106,7 @@ def inject_all_scenarios() -> dict[str, Any]:
         well_id=_WELLS["W001"]["well_id"],
         meter_id=_WELLS["W001"]["meter_id"],
         combcode=_WELLS["W001"]["combcode"],
-        parcel_ids=["parcel-anon-101"],
+        parcel_ids=["FC-PCL-101"],
         cumulative_volume=1272.0,
         unit="acre-feet",
         multiplier=1.0,
@@ -131,7 +131,7 @@ def inject_all_scenarios() -> dict[str, Any]:
         well_id=_WELLS["W002"]["well_id"],
         meter_id=_WELLS["W002"]["meter_id"],
         combcode=_WELLS["W002"]["combcode"],
-        parcel_ids=["parcel-anon-102"],
+        parcel_ids=["FC-PCL-102"],
         cumulative_volume=9850.4,
         unit="acre-feet",
         multiplier=1.0,
@@ -151,7 +151,7 @@ def inject_all_scenarios() -> dict[str, Any]:
         well_id=_WELLS["W002"]["well_id"],
         meter_id=_WELLS["W002"]["meter_id"],
         combcode=_WELLS["W002"]["combcode"],
-        parcel_ids=["parcel-anon-102"],
+        parcel_ids=["FC-PCL-102"],
         cumulative_volume=12.1,  # Reset — meter replaced and restarted from near-zero
         unit="acre-feet",
         multiplier=1.0,
@@ -172,7 +172,7 @@ def inject_all_scenarios() -> dict[str, Any]:
         well_id=_WELLS["W004"]["well_id"],
         meter_id=_WELLS["W004"]["meter_id"],
         combcode=_WELLS["W004"]["combcode"],
-        parcel_ids=["parcel-anon-104"],
+        parcel_ids=["FC-PCL-104"],
         cumulative_volume=450.0,
         interval_volume=9.0,
         unit="acre-feet",
@@ -203,7 +203,7 @@ def inject_all_scenarios() -> dict[str, Any]:
         well_id=_WELLS["W005"]["well_id"],
         meter_id=_WELLS["W005"]["meter_id"],
         combcode=_WELLS["W005"]["combcode"],
-        parcel_ids=["parcel-anon-105"],
+        parcel_ids=["FC-PCL-105"],
         cumulative_volume=4_500_000.0,  # In gallons — will normalize to ~13.8 AF
         unit_original="gallons",
         unit="acre-feet",
@@ -234,7 +234,7 @@ def inject_all_scenarios() -> dict[str, Any]:
         well_id=_WELLS["W001"]["well_id"],
         meter_id=_WELLS["W001"]["meter_id"],
         combcode=_WELLS["W001"]["combcode"],
-        parcel_ids=["parcel-anon-101"],
+        parcel_ids=["FC-PCL-101"],
         cumulative_volume=1290.0,
         interval_volume=8.2,
         unit="acre-feet",
@@ -254,7 +254,7 @@ def inject_all_scenarios() -> dict[str, Any]:
         well_id=_WELLS["W001"]["well_id"],
         meter_id=_WELLS["W001"]["meter_id"],
         combcode=_WELLS["W001"]["combcode"],
-        parcel_ids=["parcel-anon-101"],
+        parcel_ids=["FC-PCL-101"],
         cumulative_volume=1290.0,
         interval_volume=8.2,
         unit="acre-feet",
@@ -275,7 +275,7 @@ def inject_all_scenarios() -> dict[str, Any]:
         well_id=_WELLS["W003"]["well_id"],
         meter_id=_WELLS["W003"]["meter_id"],
         combcode=None,
-        parcel_ids=["parcel-anon-103"],
+        parcel_ids=["FC-PCL-103"],
         cumulative_volume=610.2,
         interval_volume=3.1,
         unit="acre-feet",
@@ -338,7 +338,7 @@ def inject_all_scenarios() -> dict[str, Any]:
         well_id=_WELLS["W004"]["well_id"],
         meter_id=_WELLS["W004"]["meter_id"],
         combcode=_WELLS["W004"]["combcode"],
-        parcel_ids=["parcel-anon-104"],
+        parcel_ids=["FC-PCL-104"],
         cumulative_volume=440.0,  # Lower than previous — negative delta
         interval_volume=-10.0,
         unit="acre-feet",
@@ -368,7 +368,7 @@ def inject_all_scenarios() -> dict[str, Any]:
         well_id=_WELLS["W003"]["well_id"],
         meter_id=_WELLS["W003"]["meter_id"],
         combcode=None,  # Not resolved
-        parcel_ids=["parcel-anon-103"],
+        parcel_ids=["FC-PCL-103"],
         cumulative_volume=620.5,
         interval_volume=4.5,
         unit="acre-feet",
@@ -410,7 +410,7 @@ def inject_all_scenarios() -> dict[str, Any]:
         well_id=_WELLS["W002"]["well_id"],
         meter_id=_WELLS["W002"]["meter_id"],
         combcode=_WELLS["W002"]["combcode"],
-        parcel_ids=["parcel-anon-102", "parcel-anon-102b"],  # Two parcels
+        parcel_ids=["FC-PCL-102", "FC-PCL-102B"],  # Two parcels
         cumulative_volume=14.0,
         interval_volume=14.0,
         unit="acre-feet",
@@ -431,7 +431,7 @@ def inject_all_scenarios() -> dict[str, Any]:
         well_id=_WELLS["W001"]["well_id"],
         meter_id=_WELLS["W001"]["meter_id"],
         combcode=_WELLS["W001"]["combcode"],
-        parcel_ids=["parcel-anon-shared-200"],  # Shared parcel
+        parcel_ids=["FC-PCL-SHARED-200"],  # Shared parcel
         cumulative_volume=1300.0,
         interval_volume=5.5,
         unit="acre-feet",
@@ -472,7 +472,7 @@ def inject_all_scenarios() -> dict[str, Any]:
         well_id=_WELLS["W003"]["well_id"],
         meter_id=_WELLS["W003"]["meter_id"],
         combcode=_WELLS["W003"]["combcode"],
-        parcel_ids=["parcel-anon-103"],
+        parcel_ids=["FC-PCL-103"],
         cumulative_volume=None,  # Meter failure — no reading
         interval_volume=None,
         unit="acre-feet",
@@ -494,7 +494,7 @@ def inject_all_scenarios() -> dict[str, Any]:
         well_id=_WELLS["W005"]["well_id"],
         meter_id=_WELLS["W005"]["meter_id"],
         combcode=_WELLS["W005"]["combcode"],
-        parcel_ids=["parcel-anon-105"],
+        parcel_ids=["FC-PCL-105"],
         cumulative_volume=92.0,
         interval_volume=2.8,
         unit="acre-feet",

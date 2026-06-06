@@ -623,7 +623,26 @@ def test_report_carries_disclaimer():
     clear_ledger()
     inject_all_scenarios()
     meta = generate_report()
-    assert "DEMONSTRATION" in meta["disclaimer"] or "demonstration" in meta["disclaimer"].lower()
+    assert "ILLUSTRATIVE" in meta["disclaimer"] or "illustrative" in meta["disclaimer"].lower()
+
+
+def test_report_branding_updated():
+    import io, zipfile
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.reports import generate_report, get_report_artifact, REPORT_FOOTER_NOTE, REPORT_DISCLAIMER
+    clear_ledger()
+    inject_all_scenarios()
+    meta = generate_report()
+    # Module-level string constants carry the new brand name
+    assert "Applied Water Intelligence" in REPORT_DISCLAIMER or "Applied Water Intelligence" in REPORT_FOOTER_NOTE
+    # README.txt inside the ZIP bundle has branding text (read by decompressing)
+    zip_result = get_report_artifact(meta["report_id"], "bundle")
+    assert zip_result is not None
+    zip_data, _ = zip_result
+    with zipfile.ZipFile(io.BytesIO(zip_data)) as zf:
+        readme = zf.read("README.txt").decode("utf-8")
+    assert "Applied Water Intelligence" in readme or "Reporting Readiness" in readme
 
 
 # ─────────────────────────────────────────────
@@ -698,7 +717,7 @@ def test_fcgma_status_endpoint(client):
     resp = client.get("/v1/fcgma-demo/status")
     assert resp.status_code == 200
     data = resp.json()
-    assert data["environment"] == "demonstration"
+    assert data["environment"] == "illustrative_workspace"
     assert "truthfulness_statement" in data
     assert "providers" in data
 
@@ -825,3 +844,389 @@ def test_existing_health_route_unaffected(client):
     resp = client.get("/v1/health")
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
+
+
+# ─────────────────────────────────────────────
+# Second-pass: neutral IDs (FC-WELL-001 format)
+# ─────────────────────────────────────────────
+
+def test_scenario_well_ids_use_neutral_format():
+    from app.services.fcgma.ledger import clear_ledger, list_records
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    clear_ledger()
+    inject_all_scenarios()
+    records = list_records()
+    well_ids = {r["well_id"] for r in records}
+    # All well IDs must use FC-WELL prefix
+    assert all(wid.startswith("FC-WELL-") for wid in well_ids), \
+        f"Found non-neutral well IDs: {well_ids - {w for w in well_ids if w.startswith('FC-WELL-')}}"
+
+
+def test_scenario_meter_ids_use_neutral_format():
+    from app.services.fcgma.ledger import clear_ledger, list_records
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    clear_ledger()
+    inject_all_scenarios()
+    records = list_records()
+    meter_ids = {r["meter_id"] for r in records if r["meter_id"]}
+    assert all(mid.startswith("FC-MTR-") for mid in meter_ids), \
+        f"Found non-neutral meter IDs: {meter_ids - {m for m in meter_ids if m.startswith('FC-MTR-')}}"
+
+
+def test_no_anon_prefix_in_well_ids():
+    from app.services.fcgma.ledger import clear_ledger, list_records
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    clear_ledger()
+    inject_all_scenarios()
+    records = list_records()
+    for r in records:
+        assert "anon" not in (r["well_id"] or ""), f"Old anon ID found in well_id: {r['well_id']}"
+
+
+# ─────────────────────────────────────────────
+# Second-pass: Terris service tools
+# ─────────────────────────────────────────────
+
+def test_terris_get_reporting_cycle_status():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.terris import get_reporting_cycle_status
+    clear_ledger()
+    inject_all_scenarios()
+    result = get_reporting_cycle_status()
+    assert result["tool"] == "get_reporting_cycle_status"
+    assert "readiness_percentage" in result
+    assert "cycle_status" in result
+    assert "status_label" in result
+    assert "blocking_exceptions" in result
+    assert result["total_records"] > 0
+    assert result["answer_type"] == "fact+calculation"
+
+
+def test_terris_list_priority_actions():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.terris import list_priority_actions
+    clear_ledger()
+    inject_all_scenarios()
+    result = list_priority_actions()
+    assert result["tool"] == "list_priority_actions"
+    assert "total_actions" in result
+    assert "actions" in result
+    # Actions are ranked
+    ranks = [a["priority_rank"] for a in result["actions"]]
+    assert ranks == sorted(ranks), "Actions should be sorted by priority_rank"
+
+
+def test_terris_list_records_blocking_reporting():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.terris import list_records_blocking_reporting
+    clear_ledger()
+    inject_all_scenarios()
+    result = list_records_blocking_reporting()
+    assert result["tool"] == "list_records_blocking_reporting"
+    assert "blocking_count" in result
+    assert "records" in result
+    # Each blocking record has blocking_reasons
+    for r in result["records"]:
+        assert "well_id" in r
+        assert "blocking_reasons" in r
+
+
+def test_terris_generate_reporting_brief():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.terris import generate_reporting_brief
+    clear_ledger()
+    inject_all_scenarios()
+    result = generate_reporting_brief()
+    assert result["tool"] == "generate_reporting_brief"
+    assert "readiness_percentage" in result
+    assert "blocking_count" in result
+    assert "top_priority_actions" in result
+    assert "disclaimer" in result
+    assert "Not an official FCGMA" in result["disclaimer"]
+
+
+def test_terris_generate_exception_packet():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.terris import generate_exception_packet
+    clear_ledger()
+    inject_all_scenarios()
+    result = generate_exception_packet()
+    assert result["tool"] == "generate_exception_packet"
+    assert "total_exceptions" in result
+    assert "packet_items" in result
+    assert "disclaimer" in result
+    # Disclaimer must prohibit filing
+    assert "does not file" in result["disclaimer"] or "review" in result["disclaimer"].lower()
+
+
+def test_terris_draft_follow_up_request():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.terris import draft_follow_up_request
+    clear_ledger()
+    inject_all_scenarios()
+    result = draft_follow_up_request()
+    assert result["tool"] == "draft_follow_up_request"
+    assert "item_count" in result
+    assert "follow_up_items" in result
+    for item in result["follow_up_items"]:
+        assert "well_id" in item
+        assert "follow_up_recipient" in item
+        assert "follow_up_action" in item
+
+
+def test_terris_add_records_to_evidence_bundle():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.terris import add_records_to_evidence_bundle
+    clear_ledger()
+    inject_all_scenarios()
+    result = add_records_to_evidence_bundle()
+    assert result["tool"] == "add_records_to_evidence_bundle"
+    assert "staged_count" in result
+    # Note must be clear this doesn't approve records
+    assert "not an approval" in result["note"].lower() or "selection only" in result["note"].lower()
+
+
+# ─────────────────────────────────────────────
+# Second-pass: Terris investigation workflow
+# ─────────────────────────────────────────────
+
+def test_terris_investigation_returns_agent_name():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.terris import run_terris_investigation
+    clear_ledger()
+    inject_all_scenarios()
+    result = run_terris_investigation("What requires my attention today?")
+    assert result["agent"] == "Terris"
+
+
+def test_terris_investigation_has_structured_sections():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.terris import run_terris_investigation
+    clear_ledger()
+    inject_all_scenarios()
+    result = run_terris_investigation("What requires my attention today?")
+    required = ["direct_answer", "why_it_matters", "evidence_reviewed",
+                "recommended_action", "remaining_uncertainty", "available_actions"]
+    for key in required:
+        assert key in result, f"Missing structured section: {key}"
+        assert result[key] is not None
+
+
+def test_terris_investigation_stages_are_real():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.terris import run_terris_investigation
+    clear_ledger()
+    inject_all_scenarios()
+    result = run_terris_investigation("Where does the reporting cycle stand?")
+    stages = result["investigation_stages"]
+    assert len(stages) >= 2
+    # First stage is classify_intent, second is identify_tools
+    assert stages[0]["stage"] == "classify_intent"
+    assert stages[1]["stage"] == "identify_tools"
+    # All stages have required fields
+    for s in stages:
+        assert "stage" in s
+        assert "status" in s
+        assert "detail" in s
+
+
+def test_terris_investigation_no_unsupported_quantities():
+    """Terris must not invent quantities beyond what the ledger contains."""
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.terris import run_terris_investigation
+    clear_ledger()
+    result = run_terris_investigation("How much water was extracted?")
+    # With empty ledger, should not claim non-zero extraction
+    direct = result.get("direct_answer", "")
+    # Should not contain a positive AF number when ledger is empty
+    assert "0.00 AF" in direct or "0 record" in direct or "No records" in direct \
+        or "0 meter" in direct or result.get("tool_results") is not None
+
+
+def test_terris_investigation_has_disclaimer():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.terris import run_terris_investigation
+    clear_ledger()
+    inject_all_scenarios()
+    result = run_terris_investigation("Show provider health.")
+    assert "disclaimer" in result
+    assert "does not approve records" in result["disclaimer"] or "Terris does not" in result["disclaimer"]
+
+
+def test_terris_intent_classification():
+    from app.services.fcgma.terris import classify_intent
+    assert classify_intent("What requires my attention today?") == "review_queue"
+    assert classify_intent("Where does the reporting cycle stand?") == "reporting_cycle"
+    assert classify_intent("Compare provider health") == "provider_health"
+    assert classify_intent("What data would Fox Canyon need?") == "data_gap"
+
+
+def test_terris_evidence_reviewed_lists_tools():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.terris import run_terris_investigation
+    clear_ledger()
+    inject_all_scenarios()
+    result = run_terris_investigation("What requires my attention today?")
+    evidence = result["evidence_reviewed"]
+    assert isinstance(evidence, list)
+    assert len(evidence) > 0
+    for e in evidence:
+        assert "tool" in e
+        assert "summary" in e
+
+
+def test_terris_available_actions_not_empty():
+    from app.services.fcgma.ledger import clear_ledger
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.terris import run_terris_investigation
+    clear_ledger()
+    inject_all_scenarios()
+    result = run_terris_investigation("What requires my attention today?")
+    actions = result["available_actions"]
+    assert isinstance(actions, list)
+    assert len(actions) > 0
+    for a in actions:
+        assert "label" in a
+        assert "target" in a
+
+
+def test_terris_record_specific_investigation():
+    from app.services.fcgma.ledger import clear_ledger, list_records
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    from app.services.fcgma.terris import run_terris_investigation
+    clear_ledger()
+    inject_all_scenarios()
+    records = list_records(evidence_class="groundwater_meter_reading")
+    assert records
+    rid = records[0]["id"]
+    result = run_terris_investigation("Explain this record.", record_id=rid)
+    assert result["agent"] == "Terris"
+    assert "explain_record" in result["tool_results"]
+    assert result["tool_results"]["explain_record"]["record_id"] == rid
+
+
+# ─────────────────────────────────────────────
+# Second-pass: Terris API endpoints
+# ─────────────────────────────────────────────
+
+def test_terris_query_endpoint(client):
+    resp = client.post("/v1/fcgma-demo/terris/query",
+                       json={"query": "What requires my attention today?"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["agent"] == "Terris"
+    assert "direct_answer" in data
+    assert "investigation_stages" in data
+    assert "disclaimer" in data
+
+
+def test_terris_query_has_structured_sections(client):
+    resp = client.post("/v1/fcgma-demo/terris/query",
+                       json={"query": "Where does the reporting cycle stand?"})
+    assert resp.status_code == 200
+    data = resp.json()
+    for key in ["direct_answer", "why_it_matters", "evidence_reviewed",
+                "recommended_action", "remaining_uncertainty", "available_actions"]:
+        assert key in data, f"Missing: {key}"
+
+
+def test_terris_preset_questions_endpoint(client):
+    resp = client.get("/v1/fcgma-demo/terris/preset-questions")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["agent"] == "Terris"
+    assert "questions" in data
+    assert len(data["questions"]) > 0
+    # No "Ask AGRO-AI" labels in Terris presets
+    for q in data["questions"]:
+        assert "Ask AGRO-AI" not in q["label"]
+
+
+def test_terris_reporting_cycle_endpoint(client):
+    resp = client.get("/v1/fcgma-demo/terris/reporting-cycle")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "readiness_percentage" in data
+    assert "cycle_status" in data
+    assert "blocking_exceptions" in data
+
+
+def test_terris_priority_actions_endpoint(client):
+    resp = client.get("/v1/fcgma-demo/terris/priority-actions")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "total_actions" in data
+    assert "actions" in data
+
+
+def test_terris_blocking_records_endpoint(client):
+    resp = client.get("/v1/fcgma-demo/terris/blocking-records")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "blocking_count" in data
+    assert "records" in data
+
+
+# ─────────────────────────────────────────────
+# Second-pass: product naming
+# ─────────────────────────────────────────────
+
+def test_status_product_name_updated(client):
+    resp = client.get("/v1/fcgma-demo/status")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "Applied Water Intelligence" in data["product"]
+
+
+def test_status_environment_is_illustrative(client):
+    resp = client.get("/v1/fcgma-demo/status")
+    assert resp.status_code == 200
+    assert resp.json()["environment"] == "illustrative_workspace"
+
+
+def test_report_disclaimer_uses_illustrative(client):
+    resp = client.post("/v1/fcgma-demo/reports/generate",
+                       json={"report_type": "full", "reporting_period": "2026-Q1"})
+    assert resp.status_code == 200
+    disclaimer = resp.json().get("disclaimer", "")
+    assert "ILLUSTRATIVE" in disclaimer or "illustrative" in disclaimer.lower()
+
+
+# ─────────────────────────────────────────────
+# Second-pass: consolidated provenance
+# ─────────────────────────────────────────────
+
+def test_scenarios_always_labeled():
+    """Every injected record must carry scenario_injected=True and a scenario_label."""
+    from app.services.fcgma.ledger import clear_ledger, list_records
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    clear_ledger()
+    inject_all_scenarios()
+    records = list_records()
+    injected = [r for r in records if r["scenario_injected"]]
+    assert len(injected) == len(records), "All records in this demo are scenario-injected"
+    for r in injected:
+        assert r["scenario_label"], f"Record {r['id']} has no scenario_label"
+
+
+def test_well_ids_have_fc_prefix():
+    """All demonstration well IDs start with FC-WELL-."""
+    from app.services.fcgma.ledger import clear_ledger, list_records
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    clear_ledger()
+    inject_all_scenarios()
+    for r in list_records():
+        assert r["well_id"].startswith("FC-WELL-"), \
+            f"Expected FC-WELL- prefix, got: {r['well_id']}"

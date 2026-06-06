@@ -24,9 +24,14 @@ from .ledger import list_records, list_exceptions, ledger_stats, CALCULATION_VER
 from .rule_pack import PACK_METADATA, DISCLAIMER as RULE_DISCLAIMER
 
 REPORT_DISCLAIMER = (
-    "DEMONSTRATION ENVIRONMENT — Not an official Fox Canyon Groundwater Management Agency "
+    "ILLUSTRATIVE WORKSPACE — Not an official Fox Canyon Groundwater Management Agency "
     "reporting submission. All records are demonstration scenarios. No authorized Fox Canyon "
     "extraction data is included. This report must not be submitted to any regulatory body."
+)
+
+REPORT_FOOTER_NOTE = (
+    "Illustrative workspace | AGRO-AI Applied Water Intelligence | "
+    "All figures are demonstration scenarios — no authorized Fox Canyon data"
 )
 
 
@@ -106,8 +111,8 @@ def _generate_pdf(stats: dict[str, Any], records: list[dict[str, Any]], exceptio
     ready = [r for r in records if r["review_status"] in ("ready_for_export", "reviewer_approved")]
 
     # ── PAGE 1: Executive Summary ──
-    story.append(Paragraph("AGRO-AI Water Intelligence Copilot", H1))
-    story.append(Paragraph("Fox Canyon Applied-Water Mission Control", style("SUB", fontSize=13, textColor=MUTED, spaceAfter=4)))
+    story.append(Paragraph("AGRO-AI Applied Water Intelligence", H1))
+    story.append(Paragraph("Reporting Readiness Brief — Fox Canyon Groundwater Management Agency", style("SUB", fontSize=12, textColor=MUTED, spaceAfter=4)))
     story.append(Spacer(1, 4))
     story.append(Paragraph(f"Reporting Period: 2026-Q1 | Generated: {_format_dt(generated_at)}", MUTED_S))
     story.append(Spacer(1, 12))
@@ -291,6 +296,9 @@ def _generate_pdf(stats: dict[str, Any], records: list[dict[str, Any]], exceptio
     story.append(Spacer(1, 12))
     story.append(Paragraph(RULE_DISCLAIMER, DISCLAIMER_S))
 
+    story.append(Spacer(1, 12))
+    story.append(Paragraph(REPORT_FOOTER_NOTE, MUTED_S))
+
     doc.build(story)
     return buf.getvalue()
 
@@ -384,8 +392,8 @@ def generate_report(report_type: str = "full") -> dict[str, Any]:
         zf.writestr(f"{report_id}_audit.json", audit_json)
         zf.writestr(f"{report_id}_lineage_manifest.json", lineage_manifest)
         zf.writestr("README.txt", (
-            f"AGRO-AI Water Intelligence Copilot\n"
-            f"Fox Canyon Applied-Water Mission Control\n"
+            f"AGRO-AI Applied Water Intelligence\n"
+            f"Reporting Readiness Brief — Fox Canyon Groundwater Management Agency\n"
             f"Report ID: {report_id}\n"
             f"Generated: {generated_at}\n\n"
             f"{REPORT_DISCLAIMER}\n"

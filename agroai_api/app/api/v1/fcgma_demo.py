@@ -44,6 +44,12 @@ class CopilotQuery(BaseModel):
     preset_key: Optional[str] = None
 
 
+class TerrisQuery(BaseModel):
+    query: str = Field(..., min_length=1, max_length=2000)
+    record_id: Optional[str] = None
+    tool_override: Optional[str] = None
+
+
 class ResolveException(BaseModel):
     resolution: str = Field(..., min_length=1, max_length=1000)
     actor: str = Field(default="reviewer")
@@ -106,11 +112,11 @@ def get_status() -> dict[str, Any]:
         providers_status.append({"id": pid, "label": preg["label"], "status": st, "message": msg})
 
     return {
-        "environment": "demonstration",
-        "product": "AGRO-AI Water Intelligence Copilot",
-        "subtitle": "Fox Canyon Applied-Water Mission Control",
+        "environment": "illustrative_workspace",
+        "product": "AGRO-AI Applied Water Intelligence",
+        "subtitle": "Water Governance Command Center — Fox Canyon Groundwater Management Agency",
         "truthfulness_statement": (
-            "Demonstration environment. "
+            "Illustrative workspace. "
             "Authorized telemetry where connected. "
             "Public contextual sources. "
             "Clearly labeled injected scenarios. "
@@ -549,6 +555,62 @@ def get_preset_questions() -> dict[str, Any]:
             {"key": "assumptions", "label": "Which assumptions still require agency validation?", "tool": "list_unvalidated_assumptions"},
         ]
     }
+
+
+# ─────────────────────────────────────────────
+# Terris — Water Intelligence Agent
+# ─────────────────────────────────────────────
+
+@router.post("/terris/query")
+def terris_query(payload: TerrisQuery) -> dict[str, Any]:
+    """
+    Submit a query to Terris, the AGRO-AI Water Intelligence Agent.
+
+    Terris runs a multi-stage investigation grounded in deterministic backend tools.
+    Returns a structured response: Direct Answer, Why It Matters, Evidence Reviewed,
+    Recommended Action, Remaining Uncertainty, Available Actions.
+    """
+    _ensure_initialized()
+    from app.services.fcgma.terris import run_terris_investigation
+    return run_terris_investigation(
+        query=payload.query,
+        record_id=payload.record_id,
+        tool_override=payload.tool_override,
+    )
+
+
+@router.get("/terris/preset-questions")
+def get_terris_preset_questions() -> dict[str, Any]:
+    from app.services.fcgma.terris import TERRIS_PRESET_QUESTIONS, AGENT_NAME, AGENT_DESCRIPTION
+    return {
+        "agent": AGENT_NAME,
+        "description": AGENT_DESCRIPTION,
+        "questions": TERRIS_PRESET_QUESTIONS,
+    }
+
+
+@router.get("/terris/reporting-cycle")
+def get_reporting_cycle() -> dict[str, Any]:
+    """Reporting cycle status and readiness."""
+    _ensure_initialized()
+    from app.services.fcgma.terris import get_reporting_cycle_status
+    return get_reporting_cycle_status()
+
+
+@router.get("/terris/priority-actions")
+def get_priority_actions() -> dict[str, Any]:
+    """Ranked action queue for the current reporting cycle."""
+    _ensure_initialized()
+    from app.services.fcgma.terris import list_priority_actions
+    return list_priority_actions()
+
+
+@router.get("/terris/blocking-records")
+def get_blocking_records() -> dict[str, Any]:
+    """Records blocking the current reporting cycle."""
+    _ensure_initialized()
+    from app.services.fcgma.terris import list_records_blocking_reporting
+    return list_records_blocking_reporting()
 
 
 # ─────────────────────────────────────────────

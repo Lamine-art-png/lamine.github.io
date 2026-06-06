@@ -1,1198 +1,1057 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AGRO-AI Water Intelligence Copilot · Fox Canyon Applied-Water Mission Control</title>
-  <style>
-    :root {
-      --forest-950: #10231d;
-      --forest-900: #17362d;
-      --forest-700: #285446;
-      --forest-500: #3a7a66;
-      --graphite: #222826;
-      --muted: #66736e;
-      --stone-50: #f6f5f1;
-      --stone-100: #ece9e1;
-      --stone-200: #ded9ce;
-      --white: #ffffff;
-      --success: #2f6f54;
-      --warning: #8a6324;
-      --danger: #9f3529;
-      --danger-light: #fff8f8;
-      --info: #3d5a68;
-      --shadow: 0 2px 16px rgba(16,35,29,0.07);
-      --shadow-lg: 0 8px 32px rgba(16,35,29,0.10);
-      --radius: 10px;
-      --radius-sm: 6px;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    html { scroll-behavior: smooth; }
-    body {
-      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: var(--stone-50);
-      color: var(--graphite);
-      min-height: 100vh;
-      font-size: 14px;
-      line-height: 1.5;
-    }
-    button, input, textarea, select { font: inherit; cursor: pointer; }
-    a { color: var(--forest-700); text-decoration: none; }
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AGRO-AI Applied Water Intelligence — Fox Canyon GMA</title>
+<style>
+:root {
+  --navy: #0c1a14;
+  --navy-hover: #172a20;
+  --navy-active-bg: #1f3828;
+  --forest: #285446;
+  --forest-light: #3a7060;
+  --forest-pale: #e8f0ec;
+  --text: #1a1f1c;
+  --text-muted: #5a6360;
+  --text-faint: #9ca8a4;
+  --bg: #f8f7f4;
+  --card: #ffffff;
+  --border: #e0dcd4;
+  --border-light: #ece9e2;
+  --danger: #9f3529;
+  --danger-bg: #fdf4f3;
+  --warn: #8a6620;
+  --warn-bg: #fdf8ec;
+  --success: #285446;
+  --success-bg: #eef5f1;
+  --stone: #f3f1ec;
+  --nav-text: #c8d8d0;
+  --nav-muted: #7a9088;
+  --radius: 8px;
+  --radius-sm: 5px;
+  --shadow: 0 1px 3px rgba(0,0,0,.08),0 1px 2px rgba(0,0,0,.05);
+  --shadow-md: 0 4px 12px rgba(0,0,0,.1);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;font-size:14px;line-height:1.5;color:var(--text);background:var(--bg);display:flex;height:100vh;overflow:hidden}
 
-    /* ── TRUTHFULNESS BANNER ── */
-    .truth-banner {
-      background: var(--forest-950);
-      color: #b9d8ca;
-      padding: 9px 24px;
-      font-size: 12px;
-      display: flex;
-      align-items: center;
-      gap: 12px;
-      flex-wrap: wrap;
-      border-bottom: 1px solid var(--forest-900);
-    }
-    .truth-banner strong { color: #e2f0eb; }
-    .truth-chip {
-      background: rgba(255,255,255,0.1);
-      border: 1px solid rgba(255,255,255,0.18);
-      border-radius: 4px;
-      padding: 3px 8px;
-      font-size: 11px;
-      white-space: nowrap;
-    }
+/* Nav */
+#nav{width:220px;min-width:220px;background:var(--navy);display:flex;flex-direction:column;overflow-y:auto}
+.nav-brand{padding:20px 18px 16px;border-bottom:1px solid rgba(255,255,255,.06)}
+.nav-brand-name{font-size:13px;font-weight:700;color:#fff;letter-spacing:.02em}
+.nav-brand-sub{font-size:11px;color:var(--nav-muted);margin-top:2px;line-height:1.3}
+.nav-section{padding:10px 0;flex:1}
+.nav-item{display:flex;align-items:center;gap:10px;padding:9px 18px;cursor:pointer;border:none;background:none;width:100%;text-align:left;color:var(--nav-text);font-size:13px;font-weight:500;transition:background .15s,color .15s}
+.nav-item:hover{background:var(--navy-hover);color:#fff}
+.nav-item.active{background:var(--navy-active-bg);color:#fff}
+.nav-item.active .nav-icon{opacity:1;color:#6dd5a8}
+.nav-icon{width:16px;height:16px;opacity:.5;flex-shrink:0}
+.nav-footer{padding:14px 18px;border-top:1px solid rgba(255,255,255,.06);font-size:11px;color:var(--nav-muted);line-height:1.4}
 
-    /* ── HEADER ── */
-    .app-header {
-      background: linear-gradient(135deg, var(--forest-950) 0%, var(--forest-700) 100%);
-      color: var(--white);
-      padding: 20px 28px 18px;
-    }
-    .header-inner { max-width: 1400px; margin: 0 auto; display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; flex-wrap: wrap; }
-    .header-brand { display: flex; align-items: center; gap: 14px; }
-    .header-logo {
-      width: 44px; height: 44px; background: rgba(255,255,255,0.12);
-      border-radius: 10px; display: flex; align-items: center; justify-content: center;
-      font-weight: 900; font-size: 16px; letter-spacing: -0.05em; color: #fff;
-      border: 1px solid rgba(255,255,255,0.2);
-    }
-    .header-title { font-size: 20px; font-weight: 800; letter-spacing: -0.04em; line-height: 1.2; }
-    .header-subtitle { font-size: 12px; color: #b9d8ca; margin-top: 2px; }
-    .header-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding-top: 4px; }
-    .btn {
-      border: none; border-radius: var(--radius-sm);
-      padding: 8px 14px; font-weight: 700; font-size: 13px;
-      transition: opacity .15s, transform .1s; display: inline-flex; align-items: center; gap: 6px;
-    }
-    .btn:hover { opacity: .88; }
-    .btn:active { transform: scale(.97); }
-    .btn-primary { background: var(--forest-700); color: #fff; }
-    .btn-secondary { background: rgba(255,255,255,0.12); color: #fff; border: 1px solid rgba(255,255,255,0.2); }
-    .btn-ghost { background: transparent; color: var(--forest-700); border: 1px solid var(--stone-200); }
-    .btn-danger { background: var(--danger); color: #fff; }
-    .btn-sm { padding: 5px 10px; font-size: 12px; }
+/* Main */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden}
+#topbar{background:var(--card);border-bottom:1px solid var(--border);padding:0 28px;height:52px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+#page-title{font-size:15px;font-weight:600;color:var(--text)}
+.topbar-right{display:flex;align-items:center;gap:12px}
+#provenance-btn{display:flex;align-items:center;gap:6px;padding:5px 12px;border:1px solid var(--border);border-radius:20px;background:var(--card);color:var(--text-muted);font-size:12px;cursor:pointer;transition:border-color .15s,color .15s}
+#provenance-btn:hover{border-color:var(--forest);color:var(--forest)}
+#provenance-btn .dot{width:7px;height:7px;border-radius:50%;background:var(--warn)}
+#content{flex:1;overflow-y:auto;padding:28px}
 
-    /* ── MAIN LAYOUT ── */
-    .app-body { display: flex; min-height: calc(100vh - 120px); }
-    .main-content { flex: 1; min-width: 0; padding: 20px 24px; max-width: 100%; }
-    .copilot-panel {
-      width: 380px; flex-shrink: 0;
-      background: var(--white);
-      border-left: 1px solid var(--stone-200);
-      display: flex; flex-direction: column;
-      position: sticky; top: 0; height: 100vh; overflow: hidden;
-    }
+/* Views */
+.view{display:none}.view.active{display:block}
 
-    /* ── METRIC CARDS ── */
-    .metric-strip { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; margin-bottom: 20px; }
-    .metric-card {
-      background: var(--white); border: 1px solid var(--stone-200);
-      border-radius: var(--radius); padding: 14px 16px;
-      box-shadow: var(--shadow);
-    }
-    .metric-card.attention { border-left: 3px solid var(--danger); }
-    .metric-card.ready { border-left: 3px solid var(--success); }
-    .metric-card.info { border-left: 3px solid var(--info); }
-    .metric-eyebrow { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); margin-bottom: 6px; }
-    .metric-value { font-size: 26px; font-weight: 800; letter-spacing: -0.04em; color: var(--graphite); line-height: 1; }
-    .metric-value.danger { color: var(--danger); }
-    .metric-value.success { color: var(--success); }
-    .metric-sub { font-size: 11px; color: var(--muted); margin-top: 4px; }
+/* Cards */
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:20px;box-shadow:var(--shadow)}
+.card-title{font-size:13px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:14px}
 
-    /* ── INTELLIGENCE CARD ── */
-    .intelligence-card {
-      background: var(--white); border: 1px solid var(--stone-200);
-      border-radius: var(--radius); padding: 20px 24px;
-      box-shadow: var(--shadow); margin-bottom: 20px;
-    }
-    .intelligence-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
-    .intelligence-eyebrow { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .09em; color: var(--forest-700); margin-bottom: 4px; }
-    .intelligence-title { font-size: 16px; font-weight: 700; letter-spacing: -0.03em; color: var(--graphite); }
-    .intelligence-narrative { font-size: 14px; color: var(--graphite); line-height: 1.65; margin-bottom: 16px; }
-    .intelligence-narrative strong { color: var(--forest-700); }
-    .action-row { display: flex; flex-wrap: wrap; gap: 8px; }
+/* KPI */
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:20px}
+.kpi-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;box-shadow:var(--shadow)}
+.kpi-label{font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em}
+.kpi-value{font-size:28px;font-weight:700;color:var(--text);margin-top:6px;line-height:1}
+.kpi-sub{font-size:12px;color:var(--text-muted);margin-top:4px}
+.kpi-card.danger .kpi-value{color:var(--danger)}
+.kpi-card.warn .kpi-value{color:var(--warn)}
+.kpi-card.success .kpi-value{color:var(--success)}
 
-    /* ── SOURCE HEALTH CHIPS ── */
-    .source-row { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-    .source-chip {
-      display: inline-flex; align-items: center; gap: 6px;
-      border-radius: 5px; padding: 5px 10px; font-size: 12px; font-weight: 600;
-      border: 1px solid transparent;
-    }
-    .source-chip.connected { background: #e8f5ef; border-color: #b6ddc8; color: var(--success); }
-    .source-chip.unavailable { background: #fff8ee; border-color: #f0dcaa; color: var(--warning); }
-    .source-chip.disabled { background: var(--stone-100); border-color: var(--stone-200); color: var(--muted); }
-    .source-dot { width: 7px; height: 7px; border-radius: 50%; }
-    .connected .source-dot { background: var(--success); }
-    .unavailable .source-dot { background: var(--warning); }
-    .disabled .source-dot { background: var(--muted); }
+/* Layouts */
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:18px}
 
-    /* ── SECTION ── */
-    .section { margin-bottom: 24px; }
-    .section-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
-    .section-title { font-size: 14px; font-weight: 700; color: var(--graphite); letter-spacing: -0.02em; }
-    .section-count { font-size: 12px; color: var(--muted); font-weight: 600; }
+/* Tables */
+.data-table{width:100%;border-collapse:collapse}
+.data-table th{text-align:left;padding:8px 12px;font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);background:var(--stone)}
+.data-table td{padding:10px 12px;border-bottom:1px solid var(--border-light);font-size:13px;color:var(--text)}
+.data-table tr:last-child td{border-bottom:none}
+.data-table tr:hover td{background:var(--stone);cursor:pointer}
 
-    /* ── FILTER BAR ── */
-    .filter-bar { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
-    .filter-btn {
-      background: var(--stone-100); border: 1px solid var(--stone-200);
-      border-radius: 5px; padding: 5px 10px; font-size: 12px; font-weight: 600;
-      color: var(--graphite); cursor: pointer; transition: all .15s;
-    }
-    .filter-btn.active, .filter-btn:hover { background: var(--forest-700); border-color: var(--forest-700); color: #fff; }
+/* Badges */
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600}
+.badge-danger{background:var(--danger-bg);color:var(--danger)}
+.badge-warn{background:var(--warn-bg);color:var(--warn)}
+.badge-success{background:var(--success-bg);color:var(--success)}
+.badge-muted{background:var(--stone);color:var(--text-muted)}
+.badge-forest{background:var(--forest-pale);color:var(--forest)}
 
-    /* ── REVIEW TABLE ── */
-    .review-table-wrap { overflow-x: auto; border-radius: var(--radius); border: 1px solid var(--stone-200); box-shadow: var(--shadow); }
-    table { width: 100%; border-collapse: collapse; background: var(--white); font-size: 12.5px; }
-    thead tr { background: var(--stone-100); }
-    th { padding: 10px 12px; text-align: left; font-weight: 700; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .07em; border-bottom: 1px solid var(--stone-200); white-space: nowrap; }
-    td { padding: 10px 12px; border-bottom: 1px solid var(--stone-100); vertical-align: middle; }
-    tr:last-child td { border-bottom: none; }
-    tr:hover td { background: var(--stone-50); }
-    .badge {
-      display: inline-flex; align-items: center; gap: 4px;
-      border-radius: 4px; padding: 3px 7px; font-size: 11px; font-weight: 700;
-    }
-    .badge.danger { background: #fde8e8; color: var(--danger); }
-    .badge.warning { background: #fef3dd; color: var(--warning); }
-    .badge.success { background: #e7f5ed; color: var(--success); }
-    .badge.muted { background: var(--stone-100); color: var(--muted); }
-    .badge.info { background: #e3edf2; color: var(--info); }
-    .record-link { background: none; border: none; color: var(--forest-700); font-weight: 700; cursor: pointer; font-size: 12.5px; text-decoration: underline; text-underline-offset: 2px; }
-    .scenario-chip { font-size: 10px; background: #f3e8ff; color: #6b21a8; border-radius: 3px; padding: 1px 5px; font-weight: 700; }
+/* Readiness bar */
+.readiness-bar-wrap{background:var(--border-light);border-radius:4px;height:8px;overflow:hidden;margin:8px 0}
+.readiness-bar-fill{height:100%;background:var(--forest);border-radius:4px;transition:width .4s ease}
 
-    /* ── DRAWER ── */
-    .drawer-overlay {
-      position: fixed; inset: 0; background: rgba(16,35,29,0.4);
-      z-index: 100; display: none; align-items: stretch; justify-content: flex-end;
-    }
-    .drawer-overlay.open { display: flex; }
-    .drawer {
-      width: min(660px, 96vw); background: var(--white);
-      height: 100vh; overflow-y: auto;
-      box-shadow: -8px 0 32px rgba(16,35,29,0.12);
-      display: flex; flex-direction: column;
-      animation: slideIn .2s ease;
-    }
-    @keyframes slideIn { from { transform: translateX(40px); opacity: 0; } to { transform: none; opacity: 1; } }
-    .drawer-header {
-      padding: 20px 24px 16px;
-      border-bottom: 1px solid var(--stone-200);
-      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
-      position: sticky; top: 0; background: var(--white); z-index: 1;
-    }
-    .drawer-close { background: none; border: 1px solid var(--stone-200); border-radius: 6px; padding: 4px 10px; font-size: 18px; color: var(--muted); cursor: pointer; }
-    .drawer-close:hover { color: var(--graphite); }
-    .drawer-body { padding: 20px 24px; flex: 1; }
-    .drawer-section { margin-bottom: 20px; }
-    .drawer-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .09em; color: var(--muted); margin-bottom: 6px; }
-    .drawer-value { font-size: 13px; color: var(--graphite); }
-    .drawer-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    .calc-step {
-      background: var(--stone-50); border: 1px solid var(--stone-200);
-      border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 8px;
-    }
-    .calc-step-name { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: .07em; color: var(--forest-700); margin-bottom: 3px; }
-    .exception-row {
-      background: var(--danger-light); border: 1px solid #f7d0d0;
-      border-radius: var(--radius-sm); padding: 10px 12px; margin-bottom: 8px;
-    }
-    .exception-type { font-size: 11px; font-weight: 700; color: var(--danger); }
-    .exception-detail { font-size: 12px; color: var(--graphite); margin-top: 3px; line-height: 1.5; }
-    .lineage-block {
-      background: #f0f7f4; border: 1px solid #cde4d8;
-      border-radius: var(--radius-sm); padding: 10px 12px; font-size: 11px;
-      font-family: monospace; line-height: 1.7; white-space: pre-wrap; word-break: break-all;
-    }
-    .model-disclaimer {
-      background: #fffbeb; border: 1px solid #f0dcaa;
-      border-radius: var(--radius-sm); padding: 10px 12px; font-size: 12px;
-      color: var(--warning); line-height: 1.5; margin-top: 10px;
-    }
-    .audit-event { border-bottom: 1px solid var(--stone-100); padding: 7px 0; font-size: 12px; }
-    .audit-event:last-child { border-bottom: none; }
-    .audit-ts { color: var(--muted); font-size: 11px; }
+/* Action cards */
+.action-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;display:flex;align-items:flex-start;gap:14px;cursor:pointer;transition:border-color .15s,box-shadow .15s}
+.action-card:hover{border-color:var(--forest);box-shadow:var(--shadow-md)}
+.action-priority-num{width:26px;height:26px;border-radius:50%;background:var(--forest-pale);color:var(--forest);font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.action-priority-num.high{background:var(--danger-bg);color:var(--danger)}
+.action-priority-num.medium{background:var(--warn-bg);color:var(--warn)}
+.action-card-body{flex:1}
+.action-well{font-weight:700;font-family:monospace;color:var(--forest);font-size:13px}
+.action-exc-type{font-size:13px;color:var(--text);margin-top:1px}
+.action-detail{font-size:12px;color:var(--text-muted);margin-top:4px;line-height:1.4}
+.action-arrow{color:var(--text-faint);font-size:16px;margin-top:2px}
 
-    /* ── COPILOT PANEL ── */
-    .copilot-header {
-      padding: 16px 18px 12px;
-      border-bottom: 1px solid var(--stone-200);
-      background: var(--forest-950); color: var(--white);
-    }
-    .copilot-title { font-size: 14px; font-weight: 800; letter-spacing: -0.03em; }
-    .copilot-sub { font-size: 11px; color: #b9d8ca; margin-top: 2px; }
-    .copilot-messages { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
-    .copilot-msg { border-radius: 8px; padding: 10px 12px; font-size: 13px; line-height: 1.6; max-width: 100%; }
-    .copilot-msg.user { background: var(--forest-700); color: #fff; align-self: flex-end; max-width: 88%; }
-    .copilot-msg.assistant { background: var(--stone-100); color: var(--graphite); align-self: flex-start; }
-    .copilot-msg.system { background: #f0f7f4; border: 1px solid #cde4d8; color: var(--forest-700); font-size: 12px; }
-    .copilot-msg pre { white-space: pre-wrap; word-break: break-word; font-family: inherit; }
-    .copilot-msg .badge { display: inline-flex; }
-    .copilot-citations { font-size: 11px; color: var(--muted); margin-top: 6px; border-top: 1px solid var(--stone-200); padding-top: 5px; }
-    .copilot-input-area {
-      padding: 12px 14px; border-top: 1px solid var(--stone-200);
-      background: var(--white);
-    }
-    .preset-pills { display: flex; flex-wrap: wrap; gap: 5px; margin-bottom: 8px; }
-    .preset-pill {
-      background: var(--stone-100); border: 1px solid var(--stone-200);
-      border-radius: 5px; padding: 4px 8px; font-size: 11px; font-weight: 600;
-      color: var(--graphite); cursor: pointer; transition: all .15s;
-    }
-    .preset-pill:hover { background: var(--forest-700); color: #fff; border-color: var(--forest-700); }
-    .copilot-input-row { display: flex; gap: 6px; }
-    .copilot-input {
-      flex: 1; border: 1px solid var(--stone-200); border-radius: var(--radius-sm);
-      padding: 9px 12px; font-size: 13px; resize: none; min-height: 40px; max-height: 120px;
-    }
-    .copilot-input:focus { outline: 2px solid var(--forest-700); }
-    .voice-btn {
-      background: var(--stone-100); border: 1px solid var(--stone-200);
-      border-radius: var(--radius-sm); padding: 0 10px; font-size: 16px;
-    }
-    .voice-btn.recording { background: var(--danger); color: #fff; border-color: var(--danger); }
-    .send-btn { background: var(--forest-700); color: #fff; border: none; border-radius: var(--radius-sm); padding: 0 14px; font-weight: 700; font-size: 13px; }
-    .speak-btn { background: var(--stone-100); border: 1px solid var(--stone-200); border-radius: 5px; padding: 3px 8px; font-size: 11px; color: var(--muted); margin-top: 4px; }
+/* Provider rows */
+.provider-row{display:flex;align-items:center;padding:10px 0;border-bottom:1px solid var(--border-light);gap:10px}
+.provider-row:last-child{border-bottom:none}
+.provider-status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.provider-status-dot.connected{background:#3a9463}
+.provider-status-dot.unavailable{background:var(--warn)}
+.provider-status-dot.disabled{background:var(--text-faint)}
+.provider-label{font-size:13px;font-weight:500;flex:1}
+.provider-msg{font-size:12px;color:var(--text-muted)}
 
-    /* ── REPORT SECTION ── */
-    .report-card {
-      background: var(--white); border: 1px solid var(--stone-200);
-      border-radius: var(--radius); padding: 18px 20px;
-      box-shadow: var(--shadow); margin-bottom: 16px;
-    }
-    .report-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
-    .download-link {
-      display: inline-flex; align-items: center; gap: 6px;
-      background: var(--stone-100); border: 1px solid var(--stone-200);
-      border-radius: var(--radius-sm); padding: 7px 12px; font-size: 12px; font-weight: 700;
-      color: var(--graphite); cursor: pointer; transition: all .15s;
-    }
-    .download-link:hover { background: var(--forest-700); color: #fff; border-color: var(--forest-700); }
+/* Drawers */
+#overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:200}
+#overlay.open{display:block}
+#provenance-drawer{position:fixed;top:0;right:-440px;width:440px;height:100%;background:var(--card);border-left:1px solid var(--border);z-index:201;display:flex;flex-direction:column;transition:right .25s ease;overflow-y:auto}
+#provenance-drawer.open{right:0}
+#record-drawer{position:fixed;top:0;right:-560px;width:560px;height:100%;background:var(--card);border-left:1px solid var(--border);z-index:201;display:flex;flex-direction:column;transition:right .25s ease}
+#record-drawer.open{right:0}
+.drawer-header{padding:20px 24px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.drawer-title{font-size:15px;font-weight:700}
+.drawer-close{background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:20px;line-height:1;padding:2px 6px}
+.drawer-close:hover{color:var(--text)}
+.drawer-body{padding:20px 24px}
+#record-drawer-body{flex:1;overflow-y:auto}
 
-    /* ── TOAST ── */
-    .toast-area { position: fixed; bottom: 20px; right: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 200; }
-    .toast {
-      background: var(--graphite); color: #fff; border-radius: var(--radius-sm);
-      padding: 10px 16px; font-size: 13px; box-shadow: var(--shadow-lg);
-      animation: toastIn .2s ease; max-width: 320px;
-    }
-    .toast.success { background: var(--success); }
-    .toast.error { background: var(--danger); }
-    @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; } }
+/* Provenance */
+.provenance-section{margin-bottom:20px}
+.provenance-section-title{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px}
+.provenance-item{display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;font-size:13px}
+.provenance-item-dot{width:7px;height:7px;border-radius:50%;margin-top:5px;flex-shrink:0}
 
-    /* ── LOADING ── */
-    .loading-state { text-align: center; padding: 40px; color: var(--muted); font-size: 13px; }
-    .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--stone-200); border-top-color: var(--forest-700); border-radius: 50%; animation: spin .8s linear infinite; margin-bottom: 8px; }
-    @keyframes spin { to { transform: rotate(360deg); } }
+/* Record drawer detail */
+.record-detail-section{margin-bottom:20px}
+.record-detail-label{font-size:11px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px}
+.record-field-row{display:flex;gap:8px;align-items:baseline;margin-bottom:5px;font-size:13px}
+.record-field-key{color:var(--text-muted);min-width:160px}
+.record-field-val{font-weight:500}
+.mono{font-family:monospace;font-size:12px;color:var(--forest)}
+.exc-item{background:var(--danger-bg);border:1px solid rgba(159,53,41,.15);border-radius:var(--radius-sm);padding:10px 12px;margin-bottom:8px}
+.exc-type{font-weight:600;font-size:13px;color:var(--danger)}
+.exc-detail{font-size:12px;color:var(--text);margin-top:4px}
+.calc-step{display:flex;gap:10px;margin-bottom:6px;font-size:12px}
+.calc-step-icon{color:var(--forest);font-weight:700;flex-shrink:0;width:16px}
 
-    /* ── EMPTY STATE ── */
-    .empty-state { text-align: center; padding: 48px 24px; color: var(--muted); }
-    .empty-icon { font-size: 36px; margin-bottom: 10px; }
-    .empty-title { font-size: 15px; font-weight: 700; color: var(--graphite); margin-bottom: 6px; }
+/* Terris */
+#view-terris{max-width:820px}
+.terris-header{margin-bottom:24px}
+.terris-name{font-size:22px;font-weight:700;color:var(--text)}
+.terris-desc{font-size:13px;color:var(--text-muted);margin-top:4px;max-width:600px;line-height:1.5}
+.terris-input-row{display:flex;gap:10px;margin-bottom:16px}
+#terris-input{flex:1;padding:11px 16px;border:1px solid var(--border);border-radius:8px;font-size:14px;background:var(--card);outline:none;transition:border-color .15s}
+#terris-input:focus{border-color:var(--forest)}
+#terris-send{padding:11px 22px;background:var(--forest);color:white;border:none;border-radius:8px;font-size:14px;font-weight:600;cursor:pointer;transition:background .15s}
+#terris-send:hover{background:var(--forest-light)}
+#terris-send:disabled{opacity:.5;cursor:not-allowed}
+.preset-pills{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px}
+.preset-pill{padding:6px 14px;border:1px solid var(--border);border-radius:20px;background:var(--card);font-size:12px;color:var(--text);cursor:pointer;transition:border-color .15s,background .15s}
+.preset-pill:hover{border-color:var(--forest);background:var(--forest-pale);color:var(--forest)}
 
-    /* ── RESPONSIVE ── */
-    @media (max-width: 900px) {
-      .copilot-panel { display: none; }
-      .app-body { flex-direction: column; }
-    }
+/* Investigation stages */
+.investigation-wrap{margin-bottom:24px}
+.stage-list{list-style:none}
+.stage-item{display:flex;align-items:flex-start;gap:10px;padding:7px 0;opacity:0;transform:translateY(6px);transition:opacity .2s,transform .2s}
+.stage-item.visible{opacity:1;transform:none}
+.stage-dot{width:8px;height:8px;border-radius:50%;margin-top:5px;flex-shrink:0;background:var(--forest)}
+.stage-dot.failed{background:var(--danger)}
+.stage-dot.skipped{background:var(--text-faint)}
+.stage-text{font-size:12px;color:var(--text-muted)}
+.stage-name{font-weight:600;color:var(--text)}
 
-    /* ── TABS ── */
-    .tabs { display: flex; gap: 0; border-bottom: 1px solid var(--stone-200); margin-bottom: 20px; }
-    .tab { background: none; border: none; border-bottom: 2px solid transparent; padding: 10px 16px; font-size: 13px; font-weight: 700; color: var(--muted); cursor: pointer; transition: all .15s; margin-bottom: -1px; }
-    .tab.active { color: var(--forest-700); border-bottom-color: var(--forest-700); }
-    .tab:hover:not(.active) { color: var(--graphite); }
+/* Structured response */
+.response-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+.response-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:16px}
+.response-card.full{grid-column:1 / -1}
+.response-card-label{font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px}
+.response-card-body{font-size:13px;color:var(--text);line-height:1.55}
+.response-card.direct{border-left:3px solid var(--forest)}
+.response-card.recommended{border-left:3px solid var(--forest-light)}
+.response-card.uncertainty{border-left:3px solid var(--warn)}
+.evidence-item{display:flex;gap:8px;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--border-light);font-size:12px}
+.evidence-item:last-child{border-bottom:none}
+.evidence-tool{font-weight:600;color:var(--forest);min-width:200px}
+.action-pill{display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border:1px solid var(--border);border-radius:6px;background:var(--card);font-size:12px;font-weight:500;cursor:pointer;margin:4px;transition:border-color .15s,background .15s}
+.action-pill:hover{border-color:var(--forest);background:var(--forest-pale);color:var(--forest)}
 
-    /* ── VIEW PANELS ── */
-    .view-panel { display: none; }
-    .view-panel.active { display: block; }
-  </style>
+/* Loading / empty */
+.loading{display:flex;align-items:center;gap:8px;color:var(--text-muted);font-size:13px;padding:12px 0}
+.spinner{width:16px;height:16px;border:2px solid var(--border);border-top-color:var(--forest);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty-state{text-align:center;padding:40px 20px;color:var(--text-muted)}
+.empty-state-icon{font-size:32px;margin-bottom:10px;opacity:.4}
+
+/* Layout helpers */
+.page-header{margin-bottom:22px}
+.page-header h1{font-size:20px;font-weight:700;color:var(--text)}
+.page-header p{font-size:13px;color:var(--text-muted);margin-top:4px}
+.section-title{font-size:13px;font-weight:700;color:var(--text);margin-bottom:12px;margin-top:22px}
+.section-title:first-child{margin-top:0}
+.filter-bar{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+.filter-btn{padding:6px 14px;border:1px solid var(--border);border-radius:20px;background:var(--card);font-size:12px;color:var(--text);cursor:pointer;transition:border-color .15s,background .15s}
+.filter-btn:hover{border-color:var(--forest)}
+.filter-btn.active{background:var(--forest);color:white;border-color:var(--forest)}
+.rule-row{padding:12px 0;border-bottom:1px solid var(--border-light)}
+.rule-row:last-child{border-bottom:none}
+.rule-id{font-size:11px;font-weight:700;color:var(--forest);font-family:monospace}
+.rule-desc{font-size:13px;color:var(--text);margin-top:2px}
+.rule-source{font-size:11px;color:var(--text-muted);margin-top:3px}
+.report-item{display:flex;align-items:center;gap:14px;padding:14px 0;border-bottom:1px solid var(--border-light)}
+.report-item:last-child{border-bottom:none}
+.report-icon{font-size:20px;flex-shrink:0}
+.report-meta{flex:1}
+.report-id{font-size:12px;font-family:monospace;color:var(--text-muted)}
+.report-date{font-size:12px;color:var(--text-muted);margin-top:2px}
+.report-actions{display:flex;gap:8px}
+.btn-sm{padding:5px 12px;border:1px solid var(--border);border-radius:5px;background:var(--card);font-size:12px;cursor:pointer;transition:border-color .15s,background .15s;text-decoration:none;color:var(--text)}
+.btn-sm:hover{border-color:var(--forest);background:var(--forest-pale);color:var(--forest)}
+.btn-primary{padding:9px 20px;background:var(--forest);color:white;border:none;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;transition:background .15s}
+.btn-primary:hover{background:var(--forest-light)}
+
+/* Cycle timeline */
+.cycle-timeline{display:flex;gap:0;margin:16px 0}
+.cycle-step{flex:1;text-align:center;position:relative}
+.cycle-step::before{content:'';position:absolute;top:14px;left:-50%;right:50%;height:2px;background:var(--border)}
+.cycle-step:first-child::before{display:none}
+.cycle-step-dot{width:28px;height:28px;border-radius:50%;background:var(--border);border:2px solid var(--border);display:inline-flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;position:relative;z-index:1;color:var(--text-muted)}
+.cycle-step.done .cycle-step-dot{background:var(--forest);border-color:var(--forest);color:white}
+.cycle-step.active .cycle-step-dot{background:white;border-color:var(--forest);color:var(--forest)}
+.cycle-step-label{font-size:11px;color:var(--text-muted);margin-top:6px}
+.cycle-step.done .cycle-step-label{color:var(--forest)}
+.cycle-step.active .cycle-step-label{color:var(--text);font-weight:600}
+</style>
 </head>
 <body>
 
-<!-- TRUTHFULNESS BANNER -->
-<div class="truth-banner">
-  <strong>Demonstration environment</strong>
-  <span class="truth-chip">Authorized telemetry where connected</span>
-  <span class="truth-chip">Public contextual sources</span>
-  <span class="truth-chip">Clearly labeled injected scenarios</span>
-  <span class="truth-chip" style="color:#f87171;background:rgba(159,53,41,.25);border-color:rgba(159,53,41,.4);">Not an official Fox Canyon reporting system</span>
-</div>
+<!-- Nav -->
+<nav id="nav">
+  <div class="nav-brand">
+    <div class="nav-brand-name">AGRO-AI</div>
+    <div class="nav-brand-sub">Applied Water Intelligence</div>
+  </div>
+  <div class="nav-section">
+    <button class="nav-item active" data-view="overview">
+      <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M3 4a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H4a1 1 0 01-1-1V4zm0 8a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1H4a1 1 0 01-1-1v-4zm8-8a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1V4zm0 8a1 1 0 011-1h4a1 1 0 011 1v4a1 1 0 01-1 1h-4a1 1 0 01-1-1v-4z"/></svg>
+      Overview
+    </button>
+    <button class="nav-item" data-view="reporting-cycle">
+      <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zM4 8h12v8H4V8z" clip-rule="evenodd"/></svg>
+      Reporting Cycle
+    </button>
+    <button class="nav-item" data-view="action-queue">
+      <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clip-rule="evenodd"/></svg>
+      Action Queue
+    </button>
+    <button class="nav-item" data-view="water-ledger">
+      <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clip-rule="evenodd"/></svg>
+      Water Ledger
+    </button>
+    <button class="nav-item" data-view="sources">
+      <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M12.316 3.051a1 1 0 01.633 1.265l-4 12a1 1 0 11-1.898-.632l4-12a1 1 0 011.265-.633zM5.707 6.293a1 1 0 010 1.414L3.414 10l2.293 2.293a1 1 0 11-1.414 1.414l-3-3a1 1 0 010-1.414l3-3a1 1 0 011.414 0zm8.586 0a1 1 0 011.414 0l3 3a1 1 0 010 1.414l-3 3a1 1 0 11-1.414-1.414L16.586 10l-2.293-2.293a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+      Sources
+    </button>
+    <button class="nav-item" data-view="rules">
+      <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 1.944A11.954 11.954 0 012.166 5C2.056 5.649 2 6.319 2 7c0 5.225 3.34 9.67 8 11.317C14.66 16.67 18 12.225 18 7c0-.682-.057-1.35-.166-2.001A11.954 11.954 0 0110 1.944z" clip-rule="evenodd"/></svg>
+      Rules &amp; Governance
+    </button>
+    <button class="nav-item" data-view="reports">
+      <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd"/></svg>
+      Reports
+    </button>
+    <button class="nav-item" data-view="terris">
+      <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><path d="M2 5a2 2 0 012-2h7a2 2 0 012 2v4a2 2 0 01-2 2H9l-3 3v-3H4a2 2 0 01-2-2V5z"/><path d="M15 7v2a4 4 0 01-4 4H9.828l-1.766 1.767c.28.149.599.233.938.233h2l3 3v-3h2a2 2 0 002-2V9a2 2 0 00-2-2h-1z"/></svg>
+      Terris
+    </button>
+  </div>
+  <div class="nav-footer">Fox Canyon GMA<br>Illustrative workspace</div>
+</nav>
 
-<!-- APP HEADER -->
-<header class="app-header">
-  <div class="header-inner">
-    <div class="header-brand">
-      <div class="header-logo">AI</div>
-      <div>
-        <div class="header-title">AGRO-AI Water Intelligence Copilot</div>
-        <div class="header-subtitle">Fox Canyon Applied-Water Mission Control &mdash; Turn fragmented meter data into trusted applied-water intelligence, actionable exceptions, and reporting-ready outputs.</div>
-      </div>
-    </div>
-    <div class="header-actions">
-      <button class="btn btn-secondary btn-sm" onclick="loadDashboard()">&#8635; Refresh</button>
-      <button class="btn btn-secondary btn-sm" onclick="resetScenarios()">&#8617; Reset Scenarios</button>
-      <button class="btn btn-primary btn-sm" onclick="generateReport()">&#8659; Generate Report</button>
+<!-- Main -->
+<div id="main">
+  <div id="topbar">
+    <div id="page-title">Overview</div>
+    <div class="topbar-right">
+      <button id="provenance-btn" onclick="openProvenance()">
+        <span class="dot"></span>
+        Illustrative workspace
+      </button>
     </div>
   </div>
-</header>
 
-<!-- MAIN APP BODY -->
-<div class="app-body">
-  <div class="main-content">
+  <div id="content">
 
-    <!-- SOURCE HEALTH CHIPS -->
-    <div class="source-row" id="sourceRow">
-      <div class="source-chip unavailable"><span class="source-dot"></span>Loading sources…</div>
-    </div>
-
-    <!-- METRIC STRIP -->
-    <div class="metric-strip" id="metricStrip">
-      <div class="metric-card"><div class="metric-eyebrow">Sources Connected</div><div class="metric-value" id="mSources">—</div><div class="metric-sub">active adapters</div></div>
-      <div class="metric-card info"><div class="metric-eyebrow">Records Processed</div><div class="metric-value" id="mRecords">—</div><div class="metric-sub">this period</div></div>
-      <div class="metric-card attention"><div class="metric-eyebrow">Requires Attention</div><div class="metric-value danger" id="mAttention">—</div><div class="metric-sub">open exceptions</div></div>
-      <div class="metric-card ready"><div class="metric-eyebrow">Ready for Review</div><div class="metric-value success" id="mReady">—</div><div class="metric-sub">records</div></div>
-      <div class="metric-card info"><div class="metric-eyebrow">Open Exceptions</div><div class="metric-value" id="mExceptions">—</div><div class="metric-sub">pending resolution</div></div>
-      <div class="metric-card"><div class="metric-eyebrow">Provisional AF</div><div class="metric-value" id="mProvisionalAF">—</div><div class="metric-sub">acre-feet (provisional)</div></div>
-      <div class="metric-card"><div class="metric-eyebrow">Reporting Period</div><div class="metric-value" style="font-size:16px" id="mPeriod">2026-Q1</div><div class="metric-sub" id="mRefresh">loading…</div></div>
-    </div>
-
-    <!-- INTELLIGENCE CARD -->
-    <div class="intelligence-card" id="intelligenceCard">
-      <div class="intelligence-card-header">
+    <!-- Overview -->
+    <div id="view-overview" class="view active">
+      <div class="page-header">
+        <h1>Water Governance Command Center</h1>
+        <p>Fox Canyon Groundwater Management Agency &middot; 2026-Q1</p>
+      </div>
+      <div class="kpi-grid">
+        <div class="kpi-card"><div class="kpi-label">Total Records</div><div class="kpi-value" id="kpi-total">—</div><div class="kpi-sub">In ledger</div></div>
+        <div class="kpi-card" id="kpi-exc-card"><div class="kpi-label">Open Exceptions</div><div class="kpi-value" id="kpi-exc">—</div><div class="kpi-sub">Blocking reporting</div></div>
+        <div class="kpi-card" id="kpi-ready-card"><div class="kpi-label">Cycle Readiness</div><div class="kpi-value" id="kpi-ready">—</div><div class="kpi-sub">Records ready</div></div>
+        <div class="kpi-card"><div class="kpi-label">Provisional AF</div><div class="kpi-value" id="kpi-prov">—</div><div class="kpi-sub">Pending validation</div></div>
+      </div>
+      <div class="two-col">
         <div>
-          <div class="intelligence-eyebrow">AI Intelligence Summary</div>
-          <div class="intelligence-title">Loading intelligence summary…</div>
-        </div>
-        <button class="btn btn-ghost btn-sm" onclick="showCopilot()">Ask AGRO-AI</button>
-      </div>
-      <div class="intelligence-narrative" id="intelligenceNarrative">
-        <div class="spinner"></div>
-      </div>
-      <div class="action-row">
-        <button class="btn btn-primary btn-sm" onclick="setFilter('review_required'); showTab('queue')">&#9741; Review Priority Records</button>
-        <button class="btn btn-ghost btn-sm" onclick="showCopilot()">&#128172; Ask AGRO-AI</button>
-        <button class="btn btn-ghost btn-sm" onclick="generateReport()">&#8659; Generate Report</button>
-        <button class="btn btn-ghost btn-sm" onclick="showTab('sources')">&#128275; Source Health</button>
-        <button class="btn btn-ghost btn-sm" onclick="showTab('audit')">&#128196; Audit Trail</button>
-      </div>
-    </div>
-
-    <!-- TABS -->
-    <div class="tabs">
-      <button class="tab active" onclick="showTab('queue')" id="tab-queue">Review Queue</button>
-      <button class="tab" onclick="showTab('sources')" id="tab-sources">Source Health</button>
-      <button class="tab" onclick="showTab('reports')" id="tab-reports">Reports</button>
-      <button class="tab" onclick="showTab('rules')" id="tab-rules">Rule Pack</button>
-      <button class="tab" onclick="showTab('audit')" id="tab-audit">Audit Trail</button>
-    </div>
-
-    <!-- QUEUE TAB -->
-    <div class="view-panel active" id="panel-queue">
-      <div class="section">
-        <div class="section-header">
-          <div class="section-title">Priority Review Queue</div>
-          <span class="section-count" id="queueCount">Loading…</span>
-        </div>
-        <div class="filter-bar" id="filterBar">
-          <button class="filter-btn active" onclick="setFilter(null)" data-filter="">All</button>
-          <button class="filter-btn" onclick="setFilter('ready')" data-filter="ready">Ready</button>
-          <button class="filter-btn" onclick="setFilter('review_required')" data-filter="review_required">Review Required</button>
-          <button class="filter-btn" onclick="setFilter('missing_mapping')" data-filter="missing_mapping">Missing Mapping</button>
-          <button class="filter-btn" onclick="setFilter('meter_gap')" data-filter="meter_gap">Meter Gap</button>
-          <button class="filter-btn" onclick="setFilter('possible_reset')" data-filter="possible_reset">Possible Reset</button>
-          <button class="filter-btn" onclick="setFilter('pump_without_meter')" data-filter="pump_without_meter">Pump ∅ Meter</button>
-          <button class="filter-btn" onclick="setFilter('duplicate')" data-filter="duplicate">Duplicate</button>
-          <button class="filter-btn" onclick="setFilter('backup_estimate')" data-filter="backup_estimate">Backup Estimate</button>
-        </div>
-        <div class="review-table-wrap">
-          <table id="reviewTable">
-            <thead>
-              <tr>
-                <th>Well / Meter</th>
-                <th>Evidence Class</th>
-                <th>Provider</th>
-                <th>Period</th>
-                <th>CombCode</th>
-                <th>Interval AF</th>
-                <th>Exceptions</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody id="reviewBody">
-              <tr><td colspan="9" class="loading-state"><div class="spinner"></div><br>Loading records…</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- SOURCES TAB -->
-    <div class="view-panel" id="panel-sources">
-      <div class="section">
-        <div class="section-header"><div class="section-title">Provider Health</div></div>
-        <div id="sourceHealthCards">
-          <div class="loading-state"><div class="spinner"></div><br>Loading provider health…</div>
-        </div>
-      </div>
-      <div class="section">
-        <div class="section-header"><div class="section-title">Fox Canyon Rule Pack</div></div>
-        <div id="rulePackMeta" class="report-card" style="font-size:12px;color:var(--muted);"></div>
-      </div>
-    </div>
-
-    <!-- REPORTS TAB -->
-    <div class="view-panel" id="panel-reports">
-      <div class="section">
-        <div class="section-header"><div class="section-title">Report Generation</div></div>
-        <div class="report-card">
-          <div class="intelligence-eyebrow">Executive Report Bundle</div>
-          <div style="font-size:14px;font-weight:700;margin:6px 0 8px;">Generate reporting-ready outputs</div>
-          <div style="font-size:12px;color:var(--muted);margin-bottom:12px;">
-            Generates: Executive PDF · Detailed Records CSV · Exceptions CSV · Audit JSON · Data-Lineage Manifest · Downloadable ZIP bundle.
-            All outputs carry a prominent demonstration disclaimer.
+          <div class="section-title">Water Accounting Readiness</div>
+          <div class="card">
+            <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+              <span id="readiness-label" style="font-size:13px;font-weight:600"></span>
+              <span id="readiness-pct" style="font-size:18px;font-weight:700;color:var(--forest)"></span>
+            </div>
+            <div class="readiness-bar-wrap"><div class="readiness-bar-fill" id="readiness-bar" style="width:0%"></div></div>
+            <div id="readiness-sub" style="font-size:12px;color:var(--text-muted);margin-top:8px"></div>
           </div>
-          <button class="btn btn-primary" onclick="generateReport()" id="genReportBtn">&#8659; Generate Full Report</button>
-          <div class="report-actions" id="reportActions" style="display:none;"></div>
+          <div class="section-title">Provider Health</div>
+          <div class="card" id="overview-providers"><div class="loading"><span class="spinner"></span>Loading&hellip;</div></div>
         </div>
-        <div id="reportHistory"></div>
-      </div>
-    </div>
-
-    <!-- RULES TAB -->
-    <div class="view-panel" id="panel-rules">
-      <div class="section">
-        <div class="section-header"><div class="section-title">Fox Canyon Public Context Rule Pack</div></div>
-        <div class="intelligence-card" style="margin-bottom:12px;">
-          <div style="font-size:12px;color:var(--warning);background:#fffbeb;border:1px solid #f0dcaa;border-radius:6px;padding:10px;margin-bottom:12px;">
-            <strong>Rule pack status:</strong> Provisional — NOT validated by Fox Canyon Groundwater Management Agency.
-            Rules are derived from public documents for demonstration context only.
-            Must be validated by agency staff before operational use.
-          </div>
-          <div id="rulePack">
-            <div class="loading-state"><div class="spinner"></div><br>Loading rule pack…</div>
+        <div>
+          <div class="section-title">Priority Action Queue</div>
+          <div id="overview-actions"><div class="loading"><span class="spinner"></span>Loading&hellip;</div></div>
+          <div class="section-title" style="margin-top:20px">Ask Terris</div>
+          <div class="card" style="padding:16px">
+            <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Terris investigates records, source health, and reporting readiness.</div>
+            <div style="display:flex;gap:8px">
+              <input id="overview-terris-input" type="text" style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:6px;font-size:13px;outline:none" placeholder="Ask a question&hellip;" onkeydown="if(event.key==='Enter')overviewAskTerris()">
+              <button class="btn-primary" style="padding:8px 16px;font-size:13px" onclick="overviewAskTerris()">Ask</button>
+            </div>
+            <div id="overview-terris-answer" style="margin-top:12px;font-size:13px;color:var(--text);line-height:1.55;display:none"></div>
           </div>
         </div>
       </div>
     </div>
 
-    <!-- AUDIT TAB -->
-    <div class="view-panel" id="panel-audit">
-      <div class="section">
-        <div class="section-header"><div class="section-title">System Audit Trail</div></div>
-        <div id="auditContent" class="report-card" style="font-size:12px;">
-          <div class="loading-state"><div class="spinner"></div></div>
+    <!-- Reporting Cycle -->
+    <div id="view-reporting-cycle" class="view">
+      <div class="page-header">
+        <h1>Reporting Cycle</h1>
+        <p>2026-Q1 &middot; Submission deadline: 2026-04-30</p>
+      </div>
+      <div class="two-col">
+        <div>
+          <div class="card" style="margin-bottom:18px">
+            <div class="card-title">Cycle Progress</div>
+            <div class="cycle-timeline">
+              <div class="cycle-step done"><div class="cycle-step-dot">&#10003;</div><div class="cycle-step-label">Data ingested</div></div>
+              <div class="cycle-step active"><div class="cycle-step-dot">2</div><div class="cycle-step-label">Review &amp; resolve</div></div>
+              <div class="cycle-step"><div class="cycle-step-dot">3</div><div class="cycle-step-label">Export ready</div></div>
+              <div class="cycle-step"><div class="cycle-step-dot">4</div><div class="cycle-step-label">Submitted</div></div>
+            </div>
+            <div id="cycle-status-card" style="margin-top:14px"></div>
+          </div>
+          <div class="card"><div class="card-title">Readiness Breakdown</div><div id="cycle-breakdown"></div></div>
+        </div>
+        <div>
+          <div class="card"><div class="card-title">Records Blocking Cycle Close</div><div id="cycle-blocking"></div></div>
         </div>
       </div>
     </div>
 
-  </div><!-- end main-content -->
+    <!-- Action Queue -->
+    <div id="view-action-queue" class="view">
+      <div class="page-header">
+        <h1>Action Queue</h1>
+        <p>Ranked by severity and regulatory impact</p>
+      </div>
+      <div class="filter-bar" id="action-filters">
+        <button class="filter-btn active" data-filter="">All</button>
+        <button class="filter-btn" data-filter="pump_activity_without_meter_movement">Pump without meter</button>
+        <button class="filter-btn" data-filter="meter_reset_detected">Meter reset</button>
+        <button class="filter-btn" data-filter="unresolved_combcode">CombCode unresolved</button>
+        <button class="filter-btn" data-filter="missing_telemetry_interval">Telemetry gap</button>
+        <button class="filter-btn" data-filter="backup_estimate_required">Backup estimate</button>
+      </div>
+      <div id="action-queue-list"><div class="loading"><span class="spinner"></span>Loading&hellip;</div></div>
+    </div>
 
-  <!-- COPILOT PANEL -->
-  <aside class="copilot-panel" id="copilotPanel">
-    <div class="copilot-header">
-      <div class="copilot-title">&#128172; Ask AGRO-AI</div>
-      <div class="copilot-sub">Grounded answers · Visible citations · Provisional distinctions</div>
-    </div>
-    <div class="copilot-messages" id="copilotMessages">
-      <div class="copilot-msg system">
-        Welcome to the AGRO-AI Water Intelligence Copilot. Ask any operational question about this dataset.
-        Answers are grounded in deterministic backend tools. I will not generate unsupported quantities or approve records.
+    <!-- Water Ledger -->
+    <div id="view-water-ledger" class="view">
+      <div class="page-header">
+        <h1>Water Ledger</h1>
+        <p>All records in the 2026-Q1 accounting period</p>
       </div>
-    </div>
-    <div class="copilot-input-area">
-      <div class="preset-pills" id="presetPills">
-        <button class="preset-pill" onclick="sendPreset('attention','What requires my attention today?')">Attention today</button>
-        <button class="preset-pill" onclick="sendPreset('reporting','Ready for reporting?')">Ready for reporting</button>
-        <button class="preset-pill" onclick="sendPreset('pump_without_meter','Pump without meter')">Pump ∅ meter</button>
-        <button class="preset-pill" onclick="sendPreset('provider_health','Provider health')">Provider health</button>
-        <button class="preset-pill" onclick="sendPreset('assumptions','Unvalidated assumptions')">Assumptions</button>
-        <button class="preset-pill" onclick="sendPreset('fox_canyon_data','Data request')">Data needed</button>
-        <button class="preset-pill" onclick="sendPreset('reporting_summary','Reporting summary')">Full summary</button>
+      <div class="filter-bar" id="ledger-filters">
+        <button class="filter-btn active" data-filter="">All</button>
+        <button class="filter-btn" data-filter="review_required">Requires attention</button>
+        <button class="filter-btn" data-filter="reviewer_approved">Approved</button>
+        <button class="filter-btn" data-filter="ready">Ready</button>
       </div>
-      <div class="copilot-input-row">
-        <button class="voice-btn" id="voiceBtn" onclick="toggleVoice()" title="Voice input (if supported)">&#127908;</button>
-        <textarea
-          class="copilot-input"
-          id="copilotInput"
-          rows="1"
-          placeholder="Ask about records, exceptions, calculations…"
-          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendCopilot();}"
-        ></textarea>
-        <button class="send-btn" onclick="sendCopilot()">&#8593;</button>
-      </div>
+      <div class="card" style="overflow:auto"><div id="ledger-table-wrap"><div class="loading"><span class="spinner"></span>Loading&hellip;</div></div></div>
     </div>
-  </aside>
-</div><!-- end app-body -->
 
-<!-- RECORD DRAWER -->
-<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer(event)">
-  <div class="drawer" id="recordDrawer">
-    <div class="drawer-header">
-      <div>
-        <div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin-bottom:3px;">Water Ledger Detail</div>
-        <div style="font-size:16px;font-weight:700;" id="drawerTitle">Record</div>
+    <!-- Sources -->
+    <div id="view-sources" class="view">
+      <div class="page-header"><h1>Sources</h1><p>Provider registry and feed health</p></div>
+      <div id="sources-content"><div class="loading"><span class="spinner"></span>Loading&hellip;</div></div>
+    </div>
+
+    <!-- Rules -->
+    <div id="view-rules" class="view">
+      <div class="page-header"><h1>Rules &amp; Governance</h1><p>Fox Canyon public-context rule pack &middot; All rules provisional</p></div>
+      <div id="rules-content"><div class="loading"><span class="spinner"></span>Loading&hellip;</div></div>
+    </div>
+
+    <!-- Reports -->
+    <div id="view-reports" class="view">
+      <div class="page-header"><h1>Reports</h1><p>AGRO-AI Applied Water Intelligence &middot; Reporting Readiness Brief</p></div>
+      <div class="two-col">
+        <div>
+          <div class="card" style="margin-bottom:18px">
+            <div class="card-title">Generate Report</div>
+            <p style="font-size:13px;color:var(--text-muted);margin-bottom:14px">Generates an executive PDF, records CSV, exceptions CSV, audit JSON, and a downloadable ZIP bundle.</p>
+            <button class="btn-primary" id="generate-report-btn" onclick="generateReport()">Generate Reporting Readiness Brief</button>
+          </div>
+        </div>
+        <div>
+          <div class="card">
+            <div class="card-title">Recent Reports</div>
+            <div id="reports-list"><div style="font-size:13px;color:var(--text-muted)">No reports generated yet.</div></div>
+          </div>
+        </div>
       </div>
-      <button class="drawer-close" onclick="closeDrawer(null)">&times;</button>
     </div>
-    <div class="drawer-body" id="drawerBody">
-      <div class="loading-state"><div class="spinner"></div></div>
+
+    <!-- Terris -->
+    <div id="view-terris" class="view">
+      <div class="terris-header">
+        <div class="terris-name">Terris</div>
+        <div class="terris-desc">Investigates meter records, source health, mapping integrity, applied-water calculations, reporting readiness, and unresolved exceptions to deliver evidence-backed operational answers.</div>
+      </div>
+      <div class="terris-input-row">
+        <input id="terris-input" type="text" placeholder="Ask Terris anything about this workspace&hellip;" onkeydown="if(event.key==='Enter')submitTerris()">
+        <button id="terris-send" onclick="submitTerris()">Investigate</button>
+      </div>
+      <div class="preset-pills" id="terris-presets"></div>
+      <div id="terris-result"></div>
     </div>
+
   </div>
 </div>
 
-<!-- TOAST AREA -->
-<div class="toast-area" id="toastArea"></div>
+<!-- Provenance Drawer -->
+<div id="overlay" onclick="closeAll()"></div>
+<div id="provenance-drawer">
+  <div class="drawer-header">
+    <div class="drawer-title">Scope &amp; Data Provenance</div>
+    <button class="drawer-close" onclick="closeAll()">&times;</button>
+  </div>
+  <div class="drawer-body" id="provenance-body"></div>
+</div>
+
+<!-- Record Drawer -->
+<div id="record-drawer">
+  <div class="drawer-header">
+    <div class="drawer-title" id="record-drawer-title">Record Detail</div>
+    <button class="drawer-close" onclick="closeRecordDrawer()">&times;</button>
+  </div>
+  <div id="record-drawer-body"></div>
+</div>
 
 <script>
-// ─────────────────────────────────────────────
-// CONFIG
-// ─────────────────────────────────────────────
 const API_BASE = (() => {
-  const injected = typeof window.AGROAI_API_BASE === 'string' ? window.AGROAI_API_BASE.trim() : '';
-  const local = ['localhost','127.0.0.1','::1'].includes(window.location.hostname);
-  return injected || (local ? 'http://127.0.0.1:8000' : 'https://api.agroai-pilot.com');
+  if (window.AGROAI_API_BASE) return window.AGROAI_API_BASE.replace(/\/$/, '');
+  const h = window.location.hostname;
+  if (h === '127.0.0.1' || h === 'localhost') return 'http://127.0.0.1:8000';
+  return '';
 })();
-const API = `${API_BASE}/v1/fcgma-demo`;
+const BASE = API_BASE + '/v1/fcgma-demo';
 
-// ─────────────────────────────────────────────
-// STATE
-// ─────────────────────────────────────────────
-let currentFilter = null;
-let lastReportId = null;
-let voiceRecognition = null;
-let voiceActive = false;
+// ── Navigation ──────────────────────────────────────────────
+const VIEW_TITLES = {
+  overview: 'Overview', 'reporting-cycle': 'Reporting Cycle',
+  'action-queue': 'Action Queue', 'water-ledger': 'Water Ledger',
+  sources: 'Sources', rules: 'Rules & Governance', reports: 'Reports', terris: 'Terris',
+};
+let currentView = 'overview';
 
-// ─────────────────────────────────────────────
-// API HELPERS
-// ─────────────────────────────────────────────
-async function apiFetch(path, opts = {}) {
-  const url = path.startsWith('http') ? path : `${API}${path}`;
-  const res = await fetch(url, { headers: { 'Content-Type': 'application/json', ...opts.headers }, ...opts });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`API ${res.status}: ${text}`);
-  }
-  return res.json();
+document.querySelectorAll('.nav-item').forEach(btn => {
+  btn.addEventListener('click', () => switchView(btn.dataset.view));
+});
+
+function switchView(v) {
+  if (!v) return;
+  document.querySelectorAll('.nav-item').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  document.querySelectorAll('.view').forEach(d => d.classList.toggle('active', d.id === 'view-' + v));
+  document.getElementById('page-title').textContent = VIEW_TITLES[v] || v;
+  currentView = v;
+  loadView(v);
 }
 
-// ─────────────────────────────────────────────
-// INITIALIZATION
-// ─────────────────────────────────────────────
-async function loadDashboard() {
+function loadView(v) {
+  if (v === 'overview') loadOverview();
+  else if (v === 'reporting-cycle') loadReportingCycle();
+  else if (v === 'action-queue') loadActionQueue();
+  else if (v === 'water-ledger') loadLedger();
+  else if (v === 'sources') loadSources();
+  else if (v === 'rules') loadRules();
+  else if (v === 'terris') loadTerrisPresets();
+}
+
+// ── API helpers ──────────────────────────────────────────────
+async function apiFetch(path, opts) {
+  const r = await fetch(BASE + path, opts);
+  if (!r.ok) throw new Error(r.status + ' ' + r.statusText);
+  return r.json();
+}
+const apiGet = path => apiFetch(path);
+const apiPost = (path, body) => apiFetch(path, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
+
+// ── Overview ─────────────────────────────────────────────────
+async function loadOverview() {
   try {
-    const [statusData, dashData] = await Promise.all([
-      apiFetch('/status'),
-      apiFetch('/dashboard'),
+    const [dash, cycle, actions] = await Promise.all([
+      apiGet('/dashboard'),
+      apiGet('/terris/reporting-cycle').catch(() => null),
+      apiGet('/terris/priority-actions').catch(() => null),
     ]);
-    renderSourceChips(statusData.providers || []);
-    renderMetrics(statusData.ledger_stats || {}, statusData);
-    renderIntelligence(dashData);
-    document.getElementById('mRefresh').textContent = 'Updated ' + new Date().toLocaleTimeString();
-  } catch(e) {
-    showToast('Backend unavailable: ' + e.message, 'error');
-    renderOfflineState();
-  }
+    const stats = dash.stats || {};
+    document.getElementById('kpi-total').textContent = stats.total_records ?? '—';
+    if (cycle) {
+      const pct = cycle.readiness_percentage ?? 0;
+      document.getElementById('kpi-ready').textContent = pct + '%';
+      document.getElementById('kpi-ready-card').className = 'kpi-card ' + (pct < 50 ? 'warn' : pct >= 80 ? 'success' : '');
+      document.getElementById('kpi-exc').textContent = cycle.blocking_exceptions ?? '—';
+      document.getElementById('kpi-exc-card').className = 'kpi-card ' + (cycle.blocking_exceptions > 0 ? 'danger' : 'success');
+      document.getElementById('readiness-pct').textContent = pct + '%';
+      document.getElementById('readiness-bar').style.width = pct + '%';
+      document.getElementById('readiness-label').textContent = cycle.status_label || '';
+      document.getElementById('readiness-sub').textContent =
+        cycle.ready_for_export + ' of ' + cycle.total_records + ' records ready \xb7 ' + cycle.blocking_exceptions + ' exception(s) blocking';
+    }
+    document.getElementById('kpi-prov').textContent =
+      stats.provisional_af != null ? Number(stats.provisional_af).toFixed(1) + ' AF' : '—';
+    loadOverviewProviders();
+    if (actions && actions.actions) renderOverviewActions(actions.actions.slice(0, 5));
+  } catch(e) { console.error('Overview error', e); }
 }
 
-function renderOfflineState() {
-  document.getElementById('sourceRow').innerHTML = `
-    <div class="source-chip unavailable"><span class="source-dot"></span>API unavailable — start backend with scripts/run_fcgma_demo.sh</div>`;
-  document.getElementById('intelligenceNarrative').innerHTML = `
-    <div style="color:var(--muted);font-size:13px;">
-      ⚠ Backend not reachable at <code>${API_BASE}</code>.<br>
-      Run: <code>cd agroai_api && uvicorn app.main:app --reload</code>
-    </div>`;
-}
-
-function renderSourceChips(providers) {
-  const row = document.getElementById('sourceRow');
-  row.innerHTML = providers.map(p => `
-    <span class="source-chip ${p.status}">
-      <span class="source-dot"></span>${p.label}
-    </span>`).join('');
-}
-
-function renderMetrics(stats, status) {
-  const connected = (status.providers || []).filter(p => p.status === 'connected').length;
-  document.getElementById('mSources').textContent = connected;
-  document.getElementById('mRecords').textContent = stats.total_records || 0;
-  document.getElementById('mAttention').textContent = stats.requires_attention || 0;
-  document.getElementById('mReady').textContent = stats.ready_for_export || 0;
-  document.getElementById('mExceptions').textContent = stats.open_exceptions || 0;
-  document.getElementById('mProvisionalAF').textContent = (stats.provisional_af || 0).toFixed(3);
-}
-
-function renderIntelligence(dashData) {
-  const card = document.getElementById('intelligenceCard');
-  const narr = document.getElementById('intelligenceNarrative');
-  const exec = dashData.executive_summary || {};
-  const stats = dashData.stats || {};
-
-  card.querySelector('.intelligence-title').textContent = 'Applied-Water Intelligence Summary';
-  const narrative = exec.narrative || 'No summary available.';
-  narr.innerHTML = `<p>${escHtml(narrative)}</p>`;
-
-  // Priority exceptions
-  const pex = dashData.recent_priority_exceptions || [];
-  if (pex.length > 0) {
-    narr.innerHTML += '<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">'
-      + pex.map(e => `
-        <div style="background:#fff8f8;border:1px solid #f7d0d0;border-radius:6px;padding:8px 10px;font-size:12px;">
-          <span class="badge danger">${escHtml(e.exception_type.replace(/_/g,' '))}</span>
-          <span style="margin-left:6px;color:var(--graphite);">${escHtml(e.well_id)} — ${escHtml((e.detail||'').slice(0,100))}</span>
-        </div>`).join('')
-      + '</div>';
-  }
-}
-
-// ─────────────────────────────────────────────
-// TABS
-// ─────────────────────────────────────────────
-function showTab(name) {
-  document.querySelectorAll('.view-panel').forEach(p => p.classList.remove('active'));
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-  document.getElementById(`panel-${name}`).classList.add('active');
-  document.getElementById(`tab-${name}`).classList.add('active');
-
-  if (name === 'queue') loadQueue();
-  if (name === 'sources') loadSourceHealth();
-  if (name === 'rules') loadRules();
-  if (name === 'audit') loadAudit();
-}
-
-// ─────────────────────────────────────────────
-// REVIEW QUEUE
-// ─────────────────────────────────────────────
-async function loadQueue() {
-  const body = document.getElementById('reviewBody');
-  body.innerHTML = '<tr><td colspan="9" class="loading-state"><div class="spinner"></div></td></tr>';
+async function loadOverviewProviders() {
   try {
-    const params = currentFilter ? `?filter=${currentFilter}` : '';
-    const data = await apiFetch(`/review-queue${params}`);
-    renderQueue(data.records || [], data.total || 0);
+    const data = await apiGet('/source-health');
+    const providers = (data.provider_health || {}).providers || [];
+    document.getElementById('overview-providers').innerHTML = providers.slice(0, 5).map(p =>
+      '<div class="provider-row"><div class="provider-status-dot ' + p.status + '"></div>' +
+      '<div class="provider-label">' + esc(p.label) + '</div>' +
+      '<div class="provider-msg">' + p.status + '</div></div>'
+    ).join('');
   } catch(e) {
-    body.innerHTML = `<tr><td colspan="9" class="empty-state">
-      <div class="empty-icon">⚠</div>
-      <div class="empty-title">Could not load queue</div>
-      <div>${escHtml(e.message)}</div>
-    </td></tr>`;
+    document.getElementById('overview-providers').innerHTML = '<div style="font-size:13px;color:var(--text-muted)">Unable to load providers.</div>';
   }
 }
 
-function renderQueue(records, total) {
-  document.getElementById('queueCount').textContent = `${total} record(s)`;
-  const body = document.getElementById('reviewBody');
-  if (!records.length) {
-    body.innerHTML = `<tr><td colspan="9" class="empty-state">
-      <div class="empty-icon">✓</div>
-      <div class="empty-title">No records match this filter</div>
-    </td></tr>`;
+function renderOverviewActions(actions) {
+  const el = document.getElementById('overview-actions');
+  if (!actions || !actions.length) {
+    el.innerHTML = '<div class="card" style="padding:16px;font-size:13px;color:var(--text-muted)">No priority actions. All records on track.</div>';
     return;
   }
-  body.innerHTML = records.map(r => {
-    const excs = r.open_exceptions || [];
-    const excBadge = excs.length
-      ? excs.slice(0,2).map(e => `<span class="badge ${e.severity === 'high' ? 'danger' : e.severity === 'medium' ? 'warning' : 'muted'}">${escHtml(e.type.replace(/_/g,' ').slice(0,22))}</span>`).join(' ')
-      : '<span class="badge success">None</span>';
-
-    const statusBadge = {
-      requires_attention: '<span class="badge danger">Requires Attention</span>',
-      ready_for_export: '<span class="badge success">Ready</span>',
-      reviewer_approved: '<span class="badge success">Approved</span>',
-      pending_review: '<span class="badge muted">Pending</span>',
-      under_review: '<span class="badge info">Under Review</span>',
-    }[r.review_status] || `<span class="badge muted">${escHtml(r.review_status)}</span>`;
-
-    const scenarioChip = r.scenario_injected ? '<span class="scenario-chip">DEMO</span> ' : '';
-
-    return `<tr>
-      <td>${scenarioChip}<button class="record-link" onclick="openRecord('${escHtml(r.id)}')">${escHtml(r.well_id)}</button><br>
-          <span style="font-size:10px;color:var(--muted);">${escHtml(r.meter_id)}</span></td>
-      <td><span style="font-size:11px;">${escHtml(r.evidence_class.replace(/_/g,' '))}</span></td>
-      <td><span style="font-size:11px;">${escHtml(r.provider)}</span></td>
-      <td style="font-size:11px;">${escHtml(r.reporting_period)}</td>
-      <td><span class="badge ${r.combcode_status === 'resolved' ? 'success' : 'danger'}">${escHtml(r.combcode || 'None')}</span></td>
-      <td style="font-family:monospace;">${r.interval_volume_af != null ? r.interval_volume_af.toFixed(4) : '—'}</td>
-      <td>${excBadge}</td>
-      <td>${statusBadge}</td>
-      <td>
-        <button class="btn btn-ghost btn-sm" onclick="openRecord('${escHtml(r.id)}')">Inspect</button>
-      </td>
-    </tr>`;
-  }).join('');
+  el.innerHTML = actions.map((a, i) =>
+    '<div class="action-card" onclick="openRecord(\'' + a.record_id + '\')">' +
+    '<div class="action-priority-num ' + (a.severity||'') + '">' + (i+1) + '</div>' +
+    '<div class="action-card-body">' +
+    '<div class="action-well">' + esc(a.well_id) + '</div>' +
+    '<div class="action-exc-type">' + esc(a.exception_type.replace(/_/g,' ')) + '</div>' +
+    '<div class="action-detail">' + esc((a.detail||'').slice(0,100)) + '</div>' +
+    '</div><div class="action-arrow">›</div></div>'
+  ).join('');
 }
 
-function setFilter(f) {
-  currentFilter = f;
-  document.querySelectorAll('.filter-btn').forEach(btn => {
-    btn.classList.toggle('active', (btn.dataset.filter || null) === f);
-  });
-  loadQueue();
-}
-
-// ─────────────────────────────────────────────
-// RECORD DRAWER
-// ─────────────────────────────────────────────
-async function openRecord(id) {
-  document.getElementById('drawerOverlay').classList.add('open');
-  document.getElementById('drawerTitle').textContent = id;
-  document.getElementById('drawerBody').innerHTML = '<div class="loading-state"><div class="spinner"></div></div>';
+async function overviewAskTerris() {
+  const q = document.getElementById('overview-terris-input').value.trim();
+  if (!q) return;
+  const ansEl = document.getElementById('overview-terris-answer');
+  ansEl.style.display = 'block';
+  ansEl.innerHTML = '<div class="loading"><span class="spinner"></span>Terris is investigating&hellip;</div>';
   try {
-    const r = await apiFetch(`/records/${id}/ledger`);
-    renderDrawer(r.record, r.calculation_explanation);
+    const r = await apiPost('/terris/query', {query: q});
+    ansEl.innerHTML = '<strong>Terris:</strong> ' + esc(r.direct_answer || '') +
+      (r.recommended_action ? '<div style="margin-top:8px;font-size:12px;color:var(--text-muted)">' + esc(r.recommended_action) + '</div>' : '');
   } catch(e) {
-    document.getElementById('drawerBody').innerHTML = `<div class="empty-state">Could not load record: ${escHtml(e.message)}</div>`;
+    ansEl.innerHTML = '<span style="color:var(--danger)">Request failed. Is the API running?</span>';
   }
 }
 
-function closeDrawer(e) {
-  if (!e || e.target === document.getElementById('drawerOverlay')) {
-    document.getElementById('drawerOverlay').classList.remove('open');
-  }
-}
-
-function renderDrawer(r, calc) {
-  const open_excs = (r.exceptions || []).filter(e => e.status !== 'resolved');
-  document.getElementById('drawerTitle').textContent = r.well_id + ' — ' + r.id;
-
-  const scenarioBanner = r.scenario_injected
-    ? `<div style="background:#f3e8ff;border:1px solid #d8b4fe;border-radius:6px;padding:10px;font-size:12px;color:#6b21a8;margin-bottom:14px;">
-        <strong>DEMONSTRATION SCENARIO</strong><br>${escHtml(r.scenario_label || '')}
-       </div>`
-    : '';
-
-  const excsHtml = open_excs.length
-    ? open_excs.map(e => `
-        <div class="exception-row">
-          <div class="exception-type">
-            <span class="badge ${e.severity === 'high' ? 'danger' : e.severity === 'medium' ? 'warning' : 'muted'}">${escHtml(e.severity)}</span>
-            ${escHtml(e.exception_type.replace(/_/g,' '))}
-          </div>
-          <div class="exception-detail">${escHtml(e.detail)}</div>
-          ${e.rule_id ? `<div style="font-size:10px;color:var(--muted);margin-top:3px;">Rule: ${escHtml(e.rule_id)}</div>` : ''}
-        </div>`).join('')
-    : '<div class="badge success" style="margin-bottom:6px;">No open exceptions</div>';
-
-  const stepsHtml = (calc && calc.steps && calc.steps.length)
-    ? calc.steps.map(s => `
-        <div class="calc-step">
-          <div class="calc-step-name">${escHtml(s.step.replace(/_/g,' '))}</div>
-          <div style="font-size:12px;color:var(--graphite);">${escHtml(s.description)}</div>
-          ${s.rule_id ? `<div style="font-size:10px;color:var(--muted);margin-top:2px;">Rule: ${escHtml(s.rule_id)}</div>` : ''}
-        </div>`).join('')
-    : '<div style="color:var(--muted);font-size:12px;">No calculation steps recorded.</div>';
-
-  const lineageJson = JSON.stringify(r.source_lineage || {}, null, 2);
-
-  const auditHtml = (r.audit_events || []).slice().reverse().slice(0, 10).map(ev => `
-    <div class="audit-event">
-      <span style="font-weight:700;">${escHtml(ev.event_type.replace(/_/g,' '))}</span>
-      — <span class="audit-ts">${escHtml(ev.timestamp ? ev.timestamp.slice(0,19) : '')}</span>
-      — <span style="color:var(--muted);">${escHtml(ev.actor)}</span><br>
-      <span style="color:var(--graphite);">${escHtml(ev.detail || '')}</span>
-    </div>`).join('');
-
-  document.getElementById('drawerBody').innerHTML = `
-    ${scenarioBanner}
-
-    <div class="drawer-grid" style="margin-bottom:16px;">
-      <div><div class="drawer-label">Evidence Class</div><div class="drawer-value"><span class="badge info">${escHtml(r.evidence_class.replace(/_/g,' '))}</span></div></div>
-      <div><div class="drawer-label">Provider</div><div class="drawer-value">${escHtml(r.provider)}</div></div>
-      <div><div class="drawer-label">Well ID</div><div class="drawer-value">${escHtml(r.well_id)}</div></div>
-      <div><div class="drawer-label">Meter ID</div><div class="drawer-value">${escHtml(r.meter_id)}</div></div>
-      <div><div class="drawer-label">Reporting Period</div><div class="drawer-value">${escHtml(r.reporting_period)}</div></div>
-      <div><div class="drawer-label">Event Timestamp</div><div class="drawer-value" style="font-size:11px;">${escHtml((r.event_timestamp||'').slice(0,19))}</div></div>
-      <div><div class="drawer-label">CombCode</div><div class="drawer-value"><span class="badge ${r.combcode ? 'success' : 'danger'}">${escHtml(r.combcode || 'Unresolved')}</span></div></div>
-      <div><div class="drawer-label">Parcel IDs</div><div class="drawer-value">${(r.parcel_ids||[]).length ? escHtml(r.parcel_ids.join(', ')) : '<span class="badge danger">Unmapped</span>'}</div></div>
-    </div>
-
-    <div class="drawer-grid" style="margin-bottom:16px;">
-      <div><div class="drawer-label">Cumulative Volume</div><div class="drawer-value" style="font-family:monospace;">${r.cumulative_volume != null ? r.cumulative_volume.toFixed(4) + ' AF' : '—'}</div></div>
-      <div><div class="drawer-label">Interval Volume</div><div class="drawer-value" style="font-family:monospace;">${r.interval_volume != null ? r.interval_volume.toFixed(4) + ' AF' : '—'}</div></div>
-      <div><div class="drawer-label">Unit (original)</div><div class="drawer-value">${escHtml(r.unit_original||'—')} → acre-feet</div></div>
-      <div><div class="drawer-label">Multiplier</div><div class="drawer-value" style="font-family:monospace;">${r.multiplier}</div></div>
-      <div><div class="drawer-label">Pump Status</div><div class="drawer-value">${r.pump_status ? `<span class="badge ${r.pump_status==='running'?'success':'muted'}">${escHtml(r.pump_status)}</span>` : '—'}</div></div>
-      <div><div class="drawer-label">Source Quality</div><div class="drawer-value"><span class="badge ${r.source_quality==='ok'?'success':'danger'}">${escHtml(r.source_quality||'ok')}</span></div></div>
-    </div>
-
-    <div class="drawer-section">
-      <div class="drawer-label">Provisional Applied-Water Attribution</div>
-      ${r.attribution_provisional
-        ? `<div class="model-disclaimer">
-            <strong>Applied-water model: DEMO RULESET v0.1</strong> — Status: <strong>Provisional</strong><br>
-            Purpose: Workflow demonstration. Requires Fox Canyon validation.<br>
-            Provisional AF: ${r.provisional_applied_water_af != null ? r.provisional_applied_water_af.toFixed(4) + ' AF' : 'N/A'}
-           </div>`
-        : `<span class="badge success">Not provisional — ${r.confirmed_applied_water_af != null ? r.confirmed_applied_water_af.toFixed(4) + ' AF confirmed' : 'no extraction quantity'}</span>`
-      }
-    </div>
-
-    <div class="drawer-section">
-      <div class="drawer-label">Open Exceptions (${open_excs.length})</div>
-      ${excsHtml}
-    </div>
-
-    <div class="drawer-section">
-      <details>
-        <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--forest-700);padding:6px 0;">
-          ▶ How was this calculated? (${(calc&&calc.steps||[]).length} steps)
-        </summary>
-        <div style="margin-top:8px;">
-          ${stepsHtml}
-          ${calc && calc.model_disclaimer ? `<div class="model-disclaimer">${escHtml(calc.model_disclaimer)}</div>` : ''}
-          ${calc && calc.rule_sources ? `<div style="font-size:11px;color:var(--muted);margin-top:6px;">
-            Sources: ${calc.rule_sources.map(u => `<a href="${escHtml(u)}" target="_blank">${escHtml(u)}</a>`).join(' · ')}</div>` : ''}
-        </div>
-      </details>
-    </div>
-
-    <div class="drawer-section">
-      <details>
-        <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--forest-700);padding:6px 0;">&#128200; Source Lineage</summary>
-        <div style="margin-top:8px;">
-          <div class="lineage-block">${escHtml(lineageJson)}</div>
-          <div style="font-size:10px;color:var(--muted);margin-top:4px;">
-            Sanitized source hash: <code>${escHtml(r.sanitized_source_hash||'')}</code> |
-            Calc version: <code>${escHtml(r.calculation_version||'')}</code>
-          </div>
-        </div>
-      </details>
-    </div>
-
-    <div class="drawer-section">
-      <details>
-        <summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--forest-700);padding:6px 0;">&#128196; Audit Events</summary>
-        <div style="margin-top:8px;">${auditHtml || '<div style="color:var(--muted);font-size:12px;">No audit events.</div>'}</div>
-      </details>
-    </div>
-
-    <div style="margin-top:16px;display:flex;gap:8px;flex-wrap:wrap;">
-      <button class="btn btn-ghost btn-sm" onclick="askAboutRecord('${escHtml(r.id)}')">Ask AGRO-AI about this record</button>
-      <button class="btn btn-ghost btn-sm" onclick="recomputeRecord('${escHtml(r.id)}')">Recompute</button>
-    </div>`;
-}
-
-async function recomputeRecord(id) {
+// ── Reporting Cycle ──────────────────────────────────────────
+async function loadReportingCycle() {
   try {
-    await apiFetch(`/records/${id}/recompute`, { method: 'POST' });
-    showToast('Record recomputed successfully.', 'success');
-    openRecord(id);
-  } catch(e) { showToast('Recompute failed: ' + e.message, 'error'); }
+    const [cycle, blocking] = await Promise.all([
+      apiGet('/terris/reporting-cycle'),
+      apiGet('/terris/blocking-records'),
+    ]);
+    document.getElementById('cycle-status-card').innerHTML =
+      '<div style="font-size:13px;font-weight:600;color:var(--text)">' + esc(cycle.status_label) + '</div>' +
+      '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">Deadline: ' + cycle.submission_deadline +
+      ' \xb7 ' + cycle.ready_for_export + '/' + cycle.total_records + ' records ready' +
+      ' \xb7 ' + cycle.blocking_exceptions + ' exception(s) blocking</div>';
+
+    document.getElementById('cycle-breakdown').innerHTML = [
+      ['Total records', cycle.total_records],
+      ['Ready for export', cycle.ready_for_export],
+      ['Requires attention', cycle.requires_attention],
+      ['Blocking exceptions', cycle.blocking_exceptions],
+      ['Readiness', cycle.readiness_percentage + '%'],
+      ['Supported extraction', Number(cycle.supported_extraction_af).toFixed(2) + ' AF'],
+      ['Provisional AF', Number(cycle.provisional_af).toFixed(2) + ' AF'],
+    ].map(([k,v]) => '<div class="record-field-row"><span class="record-field-key">' + k + '</span><span class="record-field-val">' + v + '</span></div>').join('');
+
+    const bl = blocking.records || [];
+    document.getElementById('cycle-blocking').innerHTML = bl.length
+      ? bl.map(r =>
+          '<div style="padding:10px 0;border-bottom:1px solid var(--border-light)">' +
+          '<span style="font-weight:700;font-family:monospace;color:var(--forest)">' + esc(r.well_id) + '</span>' +
+          '<span style="margin-left:10px;font-size:12px;color:var(--text-muted)">' + (r.blocking_reasons||[]).join(', ').replace(/_/g,' ') + '</span></div>'
+        ).join('')
+      : '<div style="font-size:13px;color:var(--text-muted)">No blocking records.</div>';
+  } catch(e) { console.error('Cycle error', e); }
 }
 
-function askAboutRecord(id) {
-  closeDrawer(null);
-  document.getElementById('copilotInput').value = `Explain record ${id}`;
-  sendCopilot(id);
-}
+// ── Action Queue ─────────────────────────────────────────────
+let allActions = [], activeFilter = '';
 
-// ─────────────────────────────────────────────
-// SOURCE HEALTH
-// ─────────────────────────────────────────────
-async function loadSourceHealth() {
+async function loadActionQueue() {
+  document.getElementById('action-queue-list').innerHTML = '<div class="loading"><span class="spinner"></span>Loading&hellip;</div>';
   try {
-    const data = await apiFetch('/source-health');
-    renderSourceHealthCards(data.provider_health?.providers || []);
-    renderRulePackMeta(data.rule_pack || {});
+    const data = await apiGet('/terris/priority-actions');
+    allActions = data.actions || [];
+    renderActions();
+    document.querySelectorAll('#action-filters .filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#action-filters .filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        activeFilter = btn.dataset.filter;
+        renderActions();
+      });
+    });
   } catch(e) {
-    document.getElementById('sourceHealthCards').innerHTML = `<div class="empty-state">Error: ${escHtml(e.message)}</div>`;
+    document.getElementById('action-queue-list').innerHTML = '<div style="color:var(--danger);font-size:13px">Failed to load actions.</div>';
   }
 }
 
-function renderSourceHealthCards(providers) {
-  const el = document.getElementById('sourceHealthCards');
-  el.innerHTML = providers.map(p => `
-    <div class="report-card" style="margin-bottom:10px;">
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px;">
-        <span class="source-chip ${p.status}"><span class="source-dot"></span>${escHtml(p.label)}</span>
-        <span style="font-size:11px;color:var(--muted);">Records: ${p.record_count}</span>
-      </div>
-      <div style="font-size:12px;color:var(--graphite);">${escHtml(p.message)}</div>
-      ${p.note ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;">${escHtml(p.note)}</div>` : ''}
-    </div>`).join('');
-}
-
-function renderRulePackMeta(pack) {
-  document.getElementById('rulePackMeta').innerHTML = `
-    <div style="margin-bottom:6px;"><strong>${escHtml(pack.pack_id||'')}</strong> v${escHtml(pack.pack_version||'')} — ${escHtml(pack.pack_status||'')}</div>
-    <div style="color:var(--warning);font-size:11px;margin-bottom:6px;">${escHtml(pack.validation_status||'')}</div>
-    <div style="font-size:11px;color:var(--muted);">${escHtml(pack.disclaimer||'')}</div>`;
-}
-
-// ─────────────────────────────────────────────
-// RULES
-// ─────────────────────────────────────────────
-async function loadRules() {
-  try {
-    const data = await apiFetch('/rules');
-    const rules = data.rules || [];
-    document.getElementById('rulePack').innerHTML = rules.map(rule => `
-      <div class="report-card" style="margin-bottom:10px;">
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-          <code style="font-size:11px;background:var(--stone-100);padding:2px 6px;border-radius:3px;">${escHtml(rule.rule_id)}</code>
-          <span class="badge ${rule.status==='provisional'?'warning':'info'}">${escHtml(rule.status)}</span>
-          ${rule.validation_required ? '<span class="badge danger">Requires Validation</span>' : ''}
-        </div>
-        <div style="font-weight:700;font-size:13px;margin-bottom:4px;">${escHtml(rule.title)}</div>
-        <div style="font-size:12px;color:var(--graphite);margin-bottom:6px;">${escHtml(rule.summary)}</div>
-        <a href="${escHtml(rule.source_url)}" target="_blank" style="font-size:11px;color:var(--forest-700);">Source ↗</a>
-        ${rule.notes ? `<div style="font-size:11px;color:var(--muted);margin-top:4px;">${escHtml(rule.notes)}</div>` : ''}
-      </div>`).join('');
-  } catch(e) {
-    document.getElementById('rulePack').innerHTML = `<div class="empty-state">Error loading rules: ${escHtml(e.message)}</div>`;
+function renderActions() {
+  const el = document.getElementById('action-queue-list');
+  const filtered = activeFilter ? allActions.filter(a => a.exception_type === activeFilter) : allActions;
+  if (!filtered.length) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-state-icon">✓</div><div>No actions match this filter.</div></div>';
+    return;
   }
+  el.innerHTML = filtered.map(a =>
+    '<div class="action-card" onclick="openRecord(\'' + a.record_id + '\')">' +
+    '<div class="action-priority-num ' + (a.severity||'') + '">' + a.priority_rank + '</div>' +
+    '<div class="action-card-body">' +
+    '<div style="display:flex;align-items:center;gap:10px">' +
+    '<div class="action-well">' + esc(a.well_id) + '</div>' +
+    '<span class="badge badge-' + sevBadge(a.severity) + '">' + esc(a.severity||'') + '</span>' +
+    '</div>' +
+    '<div class="action-exc-type" style="margin-top:3px">' + esc(a.exception_type.replace(/_/g,' ')) + '</div>' +
+    '<div class="action-detail">' + esc((a.detail||'').slice(0,140)) + '</div>' +
+    '<div style="margin-top:6px;font-size:11px;color:var(--forest)">' + esc((a.recommended_action||'').slice(0,120)) + '</div>' +
+    '</div><div class="action-arrow">›</div></div>'
+  ).join('');
 }
 
-// ─────────────────────────────────────────────
-// AUDIT
-// ─────────────────────────────────────────────
-async function loadAudit() {
+function sevBadge(s) {
+  return s === 'high' ? 'danger' : s === 'medium' ? 'warn' : 'muted';
+}
+
+// ── Water Ledger ─────────────────────────────────────────────
+let ledgerFilter = '';
+
+async function loadLedger() {
+  document.getElementById('ledger-table-wrap').innerHTML = '<div class="loading"><span class="spinner"></span>Loading&hellip;</div>';
   try {
-    const data = await apiFetch('/review-queue');
+    const f = ledgerFilter ? '?filter=' + ledgerFilter : '';
+    const data = await apiGet('/review-queue' + f);
     const records = data.records || [];
-    let events = [];
-    for (const r of records.slice(0,20)) {
-      const detail = await apiFetch(`/records/${r.id}/audit`);
-      events.push(...(detail.audit_events||[]).map(ev => ({...ev, record_id: r.id, well_id: r.well_id})));
+    if (!records.length) {
+      document.getElementById('ledger-table-wrap').innerHTML = '<div class="empty-state"><div>No records match this filter.</div></div>';
+      return;
     }
-    events.sort((a,b) => (b.timestamp||'').localeCompare(a.timestamp||''));
-    document.getElementById('auditContent').innerHTML = events.slice(0,50).map(ev => `
-      <div class="audit-event">
-        <span class="audit-ts">${escHtml((ev.timestamp||'').slice(0,19))}</span> —
-        <strong>${escHtml(ev.event_type.replace(/_/g,' '))}</strong> —
-        <code style="font-size:11px;">${escHtml(ev.record_id||'')}</code>
-        (${escHtml(ev.well_id||'')})<br>
-        <span style="color:var(--muted);">${escHtml(ev.actor||'')}:</span> ${escHtml(ev.detail||'')}
-      </div>`).join('') || '<div class="empty-state">No audit events found.</div>';
+    document.getElementById('ledger-table-wrap').innerHTML =
+      '<table class="data-table"><thead><tr>' +
+      '<th>Well</th><th>Evidence Class</th><th>Period</th><th>Volume (AF)</th><th>Status</th><th>Exceptions</th>' +
+      '</tr></thead><tbody>' +
+      records.map(r =>
+        '<tr onclick="openRecord(\'' + r.id + '\')">' +
+        '<td style="font-weight:700;font-family:monospace;color:var(--forest)">' + esc(r.well_id) + '</td>' +
+        '<td style="font-size:11px;color:var(--text-muted)">' + esc((r.evidence_class||'').replace(/_/g,' ')) + '</td>' +
+        '<td>' + esc(r.reporting_period||'—') + '</td>' +
+        '<td>' + (r.interval_volume_af != null ? Number(r.interval_volume_af).toFixed(3) : '—') + '</td>' +
+        '<td><span class="badge badge-' + statusBadge(r.review_status) + '">' + esc((r.review_status||'').replace(/_/g,' ')) + '</span></td>' +
+        '<td>' + (r.open_exception_count > 0 ? '<span class="badge badge-danger">' + r.open_exception_count + '</span>' : '<span class="badge badge-muted">0</span>') + '</td>' +
+        '</tr>'
+      ).join('') +
+      '</tbody></table>';
+
+    document.querySelectorAll('#ledger-filters .filter-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#ledger-filters .filter-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        ledgerFilter = btn.dataset.filter;
+        loadLedger();
+      });
+    });
   } catch(e) {
-    document.getElementById('auditContent').innerHTML = `<div class="empty-state">Error: ${escHtml(e.message)}</div>`;
+    document.getElementById('ledger-table-wrap').innerHTML = '<div style="color:var(--danger);font-size:13px">Failed to load ledger: ' + esc(e.message) + '</div>';
   }
 }
 
-// ─────────────────────────────────────────────
-// REPORTS
-// ─────────────────────────────────────────────
+function statusBadge(s) {
+  return s === 'requires_attention' ? 'danger' : (s === 'reviewer_approved' || s === 'ready_for_export') ? 'success' : 'muted';
+}
+
+// ── Sources ──────────────────────────────────────────────────
+async function loadSources() {
+  const el = document.getElementById('sources-content');
+  el.innerHTML = '<div class="loading"><span class="spinner"></span>Loading&hellip;</div>';
+  try {
+    const data = await apiGet('/source-health');
+    const providers = (data.provider_health || {}).providers || [];
+    const rp = data.rule_pack || {};
+    el.innerHTML =
+      '<div class="section-title">Provider Registry</div>' +
+      providers.map(p =>
+        '<div class="card" style="margin-bottom:12px">' +
+        '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">' +
+        '<div class="provider-status-dot ' + p.status + '"></div>' +
+        '<strong style="font-size:14px">' + esc(p.label) + '</strong>' +
+        '<span class="badge badge-' + (p.status === 'connected' ? 'success' : p.status === 'disabled' ? 'muted' : 'warn') + '">' + p.status + '</span>' +
+        '<span style="font-size:11px;color:var(--text-muted);margin-left:auto">' + p.record_count + ' record(s)</span>' +
+        '</div>' +
+        '<div style="font-size:12px;color:var(--text-muted)">' + esc(p.message||'') + '</div>' +
+        (p.note ? '<div style="font-size:12px;color:var(--text-muted);margin-top:4px">' + esc(p.note) + '</div>' : '') +
+        '<div style="font-size:11px;color:var(--text-faint);margin-top:6px">Evidence class: ' + esc((p.evidence_class||'').replace(/_/g,' ')) + '</div>' +
+        '</div>'
+      ).join('') +
+      '<div class="section-title" style="margin-top:24px">Rule Pack</div>' +
+      '<div class="card">' +
+      '<div class="record-field-row"><span class="record-field-key">Pack ID</span><span class="record-field-val mono">' + esc(rp.pack_id||'—') + '</span></div>' +
+      '<div class="record-field-row"><span class="record-field-key">Version</span><span class="record-field-val">' + esc(rp.pack_version||'—') + '</span></div>' +
+      '<div class="record-field-row"><span class="record-field-key">Validation status</span><span class="record-field-val" style="color:var(--warn)">' + esc(rp.validation_status||'—') + '</span></div>' +
+      '<div style="font-size:12px;color:var(--text-muted);margin-top:8px;padding-top:8px;border-top:1px solid var(--border-light)">' + esc(rp.disclaimer||'') + '</div>' +
+      '</div>';
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--danger);font-size:13px">Failed: ' + esc(e.message) + '</div>';
+  }
+}
+
+// ── Rules ─────────────────────────────────────────────────────
+async function loadRules() {
+  const el = document.getElementById('rules-content');
+  el.innerHTML = '<div class="loading"><span class="spinner"></span>Loading&hellip;</div>';
+  try {
+    const data = await apiGet('/rules');
+    const rules = data.rules || [];
+    const meta = data.metadata || {};
+    el.innerHTML =
+      '<div class="card" style="margin-bottom:18px">' +
+      '<div class="record-field-row"><span class="record-field-key">Pack ID</span><span class="record-field-val mono">' + esc(meta.pack_id||'—') + '</span></div>' +
+      '<div class="record-field-row"><span class="record-field-key">Version</span><span class="record-field-val">' + esc(meta.pack_version||'—') + '</span></div>' +
+      '<div class="record-field-row"><span class="record-field-key">Status</span><span class="record-field-val" style="color:var(--warn)">' + esc(meta.validation_status||'—') + '</span></div>' +
+      '<div style="font-size:12px;color:var(--text-muted);margin-top:8px">' + esc(meta.disclaimer||'') + '</div>' +
+      '</div>' +
+      '<div class="card">' +
+      rules.map(r =>
+        '<div class="rule-row">' +
+        '<div class="rule-id">' + esc(r.rule_id||'') + '</div>' +
+        '<div class="rule-desc">' + esc(r.description || r.title || '') + '</div>' +
+        (r.source_url ? '<div class="rule-source">Source: ' + esc(r.source_url) + '</div>' : '') +
+        (r.validation_required ? '<div style="margin-top:3px"><span class="badge badge-warn">Validation required</span></div>' : '') +
+        '</div>'
+      ).join('') +
+      '</div>';
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--danger);font-size:13px">Failed: ' + esc(e.message) + '</div>';
+  }
+}
+
+// ── Reports ───────────────────────────────────────────────────
+const reportsList = [];
+
 async function generateReport() {
-  const btn = document.getElementById('genReportBtn');
+  const btn = document.getElementById('generate-report-btn');
   btn.disabled = true; btn.textContent = 'Generating…';
   try {
-    const data = await apiFetch('/reports/generate', { method: 'POST', body: JSON.stringify({ report_type: 'full', reporting_period: '2026-Q1' }) });
-    lastReportId = data.report_id;
-    showToast('Report generated successfully!', 'success');
-    renderReportActions(data);
-    showTab('reports');
-    btn.disabled = false; btn.textContent = '↙ Generate Full Report';
-  } catch(e) {
-    showToast('Report generation failed: ' + e.message, 'error');
-    btn.disabled = false; btn.textContent = '↙ Generate Full Report';
-  }
+    const r = await apiPost('/reports/generate', {report_type:'full', reporting_period:'2026-Q1'});
+    reportsList.unshift(r);
+    renderReports();
+  } catch(e) { alert('Report failed: ' + e.message); }
+  btn.textContent = 'Generate Reporting Readiness Brief'; btn.disabled = false;
 }
 
-function renderReportActions(data) {
-  const el = document.getElementById('reportActions');
-  el.style.display = 'flex';
-  el.innerHTML = `
-    <a class="download-link" href="${API}/reports/${data.report_id}/pdf" target="_blank">&#128196; Executive PDF</a>
-    <a class="download-link" href="${API}/reports/${data.report_id}/csv?type=records" target="_blank">&#128196; Records CSV</a>
-    <a class="download-link" href="${API}/reports/${data.report_id}/csv?type=exceptions" target="_blank">&#128196; Exceptions CSV</a>
-    <a class="download-link" href="${API}/reports/${data.report_id}/bundle" target="_blank">&#128230; Download ZIP Bundle</a>
-  `;
-  const hist = document.getElementById('reportHistory');
-  hist.innerHTML = `<div class="report-card">
-    <div class="intelligence-eyebrow">Generated Report</div>
-    <div style="font-size:13px;margin:6px 0;font-weight:700;">${escHtml(data.report_id)}</div>
-    <div style="font-size:11px;color:var(--muted);">
-      ${data.record_count} records · ${data.exception_count} exceptions ·
-      Calc: ${escHtml(data.stats?.calculation_version||'')}
-    </div>
-    <div style="font-size:11px;color:var(--danger);margin-top:6px;">${escHtml(data.disclaimer||'')}</div>
-  </div>`;
+function renderReports() {
+  document.getElementById('reports-list').innerHTML = reportsList.map(r =>
+    '<div class="report-item">' +
+    '<div class="report-icon">&#128203;</div>' +
+    '<div class="report-meta">' +
+    '<div style="font-size:13px;font-weight:500">Reporting Readiness Brief</div>' +
+    '<div class="report-id">' + esc(r.report_id) + '</div>' +
+    '<div class="report-date">' + new Date(r.generated_at).toLocaleString() + '</div>' +
+    '<div style="font-size:11px;color:var(--text-muted);margin-top:3px">' + r.record_count + ' records \xb7 ' + r.exception_count + ' exceptions</div>' +
+    '</div>' +
+    '<div class="report-actions">' +
+    '<a href="' + BASE + '/reports/' + r.report_id + '/pdf" target="_blank" class="btn-sm">PDF</a>' +
+    '<a href="' + BASE + '/reports/' + r.report_id + '/bundle" class="btn-sm">Bundle</a>' +
+    '</div></div>'
+  ).join('');
 }
 
-// ─────────────────────────────────────────────
-// COPILOT
-// ─────────────────────────────────────────────
-function showCopilot() {
-  document.getElementById('copilotPanel').style.display = 'flex';
-  document.getElementById('copilotInput').focus();
+// ── Terris ─────────────────────────────────────────────────────
+async function loadTerrisPresets() {
+  try {
+    const data = await apiGet('/terris/preset-questions');
+    document.getElementById('terris-presets').innerHTML = (data.questions||[]).map(p =>
+      '<button class="preset-pill" onclick="submitTerrisQuery(' + JSON.stringify(p.label) + ')">' + esc(p.label) + '</button>'
+    ).join('');
+  } catch(e) {}
 }
 
-function addMsg(role, text) {
-  const el = document.getElementById('copilotMessages');
-  const div = document.createElement('div');
-  div.className = `copilot-msg ${role}`;
-  div.innerHTML = `<pre>${escHtml(text)}</pre>`;
-
-  if (role === 'assistant') {
-    const speakBtn = document.createElement('button');
-    speakBtn.className = 'speak-btn';
-    speakBtn.textContent = '🔊 Read aloud';
-    speakBtn.onclick = () => speakText(text);
-    div.appendChild(speakBtn);
-  }
-  el.appendChild(div);
-  el.scrollTop = el.scrollHeight;
+function submitTerris() {
+  const q = document.getElementById('terris-input').value.trim();
+  if (q) submitTerrisQuery(q);
 }
 
-function addCitationMsg(result) {
-  const el = document.getElementById('copilotMessages');
-  const div = document.createElement('div');
-  div.className = 'copilot-msg assistant';
-  div.innerHTML = `<pre>${escHtml(result.answer || '')}</pre>`;
+async function submitTerrisQuery(query) {
+  document.getElementById('terris-input').value = query;
+  const btn = document.getElementById('terris-send');
+  btn.disabled = true;
+  const el = document.getElementById('terris-result');
+  el.innerHTML = '';
 
-  // Citations
-  const sr = result.structured_result || {};
-  const cites = [];
-  if (sr.calculation_version) cites.push(`Calc: ${sr.calculation_version}`);
-  if (result.answer_type) cites.push(`Type: ${result.answer_type}`);
-  if (!result.llm_enhanced) cites.push('Deterministic fallback (no LLM key required)');
-
-  if (cites.length) {
-    div.innerHTML += `<div class="copilot-citations">${cites.map(escHtml).join(' · ')}</div>`;
-  }
-
-  const speakBtn = document.createElement('button');
-  speakBtn.className = 'speak-btn';
-  speakBtn.textContent = '🔊 Read aloud';
-  speakBtn.onclick = () => speakText(result.answer || '');
-  div.appendChild(speakBtn);
-
-  el.appendChild(div);
-  el.scrollTop = el.scrollHeight;
-}
-
-async function sendCopilot(recordIdOverride = null) {
-  const input = document.getElementById('copilotInput');
-  const query = input.value.trim();
-  if (!query) return;
-  input.value = '';
-
-  addMsg('user', query);
-
-  // Thinking indicator
-  const el = document.getElementById('copilotMessages');
-  const thinking = document.createElement('div');
-  thinking.className = 'copilot-msg system';
-  thinking.textContent = 'Querying backend tools…';
-  el.appendChild(thinking);
-  el.scrollTop = el.scrollHeight;
+  const stagesEl = document.createElement('div');
+  stagesEl.className = 'investigation-wrap';
+  stagesEl.innerHTML =
+    '<div style="font-size:11px;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:10px">Investigation</div>' +
+    '<ul class="stage-list" id="stage-list"></ul>';
+  el.appendChild(stagesEl);
 
   try {
-    const payload = { query };
-    if (recordIdOverride) payload.record_id = recordIdOverride;
-    const data = await apiFetch('/copilot/query', { method: 'POST', body: JSON.stringify(payload) });
-    thinking.remove();
-    addCitationMsg(data);
+    const result = await apiPost('/terris/query', {query});
+    btn.disabled = false;
+    const stages = result.investigation_stages || [];
+    const stageList = document.getElementById('stage-list');
+    for (const s of stages) {
+      await sleep(100);
+      const li = document.createElement('li');
+      li.className = 'stage-item';
+      li.innerHTML =
+        '<div class="stage-dot ' + (s.status !== 'completed' ? s.status : '') + '"></div>' +
+        '<div class="stage-text"><span class="stage-name">' + esc(formatStage(s.stage)) + '</span> — ' + esc(s.detail||'') + '</div>';
+      stageList.appendChild(li);
+      await sleep(20);
+      li.classList.add('visible');
+    }
+    await sleep(180);
+    const resEl = document.createElement('div');
+    resEl.innerHTML = buildResponse(result);
+    el.appendChild(resEl);
   } catch(e) {
-    thinking.remove();
-    addMsg('assistant', `Error: ${e.message}\n\nCheck that the backend is running.`);
+    btn.disabled = false;
+    el.innerHTML += '<div style="color:var(--danger);font-size:13px;margin-top:12px">Investigation failed: ' + esc(e.message) + '</div>';
   }
 }
 
-async function sendPreset(key, label) {
-  const input = document.getElementById('copilotInput');
-  input.value = label;
-  await sendCopilot();
+function buildResponse(r) {
+  const evidence = (r.evidence_reviewed||[]).map(e =>
+    '<div class="evidence-item"><span class="evidence-tool">' + esc(e.tool.replace(/_/g,' ')) + '</span><span>' + esc(e.summary||'') + '</span></div>'
+  ).join('');
+  const actions = (r.available_actions||[]).map(a =>
+    '<button class="action-pill" onclick="terrisAction(\'' + a.target + '\')">' + esc(a.label) + '</button>'
+  ).join('');
+  return '<div class="response-grid" style="margin-top:20px">' +
+    '<div class="response-card direct full"><div class="response-card-label">Direct Answer</div><div class="response-card-body">' + esc(r.direct_answer||'') + '</div></div>' +
+    '<div class="response-card"><div class="response-card-label">Why It Matters</div><div class="response-card-body">' + esc(r.why_it_matters||'') + '</div></div>' +
+    '<div class="response-card recommended"><div class="response-card-label">Recommended Action</div><div class="response-card-body">' + esc(r.recommended_action||'') + '</div></div>' +
+    '<div class="response-card"><div class="response-card-label">Evidence Reviewed</div><div class="response-card-body">' + (evidence||'—') + '</div></div>' +
+    '<div class="response-card uncertainty"><div class="response-card-label">Remaining Uncertainty</div><div class="response-card-body">' + esc(r.remaining_uncertainty||'') + '</div></div>' +
+    '</div><div style="margin-top:8px">' + actions + '</div>' +
+    '<div style="margin-top:14px;font-size:11px;color:var(--text-faint);line-height:1.4">' + esc(r.disclaimer||'') + '</div>';
 }
 
-// ─────────────────────────────────────────────
-// VOICE
-// ─────────────────────────────────────────────
-function toggleVoice() {
-  if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
-    showToast('Speech recognition not supported in this browser.', 'error');
-    return;
-  }
-  const btn = document.getElementById('voiceBtn');
-  if (voiceActive) {
-    voiceRecognition && voiceRecognition.stop();
-    voiceActive = false;
-    btn.classList.remove('recording');
-    return;
-  }
-  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  voiceRecognition = new SR();
-  voiceRecognition.lang = 'en-US';
-  voiceRecognition.onresult = (e) => {
-    document.getElementById('copilotInput').value = e.results[0][0].transcript;
-  };
-  voiceRecognition.onend = () => { voiceActive = false; btn.classList.remove('recording'); };
-  voiceRecognition.start();
-  voiceActive = true;
-  btn.classList.add('recording');
+function terrisAction(target) {
+  if (target === 'action_queue') switchView('action-queue');
+  else if (target === 'reports') switchView('reports');
+  else document.getElementById('terris-input').focus();
 }
 
-function speakText(text) {
-  if (!('speechSynthesis' in window)) { showToast('Speech synthesis not supported.', 'error'); return; }
-  const clean = text.replace(/[*_#`]/g, '').replace(/\[.*?\]\(.*?\)/g, '').slice(0, 1000);
-  const utter = new SpeechSynthesisUtterance(clean);
-  utter.lang = 'en-US';
-  utter.rate = 0.95;
-  window.speechSynthesis.cancel();
-  window.speechSynthesis.speak(utter);
+function formatStage(s) {
+  return s.replace(/_/g,' ').replace(/^./,c=>c.toUpperCase());
 }
 
-// ─────────────────────────────────────────────
-// SCENARIOS
-// ─────────────────────────────────────────────
-async function resetScenarios() {
-  if (!confirm('Reset demonstration dataset? This will clear all records and re-inject the standard scenario set.')) return;
+// ── Record Drawer ────────────────────────────────────────────
+async function openRecord(id) {
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('record-drawer').classList.add('open');
+  document.getElementById('record-drawer-title').textContent = 'Loading…';
+  document.getElementById('record-drawer-body').innerHTML =
+    '<div class="loading" style="padding:24px"><span class="spinner"></span>Loading record…</div>';
   try {
-    await apiFetch('/scenarios/reset', { method: 'POST' });
-    showToast('Demonstration dataset reset.', 'success');
-    loadDashboard();
-    loadQueue();
-  } catch(e) { showToast('Reset failed: ' + e.message, 'error'); }
+    const data = await apiGet('/records/' + id + '/ledger');
+    renderRecord(data);
+  } catch(e) {
+    document.getElementById('record-drawer-body').innerHTML =
+      '<div style="padding:24px;color:var(--danger)">Failed: ' + esc(e.message) + '</div>';
+  }
 }
 
-// ─────────────────────────────────────────────
-// UTILS
-// ─────────────────────────────────────────────
-function escHtml(str) {
-  if (str == null) return '';
-  return String(str)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+function renderRecord(data) {
+  const r = data.record || {};
+  const expl = data.calculation_explanation || {};
+  document.getElementById('record-drawer-title').textContent = r.well_id || r.id || 'Record';
+  const openExcs = (r.exceptions||[]).filter(e => e.status !== 'resolved');
+  const steps = expl.steps || [];
+  document.getElementById('record-drawer-body').innerHTML =
+    '<div style="padding:0 24px 24px">' +
+    section('Identity', [
+      field('Well', '<span class="mono">' + esc(r.well_id||'—') + '</span>'),
+      field('Meter', '<span class="mono">' + esc(r.meter_id||'—') + '</span>'),
+      field('Evidence class', esc((r.evidence_class||'').replace(/_/g,' '))),
+      field('Provider', esc(r.provider||'—')),
+      field('Event timestamp', esc((r.event_timestamp||'').slice(0,16).replace('T',' '))),
+      field('Reporting period', esc(r.reporting_period||'—')),
+    ]) +
+    section('Measurement', [
+      field('Interval volume', r.interval_volume != null ? Number(r.interval_volume).toFixed(3)+' AF' : '—'),
+      field('Cumulative volume', r.cumulative_volume != null ? Number(r.cumulative_volume).toFixed(3) : '—'),
+      field('Unit', esc(r.unit||'—')),
+      field('Multiplier', r.multiplier != null ? r.multiplier : '—'),
+      field('Attribution', '<span class="badge badge-' + (r.attribution_provisional?'warn':'success') + '">' + (r.attribution_provisional?'provisional':'supported') + '</span>'),
+    ]) +
+    (openExcs.length ? '<div class="record-detail-section"><div class="record-detail-label">Open Exceptions (' + openExcs.length + ')</div>' +
+      openExcs.map(e =>
+        '<div class="exc-item"><div class="exc-type">' + esc(e.exception_type.replace(/_/g,' ')) + '</div>' +
+        '<div class="exc-detail">' + esc(e.detail||'') + '</div>' +
+        (e.rule_id ? '<div style="font-size:11px;color:var(--text-muted);margin-top:4px">Rule: ' + esc(e.rule_id) + '</div>' : '') +
+        '</div>'
+      ).join('') + '</div>' : '') +
+    (steps.length ? '<div class="record-detail-section"><div class="record-detail-label">Calculation Steps</div>' +
+      steps.map(s => '<div class="calc-step"><span class="calc-step-icon">→</span><span>' + esc(s.description||s.step||'') + (s.value != null ? ' <strong>' + s.value + '</strong>' : '') + '</span></div>').join('') +
+      '</div>' : '') +
+    section('Source Lineage', [
+      field('Source hash', '<span class="mono">' + esc(r.sanitized_source_hash||'—') + '</span>'),
+      field('Scenario injected', r.scenario_injected ? 'Yes' : 'No'),
+    ]) +
+    (r.scenario_label ? '<div style="font-size:11px;color:var(--text-muted);margin-bottom:12px">' + esc(r.scenario_label) + '</div>' : '') +
+    '<div style="font-size:11px;color:var(--text-faint);line-height:1.4">' + esc(data.disclaimer||'') + '</div>' +
+    '</div>';
 }
 
-function showToast(msg, type = '') {
-  const area = document.getElementById('toastArea');
-  const toast = document.createElement('div');
-  toast.className = `toast ${type}`;
-  toast.textContent = msg;
-  area.appendChild(toast);
-  setTimeout(() => toast.remove(), 4000);
+function section(title, fields) {
+  return '<div class="record-detail-section"><div class="record-detail-label">' + title + '</div>' + fields.join('') + '</div>';
+}
+function field(k, v) {
+  return '<div class="record-field-row"><span class="record-field-key">' + k + '</span><span class="record-field-val">' + v + '</span></div>';
 }
 
-// ─────────────────────────────────────────────
-// BOOT
-// ─────────────────────────────────────────────
-loadDashboard();
-loadQueue();
+function closeRecordDrawer() {
+  document.getElementById('record-drawer').classList.remove('open');
+  document.getElementById('overlay').classList.remove('open');
+}
+
+// ── Provenance Drawer ────────────────────────────────────────
+async function openProvenance() {
+  document.getElementById('overlay').classList.add('open');
+  document.getElementById('provenance-drawer').classList.add('open');
+  const el = document.getElementById('provenance-body');
+  if (el.dataset.loaded) return;
+  el.innerHTML = '<div class="loading"><span class="spinner"></span>Loading…</div>';
+  try {
+    const [status, health] = await Promise.all([apiGet('/status'), apiGet('/source-health')]);
+    renderProvenance(status, health);
+    el.dataset.loaded = '1';
+  } catch(e) {
+    el.innerHTML = '<div style="color:var(--danger);font-size:13px">Failed: ' + esc(e.message) + '</div>';
+  }
+}
+
+function renderProvenance(status, health) {
+  const providers = (health.provider_health||{}).providers || [];
+  const stats = status.ledger_stats || {};
+  const dot = c => '<div class="provenance-item-dot" style="background:' + c + '"></div>';
+  const live = providers.filter(p => p.status === 'connected');
+  const disabled = providers.filter(p => p.status === 'disabled');
+
+  document.getElementById('provenance-body').innerHTML =
+    '<div class="provenance-section">' +
+    '<div class="provenance-section-title">Workspace Type</div>' +
+    '<p style="font-size:13px;color:var(--text);line-height:1.5">This is an <strong>illustrative workspace</strong> containing demonstration scenarios. ' +
+    'It is not an official Fox Canyon GMA reporting system and contains no authorized Fox Canyon private extraction data.</p>' +
+    '</div>' +
+
+    '<div class="provenance-section">' +
+    '<div class="provenance-section-title">What Is Live</div>' +
+    (live.length
+      ? live.map(p => '<div class="provenance-item">' + dot('#3a9463') + '<span>' + esc(p.label) + ' — <strong>' + p.record_count + '</strong> record(s)</span></div>').join('')
+      : '<div style="font-size:13px;color:var(--text-muted)">No live sources connected. Configure API keys to enable.</div>') +
+    '</div>' +
+
+    '<div class="provenance-section">' +
+    '<div class="provenance-section-title">What Is Public Context</div>' +
+    '<div class="provenance-item">' + dot('#5a8c70') + '<span>FCGMA public documents (flowmeter requirements, rule pack)</span></div>' +
+    '<div class="provenance-item">' + dot('#5a8c70') + '<span>CIMIS reference ET data (if CIMIS_APP_KEY configured)</span></div>' +
+    '</div>' +
+
+    '<div class="provenance-section">' +
+    '<div class="provenance-section-title">What Is Injected</div>' +
+    '<div class="provenance-item">' + dot('#8a6620') + '<span><strong>' + (stats.injected_scenario_records||0) + '</strong> demonstration scenarios — all labeled scenario_injected = true</span></div>' +
+    '<div style="font-size:12px;color:var(--text-muted);margin-top:4px;line-height:1.4">Scenarios illustrate meter reset, telemetry gap, duplicates, CombCode issues, pump without meter, and other exception types. Never silently mixed with live data.</div>' +
+    '</div>' +
+
+    '<div class="provenance-section">' +
+    '<div class="provenance-section-title">Disabled Adapters</div>' +
+    (disabled.length
+      ? disabled.map(p => '<div class="provenance-item">' + dot('#9ca8a4') + '<span><strong>' + esc(p.label) + '</strong> — ' + esc(p.message||'disabled') + '</span></div>').join('')
+      : '<div style="font-size:13px;color:var(--text-muted)">No disabled adapters.</div>') +
+    '</div>' +
+
+    '<div class="provenance-section">' +
+    '<div class="provenance-section-title">Guarantees</div>' +
+    '<div class="provenance-item">' + dot('#285446') + '<span>Live and injected records are never silently mixed</span></div>' +
+    '<div class="provenance-item">' + dot('#285446') + '<span>All quantities from deterministic tools — Terris does not generate numbers</span></div>' +
+    '<div class="provenance-item">' + dot('#285446') + '<span>Applied-water attribution is provisional until Fox Canyon validates the rule pack</span></div>' +
+    '<div class="provenance-item">' + dot('#285446') + '<span>Terris does not approve records, file reports, or claim legal compliance</span></div>' +
+    '</div>' +
+
+    '<div style="margin-top:16px;padding:12px;background:var(--stone);border-radius:6px;font-size:12px;color:var(--text-muted);line-height:1.4">' +
+    'Calculation version: <strong>' + esc(status.calculation_version||'fcgma-calc-v0.1') + '</strong> \xb7 ' +
+    'Rule pack: <strong>' + esc(status.rule_pack_version||'0.1.0') + '</strong> — ' + esc(status.rule_pack_status||'provisional') +
+    '</div>';
+}
+
+function closeAll() {
+  document.getElementById('overlay').classList.remove('open');
+  document.getElementById('provenance-drawer').classList.remove('open');
+  document.getElementById('record-drawer').classList.remove('open');
+}
+
+// ── Utilities ─────────────────────────────────────────────────
+function esc(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ── Boot ──────────────────────────────────────────────────────
+loadOverview();
 </script>
 </body>
 </html>
