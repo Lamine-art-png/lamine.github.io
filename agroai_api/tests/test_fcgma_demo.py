@@ -1990,3 +1990,414 @@ def test_poll_job_events_are_natural_language(client):
         assert not label.startswith("invoke_"), (
             f"Event label looks like a raw stage name: {label!r}"
         )
+
+
+# ═════════════════════════════════════════════════════════════════════════════
+# Seventh-pass tests: ReconciliationSnapshot, Lineage, Extended Tools,
+#                     Gate count, Quantity definitions, Agent loop schemas
+# ═════════════════════════════════════════════════════════════════════════════
+
+# ─────────────────────────────────────────────
+# Gate count and gate_summary fields
+# ─────────────────────────────────────────────
+
+def test_gate_summary_has_total_and_prerequisite():
+    """compute_all_gates() must expose total (5) and prerequisite (4) in gate_summary."""
+    from app.services.fcgma.gates import compute_all_gates
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    inject_all_scenarios()
+    result = compute_all_gates()
+    summary = result["gate_summary"]
+    assert summary["total"] == 5, "Total gates must be 5"
+    assert summary["prerequisite"] == 4, "Prerequisite gates must be 4"
+
+
+def test_gate_summary_position_no_hardcoded_four():
+    """summary_position must not contain the literal string 'four' — must be dynamic."""
+    from app.services.fcgma.gates import compute_all_gates
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    inject_all_scenarios()
+    result = compute_all_gates()
+    pos = result.get("summary_position", "")
+    assert "four" not in pos.lower(), f"summary_position still hardcodes 'four': {pos!r}"
+
+
+def test_briefing_gate_count_is_dynamic():
+    """Briefing narrative must reference the live gate count, not a hardcoded 4."""
+    from app.services.fcgma.briefing import generate_terris_briefing
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    inject_all_scenarios()
+    result = generate_terris_briefing()
+    briefing = result.get("briefing", "")
+    # Must not say "4 prerequisite gates" or "four prerequisite" as hardcoded text
+    assert "4 prerequisite gates" not in briefing or "of 5" in briefing or "of 4 prerequisite" in briefing, (
+        "Briefing gate count appears stale"
+    )
+
+
+# ─────────────────────────────────────────────
+# ReconciliationSnapshot unit tests
+# ─────────────────────────────────────────────
+
+def test_reconciliation_snapshot_creates_with_nine_quantities():
+    """create_snapshot() must return all nine defined water-accounting quantities."""
+    from app.services.fcgma.reconciliation import create_snapshot
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    inject_all_scenarios()
+    snap = create_snapshot(triggered_by="test")
+    required_quantities = [
+        "total_extraction_af", "supported_extraction_af", "provisional_af",
+        "quarantined_af", "confirmed_applied_water_af", "provisional_applied_water_af",
+        "unattributed_af", "quantity_under_review_af", "total_reported_af",
+    ]
+    for q in required_quantities:
+        assert q in snap, f"Missing quantity field: {q}"
+    # All quantities must be non-negative floats
+    for q in required_quantities:
+        assert isinstance(snap[q], float), f"{q} is not a float"
+        assert snap[q] >= 0, f"{q} is negative: {snap[q]}"
+
+
+def test_reconciliation_snapshot_has_gate_fields():
+    """Snapshot must include gate_summary fields and gate_5_status."""
+    from app.services.fcgma.reconciliation import create_snapshot
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    inject_all_scenarios()
+    snap = create_snapshot(triggered_by="test")
+    assert "gates_clear" in snap
+    assert "gates_total" in snap
+    assert snap["gates_total"] == 5
+    assert "gate_5_status" in snap
+    assert "gate_5_label" in snap
+    assert "summary_position" in snap
+
+
+def test_reconciliation_snapshot_stored_and_retrievable():
+    """Snapshot must be retrievable via get_latest_snapshot() and get_snapshot(id)."""
+    from app.services.fcgma.reconciliation import create_snapshot, get_latest_snapshot, get_snapshot
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    inject_all_scenarios()
+    snap = create_snapshot(triggered_by="test")
+    sid = snap["id"]
+    assert sid.startswith("snap-")
+
+    latest = get_latest_snapshot()
+    assert latest is not None
+    assert latest["id"] == sid
+
+    by_id = get_snapshot(sid)
+    assert by_id is not None
+    assert by_id["id"] == sid
+
+
+def test_reconciliation_snapshot_compare_returns_diff():
+    """compare_snapshots() returns a diff when two snapshots exist."""
+    from app.services.fcgma.reconciliation import create_snapshot, compare_snapshots
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    inject_all_scenarios()
+    snap1 = create_snapshot(triggered_by="test-1")
+    snap2 = create_snapshot(triggered_by="test-2")
+    diff = compare_snapshots(snap2["id"], snap1["id"])
+    assert diff is not None
+    assert "quantity_changes" in diff
+    assert "count_changes" in diff
+    assert "snapshot_id" in diff
+    assert diff["snapshot_id"] == snap2["id"]
+    assert diff["prior_id"] == snap1["id"]
+
+
+def test_reconciliation_run_endpoint(client):
+    """POST /reconciliation/run returns snapshot with all nine quantities."""
+    resp = client.post("/v1/fcgma-demo/reconciliation/run")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    snap = data.get("snapshot", {})
+    assert snap.get("id", "").startswith("snap-")
+    for q in ["total_extraction_af", "supported_extraction_af", "provisional_af",
+               "quarantined_af", "confirmed_applied_water_af", "provisional_applied_water_af",
+               "unattributed_af", "quantity_under_review_af", "total_reported_af"]:
+        assert q in snap, f"Missing quantity in snapshot: {q}"
+    # Post-reconciliation briefing must be included
+    assert "proactive_briefing" in data
+
+
+def test_reconciliation_latest_endpoint(client):
+    """GET /reconciliation/latest returns most recent snapshot after a run."""
+    client.post("/v1/fcgma-demo/reconciliation/run")
+    resp = client.get("/v1/fcgma-demo/reconciliation/latest")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data.get("id", "").startswith("snap-")
+    assert "gates_total" in data
+    assert data["gates_total"] == 5
+
+
+def test_reconciliation_compare_endpoint(client):
+    """GET /reconciliation/{id}/compare/{prior_id} returns a structured diff."""
+    r1 = client.post("/v1/fcgma-demo/reconciliation/run").json()["snapshot"]["id"]
+    r2 = client.post("/v1/fcgma-demo/reconciliation/run").json()["snapshot"]["id"]
+    resp = client.get(f"/v1/fcgma-demo/reconciliation/{r2}/compare/{r1}")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["snapshot_id"] == r2
+    assert data["prior_id"] == r1
+    assert "has_changes" in data
+
+
+# ─────────────────────────────────────────────
+# Lineage tracing
+# ─────────────────────────────────────────────
+
+def test_record_lineage_has_ordered_steps():
+    """get_record_lineage() must return ordered steps covering all transformation stages."""
+    from app.services.fcgma.lineage import get_record_lineage
+    from app.services.fcgma.ledger import list_records
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    inject_all_scenarios()
+    records = list_records()
+    assert records, "Need at least one record for lineage test"
+    lineage = get_record_lineage(records[0]["id"])
+    assert lineage is not None
+    steps = lineage.get("lineage_steps", [])
+    assert len(steps) >= 3, "Lineage must have at least 3 steps"
+    # First step must be raw_ingestion
+    assert steps[0]["stage"] == "raw_ingestion"
+    # Last step must be reporting_readiness
+    assert steps[-1]["stage"] == "reporting_readiness"
+    # Steps must be numbered sequentially
+    for i, step in enumerate(steps, start=1):
+        assert step["step"] == i, f"Step {i} has wrong number: {step['step']}"
+
+
+def test_record_lineage_endpoint(client):
+    """GET /lineage/records/{id} returns lineage with all required fields."""
+    resp = client.get("/v1/fcgma-demo/review-queue")
+    record_id = resp.json()["records"][0]["id"]
+
+    resp = client.get(f"/v1/fcgma-demo/lineage/records/{record_id}")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["record_id"] == record_id
+    assert "lineage_steps" in data
+    assert len(data["lineage_steps"]) >= 3
+    assert "calculation_version" in data
+
+
+def test_case_lineage_endpoint(client):
+    """GET /lineage/cases/{id} returns lineage for all contributing records."""
+    cases_resp = client.get("/v1/fcgma-demo/terris/cases").json()
+    case_id = cases_resp["cases"][0]["case_id"]
+
+    resp = client.get(f"/v1/fcgma-demo/lineage/cases/{case_id}")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert data["case_id"] == case_id
+    assert "record_lineages" in data
+    assert "record_count" in data
+
+
+# ─────────────────────────────────────────────
+# Extended domain tools
+# ─────────────────────────────────────────────
+
+def test_get_gate_status_tool():
+    """get_gate_status() must return all five gates and prerequisite count."""
+    from app.services.fcgma.terris import get_gate_status
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    inject_all_scenarios()
+    result = get_gate_status()
+    assert result["gates_total"] == 5
+    assert result["prerequisite_count"] == 4
+    assert "gate_5_status" in result
+    assert "gate_5_label" in result
+    assert "summary_position" in result
+
+
+def test_get_applied_water_summary_tool():
+    """get_applied_water_summary() must return nine-quantity-aligned AF fields."""
+    from app.services.fcgma.terris import get_applied_water_summary
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    inject_all_scenarios()
+    result = get_applied_water_summary()
+    for field in ["total_metered_af", "confirmed_applied_water_af",
+                  "provisional_applied_water_af", "unattributed_af"]:
+        assert field in result, f"Missing field: {field}"
+        assert isinstance(result[field], float)
+        assert result[field] >= 0
+
+
+def test_get_exception_count_by_type_tool():
+    """get_exception_count_by_type() returns by_type breakdown."""
+    from app.services.fcgma.terris import get_exception_count_by_type
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    inject_all_scenarios()
+    result = get_exception_count_by_type()
+    assert "total_open" in result
+    assert "by_type" in result
+    assert isinstance(result["by_type"], list)
+
+
+def test_get_cycle_readiness_tool():
+    """get_cycle_readiness() returns path_to_close and operator/agency breakdown."""
+    from app.services.fcgma.terris import get_cycle_readiness
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    inject_all_scenarios()
+    result = get_cycle_readiness()
+    assert "readiness_percentage" in result
+    assert "operator_action_items" in result
+    assert "agency_action_items" in result
+    assert "path_to_close" in result
+    assert isinstance(result["path_to_close"], str)
+
+
+def test_list_wells_with_issues_tool():
+    """list_wells_with_issues() returns wells with exception counts."""
+    from app.services.fcgma.terris import list_wells_with_issues
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    inject_all_scenarios()
+    result = list_wells_with_issues()
+    assert "well_count" in result
+    assert "wells" in result
+    # Each well entry must have expected fields
+    for w in result["wells"]:
+        assert "well_id" in w
+        assert "open_exceptions" in w
+        assert "exception_types" in w
+
+
+def test_terris_tool_map_has_20_plus_tools():
+    """TERRIS_TOOL_MAP must have at least 20 distinct tools."""
+    from app.services.fcgma.terris import TERRIS_TOOL_MAP
+    assert len(TERRIS_TOOL_MAP) >= 20, f"Only {len(TERRIS_TOOL_MAP)} tools in map"
+
+
+# ─────────────────────────────────────────────
+# Agent loop schemas
+# ─────────────────────────────────────────────
+
+def test_agent_tool_schemas_are_well_formed():
+    """All agent tool schemas must have name, description, and valid input_schema."""
+    from app.services.fcgma.conversation import _build_anthropic_tool_list
+    tools = _build_anthropic_tool_list()
+    assert len(tools) >= 15, f"Only {len(tools)} agent tools defined"
+    for t in tools:
+        assert "name" in t, f"Tool missing name: {t}"
+        assert "description" in t, f"Tool missing description: {t!r}"
+        assert "input_schema" in t, f"Tool missing input_schema: {t!r}"
+        assert t["input_schema"]["type"] == "object"
+
+
+def test_agent_tool_schemas_names_in_terris_tool_map():
+    """All agent tool schema names must exist in TERRIS_TOOL_MAP."""
+    from app.services.fcgma.conversation import _AGENT_TOOL_SCHEMAS
+    from app.services.fcgma.terris import TERRIS_TOOL_MAP
+    for schema in _AGENT_TOOL_SCHEMAS:
+        name = schema["name"]
+        assert name in TERRIS_TOOL_MAP, f"Agent tool {name!r} not in TERRIS_TOOL_MAP"
+
+
+# ─────────────────────────────────────────────
+# Quantity definitions consistency
+# ─────────────────────────────────────────────
+
+def test_nine_quantities_non_negative():
+    """All nine water-accounting quantities must be non-negative after scenario injection."""
+    from app.services.fcgma.reconciliation import create_snapshot
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    inject_all_scenarios()
+    snap = create_snapshot(triggered_by="test-nine-quantities")
+    quantities = [
+        snap["total_extraction_af"], snap["supported_extraction_af"], snap["provisional_af"],
+        snap["quarantined_af"], snap["confirmed_applied_water_af"],
+        snap["provisional_applied_water_af"], snap["unattributed_af"],
+        snap["quantity_under_review_af"], snap["total_reported_af"],
+    ]
+    for i, q in enumerate(quantities):
+        assert q >= 0, f"Quantity {i} is negative: {q}"
+
+
+# ─────────────────────────────────────────────
+# Reconciliation + briefing integration (Part 10)
+# ─────────────────────────────────────────────
+
+def test_reconciliation_run_includes_proactive_briefing(client):
+    """POST /reconciliation/run must return a proactive_briefing section."""
+    resp = client.post("/v1/fcgma-demo/reconciliation/run")
+    assert resp.status_code == 200, resp.text
+    data = resp.json()
+    assert "proactive_briefing" in data, "Missing proactive_briefing in reconciliation response"
+    pb = data["proactive_briefing"]
+    assert pb is not None
+    assert "briefing" in pb
+    assert isinstance(pb["briefing"], str)
+    assert len(pb["briefing"]) > 50
+
+
+# ─────────────────────────────────────────────
+# Lineage edge cases
+# ─────────────────────────────────────────────
+
+def test_record_lineage_not_found_returns_none():
+    """get_record_lineage() must return None for a non-existent record_id."""
+    from app.services.fcgma.lineage import get_record_lineage
+    assert get_record_lineage("rec-nonexistent-id") is None
+
+
+def test_case_lineage_not_found_returns_none():
+    """get_case_lineage() must return None for a non-existent case_id."""
+    from app.services.fcgma.lineage import get_case_lineage
+    assert get_case_lineage("case-nonexistent-id") is None
+
+
+def test_lineage_record_endpoint_404(client):
+    """GET /lineage/records/{id} returns 404 for unknown record."""
+    resp = client.get("/v1/fcgma-demo/lineage/records/rec-does-not-exist")
+    assert resp.status_code == 404
+
+
+def test_lineage_case_endpoint_404(client):
+    """GET /lineage/cases/{id} returns 404 for unknown case."""
+    resp = client.get("/v1/fcgma-demo/lineage/cases/case-does-not-exist")
+    assert resp.status_code == 404
+
+
+# ─────────────────────────────────────────────
+# Reconciliation snapshot 404
+# ─────────────────────────────────────────────
+
+def test_reconciliation_compare_404_on_missing(client):
+    """GET /reconciliation/{id}/compare/{prior_id} returns 404 for missing IDs."""
+    resp = client.get("/v1/fcgma-demo/reconciliation/snap-bad1/compare/snap-bad2")
+    assert resp.status_code == 404
+
+
+# ─────────────────────────────────────────────
+# New tool result shapes
+# ─────────────────────────────────────────────
+
+def test_get_combcode_status_tool():
+    """get_combcode_status() returns completion_pct and counts."""
+    from app.services.fcgma.terris import get_combcode_status
+    from app.services.fcgma.scenarios import inject_all_scenarios
+    inject_all_scenarios()
+    result = get_combcode_status()
+    assert "total_meter_records" in result
+    assert "combcode_mapped" in result
+    assert "combcode_unmapped" in result
+    assert "combcode_completion_pct" in result
+    total = result["combcode_mapped"] + result["combcode_unmapped"]
+    assert total == result["total_meter_records"]
+
+
+def test_get_reconciliation_status_tool_no_snapshot():
+    """get_reconciliation_status() returns status='no_snapshot' when no snapshot exists."""
+    from app.services.fcgma.terris import get_reconciliation_status
+    from app.services.fcgma.reconciliation import _SNAPSHOTS
+    # Clear snapshots for this test
+    old = dict(_SNAPSHOTS)
+    _SNAPSHOTS.clear()
+    try:
+        result = get_reconciliation_status()
+        assert result["status"] == "no_snapshot"
+    finally:
+        _SNAPSHOTS.update(old)

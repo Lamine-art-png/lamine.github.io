@@ -812,6 +812,103 @@ def download_csv(report_id: str, type: str = Query(default="records")) -> Respon
 
 
 # ─────────────────────────────────────────────
+# Reconciliation (Parts 2 & 4)
+# ─────────────────────────────────────────────
+
+@router.post("/reconciliation/run")
+def run_reconciliation() -> dict[str, Any]:
+    """Run a full reconciliation pass and capture a versioned ReconciliationSnapshot."""
+    _ensure_initialized()
+    from app.services.fcgma.reconciliation import create_snapshot
+    from app.services.fcgma.briefing import generate_terris_briefing
+
+    progress_events: list[dict[str, Any]] = []
+
+    def _collect(stage: str, label: str) -> None:
+        progress_events.append({"stage": stage, "label": label})
+
+    snap = create_snapshot(triggered_by="api", on_progress=_collect)
+
+    # Part 10: proactive briefing after reconciliation
+    briefing = None
+    try:
+        briefing = generate_terris_briefing()
+    except Exception:
+        pass
+
+    return {
+        "snapshot": snap,
+        "progress_events": progress_events,
+        "proactive_briefing": {
+            "briefing": briefing.get("briefing") if briefing else None,
+            "open_case_count": briefing.get("open_case_count") if briefing else None,
+            "high_severity_count": briefing.get("high_severity_count") if briefing else None,
+            "suggested_actions": briefing.get("suggested_actions", []) if briefing else [],
+        } if briefing else None,
+        "disclaimer": "Reconciliation snapshot is from demonstration scenarios only.",
+    }
+
+
+@router.get("/reconciliation/latest")
+def get_latest_reconciliation() -> dict[str, Any]:
+    """Get the most recent ReconciliationSnapshot."""
+    _ensure_initialized()
+    from app.services.fcgma.reconciliation import get_latest_snapshot
+    snap = get_latest_snapshot()
+    if not snap:
+        raise HTTPException(404, "No reconciliation snapshot exists. Run POST /reconciliation/run first.")
+    return snap
+
+
+@router.get("/reconciliation/{snap_id}")
+def get_reconciliation_snapshot(snap_id: str) -> dict[str, Any]:
+    """Get a specific ReconciliationSnapshot by ID."""
+    _ensure_initialized()
+    from app.services.fcgma.reconciliation import get_snapshot
+    snap = get_snapshot(snap_id)
+    if not snap:
+        raise HTTPException(404, f"Snapshot '{snap_id}' not found.")
+    return snap
+
+
+@router.get("/reconciliation/{snap_id}/compare/{prior_id}")
+def compare_reconciliation(snap_id: str, prior_id: str) -> dict[str, Any]:
+    """Compare two ReconciliationSnapshots — quantities, counts, and gate changes."""
+    _ensure_initialized()
+    from app.services.fcgma.reconciliation import compare_snapshots
+    result = compare_snapshots(snap_id, prior_id)
+    if not result:
+        raise HTTPException(404, f"One or both snapshots not found: {snap_id}, {prior_id}")
+    return result
+
+
+# ─────────────────────────────────────────────
+# Lineage (Part 5)
+# ─────────────────────────────────────────────
+
+@router.get("/lineage/records/{record_id}")
+def get_record_lineage(record_id: str) -> dict[str, Any]:
+    """Get the full source-to-report lineage trace for a ledger record."""
+    _ensure_initialized()
+    from app.services.fcgma.lineage import get_record_lineage as do_lineage
+    result = do_lineage(record_id)
+    if not result:
+        raise HTTPException(404, f"Record '{record_id}' not found.")
+    return result
+
+
+@router.get("/lineage/cases/{case_id}")
+def get_case_lineage(case_id: str) -> dict[str, Any]:
+    """Get the lineage trace for all records contributing to a ReviewCase."""
+    _ensure_initialized()
+    from app.services.fcgma.lineage import get_case_lineage as do_case_lineage
+    result = do_case_lineage(case_id)
+    if not result:
+        raise HTTPException(404, f"Case '{case_id}' not found.")
+    return result
+
+
+# ─────────────────────────────────────────────
 # CIMIS weather context
 # ─────────────────────────────────────────────
 

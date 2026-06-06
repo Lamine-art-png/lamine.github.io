@@ -350,6 +350,366 @@ def draft_follow_up_request(exception_type: str | None = None) -> dict[str, Any]
 # Extended tool map
 # ─────────────────────────────────────────────
 
+# ─────────────────────────────────────────────
+# Extended domain tools (Part 7)
+# ─────────────────────────────────────────────
+
+def get_gate_status() -> dict[str, Any]:
+    """Returns all five reporting gate statuses and summary position."""
+    from .gates import compute_all_gates
+    gates = compute_all_gates()
+    return {
+        "tool": "get_gate_status",
+        "reporting_period": gates.get("reporting_period"),
+        "submission_deadline": gates.get("submission_deadline"),
+        "gates_clear": gates["gate_summary"]["clear"],
+        "gates_attention": gates["gate_summary"]["attention"],
+        "gates_blocked": gates["gate_summary"]["blocked"],
+        "gates_total": gates["gate_summary"].get("total", 5),
+        "prerequisite_count": gates["gate_summary"].get("prerequisite", 4),
+        "summary_position": gates.get("summary_position"),
+        "gate_5_status": gates["gates"][-1]["status"] if gates.get("gates") else "unknown",
+        "gate_5_label": gates["gates"][-1]["status_label"] if gates.get("gates") else "Unknown",
+        "answer_type": "fact",
+        "calculation_version": CALCULATION_VERSION,
+    }
+
+
+def get_applied_water_summary() -> dict[str, Any]:
+    """Returns provisional applied-water attribution summary across all records."""
+    records = list_records()
+    meter_records = [r for r in records if r.get("evidence_class") == "groundwater_meter_reading"]
+
+    total_iv = sum((r.get("interval_volume") or 0) for r in meter_records)
+    confirmed_aw = sum((r.get("confirmed_applied_water_af") or 0) for r in meter_records)
+    provisional_aw = sum((r.get("provisional_applied_water_af") or 0) for r in meter_records)
+    unattributed = max(0.0, total_iv - confirmed_aw - provisional_aw)
+
+    combcode_ok = sum(1 for r in meter_records if r.get("combcode"))
+    parcel_ok = sum(1 for r in meter_records if r.get("parcel_ids"))
+    total_meter = len(meter_records)
+
+    return {
+        "tool": "get_applied_water_summary",
+        "total_metered_af": round(total_iv, 4),
+        "confirmed_applied_water_af": round(confirmed_aw, 4),
+        "provisional_applied_water_af": round(provisional_aw, 4),
+        "unattributed_af": round(unattributed, 4),
+        "total_meter_records": total_meter,
+        "records_with_combcode": combcode_ok,
+        "records_with_parcel_mapping": parcel_ok,
+        "attribution_model": "DEMO RULESET v0.1",
+        "attribution_model_status": "provisional",
+        "answer_type": "fact+calculation",
+        "disclaimer": (
+            "Applied-water attribution is provisional. "
+            "Requires Fox Canyon validation before regulatory reporting."
+        ),
+        "calculation_version": CALCULATION_VERSION,
+    }
+
+
+def get_high_severity_cases() -> dict[str, Any]:
+    """Returns open cases with high severity — the most critical items."""
+    from .cases import build_cases
+    cases = build_cases()
+    high = [c for c in cases if c.get("status") == "open" and c.get("severity") == "high"]
+    total_af = round(sum(c.get("affected_quantity_af", 0) for c in high), 4)
+    return {
+        "tool": "get_high_severity_cases",
+        "count": len(high),
+        "total_affected_af": total_af,
+        "cases": high[:10],
+        "answer_type": "fact",
+        "calculation_version": CALCULATION_VERSION,
+    }
+
+
+def get_well_records(well_id: str | None = None) -> dict[str, Any]:
+    """Returns all ledger records for a specific well, with exception summary."""
+    records = list_records()
+    if well_id:
+        records = [r for r in records if r.get("well_id") == well_id]
+
+    summary = []
+    for r in records:
+        open_excs = [e for e in r.get("exceptions", []) if e.get("status") != "resolved"]
+        summary.append({
+            "record_id": r["id"],
+            "well_id": r["well_id"],
+            "evidence_class": r["evidence_class"],
+            "provider": r["provider"],
+            "event_timestamp": r["event_timestamp"],
+            "review_status": r["review_status"],
+            "interval_volume_af": r.get("interval_volume"),
+            "open_exception_count": len(open_excs),
+            "exception_types": [e["exception_type"] for e in open_excs],
+        })
+
+    wells_found = list(dict.fromkeys(r["well_id"] for r in records))
+    return {
+        "tool": "get_well_records",
+        "well_id": well_id or "all",
+        "record_count": len(summary),
+        "wells": wells_found,
+        "records": summary[:20],
+        "answer_type": "fact",
+        "calculation_version": CALCULATION_VERSION,
+    }
+
+
+def get_exception_count_by_type() -> dict[str, Any]:
+    """Returns a breakdown of open exceptions by type and severity."""
+    exceptions = list_exceptions()
+    open_excs = [e for e in exceptions if e.get("status") != "resolved"]
+
+    by_type: dict[str, dict[str, int]] = {}
+    for e in open_excs:
+        t = e.get("exception_type", "unknown")
+        s = e.get("severity", "medium")
+        if t not in by_type:
+            by_type[t] = {"total": 0, "high": 0, "medium": 0, "low": 0}
+        by_type[t]["total"] += 1
+        by_type[t][s] = by_type[t].get(s, 0) + 1
+
+    rows = [{"exception_type": t, **counts} for t, counts in sorted(by_type.items())]
+
+    return {
+        "tool": "get_exception_count_by_type",
+        "total_open": len(open_excs),
+        "type_count": len(by_type),
+        "by_type": rows,
+        "answer_type": "fact",
+        "calculation_version": CALCULATION_VERSION,
+    }
+
+
+def list_wells_with_issues() -> dict[str, Any]:
+    """Returns wells that have at least one open exception, with issue summary."""
+    records = list_records()
+    wells: dict[str, dict[str, Any]] = {}
+
+    all_excs = list_exceptions()
+    global_by_record: dict[str, list[dict]] = {}
+    for exc in all_excs:
+        if exc.get("status") != "resolved":
+            rid = exc.get("record_id")
+            if rid:
+                global_by_record.setdefault(rid, []).append(exc)
+
+    for r in records:
+        embedded = {e["id"]: e for e in r.get("exceptions", []) if e.get("status") != "resolved"}
+        global_excs = {e["id"]: e for e in global_by_record.get(r["id"], [])}
+        merged = {**global_excs, **embedded}
+        if not merged:
+            continue
+        wid = r["well_id"]
+        if wid not in wells:
+            wells[wid] = {"well_id": wid, "open_exceptions": 0, "types": set(), "records": 0}
+        wells[wid]["open_exceptions"] += len(merged)
+        wells[wid]["records"] += 1
+        for e in merged.values():
+            wells[wid]["types"].add(e["exception_type"])
+
+    result = [
+        {
+            "well_id": w["well_id"],
+            "open_exceptions": w["open_exceptions"],
+            "exception_types": sorted(w["types"]),
+            "records_affected": w["records"],
+        }
+        for w in sorted(wells.values(), key=lambda x: x["open_exceptions"], reverse=True)
+    ]
+
+    return {
+        "tool": "list_wells_with_issues",
+        "well_count": len(result),
+        "wells": result,
+        "answer_type": "fact",
+        "calculation_version": CALCULATION_VERSION,
+    }
+
+
+def get_operator_action_items() -> dict[str, Any]:
+    """Returns cases requiring field operator confirmation or investigation."""
+    from .cases import build_cases
+    operator_types = {
+        "pump_activity_without_meter_movement",
+        "backup_estimate_required",
+        "missing_telemetry_interval",
+    }
+    cases = build_cases()
+    operator_cases = [
+        c for c in cases
+        if c.get("status") == "open"
+        and any(cat in operator_types for cat in c.get("issue_categories", []))
+    ]
+    return {
+        "tool": "get_operator_action_items",
+        "count": len(operator_cases),
+        "cases": operator_cases[:10],
+        "description": "These cases require field operator confirmation or site investigation.",
+        "answer_type": "fact+recommended_next_action",
+        "calculation_version": CALCULATION_VERSION,
+    }
+
+
+def get_agency_action_items() -> dict[str, Any]:
+    """Returns cases requiring FCGMA agency notification or CombCode coordination."""
+    from .cases import build_cases
+    agency_types = {
+        "meter_reset_detected",
+        "unresolved_combcode",
+        "multiplier_change",
+        "backup_estimate_required",
+        "late_arriving_record",
+    }
+    cases = build_cases()
+    agency_cases = [
+        c for c in cases
+        if c.get("status") == "open"
+        and any(cat in agency_types for cat in c.get("issue_categories", []))
+    ]
+    return {
+        "tool": "get_agency_action_items",
+        "count": len(agency_cases),
+        "cases": agency_cases[:10],
+        "description": "These cases require FCGMA notification or CombCode coordination.",
+        "answer_type": "fact+recommended_next_action",
+        "calculation_version": CALCULATION_VERSION,
+    }
+
+
+def get_combcode_status() -> dict[str, Any]:
+    """Returns CombCode mapping status across all groundwater meter records."""
+    records = [
+        r for r in list_records()
+        if r.get("evidence_class") == "groundwater_meter_reading"
+    ]
+    mapped = sum(1 for r in records if r.get("combcode"))
+    unmapped = len(records) - mapped
+    parcel_mapped = sum(1 for r in records if r.get("parcel_ids"))
+    parcel_unmapped = len(records) - parcel_mapped
+
+    return {
+        "tool": "get_combcode_status",
+        "total_meter_records": len(records),
+        "combcode_mapped": mapped,
+        "combcode_unmapped": unmapped,
+        "parcel_mapped": parcel_mapped,
+        "parcel_unmapped": parcel_unmapped,
+        "combcode_completion_pct": round(mapped / len(records) * 100, 1) if records else 0.0,
+        "answer_type": "fact",
+        "calculation_version": CALCULATION_VERSION,
+    }
+
+
+def draft_evidence_request(well_id: str | None = None) -> dict[str, Any]:
+    """Drafts a structured evidence request for a well or all wells with open issues."""
+    from .cases import build_cases
+    cases = build_cases()
+    open_cases = [c for c in cases if c.get("status") == "open"]
+    if well_id:
+        open_cases = [c for c in open_cases if c.get("well_id") == well_id]
+
+    requests = []
+    for c in open_cases[:10]:
+        evidence_needed = c.get("required_evidence", [])
+        if evidence_needed:
+            requests.append({
+                "well_id": c["well_id"],
+                "case_id": c["case_id"],
+                "primary_issue": c["primary_issue"],
+                "evidence_needed": evidence_needed,
+                "recipient": (
+                    "FCGMA" if any(t in {"meter_reset_detected", "unresolved_combcode", "multiplier_change"}
+                                  for t in c.get("issue_categories", []))
+                    else "Field Operator"
+                ),
+            })
+
+    return {
+        "tool": "draft_evidence_request",
+        "well_id": well_id or "all",
+        "request_count": len(requests),
+        "requests": requests,
+        "disclaimer": (
+            "Draft evidence requests for review only. "
+            "Terris does not file regulatory reports."
+        ),
+        "answer_type": "recommended_next_action",
+        "calculation_version": CALCULATION_VERSION,
+    }
+
+
+def get_cycle_readiness() -> dict[str, Any]:
+    """Returns detailed cycle readiness metrics — readiness %, blockers, and path to close."""
+    cycle = get_reporting_cycle_status()
+    from .cases import build_cases
+    cases = build_cases()
+    open_cases = [c for c in cases if c.get("status") == "open"]
+    high_cases = [c for c in open_cases if c.get("severity") == "high"]
+
+    operator_types = {"pump_activity_without_meter_movement", "backup_estimate_required", "missing_telemetry_interval"}
+    agency_types = {"meter_reset_detected", "unresolved_combcode", "multiplier_change"}
+
+    operator_items = [c for c in open_cases if any(t in operator_types for t in c.get("issue_categories", []))]
+    agency_items = [c for c in open_cases if any(t in agency_types for t in c.get("issue_categories", []))]
+    self_service = [c for c in open_cases if c not in operator_items and c not in agency_items]
+
+    return {
+        "tool": "get_cycle_readiness",
+        "readiness_percentage": cycle.get("readiness_percentage", 0),
+        "status_label": cycle.get("status_label"),
+        "total_records": cycle.get("total_records", 0),
+        "ready_for_export": cycle.get("ready_for_export", 0),
+        "blocking_exceptions": cycle.get("blocking_exceptions", 0),
+        "open_cases": len(open_cases),
+        "high_severity_cases": len(high_cases),
+        "operator_action_items": len(operator_items),
+        "agency_action_items": len(agency_items),
+        "self_service_items": len(self_service),
+        "path_to_close": (
+            f"Resolve {len(operator_items)} operator items and {len(agency_items)} agency items. "
+            + (f"{len(self_service)} case(s) can be resolved using existing evidence. " if self_service else "")
+        ),
+        "answer_type": "fact+calculation",
+        "calculation_version": CALCULATION_VERSION,
+    }
+
+
+def get_reconciliation_status() -> dict[str, Any]:
+    """Returns the latest reconciliation snapshot summary, or triggers one if none exists."""
+    from .reconciliation import get_latest_snapshot
+    snap = get_latest_snapshot()
+    if not snap:
+        return {
+            "tool": "get_reconciliation_status",
+            "status": "no_snapshot",
+            "message": "No reconciliation snapshot exists yet. Run a reconciliation pass first.",
+            "answer_type": "missing_information",
+            "calculation_version": CALCULATION_VERSION,
+        }
+    return {
+        "tool": "get_reconciliation_status",
+        "snapshot_id": snap["id"],
+        "created_at": snap["created_at"],
+        "gates_clear": snap["gates_clear"],
+        "gates_total": snap["gates_total"],
+        "gate_5_label": snap["gate_5_label"],
+        "total_records": snap["total_records"],
+        "records_cleared": snap["records_cleared"],
+        "open_cases": snap["open_cases"],
+        "high_severity_cases": snap["high_severity_cases"],
+        "total_extraction_af": snap["total_extraction_af"],
+        "supported_extraction_af": snap["supported_extraction_af"],
+        "provisional_af": snap["provisional_af"],
+        "total_reported_af": snap["total_reported_af"],
+        "answer_type": "fact+calculation",
+        "calculation_version": CALCULATION_VERSION,
+    }
+
+
 TERRIS_TOOL_MAP: dict[str, Any] = {
     **TOOL_MAP,
     "get_reporting_cycle_status": get_reporting_cycle_status,
@@ -359,6 +719,19 @@ TERRIS_TOOL_MAP: dict[str, Any] = {
     "generate_exception_packet": generate_exception_packet,
     "add_records_to_evidence_bundle": add_records_to_evidence_bundle,
     "draft_follow_up_request": draft_follow_up_request,
+    # Extended domain tools
+    "get_gate_status": get_gate_status,
+    "get_applied_water_summary": get_applied_water_summary,
+    "get_high_severity_cases": get_high_severity_cases,
+    "get_well_records": get_well_records,
+    "get_exception_count_by_type": get_exception_count_by_type,
+    "list_wells_with_issues": list_wells_with_issues,
+    "get_operator_action_items": get_operator_action_items,
+    "get_agency_action_items": get_agency_action_items,
+    "get_combcode_status": get_combcode_status,
+    "draft_evidence_request": draft_evidence_request,
+    "get_cycle_readiness": get_cycle_readiness,
+    "get_reconciliation_status": get_reconciliation_status,
 }
 
 TERRIS_PRESET_QUESTIONS = [
@@ -427,6 +800,7 @@ def _n(count: int, singular: str, plural: str | None = None) -> str:
 # ─────────────────────────────────────────────
 
 STAGE_PROGRESS_LABELS: dict[str, str] = {
+    # Core tools
     "invoke_list_priority_actions": "Reviewing priority cases…",
     "invoke_get_reporting_cycle_status": "Reviewing the current reporting cycle…",
     "invoke_list_records_blocking_reporting": "Identifying records blocking cycle close…",
@@ -439,6 +813,20 @@ STAGE_PROGRESS_LABELS: dict[str, str] = {
     "invoke_get_executive_summary": "Reviewing the ledger summary…",
     "invoke_generate_reporting_summary": "Checking reporting summary…",
     "invoke_add_records_to_evidence_bundle": "Staging evidence bundle…",
+    # Extended domain tools
+    "invoke_get_gate_status": "Evaluating five reporting gates…",
+    "invoke_get_applied_water_summary": "Reviewing applied-water attribution…",
+    "invoke_get_high_severity_cases": "Identifying high-severity cases…",
+    "invoke_get_well_records": "Loading well records from ledger…",
+    "invoke_get_exception_count_by_type": "Counting exceptions by type…",
+    "invoke_list_wells_with_issues": "Scanning wells for open issues…",
+    "invoke_get_operator_action_items": "Identifying operator action items…",
+    "invoke_get_agency_action_items": "Identifying agency notification items…",
+    "invoke_get_combcode_status": "Checking CombCode mapping coverage…",
+    "invoke_draft_evidence_request": "Drafting evidence request…",
+    "invoke_get_cycle_readiness": "Computing cycle readiness metrics…",
+    "invoke_get_reconciliation_status": "Loading latest reconciliation snapshot…",
+    # Investigation stages
     "inspect_records": "Reconciling affected meter records…",
     "identify_assumptions": "Checking calculation assumptions…",
     "inspect_record": "Inspecting meter record…",
@@ -500,6 +888,54 @@ def _brief_tool_result(tool_name: str, result: dict) -> str:
     if tool_name == "add_records_to_evidence_bundle":
         n = result.get("staged_count", 0)
         return f"{_n(n, 'record')} staged for bundle"
+    if tool_name == "get_gate_status":
+        clear = result.get("gates_clear", 0)
+        total = result.get("gates_total", 5)
+        label = result.get("gate_5_label", "?")
+        return f"{clear}/{total} gates clear · submission: {label}"
+    if tool_name == "get_applied_water_summary":
+        af = result.get("total_metered_af", 0)
+        prov = result.get("provisional_applied_water_af", 0)
+        return f"{af:.2f} AF metered · {prov:.2f} AF provisional"
+    if tool_name == "get_high_severity_cases":
+        n = result.get("count", 0)
+        af = result.get("total_affected_af", 0)
+        return f"{_n(n, 'high-severity case')} · {af:.2f} AF affected"
+    if tool_name == "get_well_records":
+        n = result.get("record_count", 0)
+        return f"{_n(n, 'record')} for {result.get('well_id', 'all wells')}"
+    if tool_name == "get_exception_count_by_type":
+        n = result.get("total_open", 0)
+        types = result.get("type_count", 0)
+        return f"{_n(n, 'open exception')} across {_n(types, 'type')}"
+    if tool_name == "list_wells_with_issues":
+        n = result.get("well_count", 0)
+        return f"{_n(n, 'well')} with open exceptions"
+    if tool_name == "get_operator_action_items":
+        n = result.get("count", 0)
+        return f"{_n(n, 'item')} requiring operator confirmation"
+    if tool_name == "get_agency_action_items":
+        n = result.get("count", 0)
+        return f"{_n(n, 'item')} requiring FCGMA notification"
+    if tool_name == "get_combcode_status":
+        pct = result.get("combcode_completion_pct", 0)
+        unmapped = result.get("combcode_unmapped", 0)
+        return f"CombCode mapping: {pct}% complete · {_n(unmapped, 'record')} unmapped"
+    if tool_name == "draft_evidence_request":
+        n = result.get("request_count", 0)
+        return f"{_n(n, 'evidence request')} drafted"
+    if tool_name == "get_cycle_readiness":
+        pct = result.get("readiness_percentage", 0)
+        path = result.get("path_to_close", "")
+        return f"{pct}% ready · {path[:80]}"
+    if tool_name == "get_reconciliation_status":
+        status = result.get("status")
+        if status == "no_snapshot":
+            return "No reconciliation snapshot — run reconciliation first"
+        snap_at = result.get("created_at", "")[:10]
+        gates_clear = result.get("gates_clear", 0)
+        total_gates = result.get("gates_total", 5)
+        return f"Snapshot {snap_at} · {gates_clear}/{total_gates} gates clear"
     return "Tool completed"
 
 

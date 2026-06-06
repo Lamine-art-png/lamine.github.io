@@ -502,13 +502,15 @@ def compute_all_gates() -> dict[str, Any]:
     quantity_under_review = gate2.get("quantity_under_review_af", 0.0)
 
     # Build natural summary
-    if clear_count == 4:
+    prerequisite_count = 4  # gates 1-4; gate 5 is the aggregate readiness gate
+    if clear_count == prerequisite_count:
         summary_position = (
-            "All four prerequisite gates are clear. The cycle is ready for submission review."
+            f"All {prerequisite_count} prerequisite gates are clear. "
+            "The cycle is ready for submission review."
         )
     elif blocked_count > 0:
         summary_position = (
-            f"{_n(clear_count, 'gate')} of four are clear. "
+            f"{_n(clear_count, 'gate')} of {prerequisite_count} prerequisite gates are clear. "
             f"{_n(blocked_count, 'gate')} {'is' if blocked_count == 1 else 'are'} blocked."
             + (
                 f" {_n(material_case_count, 'material case')} remain open, "
@@ -518,7 +520,7 @@ def compute_all_gates() -> dict[str, Any]:
         )
     else:
         summary_position = (
-            f"{_n(clear_count, 'gate')} of four are clear. "
+            f"{_n(clear_count, 'gate')} of {prerequisite_count} prerequisite gates are clear. "
             f"{_n(attention_count, 'gate')} {'requires' if attention_count == 1 else 'require'} attention."
             + (
                 f" {_n(material_case_count, 'material case')} remain open, "
@@ -536,6 +538,8 @@ def compute_all_gates() -> dict[str, Any]:
             "clear": clear_count,
             "attention": attention_count,
             "blocked": blocked_count,
+            "total": len(gates),
+            "prerequisite": prerequisite_count,
         },
         "generated_at": _now(),
         "calculation_version": CALCULATION_VERSION,

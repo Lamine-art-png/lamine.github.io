@@ -26,6 +26,7 @@ from .terris import (
     run_terris_investigation,
     AGENT_NAME,
     CALCULATION_VERSION,
+    STAGE_PROGRESS_LABELS,
     _brief_tool_result,
     _n,
 )
@@ -293,6 +294,157 @@ def _llm_narrate(
         raise
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Bounded LLM tool-using agent loop (Part 6)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_AGENT_TOOL_SCHEMAS: list[dict[str, Any]] = [
+    {"name": "get_reporting_cycle_status", "description": "Get current cycle readiness, blocking exception count, and submission deadline."},
+    {"name": "list_priority_actions", "description": "Get ranked action queue — top cases requiring attention."},
+    {"name": "list_records_blocking_reporting", "description": "List records with open exceptions that block cycle close."},
+    {"name": "get_gate_status", "description": "Get all five reporting gate statuses and overall summary position."},
+    {"name": "get_high_severity_cases", "description": "Get open cases with high severity and total affected AF."},
+    {"name": "get_applied_water_summary", "description": "Get provisional applied-water attribution summary."},
+    {"name": "get_exception_count_by_type", "description": "Get breakdown of open exceptions by type and severity."},
+    {"name": "list_wells_with_issues", "description": "List wells that have at least one open exception."},
+    {"name": "get_operator_action_items", "description": "Get cases requiring field operator confirmation."},
+    {"name": "get_agency_action_items", "description": "Get cases requiring FCGMA agency notification."},
+    {"name": "get_combcode_status", "description": "Get CombCode and parcel mapping completion status."},
+    {"name": "get_cycle_readiness", "description": "Get detailed cycle readiness: self-service vs operator vs agency items."},
+    {"name": "get_reconciliation_status", "description": "Get latest reconciliation snapshot summary."},
+    {"name": "generate_reporting_brief", "description": "Generate an executive reporting-readiness brief."},
+    {"name": "generate_exception_packet", "description": "Compile exception packet for agency notification review."},
+    {"name": "draft_follow_up_request", "description": "Draft follow-up requests for operator or agency action."},
+    {"name": "draft_evidence_request", "description": "Draft structured evidence requests for wells with open issues."},
+    {"name": "compare_provider_health", "description": "Compare provider feed health and connectivity status."},
+    {"name": "list_unvalidated_assumptions", "description": "List model assumptions requiring Fox Canyon validation."},
+    {"name": "run_applied_water_scenario", "description": "Run and explain the applied-water attribution scenario."},
+]
+
+_MAX_AGENT_ITERATIONS = 4
+
+
+def _build_anthropic_tool_list() -> list[dict[str, Any]]:
+    """Convert tool schemas to Anthropic tool-use format."""
+    tools = []
+    for t in _AGENT_TOOL_SCHEMAS:
+        tools.append({
+            "name": t["name"],
+            "description": t["description"],
+            "input_schema": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        })
+    return tools
+
+
+def _run_agent_loop(
+    user_query: str,
+    conversation_history: list[dict[str, Any]],
+    api_key: str,
+    provider: str,
+    model: str,
+    on_progress: Callable[[dict], None] | None = None,
+) -> tuple[str, list[dict[str, Any]]]:
+    """
+    Bounded tool-using agent loop.
+
+    LLM selects tools from TERRIS_TOOL_MAP; deterministic backend invokes them.
+    Max iterations: _MAX_AGENT_ITERATIONS to bound cost.
+    Returns (final_answer, audit_log).
+    """
+    from .terris import TERRIS_TOOL_MAP
+
+    if provider != "anthropic":
+        return ("Agent loop requires Anthropic provider.", [])
+
+    import anthropic  # type: ignore
+
+    client = anthropic.Anthropic(api_key=api_key)
+    tools = _build_anthropic_tool_list()
+    audit_log: list[dict[str, Any]] = []
+
+    messages: list[dict[str, Any]] = []
+    for turn in conversation_history[-6:]:
+        if turn["role"] in ("user", "assistant"):
+            messages.append({"role": turn["role"], "content": turn["content"]})
+    messages.append({"role": "user", "content": user_query})
+
+    tool_results_for_narration: dict[str, Any] = {}
+
+    for iteration in range(_MAX_AGENT_ITERATIONS):
+        resp = client.messages.create(
+            model=model,
+            max_tokens=1200,
+            system=_TERRIS_SYSTEM,
+            tools=tools,  # type: ignore
+            messages=messages,  # type: ignore
+        )
+
+        # Handle tool use
+        if resp.stop_reason == "tool_use":
+            tool_calls = [b for b in resp.content if b.type == "tool_use"]
+            tool_results_content: list[dict[str, Any]] = []
+
+            for tc in tool_calls:
+                tool_name = tc.name
+                fn = TERRIS_TOOL_MAP.get(tool_name)
+                label = STAGE_PROGRESS_LABELS.get(f"invoke_{tool_name}", f"Running {tool_name}…")
+
+                if on_progress:
+                    on_progress({"stage": f"agent_invoke_{tool_name}", "label": label, "status": "started"})
+
+                try:
+                    result = fn() if fn else {"error": f"Unknown tool: {tool_name}"}
+                    audit_log.append({
+                        "iteration": iteration + 1,
+                        "tool": tool_name,
+                        "status": "completed",
+                        "brief": _brief_tool_result(tool_name, result),
+                    })
+                    tool_results_for_narration[tool_name] = result
+                    tool_results_content.append({
+                        "type": "tool_result",
+                        "tool_use_id": tc.id,
+                        "content": _brief_tool_result(tool_name, result),
+                    })
+                    if on_progress:
+                        on_progress({"stage": f"agent_invoke_{tool_name}", "label": label, "status": "completed"})
+                except Exception as exc:
+                    audit_log.append({
+                        "iteration": iteration + 1,
+                        "tool": tool_name,
+                        "status": "error",
+                        "error": str(exc)[:120],
+                    })
+                    tool_results_content.append({
+                        "type": "tool_result",
+                        "tool_use_id": tc.id,
+                        "content": f"Error: {str(exc)[:80]}",
+                        "is_error": True,
+                    })
+
+            # Append assistant turn with tool use
+            messages.append({"role": "assistant", "content": resp.content})  # type: ignore
+            messages.append({"role": "user", "content": tool_results_content})  # type: ignore
+        else:
+            # end_turn — LLM has produced final text
+            final_text = "".join(
+                b.text for b in resp.content if hasattr(b, "text")
+            )
+            return final_text, audit_log
+
+    # Max iterations hit — synthesize from what we have
+    if tool_results_for_narration:
+        from .terris import run_terris_investigation
+        inv = run_terris_investigation(user_query)
+        return inv.get("direct_answer", "Investigation complete. See evidence trail."), audit_log
+
+    return "Investigation complete. See evidence trail.", audit_log
+
+
 def _build_follow_up_suggestions(investigation: dict[str, Any], ctx: dict[str, Any]) -> list[str]:
     """Return 2-3 contextual follow-up suggestions based on current investigation."""
     intent = investigation.get("intent", "executive_summary")
@@ -435,18 +587,25 @@ def add_message(
     except Exception:
         pass
 
-    # Try LLM narration
+    # Try LLM narration (Connected Intelligence Mode)
     api_key, provider, model = _get_llm_config()
     llm_mode = "structured_safe"
     narrated_answer = investigation.get("direct_answer", "")
+    agent_audit_log: list[dict[str, Any]] = []
 
     if api_key:
         if on_progress:
             on_progress({"stage": "llm_synthesis", "label": "Synthesizing findings…", "status": "started"})
         try:
-            narrated_answer = _llm_narrate(
-                user_query, investigation, history, api_key, provider, model,
-            )
+            if provider == "anthropic":
+                # Use bounded tool-using agent loop for richer responses
+                narrated_answer, agent_audit_log = _run_agent_loop(
+                    user_query, history, api_key, provider, model, on_progress=on_progress,
+                )
+            else:
+                narrated_answer = _llm_narrate(
+                    user_query, investigation, history, api_key, provider, model,
+                )
             llm_mode = "connected_intelligence"
             if on_progress:
                 on_progress({"stage": "llm_synthesis", "label": "Synthesizing findings…", "status": "completed"})
@@ -479,6 +638,7 @@ def add_message(
         "llm_mode": llm_mode,
         "progress_labels": investigation.get("progress_labels", []),
         "reviewed_summary": investigation.get("reviewed_summary", ""),
+        "agent_audit_log": agent_audit_log,
         "investigation_meta": {
             "intent": investigation.get("intent"),
             "answer_type": investigation.get("answer_type"),

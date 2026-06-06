@@ -69,7 +69,7 @@ def _build_briefing_narrative(
     """
     gate_summary = gates.get("gate_summary", {})
     clear_gates = gate_summary.get("clear", 0)
-    total_prerequisite_gates = 4
+    total_gates = len(gates.get("gates", [])) or 5
 
     # ── Paragraph 1: Reporting position ──────────────────────────────────────
     if total == 0:
@@ -79,9 +79,10 @@ def _build_briefing_narrative(
         )
     else:
         pct = round(cleared / total * 100) if total > 0 else 0
+        gate_word = "gate" if clear_gates == 1 else "gates"
         position_sentence = (
             f"The current reporting position for 2026-Q1 is {clear_gates} of "
-            f"{total_prerequisite_gates} prerequisite gates clear. "
+            f"{total_gates} {gate_word} clear. "
             f"{cleared} of {total} {'record is' if total == 1 else 'records are'} cleared for reporting "
             f"({pct}%), "
             f"with {under_review_af:.2f} AF currently under provisional review."
