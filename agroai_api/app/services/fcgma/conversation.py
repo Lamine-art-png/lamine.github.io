@@ -8,7 +8,7 @@ LLM integration:
   TERRIS_LLM_MODEL            — model name override for paid providers
   TERRIS_LLM_API_KEY          — provider API key for paid providers
   TERRIS_GEMINI_API_KEY       — Gemini API key (free developer tier)
-  TERRIS_GEMINI_MODEL         — Gemini model (default: gemini-2.0-flash)
+  TERRIS_GEMINI_MODEL         — Gemini model (default: gemini-3.5-flash)
   TERRIS_EXTERNAL_DEMO_ONLY   — restrict external model to illustrative data (default: true)
   TERRIS_EXTERNAL_BLOCK_PRIVATE — block private/confidential provenance (default: true)
   TERRIS_EXTERNAL_ALLOWED_PROVENANCE — comma-separated allowed provenance categories
@@ -253,7 +253,7 @@ def _get_llm_config() -> tuple[str | None, str, str, str]:
         api_key = os.getenv("TERRIS_GEMINI_API_KEY")
         if not api_key or not api_key.strip():
             api_key = None
-        model = os.getenv("TERRIS_GEMINI_MODEL", "gemini-2.0-flash")
+        model = os.getenv("TERRIS_GEMINI_MODEL", "gemini-3.5-flash")
         reasoning_effort = "medium"
         return api_key, provider, model, reasoning_effort
 
@@ -289,7 +289,7 @@ def _get_ollama_config() -> dict[str, Any]:
 def _get_gemini_config() -> dict[str, Any]:
     """Return Gemini Demo Intelligence configuration."""
     return {
-        "model": os.getenv("TERRIS_GEMINI_MODEL", "gemini-2.0-flash"),
+        "model": os.getenv("TERRIS_GEMINI_MODEL", "gemini-3.5-flash"),
         "max_tool_iterations": int(os.getenv("TERRIS_EXTERNAL_MAX_TOOL_ITERATIONS", "6")),
         "timeout_seconds": float(os.getenv("TERRIS_EXTERNAL_TIMEOUT_SECONDS", "120")),
         "demo_only": os.getenv("TERRIS_EXTERNAL_DEMO_ONLY", "true").lower() == "true",
@@ -411,6 +411,7 @@ def get_provider_health() -> dict[str, Any]:
         key_set = bool(api_key)
         demo_only = cfg["demo_only"]
         block_private = cfg["block_private"]
+        active_health = _get_gemini_active_health()
 
         stored_mode = _PROVIDER_HEALTH.get("mode", "structured_safe")
         if stored_mode in ("gemini_demo_intelligence", "gemini_demo_degraded"):
@@ -440,13 +441,21 @@ def get_provider_health() -> dict[str, Any]:
             ),
             "cloud_key_required": True,
             "cloud_inference_disabled": False,
+            "schema_valid": active_health["schema_valid"],
+            "recent_provider_health": active_health["recent_health"],
+            "health_check_age_seconds": active_health["health_check_age_seconds"],
+            "health_ttl_seconds": active_health["health_ttl_seconds"],
+            "rate_limited": active_health["rate_limited"],
+            "rate_limited_at": active_health["rate_limited_at"],
+            "fallback_active": active_health["fallback_active"],
             "last_check_at": _PROVIDER_HEALTH.get("last_check_at"),
             "last_error_redacted": _PROVIDER_HEALTH.get("last_error_redacted"),
             "process_start": _PROVIDER_HEALTH.get("process_start"),
             "note": (
                 "Gemini Demo Intelligence. Illustrative and sanitized records only. "
                 "Private data is blocked before any external model call. "
-                "Configure with: bash scripts/configure_terris_gemini_demo.sh"
+                "Configure with: bash scripts/configure_terris_gemini_demo.sh. "
+                "API rate limits: see aistudio.google.com/usage"
             ),
         }
 
@@ -525,23 +534,88 @@ def _validate_evidence_provenance(evidence_items: list[dict[str, Any]]) -> tuple
     return True, ""
 
 
-def _get_tool_provenance(tool_name: str) -> str:
-    """Return the provenance category for a demo tool result.
+# ─────────────────────────────────────────────────────────────────────────────
+# Per-tool external provenance policy registry
+# Each tool must explicitly declare its external access policy.
+# Unknown tools → FAIL CLOSED (external_allowed=False).
+# ─────────────────────────────────────────────────────────────────────────────
 
-    All demo tools return sanitized replay or injected demo scenarios.
-    No tool in the illustrative demo returns private, confidential, or credential data.
-    """
-    return "injected_demo_scenario"
+_DEMO_TOOL_POLICY: dict[str, Any] = {
+    "external_allowed": True,
+    "allowed_output_provenance": frozenset({
+        "public_context", "sanitized_replay", "injected_demo_scenario"
+    }),
+    "sends_summary_only": True,
+    "blocks_unknown_fields": True,
+    "requires_anonymization": False,
+    "safe_for_gemini_demo": True,
+    "field_redaction_policy": "summary_only",
+}
+
+TOOL_EXTERNAL_PROVENANCE_POLICY: dict[str, dict[str, Any]] = {
+    "get_reporting_cycle_status":       {**_DEMO_TOOL_POLICY, "audit_category": "cycle_status"},
+    "list_priority_actions":            {**_DEMO_TOOL_POLICY, "audit_category": "priority_queue"},
+    "list_records_blocking_reporting":  {**_DEMO_TOOL_POLICY, "audit_category": "blocking_records"},
+    "get_gate_status":                  {**_DEMO_TOOL_POLICY, "audit_category": "gate_status"},
+    "get_high_severity_cases":          {**_DEMO_TOOL_POLICY, "audit_category": "case_severity"},
+    "get_applied_water_summary":        {**_DEMO_TOOL_POLICY, "audit_category": "applied_water"},
+    "get_exception_count_by_type":      {**_DEMO_TOOL_POLICY, "audit_category": "exception_types"},
+    "list_wells_with_issues":           {**_DEMO_TOOL_POLICY, "audit_category": "well_status"},
+    "get_operator_action_items":        {**_DEMO_TOOL_POLICY, "audit_category": "operator_actions"},
+    "get_agency_action_items":          {**_DEMO_TOOL_POLICY, "audit_category": "agency_actions"},
+    "get_combcode_status":              {**_DEMO_TOOL_POLICY, "audit_category": "combcode_status"},
+    "get_cycle_readiness":              {**_DEMO_TOOL_POLICY, "audit_category": "cycle_readiness"},
+    "get_reconciliation_status":        {**_DEMO_TOOL_POLICY, "audit_category": "reconciliation"},
+    "generate_reporting_brief":         {**_DEMO_TOOL_POLICY, "audit_category": "reporting_brief"},
+    "generate_exception_packet":        {**_DEMO_TOOL_POLICY, "audit_category": "exception_packet"},
+    "draft_follow_up_request":          {**_DEMO_TOOL_POLICY, "audit_category": "follow_up_request"},
+    "draft_evidence_request":           {**_DEMO_TOOL_POLICY, "audit_category": "evidence_request"},
+    "compare_provider_health":          {**_DEMO_TOOL_POLICY, "audit_category": "provider_health"},
+    "list_unvalidated_assumptions":     {**_DEMO_TOOL_POLICY, "audit_category": "assumptions"},
+    "run_applied_water_scenario":       {**_DEMO_TOOL_POLICY, "audit_category": "water_scenario"},
+}
+
+# Default for any tool NOT in the registry: FAIL CLOSED
+_TOOL_POLICY_DEFAULT: dict[str, Any] = {
+    "external_allowed": False,
+    "allowed_output_provenance": frozenset(),
+    "sends_summary_only": False,
+    "blocks_unknown_fields": True,
+    "requires_anonymization": True,
+    "safe_for_gemini_demo": False,
+    "field_redaction_policy": "block",
+    "audit_category": "unknown",
+}
+
+
+def _get_tool_policy(tool_name: str) -> dict[str, Any]:
+    """Return the external provenance policy for a tool. Unknown tools fail closed."""
+    return TOOL_EXTERNAL_PROVENANCE_POLICY.get(tool_name, _TOOL_POLICY_DEFAULT)
+
+
+def _get_tool_provenance(tool_name: str) -> str:
+    """Return a representative provenance tag for a tool, derived from its registry policy."""
+    policy = _get_tool_policy(tool_name)
+    allowed = policy.get("allowed_output_provenance", frozenset())
+    if not allowed:
+        return "unknown"
+    # Prefer injected_demo_scenario for demo tools, otherwise first allowed
+    if "injected_demo_scenario" in allowed:
+        return "injected_demo_scenario"
+    return next(iter(allowed))
 
 
 def _sanitize_evidence_for_external(tool_results: dict[str, Any]) -> list[dict[str, Any]]:
     """Build a minimized, provenance-tagged evidence list safe for external models.
 
-    Strips unnecessary fields, replaces internal IDs with stable anonymized IDs,
-    and tags each item with its provenance category.
+    Uses the per-tool registry to determine provenance. Tools not in the registry
+    are excluded (fail closed). Strips unnecessary fields, sends summaries only.
     """
     items: list[dict[str, Any]] = []
     for tool_name, result in tool_results.items():
+        policy = _get_tool_policy(tool_name)
+        if not policy["external_allowed"]:
+            continue  # fail closed — do not include in external payload
         brief = _brief_tool_result(tool_name, result)
         prov = _get_tool_provenance(tool_name)
         items.append({
@@ -550,6 +624,216 @@ def _sanitize_evidence_for_external(tool_results: dict[str, Any]) -> list[dict[s
             "provenance": prov,
         })
     return items
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Operational query classification
+# ─────────────────────────────────────────────────────────────────────────────
+
+_GENERAL_CONVERSATIONAL_PATTERNS: frozenset[str] = frozenset({
+    "what can you", "what can terris", "who are you", "what are you",
+    "help me with", "explain the portal", "what is terris", "how does terris",
+    "what is agro", "tell me about terris", "what is this portal",
+    "introduce yourself", "what do you do",
+})
+
+_OPERATIONAL_INDICATORS: frozenset[str] = frozenset({
+    "cycle", "reporting", "position", "attention", "provisional",
+    "applied water", "extraction", "wells", "records", "cases",
+    "evidence", "brief", "exception", "gate", "status", "readiness",
+    "quarantined", "missing", "unresolved", "prioritize", "priority",
+    "resolve", "review", "fc-well", "snapshot", "reconciliation",
+    "submission", "deadline", "acreage", " af ", "acre", "permit",
+    "measurement", "meter", "pump", "combcode", "parcel", "lineage",
+    "source", "provider", "wiseconn", "ami", "cimis", "ranch systems",
+    "going on", "stand", "what requires", "what should", "which records",
+    "which wells", "draft", "generate brief", "explain fc-", "trace",
+    "walk me through", "how did", "how does the", "what is the current",
+    "what are the", "show me the", "are we ready", "can we",
+})
+
+
+def _classify_query_operational(query: str) -> bool:
+    """Return True if the query requires water-intelligence operational tool calling.
+
+    General conversational questions (identity, portal explanation) do not require
+    tools. All water-intelligence operational questions require deterministic tool
+    calling before any answer synthesis.
+    """
+    q = query.lower().strip()
+    # Short general queries
+    if any(p in q for p in _GENERAL_CONVERSATIONAL_PATTERNS):
+        return False
+    # Any operational indicator makes it operational
+    if any(kw in q for kw in _OPERATIONAL_INDICATORS):
+        return True
+    # Queries < 3 words are probably short factual — require tools conservatively
+    words = q.split()
+    if len(words) < 3:
+        return False
+    # Default: treat as operational to ensure deterministic grounding
+    return True
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Evidence map and quantity validation
+# ─────────────────────────────────────────────────────────────────────────────
+
+import re as _re_module
+
+_WATER_QTY_PATTERN = _re_module.compile(
+    r'(\d+(?:,\d{3})*(?:\.\d+)?)\s*(?:af\b|acre-?feet|acre feet)',
+    _re_module.IGNORECASE,
+)
+
+
+def _build_evidence_map(tool_raw_results: dict[str, Any]) -> dict[str, Any]:
+    """Extract all numeric quantities from deterministic tool results."""
+    evidence: dict[str, Any] = {}
+
+    def _extract(obj: Any, prefix: str) -> None:
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                key = f"{prefix}.{k}" if prefix else str(k)
+                if isinstance(v, (int, float)) and not isinstance(v, bool):
+                    evidence[key] = float(v)
+                elif isinstance(v, str) and v:
+                    evidence[key] = v
+                elif isinstance(v, (dict, list)):
+                    _extract(v, key)
+        elif isinstance(obj, list):
+            for i, item in enumerate(obj[:30]):
+                _extract(item, f"{prefix}[{i}]")
+
+    for tool_name, result in tool_raw_results.items():
+        if isinstance(result, dict):
+            _extract(result, tool_name)
+
+    return evidence
+
+
+def _validate_answer_quantities(
+    answer: str,
+    evidence_map: dict[str, Any],
+) -> tuple[bool, list[str]]:
+    """Validate water quantities (af/acre-feet) in the answer against approved evidence.
+
+    Only validates significant water quantities; does not block general counts or
+    percentages. Returns (valid, issues).
+    """
+    if not answer or not evidence_map:
+        return True, []
+
+    matches = _WATER_QTY_PATTERN.findall(answer)
+    if not matches:
+        return True, []
+
+    # Build approved numeric values from evidence (with tolerance)
+    approved_values: set[float] = set()
+    for v in evidence_map.values():
+        if isinstance(v, (int, float)) and not isinstance(v, bool):
+            fv = float(v)
+            if fv > 0:
+                approved_values.add(fv)
+
+    if not approved_values:
+        return True, []
+
+    issues: list[str] = []
+    for match_str in matches:
+        clean = match_str.replace(",", "")
+        try:
+            val = float(clean)
+        except ValueError:
+            continue
+        if val <= 0:
+            continue
+
+        found = any(
+            abs(val - av) <= max(0.05 * av, 0.5)
+            for av in approved_values
+        )
+        if not found:
+            issues.append(f"Water quantity '{match_str} af' not found in deterministic evidence")
+
+    return len(issues) == 0, issues
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Gemini schema validation and active health TTL
+# ─────────────────────────────────────────────────────────────────────────────
+
+_GEMINI_SCHEMA_VALID: bool | None = None
+
+
+def _get_gemini_schema_valid() -> bool:
+    """Validate Gemini tool schemas once at first call. Returns False → degrade safely."""
+    global _GEMINI_SCHEMA_VALID
+    if _GEMINI_SCHEMA_VALID is not None:
+        return _GEMINI_SCHEMA_VALID
+    try:
+        tools = _build_gemini_tool_list()
+        if not tools:
+            _GEMINI_SCHEMA_VALID = False
+            return False
+        try:
+            from google.genai import types as _gt  # type: ignore
+            total_decls = sum(
+                len(getattr(t, "function_declarations", []))
+                for t in tools
+            )
+            _GEMINI_SCHEMA_VALID = total_decls == len(_AGENT_TOOL_SCHEMAS)
+        except Exception:
+            _GEMINI_SCHEMA_VALID = len(tools) > 0
+    except Exception:
+        _GEMINI_SCHEMA_VALID = False
+    return _GEMINI_SCHEMA_VALID or False
+
+
+def _get_gemini_active_health() -> dict[str, Any]:
+    """Return active Gemini health based on schema validity and last-call TTL.
+
+    Does NOT make external API calls; uses the cached state from the last
+    successful or failed call and applies the configured TTL.
+    """
+    ttl = float(os.getenv("TERRIS_GEMINI_HEALTH_TTL_SECONDS", "120"))
+    schema_valid = _get_gemini_schema_valid()
+
+    last_check = _PROVIDER_HEALTH.get("last_check_at")
+    health_age: float = -1.0
+    health_fresh = False
+    if last_check:
+        try:
+            age = (datetime.now(timezone.utc) - datetime.fromisoformat(last_check)).total_seconds()
+            health_age = round(age, 1)
+            health_fresh = age < ttl
+        except Exception:
+            pass
+
+    stored_mode = _PROVIDER_HEALTH.get("mode", "structured_safe")
+    if health_fresh and stored_mode == "gemini_demo_intelligence":
+        recent_health = "healthy"
+    elif health_fresh and stored_mode == "gemini_demo_degraded":
+        recent_health = "degraded"
+    else:
+        recent_health = "unknown"  # TTL expired — do not misrepresent as healthy
+
+    rate_limited = _PROVIDER_HEALTH.get("rate_limited", False)
+    rate_limited_at = _PROVIDER_HEALTH.get("rate_limited_at")
+
+    return {
+        "schema_valid": schema_valid,
+        "recent_health": recent_health,
+        "health_check_age_seconds": health_age,
+        "health_ttl_seconds": ttl,
+        "rate_limited": rate_limited,
+        "rate_limited_at": rate_limited_at,
+        "fallback_active": not (schema_valid and recent_health == "healthy"),
+        "note": (
+            "Actual API rate limits vary by model and project. "
+            "Check current limits at aistudio.google.com/usage"
+        ),
+    }
 
 
 _TERRIS_SYSTEM = """\
@@ -980,23 +1264,33 @@ def _run_gemini_agent_loop(
 ) -> tuple[str, list[dict[str, Any]]]:
     """Bounded tool-using agent loop using Google Gemini (google-genai SDK).
 
-    Safety gate: validates provenance before sending any evidence to the model.
-    Returns (final_answer, audit_log).
+    Hardened: mandatory tool calling for operational queries (mode=ANY), per-tool
+    policy check (fail-closed for unknown tools), quantity-level answer validation,
+    and TTL-based health. Returns (final_answer, audit_log).
 
     Falls back to structured_safe if:
+    - Schema validation fails at entry
     - The SDK is not installed
     - The API key is invalid
     - Blocked provenance is detected
     - Rate limits are exceeded (429)
+    - Operational question receives no tool calls after one retry
     - Any unrecoverable error occurs
     """
     import time
     from .terris import TERRIS_TOOL_MAP
 
+    # Schema validation guard — fail closed before any API call
+    if not _get_gemini_schema_valid():
+        logger.warning("Terris Gemini: schema validation failed — falling back to structured_safe")
+        _record_provider_failure(RuntimeError("schema_invalid"), gemini=True)
+        return "", []
+
     cfg = _get_gemini_config()
     max_iters = cfg["max_tool_iterations"]
     timeout = cfg["timeout_seconds"]
     audit_log: list[dict[str, Any]] = []
+    tool_raw_results: dict[str, Any] = {}
     start_time = time.monotonic()
 
     try:
@@ -1011,6 +1305,9 @@ def _run_gemini_agent_loop(
     except Exception as exc:
         _record_provider_failure(exc, gemini=True)
         return "", audit_log
+
+    # Classify query: operational queries require mandatory deterministic tool calling
+    is_operational = _classify_query_operational(user_query)
 
     # Build conversation contents (last 8 turns)
     contents: list[Any] = []
@@ -1028,46 +1325,75 @@ def _run_gemini_agent_loop(
         contents.append({"role": "user", "parts": [{"text": user_query}]})
 
     tools = _build_gemini_tool_list()
+    tool_names = [t["name"] for t in _AGENT_TOOL_SCHEMAS]
 
-    try:
-        config = types.GenerateContentConfig(
-            system_instruction=_TERRIS_SYSTEM,
-            tools=tools if tools else None,
-            temperature=0.3,
-            max_output_tokens=1500,
-        )
-    except Exception:
-        config = None  # type: ignore
+    def _make_config(force_tools: bool = False) -> Any:
+        try:
+            if force_tools and tools:
+                tool_cfg = types.ToolConfig(
+                    function_calling_config=types.FunctionCallingConfig(
+                        mode="ANY",
+                        allowed_function_names=tool_names,
+                    )
+                )
+                return types.GenerateContentConfig(
+                    system_instruction=_TERRIS_SYSTEM,
+                    tools=tools,
+                    tool_config=tool_cfg,
+                    temperature=0.3,
+                    max_output_tokens=1500,
+                )
+            elif tools:
+                return types.GenerateContentConfig(
+                    system_instruction=_TERRIS_SYSTEM,
+                    tools=tools,
+                    temperature=0.3,
+                    max_output_tokens=1500,
+                )
+            else:
+                return types.GenerateContentConfig(
+                    system_instruction=_TERRIS_SYSTEM,
+                    temperature=0.3,
+                    max_output_tokens=1500,
+                )
+        except Exception:
+            return None
 
-    def _call_gemini(use_tools: bool = True) -> Any:
+    def _call_gemini(use_tools: bool = True, force_tool_mode: bool = False) -> Any:
+        cfg_obj = _make_config(force_tools=force_tool_mode and use_tools)
         kwargs: dict[str, Any] = {"model": model, "contents": contents}
-        if config is not None:
+        if cfg_obj is not None:
             if not use_tools:
                 try:
-                    no_tool_cfg = types.GenerateContentConfig(
+                    kwargs["config"] = types.GenerateContentConfig(
                         system_instruction=_TERRIS_SYSTEM,
                         temperature=0.3,
                         max_output_tokens=1500,
                     )
-                    kwargs["config"] = no_tool_cfg
                 except Exception:
-                    kwargs["config"] = config
+                    kwargs["config"] = cfg_obj
             else:
-                kwargs["config"] = config
+                kwargs["config"] = cfg_obj
         return client.models.generate_content(**kwargs)
+
+    _retried_for_tools = False
 
     for iteration in range(max_iters):
         if time.monotonic() - start_time > timeout:
             logger.warning("Terris Gemini agent loop hit timeout after %d iterations", iteration)
             break
 
+        # First call for operational queries uses forced tool mode (mode=ANY)
+        force_mode = is_operational and iteration == 0 and not _retried_for_tools
+
         try:
-            response = _call_gemini(use_tools=bool(tools))
+            response = _call_gemini(use_tools=bool(tools), force_tool_mode=force_mode)
         except Exception as exc:
             err_str = str(exc)
-            # Rate limit — fall back gracefully
             if "429" in err_str or "quota" in err_str.lower() or "resource_exhausted" in err_str.lower():
                 logger.warning("Terris Gemini rate limit reached: %s", exc)
+                _PROVIDER_HEALTH["rate_limited"] = True
+                _PROVIDER_HEALTH["rate_limited_at"] = datetime.now(timezone.utc).isoformat()
                 _record_provider_failure(exc, gemini=True)
                 return "", audit_log
             _record_provider_failure(exc, gemini=True)
@@ -1079,7 +1405,6 @@ def _run_gemini_agent_loop(
             candidate = response.candidates[0]
             parts = list(candidate.content.parts)
         except Exception:
-            # No candidates — try response.text directly
             try:
                 text = response.text
                 if text:
@@ -1101,14 +1426,51 @@ def _run_gemini_agent_loop(
                     text_parts.append(txt)
 
         if not fn_calls:
-            # No tool calls — return text
+            # Mandatory tool enforcement for operational queries
+            if is_operational and not _retried_for_tools and not audit_log:
+                _retried_for_tools = True
+                logger.info("Terris Gemini: no tools on operational query — retrying with forced tool mode")
+                try:
+                    contents.append(
+                        types.Content(
+                            role="user",
+                            parts=[types.Part.from_text(
+                                "Please use the available tools to retrieve the current "
+                                "water-intelligence data before answering. Do not answer from memory."
+                            )],
+                        )
+                    )
+                except Exception:
+                    contents.append({"role": "user", "parts": [{"text": "Use the available tools to retrieve current water-intelligence data before answering."}]})
+                continue  # retry
+
+            if is_operational and not audit_log:
+                # Still no tools after retry — fall back
+                logger.warning("Terris Gemini: no tools called after retry for operational query — falling back")
+                _record_provider_failure(RuntimeError("no_tools_called_on_operational_query"), gemini=True)
+                return "", audit_log
+
+            # Non-operational or tools already called — accept answer
             final_text = "".join(text_parts).strip()
             if not final_text:
                 try:
                     final_text = response.text or ""
                 except Exception:
                     pass
+
             if final_text:
+                if tool_raw_results:
+                    evidence_map = _build_evidence_map(tool_raw_results)
+                    valid, issues = _validate_answer_quantities(final_text, evidence_map)
+                    if not valid:
+                        for issue in issues:
+                            logger.warning("Terris Gemini quantity mismatch: %s", issue)
+                        audit_log.append({
+                            "iteration": iteration + 1,
+                            "tool": "_quantity_validation",
+                            "status": "warning",
+                            "issues": issues,
+                        })
                 _record_provider_success(gemini=True)
                 return final_text, audit_log
             break
@@ -1119,10 +1481,32 @@ def _run_gemini_agent_loop(
         except Exception:
             pass
 
-        # Execute each tool call and collect results
+        # Execute each tool call
         fn_response_parts: list[Any] = []
         for _part, fn_call in fn_calls:
             tool_name = fn_call.name
+            policy = _get_tool_policy(tool_name)
+
+            # Per-tool policy check — fail closed for unknown/unregistered tools
+            if not policy["external_allowed"]:
+                logger.warning("Terris Gemini: tool %r not in provenance registry — blocked (fail closed)", tool_name)
+                audit_log.append({
+                    "iteration": iteration + 1,
+                    "tool": tool_name,
+                    "status": "blocked",
+                    "reason": "not_in_provenance_registry",
+                })
+                try:
+                    fn_response_parts.append(
+                        types.Part.from_function_response(
+                            name=tool_name,
+                            response={"result": "Tool not available in this context."},
+                        )
+                    )
+                except Exception:
+                    pass
+                continue
+
             fn = TERRIS_TOOL_MAP.get(tool_name)
             label = _get_tool_progress_label(tool_name)
 
@@ -1131,6 +1515,7 @@ def _run_gemini_agent_loop(
 
             try:
                 result = fn() if fn else {"error": f"Tool not available: {tool_name}"}
+                tool_raw_results[tool_name] = result  # accumulate for evidence map
                 brief = _brief_tool_result(tool_name, result)
 
                 # Provenance safety check before including in context
@@ -1196,7 +1581,7 @@ def _run_gemini_agent_loop(
             except Exception:
                 pass
 
-    # Max iterations or empty response — synthesis pass without tools
+    # Max iterations or timeout — synthesis pass without tools
     if audit_log:
         if on_progress:
             on_progress({"stage": "llm_synthesis", "label": "Preparing a recommendation…", "status": "started"})
@@ -1226,7 +1611,7 @@ def _run_gemini_agent_loop(
                     system_instruction=_TERRIS_SYSTEM,
                     temperature=0.3,
                     max_output_tokens=1500,
-                ) if config is not None else None,
+                ),
             )
             try:
                 text = synth_response.text or ""
@@ -1241,6 +1626,18 @@ def _run_gemini_agent_loop(
                 except Exception:
                     pass
             if text:
+                if tool_raw_results:
+                    evidence_map = _build_evidence_map(tool_raw_results)
+                    valid, issues = _validate_answer_quantities(text, evidence_map)
+                    if not valid:
+                        for issue in issues:
+                            logger.warning("Terris Gemini synthesis quantity mismatch: %s", issue)
+                        audit_log.append({
+                            "iteration": -1,
+                            "tool": "_synthesis_quantity_validation",
+                            "status": "warning",
+                            "issues": issues,
+                        })
                 _record_provider_success(gemini=True)
                 return text, audit_log
         except Exception as exc:

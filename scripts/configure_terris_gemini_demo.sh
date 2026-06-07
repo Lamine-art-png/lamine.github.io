@@ -70,8 +70,8 @@ echo "  Key received (value not displayed)."
 # ── Model selection ───────────────────────────────────────────────────────
 echo ""
 echo "Select Gemini model:"
-echo "  1) gemini-2.0-flash    — fast, free tier, good tool-calling (Recommended)"
-echo "  2) gemini-1.5-flash    — stable, well-supported free tier"
+echo "  1) gemini-3.5-flash    — latest, fast, free tier, strong tool-calling (Recommended)"
+echo "  2) gemini-2.0-flash    — stable, good tool-calling, free tier"
 echo "  3) gemini-2.0-flash-lite — lightweight, lowest latency"
 echo "  4) Enter custom model name"
 echo ""
@@ -79,14 +79,14 @@ read -rp "Choice [1]: " MODEL_CHOICE < /dev/tty
 MODEL_CHOICE="${MODEL_CHOICE:-1}"
 
 case "$MODEL_CHOICE" in
-  1) GEMINI_MODEL="gemini-2.0-flash" ;;
-  2) GEMINI_MODEL="gemini-1.5-flash" ;;
+  1) GEMINI_MODEL="gemini-3.5-flash" ;;
+  2) GEMINI_MODEL="gemini-2.0-flash" ;;
   3) GEMINI_MODEL="gemini-2.0-flash-lite" ;;
   4)
     read -rp "Enter model name: " GEMINI_MODEL < /dev/tty
-    GEMINI_MODEL="${GEMINI_MODEL:-gemini-2.0-flash}"
+    GEMINI_MODEL="${GEMINI_MODEL:-gemini-3.5-flash}"
     ;;
-  *) GEMINI_MODEL="gemini-2.0-flash" ;;
+  *) GEMINI_MODEL="gemini-3.5-flash" ;;
 esac
 
 echo "  Model: ${GEMINI_MODEL}"

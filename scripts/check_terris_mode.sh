@@ -251,7 +251,7 @@ case "$EFFECTIVE_STATE" in
     echo ""
     echo "  Fix options:"
     echo "    - Verify API key:  bash scripts/configure_terris_gemini_demo.sh"
-    echo "    - Check rate limit: free tier allows 15 RPM / 1 million TPD"
+    echo "    - Check rate limits: aistudio.google.com/usage (limits vary by model and project)"
     echo "    - Restart backend: bash scripts/run_fcgma_demo.sh"
     echo "    - Verify mode:     bash scripts/verify_terris_gemini_demo.sh"
     ;;

@@ -4037,3 +4037,282 @@ def test_gemini_runtime_smoke_no_api_key_returns_structured_safe(client):
     assert data.get("content"), "Structured safe fallback must still return content"
     assert data.get("llm_mode") in ("structured_safe", "gemini_demo_intelligence", "gemini_demo_degraded")
     os.environ.pop("TERRIS_LLM_PROVIDER", None)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Eighteenth pass — hardening tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_classify_query_operational_cycle():
+    from agroai_api.app.services.fcgma.conversation import _classify_query_operational
+    assert _classify_query_operational("What is the current reporting cycle status?") is True
+
+
+def test_classify_query_operational_wells():
+    from agroai_api.app.services.fcgma.conversation import _classify_query_operational
+    assert _classify_query_operational("Which wells have open exceptions?") is True
+
+
+def test_classify_query_operational_applied_water():
+    from agroai_api.app.services.fcgma.conversation import _classify_query_operational
+    assert _classify_query_operational("Show me the applied water summary for this quarter") is True
+
+
+def test_classify_query_operational_reconciliation():
+    from agroai_api.app.services.fcgma.conversation import _classify_query_operational
+    assert _classify_query_operational("What is the reconciliation status?") is True
+
+
+def test_classify_query_non_operational_who_are_you():
+    from agroai_api.app.services.fcgma.conversation import _classify_query_operational
+    assert _classify_query_operational("Who are you?") is False
+
+
+def test_classify_query_non_operational_what_can_you_do():
+    from agroai_api.app.services.fcgma.conversation import _classify_query_operational
+    assert _classify_query_operational("What can you help me with?") is False
+
+
+def test_classify_query_non_operational_introduce():
+    from agroai_api.app.services.fcgma.conversation import _classify_query_operational
+    assert _classify_query_operational("Introduce yourself") is False
+
+
+def test_classify_query_short_query_not_operational():
+    from agroai_api.app.services.fcgma.conversation import _classify_query_operational
+    # Short queries (< 3 words) that don't match operational indicators
+    assert _classify_query_operational("hi") is False
+
+
+def test_build_evidence_map_extracts_numerics():
+    from agroai_api.app.services.fcgma.conversation import _build_evidence_map
+    tool_results = {
+        "get_applied_water_summary": {
+            "total_af": 1234.5,
+            "provisional_af": 200.0,
+            "wells": [{"id": "FC-001", "af": 100.0}, {"id": "FC-002", "af": 50.5}],
+        }
+    }
+    evidence = _build_evidence_map(tool_results)
+    assert any(abs(v - 1234.5) < 0.01 for v in evidence.values() if isinstance(v, float))
+    assert any(abs(v - 200.0) < 0.01 for v in evidence.values() if isinstance(v, float))
+    assert any(abs(v - 100.0) < 0.01 for v in evidence.values() if isinstance(v, float))
+
+
+def test_build_evidence_map_empty_returns_empty():
+    from agroai_api.app.services.fcgma.conversation import _build_evidence_map
+    assert _build_evidence_map({}) == {}
+
+
+def test_build_evidence_map_ignores_booleans():
+    from agroai_api.app.services.fcgma.conversation import _build_evidence_map
+    tool_results = {"tool_x": {"ready": True, "count": 3, "amount_af": 99.9}}
+    evidence = _build_evidence_map(tool_results)
+    # True (bool) must not appear as a float
+    float_vals = [v for v in evidence.values() if isinstance(v, float)]
+    assert True not in float_vals
+    assert any(abs(v - 99.9) < 0.01 for v in float_vals)
+
+
+def test_validate_answer_quantities_valid():
+    from agroai_api.app.services.fcgma.conversation import _validate_answer_quantities
+    evidence = {"tool.total_af": 1234.5, "tool.provisional_af": 200.0}
+    answer = "The total applied water is 1234.5 af for the quarter."
+    valid, issues = _validate_answer_quantities(answer, evidence)
+    assert valid is True
+    assert issues == []
+
+
+def test_validate_answer_quantities_mismatch():
+    from agroai_api.app.services.fcgma.conversation import _validate_answer_quantities
+    evidence = {"tool.total_af": 1234.5}
+    answer = "The total is 9999.0 acre-feet."
+    valid, issues = _validate_answer_quantities(answer, evidence)
+    assert valid is False
+    assert len(issues) == 1
+    assert "9999.0" in issues[0]
+
+
+def test_validate_answer_quantities_no_water_terms():
+    from agroai_api.app.services.fcgma.conversation import _validate_answer_quantities
+    evidence = {"tool.count": 5.0}
+    answer = "There are 5 wells with open exceptions."
+    valid, issues = _validate_answer_quantities(answer, evidence)
+    assert valid is True  # no af/acre-feet units → no validation triggered
+
+
+def test_validate_answer_quantities_empty_answer():
+    from agroai_api.app.services.fcgma.conversation import _validate_answer_quantities
+    valid, issues = _validate_answer_quantities("", {"tool.af": 100.0})
+    assert valid is True
+    assert issues == []
+
+
+def test_validate_answer_quantities_empty_evidence():
+    from agroai_api.app.services.fcgma.conversation import _validate_answer_quantities
+    valid, issues = _validate_answer_quantities("The total is 100 af.", {})
+    assert valid is True  # no approved values → pass through
+
+
+def test_get_tool_policy_registered_tool():
+    from agroai_api.app.services.fcgma.conversation import _get_tool_policy
+    policy = _get_tool_policy("get_reporting_cycle_status")
+    assert policy["external_allowed"] is True
+    assert policy["safe_for_gemini_demo"] is True
+    assert "injected_demo_scenario" in policy["allowed_output_provenance"]
+
+
+def test_get_tool_policy_unknown_tool_fail_closed():
+    from agroai_api.app.services.fcgma.conversation import _get_tool_policy
+    policy = _get_tool_policy("some_unknown_tool_xyz")
+    assert policy["external_allowed"] is False
+    assert policy["safe_for_gemini_demo"] is False
+    assert policy["field_redaction_policy"] == "block"
+
+
+def test_get_tool_policy_all_registered_tools_external_allowed():
+    from agroai_api.app.services.fcgma.conversation import TOOL_EXTERNAL_PROVENANCE_POLICY, _AGENT_TOOL_SCHEMAS
+    schema_names = {t["name"] for t in _AGENT_TOOL_SCHEMAS}
+    for name in schema_names:
+        policy = TOOL_EXTERNAL_PROVENANCE_POLICY.get(name)
+        assert policy is not None, f"Tool {name!r} missing from TOOL_EXTERNAL_PROVENANCE_POLICY"
+        assert policy["external_allowed"] is True, f"Tool {name!r} must have external_allowed=True"
+
+
+def test_get_gemini_active_health_schema_valid_field():
+    from agroai_api.app.services.fcgma.conversation import _get_gemini_active_health
+    health = _get_gemini_active_health()
+    assert "schema_valid" in health
+    assert "recent_health" in health
+    assert "health_check_age_seconds" in health
+    assert "health_ttl_seconds" in health
+    assert "fallback_active" in health
+    assert "rate_limited" in health
+
+
+def test_get_gemini_active_health_no_api_calls(monkeypatch):
+    """_get_gemini_active_health must not make external API calls."""
+    from agroai_api.app.services.fcgma.conversation import _get_gemini_active_health
+    import urllib.request
+    original_urlopen = urllib.request.urlopen
+    calls = []
+    def mock_urlopen(*a, **kw):
+        calls.append(a)
+        return original_urlopen(*a, **kw)
+    monkeypatch.setattr(urllib.request, "urlopen", mock_urlopen)
+    _get_gemini_active_health()
+    assert calls == [], "_get_gemini_active_health must not make external HTTP calls"
+
+
+def test_get_gemini_active_health_unknown_when_no_check():
+    from agroai_api.app.services.fcgma.conversation import _get_gemini_active_health, _PROVIDER_HEALTH
+    old_check = _PROVIDER_HEALTH.get("last_check_at")
+    _PROVIDER_HEALTH["last_check_at"] = None
+    try:
+        health = _get_gemini_active_health()
+        assert health["recent_health"] == "unknown"
+        assert health["health_check_age_seconds"] == -1.0
+    finally:
+        if old_check is not None:
+            _PROVIDER_HEALTH["last_check_at"] = old_check
+
+
+def test_provider_health_gemini_includes_active_health_fields(client):
+    import os
+    os.environ["TERRIS_LLM_PROVIDER"] = "gemini_demo"
+    os.environ.pop("TERRIS_GEMINI_API_KEY", None)
+    resp = client.get("/v1/fcgma-demo/terris/diagnostic")
+    assert resp.status_code == 200
+    data = resp.json()
+    if data.get("provider") == "gemini_demo":
+        assert "schema_valid" in data
+        assert "recent_provider_health" in data
+        assert "health_ttl_seconds" in data
+        assert "fallback_active" in data
+    os.environ.pop("TERRIS_LLM_PROVIDER", None)
+
+
+def test_provider_health_gemini_no_hardcoded_rate_limit():
+    """get_provider_health note must not contain hardcoded rate-limit numbers."""
+    import os
+    os.environ["TERRIS_LLM_PROVIDER"] = "gemini_demo"
+    os.environ.pop("TERRIS_GEMINI_API_KEY", None)
+    from agroai_api.app.services.fcgma.conversation import get_provider_health
+    health = get_provider_health()
+    note = health.get("note", "")
+    assert "15 RPM" not in note, "Note must not contain hardcoded rate limits"
+    assert "1 million TPD" not in note, "Note must not contain hardcoded rate limits"
+    os.environ.pop("TERRIS_LLM_PROVIDER", None)
+
+
+def test_rate_limit_recorded_in_provider_health(monkeypatch):
+    from agroai_api.app.services.fcgma.conversation import _PROVIDER_HEALTH, _record_provider_failure
+    _PROVIDER_HEALTH.pop("rate_limited", None)
+    _PROVIDER_HEALTH.pop("rate_limited_at", None)
+    _PROVIDER_HEALTH["rate_limited"] = True
+    _PROVIDER_HEALTH["rate_limited_at"] = "2026-06-06T00:00:00+00:00"
+    assert _PROVIDER_HEALTH["rate_limited"] is True
+    assert _PROVIDER_HEALTH["rate_limited_at"] is not None
+    # Cleanup
+    _PROVIDER_HEALTH.pop("rate_limited", None)
+    _PROVIDER_HEALTH.pop("rate_limited_at", None)
+
+
+def test_gemini_schema_valid_returns_bool():
+    from agroai_api.app.services.fcgma.conversation import _get_gemini_schema_valid
+    result = _get_gemini_schema_valid()
+    assert isinstance(result, bool)
+
+
+def test_gemini_schema_valid_cached():
+    from agroai_api.app.services.fcgma import conversation as _conv
+    # Reset cache
+    original = _conv._GEMINI_SCHEMA_VALID
+    _conv._GEMINI_SCHEMA_VALID = None
+    first = _conv._get_gemini_schema_valid()
+    second = _conv._get_gemini_schema_valid()
+    assert first == second, "Schema valid result must be cached"
+    _conv._GEMINI_SCHEMA_VALID = original
+
+
+def test_check_terris_mode_sh_no_hardcoded_rate_limit():
+    """check_terris_mode.sh must not contain hardcoded rate-limit claims."""
+    import os
+    script_path = os.path.join(
+        os.path.dirname(__file__), "../../scripts/check_terris_mode.sh"
+    )
+    script_path = os.path.normpath(script_path)
+    with open(script_path) as f:
+        content = f.read()
+    assert "15 RPM" not in content, "check_terris_mode.sh must not contain hardcoded rate limits"
+    assert "1 million TPD" not in content, "check_terris_mode.sh must not contain hardcoded rate limits"
+    assert "aistudio.google.com/usage" in content, "check_terris_mode.sh must reference aistudio.google.com/usage"
+
+
+def test_configure_gemini_demo_sh_default_model_35_flash():
+    """configure_terris_gemini_demo.sh must default to gemini-3.5-flash."""
+    import os
+    script_path = os.path.join(
+        os.path.dirname(__file__), "../../scripts/configure_terris_gemini_demo.sh"
+    )
+    script_path = os.path.normpath(script_path)
+    with open(script_path) as f:
+        content = f.read()
+    assert "gemini-3.5-flash" in content, "configure script must include gemini-3.5-flash as an option"
+    assert 'GEMINI_MODEL="gemini-3.5-flash"' in content or "gemini-3.5-flash" in content
+
+
+def test_env_example_has_gemini_entries():
+    """agroai_api/.env.example must document Gemini configuration keys."""
+    import os
+    env_example = os.path.join(
+        os.path.dirname(__file__), "../.env.example"
+    )
+    env_example = os.path.normpath(env_example)
+    with open(env_example) as f:
+        content = f.read()
+    assert "TERRIS_GEMINI_API_KEY" in content
+    assert "TERRIS_GEMINI_MODEL" in content
+    assert "TERRIS_EXTERNAL_DEMO_ONLY" in content
+    assert "TERRIS_EXTERNAL_BLOCK_PRIVATE" in content
+    assert "TERRIS_GEMINI_HEALTH_TTL_SECONDS" in content
