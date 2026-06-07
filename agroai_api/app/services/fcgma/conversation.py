@@ -4,27 +4,40 @@ Manages multi-turn conversation threads with context persistence,
 reference resolution, and LLM provider abstraction.
 
 LLM integration:
-  TERRIS_LLM_PROVIDER         — "ollama" | "anthropic" | "openai" (default: anthropic)
-  TERRIS_LLM_MODEL            — model name override
-  TERRIS_LLM_API_KEY          — provider API key for paid providers (not needed for ollama)
+  TERRIS_LLM_PROVIDER         — "gemini_demo" | "ollama" | "anthropic" | "openai" (default: anthropic)
+  TERRIS_LLM_MODEL            — model name override for paid providers
+  TERRIS_LLM_API_KEY          — provider API key for paid providers
+  TERRIS_GEMINI_API_KEY       — Gemini API key (free developer tier)
+  TERRIS_GEMINI_MODEL         — Gemini model (default: gemini-2.0-flash)
+  TERRIS_EXTERNAL_DEMO_ONLY   — restrict external model to illustrative data (default: true)
+  TERRIS_EXTERNAL_BLOCK_PRIVATE — block private/confidential provenance (default: true)
+  TERRIS_EXTERNAL_ALLOWED_PROVENANCE — comma-separated allowed provenance categories
+  TERRIS_EXTERNAL_MAX_TOOL_ITERATIONS — max tool iterations for Gemini (default: 6)
+  TERRIS_EXTERNAL_TIMEOUT_SECONDS     — wall-clock timeout for Gemini (default: 120)
   TERRIS_OLLAMA_BASE_URL      — Ollama base URL (default: http://127.0.0.1:11434)
   TERRIS_OLLAMA_MODEL         — Ollama model (default: llama3.1:8b)
   TERRIS_OLLAMA_NUM_CTX       — context window (default: 32768)
   TERRIS_OLLAMA_MAX_TOOL_ITERATIONS — max agent iterations for Ollama (default: 6)
   TERRIS_OLLAMA_TIMEOUT_SECONDS     — wall-clock timeout (default: 180)
 
-Provider priority:
-  1. ollama_local      — free, local, zero cloud dependency
-  2. openai_connected  — when funded
-  3. anthropic_connected — when funded
-  4. structured_safe   — deterministic fallback, no LLM required
+Provider priority (gemini_demo illustrative demo):
+  1. gemini_demo_intelligence — Gemini free tier, demo-only safety gate active
+  2. structured_safe          — deterministic fallback
 
-Modes:
-  local_intelligence    — Ollama running, model installed, tool-calling works
-  local_degraded        — Ollama unreachable or model missing
+All preserved providers:
+  local_intelligence     — Ollama running, model installed, tool-calling works
+  local_degraded         — Ollama unreachable or model missing
+  gemini_demo_intelligence — Gemini configured, safety gate active, working
+  gemini_demo_degraded   — Gemini configured but failing (rate limit, auth, etc.)
   connected_intelligence — paid LLM active and working
-  connected_degraded    — paid LLM configured but failing
-  structured_safe       — deterministic fallback only
+  connected_degraded     — paid LLM configured but failing
+  structured_safe        — deterministic fallback only
+
+Demo-only safety gate (TERRIS_EXTERNAL_BLOCK_PRIVATE=true):
+  Allowed provenance: public_context, sanitized_replay, injected_demo_scenario
+  Blocked provenance: authorized_live_private, confidential_customer, credential, unknown
+  Any blocked provenance causes external call refusal and structured_safe fallback.
+  A discreet explanation is included in the Runtime intelligence section.
 """
 from __future__ import annotations
 
@@ -52,6 +65,22 @@ logger = logging.getLogger(__name__)
 # ─────────────────────────────────────────────────────────────────────────────
 # In-memory stores
 # ─────────────────────────────────────────────────────────────────────────────
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Provenance safety constants (demo-only external model gate)
+# ─────────────────────────────────────────────────────────────────────────────
+
+_BLOCKED_PROVENANCE_CATEGORIES: frozenset[str] = frozenset({
+    "authorized_live_private",
+    "confidential_customer",
+    "credential",
+    "unknown",
+})
+_ALLOWED_PROVENANCE_CATEGORIES: frozenset[str] = frozenset({
+    "public_context",
+    "sanitized_replay",
+    "injected_demo_scenario",
+})
 
 _CONVERSATIONS: dict[str, dict[str, Any]] = {}
 _JOBS: dict[str, dict[str, Any]] = {}  # active streaming jobs
@@ -219,6 +248,15 @@ def _get_llm_config() -> tuple[str | None, str, str, str]:
         reasoning_effort = "local"
         return api_key, provider, model, reasoning_effort
 
+    if provider == "gemini_demo":
+        # Gemini free developer tier — illustrative/sanitized data only
+        api_key = os.getenv("TERRIS_GEMINI_API_KEY")
+        if not api_key or not api_key.strip():
+            api_key = None
+        model = os.getenv("TERRIS_GEMINI_MODEL", "gemini-2.0-flash")
+        reasoning_effort = "medium"
+        return api_key, provider, model, reasoning_effort
+
     api_key = (
         os.getenv("TERRIS_LLM_API_KEY")
         or os.getenv("ANTHROPIC_API_KEY")
@@ -245,6 +283,23 @@ def _get_ollama_config() -> dict[str, Any]:
         "max_tool_iterations": int(os.getenv("TERRIS_OLLAMA_MAX_TOOL_ITERATIONS", "6")),
         "timeout_seconds": float(os.getenv("TERRIS_OLLAMA_TIMEOUT_SECONDS", "180")),
         "stream": os.getenv("TERRIS_OLLAMA_STREAM", "true").lower() == "true",
+    }
+
+
+def _get_gemini_config() -> dict[str, Any]:
+    """Return Gemini Demo Intelligence configuration."""
+    return {
+        "model": os.getenv("TERRIS_GEMINI_MODEL", "gemini-2.0-flash"),
+        "max_tool_iterations": int(os.getenv("TERRIS_EXTERNAL_MAX_TOOL_ITERATIONS", "6")),
+        "timeout_seconds": float(os.getenv("TERRIS_EXTERNAL_TIMEOUT_SECONDS", "120")),
+        "demo_only": os.getenv("TERRIS_EXTERNAL_DEMO_ONLY", "true").lower() == "true",
+        "block_private": os.getenv("TERRIS_EXTERNAL_BLOCK_PRIVATE", "true").lower() == "true",
+        "allowed_provenance": set(
+            os.getenv(
+                "TERRIS_EXTERNAL_ALLOWED_PROVENANCE",
+                "public_context,sanitized_replay,injected_demo_scenario",
+            ).split(",")
+        ),
     }
 
 
@@ -288,7 +343,9 @@ def _check_sdk_available(provider: str) -> bool:
         if provider == "openai":
             import openai  # noqa: F401
         elif provider == "ollama":
-            return True  # Ollama uses urllib/httpx — no external SDK required
+            return True  # Ollama uses stdlib urllib — no external SDK required
+        elif provider == "gemini_demo":
+            from google import genai  # noqa: F401
         else:
             import anthropic  # noqa: F401
         return True
@@ -348,7 +405,52 @@ def get_provider_health() -> dict[str, Any]:
             ),
         }
 
-    # Paid providers
+    if provider == "gemini_demo":
+        cfg = _get_gemini_config()
+        sdk_ok = _check_sdk_available("gemini_demo")
+        key_set = bool(api_key)
+        demo_only = cfg["demo_only"]
+        block_private = cfg["block_private"]
+
+        stored_mode = _PROVIDER_HEALTH.get("mode", "structured_safe")
+        if stored_mode in ("gemini_demo_intelligence", "gemini_demo_degraded"):
+            mode = stored_mode
+        elif key_set and sdk_ok and demo_only:
+            mode = "gemini_demo_intelligence"
+        elif key_set and not sdk_ok:
+            mode = "gemini_demo_degraded"
+        elif key_set:
+            mode = "gemini_demo_intelligence"
+        else:
+            mode = "structured_safe"
+
+        return {
+            "mode": mode,
+            "llm_mode": mode,
+            "provider": "gemini_demo",
+            "model": model,
+            "reasoning_effort": "medium",
+            "key_configured": key_set,
+            "sdk_available": sdk_ok,
+            "demo_only_safety_active": demo_only,
+            "blocked_private_provenance": block_private,
+            "allowed_provenance": os.getenv(
+                "TERRIS_EXTERNAL_ALLOWED_PROVENANCE",
+                "public_context,sanitized_replay,injected_demo_scenario",
+            ),
+            "cloud_key_required": True,
+            "cloud_inference_disabled": False,
+            "last_check_at": _PROVIDER_HEALTH.get("last_check_at"),
+            "last_error_redacted": _PROVIDER_HEALTH.get("last_error_redacted"),
+            "process_start": _PROVIDER_HEALTH.get("process_start"),
+            "note": (
+                "Gemini Demo Intelligence. Illustrative and sanitized records only. "
+                "Private data is blocked before any external model call. "
+                "Configure with: bash scripts/configure_terris_gemini_demo.sh"
+            ),
+        }
+
+    # Paid providers (anthropic, openai)
     if not api_key:
         mode = "structured_safe"
     elif not sdk_ok:
@@ -379,21 +481,75 @@ def get_provider_health() -> dict[str, Any]:
     }
 
 
-def _record_provider_success(local: bool = False) -> None:
-    _PROVIDER_HEALTH["mode"] = "local_intelligence" if local else "connected_intelligence"
+def _record_provider_success(local: bool = False, gemini: bool = False) -> None:
+    if local:
+        _PROVIDER_HEALTH["mode"] = "local_intelligence"
+    elif gemini:
+        _PROVIDER_HEALTH["mode"] = "gemini_demo_intelligence"
+    else:
+        _PROVIDER_HEALTH["mode"] = "connected_intelligence"
     _PROVIDER_HEALTH["last_check_at"] = datetime.now(timezone.utc).isoformat()
     _PROVIDER_HEALTH["last_error_redacted"] = None
     _PROVIDER_HEALTH["sdk_available"] = True
 
 
-def _record_provider_failure(exc: Exception, local: bool = False) -> None:
+def _record_provider_failure(exc: Exception, local: bool = False, gemini: bool = False) -> None:
     import re as _re
     raw = type(exc).__name__ + ": " + str(exc)[:120]
-    # Scrub any sk-... / sk-ant-... key-like tokens before storing
-    redacted = _re.sub(r"sk-[A-Za-z0-9\-]{8,}", "[REDACTED]", raw)[:100]
-    _PROVIDER_HEALTH["mode"] = "local_degraded" if local else "connected_degraded"
+    # Scrub any sk-... / sk-ant-... or AIza... key-like tokens before storing
+    redacted = _re.sub(r"sk-[A-Za-z0-9\-]{8,}", "[REDACTED]", raw)
+    redacted = _re.sub(r"AIza[A-Za-z0-9\-_]{8,}", "[REDACTED]", redacted)[:100]
+    if local:
+        _PROVIDER_HEALTH["mode"] = "local_degraded"
+    elif gemini:
+        _PROVIDER_HEALTH["mode"] = "gemini_demo_degraded"
+    else:
+        _PROVIDER_HEALTH["mode"] = "connected_degraded"
     _PROVIDER_HEALTH["last_check_at"] = datetime.now(timezone.utc).isoformat()
     _PROVIDER_HEALTH["last_error_redacted"] = redacted
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Provenance safety gate (demo-only external model protection)
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _validate_evidence_provenance(evidence_items: list[dict[str, Any]]) -> tuple[bool, str]:
+    """Return (safe, reason). Blocks forbidden provenance categories from reaching external models."""
+    cfg = _get_gemini_config()
+    if not cfg["block_private"]:
+        return True, ""
+    for item in evidence_items:
+        prov = item.get("provenance", "unknown")
+        if prov in _BLOCKED_PROVENANCE_CATEGORIES:
+            return False, f"Blocked provenance category: {prov}"
+    return True, ""
+
+
+def _get_tool_provenance(tool_name: str) -> str:
+    """Return the provenance category for a demo tool result.
+
+    All demo tools return sanitized replay or injected demo scenarios.
+    No tool in the illustrative demo returns private, confidential, or credential data.
+    """
+    return "injected_demo_scenario"
+
+
+def _sanitize_evidence_for_external(tool_results: dict[str, Any]) -> list[dict[str, Any]]:
+    """Build a minimized, provenance-tagged evidence list safe for external models.
+
+    Strips unnecessary fields, replaces internal IDs with stable anonymized IDs,
+    and tags each item with its provenance category.
+    """
+    items: list[dict[str, Any]] = []
+    for tool_name, result in tool_results.items():
+        brief = _brief_tool_result(tool_name, result)
+        prov = _get_tool_provenance(tool_name)
+        items.append({
+            "tool": tool_name,
+            "brief": brief,
+            "provenance": prov,
+        })
+    return items
 
 
 _TERRIS_SYSTEM = """\
@@ -598,6 +754,25 @@ def _build_ollama_tool_list() -> list[dict[str, Any]]:
     return tools
 
 
+def _build_gemini_tool_list() -> list[Any]:
+    """Convert tool schemas to Gemini FunctionDeclaration format (google-genai SDK)."""
+    try:
+        from google.genai import types  # type: ignore
+
+        declarations = []
+        for t in _AGENT_TOOL_SCHEMAS:
+            declarations.append(
+                types.FunctionDeclaration(
+                    name=t["name"],
+                    description=t["description"],
+                    parameters={"type": "OBJECT", "properties": {}},
+                )
+            )
+        return [types.Tool(function_declarations=declarations)]
+    except Exception:
+        return []
+
+
 def _run_ollama_agent_loop(
     user_query: str,
     conversation_history: list[dict[str, Any]],
@@ -794,6 +969,285 @@ def _get_tool_progress_label(tool_name: str) -> str:
         "run_applied_water_scenario": "Evaluating applied-water attribution scenario…",
     }
     return labels.get(tool_name, f"Reviewing {tool_name.replace('_', ' ')}…")
+
+
+def _run_gemini_agent_loop(
+    user_query: str,
+    conversation_history: list[dict[str, Any]],
+    api_key: str,
+    model: str,
+    on_progress: Callable[[dict], None] | None = None,
+) -> tuple[str, list[dict[str, Any]]]:
+    """Bounded tool-using agent loop using Google Gemini (google-genai SDK).
+
+    Safety gate: validates provenance before sending any evidence to the model.
+    Returns (final_answer, audit_log).
+
+    Falls back to structured_safe if:
+    - The SDK is not installed
+    - The API key is invalid
+    - Blocked provenance is detected
+    - Rate limits are exceeded (429)
+    - Any unrecoverable error occurs
+    """
+    import time
+    from .terris import TERRIS_TOOL_MAP
+
+    cfg = _get_gemini_config()
+    max_iters = cfg["max_tool_iterations"]
+    timeout = cfg["timeout_seconds"]
+    audit_log: list[dict[str, Any]] = []
+    start_time = time.monotonic()
+
+    try:
+        from google import genai  # type: ignore
+        from google.genai import types  # type: ignore
+    except ImportError as exc:
+        _record_provider_failure(exc, gemini=True)
+        return "", audit_log
+
+    try:
+        client = genai.Client(api_key=api_key)
+    except Exception as exc:
+        _record_provider_failure(exc, gemini=True)
+        return "", audit_log
+
+    # Build conversation contents (last 8 turns)
+    contents: list[Any] = []
+    for turn in conversation_history[-8:]:
+        role = "user" if turn["role"] == "user" else "model"
+        text = turn.get("content", "")
+        if text and isinstance(text, str):
+            try:
+                contents.append(types.Content(role=role, parts=[types.Part.from_text(text)]))
+            except Exception:
+                contents.append({"role": role, "parts": [{"text": text}]})
+    try:
+        contents.append(types.Content(role="user", parts=[types.Part.from_text(user_query)]))
+    except Exception:
+        contents.append({"role": "user", "parts": [{"text": user_query}]})
+
+    tools = _build_gemini_tool_list()
+
+    try:
+        config = types.GenerateContentConfig(
+            system_instruction=_TERRIS_SYSTEM,
+            tools=tools if tools else None,
+            temperature=0.3,
+            max_output_tokens=1500,
+        )
+    except Exception:
+        config = None  # type: ignore
+
+    def _call_gemini(use_tools: bool = True) -> Any:
+        kwargs: dict[str, Any] = {"model": model, "contents": contents}
+        if config is not None:
+            if not use_tools:
+                try:
+                    no_tool_cfg = types.GenerateContentConfig(
+                        system_instruction=_TERRIS_SYSTEM,
+                        temperature=0.3,
+                        max_output_tokens=1500,
+                    )
+                    kwargs["config"] = no_tool_cfg
+                except Exception:
+                    kwargs["config"] = config
+            else:
+                kwargs["config"] = config
+        return client.models.generate_content(**kwargs)
+
+    for iteration in range(max_iters):
+        if time.monotonic() - start_time > timeout:
+            logger.warning("Terris Gemini agent loop hit timeout after %d iterations", iteration)
+            break
+
+        try:
+            response = _call_gemini(use_tools=bool(tools))
+        except Exception as exc:
+            err_str = str(exc)
+            # Rate limit — fall back gracefully
+            if "429" in err_str or "quota" in err_str.lower() or "resource_exhausted" in err_str.lower():
+                logger.warning("Terris Gemini rate limit reached: %s", exc)
+                _record_provider_failure(exc, gemini=True)
+                return "", audit_log
+            _record_provider_failure(exc, gemini=True)
+            logger.warning("Terris Gemini call failed: %s", exc)
+            return "", audit_log
+
+        # Extract function calls from response
+        try:
+            candidate = response.candidates[0]
+            parts = list(candidate.content.parts)
+        except Exception:
+            # No candidates — try response.text directly
+            try:
+                text = response.text
+                if text:
+                    _record_provider_success(gemini=True)
+                    return text, audit_log
+            except Exception:
+                pass
+            break
+
+        fn_calls = []
+        text_parts = []
+        for part in parts:
+            fn_call = getattr(part, "function_call", None)
+            if fn_call and getattr(fn_call, "name", None):
+                fn_calls.append((part, fn_call))
+            else:
+                txt = getattr(part, "text", None)
+                if txt:
+                    text_parts.append(txt)
+
+        if not fn_calls:
+            # No tool calls — return text
+            final_text = "".join(text_parts).strip()
+            if not final_text:
+                try:
+                    final_text = response.text or ""
+                except Exception:
+                    pass
+            if final_text:
+                _record_provider_success(gemini=True)
+                return final_text, audit_log
+            break
+
+        # Append model's turn with function calls
+        try:
+            contents.append(candidate.content)
+        except Exception:
+            pass
+
+        # Execute each tool call and collect results
+        fn_response_parts: list[Any] = []
+        for _part, fn_call in fn_calls:
+            tool_name = fn_call.name
+            fn = TERRIS_TOOL_MAP.get(tool_name)
+            label = _get_tool_progress_label(tool_name)
+
+            if on_progress:
+                on_progress({"stage": f"agent_invoke_{tool_name}", "label": label, "status": "started"})
+
+            try:
+                result = fn() if fn else {"error": f"Tool not available: {tool_name}"}
+                brief = _brief_tool_result(tool_name, result)
+
+                # Provenance safety check before including in context
+                evidence_item = {
+                    "tool": tool_name,
+                    "brief": brief,
+                    "provenance": _get_tool_provenance(tool_name),
+                }
+                safe, reason = _validate_evidence_provenance([evidence_item])
+                if not safe:
+                    logger.warning("Provenance safety gate blocked tool result: %s — %s", tool_name, reason)
+                    audit_log.append({
+                        "iteration": iteration + 1,
+                        "tool": tool_name,
+                        "status": "blocked",
+                        "reason": reason,
+                    })
+                    brief = "Result blocked by provenance safety gate — private data remained local."
+                else:
+                    audit_log.append({
+                        "iteration": iteration + 1,
+                        "tool": tool_name,
+                        "status": "completed",
+                        "brief": brief,
+                    })
+
+                try:
+                    fn_response_parts.append(
+                        types.Part.from_function_response(
+                            name=tool_name,
+                            response={"result": brief},
+                        )
+                    )
+                except Exception:
+                    fn_response_parts.append({"function_response": {"name": tool_name, "response": {"result": brief}}})
+
+                if on_progress:
+                    on_progress({"stage": f"agent_invoke_{tool_name}", "label": label, "status": "completed"})
+
+            except Exception as exc:
+                audit_log.append({
+                    "iteration": iteration + 1,
+                    "tool": tool_name,
+                    "status": "error",
+                    "error": str(exc)[:120],
+                })
+                try:
+                    fn_response_parts.append(
+                        types.Part.from_function_response(
+                            name=tool_name,
+                            response={"error": f"Tool error: {str(exc)[:80]}"},
+                        )
+                    )
+                except Exception:
+                    pass
+                if on_progress:
+                    on_progress({"stage": f"agent_invoke_{tool_name}", "label": label, "status": "error"})
+
+        # Append tool results as user turn
+        if fn_response_parts:
+            try:
+                contents.append(types.Content(role="user", parts=fn_response_parts))
+            except Exception:
+                pass
+
+    # Max iterations or empty response — synthesis pass without tools
+    if audit_log:
+        if on_progress:
+            on_progress({"stage": "llm_synthesis", "label": "Preparing a recommendation…", "status": "started"})
+        try:
+            tool_summary = "\n".join(
+                f"• {e['tool']}: {e.get('brief', e.get('error', ''))}"
+                for e in audit_log
+                if e["status"] == "completed"
+            )
+            synthesis_query = (
+                f"Based on the following tool findings, answer: {user_query}\n\n"
+                f"Tool findings:\n{tool_summary}\n\n"
+                "Provide a natural, grounded analytical answer. Do not expose tool names."
+            )
+            try:
+                synth_contents = [
+                    *[c for c in contents if isinstance(c, dict) or getattr(c, "role", None) == "user"],
+                    types.Content(role="user", parts=[types.Part.from_text(synthesis_query)]),
+                ]
+            except Exception:
+                synth_contents = [{"role": "user", "parts": [{"text": synthesis_query}]}]
+
+            synth_response = client.models.generate_content(
+                model=model,
+                contents=synth_contents,
+                config=types.GenerateContentConfig(
+                    system_instruction=_TERRIS_SYSTEM,
+                    temperature=0.3,
+                    max_output_tokens=1500,
+                ) if config is not None else None,
+            )
+            try:
+                text = synth_response.text or ""
+            except Exception:
+                text = ""
+            if not text:
+                try:
+                    text = "".join(
+                        getattr(p, "text", "") or ""
+                        for p in synth_response.candidates[0].content.parts
+                    )
+                except Exception:
+                    pass
+            if text:
+                _record_provider_success(gemini=True)
+                return text, audit_log
+        except Exception as exc:
+            _record_provider_failure(exc, gemini=True)
+
+    _record_provider_failure(RuntimeError("max iterations reached without answer"), gemini=True)
+    return "", audit_log
 
 
 def _run_openai_agent_loop(
@@ -1259,6 +1713,28 @@ def add_message(
         except Exception as exc:
             logger.warning("Terris Ollama local inference failed, falling back: %s", exc)
             _record_provider_failure(exc, local=True)
+
+    elif provider == "gemini_demo" and api_key:
+        # Gemini Demo Intelligence Mode — free tier, illustrative data only, safety gate active
+        if on_progress:
+            on_progress({"stage": "llm_thinking", "label": "Thinking…", "status": "started"})
+        try:
+            result_text, agent_audit_log = _run_gemini_agent_loop(
+                user_query, history, api_key, model, on_progress=on_progress,
+            )
+            if result_text:
+                narrated_answer = result_text
+                llm_mode = "gemini_demo_intelligence"
+            else:
+                # Gemini returned empty — safe fallback to structured_safe
+                logger.info("Terris Gemini returned empty response; using structured safe fallback.")
+                llm_mode = "structured_safe"
+            if on_progress:
+                on_progress({"stage": "llm_thinking", "label": "Thinking…", "status": "completed"})
+        except Exception as exc:
+            logger.warning("Terris Gemini inference failed, falling back: %s", exc)
+            _record_provider_failure(exc, gemini=True)
+            llm_mode = "structured_safe"
 
     elif api_key:
         # Paid provider — Connected Intelligence Mode

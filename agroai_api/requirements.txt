@@ -20,6 +20,8 @@ anthropic>=0.39.0
 # Ollama local inference — uses stdlib urllib; no extra SDK needed.
 # The ollama Python package is optional (uncomment if preferred):
 # ollama>=0.3.0
+# Gemini Demo Intelligence — illustrative/sanitized data only; free developer tier.
+google-genai>=0.8.0
 
 # Cloud Storage
 boto3==1.34.13

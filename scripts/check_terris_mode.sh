@@ -112,6 +112,71 @@ except Exception:
     print('')
 " 2>/dev/null)
 
+# ── Parse Ollama-specific health fields ──────────────────────────────────────
+RUNTIME_OLLAMA_REACHABLE=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+    print('yes' if d.get('ollama_reachable') else 'no')
+except Exception:
+    print('no')
+" "${TMP_DIAG}" 2>/dev/null || echo "no")
+
+RUNTIME_OLLAMA_LOOPBACK=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+    print('yes' if d.get('ollama_loopback_only') else 'no')
+except Exception:
+    print('unknown')
+" "${TMP_DIAG}" 2>/dev/null || echo "unknown")
+
+RUNTIME_MODEL_INSTALLED=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+    print('yes' if d.get('model_installed') else 'no')
+except Exception:
+    print('unknown')
+" "${TMP_DIAG}" 2>/dev/null || echo "unknown")
+
+RUNTIME_CLOUD_KEY_REQUIRED=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+    print('yes' if d.get('cloud_key_required') else 'no')
+except Exception:
+    print('unknown')
+" "${TMP_DIAG}" 2>/dev/null || echo "unknown")
+
+# ── Parse Gemini Demo-specific health fields ──────────────────────────────────
+RUNTIME_DEMO_ONLY=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+    print('yes' if d.get('demo_only_safety_active') else 'no')
+except Exception:
+    print('no')
+" "${TMP_DIAG}" 2>/dev/null || echo "no")
+
+RUNTIME_BLOCK_PRIVATE=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+    print('yes' if d.get('blocked_private_provenance') else 'no')
+except Exception:
+    print('no')
+" "${TMP_DIAG}" 2>/dev/null || echo "no")
+
+RUNTIME_ALLOWED_PROV=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+    print(d.get('allowed_provenance', ''))
+except Exception:
+    print('')
+" "${TMP_DIAG}" 2>/dev/null || echo "")
+
 rm -f "${TMP_DIAG}"
 
 # ── Check .env.local for configured key ──────────────────────────────────────
@@ -138,46 +203,12 @@ if [[ -f "${ENV_LOCAL}" ]]; then
   unset RAW_KEY
 fi
 
-# ── Parse additional Ollama health fields (re-read saved diag) ────────────────
-_DIAG_JSON="${TMP_DIAG}"
-RUNTIME_OLLAMA_REACHABLE=$(python3 -c "
-import json, sys
-try:
-    d = json.load(open(sys.argv[1]))
-    print('yes' if d.get('ollama_reachable') else 'no')
-except Exception:
-    print('no')
-" "${_DIAG_JSON}" 2>/dev/null || echo "no")
-
-RUNTIME_OLLAMA_LOOPBACK=$(python3 -c "
-import json, sys
-try:
-    d = json.load(open(sys.argv[1]))
-    print('yes' if d.get('ollama_loopback_only') else 'no')
-except Exception:
-    print('unknown')
-" "${_DIAG_JSON}" 2>/dev/null || echo "unknown")
-
-RUNTIME_MODEL_INSTALLED=$(python3 -c "
-import json, sys
-try:
-    d = json.load(open(sys.argv[1]))
-    print('yes' if d.get('model_installed') else 'no')
-except Exception:
-    print('unknown')
-" "${_DIAG_JSON}" 2>/dev/null || echo "unknown")
-
-RUNTIME_CLOUD_KEY_REQUIRED=$(python3 -c "
-import json, sys
-try:
-    d = json.load(open(sys.argv[1]))
-    print('yes' if d.get('cloud_key_required') else 'no')
-except Exception:
-    print('unknown')
-" "${_DIAG_JSON}" 2>/dev/null || echo "unknown")
-
 # ── Determine effective state ─────────────────────────────────────────────────
-if [[ "$RUNTIME_MODE" == "local_intelligence" ]]; then
+if [[ "$RUNTIME_MODE" == "gemini_demo_intelligence" ]]; then
+  EFFECTIVE_STATE="gemini_demo_intelligence"
+elif [[ "$RUNTIME_MODE" == "gemini_demo_degraded" ]]; then
+  EFFECTIVE_STATE="gemini_demo_degraded"
+elif [[ "$RUNTIME_MODE" == "local_intelligence" ]]; then
   EFFECTIVE_STATE="local_intelligence"
 elif [[ "$RUNTIME_MODE" == "local_degraded" ]]; then
   EFFECTIVE_STATE="local_degraded"
@@ -198,6 +229,32 @@ echo "Effective state: ${EFFECTIVE_STATE}"
 echo ""
 
 case "$EFFECTIVE_STATE" in
+  gemini_demo_intelligence)
+    echo "  Status  : GEMINI DEMO INTELLIGENCE MODE"
+    echo "  Detail  : Gemini free-tier active. Illustrative and sanitized data only."
+    echo "            Terris uses Google Gemini backed by deterministic AGRO-AI tools."
+    echo "            Demo-only safety gate is active — private data never leaves this server."
+    echo "  Provider: gemini_demo"
+    echo "  Model   : ${RUNTIME_MODEL}"
+    echo "  Demo-only safety    : ${RUNTIME_DEMO_ONLY}"
+    echo "  Private data blocked: ${RUNTIME_BLOCK_PRIVATE}"
+    [[ -n "$RUNTIME_ALLOWED_PROV" ]] && echo "  Allowed provenance  : ${RUNTIME_ALLOWED_PROV}"
+    echo "  SDK     : available"
+    ;;
+  gemini_demo_degraded)
+    echo "  Status  : GEMINI DEMO DEGRADED"
+    echo "  Detail  : Gemini is configured but the last call failed."
+    echo "            Terris is using deterministic structured fallback."
+    echo "  Provider: gemini_demo"
+    echo "  Model   : ${RUNTIME_MODEL}"
+    [[ -n "$RUNTIME_LAST_ERR" ]] && echo "  Last err: ${RUNTIME_LAST_ERR}"
+    echo ""
+    echo "  Fix options:"
+    echo "    - Verify API key:  bash scripts/configure_terris_gemini_demo.sh"
+    echo "    - Check rate limit: free tier allows 15 RPM / 1 million TPD"
+    echo "    - Restart backend: bash scripts/run_fcgma_demo.sh"
+    echo "    - Verify mode:     bash scripts/verify_terris_gemini_demo.sh"
+    ;;
   local_intelligence)
     echo "  Status  : LOCAL INTELLIGENCE MODE"
     echo "  Detail  : Ollama running, model installed, loopback-only, tool-calling active."

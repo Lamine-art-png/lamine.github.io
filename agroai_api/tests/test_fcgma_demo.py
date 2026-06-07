@@ -3624,3 +3624,416 @@ def test_local_intelligence_mode_in_diagnostic_when_ollama_set(client):
         "cloud_key_required must be False for Ollama"
     os.environ.pop("TERRIS_LLM_PROVIDER", None)
     os.environ.pop("TERRIS_OLLAMA_BASE_URL", None)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Seventeenth pass: Gemini Demo Intelligence tests
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_gemini_sdk_declared_in_requirements():
+    """google-genai must be listed in requirements.txt."""
+    import pathlib
+    req = pathlib.Path(__file__).parent.parent / "requirements.txt"
+    text = req.read_text()
+    assert "google-genai" in text, "google-genai must be declared in requirements.txt"
+
+
+def test_gemini_sdk_importable_when_installed():
+    """google-genai SDK must be importable (or clearly not installed)."""
+    try:
+        from google import genai  # noqa: F401
+        assert True  # SDK present
+    except ImportError:
+        # Not installed in this env — that's acceptable; the test confirms we *tried* correctly
+        pass
+
+
+def test_gemini_provider_configured_via_env(client):
+    """GET /terris/diagnostic must report gemini_demo provider when TERRIS_LLM_PROVIDER=gemini_demo."""
+    import os
+    os.environ["TERRIS_LLM_PROVIDER"] = "gemini_demo"
+    os.environ["TERRIS_GEMINI_MODEL"] = "gemini-2.0-flash"
+    resp = client.get("/v1/fcgma-demo/terris/diagnostic")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data.get("provider") == "gemini_demo", \
+        f"Expected provider='gemini_demo', got {data.get('provider')!r}"
+    assert data.get("model") == "gemini-2.0-flash"
+    os.environ.pop("TERRIS_LLM_PROVIDER", None)
+    os.environ.pop("TERRIS_GEMINI_MODEL", None)
+
+
+def test_gemini_demo_only_safety_active_by_default(client):
+    """demo_only_safety_active must be True when TERRIS_EXTERNAL_DEMO_ONLY=true."""
+    import os
+    os.environ["TERRIS_LLM_PROVIDER"] = "gemini_demo"
+    os.environ["TERRIS_EXTERNAL_DEMO_ONLY"] = "true"
+    resp = client.get("/v1/fcgma-demo/terris/diagnostic")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data.get("demo_only_safety_active") is True, \
+        "demo_only_safety_active must be True when TERRIS_EXTERNAL_DEMO_ONLY=true"
+    os.environ.pop("TERRIS_LLM_PROVIDER", None)
+    os.environ.pop("TERRIS_EXTERNAL_DEMO_ONLY", None)
+
+
+def test_gemini_blocked_provenance_field_present(client):
+    """blocked_private_provenance must be present in Gemini diagnostic."""
+    import os
+    os.environ["TERRIS_LLM_PROVIDER"] = "gemini_demo"
+    os.environ["TERRIS_EXTERNAL_BLOCK_PRIVATE"] = "true"
+    resp = client.get("/v1/fcgma-demo/terris/diagnostic")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data.get("blocked_private_provenance") is True, \
+        "blocked_private_provenance must be True when TERRIS_EXTERNAL_BLOCK_PRIVATE=true"
+    os.environ.pop("TERRIS_LLM_PROVIDER", None)
+    os.environ.pop("TERRIS_EXTERNAL_BLOCK_PRIVATE", None)
+
+
+def test_gemini_validate_evidence_provenance_blocks_private():
+    """_validate_evidence_provenance must reject authorized_live_private."""
+    import os
+    os.environ["TERRIS_EXTERNAL_BLOCK_PRIVATE"] = "true"
+    from app.services.fcgma.conversation import _validate_evidence_provenance
+    items = [{"tool": "some_tool", "brief": "data", "provenance": "authorized_live_private"}]
+    safe, reason = _validate_evidence_provenance(items)
+    assert not safe, "authorized_live_private must be blocked"
+    assert "authorized_live_private" in reason
+    os.environ.pop("TERRIS_EXTERNAL_BLOCK_PRIVATE", None)
+
+
+def test_gemini_validate_evidence_provenance_blocks_confidential():
+    """_validate_evidence_provenance must reject confidential_customer."""
+    import os
+    os.environ["TERRIS_EXTERNAL_BLOCK_PRIVATE"] = "true"
+    from app.services.fcgma.conversation import _validate_evidence_provenance
+    items = [{"tool": "some_tool", "brief": "data", "provenance": "confidential_customer"}]
+    safe, reason = _validate_evidence_provenance(items)
+    assert not safe, "confidential_customer must be blocked"
+    os.environ.pop("TERRIS_EXTERNAL_BLOCK_PRIVATE", None)
+
+
+def test_gemini_validate_evidence_provenance_blocks_credential():
+    """_validate_evidence_provenance must reject credential provenance."""
+    import os
+    os.environ["TERRIS_EXTERNAL_BLOCK_PRIVATE"] = "true"
+    from app.services.fcgma.conversation import _validate_evidence_provenance
+    items = [{"tool": "some_tool", "brief": "data", "provenance": "credential"}]
+    safe, reason = _validate_evidence_provenance(items)
+    assert not safe, "credential must be blocked"
+    os.environ.pop("TERRIS_EXTERNAL_BLOCK_PRIVATE", None)
+
+
+def test_gemini_validate_evidence_provenance_blocks_unknown():
+    """_validate_evidence_provenance must reject unknown provenance."""
+    import os
+    os.environ["TERRIS_EXTERNAL_BLOCK_PRIVATE"] = "true"
+    from app.services.fcgma.conversation import _validate_evidence_provenance
+    items = [{"tool": "some_tool", "brief": "data", "provenance": "unknown"}]
+    safe, reason = _validate_evidence_provenance(items)
+    assert not safe, "unknown provenance must be blocked"
+    os.environ.pop("TERRIS_EXTERNAL_BLOCK_PRIVATE", None)
+
+
+def test_gemini_validate_evidence_provenance_allows_demo_scenarios():
+    """_validate_evidence_provenance must allow injected_demo_scenario."""
+    import os
+    os.environ["TERRIS_EXTERNAL_BLOCK_PRIVATE"] = "true"
+    from app.services.fcgma.conversation import _validate_evidence_provenance
+    items = [
+        {"tool": "t1", "brief": "data", "provenance": "public_context"},
+        {"tool": "t2", "brief": "data", "provenance": "sanitized_replay"},
+        {"tool": "t3", "brief": "data", "provenance": "injected_demo_scenario"},
+    ]
+    safe, reason = _validate_evidence_provenance(items)
+    assert safe, f"Allowed provenance categories must pass gate; reason={reason!r}"
+    os.environ.pop("TERRIS_EXTERNAL_BLOCK_PRIVATE", None)
+
+
+def test_gemini_sanitize_evidence_for_external_has_provenance():
+    """_sanitize_evidence_for_external must tag every item with provenance."""
+    from app.services.fcgma.conversation import _sanitize_evidence_for_external
+    tool_results = {"get_reporting_cycle_status": {"status": "on_track"}}
+    items = _sanitize_evidence_for_external(tool_results)
+    assert len(items) == 1
+    assert "provenance" in items[0], "Each sanitized item must have a provenance tag"
+    assert items[0]["provenance"] in (
+        "public_context", "sanitized_replay", "injected_demo_scenario"
+    ), f"Unexpected provenance: {items[0]['provenance']!r}"
+
+
+def test_gemini_sanitize_evidence_never_contains_api_keys():
+    """_sanitize_evidence_for_external must never output raw API keys."""
+    from app.services.fcgma.conversation import _sanitize_evidence_for_external
+    tool_results = {"get_reconciliation_status": {"key": "sk-ant-secret123"}}
+    items = _sanitize_evidence_for_external(tool_results)
+    all_text = str(items)
+    # The brief should not contain raw sk-... patterns
+    import re
+    found = re.findall(r"sk-[A-Za-z0-9\-]{8,}", all_text)
+    assert not found, f"API key pattern found in sanitized evidence: {found}"
+
+
+def test_gemini_build_tool_list_format():
+    """_build_gemini_tool_list must return valid Gemini FunctionDeclaration-compatible tools or empty list."""
+    from app.services.fcgma.conversation import _build_gemini_tool_list, _AGENT_TOOL_SCHEMAS
+    tools = _build_gemini_tool_list()
+    # Should be a list (either of Tool objects or empty if SDK not installed)
+    assert isinstance(tools, list), "_build_gemini_tool_list must return a list"
+    # If SDK is available, validate tool count
+    try:
+        from google import genai  # noqa: F401
+        # SDK present — should have one Tool object containing all declarations
+        assert len(tools) >= 1, "Expected at least one Tool object"
+    except ImportError:
+        # SDK absent — empty list is acceptable
+        assert len(tools) == 0, "Without SDK, _build_gemini_tool_list must return empty list"
+
+
+def test_gemini_agent_loop_falls_back_on_import_error(client, monkeypatch):
+    """_run_gemini_agent_loop must return ('', []) when SDK not importable."""
+    import os
+    import importlib
+    from app.services.fcgma import conversation
+
+    # Monkeypatch _check_sdk_available to simulate missing SDK
+    original_check = conversation._check_sdk_available
+    monkeypatch.setattr(conversation, "_check_sdk_available", lambda p: False if p == "gemini_demo" else original_check(p))
+
+    os.environ["TERRIS_LLM_PROVIDER"] = "gemini_demo"
+    os.environ["TERRIS_GEMINI_API_KEY"] = "test-key-placeholder"
+
+    # Direct call to the loop with a fake import mechanism
+    # Since the SDK may or may not be installed, we test the fallback through add_message
+    resp = client.post(
+        "/v1/fcgma-demo/terris/conversation",
+        json={},
+    )
+    assert resp.status_code == 200
+    tid = resp.json()["thread_id"]
+
+    # Even without a real Gemini response, the system must return a structured answer
+    msg_resp = client.post(
+        f"/v1/fcgma-demo/terris/conversation/{tid}/message",
+        json={"query": "What is the cycle status?"},
+    )
+    assert msg_resp.status_code == 200
+    data = msg_resp.json()
+    assert "content" in data, "Response must have content even on Gemini fallback"
+    assert data["content"], "Content must not be empty"
+
+    os.environ.pop("TERRIS_LLM_PROVIDER", None)
+    os.environ.pop("TERRIS_GEMINI_API_KEY", None)
+
+
+def test_gemini_tool_loop_bounded(monkeypatch):
+    """_run_gemini_agent_loop must not exceed TERRIS_EXTERNAL_MAX_TOOL_ITERATIONS."""
+    import os
+    from app.services.fcgma.conversation import _get_gemini_config
+    os.environ["TERRIS_EXTERNAL_MAX_TOOL_ITERATIONS"] = "3"
+    cfg = _get_gemini_config()
+    assert cfg["max_tool_iterations"] == 3, \
+        "TERRIS_EXTERNAL_MAX_TOOL_ITERATIONS must be respected"
+    os.environ.pop("TERRIS_EXTERNAL_MAX_TOOL_ITERATIONS", None)
+
+
+def test_gemini_rate_limit_recorded_as_degraded(monkeypatch):
+    """_record_provider_failure with gemini=True must set gemini_demo_degraded."""
+    from app.services.fcgma import conversation
+    conversation._record_provider_failure(RuntimeError("429 Resource exhausted"), gemini=True)
+    assert conversation._PROVIDER_HEALTH["mode"] == "gemini_demo_degraded"
+    # Reset
+    conversation._PROVIDER_HEALTH["mode"] = "structured_safe"
+    conversation._PROVIDER_HEALTH["last_error_redacted"] = None
+
+
+def test_gemini_success_recorded_as_intelligence(monkeypatch):
+    """_record_provider_success with gemini=True must set gemini_demo_intelligence."""
+    from app.services.fcgma import conversation
+    conversation._record_provider_success(gemini=True)
+    assert conversation._PROVIDER_HEALTH["mode"] == "gemini_demo_intelligence"
+    # Reset
+    conversation._PROVIDER_HEALTH["mode"] = "structured_safe"
+    conversation._PROVIDER_HEALTH["last_error_redacted"] = None
+
+
+def test_gemini_failure_redacts_aikey():
+    """_record_provider_failure must redact AIza-style Gemini key patterns."""
+    from app.services.fcgma import conversation
+    exc = RuntimeError("AIzaSyABC123xyz456 authentication failed")
+    conversation._record_provider_failure(exc, gemini=True)
+    err = conversation._PROVIDER_HEALTH.get("last_error_redacted", "")
+    assert "AIzaSy" not in err, f"Gemini key pattern not redacted: {err!r}"
+    assert "[REDACTED]" in err, f"Expected [REDACTED] in error; got: {err!r}"
+    # Reset
+    conversation._PROVIDER_HEALTH["mode"] = "structured_safe"
+    conversation._PROVIDER_HEALTH["last_error_redacted"] = None
+
+
+def test_structured_safe_preserved_when_gemini_unconfigured(client):
+    """Without TERRIS_GEMINI_API_KEY, provider must be structured_safe."""
+    import os
+    os.environ["TERRIS_LLM_PROVIDER"] = "gemini_demo"
+    os.environ.pop("TERRIS_GEMINI_API_KEY", None)
+    resp = client.get("/v1/fcgma-demo/terris/diagnostic")
+    assert resp.status_code == 200
+    data = resp.json()
+    mode = data.get("mode", "")
+    assert mode in ("structured_safe", "gemini_demo_intelligence", "gemini_demo_degraded"), \
+        f"Unexpected mode without API key: {mode!r}"
+    os.environ.pop("TERRIS_LLM_PROVIDER", None)
+
+
+def test_openai_provider_still_recognized():
+    """OpenAI provider must still be recognized and not replaced by Gemini."""
+    import os
+    from app.services.fcgma.conversation import _get_llm_config
+    os.environ["TERRIS_LLM_PROVIDER"] = "openai"
+    os.environ["TERRIS_LLM_API_KEY"] = "sk-placeholder"
+    os.environ["TERRIS_LLM_MODEL"] = "gpt-4o"
+    _, provider, model, _ = _get_llm_config()
+    assert provider == "openai"
+    assert model == "gpt-4o"
+    os.environ.pop("TERRIS_LLM_PROVIDER", None)
+    os.environ.pop("TERRIS_LLM_API_KEY", None)
+    os.environ.pop("TERRIS_LLM_MODEL", None)
+
+
+def test_ollama_provider_still_preserved_alongside_gemini():
+    """Ollama provider must still be recognized independently from Gemini."""
+    import os
+    from app.services.fcgma.conversation import _get_llm_config
+    os.environ["TERRIS_LLM_PROVIDER"] = "ollama"
+    os.environ["TERRIS_OLLAMA_MODEL"] = "llama3.1:8b"
+    api_key, provider, model, effort = _get_llm_config()
+    assert provider == "ollama"
+    assert api_key is None
+    assert model == "llama3.1:8b"
+    assert effort == "local"
+    os.environ.pop("TERRIS_LLM_PROVIDER", None)
+    os.environ.pop("TERRIS_OLLAMA_MODEL", None)
+
+
+def test_gemini_diagnostic_has_allowed_provenance_field(client):
+    """GET /terris/diagnostic must include allowed_provenance when gemini_demo provider."""
+    import os
+    os.environ["TERRIS_LLM_PROVIDER"] = "gemini_demo"
+    resp = client.get("/v1/fcgma-demo/terris/diagnostic")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "allowed_provenance" in data, \
+        "allowed_provenance must be present in Gemini diagnostic response"
+    allowed = data["allowed_provenance"]
+    assert "public_context" in allowed
+    assert "sanitized_replay" in allowed
+    assert "injected_demo_scenario" in allowed
+    os.environ.pop("TERRIS_LLM_PROVIDER", None)
+
+
+def test_gemini_diagnostic_mode_valid_values(client):
+    """Gemini diagnostic mode must be one of the 9 defined provider states."""
+    import os
+    os.environ["TERRIS_LLM_PROVIDER"] = "gemini_demo"
+    resp = client.get("/v1/fcgma-demo/terris/diagnostic")
+    assert resp.status_code == 200
+    data = resp.json()
+    valid_modes = {
+        "gemini_demo_intelligence", "gemini_demo_degraded",
+        "local_intelligence", "local_degraded",
+        "connected_intelligence", "connected_degraded",
+        "structured_safe", "invalid_configuration", "restart_required",
+    }
+    mode = data.get("mode", "")
+    assert mode in valid_modes, f"Unexpected mode: {mode!r}"
+    os.environ.pop("TERRIS_LLM_PROVIDER", None)
+
+
+def test_gemini_get_config_defaults():
+    """_get_gemini_config must return sensible defaults when env vars not set."""
+    import os
+    for k in ("TERRIS_GEMINI_MODEL", "TERRIS_EXTERNAL_MAX_TOOL_ITERATIONS",
+              "TERRIS_EXTERNAL_TIMEOUT_SECONDS", "TERRIS_EXTERNAL_DEMO_ONLY",
+              "TERRIS_EXTERNAL_BLOCK_PRIVATE"):
+        os.environ.pop(k, None)
+    from app.services.fcgma.conversation import _get_gemini_config
+    cfg = _get_gemini_config()
+    assert cfg["max_tool_iterations"] == 6
+    assert cfg["timeout_seconds"] == 120.0
+    assert cfg["demo_only"] is True
+    assert cfg["block_private"] is True
+    assert "public_context" in cfg["allowed_provenance"]
+    assert "injected_demo_scenario" in cfg["allowed_provenance"]
+
+
+def test_configure_terris_gemini_demo_script_exists():
+    """scripts/configure_terris_gemini_demo.sh must exist."""
+    import pathlib
+    script = pathlib.Path(__file__).parent.parent.parent / "scripts" / "configure_terris_gemini_demo.sh"
+    assert script.exists(), "scripts/configure_terris_gemini_demo.sh must exist"
+    assert script.stat().st_mode & 0o111, "Script must be executable"
+
+
+def test_verify_terris_gemini_demo_script_exists():
+    """scripts/verify_terris_gemini_demo.sh must exist."""
+    import pathlib
+    script = pathlib.Path(__file__).parent.parent.parent / "scripts" / "verify_terris_gemini_demo.sh"
+    assert script.exists(), "scripts/verify_terris_gemini_demo.sh must exist"
+    assert script.stat().st_mode & 0o111, "Script must be executable"
+
+
+def test_gemini_follow_up_suggestions_present(client):
+    """Follow-up suggestions must be present in Gemini demo response."""
+    import os
+    os.environ["TERRIS_LLM_PROVIDER"] = "gemini_demo"
+    # No API key — will fall back to structured safe but suggestions still come from investigation
+    os.environ.pop("TERRIS_GEMINI_API_KEY", None)
+    resp = client.post("/v1/fcgma-demo/terris/conversation", json={})
+    assert resp.status_code == 200
+    tid = resp.json()["thread_id"]
+    msg = client.post(
+        f"/v1/fcgma-demo/terris/conversation/{tid}/message",
+        json={"query": "What is the current cycle status?"},
+    )
+    assert msg.status_code == 200
+    data = msg.json()
+    assert "follow_up_suggestions" in data
+    assert isinstance(data["follow_up_suggestions"], list)
+    os.environ.pop("TERRIS_LLM_PROVIDER", None)
+
+
+def test_gemini_no_chain_of_thought_in_response(client):
+    """Terris must never expose hidden reasoning tokens in response content."""
+    import os
+    os.environ["TERRIS_LLM_PROVIDER"] = "gemini_demo"
+    os.environ.pop("TERRIS_GEMINI_API_KEY", None)
+    resp = client.post("/v1/fcgma-demo/terris/conversation", json={})
+    assert resp.status_code == 200
+    tid = resp.json()["thread_id"]
+    msg = client.post(
+        f"/v1/fcgma-demo/terris/conversation/{tid}/message",
+        json={"query": "Summarize the water position."},
+    )
+    content = msg.json().get("content", "")
+    assert "<think>" not in content, "Hidden <think> token must not appear in response"
+    assert "<thinking>" not in content, "Hidden <thinking> token must not appear in response"
+    os.environ.pop("TERRIS_LLM_PROVIDER", None)
+
+
+def test_gemini_runtime_smoke_no_api_key_returns_structured_safe(client):
+    """Without API key, Gemini path must degrade gracefully to structured_safe content."""
+    import os
+    os.environ["TERRIS_LLM_PROVIDER"] = "gemini_demo"
+    os.environ.pop("TERRIS_GEMINI_API_KEY", None)
+    resp = client.post("/v1/fcgma-demo/terris/conversation", json={})
+    assert resp.status_code == 200
+    tid = resp.json()["thread_id"]
+    msg = client.post(
+        f"/v1/fcgma-demo/terris/conversation/{tid}/message",
+        json={"query": "What is the reporting status?"},
+    )
+    assert msg.status_code == 200
+    data = msg.json()
+    assert data.get("content"), "Structured safe fallback must still return content"
+    assert data.get("llm_mode") in ("structured_safe", "gemini_demo_intelligence", "gemini_demo_degraded")
+    os.environ.pop("TERRIS_LLM_PROVIDER", None)

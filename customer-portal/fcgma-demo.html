@@ -1834,7 +1834,9 @@ async function sendTerrisMessage(query, contextHint) {
       (reviewedSummary ? '<div class="terris-reviewed-summary">Reviewed: ' + esc(reviewedSummary) + '</div>' : '') +
       (evidenceRows ? '<div style="margin-top:8px">' + evidenceRows + '</div>' : '');
 
-    const modeLabel = response.llm_mode === 'local_intelligence' ? 'Local Intelligence'
+    const modeLabel = response.llm_mode === 'gemini_demo_intelligence' ? 'Gemini Demo Intelligence'
+      : response.llm_mode === 'gemini_demo_degraded' ? 'Gemini Degraded'
+      : response.llm_mode === 'local_intelligence' ? 'Local Intelligence'
       : response.llm_mode === 'connected_intelligence' ? 'Connected Intelligence'
       : response.llm_mode === 'local_degraded' ? 'Local Degraded'
       : 'Structured Safe';
@@ -1856,7 +1858,11 @@ async function sendTerrisMessage(query, contextHint) {
 
     thread.appendChild(respEl);
 
-    if (response.llm_mode === 'local_intelligence') {
+    if (response.llm_mode === 'gemini_demo_intelligence') {
+      document.getElementById('terris-mode-label').textContent = 'Water Intelligence Agent · Gemini Demo Intelligence';
+    } else if (response.llm_mode === 'gemini_demo_degraded') {
+      document.getElementById('terris-mode-label').textContent = 'Water Intelligence Agent · Gemini Degraded (structured fallback)';
+    } else if (response.llm_mode === 'local_intelligence') {
       document.getElementById('terris-mode-label').textContent = 'Water Intelligence Agent · Local Intelligence (Ollama)';
     } else if (response.llm_mode === 'connected_intelligence') {
       document.getElementById('terris-mode-label').textContent = 'Water Intelligence Agent · Connected Intelligence mode';
@@ -2159,7 +2165,11 @@ async function openProvenance() {
     const modeEl = document.getElementById('prov-llm-mode');
     if (modeEl && briefing) {
       const mode = briefing.llm_mode || 'structured_safe';
-      modeEl.textContent = mode === 'local_intelligence'
+      modeEl.textContent = mode === 'gemini_demo_intelligence'
+        ? 'Gemini Demo Intelligence (free tier — illustrative data only)'
+        : mode === 'gemini_demo_degraded'
+        ? 'Gemini Degraded (rate limit or auth failure — structured fallback)'
+        : mode === 'local_intelligence'
         ? 'Local Intelligence (Ollama — zero cloud cost)'
         : mode === 'connected_intelligence'
         ? 'Connected Intelligence (cloud LLM configured)'
