@@ -1834,7 +1834,10 @@ async function sendTerrisMessage(query, contextHint) {
       (reviewedSummary ? '<div class="terris-reviewed-summary">Reviewed: ' + esc(reviewedSummary) + '</div>' : '') +
       (evidenceRows ? '<div style="margin-top:8px">' + evidenceRows + '</div>' : '');
 
-    const modeLabel = response.llm_mode === 'connected_intelligence' ? 'Connected Intelligence' : 'Structured Safe';
+    const modeLabel = response.llm_mode === 'local_intelligence' ? 'Local Intelligence'
+      : response.llm_mode === 'connected_intelligence' ? 'Connected Intelligence'
+      : response.llm_mode === 'local_degraded' ? 'Local Degraded'
+      : 'Structured Safe';
     const hasTrail = !!(progressLabels.length || evidenceRows);
 
     respEl.innerHTML =
@@ -1853,7 +1856,9 @@ async function sendTerrisMessage(query, contextHint) {
 
     thread.appendChild(respEl);
 
-    if (response.llm_mode === 'connected_intelligence') {
+    if (response.llm_mode === 'local_intelligence') {
+      document.getElementById('terris-mode-label').textContent = 'Water Intelligence Agent · Local Intelligence (Ollama)';
+    } else if (response.llm_mode === 'connected_intelligence') {
       document.getElementById('terris-mode-label').textContent = 'Water Intelligence Agent · Connected Intelligence mode';
     }
     _terrisMessageCount++;
@@ -2154,9 +2159,13 @@ async function openProvenance() {
     const modeEl = document.getElementById('prov-llm-mode');
     if (modeEl && briefing) {
       const mode = briefing.llm_mode || 'structured_safe';
-      modeEl.textContent = mode === 'connected_intelligence'
-        ? 'Connected Intelligence (LLM configured)'
-        : 'Structured Safe (no LLM key — deterministic answers only)';
+      modeEl.textContent = mode === 'local_intelligence'
+        ? 'Local Intelligence (Ollama — zero cloud cost)'
+        : mode === 'connected_intelligence'
+        ? 'Connected Intelligence (cloud LLM configured)'
+        : mode === 'local_degraded'
+        ? 'Local Degraded (Ollama unreachable — deterministic fallback)'
+        : 'Structured Safe (no LLM — deterministic answers only)';
     }
   } catch(e) {
     el.innerHTML = '<div style="color:var(--danger);font-size:13px">Failed: ' + esc(e.message) + '</div>';

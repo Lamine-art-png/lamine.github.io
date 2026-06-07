@@ -138,8 +138,50 @@ if [[ -f "${ENV_LOCAL}" ]]; then
   unset RAW_KEY
 fi
 
+# ── Parse additional Ollama health fields (re-read saved diag) ────────────────
+_DIAG_JSON="${TMP_DIAG}"
+RUNTIME_OLLAMA_REACHABLE=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+    print('yes' if d.get('ollama_reachable') else 'no')
+except Exception:
+    print('no')
+" "${_DIAG_JSON}" 2>/dev/null || echo "no")
+
+RUNTIME_OLLAMA_LOOPBACK=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+    print('yes' if d.get('ollama_loopback_only') else 'no')
+except Exception:
+    print('unknown')
+" "${_DIAG_JSON}" 2>/dev/null || echo "unknown")
+
+RUNTIME_MODEL_INSTALLED=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+    print('yes' if d.get('model_installed') else 'no')
+except Exception:
+    print('unknown')
+" "${_DIAG_JSON}" 2>/dev/null || echo "unknown")
+
+RUNTIME_CLOUD_KEY_REQUIRED=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open(sys.argv[1]))
+    print('yes' if d.get('cloud_key_required') else 'no')
+except Exception:
+    print('unknown')
+" "${_DIAG_JSON}" 2>/dev/null || echo "unknown")
+
 # ── Determine effective state ─────────────────────────────────────────────────
-if [[ "$RUNTIME_MODE" == "connected_intelligence" ]]; then
+if [[ "$RUNTIME_MODE" == "local_intelligence" ]]; then
+  EFFECTIVE_STATE="local_intelligence"
+elif [[ "$RUNTIME_MODE" == "local_degraded" ]]; then
+  EFFECTIVE_STATE="local_degraded"
+elif [[ "$RUNTIME_MODE" == "connected_intelligence" ]]; then
   EFFECTIVE_STATE="connected_intelligence"
 elif [[ "$RUNTIME_MODE" == "connected_degraded" ]]; then
   EFFECTIVE_STATE="connected_degraded"
@@ -156,6 +198,38 @@ echo "Effective state: ${EFFECTIVE_STATE}"
 echo ""
 
 case "$EFFECTIVE_STATE" in
+  local_intelligence)
+    echo "  Status  : LOCAL INTELLIGENCE MODE"
+    echo "  Detail  : Ollama running, model installed, loopback-only, tool-calling active."
+    echo "            Terris uses a local Meta Llama model backed by deterministic AGRO-AI tools."
+    echo "            Zero per-token cost. No cloud key required. No external inference."
+    echo "  Provider: ollama"
+    echo "  Model   : ${RUNTIME_MODEL}"
+    echo "  Reachable : ${RUNTIME_OLLAMA_REACHABLE}"
+    echo "  Loopback  : ${RUNTIME_OLLAMA_LOOPBACK}"
+    echo "  Model OK  : ${RUNTIME_MODEL_INSTALLED}"
+    echo "  Cloud key : ${RUNTIME_CLOUD_KEY_REQUIRED}"
+    ;;
+  local_degraded)
+    echo "  Status  : LOCAL DEGRADED"
+    echo "  Detail  : Ollama is configured but not fully operational."
+    echo "            Terris is using deterministic structured fallback."
+    echo "  Provider  : ollama"
+    echo "  Model     : ${RUNTIME_MODEL}"
+    echo "  Reachable : ${RUNTIME_OLLAMA_REACHABLE}"
+    echo "  Model OK  : ${RUNTIME_MODEL_INSTALLED}"
+    [[ -n "$RUNTIME_LAST_ERR" ]] && echo "  Last err  : ${RUNTIME_LAST_ERR}"
+    echo ""
+    echo "  Fix options:"
+    if [[ "${RUNTIME_OLLAMA_REACHABLE}" == "no" ]]; then
+      echo "    - Start Ollama:    OLLAMA_HOST=127.0.0.1 ollama serve"
+    fi
+    if [[ "${RUNTIME_MODEL_INSTALLED}" == "no" ]]; then
+      echo "    - Pull model:      ollama pull ${RUNTIME_MODEL}"
+    fi
+    echo "    - Re-configure:    bash scripts/configure_terris_local.sh"
+    echo "    - Restart backend: bash scripts/run_fcgma_demo.sh"
+    ;;
   connected_intelligence)
     echo "  Status  : CONNECTED INTELLIGENCE MODE"
     echo "  Detail  : SDK active, key loaded, provider check passed."
@@ -178,6 +252,7 @@ case "$EFFECTIVE_STATE" in
     echo "    - Verify API key:  bash scripts/configure_terris_llm.sh"
     echo "    - Install SDK:     pip install openai>=1.54.0 anthropic>=0.39.0"
     echo "    - Restart backend: bash scripts/run_fcgma_demo.sh"
+    echo "    - Use local mode:  bash scripts/configure_terris_local.sh"
     ;;
   restart_required)
     echo "  Status  : RESTART REQUIRED"
@@ -198,14 +273,18 @@ case "$EFFECTIVE_STATE" in
     echo "  Detail  : .env.local contains an invalid configuration (e.g., numeric model ID)."
     echo ""
     echo "  Fix: Re-run the configuration wizard:"
-    echo "    bash scripts/configure_terris_llm.sh"
+    echo "    bash scripts/configure_terris_local.sh   (for Ollama local)"
+    echo "    bash scripts/configure_terris_llm.sh     (for paid providers)"
     ;;
   structured_safe)
     echo "  Status  : STRUCTURED SAFE MODE"
-    echo "  Detail  : No LLM key configured. Terris returns deterministic"
+    echo "  Detail  : No LLM configured. Terris returns deterministic"
     echo "            structured answers without LLM narration."
     echo ""
-    echo "  To enable Connected Intelligence Mode:"
+    echo "  To enable Local Intelligence Mode (free, recommended for demo):"
+    echo "    bash scripts/configure_terris_local.sh"
+    echo ""
+    echo "  To enable Connected Intelligence Mode (paid API required):"
     echo "    bash scripts/configure_terris_llm.sh"
     ;;
   *)

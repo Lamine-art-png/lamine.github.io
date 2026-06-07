@@ -62,10 +62,16 @@ if [[ -f "${ENV_LOCAL}" ]]; then
   set +a
   echo "→ Loaded local configuration (.env.local)"
   # Report Terris mode without printing the key
-  if [[ -n "${TERRIS_LLM_API_KEY:-}" ]]; then
-    echo "→ Terris: Connected Intelligence mode (${TERRIS_LLM_PROVIDER:-anthropic} / ${TERRIS_LLM_MODEL:-default})"
+  PROVIDER="${TERRIS_LLM_PROVIDER:-anthropic}"
+  if [[ "${PROVIDER}" == "ollama" ]]; then
+    OLLAMA_MODEL="${TERRIS_OLLAMA_MODEL:-llama3.1:8b}"
+    OLLAMA_URL="${TERRIS_OLLAMA_BASE_URL:-http://127.0.0.1:11434}"
+    echo "→ Terris: Local Intelligence mode (ollama / ${OLLAMA_MODEL} @ ${OLLAMA_URL})"
+    echo "→ No cloud API key required for local intelligence."
+  elif [[ -n "${TERRIS_LLM_API_KEY:-}" ]]; then
+    echo "→ Terris: Connected Intelligence mode (${PROVIDER} / ${TERRIS_LLM_MODEL:-default})"
   else
-    echo "→ Terris: Structured Safe mode (no LLM key — run scripts/configure_terris_llm.sh to enable)"
+    echo "→ Terris: Structured Safe mode (no LLM key — run scripts/configure_terris_local.sh to enable)"
   fi
 else
   echo "→ Terris: Structured Safe mode (.env.local not found)"

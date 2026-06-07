@@ -4,13 +4,27 @@ Manages multi-turn conversation threads with context persistence,
 reference resolution, and LLM provider abstraction.
 
 LLM integration:
-  TERRIS_LLM_PROVIDER  — "anthropic" (default) | "openai"
-  TERRIS_LLM_MODEL     — model name override
-  TERRIS_LLM_API_KEY   — provider API key (falls back to ANTHROPIC_API_KEY)
+  TERRIS_LLM_PROVIDER         — "ollama" | "anthropic" | "openai" (default: anthropic)
+  TERRIS_LLM_MODEL            — model name override
+  TERRIS_LLM_API_KEY          — provider API key for paid providers (not needed for ollama)
+  TERRIS_OLLAMA_BASE_URL      — Ollama base URL (default: http://127.0.0.1:11434)
+  TERRIS_OLLAMA_MODEL         — Ollama model (default: llama3.1:8b)
+  TERRIS_OLLAMA_NUM_CTX       — context window (default: 32768)
+  TERRIS_OLLAMA_MAX_TOOL_ITERATIONS — max agent iterations for Ollama (default: 6)
+  TERRIS_OLLAMA_TIMEOUT_SECONDS     — wall-clock timeout (default: 180)
+
+Provider priority:
+  1. ollama_local      — free, local, zero cloud dependency
+  2. openai_connected  — when funded
+  3. anthropic_connected — when funded
+  4. structured_safe   — deterministic fallback, no LLM required
 
 Modes:
-  Connected Intelligence — LLM narrates deterministic tool results
-  Structured Safe        — deterministic fallback, no LLM required
+  local_intelligence    — Ollama running, model installed, tool-calling works
+  local_degraded        — Ollama unreachable or model missing
+  connected_intelligence — paid LLM active and working
+  connected_degraded    — paid LLM configured but failing
+  structured_safe       — deterministic fallback only
 """
 from __future__ import annotations
 
@@ -195,8 +209,16 @@ def _choose_reasoning_effort(query: str, intent: str, base_effort: str) -> str:
 
 
 def _get_llm_config() -> tuple[str | None, str, str, str]:
-    """Return (api_key, provider, model, reasoning_effort). api_key is None when unconfigured."""
+    """Return (api_key, provider, model, reasoning_effort). api_key is None for Ollama/unconfigured."""
     provider = os.getenv("TERRIS_LLM_PROVIDER", "anthropic").lower()
+
+    if provider == "ollama":
+        # Ollama never requires a cloud key
+        api_key = None
+        model = os.getenv("TERRIS_OLLAMA_MODEL", "llama3.1:8b")
+        reasoning_effort = "local"
+        return api_key, provider, model, reasoning_effort
+
     api_key = (
         os.getenv("TERRIS_LLM_API_KEY")
         or os.getenv("ANTHROPIC_API_KEY")
@@ -213,11 +235,60 @@ def _get_llm_config() -> tuple[str | None, str, str, str]:
     return api_key, provider, model, reasoning_effort
 
 
+def _get_ollama_config() -> dict[str, Any]:
+    """Return Ollama-specific configuration."""
+    return {
+        "base_url": os.getenv("TERRIS_OLLAMA_BASE_URL", "http://127.0.0.1:11434"),
+        "model": os.getenv("TERRIS_OLLAMA_MODEL", "llama3.1:8b"),
+        "fallback_model": os.getenv("TERRIS_OLLAMA_FALLBACK_MODEL", "llama3.2:3b"),
+        "num_ctx": int(os.getenv("TERRIS_OLLAMA_NUM_CTX", "32768")),
+        "max_tool_iterations": int(os.getenv("TERRIS_OLLAMA_MAX_TOOL_ITERATIONS", "6")),
+        "timeout_seconds": float(os.getenv("TERRIS_OLLAMA_TIMEOUT_SECONDS", "180")),
+        "stream": os.getenv("TERRIS_OLLAMA_STREAM", "true").lower() == "true",
+    }
+
+
+def _check_ollama_reachable(base_url: str | None = None) -> bool:
+    """Return True if Ollama responds on the expected base URL."""
+    import urllib.request
+    import urllib.error
+    url = base_url or os.getenv("TERRIS_OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+    try:
+        with urllib.request.urlopen(f"{url}/api/tags", timeout=4) as resp:  # noqa: S310
+            return resp.status == 200
+    except Exception:
+        return False
+
+
+def _check_ollama_loopback_only(base_url: str | None = None) -> bool:
+    """Return True when Ollama base_url is loopback (127.0.0.1 or localhost)."""
+    url = base_url or os.getenv("TERRIS_OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+    return "127.0.0.1" in url or "localhost" in url
+
+
+def _check_ollama_model_available(model: str, base_url: str | None = None) -> bool:
+    """Return True if the model is installed in the local Ollama instance."""
+    import json
+    import urllib.request
+    import urllib.error
+    url = base_url or os.getenv("TERRIS_OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+    try:
+        with urllib.request.urlopen(f"{url}/api/tags", timeout=4) as resp:  # noqa: S310
+            data = json.loads(resp.read())
+            installed = [m.get("name", "") for m in data.get("models", [])]
+            # Accept partial match: "llama3.1:8b" in "llama3.1:8b-instruct-q4..."
+            return any(model.split(":")[0] in n for n in installed) or model in installed
+    except Exception:
+        return False
+
+
 def _check_sdk_available(provider: str) -> bool:
     """Return True if the provider SDK can be imported."""
     try:
         if provider == "openai":
             import openai  # noqa: F401
+        elif provider == "ollama":
+            return True  # Ollama uses urllib/httpx — no external SDK required
         else:
             import anthropic  # noqa: F401
         return True
@@ -230,7 +301,54 @@ def get_provider_health() -> dict[str, Any]:
     api_key, provider, model, reasoning_effort = _get_llm_config()
     sdk_ok = _check_sdk_available(provider)
 
-    # Determine effective mode
+    if provider == "ollama":
+        cfg = _get_ollama_config()
+        base_url = cfg["base_url"]
+        reachable = _check_ollama_reachable(base_url)
+        loopback = _check_ollama_loopback_only(base_url)
+        model_ok = _check_ollama_model_available(model, base_url) if reachable else False
+
+        stored_mode = _PROVIDER_HEALTH.get("mode", "structured_safe")
+        if stored_mode in ("local_intelligence", "local_degraded"):
+            mode = stored_mode
+        elif reachable and model_ok and loopback:
+            mode = "local_intelligence"
+        elif reachable and not model_ok:
+            mode = "local_degraded"
+        elif not reachable:
+            mode = "local_degraded"
+        else:
+            mode = "local_degraded"
+
+        return {
+            "mode": mode,
+            "llm_mode": mode,
+            "provider": "ollama",
+            "model": model,
+            "reasoning_effort": "local",
+            "key_configured": False,
+            "cloud_key_required": False,
+            "cloud_inference_disabled": True,
+            "sdk_available": True,
+            "ollama_reachable": reachable,
+            "ollama_loopback_only": loopback,
+            "model_installed": model_ok,
+            "base_url_safe": base_url if loopback else "WARN: not loopback",
+            "last_check_at": _PROVIDER_HEALTH.get("last_check_at"),
+            "last_error_redacted": _PROVIDER_HEALTH.get("last_error_redacted"),
+            "process_start": _PROVIDER_HEALTH.get("process_start"),
+            "note": (
+                "Local Intelligence Mode. No cloud key required. "
+                "All inference runs on-device via Ollama. "
+                "Configure with: bash scripts/configure_terris_local.sh"
+                + ("" if loopback else
+                   " WARNING: Ollama not bound to loopback. See Part 2 of setup guide.")
+                + ("" if model_ok else
+                   f" Model '{model}' not installed. Run: ollama pull {model}")
+            ),
+        }
+
+    # Paid providers
     if not api_key:
         mode = "structured_safe"
     elif not sdk_ok:
@@ -245,6 +363,8 @@ def get_provider_health() -> dict[str, Any]:
         "model": model if model else f"(default for {provider})",
         "reasoning_effort": reasoning_effort,
         "key_configured": bool(api_key),
+        "cloud_key_required": True,
+        "cloud_inference_disabled": False,
         "sdk_available": sdk_ok,
         "last_check_at": _PROVIDER_HEALTH.get("last_check_at"),
         "last_error_redacted": _PROVIDER_HEALTH.get("last_error_redacted"),
@@ -259,19 +379,19 @@ def get_provider_health() -> dict[str, Any]:
     }
 
 
-def _record_provider_success() -> None:
-    _PROVIDER_HEALTH["mode"] = "connected_intelligence"
+def _record_provider_success(local: bool = False) -> None:
+    _PROVIDER_HEALTH["mode"] = "local_intelligence" if local else "connected_intelligence"
     _PROVIDER_HEALTH["last_check_at"] = datetime.now(timezone.utc).isoformat()
     _PROVIDER_HEALTH["last_error_redacted"] = None
     _PROVIDER_HEALTH["sdk_available"] = True
 
 
-def _record_provider_failure(exc: Exception) -> None:
+def _record_provider_failure(exc: Exception, local: bool = False) -> None:
     import re as _re
     raw = type(exc).__name__ + ": " + str(exc)[:120]
     # Scrub any sk-... / sk-ant-... key-like tokens before storing
     redacted = _re.sub(r"sk-[A-Za-z0-9\-]{8,}", "[REDACTED]", raw)[:100]
-    _PROVIDER_HEALTH["mode"] = "connected_degraded"
+    _PROVIDER_HEALTH["mode"] = "local_degraded" if local else "connected_degraded"
     _PROVIDER_HEALTH["last_check_at"] = datetime.now(timezone.utc).isoformat()
     _PROVIDER_HEALTH["last_error_redacted"] = redacted
 
@@ -457,6 +577,223 @@ def _build_openai_tool_list() -> list[dict[str, Any]]:
             },
         })
     return tools
+
+
+def _build_ollama_tool_list() -> list[dict[str, Any]]:
+    """Convert tool schemas to Ollama/OpenAI-compatible tool format for local models."""
+    tools = []
+    for t in _AGENT_TOOL_SCHEMAS:
+        tools.append({
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": {
+                    "type": "object",
+                    "properties": {},
+                    "required": [],
+                },
+            },
+        })
+    return tools
+
+
+def _run_ollama_agent_loop(
+    user_query: str,
+    conversation_history: list[dict[str, Any]],
+    model: str,
+    on_progress: Callable[[dict], None] | None = None,
+) -> tuple[str, list[dict[str, Any]]]:
+    """Bounded tool-using agent loop using Ollama local chat API.
+
+    Uses the Ollama /api/chat endpoint with tool_choice and tool schemas.
+    Returns (final_answer, audit_log). No cloud key required.
+
+    Falls back gracefully if the model does not support tool calling.
+    """
+    import json
+    import time
+    import urllib.request
+    import urllib.error
+    from .terris import TERRIS_TOOL_MAP
+
+    cfg = _get_ollama_config()
+    base_url = cfg["base_url"]
+    max_iters = cfg["max_tool_iterations"]
+    timeout = cfg["timeout_seconds"]
+    num_ctx = cfg["num_ctx"]
+    fallback_model = cfg["fallback_model"]
+    tools = _build_ollama_tool_list()
+    audit_log: list[dict[str, Any]] = []
+    start_time = time.monotonic()
+
+    # Build message history (last 8 turns for context window efficiency)
+    messages: list[dict[str, Any]] = [
+        {"role": "system", "content": _TERRIS_SYSTEM},
+    ]
+    for turn in conversation_history[-8:]:
+        if turn["role"] in ("user", "assistant"):
+            messages.append({"role": turn["role"], "content": turn.get("content", "")})
+    messages.append({"role": "user", "content": user_query})
+
+    def _post_chat(msgs: list[dict], use_tools: bool = True) -> dict:
+        payload: dict[str, Any] = {
+            "model": model,
+            "messages": msgs,
+            "stream": False,
+            "options": {"num_ctx": num_ctx},
+        }
+        if use_tools:
+            payload["tools"] = tools
+        data = json.dumps(payload).encode()
+        req = urllib.request.Request(  # noqa: S310
+            f"{base_url}/api/chat",
+            data=data,
+            headers={"Content-Type": "application/json"},
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:  # noqa: S310
+            return json.loads(resp.read())
+
+    for iteration in range(max_iters):
+        if time.monotonic() - start_time > timeout:
+            break
+
+        try:
+            response = _post_chat(messages, use_tools=True)
+        except Exception as exc:
+            _record_provider_failure(exc, local=True)
+            # Try without tools as degraded fallback
+            try:
+                response = _post_chat(messages, use_tools=False)
+                text = (response.get("message") or {}).get("content", "")
+                if text:
+                    _record_provider_success(local=True)
+                    return text, audit_log
+            except Exception as exc2:
+                _record_provider_failure(exc2, local=True)
+                raise
+            raise
+
+        msg = response.get("message") or {}
+        tool_calls = msg.get("tool_calls") or []
+        content = msg.get("content") or ""
+
+        if not tool_calls:
+            # No tool calls — model produced final answer
+            if content:
+                _record_provider_success(local=True)
+                return content, audit_log
+            # Empty content with no tools — synthesize from investigation
+            break
+
+        # Execute each tool call
+        tool_result_messages: list[dict[str, Any]] = []
+        # Append the assistant message with tool_calls
+        messages.append({"role": "assistant", "content": content, "tool_calls": tool_calls})
+
+        for tc in tool_calls:
+            fn_info = tc.get("function") or {}
+            tool_name = fn_info.get("name", "")
+            fn = TERRIS_TOOL_MAP.get(tool_name)
+            label = STAGE_PROGRESS_LABELS.get(
+                f"invoke_{tool_name}",
+                _get_tool_progress_label(tool_name),
+            )
+
+            if on_progress:
+                on_progress({"stage": f"agent_invoke_{tool_name}", "label": label, "status": "started"})
+
+            try:
+                result = fn() if fn else {"error": f"Tool not available: {tool_name}"}
+                brief = _brief_tool_result(tool_name, result)
+                audit_log.append({
+                    "iteration": iteration + 1,
+                    "tool": tool_name,
+                    "status": "completed",
+                    "brief": brief,
+                })
+                tool_result_messages.append({
+                    "role": "tool",
+                    "content": brief,
+                })
+                if on_progress:
+                    on_progress({"stage": f"agent_invoke_{tool_name}", "label": label, "status": "completed"})
+            except Exception as exc:
+                audit_log.append({
+                    "iteration": iteration + 1,
+                    "tool": tool_name,
+                    "status": "error",
+                    "error": str(exc)[:120],
+                })
+                tool_result_messages.append({
+                    "role": "tool",
+                    "content": f"Error executing {tool_name}: {str(exc)[:80]}",
+                })
+                if on_progress:
+                    on_progress({"stage": f"agent_invoke_{tool_name}", "label": label, "status": "error"})
+
+        messages.extend(tool_result_messages)
+
+    # Max iterations or timeout reached — do a final synthesis pass without tools
+    if audit_log:
+        if on_progress:
+            on_progress({"stage": "llm_synthesis", "label": "Preparing a recommendation…", "status": "started"})
+        try:
+            # Condense tool results into a synthesis prompt
+            tool_summary = "\n".join(
+                f"• {e['tool']}: {e.get('brief', e.get('error', ''))}"
+                for e in audit_log if e["status"] == "completed"
+            )
+            synthesis_messages = [
+                {"role": "system", "content": _TERRIS_SYSTEM},
+                *[m for m in messages if m["role"] in ("user", "assistant") and m.get("content")],
+                {
+                    "role": "user",
+                    "content": (
+                        f"Based on the following tool findings, answer: {user_query}\n\n"
+                        f"Tool findings:\n{tool_summary}\n\n"
+                        "Provide a natural, grounded analytical answer. Do not expose tool names."
+                    ),
+                },
+            ]
+            response = _post_chat(synthesis_messages, use_tools=False)
+            text = (response.get("message") or {}).get("content", "")
+            if text:
+                _record_provider_success(local=True)
+                return text, audit_log
+        except Exception as exc:
+            _record_provider_failure(exc, local=True)
+
+    _record_provider_failure(RuntimeError("max iterations reached without final answer"), local=True)
+    return "", audit_log
+
+
+def _get_tool_progress_label(tool_name: str) -> str:
+    """Map tool name to a natural, high-level progress label (no internal function names)."""
+    labels = {
+        "get_reporting_cycle_status": "Reviewing the reporting-cycle status…",
+        "list_priority_actions": "Analysing the reporting-cycle blockers…",
+        "list_records_blocking_reporting": "Tracing affected meter records…",
+        "get_gate_status": "Evaluating reporting-cycle gates…",
+        "get_high_severity_cases": "Reviewing high-severity cases…",
+        "get_applied_water_summary": "Evaluating the applied-water position…",
+        "get_exception_count_by_type": "Reviewing exceptions by type…",
+        "list_wells_with_issues": "Checking wells with open issues…",
+        "get_operator_action_items": "Checking operator action items…",
+        "get_agency_action_items": "Reviewing agency notifications required…",
+        "get_combcode_status": "Reviewing CombCode and parcel relationships…",
+        "get_cycle_readiness": "Analysing cycle-close readiness…",
+        "get_reconciliation_status": "Reviewing the latest reconciliation snapshot…",
+        "generate_reporting_brief": "Preparing reporting-readiness brief…",
+        "generate_exception_packet": "Compiling exception packet…",
+        "draft_follow_up_request": "Drafting follow-up request…",
+        "draft_evidence_request": "Drafting evidence request…",
+        "compare_provider_health": "Comparing provider evidence…",
+        "list_unvalidated_assumptions": "Reviewing governance assumptions…",
+        "run_applied_water_scenario": "Evaluating applied-water attribution scenario…",
+    }
+    return labels.get(tool_name, f"Reviewing {tool_name.replace('_', ' ')}…")
 
 
 def _run_openai_agent_loop(
@@ -896,9 +1233,8 @@ def add_message(
     except Exception:
         pass
 
-    # Try LLM narration (Connected Intelligence Mode)
+    # Try LLM narration — Ollama Local Intelligence or paid providers
     api_key, provider, model, reasoning_effort = _get_llm_config()
-    # Adapt reasoning effort to actual query depth
     intent = investigation.get("intent", "other")
     effective_effort = _choose_reasoning_effort(user_query, intent, reasoning_effort)
 
@@ -907,7 +1243,25 @@ def add_message(
     agent_audit_log: list[dict[str, Any]] = []
     new_previous_response_id: str | None = None
 
-    if api_key:
+    if provider == "ollama":
+        # Local Intelligence Mode — no API key required, no cloud calls
+        if on_progress:
+            on_progress({"stage": "llm_thinking", "label": "Thinking…", "status": "started"})
+        try:
+            result_text, agent_audit_log = _run_ollama_agent_loop(
+                user_query, history, model, on_progress=on_progress,
+            )
+            if result_text:
+                narrated_answer = result_text
+            llm_mode = "local_intelligence"
+            if on_progress:
+                on_progress({"stage": "llm_thinking", "label": "Thinking…", "status": "completed"})
+        except Exception as exc:
+            logger.warning("Terris Ollama local inference failed, falling back: %s", exc)
+            _record_provider_failure(exc, local=True)
+
+    elif api_key:
+        # Paid provider — Connected Intelligence Mode
         if on_progress:
             on_progress({"stage": "llm_synthesis", "label": "Synthesizing findings…", "status": "started"})
         try:
@@ -916,14 +1270,12 @@ def add_message(
                     user_query, history, api_key, provider, model, on_progress=on_progress,
                 )
             elif provider == "openai":
-                # Retrieve persisted previous_response_id for conversation continuity
                 prior_response_id = ctx.get("openai_previous_response_id")
                 narrated_answer, agent_audit_log, new_previous_response_id = _run_openai_agent_loop(
                     user_query, history, api_key, model, effective_effort,
                     on_progress=on_progress,
                     previous_response_id=prior_response_id,
                 )
-                # Persist the new response ID for the next follow-up
                 if new_previous_response_id:
                     ctx["openai_previous_response_id"] = new_previous_response_id
             else:
@@ -967,8 +1319,10 @@ def add_message(
             "intent": intent,
             "answer_type": investigation.get("answer_type"),
             "calculation_version": CALCULATION_VERSION,
-            "reasoning_effort_used": effective_effort if api_key else None,
+            "reasoning_effort_used": effective_effort if (api_key or provider == "ollama") else None,
             "previous_response_id": new_previous_response_id,
+            "provider": provider,
+            "model": model,
         },
     }
     history.append(assistant_turn)
