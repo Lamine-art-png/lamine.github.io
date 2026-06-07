@@ -14,6 +14,10 @@ python-json-logger==2.0.7
 tenacity==8.2.3
 apscheduler==3.10.4
 
+# AI provider SDKs
+openai>=1.54.0
+anthropic>=0.39.0
+
 # Cloud Storage
 boto3==1.34.13
 azure-storage-blob==12.19.0

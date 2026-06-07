@@ -93,6 +93,25 @@ except Exception:
     print('no')
 " 2>/dev/null)
 
+RUNTIME_SDK_AVAIL=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open('${TMP_DIAG}'))
+    print('yes' if d.get('sdk_available') else 'no')
+except Exception:
+    print('no')
+" 2>/dev/null)
+
+RUNTIME_LAST_ERR=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open('${TMP_DIAG}'))
+    err = d.get('last_error_redacted') or ''
+    print(err[:80])
+except Exception:
+    print('')
+" 2>/dev/null)
+
 rm -f "${TMP_DIAG}"
 
 # ── Check .env.local for configured key ──────────────────────────────────────
@@ -122,6 +141,8 @@ fi
 # ── Determine effective state ─────────────────────────────────────────────────
 if [[ "$RUNTIME_MODE" == "connected_intelligence" ]]; then
   EFFECTIVE_STATE="connected_intelligence"
+elif [[ "$RUNTIME_MODE" == "connected_degraded" ]]; then
+  EFFECTIVE_STATE="connected_degraded"
 elif [[ "$RUNTIME_MODE" == "structured_safe" && "$LOCAL_KEY_SET" == "yes" && "$LOCAL_VALID" == "yes" ]]; then
   EFFECTIVE_STATE="restart_required"
 elif [[ "$LOCAL_VALID" == "no" ]]; then
@@ -137,11 +158,26 @@ echo ""
 case "$EFFECTIVE_STATE" in
   connected_intelligence)
     echo "  Status  : CONNECTED INTELLIGENCE MODE"
-    echo "  Detail  : LLM key is active in the running backend."
-    echo "            Terris narrates deterministic tool results using the LLM."
+    echo "  Detail  : SDK active, key loaded, provider check passed."
+    echo "            Terris uses a real reasoning-capable LLM backed by deterministic tools."
     echo "  Provider: ${RUNTIME_PROVIDER}"
     echo "  Model   : ${RUNTIME_MODEL}"
     echo "  Effort  : ${RUNTIME_EFFORT}"
+    echo "  SDK     : available"
+    ;;
+  connected_degraded)
+    echo "  Status  : CONNECTED DEGRADED"
+    echo "  Detail  : Configuration exists but the last provider call failed."
+    echo "            Terris is using deterministic fallback."
+    echo "  Provider: ${RUNTIME_PROVIDER}"
+    echo "  Model   : ${RUNTIME_MODEL}"
+    echo "  SDK     : ${RUNTIME_SDK_AVAIL}"
+    [[ -n "$RUNTIME_LAST_ERR" ]] && echo "  Last err: ${RUNTIME_LAST_ERR}"
+    echo ""
+    echo "  Fix options:"
+    echo "    - Verify API key:  bash scripts/configure_terris_llm.sh"
+    echo "    - Install SDK:     pip install openai>=1.54.0 anthropic>=0.39.0"
+    echo "    - Restart backend: bash scripts/run_fcgma_demo.sh"
     ;;
   restart_required)
     echo "  Status  : RESTART REQUIRED"

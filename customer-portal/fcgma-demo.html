@@ -93,6 +93,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-seri
 .badge-success{background:var(--success-bg);color:var(--success)}
 .badge-muted{background:var(--stone);color:var(--text-muted)}
 .badge-forest{background:var(--forest-pale);color:var(--forest)}
+.badge-ok{background:var(--success-bg);color:var(--success)}
+.badge-error{background:var(--danger-bg);color:var(--danger)}
 
 /* Readiness bar */
 .readiness-bar-wrap{background:var(--border-light);border-radius:4px;height:8px;overflow:hidden;margin:8px 0}
@@ -537,9 +539,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-seri
           <p>Five-layer water intelligence stack &middot; Fox Canyon GMA &middot; 2026-Q1</p>
         </div>
         <div style="display:flex;gap:8px">
-          <button class="btn-sm" onclick="runReconciliation()" id="recon-run-btn">Run reconciliation</button>
-          <button class="btn-ask-terris" onclick="askTerrisContext('Give me a full reconciliation and reporting readiness status.')">&#9998; Ask Terris</button>
+          <button class="btn-sm" onclick="runReconciliation()" id="recon-run-btn">&#9654; Run reconciliation</button>
+          <button class="btn-ask-terris" data-terris-ask="Walk me through how provider records became the current applied-water position.">&#9998; Ask Terris</button>
         </div>
+      </div>
+
+      <!-- Transformation pipeline legend -->
+      <div style="background:var(--stone);border-radius:6px;padding:10px 14px;margin-bottom:20px;font-size:12px;color:var(--text-muted);line-height:1.8">
+        <strong style="color:var(--text)">Source → Report transformation:</strong>&nbsp;
+        Provider feeds &rarr; Ingestion &rarr; Schema validation &rarr; Normalization &rarr; Canonical ledger &rarr;
+        Evidence classification &rarr; Meter reconciliation &rarr; Mapping integrity &rarr; Quarantine &rarr;
+        Provisional attribution &rarr; Review cases &rarr; Close-readiness gates &rarr; Reports &amp; evidence bundles
       </div>
 
       <!-- Layer 1: Provider Feeds -->
@@ -548,35 +558,48 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-seri
         <div class="loading"><span class="spinner"></span> Loading provider feeds…</div>
       </div>
 
-      <!-- Layer 2: Water Ledger -->
-      <div class="section-title">Layer 2 &mdash; Water Ledger</div>
+      <!-- Layer 2: Canonical Water Ledger -->
+      <div class="section-title">Layer 2 &mdash; Canonical Water Ledger</div>
       <div id="fabric-ledger" class="card" style="margin-bottom:16px">
         <div class="loading"><span class="spinner"></span> Loading ledger…</div>
+      </div>
+      <!-- Source-to-report trace panel (record-level) -->
+      <div id="fabric-trace-panel" style="display:none;margin-bottom:16px">
+        <div class="section-title" style="font-size:12px;color:var(--forest);margin-bottom:8px">&#9654; Source-to-report trace</div>
+        <div id="fabric-trace-content" class="card" style="font-size:12px;padding:12px"></div>
       </div>
 
       <!-- Layer 3: Reconciliation Engine -->
       <div class="section-title">Layer 3 &mdash; Reconciliation Engine</div>
-      <div id="fabric-reconciliation" class="card" style="margin-bottom:16px">
+      <div id="fabric-reconciliation" class="card" style="margin-bottom:8px">
         <div class="loading"><span class="spinner"></span> Loading reconciliation snapshot…</div>
       </div>
       <div id="recon-progress-bar" style="display:none;margin-bottom:16px">
-        <div style="background:var(--stone);border-radius:4px;overflow:hidden;height:6px"><div id="recon-progress-fill" style="height:100%;background:var(--forest);width:0%;transition:width .3s"></div></div>
+        <div style="background:var(--stone);border-radius:4px;overflow:hidden;height:6px">
+          <div id="recon-progress-fill" style="height:100%;background:var(--forest);width:0%;transition:width .3s"></div>
+        </div>
         <div id="recon-progress-label" style="font-size:12px;color:var(--text-muted);margin-top:4px"></div>
       </div>
+      <!-- Post-recon summary -->
+      <div id="recon-summary-row" style="display:none;font-size:12px;color:var(--text-muted);margin-bottom:16px;padding:8px 12px;background:var(--stone);border-radius:4px"></div>
 
       <!-- Layer 4: Applied-Water Position -->
       <div class="section-title">Layer 4 &mdash; Applied-Water Position</div>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:8px">
+        Model: DEMO RULESET v0.1 — provisional, not validated by Fox Canyon GMA.
+        Quantities require CombCode and parcel confirmation before regulatory use.
+      </div>
       <div id="fabric-applied-water" class="card" style="margin-bottom:16px">
         <div class="loading"><span class="spinner"></span> Loading attribution…</div>
       </div>
 
-      <!-- Layer 5: Governance -->
-      <div class="section-title">Layer 5 &mdash; Governance</div>
-      <div id="fabric-governance" class="card" style="margin-bottom:32px">
+      <!-- Layer 5: Governance &amp; Reporting -->
+      <div class="section-title">Layer 5 &mdash; Governance &amp; Reporting</div>
+      <div id="fabric-governance" class="card" style="margin-bottom:24px">
         <div class="loading"><span class="spinner"></span> Loading gate status…</div>
       </div>
 
-      <!-- Post-reconciliation briefing (Part 10) -->
+      <!-- Post-reconciliation briefing -->
       <div id="recon-briefing-section" style="display:none;margin-bottom:32px">
         <div class="section-title">Post-Reconciliation Brief &mdash; Terris</div>
         <div class="terris-briefing-card" id="recon-briefing-card">
@@ -1205,67 +1228,156 @@ function renderReportsList(list) {
 // ── Live Data Fabric (Part 3) ─────────────────────────────────
 async function loadLiveDataFabric() {
   try {
-    const [status, recon] = await Promise.all([
+    const [status, recon, gates] = await Promise.all([
       apiGet('/status').catch(() => null),
-      apiGet('/reconciliation/latest').catch(() => null),
+      apiGet('/reconciliation/latest').catch(() => ({ status: 'no_snapshot' })),
+      apiGet('/terris/cycle-gates').catch(() => null),
     ]);
 
     // Layer 1: Provider Feeds
     const el1 = document.getElementById('fabric-providers');
-    if (status && status.providers) {
+    if (status && status.providers && status.providers.length) {
+      const breakdown = (status.ledger_stats || {}).evidence_class_breakdown || {};
+      const providerEvidenceMap = {
+        'demo_ledger': 'groundwater_meter_reading',
+        'ranch_systems': 'controller_irrigation_telemetry',
+        'cimis': 'weather_context',
+        'public_context': 'public_context',
+      };
       el1.innerHTML = status.providers.map(p => {
         const dot = p.status === 'connected' ? '#22c55e' : p.status === 'disabled' ? '#94a3b8' : '#f59e0b';
-        return `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border-light)">
-          <div style="width:8px;height:8px;border-radius:50%;background:${dot};flex-shrink:0"></div>
+        const badgeCls = p.status === 'connected' ? 'badge-ok' : p.status === 'disabled' ? '' : 'badge-warn';
+        const ec = providerEvidenceMap[p.id] || null;
+        const ecCount = ec != null ? (breakdown[ec] || 0) : null;
+        return `<div style="padding:10px 0;border-bottom:1px solid var(--border-light);display:flex;align-items:flex-start;gap:12px">
+          <div style="width:8px;height:8px;border-radius:50%;background:${dot};flex-shrink:0;margin-top:4px"></div>
           <div style="flex:1">
-            <div style="font-size:13px;font-weight:600">${p.label}</div>
-            <div style="font-size:12px;color:var(--text-muted)">${p.message || p.status}</div>
+            <div style="font-size:13px;font-weight:600;margin-bottom:2px">${esc(p.label)}</div>
+            <div style="font-size:12px;color:var(--text-muted)">${esc(p.message || p.status)}</div>
+            ${ec && ecCount !== null ? `<div style="font-size:11px;color:var(--text-faint);margin-top:4px">Evidence class: <code>${esc(ec)}</code> &middot; ${ecCount} record${ecCount !== 1 ? 's' : ''} in ledger</div>` : ''}
           </div>
-          <div class="badge ${p.status === 'connected' ? 'badge-ok' : 'badge-warn'}">${p.status}</div>
+          <div class="badge ${badgeCls}" style="flex-shrink:0">${esc(p.status)}</div>
         </div>`;
-      }).join('');
-    } else { el1.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Provider data unavailable</div>'; }
+      }).join('') +
+      `<div style="font-size:11px;color:var(--text-faint);margin-top:10px;padding-top:8px;border-top:1px solid var(--border-light)">
+        Ranch Systems: pending authorization &middot; CIMIS: configurable via CIMIS_APP_KEY &middot;
+        Live source unavailable — configure authorized access if shown above.
+      </div>`;
+    } else {
+      el1.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Provider data unavailable</div>';
+    }
 
-    // Layer 2: Water Ledger
+    // Layer 2: Canonical Water Ledger
     const el2 = document.getElementById('fabric-ledger');
     if (status && status.ledger_stats) {
       const s = status.ledger_stats;
-      el2.innerHTML = `<div class="kpi-grid" style="margin:0">
-        <div class="kpi-card"><div class="kpi-label">Total Records</div><div class="kpi-value">${s.total_records ?? '—'}</div></div>
-        <div class="kpi-card success"><div class="kpi-label">Cleared</div><div class="kpi-value">${s.ready_for_export ?? '—'}</div></div>
-        <div class="kpi-card warn"><div class="kpi-label">Under Review</div><div class="kpi-value">${s.requires_attention ?? '—'}</div></div>
-        <div class="kpi-card"><div class="kpi-label">Supported (AF)</div><div class="kpi-value">${s.supported_extraction_af != null ? Number(s.supported_extraction_af).toFixed(2) : '—'}</div></div>
-      </div>`;
-    } else { el2.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Ledger data unavailable</div>'; }
+      const bd = s.evidence_class_breakdown || {};
+      const bdRows = Object.entries(bd).map(([cls, cnt]) =>
+        `<tr>
+          <td style="padding:3px 8px;font-size:12px;color:var(--text-muted)">${esc(cls)}</td>
+          <td style="padding:3px 8px;font-size:12px;text-align:right;font-weight:600">${cnt}</td>
+        </tr>`
+      ).join('');
+      el2.innerHTML = `
+        <div class="kpi-grid" style="margin:0 0 12px 0">
+          <div class="kpi-card"><div class="kpi-label">Total Records</div><div class="kpi-value">${s.total_records ?? '—'}</div></div>
+          <div class="kpi-card success"><div class="kpi-label">Ready for Export</div><div class="kpi-value">${s.ready_for_export ?? '—'}</div></div>
+          <div class="kpi-card warn"><div class="kpi-label">Requires Attention</div><div class="kpi-value">${s.requires_attention ?? '—'}</div></div>
+          <div class="kpi-card"><div class="kpi-label">Supported AF</div><div class="kpi-value">${s.supported_extraction_af != null ? Number(s.supported_extraction_af).toFixed(2) : '—'}</div></div>
+        </div>
+        <div style="font-size:12px;font-weight:600;margin-bottom:6px;color:var(--text-muted)">Evidence class breakdown</div>
+        <table style="width:100%;border-collapse:collapse">
+          ${bdRows || '<tr><td colspan="2" style="font-size:12px;color:var(--text-muted);padding:3px 8px">No records</td></tr>'}
+        </table>
+        <div style="margin-top:10px;font-size:11px;color:var(--text-faint)">
+          ${s.injected_scenario_records ? `${s.injected_scenario_records} demonstration scenario records &middot; ` : ''}${s.open_exceptions || 0} open exceptions
+        </div>
+        <div style="margin-top:8px">
+          <button class="btn-sm" onclick="showFabricRecordTrace()">&#9654; Inspect source-to-report lineage trace</button>
+        </div>`;
+    } else {
+      el2.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Ledger data unavailable</div>';
+    }
 
     // Layer 3: Reconciliation Engine
-    renderReconSnapshot(recon);
+    renderReconSnapshot(recon && recon.status !== 'no_snapshot' ? recon : null);
 
-    // Layer 4: Applied-Water Position (load inline summary)
+    // Layer 4: Applied-Water Position
     const el4 = document.getElementById('fabric-applied-water');
     try {
       const aw = await loadAppliedWaterSummary();
-      el4.innerHTML = `<div class="kpi-grid" style="margin:0">
-        <div class="kpi-card"><div class="kpi-label">Total Metered</div><div class="kpi-value">${aw.total_metered_af != null ? aw.total_metered_af.toFixed(2) + ' AF' : '—'}</div></div>
-        <div class="kpi-card success"><div class="kpi-label">Confirmed</div><div class="kpi-value">${aw.confirmed_applied_water_af != null ? aw.confirmed_applied_water_af.toFixed(2) + ' AF' : '—'}</div></div>
-        <div class="kpi-card warn"><div class="kpi-label">Provisional</div><div class="kpi-value">${aw.provisional_applied_water_af != null ? aw.provisional_applied_water_af.toFixed(2) + ' AF' : '—'}</div></div>
-        <div class="kpi-card"><div class="kpi-label">Unattributed</div><div class="kpi-value">${aw.unattributed_af != null ? aw.unattributed_af.toFixed(2) + ' AF' : '—'}</div></div>
-      </div>
-      <div style="font-size:11px;color:var(--text-faint);margin-top:8px">Model: ${aw.attribution_model || 'DEMO RULESET v0.1'} — ${aw.attribution_model_status || 'provisional'}</div>`;
-    } catch(e) { el4.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Attribution data unavailable</div>'; }
-
-    // Layer 5: Governance — gate status
-    const el5 = document.getElementById('fabric-governance');
-    try {
-      const gates = await apiGet('/terris/cycle-gates');
-      const gs = gates.gate_summary || {};
-      el5.innerHTML = `<div style="font-size:14px;margin-bottom:12px;font-weight:600">${gates.summary_position || ''}</div>
-        <div class="kpi-grid" style="margin:0">
-          <div class="kpi-card success"><div class="kpi-label">Gates Clear</div><div class="kpi-value">${gs.clear ?? '—'}</div><div class="kpi-sub">of ${gs.total ?? 5}</div></div>
-          <div class="kpi-card ${(gs.attention || 0) > 0 ? 'warn' : ''}"><div class="kpi-label">Attention</div><div class="kpi-value">${gs.attention ?? '—'}</div></div>
-          <div class="kpi-card ${(gs.blocked || 0) > 0 ? 'danger' : ''}"><div class="kpi-label">Blocked</div><div class="kpi-value">${gs.blocked ?? '—'}</div></div>
+      const snap = (recon && recon.status !== 'no_snapshot') ? recon : null;
+      const totalAF = snap ? snap.total_extraction_af : (aw.total_metered_af || 0);
+      const supportedAF = snap ? snap.supported_extraction_af : (aw.confirmed_applied_water_af || 0);
+      const provisionalAF = snap ? snap.provisional_af : (aw.provisional_applied_water_af || 0);
+      const unattributed = Math.max(0, (totalAF || 0) - (supportedAF || 0) - (provisionalAF || 0));
+      el4.innerHTML = `
+        <div class="kpi-grid" style="margin:0 0 12px 0">
+          <div class="kpi-card">
+            <div class="kpi-label">Total Extraction</div>
+            <div class="kpi-value">${Number(totalAF||0).toFixed(2)} AF</div>
+            <div class="kpi-sub">metered gross</div>
+          </div>
+          <div class="kpi-card success">
+            <div class="kpi-label">Confirmed</div>
+            <div class="kpi-value">${Number(supportedAF||0).toFixed(2)} AF</div>
+            <div class="kpi-sub">ready for export</div>
+          </div>
+          <div class="kpi-card warn">
+            <div class="kpi-label">Provisional</div>
+            <div class="kpi-value">${Number(provisionalAF||0).toFixed(2)} AF</div>
+            <div class="kpi-sub">pending review</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Unattributed</div>
+            <div class="kpi-value">${Number(unattributed).toFixed(2)} AF</div>
+            <div class="kpi-sub">needs CombCode mapping</div>
+          </div>
+        </div>
+        <div style="font-size:11px;color:var(--text-faint)">
+          Model: ${esc(aw.attribution_model || 'DEMO RULESET v0.1')} &mdash; ${esc(aw.attribution_model_status || 'provisional')}.
+          Quantities require CombCode and parcel confirmation before regulatory use.
+          Applied-water attribution remains provisional until rules and mappings are configured and validated by Fox Canyon GMA.
         </div>`;
-    } catch(e) { el5.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Gate data unavailable</div>'; }
+    } catch(e) {
+      el4.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Attribution data unavailable</div>';
+    }
+
+    // Layer 5: Governance & Reporting — individual gate items
+    const el5 = document.getElementById('fabric-governance');
+    if (gates && gates.gates && gates.gates.length) {
+      const gs = gates.gate_summary || {};
+      const gateRows = gates.gates.map(g => {
+        const statusColor = {
+          cleared: '#22c55e', complete: '#22c55e', ready: '#22c55e',
+          attention_required: '#f59e0b', action_required: '#f59e0b',
+          awaiting_confirmation: '#f59e0b', draft_available: '#3b82f6',
+          blocked: '#ef4444', incomplete: '#ef4444', not_generated: '#94a3b8',
+        }[g.status] || '#94a3b8';
+        const badgeCls = ['cleared','complete','ready'].includes(g.status) ? 'badge-ok' :
+                         ['blocked','incomplete'].includes(g.status) ? 'badge-error' : 'badge-warn';
+        return `<div style="padding:8px 0;border-bottom:1px solid var(--border-light);display:flex;align-items:flex-start;gap:10px">
+          <div style="width:6px;height:6px;border-radius:50%;background:${statusColor};flex-shrink:0;margin-top:6px"></div>
+          <div style="flex:1">
+            <div style="font-size:12px;font-weight:600">Gate ${g.gate} — ${esc(g.name || '')}</div>
+            ${g.what_remains ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${esc(g.what_remains)}</div>` : ''}
+            ${g.next_action ? `<div style="font-size:11px;color:var(--forest);margin-top:2px">&#8594; ${esc(g.next_action)}</div>` : ''}
+          </div>
+          <div class="badge ${badgeCls}" style="flex-shrink:0;font-size:10px">${esc(g.status_label || g.status)}</div>
+        </div>`;
+      }).join('');
+      el5.innerHTML = `
+        <div style="font-size:13px;color:var(--text-muted);margin-bottom:12px">${esc(gates.summary_position || '')}</div>
+        ${gateRows}
+        <div style="margin-top:10px;font-size:11px;color:var(--text-faint)">
+          Period: ${esc(gates.reporting_period || '2026-Q1')} &middot;
+          Deadline: ${esc(gates.submission_deadline || '—')} &middot;
+          ${gs.clear ?? '?'}/${gs.total ?? 5} gates clear &middot;
+          Calculation: ${esc(gates.calculation_version || '—')}
+        </div>`;
+    } else {
+      el5.innerHTML = '<div style="color:var(--text-muted);font-size:13px">Gate data unavailable</div>';
+    }
 
   } catch(e) {
     console.error('loadLiveDataFabric error', e);
@@ -1275,21 +1387,34 @@ async function loadLiveDataFabric() {
 function renderReconSnapshot(recon) {
   const el = document.getElementById('fabric-reconciliation');
   if (!el) return;
-  if (!recon || recon.status === 'no_snapshot') {
+  if (!recon) {
     el.innerHTML = `<div style="color:var(--text-muted);font-size:13px;text-align:center;padding:12px">
       No reconciliation snapshot. Click <strong>Run reconciliation</strong> above to create one.
     </div>`;
     return;
   }
   const ts = recon.created_at ? new Date(recon.created_at).toLocaleString() : '—';
-  el.innerHTML = `<div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">Last run: ${ts} &middot; triggered by: ${recon.triggered_by || '?'}</div>
-    <div class="kpi-grid" style="margin:0">
+  const stagesHTML = [
+    { label: 'Ingestion intake', detail: `${recon.total_records ?? '?'} records in ledger` },
+    { label: 'Calculation pass', detail: `${recon.records_processed ?? recon.total_records ?? '?'} records computed` },
+    { label: 'Quantity computation', detail: `${(recon.total_extraction_af || 0).toFixed(2)} AF total &middot; ${(recon.supported_extraction_af || 0).toFixed(2)} AF supported` },
+    { label: 'Gate evaluation', detail: `${recon.gates_clear ?? '?'}/${recon.gates_total ?? 5} gates clear` },
+    { label: 'Case grouping', detail: `${recon.open_cases ?? '?'} open cases &middot; ${recon.high_severity_cases ?? '?'} high severity` },
+  ].map((s, i) => `<div style="display:flex;align-items:center;gap:8px;padding:4px 0;font-size:12px">
+    <div style="width:18px;height:18px;border-radius:50%;background:var(--forest);color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${i+1}</div>
+    <div style="flex:1"><strong>${s.label}</strong> &middot; <span style="color:var(--text-muted)">${s.detail}</span></div>
+  </div>`).join('');
+  el.innerHTML = `
+    <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px">
+      Last run: ${ts} &middot; triggered by: ${esc(recon.triggered_by || '?')} &middot; v${esc(recon.calculation_version || '—')}
+    </div>
+    ${stagesHTML}
+    <div class="kpi-grid" style="margin:10px 0 0 0">
       <div class="kpi-card"><div class="kpi-label">Total AF</div><div class="kpi-value">${(recon.total_extraction_af || 0).toFixed(2)}</div></div>
       <div class="kpi-card success"><div class="kpi-label">Supported AF</div><div class="kpi-value">${(recon.supported_extraction_af || 0).toFixed(2)}</div></div>
       <div class="kpi-card warn"><div class="kpi-label">Provisional AF</div><div class="kpi-value">${(recon.provisional_af || 0).toFixed(2)}</div></div>
-      <div class="kpi-card"><div class="kpi-label">Total Reported AF</div><div class="kpi-value">${(recon.total_reported_af || 0).toFixed(2)}</div></div>
-    </div>
-    <div style="font-size:12px;color:var(--text-muted);margin-top:10px">${recon.gates_clear ?? '?'}/${recon.gates_total ?? 5} gates clear &middot; ${recon.open_cases ?? '?'} open cases &middot; ${recon.high_severity_cases ?? '?'} high severity</div>`;
+      <div class="kpi-card"><div class="kpi-label">Reported AF</div><div class="kpi-value">${(recon.total_reported_af || 0).toFixed(2)}</div></div>
+    </div>`;
 }
 
 async function runReconciliation() {
@@ -1297,24 +1422,54 @@ async function runReconciliation() {
   const progress = document.getElementById('recon-progress-bar');
   const fill = document.getElementById('recon-progress-fill');
   const label = document.getElementById('recon-progress-label');
+  const summaryRow = document.getElementById('recon-summary-row');
   if (btn) btn.disabled = true;
   if (progress) { progress.style.display = 'block'; fill.style.width = '0%'; }
-  const steps = ['Starting reconciliation pass…', 'Running calculation pass…', 'Computing quantities…', 'Evaluating gates…', 'Grouping cases…', 'Done'];
+  const stages = [
+    'Ingestion intake…',
+    'Running calculation pass…',
+    'Computing nine quantities…',
+    'Evaluating gates…',
+    'Grouping exception cases…',
+    'Finalizing snapshot…',
+  ];
   let step = 0;
+  const startTime = Date.now();
   const interval = setInterval(() => {
-    if (step < steps.length) {
-      if (fill) fill.style.width = Math.round((step + 1) / steps.length * 100) + '%';
-      if (label) label.textContent = steps[step];
+    if (step < stages.length) {
+      if (fill) fill.style.width = Math.round((step + 1) / stages.length * 100) + '%';
+      if (label) label.textContent = stages[step];
       step++;
     }
   }, 400);
   try {
+    const prevSnap = await apiGet('/reconciliation/latest').catch(() => null);
+    const prevId = prevSnap && prevSnap.id ? prevSnap.id : null;
+
     const result = await apiPost('/reconciliation/run', {});
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
     clearInterval(interval);
     if (fill) fill.style.width = '100%';
-    if (label) label.textContent = 'Reconciliation complete.';
-    renderReconSnapshot(result.snapshot);
-    // Part 10: show post-reconciliation brief
+    if (label) label.textContent = `Reconciliation complete in ${elapsed}s.`;
+
+    const snap = result.snapshot;
+    renderReconSnapshot(snap);
+
+    if (summaryRow && snap) {
+      const gc = snap.gates_clear ?? '?';
+      const gt = snap.gates_total ?? 5;
+      const oc = snap.open_cases ?? '?';
+      const hs = snap.high_severity_cases ?? '?';
+      const taf = snap.total_extraction_af != null ? Number(snap.total_extraction_af).toFixed(2) : '—';
+      const saf = snap.supported_extraction_af != null ? Number(snap.supported_extraction_af).toFixed(2) : '—';
+      let viewLink = '';
+      if (prevId && snap.id && prevId !== snap.id) {
+        viewLink = ` &middot; <button class="btn-sm" style="font-size:10px;padding:1px 6px" onclick="viewReconComparison('${esc(snap.id)}','${esc(prevId)}')">View what changed</button>`;
+      }
+      summaryRow.style.display = '';
+      summaryRow.innerHTML = `Ran in ${elapsed}s &middot; ${taf} AF total &middot; ${saf} AF supported &middot; ${gc}/${gt} gates clear &middot; ${oc} open cases &middot; ${hs} high severity${viewLink}`;
+    }
+
     if (result.proactive_briefing && result.proactive_briefing.briefing) {
       const sec = document.getElementById('recon-briefing-section');
       const txt = document.getElementById('recon-briefing-text');
@@ -1324,7 +1479,7 @@ async function runReconciliation() {
         txt.textContent = result.proactive_briefing.briefing;
         if (acts && result.proactive_briefing.suggested_actions) {
           acts.innerHTML = result.proactive_briefing.suggested_actions.slice(0, 3).map(a =>
-            `<button class="terris-briefing-action-btn" onclick="askTerrisContext('${a.query.replace(/'/g,"\\'")}')">&#9656; ${a.label}</button>`
+            `<button class="terris-briefing-action-btn" data-terris-ask="${encAttr(a.query)}">&#9656; ${esc(a.label)}</button>`
           ).join('');
         }
       }
@@ -1335,6 +1490,102 @@ async function runReconciliation() {
     if (label) label.textContent = 'Reconciliation failed: ' + (e.message || 'error');
   } finally {
     if (btn) btn.disabled = false;
+  }
+}
+
+async function viewReconComparison(snapId, priorId) {
+  const summaryRow = document.getElementById('recon-summary-row');
+  try {
+    const data = await apiGet('/reconciliation/' + encodeURIComponent(snapId) + '/compare/' + encodeURIComponent(priorId));
+    const changes = data.quantity_changes || {};
+    const keys = Object.keys(changes);
+    if (!keys.length) {
+      if (summaryRow) summaryRow.innerHTML += ' &middot; <em>No quantity changes vs prior snapshot.</em>';
+      return;
+    }
+    const delta = keys.map(k => {
+      const c = changes[k];
+      const sign = (c.delta || 0) > 0 ? '+' : '';
+      return `${k.replace(/_af$/, '').replace(/_/g, ' ')}: ${sign}${Number(c.delta||0).toFixed(2)} AF`;
+    }).join(' &middot; ');
+    if (summaryRow) summaryRow.innerHTML += `<div style="margin-top:6px;font-size:11px;color:var(--text-muted)">Changes vs prior: ${delta}</div>`;
+  } catch(e) {
+    if (summaryRow) summaryRow.innerHTML += ' &middot; <em>Comparison unavailable.</em>';
+  }
+}
+
+async function showFabricRecordTrace(recordId) {
+  const panel = document.getElementById('fabric-trace-panel');
+  const content = document.getElementById('fabric-trace-content');
+  if (!panel || !content) return;
+
+  if (!recordId) {
+    try {
+      const queue = await apiGet('/review-queue');
+      const meterRecords = (queue.records || []).filter(r => r.evidence_class === 'groundwater_meter_reading');
+      if (!meterRecords.length) {
+        panel.style.display = '';
+        content.innerHTML = '<div style="color:var(--text-muted);font-size:12px">No meter records available for lineage trace.</div>';
+        return;
+      }
+      recordId = meterRecords[0].id;
+    } catch(e) {
+      panel.style.display = '';
+      content.innerHTML = '<div style="color:var(--text-muted);font-size:12px">Could not load records for trace.</div>';
+      return;
+    }
+  }
+
+  panel.style.display = '';
+  content.innerHTML = '<div class="loading"><span class="spinner"></span> Loading lineage trace…</div>';
+
+  try {
+    const lineage = await apiGet('/lineage/records/' + encodeURIComponent(recordId));
+    const steps = lineage.lineage_steps || [];
+    const statusColor = s => ({
+      completed: '#22c55e', cleared: '#22c55e', eligible: '#22c55e', confirmed: '#22c55e',
+      open_exceptions: '#ef4444', not_eligible: '#f59e0b', provisional: '#f59e0b',
+      pending_review: '#94a3b8', requires_attention: '#f59e0b',
+    }[s] || '#94a3b8');
+    const stepsHTML = steps.map((s, i) => {
+      const isLast = i === steps.length - 1;
+      let detail = '';
+      if (s.stage === 'raw_ingestion') {
+        detail = `Provider: ${esc(s.provider || '—')} &middot; Method: ${esc(s.retrieval_method || '—')}`;
+        if (s.scenario_injected) detail += ` &middot; <em>Demonstration scenario injected to illustrate exception handling.</em>`;
+      } else if (s.stage === 'attribution') {
+        detail = `Model: ${esc(s.attribution_model || 'DEMO RULESET v0.1')} &middot; Status: ${esc(s.status)}`;
+        if (s.confirmed_applied_water_af != null) detail += ` &middot; Confirmed: ${Number(s.confirmed_applied_water_af).toFixed(2)} AF`;
+        else if (s.provisional_applied_water_af != null) detail += ` &middot; Provisional: ${Number(s.provisional_applied_water_af).toFixed(2)} AF`;
+      } else if (s.stage === 'exception_detection') {
+        const open = (s.open_exceptions || []).length;
+        const resolved = (s.resolved_exceptions || []).length;
+        detail = `${open} open exception${open !== 1 ? 's' : ''} &middot; ${resolved} resolved`;
+      } else if (s.stage === 'reporting_readiness') {
+        detail = s.eligible_for_reporting
+          ? `Eligible &middot; ${s.interval_volume_af != null ? Number(s.interval_volume_af).toFixed(2) + ' AF' : '—'}`
+          : 'Not yet eligible for reporting';
+      } else if (s.description) {
+        detail = esc(s.description) + (s.rule_id ? ` &middot; Rule: ${esc(s.rule_id)}` : '');
+      }
+      const col = statusColor(s.status);
+      return `<div style="display:flex;gap:10px;align-items:flex-start;padding:6px 0${isLast ? '' : ';border-bottom:1px solid var(--border-light)'}">
+        <div style="min-width:20px;font-size:11px;font-weight:700;color:var(--forest);text-align:right;margin-top:2px">${s.step}</div>
+        <div style="flex:1">
+          <div style="font-size:12px;font-weight:600">${esc(s.label || s.stage)}</div>
+          ${detail ? `<div style="font-size:11px;color:var(--text-muted);margin-top:2px">${detail}</div>` : ''}
+        </div>
+        <div style="font-size:10px;padding:2px 6px;border-radius:10px;background:${col}22;color:${col};font-weight:600;white-space:nowrap;flex-shrink:0">${esc(s.status)}</div>
+      </div>`;
+    }).join('');
+    content.innerHTML = `
+      <div style="font-size:12px;font-weight:600;margin-bottom:8px">
+        Record ${esc(lineage.record_id)} &middot; Well ${esc(lineage.well_id || '—')} &middot; ${esc(lineage.provider || '—')}
+      </div>
+      ${stepsHTML}
+      <div style="margin-top:8px;font-size:11px;color:var(--text-faint)">${esc(lineage.disclaimer || '')}</div>`;
+  } catch(e) {
+    content.innerHTML = `<div style="color:var(--text-muted);font-size:12px">Lineage trace unavailable: ${esc(e.message || 'error')}</div>`;
   }
 }
 

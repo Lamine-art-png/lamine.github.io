@@ -153,8 +153,46 @@ def _update_context_from_cases(ctx: dict[str, Any], cases: list[dict]) -> None:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# LLM abstraction
+# LLM abstraction + provider health model
 # ─────────────────────────────────────────────────────────────────────────────
+
+# Persisted health state for the running process
+_PROVIDER_HEALTH: dict[str, Any] = {
+    "mode": "structured_safe",
+    "sdk_available": False,
+    "last_check_at": None,
+    "last_error_redacted": None,
+    "process_start": datetime.now(timezone.utc).isoformat(),
+}
+
+_DEEP_INTENT_KEYWORDS = frozenset({
+    "reconciliation", "executive", "board", "trace", "source-to-report",
+    "lineage", "walk me through", "explain", "deep", "brief", "full",
+    "everything", "comprehensive", "summary", "investigate", "analysis",
+    "position", "cycle stand", "going on", "happening",
+})
+_SIMPLE_INTENT_KEYWORDS = frozenset({
+    "how many", "count", "total", "what is", "define", "who", "when",
+    "list", "show", "status of",
+})
+
+
+def _choose_reasoning_effort(query: str, intent: str, base_effort: str) -> str:
+    """Adapt reasoning effort based on query depth.
+
+    base_effort (from env) is the ceiling; we may reduce it for simpler queries.
+    """
+    q = query.lower()
+    if intent in ("executive_summary", "reporting_cycle", "applied_water", "data_gap"):
+        return base_effort  # always use configured ceiling for these
+    deep_hit = any(kw in q for kw in _DEEP_INTENT_KEYWORDS)
+    simple_hit = any(kw in q for kw in _SIMPLE_INTENT_KEYWORDS) and not deep_hit
+    if deep_hit:
+        return base_effort
+    if simple_hit:
+        return "medium" if base_effort == "xhigh" else base_effort
+    return "high" if base_effort == "xhigh" else base_effort
+
 
 def _get_llm_config() -> tuple[str | None, str, str, str]:
     """Return (api_key, provider, model, reasoning_effort). api_key is None when unconfigured."""
@@ -173,6 +211,69 @@ def _get_llm_config() -> tuple[str | None, str, str, str]:
     model = os.getenv("TERRIS_LLM_MODEL", default_models.get(provider, "claude-sonnet-4-6"))
     reasoning_effort = os.getenv("TERRIS_LLM_REASONING_EFFORT", "xhigh")
     return api_key, provider, model, reasoning_effort
+
+
+def _check_sdk_available(provider: str) -> bool:
+    """Return True if the provider SDK can be imported."""
+    try:
+        if provider == "openai":
+            import openai  # noqa: F401
+        else:
+            import anthropic  # noqa: F401
+        return True
+    except ImportError:
+        return False
+
+
+def get_provider_health() -> dict[str, Any]:
+    """Return safe provider health diagnostics (never exposes key value)."""
+    api_key, provider, model, reasoning_effort = _get_llm_config()
+    sdk_ok = _check_sdk_available(provider)
+
+    # Determine effective mode
+    if not api_key:
+        mode = "structured_safe"
+    elif not sdk_ok:
+        mode = "connected_degraded"
+    else:
+        mode = _PROVIDER_HEALTH.get("mode", "structured_safe")
+
+    return {
+        "mode": mode,
+        "llm_mode": mode,
+        "provider": provider,
+        "model": model if model else f"(default for {provider})",
+        "reasoning_effort": reasoning_effort,
+        "key_configured": bool(api_key),
+        "sdk_available": sdk_ok,
+        "last_check_at": _PROVIDER_HEALTH.get("last_check_at"),
+        "last_error_redacted": _PROVIDER_HEALTH.get("last_error_redacted"),
+        "process_start": _PROVIDER_HEALTH.get("process_start"),
+        "note": (
+            "Key value is never returned. "
+            "Mode 'connected_degraded' means configuration exists but the provider "
+            "call failed — check sdk_available and last_error_redacted. "
+            "Mode 'restart_required' means .env.local is configured but the process "
+            "was started before the file existed."
+        ),
+    }
+
+
+def _record_provider_success() -> None:
+    _PROVIDER_HEALTH["mode"] = "connected_intelligence"
+    _PROVIDER_HEALTH["last_check_at"] = datetime.now(timezone.utc).isoformat()
+    _PROVIDER_HEALTH["last_error_redacted"] = None
+    _PROVIDER_HEALTH["sdk_available"] = True
+
+
+def _record_provider_failure(exc: Exception) -> None:
+    import re as _re
+    raw = type(exc).__name__ + ": " + str(exc)[:120]
+    # Scrub any sk-... / sk-ant-... key-like tokens before storing
+    redacted = _re.sub(r"sk-[A-Za-z0-9\-]{8,}", "[REDACTED]", raw)[:100]
+    _PROVIDER_HEALTH["mode"] = "connected_degraded"
+    _PROVIDER_HEALTH["last_check_at"] = datetime.now(timezone.utc).isoformat()
+    _PROVIDER_HEALTH["last_error_redacted"] = redacted
 
 
 _TERRIS_SYSTEM = """\
@@ -365,108 +466,137 @@ def _run_openai_agent_loop(
     model: str,
     reasoning_effort: str,
     on_progress: Callable[[dict], None] | None = None,
-) -> tuple[str, list[dict[str, Any]]]:
+    previous_response_id: str | None = None,
+) -> tuple[str, list[dict[str, Any]], str | None]:
     """
-    Bounded tool-using agent loop using the OpenAI Responses API.
+    Bounded tool-using agent loop using the OpenAI Responses API (openai >= 1.54).
 
-    Uses reasoning with configurable effort, previous_response_id for
-    conversation continuity, and deterministic backend tools.
-    Returns (final_answer, audit_log).
+    Returns (final_answer, audit_log, last_response_id).
+    last_response_id should be persisted in the conversation for follow-up context.
     """
     import json
+    import time
     from .terris import TERRIS_TOOL_MAP
 
     try:
-        import openai  # type: ignore
+        from openai import OpenAI  # type: ignore
     except ImportError:
-        return ("OpenAI library not installed.", [])
+        _record_provider_failure(ImportError("openai not installed"))
+        return ("OpenAI library not installed. Run: pip install openai>=1.54.0", [], None)
 
-    client = openai.OpenAI(api_key=api_key)
+    client = OpenAI(api_key=api_key)
     tools = _build_openai_tool_list()
     audit_log: list[dict[str, Any]] = []
-
-    # Build initial input from conversation history + current query
-    input_messages: list[dict[str, Any]] = [
-        {"role": "system", "content": _TERRIS_SYSTEM}
-    ]
-    for turn in conversation_history[-6:]:
-        if turn["role"] in ("user", "assistant") and isinstance(turn.get("content"), str):
-            input_messages.append({"role": turn["role"], "content": turn["content"]})
-    input_messages.append({"role": "user", "content": user_query})
-
-    previous_response_id: str | None = None
     tool_results_for_narration: dict[str, Any] = {}
-    max_iterations = max(_MAX_AGENT_ITERATIONS, 6)
 
-    for iteration in range(max_iterations):
+    # Build initial input messages (only needed for the first call in a session)
+    initial_input: list[dict[str, Any]] = []
+    if previous_response_id is None:
+        for turn in conversation_history[-8:]:
+            if turn["role"] in ("user", "assistant") and isinstance(turn.get("content"), str):
+                initial_input.append({"role": turn["role"], "content": turn["content"]})
+        initial_input.append({"role": "user", "content": user_query})
+    else:
+        # With previous_response_id, only the new user turn is needed
+        initial_input = [{"role": "user", "content": user_query}]
+
+    current_input: list[dict[str, Any]] = initial_input
+    current_prev_id: str | None = previous_response_id
+    last_response_id: str | None = previous_response_id
+    start_time = time.monotonic()
+    max_wall_clock = float(os.getenv("TERRIS_AGENT_TIMEOUT_SECS", "55"))
+
+    for iteration in range(_MAX_AGENT_ITERATIONS):
+        if time.monotonic() - start_time > max_wall_clock:
+            logger.warning("Terris agent loop hit wall-clock limit after %d iterations", iteration)
+            break
+
+        # Build Responses API kwargs
+        create_kwargs: dict[str, Any] = {
+            "model": model,
+            "tools": tools,
+            "instructions": _TERRIS_SYSTEM,
+            "store": True,
+        }
+
+        if current_prev_id:
+            create_kwargs["previous_response_id"] = current_prev_id
+            create_kwargs["input"] = current_input
+        else:
+            create_kwargs["input"] = current_input
+
+        # Add reasoning for models that support it (o-series and gpt-5+)
+        if any(seg in model for seg in ("o1", "o3", "o4", "gpt-5", "gpt5")):
+            create_kwargs["reasoning"] = {"effort": reasoning_effort, "summary": "auto"}
+
         try:
-            create_kwargs: dict[str, Any] = {
-                "model": model,
-                "tools": tools,
-                "input": input_messages if previous_response_id is None else None,
-            }
-            if previous_response_id:
-                create_kwargs["previous_response_id"] = previous_response_id
-            # Remove None values
-            create_kwargs = {k: v for k, v in create_kwargs.items() if v is not None}
-
-            # Add reasoning if supported by the model
-            if any(m in model for m in ("o1", "o3", "o4", "gpt-5")):
-                create_kwargs["reasoning"] = {"effort": reasoning_effort, "summary": "auto"}
-
             resp = client.responses.create(**create_kwargs)  # type: ignore
-            previous_response_id = resp.id
-
-        except (AttributeError, Exception) as exc:
-            # Responses API unavailable — fall back to chat completions
-            logger.warning("OpenAI Responses API unavailable (%s), falling back to chat.completions", exc)
-            try:
-                chat_messages = [{"role": "system", "content": _TERRIS_SYSTEM}]
-                for turn in conversation_history[-6:]:
-                    if turn["role"] in ("user", "assistant") and isinstance(turn.get("content"), str):
-                        chat_messages.append({"role": turn["role"], "content": turn["content"]})
-                chat_messages.append({"role": "user", "content": user_query})
-                fallback_resp = client.chat.completions.create(
-                    model=model,
-                    max_tokens=1200,
-                    messages=chat_messages,  # type: ignore
+        except Exception as exc:
+            err_str = str(exc)
+            # Reasoning not supported by this model — retry without it
+            if "reasoning" in err_str.lower() or "unsupported" in err_str.lower():
+                create_kwargs.pop("reasoning", None)
+                try:
+                    resp = client.responses.create(**create_kwargs)  # type: ignore
+                except Exception as exc2:
+                    _record_provider_failure(exc2)
+                    logger.warning("OpenAI Responses API call failed: %s", exc2)
+                    # Fall back to chat.completions
+                    return _openai_chat_fallback(
+                        user_query, conversation_history, client, model, audit_log
+                    )
+            # Model not found — fall back to gpt-4o
+            elif "model" in err_str.lower() and "not found" in err_str.lower():
+                create_kwargs["model"] = "gpt-4o"
+                create_kwargs.pop("reasoning", None)
+                try:
+                    resp = client.responses.create(**create_kwargs)  # type: ignore
+                except Exception as exc3:
+                    _record_provider_failure(exc3)
+                    return _openai_chat_fallback(
+                        user_query, conversation_history, client, "gpt-4o", audit_log
+                    )
+            else:
+                _record_provider_failure(exc)
+                logger.warning("OpenAI Responses API call failed: %s", exc)
+                return _openai_chat_fallback(
+                    user_query, conversation_history, client, model, audit_log
                 )
-                return fallback_resp.choices[0].message.content or "", audit_log
-            except Exception as fb_exc:
-                return (f"LLM call failed: {str(fb_exc)[:120]}", audit_log)
 
-        # Collect tool calls from response output
-        tool_calls = []
-        final_text_parts: list[str] = []
+        last_response_id = resp.id
+        current_prev_id = resp.id
 
+        # Extract tool calls and text from the response output
+        fn_calls = []
         for item in resp.output:  # type: ignore
             item_type = getattr(item, "type", None)
             if item_type == "function_call":
-                tool_calls.append(item)
-            elif item_type in ("text", "message"):
-                content = getattr(item, "text", None) or getattr(item, "content", None)
-                if isinstance(content, str):
-                    final_text_parts.append(content)
-                elif isinstance(content, list):
-                    for part in content:
-                        if hasattr(part, "text"):
-                            final_text_parts.append(part.text)
+                fn_calls.append(item)
 
-        if not tool_calls:
-            # No tool calls — LLM produced final answer
-            final_text = " ".join(final_text_parts).strip()
+        if not fn_calls:
+            # No tool calls — grab final answer
+            final_text = getattr(resp, "output_text", None) or ""
+            if not final_text:
+                # Fallback: manually extract from output messages
+                parts: list[str] = []
+                for item in resp.output:  # type: ignore
+                    if getattr(item, "type", None) == "message":
+                        for block in getattr(item, "content", []):
+                            if getattr(block, "type", None) == "output_text":
+                                parts.append(block.text)
+                final_text = " ".join(parts).strip()
             if final_text:
-                return final_text, audit_log
-            # Empty text but no tool calls — synthesise from investigation
+                _record_provider_success()
+                return final_text, audit_log, last_response_id
             break
 
-        # Execute tool calls and collect results for next turn
+        # Execute each tool call and collect outputs
         tool_output_items: list[dict[str, Any]] = []
-        for tc in tool_calls:
+        for tc in fn_calls:
             tool_name = getattr(tc, "name", "")
-            call_id = getattr(tc, "call_id", getattr(tc, "id", ""))
+            call_id = getattr(tc, "call_id", "")
             fn = TERRIS_TOOL_MAP.get(tool_name)
-            label = STAGE_PROGRESS_LABELS.get(f"invoke_{tool_name}", f"Running {tool_name}…")
+            label = STAGE_PROGRESS_LABELS.get(f"invoke_{tool_name}", f"Reviewing {tool_name.replace('_',' ')}…")
 
             if on_progress:
                 on_progress({"stage": f"agent_invoke_{tool_name}", "label": label, "status": "started"})
@@ -474,43 +604,52 @@ def _run_openai_agent_loop(
             try:
                 result = fn() if fn else {"error": f"Unknown tool: {tool_name}"}
                 brief = _brief_tool_result(tool_name, result)
-                audit_log.append({
-                    "iteration": iteration + 1,
-                    "tool": tool_name,
-                    "status": "completed",
-                    "brief": brief,
-                })
+                audit_log.append({"iteration": iteration + 1, "tool": tool_name, "status": "completed", "brief": brief})
                 tool_results_for_narration[tool_name] = result
-                tool_output_items.append({
-                    "type": "function_call_output",
-                    "call_id": call_id,
-                    "output": json.dumps(result),
-                })
+                tool_output_items.append({"type": "function_call_output", "call_id": call_id, "output": json.dumps(result)})
                 if on_progress:
                     on_progress({"stage": f"agent_invoke_{tool_name}", "label": label, "status": "completed"})
             except Exception as exc:
-                audit_log.append({
-                    "iteration": iteration + 1,
-                    "tool": tool_name,
-                    "status": "error",
-                    "error": str(exc)[:120],
-                })
-                tool_output_items.append({
-                    "type": "function_call_output",
-                    "call_id": call_id,
-                    "output": json.dumps({"error": str(exc)[:80]}),
-                })
+                audit_log.append({"iteration": iteration + 1, "tool": tool_name, "status": "error", "error": str(exc)[:120]})
+                tool_output_items.append({"type": "function_call_output", "call_id": call_id, "output": json.dumps({"error": str(exc)[:80]})})
 
-        # Feed tool results back as next input
-        input_messages = tool_output_items  # type: ignore
+        # Next iteration: feed tool outputs back
+        current_input = tool_output_items  # type: ignore
 
-    # Max iterations hit — fall back to deterministic answer
+    # Max iterations or empty answer — synthesise from deterministic result
+    _record_provider_failure(RuntimeError("max iterations reached without answer"))
     if tool_results_for_narration:
         from .terris import run_terris_investigation
         inv = run_terris_investigation(user_query)
-        return inv.get("direct_answer", "Investigation complete. See evidence trail."), audit_log
+        return inv.get("direct_answer", "Investigation complete. See evidence trail."), audit_log, last_response_id
+    return "Investigation complete. See evidence trail.", audit_log, last_response_id
 
-    return "Investigation complete. See evidence trail.", audit_log
+
+def _openai_chat_fallback(
+    user_query: str,
+    conversation_history: list[dict[str, Any]],
+    client: Any,
+    model: str,
+    audit_log: list[dict[str, Any]],
+) -> tuple[str, list[dict[str, Any]], str | None]:
+    """Fall back to chat.completions when Responses API is unavailable."""
+    try:
+        chat_messages: list[dict[str, str]] = [{"role": "system", "content": _TERRIS_SYSTEM}]
+        for turn in conversation_history[-6:]:
+            if turn["role"] in ("user", "assistant") and isinstance(turn.get("content"), str):
+                chat_messages.append({"role": turn["role"], "content": turn["content"]})
+        chat_messages.append({"role": "user", "content": user_query})
+        fallback_resp = client.chat.completions.create(
+            model=model if model else "gpt-4o",
+            max_tokens=1200,
+            messages=chat_messages,  # type: ignore
+        )
+        answer = fallback_resp.choices[0].message.content or ""
+        _record_provider_success()
+        return answer, audit_log, None
+    except Exception as fb_exc:
+        _record_provider_failure(fb_exc)
+        return f"Provider call failed: {str(fb_exc)[:120]}", audit_log, None
 
 
 def _run_agent_loop(
@@ -759,9 +898,14 @@ def add_message(
 
     # Try LLM narration (Connected Intelligence Mode)
     api_key, provider, model, reasoning_effort = _get_llm_config()
+    # Adapt reasoning effort to actual query depth
+    intent = investigation.get("intent", "other")
+    effective_effort = _choose_reasoning_effort(user_query, intent, reasoning_effort)
+
     llm_mode = "structured_safe"
     narrated_answer = investigation.get("direct_answer", "")
     agent_audit_log: list[dict[str, Any]] = []
+    new_previous_response_id: str | None = None
 
     if api_key:
         if on_progress:
@@ -772,9 +916,16 @@ def add_message(
                     user_query, history, api_key, provider, model, on_progress=on_progress,
                 )
             elif provider == "openai":
-                narrated_answer, agent_audit_log = _run_openai_agent_loop(
-                    user_query, history, api_key, model, reasoning_effort, on_progress=on_progress,
+                # Retrieve persisted previous_response_id for conversation continuity
+                prior_response_id = ctx.get("openai_previous_response_id")
+                narrated_answer, agent_audit_log, new_previous_response_id = _run_openai_agent_loop(
+                    user_query, history, api_key, model, effective_effort,
+                    on_progress=on_progress,
+                    previous_response_id=prior_response_id,
                 )
+                # Persist the new response ID for the next follow-up
+                if new_previous_response_id:
+                    ctx["openai_previous_response_id"] = new_previous_response_id
             else:
                 narrated_answer = _llm_narrate(
                     user_query, investigation, history, api_key, provider, model, reasoning_effort,
@@ -813,9 +964,11 @@ def add_message(
         "reviewed_summary": investigation.get("reviewed_summary", ""),
         "agent_audit_log": agent_audit_log,
         "investigation_meta": {
-            "intent": investigation.get("intent"),
+            "intent": intent,
             "answer_type": investigation.get("answer_type"),
             "calculation_version": CALCULATION_VERSION,
+            "reasoning_effort_used": effective_effort if api_key else None,
+            "previous_response_id": new_previous_response_id,
         },
     }
     history.append(assistant_turn)
