@@ -3,13 +3,17 @@ from __future__ import annotations
 
 import os
 import re
+import sys
 from datetime import date, datetime
+from pathlib import Path
 
 import sqlalchemy as sa
 from alembic import command
 from alembic.config import Config
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.engine import make_url
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from app.db.base import Base
 from app.models.block import Block
