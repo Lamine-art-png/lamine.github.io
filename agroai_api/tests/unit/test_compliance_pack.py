@@ -7,6 +7,7 @@ from alembic import command
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from sqlalchemy import Column, Float, ForeignKey, JSON, MetaData, String, Table, create_engine, event, inspect
+from sqlalchemy.orm import sessionmaker
 
 from app.compliance import services
 from app.compliance.adapters import OpenETProvenanceAdapter, serialize_qanat_record
@@ -24,6 +25,7 @@ from app.models.compliance import (
     ComplianceReadinessSnapshot,
     ComplianceWell,
 )
+from scripts.compliance_migration_preflight import collect_report
 
 DEMO_HEADERS = {"X-Compliance-Demo-Token": "demo-token"}
 
@@ -33,6 +35,19 @@ def _enable_demo(monkeypatch):
     monkeypatch.setattr(settings, "COMPLIANCE_DEMO_FIXTURES_ENABLED", True)
     monkeypatch.setattr(settings, "COMPLIANCE_DEMO_TOKEN", "demo-token")
     monkeypatch.setattr(settings, "COMPLIANCE_DEMO_TENANT_ID", APPROVED_FIXTURE_TENANT_ID)
+
+
+def _snapshot_count(session) -> int:
+    return session.query(ComplianceReadinessSnapshot).filter_by(tenant_id=APPROVED_FIXTURE_TENANT_ID).count()
+
+
+def _fresh_snapshot_count(session) -> int:
+    fresh_session_factory = sessionmaker(bind=session.get_bind())
+    fresh = fresh_session_factory()
+    try:
+        return _snapshot_count(fresh)
+    finally:
+        fresh.close()
 
 
 def test_feature_flag_and_fail_closed_behavior(client, monkeypatch):
@@ -228,13 +243,18 @@ def test_export_gap_flags_are_scoped_to_selected_reporting_year(client, db, monk
         "quality_status": "gap_estimate",
         "correction_lineage": [{"missing_window": "2025-06-12/2025-06-20"}],
     })
+    before = _snapshot_count(db)
     response = client.post("/v1/compliance/exports", json={"export_type": "json", "workflow_type": "gears_groundwater_extractor_readiness"}, headers=DEMO_HEADERS)
     assert response.status_code == 201
     package = response.json()
     assert package["reporting_year"] == "2026"
+    assert _snapshot_count(db) == before + 1
     assert package["missing_data_flags"]
     assert all(flag.endswith(":2026") for flag in package["missing_data_flags"])
     assert all("2025" not in assumption for assumption in package["assumptions"])
+    assert package["historical_measurements_excluded_count"] >= 1
+    assert all(str(measurement["reporting_period"]) == "2026" for measurement in package["measurements"])
+    assert all(measurement["source_timestamp"] != "2025-06-28T23:59:00" for measurement in package["measurements"])
 
 
 def test_jurisdiction_serializes_global_fields(client, monkeypatch):
@@ -247,9 +267,9 @@ def test_jurisdiction_serializes_global_fields(client, monkeypatch):
     assert jurisdiction["authority_name"]
 
 
-def test_status_returns_api_backed_summary_and_single_snapshot(client, db, monkeypatch):
+def test_status_returns_api_backed_summary_without_snapshot(client, db, monkeypatch):
     _enable_demo(monkeypatch)
-    before = db.query(ComplianceReadinessSnapshot).filter_by(tenant_id=APPROVED_FIXTURE_TENANT_ID).count()
+    before = _snapshot_count(db)
     response = client.get("/v1/compliance/status", headers=DEMO_HEADERS)
     assert response.status_code == 200
     payload = response.json()
@@ -258,8 +278,28 @@ def test_status_returns_api_backed_summary_and_single_snapshot(client, db, monke
     assert payload["upcoming_deadlines"]
     assert isinstance(payload["missing_evidence_count"], int)
     assert isinstance(payload["unresolved_anomaly_count"], int)
-    after = db.query(ComplianceReadinessSnapshot).filter_by(tenant_id=APPROVED_FIXTURE_TENANT_ID).count()
-    assert after == before + 1
+    assert _snapshot_count(db) == before
+
+
+def test_readiness_get_is_read_only(client, db, monkeypatch):
+    _enable_demo(monkeypatch)
+    before = _snapshot_count(db)
+    response = client.get("/v1/compliance/readiness", headers=DEMO_HEADERS)
+    assert response.status_code == 200
+    assert response.json()["workflow_type"] == "gears_groundwater_extractor_readiness"
+    assert _snapshot_count(db) == before
+
+
+def test_readiness_snapshot_post_commits_once_and_survives_fresh_session(client, db, monkeypatch):
+    _enable_demo(monkeypatch)
+    before = _snapshot_count(db)
+    response = client.post("/v1/compliance/readiness/snapshots", headers=DEMO_HEADERS)
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["snapshot"]["tenant_id"] == APPROVED_FIXTURE_TENANT_ID
+    assert payload["readiness"]["workflow_type"] == "gears_groundwater_extractor_readiness"
+    assert _snapshot_count(db) == before + 1
+    assert _fresh_snapshot_count(db) == before + 1
 
 
 def test_reconciliation_variance_percentage_from_persisted_values(db):
@@ -333,6 +373,29 @@ def test_upgraded_sqlite_alembic_upgrade_002_through_003(tmp_path, monkeypatch):
     cols = {column["name"] for column in inspect(engine).get_columns("compliance_parcels")}
     assert "parcel_identifier" in cols
     assert "compliance_export_metadata" in inspect(engine).get_table_names()
+
+
+def test_compliance_migration_preflight_classifies_clean_002_and_003(tmp_path, monkeypatch):
+    db_path = tmp_path / "preflight.db"
+    database_url = f"sqlite:///{db_path}"
+    monkeypatch.setattr(settings, "DATABASE_URL", database_url)
+    _bootstrap_legacy_baseline(db_path)
+    assert collect_report(database_url)["schema_classification"] == "A_clean_baseline_no_compliance_tables"
+
+    cfg = _alembic_config(db_path)
+    command.upgrade(cfg, "002_california_compliance_pack")
+    report_002 = collect_report(database_url)
+    assert report_002["current_alembic_revision"] == "002_california_compliance_pack"
+    assert report_002["schema_classification"] == "B_migration_002_schema"
+    assert report_002["tables"]["compliance_export_metadata"] is False
+    assert report_002["parcel_identifier_exists"] is False
+
+    command.upgrade(cfg, "head")
+    report_003 = collect_report(database_url)
+    assert report_003["current_alembic_revision"] == "003_global_compliance_kernel"
+    assert report_003["schema_classification"] == "C_migration_003_schema"
+    assert report_003["tables"]["compliance_export_metadata"] is True
+    assert report_003["parcel_identifier_exists"] is True
 
 def _load_migration_003():
     path = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "003_global_compliance_kernel.py"
