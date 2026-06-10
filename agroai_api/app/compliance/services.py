@@ -80,6 +80,13 @@ def _groundwater_measurements(repo: ComplianceRepository, reporting_year: str) -
     ]
 
 
+def _measurements_for_reporting_year(repo: ComplianceRepository, reporting_year: str) -> list[dict[str, Any]]:
+    return [
+        measurement for measurement in repo.list_measurements()
+        if str(measurement.get("reporting_period")) == str(reporting_year)
+    ]
+
+
 def _months_covered(measurements: list[dict[str, Any]]) -> set[int]:
     months: set[int] = set()
     for measurement in measurements:
@@ -237,9 +244,15 @@ def readiness(repo: ComplianceRepository, workflow_type: str = "gears_groundwate
     return payload
 
 
+def create_readiness_snapshot(repo: ComplianceRepository, workflow_type: str = "gears_groundwater_extractor_readiness") -> dict[str, Any]:
+    payload = readiness(repo, workflow_type, persist=False)
+    snapshot = repo.persist_readiness_snapshot(payload, payload["reporting_year"])
+    return {"snapshot": snapshot, "readiness": payload}
+
+
 def status(repo: ComplianceRepository, workflow_type: str = "gears_groundwater_extractor_readiness", *, demo_mode: bool = False) -> dict[str, Any]:
     pack = resolve_workflow_pack(workflow_type)
-    readiness_payload = readiness(repo, workflow_type, persist=True)
+    readiness_payload = readiness(repo, workflow_type, persist=False)
     budgets = water_budget_status(repo, pack)
     reconciliation_rows = reconciliation(repo)
     return {
@@ -265,8 +278,15 @@ def compose_export(repo: ComplianceRepository, export_type: str, workflow_type: 
     if export_type != "json":
         raise ValueError("Only JSON metadata package preparation is available while object storage is disabled")
     export_id = f"export-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
-    gaps = _telemetry_gaps(_groundwater_measurements(repo, reporting_year))
+    measurements = _measurements_for_reporting_year(repo, reporting_year)
+    historical_measurements_excluded_count = len(repo.list_measurements()) - len(measurements)
+    gaps = _telemetry_gaps([
+        measurement for measurement in measurements
+        if measurement.get("measurement_type") == "groundwater_extraction"
+    ])
     assumptions = [f"Telemetry gap for {gap['asset_id']} in {gap['reporting_period']} remains labeled {gap['truth_label']}." for gap in gaps]
+    readiness_payload = readiness(repo, workflow_type, persist=False)
+    readiness_snapshot = repo.persist_readiness_snapshot(readiness_payload, reporting_year)
     package = {
         "id": export_id,
         "format": export_type,
@@ -276,10 +296,12 @@ def compose_export(repo: ComplianceRepository, export_type: str, workflow_type: 
         "created_at": datetime.now(timezone.utc).isoformat(),
         "jurisdictions": repo.list_jurisdictions(),
         "assets": {"parcels": repo.list_parcels(), "wells": repo.list_wells(), "meters": repo.list_meters()},
-        "measurements": repo.list_measurements(),
+        "measurements": measurements,
+        "historical_measurements_excluded_count": historical_measurements_excluded_count,
         "water_budgets": water_budget_status(repo, pack),
         "reconciliation": reconciliation(repo),
-        "readiness": readiness(repo, workflow_type, persist=True),
+        "readiness": readiness_payload,
+        "readiness_snapshot": readiness_snapshot,
         "provenance": {"source": "AGRO-AI compliance kernel", "truth_labels_required": sorted(TRUTH_LABELS), "direct_filing": False, "object_storage": storage_backend, "secure_download_available": False},
         "assumptions": assumptions,
         "missing_data_flags": [f"{gap['asset_id']}:{gap['reporting_period']}" for gap in gaps],

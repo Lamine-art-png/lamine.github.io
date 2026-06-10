@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, status as http_status
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Query, status as http_status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
@@ -110,6 +110,10 @@ class ExportIn(BaseModel):
     workflow_type: str = "gears_groundwater_extractor_readiness"
 
 
+class ReadinessSnapshotIn(BaseModel):
+    workflow_type: str = "gears_groundwater_extractor_readiness"
+
+
 def _raise_value(exc: ValueError) -> None:
     raise HTTPException(status_code=422, detail=str(exc)) from exc
 
@@ -172,6 +176,18 @@ def get_water_budgets(context: ComplianceContext = Depends(_context)) -> list[di
 def get_readiness(workflow_type: str = Query("gears_groundwater_extractor_readiness"), context: ComplianceContext = Depends(_context)) -> dict[str, Any]:
     try:
         return services.readiness(context.repo, workflow_type)
+    except ValueError as exc:
+        _raise_value(exc)
+
+
+@router.post("/readiness/snapshots", status_code=201)
+def create_readiness_snapshot(
+    payload: ReadinessSnapshotIn | None = Body(default=None),
+    context: ComplianceContext = Depends(_context),
+) -> dict[str, Any]:
+    try:
+        workflow_type = payload.workflow_type if payload else "gears_groundwater_extractor_readiness"
+        return services.create_readiness_snapshot(context.repo, workflow_type)
     except ValueError as exc:
         _raise_value(exc)
 
