@@ -6,9 +6,10 @@ Create Date: 2026-05-31
 """
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 revision = "002_california_compliance_pack"
-down_revision = "001_enterprise_tables"
+down_revision = "001"
 branch_labels = None
 depends_on = None
 
@@ -21,8 +22,16 @@ def upgrade():
     if bind.dialect.name != "sqlite":
         truth_label.create(bind, checkfirst=True)
         workflow_type.create(bind, checkfirst=True)
-    truth_col = truth_label if bind.dialect.name != "sqlite" else sa.String(length=32)
-    workflow_col = workflow_type if bind.dialect.name != "sqlite" else sa.String(length=64)
+    truth_col = (
+        postgresql.ENUM("measured", "reported", "estimated", "calculated", "AI-inferred", name="compliance_truth_label", create_type=False)
+        if bind.dialect.name == "postgresql"
+        else truth_label if bind.dialect.name != "sqlite" else sa.String(length=32)
+    )
+    workflow_col = (
+        postgresql.ENUM("sgma_gsa_annual_report_readiness", "gears_groundwater_extractor_readiness", name="compliance_workflow_type", create_type=False)
+        if bind.dialect.name == "postgresql"
+        else workflow_type if bind.dialect.name != "sqlite" else sa.String(length=64)
+    )
 
     op.create_table("compliance_jurisdictions", sa.Column("id", sa.String(), primary_key=True), sa.Column("tenant_id", sa.String(), sa.ForeignKey("tenants.id"), nullable=False), sa.Column("state", sa.String(), nullable=False), sa.Column("county", sa.String(), nullable=False), sa.Column("basin", sa.String()), sa.Column("subbasin", sa.String()), sa.Column("gsa", sa.String()), sa.Column("district", sa.String()), sa.Column("jurisdiction_pack", sa.String(), nullable=False), sa.Column("reporting_year", sa.String(), nullable=False), sa.Column("reporting_deadline", sa.Date(), nullable=False), sa.Column("workflow_type", workflow_col, nullable=False), sa.Column("created_at", sa.DateTime()))
     op.create_table("compliance_organization_roles", sa.Column("id", sa.String(), primary_key=True), sa.Column("tenant_id", sa.String(), sa.ForeignKey("tenants.id"), nullable=False), sa.Column("organization_name", sa.String(), nullable=False), sa.Column("owner", sa.String()), sa.Column("operator", sa.String()), sa.Column("reporting_agent", sa.String()), sa.Column("authorization_artifact_id", sa.String()), sa.Column("consent_scope", sa.Text()), sa.Column("reviewer_role", sa.String()))

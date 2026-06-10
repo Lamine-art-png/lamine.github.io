@@ -167,6 +167,24 @@ function openBackendSetupModal(provider = "WiseConn") {
   });
 }
 
+async function prepareComplianceExport(exportType) {
+  if (!window.AGROAI_PORTAL_CONFIG?.CALIFORNIA_COMPLIANCE_PACK_ENABLED) {
+    openModal("Compliance disabled", "<p>The compliance tab is hidden unless the feature flag is enabled.</p>");
+    return;
+  }
+  const created = await api.createComplianceExport(exportType);
+  if (!created.ok) {
+    openModal("Compliance export unavailable", `<p>${created.error || "Secure export endpoint unavailable."}</p>`);
+    return;
+  }
+  const fetched = await api.getComplianceExport(created.data.id);
+  if (!fetched.ok) {
+    openModal("Compliance export unavailable", `<p>${fetched.error || "Secure download endpoint unavailable."}</p>`);
+    return;
+  }
+  openModal("Compliance export prepared", `<p>JSON export metadata <strong>${created.data.id}</strong> is persisted by the API. Secure stored downloads are not claimed while object storage is disabled. Direct regulatory filing remains out of scope.</p>`);
+}
+
 function collectOverrides(form) {
   const data = new FormData(form);
   const overrides = {};
@@ -180,6 +198,25 @@ function collectOverrides(form) {
   return overrides;
 }
 
+async function loadComplianceStatusForView() {
+  if (state.compliance?.loading || state.compliance?.status) return;
+  state.compliance.loading = true;
+  state.compliance.error = "";
+  try {
+    const response = await api.getComplianceStatus();
+    if (response.ok) {
+      state.compliance.status = response.data;
+    } else {
+      state.compliance.error = response.error || "Compliance API unavailable.";
+    }
+  } catch (error) {
+    state.compliance.error = error?.message || "Compliance API unavailable.";
+  } finally {
+    state.compliance.loading = false;
+    notify();
+  }
+}
+
 function renderActiveView() {
   if (state.activeView === "farm-explorer") return renderFarmExplorer(state);
   if (state.activeView === "intelligence") return renderIntelligence(state);
@@ -188,7 +225,10 @@ function renderActiveView() {
   if (state.activeView === "integrations") return renderIntegrations(state);
   if (state.activeView === "audit-log") return renderAuditLog(state);
   if (state.activeView === "settings") return renderSettings(state);
-  if (state.activeView === "compliance" && window.AGROAI_PORTAL_CONFIG?.CALIFORNIA_COMPLIANCE_PACK_ENABLED) return renderCompliance(state);
+  if (state.activeView === "compliance" && window.AGROAI_PORTAL_CONFIG?.CALIFORNIA_COMPLIANCE_PACK_ENABLED) {
+    void loadComplianceStatusForView();
+    return renderCompliance(state);
+  }
   return renderCommandCenter(state);
 }
 
@@ -532,6 +572,9 @@ function bindShellEvents() {
       if (action === "preview-report") updateDemo(generateDemoReport(state.demoRuntime, button.dataset.reportType || "Irrigation Intelligence Report"), "Report preview generated");
       if (action === "print-report") window.print();
       if (action === "export-csv") downloadCsv(state.demoRuntime.reportSnapshots?.[0]);
+      if (action === "export-compliance-json") await prepareComplianceExport("json");
+      if (action === "export-compliance-csv") await prepareComplianceExport("csv");
+      if (action === "export-compliance-pdf") await prepareComplianceExport("pdf");
       if (action === "live-execution-note") openModal("Execution capture", "<p>Execution capture requires backend execution endpoints. Verification chain and reconciliation are available in this workspace.</p>");
       if (action === "integration-note") openModal("Integration status", `<p>${button.dataset.message || "Runtime status details are shown in this card. Secure credential storage requires backend credential endpoints."}</p>`);
       if (action === "request-backend-setup") {

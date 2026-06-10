@@ -26,6 +26,9 @@ export const ENDPOINTS = {
   workbenchLiveAnalyze: "/v1/workbench/analyze-live",
   workbenchReport: (id) => `/v1/workbench/sessions/${encodeURIComponent(id)}/report`,
   workbenchSchema: "/v1/workbench/schema",
+  complianceStatus: "/v1/compliance/status",
+  complianceExports: "/v1/compliance/exports",
+  complianceExport: (id) => `/v1/compliance/exports/${encodeURIComponent(id)}`,
 };
 
 export class ApiClient {
@@ -208,5 +211,26 @@ export class ApiClient {
 
   getWorkbenchSchema() {
     return this.request(ENDPOINTS.workbenchSchema);
+  }
+
+  complianceHeaders() {
+    const token = window.AGROAI_PORTAL_CONFIG?.COMPLIANCE_DEMO_TOKEN || "";
+    return token ? { "X-Compliance-Demo-Token": token } : {};
+  }
+
+  getComplianceStatus() {
+    return this.request(ENDPOINTS.complianceStatus, { headers: this.complianceHeaders() });
+  }
+
+  createComplianceExport(exportType = "json") {
+    return this.request(ENDPOINTS.complianceExports, {
+      method: "POST",
+      headers: this.complianceHeaders(),
+      body: { export_type: exportType, workflow_type: "gears_groundwater_extractor_readiness" },
+    });
+  }
+
+  getComplianceExport(exportId) {
+    return this.request(ENDPOINTS.complianceExport(exportId), { headers: this.complianceHeaders() });
   }
 }

@@ -10,7 +10,7 @@ def serialize_qanat_record(record: dict[str, Any]) -> dict[str, Any]:
     return {
         "source_system": "qanat_interop",
         "source_provenance": record.get("source_provenance", {}),
-        "parcel": {"apn": record.get("parcel_identifier") or record.get("apn"), "geometry_ref": record.get("parcel_geometry_ref")},
+        "parcel": {"parcel_identifier": record.get("parcel_identifier") or record.get("apn"), "apn": record.get("apn"), "geometry_ref": record.get("parcel_geometry_ref")},
         "well": {"well_identifier": record.get("well_identifier"), "latitude": record.get("latitude"), "longitude": record.get("longitude")},
         "extraction_volume": {"value": record.get("extraction_volume"), "unit": record.get("unit", "acre_feet"), "truth_label": record.get("truth_label", "reported")},
         "water_budget": record.get("water_budget", {}),

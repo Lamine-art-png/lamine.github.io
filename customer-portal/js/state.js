@@ -20,6 +20,11 @@ export const state = {
   },
   activeView: "command-center",
   demoRuntime: createDemoRuntime(),
+  compliance: {
+    loading: false,
+    status: null,
+    error: "",
+  },
   live: {
     auth: null,
     farms: [],

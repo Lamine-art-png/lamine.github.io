@@ -1,157 +1,224 @@
 """Compliance kernel services for readiness, validation, and exports."""
 from __future__ import annotations
 
-import csv
-import io
-import uuid
-from copy import deepcopy
 from datetime import date, datetime, timezone
 from typing import Any
 
-from app.compliance.constants import DISCLAIMER, TRUTH_LABELS
-from app.compliance.fixtures import ORG_ID, VINEYARD_FIXTURE
+from app.compliance.constants import DISCLAIMER, RULE_PACKS, TRUTH_LABELS
+from app.compliance.repository import ComplianceRepository
 
-EXPORTS: dict[str, dict[str, Any]] = {}
-CUSTOM_MEASUREMENTS: list[dict[str, Any]] = []
-CUSTOM_EVIDENCE: list[dict[str, Any]] = []
-
-
-def _tenant_id(organization_id: str | None = None) -> str:
-    return organization_id or ORG_ID
-
-
-def _scoped(items: list[dict[str, Any]], organization_id: str | None) -> list[dict[str, Any]]:
-    tenant = _tenant_id(organization_id)
-    return [deepcopy(item) for item in items if item.get("organization_id") == tenant]
+CUSTOMER_ALLOWED_STATUSES = {"internal_alpha_pending_external_validation"}
 
 
 def truth_label_valid(label: str) -> bool:
     return label in TRUTH_LABELS
 
 
-def add_measurement(payload: dict[str, Any], organization_id: str | None = None) -> dict[str, Any]:
-    tenant = _tenant_id(organization_id or payload.get("organization_id"))
+def resolve_workflow_pack(workflow_type: str) -> dict[str, Any]:
+    matches = [pack for pack in RULE_PACKS.values() if pack.get("workflow_type") == workflow_type]
+    if not matches:
+        raise ValueError("Unsupported compliance workflow")
+    enabled_matches = [pack for pack in matches if pack.get("enabled")]
+    if not enabled_matches:
+        raise ValueError("Compliance workflow is disabled")
+    pack = enabled_matches[0]
+    if pack.get("status") not in CUSTOMER_ALLOWED_STATUSES:
+        raise ValueError("Compliance workflow is not customer-facing")
+    return dict(pack)
+
+
+def pack_metadata(pack: dict[str, Any]) -> dict[str, Any]:
+    return {key: pack[key] for key in ("pack_id", "jurisdiction", "status", "version", "workflow_type", "external_validation")}
+
+
+def active_pack_metadata() -> dict[str, Any]:
+    return pack_metadata(resolve_workflow_pack("gears_groundwater_extractor_readiness"))
+
+
+def add_measurement(repo: ComplianceRepository, payload: dict[str, Any]) -> dict[str, Any]:
     label = payload.get("truth_label")
     if not truth_label_valid(label):
         raise ValueError(f"truth_label must be one of {sorted(TRUTH_LABELS)}")
-    record = {
-        "id": payload.get("id") or f"meas-{uuid.uuid4().hex[:12]}",
-        "organization_id": tenant,
-        "asset_type": payload["asset_type"],
-        "asset_id": payload["asset_id"],
-        "measurement_type": payload["measurement_type"],
-        "value": float(payload["value"]),
-        "unit": payload["unit"],
-        "method": payload["method"],
-        "truth_label": label,
-        "source_system": payload["source_system"],
-        "source_timestamp": payload["source_timestamp"],
-        "ingestion_timestamp": datetime.now(timezone.utc).isoformat(),
-        "quality_status": payload.get("quality_status", "pending_review"),
-        "reporting_period": str(payload["reporting_period"]),
-        "confidence": payload.get("confidence"),
-        "correction_lineage": payload.get("correction_lineage", []),
-    }
-    CUSTOM_MEASUREMENTS.append(record)
-    return deepcopy(record)
+    return repo.add_measurement(payload)
 
 
-def list_measurements(organization_id: str | None = None) -> list[dict[str, Any]]:
-    return _scoped(VINEYARD_FIXTURE["measurements"] + CUSTOM_MEASUREMENTS, organization_id)
+def list_measurements(repo: ComplianceRepository) -> list[dict[str, Any]]:
+    return repo.list_measurements()
 
 
-def list_assets(kind: str, organization_id: str | None = None) -> list[dict[str, Any]]:
-    return _scoped(VINEYARD_FIXTURE[kind], organization_id)
+def list_assets(repo: ComplianceRepository, kind: str) -> list[dict[str, Any]]:
+    return repo.list_assets(kind)
 
 
-def list_jurisdictions(organization_id: str | None = None) -> list[dict[str, Any]]:
-    return _scoped(VINEYARD_FIXTURE["jurisdictions"], organization_id)
+def list_jurisdictions(repo: ComplianceRepository) -> list[dict[str, Any]]:
+    return repo.list_jurisdictions()
 
 
-def list_evidence(organization_id: str | None = None) -> list[dict[str, Any]]:
-    return _scoped(VINEYARD_FIXTURE["evidence"] + CUSTOM_EVIDENCE, organization_id)
+def list_evidence(repo: ComplianceRepository) -> list[dict[str, Any]]:
+    return repo.list_evidence()
 
 
-def add_evidence(payload: dict[str, Any], organization_id: str | None = None) -> dict[str, Any]:
+def add_evidence(repo: ComplianceRepository, payload: dict[str, Any]) -> dict[str, Any]:
     label = payload.get("truth_label", "reported")
     if not truth_label_valid(label):
         raise ValueError("invalid truth_label")
-    record = {
-        "id": payload.get("id") or f"ev-{uuid.uuid4().hex[:12]}",
-        "organization_id": _tenant_id(organization_id or payload.get("organization_id")),
-        "artifact_type": payload["artifact_type"],
-        "file_ref": payload["file_ref"],
-        "truth_label": label,
-        "review_status": payload.get("review_status", "pending_review"),
-        "notes": payload.get("notes"),
-    }
-    CUSTOM_EVIDENCE.append(record)
-    return deepcopy(record)
+    return repo.add_evidence(payload)
 
 
-def validate_required_fields(workflow_type: str, organization_id: str | None = None) -> list[str]:
+def _reporting_year(repo: ComplianceRepository, workflow_type: str) -> str:
+    for jurisdiction in repo.list_jurisdictions():
+        if jurisdiction.get("workflow_type") == workflow_type and jurisdiction.get("reporting_year"):
+            return str(jurisdiction["reporting_year"])
+    return str(date.today().year)
+
+
+def _groundwater_measurements(repo: ComplianceRepository, reporting_year: str) -> list[dict[str, Any]]:
+    return [
+        measurement for measurement in repo.list_measurements()
+        if measurement.get("measurement_type") == "groundwater_extraction"
+        and str(measurement.get("reporting_period")) == str(reporting_year)
+    ]
+
+
+def _months_covered(measurements: list[dict[str, Any]]) -> set[int]:
+    months: set[int] = set()
+    for measurement in measurements:
+        timestamp = str(measurement.get("source_timestamp") or "")
+        try:
+            months.add(datetime.fromisoformat(timestamp.replace("Z", "+00:00")).month)
+        except ValueError:
+            continue
+    return months
+
+
+def _months_by_well(measurements: list[dict[str, Any]]) -> dict[str, set[int]]:
+    coverage: dict[str, set[int]] = {}
+    for measurement in measurements:
+        if measurement.get("asset_type") not in (None, "well"):
+            continue
+        asset_id = measurement.get("asset_id")
+        if not asset_id:
+            continue
+        coverage.setdefault(str(asset_id), set()).update(_months_covered([measurement]))
+    return coverage
+
+
+def validate_required_fields(repo: ComplianceRepository, workflow_type: str, pack: dict[str, Any] | None = None) -> list[str]:
+    pack = pack or resolve_workflow_pack(workflow_type)
+    reporting_year = _reporting_year(repo, workflow_type)
     missing: list[str] = []
-    org = VINEYARD_FIXTURE["organization"] if _tenant_id(organization_id) == ORG_ID else {}
-    wells = list_assets("wells", organization_id)
-    meters = list_assets("meters", organization_id)
-    measurements = list_measurements(organization_id)
-    evidence = list_evidence(organization_id)
-    if not org.get("owner"):
+    org = repo.organization()
+    wells = repo.list_wells()
+    meters = repo.list_meters()
+    groundwater = _groundwater_measurements(repo, reporting_year)
+    evidence = repo.list_evidence()
+    required = set(pack.get("required_fields", []))
+    if "owner_details" in required and not org.get("owner"):
         missing.append("owner_details")
-    if not wells:
-        missing.append("well_identifier")
-    if any(well.get("latitude") is None or well.get("longitude") is None for well in wells):
+    if "well_identifier" in required:
+        if not wells:
+            missing.append("well_identifier")
+        elif any(not well.get("well_identifier") for well in wells):
+            missing.append("well_identifier")
+    if wells and any(well.get("latitude") is None or well.get("longitude") is None for well in wells):
         missing.append("well_location")
-    if not measurements:
-        missing.append("monthly_groundwater_extraction_volumes")
-    if any(not meter.get("measurement_method") for meter in meters):
-        missing.append("measurement_method")
+    if "measurement_method" in required:
+        if not meters:
+            missing.append("measurement_method")
+        elif any(not meter.get("measurement_method") for meter in meters):
+            missing.append("measurement_method")
+    if "monthly_groundwater_extraction_volumes" in required:
+        if not groundwater:
+            missing.append("monthly_groundwater_extraction_volumes")
+        else:
+            required_months = int(pack.get("thresholds", {}).get("required_groundwater_months", 12))
+            months_by_well = _months_by_well(groundwater)
+            incomplete_wells = [
+                well.get("id") for well in wells
+                if well.get("id") and len(months_by_well.get(str(well.get("id")), set())) < required_months
+            ]
+            if len(_months_covered(groundwater)) < required_months or incomplete_wells:
+                missing.append("monthly_groundwater_extraction_coverage")
     if workflow_type == "gears_groundwater_extractor_readiness" and org.get("reporting_agent"):
         if not any(ev.get("artifact_type") == "agent_authorization" for ev in evidence):
             missing.append("agent_authorization_evidence")
     return missing
 
 
-def water_budget_status(organization_id: str | None = None) -> list[dict[str, Any]]:
-    budgets = _scoped(VINEYARD_FIXTURE["water_budgets"], organization_id)
+def water_budget_status(repo: ComplianceRepository, pack: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    pack = pack or resolve_workflow_pack("gears_groundwater_extractor_readiness")
+    threshold = pack.get("thresholds", {}).get("water_budget_remaining_pct_alert", 15)
+    budgets = repo.list_budgets()
     for budget in budgets:
-        budget["remaining_balance_af"] = round(budget["allocation_af"] - budget["extraction_af"], 2)
-        remaining_pct = budget["remaining_balance_af"] / budget["allocation_af"] * 100 if budget["allocation_af"] else 0
+        allocation = float(budget.get("allocation_af") or 0)
+        extraction = float(budget.get("extraction_af") or 0)
+        remaining = round(allocation - extraction, 2)
+        remaining_pct = remaining / allocation * 100 if allocation else 0
+        budget["remaining_balance_af"] = remaining
         budget["remaining_pct"] = round(remaining_pct, 1)
-        budget["threshold_status"] = "alert" if remaining_pct < 15 or budget["projected_balance_af"] < 0 else "ok"
+        budget["threshold_status"] = "alert" if remaining_pct < threshold or float(budget.get("projected_balance_af") or 0) < 0 else "ok"
         budget["truth_labels"] = {"remaining_balance_af": "calculated", "projected_balance_af": "calculated", "extraction_af": "measured"}
     return budgets
 
 
-def reconciliation(organization_id: str | None = None) -> list[dict[str, Any]]:
-    return _scoped(VINEYARD_FIXTURE["reconciliation"], organization_id)
+def reconciliation(repo: ComplianceRepository) -> list[dict[str, Any]]:
+    return repo.list_execution_ledger()
 
 
-def readiness(workflow_type: str = "gears_groundwater_extractor_readiness", organization_id: str | None = None) -> dict[str, Any]:
-    missing_fields = validate_required_fields(workflow_type, organization_id)
-    measurements = list_measurements(organization_id)
-    meters = list_assets("meters", organization_id)
+def _telemetry_gaps(measurements: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    gaps: list[dict[str, Any]] = []
+    for measurement in measurements:
+        lineage = measurement.get("correction_lineage") or []
+        if measurement.get("quality_status") == "gap_estimate" or lineage:
+            windows = [entry.get("missing_window") for entry in lineage if isinstance(entry, dict) and entry.get("missing_window")]
+            gaps.append({
+                "asset_id": measurement.get("asset_id"),
+                "reporting_period": measurement.get("reporting_period"),
+                "windows": windows,
+                "truth_label": measurement.get("truth_label"),
+                "measurement_id": measurement.get("id"),
+            })
+    return gaps
+
+
+def readiness(repo: ComplianceRepository, workflow_type: str = "gears_groundwater_extractor_readiness", *, persist: bool = False) -> dict[str, Any]:
+    pack = resolve_workflow_pack(workflow_type)
+    reporting_year = _reporting_year(repo, workflow_type)
+    missing_fields = validate_required_fields(repo, workflow_type, pack)
+    measurements = repo.list_measurements()
+    meters = repo.list_meters()
     missing_evidence = []
     warnings = []
-    stale_telemetry = []
+    stale_telemetry = _telemetry_gaps(_groundwater_measurements(repo, reporting_year))
     anomalies = []
-    if any(m.get("quality_status") == "gap_estimate" for m in measurements):
-        stale_telemetry.append({"asset_id": "well-sv-02", "window": "2026-06-12/2026-06-20", "severity": "blocking", "truth_label": "estimated"})
-        missing_evidence.append("manual_reading_evidence_for_june_gap")
+    for gap in stale_telemetry:
+        missing_evidence.append(f"manual_reading_evidence:{gap['asset_id']}:{gap['reporting_period']}")
+    today = date.today()
+    calibration_limit = pack.get("thresholds", {}).get("stale_calibration_days", 365)
     for meter in meters:
-        cal = date.fromisoformat(meter["calibration_date"])
-        if (date(2026, 7, 1) - cal).days > 365:
-            warnings.append({"code": "stale_calibration", "meter_id": meter["id"], "calibration_date": meter["calibration_date"]})
-    for budget in water_budget_status(organization_id):
+        cal_value = meter.get("calibration_date")
+        if not cal_value:
+            warnings.append({"code": "missing_calibration", "meter_id": meter.get("id")})
+            continue
+        cal = date.fromisoformat(cal_value)
+        age_days = (today - cal).days
+        if age_days > calibration_limit:
+            warnings.append({"code": "stale_calibration", "meter_id": meter.get("id"), "calibration_date": cal_value, "age_days": age_days, "threshold_days": calibration_limit})
+    for budget in water_budget_status(repo, pack):
         if budget["threshold_status"] == "alert":
-            warnings.append({"code": "water_budget_threshold_alert", "budget_id": budget["id"], "projected_balance_af": budget["projected_balance_af"]})
-    for row in reconciliation(organization_id):
-        if abs(row["variance_pct"]) > 10:
-            anomalies.append({"code": "application_variance", "reconciliation_id": row["id"], "variance_pct": row["variance_pct"]})
-    blocking = missing_fields + [item["code"] if "code" in item else "stale_telemetry" for item in stale_telemetry]
+            warnings.append({"code": "water_budget_threshold_alert", "budget_id": budget["id"], "projected_balance_af": budget["projected_balance_af"], "remaining_pct": budget.get("remaining_pct")})
+    for row in reconciliation(repo):
+        variance_pct = row.get("variance_pct")
+        if variance_pct is not None and abs(float(variance_pct)) > 10:
+            anomalies.append({"code": "application_variance", "reconciliation_id": row["id"], "variance_pct": variance_pct})
+    blocking = missing_fields + ["stale_telemetry" for _ in stale_telemetry]
     deductions = len(blocking) * 18 + len(warnings) * 6 + len(anomalies) * 5
-    return {
+    next_action = "Reviewer can approve the package for export."
+    if missing_evidence:
+        next_action = f"Attach missing evidence for {len(missing_evidence)} telemetry gap(s) before export review."
+    payload = {
         "workflow_type": workflow_type,
+        "reporting_year": reporting_year,
         "readiness_percentage": max(0, 100 - deductions),
         "readiness_status": "blocked" if blocking else ("warning" if warnings else "ready"),
         "blocking_defects": blocking,
@@ -160,66 +227,68 @@ def readiness(workflow_type: str = "gears_groundwater_extractor_readiness", orga
         "stale_telemetry": stale_telemetry,
         "missing_required_fields": missing_fields,
         "unresolved_anomalies": anomalies,
-        "upcoming_deadlines": [j for j in list_jurisdictions(organization_id) if j["workflow_type"] == workflow_type],
+        "rule_pack": pack_metadata(pack),
+        "upcoming_deadlines": [j for j in repo.list_jurisdictions() if j["workflow_type"] == workflow_type],
         "disclaimer": DISCLAIMER,
-        "next_required_action": "Attach manual reading evidence for June telemetry gap before export review." if stale_telemetry else "Reviewer can approve the package for export.",
+        "next_required_action": next_action,
     }
+    if persist:
+        repo.persist_readiness_snapshot(payload, reporting_year)
+    return payload
 
 
-def status(organization_id: str | None = None) -> dict[str, Any]:
+def status(repo: ComplianceRepository, workflow_type: str = "gears_groundwater_extractor_readiness", *, demo_mode: bool = False) -> dict[str, Any]:
+    pack = resolve_workflow_pack(workflow_type)
+    readiness_payload = readiness(repo, workflow_type, persist=True)
+    budgets = water_budget_status(repo, pack)
+    reconciliation_rows = reconciliation(repo)
     return {
         "enabled": True,
         "feature_flag": "CALIFORNIA_COMPLIANCE_PACK_ENABLED",
-        "organization": deepcopy(VINEYARD_FIXTURE["organization"]) if _tenant_id(organization_id) == ORG_ID else {"id": _tenant_id(organization_id)},
-        "rule_pack": deepcopy(VINEYARD_FIXTURE["rule_pack"]),
-        "readiness": readiness(organization_id=organization_id),
+        "demo_mode": demo_mode,
+        "organization": repo.organization(),
+        "rule_pack": pack_metadata(pack),
+        "readiness": readiness_payload,
+        "water_budgets": budgets,
+        "reconciliation_summary": reconciliation_rows,
+        "upcoming_deadlines": readiness_payload["upcoming_deadlines"],
+        "missing_evidence_count": len(readiness_payload["missing_evidence"]),
+        "unresolved_anomaly_count": len(readiness_payload["unresolved_anomalies"]),
     }
 
 
-def _csv_export(package: dict[str, Any]) -> str:
-    out = io.StringIO()
-    writer = csv.writer(out)
-    writer.writerow(["section", "id", "field", "value", "truth_label"])
-    for measurement in package["measurements"]:
-        writer.writerow(["measurement", measurement["id"], "value", measurement["value"], measurement["truth_label"]])
-    for budget in package["water_budgets"]:
-        writer.writerow(["water_budget", budget["id"], "remaining_balance_af", budget["remaining_balance_af"], "calculated"])
-    return out.getvalue()
-
-
-def compose_export(export_type: str, workflow_type: str, organization_id: str | None = None) -> dict[str, Any]:
+def compose_export(repo: ComplianceRepository, export_type: str, workflow_type: str, *, storage_backend: str) -> dict[str, Any]:
+    pack = resolve_workflow_pack(workflow_type)
+    reporting_year = _reporting_year(repo, workflow_type)
+    if storage_backend != "disabled":
+        raise ValueError("Compliance object storage backend is not implemented")
+    if export_type != "json":
+        raise ValueError("Only JSON metadata package preparation is available while object storage is disabled")
+    export_id = f"export-{datetime.now(timezone.utc).strftime('%Y%m%d%H%M%S%f')}"
+    gaps = _telemetry_gaps(_groundwater_measurements(repo, reporting_year))
+    assumptions = [f"Telemetry gap for {gap['asset_id']} in {gap['reporting_period']} remains labeled {gap['truth_label']}." for gap in gaps]
     package = {
-        "id": f"export-{uuid.uuid4().hex[:10]}",
+        "id": export_id,
         "format": export_type,
         "workflow_type": workflow_type,
-        "organization_id": _tenant_id(organization_id),
+        "reporting_year": reporting_year,
+        "organization_id": repo.tenant_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
-        "jurisdictions": list_jurisdictions(organization_id),
-        "assets": {"parcels": list_assets("parcels", organization_id), "wells": list_assets("wells", organization_id), "meters": list_assets("meters", organization_id)},
-        "measurements": list_measurements(organization_id),
-        "water_budgets": water_budget_status(organization_id),
-        "reconciliation": reconciliation(organization_id),
-        "readiness": readiness(workflow_type, organization_id),
-        "provenance": {"source": "AGRO-AI compliance kernel", "truth_labels_required": sorted(TRUTH_LABELS), "direct_filing": False},
-        "assumptions": ["Missing June telemetry for SV-WELL-02 is estimated and flagged; not a certified measurement."],
-        "missing_data_flags": ["SV-WELL-02 June telemetry gap"],
+        "jurisdictions": repo.list_jurisdictions(),
+        "assets": {"parcels": repo.list_parcels(), "wells": repo.list_wells(), "meters": repo.list_meters()},
+        "measurements": repo.list_measurements(),
+        "water_budgets": water_budget_status(repo, pack),
+        "reconciliation": reconciliation(repo),
+        "readiness": readiness(repo, workflow_type, persist=True),
+        "provenance": {"source": "AGRO-AI compliance kernel", "truth_labels_required": sorted(TRUTH_LABELS), "direct_filing": False, "object_storage": storage_backend, "secure_download_available": False},
+        "assumptions": assumptions,
+        "missing_data_flags": [f"{gap['asset_id']}:{gap['reporting_period']}" for gap in gaps],
         "methodology": "Values are reported, measured, estimated, calculated, or AI-inferred according to record-level truth labels. Estimates remain explicitly labeled.",
         "disclaimer": DISCLAIMER,
+        "storage_status": "metadata_persisted_object_storage_disabled",
     }
-    if export_type == "csv":
-        package["content"] = _csv_export(package)
-    elif export_type == "xlsx":
-        package["content"] = {"workbook_sheets": ["cover", "gears", "sgma", "measurements", "evidence", "methodology"]}
-    elif export_type == "pdf":
-        package["content"] = "Human-readable PDF package placeholder with cover, readiness summary, evidence table, and methodology."
-    else:
-        package["content"] = deepcopy(package)
-    EXPORTS[package["id"]] = package
-    return deepcopy(package)
+    return repo.persist_export_metadata(package, export_type, workflow_type, storage_backend)
 
 
-def get_export(export_id: str, organization_id: str | None = None) -> dict[str, Any] | None:
-    package = EXPORTS.get(export_id)
-    if not package or package.get("organization_id") != _tenant_id(organization_id):
-        return None
-    return deepcopy(package)
+def get_export(repo: ComplianceRepository, export_id: str) -> dict[str, Any] | None:
+    return repo.get_export(export_id)

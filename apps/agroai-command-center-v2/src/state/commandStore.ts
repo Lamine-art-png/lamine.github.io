@@ -16,7 +16,7 @@ import type {
 } from "../api/contracts";
 
 export type ScenarioId = "alpha-vineyard" | "almond-orchard" | "multi-farm" | "partner-validation";
-export type Route = "command" | "sources" | "reports" | "integrations" | "audit" | "settings";
+export type Route = "command" | "sources" | "reports" | "integrations" | "audit" | "settings" | "compliance";
 
 export interface ReportModel {
   farm: string;
