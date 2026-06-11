@@ -59,6 +59,7 @@ def _table(name: str, metadata: sa.MetaData, *columns, **kwargs):
 def _create_historical_002(engine) -> None:
     Base.metadata.create_all(bind=engine, tables=[Tenant.__table__, Block.__table__])
     metadata = sa.MetaData()
+    sa.Table("tenants", metadata, autoload_with=engine)
     truth, workflow = _enum_types()
     tenant_fk = lambda: sa.ForeignKey("tenants.id")
     _table("compliance_jurisdictions", metadata, sa.Column("tenant_id", sa.String(), tenant_fk(), nullable=False), sa.Column("state", sa.String(), nullable=False), sa.Column("county", sa.String(), nullable=False), sa.Column("basin", sa.String()), sa.Column("subbasin", sa.String()), sa.Column("gsa", sa.String()), sa.Column("district", sa.String()), sa.Column("jurisdiction_pack", sa.String(), nullable=False), sa.Column("reporting_year", sa.String(), nullable=False), sa.Column("reporting_deadline", sa.Date(), nullable=False), sa.Column("workflow_type", workflow, nullable=False), sa.Column("created_at", sa.DateTime()))
