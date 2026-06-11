@@ -34,7 +34,7 @@ The attached `AGRO-AI_SGMA_GEARS_Data_Dictionary.xlsx` was requested as the cano
 
 ## Endpoint documentation
 
-All endpoints require the feature flag and are tenant-scoped by `X-Organization-Id` when supplied.
+All endpoints require the feature flag. Production tenant scope is derived server-side from a verified `X-API-Key`; `X-Organization-Id` is never trusted as authority and requests are rejected when the header conflicts with the authenticated tenant. Non-production fixtures require `COMPLIANCE_DEMO_FIXTURES_ENABLED=true` plus `X-Compliance-Demo-Token`, and the token is pinned to the approved fixture tenant.
 
 - `GET /v1/compliance/status`
 - `GET /v1/compliance/jurisdictions`
@@ -46,8 +46,8 @@ All endpoints require the feature flag and are tenant-scoped by `X-Organization-
 - `GET /v1/compliance/reconciliation`
 - `GET /v1/compliance/water-budgets`
 - `GET /v1/compliance/readiness?workflow_type=gears_groundwater_extractor_readiness`
+- `POST /v1/compliance/readiness/snapshots`
 - `POST /v1/compliance/evidence`
-- `GET /v1/compliance/audit-log`
 - `POST /v1/compliance/exports`
 - `GET /v1/compliance/exports/{export_id}`
 
@@ -55,15 +55,49 @@ All endpoints require the feature flag and are tenant-scoped by `X-Organization-
 
 ```bash
 cd agroai_api
-CALIFORNIA_COMPLIANCE_PACK_ENABLED=true pytest tests/unit/test_compliance_pack.py
+pytest tests/unit/test_compliance_pack.py
 ```
 
 ## Railway deployment checks
 
 1. Set `CALIFORNIA_COMPLIANCE_PACK_ENABLED=true` only for tenants/environments approved for controlled rollout.
-2. Run `alembic upgrade head` and verify `002_california_compliance_pack` is applied.
-3. Smoke test `GET /v1/health` and `GET /v1/compliance/status` with a tenant header.
-4. Confirm logs do not contain direct-filing claims or regulator-endorsement language.
+2. Before touching production data, run `python -m py_compile alembic/versions/002_california_compliance_pack.py alembic/versions/003_global_compliance_kernel.py scripts/compliance_migration_preflight.py` and `alembic heads` against the release image.
+3. Take a Railway-managed backup or run the migration first against a restored copy of the production database.
+4. Run `python scripts/compliance_migration_preflight.py --database-url "$DATABASE_URL"` to confirm the starting revision and schema shape before any migration command.
+5. Run `alembic current` to confirm the preflight starting revision, then run `alembic upgrade head` and verify `002_california_compliance_pack` and `003_global_compliance_kernel` are applied.
+6. Confirm PostgreSQL no longer retains an unused `compliance_workflow_type` enum after migration 003, while `compliance_truth_label` remains available for migration 002 tables.
+7. Smoke test `GET /v1/health` and `GET /v1/compliance/status` with a verified server-side API key or explicitly labeled non-production demo token.
+8. Confirm logs do not contain direct-filing claims or regulator-endorsement language.
+
+### Railway migration decision tree
+
+**A. Clean baseline with no compliance tables**
+
+1. Take a Railway-managed backup.
+2. Run `python scripts/compliance_migration_preflight.py --database-url "$DATABASE_URL"` and confirm `A_clean_baseline_no_compliance_tables`.
+3. Run `alembic upgrade head`.
+4. Verify `alembic current`, compliance table creation, and a read-only `GET /v1/compliance/status` smoke test.
+
+**B. Database already stamped at 002**
+
+1. Take a Railway-managed backup.
+2. Run `python scripts/compliance_migration_preflight.py --database-url "$DATABASE_URL"` and confirm revision `002_california_compliance_pack` with `B_migration_002_schema`.
+3. Run `alembic upgrade head`.
+4. Verify migration 003 additions, including `parcel_identifier` backfill and `compliance_export_metadata`.
+
+**C. Compliance tables exist but Alembic is not stamped at 002**
+
+1. Stop before running production migrations.
+2. Restore a production copy in staging.
+3. Compare the live schema carefully against the historical migration 002 shape and existing row data.
+4. Only after manual verification, use an explicit stamp-and-upgrade procedure in the restored environment first.
+5. Never auto-stamp production blindly.
+
+**D. Partial or ambiguous schema**
+
+1. Stop.
+2. Do not migrate.
+3. Reconcile the schema manually before any stamp or upgrade command.
 
 ## Cloudflare Pages deployment checks
 
@@ -74,6 +108,6 @@ CALIFORNIA_COMPLIANCE_PACK_ENABLED=true pytest tests/unit/test_compliance_pack.p
 ## Known limitations
 
 - No direct filing into SGMA Portal or GEARS.
-- The PDF/XLSX composers return structured placeholders for Phase 1 rather than binary rendered files.
+- PDF/XLSX binary export is not implemented; object storage backends are not implemented and fail closed.
 - The workbook field dictionary was unavailable in this repository and should be reconciled before broader rollout.
 - The fixture is representative California vineyard data, not customer production data.

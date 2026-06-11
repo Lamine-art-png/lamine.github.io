@@ -43,7 +43,11 @@ def init_db():
         tenant, client, block, telemetry, event,
         recommendation, schedule, webhook, usage_metering, audit_log, compliance
     )
-    Base.metadata.create_all(bind=engine)
+    non_compliance_tables = [
+        table for table in Base.metadata.sorted_tables
+        if not table.name.startswith("compliance_")
+    ]
+    Base.metadata.create_all(bind=engine, tables=non_compliance_tables)
 
     # Add columns to existing tables that create_all() won't handle.
     # Each ALTER is idempotent (IF NOT EXISTS or caught exception).

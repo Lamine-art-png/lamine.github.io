@@ -7,6 +7,7 @@ import { ReportsPage } from "./pages/ReportsPage";
 import { IntegrationsPage } from "./pages/IntegrationsPage";
 import { AuditPage } from "./pages/AuditPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { CompliancePage } from "./pages/CompliancePage";
 import { actions, useCommandStore } from "./state/commandStore";
 
 export function App() {
@@ -28,6 +29,7 @@ export function App() {
       {route === "integrations" && <IntegrationsPage />}
       {route === "audit" && <AuditPage />}
       {route === "settings" && <SettingsPage />}
+      {route === "compliance" && <CompliancePage />}
     </AppShell>
   );
 }

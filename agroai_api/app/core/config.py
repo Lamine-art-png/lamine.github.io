@@ -43,6 +43,11 @@ class Settings(BaseSettings):
     ENABLE_WEBHOOKS: bool = True
     ENABLE_METERING: bool = True
     CALIFORNIA_COMPLIANCE_PACK_ENABLED: bool = False
+    COMPLIANCE_DEMO_FIXTURES_ENABLED: bool = False
+    COMPLIANCE_DEMO_TOKEN: str = ""
+    COMPLIANCE_DEMO_TENANT_ID: str = "org-ca-vineyard-001"
+    COMPLIANCE_ALLOW_BROWSER_TENANT_API_KEYS: bool = False
+    COMPLIANCE_OBJECT_STORAGE_BACKEND: str = "disabled"
 
     # Scheduler
     SYNC_INTERVAL_MINUTES: int = 15  # How often to run WiseConn sync

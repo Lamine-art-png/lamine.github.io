@@ -10,5 +10,6 @@
     portalDomain: "https://app.agroai-pilot.com",
     liveWiseConnZoneId: "162803",
     CALIFORNIA_COMPLIANCE_PACK_ENABLED: false,
+    COMPLIANCE_DEMO_TOKEN: "",
   };
 })();

@@ -8,7 +8,10 @@ const PRIMARY: { route: Route; label: string }[] = [
   { route: "integrations", label: "Integrations" },
 ];
 
+const COMPLIANCE_ENABLED = import.meta.env.VITE_COMPLIANCE_ENABLED === "true";
+
 const SECONDARY: { route: Route; label: string }[] = [
+  ...(COMPLIANCE_ENABLED ? [{ route: "compliance" as Route, label: "Compliance" }] : []),
   { route: "audit", label: "Audit" },
   { route: "settings", label: "Settings" },
 ];

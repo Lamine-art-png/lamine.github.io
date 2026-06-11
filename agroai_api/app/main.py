@@ -79,6 +79,9 @@ app.include_router(intelligence_router, prefix="/v1")
 from app.api.v1.workbench import router as workbench_router  # noqa: E402
 app.include_router(workbench_router, prefix="/v1")
 
+from app.api.v1.talgil import router as talgil_router  # noqa: E402
+app.include_router(talgil_router, prefix="/v1")
+
 from app.api.v1.compliance import router as compliance_router  # noqa: E402
 app.include_router(compliance_router, prefix="/v1")
 

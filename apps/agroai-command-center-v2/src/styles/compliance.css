@@ -1,0 +1,23 @@
+.compliance-page {
+  display: grid;
+  gap: 1rem;
+}
+
+.compliance-hero {
+  border-color: rgba(120, 180, 120, 0.35);
+}
+
+.compliance-warning {
+  border-color: rgba(245, 158, 11, 0.45);
+  background: rgba(245, 158, 11, 0.08);
+}
+
+.compliance-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.compliance-span {
+  grid-column: 1 / -1;
+}

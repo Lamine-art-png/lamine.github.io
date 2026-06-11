@@ -8,8 +8,11 @@ class ComplianceJurisdiction(Base):
     __tablename__ = "compliance_jurisdictions"
     id = Column(String, primary_key=True)
     tenant_id = Column(String, ForeignKey("tenants.id"), nullable=False, index=True)
-    state = Column(String, nullable=False, index=True)
-    county = Column(String, nullable=False, index=True)
+    country = Column(String, nullable=True, index=True)
+    jurisdiction_level = Column(String, nullable=True, index=True)
+    authority_name = Column(String, nullable=True, index=True)
+    state = Column(String, nullable=True, index=True)
+    county = Column(String, nullable=True, index=True)
     basin = Column(String, nullable=True, index=True)
     subbasin = Column(String, nullable=True, index=True)
     gsa = Column(String, nullable=True, index=True)
@@ -38,11 +41,14 @@ class ComplianceParcel(Base):
     __tablename__ = "compliance_parcels"
     id = Column(String, primary_key=True)
     tenant_id = Column(String, ForeignKey("tenants.id"), nullable=False, index=True)
-    apn = Column(String, nullable=False, index=True)
+    apn = Column(String, nullable=True, index=True)
+    parcel_identifier = Column(String, nullable=False, index=True)
+    country = Column(String, nullable=True, index=True)
+    state = Column(String, nullable=True, index=True)
     geometry_ref = Column(Text, nullable=True)
     geometry = Column(JSON, nullable=True)
     county = Column(String, nullable=True, index=True)
-    __table_args__ = (UniqueConstraint("tenant_id", "apn", name="uq_compliance_parcel_tenant_apn"),)
+    __table_args__ = (UniqueConstraint("tenant_id", "parcel_identifier", name="uq_compliance_parcel_tenant_identifier"),)
 
 
 class ComplianceWell(Base):
@@ -51,8 +57,8 @@ class ComplianceWell(Base):
     tenant_id = Column(String, ForeignKey("tenants.id"), nullable=False, index=True)
     parcel_id = Column(String, ForeignKey("compliance_parcels.id"), nullable=True, index=True)
     well_identifier = Column(String, nullable=False, index=True)
-    latitude = Column(Float, nullable=False)
-    longitude = Column(Float, nullable=False)
+    latitude = Column(Float, nullable=True)
+    longitude = Column(Float, nullable=True)
     well_capacity = Column(Float, nullable=True)
     capacity_unit = Column(String, default="gpm")
     __table_args__ = (UniqueConstraint("tenant_id", "well_identifier", name="uq_compliance_well_tenant_identifier"),)
@@ -104,6 +110,7 @@ class ComplianceExecutionLedger(Base):
     measured_extraction_id = Column(String, nullable=True, index=True)
     variance = Column(Float, nullable=True)
     operator_note = Column(Text, nullable=True)
+    payload = Column(JSON, nullable=True)
     truth_labels = Column(JSON, nullable=False)
     reporting_period = Column(String, nullable=False, index=True)
 
@@ -148,6 +155,19 @@ class ComplianceRulePack(Base):
     warning_thresholds = Column(JSON, nullable=False)
     export_schema = Column(JSON, nullable=False)
     disclaimer_text = Column(Text, nullable=False)
+
+
+class ComplianceExportMetadata(Base):
+    __tablename__ = "compliance_export_metadata"
+    id = Column(String, primary_key=True)
+    tenant_id = Column(String, ForeignKey("tenants.id"), nullable=False, index=True)
+    export_type = Column(String, nullable=False, index=True)
+    workflow_type = Column(String, nullable=False, index=True)
+    storage_backend = Column(String, nullable=False, index=True)
+    storage_ref = Column(Text, nullable=True)
+    checksum = Column(String, nullable=True, index=True)
+    payload = Column(JSON, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 
 class ComplianceReadinessSnapshot(Base):
