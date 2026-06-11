@@ -32,6 +32,7 @@ export function compareEligibleWindows({ recommendation, windows, tariff, mode =
     agronomicConstraint: recommendation?.timing || null,
     windows: priced,
     bestWindow: priced[0] || null,
+    representativeDemo: mode === "demo" && Boolean(tariff.representativeDemo),
     limitations: ["Cost optimization never overrides agronomic timing or field safety constraints."],
   };
 }
@@ -55,10 +56,10 @@ export function pumpingRuntimeEvent(input) {
     module: "energy",
     fieldId: input.fieldId,
     sourceRecordId: input.id,
-    sourceMode: input.sourceMode || "manual",
+    sourceMode: input.representativeDemo ? "demo" : input.sourceMode || "manual",
     truthLabel: input.measuredKwh != null || input.measuredCost != null ? "measured" : "estimated",
     occurredAt: input.timestamp || new Date().toISOString(),
-    payload: input,
+    payload: { ...input, representativeDemo: Boolean(input.representativeDemo) },
     limitations: input.limitations || [],
   });
 }

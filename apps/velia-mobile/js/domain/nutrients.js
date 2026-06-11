@@ -13,8 +13,10 @@ export function createNutrientRecord(input) {
   if (finiteNumber(input.waterVolume) && !finiteNumber(input.concentration)) missingData.push("nutrient concentration");
   const canCalculate = finiteNumber(input.waterVolume) && finiteNumber(input.concentration);
   const hasApplied = finiteNumber(input.appliedQuantity);
+  const hasPlanned = finiteNumber(input.plannedQuantity);
   const appliedQuantity = hasApplied ? Number(input.appliedQuantity) : canCalculate ? Number(input.waterVolume) * Number(input.concentration) : null;
   const truthLabel = hasApplied ? "reported" : canCalculate ? "calculated" : "unknown";
+  const recordStatus = appliedQuantity != null ? "applied" : hasPlanned && !missingData.length ? "planned" : "draft_missing_inputs";
   return {
     id: input.id || `nutrient-${Date.now()}`,
     fieldId: input.fieldId || null,
@@ -32,26 +34,31 @@ export function createNutrientRecord(input) {
     linkedIrrigationEventId: input.linkedIrrigationEventId || null,
     provenance: input.provenance || { source: "manual", assumptions: [], limitations: [] },
     truthLabel,
+    recordStatus,
     notes: input.notes || "",
     missingData,
     nextEvidenceRequired: missingData[0] || null,
     demo: Boolean(input.demo),
+    representativeDemo: Boolean(input.representativeDemo || input.demo),
   };
 }
 
 export function nutrientLedgerEvent(record) {
+  const eventType = record.applicationMethod === "fertigation"
+    ? record.recordStatus === "applied" ? "fertigation_applied" : "fertigation_plan"
+    : "nutrient_application";
   return createTerrisFieldEvent({
-    eventType: record.applicationMethod === "fertigation" ? "fertigation_applied" : "nutrient_application",
+    eventType,
     module: "nutrients",
     fieldId: record.fieldId,
     blockId: record.blockId,
     cropCycleId: record.cropCycleId,
     sourceRecordId: record.id,
-    sourceMode: "manual",
-    truthLabel: record.truthLabel === "unknown" ? "reported" : record.truthLabel,
+    sourceMode: record.representativeDemo ? "demo" : "manual",
+    truthLabel: record.truthLabel,
     occurredAt: record.timestamp,
     dataQuality: record.missingData.length ? "blocked" : "medium",
-    payload: record,
+    payload: { ...record, recordStatus: record.recordStatus },
     limitations: record.missingData.length ? [`Withheld calculation until ${record.missingData.join(" and ")} is available.`] : [],
   });
 }

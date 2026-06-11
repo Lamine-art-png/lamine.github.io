@@ -20,15 +20,49 @@ export function createEvidenceArtifact(input) {
   };
 }
 
+export function filterEvidenceEvents(events = [], scope = {}) {
+  const start = scope.dateWindow?.start ? new Date(`${scope.dateWindow.start}T00:00:00.000Z`).getTime() : null;
+  const end = scope.dateWindow?.end ? new Date(`${scope.dateWindow.end}T23:59:59.999Z`).getTime() : null;
+  return events.filter((event) => {
+    if (scope.moduleScope && event.module !== scope.moduleScope) return false;
+    if (scope.farmScope && event.farmId && event.farmId !== scope.farmScope) return false;
+    if (scope.fieldScope && event.fieldId !== scope.fieldScope) return false;
+    if (scope.blockScope && event.blockId !== scope.blockScope) return false;
+    const occurred = new Date(event.occurredAt || event.recordedAt || 0).getTime();
+    if (start != null && occurred < start) return false;
+    if (end != null && occurred > end) return false;
+    return true;
+  });
+}
+
+export function reviewRowsForEvents(events = []) {
+  return events.map((event) => ({
+    id: event.id,
+    eventType: event.eventType,
+    fieldId: event.fieldId || null,
+    occurredAt: event.occurredAt || event.recordedAt || null,
+    truthLabel: event.truthLabel || "unknown",
+    dataQuality: event.dataQuality || "unknown",
+  }));
+}
+
 export function createEvidencePacket(input) {
-  const events = input.events || [];
+  const scope = {
+    moduleScope: input.moduleScope || "",
+    farmScope: input.farmScope || "",
+    fieldScope: input.fieldScope || null,
+    blockScope: input.blockScope || null,
+    dateWindow: input.dateWindow || null,
+  };
+  const events = input.preFiltered ? input.events || [] : filterEvidenceEvents(input.events || [], scope);
   const artifacts = input.artifacts || [];
   const missingInputs = input.missingInputs || [];
   const requiredMissing = [];
   if (!input.moduleScope) requiredMissing.push("module scope");
   if (!input.farmScope) requiredMissing.push("farm scope");
   if (!input.dateWindow?.start || !input.dateWindow?.end) requiredMissing.push("date window");
-  if (!events.length) requiredMissing.push("included event review");
+  if (!events.length) requiredMissing.push("filtered ledger evidence");
+  if (!input.reviewConfirmed) requiredMissing.push("included event review confirmation");
   const allMissing = [...requiredMissing, ...missingInputs];
   return {
     id: input.id || `packet-${Date.now()}`,
@@ -39,6 +73,8 @@ export function createEvidencePacket(input) {
     fieldScope: input.fieldScope || null,
     blockScope: input.blockScope || null,
     dateWindow: input.dateWindow || null,
+    reviewConfirmed: Boolean(input.reviewConfirmed),
+    reviewRows: reviewRowsForEvents(events),
     includedEventIds: events.map((event) => event.id),
     includedEvidenceArtifactIds: artifacts.map((artifact) => artifact.id),
     assumptions: input.assumptions || [],
@@ -47,6 +83,7 @@ export function createEvidencePacket(input) {
     generatedAt: new Date().toISOString(),
     truthLabelSummary: [...new Set(events.map((event) => event.truthLabel).filter(Boolean))],
     disclaimer: TERRIS_PROOF_DISCLAIMER,
+    representativeDemo: Boolean(input.representativeDemo),
   };
 }
 
@@ -56,10 +93,10 @@ export function evidencePacketEvent(packet) {
     module: "proof",
     fieldId: packet.fieldScope,
     sourceRecordId: packet.id,
-    sourceMode: "system",
+    sourceMode: packet.representativeDemo ? "demo" : "system",
     truthLabel: "calculated",
     dataQuality: packet.status === "draft_missing_evidence" ? "blocked" : "medium",
-    payload: packet,
+    payload: { ...packet, representativeDemo: Boolean(packet.representativeDemo) },
     limitations: packet.limitations,
   });
 }

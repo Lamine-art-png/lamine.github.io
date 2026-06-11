@@ -30,6 +30,7 @@ export function createFieldTask(input) {
     attachments: input.attachments || [],
     provenance: input.provenance || { source: "system" },
     offlineSyncState: input.offlineSyncState || "synced",
+    representativeDemo: Boolean(input.representativeDemo),
   };
 }
 
@@ -52,10 +53,10 @@ export function taskEvent(task, completed = false) {
     fieldId: task.fieldId,
     blockId: task.blockId,
     sourceRecordId: task.id,
-    sourceMode: "system",
+    sourceMode: task.representativeDemo ? "demo" : "system",
     truthLabel: "reported",
     occurredAt: completed ? task.completedAt : undefined,
-    payload: task,
+    payload: { ...task, representativeDemo: Boolean(task.representativeDemo) },
     attachments: task.attachments || [],
     queuedForSync: task.offlineSyncState === "queued",
     limitations: completed ? ["Task completion is not agronomic verification."] : [],

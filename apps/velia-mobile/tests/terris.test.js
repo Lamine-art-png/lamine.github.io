@@ -2,12 +2,12 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { storage } from "../js/services/storage.js";
-import { createTerrisFieldEvent, appendLedgerEvent, fieldObservationEvent, recommendationFingerprint, safeRandomUuid, waterAppliedEvent, waterRecommendationEvent } from "../js/domain/fieldLedger.js";
+import { createTerrisFieldEvent, appendLedgerEvent, appendRecommendationEventIfNew, fieldObservationEvent, recommendationFingerprint, safeRandomUuid, waterAppliedEvent, waterRecommendationEvent } from "../js/domain/fieldLedger.js";
 import { terrisModuleRegistryForMode, TERRIS_FEATURE_FLAGS } from "../js/domain/moduleRegistry.js";
 import { createNutrientRecord, nutrientLedgerEvent, plannedAppliedVariance } from "../js/domain/nutrients.js";
 import { compareEligibleWindows, pumpingRuntimeEvent } from "../js/domain/energy.js";
 import { completeFieldTask, createFieldTask, taskEvent } from "../js/domain/ops.js";
-import { createEvidencePacket, TERRIS_PROOF_DISCLAIMER } from "../js/domain/proof.js";
+import { createEvidencePacket, evidencePacketEvent, filterEvidenceEvents, TERRIS_PROOF_DISCLAIMER } from "../js/domain/proof.js";
 import { createInitialState, hydrateState } from "../js/state/store.js";
 import { createAttachmentMetadata, createIrrigationLog, createObservation, createVoiceTimelineEntry } from "../js/state/actions.js";
 
@@ -72,9 +72,11 @@ test("water recommendation fingerprint is stable and prevents duplicate ledger a
   const fp2 = recommendationFingerprint({ fieldId: "f1", recommendation, sourceMode: "backend", decisionVersion: "v1" });
   assert.equal(fp1, fp2);
   const event = waterRecommendationEvent({ field, recommendation, weather: {}, fingerprint: fp1 });
-  const state = appendLedgerEvent(createInitialState(), event);
-  const duplicated = (state.fieldLedgerEvents || []).some((x) => x.payload?.fingerprint === fp2);
-  assert.equal(duplicated, true);
+  const first = appendRecommendationEventIfNew(createInitialState(), event);
+  const second = appendRecommendationEventIfNew(first.state, waterRecommendationEvent({ field, recommendation, weather: {}, fingerprint: fp2 }));
+  assert.equal(first.appended, true);
+  assert.equal(second.appended, false);
+  assert.equal(second.state.fieldLedgerEvents.length, 1);
 });
 
 test("render and recommendation helpers do not append ledger events or persist state", () => {
@@ -86,6 +88,19 @@ test("render and recommendation helpers do not append ledger events or persist s
     assert.ok(!body.includes("appendLedgerEvent"));
     assert.ok(!body.includes("persist()"));
   }
+  assert.ok(appSource.includes("recordLocalRecommendationTransitions"));
+  assert.ok(appSource.includes("recordRecommendationLedgerEvent(field, recommendation"));
+});
+
+test("beta UI renders locked cards instead of disabled forms and handlers are guarded", () => {
+  const appSource = fs.readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
+  assert.ok(appSource.includes("function isTerrisModuleEnabled"));
+  assert.ok(appSource.includes("betaLockedCard"));
+  assert.ok(appSource.includes('data-module-locked="${h(key)}"'));
+  assert.ok(appSource.includes('if (!isTerrisModuleEnabled("nutrients"))'));
+  assert.ok(appSource.includes('if (!isTerrisModuleEnabled("ops"))'));
+  assert.ok(appSource.includes('if (!isTerrisModuleEnabled("proof"))'));
+  assert.ok(!appSource.includes("Complete sample evidence task"));
 });
 
 test("module registry gates beta modules in real mode and exposes representative demo surfaces", () => {
@@ -116,8 +131,22 @@ test("nutrients beta withholds calculated amount when required values are missin
   const complete = createNutrientRecord({ fieldId: "f1", nutrientType: "N", sourceType: "fertilizer", waterVolume: 10, concentration: 2, plannedQuantity: 25, unit: "kg", applicationMethod: "fertigation" });
   assert.equal(complete.appliedQuantity, 20);
   assert.equal(complete.truthLabel, "calculated");
+  assert.equal(complete.recordStatus, "applied");
   assert.equal(plannedAppliedVariance(complete), -5);
   assert.equal(nutrientLedgerEvent(complete).eventType, "fertigation_applied");
+});
+
+test("nutrient events preserve unknown truth labels and distinguish planned fertigation", () => {
+  const planned = createNutrientRecord({ fieldId: "f1", nutrientType: "N", sourceType: "fertilizer", plannedQuantity: 20, unit: "kg", applicationMethod: "fertigation" });
+  const event = nutrientLedgerEvent(planned);
+  assert.equal(planned.appliedQuantity, null);
+  assert.equal(planned.truthLabel, "unknown");
+  assert.equal(planned.recordStatus, "planned");
+  assert.equal(event.truthLabel, "unknown");
+  assert.equal(event.eventType, "fertigation_plan");
+  const draft = createNutrientRecord({ fieldId: "f1", nutrientType: "N", sourceType: "fertilizer", unit: "kg", applicationMethod: "broadcast" });
+  assert.equal(draft.recordStatus, "draft_missing_inputs");
+  assert.equal(nutrientLedgerEvent(draft).payload.recordStatus, "draft_missing_inputs");
 });
 
 test("energy beta withholds real-mode comparison without pump and tariff evidence", () => {
@@ -152,9 +181,56 @@ test("ops task completion requires notes and preserves attachments", () => {
 test("proof packet is draft when required evidence is missing", () => {
   const packet = createEvidencePacket({ moduleScope: "water", farmScope: "farm-1", fieldScope: "f1", dateWindow: { start: "2026-06-01", end: "2026-06-02" }, events: [], missingInputs: ["controller confirmation"] });
   assert.equal(packet.status, "draft_missing_evidence");
-  assert.ok(packet.missingInputs.includes("included event review"));
+  assert.ok(packet.missingInputs.includes("filtered ledger evidence"));
+  assert.ok(packet.missingInputs.includes("included event review confirmation"));
   assert.equal(packet.disclaimer, TERRIS_PROOF_DISCLAIMER);
   assert.ok(!/official regulatory filing support/i.test(packet.disclaimer));
+});
+
+test("proof packet filters events by scope, date window, and requires explicit review for ready status", () => {
+  const events = [
+    createTerrisFieldEvent({ id: "e1", eventType: "irrigation_applied", module: "water", farmId: "farm-1", fieldId: "f1", blockId: "b1", occurredAt: "2026-06-02T12:00:00.000Z", truthLabel: "reported", dataQuality: "medium" }),
+    createTerrisFieldEvent({ id: "e2", eventType: "nutrient_application", module: "nutrients", farmId: "farm-1", fieldId: "f1", occurredAt: "2026-06-02T12:00:00.000Z", truthLabel: "reported", dataQuality: "medium" }),
+    createTerrisFieldEvent({ id: "e3", eventType: "irrigation_applied", module: "water", farmId: "farm-2", fieldId: "f1", occurredAt: "2026-06-02T12:00:00.000Z", truthLabel: "reported", dataQuality: "medium" }),
+    createTerrisFieldEvent({ id: "e4", eventType: "irrigation_applied", module: "water", farmId: "farm-1", fieldId: "f1", occurredAt: "2026-05-30T12:00:00.000Z", truthLabel: "reported", dataQuality: "medium" }),
+  ];
+  const scope = { moduleScope: "water", farmScope: "farm-1", fieldScope: "f1", blockScope: "b1", dateWindow: { start: "2026-06-01", end: "2026-06-03" } };
+  const filtered = filterEvidenceEvents(events, scope);
+  assert.deepEqual(filtered.map((event) => event.id), ["e1"]);
+  const unreviewed = createEvidencePacket({ ...scope, events, reviewConfirmed: false });
+  assert.equal(unreviewed.status, "draft_missing_evidence");
+  const reviewed = createEvidencePacket({ ...scope, events, reviewConfirmed: true });
+  assert.equal(reviewed.status, "ready_operational_record");
+  assert.deepEqual(reviewed.includedEventIds, ["e1"]);
+  assert.equal(reviewed.reviewRows[0].eventType, "irrigation_applied");
+});
+
+test("representative demo metadata reaches beta records and ledger events", () => {
+  const nutrient = createNutrientRecord({ fieldId: "f1", nutrientType: "N", sourceType: "fertilizer", plannedQuantity: 10, unit: "kg", applicationMethod: "fertigation", representativeDemo: true });
+  assert.equal(nutrient.representativeDemo, true);
+  assert.equal(nutrientLedgerEvent(nutrient).sourceMode, "demo");
+  const task = createFieldTask({ title: "Demo task", module: "ops", taskType: "inspect_field", fieldId: "f1", representativeDemo: true });
+  assert.equal(taskEvent(task).sourceMode, "demo");
+  const packet = createEvidencePacket({ moduleScope: "water", farmScope: "farm-1", dateWindow: { start: "2026-06-01", end: "2026-06-03" }, events: [createTerrisFieldEvent({ eventType: "irrigation_applied", module: "water", farmId: "farm-1", fieldId: "f1", occurredAt: "2026-06-02T12:00:00.000Z" })], reviewConfirmed: true, representativeDemo: true });
+  assert.equal(packet.representativeDemo, true);
+  assert.equal(evidencePacketEvent(packet).sourceMode, "demo");
+});
+
+test("materially changed recommendation creates one new event and local/backend are distinguishable", () => {
+  const field = { id: "f1" };
+  const local = { action: "monitor", urgency: "low", timing: "today", sourceMode: "local" };
+  const changed = { action: "irrigate", urgency: "high", timing: "today", sourceMode: "local" };
+  const localEvent = waterRecommendationEvent({ field, recommendation: local, weather: {}, fingerprint: recommendationFingerprint({ fieldId: "f1", recommendation: local, sourceMode: "local", decisionVersion: "d1" }) });
+  const first = appendRecommendationEventIfNew(createInitialState(), localEvent);
+  const duplicate = appendRecommendationEventIfNew(first.state, localEvent);
+  const changedEvent = waterRecommendationEvent({ field, recommendation: changed, weather: {}, fingerprint: recommendationFingerprint({ fieldId: "f1", recommendation: changed, sourceMode: "local", decisionVersion: "d1" }) });
+  const second = appendRecommendationEventIfNew(duplicate.state, changedEvent);
+  const backendEvent = waterRecommendationEvent({ field, recommendation: { ...changed, sourceMode: "backend" }, weather: {}, fingerprint: recommendationFingerprint({ fieldId: "f1", recommendation: changed, sourceMode: "backend", decisionVersion: "d1" }) });
+  const third = appendRecommendationEventIfNew(second.state, backendEvent);
+  assert.equal(duplicate.appended, false);
+  assert.equal(second.appended, true);
+  assert.equal(third.appended, true);
+  assert.deepEqual(third.state.fieldLedgerEvents.map((event) => event.sourceMode).sort(), ["backend", "local", "local"]);
 });
 
 test("offline voice, photo metadata, translation, and field association remain explicit", () => {

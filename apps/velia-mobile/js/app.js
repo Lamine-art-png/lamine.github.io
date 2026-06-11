@@ -8,12 +8,12 @@ import { applyDemoScenario, applyOnboarding, loadState, recordRecommendationHist
 import { createIrrigationLog, createObservation, createVoiceTimelineEntry } from "./state/actions.js";
 import { createAiOrchestrator } from "./ai/aiOrchestrator.js";
 import { memoryStore } from "./ai/memoryStore.js";
-import { appendLedgerEvent, fieldObservationEvent, recommendationFingerprint, waterAppliedEvent, waterRecommendationEvent } from "./domain/fieldLedger.js";
+import { appendLedgerEvent, appendRecommendationEventIfNew, fieldObservationEvent, recommendationFingerprint, waterAppliedEvent, waterRecommendationEvent } from "./domain/fieldLedger.js";
 import { terrisModuleRegistryForMode } from "./domain/moduleRegistry.js";
 import { createNutrientRecord, nutrientLedgerEvent } from "./domain/nutrients.js";
 import { compareEligibleWindows, demoEnergyComparison } from "./domain/energy.js";
 import { completeFieldTask, createFieldTask, taskEvent } from "./domain/ops.js";
-import { createEvidencePacket, evidencePacketEvent, TERRIS_PROOF_DISCLAIMER } from "./domain/proof.js";
+import { createEvidencePacket, evidencePacketEvent, filterEvidenceEvents, reviewRowsForEvents, TERRIS_PROOF_DISCLAIMER } from "./domain/proof.js";
 
 const app = document.getElementById("app");
 const h = escapeHtml;
@@ -52,6 +52,15 @@ let onboardingDraft = {
   usualDurationMin: "",
   waterSource: "",
 };
+
+const moduleState = (key, mode = state.mode) => terrisModuleRegistryForMode(mode).find((module) => module.key === key) || null;
+function isTerrisModuleEnabled(key, mode = state.mode) {
+  return Boolean(moduleState(key, mode)?.enabled);
+}
+
+function representativeDemoFor(key) {
+  return Boolean(moduleState(key, state.mode)?.representativeDemo);
+}
 
 const bootParams = new URLSearchParams(window.location.search);
 const acceptanceDemo = bootParams.get("demo") === "1";
@@ -110,6 +119,7 @@ async function refreshWeather(forceRefresh = false) {
   const location = state.profile?.farm?.location || "farm";
   weather = await weatherService.getWeather({ location, coordinates: state.profile?.farm?.coordinates || state.fields[0]?.coordinates || null, forceRefresh });
   state.weatherCache = weather;
+  if (state.onboarded) recordLocalRecommendationTransitions();
   persist();
 }
 
@@ -132,6 +142,7 @@ function addIrrigationLog(payload) {
     field.updatedAt = new Date().toISOString();
   }
   state = appendLedgerEvent(state, waterAppliedEvent(log));
+  if (field) recordLocalRecommendationTransitions([field]);
   if (!navigator.onLine) syncService.queueAction({ kind: "irrigation_log", payload: log });
   persist();
   showMessage(navigator.onLine ? "Irrigation log saved." : "Saved offline. Terris will sync when connected.");
@@ -154,6 +165,7 @@ function updateCondition(payload) {
     field.updatedAt = new Date().toISOString();
   }
   state = appendLedgerEvent(state, fieldObservationEvent(observation));
+  if (field) recordLocalRecommendationTransitions([field]);
   if (!navigator.onLine) syncService.queueAction({ kind: "observation", payload: observation });
   persist();
   showMessage(navigator.onLine ? "Condition updated." : "Condition saved offline.");
@@ -169,10 +181,27 @@ function recordRecommendationLedgerEvent(field, recommendation, options = {}) {
     occurredAt: options.occurredAt || new Date().toISOString(),
     decisionTraceRef: recommendation.decisionTrace?.id || recommendation.decisionTrace?.traceId,
   });
-  const existing = (state.fieldLedgerEvents || []).find((event) => event.eventType === "irrigation_recommendation" && event.payload?.fingerprint === fingerprint);
-  if (existing) return false;
-  state = appendLedgerEvent(state, waterRecommendationEvent({ field, recommendation: { ...recommendation, sourceMode }, weather, fingerprint }));
-  return true;
+  const result = appendRecommendationEventIfNew(state, waterRecommendationEvent({ field, recommendation: { ...recommendation, sourceMode }, weather, fingerprint }));
+  state = result.state;
+  return result.appended;
+}
+
+function computeLocalRecommendationForTransition(field) {
+  if (state.mode === "demo" && field.demoRecommendation) {
+    return { ...field.demoRecommendation, sourceMode: "demo", verificationStatus: field.verificationStatus || "needs field confirmation" };
+  }
+  const result = ai().runGoal({ goal: "daily irrigation decision", fieldId: field.id, language: state.language || "en" });
+  return { ...result.decision, sourceMode: weather?.stale ? "offline" : "local", verificationStatus: field.verificationStatus || result.verification?.status || "needs field confirmation" };
+}
+
+function recordLocalRecommendationTransitions(fields = state.fields) {
+  let changed = false;
+  for (const field of fields) {
+    if (!field) continue;
+    const recommendation = computeLocalRecommendationForTransition(field);
+    changed = recordRecommendationLedgerEvent(field, recommendation, { sourceMode: recommendation.sourceMode }) || changed;
+  }
+  return changed;
 }
 
 function computeRecommendation(field) {
@@ -583,9 +612,27 @@ function moreContent() {
 function terrisBetaContent() {
   const modules = terrisModuleRegistryForMode(state.mode);
   const betaRows = modules.filter((module) => module.key !== "water").map((module) => `<div class="change-row"><strong>${h(module.label)}</strong><p>${h(module.enabled ? module.representativeDemo ? "Enabled as representative demo data." : "Enabled by explicit feature flag." : `${module.status} gated off in real mode.`)}</p></div>`).join("");
-  const energy = state.mode === "demo" ? demoEnergyComparison({ timing: "Today before afternoon heat" }) : compareEligibleWindows({ recommendation: {}, windows: [], tariff: null, mode: "real", pumpEvidence: null });
-  return `<section class="card section-card"><p class="card-label">Terris modules</p>${betaRows}</section>
-    <section class="card form-card"><h2>Terris Nutrients beta</h2>
+  return `<section class="card section-card"><p class="card-label">Terris modules</p>${betaRows}</section>${ledgerStatusCard()}${nutrientsBetaSurface()}${energyBetaSurface()}${opsBetaSurface()}${proofBetaSurface()}`;
+}
+
+function betaLockedCard(key, label) {
+  const module = moduleState(key);
+  return `<section class="card section-card" data-module-locked="${h(key)}"><p class="card-label">${h(label)}</p><h2>Beta not enabled</h2><p>This beta is not enabled for this workspace.</p><small>${h(module?.limitations?.[0] || "Feature-gated Terris module.")}</small></section>`;
+}
+
+function demoBadge(key) {
+  return representativeDemoFor(key) ? `<p class="demo-banner">Representative demo data</p>` : "";
+}
+
+function ledgerStatusCard() {
+  const sync = syncStatus();
+  const pending = Boolean(state.ledgerMetadata?.queuedForSync || sync.pending);
+  return `<section class="card section-card"><p class="card-label">Terris Ledger status</p><div class="data-source-list"><span>Storage: Local mobile buffer</span><span>Retention: Latest ${h(state.ledgerMetadata?.retentionLimit || 500)} events</span><span>Backend persistence: Not enabled</span><span>Pending sync: ${pending ? "Yes" : "No"}</span></div><p class="muted">This is not yet a durable audit archive.</p></section>`;
+}
+
+function nutrientsBetaSurface() {
+  if (!isTerrisModuleEnabled("nutrients")) return betaLockedCard("nutrients", "Terris Nutrients beta");
+  return `<section class="card form-card"><h2>Terris Nutrients beta</h2>${demoBadge("nutrients")}
       <label>Field<select id="nutrientField">${state.fields.map((f) => `<option value="${h(f.id)}">${h(f.name)}</option>`).join("")}</select></label>
       <label>Block optional<input id="nutrientBlock" /></label>
       <label>Crop cycle optional<input id="nutrientCropCycle" /></label>
@@ -601,10 +648,76 @@ function terrisBetaContent() {
       <label>Linked irrigation event optional<input id="nutrientIrrigationEvent" /></label>
       <label>Notes<input id="nutrientNotes" /></label>
       <button class="btn brand" data-save-nutrient="1">Save nutrient record</button>
-    </section>
-    <section class="card section-card"><p class="card-label">Terris Energy beta</p><p>${h(energy.status === "ok" ? `Representative demo comparison: ${energy.bestWindow?.label}` : `Withheld until ${energy.missingInputs?.join(" and ") || "pump and tariff evidence"} exists.`)}</p><small>Cost optimization never overrides agronomic constraints.</small></section>
-    <section class="card form-card"><h2>Terris Ops beta</h2><label>Operator note<input id="taskCompletionNote" placeholder="What was completed?" /></label><label>Attachment refs optional<input id="taskAttachments" placeholder="photo-1, receipt-2" /></label><button class="btn" data-complete-task="1">Complete sample evidence task</button></section>
-    <section class="card form-card"><h2>Terris Proof beta</h2><p>${h(TERRIS_PROOF_DISCLAIMER)}</p><label>Module scope<input id="proofModule" placeholder="water" /></label><label>Farm scope<input id="proofFarm" value="${h(state.profile?.farm?.name || "local-farm")}" /></label><label>Field or block scope<select id="proofField">${state.fields.map((f) => `<option value="${h(f.id)}">${h(f.name)}</option>`).join("")}</select></label><label>Start date<input id="proofStart" type="date" /></label><label>End date<input id="proofEnd" type="date" /></label><button class="btn" data-generate-packet="1">Generate draft packet</button></section>`;
+    </section>`;
+}
+
+function energyBetaSurface() {
+  if (!isTerrisModuleEnabled("energy")) return betaLockedCard("energy", "Terris Energy beta");
+  const energy = state.mode === "demo" ? demoEnergyComparison({ timing: "Today before afternoon heat" }) : compareEligibleWindows({ recommendation: {}, windows: [], tariff: null, mode: "real", pumpEvidence: null });
+  return `<section class="card section-card"><p class="card-label">Terris Energy beta</p>${demoBadge("energy")}<p>${h(energy.status === "ok" ? `Representative demo comparison: ${energy.bestWindow?.label}` : `Withheld until ${energy.missingInputs?.join(" and ") || "pump and tariff evidence"} exists.`)}</p><small>Cost optimization never overrides agronomic constraints.</small></section>`;
+}
+
+function openTasks() {
+  return (state.fieldTasks || []).filter((task) => task.status !== "completed");
+}
+
+function opsBetaSurface() {
+  if (!isTerrisModuleEnabled("ops")) return betaLockedCard("ops", "Terris Ops beta");
+  const tasks = openTasks();
+  return `<section class="card form-card"><h2>Terris Ops beta</h2>${demoBadge("ops")}
+    <label>Task title<input id="taskTitle" placeholder="Collect missing evidence" /></label>
+    <label>Field<select id="taskField">${state.fields.map((f) => `<option value="${h(f.id)}">${h(f.name)}</option>`).join("")}</select></label>
+    <label>Task type<select id="taskType"><option value="collect_missing_data">Collect missing evidence</option><option value="inspect_field">Inspect field</option><option value="inspect_pump">Inspect pump</option><option value="record_fertigation">Record fertigation</option><option value="attach_evidence">Attach evidence</option><option value="review_anomaly">Review anomaly</option><option value="verify_application">Verify application workflow</option></select></label>
+    <label>Priority<select id="taskPriority"><option value="medium">Medium</option><option value="high">High</option><option value="low">Low</option></select></label>
+    <button class="btn" data-create-task="1">Create field task</button>
+    <div class="change-row"><strong>Open-task queue</strong><p>${h(tasks.length ? tasks.map((task) => `${task.title} (${fieldName(task.fieldId)})`).join(", ") : "No open tasks.")}</p></div>
+    <label>Task to complete<select id="taskToComplete">${tasks.map((task) => `<option value="${h(task.id)}">${h(task.title)} - ${h(fieldName(task.fieldId))}</option>`).join("")}</select></label>
+    <label>Operator note<input id="taskCompletionNote" placeholder="What was completed?" /></label>
+    <label>Attachment refs optional<input id="taskAttachments" placeholder="photo-1, receipt-2" /></label>
+    <label>Completed at<input id="taskCompletedAt" type="datetime-local" /></label>
+    <button class="btn" data-complete-task="1">Complete selected task</button>
+  </section>`;
+}
+
+function defaultProofWindow() {
+  const end = new Date().toISOString().slice(0, 10);
+  const start = new Date(Date.now() - 7 * 24 * 3600000).toISOString().slice(0, 10);
+  return { start, end };
+}
+
+function proofCandidateEvents(scope = {}) {
+  const window = scope.dateWindow || defaultProofWindow();
+  return filterEvidenceEvents(state.fieldLedgerEvents || [], {
+    moduleScope: scope.moduleScope || "water",
+    farmScope: scope.farmScope || "local-farm",
+    fieldScope: scope.fieldScope || null,
+    blockScope: scope.blockScope || null,
+    dateWindow: window,
+  });
+}
+
+function proofReviewTable(events) {
+  const rows = reviewRowsForEvents(events);
+  if (!rows.length) return `<p class="muted">No candidate events match the current default scope.</p>`;
+  return `<div class="activity-list">${rows.slice(0, 8).map((row) => `<div class="activity-row"><span></span><div><strong>${h(row.eventType)}</strong><p>${h(fieldName(row.fieldId))} - ${h(row.truthLabel)} - ${h(row.dataQuality)}</p></div><time>${h(relativeTime(row.occurredAt))}</time></div>`).join("")}</div>`;
+}
+
+function proofBetaSurface() {
+  if (!isTerrisModuleEnabled("proof")) return betaLockedCard("proof", "Terris Proof beta");
+  const defaults = defaultProofWindow();
+  const candidates = proofCandidateEvents({ dateWindow: defaults });
+  return `<section class="card form-card"><h2>Terris Proof beta</h2>${demoBadge("proof")}<p>${h(TERRIS_PROOF_DISCLAIMER)}</p>
+    <label>Module scope<input id="proofModule" value="water" /></label>
+    <label>Farm scope<input id="proofFarm" value="local-farm" /></label>
+    <label>Field scope<select id="proofField"><option value="">All fields</option>${state.fields.map((f) => `<option value="${h(f.id)}">${h(f.name)}</option>`).join("")}</select></label>
+    <label>Block scope optional<input id="proofBlock" /></label>
+    <label>Start date<input id="proofStart" type="date" value="${h(defaults.start)}" /></label>
+    <label>End date<input id="proofEnd" type="date" value="${h(defaults.end)}" /></label>
+    <div class="change-row"><strong>Candidate event review</strong><p>Review event type, field, timestamp, truth label, and data quality before generating.</p></div>
+    ${proofReviewTable(candidates)}
+    <label class="check-row"><input id="proofReviewed" type="checkbox" /> I reviewed included events</label>
+    <button class="btn" data-generate-packet="1">Generate packet</button>
+  </section>`;
 }
 
 function settingSubtitle(item) {
@@ -713,6 +826,7 @@ function bind() {
   if (applyScenarioBtn) applyScenarioBtn.onclick = async () => {
     const scenario = document.getElementById("demoScenario")?.value || "baseline";
     state = applyDemoScenario(state, scenario);
+    recordLocalRecommendationTransitions();
     persist();
     await refreshWeather(true);
     render();
@@ -729,6 +843,10 @@ function bind() {
   };
   const saveNutrientBtn = document.querySelector("[data-save-nutrient]");
   if (saveNutrientBtn) saveNutrientBtn.onclick = () => {
+    if (!isTerrisModuleEnabled("nutrients")) {
+      showMessage("Terris Nutrients beta is not enabled for this workspace.");
+      return;
+    }
     const record = createNutrientRecord({
       fieldId: document.getElementById("nutrientField")?.value,
       blockId: document.getElementById("nutrientBlock")?.value || null,
@@ -744,6 +862,8 @@ function bind() {
       timestamp: document.getElementById("nutrientTimestamp")?.value ? new Date(document.getElementById("nutrientTimestamp").value).toISOString() : new Date().toISOString(),
       linkedIrrigationEventId: document.getElementById("nutrientIrrigationEvent")?.value || null,
       notes: document.getElementById("nutrientNotes")?.value || "",
+      representativeDemo: representativeDemoFor("nutrients"),
+      demo: state.mode === "demo",
     });
     state.nutrientRecords.unshift(record);
     state = appendLedgerEvent(state, nutrientLedgerEvent(record));
@@ -751,12 +871,48 @@ function bind() {
     showMessage(record.missingData.length ? `Saved draft. Missing: ${record.missingData.join(", ")}.` : "Nutrient record saved.");
     render();
   };
+  const createTaskBtn = document.querySelector("[data-create-task]");
+  if (createTaskBtn) createTaskBtn.onclick = () => {
+    if (!isTerrisModuleEnabled("ops")) {
+      showMessage("Terris Ops beta is not enabled for this workspace.");
+      return;
+    }
+    try {
+      const task = createFieldTask({
+        title: document.getElementById("taskTitle")?.value || "Collect missing evidence",
+        module: "ops",
+        taskType: document.getElementById("taskType")?.value || "collect_missing_data",
+        priority: document.getElementById("taskPriority")?.value || "medium",
+        fieldId: document.getElementById("taskField")?.value || state.fields[0]?.id || "local-field",
+        offlineSyncState: navigator.onLine ? "synced" : "queued",
+        representativeDemo: representativeDemoFor("ops"),
+      });
+      state.fieldTasks.unshift(task);
+      state = appendLedgerEvent(state, taskEvent(task, false));
+      persist();
+      showMessage("Field task created.");
+      render();
+    } catch (error) {
+      showMessage(error.message);
+    }
+  };
   const completeTaskBtn = document.querySelector("[data-complete-task]");
   if (completeTaskBtn) completeTaskBtn.onclick = () => {
+    if (!isTerrisModuleEnabled("ops")) {
+      showMessage("Terris Ops beta is not enabled for this workspace.");
+      return;
+    }
     try {
-      const task = createFieldTask({ title: "Collect missing evidence", module: "ops", taskType: "collect_missing_data", fieldId: state.fields[0]?.id || "local-field" });
-      const completed = completeFieldTask(task, { notes: document.getElementById("taskCompletionNote")?.value || "", attachments: (document.getElementById("taskAttachments")?.value || "").split(",").map((x) => x.trim()).filter(Boolean), offline: !navigator.onLine });
-      state.fieldTasks.unshift(completed);
+      const taskId = document.getElementById("taskToComplete")?.value || "";
+      const task = (state.fieldTasks || []).find((row) => row.id === taskId);
+      if (!task) throw new Error("Select an open task before completing it.");
+      const completed = completeFieldTask(task, {
+        notes: document.getElementById("taskCompletionNote")?.value || "",
+        attachments: (document.getElementById("taskAttachments")?.value || "").split(",").map((x) => x.trim()).filter(Boolean),
+        completedAt: document.getElementById("taskCompletedAt")?.value ? new Date(document.getElementById("taskCompletedAt").value).toISOString() : new Date().toISOString(),
+        offline: !navigator.onLine,
+      });
+      state.fieldTasks = (state.fieldTasks || []).map((row) => row.id === task.id ? completed : row);
       state = appendLedgerEvent(state, taskEvent(completed, true));
       persist();
       showMessage("Task completion recorded separately from agronomic verification.");
@@ -767,15 +923,31 @@ function bind() {
   };
   const generatePacketBtn = document.querySelector("[data-generate-packet]");
   if (generatePacketBtn) generatePacketBtn.onclick = () => {
+    if (!isTerrisModuleEnabled("proof")) {
+      showMessage("Terris Proof beta is not enabled for this workspace.");
+      return;
+    }
     const fieldScope = document.getElementById("proofField")?.value || null;
-    const events = (state.fieldLedgerEvents || []).filter((event) => !fieldScope || event.fieldId === fieldScope);
-    const packet = createEvidencePacket({
+    const blockScope = document.getElementById("proofBlock")?.value || null;
+    const scope = {
       moduleScope: document.getElementById("proofModule")?.value || "",
       farmScope: document.getElementById("proofFarm")?.value || "",
       fieldScope,
+      blockScope,
       dateWindow: { start: document.getElementById("proofStart")?.value || "", end: document.getElementById("proofEnd")?.value || "" },
+    };
+    const events = filterEvidenceEvents(state.fieldLedgerEvents || [], scope);
+    const packet = createEvidencePacket({
+      moduleScope: scope.moduleScope,
+      farmScope: scope.farmScope,
+      fieldScope,
+      blockScope,
+      dateWindow: scope.dateWindow,
       events,
+      preFiltered: true,
+      reviewConfirmed: Boolean(document.getElementById("proofReviewed")?.checked),
       missingInputs: events.length ? [] : ["reviewable ledger evidence"],
+      representativeDemo: representativeDemoFor("proof"),
     });
     state.evidencePackets.unshift(packet);
     state = appendLedgerEvent(state, evidencePacketEvent(packet));

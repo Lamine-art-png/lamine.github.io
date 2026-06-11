@@ -101,6 +101,15 @@ export function appendLedgerEvent(state, event) {
   };
 }
 
+export function appendRecommendationEventIfNew(state, event) {
+  const fingerprint = event?.payload?.fingerprint;
+  const existing = fingerprint
+    ? (state.fieldLedgerEvents || []).find((row) => row.eventType === "irrigation_recommendation" && row.payload?.fingerprint === fingerprint)
+    : null;
+  if (existing) return { state, appended: false };
+  return { state: appendLedgerEvent(state, event), appended: true };
+}
+
 export function recommendationFingerprint({ fieldId, recommendation = {}, sourceMode, decisionVersion, occurredAt, decisionTraceRef }) {
   const occurredDate = occurredAt ? new Date(occurredAt).toISOString().slice(0, 10) : "";
   return [
@@ -119,7 +128,7 @@ export function waterRecommendationEvent({ field, recommendation, weather, finge
     eventType: "irrigation_recommendation",
     module: "water",
     fieldId: field.id,
-    sourceMode: recommendation.sourceMode === "backend" ? "backend" : recommendation.sourceMode === "demo" ? "demo" : "derived",
+    sourceMode: TERRIS_SOURCE_MODES.includes(recommendation.sourceMode) ? recommendation.sourceMode : "derived",
     truthLabel: "ai_inferred",
     confidence: typeof recommendation.confidenceScore === "number" ? recommendation.confidenceScore : undefined,
     dataQuality: recommendation.missingData?.length ? "medium" : "high",
