@@ -31,6 +31,8 @@ export function createIrrigationLog(payload) {
     note: payload.note || "",
     source: payload.source || "manual",
     performedAt: payload.performedAt || new Date().toISOString(),
+    attachmentRefs: payload.attachmentRefs || [],
+    syncStatus: payload.syncStatus || (payload.offline ? "queued" : "synced"),
   };
 }
 
@@ -42,6 +44,10 @@ export function createObservation(payload) {
     note: payload.note || "",
     source: payload.source || "manual",
     createdAt: new Date().toISOString(),
+    attachmentRefs: payload.attachmentRefs || [],
+    translation: payload.translation || null,
+    geotag: payload.geotag || null,
+    syncStatus: payload.syncStatus || (payload.offline ? "queued" : "synced"),
   };
 }
 
@@ -52,6 +58,25 @@ export function createVoiceTimelineEntry(payload) {
     intent: payload.intent,
     outcome: payload.outcome,
     fieldId: payload.fieldId || null,
+    attachmentRefs: payload.attachmentRefs || [],
+    translation: payload.translation || null,
+    syncStatus: payload.syncStatus || (payload.offline ? "queued" : "synced"),
     createdAt: new Date().toISOString(),
+  };
+}
+
+export function createAttachmentMetadata(payload) {
+  return {
+    id: payload.id || `attachment-${Date.now()}`,
+    type: payload.type || "photo",
+    uri: payload.uri,
+    fieldId: payload.fieldId || null,
+    blockId: payload.blockId || null,
+    cropCycleId: payload.cropCycleId || null,
+    geotag: payload.geotag || null,
+    translation: payload.translation || null,
+    syncStatus: payload.syncStatus || "queued",
+    offlineQueueState: payload.offlineQueueState || "queued",
+    createdAt: payload.createdAt || new Date().toISOString(),
   };
 }

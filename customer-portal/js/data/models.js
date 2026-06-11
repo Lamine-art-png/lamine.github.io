@@ -1,5 +1,6 @@
 /**
- * Core data model foundation for Velia.
+ * Core data model foundation for Terris.
+ * The velia-foundation version string remains as a legacy compatibility alias.
  * JSDoc typedefs are used as typed contracts for the current static-app foundation.
  */
 
@@ -25,3 +26,4 @@
 /** @typedef {{ id: string; sessionId: string; text: string; confidence: 'low'|'moderate'|'high'; uncertainty?: string; spoken: boolean; createdAt: string; }} VoiceAgentResponse */
 
 export const modelVersion = "velia-foundation-v1";
+export const terrisModelVersion = "terris-foundation-v2";
