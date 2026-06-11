@@ -1,4 +1,4 @@
-"""Read-only compliance schema preflight for Railway migrations."""
+"""Read-only compliance schema preflight for production database migrations."""
 from __future__ import annotations
 
 import argparse

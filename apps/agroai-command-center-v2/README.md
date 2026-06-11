@@ -3,7 +3,8 @@
 A parallel enterprise rebuild of the customer-facing irrigation intelligence
 console, built with React + TypeScript + Vite. The existing `customer-portal`
 remains the fallback evaluation surface until V2 passes review. **No hosting,
-DNS, Cloudflare, Railway, or secret changes are made in this PR.**
+DNS, Cloudflare, Render, Railway fallback, or secret changes are made in this
+PR.**
 
 Core product story: **AGRO-AI turns scattered irrigation data into verified
 water decisions.**
@@ -37,7 +38,17 @@ State lives in one typed store (`commandStore.ts`) bound to React through
 templates, no monolithic components, no CSS cascade patches — styling is native
 CSS driven by design tokens.
 
-## Routes used (production API base unchanged)
+## Routes Used
+
+The source-code fallback remains `https://api.agroai-pilot.com`, which is the
+temporary stable Railway-backed API fallback used by the existing stable portal.
+The deployed V2 evaluation preview should be configured with:
+
+`VITE_API_BASE_URL=https://api-preview.agroai-pilot.com`
+
+`api-preview.agroai-pilot.com` routes to the Render preview service
+`agroai-api-preview`. Do not hardcode the provider URL in browser application
+code when a controlled custom API domain is available.
 
 API base: `https://api.agroai-pilot.com` (override with `VITE_API_BASE_URL`).
 

@@ -58,29 +58,29 @@ cd agroai_api
 pytest tests/unit/test_compliance_pack.py
 ```
 
-## Railway deployment checks
+## Production Deployment Checks
 
 1. Set `CALIFORNIA_COMPLIANCE_PACK_ENABLED=true` only for tenants/environments approved for controlled rollout.
 2. Before touching production data, run `python -m py_compile alembic/versions/002_california_compliance_pack.py alembic/versions/003_global_compliance_kernel.py scripts/compliance_migration_preflight.py` and `alembic heads` against the release image.
-3. Take a Railway-managed backup or run the migration first against a restored copy of the production database.
+3. Take a platform-managed PostgreSQL backup or verified database snapshot, or run the migration first against a restored copy of the production database.
 4. Run `python scripts/compliance_migration_preflight.py --database-url "$DATABASE_URL"` to confirm the starting revision and schema shape before any migration command.
 5. Run `alembic current` to confirm the preflight starting revision, then run `alembic upgrade head` and verify `002_california_compliance_pack` and `003_global_compliance_kernel` are applied.
 6. Confirm PostgreSQL no longer retains an unused `compliance_workflow_type` enum after migration 003, while `compliance_truth_label` remains available for migration 002 tables.
 7. Smoke test `GET /v1/health` and `GET /v1/compliance/status` with a verified server-side API key or explicitly labeled non-production demo token.
 8. Confirm logs do not contain direct-filing claims or regulator-endorsement language.
 
-### Railway migration decision tree
+### Production database migration decision tree
 
 **A. Clean baseline with no compliance tables**
 
-1. Take a Railway-managed backup.
+1. Take a platform-managed PostgreSQL backup or verified database snapshot.
 2. Run `python scripts/compliance_migration_preflight.py --database-url "$DATABASE_URL"` and confirm `A_clean_baseline_no_compliance_tables`.
 3. Run `alembic upgrade head`.
 4. Verify `alembic current`, compliance table creation, and a read-only `GET /v1/compliance/status` smoke test.
 
 **B. Database already stamped at 002**
 
-1. Take a Railway-managed backup.
+1. Take a platform-managed PostgreSQL backup or verified database snapshot.
 2. Run `python scripts/compliance_migration_preflight.py --database-url "$DATABASE_URL"` and confirm revision `002_california_compliance_pack` with `B_migration_002_schema`.
 3. Run `alembic upgrade head`.
 4. Verify migration 003 additions, including `parcel_identifier` backfill and `compliance_export_metadata`.

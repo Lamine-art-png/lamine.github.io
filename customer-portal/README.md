@@ -123,5 +123,9 @@ Open `http://localhost:4174`.
 ## Static Deploy Note
 
 1. Deploy `customer-portal/` as static files.
-2. Keep API base set to `https://api.agroai-pilot.com` for production.
-3. Do not alter Railway secrets, DNS, Cloudflare settings, or infrastructure outside explicit change control.
+2. Keep API base set to `https://api.agroai-pilot.com` for the existing stable
+   portal. This domain is the temporary stable Railway-backed API fallback until
+   a controlled Render production cutover is approved and compatibility is
+   proven.
+3. Do not alter provider secrets, DNS, Cloudflare settings, Render settings,
+   Railway fallback routing, or infrastructure outside explicit change control.
