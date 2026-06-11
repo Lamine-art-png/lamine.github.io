@@ -2,7 +2,7 @@
 
 This document describes a manual Cloudflare Pages preview deployment for the
 Water Command Center V2 app only. Do not modify the live portal, DNS, custom
-domains, Railway secrets, or existing Pages projects.
+domains, provider settings, secrets, or existing Pages projects.
 
 ## Cloudflare Pages Project
 
@@ -13,7 +13,7 @@ Create a separate Pages project in the Cloudflare dashboard.
 - Build command: `npm ci && npm run build`
 - Output directory: `dist`
 - Environment variable:
-  - `VITE_API_BASE_URL=https://api.agroai-pilot.com`
+  - `VITE_API_BASE_URL=https://api-preview.agroai-pilot.com`
 
 Use the generated `pages.dev` URL only.
 
@@ -28,7 +28,7 @@ Use the generated `pages.dev` URL only.
 7. Set build command to `npm ci && npm run build`.
 8. Set output directory to `dist`.
 9. Add environment variable `VITE_API_BASE_URL` with value
-   `https://api.agroai-pilot.com`.
+   `https://api-preview.agroai-pilot.com`.
 10. Deploy and use only the generated `pages.dev` preview URL.
 
 ## Safety Rules
@@ -39,7 +39,9 @@ Use the generated `pages.dev` URL only.
 - Do not modify production routing.
 - Do not touch the existing `agroai-portal` Pages project.
 - Do not touch Velia hosting.
-- Do not modify Railway secrets.
+- Do not modify provider secrets.
+- Keep `api-preview.agroai-pilot.com` separate from the stable
+  `api.agroai-pilot.com` API fallback.
 
 The Vite config uses `base: "./"` and emits a static `dist/` bundle, preserving
 relative asset paths for preview deployment.
@@ -53,16 +55,27 @@ Use the full URL (e.g. `https://agroai-command-center-v2-preview.pages.dev`).
 Do **not** allow wildcard `*.pages.dev` origins — wildcard coverage would allow
 any Cloudflare Pages deployment to call the production API without authorisation.
 
-## Local Railway API Browser Testing
+## Local API Browser Testing
 
-Browser requests from localhost to the Railway API will be blocked by CORS unless
-the allowlist explicitly includes:
+Browser requests from localhost to a deployed API will be blocked by CORS unless
+the allowlist explicitly includes the local preview origins:
 
 - `http://localhost:4180`
 - `http://127.0.0.1:4180`
 
 Add these to the backend CORS allowlist only in a development/staging configuration,
 never in the production allowlist.
+
+## Current Routing Map
+
+- V2 preview portal: `app-v2.agroai-pilot.com` -> `agroai-command-center-v2-preview.pages.dev`.
+- Generated preview URL: `https://agroai-command-center-v2-preview.pages.dev/`.
+- V2 preview API: `api-preview.agroai-pilot.com` -> Render service `agroai-api-preview`.
+- Stable portal: `app.agroai-pilot.com` -> `agroai-portal.pages.dev`.
+- Stable API: `api.agroai-pilot.com` -> temporary stable Railway-backed fallback.
+
+Do not cut over `api.agroai-pilot.com` to Render until the production cutover is
+approved and stable portal compatibility is proven.
 
 ## Current Known Limitations
 

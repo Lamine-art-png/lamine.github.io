@@ -1,8 +1,10 @@
-name: Build, Push & Deploy to Cloudflare
+name: Legacy Cloudflare Containers deploy — manual only
 
+# Render serves the active V2 preview backend at api-preview.agroai-pilot.com,
+# while api.agroai-pilot.com remains a temporary Railway-backed stable fallback.
+# This Cloudflare Containers path is not part of active DNS routing; manual
+# execution requires explicit operator intent.
 on:
-  push:
-    branches: ["main"]
   workflow_dispatch:
 
 permissions:

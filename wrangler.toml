@@ -1,3 +1,10 @@
+# LEGACY/MANUAL-ONLY: retained Cloudflare Containers configuration for AGRO-AI API.
+# Active preview API traffic routes through api-preview.agroai-pilot.com to Render
+# (agroai-api-preview.onrender.com). Stable API traffic currently routes through
+# api.agroai-pilot.com to the temporary Railway fallback. The commented custom
+# route below must remain commented; do not deploy this path without explicit
+# infrastructure approval.
+#
 # Cloudflare Containers deployment for AGRO-AI API
 #
 # Prerequisites:
