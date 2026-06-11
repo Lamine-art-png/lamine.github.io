@@ -7,6 +7,12 @@ import { apiClient } from "./services/apiClient.js";
 import { applyDemoScenario, applyOnboarding, loadState, recordRecommendationHistory, saveState, useDemoMode } from "./state/store.js";
 import { createIrrigationLog, createObservation, createVoiceTimelineEntry } from "./state/actions.js";
 import { createAiOrchestrator } from "./ai/aiOrchestrator.js";
+import { appendLedgerEvent, fieldObservationEvent, waterAppliedEvent, waterRecommendationEvent } from "./domain/fieldLedger.js";
+import { terrisModuleRegistry } from "./domain/moduleRegistry.js";
+import { createNutrientRecord, nutrientLedgerEvent, plannedAppliedVariance } from "./domain/nutrients.js";
+import { compareEligibleWindows, pumpingRuntimeEvent } from "./domain/energy.js";
+import { completeFieldTask, createFieldTask, taskEvent } from "./domain/ops.js";
+import { createEvidenceArtifact, createEvidencePacket, evidencePacketEvent } from "./domain/proof.js";
 
 const app = document.getElementById("app");
 let state = loadState();
@@ -41,7 +47,7 @@ let onboardingDraft = {
   waterSource: "",
 };
 
-const nav = ["today", "fields", "alerts", "assistant", "reports", "settings"];
+const nav = ["today", "fields", "tasks", "ledger", "more"];
 const tr = (k) => translations[state.language || "en"]?.[k] || translations.en[k] || k;
 
 function buildAiContext() {
@@ -94,6 +100,7 @@ async function refreshWeather(forceRefresh = false) {
 function addIrrigationLog(payload) {
   const log = createIrrigationLog(payload);
   state.irrigationLogs.unshift(log);
+  state = appendLedgerEvent(state, waterAppliedEvent(log));
   const field = state.fields.find((f) => f.id === payload.fieldId);
   if (field) {
     field.lastIrrigationAt = log.performedAt;
@@ -115,6 +122,7 @@ function addFieldNote(payload) {
 function updateCondition(payload) {
   const observation = createObservation(payload);
   state.observations.unshift(observation);
+  state = appendLedgerEvent(state, fieldObservationEvent(observation));
   const field = state.fields.find((f) => f.id === payload.fieldId);
   if (field) {
     field.lastObservation = payload.condition;
@@ -142,6 +150,8 @@ function recommendationFor(field) {
   const freshCached = cached && Date.now() - new Date(cached.fetchedAt).getTime() < 10 * 60 * 1000;
   if (navigator.onLine && !freshCached && !decisionRefreshInflight.has(field.id)) refreshRemoteDecision(field);
   const rec = freshCached ? { ...cached.decision, confidence: cached.decision.confidenceLabel || cached.decision.confidence || "moderate" } : localRec;
+  const existingEvent = (state.fieldLedgerEvents || []).find((event) => event.eventType === "irrigation_recommendation" && event.fieldId === field.id && event.payload?.action === rec.action && event.payload?.urgency === rec.urgency);
+  if (!existingEvent) state = appendLedgerEvent(state, waterRecommendationEvent({ field, recommendation: rec, weather }));
   state = recordRecommendationHistory(state, field.id, rec);
   persist();
   return { ...rec, verificationStatus: result.verification?.status || "no_confirmation" };
@@ -183,17 +193,18 @@ async function fetchAssistantText(fieldId, query = "Why?") {
   }
 }
 
-function whyVeliaSection(rec) {
+function evidenceTrailSection(rec) {
   const p = rec.provenance || {};
   const sources = p.ragSourcesUsed || rec.knowledgeSources || [];
   return `<details class='card compact-card provenance-card'>
-    <summary>Why Velia recommended this</summary>
+    <summary>View evidence trail</summary>
     <ul class='mini-list'>
       <li>Mode: ${p.providerMode || "local fallback"}${p.modelUsed ? ` • ${p.modelUsed}` : ""}</li>
       <li>Weather: ${p.weatherSource || weather?.source || "local"}${p.weatherStale || weather?.stale ? " • stale" : ""} • ${weatherAgeLabel(weather)}</li>
       <li>Rules: ${(p.deterministicRulesTriggered || rec.decisionTrace?.deterministicRulesTriggered || []).join(", ") || "none"}</li>
       <li>Fallback: ${p.fallbackStatus?.llmFallbackUsed ? p.fallbackStatus.llmFallbackReason || "local deterministic fallback" : "none"}</li>
       <li>Sources: ${sources.slice(0, 3).map((s) => s.title || s.id || s.topic).join(", ") || "local guidance"}</li>
+      <li>Truth labels: ${(state.fieldLedgerEvents || []).slice(0, 6).map((event) => event.truthLabel).filter(Boolean).join(", ") || "none yet"}</li>
     </ul>
   </details>`;
 }
@@ -273,7 +284,7 @@ function todayContent() {
         <p class='small'>Tools: ${(rec.decisionTrace?.toolsUsed || []).slice(0,4).join(", ")}</p>
       </article>
 
-      ${whyVeliaSection(rec)}
+      ${evidenceTrailSection(rec)}
 
       <article class='card compact-card'>
         <p class='card-label'>Quick actions</p>
@@ -281,7 +292,7 @@ function todayContent() {
           <button class='btn brand' data-open-log='${field.id}'>Log irrigation</button>
           <button class='btn' data-act='note' data-field='${field.id}'>Add field note</button>
           <button class='btn' data-open-condition='${field.id}'>Update field condition</button>
-          <button class='btn' data-nav='assistant'>Ask Velia</button>
+          <button class='btn' data-more-view='assistant'>Ask Terris</button>
         </div>
       </article>
     </section>
@@ -331,17 +342,89 @@ function fieldDetail(fieldId) {
     <h3>Recommendation history</h3><ul>${fieldRecHistory.length ? fieldRecHistory.map((e) => `<li>${new Date(e.at).toLocaleString()} — ${e.rec?.urgency || "recorded"} urgency</li>`).join("") : "<li>No recommendations recorded yet</li>"}</ul></section>${voiceCard(f.id, recommendationFor(f))}`;
 }
 
-function alertsContent() { return `<section class='card'><p class='card-label'>Alerts</p><p class='small'>No active alerts. Velia surfaces heat, frost, and irrigation risks here as conditions change.</p></section>`; }
+function tasksContent() {
+  const tasks = state.fieldTasks || [];
+  return `<section class='today-stack'>
+    <article class='card compact-card'><p class='card-label'>Tasks</p><h2>Field actions</h2><p class='small'>Today, high priority, by farm, by field, offline pending sync, and completed work stay here without becoming agronomic verification.</p><button class='btn brand' data-create-task='inspect_field'>Create inspection task</button></article>
+    ${tasks.length ? tasks.map((task) => `<article class='card compact-card'><p class='card-label'>${task.module} • ${task.priority}</p><h3>${task.title}</h3><p>Status: ${task.status}</p><p class='small'>Sync: ${task.offlineSyncState || "synced"}</p>${task.status !== "completed" ? `<button class='btn' data-complete-task='${task.id}'>Complete with note</button>` : `<p class='small'>Completion does not equal verification.</p>`}</article>`).join("") : `<article class='card compact-card'><p class='small'>No tasks yet. Terris creates field actions from recommendations, anomalies, or missing evidence.</p></article>`}
+  </section>`;
+}
+
+function ledgerContent() {
+  const events = state.fieldLedgerEvents || [];
+  return `<section class='today-stack'>
+    <article class='card compact-card'><p class='card-label'>Ledger</p><h2>Field event ledger</h2><p class='small'>One operating record for Observe, Recommend, Approve, Execute, Verify, Prove, and Improve.</p><button class='btn brand' data-generate-packet='1'>Generate evidence packet</button></article>
+    ${events.length ? events.slice(0, 12).map((event) => `<article class='card compact-card'><p class='card-label'>${event.module} • ${event.truthLabel}</p><h3>${event.eventType.replaceAll("_", " ")}</h3><p>${event.fieldId || "farm scope"} • ${new Date(event.occurredAt).toLocaleString()}</p><p class='small'>Source: ${event.sourceMode}. Quality: ${event.dataQuality || "unknown"}.</p></article>`).join("") : `<article class='card compact-card'><p class='small'>Ledger events will appear after recommendations, logs, observations, tasks, and evidence packets.</p></article>`}
+  </section>`;
+}
+
+function waterContent() { return todayContent(); }
+
+function nutrientsContent() {
+  const field = state.fields[0];
+  const records = state.nutrientRecords || [];
+  return `<section class='today-stack'>
+    <article class='card compact-card'><p class='card-label'>Terris Nutrients • Beta</p><h2>Nutrient ledger</h2><p class='small'>Representative demo records are labeled and never treated as live telemetry.</p><button class='btn brand' data-add-nutrient='1'>Add manual nutrient record</button></article>
+    <article class='card compact-card'><p class='card-label'>Fertigation readiness</p><p>${field ? "Field context available" : "Add a field first"}</p><p class='small'>Missing inputs: ${field?.lastIrrigationAt ? "nutrient concentration if calculating from water" : "linked irrigation water volume"}</p></article>
+    ${records.map((record) => `<article class='card compact-card'><p class='card-label'>${record.demo ? "Representative demo data" : record.truthLabel}</p><h3>${record.nutrientType}</h3><p>${record.applicationMethod} • planned ${record.plannedQuantity ?? "n/a"} ${record.unit || ""} • applied ${record.appliedQuantity ?? "withheld"} ${record.unit || ""}</p><p class='small'>Variance: ${plannedAppliedVariance(record) ?? "needs planned and applied values"}</p><p class='small'>Missing: ${record.missingData?.join(", ") || "none"}</p></article>`).join("")}
+  </section>`;
+}
+
+function energyContent() {
+  const comparison = compareEligibleWindows({
+    recommendation: state.recommendationHistory?.[0]?.rec,
+    tariff: { label: "Demo TOU", energyRate: 0.25, truthLabel: "reported" },
+    windows: [
+      { label: "Morning", estimatedKwh: 18, energyRate: 0.25, allowedByWaterDecision: true },
+      { label: "Restricted hot afternoon", estimatedKwh: 18, energyRate: 0.12, allowedByWaterDecision: false },
+    ],
+  });
+  return `<section class='today-stack'>
+    <article class='card compact-card'><p class='card-label'>Terris Energy • Beta</p><h2>Pumping economics</h2><p class='small'>Compares only water-safe execution windows and labels cost as estimated or measured.</p></article>
+    <article class='card compact-card'><p class='card-label'>Eligible windows</p><p>Lower-cost eligible window: ${comparison.bestWindow?.label || "needs tariff and pump data"}</p><p class='small'>Unsafe cheaper windows are filtered out.</p></article>
+    ${(state.pumpRuntimeEvents || []).map((event) => `<article class='card compact-card'><h3>${event.pumpId}</h3><p>${event.runtimeMinutes} min • ${event.estimatedCost ?? event.measuredCost ?? "cost missing"}</p><p class='small'>${event.truthLabel}. ${event.demo ? "Representative demo data." : ""}</p></article>`).join("")}
+  </section>`;
+}
+
+function proofContent() {
+  return `<section class='today-stack'>
+    <article class='card compact-card'><p class='card-label'>Terris Proof • Beta</p><h2>Evidence packets</h2><p class='small'>Operational records only. Not official regulatory filings or legal advice.</p><button class='btn brand' data-generate-packet='1'>Generate water decision packet</button></article>
+    ${(state.evidencePackets || []).map((packet) => `<article class='card compact-card'><h3>${packet.title}</h3><p>${packet.includedEventIds.length} events • ${packet.truthLabelSummary.join(", ") || "no labels"}</p><p class='small'>${packet.disclaimer}</p></article>`).join("")}
+  </section>`;
+}
+
+let moreView = "modules";
+
 function assistantContent() {
   const chips = ["Should I irrigate today?", "Log irrigation for Field 1 for two hours", "Field 1 looks dry", "Why is confidence moderate?", "What changed since yesterday?"];
-  return `<section class='card'><h2>Field Decision Assistant</h2><p>Ask Velia anything about your irrigation decisions.</p><div class='chips'>${chips.map((c) => `<button class='chip' data-assistant-query='${c}'>${c}</button>`).join("")}</div><p><strong>Velia:</strong> ${assistantResponse}</p></section>${voiceCard(state.fields[0]?.id, state.fields[0] ? recommendationFor(state.fields[0]) : null)}`;
+  return `<section class='card'><h2>Terris Assistant</h2><p>Ask Terris about field state, missing inputs, eligible windows, tasks, and evidence.</p><div class='chips'>${chips.map((c) => `<button class='chip' data-assistant-query='${c}'>${c}</button>`).join("")}</div><p><strong>Terris:</strong> ${assistantResponse}</p>${evidenceTrailSection(state.recommendationHistory?.[0]?.rec || {})}</section>${voiceCard(state.fields[0]?.id, state.fields[0] ? recommendationFor(state.fields[0]) : null)}`;
 }
-function reportsContent() { return `<section class='card'><h2>Reports</h2><p>Planned for next increment.</p></section>`; }
-function settingsContent() { return `<section class='card'><h2>Settings</h2><p>Mode: ${state.mode}</p><button class='btn' data-mode='demo'>Demo mode</button><button class='btn' data-mode='real'>Real mode</button><p>Farm location: ${state.profile?.farm?.location || "not set"}</p><p>Weather provider: ${weather?.provider || "mock"}</p><button class='btn' data-refresh-weather='1'>Refresh weather</button>${state.mode === "demo" ? `<label>Demo scenario<select id='demoScenario'><option value='baseline' ${state.demoScenario === "baseline" ? "selected" : ""}>Baseline</option><option value='hotDry' ${state.demoScenario === "hotDry" ? "selected" : ""}>Hot and dry</option><option value='coolWet' ${state.demoScenario === "coolWet" ? "selected" : ""}>Cool and wet</option></select></label><button class='btn' data-apply-scenario='1'>Apply scenario</button>` : ""}</section>`; }
+
+function modulesContent() {
+  return `<section class='today-stack'><article class='card compact-card'><p class='card-label'>Modules</p><h2>Terris operating layers</h2><p class='small'>Water is active. Beta modules are usable but limited. Protect and Risk API are staged boundaries.</p></article>${terrisModuleRegistry.map((module) => `<article class='card compact-card'><p class='card-label'>${module.status}${module.enabled ? "" : " • disabled"}</p><h3>${module.label}</h3><p class='small'>${module.description}</p>${module.route && module.enabled ? `<button class='btn' data-more-view='${module.route}'>Open</button>` : `<p class='small'>Roadmap surface only.</p>`}</article>`).join("")}</section>`;
+}
+
+function reportsContent() { return `<section class='card'><h2>Reports</h2><p class='small'>Evidence exports are available from Terris Proof packets as JSON.</p></section>`; }
+function settingsContent() { return `<section class='card'><h2>Settings</h2><p>Mode: ${state.mode}</p><button class='btn' data-mode='demo'>Demo mode</button><button class='btn' data-mode='real'>Real mode</button><p>Farm location: ${state.profile?.farm?.location || "not set"}</p><p>Weather provider: ${weather?.provider || "mock"}</p><button class='btn' data-refresh-weather='1'>Refresh weather</button>${state.mode === "demo" ? `<p class='small'>Representative demo data</p><label>Demo scenario<select id='demoScenario'><option value='baseline' ${state.demoScenario === "baseline" ? "selected" : ""}>Baseline</option><option value='hotDry' ${state.demoScenario === "hotDry" ? "selected" : ""}>Hot and dry</option><option value='coolWet' ${state.demoScenario === "coolWet" ? "selected" : ""}>Cool and wet</option></select></label><button class='btn' data-apply-scenario='1'>Apply scenario</button>` : ""}</section>`; }
+
+function moreContent() {
+  const tabs = ["modules", "assistant", "water", "nutrients", "energy", "ops", "proof", "reports", "integrations", "settings"];
+  const inner = moreView === "assistant" ? assistantContent()
+    : moreView === "water" ? waterContent()
+    : moreView === "nutrients" ? nutrientsContent()
+    : moreView === "energy" ? energyContent()
+    : moreView === "ops" ? tasksContent()
+    : moreView === "proof" ? proofContent()
+    : moreView === "reports" ? reportsContent()
+    : moreView === "settings" ? settingsContent()
+    : moreView === "integrations" ? `<section class='card'><h2>Integrations</h2><p class='small'>No live integration is implied unless a provider is configured and verified.</p></section>`
+    : modulesContent();
+  return `<section class='card compact-card'><div class='chips'>${tabs.map((tab) => `<button class='chip ${moreView === tab ? "active" : ""}' data-more-view='${tab}'>${tab}</button>`).join("")}</div></section>${inner}`;
+}
 
 function voiceCard(fieldId, rec) {
   const sync = syncService.status();
-  return `<section class='card'><h3>Voice Agent</h3><button class='btn mic ${voiceListening ? "listening" : ""}' data-voice='${fieldId}'>${voiceListening ? "Listening... tap to stop" : "Start voice input"}</button><p class='small'>Transcript: ${transcript || "No transcript yet"}</p><p class='small'>Velia response: ${voiceResponse || "No response yet"}</p>${rec ? `<p class='small'>Current confidence: ${rec.confidence}</p>` : ""}${!sync.isOnline ? `<p class='warn'>${tr("offlineSaved")}. ${tr("willSync")}.</p>` : ""}</section>`;
+  return `<section class='card'><h3>Voice Agent</h3><button class='btn mic ${voiceListening ? "listening" : ""}' data-voice='${fieldId}'>${voiceListening ? "Listening... tap to stop" : "Start voice input"}</button><p class='small'>Transcript: ${transcript || "No transcript yet"}</p><p class='small'>Terris response: ${voiceResponse || "No response yet"}</p>${rec ? `<p class='small'>Current confidence: ${rec.confidence}</p>` : ""}${!sync.isOnline ? `<p class='warn'>${tr("offlineSaved")}. ${tr("willSync")}.</p>` : ""}</section>`;
 }
 
 function progressDots() {
@@ -357,16 +440,16 @@ function onboardingFlow() {
   if (onboardingStep === 0) {
     return `<section class='onboard-hero'>
       <p class='eyebrow'>AGRO-AI</p>
-      <h1 class='onboard-title'>Velia</h1>
-      <p class='onboard-promise'>Know what to do with water today.</p>
-      <p class='small'>Simple daily irrigation guidance for farms of every size.</p>
+      <h1 class='onboard-title'>Terris</h1>
+      <p class='onboard-promise'>Know what to do, prove what happened, and improve the next decision.</p>
+      <p class='small'>Water-first operating intelligence for farms of every size.</p>
       <button class='btn brand xl' data-next-step='1'>Set up my farm</button>
       <button class='btn xl' id='startDemo'>Try demo mode</button>
     </section>`;
   }
 
   const stepCards = {
-    1: `<section class='card onboard-card'><h2>Who will use Velia?</h2><p class='small'>Pick your role and language.</p>
+    1: `<section class='card onboard-card'><h2>Who will use Terris?</h2><p class='small'>Pick your role and language.</p>
       ${cardOptions([
         { value: "farmer", label: "Farmer" },
         { value: "farm manager", label: "Farm manager" },
@@ -426,15 +509,14 @@ function content() {
   if (!state.onboarded) return onboardingFlow();
   if (route === "today") return todayContent();
   if (route === "fields") return fieldsContent();
-  if (route === "alerts") return alertsContent();
-  if (route === "assistant") return assistantContent();
-  if (route === "reports") return reportsContent();
-  return settingsContent();
+  if (route === "tasks") return tasksContent();
+  if (route === "ledger") return ledgerContent();
+  return moreContent();
 }
 
 function render() {
   const sync = syncService.status();
-  app.innerHTML = `<div class='shell ${!state.onboarded ? "shell-onboard" : ""}'><header class='top'><div><p class='small'>AGRO-AI</p><h1>${tr("appName")}</h1><p class='small'>${tr("framing")}</p></div><div><span class='small'>${sync.state}${sync.pending ? ` (${sync.pending})` : ""}</span></div></header>${!sync.isOnline ? `<div class='offline-banner'>Offline mode active. Actions queue locally and sync when connected.</div>` : ""}${content()}${uiMessage ? `<div class='toast'>${uiMessage}</div>` : ""}${state.onboarded ? `<nav class='bottom'>${nav.map((n) => `<button class='btn nav ${route === n ? "active" : ""}' data-nav='${n}'>${n}</button>`).join("")}</nav>` : ""}</div>`;
+  app.innerHTML = `<div class='shell ${!state.onboarded ? "shell-onboard" : ""}'><header class='top'><div><p class='small'>AGRO-AI</p><h1>${tr("appName")}</h1><p class='small'>${tr("framing")}</p>${state.mode === "demo" ? `<p class='demo-indicator'>Representative demo data</p>` : ""}</div><div><span class='small'>${sync.state}${sync.pending ? ` (${sync.pending})` : ""}</span></div></header>${!sync.isOnline ? `<div class='offline-banner'>Offline mode active. Actions queue locally and sync when connected.</div>` : ""}${content()}${uiMessage ? `<div class='toast'>${uiMessage}</div>` : ""}${state.onboarded ? `<nav class='bottom'>${nav.map((n) => `<button class='btn nav ${route === n ? "active" : ""}' data-nav='${n}'>${n}</button>`).join("")}</nav>` : ""}</div>`;
   bind();
 }
 
@@ -461,15 +543,61 @@ function bind() {
   app.querySelectorAll("[data-nav]").forEach((b) => (b.onclick = async () => {
     route = b.dataset.nav;
     selectedField = null;
-    if (route === "assistant") {
+    if (route === "more" && moreView === "assistant") {
       assistantResponse = await fetchAssistantText(state.fields[0]?.id || "");
     }
+    render();
+  }));
+  app.querySelectorAll("[data-more-view]").forEach((b) => (b.onclick = async () => {
+    route = "more";
+    moreView = b.dataset.moreView;
+    if (moreView === "assistant") assistantResponse = await fetchAssistantText(state.fields[0]?.id || "");
     render();
   }));
   app.querySelectorAll("[data-open-field]").forEach((b) => (b.onclick = () => { selectedField = { type: "detail", fieldId: b.dataset.openField }; render(); }));
   app.querySelectorAll("[data-open-log]").forEach((b) => (b.onclick = () => { route = "fields"; selectedField = { type: "log", fieldId: b.dataset.openLog }; render(); }));
   app.querySelectorAll("[data-open-condition]").forEach((b) => (b.onclick = () => { route = "fields"; selectedField = { type: "condition", fieldId: b.dataset.openCondition }; render(); }));
   app.querySelectorAll("[data-act='note']").forEach((b) => (b.onclick = () => { addFieldNote({ fieldId: b.dataset.field || state.fields[0]?.id, text: "Field note captured.", source: "manual" }); render(); }));
+  app.querySelectorAll("[data-create-task]").forEach((b) => (b.onclick = () => {
+    const fieldId = state.fields[0]?.id;
+    if (!fieldId) return;
+    const task = createFieldTask({ title: "Inspect field and capture evidence", module: "ops", taskType: b.dataset.createTask, priority: "high", fieldId, offlineSyncState: navigator.onLine ? "synced" : "queued" });
+    state.fieldTasks.unshift(task);
+    state = appendLedgerEvent(state, taskEvent(task));
+    if (!navigator.onLine) syncService.queueAction({ kind: "field_task", payload: task });
+    persist();
+    render();
+  }));
+  app.querySelectorAll("[data-complete-task]").forEach((b) => (b.onclick = () => {
+    const idx = state.fieldTasks.findIndex((task) => task.id === b.dataset.completeTask);
+    if (idx < 0) return;
+    const completed = completeFieldTask(state.fieldTasks[idx], { notes: "Completed from mobile task queue.", offline: !navigator.onLine });
+    state.fieldTasks[idx] = completed;
+    state = appendLedgerEvent(state, taskEvent(completed, true));
+    if (!navigator.onLine) syncService.queueAction({ kind: "field_task_completion", payload: completed });
+    persist();
+    render();
+  }));
+  app.querySelectorAll("[data-add-nutrient]").forEach((b) => (b.onclick = () => {
+    const record = createNutrientRecord({ fieldId: state.fields[0]?.id, nutrientType: "Nitrogen", plannedQuantity: 10, unit: "kg", applicationMethod: "fertigation", sourceType: "manual", notes: "Manual beta record; concentration missing if calculating from water." });
+    state.nutrientRecords.unshift(record);
+    state = appendLedgerEvent(state, nutrientLedgerEvent(record));
+    if (!navigator.onLine) syncService.queueAction({ kind: "nutrient_log", payload: record });
+    persist();
+    render();
+  }));
+  app.querySelectorAll("[data-generate-packet]").forEach((b) => (b.onclick = () => {
+    const events = (state.fieldLedgerEvents || []).slice(0, 10);
+    const artifact = createEvidenceArtifact({ linkedEventId: events[0]?.id || null, fieldId: state.fields[0]?.id || null, artifactType: "operational_summary", sourceMode: "system", truthLabel: "calculated" });
+    const packet = createEvidencePacket({ title: "Water decision evidence packet", moduleScope: "water", fieldScope: state.fields[0]?.id || null, events, artifacts: [artifact], missingInputs: events.length ? [] : ["field ledger events"] });
+    state.evidenceArtifacts.unshift(artifact);
+    state.evidencePackets.unshift(packet);
+    state = appendLedgerEvent(state, evidencePacketEvent(packet));
+    persist();
+    route = "more";
+    moreView = "proof";
+    render();
+  }));
   app.querySelectorAll("[data-mode]").forEach((b) => (b.onclick = async () => { state = b.dataset.mode === "demo" ? useDemoMode(state) : { ...state, mode: "real" }; persist(); await refreshWeather(true); render(); }));
   app.querySelectorAll("[data-refresh-weather]").forEach((b) => (b.onclick = async () => { await refreshWeather(true); render(); }));
   app.querySelectorAll("[data-assistant-query]").forEach((b) => (b.onclick = async () => {

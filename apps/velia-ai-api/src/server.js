@@ -27,7 +27,7 @@ async function createExpressApp() {
   expressApp.use(requestLogger);
   expressApp.use(rateLimitPlaceholder);
 
-  expressApp.get("/health", (_req, res) => res.json({ ok: true, service: "velia-ai-api" }));
+  expressApp.get("/health", (_req, res) => res.json({ ok: true, service: "terris-ai-api" }));
   expressApp.use("/v1/decisions", decisionsRouter);
   expressApp.use("/v1/assistant", assistantRouter);
   expressApp.use("/v1/voice", voiceRouter);
@@ -73,7 +73,7 @@ function createFallbackApp() {
 
     try {
       if (req.method === "GET" && url.pathname === "/health") {
-        return sendJson(res, 200, { ok: true, service: "velia-ai-api", runtime: "node-fallback" });
+        return sendJson(res, 200, { ok: true, service: "terris-ai-api", runtime: "node-fallback" });
       }
 
       const body = req.method === "POST" ? await readJson(req) : {};
@@ -167,6 +167,6 @@ export const app = await createApp();
 
 if (process.env.NODE_ENV !== "test") {
   http.createServer(app).listen(config.port, () => {
-    console.log(JSON.stringify({ level: "info", msg: "velia-ai-api started", port: config.port }));
+    console.log(JSON.stringify({ level: "info", msg: "terris-ai-api started", port: config.port }));
   });
 }

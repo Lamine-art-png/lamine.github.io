@@ -45,7 +45,7 @@ export class OpenAIProvider extends LLMProvider {
       body.text = {
         format: {
           type: "json_schema",
-          name: options.schemaName || "velia_irrigation_decision",
+          name: options.schemaName || "terris_irrigation_decision",
           schema: options.schema,
           strict: true,
         },

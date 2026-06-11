@@ -32,12 +32,16 @@ make tfapply
 <!-- trigger deploy -->
 
 
-## Velia AI backend + mobile wiring
+## Terris AI backend + mobile wiring
 
-- Backend app: `apps/velia-ai-api` (Express).
-- Mobile app: `apps/velia-mobile` calls backend-first APIs with local fallback for weather, daily decisions, assistant responses, and voice interpretation.
-- Velia Real Intelligence v1 adds backend-only Gemini/OpenAI reasoning adapters, Gemini/OpenAI embeddings, OpenWeather weather retrieval, local RAG ingestion, JSON memory, provenance, guardrails, and deterministic fallback.
+- Backend app: `apps/velia-ai-api` (Express, retained compatibility path).
+- Mobile app: `apps/velia-mobile` (retained compatibility path) calls backend-first APIs with local fallback for weather, daily decisions, assistant responses, and voice interpretation.
+- Terris Real Intelligence v1 adds backend-only Gemini/OpenAI reasoning adapters, Gemini/OpenAI embeddings, OpenWeather weather retrieval, local RAG ingestion, JSON memory, provenance, guardrails, and deterministic fallback.
 - Do not put provider keys in frontend code. Configure `apps/velia-ai-api/.env` from `.env.example`.
+- Product architecture: `docs/TERRIS_PRODUCT_ARCHITECTURE.md`.
+- Field ledger: `docs/TERRIS_FIELD_LEDGER.md`.
+- Rename compatibility: `docs/TERRIS_RENAME_COMPATIBILITY.md`.
+- Module registry: `docs/TERRIS_MODULE_REGISTRY.md`.
 
 ### Backend quick run
 
@@ -55,7 +59,7 @@ Optional live providers:
 - `EMBEDDING_PROVIDER=gemini|openai`
 - `WEATHER_PROVIDER=openweather` with `OPENWEATHER_API_KEY`
 
-Without keys, Velia stays in local deterministic/mock fallback mode.
+Without keys, Terris stays in local deterministic/mock fallback mode.
 
 ### Backend tests
 

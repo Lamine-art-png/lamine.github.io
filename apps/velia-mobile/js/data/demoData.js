@@ -17,6 +17,7 @@ export const demoScenarios = {
 };
 
 export const demoProfile = {
+  demoLabel: "Representative demo data",
   role: "farmer",
   farm: { name: "Demo Farm", location: "Napa Valley", units: "metric", hardware: "connected" },
   language: "en",
@@ -43,4 +44,50 @@ export const demoProfile = {
   irrigationLogs: [],
   fieldNotes: [],
   observations: [],
+  nutrientRecords: [
+    {
+      id: "demo-nutrient-1",
+      fieldId: "demo-field-1",
+      nutrientType: "Nitrogen",
+      sourceType: "representative demo data",
+      plannedQuantity: 24,
+      appliedQuantity: 22,
+      unit: "kg",
+      applicationMethod: "fertigation",
+      timestamp: new Date(Date.now() - 30 * 3600000).toISOString(),
+      linkedIrrigationEventId: null,
+      truthLabel: "reported",
+      notes: "Representative demo fertigation record.",
+      missingData: [],
+      demo: true,
+    },
+  ],
+  pumpRuntimeEvents: [
+    {
+      id: "demo-runtime-1",
+      fieldId: "demo-field-1",
+      pumpId: "demo-pump-1",
+      runtimeMinutes: 90,
+      estimatedKwh: 18,
+      estimatedCost: 4.5,
+      timestamp: new Date(Date.now() - 28 * 3600000).toISOString(),
+      truthLabel: "estimated",
+      limitations: ["Representative demo estimate; not live utility data."],
+      demo: true,
+    },
+  ],
+  fieldTasks: [
+    {
+      id: "demo-task-1",
+      title: "Verify last irrigation outcome",
+      module: "water",
+      taskType: "verify_application",
+      priority: "high",
+      fieldId: "demo-field-1",
+      status: "open",
+      offlineSyncState: "synced",
+      provenance: { source: "representative demo data" },
+    },
+  ],
+  fieldLedgerEvents: [],
 };

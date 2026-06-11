@@ -1,4 +1,4 @@
-const CACHE_NAME = "velia-v1";
+const CACHE_NAME = "terris-v1";
 const ASSETS = ["./","./index.html","./styles.css","./js/app.js","./manifest.webmanifest"];
 
 self.addEventListener("install", (event) => {

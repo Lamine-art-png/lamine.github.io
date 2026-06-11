@@ -13,6 +13,12 @@ export function createInitialState() {
     irrigationLogs: [],
     fieldNotes: [],
     observations: [],
+    nutrientRecords: [],
+    pumpRuntimeEvents: [],
+    fieldTasks: [],
+    evidenceArtifacts: [],
+    evidencePackets: [],
+    fieldLedgerEvents: [],
     recommendationHistory: [],
     remoteDecisions: {},
     alertHistory: [],
@@ -59,6 +65,12 @@ export function useDemoMode(state) {
     observations: demoProfile.observations || [],
     language: demoProfile.language,
     units: demoProfile.farm.units,
+    nutrientRecords: demoProfile.nutrientRecords || [],
+    pumpRuntimeEvents: demoProfile.pumpRuntimeEvents || [],
+    fieldTasks: demoProfile.fieldTasks || [],
+    evidenceArtifacts: [],
+    evidencePackets: [],
+    fieldLedgerEvents: demoProfile.fieldLedgerEvents || [],
   };
 }
 

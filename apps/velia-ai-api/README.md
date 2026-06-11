@@ -1,6 +1,6 @@
-# Velia AI API (Real Intelligence v1 foundation)
+# Terris AI API (Real Intelligence v1 foundation)
 
-Backend companion for `apps/velia-mobile`.
+Backend companion for `apps/velia-mobile`. The path is retained for local tooling compatibility while the active product name is Terris.
 
 ## Run locally
 
@@ -12,7 +12,7 @@ npm run dev
 
 API base URL defaults to `http://localhost:4310`.
 
-Copy `.env.example` to `.env` for local configuration. If no provider keys are set, Velia runs in local deterministic fallback mode.
+Copy `.env.example` to `.env` for local configuration. If no provider keys are set, Terris runs in local deterministic fallback mode.
 
 ## Endpoints
 

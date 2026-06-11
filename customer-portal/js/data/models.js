@@ -1,5 +1,5 @@
 /**
- * Core data model foundation for Velia.
+ * Core data model foundation for Terris.
  * JSDoc typedefs are used as typed contracts for the current static-app foundation.
  */
 
@@ -24,4 +24,4 @@
 /** @typedef {{ id: string; type: 'save_note'|'log_irrigation'|'navigate'|'reminder'|'noop'; payload: Record<string, unknown>; requiresLiveData?: boolean; queued?: boolean; }} VoiceAction */
 /** @typedef {{ id: string; sessionId: string; text: string; confidence: 'low'|'moderate'|'high'; uncertainty?: string; spoken: boolean; createdAt: string; }} VoiceAgentResponse */
 
-export const modelVersion = "velia-foundation-v1";
+export const modelVersion = "terris-foundation-v1";

@@ -1,4 +1,7 @@
-const DEFAULT_BASE_URL = (globalThis?.localStorage?.getItem("veliaApiBaseUrl") || "http://localhost:4310").replace(/\/$/, "");
+const apiBaseUrl = globalThis?.localStorage?.getItem("terrisApiBaseUrl")
+  || globalThis?.localStorage?.getItem("veliaApiBaseUrl")
+  || "http://localhost:4310";
+const DEFAULT_BASE_URL = apiBaseUrl.replace(/\/$/, "");
 
 async function post(path, body) {
   const controller = new AbortController();

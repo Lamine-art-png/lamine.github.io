@@ -49,6 +49,24 @@ export function createVoiceTimelineEntry(payload) {
     intent: payload.intent,
     outcome: payload.outcome,
     fieldId: payload.fieldId || null,
+    attachmentRefs: payload.attachmentRefs || [],
+    translation: payload.translation || null,
     createdAt: new Date().toISOString(),
+  };
+}
+
+export function createAttachmentMetadata(payload) {
+  return {
+    id: payload.id || `attachment-${Date.now()}`,
+    fieldId: payload.fieldId,
+    blockId: payload.blockId || null,
+    type: payload.type,
+    uri: payload.uri || null,
+    name: payload.name || "",
+    mimeType: payload.mimeType || "",
+    geotag: payload.geotag || null,
+    sourceMode: payload.sourceMode || "manual",
+    syncStatus: payload.syncStatus || "queued",
+    createdAt: payload.createdAt || new Date().toISOString(),
   };
 }

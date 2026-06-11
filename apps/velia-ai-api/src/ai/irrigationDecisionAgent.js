@@ -63,7 +63,7 @@ function redactableContextForPrompt({ context, signals, memory, rag }) {
 }
 
 function buildReasoningPrompt(payload) {
-  return `You are Velia, a field-specific irrigation decision engine.
+  return `You are Terris, a field-specific irrigation decision engine.
 Return only JSON matching the schema. Use the deterministic signals as safety-authoritative constraints.
 Do not invent sensor data, exact soil moisture, satellite evidence, weather, sources, yield guarantees, or water-savings guarantees.
 If data is missing, name it and choose the smallest useful field check.
@@ -107,7 +107,7 @@ async function callReasoningModel({ prompt, fallbackDecision, provider }) {
     const first = await provider.generate(prompt, {
       task: "irrigation_decision",
       schema: decisionResponseSchema,
-      schemaName: "velia_irrigation_decision",
+      schemaName: "terris_irrigation_decision",
       fallbackDecision,
     });
     let parsed = null;
@@ -129,7 +129,7 @@ Repair it now. Return only valid JSON matching the schema. Previous output:
 ${first.text}`, {
       task: "irrigation_decision_repair",
       schema: decisionResponseSchema,
-      schemaName: "velia_irrigation_decision",
+      schemaName: "terris_irrigation_decision",
       fallbackDecision,
       temperature: 0,
     });

@@ -1,8 +1,8 @@
-# Velia Mobile + Agentic AI Brain v0.1 (AGRO-AI)
+# Terris Mobile + Agentic AI Brain v0.1 (AGRO-AI)
 
-Velia helps farms make better water decisions, act faster, and understand what happened across their fields.
+Terris helps farms make better water decisions, act faster, and understand what happened across their fields.
 
-This app includes a frontend-local **Agentic AI Brain architecture** for offline fallback, while live intelligence runs backend-first through `apps/velia-ai-api`.
+This app includes a frontend-local **Agentic AI Brain architecture** for offline fallback, while live intelligence runs backend-first through `apps/velia-ai-api`. The path is retained for local tooling compatibility while the active product name is Terris.
 
 ## AI Brain architecture (`js/ai/`)
 
@@ -194,7 +194,7 @@ python -m http.server 4174
 ## Tests
 
 ```bash
-cd apps/velia-mobile
+cd apps/terris-mobile
 npm test
 ```
 
@@ -212,7 +212,7 @@ npm test
 `js/services/apiClient.js` uses `http://localhost:4310` by default and can be overridden with:
 
 ```js
-localStorage.setItem("veliaApiBaseUrl", "https://your-api-host");
+localStorage.setItem("terrisApiBaseUrl", "https://your-api-host");
 ```
 
 Runtime behavior is backend-first with local fallback for:
@@ -226,10 +226,10 @@ The mobile app never stores LLM, embedding, or weather provider API keys. Provid
 ## Real Intelligence v1 UI behavior
 
 - Today renders immediately using local deterministic fallback.
-- When online, Velia refreshes the current field decision from the backend and caches it briefly.
+- When online, Terris refreshes the current field decision from the backend and caches it briefly.
 - If backend or providers are unavailable, local recommendations, observations, logs, voice actions, and sync queue behavior continue.
 - Weather cards show the age of the weather context.
-- Detailed provenance is tucked into the expandable `Why Velia recommended this` section so the farmer-facing screen stays simple.
+- Detailed provenance is tucked into the expandable `View evidence trail` section so the farmer-facing screen stays simple.
 
 ## Local run with backend
 
@@ -252,7 +252,7 @@ python -m http.server 4174
 Open `http://localhost:4174`. To point at another backend:
 
 ```js
-localStorage.setItem("veliaApiBaseUrl", "https://your-api-host");
+localStorage.setItem("terrisApiBaseUrl", "https://your-api-host");
 ```
 
 ## Testing note
