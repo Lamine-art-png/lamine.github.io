@@ -148,6 +148,18 @@ def _make_analyzed_session(client):
     return session_id
 
 
+def _assert_no_evidence_action_writes(session_id):
+    from app.services.workbench_engine import SESSIONS
+    store = SESSIONS[session_id]
+    assert store.get('evidence_actions', []) == []
+    action_audits = [
+        event for event in store.get('audit', [])
+        if 'evidence action recorded' in str(event.get('event', '')).lower()
+        or 'evidence order override' in str(event.get('event', '')).lower()
+    ]
+    assert action_audits == []
+
+
 def test_cannot_apply_before_schedule_returns_409(client):
     session_id = _make_analyzed_session(client)
     r = client.post(f'/v1/workbench/sessions/{session_id}/actions/applied', json={'actor': 'Ops', **_ALPHA_SCOPE})
@@ -718,22 +730,40 @@ def test_scheduling_409_message_no_override_hint(client):
 
 # --- Section 8: New regression tests ------------------------------------------
 
-def test_scheduling_empty_session_fails_409(client):
-    """Empty session (no analysis) must return 409 when trying to schedule."""
+def test_scheduling_empty_session_fails_422_without_scope(client):
+    """Empty session (no analysis) must require farm/block before scheduling."""
     session = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()
     sid = session['session_id']
     r = client.post(f'/v1/workbench/sessions/{sid}/actions/schedule', json={'actor': 'Ops'})
-    assert r.status_code == 409
-    assert 'no analysis' in r.json()['detail'].lower() or 'scheduling not allowed' in r.json()['detail'].lower()
+    assert r.status_code == 422
+    assert 'scope' in r.json()['detail'].lower()
+    _assert_no_evidence_action_writes(sid)
 
 
-def test_scheduling_empty_session_with_override_reason_still_fails_409(client):
-    """override_reason must not bypass the scheduling gate for an empty session."""
+def test_scheduling_empty_session_with_override_reason_still_fails_422(client):
+    """override_reason must not bypass missing-scope enforcement for an empty session."""
     session = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()
     sid = session['session_id']
     r = client.post(f'/v1/workbench/sessions/{sid}/actions/schedule',
                     json={'actor': 'Ops', 'override_reason': 'Emergency override'})
-    assert r.status_code == 409
+    assert r.status_code == 422
+    assert 'scope' in r.json()['detail'].lower()
+    _assert_no_evidence_action_writes(sid)
+
+
+def test_empty_session_non_schedule_actions_with_override_require_scope(client):
+    """override_reason must not allow unscoped applied/observed/verified actions."""
+    endpoints = ('applied', 'observe', 'verify')
+    for endpoint in endpoints:
+        session = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()
+        sid = session['session_id']
+        r = client.post(
+            f'/v1/workbench/sessions/{sid}/actions/{endpoint}',
+            json={'actor': 'Ops', 'override_reason': 'Manual operator override'},
+        )
+        assert r.status_code == 422, f"{endpoint} without scope must be rejected before override handling: {r.text}"
+        assert 'scope' in r.json()['detail'].lower()
+        _assert_no_evidence_action_writes(sid)
 
 
 def test_empty_session_schedule_leaves_evidence_unchanged(client):
@@ -741,13 +771,14 @@ def test_empty_session_schedule_leaves_evidence_unchanged(client):
     session = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()
     sid = session['session_id']
     r = client.post(f'/v1/workbench/sessions/{sid}/actions/schedule', json={'actor': 'Ops'})
-    assert r.status_code == 409
+    assert r.status_code == 422
     chain = client.get(f'/v1/workbench/sessions/{sid}/evidence-chain').json()
     # Evidence steps exist (pre-seeded) but none should be recorded after a rejected gate.
     assert all(s.get('status') == 'Pending' for s in chain.get('evidence_chain', [])), (
         "Rejected scheduling must not advance any evidence step"
     )
     assert chain.get('audit_events', []) == [], "Rejected scheduling must not write audit events"
+    _assert_no_evidence_action_writes(sid)
 
 
 def test_farm_a_field_notes_do_not_satisfy_farm_b(client):
@@ -2035,6 +2066,15 @@ def test_action_with_only_farm_returns_422(client):
     assert r.status_code == 422, f"Expected 422 for partial scope, got {r.status_code}: {r.text}"
 
 
+def test_action_with_only_block_returns_422(client):
+    """Evidence action with only selected_block (no farm) returns 422."""
+    sid = _make_analyzed_session(client)
+    r = client.post(f'/v1/workbench/sessions/{sid}/actions/schedule',
+                    json={'actor': 'Ops', 'selected_block': _ALPHA_BLOCK})
+    assert r.status_code == 422, f"Expected 422 for partial scope, got {r.status_code}: {r.text}"
+    assert 'scope' in r.json()['detail'].lower()
+
+
 def test_action_with_correct_scope_succeeds(client):
     """Evidence action with correct canonical scope succeeds (200)."""
     sid = _make_analyzed_session(client)
@@ -2119,12 +2159,52 @@ def test_unanalyzed_scope_chain_has_scope_status_unanalyzed(client):
             assert step['status'] == 'Pending', f"Recommended must be Pending for unanalyzed scope: {step}"
 
 
-def test_empty_session_action_without_scope_still_reaches_scheduling_gate(client):
-    """Empty session (no analysis, no latest_analyzed_scope) reaches scheduling gate, not scope guard."""
+def test_empty_session_action_without_scope_returns_422_before_scheduling_gate(client):
+    """Empty session (no analysis, no latest_analyzed_scope) still requires farm/block scope."""
     session = client.post('/v1/workbench/sessions', json={'mode': 'uploaded'}).json()
     sid = session['session_id']
-    # No analysis → no latest_analyzed_scope → scope guard bypassed → scheduling gate → 409
     r = client.post(f'/v1/workbench/sessions/{sid}/actions/schedule', json={'actor': 'Ops'})
-    assert r.status_code == 409, f"Empty session without analysis must reach 409 scheduling gate, got {r.status_code}: {r.text}"
+    assert r.status_code == 422, f"Empty session without scope must reach 422 scope guard, got {r.status_code}: {r.text}"
     detail = r.json()['detail'].lower()
-    assert 'no analysis' in detail or 'scheduling not allowed' in detail
+    assert 'scope' in detail
+    _assert_no_evidence_action_writes(sid)
+
+
+def test_live_degraded_placeholder_scope_cannot_record_operational_evidence(client):
+    """Degraded live analysis placeholder farm/block is display-only, not operationally mapped."""
+    analyzed = client.post('/v1/workbench/analyze-live', json={'source': 'wiseconn', 'entity_id': '162803'})
+    assert analyzed.status_code == 200
+    body = analyzed.json()
+    session_id = body['session_id']
+    context = body['normalized_context']
+    assert context.get('farm') == 'Connected field'
+    assert context.get('block') == '162803'
+    assert context.get('operational_scope_mapped') is False
+
+    r = client.post(
+        f'/v1/workbench/sessions/{session_id}/actions/schedule',
+        json={'actor': 'Ops', 'selected_farm': 'Connected field', 'selected_block': '162803'},
+    )
+    assert r.status_code == 409
+    assert 'mapped to a farm and block' in r.json()['detail'].lower()
+    _assert_no_evidence_action_writes(session_id)
+
+
+def test_override_reason_cannot_bypass_unmapped_live_scope(client):
+    """override_reason must not permit operational writes for unmapped live placeholder scopes."""
+    analyzed = client.post('/v1/workbench/analyze-live', json={'source': 'wiseconn', 'entity_id': '162803'})
+    assert analyzed.status_code == 200
+    session_id = analyzed.json()['session_id']
+
+    r = client.post(
+        f'/v1/workbench/sessions/{session_id}/actions/applied',
+        json={
+            'actor': 'Ops',
+            'selected_farm': 'Connected field',
+            'selected_block': '162803',
+            'override_reason': 'Manual field operation',
+        },
+    )
+    assert r.status_code == 409
+    assert 'mapped to a farm and block' in r.json()['detail'].lower()
+    _assert_no_evidence_action_writes(session_id)

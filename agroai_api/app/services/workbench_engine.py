@@ -378,6 +378,11 @@ class ScopeMismatchError(Exception):
         )
 
 
+class OperationalScopeUnmapped(Exception):
+    """Analyzed scope is not mapped enough for operational evidence writes."""
+    pass
+
+
 def _is_schedulable(recommendation: Dict[str, Any]) -> Tuple[bool, List[str]]:
     reasons: List[str] = []
     if recommendation.get("kernel_action") != "irrigate":
@@ -823,6 +828,7 @@ def assemble_context_from_artifacts(
     context["scope_defaulted"] = bool(_total_profiles > 1 and not selected_farm)
     context["scope_defaulted_farm"] = farm if context["scope_defaulted"] else None
     context["scope_defaulted_block"] = block if context["scope_defaulted"] else None
+    context["operational_scope_mapped"] = bool(_rows_for(profile_rows, farm, block))
 
     context["mapping_completeness"] = _mapping_completeness(context, rows)
     context["source_rows"] = _build_source_rows(
@@ -866,6 +872,7 @@ def assemble_context_from_live(source: str, entity_id: str) -> Dict[str, Any]:
         "warnings": [],
         "live_inputs_used": [],
         "context_origin": "live",
+        "operational_scope_mapped": False,
     }
 
 
@@ -1545,6 +1552,7 @@ def _public_context(context: Dict[str, Any]) -> Dict[str, Any]:
         "scope_defaulted": context.get("scope_defaulted", False),
         "scope_defaulted_farm": context.get("scope_defaulted_farm"),
         "scope_defaulted_block": context.get("scope_defaulted_block"),
+        "operational_scope_mapped": context.get("operational_scope_mapped", False),
         **(context.get("mapping_completeness") or {}),
     }
 
@@ -1831,25 +1839,33 @@ def record_evidence_action(
     if not store:
         raise KeyError("Session not found")
 
-    # Scope enforcement: sessions that have an analyzed scope always require farm+block on actions.
+    # Scope enforcement: every operational evidence action must carry an exact farm+block.
+    # This runs before scheduling gates, evidence-order overrides, audit writes, or action writes.
     req_farm = (selected_farm or "").strip()
     req_block = (selected_block or "").strip()
+    if not req_farm or not req_block:
+        provided = "selected_farm" if req_farm else "selected_block" if req_block else "neither selected_farm nor selected_block"
+        raise ScopeMissingError(
+            f"Evidence action '{action_type}' requires selected_farm and selected_block. "
+            f"Received {provided}. Include both in the request body."
+        )
+
     latest_scope = store.get("latest_analyzed_scope")
     if latest_scope:
         exp_farm = latest_scope.get("farm", "")
         exp_block = latest_scope.get("block", "")
-        if not req_farm or not req_block:
-            raise ScopeMissingError(
-                f"Evidence action '{action_type}' requires selected_farm and selected_block. "
-                f"Latest analyzed scope is {exp_farm} / {exp_block}. "
-                "Include both in the request body."
-            )
         if req_farm != exp_farm or req_block != exp_block:
             raise ScopeMismatchError(action_type, exp_farm, exp_block, req_farm, req_block)
 
     # Resolve the analysis and prior actions for this scope.
     scope_key = f"{req_farm}||{req_block}"
     scope_analysis = store.get("analyses_by_scope", {}).get(scope_key)
+    if scope_analysis is not None:
+        normalized_context = getattr(scope_analysis, "normalized_context", {}) or {}
+        if not normalized_context.get("operational_scope_mapped", False):
+            raise OperationalScopeUnmapped(
+                "Operational evidence cannot be recorded until this provider entity is mapped to a farm and block."
+            )
     scope_actions = [
         a for a in store.get("evidence_actions", [])
         if a.get("selected_farm") == req_farm and a.get("selected_block") == req_block

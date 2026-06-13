@@ -5,7 +5,7 @@ from pydantic import BaseModel
 
 from app.models.workbench import WorkbenchActionRequest, WorkbenchAnalysisRequest, WorkbenchLiveAnalysisRequest
 from app.services import workbench_engine as engine
-from app.services.workbench_engine import EvidenceOrderViolation, SchedulingNotAllowed, ScopeMissingError, ScopeMismatchError
+from app.services.workbench_engine import EvidenceOrderViolation, OperationalScopeUnmapped, SchedulingNotAllowed, ScopeMissingError, ScopeMismatchError
 
 router = APIRouter(prefix="/workbench", tags=["workbench"])
 MAX_FILE = 10 * 1024 * 1024
@@ -111,6 +111,8 @@ def _record_action(session_id: str, action_type: str, payload: WorkbenchActionRe
         raise HTTPException(422, f"Scope required: {exc}")
     except ScopeMismatchError as exc:
         raise HTTPException(409, f"Scope mismatch: {exc}")
+    except OperationalScopeUnmapped as exc:
+        raise HTTPException(409, str(exc))
     except EvidenceOrderViolation as exc:
         raise HTTPException(
             409,
