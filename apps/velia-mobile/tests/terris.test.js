@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import { storage } from "../js/services/storage.js";
 import { syncService } from "../js/services/sync.js";
+import { applyVoiceAction, parseVoiceCommand } from "../js/services/voiceAgent.js";
 import { createTerrisFieldEvent, appendLedgerEvent, appendRecommendationEventIfNew, fieldObservationEvent, recommendationFingerprint, safeRandomUuid, waterAppliedEvent, waterRecommendationEvent } from "../js/domain/fieldLedger.js";
 import { terrisModuleRegistryForMode, TERRIS_FEATURE_FLAGS } from "../js/domain/moduleRegistry.js";
 import { createNutrientRecord, nutrientLedgerEvent, plannedAppliedVariance } from "../js/domain/nutrients.js";
@@ -273,11 +274,13 @@ test("app reconciles global ledger sync metadata from the current queue", async 
   const originalNavigator = global.navigator;
   Object.defineProperty(global, "navigator", { value: { onLine: true }, configurable: true, writable: true });
   storage.set("queue", []);
+  syncService.configure({ backendSyncEnabled: false });
   try {
     syncService.queueAction({ kind: "irrigation_log", payload: { id: "log-1" } });
     assert.equal(syncService.status().pending, 1);
-    await syncService.flushQueue();
-    assert.equal(syncService.status().pending, 0);
+    const flushed = await syncService.flushQueue();
+    assert.equal(flushed.reason, "backend_sync_not_enabled");
+    assert.equal(syncService.status().pending, 1);
     const appSource = fs.readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
     assert.ok(appSource.includes("function reconcileLedgerSyncMetadata"));
     assert.ok(appSource.includes("syncService.status().pending > 0"));
@@ -285,8 +288,44 @@ test("app reconciles global ledger sync metadata from the current queue", async 
     assert.ok(appSource.includes("await syncService.flushQueue(); reconcileLedgerSyncMetadata();"));
   } finally {
     storage.set("queue", []);
+    syncService.configure({ backendSyncEnabled: false });
     Object.defineProperty(global, "navigator", { value: originalNavigator, configurable: true, writable: true });
   }
+});
+
+test("offline ops and proof actions preserve local queue semantics", () => {
+  const task = createFieldTask({ title: "Inspect pump", module: "ops", taskType: "inspect_pump", fieldId: "f1", offlineSyncState: "queued", representativeDemo: true });
+  const completed = completeFieldTask(task, { notes: "Pump inspected.", attachments: ["photo-1"], offline: true });
+  const proofEvent = createTerrisFieldEvent({ id: "proof-e", eventType: "irrigation_applied", module: "water", farmId: "farm-1", fieldId: "f1", occurredAt: "2026-06-02T12:00:00.000Z" });
+  const proofScope = { moduleScope: "water", farmScope: "farm-1", dateWindow: { start: "2026-06-01", end: "2026-06-03" } };
+  const reviewSnapshot = { scope: proofScope, includedEventIds: [proofEvent.id], reviewSignature: evidenceReviewSignature(proofScope, [proofEvent]), reviewedAt: "2026-06-03T00:00:00.000Z" };
+  const packet = createEvidencePacket({ ...proofScope, events: [proofEvent], reviewConfirmed: true, reviewSnapshot, syncStatus: "queued", representativeDemo: true });
+  const appSource = fs.readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
+  assert.equal(taskEvent(task).ledgerMetadata.queuedForSync, true);
+  assert.equal(taskEvent(completed, true).ledgerMetadata.queuedForSync, true);
+  assert.equal(packet.syncStatus, "queued");
+  assert.equal(packet.reviewSignature, reviewSnapshot.reviewSignature);
+  assert.equal(evidencePacketEvent(packet).ledgerMetadata.queuedForSync, true);
+  assert.ok(appSource.includes('queueSyncAction({ kind: "task_create", payload: task })'));
+  assert.ok(appSource.includes('queueSyncAction({ kind: "task_complete", payload: completed })'));
+  assert.ok(appSource.includes('queueSyncAction({ kind: "proof_packet", payload: packet })'));
+});
+
+test("offline actionable voice command queues exactly one operational action", () => {
+  storage.set("queue", []);
+  const command = parseVoiceCommand("Field north block looks dry", { fieldId: "f1" });
+  applyVoiceAction(command, {
+    onIrrigation: (payload) => syncService.queueAction({ kind: "irrigation_log", payload }),
+    onCondition: (payload) => syncService.queueAction({ kind: "observation", payload }),
+    onNote: (payload) => syncService.queueAction({ kind: "field_note", payload }),
+    onNoop: () => {},
+  });
+  const queue = syncService.getQueue();
+  const voiceSource = fs.readFileSync(new URL("../js/services/voiceAgent.js", import.meta.url), "utf8");
+  assert.equal(queue.length, 1);
+  assert.equal(queue[0].kind, "observation");
+  assert.ok(!voiceSource.includes('kind: "voice"'));
+  storage.set("queue", []);
 });
 
 test("materially changed recommendation creates one new event and local/backend are distinguishable", () => {

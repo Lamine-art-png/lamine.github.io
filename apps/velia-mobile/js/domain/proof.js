@@ -104,6 +104,7 @@ export function createEvidencePacket(input) {
     truthLabelSummary: [...new Set(events.map((event) => event.truthLabel).filter(Boolean))],
     disclaimer: TERRIS_PROOF_DISCLAIMER,
     representativeDemo: Boolean(input.representativeDemo),
+    syncStatus: input.syncStatus || (input.offline ? "queued" : "synced"),
   };
 }
 
@@ -120,5 +121,6 @@ export function evidencePacketEvent(packet) {
     dataQuality: packet.status === "draft_missing_evidence" ? "blocked" : "medium",
     payload: { ...packet, representativeDemo: Boolean(packet.representativeDemo) },
     limitations: packet.limitations,
+    queuedForSync: packet.syncStatus === "queued",
   });
 }

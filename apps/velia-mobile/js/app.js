@@ -1,6 +1,6 @@
 import { translations } from "./i18n/translations.js";
 import { syncService } from "./services/sync.js";
-import { applyVoiceAction, parseVoiceCommand, saveOfflineVoiceAction } from "./services/voiceAgent.js";
+import { applyVoiceAction, parseVoiceCommand } from "./services/voiceAgent.js";
 import { weatherService } from "./services/weatherService.js";
 import { apiClient } from "./services/apiClient.js";
 import { actionMappingFor, alertFingerprint, alertGroup, alertKey, confidencePresentation, dedupeActivityRows, escapeHtml, confidenceText, isAlertDismissed, normalizeDecisionAction, readConfidence, recommendationContextLabel, relativeTime, shortDate, sortAlerts, weatherAgeLabel } from "./services/uiHelpers.js";
@@ -161,7 +161,7 @@ function addIrrigationLog(payload) {
   if (field) recordLocalRecommendationTransitions([field]);
   if (offline) queueSyncAction({ kind: "irrigation_log", payload: log });
   persist();
-  showMessage(navigator.onLine ? "Irrigation log saved." : "Saved offline. Terris will sync when connected.");
+  showMessage(navigator.onLine ? "Irrigation log saved locally." : "Saved locally. Backend sync is not enabled yet.");
 }
 
 function addFieldNote(payload) {
@@ -169,7 +169,7 @@ function addFieldNote(payload) {
   state.fieldNotes.unshift(note);
   if (!navigator.onLine) queueSyncAction({ kind: "field_note", payload: note });
   persist();
-  showMessage(navigator.onLine ? "Field note added." : "Field note saved offline.");
+  showMessage(navigator.onLine ? "Field note saved locally." : "Saved locally. Backend sync is not enabled yet.");
 }
 
 function updateCondition(payload) {
@@ -185,7 +185,7 @@ function updateCondition(payload) {
   if (field) recordLocalRecommendationTransitions([field]);
   if (offline) queueSyncAction({ kind: "observation", payload: observation });
   persist();
-  showMessage(navigator.onLine ? "Condition updated." : "Condition saved offline.");
+  showMessage(navigator.onLine ? "Condition saved locally." : "Saved locally. Backend sync is not enabled yet.");
 }
 
 function recordRecommendationLedgerEvent(field, recommendation, options = {}) {
@@ -436,7 +436,7 @@ function buildChanges(field, rec) {
   if (weather?.heatRisk === "high" || weather?.heatRisk === "elevated") changes.push(["Heat pressure elevated", "Terris is weighing afternoon demand more carefully."]);
   const lastObs = state.observations.find((o) => o.fieldId === field.id);
   if (lastObs) changes.push(["New field observation", `${field.name}: ${lastObs.condition}.`]);
-  if (rec.sourceMode === "backend") changes.push(["Backend decision synced", "Terris refreshed the recommendation with server-side intelligence."]);
+  if (rec.sourceMode === "backend") changes.push(["Backend decision refreshed", "Terris refreshed the recommendation with server-side intelligence."]);
   if (!changes.length) changes.push(["No major overnight shift", "Weather, logs, and observations remain consistent."]);
   return `<section class="card section-card"><div class="section-heading"><p class="card-label">What changed overnight</p></div>${changes.slice(0, 4).map(([title, body]) => `<div class="change-row"><strong>${h(title)}</strong><p>${h(body)}</p></div>`).join("")}</section>`;
 }
@@ -643,8 +643,7 @@ function demoBadge(key) {
 
 function ledgerStatusCard() {
   const sync = syncStatus();
-  const pending = sync.pending > 0;
-  return `<section class="card section-card"><p class="card-label">Terris Ledger status</p><div class="data-source-list"><span>Storage: Local mobile buffer</span><span>Retention: Latest ${h(state.ledgerMetadata?.retentionLimit || 500)} events</span><span>Backend persistence: Not enabled</span><span>Pending sync: ${pending ? "Yes" : "No"}</span></div><p class="muted">This is not yet a durable audit archive.</p></section>`;
+  return `<section class="card section-card"><p class="card-label">Terris Ledger status</p><div class="data-source-list"><span>Storage: Local mobile buffer</span><span>Retention: Latest ${h(state.ledgerMetadata?.retentionLimit || 500)} events</span><span>Backend persistence: Not enabled</span><span>Local actions awaiting backend sync: ${h(sync.pending || 0)}</span></div><p class="muted">This is not yet a durable audit archive.</p></section>`;
 }
 
 function nutrientsBetaSurface() {
@@ -915,8 +914,9 @@ function bind() {
       });
       state.fieldTasks.unshift(task);
       state = appendLedgerEvent(state, taskEvent(task, false));
+      if (!navigator.onLine) queueSyncAction({ kind: "task_create", payload: task });
       persist();
-      showMessage("Field task created.");
+      showMessage(navigator.onLine ? "Field task saved locally." : "Saved locally. Backend sync is not enabled yet.");
       render();
     } catch (error) {
       showMessage(error.message);
@@ -940,8 +940,9 @@ function bind() {
       });
       state.fieldTasks = (state.fieldTasks || []).map((row) => row.id === task.id ? completed : row);
       state = appendLedgerEvent(state, taskEvent(completed, true));
+      if (!navigator.onLine) queueSyncAction({ kind: "task_complete", payload: completed });
       persist();
-      showMessage("Task completion recorded separately from agronomic verification.");
+      showMessage(navigator.onLine ? "Task completion saved locally, separately from agronomic verification." : "Saved locally. Backend sync is not enabled yet.");
       render();
     } catch (error) {
       showMessage(error.message);
@@ -990,6 +991,7 @@ function bind() {
     const currentSignature = evidenceReviewSignature(scope, events);
     const snapshotMatches = proofReviewSnapshot?.reviewSignature === currentSignature
       && JSON.stringify([...(proofReviewSnapshot?.includedEventIds || [])].sort()) === JSON.stringify(events.map((event) => event.id).sort());
+    const offline = !navigator.onLine;
     const packet = createEvidencePacket({
       moduleScope: scope.moduleScope,
       farmScope: scope.farmScope,
@@ -1002,11 +1004,13 @@ function bind() {
       reviewSnapshot: proofReviewSnapshot,
       missingInputs: snapshotMatches ? events.length ? [] : ["reviewable ledger evidence"] : ["preview candidate events for the current scope"],
       representativeDemo: representativeDemoFor("proof"),
+      syncStatus: offline ? "queued" : "synced",
     });
     state.evidencePackets.unshift(packet);
     state = appendLedgerEvent(state, evidencePacketEvent(packet));
+    if (offline) queueSyncAction({ kind: "proof_packet", payload: packet });
     persist();
-    showMessage(packet.status === "draft_missing_evidence" ? "Draft packet saved with missing evidence clearly labeled." : "Operational evidence packet saved.");
+    showMessage(packet.status === "draft_missing_evidence" ? "Draft packet saved locally with missing evidence clearly labeled." : "Operational evidence packet saved locally.");
     render();
   };
   app.querySelectorAll("[data-resolve-alert]").forEach((b) => (b.onclick = () => {
@@ -1054,15 +1058,11 @@ function bind() {
   if (confirmVoice) confirmVoice.onclick = () => {
     const command = pendingVoiceCommand;
     if (!command) return;
-    if (!navigator.onLine) {
-      saveOfflineVoiceAction(command.action);
-      reconcileLedgerSyncMetadata({ persistState: false });
-    }
     applyVoiceAction(command, { onIrrigation: addIrrigationLog, onCondition: updateCondition, onNote: addFieldNote, onNoop: () => {} });
-    state.voiceTimeline.unshift(createVoiceTimelineEntry({ transcript, intent: command.intent, outcome: "confirmed", fieldId: command.action?.payload?.fieldId || state.fields[0]?.id }));
+    state.voiceTimeline.unshift(createVoiceTimelineEntry({ transcript, intent: command.intent, outcome: "confirmed", fieldId: command.action?.payload?.fieldId || state.fields[0]?.id, offline: !navigator.onLine }));
     state.voiceTimeline = state.voiceTimeline.slice(0, 20);
     pendingVoiceCommand = null;
-    voiceResponse = navigator.onLine ? "Voice action saved." : "Voice action queued offline.";
+    voiceResponse = navigator.onLine ? "Voice action saved locally." : "Saved locally. Backend sync is not enabled yet.";
     persist();
     render();
   };
