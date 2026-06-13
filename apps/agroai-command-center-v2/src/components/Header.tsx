@@ -19,14 +19,29 @@ export function Header() {
   const scopeDefaultedFarm = useCommandStore((s) => s.scopeDefaultedFarm);
   const scopeDefaultedBlock = useCommandStore((s) => s.scopeDefaultedBlock);
   const scopeSelectionPending = useCommandStore((s) => s.scopeSelectionPending);
+  const packageAwaitingAnalysis = useCommandStore((s) => s.packageAwaitingAnalysis);
+  const resultStale = useCommandStore((s) => s.resultStale);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const farmName = displayFarmName;
   const currentScenarioLabel = SCENARIO_OPTIONS.find((s) => s.id === scenarioId)?.name ?? "Validated operating block";
   const evidenceDone = evidence.filter((s) => s.status === "Complete").length;
   const evidenceTotal = evidence.length;
-  const sourceState = analysisPhase === "complete" ? "Sources reconciled" : "Analyzing sources";
-  const sourceTone = analysisPhase === "complete" ? "ok" : "warn";
+  const emptyPackage =
+    packageAwaitingAnalysis ||
+    (resultStale && recommendationOrigin === "insufficient_context" && displayFarmName === "No package loaded");
+  const sourceState = emptyPackage
+    ? "Awaiting source package"
+    : resultStale || scopeSelectionPending
+    ? "Prior result stale"
+    : analysisPhase === "complete"
+    ? "Sources reconciled"
+    : "Analyzing sources";
+  const sourceTone = emptyPackage || resultStale || scopeSelectionPending
+    ? "warn"
+    : analysisPhase === "complete"
+    ? "ok"
+    : "warn";
   const provenance = getProvenanceBadge(analysisMode, recommendationOrigin);
 
   // Show scope selectors whenever the backend has provided customer-safe available scopes.

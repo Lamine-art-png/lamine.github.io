@@ -620,22 +620,31 @@ function toast(message: string) {
   }, 3200);
 }
 
+function packageGenMatches(expectedPackageGen: number) {
+  return expectedPackageGen === _packageGen;
+}
+
 // Fetch the scoped evidence chain from the backend and update both the active
 // evidence display and the per-scope cache. Safe to call speculatively — ignored
 // when the session or scope no longer matches the current state.
-async function hydrateEvidenceChain(sessionId: string, farm: string, block: string) {
+async function hydrateEvidenceChain(
+  sessionId: string,
+  farm: string,
+  block: string,
+  expectedPackageGen: number = _packageGen,
+) {
   if (!sessionId || !farm || !block) return;
   try {
     const res = await apiClient.getEvidenceChain(sessionId, farm, block);
     if (!res.ok || !res.data?.evidence_chain) return;
     const chain = res.data.evidence_chain as EvidenceStep[];
     const scopeKey = `${farm}||${block}`;
-    // Only apply if this session/scope is still current.
+    // Only apply if this package/session/scope is still current.
+    if (!packageGenMatches(expectedPackageGen)) return;
     if (state.sessionId !== sessionId) return;
+    if (state.activeAnalyzedFarm !== farm || state.activeAnalyzedBlock !== block) return;
     set({ blockEvidenceChains: { ...state.blockEvidenceChains, [scopeKey]: chain } });
-    if (state.activeAnalyzedFarm === farm && state.activeAnalyzedBlock === block) {
-      set({ evidence: chain });
-    }
+    set({ evidence: chain });
   } catch {
     // Hydration failure is non-fatal; cached or base evidence remains.
   }
@@ -845,7 +854,12 @@ function pct(value: unknown, fallback: string): string {
   return fallback;
 }
 
-function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode) {
+function applyBackendResult(
+  result: WorkbenchAnalysisResult,
+  mode: AnalysisMode,
+  expectedPackageGen: number = _packageGen,
+) {
+  if (!packageGenMatches(expectedPackageGen)) return false;
   const sc = SCENARIOS[state.scenarioId];
   const rec = (result.recommendation ?? {}) as Record<string, unknown>;
   const summary = (result.report_summary ?? {}) as Record<string, unknown>;
@@ -1034,8 +1048,9 @@ function applyBackendResult(result: WorkbenchAnalysisResult, mode: AnalysisMode)
   // Hydrate evidence chain from backend for the canonical scope.
   const hydrateSessionId = result.session_id || state.sessionId;
   if (canonicalFarm && canonicalBlock && hydrateSessionId) {
-    void hydrateEvidenceChain(hydrateSessionId, canonicalFarm, canonicalBlock);
+    void hydrateEvidenceChain(hydrateSessionId, canonicalFarm, canonicalBlock, expectedPackageGen);
   }
+  return true;
 }
 
 // ---- Public actions -------------------------------------------------------
@@ -1048,6 +1063,8 @@ export const actions = {
   },
 
   async openEvaluationWorkspace() {
+    _scopeAnalysisGen++;
+    const packageGen = ++_packageGen;
     set({
       entryState: "workspace",
       productionSignInMessage: null,
@@ -1059,13 +1076,15 @@ export const actions = {
     if (state.backend.status !== "unavailable") {
       try {
         const sample = await apiClient.createSamplePackage();
+        if (!packageGenMatches(packageGen)) return;
         const sessionId = sample.data?.session?.session_id || sample.data?.session_id || "";
         if (sample.ok && sessionId) {
           set({ sessionId, pipelineMessage: "Analyzing representative source package…" });
           addAudit("Evaluation session created", "Backend evaluation-session persistence enabled.");
           const analysis = await apiClient.analyzeSession(sessionId);
+          if (!packageGenMatches(packageGen) || state.sessionId !== sessionId) return;
           if (analysis.ok && analysis.data) {
-            applyBackendResult(analysis.data, "representative");
+            if (!applyBackendResult(analysis.data, "representative", packageGen)) return;
             addAudit("Representative package analyzed", "Decision, evidence chain, reconciliation, and report preview populated.");
             toast("Evaluation workspace ready.");
             return;
@@ -1075,6 +1094,7 @@ export const actions = {
         // Falls through to the honest representative fallback.
       }
     }
+    if (!packageGenMatches(packageGen)) return;
     set(scenarioState(state.scenarioId, "representative", "representative_fallback"));
     set({ pipelineMessage: "Backend analysis unavailable. Representative fallback is active." });
     addAudit("Representative fallback active", "Backend analysis failed or was unavailable; local representative records remain loaded.");
@@ -1127,7 +1147,7 @@ export const actions = {
     // Increment all generations so any in-flight scope or switch calls from prior scenario are discarded.
     switchGen++;
     _scopeAnalysisGen++;
-    _packageGen++;
+    const packageGen = ++_packageGen;
     const gen = switchGen;
 
     // Set local representative state immediately so the UI reflects the new scenario
@@ -1143,14 +1163,14 @@ export const actions = {
       try {
         const backendScenario = id === "incomplete-evidence" ? "incomplete_evidence_review" : "validated_operating_block";
         const sample = await apiClient.createSamplePackage(backendScenario);
-        if (gen !== switchGen) return; // superseded by a later switchScenario call
+        if (gen !== switchGen || !packageGenMatches(packageGen)) return; // superseded
         const sessionId = sample.data?.session?.session_id || sample.data?.session_id || "";
         if (sample.ok && sessionId) {
           set({ sessionId, pipelineMessage: "Analyzing scenario source package…" });
           const analysis = await apiClient.analyzeSession(sessionId);
-          if (gen !== switchGen) return; // superseded by a later switchScenario call
+          if (gen !== switchGen || !packageGenMatches(packageGen) || state.sessionId !== sessionId) return;
           if (analysis.ok && analysis.data) {
-            applyBackendResult(analysis.data, "representative");
+            if (!applyBackendResult(analysis.data, "representative", packageGen)) return;
             addAudit("Scenario loaded via backend", `${SCENARIOS[id].name} analyzed from backend.`);
             toast(`${SCENARIOS[id].name} loaded`);
             return;
@@ -1161,7 +1181,7 @@ export const actions = {
       }
     }
 
-    if (gen !== switchGen) return;
+    if (gen !== switchGen || !packageGenMatches(packageGen)) return;
     set({ ...scenarioState(id, "representative", immediateOrigin), pipelineMessage: "Backend unavailable. Offline representative fallback active." });
     addAudit("Workspace scenario loaded", `${SCENARIOS[id].name} offline representative records loaded.`);
     toast(`${SCENARIOS[id].name} loaded`);
@@ -1169,24 +1189,48 @@ export const actions = {
 
   async refreshIntelligence() {
     if (state.analysisPhase === "running") return;
+    if (state.packageAwaitingAnalysis) {
+      set({ analysisPhase: "complete", pipelineMessage: "Upload source files before refreshing analysis." });
+      addAudit("Refresh blocked", "No package has been analyzed. Upload source files before refreshing analysis.");
+      toast("Upload source files before refreshing analysis.");
+      return;
+    }
+    if (state.resultStale && !state.sessionId) {
+      set({ analysisPhase: "complete", pipelineMessage: "Upload source files before refreshing analysis." });
+      addAudit("Refresh blocked", "No active package session is available for refresh.");
+      toast("Upload source files before refreshing analysis.");
+      return;
+    }
+    if (state.scopeSelectionPending) {
+      addAudit("Refresh blocked", "Scope selection pending: select both farm and block before refreshing.");
+      toast("Select both farm and block before refreshing this scope.");
+      return;
+    }
     // Block refresh when scope selection is partial (one of farm/block is set but not the other).
     if ((state.selectedFarm && !state.selectedBlock) || (!state.selectedFarm && state.selectedBlock)) {
       addAudit("Refresh blocked", "Partial scope selection: both farm and block must be set before refreshing.");
       toast("Select both farm and block before refreshing this scope.");
       return;
     }
+    const packageGen = _packageGen;
+    const capturedSessionId = state.sessionId;
+    const capturedSelectedFarm = state.selectedFarm;
+    const capturedSelectedBlock = state.selectedBlock;
+    const capturedActiveFarm = state.activeAnalyzedFarm;
+    const capturedActiveBlock = state.activeAnalyzedBlock;
+    const capturedAnalysisMode = state.analysisMode;
     set({ analysisPhase: "running", pipelineMessage: "Re-analyzing evaluation source records…", trace: buildTrace(new Date().toISOString(), false) });
     addAudit("Evaluation refresh started", `Re-running analyzeSession for session: ${state.sessionId ?? "none"}.`);
 
     // For evaluation mode, re-run the existing session rather than switching to a live provider.
     // Live-provider refresh is a separate explicit action the user must invoke.
     let result: WorkbenchAnalysisResult | null = null;
-    if (state.backend.status !== "unavailable" && state.sessionId) {
+    if (state.backend.status !== "unavailable" && capturedSessionId) {
       try {
         // Only pass scope when both are set — never issue a partial-scope request.
-        const scopeFarm = (state.selectedFarm && state.selectedBlock) ? state.selectedFarm : undefined;
-        const scopeBlock = (state.selectedFarm && state.selectedBlock) ? state.selectedBlock : undefined;
-        const res = await apiClient.analyzeSession(state.sessionId, scopeFarm, scopeBlock);
+        const scopeFarm = (capturedSelectedFarm && capturedSelectedBlock) ? capturedSelectedFarm : undefined;
+        const scopeBlock = (capturedSelectedFarm && capturedSelectedBlock) ? capturedSelectedBlock : undefined;
+        const res = await apiClient.analyzeSession(capturedSessionId, scopeFarm, scopeBlock);
         if (res.ok && res.data) result = res.data;
       } catch {
         result = null;
@@ -1195,13 +1239,21 @@ export const actions = {
 
     // brief pause so the pipeline animation is legible
     await new Promise((r) => setTimeout(r, 900));
+    if (
+      !packageGenMatches(packageGen) ||
+      state.sessionId !== capturedSessionId ||
+      state.selectedFarm !== capturedSelectedFarm ||
+      state.selectedBlock !== capturedSelectedBlock ||
+      state.activeAnalyzedFarm !== capturedActiveFarm ||
+      state.activeAnalyzedBlock !== capturedActiveBlock
+    ) return;
 
     if (result) {
       // Preserve the evidence chain for the active scope — do not reset on refresh.
       const prevActiveScope = (state.activeAnalyzedFarm && state.activeAnalyzedBlock)
         ? `${state.activeAnalyzedFarm}||${state.activeAnalyzedBlock}` : null;
       const prevChain = prevActiveScope ? state.blockEvidenceChains[prevActiveScope] : undefined;
-      applyBackendResult(result, state.analysisMode);
+      if (!applyBackendResult(result, capturedAnalysisMode, packageGen)) return;
       if (prevChain) set({ evidence: prevChain });
       set({ resultStale: false });
       addAudit("Evaluation refresh completed", "Decision refreshed from evaluation session.");
@@ -1227,6 +1279,13 @@ export const actions = {
 
   async runLiveRefresh() {
     if (state.analysisPhase === "running") return;
+    const packageGen = _packageGen;
+    const capturedSessionId = state.sessionId;
+    const capturedSelectedFarm = state.selectedFarm;
+    const capturedSelectedBlock = state.selectedBlock;
+    const capturedActiveFarm = state.activeAnalyzedFarm;
+    const capturedActiveBlock = state.activeAnalyzedBlock;
+    const capturedAnalysisMode = state.analysisMode;
     set({ analysisPhase: "running", pipelineMessage: "Connecting to live provider sources…", trace: buildTrace(new Date().toISOString(), false) });
     addAudit("Live refresh started", "Requesting live connected-source intelligence from backend.");
     let result: WorkbenchAnalysisResult | null = null;
@@ -1240,8 +1299,17 @@ export const actions = {
       }
     }
     await new Promise((r) => setTimeout(r, 900));
+    if (
+      !packageGenMatches(packageGen) ||
+      state.sessionId !== capturedSessionId ||
+      state.selectedFarm !== capturedSelectedFarm ||
+      state.selectedBlock !== capturedSelectedBlock ||
+      state.activeAnalyzedFarm !== capturedActiveFarm ||
+      state.activeAnalyzedBlock !== capturedActiveBlock ||
+      state.analysisMode !== capturedAnalysisMode
+    ) return;
     if (result) {
-      applyBackendResult(result, "live");
+      if (!applyBackendResult(result, "live", packageGen)) return;
       set({ resultStale: false });
       addAudit("Live refresh completed", "Decision updated from live connected-source intelligence.");
       toast("Live intelligence refreshed.");
@@ -1320,16 +1388,19 @@ export const actions = {
     // Reuse the existing uploaded-package session rather than creating a new one per file.
     // Never mix a representative sample session with a user-uploaded package session.
     let sessionId = state.uploadedPackageSessionId ?? "";
+    let packageGen = _packageGen;
     if (!sessionId) {
-      _packageGen++; // new package start — invalidate any prior async responses
+      packageGen = ++_packageGen; // new package start — invalidate any prior async responses
       let created;
       try {
         created = await apiClient.createSession("uploaded");
       } catch {
+        if (!packageGenMatches(packageGen)) return;
         failAllPending("Network error creating session.");
         toast("Upload session unavailable. Network error.");
         return;
       }
+      if (!packageGenMatches(packageGen)) return;
       if (created.ok) sessionId = created.data?.session_id || created.data?.session?.session_id || "";
       if (!sessionId) {
         failAllPending("Backend unavailable.");
@@ -1341,6 +1412,11 @@ export const actions = {
     } else {
       set({ sessionId });
     }
+    const capturedSessionId = sessionId;
+    const capturedSelectedFarm = state.selectedFarm;
+    const capturedSelectedBlock = state.selectedBlock;
+    const capturedActiveFarm = state.activeAnalyzedFarm;
+    const capturedActiveBlock = state.activeAnalyzedBlock;
 
     const newArtifacts: UploadedFileState[] = [];
     for (const file of files) {
@@ -1353,6 +1429,7 @@ export const actions = {
       } catch {
         up = null;
       }
+      if (!packageGenMatches(packageGen) || state.sessionId !== capturedSessionId) return;
       const artifact: UploadedFileState = up && up.ok && up.data
         ? {
             name: up.data.filename || file.name,
@@ -1400,8 +1477,16 @@ export const actions = {
     } catch {
       analysis = null;
     }
+    if (
+      !packageGenMatches(packageGen) ||
+      state.sessionId !== capturedSessionId ||
+      state.selectedFarm !== capturedSelectedFarm ||
+      state.selectedBlock !== capturedSelectedBlock ||
+      state.activeAnalyzedFarm !== capturedActiveFarm ||
+      state.activeAnalyzedBlock !== capturedActiveBlock
+    ) return;
     if (analysis && analysis.ok && analysis.data) {
-      applyBackendResult(analysis.data, "uploaded");
+      if (!applyBackendResult(analysis.data, "uploaded", packageGen)) return;
       // Clear stale / awaiting flags — successful analysis for this package.
       set({ resultStale: false, packageAwaitingAnalysis: false });
       addAudit("Uploaded package analyzed", `${files.map(f => f.name).join(", ")} analyzed via Workbench.`);
@@ -1489,6 +1574,7 @@ export const actions = {
   setSelectedBlock(block: string | null) {
     // Block change invalidates any in-flight scope request for the prior block.
     _scopeAnalysisGen++;
+    _packageGen++;
     set({ selectedBlock: block });
     addAudit("Block scope selected", `Selected block: ${block ?? "none"}`);
   },
@@ -1507,9 +1593,11 @@ export const actions = {
     const capturedBlock = state.selectedBlock;
     const capturedSessionId = state.sessionId;
     const gen = ++_scopeAnalysisGen;
+    const packageGen = _packageGen;
 
     const isCurrentRequest = () =>
       gen === _scopeAnalysisGen &&
+      packageGenMatches(packageGen) &&
       state.selectedFarm === capturedFarm &&
       state.selectedBlock === capturedBlock &&
       state.sessionId === capturedSessionId;
@@ -1527,7 +1615,7 @@ export const actions = {
       const res = await apiClient.analyzeSession(capturedSessionId, capturedFarm, capturedBlock);
       if (!isCurrentRequest()) return; // discard — superseded by newer selection
       if (res.ok && res.data) {
-        applyBackendResult(res.data, state.analysisMode);
+        if (!applyBackendResult(res.data, state.analysisMode, packageGen)) return;
         // applyBackendResult sets activeAnalyzedFarm/Block from canonical context;
         // also override with the explicitly requested scope to be safe.
         set({
@@ -1542,7 +1630,7 @@ export const actions = {
         const cachedChain = state.blockEvidenceChains[scopeKey];
         if (cachedChain) set({ evidence: cachedChain });
         // Hydrate evidence chain from backend for the re-analyzed scope.
-        void hydrateEvidenceChain(capturedSessionId, capturedFarm, capturedBlock);
+        void hydrateEvidenceChain(capturedSessionId, capturedFarm, capturedBlock, packageGen);
         addAudit("Scope re-analysis completed", `Analysis updated for ${capturedFarm} / ${capturedBlock}.`);
         toast("Analysis updated for selected scope.");
         return;
@@ -1633,7 +1721,7 @@ export const actions = {
         const scopeKey = `${state.activeAnalyzedFarm}||${state.activeAnalyzedBlock}`;
         set({ blockEvidenceChains: { ...state.blockEvidenceChains, [scopeKey]: chain } });
         // Hydrate from backend to ensure chain reflects server-authoritative state.
-        void hydrateEvidenceChain(state.sessionId!, state.activeAnalyzedFarm, state.activeAnalyzedBlock);
+        void hydrateEvidenceChain(state.sessionId!, state.activeAnalyzedFarm, state.activeAnalyzedBlock, _packageGen);
       }
       addAudit(`${order[idx]} recorded`, `Backend evidence action recorded in evaluation-session storage.`);
       toast(`${state.evidence[idx]?.label ?? "Step"} recorded`);

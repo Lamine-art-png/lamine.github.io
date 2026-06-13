@@ -1246,4 +1246,242 @@ describe("commandStore", () => {
     expect(aScheduled?.status).toBe("Complete");
     expect(bScheduled?.status).toBe("Pending");
   });
+
+  it("old refresh response cannot resurrect reset package", async () => {
+    vi.useFakeTimers();
+    const originalFetch = global.fetch;
+    const analyze = deferredResponse();
+    global.fetch = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/analyze")) return analyze.promise;
+      if (url.includes("/evidence-chain")) return Promise.resolve(jsonResponse(chainFor("Alpha Vineyard", "Block A North")));
+      return Promise.resolve(jsonResponse({}));
+    }) as any;
+    try {
+      __applyBackendResult("alpha-vineyard", resultFor("old-session", "Alpha Vineyard", "Block A North", "Old refresh result"), "old-session");
+      __setBackendStatusForTest("available");
+      const refresh = actions.refreshIntelligence();
+      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+      actions.startNewPackage();
+      analyze.resolve(jsonResponse(resultFor("old-session", "Alpha Vineyard", "Block A North", "Old refresh result")));
+      await vi.runAllTimersAsync();
+      await refresh;
+      const s = getState();
+      expect(s.sessionId).toBeNull();
+      expect(s.packageAwaitingAnalysis).toBe(true);
+      expect(s.resultStale).toBe(true);
+      expect(s.decision.action).toMatch(/No package loaded/i);
+      expect(s.sources).toEqual([]);
+      expect(s.reconciliation).toEqual([]);
+      expect(s.report.recommendation).toMatch(/Upload source files/i);
+      expect(s.evidence.every((step) => step.status === "Pending")).toBe(true);
+    } finally {
+      global.fetch = originalFetch;
+      vi.useRealTimers();
+    }
+  });
+
+  it("old upload analysis response cannot resurrect reset package", async () => {
+    const originalFetch = global.fetch;
+    const analyze = deferredResponse();
+    global.fetch = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.endsWith("/v1/workbench/sessions")) return Promise.resolve(jsonResponse({ session_id: "upload-session" }));
+      if (url.includes("/upload")) return Promise.resolve(jsonResponse({ filename: "data.csv", source_kind: "controller_events", parse_status: "parsed", rows_detected: 1, columns_detected: ["timestamp"], warnings: [] }));
+      if (url.includes("/analyze")) return analyze.promise;
+      if (url.includes("/evidence-chain")) return Promise.resolve(jsonResponse(chainFor("Upload Farm", "Upload Block")));
+      return Promise.resolve(jsonResponse({}));
+    }) as any;
+    try {
+      const upload = actions.uploadFiles([new File(["timestamp,farm,block\n2026-01-01,A,B"], "data.csv", { type: "text/csv" })]);
+      await waitFor(() => expect(String((global.fetch as any).mock.calls.at(-1)?.[0] ?? "")).toContain("/analyze"));
+      actions.startNewPackage();
+      analyze.resolve(jsonResponse(resultFor("upload-session", "Upload Farm", "Upload Block", "Uploaded old result")));
+      await upload;
+      const s = getState();
+      expect(s.sessionId).toBeNull();
+      expect(s.packageAwaitingAnalysis).toBe(true);
+      expect(s.resultStale).toBe(true);
+      expect(s.decision.action).toMatch(/No package loaded/i);
+      expect(s.uploadedPackageArtifacts).toEqual([]);
+      expect(s.evidence.every((step) => step.status === "Pending")).toBe(true);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it("old live refresh response cannot overwrite reset workspace", async () => {
+    vi.useFakeTimers();
+    const originalFetch = global.fetch;
+    const live = deferredResponse();
+    global.fetch = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("/analyze-live")) return live.promise;
+      if (url.includes("/evidence-chain")) return Promise.resolve(jsonResponse(chainFor("Live Farm", "Live Block")));
+      return Promise.resolve(jsonResponse({}));
+    }) as any;
+    try {
+      __applyBackendResult("alpha-vineyard", resultFor("live-session", "Live Farm", "Live Block", "Current live result", "live_intelligence_engine", "live"), "live-session");
+      __setBackendStatusForTest("available");
+      const refresh = actions.runLiveRefresh();
+      await waitFor(() => expect(global.fetch).toHaveBeenCalled());
+      actions.startNewPackage();
+      live.resolve(jsonResponse(resultFor("new-live-session", "Other Farm", "Other Block", "Old live response", "live_intelligence_engine", "live")));
+      await vi.runAllTimersAsync();
+      await refresh;
+      const s = getState();
+      expect(s.sessionId).toBeNull();
+      expect(s.displayFarmName).toBe("No package loaded");
+      expect(s.decision.action).toMatch(/No package loaded/i);
+      expect(s.recommendationOrigin).toBe("insufficient_context");
+    } finally {
+      global.fetch = originalFetch;
+      vi.useRealTimers();
+    }
+  });
+
+  it("old hydrateEvidenceChain response cannot overwrite newer active block", async () => {
+    const originalFetch = global.fetch;
+    const blockA = deferredResponse();
+    global.fetch = vi.fn((input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url.includes("Block%20A%20North")) return blockA.promise;
+      if (url.includes("Block%20B%20West")) return Promise.resolve(jsonResponse(chainFor("Alpha Vineyard", "Block B West", "Block B authoritative chain")));
+      return Promise.resolve(jsonResponse({}));
+    }) as any;
+    try {
+      __applyBackendResult("alpha-vineyard", resultFor("chain-session", "Alpha Vineyard", "Block A North", "Block A result"), "chain-session");
+      actions.setSelectedFarm("Alpha Vineyard");
+      actions.setSelectedBlock("Block B West");
+      __applyBackendResult("alpha-vineyard", resultFor("chain-session", "Alpha Vineyard", "Block B West", "Block B result"), "chain-session");
+      await waitFor(() => expect(getState().evidence[0]?.evidence).toContain("Block B authoritative chain"));
+      blockA.resolve(jsonResponse(chainFor("Alpha Vineyard", "Block A North", "STALE Block A chain")));
+      await Promise.resolve();
+      expect(getState().activeAnalyzedBlock).toBe("Block B West");
+      expect(getState().evidence[0]?.evidence).toContain("Block B authoritative chain");
+      expect(getState().evidence[0]?.evidence).not.toContain("STALE Block A chain");
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
+
+  it("refreshIntelligence blocks empty and partial package states without analyzeSession", async () => {
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn(() => Promise.resolve(jsonResponse({}))) as any;
+    try {
+      actions.startNewPackage();
+      await actions.refreshIntelligence();
+      expect(analyzeFetchCalls()).toHaveLength(0);
+      expect(getState().pipelineMessage).toMatch(/Upload source files/i);
+
+      __resetForTest();
+      __applyBackendResult("alpha-vineyard", resultFor("partial-session", "Alpha Vineyard", "Block A North", "Partial base"), "partial-session");
+      vi.mocked(global.fetch).mockClear();
+      actions.setSelectedFarm("Alpha Vineyard");
+      await actions.refreshIntelligence();
+      expect(analyzeFetchCalls()).toHaveLength(0);
+
+      __resetForTest();
+      __applyBackendResult("alpha-vineyard", resultFor("partial-session", "Alpha Vineyard", "Block A North", "Partial base"), "partial-session");
+      vi.mocked(global.fetch).mockClear();
+      __patchStateForTest({ selectedFarm: null, selectedBlock: "Block A North", scopeSelectionPending: false });
+      await actions.refreshIntelligence();
+      expect(analyzeFetchCalls()).toHaveLength(0);
+    } finally {
+      global.fetch = originalFetch;
+    }
+  });
 });
+
+function deferredResponse() {
+  let resolve!: (value: Response) => void;
+  const promise = new Promise<Response>((res) => { resolve = res; });
+  return { promise, resolve };
+}
+
+function analyzeFetchCalls() {
+  return vi.mocked(global.fetch).mock.calls.filter(([input]) => String(input).includes("/analyze"));
+}
+
+function jsonResponse(data: unknown, status = 200): Response {
+  return {
+    ok: status >= 200 && status < 300,
+    status,
+    headers: { get: (key: string) => key.toLowerCase() === "content-type" ? "application/json" : null },
+    json: async () => data,
+  } as Response;
+}
+
+async function waitFor(assertion: () => void) {
+  let lastError: unknown;
+  for (let i = 0; i < 20; i++) {
+    try {
+      assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await Promise.resolve();
+    }
+  }
+  throw lastError;
+}
+
+function resultFor(
+  sessionId: string,
+  farm: string,
+  block: string,
+  action: string,
+  origin: "uploaded_intelligence_engine" | "live_intelligence_engine" = "uploaded_intelligence_engine",
+  mode: "uploaded" | "live" = "uploaded",
+) {
+  return {
+    analysis_id: `${sessionId}-${farm}-${block}`,
+    session_id: sessionId,
+    status: "complete",
+    analysis_mode: mode,
+    recommendation_origin: origin,
+    context_origin: mode,
+    recommendation: {
+      action,
+      schedulable: true,
+      scheduling_block_reasons: [],
+      flow_validation_status: "validated",
+      confidence: 0.8,
+    },
+    reconciliation: { evidence_completeness: "80%" },
+    signal_summary: {},
+    normalized_context: {
+      farm,
+      block,
+      canonical_analyzed_farm: farm,
+      canonical_analyzed_block: block,
+      available_farms: [farm],
+      available_blocks_by_farm: { [farm]: [block] },
+    },
+    source_rows: [
+      { source_label: "Controller history", source_kind: "controller_events", selected_scope_record_count: 1, package_record_count: 1, latest_timestamp: "2026-06-05T10:00:00Z", latest_signal_summary: action, status: "accepted", limitations: [], contribution_label: "Not scored" },
+    ],
+    report_summary: { recommendation: action, planned_water: "10 mm", evidence_completeness: 0.8, confidence: 0.8 },
+    warnings: [],
+    uploaded_artifacts_used: mode === "uploaded" ? ["data.csv"] : [],
+    live_inputs_used: mode === "live" ? ["wiseconn"] : [],
+    limitations: [],
+    analysis_trace: [],
+  };
+}
+
+function chainFor(farm: string, block: string, label = `${block} authoritative chain`) {
+  return {
+    session_id: "chain-session",
+    scope: { selected_farm: farm, selected_block: block },
+    scope_status: "analyzed",
+    evidence_chain: [
+      { key: "recommended", label: "Recommended", status: "Complete", owner: "AGRO-AI Workbench", timestamp: "2026-06-05T10:00:00Z", evidence: label, evidence_type: "system_generated" },
+      { key: "scheduled", label: "Scheduled", status: "Pending", owner: "Operations user", timestamp: "", evidence: "Scheduled pending" },
+      { key: "applied", label: "Applied", status: "Pending", owner: "Operations user", timestamp: "", evidence: "Applied pending" },
+      { key: "observed", label: "Observed", status: "Pending", owner: "Operations user", timestamp: "", evidence: "Observed pending" },
+      { key: "verified", label: "Verified", status: "Pending", owner: "Operations user", timestamp: "", evidence: "Verified pending" },
+    ],
+    audit_events: [],
+  };
+}

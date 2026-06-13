@@ -352,6 +352,7 @@ test.describe("Scope selectors (mocked backend — deterministic)", () => {
     if (await approveBtn.count() > 0) {
       await expect(approveBtn).toBeDisabled();
     }
+    await expect(page.locator(".status-row")).not.toContainText(/Offline representative fallback/i);
   });
 
   test("stale-scope warning appears immediately after farm change before block is chosen", async ({ page }) => {
@@ -408,6 +409,8 @@ test.describe("Scope selectors (mocked backend — deterministic)", () => {
       await expect(page.locator(".upload-package-item")).toHaveCount(0);
       // Decision card must show empty-package notice
       await expect(page.locator("[data-testid='empty-package-notice']")).toBeVisible({ timeout: 5000 });
+      await expect(page.locator(".status-row")).not.toContainText(/Sources reconciled/i);
+      await expect(page.locator(".status-row")).toContainText(/Awaiting source package/i);
     }
   });
 
