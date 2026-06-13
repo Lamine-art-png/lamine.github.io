@@ -160,10 +160,10 @@ export function waterAppliedEvent(log) {
       amountMm: log.amountMm,
       note: log.note || "",
       attachmentRefs: log.attachmentRefs || [],
-      syncStatus: log.syncStatus || "synced",
+      syncStatus: log.syncStatus || "local_pending",
     },
     attachments: log.attachmentRefs || [],
-    queuedForSync: log.syncStatus === "queued",
+    queuedForSync: log.syncStatus === "local_pending",
   });
 }
 
@@ -182,9 +182,9 @@ export function fieldObservationEvent(observation, module = "water") {
       attachmentRefs: observation.attachmentRefs || [],
       translation: observation.translation || null,
       geotag: observation.geotag || null,
-      syncStatus: observation.syncStatus || "synced",
+      syncStatus: observation.syncStatus || "local_pending",
     },
     attachments: observation.attachmentRefs || [],
-    queuedForSync: observation.syncStatus === "queued",
+    queuedForSync: observation.syncStatus === "local_pending",
   });
 }

@@ -104,7 +104,7 @@ test('generated alert keys remain dismissed until the condition changes', () => 
 
 test('recommendation context labels separate mode from risk', () => {
   assert.equal(recommendationContextLabel({ sourceMode: 'demo' }, {}, 'demo'), 'Demo preview');
-  assert.equal(recommendationContextLabel({ sourceMode: 'backend' }, {}, 'real'), 'Synced backend intelligence');
+  assert.equal(recommendationContextLabel({ sourceMode: 'backend' }, {}, 'real'), 'Backend intelligence refreshed');
   assert.equal(recommendationContextLabel({ sourceMode: 'local' }, { stale: false }, 'real'), 'Local fallback with fresh cached context');
   assert.equal(recommendationContextLabel({ sourceMode: 'offline' }, { stale: true }, 'real'), 'Stale offline fallback');
 });

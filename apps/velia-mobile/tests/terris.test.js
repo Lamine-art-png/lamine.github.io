@@ -126,12 +126,12 @@ test("water applied and observation create separate ledger events", () => {
   assert.notEqual(applied.eventType, "irrigation_verified");
 });
 
-test("offline water records preserve queued ledger metadata", () => {
+test("water records preserve local-pending ledger metadata", () => {
   const applied = waterAppliedEvent(createIrrigationLog({ fieldId: "f1", durationMin: 60, amountMm: 12, source: "manual", offline: true }));
   const observed = fieldObservationEvent(createObservation({ fieldId: "f1", condition: "Looks dry", offline: true }));
-  assert.equal(applied.payload.syncStatus, "queued");
+  assert.equal(applied.payload.syncStatus, "local_pending");
   assert.equal(applied.ledgerMetadata.queuedForSync, true);
-  assert.equal(observed.payload.syncStatus, "queued");
+  assert.equal(observed.payload.syncStatus, "local_pending");
   assert.equal(observed.ledgerMetadata.queuedForSync, true);
   const state = appendLedgerEvent(createInitialState(), applied);
   assert.equal(state.ledgerMetadata.queuedForSync, true);
@@ -175,12 +175,12 @@ test("nutrient status distinguishes planned, calculated, and manual applied reco
   assert.equal(nutrientLedgerEvent(manualApplied).dataQuality, "medium");
 });
 
-test("offline nutrient records use nutrient_log queue semantics and queued ledger metadata", () => {
+test("nutrient records use nutrient_log queue semantics and local-pending ledger metadata", () => {
   const record = createNutrientRecord({ fieldId: "f1", nutrientType: "N", sourceType: "fertilizer", appliedQuantity: 10, unit: "kg", applicationMethod: "broadcast", offline: true, representativeDemo: true });
   const event = nutrientLedgerEvent(record);
   const appSource = fs.readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
-  assert.equal(record.syncStatus, "queued");
-  assert.equal(event.payload.syncStatus, "queued");
+  assert.equal(record.syncStatus, "local_pending");
+  assert.equal(event.payload.syncStatus, "local_pending");
   assert.equal(event.ledgerMetadata.queuedForSync, true);
   assert.equal(event.sourceMode, "demo");
   assert.ok(appSource.includes('queueSyncAction({ kind: "nutrient_log", payload: record })'));
@@ -209,7 +209,7 @@ test("ops task completion requires notes and preserves attachments", () => {
   assert.throws(() => completeFieldTask(task, {}), /operator note/);
   const completed = completeFieldTask(task, { notes: "Checked row end", attachments: ["photo-1"], offline: true });
   const event = taskEvent(completed, true);
-  assert.equal(completed.offlineSyncState, "queued");
+  assert.equal(completed.offlineSyncState, "local_pending");
   assert.deepEqual(completed.attachments, ["photo-1"]);
   assert.equal(event.eventType, "task_completed");
   assert.ok(event.limitations[0].includes("not agronomic verification"));
@@ -293,17 +293,17 @@ test("app reconciles global ledger sync metadata from the current queue", async 
   }
 });
 
-test("offline ops and proof actions preserve local queue semantics", () => {
-  const task = createFieldTask({ title: "Inspect pump", module: "ops", taskType: "inspect_pump", fieldId: "f1", offlineSyncState: "queued", representativeDemo: true });
+test("ops and proof actions preserve local queue semantics", () => {
+  const task = createFieldTask({ title: "Inspect pump", module: "ops", taskType: "inspect_pump", fieldId: "f1", offlineSyncState: "local_pending", representativeDemo: true });
   const completed = completeFieldTask(task, { notes: "Pump inspected.", attachments: ["photo-1"], offline: true });
   const proofEvent = createTerrisFieldEvent({ id: "proof-e", eventType: "irrigation_applied", module: "water", farmId: "farm-1", fieldId: "f1", occurredAt: "2026-06-02T12:00:00.000Z" });
   const proofScope = { moduleScope: "water", farmScope: "farm-1", dateWindow: { start: "2026-06-01", end: "2026-06-03" } };
   const reviewSnapshot = { scope: proofScope, includedEventIds: [proofEvent.id], reviewSignature: evidenceReviewSignature(proofScope, [proofEvent]), reviewedAt: "2026-06-03T00:00:00.000Z" };
-  const packet = createEvidencePacket({ ...proofScope, events: [proofEvent], reviewConfirmed: true, reviewSnapshot, syncStatus: "queued", representativeDemo: true });
+  const packet = createEvidencePacket({ ...proofScope, events: [proofEvent], reviewConfirmed: true, reviewSnapshot, syncStatus: "local_pending", representativeDemo: true });
   const appSource = fs.readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
   assert.equal(taskEvent(task).ledgerMetadata.queuedForSync, true);
   assert.equal(taskEvent(completed, true).ledgerMetadata.queuedForSync, true);
-  assert.equal(packet.syncStatus, "queued");
+  assert.equal(packet.syncStatus, "local_pending");
   assert.equal(packet.reviewSignature, reviewSnapshot.reviewSignature);
   assert.equal(evidencePacketEvent(packet).ledgerMetadata.queuedForSync, true);
   assert.ok(appSource.includes('queueSyncAction({ kind: "task_create", payload: task })'));
@@ -311,7 +311,7 @@ test("offline ops and proof actions preserve local queue semantics", () => {
   assert.ok(appSource.includes('queueSyncAction({ kind: "proof_packet", payload: packet })'));
 });
 
-test("offline actionable voice command queues exactly one operational action", () => {
+test("offline actionable voice condition queues exactly one operational action", () => {
   storage.set("queue", []);
   const command = parseVoiceCommand("Field north block looks dry", { fieldId: "f1" });
   applyVoiceAction(command, {
@@ -325,6 +325,60 @@ test("offline actionable voice command queues exactly one operational action", (
   assert.equal(queue.length, 1);
   assert.equal(queue[0].kind, "observation");
   assert.ok(!voiceSource.includes('kind: "voice"'));
+  storage.set("queue", []);
+});
+
+test("operational records are local_pending and enqueue once with stable idempotency", () => {
+  storage.set("queue", []);
+  const irrigation = createIrrigationLog({ fieldId: "f1", durationMin: 30, amountMm: 6, source: "manual" });
+  const observation = createObservation({ fieldId: "f1", condition: "Looks dry" });
+  const nutrient = createNutrientRecord({ fieldId: "f1", nutrientType: "N", sourceType: "fertilizer", appliedQuantity: 10, unit: "kg", applicationMethod: "broadcast" });
+  const task = createFieldTask({ title: "Inspect field", module: "ops", taskType: "inspect_field", fieldId: "f1" });
+  const completed = completeFieldTask(task, { notes: "Inspection done" });
+  const proofEvent = createTerrisFieldEvent({ id: "proof-online", eventType: "irrigation_applied", module: "water", farmId: "farm-1", fieldId: "f1", occurredAt: "2026-06-02T12:00:00.000Z" });
+  const proofScope = { moduleScope: "water", farmScope: "farm-1", dateWindow: { start: "2026-06-01", end: "2026-06-03" } };
+  const reviewSnapshot = { scope: proofScope, includedEventIds: [proofEvent.id], reviewSignature: evidenceReviewSignature(proofScope, [proofEvent]), reviewedAt: "2026-06-03T00:00:00.000Z" };
+  const packet = createEvidencePacket({ ...proofScope, events: [proofEvent], reviewConfirmed: true, reviewSnapshot });
+  const actions = [
+    { kind: "irrigation_log", payload: irrigation },
+    { kind: "observation", payload: observation },
+    { kind: "field_note", payload: { id: "note-1", syncStatus: "local_pending" } },
+    { kind: "nutrient_log", payload: nutrient },
+    { kind: "task_create", payload: task },
+    { kind: "task_complete", payload: completed },
+    { kind: "proof_packet", payload: packet },
+  ];
+  actions.forEach((action) => {
+    assert.equal(action.payload.syncStatus || action.payload.offlineSyncState, "local_pending");
+    syncService.queueAction(action);
+    syncService.queueAction(action);
+  });
+  const queue = syncService.getQueue();
+  assert.equal(queue.length, actions.length);
+  assert.deepEqual(queue.map((item) => item.idempotencyKey), actions.map((action) => `${action.kind}:${action.payload.id}`));
+  storage.set("queue", []);
+});
+
+test("offline voice irrigation and noop keep exactly-once operational queue semantics", () => {
+  storage.set("queue", []);
+  const irrigation = parseVoiceCommand("log irrigation for 30 minutes", { fieldId: "f1" });
+  applyVoiceAction(irrigation, {
+    onIrrigation: (payload) => syncService.queueAction({ kind: "irrigation_log", payload: createIrrigationLog({ ...payload, offline: true }) }),
+    onCondition: (payload) => syncService.queueAction({ kind: "observation", payload }),
+    onNote: (payload) => syncService.queueAction({ kind: "field_note", payload }),
+    onNoop: () => {},
+  });
+  assert.equal(syncService.getQueue().length, 1);
+  assert.equal(syncService.getQueue()[0].kind, "irrigation_log");
+
+  const noop = parseVoiceCommand("sing a song", { fieldId: "f1" });
+  applyVoiceAction(noop, {
+    onIrrigation: (payload) => syncService.queueAction({ kind: "irrigation_log", payload }),
+    onCondition: (payload) => syncService.queueAction({ kind: "observation", payload }),
+    onNote: (payload) => syncService.queueAction({ kind: "field_note", payload }),
+    onNoop: () => {},
+  });
+  assert.equal(syncService.getQueue().length, 1);
   storage.set("queue", []);
 });
 
@@ -347,9 +401,9 @@ test("materially changed recommendation creates one new event and local/backend 
 
 test("offline voice, photo metadata, translation, and field association remain explicit", () => {
   const photo = createAttachmentMetadata({ fieldId: "f1", type: "photo", uri: "local://photo.jpg", geotag: { lat: 1, lon: 2 } });
-  const voice = createVoiceTimelineEntry({ fieldId: "f1", transcript: "Looks dry", intent: "UPDATE_CONDITION", outcome: "queued", attachmentRefs: [photo.id], translation: { display: "Se ve seco", locale: "es" }, offline: true });
-  assert.equal(photo.syncStatus, "queued");
+  const voice = createVoiceTimelineEntry({ fieldId: "f1", transcript: "Looks dry", intent: "UPDATE_CONDITION", outcome: "local_pending", attachmentRefs: [photo.id], translation: { display: "Se ve seco", locale: "es" }, offline: true });
+  assert.equal(photo.syncStatus, "local_pending");
   assert.equal(voice.fieldId, "f1");
   assert.equal(voice.translation.display, "Se ve seco");
-  assert.equal(voice.syncStatus, "queued");
+  assert.equal(voice.syncStatus, "local_pending");
 });

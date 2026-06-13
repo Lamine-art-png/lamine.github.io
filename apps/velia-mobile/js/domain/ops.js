@@ -29,7 +29,7 @@ export function createFieldTask(input) {
     completionNotes: input.completionNotes || "",
     attachments: input.attachments || [],
     provenance: input.provenance || { source: "system" },
-    offlineSyncState: input.offlineSyncState || "synced",
+    offlineSyncState: input.offlineSyncState || "local_pending",
     representativeDemo: Boolean(input.representativeDemo),
   };
 }
@@ -42,7 +42,7 @@ export function completeFieldTask(task, completion = {}) {
     completionNotes: completion.notes,
     attachments: [...(task.attachments || []), ...(completion.attachments || [])],
     completedAt: completion.completedAt || new Date().toISOString(),
-    offlineSyncState: completion.offline ? "queued" : task.offlineSyncState,
+    offlineSyncState: completion.offlineSyncState || "local_pending",
   };
 }
 
@@ -58,7 +58,7 @@ export function taskEvent(task, completed = false) {
     occurredAt: completed ? task.completedAt : undefined,
     payload: { ...task, representativeDemo: Boolean(task.representativeDemo) },
     attachments: task.attachments || [],
-    queuedForSync: task.offlineSyncState === "queued",
+    queuedForSync: task.offlineSyncState === "local_pending",
     limitations: completed ? ["Task completion is not agronomic verification."] : [],
   });
 }

@@ -131,7 +131,7 @@ export function isAlertDismissed(alert, dismissed = {}, now = Date.now(), expira
 
 export function recommendationContextLabel(rec = {}, weather = {}, mode = "real") {
   if (mode === "demo") return "Demo preview";
-  if (rec.sourceMode === "backend") return "Synced backend intelligence";
+  if (rec.sourceMode === "backend") return "Backend intelligence refreshed";
   if (weather?.stale || rec.sourceMode === "offline") return "Stale offline fallback";
   if (rec.sourceMode === "refreshing") return "Refreshing intelligence";
   return "Local fallback with fresh cached context";

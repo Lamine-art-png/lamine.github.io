@@ -47,7 +47,7 @@ export function createNutrientRecord(input) {
     nextEvidenceRequired: missingData[0] || null,
     demo: Boolean(input.demo),
     representativeDemo: Boolean(input.representativeDemo || input.demo),
-    syncStatus: input.syncStatus || (input.offline ? "queued" : "synced"),
+    syncStatus: input.syncStatus || "local_pending",
   };
 }
 
@@ -66,9 +66,9 @@ export function nutrientLedgerEvent(record) {
     truthLabel: record.truthLabel,
     occurredAt: record.timestamp,
     dataQuality: record.recordStatus === "draft_missing_inputs" || record.missingData.length ? "blocked" : "medium",
-    payload: { ...record, recordStatus: record.recordStatus, syncStatus: record.syncStatus || "synced" },
+    payload: { ...record, recordStatus: record.recordStatus, syncStatus: record.syncStatus || "local_pending" },
     limitations: record.missingData.length ? [`Withheld calculation until ${record.missingData.join(" and ")} is available.`] : [],
-    queuedForSync: record.syncStatus === "queued",
+    queuedForSync: record.syncStatus === "local_pending",
   });
 }
 

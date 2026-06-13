@@ -159,17 +159,18 @@ function addIrrigationLog(payload) {
   }
   state = appendLedgerEvent(state, waterAppliedEvent(log));
   if (field) recordLocalRecommendationTransitions([field]);
-  if (offline) queueSyncAction({ kind: "irrigation_log", payload: log });
+  queueSyncAction({ kind: "irrigation_log", payload: log });
   persist();
-  showMessage(navigator.onLine ? "Irrigation log saved locally." : "Saved locally. Backend sync is not enabled yet.");
+  showMessage("Saved locally. Awaiting backend sync.");
 }
 
 function addFieldNote(payload) {
   const note = { id: `note-${Date.now()}`, createdAt: new Date().toISOString(), ...payload };
   state.fieldNotes.unshift(note);
-  if (!navigator.onLine) queueSyncAction({ kind: "field_note", payload: note });
+  note.syncStatus = "local_pending";
+  queueSyncAction({ kind: "field_note", payload: note });
   persist();
-  showMessage(navigator.onLine ? "Field note saved locally." : "Saved locally. Backend sync is not enabled yet.");
+  showMessage("Saved locally. Awaiting backend sync.");
 }
 
 function updateCondition(payload) {
@@ -183,9 +184,9 @@ function updateCondition(payload) {
   }
   state = appendLedgerEvent(state, fieldObservationEvent(observation));
   if (field) recordLocalRecommendationTransitions([field]);
-  if (offline) queueSyncAction({ kind: "observation", payload: observation });
+  queueSyncAction({ kind: "observation", payload: observation });
   persist();
-  showMessage(navigator.onLine ? "Condition saved locally." : "Saved locally. Backend sync is not enabled yet.");
+  showMessage("Saved locally. Awaiting backend sync.");
 }
 
 function recordRecommendationLedgerEvent(field, recommendation, options = {}) {
@@ -586,7 +587,7 @@ function buildAlerts() {
     const rec = recommendationFor(field);
     if (weather?.heatRisk === "high" || weather?.heatRisk === "elevated") addGeneratedAlert({ type: "heat", severity: "medium", fieldId: field.id, conditionToken: `heat:${weather.heatRisk}`, createdAt: new Date().toISOString(), explanation: "Heat pressure may increase water demand.", action: "Check leaf stress before the afternoon.", resolved: false });
     if (weather?.frostRisk === "high" || weather?.frostRisk === "elevated") addGeneratedAlert({ type: "frost", severity: "high", fieldId: field.id, conditionToken: `frost:${weather.frostRisk}`, createdAt: new Date().toISOString(), explanation: "Frost risk can change irrigation timing.", action: "Confirm local frost protocol.", resolved: false });
-    if (weather?.stale) addGeneratedAlert({ type: "stale weather", severity: "medium", fieldId: field.id, conditionToken: `weather:${weather.weatherTimestamp || weather.cachedAt || "stale"}`, createdAt: new Date().toISOString(), explanation: "Weather is cached or stale.", action: "Refresh weather when connected.", resolved: false });
+    if (weather?.stale) addGeneratedAlert({ type: "stale weather", severity: "medium", fieldId: field.id, conditionToken: `weather:${weather.weatherTimestamp || weather.cachedAt || "stale"}`, createdAt: new Date().toISOString(), explanation: "Weather is cached or stale.", action: "Refresh weather when network access is available.", resolved: false });
     if (!field.lastObservation || field.verificationStatus === "overdue") addGeneratedAlert({ type: "verification", severity: "high", fieldId: field.id, conditionToken: `verification:${field.verificationStatus || "missing"}:${field.lastObservation || "none"}`, createdAt: field.updatedAt || new Date().toISOString(), explanation: "Terris needs a recent field observation.", action: "Record a field check.", resolved: false });
     if (!field.sensorData) addGeneratedAlert({ type: "sensor", severity: "low", fieldId: field.id, conditionToken: `sensor:${field.dataSource || "none"}`, createdAt: new Date().toISOString(), explanation: "No sensor reading is available.", action: "Use a manual observation to improve confidence.", resolved: false });
     if (confidenceText(readConfidence(rec)).toLowerCase() === "low") addGeneratedAlert({ type: "confidence", severity: "medium", fieldId: field.id, conditionToken: `confidence:${readConfidence(rec) || "low"}`, createdAt: new Date().toISOString(), explanation: "Decision confidence is low.", action: "Add crop, soil, weather, or observation data.", resolved: false });
@@ -620,7 +621,7 @@ function moreContent() {
   return `<section class="screen more-screen">
     <div class="screen-heading"><div><p class="eyebrow">More</p><h1>Farm controls</h1></div></div>
     <section class="settings-list">${items.map((item) => `<button class="settings-row"><span>${h(item)}</span><small>${h(settingSubtitle(item))}</small></button>`).join("")}</section>
-    <section class="card section-card"><p class="card-label">Offline and sync</p><p>${h(syncStatus().state)}${syncStatus().pending ? ` - ${h(syncStatus().pending)} queued` : ""}</p><button class="btn" data-refresh-weather="1">Refresh weather</button></section>
+    <section class="card section-card"><p class="card-label">Offline and sync</p><p>${h(syncStatus().state)}${syncStatus().pending ? ` - ${h(syncStatus().pending)} local pending` : ""}</p><button class="btn" data-refresh-weather="1">Refresh weather</button></section>
     ${terrisBetaContent()}
     ${state.mode === "demo" ? `<section class="card internal-card"><p class="card-label">Internal demo controls</p><label>Demo scenario<select id="demoScenario"><option value="baseline" ${state.demoScenario === "baseline" ? "selected" : ""}>Napa baseline</option><option value="hotDry" ${state.demoScenario === "hotDry" ? "selected" : ""}>Hot and dry</option><option value="coolWet" ${state.demoScenario === "coolWet" ? "selected" : ""}>Rain watch</option></select></label><button class="btn" data-apply-scenario="1">Apply scenario</button><button class="btn" data-mode="real">Leave demo mode</button></section>` : ""}
   </section>`;
@@ -806,7 +807,7 @@ function bottomNav() {
 function render() {
   const sync = syncStatus();
   if (state.onboarded) prepareRecommendationSnapshot();
-  app.innerHTML = `<div class="app-bg"><main class="shell ${!state.onboarded ? "shell-onboard" : ""}">${topBar()}${!sync.isOnline ? `<div class="offline-banner">Offline mode active. Logs and observations will sync later.</div>` : ""}${content()}${uiMessage ? `<div class="toast">${h(uiMessage)}</div>` : ""}${state.onboarded ? bottomNav() : ""}</main></div>`;
+  app.innerHTML = `<div class="app-bg"><main class="shell ${!state.onboarded ? "shell-onboard" : ""}">${topBar()}${!sync.isOnline ? `<div class="offline-banner">Offline mode active. New records are saved locally.</div>` : ""}${content()}${uiMessage ? `<div class="toast">${h(uiMessage)}</div>` : ""}${state.onboarded ? bottomNav() : ""}</main></div>`;
   bind();
   scheduleDecisionRefreshes();
 }
@@ -869,7 +870,6 @@ function bind() {
       showMessage("Terris Nutrients beta is not enabled for this workspace.");
       return;
     }
-    const offline = !navigator.onLine;
     const record = createNutrientRecord({
       fieldId: document.getElementById("nutrientField")?.value,
       blockId: document.getElementById("nutrientBlock")?.value || null,
@@ -887,11 +887,11 @@ function bind() {
       notes: document.getElementById("nutrientNotes")?.value || "",
       representativeDemo: representativeDemoFor("nutrients"),
       demo: state.mode === "demo",
-      syncStatus: offline ? "queued" : "synced",
+      syncStatus: "local_pending",
     });
     state.nutrientRecords.unshift(record);
     state = appendLedgerEvent(state, nutrientLedgerEvent(record));
-    if (offline) queueSyncAction({ kind: "nutrient_log", payload: record });
+    queueSyncAction({ kind: "nutrient_log", payload: record });
     persist();
     showMessage(record.missingData.length ? `Saved draft. Missing: ${record.missingData.join(", ")}.` : "Nutrient record saved.");
     render();
@@ -909,14 +909,14 @@ function bind() {
         taskType: document.getElementById("taskType")?.value || "collect_missing_data",
         priority: document.getElementById("taskPriority")?.value || "medium",
         fieldId: document.getElementById("taskField")?.value || state.fields[0]?.id || "local-field",
-        offlineSyncState: navigator.onLine ? "synced" : "queued",
+        offlineSyncState: "local_pending",
         representativeDemo: representativeDemoFor("ops"),
       });
       state.fieldTasks.unshift(task);
       state = appendLedgerEvent(state, taskEvent(task, false));
-      if (!navigator.onLine) queueSyncAction({ kind: "task_create", payload: task });
+      queueSyncAction({ kind: "task_create", payload: task });
       persist();
-      showMessage(navigator.onLine ? "Field task saved locally." : "Saved locally. Backend sync is not enabled yet.");
+      showMessage("Saved locally. Awaiting backend sync.");
       render();
     } catch (error) {
       showMessage(error.message);
@@ -936,13 +936,13 @@ function bind() {
         notes: document.getElementById("taskCompletionNote")?.value || "",
         attachments: (document.getElementById("taskAttachments")?.value || "").split(",").map((x) => x.trim()).filter(Boolean),
         completedAt: document.getElementById("taskCompletedAt")?.value ? new Date(document.getElementById("taskCompletedAt").value).toISOString() : new Date().toISOString(),
-        offline: !navigator.onLine,
+        offlineSyncState: "local_pending",
       });
       state.fieldTasks = (state.fieldTasks || []).map((row) => row.id === task.id ? completed : row);
       state = appendLedgerEvent(state, taskEvent(completed, true));
-      if (!navigator.onLine) queueSyncAction({ kind: "task_complete", payload: completed });
+      queueSyncAction({ kind: "task_complete", payload: completed });
       persist();
-      showMessage(navigator.onLine ? "Task completion saved locally, separately from agronomic verification." : "Saved locally. Backend sync is not enabled yet.");
+      showMessage("Saved locally. Awaiting backend sync.");
       render();
     } catch (error) {
       showMessage(error.message);
@@ -991,7 +991,6 @@ function bind() {
     const currentSignature = evidenceReviewSignature(scope, events);
     const snapshotMatches = proofReviewSnapshot?.reviewSignature === currentSignature
       && JSON.stringify([...(proofReviewSnapshot?.includedEventIds || [])].sort()) === JSON.stringify(events.map((event) => event.id).sort());
-    const offline = !navigator.onLine;
     const packet = createEvidencePacket({
       moduleScope: scope.moduleScope,
       farmScope: scope.farmScope,
@@ -1004,11 +1003,11 @@ function bind() {
       reviewSnapshot: proofReviewSnapshot,
       missingInputs: snapshotMatches ? events.length ? [] : ["reviewable ledger evidence"] : ["preview candidate events for the current scope"],
       representativeDemo: representativeDemoFor("proof"),
-      syncStatus: offline ? "queued" : "synced",
+      syncStatus: "local_pending",
     });
     state.evidencePackets.unshift(packet);
     state = appendLedgerEvent(state, evidencePacketEvent(packet));
-    if (offline) queueSyncAction({ kind: "proof_packet", payload: packet });
+    queueSyncAction({ kind: "proof_packet", payload: packet });
     persist();
     showMessage(packet.status === "draft_missing_evidence" ? "Draft packet saved locally with missing evidence clearly labeled." : "Operational evidence packet saved locally.");
     render();
@@ -1062,7 +1061,7 @@ function bind() {
     state.voiceTimeline.unshift(createVoiceTimelineEntry({ transcript, intent: command.intent, outcome: "confirmed", fieldId: command.action?.payload?.fieldId || state.fields[0]?.id, offline: !navigator.onLine }));
     state.voiceTimeline = state.voiceTimeline.slice(0, 20);
     pendingVoiceCommand = null;
-    voiceResponse = navigator.onLine ? "Voice action saved locally." : "Saved locally. Backend sync is not enabled yet.";
+    voiceResponse = "Saved locally. Awaiting backend sync.";
     persist();
     render();
   };
