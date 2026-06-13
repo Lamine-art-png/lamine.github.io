@@ -14,9 +14,16 @@ export function createNutrientRecord(input) {
   const canCalculate = finiteNumber(input.waterVolume) && finiteNumber(input.concentration);
   const hasApplied = finiteNumber(input.appliedQuantity);
   const hasPlanned = finiteNumber(input.plannedQuantity);
+  const hasQuantityEvidence = hasPlanned || hasApplied || canCalculate;
+  if (!hasQuantityEvidence) missingData.push("quantity evidence");
   const appliedQuantity = hasApplied ? Number(input.appliedQuantity) : canCalculate ? Number(input.waterVolume) * Number(input.concentration) : null;
   const truthLabel = hasApplied ? "reported" : canCalculate ? "calculated" : "unknown";
-  const recordStatus = appliedQuantity != null ? "applied" : hasPlanned && !missingData.length ? "planned" : "draft_missing_inputs";
+  const hasRequiredMetadata = Boolean(input.fieldId && input.nutrientType && input.sourceType && input.applicationMethod && input.unit);
+  const recordStatus = !hasRequiredMetadata || !hasQuantityEvidence
+    ? "draft_missing_inputs"
+    : appliedQuantity != null
+      ? "applied"
+      : "planned";
   return {
     id: input.id || `nutrient-${Date.now()}`,
     fieldId: input.fieldId || null,
@@ -40,12 +47,13 @@ export function createNutrientRecord(input) {
     nextEvidenceRequired: missingData[0] || null,
     demo: Boolean(input.demo),
     representativeDemo: Boolean(input.representativeDemo || input.demo),
+    syncStatus: input.syncStatus || (input.offline ? "queued" : "synced"),
   };
 }
 
 export function nutrientLedgerEvent(record) {
   const eventType = record.applicationMethod === "fertigation"
-    ? record.recordStatus === "applied" ? "fertigation_applied" : "fertigation_plan"
+    ? record.appliedQuantity != null ? "fertigation_applied" : "fertigation_plan"
     : "nutrient_application";
   return createTerrisFieldEvent({
     eventType,
@@ -57,9 +65,10 @@ export function nutrientLedgerEvent(record) {
     sourceMode: record.representativeDemo ? "demo" : "manual",
     truthLabel: record.truthLabel,
     occurredAt: record.timestamp,
-    dataQuality: record.missingData.length ? "blocked" : "medium",
-    payload: { ...record, recordStatus: record.recordStatus },
+    dataQuality: record.recordStatus === "draft_missing_inputs" || record.missingData.length ? "blocked" : "medium",
+    payload: { ...record, recordStatus: record.recordStatus, syncStatus: record.syncStatus || "synced" },
     limitations: record.missingData.length ? [`Withheld calculation until ${record.missingData.join(" and ")} is available.`] : [],
+    queuedForSync: record.syncStatus === "queued",
   });
 }
 

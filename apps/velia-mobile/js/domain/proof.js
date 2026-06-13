@@ -25,7 +25,7 @@ export function filterEvidenceEvents(events = [], scope = {}) {
   const end = scope.dateWindow?.end ? new Date(`${scope.dateWindow.end}T23:59:59.999Z`).getTime() : null;
   return events.filter((event) => {
     if (scope.moduleScope && event.module !== scope.moduleScope) return false;
-    if (scope.farmScope && event.farmId && event.farmId !== scope.farmScope) return false;
+    if (scope.farmScope && event.farmId !== scope.farmScope) return false;
     if (scope.fieldScope && event.fieldId !== scope.fieldScope) return false;
     if (scope.blockScope && event.blockId !== scope.blockScope) return false;
     const occurred = new Date(event.occurredAt || event.recordedAt || 0).getTime();
@@ -46,6 +46,19 @@ export function reviewRowsForEvents(events = []) {
   }));
 }
 
+export function evidenceReviewSignature(scope = {}, events = []) {
+  const ids = events.map((event) => event.id).filter(Boolean).sort();
+  return [
+    scope.moduleScope || "",
+    scope.farmScope || "",
+    scope.fieldScope || "",
+    scope.blockScope || "",
+    scope.dateWindow?.start || "",
+    scope.dateWindow?.end || "",
+    ids.join(","),
+  ].join("|");
+}
+
 export function createEvidencePacket(input) {
   const scope = {
     moduleScope: input.moduleScope || "",
@@ -57,12 +70,17 @@ export function createEvidencePacket(input) {
   const events = input.preFiltered ? input.events || [] : filterEvidenceEvents(input.events || [], scope);
   const artifacts = input.artifacts || [];
   const missingInputs = input.missingInputs || [];
+  const reviewSignature = evidenceReviewSignature(scope, events);
+  const reviewedEventIds = input.reviewSnapshot?.includedEventIds || input.reviewedEventIds || [];
+  const reviewedIdsMatch = JSON.stringify([...reviewedEventIds].sort()) === JSON.stringify(events.map((event) => event.id).filter(Boolean).sort());
+  const reviewedSignature = input.reviewSnapshot?.reviewSignature || input.reviewSignature || "";
+  const reviewMatches = Boolean(input.reviewConfirmed && reviewedSignature && reviewedSignature === reviewSignature && reviewedIdsMatch);
   const requiredMissing = [];
   if (!input.moduleScope) requiredMissing.push("module scope");
   if (!input.farmScope) requiredMissing.push("farm scope");
   if (!input.dateWindow?.start || !input.dateWindow?.end) requiredMissing.push("date window");
   if (!events.length) requiredMissing.push("filtered ledger evidence");
-  if (!input.reviewConfirmed) requiredMissing.push("included event review confirmation");
+  if (!reviewMatches) requiredMissing.push("matching reviewed event scope");
   const allMissing = [...requiredMissing, ...missingInputs];
   return {
     id: input.id || `packet-${Date.now()}`,
@@ -73,7 +91,9 @@ export function createEvidencePacket(input) {
     fieldScope: input.fieldScope || null,
     blockScope: input.blockScope || null,
     dateWindow: input.dateWindow || null,
-    reviewConfirmed: Boolean(input.reviewConfirmed),
+    reviewConfirmed: reviewMatches,
+    reviewSignature,
+    reviewedAt: reviewMatches ? input.reviewSnapshot?.reviewedAt || input.reviewedAt || null : null,
     reviewRows: reviewRowsForEvents(events),
     includedEventIds: events.map((event) => event.id),
     includedEvidenceArtifactIds: artifacts.map((artifact) => artifact.id),
@@ -91,7 +111,9 @@ export function evidencePacketEvent(packet) {
   return createTerrisFieldEvent({
     eventType: "evidence_packet_generated",
     module: "proof",
+    farmId: packet.farmScope,
     fieldId: packet.fieldScope,
+    blockId: packet.blockScope,
     sourceRecordId: packet.id,
     sourceMode: packet.representativeDemo ? "demo" : "system",
     truthLabel: "calculated",

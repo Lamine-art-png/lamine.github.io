@@ -13,7 +13,7 @@ import { terrisModuleRegistryForMode } from "./domain/moduleRegistry.js";
 import { createNutrientRecord, nutrientLedgerEvent } from "./domain/nutrients.js";
 import { compareEligibleWindows, demoEnergyComparison } from "./domain/energy.js";
 import { completeFieldTask, createFieldTask, taskEvent } from "./domain/ops.js";
-import { createEvidencePacket, evidencePacketEvent, filterEvidenceEvents, reviewRowsForEvents, TERRIS_PROOF_DISCLAIMER } from "./domain/proof.js";
+import { createEvidencePacket, evidencePacketEvent, evidenceReviewSignature, filterEvidenceEvents, reviewRowsForEvents, TERRIS_PROOF_DISCLAIMER } from "./domain/proof.js";
 
 const app = document.getElementById("app");
 const h = escapeHtml;
@@ -32,6 +32,7 @@ let weather = state.weatherCache || null;
 let decisionRefreshInflight = new Set();
 let renderRecommendationSnapshot = new Map();
 let uiMessage = "";
+let proofReviewSnapshot = null;
 let onboardingStep = 0;
 let onboardingDraft = {
   role: "farmer",
@@ -115,6 +116,20 @@ function ai() { return createAiOrchestrator(buildAiContext({ preview: true })); 
 function persist() { saveState(state); }
 function syncStatus() { return syncService.status(); }
 
+function reconcileLedgerSyncMetadata({ persistState = true } = {}) {
+  const pending = syncService.status().pending > 0;
+  const previous = state.ledgerMetadata || {};
+  state.ledgerMetadata = { ...previous, queuedForSync: pending };
+  if (persistState) persist();
+  return pending;
+}
+
+function queueSyncAction(action) {
+  const pending = syncService.queueAction(action);
+  reconcileLedgerSyncMetadata({ persistState: false });
+  return pending;
+}
+
 async function refreshWeather(forceRefresh = false) {
   const location = state.profile?.farm?.location || "farm";
   weather = await weatherService.getWeather({ location, coordinates: state.profile?.farm?.coordinates || state.fields[0]?.coordinates || null, forceRefresh });
@@ -134,7 +149,8 @@ function showMessage(text) {
 }
 
 function addIrrigationLog(payload) {
-  const log = createIrrigationLog(payload);
+  const offline = !navigator.onLine;
+  const log = createIrrigationLog({ ...payload, offline });
   state.irrigationLogs.unshift(log);
   const field = state.fields.find((f) => f.id === payload.fieldId);
   if (field) {
@@ -143,7 +159,7 @@ function addIrrigationLog(payload) {
   }
   state = appendLedgerEvent(state, waterAppliedEvent(log));
   if (field) recordLocalRecommendationTransitions([field]);
-  if (!navigator.onLine) syncService.queueAction({ kind: "irrigation_log", payload: log });
+  if (offline) queueSyncAction({ kind: "irrigation_log", payload: log });
   persist();
   showMessage(navigator.onLine ? "Irrigation log saved." : "Saved offline. Terris will sync when connected.");
 }
@@ -151,13 +167,14 @@ function addIrrigationLog(payload) {
 function addFieldNote(payload) {
   const note = { id: `note-${Date.now()}`, createdAt: new Date().toISOString(), ...payload };
   state.fieldNotes.unshift(note);
-  if (!navigator.onLine) syncService.queueAction({ kind: "field_note", payload: note });
+  if (!navigator.onLine) queueSyncAction({ kind: "field_note", payload: note });
   persist();
   showMessage(navigator.onLine ? "Field note added." : "Field note saved offline.");
 }
 
 function updateCondition(payload) {
-  const observation = createObservation(payload);
+  const offline = !navigator.onLine;
+  const observation = createObservation({ ...payload, offline });
   state.observations.unshift(observation);
   const field = state.fields.find((f) => f.id === payload.fieldId);
   if (field) {
@@ -166,7 +183,7 @@ function updateCondition(payload) {
   }
   state = appendLedgerEvent(state, fieldObservationEvent(observation));
   if (field) recordLocalRecommendationTransitions([field]);
-  if (!navigator.onLine) syncService.queueAction({ kind: "observation", payload: observation });
+  if (offline) queueSyncAction({ kind: "observation", payload: observation });
   persist();
   showMessage(navigator.onLine ? "Condition updated." : "Condition saved offline.");
 }
@@ -626,7 +643,7 @@ function demoBadge(key) {
 
 function ledgerStatusCard() {
   const sync = syncStatus();
-  const pending = Boolean(state.ledgerMetadata?.queuedForSync || sync.pending);
+  const pending = sync.pending > 0;
   return `<section class="card section-card"><p class="card-label">Terris Ledger status</p><div class="data-source-list"><span>Storage: Local mobile buffer</span><span>Retention: Latest ${h(state.ledgerMetadata?.retentionLimit || 500)} events</span><span>Backend persistence: Not enabled</span><span>Pending sync: ${pending ? "Yes" : "No"}</span></div><p class="muted">This is not yet a durable audit archive.</p></section>`;
 }
 
@@ -699,22 +716,28 @@ function proofCandidateEvents(scope = {}) {
 function proofReviewTable(events) {
   const rows = reviewRowsForEvents(events);
   if (!rows.length) return `<p class="muted">No candidate events match the current default scope.</p>`;
-  return `<div class="activity-list">${rows.slice(0, 8).map((row) => `<div class="activity-row"><span></span><div><strong>${h(row.eventType)}</strong><p>${h(fieldName(row.fieldId))} - ${h(row.truthLabel)} - ${h(row.dataQuality)}</p></div><time>${h(relativeTime(row.occurredAt))}</time></div>`).join("")}</div>`;
+  const overflow = rows.length > 8 ? `<p class="muted">...and ${h(rows.length - 8)} more events in scope.</p>` : "";
+  return `<div class="activity-list">${rows.slice(0, 8).map((row) => `<div class="activity-row"><span></span><div><strong>${h(row.eventType)}</strong><p>${h(fieldName(row.fieldId))} - ${h(row.truthLabel)} - ${h(row.dataQuality)}</p></div><time>${h(relativeTime(row.occurredAt))}</time></div>`).join("")}</div>${overflow}`;
 }
 
 function proofBetaSurface() {
   if (!isTerrisModuleEnabled("proof")) return betaLockedCard("proof", "Terris Proof beta");
-  const defaults = defaultProofWindow();
-  const candidates = proofCandidateEvents({ dateWindow: defaults });
+  const defaults = proofReviewSnapshot?.scope?.dateWindow || defaultProofWindow();
+  const moduleScope = proofReviewSnapshot?.scope?.moduleScope || "water";
+  const farmScope = proofReviewSnapshot?.scope?.farmScope || "local-farm";
+  const fieldScope = proofReviewSnapshot?.scope?.fieldScope || "";
+  const blockScope = proofReviewSnapshot?.scope?.blockScope || "";
+  const candidates = proofReviewSnapshot?.events || [];
   return `<section class="card form-card"><h2>Terris Proof beta</h2>${demoBadge("proof")}<p>${h(TERRIS_PROOF_DISCLAIMER)}</p>
-    <label>Module scope<input id="proofModule" value="water" /></label>
-    <label>Farm scope<input id="proofFarm" value="local-farm" /></label>
-    <label>Field scope<select id="proofField"><option value="">All fields</option>${state.fields.map((f) => `<option value="${h(f.id)}">${h(f.name)}</option>`).join("")}</select></label>
-    <label>Block scope optional<input id="proofBlock" /></label>
+    <label>Module scope<input id="proofModule" value="${h(moduleScope)}" /></label>
+    <label>Farm scope<input id="proofFarm" value="${h(farmScope)}" /></label>
+    <label>Field scope<select id="proofField"><option value="">All fields</option>${state.fields.map((f) => `<option value="${h(f.id)}" ${fieldScope === f.id ? "selected" : ""}>${h(f.name)}</option>`).join("")}</select></label>
+    <label>Block scope optional<input id="proofBlock" value="${h(blockScope)}" /></label>
     <label>Start date<input id="proofStart" type="date" value="${h(defaults.start)}" /></label>
     <label>End date<input id="proofEnd" type="date" value="${h(defaults.end)}" /></label>
-    <div class="change-row"><strong>Candidate event review</strong><p>Review event type, field, timestamp, truth label, and data quality before generating.</p></div>
-    ${proofReviewTable(candidates)}
+    <button class="btn" data-preview-proof="1">Preview candidate events</button>
+    <div class="change-row"><strong>Candidate event review</strong><p>${proofReviewSnapshot ? `Previewed ${h(candidates.length)} events at ${h(relativeTime(proofReviewSnapshot.reviewedAt))}.` : "Preview candidate events before generating."}</p></div>
+    ${proofReviewSnapshot ? proofReviewTable(candidates) : `<p class="muted">No reviewed candidate set yet.</p>`}
     <label class="check-row"><input id="proofReviewed" type="checkbox" /> I reviewed included events</label>
     <button class="btn" data-generate-packet="1">Generate packet</button>
   </section>`;
@@ -847,6 +870,7 @@ function bind() {
       showMessage("Terris Nutrients beta is not enabled for this workspace.");
       return;
     }
+    const offline = !navigator.onLine;
     const record = createNutrientRecord({
       fieldId: document.getElementById("nutrientField")?.value,
       blockId: document.getElementById("nutrientBlock")?.value || null,
@@ -864,9 +888,11 @@ function bind() {
       notes: document.getElementById("nutrientNotes")?.value || "",
       representativeDemo: representativeDemoFor("nutrients"),
       demo: state.mode === "demo",
+      syncStatus: offline ? "queued" : "synced",
     });
     state.nutrientRecords.unshift(record);
     state = appendLedgerEvent(state, nutrientLedgerEvent(record));
+    if (offline) queueSyncAction({ kind: "nutrient_log", payload: record });
     persist();
     showMessage(record.missingData.length ? `Saved draft. Missing: ${record.missingData.join(", ")}.` : "Nutrient record saved.");
     render();
@@ -921,6 +947,30 @@ function bind() {
       showMessage(error.message);
     }
   };
+  const previewProofBtn = document.querySelector("[data-preview-proof]");
+  if (previewProofBtn) previewProofBtn.onclick = () => {
+    if (!isTerrisModuleEnabled("proof")) {
+      showMessage("Terris Proof beta is not enabled for this workspace.");
+      return;
+    }
+    const scope = {
+      moduleScope: document.getElementById("proofModule")?.value || "",
+      farmScope: document.getElementById("proofFarm")?.value || "",
+      fieldScope: document.getElementById("proofField")?.value || null,
+      blockScope: document.getElementById("proofBlock")?.value || null,
+      dateWindow: { start: document.getElementById("proofStart")?.value || "", end: document.getElementById("proofEnd")?.value || "" },
+    };
+    const events = filterEvidenceEvents(state.fieldLedgerEvents || [], scope);
+    proofReviewSnapshot = {
+      scope,
+      includedEventIds: events.map((event) => event.id),
+      reviewSignature: evidenceReviewSignature(scope, events),
+      reviewedAt: new Date().toISOString(),
+      events,
+    };
+    showMessage(events.length ? "Candidate events previewed." : "No candidate events matched this proof scope.");
+    render();
+  };
   const generatePacketBtn = document.querySelector("[data-generate-packet]");
   if (generatePacketBtn) generatePacketBtn.onclick = () => {
     if (!isTerrisModuleEnabled("proof")) {
@@ -937,6 +987,9 @@ function bind() {
       dateWindow: { start: document.getElementById("proofStart")?.value || "", end: document.getElementById("proofEnd")?.value || "" },
     };
     const events = filterEvidenceEvents(state.fieldLedgerEvents || [], scope);
+    const currentSignature = evidenceReviewSignature(scope, events);
+    const snapshotMatches = proofReviewSnapshot?.reviewSignature === currentSignature
+      && JSON.stringify([...(proofReviewSnapshot?.includedEventIds || [])].sort()) === JSON.stringify(events.map((event) => event.id).sort());
     const packet = createEvidencePacket({
       moduleScope: scope.moduleScope,
       farmScope: scope.farmScope,
@@ -945,8 +998,9 @@ function bind() {
       dateWindow: scope.dateWindow,
       events,
       preFiltered: true,
-      reviewConfirmed: Boolean(document.getElementById("proofReviewed")?.checked),
-      missingInputs: events.length ? [] : ["reviewable ledger evidence"],
+      reviewConfirmed: Boolean(document.getElementById("proofReviewed")?.checked) && snapshotMatches,
+      reviewSnapshot: proofReviewSnapshot,
+      missingInputs: snapshotMatches ? events.length ? [] : ["reviewable ledger evidence"] : ["preview candidate events for the current scope"],
       representativeDemo: representativeDemoFor("proof"),
     });
     state.evidencePackets.unshift(packet);
@@ -1000,7 +1054,10 @@ function bind() {
   if (confirmVoice) confirmVoice.onclick = () => {
     const command = pendingVoiceCommand;
     if (!command) return;
-    if (!navigator.onLine) saveOfflineVoiceAction(command.action);
+    if (!navigator.onLine) {
+      saveOfflineVoiceAction(command.action);
+      reconcileLedgerSyncMetadata({ persistState: false });
+    }
     applyVoiceAction(command, { onIrrigation: addIrrigationLog, onCondition: updateCondition, onNote: addFieldNote, onNoop: () => {} });
     state.voiceTimeline.unshift(createVoiceTimelineEntry({ transcript, intent: command.intent, outcome: "confirmed", fieldId: command.action?.payload?.fieldId || state.fields[0]?.id }));
     state.voiceTimeline = state.voiceTimeline.slice(0, 20);
@@ -1012,7 +1069,7 @@ function bind() {
 }
 
 if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js"));
-window.addEventListener("online", async () => { await syncService.flushQueue(); await refreshWeather(false); render(); });
+window.addEventListener("online", async () => { await syncService.flushQueue(); reconcileLedgerSyncMetadata(); await refreshWeather(false); render(); });
 window.addEventListener("offline", render);
 
 (async () => {

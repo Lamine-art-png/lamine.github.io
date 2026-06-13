@@ -2,12 +2,13 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { storage } from "../js/services/storage.js";
+import { syncService } from "../js/services/sync.js";
 import { createTerrisFieldEvent, appendLedgerEvent, appendRecommendationEventIfNew, fieldObservationEvent, recommendationFingerprint, safeRandomUuid, waterAppliedEvent, waterRecommendationEvent } from "../js/domain/fieldLedger.js";
 import { terrisModuleRegistryForMode, TERRIS_FEATURE_FLAGS } from "../js/domain/moduleRegistry.js";
 import { createNutrientRecord, nutrientLedgerEvent, plannedAppliedVariance } from "../js/domain/nutrients.js";
 import { compareEligibleWindows, pumpingRuntimeEvent } from "../js/domain/energy.js";
 import { completeFieldTask, createFieldTask, taskEvent } from "../js/domain/ops.js";
-import { createEvidencePacket, evidencePacketEvent, filterEvidenceEvents, TERRIS_PROOF_DISCLAIMER } from "../js/domain/proof.js";
+import { createEvidencePacket, evidencePacketEvent, evidenceReviewSignature, filterEvidenceEvents, TERRIS_PROOF_DISCLAIMER } from "../js/domain/proof.js";
 import { createInitialState, hydrateState } from "../js/state/store.js";
 import { createAttachmentMetadata, createIrrigationLog, createObservation, createVoiceTimelineEntry } from "../js/state/actions.js";
 
@@ -124,19 +125,33 @@ test("water applied and observation create separate ledger events", () => {
   assert.notEqual(applied.eventType, "irrigation_verified");
 });
 
-test("nutrients beta withholds calculated amount when required values are missing", () => {
-  const missingVolume = createNutrientRecord({ fieldId: "f1", nutrientType: "N", sourceType: "fertilizer", concentration: 2, unit: "kg", applicationMethod: "fertigation" });
-  assert.equal(missingVolume.appliedQuantity, null);
-  assert.ok(missingVolume.missingData.includes("water volume"));
-  const complete = createNutrientRecord({ fieldId: "f1", nutrientType: "N", sourceType: "fertilizer", waterVolume: 10, concentration: 2, plannedQuantity: 25, unit: "kg", applicationMethod: "fertigation" });
-  assert.equal(complete.appliedQuantity, 20);
-  assert.equal(complete.truthLabel, "calculated");
-  assert.equal(complete.recordStatus, "applied");
-  assert.equal(plannedAppliedVariance(complete), -5);
-  assert.equal(nutrientLedgerEvent(complete).eventType, "fertigation_applied");
+test("offline water records preserve queued ledger metadata", () => {
+  const applied = waterAppliedEvent(createIrrigationLog({ fieldId: "f1", durationMin: 60, amountMm: 12, source: "manual", offline: true }));
+  const observed = fieldObservationEvent(createObservation({ fieldId: "f1", condition: "Looks dry", offline: true }));
+  assert.equal(applied.payload.syncStatus, "queued");
+  assert.equal(applied.ledgerMetadata.queuedForSync, true);
+  assert.equal(observed.payload.syncStatus, "queued");
+  assert.equal(observed.ledgerMetadata.queuedForSync, true);
+  const state = appendLedgerEvent(createInitialState(), applied);
+  assert.equal(state.ledgerMetadata.queuedForSync, true);
 });
 
-test("nutrient events preserve unknown truth labels and distinguish planned fertigation", () => {
+test("nutrient drafts require metadata and quantity evidence", () => {
+  const missingMetadata = createNutrientRecord({ fieldId: "f1", nutrientType: "N", appliedQuantity: 10, unit: "kg", applicationMethod: "fertigation" });
+  assert.equal(missingMetadata.recordStatus, "draft_missing_inputs");
+  assert.equal(missingMetadata.truthLabel, "reported");
+  assert.ok(missingMetadata.missingData.includes("source type"));
+  assert.equal(nutrientLedgerEvent(missingMetadata).eventType, "fertigation_applied");
+  assert.equal(nutrientLedgerEvent(missingMetadata).dataQuality, "blocked");
+
+  const noQuantity = createNutrientRecord({ fieldId: "f1", nutrientType: "N", sourceType: "fertilizer", unit: "kg", applicationMethod: "broadcast" });
+  assert.equal(noQuantity.recordStatus, "draft_missing_inputs");
+  assert.equal(noQuantity.truthLabel, "unknown");
+  assert.ok(noQuantity.missingData.includes("quantity evidence"));
+  assert.equal(nutrientLedgerEvent(noQuantity).dataQuality, "blocked");
+});
+
+test("nutrient status distinguishes planned, calculated, and manual applied records", () => {
   const planned = createNutrientRecord({ fieldId: "f1", nutrientType: "N", sourceType: "fertilizer", plannedQuantity: 20, unit: "kg", applicationMethod: "fertigation" });
   const event = nutrientLedgerEvent(planned);
   assert.equal(planned.appliedQuantity, null);
@@ -144,9 +159,30 @@ test("nutrient events preserve unknown truth labels and distinguish planned fert
   assert.equal(planned.recordStatus, "planned");
   assert.equal(event.truthLabel, "unknown");
   assert.equal(event.eventType, "fertigation_plan");
-  const draft = createNutrientRecord({ fieldId: "f1", nutrientType: "N", sourceType: "fertilizer", unit: "kg", applicationMethod: "broadcast" });
-  assert.equal(draft.recordStatus, "draft_missing_inputs");
-  assert.equal(nutrientLedgerEvent(draft).payload.recordStatus, "draft_missing_inputs");
+
+  const calculated = createNutrientRecord({ fieldId: "f1", nutrientType: "N", sourceType: "fertilizer", waterVolume: 10, concentration: 2, plannedQuantity: 25, unit: "kg", applicationMethod: "fertigation" });
+  assert.equal(calculated.appliedQuantity, 20);
+  assert.equal(calculated.truthLabel, "calculated");
+  assert.equal(calculated.recordStatus, "applied");
+  assert.equal(plannedAppliedVariance(calculated), -5);
+  assert.equal(nutrientLedgerEvent(calculated).eventType, "fertigation_applied");
+
+  const manualApplied = createNutrientRecord({ fieldId: "f1", nutrientType: "K", sourceType: "fertilizer", appliedQuantity: 8, unit: "kg", applicationMethod: "broadcast" });
+  assert.equal(manualApplied.recordStatus, "applied");
+  assert.equal(manualApplied.truthLabel, "reported");
+  assert.equal(nutrientLedgerEvent(manualApplied).eventType, "nutrient_application");
+  assert.equal(nutrientLedgerEvent(manualApplied).dataQuality, "medium");
+});
+
+test("offline nutrient records use nutrient_log queue semantics and queued ledger metadata", () => {
+  const record = createNutrientRecord({ fieldId: "f1", nutrientType: "N", sourceType: "fertilizer", appliedQuantity: 10, unit: "kg", applicationMethod: "broadcast", offline: true, representativeDemo: true });
+  const event = nutrientLedgerEvent(record);
+  const appSource = fs.readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
+  assert.equal(record.syncStatus, "queued");
+  assert.equal(event.payload.syncStatus, "queued");
+  assert.equal(event.ledgerMetadata.queuedForSync, true);
+  assert.equal(event.sourceMode, "demo");
+  assert.ok(appSource.includes('queueSyncAction({ kind: "nutrient_log", payload: record })'));
 });
 
 test("energy beta withholds real-mode comparison without pump and tariff evidence", () => {
@@ -182,7 +218,7 @@ test("proof packet is draft when required evidence is missing", () => {
   const packet = createEvidencePacket({ moduleScope: "water", farmScope: "farm-1", fieldScope: "f1", dateWindow: { start: "2026-06-01", end: "2026-06-02" }, events: [], missingInputs: ["controller confirmation"] });
   assert.equal(packet.status, "draft_missing_evidence");
   assert.ok(packet.missingInputs.includes("filtered ledger evidence"));
-  assert.ok(packet.missingInputs.includes("included event review confirmation"));
+  assert.ok(packet.missingInputs.includes("matching reviewed event scope"));
   assert.equal(packet.disclaimer, TERRIS_PROOF_DISCLAIMER);
   assert.ok(!/official regulatory filing support/i.test(packet.disclaimer));
 });
@@ -193,16 +229,30 @@ test("proof packet filters events by scope, date window, and requires explicit r
     createTerrisFieldEvent({ id: "e2", eventType: "nutrient_application", module: "nutrients", farmId: "farm-1", fieldId: "f1", occurredAt: "2026-06-02T12:00:00.000Z", truthLabel: "reported", dataQuality: "medium" }),
     createTerrisFieldEvent({ id: "e3", eventType: "irrigation_applied", module: "water", farmId: "farm-2", fieldId: "f1", occurredAt: "2026-06-02T12:00:00.000Z", truthLabel: "reported", dataQuality: "medium" }),
     createTerrisFieldEvent({ id: "e4", eventType: "irrigation_applied", module: "water", farmId: "farm-1", fieldId: "f1", occurredAt: "2026-05-30T12:00:00.000Z", truthLabel: "reported", dataQuality: "medium" }),
+    createTerrisFieldEvent({ id: "e5", eventType: "irrigation_applied", module: "water", fieldId: "f1", blockId: "b1", occurredAt: "2026-06-02T12:00:00.000Z", truthLabel: "reported", dataQuality: "medium" }),
   ];
   const scope = { moduleScope: "water", farmScope: "farm-1", fieldScope: "f1", blockScope: "b1", dateWindow: { start: "2026-06-01", end: "2026-06-03" } };
   const filtered = filterEvidenceEvents(events, scope);
   assert.deepEqual(filtered.map((event) => event.id), ["e1"]);
-  const unreviewed = createEvidencePacket({ ...scope, events, reviewConfirmed: false });
+  const reviewSnapshot = { scope, includedEventIds: filtered.map((event) => event.id), reviewSignature: evidenceReviewSignature(scope, filtered), reviewedAt: "2026-06-03T00:00:00.000Z" };
+  const unreviewed = createEvidencePacket({ ...scope, events, reviewConfirmed: false, reviewSnapshot });
   assert.equal(unreviewed.status, "draft_missing_evidence");
-  const reviewed = createEvidencePacket({ ...scope, events, reviewConfirmed: true });
+  const reviewed = createEvidencePacket({ ...scope, events, reviewConfirmed: true, reviewSnapshot });
   assert.equal(reviewed.status, "ready_operational_record");
   assert.deepEqual(reviewed.includedEventIds, ["e1"]);
   assert.equal(reviewed.reviewRows[0].eventType, "irrigation_applied");
+  assert.equal(reviewed.reviewSignature, reviewSnapshot.reviewSignature);
+
+  const editedScope = { ...scope, fieldScope: null };
+  const editedEvents = filterEvidenceEvents(events, editedScope);
+  const staleReview = createEvidencePacket({ ...editedScope, events: editedEvents, preFiltered: true, reviewConfirmed: true, reviewSnapshot });
+  assert.equal(staleReview.status, "draft_missing_evidence");
+  assert.ok(staleReview.missingInputs.includes("matching reviewed event scope"));
+
+  const event = evidencePacketEvent(reviewed);
+  assert.equal(event.farmId, "farm-1");
+  assert.equal(event.fieldId, "f1");
+  assert.equal(event.blockId, "b1");
 });
 
 test("representative demo metadata reaches beta records and ledger events", () => {
@@ -211,9 +261,32 @@ test("representative demo metadata reaches beta records and ledger events", () =
   assert.equal(nutrientLedgerEvent(nutrient).sourceMode, "demo");
   const task = createFieldTask({ title: "Demo task", module: "ops", taskType: "inspect_field", fieldId: "f1", representativeDemo: true });
   assert.equal(taskEvent(task).sourceMode, "demo");
-  const packet = createEvidencePacket({ moduleScope: "water", farmScope: "farm-1", dateWindow: { start: "2026-06-01", end: "2026-06-03" }, events: [createTerrisFieldEvent({ eventType: "irrigation_applied", module: "water", farmId: "farm-1", fieldId: "f1", occurredAt: "2026-06-02T12:00:00.000Z" })], reviewConfirmed: true, representativeDemo: true });
+  const packetEvent = createTerrisFieldEvent({ id: "demo-e", eventType: "irrigation_applied", module: "water", farmId: "farm-1", fieldId: "f1", occurredAt: "2026-06-02T12:00:00.000Z" });
+  const packetScope = { moduleScope: "water", farmScope: "farm-1", dateWindow: { start: "2026-06-01", end: "2026-06-03" } };
+  const packetReview = { scope: packetScope, includedEventIds: [packetEvent.id], reviewSignature: evidenceReviewSignature(packetScope, [packetEvent]), reviewedAt: "2026-06-03T00:00:00.000Z" };
+  const packet = createEvidencePacket({ ...packetScope, events: [packetEvent], reviewConfirmed: true, reviewSnapshot: packetReview, representativeDemo: true });
   assert.equal(packet.representativeDemo, true);
   assert.equal(evidencePacketEvent(packet).sourceMode, "demo");
+});
+
+test("app reconciles global ledger sync metadata from the current queue", async () => {
+  const originalNavigator = global.navigator;
+  Object.defineProperty(global, "navigator", { value: { onLine: true }, configurable: true, writable: true });
+  storage.set("queue", []);
+  try {
+    syncService.queueAction({ kind: "irrigation_log", payload: { id: "log-1" } });
+    assert.equal(syncService.status().pending, 1);
+    await syncService.flushQueue();
+    assert.equal(syncService.status().pending, 0);
+    const appSource = fs.readFileSync(new URL("../js/app.js", import.meta.url), "utf8");
+    assert.ok(appSource.includes("function reconcileLedgerSyncMetadata"));
+    assert.ok(appSource.includes("syncService.status().pending > 0"));
+    assert.ok(appSource.includes("queueSyncAction"));
+    assert.ok(appSource.includes("await syncService.flushQueue(); reconcileLedgerSyncMetadata();"));
+  } finally {
+    storage.set("queue", []);
+    Object.defineProperty(global, "navigator", { value: originalNavigator, configurable: true, writable: true });
+  }
 });
 
 test("materially changed recommendation creates one new event and local/backend are distinguishable", () => {
