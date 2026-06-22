@@ -22,6 +22,16 @@ from app.models.compliance import (
     ComplianceWell, ComplianceMeter, ComplianceMeasurement, ComplianceExecutionLedger,
     ComplianceWaterBudget, ComplianceEvidence, ComplianceRulePack, ComplianceExportMetadata, ComplianceReadinessSnapshot,
 )
+from app.assurance.models import (
+    AssurancePassport, AssurancePassportSection, AssuranceEvidenceArtifact,
+    AssuranceChecklistItem, AssuranceRiskScore, InputApplication,
+    PesticideApplication, FertilizerApplication, HarvestLot, TraceabilityEvent,
+    BuyerRequirement, RulePack, AssuranceExport,
+)
+from app.models.workbench_persistence import (
+    WorkbenchSessionRecord, WorkbenchDataArtifactRecord, WorkbenchAnalysisRecord,
+    WorkbenchAuditEventRecord, WorkbenchEvidenceActionRecord,
+)
 
 __all__ = [
     "Tenant",
@@ -54,4 +64,22 @@ __all__ = [
     "ComplianceRulePack",
     "ComplianceExportMetadata",
     "ComplianceReadinessSnapshot",
+    "AssurancePassport",
+    "AssurancePassportSection",
+    "AssuranceEvidenceArtifact",
+    "AssuranceChecklistItem",
+    "AssuranceRiskScore",
+    "InputApplication",
+    "PesticideApplication",
+    "FertilizerApplication",
+    "HarvestLot",
+    "TraceabilityEvent",
+    "BuyerRequirement",
+    "RulePack",
+    "AssuranceExport",
+    "WorkbenchSessionRecord",
+    "WorkbenchDataArtifactRecord",
+    "WorkbenchAnalysisRecord",
+    "WorkbenchAuditEventRecord",
+    "WorkbenchEvidenceActionRecord",
 ]

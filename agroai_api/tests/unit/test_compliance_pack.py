@@ -391,11 +391,11 @@ def test_compliance_migration_preflight_classifies_clean_002_and_003(tmp_path, m
     assert report_002["parcel_identifier_exists"] is False
 
     command.upgrade(cfg, "head")
-    report_003 = collect_report(database_url)
-    assert report_003["current_alembic_revision"] == "003_global_compliance_kernel"
-    assert report_003["schema_classification"] == "C_migration_003_schema"
-    assert report_003["tables"]["compliance_export_metadata"] is True
-    assert report_003["parcel_identifier_exists"] is True
+    report_head = collect_report(database_url)
+    assert report_head["current_alembic_revision"] == "004_assurance_audit_mvp"
+    assert report_head["schema_classification"] == "C_migration_003_schema"
+    assert report_head["tables"]["compliance_export_metadata"] is True
+    assert report_head["parcel_identifier_exists"] is True
 
 def _load_migration_003():
     path = Path(__file__).resolve().parents[2] / "alembic" / "versions" / "003_global_compliance_kernel.py"
