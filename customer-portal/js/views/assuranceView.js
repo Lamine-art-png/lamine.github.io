@@ -44,10 +44,39 @@ export const demoAgent = {
   needs_approval: ["External use", "Submission language", "Any certification or legal status change"],
 };
 
-function passportPackage(state) {
+export const liveAssuranceEmptyPackage = {
+  passport: {
+    id: "",
+    farm_name: "Create or connect a live Assurance Passport",
+    farm_location: "",
+    crop: "",
+    season: "",
+    reporting_period: "",
+    status: "backend_auth_required",
+    rule_pack_ids: [],
+  },
+  readiness: {
+    readiness_score: null,
+    risk_level: "needs_review",
+    status: "scope_missing",
+    missing_evidence: [],
+    proof_counts: {},
+    scope: { missing_scope: ["active_passport"] },
+  },
+  evidence: [],
+  input_applications: [],
+  harvest_lots: [],
+  traceability_events: [],
+};
+
+export function isAssuranceEvaluationMode(state) {
+  return state.session.mode === "demo" || (state.assurance.demoMode === true && state.session.mode !== "live");
+}
+
+export function passportPackage(state) {
   const active = state.assurance.activePassport;
   if (active?.passport) return active;
-  return demoAssurance;
+  return isAssuranceEvaluationMode(state) ? demoAssurance : liveAssuranceEmptyPackage;
 }
 
 function statusChip(value) {
@@ -59,15 +88,17 @@ function tableRows(rows, empty, mapper) {
 }
 
 export function renderAssurance(state) {
-  const isEvaluation = state.session.mode === "demo" || state.assurance.demoMode === true;
+  const isEvaluation = isAssuranceEvaluationMode(state);
   const pkg = passportPackage(state);
   const passport = pkg.passport;
   const readiness = state.assurance.readiness || pkg.readiness || {};
   const evidence = pkg.evidence || [];
-  const agent = state.agent.activeRun?.result || demoAgent;
+  const agent = state.agent.activeRun?.result || (isEvaluation ? demoAgent : {});
+  const hasLivePassport = Boolean(state.assurance.activePassportId || state.assurance.activePassport?.passport);
+  const liveNoPassport = !isEvaluation && !hasLivePassport;
   const authNote = state.session.mode === "live" ? `<p class="alert">Backend auth required for live Assurance APIs. No tenant API key is stored in the browser.</p>` : "";
   const missingCount = (readiness.missing_evidence || []).length;
-  const exportReadiness = missingCount ? "Missing proof before reviewer export" : "Ready for reviewer evaluation";
+  const exportReadiness = liveNoPassport ? "Passport required before export" : missingCount ? "Missing proof before reviewer export" : "Ready for reviewer evaluation";
   const lastUpdated = evidence[0]?.created_at || readiness.updated_at || "unavailable";
 
   return `<section class="page-stack assurance-page">
@@ -75,7 +106,7 @@ export function renderAssurance(state) {
       <div>
         <p class="eyebrow">${isEvaluation ? "Evaluation workspace · not live · not certified" : "Assurance OS"}</p>
         <h2>${escapeHtml(passport.farm_name || "Assurance Passport")}</h2>
-        <p>${escapeHtml(passport.crop || "Crop unavailable")} · Season ${escapeHtml(passport.season || "unavailable")} · Reporting period ${escapeHtml(passport.reporting_period || "unavailable")}</p>
+        <p>${escapeHtml(liveNoPassport ? "Backend auth required for live Assurance APIs. No demo passport was loaded." : `${passport.crop || "Crop unavailable"} · Season ${passport.season || "unavailable"} · Reporting period ${passport.reporting_period || "unavailable"}`)}</p>
         <div class="chip-row">${statusChip(passport.status || readiness.status || "needs_review")}${statusChip(exportReadiness)}${statusChip(`last updated: ${lastUpdated}`)}</div>
         ${authNote}
       </div>
@@ -108,6 +139,7 @@ export function renderAssurance(state) {
       </article>
       <article class="panel action-queue-card">
         <div class="panel-head"><p class="eyebrow">Actions</p><h3>Proof workflow</h3></div>
+        ${liveNoPassport ? '<div class="premium-empty-state"><h3>Create or connect a live Assurance Passport</h3><p>Backend auth required for live Assurance APIs. No demo passport was loaded.</p></div>' : ""}
         <div class="action-grid">
           <button class="button primary" data-action="run-assurance-agent" type="button">Run AGRO-AI Agent</button>
           <button class="button secondary" data-action="open-source-drawer" type="button">Attach records</button>

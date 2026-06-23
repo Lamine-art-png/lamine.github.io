@@ -1,12 +1,15 @@
 import { escapeHtml, formatDate } from "../components/dom.js";
-import { demoAssurance } from "./assuranceView.js";
+import { isAssuranceEvaluationMode, passportPackage } from "./assuranceView.js";
 
 function activePackage(state) {
-  return state.assurance.activePassport?.passport ? state.assurance.activePassport : demoAssurance;
+  return passportPackage(state);
 }
 
 function evidenceRecords(state) {
   const pkg = activePackage(state);
+  if (!isAssuranceEvaluationMode(state) && !state.assurance.activePassportId && !state.assurance.activePassport?.passport) {
+    return [];
+  }
   const uploaded = state.demoRuntime.analysis?.artifacts || [];
   return [
     ...(pkg.evidence || []).map((row) => ({
@@ -46,7 +49,8 @@ function extractedFacts(records) {
 }
 
 export function renderEvidence(state) {
-  const isEvaluation = state.session.mode === "demo" || state.assurance.demoMode === true;
+  const isEvaluation = isAssuranceEvaluationMode(state);
+  const liveNoPassport = !isEvaluation && !state.assurance.activePassportId && !state.assurance.activePassport?.passport;
   const records = evidenceRecords(state);
   const facts = extractedFacts(records);
 
@@ -55,13 +59,15 @@ export function renderEvidence(state) {
       <div>
         <p class="eyebrow">Evidence Intelligence</p>
         <h2>Evidence Vault</h2>
-        <p>Uploaded files, extracted facts, proof linkage, review state, and audit references in one workspace.</p>
+        <p>${escapeHtml(liveNoPassport ? "Backend auth required for live Assurance APIs. No demo passport was loaded." : "Uploaded files, extracted facts, proof linkage, review state, and audit references in one workspace.")}</p>
       </div>
       <div class="hero-actions">
         <span class="status-chip subtle">${escapeHtml(isEvaluation ? "Evaluation data · not live" : "Backend auth required")}</span>
         <button class="button primary" data-action="open-source-drawer" type="button">Attach records</button>
       </div>
     </section>
+
+    ${liveNoPassport ? '<section class="premium-empty-state live-assurance-empty"><h3>Create or connect a live Assurance Passport</h3><p>Backend auth required for live Assurance APIs. No demo passport was loaded.</p><button class="button primary" data-view="assurance" type="button">Open Assurance</button></section>' : ""}
 
     <section class="panel">
       <div class="panel-head"><p class="eyebrow">Evidence Vault Table</p><h3>Records prepared for proof packages</h3></div>

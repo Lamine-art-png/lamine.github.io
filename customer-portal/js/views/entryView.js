@@ -5,15 +5,20 @@ export function renderEntryView(state) {
   return `<main class="entry-screen entry-premium">
     <section class="entry-brand value-panel">
       <img src="./assets/agro-ai-logo.png" alt="AGRO-AI" class="entry-logo" />
-      <p class="eyebrow">AGRO-AI Water Command Center</p>
-      <h1>Recommendation, execution, and verification for connected irrigation environments.</h1>
-      <p class="entry-copy">A customer-facing operations layer for controller environments, live field context, irrigation decisions, planned-vs-applied verification, and executive reporting.</p>
+      <p class="eyebrow">AGRO-AI Enterprise Operating System</p>
+      <h1>Intelligence, WaterOps, and Assurance in one evidence-backed workspace.</h1>
+      <p class="entry-copy">AGRO-AI turns irrigation telemetry, field records, proof packages, and agent workflows into review-ready operating decisions.</p>
       <div class="proof-point-grid" aria-label="Portal proof points">
-        <span>WiseConn environment support</span>
-        <span>Talgil environment support</span>
-        <span>Live context intelligence</span>
-        <span>Planned vs applied verification</span>
-        <span>Executive reporting</span>
+        <span>AI-assisted action queue</span>
+        <span>Evidence-backed decisions</span>
+        <span>WaterOps verification</span>
+        <span>Assurance Passport workflows</span>
+        <span>Reviewer-gated proof packages</span>
+      </div>
+      <div class="compatibility-strip" aria-label="Integration compatibility">
+        <span>Integrated with WiseConn</span>
+        <span>Integrated with Talgil</span>
+        <span>Compatible with additional telemetry and irrigation systems</span>
       </div>
       <p class="auth-safe-note">Customer authentication is prepared as an enterprise access surface. Production sign-in requires backend identity endpoints.</p>
     </section>
@@ -42,9 +47,9 @@ export function renderEntryView(state) {
 
       <article class="demo-card interactive-demo-card">
         <p class="eyebrow">Evaluation Workspace</p>
-        <h2>Open the Water Command Center</h2>
-        <p>Explore a simulated enterprise workspace with WiseConn and Talgil environments, recommendations, verification, and reports.</p>
-        <button id="launch-demo" class="button primary wide demo-launch" type="button">Open Water Command Center</button>
+        <h2>Open the Enterprise OS workspace</h2>
+        <p>Explore a clearly labeled evaluation workspace with representative irrigation, assurance, evidence, agent, and reporting flows.</p>
+        <button id="launch-demo" class="button primary wide demo-launch" type="button">Open Evaluation Workspace</button>
         <p class="demo-disclaimer">One click. No production credentials. Sample data is labeled after entering the workspace.</p>
       </article>
     </section>

@@ -1,9 +1,9 @@
 import { escapeHtml, formatDate } from "../components/dom.js";
 import { metricCard } from "../components/ui.js";
-import { demoAgent, demoAssurance } from "./assuranceView.js";
+import { demoAgent, isAssuranceEvaluationMode, passportPackage } from "./assuranceView.js";
 
 function activePackage(state) {
-  return state.assurance.activePassport?.passport ? state.assurance.activePassport : demoAssurance;
+  return passportPackage(state);
 }
 
 function readinessModel(state) {
@@ -38,6 +38,9 @@ function actionQueue(state) {
 
 function evidenceRows(state) {
   const pkg = activePackage(state);
+  if (!isAssuranceEvaluationMode(state) && !state.assurance.activePassportId && !state.assurance.activePassport?.passport) {
+    return [];
+  }
   const uploaded = state.demoRuntime.analysis?.artifacts || [];
   return [
     ...(pkg.evidence || []).map((item) => ({
@@ -58,12 +61,13 @@ function evidenceRows(state) {
 }
 
 export function renderOverview(state) {
-  const isEvaluation = state.session.mode === "demo" || state.assurance.demoMode === true;
+  const isEvaluation = isAssuranceEvaluationMode(state);
   const pkg = activePackage(state);
   const passport = pkg.passport || {};
   const readiness = readinessModel(state);
-  const agent = state.agent.activeRun?.result || demoAgent;
+  const agent = state.agent.activeRun?.result || (isEvaluation ? demoAgent : {});
   const runtime = state.demoRuntime;
+  const liveNoPassport = !isEvaluation && !state.assurance.activePassportId && !state.assurance.activePassport?.passport;
   const actions = actionQueue(state);
   const evidence = evidenceRows(state);
   const openActions = actions.length;
@@ -76,7 +80,7 @@ export function renderOverview(state) {
       <div>
         <p class="eyebrow">Enterprise OS Overview</p>
         <h2>${escapeHtml(passport.farm_name || runtime.activeFarm?.name || "Workspace")}</h2>
-        <p>Intake, analysis, findings, action queue, approval, and export in one evidence-backed operating surface.</p>
+        <p>${escapeHtml(liveNoPassport ? "Backend auth required for live Assurance APIs. No demo passport was loaded." : "Intake, analysis, findings, action queue, approval, and export in one evidence-backed operating surface.")}</p>
       </div>
       <dl class="hero-status-grid">
         <div><dt>Environment</dt><dd>${escapeHtml(isEvaluation ? "Evaluation workspace · not live · not certified" : "Live mode · backend auth required")}</dd></div>
@@ -84,6 +88,8 @@ export function renderOverview(state) {
         <div><dt>Operating mode</dt><dd>${escapeHtml(runtime.intakeMode || "source selection pending")}</dd></div>
       </dl>
     </section>
+
+    ${liveNoPassport ? '<section class="premium-empty-state live-assurance-empty"><h3>Create or connect a live Assurance Passport</h3><p>Backend auth required for live Assurance APIs. No demo passport was loaded.</p><button class="button primary" data-view="assurance" type="button">Open Assurance</button></section>' : ""}
 
     <section class="enterprise-metric-row">
       ${metricCard("Assurance readiness", `${readiness.readiness_score ?? "—"}%`, readiness.status || "needs_review")}

@@ -1,20 +1,21 @@
 import { escapeHtml } from "../components/dom.js";
-import { demoAgent } from "./assuranceView.js";
+import { demoAgent, isAssuranceEvaluationMode } from "./assuranceView.js";
 
 const timeline = ["Ingest", "Normalize", "Classify", "Reconcile", "Detect missing proof", "Propose actions", "Prepare export", "Human review"];
 
 export function renderAgent(state) {
   const run = state.agent.activeRun;
-  const result = run?.result || demoAgent;
-  const isEvaluation = state.session.mode === "demo" || state.assurance.demoMode === true;
+  const isEvaluation = isAssuranceEvaluationMode(state);
+  const liveNoPassport = !isEvaluation && !state.assurance.activePassportId && !state.assurance.activePassport?.passport;
+  const result = run?.result || (isEvaluation ? demoAgent : {});
   const proposed = run?.proposed_actions || result.recommended_actions || [];
-  const findings = result.findings || [{ summary: result.summary, severity: "needs_review", confidence: result.confidence || 0.8 }];
+  const findings = result.findings || [{ summary: liveNoPassport ? "Create or connect a live Assurance Passport before running the agent." : result.summary, severity: "needs_review", confidence: result.confidence || "needs review" }];
   return `<section class="page-stack agent-page">
     <section class="enterprise-hero">
       <div>
         <p class="eyebrow">${isEvaluation ? "Evaluation workspace · deterministic agent · not live" : "Agent workflow"}</p>
         <h2>Agent Mission Control</h2>
-        <p>Workflow: ${escapeHtml(run?.workflow_type || "assurance_audit")} · Passport/session: ${escapeHtml(run?.passport_id || state.assurance.activePassportId || "demo-passport-alpha-vineyard")} · Status: ${escapeHtml(run?.status || "needs_review")}</p>
+        <p>${escapeHtml(liveNoPassport ? "Backend auth required for live Assurance APIs. No demo passport was loaded." : `Workflow: ${run?.workflow_type || "assurance_audit"} · Passport/session: ${run?.passport_id || state.assurance.activePassportId || "demo-passport-alpha-vineyard"} · Status: ${run?.status || "needs_review"}`)}</p>
       </div>
       <dl class="hero-status-grid">
         <div><dt>Groundedness</dt><dd>${escapeHtml(findings[0]?.evidence_reference ? "Grounded by evidence reference" : "Evidence reference needs review")}</dd></div>
@@ -23,6 +24,7 @@ export function renderAgent(state) {
       </dl>
       <button class="button primary" data-action="run-assurance-agent" type="button">Run AGRO-AI Agent</button>
     </section>
+    ${liveNoPassport ? '<section class="premium-empty-state live-assurance-empty"><h3>Create or connect a live Assurance Passport</h3><p>Backend auth required for live Assurance APIs. No demo passport was loaded.</p><button class="button primary" data-view="assurance" type="button">Open Assurance</button></section>' : ""}
     <section class="panel">
       <div class="panel-head"><p class="eyebrow">Agent Workflow Timeline</p><h3>Operating brain</h3></div>
       <div class="timeline-row">${timeline.map((step, index) => `<span class="timeline-step ${index < 6 ? "complete" : "pending"}">${escapeHtml(step)}</span>`).join("")}</div>
