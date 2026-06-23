@@ -10,6 +10,9 @@ export function renderAgent(state) {
   const result = run?.result || (isEvaluation ? demoAgent : {});
   const proposed = run?.proposed_actions || result.recommended_actions || [];
   const findings = result.findings || [{ summary: liveNoPassport ? "Create or connect a live Assurance Passport before running the agent." : result.summary, severity: "needs_review", confidence: result.confidence || "needs review" }];
+  const timelineClass = (index) => liveNoPassport ? "blocked" : index < 6 ? "complete" : "pending";
+  const runLogStatus = (index) => liveNoPassport ? "passport_required" : index < 6 ? "ready" : "needs_review";
+  const runLogReference = liveNoPassport ? "no-live-run" : run?.id || "evaluation-run";
   return `<section class="page-stack agent-page">
     <section class="enterprise-hero">
       <div>
@@ -27,7 +30,7 @@ export function renderAgent(state) {
     ${liveNoPassport ? '<section class="premium-empty-state live-assurance-empty"><h3>Create or connect a live Assurance Passport</h3><p>Backend auth required for live Assurance APIs. No demo passport was loaded.</p><button class="button primary" data-view="assurance" type="button">Open Assurance</button></section>' : ""}
     <section class="panel">
       <div class="panel-head"><p class="eyebrow">Agent Workflow Timeline</p><h3>Operating brain</h3></div>
-      <div class="timeline-row">${timeline.map((step, index) => `<span class="timeline-step ${index < 6 ? "complete" : "pending"}">${escapeHtml(step)}</span>`).join("")}</div>
+      <div class="timeline-row">${timeline.map((step, index) => `<span class="timeline-step ${timelineClass(index)}">${escapeHtml(step)}</span>`).join("")}</div>
     </section>
     <section class="grid two-col">
       <article class="panel">
@@ -52,7 +55,7 @@ export function renderAgent(state) {
     <section class="panel">
       <div class="panel-head"><p class="eyebrow">Run Log</p><h3>Audit trail</h3></div>
       <div class="table-wrap"><table class="data-table compact"><thead><tr><th>Step</th><th>Status</th><th>Reference</th></tr></thead><tbody>
-        ${timeline.map((step, index) => `<tr><td>${escapeHtml(step)}</td><td>${escapeHtml(index < 6 ? "ready" : "needs_review")}</td><td>${escapeHtml(run?.id || "evaluation-run")}</td></tr>`).join("")}
+        ${timeline.map((step, index) => `<tr><td>${escapeHtml(step)}</td><td>${escapeHtml(runLogStatus(index))}</td><td>${escapeHtml(runLogReference)}</td></tr>`).join("")}
       </tbody></table></div>
     </section>
   </section>`;
