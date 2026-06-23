@@ -16,6 +16,8 @@ import { renderSettings } from "./views/settingsView.js";
 import { renderCompliance } from "./views/complianceView.js";
 import { renderAssurance, demoAssurance, demoAgent } from "./views/assuranceView.js";
 import { renderAgent } from "./views/agentView.js";
+import { renderOverview } from "./views/overviewView.js";
+import { renderEvidence } from "./views/evidenceView.js";
 
 const api = new ApiClient();
 const root = document.getElementById("app");
@@ -318,7 +320,9 @@ async function loadComplianceStatusForView() {
 }
 
 function renderActiveView() {
+  if (state.activeView === "overview") return renderOverview(state);
   if (state.activeView === "assurance") return renderAssurance(state);
+  if (state.activeView === "evidence") return renderEvidence(state);
   if (state.activeView === "agent") return renderAgent(state);
   if (state.activeView === "farm-explorer") return renderFarmExplorer(state);
   if (state.activeView === "intelligence") return renderIntelligence(state);

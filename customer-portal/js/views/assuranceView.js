@@ -66,13 +66,17 @@ export function renderAssurance(state) {
   const evidence = pkg.evidence || [];
   const agent = state.agent.activeRun?.result || demoAgent;
   const authNote = state.session.mode === "live" ? `<p class="alert">Backend auth required for live Assurance APIs. No tenant API key is stored in the browser.</p>` : "";
+  const missingCount = (readiness.missing_evidence || []).length;
+  const exportReadiness = missingCount ? "Missing proof before reviewer export" : "Ready for reviewer evaluation";
+  const lastUpdated = evidence[0]?.created_at || readiness.updated_at || "unavailable";
 
   return `<section class="page-stack assurance-page">
-    <section class="hero-panel">
+    <section class="enterprise-hero passport-hero">
       <div>
         <p class="eyebrow">${isEvaluation ? "Evaluation workspace · not live · not certified" : "Assurance OS"}</p>
-        <h2>Assurance Passport</h2>
-        <p>${escapeHtml(passport.farm_name || "Farm unavailable")} · ${escapeHtml(passport.crop || "Crop unavailable")} · ${escapeHtml(passport.season || "Season unavailable")} · ${escapeHtml(passport.reporting_period || "Period unavailable")}</p>
+        <h2>${escapeHtml(passport.farm_name || "Assurance Passport")}</h2>
+        <p>${escapeHtml(passport.crop || "Crop unavailable")} · Season ${escapeHtml(passport.season || "unavailable")} · Reporting period ${escapeHtml(passport.reporting_period || "unavailable")}</p>
+        <div class="chip-row">${statusChip(passport.status || readiness.status || "needs_review")}${statusChip(exportReadiness)}${statusChip(`last updated: ${lastUpdated}`)}</div>
         ${authNote}
       </div>
       <div class="score-stack">
@@ -83,11 +87,16 @@ export function renderAssurance(state) {
       </div>
     </section>
 
-    <div class="chip-row">${(passport.rule_pack_ids || []).map((pack) => statusChip(pack)).join("")}</div>
+    <section class="enterprise-metric-row">
+      ${statusChip("Rule packs")}
+      ${(passport.rule_pack_ids || []).map((pack) => statusChip(pack)).join("")}
+      ${statusChip(`missing proof: ${missingCount}`)}
+      ${statusChip(`export readiness: ${exportReadiness}`)}
+    </section>
 
     <section class="grid two-col">
       <article class="panel">
-        <div class="panel-head"><p class="eyebrow">AI Agent Panel</p><h3>What AGRO-AI sees</h3></div>
+        <div class="panel-head"><p class="eyebrow">AI insight panel</p><h3>What AGRO-AI sees</h3></div>
         <dl class="setup-brief">
           <div><dt>Proof present</dt><dd>${escapeHtml((agent.proof_present || evidence.map((row) => row.filename || row.evidence_type)).join(", ") || "Unavailable")}</dd></div>
           <div><dt>Proof missing</dt><dd>${escapeHtml((agent.missing_proof || readiness.missing_evidence || []).map((row) => row.requirement_key).join(", ") || "No missing checklist proof detected")}</dd></div>
@@ -97,7 +106,7 @@ export function renderAssurance(state) {
           <div><dt>Needs human approval</dt><dd>${escapeHtml((agent.needs_approval || ["External use", "submission language"]).join(", "))}</dd></div>
         </dl>
       </article>
-      <article class="panel">
+      <article class="panel action-queue-card">
         <div class="panel-head"><p class="eyebrow">Actions</p><h3>Proof workflow</h3></div>
         <div class="action-grid">
           <button class="button primary" data-action="run-assurance-agent" type="button">Run AGRO-AI Agent</button>
@@ -125,10 +134,10 @@ export function renderAssurance(state) {
       </tbody></table>
     </section>
 
-    <section class="grid three-col">
-      <article class="panel"><h3>Water Proof</h3><p>Wells, meters, water budgets, and measurements are counted only when scoped to this passport.</p><strong>${escapeHtml(readiness.status || "unavailable")}</strong></article>
-      <article class="panel"><h3>Input Proof</h3><p>Input applications: ${escapeHtml(String((pkg.input_applications || []).length))}. Pesticide and fertilizer details remain needs review when not provided.</p></article>
-      <article class="panel"><h3>Traceability Proof</h3><p>Harvest lots: ${escapeHtml(String((pkg.harvest_lots || []).length))}; events: ${escapeHtml(String((pkg.traceability_events || []).length))}. Buyer/export readiness requires reviewer evaluation.</p></article>
+    <section class="grid three-col proof-domain-grid">
+      <article class="panel"><div class="panel-head"><p class="eyebrow">Water Proof</p><h3>Scoped water evidence</h3></div><p>Wells, meters, water budgets, and measurements are counted only when scoped to this passport.</p><strong>${escapeHtml(readiness.status || "unavailable")}</strong></article>
+      <article class="panel"><div class="panel-head"><p class="eyebrow">Input Proof</p><h3>Applications and inputs</h3></div><p>Input applications: ${escapeHtml(String((pkg.input_applications || []).length))}. Pesticide and fertilizer details remain needs review when not provided.</p></article>
+      <article class="panel"><div class="panel-head"><p class="eyebrow">Traceability Proof</p><h3>Lots and events</h3></div><p>Harvest lots: ${escapeHtml(String((pkg.harvest_lots || []).length))}; events: ${escapeHtml(String((pkg.traceability_events || []).length))}. Buyer/export readiness requires reviewer evaluation.</p></article>
     </section>
   </section>`;
 }

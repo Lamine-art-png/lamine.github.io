@@ -18,7 +18,7 @@ export const state = {
     userName: "Operations user",
     loginError: "",
   },
-  activeView: "command-center",
+  activeView: "overview",
   demoRuntime: createDemoRuntime(),
   compliance: {
     loading: false,
@@ -98,7 +98,7 @@ export function launchDemoSession() {
     userName: "Operations user",
     loginError: "",
   };
-  state.activeView = "command-center";
+  state.activeView = "overview";
   state.assurance.demoMode = true;
   state.assurance.activePassportId = "demo-passport-alpha-vineyard";
   state.agent.activeRunId = "demo-agent-run-alpha-vineyard";
@@ -119,7 +119,7 @@ export function startLoginScaffold(email) {
     userEmail: email || "customer@example.com",
     loginError: "",
   };
-  state.activeView = "command-center";
+  state.activeView = "overview";
   state.assurance = {
     ...state.assurance,
     loading: false,
@@ -148,6 +148,6 @@ export function startLoginScaffold(email) {
 export function returnToEntry() {
   state.session.mode = SESSION_MODES.ENTRY;
   state.session.workspace = null;
-  state.activeView = "command-center";
+  state.activeView = "overview";
   notify();
 }
