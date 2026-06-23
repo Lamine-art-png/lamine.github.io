@@ -515,7 +515,7 @@ const SOURCE_DRAWER_TABS = {
   upload: `<div class="drawer-tabpanel" data-panel="upload">
       <p class="muted">Accepted: CSV, Excel, JSON, TXT, spreadsheet exports, and field notes.</p>
       <p class="muted">If no active Assurance Passport exists, create one first so uploaded records can be attached to a proof package.</p>
-      <button class="button secondary compact" data-action="create-demo-passport" type="button">Create Assurance Passport first</button>
+      <button class="button secondary compact" data-action="create-assurance-passport" type="button">__ASSURANCE_PASSPORT_BUTTON__</button>
       <label class="drawer-dropzone" id="drawer-dropzone"><input class="visually-hidden" id="drawer-upload-input" type="file" accept=".csv,.json,.txt,.xlsx,.xls,application/json,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /><strong>Drop a file or browse</strong><span>Records are processed through the Workbench upload route.</span></label>
       <div id="drawer-upload-status"><p class="muted">No file selected.</p></div>
     </div>`,
@@ -536,6 +536,15 @@ const SOURCE_DRAWER_TABS = {
       <p class="muted">Partner feed authorization required for production use.</p>
     </div>`,
 };
+
+function assurancePassportButtonLabel() {
+  return state.session.mode === SESSION_MODES.EVALUATION ? "Create evaluation Assurance Passport" : "Create live Assurance Passport";
+}
+
+function sourceDrawerTabMarkup(tab) {
+  const markup = SOURCE_DRAWER_TABS[tab] || "";
+  return tab === "upload" ? markup.replace("__ASSURANCE_PASSPORT_BUTTON__", assurancePassportButtonLabel()) : markup;
+}
 
 function openSourceDrawer() {
   closeSourceDrawer();
@@ -565,7 +574,13 @@ function openSourceDrawer() {
           openBackendSetupModal(provider);
         }
         if (action === "view-accepted-fields") showAcceptedFields();
-        if (action === "create-demo-passport") applyDemoAssurance("Assurance Passport created in the evaluation workspace.");
+        if (action === "create-assurance-passport") {
+          if (state.session.mode === SESSION_MODES.EVALUATION) {
+            applyDemoAssurance("Assurance Passport created in the evaluation workspace.");
+          } else {
+            openModal("Backend auth required", "<p>Backend auth required to create a live Assurance Passport. No demo passport was loaded.</p>");
+          }
+        }
       });
     });
     body.querySelector("#drawer-upload-input")?.addEventListener("change", async (event) => {
@@ -594,7 +609,7 @@ function openSourceDrawer() {
     tab.addEventListener("click", () => {
       wrapper.querySelectorAll(".drawer-tab").forEach((t) => t.classList.remove("active"));
       tab.classList.add("active");
-      body.innerHTML = SOURCE_DRAWER_TABS[tab.dataset.tab] || "";
+      body.innerHTML = sourceDrawerTabMarkup(tab.dataset.tab);
       bindBodyActions();
     });
   });
