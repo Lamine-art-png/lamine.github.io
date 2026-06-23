@@ -14,6 +14,8 @@ import { renderIntegrations } from "./views/integrationsView.js";
 import { renderAuditLog } from "./views/auditLogView.js";
 import { renderSettings } from "./views/settingsView.js";
 import { renderCompliance } from "./views/complianceView.js";
+import { renderAssurance, demoAssurance, demoAgent } from "./views/assuranceView.js";
+import { renderAgent } from "./views/agentView.js";
 
 const api = new ApiClient();
 const root = document.getElementById("app");
@@ -47,6 +49,20 @@ function downloadCsv(snapshot) {
 
 function downloadText(filename, content, type = "text/plain") {
   const blob = new Blob([content], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function downloadBase64(filename, contentBase64, type = "application/pdf") {
+  const binary = atob(contentBase64);
+  const bytes = Uint8Array.from(binary, (char) => char.charCodeAt(0));
+  const blob = new Blob([bytes], { type });
   const url = URL.createObjectURL(blob);
   const link = document.createElement("a");
   link.href = url;
@@ -185,6 +201,90 @@ async function prepareComplianceExport(exportType) {
   openModal("Compliance export prepared", `<p>JSON export metadata <strong>${created.data.id}</strong> is persisted by the API. Secure stored downloads are not claimed while object storage is disabled. Direct regulatory filing remains out of scope.</p>`);
 }
 
+function applyDemoAssurance(message = "Evaluation Assurance workspace loaded.") {
+  state.assurance.demoMode = true;
+  state.assurance.activePassportId = demoAssurance.passport.id;
+  state.assurance.activePassport = demoAssurance;
+  state.assurance.readiness = demoAssurance.readiness;
+  state.agent.activeRun = {
+    id: "demo-agent-run-alpha-vineyard",
+    workflow_type: "assurance_audit",
+    status: "needs_review",
+    passport_id: demoAssurance.passport.id,
+    result: demoAgent,
+    proposed_actions: [
+      { id: "demo-action-scope", title: "Attach water measurement proof", rationale: "Water measurement proof is missing from the audit readiness package.", requires_human_approval: false },
+      { id: "demo-action-review", title: "Reviewer evaluation before external use", rationale: "Human approval is required before external use.", requires_human_approval: true },
+    ],
+  };
+  state.agent.findings = demoAgent.findings || [];
+  state.agent.recommendations = state.agent.activeRun.proposed_actions;
+  state.agent.proposedActions = state.agent.activeRun.proposed_actions;
+  state.agent.automationPlan = demoAgent.automation_plan || [];
+  state.agent.messages = [{ role: "agent", content: demoAgent.summary }];
+  updateDemo(state.demoRuntime, message);
+}
+
+async function runAssuranceAgent() {
+  const passportId = state.assurance.activePassportId;
+  if (!passportId || state.session.mode === SESSION_MODES.EVALUATION) {
+    applyDemoAssurance("AGRO-AI agent triage completed with representative Assurance data.");
+    setActiveView("agent");
+    return;
+  }
+  state.agent.loading = true;
+  state.agent.error = "";
+  notify();
+  const response = await api.triageAssurancePassport(passportId);
+  state.agent.loading = false;
+  if (response.ok) {
+    state.agent.activeRun = response.data;
+    state.agent.activeRunId = response.data.id;
+    state.agent.findings = response.data.findings || [];
+    state.agent.recommendations = response.data.recommendations || [];
+    state.agent.proposedActions = response.data.proposed_actions || [];
+    state.agent.automationPlan = response.data.automation_plan || [];
+    state.agent.messages = response.data.messages || [];
+    setActiveView("agent");
+  } else {
+    state.agent.error = response.error || "backend auth required";
+    openModal("Agent unavailable", `<p>${escapeHtmlSafe(state.agent.error)}. Evaluation mode uses clearly labeled representative data.</p>`);
+  }
+  notify();
+}
+
+async function refreshAssuranceReadiness() {
+  const passportId = state.assurance.activePassportId;
+  if (!passportId || state.session.mode === SESSION_MODES.EVALUATION) {
+    applyDemoAssurance("Readiness refreshed with representative Assurance data.");
+    return;
+  }
+  const response = await api.getAssuranceReadiness(passportId);
+  if (response.ok) {
+    state.assurance.readiness = response.data;
+    notify();
+  } else {
+    openModal("Readiness unavailable", `<p>${escapeHtmlSafe(response.error || "backend auth required")}</p>`);
+  }
+}
+
+async function generateAssurancePdf() {
+  const passportId = state.assurance.activePassportId;
+  if (!passportId || state.session.mode === SESSION_MODES.EVALUATION) {
+    applyDemoAssurance("Representative Assurance PDF preview would be generated when backend auth is available.");
+    openModal("Assurance PDF", "<p>Evaluation workspace: export controls are representative. Live PDF generation requires authenticated backend access.</p>");
+    return;
+  }
+  const response = await api.createAssuranceExport(passportId, { export_type: "pdf" });
+  if (response.ok && response.data?.content_base64) {
+    state.assurance.latestExport = response.data;
+    downloadBase64(`assurance-passport-${passportId}.pdf`, response.data.content_base64, response.data.content_type || "application/pdf");
+    notify();
+  } else {
+    openModal("Assurance PDF unavailable", `<p>${escapeHtmlSafe(response.error || "Export endpoint unavailable")}</p>`);
+  }
+}
+
 function collectOverrides(form) {
   const data = new FormData(form);
   const overrides = {};
@@ -218,6 +318,8 @@ async function loadComplianceStatusForView() {
 }
 
 function renderActiveView() {
+  if (state.activeView === "assurance") return renderAssurance(state);
+  if (state.activeView === "agent") return renderAgent(state);
   if (state.activeView === "farm-explorer") return renderFarmExplorer(state);
   if (state.activeView === "intelligence") return renderIntelligence(state);
   if (state.activeView === "verification") return renderVerification(state);
@@ -341,7 +443,9 @@ async function animateAnalysis() {
 async function handleWorkbenchUpload(file) {
   const rt = selectIntakeMode(state.demoRuntime, "upload");
   if (!rt.analysis.sessionId) {
-    const created = await api.createWorkbenchSession({ mode: "uploaded", workspace_name: "Alpha Vineyard · Water Command Center" });
+    const payload = { mode: "uploaded", workspace_name: "Alpha Vineyard · Enterprise Operating System" };
+    if (state.assurance.activePassportId) payload.assurance_passport_id = state.assurance.activePassportId;
+    const created = await api.createWorkbenchSession(payload);
     if (created.ok) rt.analysis.sessionId = created.data?.session_id || created.data?.session?.session_id || "";
   }
   if (!rt.analysis.sessionId) {
@@ -353,6 +457,10 @@ async function handleWorkbenchUpload(file) {
   if (up.ok) {
     updateDemo(attachUploadArtifact(rt, up.data || { filename: file.name, status: "Accepted for analysis" }, file), `${file.name} accepted for analysis.`);
     updateSourceDrawerStatus(file, up.data?.parse_status || "Accepted for analysis", up.data);
+    if (state.assurance.activePassportId && state.session.mode !== SESSION_MODES.EVALUATION) {
+      await api.triageAssurancePassport(state.assurance.activePassportId);
+      await refreshAssuranceReadiness();
+    }
   } else {
     updateDemo(markBackendUnavailable(rt, up.error || "Backend upload endpoint required for production ingestion. Representative-data analysis remains available."), "Backend upload endpoint required for production ingestion.");
     updateSourceDrawerStatus(file, "Backend upload endpoint required. Representative-data analysis remains available.");
@@ -406,6 +514,8 @@ const SOURCE_DRAWER_TABS = {
     </div>`,
   upload: `<div class="drawer-tabpanel" data-panel="upload">
       <p class="muted">Accepted: CSV, Excel, JSON, TXT, spreadsheet exports, and field notes.</p>
+      <p class="muted">If no active Assurance Passport exists, create one first so uploaded records can be attached to a proof package.</p>
+      <button class="button secondary compact" data-action="create-demo-passport" type="button">Create Assurance Passport first</button>
       <label class="drawer-dropzone" id="drawer-dropzone"><input class="visually-hidden" id="drawer-upload-input" type="file" accept=".csv,.json,.txt,.xlsx,.xls,application/json,text/csv,text/plain,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" /><strong>Drop a file or browse</strong><span>Records are processed through the Workbench upload route.</span></label>
       <div id="drawer-upload-status"><p class="muted">No file selected.</p></div>
     </div>`,
@@ -455,6 +565,7 @@ function openSourceDrawer() {
           openBackendSetupModal(provider);
         }
         if (action === "view-accepted-fields") showAcceptedFields();
+        if (action === "create-demo-passport") applyDemoAssurance("Assurance Passport created in the evaluation workspace.");
       });
     });
     body.querySelector("#drawer-upload-input")?.addEventListener("change", async (event) => {
@@ -586,6 +697,27 @@ function bindShellEvents() {
       if (action === "check-integrations") setActiveView("integrations");
       if (action === "open-source-drawer") openSourceDrawer();
       if (action === "workspace-details") openWorkspaceDetails();
+      if (action === "run-assurance-agent") await runAssuranceAgent();
+      if (action === "refresh-assurance-readiness") await refreshAssuranceReadiness();
+      if (action === "generate-assurance-pdf") await generateAssurancePdf();
+      if (action === "add-input-record-note") openModal("Input record", "<p>Add input record uses the authenticated Assurance API in live mode. Evaluation workspace shows representative missing proof only.</p>");
+      if (action === "add-harvest-lot-note") openModal("Harvest lot", "<p>Add harvest lot uses the authenticated Assurance API in live mode. Evaluation workspace remains clearly labeled.</p>");
+      if (action === "add-traceability-note") openModal("Traceability event", "<p>Add traceability event uses the authenticated Assurance API in live mode. No buyer/export readiness claim is made without reviewer evaluation.</p>");
+      if (action === "agent-question") {
+        openModal("AGRO-AI Agent", `<p>${escapeHtmlSafe(button.dataset.question || "Instruction")} · Deterministic response: ${escapeHtmlSafe(demoAgent.summary)}</p>`);
+      }
+      if (action === "approve-agent-action" || action === "reject-agent-action") {
+        const runId = button.dataset.runId;
+        const actionId = button.dataset.actionId;
+        if (!runId || !actionId || state.session.mode === SESSION_MODES.EVALUATION) {
+          openModal("Human review recorded", "<p>Evaluation workspace action recorded locally. Live approval requires authenticated backend access.</p>");
+        } else {
+          const response = action === "approve-agent-action" ? await api.approveAgentAction(runId, actionId) : await api.rejectAgentAction(runId, actionId);
+          if (response.ok) state.agent.activeRun = response.data;
+          else openModal("Action update unavailable", `<p>${escapeHtmlSafe(response.error || "backend auth required")}</p>`);
+          notify();
+        }
+      }
     });
   });
 }

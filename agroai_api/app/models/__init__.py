@@ -28,6 +28,10 @@ from app.assurance.models import (
     PesticideApplication, FertilizerApplication, HarvestLot, TraceabilityEvent,
     BuyerRequirement, RulePack, AssuranceExport,
 )
+from app.agents.models import (
+    AgentWorkflowRun, AgentTask, AgentFinding, AgentRecommendation,
+    AgentActionProposal, AgentToolCall, AgentMessage, AgentRunAuditEvent,
+)
 from app.models.workbench_persistence import (
     WorkbenchSessionRecord, WorkbenchDataArtifactRecord, WorkbenchAnalysisRecord,
     WorkbenchAuditEventRecord, WorkbenchEvidenceActionRecord,
@@ -77,6 +81,14 @@ __all__ = [
     "BuyerRequirement",
     "RulePack",
     "AssuranceExport",
+    "AgentWorkflowRun",
+    "AgentTask",
+    "AgentFinding",
+    "AgentRecommendation",
+    "AgentActionProposal",
+    "AgentToolCall",
+    "AgentMessage",
+    "AgentRunAuditEvent",
     "WorkbenchSessionRecord",
     "WorkbenchDataArtifactRecord",
     "WorkbenchAnalysisRecord",

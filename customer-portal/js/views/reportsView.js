@@ -10,6 +10,14 @@ const liveReports = [
   { name: "Executive ROI Summary", purpose: "Frames water, energy, cost, and operational value for executive stakeholders.", status: "Report generation is coming online for this deployment.", coverage: "Executive layer", lastGenerated: "", action: "View readiness" },
 ];
 
+const assuranceReports = [
+  { name: "Assurance Passport PDF", purpose: "Audit-ready farm, water, input, traceability, readiness, risk, and audit trail package.", status: "Requires active Assurance Passport", coverage: "Assurance OS", action: "Generate PDF", actionAttrs: 'data-action="generate-assurance-pdf"' },
+  { name: "Buyer Proof Pack", purpose: "Evidence package for buyer reviewer evaluation, grounded in attached proof.", status: "Agent workflow draft", coverage: "Buyer readiness", action: "Draft pack", actionAttrs: 'data-action="run-assurance-agent"' },
+  { name: "WaterOps Evidence Pack", purpose: "Scoped wells, meters, measurements, water budgets, and missing proof for reviewer evaluation.", status: "Scoped proof required", coverage: "WaterOps", action: "Refresh readiness", actionAttrs: 'data-action="refresh-assurance-readiness"' },
+  { name: "Lender / Landowner Risk Summary", purpose: "Readiness and risk narrative without credit decisions or legal conclusions.", status: "Agent workflow draft", coverage: "Risk review", action: "Draft summary", actionAttrs: 'data-action="run-assurance-agent"' },
+  { name: "Input & Traceability Proof Pack", purpose: "Input records, harvest lots, traceability events, and missing fields for review.", status: "Needs evidence", coverage: "Assurance OS", action: "Open Assurance", actionAttrs: 'data-view="assurance"' },
+];
+
 function reportPreview(snapshot) {
   if (!snapshot) return '<section class="empty-state"><h3>No report preview yet</h3><p>Generate a report preview to review customer-ready output, print, or export CSV.</p></section>';
   return `<section class="panel-card report-preview"><div class="section-heading"><p class="eyebrow">Report Preview</p><h2>${snapshot.type}</h2><p>${snapshot.farm} · ${snapshot.block} · ${snapshot.generatedAt}</p></div>${table(
@@ -24,7 +32,8 @@ export function renderReports(state) {
   const isDemo = state.session.mode === "demo";
   const reports = isDemo ? demoReports : liveReports;
   const snapshot = state.demoRuntime.reportSnapshots?.[0];
+  const passportCta = state.assurance?.activePassportId ? "" : '<section class="empty-state"><h3>Create Assurance Passport</h3><p>An active passport is required before Assurance proof packs can be generated.</p><button class="button primary" data-view="assurance" type="button">Create Assurance Passport</button></section>';
   return `<div class="screen-stack"><section class="panel-card"><div class="section-heading"><p class="eyebrow">Report Center</p><h2>Executive-ready reporting</h2><p>Each report explains its purpose, coverage, readiness status, and the next action with customer-ready language.</p></div><div class="report-grid">${reports
     .map((report) => isDemo ? reportCard({ ...report, action: "Preview Report", status: report.status || "Sample preview available", actionAttrs: `data-action="preview-report" data-report-type="${report.name}"` }) : reportCard(report))
-    .join("")}</div></section>${isDemo ? reportPreview(snapshot) : ""}</div>`;
+    .join("")}</div></section><section class="panel-card"><div class="section-heading"><p class="eyebrow">Assurance Reports</p><h2>Evidence proof packages</h2><p>Outputs are audit-ready evidence packages for reviewer evaluation, not certification, approval, or legal determination.</p></div>${passportCta}<div class="report-grid">${assuranceReports.map((report) => reportCard(report)).join("")}</div></section>${isDemo ? reportPreview(snapshot) : ""}</div>`;
 }
