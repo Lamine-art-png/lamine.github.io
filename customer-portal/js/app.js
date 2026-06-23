@@ -16,6 +16,8 @@ import { renderSettings } from "./views/settingsView.js";
 import { renderCompliance } from "./views/complianceView.js";
 import { renderAssurance, demoAssurance, demoAgent } from "./views/assuranceView.js";
 import { renderAgent } from "./views/agentView.js";
+import { renderOverview } from "./views/overviewView.js";
+import { renderEvidence } from "./views/evidenceView.js";
 
 const api = new ApiClient();
 const root = document.getElementById("app");
@@ -201,7 +203,31 @@ async function prepareComplianceExport(exportType) {
   openModal("Compliance export prepared", `<p>JSON export metadata <strong>${created.data.id}</strong> is persisted by the API. Secure stored downloads are not claimed while object storage is disabled. Direct regulatory filing remains out of scope.</p>`);
 }
 
+function canUseDemoAssurance() {
+  return state.session.mode === SESSION_MODES.EVALUATION || (state.assurance.demoMode === true && state.session.mode !== SESSION_MODES.LIVE);
+}
+
+function showLiveAssurancePassportRequired() {
+  state.assurance.demoMode = false;
+  state.assurance.activePassportId = "";
+  state.assurance.activePassport = null;
+  state.assurance.readiness = null;
+  state.agent.activeRun = null;
+  state.agent.activeRunId = "";
+  state.agent.findings = [];
+  state.agent.recommendations = [];
+  state.agent.proposedActions = [];
+  state.agent.automationPlan = [];
+  state.agent.messages = [];
+  openModal("Backend auth required", "<p>Backend auth required for live Assurance APIs. No demo passport was loaded.</p>");
+  setActiveView("assurance");
+}
+
 function applyDemoAssurance(message = "Evaluation Assurance workspace loaded.") {
+  if (!canUseDemoAssurance()) {
+    showLiveAssurancePassportRequired();
+    return false;
+  }
   state.assurance.demoMode = true;
   state.assurance.activePassportId = demoAssurance.passport.id;
   state.assurance.activePassport = demoAssurance;
@@ -223,13 +249,18 @@ function applyDemoAssurance(message = "Evaluation Assurance workspace loaded.") 
   state.agent.automationPlan = demoAgent.automation_plan || [];
   state.agent.messages = [{ role: "agent", content: demoAgent.summary }];
   updateDemo(state.demoRuntime, message);
+  return true;
 }
 
 async function runAssuranceAgent() {
   const passportId = state.assurance.activePassportId;
-  if (!passportId || state.session.mode === SESSION_MODES.EVALUATION) {
+  if (canUseDemoAssurance()) {
     applyDemoAssurance("AGRO-AI agent triage completed with representative Assurance data.");
     setActiveView("agent");
+    return;
+  }
+  if (!passportId) {
+    showLiveAssurancePassportRequired();
     return;
   }
   state.agent.loading = true;
@@ -255,8 +286,12 @@ async function runAssuranceAgent() {
 
 async function refreshAssuranceReadiness() {
   const passportId = state.assurance.activePassportId;
-  if (!passportId || state.session.mode === SESSION_MODES.EVALUATION) {
+  if (canUseDemoAssurance()) {
     applyDemoAssurance("Readiness refreshed with representative Assurance data.");
+    return;
+  }
+  if (!passportId) {
+    showLiveAssurancePassportRequired();
     return;
   }
   const response = await api.getAssuranceReadiness(passportId);
@@ -270,9 +305,13 @@ async function refreshAssuranceReadiness() {
 
 async function generateAssurancePdf() {
   const passportId = state.assurance.activePassportId;
-  if (!passportId || state.session.mode === SESSION_MODES.EVALUATION) {
+  if (canUseDemoAssurance()) {
     applyDemoAssurance("Representative Assurance PDF preview would be generated when backend auth is available.");
     openModal("Assurance PDF", "<p>Evaluation workspace: export controls are representative. Live PDF generation requires authenticated backend access.</p>");
+    return;
+  }
+  if (!passportId) {
+    showLiveAssurancePassportRequired();
     return;
   }
   const response = await api.createAssuranceExport(passportId, { export_type: "pdf" });
@@ -318,7 +357,9 @@ async function loadComplianceStatusForView() {
 }
 
 function renderActiveView() {
+  if (state.activeView === "overview") return renderOverview(state);
   if (state.activeView === "assurance") return renderAssurance(state);
+  if (state.activeView === "evidence") return renderEvidence(state);
   if (state.activeView === "agent") return renderAgent(state);
   if (state.activeView === "farm-explorer") return renderFarmExplorer(state);
   if (state.activeView === "intelligence") return renderIntelligence(state);

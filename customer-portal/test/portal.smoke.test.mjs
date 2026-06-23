@@ -23,14 +23,28 @@ const rtm = await import("../js/services/demoRuntime.js");
 const { renderShell } = await import("../js/views/shellView.js");
 const { renderCommandCenter } = await import("../js/views/commandCenterView.js");
 const { renderIntegrations } = await import("../js/views/integrationsView.js");
+const { renderOverview } = await import("../js/views/overviewView.js");
+const { renderEvidence } = await import("../js/views/evidenceView.js");
+const { renderAssurance } = await import("../js/views/assuranceView.js");
+const { renderAgent } = await import("../js/views/agentView.js");
 
 function freshState() {
   const runtime = rtm.loadRepresentativePackage(rtm.resetDemo(false));
   return {
     session: { mode: "demo", workspace: { name: "Alpha Vineyard" }, userName: "Operations user", authNotice: "" },
-    activeView: "command-center",
+    activeView: "overview",
     demoRuntime: runtime,
+    assurance: { activePassportId: "demo-passport-alpha-vineyard", activePassport: null, readiness: null, latestExport: null, demoMode: true },
+    agent: { activeRunId: "demo-agent-run-alpha-vineyard", activeRun: null, findings: [], proposedActions: [] },
   };
+}
+
+function liveNoPassportState() {
+  const state = freshState();
+  state.session = { mode: "live", workspace: { name: "Live Workspace" }, userName: "Operations user", authNotice: "Backend auth required" };
+  state.assurance = { activePassportId: "", activePassport: null, readiness: null, latestExport: null, demoMode: false };
+  state.agent = { activeRunId: "", activeRun: null, findings: [], proposedActions: [], recommendations: [], automationPlan: [], messages: [] };
+  return state;
 }
 
 // Banned user-facing scaffold language (case-insensitive on rendered text).
@@ -77,15 +91,65 @@ test("evidence chain actions complete and CSV export produces rows", () => {
   assert.ok(csv.split("\n").length > 5, "CSV has multiple rows");
 });
 
-test("shell header is restrained and free of scaffold language", () => {
+test("shell presents the Enterprise OS IA and agent rail", () => {
   const state = freshState();
   const shell = renderShell(state, "");
-  assert.match(shell, /Scattered irrigation data becomes a verified water decision\./);
-  assert.match(shell, /Representative data/);
+  assert.match(shell, /Enterprise Operating System/);
+  assert.match(shell, /Overview/);
+  assert.match(shell, /Operations/);
+  assert.match(shell, /Assurance/);
+  assert.match(shell, /Evidence/);
+  assert.match(shell, /AGRO-AI Rail/);
+  assert.match(shell, /Evaluation · not live · not certified/);
   assert.match(shell, /workspace-scenario-select/);
   assert.match(shell, /Operations user/);
   assert.match(shell, /Exit workspace/);
   for (const term of BANNED) assert.ok(!shell.includes(term), `shell must not contain "${term}"`);
+});
+
+test("overview and evidence workspaces render proof-centered enterprise surfaces", () => {
+  const state = freshState();
+  const overview = renderOverview(state);
+  const evidence = renderEvidence(state);
+  assert.match(overview, /Enterprise OS Overview/);
+  assert.match(overview, /Action Queue/);
+  assert.match(overview, /Agent Activity/);
+  assert.match(overview, /Operational Health/);
+  assert.match(evidence, /Evidence Vault/);
+  assert.match(evidence, /Extracted Facts/);
+  assert.match(evidence, /Reviewer evaluation required/);
+});
+
+test("live mode without an Assurance Passport never renders evaluation passport data", () => {
+  const state = liveNoPassportState();
+  const rendered = [
+    renderOverview(state),
+    renderAssurance(state),
+    renderEvidence(state),
+    renderAgent(state),
+  ].join("\n");
+  assert.match(rendered, /Create or connect a live Assurance Passport/);
+  assert.match(rendered, /Backend auth required for live Assurance APIs\. No demo passport was loaded\./);
+  assert.match(rendered, /no-live-run/);
+  assert.match(rendered, /passport_required/);
+  assert.doesNotMatch(rendered, /Alpha Vineyard/);
+  assert.doesNotMatch(rendered, /demo-passport-alpha-vineyard/);
+  assert.doesNotMatch(rendered, /controller_events\.csv/);
+  assert.doesNotMatch(rendered, /evaluation-run/);
+  assert.doesNotMatch(rendered, /timeline-step complete/);
+});
+
+test("live mode ignores a stale assurance demoMode flag", () => {
+  const state = liveNoPassportState();
+  state.assurance.demoMode = true;
+  const rendered = [renderAssurance(state), renderEvidence(state), renderAgent(state)].join("\n");
+  assert.match(rendered, /Create or connect a live Assurance Passport/);
+  assert.match(rendered, /no-live-run/);
+  assert.match(rendered, /passport_required/);
+  assert.doesNotMatch(rendered, /Alpha Vineyard/);
+  assert.doesNotMatch(rendered, /demo-passport-alpha-vineyard/);
+  assert.doesNotMatch(rendered, /evaluation-run/);
+  assert.doesNotMatch(rendered, /timeline-step complete/);
 });
 
 test("command page shows the decision, drawer entry, run state, and trace", () => {

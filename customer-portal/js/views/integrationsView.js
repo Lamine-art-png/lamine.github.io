@@ -21,6 +21,15 @@ export function renderIntegrations(state) {
   const isDemo = state.session.mode === "demo";
   const integrations = isDemo ? demoProviders : state.live.integrations;
   return `<div class="screen-stack">
+    <section class="panel-card integration-compatibility">
+      <div class="section-heading"><p class="eyebrow">Compatibility</p><h2>Designed for modern irrigation operations</h2><p>AGRO-AI connects operational telemetry and proof workflows without storing production provider credentials in browser storage.</p></div>
+      <div class="compatibility-strip compatibility-strip-light" aria-label="Integration compatibility">
+        <span>Integrated with WiseConn</span>
+        <span>Integrated with Talgil</span>
+        <span>Compatible with CropX when approved source access is configured</span>
+        <span>Compatible with additional telemetry and irrigation systems</span>
+      </div>
+    </section>
     ${stepper()}
     <section class="panel-card"><div class="section-heading"><p class="eyebrow">Integrations</p><h2>Connected controller environments</h2><p>WiseConn and Talgil are shown with customer-safe runtime status, what AGRO-AI reads, what AGRO-AI generates, and current limitations. No live telemetry is claimed until production targets are connected.</p></div><div class="integration-grid">${integrations
       .map(integrationCard)
