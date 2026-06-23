@@ -59,7 +59,7 @@ function tableRows(rows, empty, mapper) {
 }
 
 export function renderAssurance(state) {
-  const isEvaluation = state.session.mode === "demo";
+  const isEvaluation = state.session.mode === "demo" || state.assurance.demoMode === true;
   const pkg = passportPackage(state);
   const passport = pkg.passport;
   const readiness = state.assurance.readiness || pkg.readiness || {};
@@ -132,4 +132,3 @@ export function renderAssurance(state) {
     </section>
   </section>`;
 }
-
