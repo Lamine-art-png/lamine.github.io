@@ -130,9 +130,13 @@ test("live mode without an Assurance Passport never renders evaluation passport 
   ].join("\n");
   assert.match(rendered, /Create or connect a live Assurance Passport/);
   assert.match(rendered, /Backend auth required for live Assurance APIs\. No demo passport was loaded\./);
+  assert.match(rendered, /no-live-run/);
+  assert.match(rendered, /passport_required/);
   assert.doesNotMatch(rendered, /Alpha Vineyard/);
   assert.doesNotMatch(rendered, /demo-passport-alpha-vineyard/);
   assert.doesNotMatch(rendered, /controller_events\.csv/);
+  assert.doesNotMatch(rendered, /evaluation-run/);
+  assert.doesNotMatch(rendered, /timeline-step complete/);
 });
 
 test("live mode ignores a stale assurance demoMode flag", () => {
@@ -140,8 +144,12 @@ test("live mode ignores a stale assurance demoMode flag", () => {
   state.assurance.demoMode = true;
   const rendered = [renderAssurance(state), renderEvidence(state), renderAgent(state)].join("\n");
   assert.match(rendered, /Create or connect a live Assurance Passport/);
+  assert.match(rendered, /no-live-run/);
+  assert.match(rendered, /passport_required/);
   assert.doesNotMatch(rendered, /Alpha Vineyard/);
   assert.doesNotMatch(rendered, /demo-passport-alpha-vineyard/);
+  assert.doesNotMatch(rendered, /evaluation-run/);
+  assert.doesNotMatch(rendered, /timeline-step complete/);
 });
 
 test("command page shows the decision, drawer entry, run state, and trace", () => {
