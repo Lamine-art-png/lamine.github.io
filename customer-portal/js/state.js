@@ -25,6 +25,27 @@ export const state = {
     status: null,
     error: "",
   },
+  assurance: {
+    loading: false,
+    error: "",
+    activePassportId: "",
+    activePassport: null,
+    rulePacks: {},
+    readiness: null,
+    latestExport: null,
+    demoMode: true,
+  },
+  agent: {
+    loading: false,
+    error: "",
+    activeRunId: "",
+    activeRun: null,
+    findings: [],
+    recommendations: [],
+    proposedActions: [],
+    automationPlan: [],
+    messages: [],
+  },
   live: {
     auth: null,
     farms: [],
@@ -78,6 +99,9 @@ export function launchDemoSession() {
     loginError: "",
   };
   state.activeView = "command-center";
+  state.assurance.demoMode = true;
+  state.assurance.activePassportId = "demo-passport-alpha-vineyard";
+  state.agent.activeRunId = "demo-agent-run-alpha-vineyard";
   notify();
 }
 
@@ -96,6 +120,28 @@ export function startLoginScaffold(email) {
     loginError: "",
   };
   state.activeView = "command-center";
+  state.assurance = {
+    ...state.assurance,
+    loading: false,
+    error: "",
+    activePassportId: "",
+    activePassport: null,
+    readiness: null,
+    latestExport: null,
+    demoMode: false,
+  };
+  state.agent = {
+    ...state.agent,
+    loading: false,
+    error: "",
+    activeRunId: "",
+    activeRun: null,
+    findings: [],
+    recommendations: [],
+    proposedActions: [],
+    automationPlan: [],
+    messages: [],
+  };
   notify();
 }
 

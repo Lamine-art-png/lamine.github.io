@@ -29,6 +29,21 @@ export const ENDPOINTS = {
   complianceStatus: "/v1/compliance/status",
   complianceExports: "/v1/compliance/exports",
   complianceExport: (id) => `/v1/compliance/exports/${encodeURIComponent(id)}`,
+  assuranceRulePacks: "/v1/assurance/rule-packs",
+  assurancePassports: "/v1/assurance/passports",
+  assurancePassport: (id) => `/v1/assurance/passports/${encodeURIComponent(id)}`,
+  assuranceEvidence: (id) => `/v1/assurance/passports/${encodeURIComponent(id)}/evidence`,
+  assuranceInputApplications: (id) => `/v1/assurance/passports/${encodeURIComponent(id)}/input-applications`,
+  assuranceHarvestLots: (id) => `/v1/assurance/passports/${encodeURIComponent(id)}/harvest-lots`,
+  assuranceTraceabilityEvents: (id) => `/v1/assurance/passports/${encodeURIComponent(id)}/traceability-events`,
+  assuranceReadiness: (id) => `/v1/assurance/passports/${encodeURIComponent(id)}/readiness`,
+  assuranceExports: (id) => `/v1/assurance/passports/${encodeURIComponent(id)}/exports`,
+  agentRuns: "/v1/agents/runs",
+  agentRun: (id) => `/v1/agents/runs/${encodeURIComponent(id)}`,
+  agentTriagePassport: (id) => `/v1/agents/assurance/passports/${encodeURIComponent(id)}/triage`,
+  agentTriageWorkbench: (id) => `/v1/agents/workbench/sessions/${encodeURIComponent(id)}/triage`,
+  agentApproveAction: (id) => `/v1/agents/runs/${encodeURIComponent(id)}/approve-action`,
+  agentRejectAction: (id) => `/v1/agents/runs/${encodeURIComponent(id)}/reject-action`,
 };
 
 export class ApiClient {
@@ -232,5 +247,65 @@ export class ApiClient {
 
   getComplianceExport(exportId) {
     return this.request(ENDPOINTS.complianceExport(exportId), { headers: this.complianceHeaders() });
+  }
+
+  getAssuranceRulePacks() {
+    return this.request(ENDPOINTS.assuranceRulePacks);
+  }
+
+  createAssurancePassport(payload) {
+    return this.request(ENDPOINTS.assurancePassports, { method: "POST", body: payload });
+  }
+
+  getAssurancePassport(passportId) {
+    return this.request(ENDPOINTS.assurancePassport(passportId));
+  }
+
+  addAssuranceEvidence(passportId, payload) {
+    return this.request(ENDPOINTS.assuranceEvidence(passportId), { method: "POST", body: payload });
+  }
+
+  addInputApplication(passportId, payload) {
+    return this.request(ENDPOINTS.assuranceInputApplications(passportId), { method: "POST", body: payload });
+  }
+
+  addHarvestLot(passportId, payload) {
+    return this.request(ENDPOINTS.assuranceHarvestLots(passportId), { method: "POST", body: payload });
+  }
+
+  addTraceabilityEvent(passportId, payload) {
+    return this.request(ENDPOINTS.assuranceTraceabilityEvents(passportId), { method: "POST", body: payload });
+  }
+
+  getAssuranceReadiness(passportId) {
+    return this.request(ENDPOINTS.assuranceReadiness(passportId));
+  }
+
+  createAssuranceExport(passportId, payload = { export_type: "pdf" }) {
+    return this.request(ENDPOINTS.assuranceExports(passportId), { method: "POST", body: payload });
+  }
+
+  createAgentRun(payload) {
+    return this.request(ENDPOINTS.agentRuns, { method: "POST", body: payload });
+  }
+
+  getAgentRun(runId) {
+    return this.request(ENDPOINTS.agentRun(runId));
+  }
+
+  triageAssurancePassport(passportId) {
+    return this.request(ENDPOINTS.agentTriagePassport(passportId), { method: "POST", body: {} });
+  }
+
+  triageWorkbenchSession(sessionId) {
+    return this.request(ENDPOINTS.agentTriageWorkbench(sessionId), { method: "POST", body: {} });
+  }
+
+  approveAgentAction(runId, actionId) {
+    return this.request(ENDPOINTS.agentApproveAction(runId), { method: "POST", body: { action_id: actionId } });
+  }
+
+  rejectAgentAction(runId, actionId) {
+    return this.request(ENDPOINTS.agentRejectAction(runId), { method: "POST", body: { action_id: actionId } });
   }
 }

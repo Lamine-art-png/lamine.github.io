@@ -8,6 +8,7 @@ import uuid
 from datetime import date, datetime, timezone
 from typing import Any
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.assurance.models import (
@@ -25,8 +26,15 @@ from app.assurance.models import (
     TraceabilityEvent,
 )
 from app.assurance.rule_packs import ASSURANCE_DISCLAIMER, DEFAULT_RULE_PACKS, checklist_for, validate_rule_pack_ids
-from app.compliance.repository import ComplianceRepository
-from app.models.compliance import ComplianceEvidence, ComplianceWaterBudget
+from app.models.compliance import (
+    ComplianceEvidence,
+    ComplianceJurisdiction,
+    ComplianceMeasurement,
+    ComplianceMeter,
+    ComplianceParcel,
+    ComplianceWaterBudget,
+    ComplianceWell,
+)
 
 
 TRUTH_LABELS = {"measured", "reported", "estimated", "calculated", "AI-inferred"}
@@ -303,19 +311,132 @@ class AssuranceRepository:
         self.db.commit()
         return _as_dict(row)
 
-    def _proof_counts(self, passport_id: str) -> dict[str, int]:
+    def _passport_scope_missing(self, passport: AssurancePassport) -> list[str]:
+        missing: list[str] = []
+        if not passport.parcel_ids:
+            missing.append("parcel_ids")
+        if not passport.reporting_period:
+            missing.append("reporting_period")
+        return missing
+
+    def _linked_water_budget_ids(self, passport_id: str) -> set[str]:
+        evidence = self.db.query(AssuranceEvidenceArtifact).filter_by(tenant_id=self.tenant_id, passport_id=passport_id).all()
+        linked_ids: set[str] = set()
+        for row in evidence:
+            metadata = row.metadata_json or {}
+            for key in ("water_budget_id", "compliance_water_budget_id"):
+                if metadata.get(key):
+                    linked_ids.add(str(metadata[key]))
+            for key in ("water_budget_ids", "compliance_water_budget_ids"):
+                values = metadata.get(key) or []
+                if isinstance(values, (str, int)):
+                    values = [values]
+                linked_ids.update(str(value) for value in values if value)
+        return linked_ids
+
+    def _scoped_compliance_assets(self, passport: AssurancePassport) -> dict[str, Any]:
+        parcel_ids = [str(parcel_id) for parcel_id in (passport.parcel_ids or []) if parcel_id]
+        scope_missing = self._passport_scope_missing(passport)
+        parcels = []
+        if parcel_ids:
+            parcels = self.db.query(ComplianceParcel).filter(
+                ComplianceParcel.tenant_id == self.tenant_id,
+                ComplianceParcel.id.in_(parcel_ids),
+            ).all()
+
+        jurisdictions = []
+        if passport.jurisdiction_id:
+            jurisdictions = self.db.query(ComplianceJurisdiction).filter_by(
+                tenant_id=self.tenant_id,
+                id=passport.jurisdiction_id,
+            ).all()
+
+        wells = []
+        if parcel_ids:
+            wells = self.db.query(ComplianceWell).filter(
+                ComplianceWell.tenant_id == self.tenant_id,
+                ComplianceWell.parcel_id.in_(parcel_ids),
+            ).all()
+        well_ids = [row.id for row in wells]
+
+        meters = []
+        if well_ids:
+            meters = self.db.query(ComplianceMeter).filter(
+                ComplianceMeter.tenant_id == self.tenant_id,
+                ComplianceMeter.well_id.in_(well_ids),
+            ).all()
+        meter_ids = [row.id for row in meters]
+
+        measurements = []
+        asset_filters = []
+        if parcel_ids:
+            asset_filters.append((ComplianceMeasurement.related_asset_type == "parcel") & ComplianceMeasurement.related_asset_id.in_(parcel_ids))
+        if well_ids:
+            asset_filters.append((ComplianceMeasurement.related_asset_type == "well") & ComplianceMeasurement.related_asset_id.in_(well_ids))
+        if meter_ids:
+            asset_filters.append((ComplianceMeasurement.related_asset_type == "meter") & ComplianceMeasurement.related_asset_id.in_(meter_ids))
+        if passport.reporting_period and asset_filters:
+            measurements = self.db.query(ComplianceMeasurement).filter(
+                ComplianceMeasurement.tenant_id == self.tenant_id,
+                ComplianceMeasurement.reporting_period == str(passport.reporting_period),
+                or_(*asset_filters),
+            ).all()
+
+        water_budgets = []
+        linked_budget_ids = self._linked_water_budget_ids(passport.id)
+        if passport.reporting_period and linked_budget_ids:
+            water_budgets = self.db.query(ComplianceWaterBudget).filter(
+                ComplianceWaterBudget.tenant_id == self.tenant_id,
+                ComplianceWaterBudget.id.in_(linked_budget_ids),
+                ComplianceWaterBudget.reporting_period == str(passport.reporting_period),
+            ).all()
+
+        return {
+            "scope_missing": scope_missing,
+            "parcels": parcels,
+            "jurisdictions": jurisdictions,
+            "wells": wells,
+            "meters": meters,
+            "measurements": measurements,
+            "water_budgets": water_budgets,
+        }
+
+    def _jurisdiction_payload(self, row: ComplianceJurisdiction) -> dict[str, Any]:
+        return {"id": row.id, "organization_id": row.tenant_id, "country": row.country, "jurisdiction_level": row.jurisdiction_level, "authority_name": row.authority_name, "state": row.state, "county": row.county, "basin": row.basin, "subbasin": row.subbasin, "gsa": row.gsa, "district": row.district, "jurisdiction_pack": row.jurisdiction_pack, "reporting_year": row.reporting_year, "reporting_deadline": _iso(row.reporting_deadline), "workflow_type": row.workflow_type}
+
+    def _parcel_payload(self, row: ComplianceParcel) -> dict[str, Any]:
+        return {"id": row.id, "organization_id": row.tenant_id, "apn": row.apn, "parcel_identifier": row.parcel_identifier, "country": row.country, "state": row.state, "county": row.county, "geometry_ref": row.geometry_ref, "geometry": row.geometry}
+
+    def _well_payload(self, row: ComplianceWell) -> dict[str, Any]:
+        return {"id": row.id, "organization_id": row.tenant_id, "parcel_id": row.parcel_id, "well_identifier": row.well_identifier, "latitude": row.latitude, "longitude": row.longitude, "well_capacity": row.well_capacity, "capacity_unit": row.capacity_unit}
+
+    def _meter_payload(self, row: ComplianceMeter) -> dict[str, Any]:
+        return {"id": row.id, "organization_id": row.tenant_id, "well_id": row.well_id, "meter_identifier": row.meter_identifier, "manufacturer": row.manufacturer, "serial_number": row.serial_number, "measurement_method": row.measurement_method, "calibration_date": _iso(row.calibration_date), "calibration_document_ref": row.calibration_document_ref}
+
+    def _measurement_payload(self, row: ComplianceMeasurement) -> dict[str, Any]:
+        return {"id": row.id, "organization_id": row.tenant_id, "asset_type": row.related_asset_type, "asset_id": row.related_asset_id, "measurement_type": row.measurement_type, "value": row.value, "unit": row.unit, "method": row.method, "truth_label": row.truth_label, "source_system": row.source_system, "source_timestamp": _iso(row.source_timestamp), "ingestion_timestamp": _iso(row.ingestion_timestamp), "quality_status": row.quality_status, "reporting_period": row.reporting_period, "confidence": row.confidence, "correction_lineage": row.correction_lineage or []}
+
+    def _water_budget_payload(self, row: ComplianceWaterBudget) -> dict[str, Any]:
+        return {"id": row.id, "organization_id": row.tenant_id, "allocation_af": row.allocation, "extraction_af": row.extraction, "irrigation_application_af": row.irrigation_application, "remaining_balance_af": row.remaining_balance, "projected_balance_af": row.projected_balance, "threshold_status": row.threshold_status, "water_source": row.water_source, "reporting_period": row.reporting_period}
+
+    def _proof_counts(self, passport_id: str, scoped_assets: dict[str, Any] | None = None) -> dict[str, int]:
         evidence = self.db.query(AssuranceEvidenceArtifact).filter_by(tenant_id=self.tenant_id, passport_id=passport_id).all()
         counts: dict[str, int] = {}
         for row in evidence:
             counts[row.evidence_type] = counts.get(row.evidence_type, 0) + 1
-        water_budget_count = self.db.query(ComplianceWaterBudget).filter_by(tenant_id=self.tenant_id).count()
-        if water_budget_count:
-            counts["water_budget"] = counts.get("water_budget", 0) + water_budget_count
+        if scoped_assets and not scoped_assets["scope_missing"]:
+            if scoped_assets["parcels"]:
+                counts["farm_boundary"] = counts.get("farm_boundary", 0) + len(scoped_assets["parcels"])
+            if scoped_assets["measurements"]:
+                counts["water_measurement"] = counts.get("water_measurement", 0) + len(scoped_assets["measurements"])
+            if scoped_assets["water_budgets"]:
+                counts["water_budget"] = counts.get("water_budget", 0) + len(scoped_assets["water_budgets"])
         return counts
 
     def readiness(self, passport_id: str, *, persist: bool = True) -> dict[str, Any]:
         passport = self._passport(passport_id)
-        counts = self._proof_counts(passport_id)
+        scoped_assets = self._scoped_compliance_assets(passport)
+        counts = self._proof_counts(passport_id, scoped_assets)
         items = self.db.query(AssuranceChecklistItem).filter_by(tenant_id=self.tenant_id, passport_id=passport_id).all()
         missing: list[dict[str, Any]] = []
         satisfied = 0
@@ -342,10 +463,14 @@ class AssuranceRepository:
         readiness_score = round(satisfied / total * 100, 1)
         risk_score = max(0.0, min(100.0, 100.0 - readiness_score + len([m for m in missing if m["severity"] == "required"]) * 5))
         risk_level = "low" if risk_score < 25 else "medium" if risk_score < 60 else "high"
+        scope_missing = scoped_assets["scope_missing"]
+        status_value = "needs_scope_review" if scope_missing else "ready_for_review" if not missing else "missing_proof"
+        review_status = "needs_review" if scope_missing or missing else "ready_for_review"
         payload = {
             "passport_id": passport_id,
             "tenant_id": self.tenant_id,
-            "status": "ready_for_review" if not missing else "missing_proof",
+            "status": status_value,
+            "review_status": review_status,
             "readiness_score": readiness_score,
             "risk_score": round(risk_score, 1),
             "risk_level": risk_level,
@@ -355,7 +480,25 @@ class AssuranceRepository:
             "proof_counts": counts,
             "rule_pack_ids": passport.rule_pack_ids,
             "language": "audit readiness",
-            "scope": {"readiness_package_only": True, "authority_submission": False, "live_source_complete": False},
+            "scope": {
+                "readiness_package_only": True,
+                "authority_submission": False,
+                "live_source_complete": False,
+                "scope_status": "needs_scope_review" if scope_missing else "scoped",
+                "review_status": review_status,
+                "missing_scope": scope_missing,
+                "parcel_ids": passport.parcel_ids or [],
+                "jurisdiction_id": passport.jurisdiction_id,
+                "reporting_period": passport.reporting_period,
+                "scoped_record_counts": {
+                    "parcels": len(scoped_assets["parcels"]),
+                    "jurisdictions": len(scoped_assets["jurisdictions"]),
+                    "wells": len(scoped_assets["wells"]),
+                    "meters": len(scoped_assets["meters"]),
+                    "measurements": len(scoped_assets["measurements"]),
+                    "water_budgets": len(scoped_assets["water_budgets"]),
+                },
+            },
             "disclaimer": ASSURANCE_DISCLAIMER,
         }
         if persist:
@@ -372,7 +515,7 @@ class AssuranceRepository:
                 section = self.db.query(AssurancePassportSection).filter_by(tenant_id=self.tenant_id, passport_id=passport_id, section_type=section_type).first()
                 if section:
                     section.readiness_score = readiness_score
-                    section.status = "ready_for_review" if not [m for m in missing if m["section_type"] == section_type] else "missing_proof"
+                    section.status = "needs_review" if scope_missing else "ready_for_review" if not [m for m in missing if m["section_type"] == section_type] else "missing_proof"
                     section.payload = payload
                     section.updated_at = datetime.utcnow()
             passport.status = payload["status"]
@@ -411,7 +554,7 @@ class AssuranceRepository:
 
     def _export_payload(self, passport_id: str) -> dict[str, Any]:
         passport = self._passport(passport_id)
-        compliance = ComplianceRepository(self.db, self.tenant_id)
+        scoped_assets = self._scoped_compliance_assets(passport)
         readiness = self.readiness(passport_id, persist=True)
         return {
             "passport": _as_dict(passport),
@@ -421,14 +564,14 @@ class AssuranceRepository:
                 "crop": passport.crop,
                 "season": passport.season,
                 "reporting_period": passport.reporting_period,
-                "parcels": compliance.list_parcels(),
-                "jurisdictions": compliance.list_jurisdictions(),
+                "parcels": [self._parcel_payload(row) for row in scoped_assets["parcels"]],
+                "jurisdictions": [self._jurisdiction_payload(row) for row in scoped_assets["jurisdictions"]],
             },
             "water_proof": {
-                "wells": compliance.list_wells(),
-                "meters": compliance.list_meters(),
-                "measurements": compliance.list_measurements(),
-                "water_budgets": compliance.list_budgets(),
+                "wells": [self._well_payload(row) for row in scoped_assets["wells"]],
+                "meters": [self._meter_payload(row) for row in scoped_assets["meters"]],
+                "measurements": [self._measurement_payload(row) for row in scoped_assets["measurements"]],
+                "water_budgets": [self._water_budget_payload(row) for row in scoped_assets["water_budgets"]],
             },
             "input_proof": [_as_dict(row) for row in self.db.query(InputApplication).filter_by(tenant_id=self.tenant_id, passport_id=passport_id).all()],
             "traceability_proof": {

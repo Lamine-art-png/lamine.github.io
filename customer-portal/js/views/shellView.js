@@ -5,12 +5,14 @@ const complianceEnabled = () => Boolean(window.AGROAI_PORTAL_CONFIG?.CALIFORNIA_
 
 export const navItems = [
   ["command-center", "Command"],
+  ["assurance", "Assurance"],
   ["farm-explorer", "Sources"],
   ["reports", "Reports"],
   ["integrations", "Integrations"],
 ];
 
 export const secondaryNavItems = [
+  ["agent", "Agent"],
   ["audit-log", "Audit"],
   ["settings", "Settings"],
 ];
@@ -48,7 +50,7 @@ export function renderShell(state, content) {
     <aside class="sidebar">
       <div class="brand-lockup">
         <img src="./assets/agro-ai-logo.png" alt="AGRO-AI" class="brand-logo" />
-        <div><div class="brand">AGRO-AI</div><p>Water Command Center</p></div>
+        <div><div class="brand">AGRO-AI</div><p>Enterprise Operating System</p></div>
       </div>
       <div class="nav-section-label">Primary</div><nav class="nav-list" aria-label="Portal navigation">${[...navItems, ...(complianceEnabled() ? [["compliance", "Compliance"]] : [])].map(([id, label]) => navButton(state, id, label)).join("")}</nav>
       <div class="nav-section-label secondary-label">Secondary</div><nav class="nav-list secondary-nav" aria-label="Secondary navigation">${secondaryNavItems.map(([id, label]) => navButton(state, id, label)).join("")}</nav>
@@ -58,12 +60,12 @@ export function renderShell(state, content) {
       <header class="portal-header">
         <div class="header-titleblock">
           <div class="header-title-row">
-            <h1>${escapeHtml(isEvaluation ? scenarioName : workspace?.name || "Customer Workspace")} · Water Command Center</h1>
+            <h1>Command Center</h1>
             ${isEvaluation ? workspaceSwitcher(runtime) : ""}
             <span class="provenance-badge" title="Representative records are used until production targets are connected.">Representative data</span>
           </div>
-          <p class="header-subtitle">Scattered irrigation data becomes a verified water decision.</p>
-          <p class="header-status-row">Evaluation workspace<span>·</span>Mixed sources<span>·</span>Evidence chain active<span>·</span>Backend intelligence online</p>
+          <p class="header-subtitle">Irrigation, WaterOps, and Assurance workflows in one evidence-driven workspace.</p>
+          <p class="header-status-row">${escapeHtml(isEvaluation ? scenarioName : workspace?.name || "Customer Workspace")}<span>·</span>Mixed sources<span>·</span>Evidence chain active<span>·</span>Backend intelligence online</p>
         </div>
         <div class="header-toolbar">
           <div class="toolbar-status" aria-label="Workspace status">
