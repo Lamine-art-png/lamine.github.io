@@ -42,7 +42,7 @@ def init_db():
     from app.models import (
         tenant, client, block, telemetry, event,
         recommendation, schedule, webhook, usage_metering, audit_log, compliance,
-        workbench_persistence,
+        workbench_persistence, saas,
     )
     from app.assurance import models as assurance_models
     non_compliance_tables = [

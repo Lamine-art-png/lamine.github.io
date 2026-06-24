@@ -164,3 +164,63 @@ export interface ApiResult<T> {
   data: T | null;
   error?: string;
 }
+
+export interface Entitlements {
+  plan: string;
+  subscription_status: string;
+  max_workspaces: number;
+  max_users: number;
+  max_agent_runs_per_month: number;
+  max_evidence_uploads_per_month: number;
+  can_export_reports: boolean;
+  can_use_live_integrations: boolean;
+  can_invite_team: boolean;
+  can_create_live_assurance_passports: boolean;
+  can_access_billing_portal: boolean;
+}
+
+export interface SaaSOrganization {
+  id: string;
+  name: string;
+  slug: string;
+  plan: string;
+  subscription_status: string;
+  role?: "owner" | "admin" | "operator" | "reviewer";
+}
+
+export interface SaaSWorkspace {
+  id: string;
+  organization_id: string;
+  name: string;
+  crop?: string | null;
+  region?: string | null;
+  mode: "evaluation" | "live";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AuthSession {
+  access_token: string;
+  token_type: "bearer";
+  user: { id: string; email: string; name?: string | null; is_active: boolean };
+  current_organization: SaaSOrganization;
+  entitlements: Entitlements;
+}
+
+export interface MeResponse {
+  user: AuthSession["user"];
+  organizations: SaaSOrganization[];
+  current_organization: SaaSOrganization | null;
+  role: string | null;
+  plan: string | null;
+  subscription_status: string | null;
+  entitlements: Entitlements | null;
+}
+
+export interface BillingStatus {
+  plan: string;
+  subscription_status: string;
+  current_period_end: string | null;
+  entitlements: Entitlements;
+  usage: Record<string, number>;
+}

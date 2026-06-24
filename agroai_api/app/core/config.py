@@ -69,6 +69,15 @@ class Settings(BaseSettings):
 
     DEMO_API_KEY: str = "changeme-demo-key"  # override via env in prod
 
+    # SaaS app + Stripe billing
+    APP_URL: str = "https://app.agroai-pilot.com"
+    API_URL: str = "https://api.agroai-pilot.com"
+    STRIPE_SECRET_KEY: str = ""
+    STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_PRICE_PILOT: str = ""
+    STRIPE_PRICE_PRO: str = ""
+    STRIPE_PRICE_ENTERPRISE: str = ""
+
     # Strip whitespace/tabs from env vars that may be copy-pasted with junk
     @field_validator("*", mode="before")
     @classmethod

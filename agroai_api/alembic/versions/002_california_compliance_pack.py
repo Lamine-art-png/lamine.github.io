@@ -1,7 +1,7 @@
 """california compliance pack v0.1
 
 Revision ID: 002_california_compliance_pack
-Revises: 001_enterprise_tables
+Revises: 001
 Create Date: 2026-05-31
 """
 from alembic import op

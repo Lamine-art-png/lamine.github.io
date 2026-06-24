@@ -1,6 +1,79 @@
-from fastapi import Header, HTTPException, status
+from dataclasses import dataclass
+
+from fastapi import Depends, Header, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.security import http_bearer, verify_token
+from app.db.base import get_db
+from app.models.saas import Organization, OrganizationMembership, User, Workspace
+
+
+@dataclass
+class AuthContext:
+    user: User
+    organization: Organization | None = None
+    membership: OrganizationMembership | None = None
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials | None = Depends(http_bearer),
+    db: Session = Depends(get_db),
+) -> User:
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Missing bearer token",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    payload = verify_token(credentials.credentials)
+    user_id = payload.get("sub")
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token subject")
+    user = db.get(User, user_id)
+    if not user or not user.is_active:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+    return user
+
+
+def get_auth_context(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> AuthContext:
+    membership = (
+        db.query(OrganizationMembership)
+        .filter(OrganizationMembership.user_id == user.id)
+        .order_by(OrganizationMembership.created_at.asc())
+        .first()
+    )
+    organization = membership.organization if membership else None
+    return AuthContext(user=user, organization=organization, membership=membership)
+
+
+def require_org_membership(org_id: str, user: User, db: Session) -> tuple[Organization, OrganizationMembership]:
+    membership = (
+        db.query(OrganizationMembership)
+        .filter(OrganizationMembership.organization_id == org_id, OrganizationMembership.user_id == user.id)
+        .first()
+    )
+    if not membership:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    return membership.organization, membership
+
+
+def require_workspace_access(workspace_id: str, user: User, db: Session) -> tuple[Workspace, OrganizationMembership]:
+    workspace = db.get(Workspace, workspace_id)
+    if not workspace:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+    membership = (
+        db.query(OrganizationMembership)
+        .filter(
+            OrganizationMembership.organization_id == workspace.organization_id,
+            OrganizationMembership.user_id == user.id,
+        )
+        .first()
+    )
+    if not membership:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+    return workspace, membership
 
 
 async def verify_demo_api_key(
