@@ -1,8 +1,41 @@
+import { useState, type FormEvent } from "react";
+import { apiClient, setAccessToken } from "../api/client";
 import { actions, useCommandStore } from "../state/commandStore";
 
 export function EntryScreen() {
   const message = useCommandStore((s) => s.productionSignInMessage);
   const onboardingOpen = useCommandStore((s) => s.onboardingOpen);
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [name, setName] = useState("");
+  const [organization, setOrganization] = useState("");
+  const [status, setStatus] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  async function submitAuth(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setBusy(true);
+    setStatus(null);
+    const response =
+      mode === "login"
+        ? await apiClient.login(email, password)
+        : await apiClient.register({
+            email,
+            password,
+            name,
+            organization_name: organization || "Evaluation organization",
+            workspace_name: "Evaluation workspace",
+          });
+    setBusy(false);
+    if (!response.ok || !response.data) {
+      setStatus("Sign-in failed. Check credentials or API availability.");
+      return;
+    }
+    setAccessToken(response.data.access_token);
+    setStatus(`${response.data.current_organization.name} connected.`);
+    await actions.openEvaluationWorkspace();
+  }
 
   return (
     <main className="entry-screen">
@@ -14,20 +47,39 @@ export function EntryScreen() {
           <button className="btn primary" onClick={() => void actions.openEvaluationWorkspace()}>
             Open evaluation workspace
           </button>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              actions.submitProductionSignIn();
-            }}
-          >
-            <button className="btn" type="submit">
-              Sign in for production access
-            </button>
-          </form>
+          <button className="btn" type="button" onClick={() => setMode(mode === "login" ? "register" : "login")}>
+            {mode === "login" ? "Create account" : "Sign in"}
+          </button>
           <button className="btn ghost" onClick={() => actions.openOnboarding()}>
             Request enterprise onboarding
           </button>
         </div>
+        <form className="auth-form" onSubmit={submitAuth}>
+          <label>
+            <span>Email</span>
+            <input value={email} onChange={(event) => setEmail(event.target.value)} type="email" required autoComplete="email" />
+          </label>
+          <label>
+            <span>Password</span>
+            <input value={password} onChange={(event) => setPassword(event.target.value)} type="password" required minLength={8} autoComplete={mode === "login" ? "current-password" : "new-password"} />
+          </label>
+          {mode === "register" && (
+            <>
+              <label>
+                <span>Name</span>
+                <input value={name} onChange={(event) => setName(event.target.value)} type="text" autoComplete="name" />
+              </label>
+              <label>
+                <span>Organization</span>
+                <input value={organization} onChange={(event) => setOrganization(event.target.value)} type="text" required />
+              </label>
+            </>
+          )}
+          <button className="btn primary" type="submit" disabled={busy}>
+            {busy ? "Connecting..." : mode === "login" ? "Sign in" : "Register"}
+          </button>
+        </form>
+        {status && <p className="entry-message">{status}</p>}
         {message && <p className="entry-message">{message}</p>}
       </section>
 
