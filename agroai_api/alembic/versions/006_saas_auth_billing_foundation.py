@@ -1,14 +1,13 @@
 """Add SaaS auth, organization, workspace, billing, and usage tables.
 
-Revision ID: 003
-Revises: 002_california_compliance_pack
+Revision ID: 006_saas_auth_billing_foundation
+Revises: 005_agent_workflow_layer
 Create Date: 2026-06-24
 """
 from alembic import op
 import sqlalchemy as sa
-
-revision = "003"
-down_revision = "002_california_compliance_pack"
+revision = "006_saas_auth_billing_foundation"
+down_revision = "005_agent_workflow_layer"
 branch_labels = None
 depends_on = None
 
