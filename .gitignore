@@ -36,3 +36,27 @@ agroai-cloudflare-worker/api-native/*.dat
 agroai-cloudflare-worker/api-native/serial.txt
 agroai-cloudflare-worker/api-native/connections.dat
 agroai-cloudflare-worker/api-native/fealog.txt
+
+# Dependency folders
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+**/dist/
+build/
+**/build/
+
+# Tool caches
+.cache/
+**/.cache/
+.wrangler/
+**/.wrangler/
+
+# Local/generated archives
+*.zip
+
+# Local env/secrets
+.env
+.env.*
+!.env.example
