@@ -1,0 +1,28 @@
+/* AGRO-AI Brand Colors */
+:root {
+  --agro-bg: #F6F4EE;
+  --agro-surface: #FFFEFA;
+  --agro-sidebar: #061D15;
+  --agro-primary: #16533C;
+  --agro-action: #1F7350;
+  --agro-accent: #9BD84B;
+  --agro-text-dark: #10231B;
+  --agro-text-muted: #68776F;
+  --agro-border: rgba(16, 35, 27, 0.12);
+  --agro-warning: #B7791F;
+  --agro-danger: #B42318;
+}
+
+@theme inline {
+  --color-agro-bg: var(--agro-bg);
+  --color-agro-surface: var(--agro-surface);
+  --color-agro-sidebar: var(--agro-sidebar);
+  --color-agro-primary: var(--agro-primary);
+  --color-agro-action: var(--agro-action);
+  --color-agro-accent: var(--agro-accent);
+  --color-agro-text-dark: var(--agro-text-dark);
+  --color-agro-text-muted: var(--agro-text-muted);
+  --color-agro-border: var(--agro-border);
+  --color-agro-warning: var(--agro-warning);
+  --color-agro-danger: var(--agro-danger);
+}

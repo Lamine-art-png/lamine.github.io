@@ -1,0 +1,387 @@
+Design a high-fidelity enterprise product interface for AGRO-AI.
+
+This is NOT a marketing site.
+This is NOT a landing page.
+This is NOT a generic SaaS template.
+This is NOT a playful dashboard.
+This is a serious, premium, minimalist, highly functional enterprise software workspace.
+
+Primary goal:
+Design a product interface that feels like a real operational tool used daily by serious enterprise customers. The interface should prioritize work, clarity, decision-making, evidence review, and operational control over marketing language.
+
+Product context:
+AGRO-AI is an AI-native enterprise operating system for agriculture. It helps farms, water districts, farmland owners, enterprise agriculture operators, lenders, and corporate teams manage operations, water decisions, evidence workflows, assurance readiness, and agent-assisted work.
+
+The product combines:
+- operational monitoring
+- data ingestion
+- proof / evidence workflows
+- assurance / audit-readiness workflows
+- AI agent action queues
+- reviewer/human approval steps
+- exports and reporting
+
+Core product philosophy:
+The interface should feel like a real work surface, not a brochure.
+Think of the emotional quality of using serious software like Claude, ChatGPT, Linear, Stripe Dashboard, Vercel, Ramp, or modern infrastructure software:
+- calm
+- fast
+- high-signal
+- low-clutter
+- trusted
+- premium
+- focused on work
+- visually minimal but highly intentional
+
+Visual direction:
+Premium enterprise SaaS
+Minimalist
+Corporate
+Operational
+High-end
+Silicon Valley product quality
+AI-native
+Serious
+Clean
+Not decorative
+Not over-designed
+Not “startup fluff”
+Not loaded with marketing copy
+Not animation-heavy
+Not noisy
+
+Very important:
+The interface should communicate:
+“real work happens here”
+not
+“buy our product”
+
+The user should immediately understand:
+- what workspace they are in
+- what the system sees
+- what requires attention
+- what the next best action is
+- what the AI is doing
+- what needs human review
+- what proof is present vs missing
+- what is ready for export vs blocked
+
+Do NOT produce:
+- a landing page
+- large sales headlines with generic value claims
+- fake charts for decoration
+- huge unusable cards
+- overlapping content
+- floating right rails
+- narrow squeezed text columns
+- cluttered chip overload
+- massive hero areas that waste space
+- internal fake IDs like demo-passport-alpha-vineyard
+- fake compliance claims like “certified”, “fully compliant”, “regulator approved”
+- childish illustrations
+- consumer app aesthetics
+- excessive gradients
+- crypto / futuristic sci-fi nonsense
+- random glowing effects
+- feature-museum UI
+
+Use the provided AGRO-AI logo as the primary logo.
+Also incorporate small integration / compatibility logo areas using the provided WiseConn and Talgil logos.
+You may also include compatible system chips for CropX and telemetry APIs, but present them carefully and professionally.
+Do not imply formal partnership unless explicitly stated.
+Use truthful wording such as:
+- “Integrated with WiseConn”
+- “Integrated with Talgil”
+- “Compatible with CropX”
+- “Telemetry API compatible”
+Include a small note that compatibility does not imply endorsement or certification.
+
+Design output required:
+Create one high-fidelity desktop application screen first.
+
+Frame:
+- Desktop
+- 1440 × 1024
+- Screen name: Overview
+
+This screen must look like a real logged-in product workspace.
+
+Information architecture:
+The interface should include:
+1. Left navigation sidebar
+2. Top context bar
+3. Main workspace content
+4. Compact summary cards
+5. Work queue / priority actions
+6. AI system insight section
+7. Integration strip
+8. Clear hierarchy and spacing
+9. No marketing-style footer or promotional sections
+
+Layout:
+- fixed dark sidebar on the left, about 272–288 px wide
+- top bar across the main content area, about 72 px high
+- main content width should feel balanced and premium
+- use a clean grid
+- strong spacing
+- no right-side floating rail
+- no overlapping modules
+- no awkward empty decorative space
+- the screen should feel substantial and useful
+
+Brand / color direction:
+Overall feeling:
+AGRO-AI should feel premium, calm, serious, and highly usable.
+
+Use:
+Background: #F6F4EE
+Surface / card: #FFFEFA
+Sidebar: #061D15
+Primary green: #16533C
+Action green: #1F7350
+Accent lime: #9BD84B
+Text dark: #10231B
+Muted text: #68776F
+Border: rgba(16,35,27,0.12)
+Warning: #B7791F
+Danger: #B42318
+
+Visual system:
+- soft card borders
+- subtle shadows only where helpful
+- restrained emphasis
+- excellent typography hierarchy
+- lots of breathing room
+- premium whitespace
+- quiet confidence
+- nothing gimmicky
+
+Typography:
+Use Inter or a similar modern neo-grotesk sans serif.
+Typography should feel like a serious enterprise product.
+- large title: bold, premium, compact
+- section titles: clean and strong
+- body copy: readable, not tiny
+- labels: uppercase or compact, restrained
+- avoid long paragraphs
+- copy should be compact, useful, and product-oriented
+
+Sidebar content:
+Top:
+- AGRO-AI logo
+- label: AGRO-AI
+- subtitle: Enterprise Portal
+
+Primary navigation:
+- Overview
+- WaterOps
+- Assurance
+- Evidence
+- Reports
+- Agents
+
+Admin / system section:
+- Integrations
+- Sources
+- Settings
+
+Bottom sidebar panel:
+Show a compact workspace status card:
+- label: Evaluation workspace
+- text: Reviewer evaluation required before external use.
+
+Sidebar should feel premium and solid, not decorative.
+
+Top bar content:
+Left side:
+- Workspace / account context:
+  North Coast Vineyard
+  Wine grapes · Coastal production block
+
+Right side:
+- status badge: Evaluation workspace
+- status badge: Not live
+- text: Updated a few minutes ago
+- primary action button: Run Agent
+
+This top bar should feel operational, not promotional.
+
+Main screen structure:
+
+Section 1: Main hero / workspace summary
+This is not a marketing hero.
+It is a product summary card.
+
+Eyebrow:
+AGRO-AI ENTERPRISE PORTAL
+
+Title:
+One operating layer for farm evidence, water decisions, assurance, and agents.
+
+Support text:
+A focused workspace for proof coverage, irrigation decisions, operational gaps, review gates, and export preparation.
+
+Primary actions:
+- Run AGRO-AI Agent
+- Attach evidence
+- Prepare export
+
+To the right of this summary area, create a compact, premium AI insight panel.
+This should feel like the system’s current reasoning state, similar in seriousness to modern AI interfaces.
+
+AI panel title:
+What AGRO-AI sees
+
+Primary statement:
+Readiness is blocked by missing proof.
+
+Support statement:
+The package can be prepared, but external use remains blocked until required records are attached and reviewer checks are completed.
+
+Inside this panel, show concise structured system observations:
+- Proof present: Controller events, weather context, crop profile
+- Proof missing: Water proof, input applications, traceability
+- Next best action: Attach scoped water measurement proof
+- Human review: Required before external use
+
+This panel should be compact, high-signal, and clean.
+
+Section 2: Metric summary row
+Create four compact metric cards.
+They must look like real product metrics, not marketing counters.
+
+Cards:
+1. Assurance readiness — 72%
+2. Open actions — 7
+3. Missing proof — 4
+4. Agent runs — 3
+
+Each card should have:
+- small label
+- large number/value
+- one-line support context
+
+Examples of support context:
+- “Package completeness toward reviewer handoff”
+- “Open tasks across evidence and assurance”
+- “Required items not yet attached or verified”
+- “Recent automated runs in this workspace”
+
+Section 3: Main work area
+This is the most important area.
+It should look functional and useful.
+
+Create a two-column main content grid.
+
+Left column:
+Card title:
+Highest-priority work
+
+Inside it, show a serious operational queue with rows.
+Each row should include:
+- task title
+- short reason
+- status
+- action
+
+Rows:
+1. Attach water measurement proof
+   Reason: Required for assurance export
+   Status: Approval required
+   Action: Review
+
+2. Request input application records
+   Reason: Missing supporting document set
+   Status: Pending document
+   Action: Follow up
+
+3. Prepare proof package draft
+   Reason: Draft export ready after missing proof is resolved
+   Status: Blocked
+   Action: Open
+
+4. Review traceability mapping
+   Reason: Evidence linked but not reviewer-checked
+   Status: Needs review
+   Action: Review
+
+This should feel like a real workflow queue.
+
+Right column:
+Card title:
+Evidence-backed automation
+
+This card should explain the AI workflow in a clean, minimal way.
+Show a 6-step structured workflow:
+- Ingest
+- Normalize
+- Classify
+- Detect gaps
+- Propose actions
+- Human review
+
+Show the first four as complete / active, and the last two as pending or waiting.
+This is not a diagram for decoration.
+It should look like a compact enterprise workflow module.
+
+Also include a small note:
+“Automation accelerates preparation. Human review governs external use.”
+
+Section 4: Integration strip
+At the bottom of the screen, create a clean integrations / compatibility section.
+
+Title:
+Connected systems
+
+Show four clean logo / label chips:
+- WiseConn integrated
+- Talgil integrated
+- CropX compatible
+- Telemetry APIs compatible
+
+Use the WiseConn and Talgil logos provided.
+Use AGRO-AI brand styling to make the section feel coherent.
+This strip should be elegant, restrained, and credible.
+
+Under it, include a small truthful note:
+“Compatibility indicates technical integration capability. It does not imply endorsement, certification, or formal partnership unless explicitly stated.”
+
+Functional design principles:
+Everything on screen should support work.
+Every module should answer one of these:
+- What is happening?
+- What matters now?
+- What is missing?
+- What is the AI doing?
+- What should the human do next?
+- What is safe to export or share?
+
+The interface should feel like it is built for:
+- enterprise operations teams
+- growers
+- irrigation managers
+- audit/review teams
+- water districts
+- farmland ownership and oversight teams
+- finance / reporting stakeholders
+
+The experience should feel:
+- premium enough to justify enterprise pricing
+- serious enough to show to real buyers
+- minimal enough to avoid noise
+- clear enough that a user understands the system in under 10 seconds
+
+Do not let visual design overpower function.
+Function and clarity come first.
+Design quality still matters a lot, but it must serve usability.
+
+Critical quality bar:
+This should look like a product a serious enterprise buyer would trust with operational workflows.
+The result should look much closer to a polished AI work platform than to a startup homepage.
+
+After generating the Overview screen, keep it editable and structured so it can later expand into:
+- Assurance
+- Evidence
+- Reports
+- Agents
+using the same design system and layout language.
