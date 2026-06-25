@@ -32,7 +32,7 @@ async def lifespan(app: FastAPI):
         logger.info("Scheduler started — first sync will run on next interval")
     else:
         logger.info("Background scheduler disabled (ENABLE_SCHEDULER=%s, API key set=%s)",
-                     settings.ENABLE_SCHEDULER, bool(settings.WISECONN_API_KEY))
+                    settings.ENABLE_SCHEDULER, bool(settings.WISECONN_API_KEY))
 
     yield  # App is running
 
@@ -47,6 +47,13 @@ app = FastAPI(
     version=VERSION,
     lifespan=lifespan,
 )
+
+# SaaS auth + billing routes
+from app.api.v1.auth import router as auth_router  # noqa: E402
+from app.api.v1.billing import router as billing_router  # noqa: E402
+
+app.include_router(auth_router, prefix="/v1")
+app.include_router(billing_router, prefix="/v1")
 
 # WiseConn integration routes
 from app.api.v1.wiseconn import router as wiseconn_router  # noqa: E402
@@ -123,7 +130,7 @@ app.add_middleware(
     ],
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"]
 )
 
 # -------------------------
