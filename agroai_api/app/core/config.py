@@ -69,22 +69,6 @@ class Settings(BaseSettings):
 
     DEMO_API_KEY: str = "changeme-demo-key"  # override via env in prod
 
-    # SaaS app + Stripe billing
-    APP_URL: str = "https://app.agroai-pilot.com"
-    API_URL: str = "https://api.agroai-pilot.com"
-    STRIPE_SECRET_KEY: str = ""
-    STRIPE_WEBHOOK_SECRET: str = ""
-
-    # Current AGRO-AI commercial offers
-    STRIPE_PRICE_ASSURANCE_AUDIT_FARM: str = ""
-    STRIPE_PRICE_ASSURANCE_AUDIT_NETWORK: str = ""
-    STRIPE_PRICE_WATEROPS_MONTHLY: str = ""
-    STRIPE_PRICE_ASSURANCE_MONTHLY: str = ""
-
-    # Legacy names kept for backwards compatibility with older frontends/tests.
-    STRIPE_PRICE_PILOT: str = ""
-    STRIPE_PRICE_PRO: str = ""
-    STRIPE_PRICE_ENTERPRISE: str = ""
     # AI gateway. Leave unset to keep startup safe and return deterministic
     # unavailable responses instead of fabricated model output.
     AI_PROVIDER: str = ""
