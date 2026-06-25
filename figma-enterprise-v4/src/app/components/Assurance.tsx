@@ -9,6 +9,10 @@ type ProofGap = { requirement?: string; domain?: string; reason?: string; status
 export function Assurance() {
   const { currentOrganization, currentWorkspace, entitlements } = useAuth();
   const [agentMessage, setAgentMessage] = useState("");
+<<<<<<< ours
+=======
+  const [isAiLoading, setIsAiLoading] = useState(false);
+>>>>>>> theirs
   const readiness = usePortalResource<unknown>(useCallback(() => apiClient.assurance.readiness(), []));
   const passport = usePortalResource<unknown>(useCallback(() => apiClient.assurance.passport(), []));
   const gaps = arrayFromUnknown<ProofGap>(readiness.data, ["gaps", "missing_proof", "items"]);
@@ -16,11 +20,25 @@ export function Assurance() {
 
   async function runAgent() {
     setAgentMessage("");
+<<<<<<< ours
     try {
       await apiClient.agents.run({ task: "assurance_readiness", workspace_id: currentWorkspace?.id });
       setAgentMessage("Agent run requested.");
     } catch (error) {
       setAgentMessage(error instanceof Error ? error.message : "Agent orchestration endpoint not connected yet.");
+=======
+    setIsAiLoading(true);
+    try {
+      const result = await apiClient.ai.assuranceReview({
+        workspace_id: currentWorkspace?.id,
+        inputs: { source: "assurance" },
+      }) as { status?: string; demo_fallback?: boolean; output?: unknown };
+      setAgentMessage(result.status === "unavailable" || result.demo_fallback ? "AI provider unavailable." : "Assurance review returned.");
+    } catch (error) {
+      setAgentMessage(error instanceof Error ? error.message : "AI assurance endpoint unavailable.");
+    } finally {
+      setIsAiLoading(false);
+>>>>>>> theirs
     }
   }
 
@@ -35,8 +53,13 @@ export function Assurance() {
         </div>
         <div className="flex items-center gap-3">
           <StatusBadge label={hasPassport ? "Live passport" : "No live passport"} tone={hasPassport ? "good" : "warn"} />
+<<<<<<< ours
           <PortalButton disabled={!canRunAgent || readiness.isUnavailable} onClick={runAgent}>
             {!canRunAgent ? "Agent runs require paid plan" : readiness.isUnavailable ? "Agent backend route not connected yet" : "Run Agent"}
+=======
+          <PortalButton disabled={!canRunAgent || readiness.isUnavailable || isAiLoading} onClick={runAgent}>
+            {!canRunAgent ? "Agent runs require paid plan" : isAiLoading ? "Reviewing" : readiness.isUnavailable ? "Assurance route unavailable" : "AI Review"}
+>>>>>>> theirs
           </PortalButton>
         </div>
       </header>
@@ -48,6 +71,10 @@ export function Assurance() {
         </div>
 
         {passport.isLoading || readiness.isLoading ? <InlineState title="Loading assurance state" /> : null}
+<<<<<<< ours
+=======
+        {isAiLoading ? <InlineState title="Loading AI assurance review" /> : null}
+>>>>>>> theirs
         {passport.isUnavailable ? (
           <InlineState
             title="No live assurance passport connected yet."

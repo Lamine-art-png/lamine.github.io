@@ -9,6 +9,10 @@ type AgentRun = { id?: string; task?: string; status?: string; created_at?: stri
 export function Agents() {
   const { currentOrganization, currentWorkspace, entitlements } = useAuth();
   const [runMessage, setRunMessage] = useState("");
+<<<<<<< ours
+=======
+  const [runningTask, setRunningTask] = useState("");
+>>>>>>> theirs
   const runs = usePortalResource<unknown>(useCallback(() => apiClient.agents.list(), []));
   const rows = arrayFromUnknown<AgentRun>(runs.data, ["runs", "items", "data"]);
   const canRunAgent = canUseEntitlement(entitlements, ["agent_runs", "agents", "can_run_agents"]);
@@ -20,11 +24,22 @@ export function Agents() {
       return;
     }
     try {
+<<<<<<< ours
       await apiClient.agents.run({ task, workspace_id: currentWorkspace?.id });
       setRunMessage("Agent run requested.");
       await runs.refresh();
     } catch (error) {
       setRunMessage(error instanceof Error ? error.message : "Agent orchestration endpoint not connected yet.");
+=======
+      setRunningTask(task);
+      const result = await apiClient.agents.run({ task, workspace_id: currentWorkspace?.id }) as { status?: string; demo_fallback?: boolean };
+      setRunMessage(result.status === "unavailable" || result.demo_fallback ? "AI provider unavailable." : "Agent run returned.");
+      await runs.refresh();
+    } catch (error) {
+      setRunMessage(error instanceof Error ? error.message : "Agent orchestration endpoint not connected yet.");
+    } finally {
+      setRunningTask("");
+>>>>>>> theirs
     }
   }
 
@@ -48,6 +63,10 @@ export function Agents() {
 
         {!canRunAgent ? <InlineState title="Agent runs require paid plan." /> : null}
         {runs.isLoading ? <InlineState title="Loading agent runs" /> : null}
+<<<<<<< ours
+=======
+        {runningTask ? <InlineState title={`Running ${runningTask.replaceAll("_", " ")}`} /> : null}
+>>>>>>> theirs
         {runs.isUnavailable ? <InlineState title="Agent orchestration endpoint not connected yet." /> : null}
         {!runs.isUnavailable && runs.error ? <InlineState title={runs.error} /> : null}
         {runMessage ? <InlineState title={runMessage} /> : null}
@@ -79,17 +98,29 @@ export function Agents() {
               <h3 className="text-[15px] font-semibold" style={{ color: TEXT }}>Agent actions</h3>
             </div>
             <div className="grid gap-3 p-5">
+<<<<<<< ours
               {["gap_analysis", "proof_draft", "follow_up_tasks", "readiness_refresh"].map((task) => (
                 <button
                   key={task}
                   type="button"
                   disabled={!canRunAgent || runs.isUnavailable}
+=======
+              {["gap_analysis", "proof_draft", "readiness_refresh", "irrigation_recommendation", "integration_diagnosis"].map((task) => (
+                <button
+                  key={task}
+                  type="button"
+                  disabled={!canRunAgent || runs.isUnavailable || Boolean(runningTask)}
+>>>>>>> theirs
                   onClick={() => runAgent(task)}
                   className="text-left rounded-xl p-4 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
                   style={{ background: BG, border: `1px solid ${BORDER}` }}
                 >
                   <div className="text-[13px] font-semibold mb-1" style={{ color: TEXT }}>{task.replaceAll("_", " ")}</div>
+<<<<<<< ours
                   <div className="text-[11px] leading-relaxed" style={{ color: MUTED }}>{!canRunAgent ? "Agent runs require paid plan." : runs.isUnavailable ? "Agent orchestration endpoint not connected yet." : "Send this action to the live agent endpoint."}</div>
+=======
+                  <div className="text-[11px] leading-relaxed" style={{ color: MUTED }}>{!canRunAgent ? "Agent runs require paid plan." : runningTask === task ? "Running against live AI gateway." : runs.isUnavailable ? "Agent orchestration endpoint not connected yet." : "Send this action to the live agent endpoint."}</div>
+>>>>>>> theirs
                 </button>
               ))}
             </div>

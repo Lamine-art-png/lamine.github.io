@@ -114,6 +114,17 @@ export type CreateOrgPayload = {
   name: string;
 };
 
+<<<<<<< ours
+=======
+export type AiRequestPayload = {
+  task?: string;
+  message?: string;
+  workspace_id?: string;
+  block_id?: string;
+  inputs?: Record<string, unknown>;
+};
+
+>>>>>>> theirs
 export const apiClient = {
   get,
   post,
@@ -154,6 +165,16 @@ export const apiClient = {
     run: (payload?: unknown) => post("/v1/agents/run", payload),
     status: (runId: string) => get(`/v1/agents/runs/${encodeURIComponent(runId)}`),
   },
+<<<<<<< ours
+=======
+  ai: {
+    chat: (payload: AiRequestPayload) => post("/v1/ai/chat", payload),
+    irrigationRecommendation: (payload: AiRequestPayload) => post("/v1/ai/irrigation-recommendation", payload),
+    assuranceReview: (payload: AiRequestPayload) => post("/v1/ai/assurance-review", payload),
+    reportDraft: (payload: AiRequestPayload) => post("/v1/ai/report-draft", payload),
+    integrationDiagnosis: (payload: AiRequestPayload) => post("/v1/ai/integration-diagnosis", payload),
+  },
+>>>>>>> theirs
   integrations: {
     list: () => get("/v1/integrations"),
     status: () => get("/v1/integrations/status"),

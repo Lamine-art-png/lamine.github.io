@@ -3,8 +3,16 @@ packages:
 supportedArchitectures:
   os:
     - linux
+<<<<<<< ours
+=======
+    - darwin
+>>>>>>> theirs
   cpu:
     - x64
     - arm64
   libc:
+<<<<<<< ours
     - glibc
+=======
+    - glibc
+>>>>>>> theirs
