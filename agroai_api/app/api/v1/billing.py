@@ -19,7 +19,9 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 
 class CheckoutRequest(BaseModel):
     organization_id: str
-    plan: str
+    # New commercial offer. "plan" kept only for old callers.
+    offer: str | None = None
+    plan: str | None = None
 
 
 class PortalRequest(BaseModel):
@@ -35,17 +37,57 @@ def _stripe_ready() -> None:
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
-def _price_for_plan(plan: str) -> str:
-    price = {
-        "pilot": settings.STRIPE_PRICE_PILOT,
-        "pro": settings.STRIPE_PRICE_PRO,
-    }.get(plan)
-    if not price:
+def _normalize_offer(payload: CheckoutRequest) -> str:
+    raw = (payload.offer or payload.plan or "").strip().lower()
+    aliases = {
+        "pilot": "waterops_monthly",
+        "pro": "assurance_monthly",
+        "waterops": "waterops_monthly",
+        "assurance": "assurance_monthly",
+        "farm_audit": "assurance_audit_farm",
+        "network_audit": "assurance_audit_network",
+    }
+    return aliases.get(raw, raw)
+
+
+def _offer_config(offer: str) -> dict:
+    offers = {
+        "assurance_audit_farm": {
+            "price": settings.STRIPE_PRICE_ASSURANCE_AUDIT_FARM,
+            "mode": "payment",
+            "plan": "assurance_audit",
+        },
+        "assurance_audit_network": {
+            "price": settings.STRIPE_PRICE_ASSURANCE_AUDIT_NETWORK,
+            "mode": "payment",
+            "plan": "assurance_audit",
+        },
+        "waterops_monthly": {
+            "price": settings.STRIPE_PRICE_WATEROPS_MONTHLY,
+            "mode": "subscription",
+            "plan": "waterops",
+        },
+        "assurance_monthly": {
+            "price": settings.STRIPE_PRICE_ASSURANCE_MONTHLY,
+            "mode": "subscription",
+            "plan": "assurance",
+        },
+    }
+    config = offers.get(offer)
+    if not config:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"code": "plan_required", "message": "A configured pilot or pro plan is required."},
+            detail={
+                "code": "offer_required",
+                "message": "Use assurance_audit_farm, assurance_audit_network, waterops_monthly, or assurance_monthly.",
+            },
         )
-    return price
+    if not config["price"]:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "stripe_price_missing", "message": f"Stripe price ID is not configured for {offer}."},
+        )
+    return config
 
 
 def _create_customer(org: Organization) -> str:
@@ -62,30 +104,39 @@ def _create_customer(org: Organization) -> str:
 
 @router.post("/create-checkout-session")
 def create_checkout_session(payload: CheckoutRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
-    if payload.plan not in {"pilot", "pro"}:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="plan must be pilot or pro")
+    offer = _normalize_offer(payload)
+    offer_config = _offer_config(offer)
+
     org, membership = require_org_membership(payload.organization_id, user, db)
     require_owner_or_admin(membership.role)
+
     customer_id = org.stripe_customer_id or _create_customer(org)
     if not org.stripe_customer_id:
         org.stripe_customer_id = customer_id
         db.commit()
+
     _stripe_ready()
     try:
         session = stripe.checkout.Session.create(
-            mode="subscription",
+            mode=offer_config["mode"],
             customer=customer_id,
-            line_items=[{"price": _price_for_plan(payload.plan), "quantity": 1}],
-            success_url=f"{settings.APP_URL}/billing?checkout=success",
-            cancel_url=f"{settings.APP_URL}/billing?checkout=cancelled",
-            metadata={"organization_id": org.id, "plan": payload.plan},
+            line_items=[{"price": offer_config["price"], "quantity": 1}],
+            success_url=f"{settings.APP_URL}/billing?checkout=success&offer={offer}",
+            cancel_url=f"{settings.APP_URL}/billing?checkout=cancelled&offer={offer}",
+            client_reference_id=org.id,
+            metadata={
+                "organization_id": org.id,
+                "offer": offer,
+                "plan": offer_config["plan"],
+                "checkout_mode": offer_config["mode"],
+            },
         )
     except stripe.error.StripeError:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail={"code": "stripe_error", "message": "Stripe checkout session creation failed."},
         )
-    return {"checkout_url": session["url"]}
+    return {"checkout_url": session["url"], "offer": offer, "mode": offer_config["mode"]}
 
 
 @router.post("/create-portal-session")
@@ -148,10 +199,12 @@ def _verify_stripe_signature(raw_body: bytes, signature: str | None) -> None:
 
 
 def _plan_from_price(price_id: str | None) -> str | None:
-    if price_id == settings.STRIPE_PRICE_PILOT:
-        return "pilot"
-    if price_id == settings.STRIPE_PRICE_PRO:
-        return "pro"
+    if price_id == settings.STRIPE_PRICE_WATEROPS_MONTHLY:
+        return "waterops"
+    if price_id == settings.STRIPE_PRICE_ASSURANCE_MONTHLY:
+        return "assurance"
+    if price_id in {settings.STRIPE_PRICE_ASSURANCE_AUDIT_FARM, settings.STRIPE_PRICE_ASSURANCE_AUDIT_NETWORK}:
+        return "assurance_audit"
     return None
 
 
@@ -177,10 +230,15 @@ def _apply_billing_event(db: Session, org: Organization | None, event_type: str,
     if event_type == "checkout.session.completed":
         org.stripe_customer_id = obj.get("customer") or org.stripe_customer_id
         org.stripe_subscription_id = obj.get("subscription") or org.stripe_subscription_id
-        plan = (obj.get("metadata") or {}).get("plan")
-        if plan in {"pilot", "pro"}:
+        metadata = obj.get("metadata") or {}
+        plan = metadata.get("plan")
+        checkout_mode = metadata.get("checkout_mode") or obj.get("mode")
+        if plan in {"waterops", "assurance"}:
             org.plan = plan
             org.subscription_status = "active"
+        elif plan == "assurance_audit" and checkout_mode == "payment":
+            org.plan = plan
+            org.subscription_status = "paid"
     elif event_type.startswith("customer.subscription."):
         org.stripe_customer_id = obj.get("customer") or org.stripe_customer_id
         org.stripe_subscription_id = obj.get("id") or org.stripe_subscription_id
