@@ -22,12 +22,7 @@ VERSION = "2.0.0"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup/shutdown lifecycle — starts scheduler, initializes DB."""
-    from app.db.base import init_db
-
-    # Initialize database tables
-    init_db()
-    logger.info("Database initialized")
+    """Startup/shutdown lifecycle — starts scheduler after Alembic migrations."""
 
     # Start background scheduler if enabled (sync runs on schedule, NOT blocking startup)
     if settings.ENABLE_SCHEDULER and settings.WISECONN_API_KEY:
@@ -79,26 +74,8 @@ app.include_router(intelligence_router, prefix="/v1")
 from app.api.v1.workbench import router as workbench_router  # noqa: E402
 app.include_router(workbench_router, prefix="/v1")
 
-from app.api.v1.talgil import router as talgil_router  # noqa: E402
-app.include_router(talgil_router, prefix="/v1")
-
 from app.api.v1.compliance import router as compliance_router  # noqa: E402
 app.include_router(compliance_router, prefix="/v1")
-
-from app.api.v1.assurance import router as assurance_router  # noqa: E402
-app.include_router(assurance_router, prefix="/v1")
-
-from app.api.v1.agents import router as agents_router  # noqa: E402
-app.include_router(agents_router, prefix="/v1")
-
-from app.api.v1.auth import router as auth_router  # noqa: E402
-app.include_router(auth_router, prefix="/v1")
-
-from app.api.v1.saas import router as saas_router  # noqa: E402
-app.include_router(saas_router, prefix="/v1")
-
-from app.api.v1.billing import router as billing_router  # noqa: E402
-app.include_router(billing_router, prefix="/v1")
 
 
 # Prometheus metrics endpoint
