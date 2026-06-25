@@ -55,6 +55,15 @@ from app.api.v1.billing import router as billing_router  # noqa: E402
 app.include_router(auth_router, prefix="/v1")
 app.include_router(billing_router, prefix="/v1")
 
+# SaaS workspace / tenant / entitlement routes
+from app.api.v1.saas import router as saas_router  # noqa: E402
+app.include_router(saas_router, prefix="/v1")
+
+# Assurance Passport routes
+from app.api.v1.assurance import router as assurance_router  # noqa: E402
+app.include_router(assurance_router, prefix="/v1")
+
+
 # WiseConn integration routes
 from app.api.v1.wiseconn import router as wiseconn_router  # noqa: E402
 

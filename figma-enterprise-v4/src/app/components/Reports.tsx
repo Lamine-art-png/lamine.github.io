@@ -9,10 +9,7 @@ type Report = { id?: string; title?: string; name?: string; status?: string; des
 export function Reports() {
   const { currentOrganization, currentWorkspace, entitlements } = useAuth();
   const [exportMessage, setExportMessage] = useState("");
-<<<<<<< ours
-=======
   const [isAiLoading, setIsAiLoading] = useState(false);
->>>>>>> theirs
   const reports = usePortalResource<unknown>(useCallback(() => apiClient.reports.list(), []));
   const rows = arrayFromUnknown<Report>(reports.data, ["reports", "items", "data"]);
   const canExport = canUseEntitlement(entitlements, ["report_exports", "reports", "can_export_reports"]);
@@ -31,8 +28,6 @@ export function Reports() {
     }
   }
 
-<<<<<<< ours
-=======
   async function draftReport(report?: Report) {
     setExportMessage("");
     setIsAiLoading(true);
@@ -49,7 +44,6 @@ export function Reports() {
     }
   }
 
->>>>>>> theirs
   return (
     <div className="min-h-screen" style={{ background: BG }}>
       <header className="h-[72px] px-8 flex items-center justify-between" style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}>
@@ -68,10 +62,7 @@ export function Reports() {
 
         {!canExport ? <InlineState title="Report export requires paid plan." /> : null}
         {reports.isLoading ? <InlineState title="Loading reports" /> : null}
-<<<<<<< ours
-=======
         {isAiLoading ? <InlineState title="Loading AI report draft" /> : null}
->>>>>>> theirs
         {reports.isUnavailable ? <InlineState title="Report generation backend not connected yet." detail="Report cards remain unavailable until a live reports endpoint is available." /> : null}
         {!reports.isUnavailable && reports.error ? <InlineState title={reports.error} /> : null}
         {exportMessage ? <InlineState title={exportMessage} /> : null}
@@ -84,11 +75,6 @@ export function Reports() {
                 <StatusBadge label={report.status || "draft"} />
               </div>
               <p className="text-[13px] leading-relaxed mb-4" style={{ color: MUTED }}>{report.description || "Description not returned by backend."}</p>
-<<<<<<< ours
-              <PortalButton disabled={!canExport || reports.isUnavailable} onClick={() => exportReport(report)}>
-                {canExport ? "Export" : "Report export requires paid plan"}
-              </PortalButton>
-=======
               <div className="flex items-center gap-2">
                 <PortalButton disabled={reports.isUnavailable || isAiLoading} onClick={() => draftReport(report)}>
                   {isAiLoading ? "Drafting" : "AI Draft"}
@@ -97,7 +83,6 @@ export function Reports() {
                   {canExport ? "Export" : "Report export requires paid plan"}
                 </PortalButton>
               </div>
->>>>>>> theirs
             </article>
           )) : (
             <article className="rounded-xl p-6 col-span-2" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>

@@ -42,10 +42,6 @@ class _StatusStubAdapter:
     async def get_runtime_status(self, *, use_cache=True):
         return self._status
 
-<<<<<<< ours
-    async def check_auth(self):
-        return self._status.live
-=======
     async def list_zones(self, farm_id: str):
         self.list_zones_calls += 1
         return [{"id": "S-1", "name": "Pressure", "provider": "talgil", "controller_id": farm_id}]
@@ -61,7 +57,6 @@ class _StubTalgilAdapter:
 
     async def check_auth(self):
         return True
->>>>>>> theirs
 
     async def list_targets(self):
         return [{"id": "6115", "name": "Controller 6115", "provider": "talgil"}]
@@ -78,18 +73,6 @@ class _StubTalgilAdapter:
         self.list_zones_calls += 1
         return [{"id": "S-1", "name": "Pressure", "provider": "talgil", "controller_id": farm_id}]
 
-<<<<<<< ours
-
-class _StubTalgilConfiguredFailureAdapter(_StatusStubAdapter):
-    def __init__(self, error_type, message, status_code=None, preview=None, shape=None, retry_after=None):
-        super().__init__(
-            configured=True,
-            status="configured",
-            live=False,
-            targets=0,
-            diagnostic=_Diag(error_type, message, status_code, preview, shape, retry_after),
-        )
-=======
 class _StubTalgilMissingCredsAdapter:
     api_url = "https://external.talgil.com/v1"
     configured = False
@@ -126,7 +109,6 @@ class _StubTalgilConfiguredFailureAdapter:
     async def list_zones(self, farm_id: str):
         return []
 
->>>>>>> theirs
 
 
 class _StubTalgilSensorsRaisesAdapter(_StatusStubAdapter):
@@ -137,10 +119,6 @@ class _StubTalgilSensorsRaisesAdapter(_StatusStubAdapter):
     async def list_zones(self, farm_id: str):
         raise RuntimeError("boom")
 
-<<<<<<< ours
-
-=======
->>>>>>> theirs
 def test_talgil_runtime_routes(monkeypatch):
     adapter = _StatusStubAdapter(configured=True, status="live", live=True, targets=1)
     monkeypatch.setattr(AdapterRegistry, "get_talgil", lambda: adapter)
@@ -156,15 +134,9 @@ def test_talgil_runtime_routes(monkeypatch):
     payload = status_resp.json()
     assert payload["status"] == "live"
     assert payload["targets"] == 1
-<<<<<<< ours
-    assert payload["sensors"] == 0
-    assert payload["auth_header_used"] == "TLG-API-Key"
-    assert payload["auth_check_path"] == "/mytargets"
-=======
     assert status_resp.json()["sensors"] == 1
     assert status_resp.json()["auth_header_used"] == "TLG-API-Key"
     assert status_resp.json()["auth_check_path"] == "/mytargets"
->>>>>>> theirs
 
     sensors_resp = client.get("/v1/talgil/sensors")
     assert sensors_resp.status_code == 200
@@ -195,10 +167,6 @@ def test_talgil_status_missing_credentials(monkeypatch):
     assert payload["configured"] is False
     assert payload["live"] is False
 
-<<<<<<< ours
-
-=======
->>>>>>> theirs
 def test_talgil_status_diagnostics_429_retry_after(monkeypatch):
     adapter = _StatusStubAdapter(
         configured=True,
@@ -279,23 +247,14 @@ def test_talgil_status_diagnostics_empty_body(monkeypatch):
 
 def test_talgil_sensors_failure_returns_json_not_500(monkeypatch):
     monkeypatch.setattr(AdapterRegistry, "get_talgil", lambda: _StubTalgilSensorsRaisesAdapter())
-<<<<<<< ours
-    payload = TestClient(app).get("/v1/talgil/sensors").json()
-=======
     client = TestClient(app)
     response = client.get("/v1/talgil/sensors")
     assert response.status_code == 200
     payload = response.json()
->>>>>>> theirs
     assert payload["ok"] is False
     assert payload["status"] == "configured"
     assert payload["live"] is False
     assert payload["sensors"] == []
-<<<<<<< ours
-    assert payload["error_type"] == "TalgilAuthError"
-    assert payload["upstream_status_code"] == 401
-=======
->>>>>>> theirs
 
 
 def test_talgil_status_does_not_call_sensors(monkeypatch):
