@@ -1,8 +1,11 @@
 import { Outlet, NavLink } from "react-router";
+import { LogOut } from "lucide-react";
+import { useAuth } from "../auth/AuthProvider";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import logoImg from "../../imports/agro-ai-logo-1.png";
 
 export function MainLayout() {
+  const { currentOrganization, currentWorkspace, logout } = useAuth();
   const navItems = [
     { name: "Overview", path: "/" },
     { name: "WaterOps", path: "/operations" },
@@ -125,14 +128,45 @@ export function MainLayout() {
               className="text-[10px] font-semibold uppercase tracking-widest mb-1"
               style={{ color: "rgba(255,255,255,0.28)" }}
             >
-              Evaluation workspace
+              {currentOrganization?.name || "Organization"}
             </div>
-            <div
-              className="text-[11px] leading-relaxed"
-              style={{ color: "rgba(255,255,255,0.42)" }}
+            <div className="space-y-1 text-[11px] leading-relaxed" style={{ color: "rgba(255,255,255,0.42)" }}>
+              <div>
+                Plan: <span style={{ color: "rgba(255,255,255,0.62)" }}>{currentOrganization?.plan || "free"}</span>
+              </div>
+              <div>
+                Status:{" "}
+                <span style={{ color: "rgba(255,255,255,0.62)" }}>
+                  {currentOrganization?.subscription_status || "inactive"}
+                </span>
+              </div>
+              <div>
+                Role: <span style={{ color: "rgba(255,255,255,0.62)" }}>{currentOrganization?.role || "member"}</span>
+              </div>
+              <div>
+                Workspace:{" "}
+                <span style={{ color: "rgba(255,255,255,0.62)" }}>
+                  {currentWorkspace?.name || "Evaluation workspace"}
+                </span>
+              </div>
+              {currentWorkspace?.evaluation_status || currentWorkspace?.status ? (
+                <div>
+                  Evaluation:{" "}
+                  <span style={{ color: "rgba(255,255,255,0.62)" }}>
+                    {currentWorkspace.evaluation_status || currentWorkspace.status}
+                  </span>
+                </div>
+              ) : null}
+            </div>
+            <button
+              type="button"
+              onClick={logout}
+              className="mt-3 flex h-8 w-full items-center justify-center gap-2 rounded-md text-[12px] font-medium transition-colors hover:bg-white/10"
+              style={{ color: "rgba(255,255,255,0.72)" }}
             >
-              Reviewer evaluation required before external use.
-            </div>
+              <LogOut className="w-3.5 h-3.5" />
+              Logout
+            </button>
           </div>
         </div>
       </aside>

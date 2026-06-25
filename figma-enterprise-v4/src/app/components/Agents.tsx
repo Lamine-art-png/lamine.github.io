@@ -1,239 +1,99 @@
-const BG = "#F6F4EE";
-const SURFACE = "#FFFEFA";
-const BORDER = "rgba(16,35,27,0.12)";
-const TEXT = "#10231B";
-const MUTED = "#68776F";
-const GREEN = "#16533C";
-const GREEN_HOVER = "#1F7350";
+import { useCallback, useState } from "react";
+import { apiClient } from "../api/client";
+import { useAuth } from "../auth/AuthProvider";
+import { arrayFromUnknown, canUseEntitlement, usePortalResource } from "../hooks/usePortalResource";
+import { BG, BORDER, InlineState, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
 
-type StepStatus = "complete" | "active" | "waiting";
-
-interface WorkflowStep {
-  label: string;
-  status: StepStatus;
-  detail: string;
-}
-
-const workflowSteps: WorkflowStep[] = [
-  { label: "Ingest sources", status: "complete", detail: "5 sources ingested" },
-  { label: "Normalize records", status: "complete", detail: "Records standardized" },
-  { label: "Classify evidence", status: "complete", detail: "3 items mapped to domains" },
-  { label: "Detect missing proof", status: "complete", detail: "4 gaps identified" },
-  { label: "Generate recommendations", status: "active", detail: "In progress" },
-  { label: "Wait for human approval", status: "waiting", detail: "Pending review" },
-];
-
-const findings = [
-  "Readiness remains incomplete until water measurement proof is attached.",
-  "Input application records are missing.",
-  "Traceability mapping needs reviewer check.",
-  "WaterOps evidence can be prepared as a draft.",
-];
-
-const agentActions = [
-  { label: "Run gap analysis", description: "Detect missing proof across all domains" },
-  { label: "Prepare proof draft", description: "Compile available evidence into a draft package" },
-  { label: "Create follow-up tasks", description: "Generate action items from current findings" },
-  { label: "Refresh readiness", description: "Re-evaluate assurance readiness score" },
-];
-
-function StepIcon({ status }: { status: StepStatus }) {
-  if (status === "complete") {
-    return (
-      <div
-        className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
-        style={{ background: GREEN }}
-      >
-        <svg width="11" height="11" viewBox="0 0 11 11" fill="none">
-          <path d="M2 5.5l2.5 2.5 4.5-4.5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
-      </div>
-    );
-  }
-  if (status === "active") {
-    return (
-      <div
-        className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
-        style={{ background: BG, border: `2px solid ${GREEN}` }}
-      >
-        <div className="w-2 h-2 rounded-full" style={{ background: GREEN }} />
-      </div>
-    );
-  }
-  return (
-    <div
-      className="w-6 h-6 rounded-full flex-shrink-0"
-      style={{ background: BG, border: `1px solid ${BORDER}` }}
-    />
-  );
-}
+type AgentRun = { id?: string; task?: string; status?: string; created_at?: string; summary?: string };
 
 export function Agents() {
+  const { currentOrganization, currentWorkspace, entitlements } = useAuth();
+  const [runMessage, setRunMessage] = useState("");
+  const runs = usePortalResource<unknown>(useCallback(() => apiClient.agents.list(), []));
+  const rows = arrayFromUnknown<AgentRun>(runs.data, ["runs", "items", "data"]);
+  const canRunAgent = canUseEntitlement(entitlements, ["agent_runs", "agents", "can_run_agents"]);
+
+  async function runAgent(task: string) {
+    setRunMessage("");
+    if (!canRunAgent) {
+      setRunMessage("Agent runs require paid plan.");
+      return;
+    }
+    try {
+      await apiClient.agents.run({ task, workspace_id: currentWorkspace?.id });
+      setRunMessage("Agent run requested.");
+      await runs.refresh();
+    } catch (error) {
+      setRunMessage(error instanceof Error ? error.message : "Agent orchestration endpoint not connected yet.");
+    }
+  }
+
   return (
     <div className="min-h-screen" style={{ background: BG }}>
-      {/* Top Bar */}
-      <header
-        className="h-[72px] px-8 flex items-center justify-between"
-        style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}
-      >
+      <header className="h-[72px] px-8 flex items-center justify-between" style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}>
         <div>
-          <div className="text-[13px] font-semibold" style={{ color: TEXT }}>
-            North Coast Vineyard
-          </div>
-          <div className="text-[11px]" style={{ color: MUTED }}>
-            Wine grapes · Coastal production block
-          </div>
+          <div className="text-[13px] font-semibold" style={{ color: TEXT }}>{currentWorkspace?.name || "Agent workspace"}</div>
+          <div className="text-[11px]" style={{ color: MUTED }}>{currentOrganization?.name || "Organization"}</div>
         </div>
-        <div className="flex items-center gap-3">
-          <span
-            className="text-[11px] font-medium px-2.5 py-1 rounded"
-            style={{ background: BG, border: `1px solid ${BORDER}`, color: MUTED }}
-          >
-            Evaluation workspace
-          </span>
-          <span
-            className="text-[11px] font-medium px-2.5 py-1 rounded"
-            style={{ background: BG, border: `1px solid ${BORDER}`, color: MUTED }}
-          >
-            Not live
-          </span>
-          <button
-            className="px-4 py-2 text-[13px] font-medium text-white rounded-lg transition-colors"
-            style={{ background: GREEN }}
-            onMouseEnter={(e) => (e.currentTarget.style.background = GREEN_HOVER)}
-            onMouseLeave={(e) => (e.currentTarget.style.background = GREEN)}
-          >
-            Run Agent
-          </button>
-        </div>
+        <PortalButton disabled={!canRunAgent || runs.isUnavailable} onClick={() => runAgent("gap_analysis")}>
+          {!canRunAgent ? "Agent runs require paid plan" : runs.isUnavailable ? "Agent orchestration endpoint not connected yet" : "Run Agent"}
+        </PortalButton>
       </header>
 
       <div className="px-8 py-6 space-y-5" style={{ maxWidth: 1220 }}>
-        {/* Page header */}
         <div>
           <h1 className="text-[28px] font-semibold mb-1" style={{ color: TEXT }}>Agents</h1>
-          <p className="text-[13px]" style={{ color: MUTED }}>
-            Analyze evidence, detect gaps, propose actions, and prepare review-ready work packages.
-          </p>
+          <p className="text-[13px]" style={{ color: MUTED }}>Live agent runs for the active workspace.</p>
         </div>
 
-        {/* Main grid — workflow + findings */}
+        {!canRunAgent ? <InlineState title="Agent runs require paid plan." /> : null}
+        {runs.isLoading ? <InlineState title="Loading agent runs" /> : null}
+        {runs.isUnavailable ? <InlineState title="Agent orchestration endpoint not connected yet." /> : null}
+        {!runs.isUnavailable && runs.error ? <InlineState title={runs.error} /> : null}
+        {runMessage ? <InlineState title={runMessage} /> : null}
+
         <div className="grid gap-5" style={{ gridTemplateColumns: "3fr 2fr" }}>
-          {/* Current run state */}
-          <div
-            className="rounded-xl overflow-hidden"
-            style={{ background: SURFACE, border: `1px solid ${BORDER}` }}
-          >
+          <section className="rounded-xl overflow-hidden" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
             <div className="px-6 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
-              <div className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: MUTED }}>
-                AGRO-AI Agent
-              </div>
-              <h3 className="text-[15px] font-semibold" style={{ color: TEXT }}>Current run state</h3>
+              <div className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: MUTED }}>Recent runs</div>
+              <h3 className="text-[15px] font-semibold" style={{ color: TEXT }}>Agent run history</h3>
             </div>
-            <div className="px-6 py-5 space-y-1">
-              {workflowSteps.map((step, i) => (
-                <div key={i}>
-                  <div className="flex items-center gap-4 py-2">
-                    <StepIcon status={step.status} />
-                    <div className="flex-1 flex items-center justify-between gap-4">
-                      <span
-                        className="text-[13px]"
-                        style={{
-                          color: step.status === "waiting" ? MUTED : TEXT,
-                          fontWeight: step.status === "complete" || step.status === "active" ? 500 : 400,
-                        }}
-                      >
-                        {step.label}
-                      </span>
-                      <span
-                        className="text-[11px] flex-shrink-0"
-                        style={{
-                          color:
-                            step.status === "complete"
-                              ? GREEN
-                              : step.status === "active"
-                              ? "#1D4ED8"
-                              : MUTED,
-                        }}
-                      >
-                        {step.detail}
-                      </span>
-                    </div>
+            <div className="p-6 space-y-3">
+              {rows.length ? rows.map((run, index) => (
+                <div key={run.id || index} className="flex items-center justify-between rounded-lg px-4 py-3" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+                  <div>
+                    <div className="text-[13px] font-medium" style={{ color: TEXT }}>{run.task || "Agent run"}</div>
+                    <div className="text-[11px]" style={{ color: MUTED }}>{run.summary || run.created_at || "No summary returned"}</div>
                   </div>
-                  {i < workflowSteps.length - 1 && (
-                    <div
-                      className="ml-3 w-px"
-                      style={{
-                        height: 8,
-                        background: step.status === "complete" ? `${GREEN}50` : BORDER,
-                      }}
-                    />
-                  )}
+                  <StatusBadge label={run.status || "queued"} />
                 </div>
-              ))}
+              )) : (
+                <InlineState title="No recent agent runs returned." detail={runs.isUnavailable ? "Agent orchestration endpoint not connected yet." : "Runs will appear after the backend returns run records."} />
+              )}
             </div>
-          </div>
+          </section>
 
-          {/* Latest findings */}
-          <div
-            className="rounded-xl overflow-hidden"
-            style={{ background: SURFACE, border: `1px solid ${BORDER}` }}
-          >
+          <section className="rounded-xl overflow-hidden" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
             <div className="px-6 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
-              <div className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: MUTED }}>
-                AI Analysis
-              </div>
-              <h3 className="text-[15px] font-semibold" style={{ color: TEXT }}>Latest findings</h3>
+              <div className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: MUTED }}>Actions</div>
+              <h3 className="text-[15px] font-semibold" style={{ color: TEXT }}>Agent actions</h3>
             </div>
-            <div className="px-6 py-5 space-y-4">
-              {findings.map((finding, i) => (
-                <div
-                  key={i}
-                  className="flex gap-3 items-start pb-4"
-                  style={i < findings.length - 1 ? { borderBottom: `1px solid ${BORDER}` } : {}}
+            <div className="grid gap-3 p-5">
+              {["gap_analysis", "proof_draft", "follow_up_tasks", "readiness_refresh"].map((task) => (
+                <button
+                  key={task}
+                  type="button"
+                  disabled={!canRunAgent || runs.isUnavailable}
+                  onClick={() => runAgent(task)}
+                  className="text-left rounded-xl p-4 transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+                  style={{ background: BG, border: `1px solid ${BORDER}` }}
                 >
-                  <div
-                    className="w-1.5 h-1.5 rounded-full flex-shrink-0 mt-2"
-                    style={{ background: MUTED }}
-                  />
-                  <p className="text-[13px] leading-relaxed" style={{ color: TEXT }}>
-                    {finding}
-                  </p>
-                </div>
+                  <div className="text-[13px] font-semibold mb-1" style={{ color: TEXT }}>{task.replaceAll("_", " ")}</div>
+                  <div className="text-[11px] leading-relaxed" style={{ color: MUTED }}>{!canRunAgent ? "Agent runs require paid plan." : runs.isUnavailable ? "Agent orchestration endpoint not connected yet." : "Send this action to the live agent endpoint."}</div>
+                </button>
               ))}
             </div>
-          </div>
-        </div>
-
-        {/* Agent actions */}
-        <div
-          className="rounded-xl overflow-hidden"
-          style={{ background: SURFACE, border: `1px solid ${BORDER}` }}
-        >
-          <div className="px-6 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
-            <div className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: MUTED }}>
-              Actions
-            </div>
-            <h3 className="text-[15px] font-semibold" style={{ color: TEXT }}>Agent actions</h3>
-          </div>
-          <div className="grid grid-cols-4 gap-4 p-5">
-            {agentActions.map((action, i) => (
-              <button
-                key={i}
-                className="text-left rounded-xl p-4 transition-colors"
-                style={{ background: BG, border: `1px solid ${BORDER}` }}
-                onMouseEnter={(e) => (e.currentTarget.style.borderColor = "rgba(16,35,27,0.25)")}
-                onMouseLeave={(e) => (e.currentTarget.style.borderColor = BORDER)}
-              >
-                <div className="text-[13px] font-semibold mb-1" style={{ color: TEXT }}>
-                  {action.label}
-                </div>
-                <div className="text-[11px] leading-relaxed" style={{ color: MUTED }}>
-                  {action.description}
-                </div>
-              </button>
-            ))}
-          </div>
+          </section>
         </div>
       </div>
     </div>
