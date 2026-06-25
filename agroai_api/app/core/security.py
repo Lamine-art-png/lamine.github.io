@@ -61,6 +61,19 @@ def get_current_tenant_id(
     return tenant_id
 
 
+def require_current_tenant_id(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(http_bearer)
+) -> str:
+    """Require a bearer token and extract its tenant ID."""
+    if not credentials:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return get_current_tenant_id(credentials)
+
+
 def generate_webhook_signature(payload: str) -> str:
     """Generate HMAC SHA-256 signature for webhook payload."""
     signature = hmac.new(

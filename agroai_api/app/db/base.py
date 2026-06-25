@@ -35,3 +35,15 @@ def get_db():
         yield db
     finally:
         db.close()
+
+
+def init_db() -> None:
+    """Initialize only legacy/core base tables.
+
+    Compliance, assurance, SaaS, billing, and agent tables are created by Alembic,
+    not by startup metadata creation.
+    """
+    from app.models.tenant import Tenant
+    from app.models.block import Block
+
+    Base.metadata.create_all(bind=engine, tables=[Tenant.__table__, Block.__table__])

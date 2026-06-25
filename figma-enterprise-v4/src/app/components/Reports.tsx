@@ -9,6 +9,7 @@ type Report = { id?: string; title?: string; name?: string; status?: string; des
 export function Reports() {
   const { currentOrganization, currentWorkspace, entitlements } = useAuth();
   const [exportMessage, setExportMessage] = useState("");
+  const [isAiLoading, setIsAiLoading] = useState(false);
   const reports = usePortalResource<unknown>(useCallback(() => apiClient.reports.list(), []));
   const rows = arrayFromUnknown<Report>(reports.data, ["reports", "items", "data"]);
   const canExport = canUseEntitlement(entitlements, ["report_exports", "reports", "can_export_reports"]);
@@ -24,6 +25,22 @@ export function Reports() {
       setExportMessage("Report export requested.");
     } catch (error) {
       setExportMessage(error instanceof Error ? error.message : "Report generation backend not connected yet.");
+    }
+  }
+
+  async function draftReport(report?: Report) {
+    setExportMessage("");
+    setIsAiLoading(true);
+    try {
+      const result = await apiClient.ai.reportDraft({
+        workspace_id: currentWorkspace?.id,
+        inputs: { report_id: report?.id },
+      }) as { status?: string; demo_fallback?: boolean };
+      setExportMessage(result.status === "unavailable" || result.demo_fallback ? "AI provider unavailable." : "Report draft returned.");
+    } catch (error) {
+      setExportMessage(error instanceof Error ? error.message : "AI report endpoint unavailable.");
+    } finally {
+      setIsAiLoading(false);
     }
   }
 
@@ -45,6 +62,7 @@ export function Reports() {
 
         {!canExport ? <InlineState title="Report export requires paid plan." /> : null}
         {reports.isLoading ? <InlineState title="Loading reports" /> : null}
+        {isAiLoading ? <InlineState title="Loading AI report draft" /> : null}
         {reports.isUnavailable ? <InlineState title="Report generation backend not connected yet." detail="Report cards remain unavailable until a live reports endpoint is available." /> : null}
         {!reports.isUnavailable && reports.error ? <InlineState title={reports.error} /> : null}
         {exportMessage ? <InlineState title={exportMessage} /> : null}
@@ -57,9 +75,14 @@ export function Reports() {
                 <StatusBadge label={report.status || "draft"} />
               </div>
               <p className="text-[13px] leading-relaxed mb-4" style={{ color: MUTED }}>{report.description || "Description not returned by backend."}</p>
-              <PortalButton disabled={!canExport || reports.isUnavailable} onClick={() => exportReport(report)}>
-                {canExport ? "Export" : "Report export requires paid plan"}
-              </PortalButton>
+              <div className="flex items-center gap-2">
+                <PortalButton disabled={reports.isUnavailable || isAiLoading} onClick={() => draftReport(report)}>
+                  {isAiLoading ? "Drafting" : "AI Draft"}
+                </PortalButton>
+                <PortalButton disabled={!canExport || reports.isUnavailable} onClick={() => exportReport(report)}>
+                  {canExport ? "Export" : "Report export requires paid plan"}
+                </PortalButton>
+              </div>
             </article>
           )) : (
             <article className="rounded-xl p-6 col-span-2" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>

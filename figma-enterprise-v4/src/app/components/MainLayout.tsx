@@ -13,6 +13,7 @@ export function MainLayout() {
     { name: "Evidence", path: "/evidence" },
     { name: "Reports", path: "/reports" },
     { name: "Agents", path: "/agents" },
+    { name: "Intelligence", path: "/intelligence" },
   ];
 
   const adminItems = [

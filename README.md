@@ -31,6 +31,36 @@ make tfapply
 - `ops/runbooks/*.md` (export PDF)
 <!-- trigger deploy -->
 
+## AGRO-AI Intelligence Engine
+
+The FastAPI backend includes a provider-agnostic AI gateway for AGRO-AI
+Intelligence routes. It does not hardcode paid model providers. Configure any
+OpenAI-compatible chat-completions endpoint or a local Ollama runtime.
+
+Recommended free/local development:
+
+```bash
+AI_PROVIDER=ollama
+AI_BASE_URL=http://localhost:11434
+AI_MODEL=qwen3:8b
+# or AI_MODEL=deepseek-r1:8b
+```
+
+Recommended serious hosted inference:
+
+```bash
+AI_PROVIDER=openai_compatible
+AI_BASE_URL=<provider base URL>
+AI_API_KEY=<key>
+AI_MODEL=<model name>
+AI_TIMEOUT_SECONDS=30
+```
+
+If AI variables are unset, the API still starts and returns a clearly marked
+`unavailable`/demo fallback response. Production AI requires either hosted
+inference or GPU-backed self-hosting. Do not place model API keys in frontend
+code.
+
 
 ## Velia AI backend + mobile wiring
 

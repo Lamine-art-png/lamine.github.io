@@ -85,6 +85,13 @@ class Settings(BaseSettings):
     STRIPE_PRICE_PILOT: str = ""
     STRIPE_PRICE_PRO: str = ""
     STRIPE_PRICE_ENTERPRISE: str = ""
+    # AI gateway. Leave unset to keep startup safe and return deterministic
+    # unavailable responses instead of fabricated model output.
+    AI_PROVIDER: str = ""
+    AI_BASE_URL: str = ""
+    AI_API_KEY: str = ""
+    AI_MODEL: str = ""
+    AI_TIMEOUT_SECONDS: int = 30
 
     # Strip whitespace/tabs from env vars that may be copy-pasted with junk
     @field_validator("*", mode="before")

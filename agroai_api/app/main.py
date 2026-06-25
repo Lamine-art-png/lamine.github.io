@@ -55,6 +55,15 @@ from app.api.v1.billing import router as billing_router  # noqa: E402
 app.include_router(auth_router, prefix="/v1")
 app.include_router(billing_router, prefix="/v1")
 
+# SaaS workspace / tenant / entitlement routes
+from app.api.v1.saas import router as saas_router  # noqa: E402
+app.include_router(saas_router, prefix="/v1")
+
+# Assurance Passport routes
+from app.api.v1.assurance import router as assurance_router  # noqa: E402
+app.include_router(assurance_router, prefix="/v1")
+
+
 # WiseConn integration routes
 from app.api.v1.wiseconn import router as wiseconn_router  # noqa: E402
 
@@ -83,6 +92,18 @@ app.include_router(workbench_router, prefix="/v1")
 
 from app.api.v1.compliance import router as compliance_router  # noqa: E402
 app.include_router(compliance_router, prefix="/v1")
+
+from app.api.v1.controllers import router as controllers_router  # noqa: E402
+app.include_router(controllers_router, prefix="/v1")
+
+from app.api.v1.talgil import router as talgil_router  # noqa: E402
+app.include_router(talgil_router, prefix="/v1")
+
+from app.api.v1.ai import router as ai_router  # noqa: E402
+app.include_router(ai_router, prefix="/v1")
+
+from app.api.v1.agents import router as agents_router  # noqa: E402
+app.include_router(agents_router, prefix="/v1")
 
 
 # Prometheus metrics endpoint

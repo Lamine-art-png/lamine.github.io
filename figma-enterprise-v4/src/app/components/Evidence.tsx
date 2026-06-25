@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { apiClient } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { arrayFromUnknown, usePortalResource } from "../hooks/usePortalResource";
@@ -16,8 +16,26 @@ type EvidenceItem = {
 
 export function Evidence() {
   const { currentOrganization, currentWorkspace } = useAuth();
+  const [aiMessage, setAiMessage] = useState("");
+  const [isAiLoading, setIsAiLoading] = useState(false);
   const evidence = usePortalResource<unknown>(useCallback(() => apiClient.evidence.list(), []));
   const rows = arrayFromUnknown<EvidenceItem>(evidence.data, ["evidence", "items", "data", "records"]);
+
+  async function reviewEvidence() {
+    setAiMessage("");
+    setIsAiLoading(true);
+    try {
+      const result = await apiClient.ai.assuranceReview({
+        workspace_id: currentWorkspace?.id,
+        inputs: { source: "evidence" },
+      }) as { status?: string; demo_fallback?: boolean };
+      setAiMessage(result.status === "unavailable" || result.demo_fallback ? "AI provider unavailable." : "Evidence review returned.");
+    } catch (error) {
+      setAiMessage(error instanceof Error ? error.message : "AI evidence review endpoint unavailable.");
+    } finally {
+      setIsAiLoading(false);
+    }
+  }
 
   return (
     <div className="min-h-screen" style={{ background: BG }}>
@@ -28,6 +46,7 @@ export function Evidence() {
         </div>
         <div className="flex items-center gap-2">
           <StatusBadge label={evidence.isUnavailable ? "Backend route unavailable" : "Live evidence"} tone={evidence.isUnavailable ? "warn" : "good"} />
+          <PortalButton disabled={isAiLoading || evidence.isUnavailable} onClick={reviewEvidence}>{isAiLoading ? "Reviewing" : "AI Review"}</PortalButton>
           <PortalButton disabled>Upload route not connected yet</PortalButton>
         </div>
       </header>
@@ -39,6 +58,8 @@ export function Evidence() {
         </div>
 
         {evidence.isLoading ? <InlineState title="Loading evidence" /> : null}
+        {isAiLoading ? <InlineState title="Loading AI evidence review" /> : null}
+        {aiMessage ? <InlineState title={aiMessage} /> : null}
         {evidence.isUnavailable ? <InlineState title="Evidence backend route not connected yet." detail="Evidence rows will appear after a live evidence list endpoint is available." /> : null}
         {!evidence.isUnavailable && evidence.error ? <InlineState title={evidence.error} /> : null}
 

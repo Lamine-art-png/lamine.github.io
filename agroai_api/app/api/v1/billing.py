@@ -105,10 +105,11 @@ def _create_customer(org: Organization) -> str:
 @router.post("/create-checkout-session")
 def create_checkout_session(payload: CheckoutRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
     offer = _normalize_offer(payload)
-    offer_config = _offer_config(offer)
 
     org, membership = require_org_membership(payload.organization_id, user, db)
     require_owner_or_admin(membership.role)
+
+    offer_config = _offer_config(offer)
 
     customer_id = org.stripe_customer_id or _create_customer(org)
     if not org.stripe_customer_id:
@@ -199,6 +200,18 @@ def _verify_stripe_signature(raw_body: bytes, signature: str | None) -> None:
 
 
 def _plan_from_price(price_id: str | None) -> str | None:
+    if not price_id:
+        return None
+
+    # Legacy Stripe price names kept for older tests/frontends.
+    if price_id == getattr(settings, "STRIPE_PRICE_PRO", ""):
+        return "pro"
+    if price_id == getattr(settings, "STRIPE_PRICE_PILOT", ""):
+        return "pilot"
+    if price_id == getattr(settings, "STRIPE_PRICE_ENTERPRISE", ""):
+        return "enterprise"
+
+    # Current AGRO-AI commercial offers.
     if price_id == settings.STRIPE_PRICE_WATEROPS_MONTHLY:
         return "waterops"
     if price_id == settings.STRIPE_PRICE_ASSURANCE_MONTHLY:
@@ -206,7 +219,6 @@ def _plan_from_price(price_id: str | None) -> str | None:
     if price_id in {settings.STRIPE_PRICE_ASSURANCE_AUDIT_FARM, settings.STRIPE_PRICE_ASSURANCE_AUDIT_NETWORK}:
         return "assurance_audit"
     return None
-
 
 def _org_for_event(db: Session, obj: dict) -> Organization | None:
     org_id = (obj.get("metadata") or {}).get("organization_id")

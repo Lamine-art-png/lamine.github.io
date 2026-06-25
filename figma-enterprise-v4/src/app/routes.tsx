@@ -6,6 +6,7 @@ import { Assurance } from "./components/Assurance";
 import { Evidence } from "./components/Evidence";
 import { Reports } from "./components/Reports";
 import { Agents } from "./components/Agents";
+import { Intelligence } from "./components/Intelligence";
 import { Integrations } from "./components/Integrations";
 import { Sources } from "./components/Sources";
 import { Audit } from "./components/Audit";
@@ -22,6 +23,7 @@ export const router = createBrowserRouter([
       { path: "evidence", Component: Evidence },
       { path: "reports", Component: Reports },
       { path: "agents", Component: Agents },
+      { path: "intelligence", Component: Intelligence },
       { path: "integrations", Component: Integrations },
       { path: "sources", Component: Sources },
       { path: "audit", Component: Audit },
