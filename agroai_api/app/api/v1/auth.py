@@ -66,7 +66,7 @@ def _unique_slug(db: Session, name: str) -> str:
 
 
 def _session_response(user: User, org: Organization, membership: OrganizationMembership) -> dict:
-    token = create_access_token({"sub": user.id, "org_id": org.id, "role": membership.role})
+    token = create_access_token({"sub": user.id, "tenant_id": org.id, "org_id": org.id, "role": membership.role})
     return {
         "access_token": token,
         "token_type": "bearer",

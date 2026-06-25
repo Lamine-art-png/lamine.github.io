@@ -50,7 +50,7 @@ def get_current_tenant_id(
 
     token = credentials.credentials
     payload = verify_token(token)
-    tenant_id = payload.get("tenant_id")
+    tenant_id = payload.get("tenant_id") or payload.get("org_id")
 
     if not tenant_id:
         raise HTTPException(
