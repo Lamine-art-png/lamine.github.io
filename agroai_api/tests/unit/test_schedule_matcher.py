@@ -54,9 +54,9 @@ def _candidate(
     )
 
 
-# ==================================================================
+# ------------------------------------------------------------------
 # Basic matching
-# ==================================================================
+# ------------------------------------------------------------------
 
 class TestBasicMatching:
     def test_no_candidates_returns_not_matched(self, matcher):
@@ -98,9 +98,9 @@ class TestBasicMatching:
         assert not result.matched
 
 
-# ==================================================================
+# ------------------------------------------------------------------
 # Provider ID matching
-# ==================================================================
+# ------------------------------------------------------------------
 
 class TestProviderIdMatching:
     def test_exact_provider_id_match(self, matcher):
@@ -132,9 +132,9 @@ class TestProviderIdMatching:
         assert result.method == "provider_id"
 
 
-# ==================================================================
+# ------------------------------------------------------------------
 # Time + duration matching
-# ==================================================================
+# ------------------------------------------------------------------
 
 class TestTimeDurationMatching:
     def test_close_time_and_duration_scores_higher(self, matcher):
@@ -172,9 +172,9 @@ class TestTimeDurationMatching:
         assert r_with_vol.confidence > r_no_vol.confidence
 
 
-# ==================================================================
+# ------------------------------------------------------------------
 # Ambiguity detection
-# ==================================================================
+# ------------------------------------------------------------------
 
 class TestAmbiguity:
     def test_two_close_candidates_flagged_ambiguous(self, matcher):
@@ -203,9 +203,9 @@ class TestAmbiguity:
         assert result.schedule_id == "s1"
 
 
-# ==================================================================
+# ------------------------------------------------------------------
 # Best candidate selection
-# ==================================================================
+# ------------------------------------------------------------------
 
 class TestBestSelection:
     def test_picks_highest_confidence(self, matcher):
