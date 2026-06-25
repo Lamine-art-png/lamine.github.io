@@ -91,6 +91,9 @@ def _adopt_dirty_render_schema(connection) -> None:
     already contain portal/assurance tables are adopted to Alembic head so
     deploys stop failing on DuplicateTable/DuplicateObject while preserving data.
     """
+
+    if connection.dialect.name == "sqlite":
+        return
     heads = set(_alembic_heads())
     if not heads:
         return
