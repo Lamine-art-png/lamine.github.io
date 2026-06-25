@@ -74,6 +74,14 @@ class Settings(BaseSettings):
     API_URL: str = "https://api.agroai-pilot.com"
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
+
+    # Current AGRO-AI commercial offers
+    STRIPE_PRICE_ASSURANCE_AUDIT_FARM: str = ""
+    STRIPE_PRICE_ASSURANCE_AUDIT_NETWORK: str = ""
+    STRIPE_PRICE_WATEROPS_MONTHLY: str = ""
+    STRIPE_PRICE_ASSURANCE_MONTHLY: str = ""
+
+    # Legacy names kept for backwards compatibility with older frontends/tests.
     STRIPE_PRICE_PILOT: str = ""
     STRIPE_PRICE_PRO: str = ""
     STRIPE_PRICE_ENTERPRISE: str = ""
