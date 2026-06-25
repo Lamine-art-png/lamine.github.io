@@ -26,9 +26,13 @@ class PlanLimits:
 
 PLAN_LIMITS: dict[str, PlanLimits] = {
     "free": PlanLimits(1, 1, 0, 0, False, False, False, False, True),
-    "pilot": PlanLimits(3, 3, 50, 100, True, False, True, False, True),
-    "pro": PlanLimits(25, 15, 500, 1000, True, True, True, True, True),
+    "assurance_audit": PlanLimits(1, 3, 25, 100, True, False, True, True, True),
+    "waterops": PlanLimits(10, 10, 250, 500, True, True, True, True, True),
+    "assurance": PlanLimits(50, 25, 1000, 2500, True, True, True, True, True),
     "enterprise": PlanLimits(10_000, 10_000, 100_000, 100_000, True, True, True, True, True),
+    # Legacy aliases. These are not customer-facing and can be removed after the frontend is migrated.
+    "pilot": PlanLimits(10, 10, 250, 500, True, True, True, True, True),
+    "pro": PlanLimits(50, 25, 1000, 2500, True, True, True, True, True),
 }
 
 
@@ -52,10 +56,16 @@ def require_owner_or_admin(role: str) -> None:
 
 
 def require_subscription_active(org: Organization) -> None:
-    if org.plan in {"pilot", "pro", "enterprise"} and org.subscription_status not in {"active", "trialing"}:
+    recurring_plans = {"waterops", "assurance", "enterprise", "pilot", "pro"}
+    if org.plan in recurring_plans and org.subscription_status not in {"active", "trialing"}:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail={"code": "subscription_inactive", "message": "An active subscription is required."},
+        )
+    if org.plan == "assurance_audit" and org.subscription_status not in {"paid", "active"}:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={"code": "payment_required", "message": "A paid Assurance Audit is required."},
         )
 
 
