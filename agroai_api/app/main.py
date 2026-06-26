@@ -108,6 +108,9 @@ app.include_router(agents_router, prefix="/v1")
 from app.api.v1.platform_intelligence import router as platform_intelligence_router  # noqa: E402
 app.include_router(platform_intelligence_router, prefix="/v1")
 
+from app.api.v1.connector_hub import router as connector_hub_router  # noqa: E402
+app.include_router(connector_hub_router, prefix="/v1")
+
 from app.api.v1.connectors import router as connectors_router  # noqa: E402
 app.include_router(connectors_router, prefix="/v1")
 
