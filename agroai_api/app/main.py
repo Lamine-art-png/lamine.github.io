@@ -105,6 +105,9 @@ app.include_router(ai_router, prefix="/v1")
 from app.api.v1.agents import router as agents_router  # noqa: E402
 app.include_router(agents_router, prefix="/v1")
 
+from app.api.v1.platform_intelligence import router as platform_intelligence_router  # noqa: E402
+app.include_router(platform_intelligence_router, prefix="/v1")
+
 
 # Prometheus metrics endpoint
 from app.core.metrics import metrics_endpoint  # noqa: E402

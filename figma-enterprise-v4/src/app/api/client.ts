@@ -122,6 +122,17 @@ export type AiRequestPayload = {
   inputs?: Record<string, unknown>;
 };
 
+export type IntelligenceActionPayload = {
+  action:
+    | "field_diagnosis"
+    | "irrigation_plan"
+    | "assurance_packet"
+    | "evidence_gap_analysis"
+    | "integration_diagnosis"
+    | "report_draft";
+  payload?: Record<string, unknown>;
+};
+
 export const apiClient = {
   get,
   post,
@@ -168,6 +179,10 @@ export const apiClient = {
     assuranceReview: (payload: AiRequestPayload) => post("/v1/ai/assurance-review", payload),
     reportDraft: (payload: AiRequestPayload) => post("/v1/ai/report-draft", payload),
     integrationDiagnosis: (payload: AiRequestPayload) => post("/v1/ai/integration-diagnosis", payload),
+  },
+  intelligence: {
+    brief: () => get("/v1/intelligence/brief"),
+    action: (payload: IntelligenceActionPayload) => post("/v1/intelligence/action", payload),
   },
   integrations: {
     list: () => get("/v1/integrations"),
