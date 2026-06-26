@@ -7,10 +7,14 @@ from __future__ import annotations
 
 import csv
 import io
+import os
 import json
+import hashlib
 import re
+import urllib.parse
 from collections import Counter
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -18,6 +22,7 @@ from fastapi.responses import Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.core.security import require_current_tenant_id
 from app.db.base import Base, get_db
 from app.models.block import Block
@@ -202,6 +207,13 @@ class ConnectorStartRequest(BaseModel):
     metadata: dict[str, Any] = Field(default_factory=dict)
 
 
+class OAuthStartRequest(BaseModel):
+    provider: Literal["gmail", "outlook", "google_drive"]
+    workspace_id: str | None = None
+    redirect_url: str | None = None
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+
 class ConnectorCreateRequest(BaseModel):
     provider: ProviderId
     mode: str = "export_upload"
@@ -239,6 +251,91 @@ class ReportGenerateRequest(BaseModel):
 
 def ensure_schema(db: Session) -> None:
     Base.metadata.create_all(bind=db.get_bind(), tables=TABLES)
+
+
+
+SECRET_FIELD_HINTS = ("secret", "token", "password", "api_key", "apikey", "credential", "private_key")
+
+
+def sanitize_config(config: dict[str, Any] | None) -> dict[str, Any]:
+    """Never persist raw customer secrets in connector config JSON."""
+    safe: dict[str, Any] = {}
+    for key, value in (config or {}).items():
+        lowered = key.lower()
+        if any(hint in lowered for hint in SECRET_FIELD_HINTS):
+            if value:
+                digest = hashlib.sha256(str(value).encode("utf-8")).hexdigest()[:12]
+                safe[key] = f"submitted:{digest}"
+            else:
+                safe[key] = ""
+        elif isinstance(value, dict):
+            safe[key] = sanitize_config(value)
+        else:
+            safe[key] = value
+    return safe
+
+
+def safe_credential_ref(value: str | None) -> str | None:
+    if not value:
+        return None
+    text = str(value)
+    digest = hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+    tail = text[-4:] if len(text) >= 4 else "set"
+    return f"credential_ref:{digest}:last4:{tail}"
+
+
+def safe_filename(name: str | None) -> str:
+    base = re.sub(r"[^A-Za-z0-9._-]+", "_", name or "upload").strip("._")
+    return base[:160] or "upload"
+
+
+def save_upload_bytes(tenant_id: str, connection_id: str, filename: str | None, data: bytes) -> str:
+    root = Path(settings.CONNECTOR_UPLOAD_DIR)
+    target_dir = root / safe_filename(tenant_id) / safe_filename(connection_id)
+    target_dir.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha256(data).hexdigest()[:16]
+    target = target_dir / f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{digest}-{safe_filename(filename)}"
+    target.write_bytes(data)
+    return str(target)
+
+
+def oauth_url(provider: str, state: str, redirect_url: str) -> tuple[str | None, str | None]:
+    if provider in {"gmail", "google_drive"}:
+        client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "").strip()
+        if not client_id:
+            return None, "Missing GOOGLE_OAUTH_CLIENT_ID. Gmail/Drive OAuth cannot start yet."
+        scopes = [
+            "openid",
+            "email",
+            "profile",
+            "https://www.googleapis.com/auth/gmail.readonly" if provider == "gmail" else "https://www.googleapis.com/auth/drive.readonly",
+        ]
+        params = {
+            "client_id": client_id,
+            "redirect_uri": redirect_url,
+            "response_type": "code",
+            "scope": " ".join(scopes),
+            "access_type": "offline",
+            "prompt": "consent",
+            "state": state,
+        }
+        return "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params), None
+
+    if provider == "outlook":
+        client_id = os.getenv("MICROSOFT_OAUTH_CLIENT_ID", "").strip()
+        if not client_id:
+            return None, "Missing MICROSOFT_OAUTH_CLIENT_ID. Outlook OAuth cannot start yet."
+        params = {
+            "client_id": client_id,
+            "redirect_uri": redirect_url,
+            "response_type": "code",
+            "scope": "offline_access openid profile email Mail.Read",
+            "state": state,
+        }
+        return "https://login.microsoftonline.com/common/oauth2/v2.0/authorize?" + urllib.parse.urlencode(params), None
+
+    return None, "Unsupported OAuth provider."
+
 
 
 def catalog_item(provider: str) -> dict[str, Any] | None:
@@ -304,7 +401,7 @@ def create_or_get_connection(
             existing.display_name = display_name
         if config:
             merged = dict(existing.config_json or {})
-            merged.update(config)
+            merged.update(sanitize_config(config))
             existing.config_json = merged
         existing.updated_at = datetime.utcnow()
         db.commit()
@@ -319,7 +416,7 @@ def create_or_get_connection(
         status="ready" if selected_mode in {"manual_upload", "export_upload"} else "needs_credentials",
         mode=selected_mode,
         required_plan=item.get("required_plan", "free"),
-        config_json=config or {},
+        config_json=sanitize_config(config or {}),
     )
     db.add(row)
     db.commit()
@@ -760,10 +857,10 @@ async def patch_connection(connection_id: str, payload: ConnectorPatchRequest, t
     if payload.display_name:
         row.display_name = payload.display_name
     if payload.credentials_ref is not None:
-        row.credentials_ref = payload.credentials_ref
+        row.credentials_ref = safe_credential_ref(payload.credentials_ref)
     if payload.config is not None:
         merged = dict(row.config_json or {})
-        merged.update(payload.config)
+        merged.update(sanitize_config(payload.config))
         row.config_json = merged
     row.updated_at = datetime.utcnow()
     db.commit()
@@ -824,8 +921,9 @@ async def upload_connector_file(connection_id: str, file: UploadFile = File(...)
         raise HTTPException(status_code=400, detail="This connector does not support manual upload yet")
     data = await file.read()
     raw_text, rows, columns, warnings = parse_rows(file.filename or "upload", file.content_type, data)
+    storage_path = save_upload_bytes(tenant_id, connection.id, file.filename or "upload", data)
     mapping = suggest_mapping(columns)
-    source = DataSource(tenant_id=tenant_id, workspace_id=connection.workspace_id, connector_connection_id=connection.id, source_type=infer_source_type(file.filename or "upload", file.content_type, connection.provider), provider=connection.provider, filename=file.filename, content_type=file.content_type, raw_text=raw_text[:200000], metadata_json={"columns": columns, "parsed_rows": rows[:500], "mapping_suggestions": mapping}, status="parsed_with_warnings" if warnings else "parsed")
+    source = DataSource(tenant_id=tenant_id, workspace_id=connection.workspace_id, connector_connection_id=connection.id, source_type=infer_source_type(file.filename or "upload", file.content_type, connection.provider), provider=connection.provider, filename=file.filename, content_type=file.content_type, storage_path=storage_path, raw_text=raw_text[:200000], metadata_json={"columns": columns, "parsed_rows": rows[:500], "mapping_suggestions": mapping}, status="parsed_with_warnings" if warnings else "parsed")
     db.add(source)
     db.flush()
     records = []
@@ -964,3 +1062,82 @@ async def download_artifact(artifact_id: str, tenant_id: str = Depends(require_c
     else:
         content = body.encode("utf-8")
     return Response(content=content, media_type=row.content_type, headers={"Content-Disposition": f'attachment; filename="{row.filename}"'})
+
+
+
+@router.post("/evidence/upload")
+async def upload_evidence_file(
+    provider: ProviderId = Query(default="manual_csv"),
+    workspace_id: str | None = Query(default=None),
+    file: UploadFile = File(...),
+    tenant_id: str = Depends(require_current_tenant_id),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """One-step upload for customers who do not want to configure a connector first."""
+    connection = create_or_get_connection(
+        db,
+        tenant_id=tenant_id,
+        provider=provider,
+        workspace_id=workspace_id,
+        mode="manual_upload" if provider == "manual_csv" else "export_upload",
+        display_name=(catalog_item(provider) or {}).get("name"),
+        config={"created_from": "direct_evidence_upload"},
+    )
+    return await upload_connector_file(connection.id, file, tenant_id, db)
+
+
+@router.post("/connectors/oauth/start")
+async def start_oauth_connector(
+    payload: OAuthStartRequest,
+    tenant_id: str = Depends(require_current_tenant_id),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Start a real OAuth authorization URL when provider client IDs exist.
+
+    This is intentionally honest: without Google/Microsoft app credentials, the
+    API returns oauth_config_missing instead of pretending the account connected.
+    """
+    redirect_url = (
+        payload.redirect_url
+        or os.getenv("AGROAI_OAUTH_REDIRECT_URL", "").strip()
+        or f"{settings.APP_URL.rstrip('/')}/integrations/oauth/callback"
+    )
+    connection = create_or_get_connection(
+        db,
+        tenant_id=tenant_id,
+        provider=payload.provider,
+        workspace_id=payload.workspace_id,
+        mode="oauth",
+        display_name=(catalog_item(payload.provider) or {}).get("name"),
+        config={"oauth_requested": True, **sanitize_config(payload.metadata)},
+    )
+    state = hashlib.sha256(f"{tenant_id}:{connection.id}:{datetime.utcnow().isoformat()}".encode("utf-8")).hexdigest()
+    auth_url, error = oauth_url(payload.provider, state, redirect_url)
+
+    if error:
+        connection.status = "oauth_config_missing"
+        connection.last_error = error
+        db.commit()
+        return {
+            "status": "oauth_config_missing",
+            "message": error,
+            "connection": public_connection(connection),
+            "auth_url": None,
+            "next_step": "Create a Google/Microsoft OAuth app, add client ID env vars, then retry.",
+        }
+
+    connection.status = "oauth_ready"
+    connection.last_error = None
+    connection.config_json = {
+        **(connection.config_json or {}),
+        "oauth_state": state,
+        "redirect_url": redirect_url,
+    }
+    db.commit()
+    return {
+        "status": "oauth_ready",
+        "message": "OAuth authorization URL created.",
+        "connection": public_connection(connection),
+        "auth_url": auth_url,
+        "redirect_url": redirect_url,
+    }

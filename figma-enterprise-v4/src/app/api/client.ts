@@ -225,6 +225,8 @@ export const apiClient = {
   evidence: {
     list: () => get("/v1/evidence"),
     summary: () => get("/v1/evidence/summary"),
+    upload: (file: File, provider = "manual_csv") =>
+      upload(`/v1/evidence/upload?provider=${encodeURIComponent(provider)}`, file),
     uploadMetadata: (payload: unknown) => post("/v1/evidence", payload),
   },
 
@@ -265,6 +267,7 @@ export const apiClient = {
     connections: () => get("/v1/connectors/connections"),
     create: (payload: unknown) => post("/v1/connectors/connections", payload),
     start: (payload: ConnectorStartPayload) => post("/v1/connectors/start", payload),
+    oauthStart: (payload: unknown) => post("/v1/connectors/oauth/start", payload),
     get: (connectionId: string) => get(`/v1/connectors/connections/${encodeURIComponent(connectionId)}`),
     update: (connectionId: string, payload: unknown) => patch(`/v1/connectors/connections/${encodeURIComponent(connectionId)}`, payload),
     test: (connectionId: string) => post(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/test`),

@@ -3,6 +3,8 @@ import { apiClient } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { usePortalResource } from "../hooks/usePortalResource";
 import { BG, BORDER, InlineState, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
+import talgilLogo from "../../imports/talgil-logo-hq.png";
+import wiseconnLogo from "../../imports/wiseconn-logo-hq.png";
 
 type AnyRecord = Record<string, any>;
 
@@ -28,6 +30,7 @@ type ConnectorProfile = {
   subtitle: string;
   type: ConnectorType;
   logoUrl?: string;
+  logoAsset?: string;
   logoFallback: string;
   logoBg: string;
   logoColor: string;
@@ -51,7 +54,7 @@ const PROFILES: Record<string, ConnectorProfile> = {
     title: "WiseConn",
     subtitle: "Irrigation controller",
     type: "controller",
-    logoUrl: "https://www.google.com/s2/favicons?domain=wiseconn.com&sz=128",
+    logoAsset: wiseconnLogo,
     logoFallback: "W",
     logoBg: "#ECFDF5",
     logoColor: "#047857",
@@ -81,7 +84,7 @@ const PROFILES: Record<string, ConnectorProfile> = {
     title: "Talgil",
     subtitle: "Irrigation controller",
     type: "controller",
-    logoUrl: "https://www.google.com/s2/favicons?domain=talgil.com&sz=128",
+    logoAsset: talgilLogo,
     logoFallback: "T",
     logoBg: "#EFF6FF",
     logoColor: "#1D4ED8",
@@ -445,12 +448,54 @@ export function Integrations() {
     return next;
   }
 
+
+  async function startOAuthConnector() {
+    if (!selected) return;
+    const profile = profileFor(selected.id, selected);
+    setBusy("oauth");
+    setMessage("");
+
+    try {
+      const activeConnection = await ensureConnection();
+      const result = await apiClient.connectorHub.oauthStart({
+        provider: selected.id,
+        workspace_id: currentWorkspace?.id,
+        redirect_url: `${window.location.origin}/integrations/oauth/callback`,
+        metadata: {
+          connector_type: profile.type,
+          account_hint: config.account_email || "",
+          scope_note: config.scope_note || config.folder_hint || "",
+        },
+      }) as AnyRecord;
+
+      setConnection(result.connection || activeConnection);
+
+      if (result.auth_url) {
+        setMessage(`${profile.title} OAuth is ready. Redirecting to provider authorization.`);
+        window.location.assign(result.auth_url);
+      } else {
+        setMessage(result.message || `${profile.title} OAuth is not configured yet.`);
+      }
+
+      await refresh();
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Could not start OAuth.");
+    } finally {
+      setBusy("");
+    }
+  }
+
   async function saveConnector(status = "test_passed") {
     if (!selected) return;
 
     const profile = profileFor(selected.id, selected);
     setBusy("save");
     setMessage("");
+
+    if (profile.method === "oauth") {
+      await startOAuthConnector();
+      return;
+    }
 
     try {
       const activeConnection = await ensureConnection();
@@ -461,11 +506,20 @@ export function Integrations() {
         config.provider_name ||
         `${selected.id}_internal_connection`;
 
+      const safeConfig: Record<string, string> = {};
+      for (const [key, value] of Object.entries(config)) {
+        if (/secret|token|password|api_key|credential|key/i.test(key)) {
+          safeConfig[key] = value ? "submitted_to_backend_sanitizer" : "";
+        } else {
+          safeConfig[key] = value;
+        }
+      }
+
       const result = await apiClient.connectorHub.update(activeConnection.id, {
         status,
         credentials_ref: String(credentialRef),
         config: {
-          ...config,
+          ...safeConfig,
           connector_type: profile.type,
           provider_label: profile.title,
           internal_testing: true,
@@ -794,7 +848,7 @@ function ConnectorForm({
 
       <div className="mt-4 flex flex-wrap gap-2">
         <PortalButton onClick={onSave} disabled={busy === "save"}>
-          {busy === "save" ? "Saving..." : profile.primaryAction}
+          {busy === "save" || busy === "oauth" ? "Working..." : profile.primaryAction}
         </PortalButton>
         <PortalButton variant="secondary" onClick={onTest} disabled={busy === "test"}>
           {busy === "test" ? "Testing..." : "Test"}
@@ -891,6 +945,7 @@ function Chip({ children }: { children: ReactNode }) {
 
 function ConnectorLogo({ profile, large = false }: { profile: ConnectorProfile; large?: boolean }) {
   const size = large ? 56 : 42;
+  const imgSrc = profile.logoAsset || profile.logoUrl;
 
   return (
     <div
@@ -905,9 +960,9 @@ function ConnectorLogo({ profile, large = false }: { profile: ConnectorProfile; 
       }}
       aria-label={`${profile.title} logo`}
     >
-      {profile.logoUrl ? (
+      {imgSrc ? (
         <img
-          src={profile.logoUrl}
+          src={imgSrc}
           alt=""
           className="h-[62%] w-[62%] object-contain"
           onError={(event) => {
@@ -917,7 +972,7 @@ function ConnectorLogo({ profile, large = false }: { profile: ConnectorProfile; 
           }}
         />
       ) : null}
-      <span style={{ display: profile.logoUrl ? "none" : "inline", fontSize: large ? 16 : 13, letterSpacing: "-0.02em" }}>
+      <span style={{ display: imgSrc ? "none" : "inline", fontSize: large ? 16 : 13, letterSpacing: "-0.02em" }}>
         {profile.logoFallback}
       </span>
     </div>
