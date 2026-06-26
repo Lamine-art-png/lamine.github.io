@@ -359,9 +359,25 @@ def _deterministic_body(context: EvidenceContext) -> dict[str, Any]:
 
 
 def _weak_or_empty(body: dict[str, Any]) -> bool:
-    summary = str(body.get("summary") or body.get("answer") or "").strip().lower()
-    if not summary:
+    # Different structured routes intentionally return different primary keys.
+    # Do not throw away valid model JSON just because it uses recommendation,
+    # proof_summary, readiness_status, findings, title, or sections instead of
+    # summary/answer.
+    primary = str(
+        body.get("summary")
+        or body.get("answer")
+        or body.get("recommendation")
+        or body.get("proof_summary")
+        or body.get("readiness_status")
+        or body.get("findings")
+        or body.get("title")
+        or body.get("sections")
+        or ""
+    ).strip().lower()
+
+    if not primary:
         return True
+
     bad = [
         "reasoning-only",
         "no customer-safe answer",
@@ -370,7 +386,7 @@ def _weak_or_empty(body: dict[str, Any]) -> bool:
         "okay, so i'm",
         "i'm trying to figure",
     ]
-    return any(marker in summary for marker in bad)
+    return any(marker in primary for marker in bad)
 
 
 async def _run_ai(

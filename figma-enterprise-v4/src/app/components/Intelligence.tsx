@@ -1,130 +1,245 @@
-import { useState } from "react";
-import { Brain, Send } from "lucide-react";
+import { useCallback, useMemo, useState } from "react";
 import { apiClient } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
+import { usePortalResource } from "../hooks/usePortalResource";
 import { BG, BORDER, InlineState, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
 
-type AiResponse = {
-  status?: string;
-  output?: string | Record<string, unknown>;
-  provider?: string;
-  model?: string;
-  demo_fallback?: boolean;
-  evidence_context?: {
-    missing_data?: string[];
-    citations?: Array<{ title?: string; source_type?: string; source_id?: string }>;
-  };
-  citations?: Array<{ title?: string; source_type?: string; source_id?: string }>;
-  verification?: { status?: string; missing_data?: string[]; risk_flags?: string[] };
+type AnyRecord = Record<string, any>;
+
+const MODES = [
+  ["farmer", "Farmer"],
+  ["farmland_manager", "Farmland Manager"],
+  ["water_agency", "Water Agency"],
+  ["lender", "Lender / Insurer"],
+  ["government", "Government Program"],
+  ["consultant", "Consultant"],
+];
+
+const PROMPTS: Record<string, string[]> = {
+  farmer: ["What should I do today?", "Am I overwatering this block?", "Explain the recommendation in simple language."],
+  farmland_manager: ["Which blocks need attention first?", "Where is our evidence weak?", "What should my operator do today?"],
+  water_agency: ["What evidence supports this water use claim?", "What is missing for a compliance review?", "Generate an assurance packet."],
+  lender: ["Summarize operational water risk.", "What data improves underwriting confidence?", "Show evidence quality by source."],
+  government: ["Summarize program-level readiness.", "What data is missing across participants?", "Create a field evidence packet."],
+  consultant: ["Draft a client-facing water operations summary.", "Identify data gaps before the next farm visit.", "Prepare an irrigation decision explanation."],
 };
 
-function formatOutput(value: unknown) {
-  if (!value) return "No live AI output returned.";
-  if (typeof value === "string") return value;
-  return JSON.stringify(value, null, 2);
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function text(value: unknown, fallback = "—") {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return fallback;
+  }
 }
 
 export function Intelligence() {
-  const { currentOrganization, currentWorkspace } = useAuth();
-  const [message, setMessage] = useState("");
-  const [response, setResponse] = useState<AiResponse | null>(null);
+  const { currentWorkspace } = useAuth();
+  const briefState = usePortalResource<AnyRecord>(useCallback(() => apiClient.intelligence.brief(), []));
+  const [mode, setMode] = useState("farmland_manager");
+  const [question, setQuestion] = useState("What should I do today?");
+  const [format, setFormat] = useState("answer");
+  const [loading, setLoading] = useState(false);
+  const [reporting, setReporting] = useState(false);
+  const [result, setResult] = useState<AnyRecord | null>(null);
+  const [report, setReport] = useState<AnyRecord | null>(null);
   const [error, setError] = useState("");
-  const [isLoading, setIsLoading] = useState(false);
 
-  async function askAgroAi() {
-    const cleanMessage = message.trim();
-    if (!cleanMessage) return;
-    setIsLoading(true);
+  const prompts = useMemo(() => PROMPTS[mode] || PROMPTS.farmland_manager, [mode]);
+  const brief = briefState.data || {};
+  const summary = result?.evidence_summary || brief.evidence_summary || {};
+
+  async function ask(prompt = question) {
+    const clean = prompt.trim();
+    if (!clean) return;
+
+    setQuestion(clean);
+    setLoading(true);
     setError("");
-    setResponse(null);
+    setReport(null);
+
     try {
-      const result = await apiClient.ai.chat({
-        message: cleanMessage,
+      const response = await apiClient.intelligence.ask({
+        question: clean,
         workspace_id: currentWorkspace?.id,
-      });
-      setResponse(result as AiResponse);
+        customer_mode: mode,
+        output_format: format,
+      }) as AnyRecord;
+      setResult(response);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "AI endpoint unavailable.");
+      setError(err instanceof Error ? err.message : "Ask AGRO-AI failed.");
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   }
 
-  const missing = response?.verification?.missing_data || response?.evidence_context?.missing_data || [];
-  const citations = response?.citations || response?.evidence_context?.citations || [];
-  const unavailable = response?.status === "unavailable" || response?.demo_fallback;
+  async function generateReport(reportType = "evidence_summary", reportFormat: "markdown" | "pdf" = "pdf") {
+    setReporting(true);
+    setError("");
+
+    try {
+      const response = await apiClient.reports.generate({
+        report_type: reportType,
+        workspace_id: currentWorkspace?.id,
+        format: reportFormat,
+      }) as AnyRecord;
+      setReport(response);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Report generation failed.");
+    } finally {
+      setReporting(false);
+    }
+  }
+
+  async function downloadArtifact() {
+    const artifactId = report?.artifact?.id;
+    if (!artifactId) return;
+
+    const blob = await apiClient.artifacts.download(artifactId);
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = report.artifact.filename || "agro-ai-report.pdf";
+    link.click();
+    URL.revokeObjectURL(url);
+  }
 
   return (
     <div className="min-h-screen" style={{ background: BG }}>
-      <header className="h-[72px] px-8 flex items-center justify-between" style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}>
-        <div>
-          <div className="text-[13px] font-semibold" style={{ color: TEXT }}>{currentWorkspace?.name || "Workspace"}</div>
-          <div className="text-[11px]" style={{ color: MUTED }}>{currentOrganization?.name || "Organization"}</div>
+      <header className="px-8 py-8" style={{ background: "#0D2B1E", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className="max-w-5xl">
+          <div className="flex items-center gap-2 mb-4">
+            <StatusBadge label={brief.mode === "live" ? "Live brain" : "Evidence-grounded"} tone="good" />
+            <StatusBadge label={`${summary.readiness_score ?? 0}% readiness`} tone={(summary.readiness_score || 0) > 50 ? "good" : "warn"} />
+          </div>
+          <h1 className="text-[34px] font-semibold tracking-tight" style={{ color: "white" }}>Ask AGRO-AI</h1>
+          <p className="mt-3 max-w-3xl text-[14px] leading-relaxed" style={{ color: "rgba(255,255,255,0.68)" }}>
+            Ask questions over imported evidence, connector readiness, missing data, water risk, and reportable proof.
+          </p>
         </div>
-        <StatusBadge label={unavailable ? "AI unavailable" : response ? "Verified output" : "Awaiting request"} tone={unavailable ? "warn" : response ? "good" : "neutral"} />
       </header>
 
-      <div className="px-8 py-6 space-y-5" style={{ maxWidth: 1220 }}>
-        <div className="flex items-center gap-3">
-          <Brain className="h-6 w-6" style={{ color: TEXT }} />
-          <div>
-            <h1 className="text-[28px] font-semibold mb-1" style={{ color: TEXT }}>Intelligence</h1>
-            <p className="text-[13px]" style={{ color: MUTED }}>Ask AGRO-AI using only live workspace evidence.</p>
-          </div>
-        </div>
+      <main className="px-8 py-7 space-y-6" style={{ maxWidth: 1180 }}>
+        {error ? <InlineState title={error} /> : null}
+        {briefState.error ? <InlineState title={briefState.error} /> : null}
 
-        <section className="rounded-xl overflow-hidden" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-          <div className="px-6 py-4" style={{ borderBottom: `1px solid ${BORDER}` }}>
-            <div className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: MUTED }}>Workspace assistant</div>
-            <h3 className="text-[15px] font-semibold" style={{ color: TEXT }}>Ask AGRO-AI</h3>
-          </div>
-          <div className="p-6 space-y-4">
-            <textarea
-              value={message}
-              onChange={(event) => setMessage(event.target.value)}
-              rows={5}
-              className="w-full rounded-lg px-4 py-3 text-[13px] outline-none"
-              style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}
-              placeholder="Ask about irrigation, assurance readiness, evidence gaps, report drafting, or integration status."
-            />
-            <div className="flex items-center gap-3">
-              <PortalButton disabled={isLoading || !message.trim()} onClick={askAgroAi}>
-                <span className="inline-flex items-center gap-2"><Send className="h-3.5 w-3.5" />{isLoading ? "Asking" : "Ask"}</span>
-              </PortalButton>
-              <span className="text-[12px]" style={{ color: MUTED }}>{response?.provider ? `Provider: ${response.provider}${response.model ? ` / ${response.model}` : ""}` : "Provider status appears after response."}</span>
+        <section className="grid gap-5" style={{ gridTemplateColumns: "1.45fr 0.55fr" }}>
+          <div className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              <label className="text-[12px]" style={{ color: MUTED }}>
+                Customer mode
+                <select value={mode} onChange={(event) => setMode(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
+                  {MODES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
+                </select>
+              </label>
+
+              <label className="text-[12px]" style={{ color: MUTED }}>
+                Output
+                <select value={format} onChange={(event) => setFormat(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
+                  <option value="answer">Answer</option>
+                  <option value="decision">Decision</option>
+                  <option value="report">Report brief</option>
+                  <option value="checklist">Checklist</option>
+                </select>
+              </label>
             </div>
+
+            <textarea
+              value={question}
+              onChange={(event) => setQuestion(event.target.value)}
+              rows={6}
+              className="w-full resize-none rounded-xl px-4 py-4 text-[14px] outline-none"
+              style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}
+              placeholder="Ask AGRO-AI what to do, what is missing, what changed, or what to report."
+            />
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <PortalButton onClick={() => ask()} disabled={loading}>{loading ? "Thinking…" : "Ask AGRO-AI"}</PortalButton>
+              <PortalButton variant="secondary" onClick={() => generateReport("evidence_summary", "pdf")} disabled={reporting}>{reporting ? "Generating…" : "Generate PDF report"}</PortalButton>
+              <PortalButton variant="secondary" onClick={() => window.location.assign("/integrations")}>Improve with connectors</PortalButton>
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              {prompts.map((item) => (
+                <button key={item} type="button" onClick={() => ask(item)} className="rounded-full px-3 py-2 text-[12px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
+                  {item}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+            <div className="text-[10px] font-semibold uppercase tracking-widest mb-3" style={{ color: MUTED }}>Current context</div>
+            <Info label="Workspace" value={text(currentWorkspace?.name || brief.workspace?.name, "Workspace")} />
+            <Info label="Mode" value={text(result?.mode || brief.mode, "demo")} />
+            <Info label="Evidence records" value={text(summary.evidence_count, "0")} />
+            <Info label="Source files" value={text(summary.source_count, "0")} />
+            <Info label="Readiness" value={`${text(summary.readiness_score, "0")}%`} />
           </div>
         </section>
 
-        {isLoading ? <InlineState title="Loading intelligence response" /> : null}
-        {error ? <InlineState title={error} /> : null}
-        {unavailable ? <InlineState title="AI provider unavailable." detail="Configure hosted inference or local Ollama to enable live model output." /> : null}
+        <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <h2 className="text-[20px] font-semibold" style={{ color: TEXT }}>AGRO-AI answer</h2>
+            <StatusBadge label={loading ? "Thinking" : result ? "Generated" : "Ready"} tone={result ? "good" : "neutral"} />
+          </div>
 
-        {response ? (
-          <section className="rounded-xl overflow-hidden" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-            <div className="px-6 py-4 flex items-center justify-between" style={{ borderBottom: `1px solid ${BORDER}` }}>
-              <div>
-                <div className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: MUTED }}>Response</div>
-                <h3 className="text-[15px] font-semibold" style={{ color: TEXT }}>{response.verification?.status || response.status || "AI result"}</h3>
+          {!result && !loading ? <InlineState title="Ask a question above." detail="The response will show answer, evidence used, missing data, risks, next actions, and citations." /> : null}
+          {loading ? <InlineState title="AGRO-AI is reading the current evidence context…" /> : null}
+
+          {result ? (
+            <div className="space-y-4">
+              <div className="rounded-xl p-5 whitespace-pre-wrap text-[14px] leading-relaxed" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
+                {text(result.answer || result.summary || result.message, "AGRO-AI completed the request.")}
               </div>
-              <StatusBadge label={response.demo_fallback ? "Unavailable" : "Verified"} tone={response.demo_fallback ? "warn" : "good"} />
+
+              <List title="Evidence used" items={asArray(result.what_i_used || result.evidence_used)} />
+              <List title="Missing data" items={asArray(result.what_is_missing || result.missing_data)} />
+              <List title="Risks / uncertainty" items={asArray(result.risks || result.risk_flags)} />
+              <List title="Next actions" items={asArray(result.next_actions)} />
+              <List title="Citations" items={asArray(result.citations)} />
             </div>
-            <div className="p-6 space-y-4">
-              <pre className="whitespace-pre-wrap text-[13px] leading-relaxed rounded-lg p-4" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>{formatOutput(response.output || response)}</pre>
-              {missing.length ? <InlineState title="Missing data" detail={missing.join(", ")} /> : null}
-              {citations.length ? (
-                <div className="grid gap-2">
-                  {citations.map((citation, index) => (
-                    <div key={`${citation.source_id || index}`} className="rounded-lg px-4 py-3 text-[12px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: MUTED }}>
-                      <span style={{ color: TEXT }}>{citation.title || citation.source_type || "Citation"}</span>
-                      {citation.source_id ? ` / ${citation.source_id}` : ""}
-                    </div>
-                  ))}
-                </div>
-              ) : null}
+          ) : null}
+        </section>
+
+        {report ? (
+          <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+            <div className="flex items-center justify-between gap-4 mb-4">
+              <h2 className="text-[20px] font-semibold" style={{ color: TEXT }}>{report.artifact?.title || "Generated report"}</h2>
+              <PortalButton onClick={downloadArtifact}>Download</PortalButton>
             </div>
+            <pre className="max-h-[420px] overflow-auto rounded-xl p-4 text-[12px] whitespace-pre-wrap" style={{ background: BG, color: TEXT, border: `1px solid ${BORDER}` }}>{report.preview}</pre>
           </section>
         ) : null}
+      </main>
+    </div>
+  );
+}
+
+function Info({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex justify-between gap-4 border-b py-3 last:border-b-0" style={{ borderColor: BORDER }}>
+      <span className="text-[12px]" style={{ color: MUTED }}>{label}</span>
+      <span className="text-[12px] font-semibold text-right" style={{ color: TEXT }}>{value}</span>
+    </div>
+  );
+}
+
+function List({ title, items }: { title: string; items: unknown[] }) {
+  if (!items.length) return null;
+
+  return (
+    <div className="rounded-xl p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+      <div className="text-[10px] font-semibold uppercase tracking-widest mb-3" style={{ color: MUTED }}>{title}</div>
+      <div className="space-y-2">
+        {items.map((item, index) => (
+          <div key={index} className="text-[13px] leading-relaxed" style={{ color: TEXT }}>• {text(item)}</div>
+        ))}
       </div>
     </div>
   );

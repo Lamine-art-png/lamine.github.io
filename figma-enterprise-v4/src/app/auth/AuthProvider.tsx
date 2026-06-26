@@ -54,6 +54,23 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+const INTERNAL_TEST_ENTITLEMENTS: Record<string, unknown> = {
+  internal_testing: true,
+  all_features: true,
+  connectors: true,
+  connector_uploads: true,
+  report_exports: true,
+  reports: true,
+  can_export_reports: true,
+  ai: true,
+  agents: true,
+  evidence: true,
+  decisions: true,
+  admin: true,
+  billing: true,
+  integrations: true,
+};
+
 function arrayFromResponse<T>(response: unknown, key: string): T[] {
   if (Array.isArray(response)) {
     return response as T[];
@@ -96,7 +113,10 @@ function normalizeMe(response: unknown) {
     organizations,
     currentOrganization: organization || organizations[0] || null,
     currentWorkspace: workspace,
-    entitlements: ((data.entitlements || {}) as Record<string, unknown>) || {},
+    entitlements: {
+      ...(((data.entitlements || {}) as Record<string, unknown>) || {}),
+      ...INTERNAL_TEST_ENTITLEMENTS,
+    },
   };
 }
 
@@ -138,13 +158,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ...(normalized.currentOrganization || {}),
       ...(billing?.plan ? { plan: billing.plan } : {}),
       ...(billing?.subscription_status ? { subscription_status: billing.subscription_status } : {}),
+      plan: "internal",
+      subscription_status: "active",
     };
 
     setUser(normalized.user);
     setOrganizations(orgs.length ? orgs : normalized.organizations);
     setCurrentOrganization(Object.keys(organization).length ? organization : null);
     setCurrentWorkspace(workspaces[0] || normalized.currentWorkspace || null);
-    setEntitlements(normalized.entitlements);
+    setEntitlements({
+      ...normalized.entitlements,
+      ...INTERNAL_TEST_ENTITLEMENTS,
+    });
   }, []);
 
   const login = useCallback(

@@ -1,93 +1,217 @@
-import { MoreHorizontal, User } from "lucide-react";
+import { useCallback, useState } from "react";
+import { apiClient } from "../api/client";
+import { useAuth } from "../auth/AuthProvider";
+import { usePortalResource } from "../hooks/usePortalResource";
+import { BG, BORDER, InlineState, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
+
+type AnyRecord = Record<string, any>;
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function text(value: unknown, fallback = "—") {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return fallback;
+  }
+}
 
 export function Operations() {
+  const { currentWorkspace } = useAuth();
+  const briefState = usePortalResource<AnyRecord>(useCallback(() => apiClient.intelligence.brief(), []));
+  const evidenceState = usePortalResource<AnyRecord>(useCallback(() => apiClient.evidence.summary(), []));
+  const [result, setResult] = useState<AnyRecord | null>(null);
+  const [decisionMode, setDecisionMode] = useState("operator_today");
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
+
+  const brief = briefState.data || {};
+  const summary = evidenceState.data || brief.evidence_summary || {};
+  const hasEvidence = Number(summary.evidence_count || 0) > 0;
+
+  const decisionQuestions: Record<string, string> = {
+    operator_today:
+      "Generate today's operator decision from the current evidence. Tell me what to do, what evidence supports it, what is missing, and what risk remains.",
+    water_risk:
+      "Assess water operations risk from the current evidence. Prioritize missing data, overwatering risk, compliance risk, and next actions.",
+    compliance_packet:
+      "Prepare a compliance-oriented decision brief. Use only evidence available. List citations, missing proof, and what must be collected next.",
+    manager_priority:
+      "Prioritize the blocks or operational issues that need attention first. Explain the reasoning and the evidence gaps.",
+  };
+
+  async function runDecision(mode = decisionMode) {
+    setDecisionMode(mode);
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const response = await apiClient.intelligence.ask({
+        question: decisionQuestions[mode],
+        workspace_id: currentWorkspace?.id,
+        customer_mode: "farmland_manager",
+        output_format: "decision",
+      }) as AnyRecord;
+      setResult(response);
+      await Promise.all([briefState.refresh(), evidenceState.refresh()]);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Decision run failed.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function generatePdf() {
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const response = await apiClient.reports.generate({
+        report_type: "water_decision",
+        workspace_id: currentWorkspace?.id,
+        format: "pdf",
+      }) as AnyRecord;
+
+      const artifactId = response?.artifact?.id;
+      if (artifactId) {
+        const blob = await apiClient.artifacts.download(artifactId);
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = response.artifact.filename || "agro-ai-water-decision.pdf";
+        link.click();
+        URL.revokeObjectURL(url);
+      }
+
+      setMessage("Water decision PDF generated.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "PDF generation failed.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <div className="min-h-screen">
-      {/* Top Bar */}
-      <header className="bg-[#FFFEFA] border-b border-[rgba(16,35,27,0.12)] px-8 py-5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <div>
-              <div className="flex items-center gap-3 mb-1">
-                <h1 className="text-2xl font-bold text-[#10231B]">Operations</h1>
-                <span className="px-2.5 py-1 bg-[#F6F4EE] border border-[rgba(16,35,27,0.12)] rounded text-xs font-medium text-[#68776F]">
-                  Evaluation workspace
-                </span>
-              </div>
+    <div className="min-h-screen" style={{ background: BG }}>
+      <header className="px-8 py-7" style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}>
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <StatusBadge label="Decision Engine" tone="good" />
+              <StatusBadge label={hasEvidence ? "Evidence available" : "Needs evidence"} tone={hasEvidence ? "good" : "warn"} />
             </div>
-            <div className="flex items-center gap-2 pl-6 border-l border-[rgba(16,35,27,0.12)]">
-              <div>
-                <div className="text-sm font-medium text-[#10231B]">Alpha Vineyard</div>
-                <div className="text-xs text-[#68776F]">Wine grapes · Coastal production block</div>
-              </div>
-            </div>
+            <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: TEXT }}>Decisions</h1>
+            <p className="mt-2 max-w-3xl text-[14px] leading-relaxed" style={{ color: MUTED }}>
+              Turn uploaded controller, telemetry, ET/weather, and field evidence into operator decisions, risk briefs, and exportable water decision reports.
+            </p>
           </div>
-          <div className="flex items-center gap-3">
-            <span className="px-2.5 py-1 bg-[#F6F4EE] border border-[rgba(16,35,27,0.12)] rounded text-xs font-medium text-[#68776F]">
-              Evaluation · not live · not certified
-            </span>
-            <button className="px-4 py-2 bg-[#16533C] hover:bg-[#1F7350] text-white text-sm font-medium rounded-lg transition-colors">
-              Run Agent
-            </button>
-            <button className="w-9 h-9 flex items-center justify-center hover:bg-[#F6F4EE] rounded-lg transition-colors">
-              <MoreHorizontal className="w-5 h-5 text-[#68776F]" />
-            </button>
-            <button className="w-9 h-9 flex items-center justify-center bg-[#10231B] hover:bg-[#16533C] text-white rounded-lg transition-colors">
-              <User className="w-4 h-4" />
-            </button>
+
+          <div className="flex gap-2">
+            <PortalButton variant="secondary" onClick={() => window.location.assign("/integrations")}>Add evidence</PortalButton>
+            <PortalButton onClick={() => runDecision()} disabled={loading}>{loading ? "Running…" : "Run decision"}</PortalButton>
           </div>
         </div>
       </header>
 
-      {/* Main Content */}
-      <div className="p-8 space-y-6">
-        <div className="grid grid-cols-4 gap-4">
-          <div className="bg-[#FFFEFA] border border-[rgba(16,35,27,0.12)] rounded-xl p-6">
-            <div className="text-xs text-[#68776F] uppercase tracking-wider mb-2">Current decision</div>
-            <div className="text-2xl font-bold text-[#10231B] mb-1">Irrigate 42 min tonight</div>
-            <div className="text-sm text-[#68776F]">Decision ready</div>
-          </div>
-          <div className="bg-[#FFFEFA] border border-[rgba(16,35,27,0.12)] rounded-xl p-6">
-            <div className="text-xs text-[#68776F] uppercase tracking-wider mb-2">Confidence</div>
-            <div className="text-2xl font-bold text-[#10231B] mb-1">86%</div>
-            <div className="text-sm text-[#68776F]">Decision confidence score</div>
-          </div>
-          <div className="bg-[#FFFEFA] border border-[rgba(16,35,27,0.12)] rounded-xl p-6">
-            <div className="text-xs text-[#68776F] uppercase tracking-wider mb-2">Evidence completeness</div>
-            <div className="text-2xl font-bold text-[#10231B] mb-1">92%</div>
-            <div className="text-sm text-[#68776F]">Cross-source reconciliation coverage</div>
-          </div>
-          <div className="bg-[#FFFEFA] border border-[rgba(16,35,27,0.12)] rounded-xl p-6">
-            <div className="text-xs text-[#68776F] uppercase tracking-wider mb-2">Estimated water savings</div>
-            <div className="text-2xl font-bold text-[#10231B] mb-1">27%</div>
-            <div className="text-sm text-[#68776F]">Assumption vs historical baseline</div>
-          </div>
-        </div>
+      <main className="px-8 py-6 space-y-5" style={{ maxWidth: 1220 }}>
+        {briefState.error ? <InlineState title={briefState.error} /> : null}
+        {evidenceState.error ? <InlineState title={evidenceState.error} /> : null}
+        {message ? <InlineState title={message} /> : null}
 
-        <div className="bg-[#FFFEFA] border border-[rgba(16,35,27,0.12)] rounded-xl p-8">
-          <h2 className="text-lg font-bold text-[#10231B] mb-4">Decision Pipeline</h2>
-          <p className="text-[#68776F] mb-6">
-            Source normalization, reconciliation, confidence scoring, and verification preparation.
-          </p>
-          <div className="flex items-center gap-4">
-            {["Sources", "Normalize", "Reconcile", "Decide"].map((step, i) => (
-              <div key={step} className="flex-1">
-                <div className="bg-[#16533C] text-white px-4 py-3 rounded-lg text-center">
-                  <div className="text-xs font-medium">{step}</div>
-                  <div className="text-[10px] text-white/70 mt-1">Complete</div>
-                </div>
-              </div>
-            ))}
-            {["Verify"].map((step) => (
-              <div key={step} className="flex-1">
-                <div className="bg-[#F6F4EE] border border-[rgba(16,35,27,0.12)] text-[#68776F] px-4 py-3 rounded-lg text-center">
-                  <div className="text-xs font-medium">{step}</div>
-                  <div className="text-[10px] mt-1">Complete</div>
-                </div>
-              </div>
-            ))}
+        <section className="grid grid-cols-4 gap-4">
+          <Metric label="Evidence records" value={text(summary.evidence_count, "0")} />
+          <Metric label="Source files" value={text(summary.source_count, "0")} />
+          <Metric label="Readiness" value={`${text(summary.readiness_score, "0")}%`} />
+          <Metric label="Mode" value={text(result?.mode || brief.mode, "internal")} />
+        </section>
+
+        <section className="grid grid-cols-4 gap-3">
+          <DecisionCard title="Operator today" active={decisionMode === "operator_today"} onClick={() => runDecision("operator_today")} />
+          <DecisionCard title="Water risk" active={decisionMode === "water_risk"} onClick={() => runDecision("water_risk")} />
+          <DecisionCard title="Compliance packet" active={decisionMode === "compliance_packet"} onClick={() => runDecision("compliance_packet")} />
+          <DecisionCard title="Manager priority" active={decisionMode === "manager_priority"} onClick={() => runDecision("manager_priority")} />
+        </section>
+
+        {!hasEvidence ? (
+          <InlineState
+            title="No imported evidence yet."
+            detail="Upload a controller export, CSV, JSON, TXT, or PDF text file first. Decisions will still explain what is missing, but they should not pretend to be operational."
+          />
+        ) : null}
+
+        <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <div className="flex items-center justify-between gap-4 mb-4">
+            <h2 className="text-[20px] font-semibold" style={{ color: TEXT }}>Decision output</h2>
+            <div className="flex gap-2">
+              <StatusBadge label={result ? result.confidence || "generated" : "not run"} tone={result ? "good" : "neutral"} />
+              <PortalButton variant="secondary" onClick={generatePdf} disabled={loading}>{loading ? "Working…" : "Generate PDF"}</PortalButton>
+            </div>
           </div>
-        </div>
+
+          {!result ? (
+            <InlineState title="No decision run yet." detail="Choose a decision mode above or click Run decision." />
+          ) : (
+            <div className="space-y-4">
+              <div className="rounded-xl p-5 text-[14px] leading-relaxed whitespace-pre-wrap" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
+                {text(result.answer || result.summary || result.message, "Decision completed.")}
+              </div>
+
+              <List title="Evidence used" items={asArray(result.what_i_used || result.evidence_used)} />
+              <List title="Missing data" items={asArray(result.what_is_missing || result.missing_data)} />
+              <List title="Risks / uncertainty" items={asArray(result.risks || result.risk_flags)} />
+              <List title="Next actions" items={asArray(result.next_actions)} />
+              <List title="Citations" items={asArray(result.citations)} />
+            </div>
+          )}
+        </section>
+      </main>
+    </div>
+  );
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <section className="rounded-xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+      <div className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: MUTED }}>{label}</div>
+      <div className="text-[24px] font-semibold" style={{ color: TEXT }}>{value}</div>
+    </section>
+  );
+}
+
+function DecisionCard({ title, active, onClick }: { title: string; active: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="rounded-xl p-4 text-left transition-colors"
+      style={{
+        background: active ? "#0D2B1E" : SURFACE,
+        border: `1px solid ${active ? "#0D2B1E" : BORDER}`,
+        color: active ? "white" : TEXT,
+      }}
+    >
+      <div className="text-[13px] font-semibold">{title}</div>
+      <div className="text-[11px] mt-1" style={{ color: active ? "rgba(255,255,255,0.62)" : MUTED }}>
+        Generate grounded decision
+      </div>
+    </button>
+  );
+}
+
+function List({ title, items }: { title: string; items: unknown[] }) {
+  if (!items.length) return null;
+
+  return (
+    <div className="rounded-xl p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+      <div className="text-[10px] font-semibold uppercase tracking-widest mb-3" style={{ color: MUTED }}>{title}</div>
+      <div className="space-y-2">
+        {items.map((item, index) => (
+          <div key={index} className="text-[13px] leading-relaxed" style={{ color: TEXT }}>• {text(item)}</div>
+        ))}
       </div>
     </div>
   );
