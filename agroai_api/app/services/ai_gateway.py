@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 from typing import Any
 
@@ -88,10 +89,23 @@ class AIGateway:
                 headers=headers,
                 json=payload,
             )
+
+            # Some OpenAI-compatible gateways, including certain Workers AI
+            # model routes, reject JSON mode even when normal chat works.
+            # Retry once without response_format before declaring AI unavailable.
+            if response.status_code in {400, 422} and "response_format" in payload:
+                retry_payload = dict(payload)
+                retry_payload.pop("response_format", None)
+                response = await client.post(
+                    f"{self.base_url}/chat/completions",
+                    headers=headers,
+                    json=retry_payload,
+                )
+
             response.raise_for_status()
             body = response.json()
 
-        content = body["choices"][0]["message"]["content"]
+        content = sanitize_model_text(body["choices"][0]["message"]["content"])
         return AIGatewayResult(
             status="ok",
             content=content,
@@ -154,14 +168,44 @@ class AIGateway:
         )
 
 
-def parse_model_json(content: str) -> dict[str, Any]:
-    """Parse a model JSON object, tolerating fenced output."""
-    text = content.strip()
+def sanitize_model_text(content: str) -> str:
+    """Remove customer-unsafe reasoning wrappers and markdown fences."""
+    text = (content or "").strip()
+
+    # Remove complete DeepSeek/R1 style reasoning blocks.
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.IGNORECASE | re.DOTALL).strip()
+
+    # If a provider emits an unclosed <think> then later returns JSON, keep only JSON.
+    if "<think>" in text.lower():
+        first_json = text.find("{")
+        if first_json >= 0:
+            text = text[first_json:].strip()
+        else:
+            text = re.sub(r"(?is)<think>.*", "", text).strip()
+
     if text.startswith("```"):
         lines = [line for line in text.splitlines() if not line.strip().startswith("```")]
         text = "\n".join(lines).strip()
+
+    return text
+
+
+def parse_model_json(content: str) -> dict[str, Any]:
+    """Parse a model JSON object, tolerating fenced or prefaced output."""
+    text = sanitize_model_text(content)
+
+    # If the model wrapped JSON in prose, recover the JSON object.
+    if not text.startswith("{"):
+        start = text.find("{")
+        end = text.rfind("}")
+        if start >= 0 and end > start:
+            text = text[start : end + 1].strip()
+
     try:
         value = json.loads(text)
     except json.JSONDecodeError:
-        return {"summary": content}
+        safe = text.strip()
+        if not safe:
+            safe = "AI returned reasoning-only output and no customer-safe answer."
+        return {"summary": safe}
     return value if isinstance(value, dict) else {"result": value}
