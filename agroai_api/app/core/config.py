@@ -94,6 +94,11 @@ class Settings(BaseSettings):
     AI_MODEL: str = ""
     AI_TIMEOUT_SECONDS: int = 30
 
+    # Connector ingestion / uploaded evidence storage.
+    # Render free instances have ephemeral disk; use a Render Disk/R2/S3 later
+    # for production retention. This makes uploads functional immediately.
+    CONNECTOR_UPLOAD_DIR: str = "/tmp/agroai_uploads"
+
     # Strip whitespace/tabs from env vars that may be copy-pasted with junk
     @field_validator("*", mode="before")
     @classmethod

@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
 import { apiClient } from "../api/client";
 import { arrayFromUnknown, usePortalResource } from "../hooks/usePortalResource";
 import { BG, BORDER, InlineState, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
@@ -24,9 +24,22 @@ type Summary = {
   readiness_score?: number;
   missing_data?: string[];
   by_type?: Record<string, number>;
+  by_provider?: Record<string, number>;
+};
+
+type UploadResult = {
+  status?: string;
+  rows_parsed?: number;
+  evidence_records_created?: number;
+  warnings?: string[];
+  filename?: string;
 };
 
 export function Evidence() {
+  const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState("");
+  const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
+
   const evidence = usePortalResource<unknown>(useCallback(() => apiClient.evidence.list(), []));
   const summaryState = usePortalResource<Summary>(useCallback(() => apiClient.evidence.summary(), []));
   const rows = arrayFromUnknown<EvidenceItem>(evidence.data, ["records", "evidence", "items", "data"]);
@@ -34,6 +47,39 @@ export function Evidence() {
 
   async function refresh() {
     await Promise.all([evidence.refresh(), summaryState.refresh()]);
+  }
+
+  async function uploadFiles(files?: FileList | null) {
+    if (!files?.length) return;
+    setUploading(true);
+    setUploadMessage("");
+    setUploadResult(null);
+
+    try {
+      let totalRows = 0;
+      let totalEvidence = 0;
+      const warnings: string[] = [];
+
+      for (const file of Array.from(files)) {
+        const result = await apiClient.evidence.upload(file, "manual_csv") as UploadResult;
+        totalRows += Number(result.rows_parsed || 0);
+        totalEvidence += Number(result.evidence_records_created || 0);
+        warnings.push(...(result.warnings || []));
+      }
+
+      setUploadResult({
+        status: "uploaded",
+        rows_parsed: totalRows,
+        evidence_records_created: totalEvidence,
+        warnings,
+      });
+      setUploadMessage(`Uploaded ${files.length} file(s). Created ${totalEvidence} evidence records from ${totalRows} parsed rows.`);
+      await refresh();
+    } catch (error) {
+      setUploadMessage(error instanceof Error ? error.message : "Upload failed.");
+    } finally {
+      setUploading(false);
+    }
   }
 
   return (
@@ -47,17 +93,51 @@ export function Evidence() {
             </div>
             <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: TEXT }}>Evidence</h1>
             <p className="mt-2 max-w-3xl text-[14px] leading-relaxed" style={{ color: MUTED }}>
-              Imported controller, telemetry, weather, ET, document, and field records. AGRO-AI uses these records as citations for answers, decisions, and reports.
+              Upload controller exports, CSVs, PDFs, spreadsheets, weather data, ET files, field logs, and messy customer documents. AGRO-AI turns usable rows into citation-ready evidence.
             </p>
           </div>
           <div className="flex gap-2">
             <PortalButton variant="secondary" onClick={refresh}>Refresh</PortalButton>
-            <PortalButton onClick={() => window.location.assign("/integrations")}>Upload evidence</PortalButton>
+            <PortalButton onClick={() => window.location.assign("/integrations")}>Open Connectors</PortalButton>
           </div>
         </div>
       </header>
 
       <div className="px-8 py-6 space-y-5" style={{ maxWidth: 1220 }}>
+        <section className="rounded-2xl p-6" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <div className="flex items-start justify-between gap-5">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: MUTED }}>Fast upload</div>
+              <h2 className="text-[18px] font-semibold mb-2" style={{ color: TEXT }}>Drop fragmented customer files here first.</h2>
+              <p className="text-[13px] leading-relaxed max-w-2xl" style={{ color: MUTED }}>
+                This creates a manual evidence connector automatically, stores the source, parses rows, suggests mappings, and makes the records available to Decisions, Reports, Assurance, and Ask AGRO-AI.
+              </p>
+            </div>
+
+            <label className="min-w-[260px] rounded-2xl p-5 cursor-pointer text-center" style={{ background: BG, border: `1px dashed ${BORDER}` }}>
+              <div className="text-[14px] font-semibold mb-1" style={{ color: TEXT }}>
+                {uploading ? "Uploading…" : "Choose files"}
+              </div>
+              <div className="text-[11px] mb-3" style={{ color: MUTED }}>CSV, JSON, TXT, PDF</div>
+              <input
+                type="file"
+                multiple
+                accept=".csv,.json,.txt,.pdf"
+                disabled={uploading}
+                onChange={(event) => uploadFiles(event.target.files)}
+                className="text-[11px] max-w-[220px]"
+                style={{ color: MUTED }}
+              />
+            </label>
+          </div>
+
+          {uploadMessage ? (
+            <div className="mt-4">
+              <InlineState title={uploadMessage} detail={(uploadResult?.warnings || []).join("; ") || undefined} />
+            </div>
+          ) : null}
+        </section>
+
         {evidence.isLoading ? <InlineState title="Loading evidence" /> : null}
         {evidence.error ? <InlineState title={evidence.error} /> : null}
         {summaryState.error ? <InlineState title={summaryState.error} /> : null}
@@ -100,7 +180,7 @@ export function Evidence() {
             </div>
           )) : (
             <div className="p-6">
-              <InlineState title="No imported evidence yet." detail="Open Connectors, create a WiseConn/Talgil/manual upload setup, and upload an export to generate citation-ready records." />
+              <InlineState title="No imported evidence yet." detail="Upload a customer file above or open Connectors to create a WiseConn/Talgil/manual upload setup." />
             </div>
           )}
         </section>
