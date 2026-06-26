@@ -12,6 +12,7 @@ from app.core.security import require_current_tenant_id
 from app.db.base import get_db
 from app.models.block import Block
 from app.models.recommendation import Recommendation
+from app.models.saas import Organization, Workspace
 from app.models.telemetry import Telemetry
 from app.schemas.ai import (
     AgentRunRequest,
@@ -23,17 +24,35 @@ from app.schemas.ai import (
     VerificationResult,
 )
 from app.services.ai_gateway import AIGateway, parse_model_json
+from app.services.evaluation_seed import ensure_evaluation_context
 
 router = APIRouter(tags=["ai"])
 
 
 SYSTEM_PROMPT = """You are AGRO-AI, an agriculture intelligence engine.
+
+Return valid JSON only. Never include chain-of-thought, scratchpad, <think>, markdown fences, or hidden reasoning.
+
+Use this JSON shape:
+{
+  "summary": "...",
+  "available_data": [],
+  "missing_data": [],
+  "integration_status": [],
+  "recommendations": [],
+  "next_actions": [],
+  "confidence": "low|medium|high",
+  "customer_safe": true
+}
+
 Rules:
 - Do not invent sensor data, integrations, compliance status, prices, or yields.
 - Use only the provided tenant-scoped evidence.
-- If evidence is missing, state exactly what is missing.
+- If evidence is evaluation_sample, label it as evaluation_sample.
+- Never claim WiseConn, Talgil, weather, OpenET, or controller data is live unless the evidence says connected/live.
+- If context is incomplete, still provide a useful operational diagnosis.
 - Keep output executive-readable, practical, and agriculture-specific.
-- Return valid JSON only."""
+"""
 
 
 TASK_PROMPTS: dict[str, str] = {
@@ -68,6 +87,45 @@ TASK_PROMPTS: dict[str, str] = {
 }
 
 
+def _integration_status() -> list[dict[str, str]]:
+    return [
+        {
+            "name": "WiseConn",
+            "status": "missing_credentials",
+            "next_step": "Add WiseConn API credentials or upload WiseConn exports.",
+        },
+        {
+            "name": "Talgil",
+            "status": "missing_credentials",
+            "next_step": "Add Talgil API credentials or upload controller exports.",
+        },
+        {
+            "name": "Manual/CSV evidence",
+            "status": "available",
+            "next_step": "Upload recent irrigation, ET, flow, soil, and field records.",
+        },
+        {
+            "name": "Weather/public data",
+            "status": "not_configured",
+            "next_step": "Configure weather/public data source before live recommendations.",
+        },
+    ]
+
+
+def _get_workspace(db: Session, tenant_id: str, workspace_id: str | None) -> Workspace | None:
+    if workspace_id:
+        workspace = db.get(Workspace, workspace_id)
+        if workspace and workspace.organization_id == tenant_id:
+            return workspace
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+    return (
+        db.query(Workspace)
+        .filter(Workspace.organization_id == tenant_id)
+        .order_by(Workspace.created_at.asc())
+        .first()
+    )
+
+
 def _get_evidence_context(
     *,
     db: Session,
@@ -75,6 +133,15 @@ def _get_evidence_context(
     block_id: str | None = None,
     workspace_id: str | None = None,
 ) -> EvidenceContext:
+    org = db.get(Organization, tenant_id)
+    workspace = _get_workspace(db, tenant_id, workspace_id)
+
+    # Repair existing orgs that registered before evaluation context existed.
+    if org:
+        ids = ensure_evaluation_context(db, org, workspace)
+        db.commit()
+        workspace = _get_workspace(db, tenant_id, workspace_id or ids.get("workspace_id"))
+
     evidence: list[dict[str, Any]] = []
     citations: list[ToolCitation] = []
     missing: list[str] = []
@@ -92,6 +159,39 @@ def _get_evidence_context(
     else:
         block = db.query(Block).filter(Block.tenant_id == tenant_id).first()
 
+    if workspace:
+        evidence.append(
+            {
+                "type": "workspace",
+                "id": workspace.id,
+                "name": workspace.name,
+                "crop": workspace.crop,
+                "region": workspace.region,
+                "mode": workspace.mode,
+                "source": "saas_workspace",
+            }
+        )
+        citations.append(
+            ToolCitation(
+                source_type="workspace",
+                source_id=workspace.id,
+                title=f"Workspace {workspace.name}",
+                tenant_id=tenant_id,
+                workspace_id=workspace.id,
+                fields=["name", "crop", "region", "mode"],
+            )
+        )
+    else:
+        missing.append("workspace record")
+
+    evidence.append(
+        {
+            "type": "integration_readiness",
+            "source": "system_status",
+            "items": _integration_status(),
+        }
+    )
+
     if block:
         evidence.append(
             {
@@ -103,6 +203,8 @@ def _get_evidence_context(
                 "soil_type": block.soil_type,
                 "water_budget_allocated": block.water_budget_allocated,
                 "water_budget_used": block.water_budget_used,
+                "source": (block.config or {}).get("source", "field_record"),
+                "config": block.config or {},
             }
         )
         citations.append(
@@ -111,8 +213,14 @@ def _get_evidence_context(
                 source_id=block.id,
                 title=f"Block {block.name}",
                 tenant_id=tenant_id,
-                workspace_id=workspace_id,
-                fields=["crop_type", "soil_type", "area_ha", "water_budget_allocated", "water_budget_used"],
+                workspace_id=workspace.id if workspace else workspace_id,
+                fields=[
+                    "crop_type",
+                    "soil_type",
+                    "area_ha",
+                    "water_budget_allocated",
+                    "water_budget_used",
+                ],
             )
         )
 
@@ -136,6 +244,7 @@ def _get_evidence_context(
                             "value": row.value,
                             "unit": row.unit,
                             "source": row.source,
+                            "meta_data": row.meta_data or {},
                         }
                         for row in telemetry
                     ],
@@ -147,7 +256,7 @@ def _get_evidence_context(
                     source_id=block.id,
                     title="Recent telemetry records",
                     tenant_id=tenant_id,
-                    workspace_id=workspace_id,
+                    workspace_id=workspace.id if workspace else workspace_id,
                     fields=["type", "timestamp", "value", "unit", "source"],
                     trace={"record_count": len(telemetry)},
                 )
@@ -168,6 +277,8 @@ def _get_evidence_context(
                     "volume_m3": recommendation.volume_m3,
                     "confidence": recommendation.confidence,
                     "explanations": recommendation.explanations or [],
+                    "version": recommendation.version,
+                    "meta_data": recommendation.meta_data or {},
                 }
             )
             citations.append(
@@ -176,7 +287,7 @@ def _get_evidence_context(
                     source_id=recommendation.id,
                     title="Most recent irrigation recommendation",
                     tenant_id=tenant_id,
-                    workspace_id=workspace_id,
+                    workspace_id=workspace.id if workspace else workspace_id,
                     fields=["when", "duration_min", "volume_m3", "confidence"],
                 )
             )
@@ -185,11 +296,17 @@ def _get_evidence_context(
     else:
         missing.extend(["workspace/block record", "recent telemetry", "recent recommendation"])
 
+    live_missing = ["live WiseConn credentials", "live Talgil credentials", "confirmed live telemetry stream"]
+    for item in live_missing:
+        if item not in missing:
+            missing.append(item)
+
     return EvidenceContext(
         organization_id=tenant_id,
-        workspace_id=workspace_id,
+        workspace_id=workspace.id if workspace else workspace_id,
         block_id=block.id if block else block_id,
-        crop_type=block.crop_type if block else None,
+        crop_type=block.crop_type if block else (workspace.crop if workspace else None),
+        region=workspace.region if workspace else None,
         evidence=evidence,
         missing_data=missing,
         citations=citations,
@@ -203,9 +320,57 @@ def _verification(status_value: str, context: EvidenceContext) -> VerificationRe
     return VerificationResult(
         status=status_name,
         missing_data=context.missing_data,
-        risk_flags=[] if status_value == "ok" else ["AI provider unavailable; output is not model-generated."],
+        risk_flags=[] if status_value == "ok" else ["AI provider unavailable; deterministic fallback used."],
         citations=context.citations,
     )
+
+
+def _deterministic_body(context: EvidenceContext) -> dict[str, Any]:
+    available: list[str] = []
+    for item in context.evidence:
+        item_type = item.get("type", "evidence")
+        source = item.get("source")
+        label = f"{item_type}" + (f" ({source})" if source else "")
+        available.append(label)
+
+    return {
+        "summary": (
+            "AGRO-AI can authenticate this organization and inspect its evaluation workspace. "
+            "Starter field context is available, but live controller and sensor integrations are not connected yet."
+        ),
+        "available_data": available,
+        "missing_data": context.missing_data,
+        "integration_status": _integration_status(),
+        "recommendations": [
+            "Use the evaluation sample only for product walkthrough and QA.",
+            "Connect WiseConn or Talgil credentials, or upload recent controller exports.",
+            "Confirm crop, acreage, soil type, water budget, and recent irrigation history before operational recommendations.",
+            "Run an assurance review after live telemetry is connected.",
+        ],
+        "next_actions": [
+            "connect_source",
+            "upload_recent_telemetry",
+            "confirm_field_profile",
+            "run_assurance_review",
+        ],
+        "confidence": "low",
+        "customer_safe": True,
+    }
+
+
+def _weak_or_empty(body: dict[str, Any]) -> bool:
+    summary = str(body.get("summary") or body.get("answer") or "").strip().lower()
+    if not summary:
+        return True
+    bad = [
+        "reasoning-only",
+        "no customer-safe answer",
+        "ai provider returned no customer-safe final answer",
+        "<think>",
+        "okay, so i'm",
+        "i'm trying to figure",
+    ]
+    return any(marker in summary for marker in bad)
 
 
 async def _run_ai(
@@ -232,7 +397,18 @@ async def _run_ai(
         temperature=temperature,
         response_format={"type": "json_object"},
     )
-    return parse_model_json(result.content), result
+    body = parse_model_json(result.content)
+    if result.status != "ok" or _weak_or_empty(body):
+        body = _deterministic_body(context)
+    return body, result
+
+
+@router.get("/ai/context", response_model=EvidenceContext)
+async def ai_context(
+    tenant_id: str = Depends(require_current_tenant_id),
+    db: Session = Depends(get_db),
+) -> EvidenceContext:
+    return _get_evidence_context(db=db, tenant_id=tenant_id)
 
 
 @router.post("/ai/chat", response_model=ChatResponse)

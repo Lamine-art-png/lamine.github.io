@@ -11,6 +11,23 @@ import httpx
 from app.core.config import settings
 
 
+FINAL_ANSWER_PROMPT = """
+Return only the final customer-safe JSON answer.
+Do not include reasoning, scratchpad, <think>, markdown, or code fences.
+Use this exact JSON shape when possible:
+{
+  "summary": "...",
+  "available_data": [],
+  "missing_data": [],
+  "integration_status": [],
+  "recommendations": [],
+  "next_actions": [],
+  "confidence": "low",
+  "customer_safe": true
+}
+"""
+
+
 @dataclass
 class AIGatewayResult:
     status: str
@@ -55,15 +72,39 @@ class AIGateway:
         except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
             return AIGatewayResult(
                 status="unavailable",
-                content=(
-                    "AI unavailable: model gateway request failed. No operational "
-                    "recommendation was generated."
+                content=json.dumps(
+                    {
+                        "summary": "AI provider unavailable. AGRO-AI returned a safe deterministic response.",
+                        "customer_safe": True,
+                    }
                 ),
                 provider=self.provider or "unconfigured",
                 model=self.model or None,
                 demo_fallback=True,
                 error=str(exc),
             )
+
+    async def _post_openai_payload(
+        self,
+        client: httpx.AsyncClient,
+        headers: dict[str, str],
+        payload: dict[str, Any],
+    ) -> dict[str, Any]:
+        response = await client.post(
+            f"{self.base_url}/chat/completions",
+            headers=headers,
+            json=payload,
+        )
+        if response.status_code in {400, 422} and "response_format" in payload:
+            retry_payload = dict(payload)
+            retry_payload.pop("response_format", None)
+            response = await client.post(
+                f"{self.base_url}/chat/completions",
+                headers=headers,
+                json=retry_payload,
+            )
+        response.raise_for_status()
+        return response.json()
 
     async def _chat_openai_compatible(
         self,
@@ -75,6 +116,7 @@ class AIGateway:
             "model": self.model,
             "messages": messages,
             "temperature": temperature,
+            "max_tokens": 1600,
         }
         if response_format:
             payload["response_format"] = response_format
@@ -83,29 +125,37 @@ class AIGateway:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
+
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(
-                f"{self.base_url}/chat/completions",
-                headers=headers,
-                json=payload,
+            body = await self._post_openai_payload(client, headers, payload)
+            raw_content = body["choices"][0]["message"]["content"]
+            content = extract_final_answer(raw_content)
+
+            if not content:
+                final_payload = dict(payload)
+                final_payload["messages"] = messages + [
+                    {"role": "assistant", "content": str(raw_content)[:4000]},
+                    {"role": "user", "content": FINAL_ANSWER_PROMPT},
+                ]
+                final_body = await self._post_openai_payload(client, headers, final_payload)
+                final_raw = final_body["choices"][0]["message"]["content"]
+                content = extract_final_answer(final_raw)
+                body = {"first_response": body, "final_response": final_body}
+
+        if not content:
+            content = json.dumps(
+                {
+                    "summary": "AI provider returned no customer-safe final answer.",
+                    "available_data": [],
+                    "missing_data": ["customer-safe final model answer"],
+                    "integration_status": [],
+                    "recommendations": [],
+                    "next_actions": ["retry_with_grounded_context"],
+                    "confidence": "low",
+                    "customer_safe": True,
+                }
             )
 
-            # Some OpenAI-compatible gateways, including certain Workers AI
-            # model routes, reject JSON mode even when normal chat works.
-            # Retry once without response_format before declaring AI unavailable.
-            if response.status_code in {400, 422} and "response_format" in payload:
-                retry_payload = dict(payload)
-                retry_payload.pop("response_format", None)
-                response = await client.post(
-                    f"{self.base_url}/chat/completions",
-                    headers=headers,
-                    json=retry_payload,
-                )
-
-            response.raise_for_status()
-            body = response.json()
-
-        content = sanitize_model_text(body["choices"][0]["message"]["content"])
         return AIGatewayResult(
             status="ok",
             content=content,
@@ -132,7 +182,7 @@ class AIGateway:
             response.raise_for_status()
             body = response.json()
 
-        content = body.get("message", {}).get("content", "")
+        content = extract_final_answer(body.get("message", {}).get("content", ""))
         return AIGatewayResult(
             status="ok",
             content=content,
@@ -157,6 +207,7 @@ class AIGateway:
                     "Configure an OpenAI-compatible hosted endpoint or local Ollama "
                     "runtime, then retry with verified workspace evidence."
                 ),
+                "customer_safe": True,
             }
         )
         return AIGatewayResult(
@@ -168,44 +219,68 @@ class AIGateway:
         )
 
 
-def sanitize_model_text(content: str) -> str:
-    """Remove customer-unsafe reasoning wrappers and markdown fences."""
-    text = (content or "").strip()
-
-    # Remove complete DeepSeek/R1 style reasoning blocks.
-    text = re.sub(r"<think>.*?</think>", "", text, flags=re.IGNORECASE | re.DOTALL).strip()
-
-    # If a provider emits an unclosed <think> then later returns JSON, keep only JSON.
-    if "<think>" in text.lower():
-        first_json = text.find("{")
-        if first_json >= 0:
-            text = text[first_json:].strip()
-        else:
-            text = re.sub(r"(?is)<think>.*", "", text).strip()
-
-    if text.startswith("```"):
+def _strip_markdown_fences(text: str) -> str:
+    if text.strip().startswith("```"):
         lines = [line for line in text.splitlines() if not line.strip().startswith("```")]
-        text = "\n".join(lines).strip()
+        return "\n".join(lines).strip()
+    return text.strip()
 
-    return text
+
+def extract_final_answer(content: str) -> str:
+    """Return only customer-safe final answer text/JSON."""
+    text = (content or "").strip()
+    if not text:
+        return ""
+
+    lower = text.lower()
+    if "</think>" in lower:
+        close = lower.rfind("</think>")
+        text = text[close + len("</think>") :].strip()
+    else:
+        text = re.sub(r"<think>.*?</think>", "", text, flags=re.IGNORECASE | re.DOTALL).strip()
+        if "<think>" in text.lower():
+            first_json = text.find("{")
+            if first_json >= 0:
+                text = text[first_json:].strip()
+            else:
+                return ""
+
+    text = _strip_markdown_fences(text)
+
+    # Recover JSON object when wrapped in prose.
+    start = text.find("{")
+    end = text.rfind("}")
+    if start >= 0 and end > start:
+        text = text[start : end + 1].strip()
+
+    # Reject obvious scratchpad/prose reasoning leaks.
+    unsafe_markers = [
+        "okay, so i'm",
+        "let me think",
+        "i need to figure",
+        "the user provided",
+        "looking at the evidence",
+        "i'm trying to figure",
+    ]
+    low = text.lower()
+    if any(marker in low for marker in unsafe_markers):
+        return ""
+
+    return text.strip()
+
+
+def sanitize_model_text(content: str) -> str:
+    return extract_final_answer(content)
 
 
 def parse_model_json(content: str) -> dict[str, Any]:
     """Parse a model JSON object, tolerating fenced or prefaced output."""
-    text = sanitize_model_text(content)
-
-    # If the model wrapped JSON in prose, recover the JSON object.
-    if not text.startswith("{"):
-        start = text.find("{")
-        end = text.rfind("}")
-        if start >= 0 and end > start:
-            text = text[start : end + 1].strip()
+    text = extract_final_answer(content)
+    if not text:
+        return {"summary": "", "customer_safe": True}
 
     try:
         value = json.loads(text)
     except json.JSONDecodeError:
-        safe = text.strip()
-        if not safe:
-            safe = "AI returned reasoning-only output and no customer-safe answer."
-        return {"summary": safe}
-    return value if isinstance(value, dict) else {"result": value}
+        return {"summary": text, "customer_safe": True}
+    return value if isinstance(value, dict) else {"result": value, "customer_safe": True}
