@@ -122,6 +122,21 @@ export type AiRequestPayload = {
   inputs?: Record<string, unknown>;
 };
 
+export type ConnectorStartPayload = {
+  provider:
+    | "wiseconn"
+    | "talgil"
+    | "weather"
+    | "openet"
+    | "manual_csv"
+    | "gmail"
+    | "outlook"
+    | "google_drive"
+    | "custom_api";
+  method?: string;
+  metadata?: Record<string, unknown>;
+};
+
 export type IntelligenceActionPayload = {
   action:
     | "field_diagnosis"
@@ -183,6 +198,10 @@ export const apiClient = {
   intelligence: {
     brief: () => get("/v1/intelligence/brief"),
     action: (payload: IntelligenceActionPayload) => post("/v1/intelligence/action", payload),
+  },
+  connectorHub: {
+    catalog: () => get("/v1/connectors/catalog"),
+    start: (payload: ConnectorStartPayload) => post("/v1/connectors/start", payload),
   },
   integrations: {
     list: () => get("/v1/integrations"),
