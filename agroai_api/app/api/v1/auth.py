@@ -14,6 +14,7 @@ from app.core.security import create_access_token
 from app.db.base import get_db
 from app.models.saas import Organization, OrganizationMembership, User, Workspace
 from app.services.entitlements import serialize_entitlements
+from app.services.evaluation_seed import ensure_evaluation_context
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -63,6 +64,15 @@ def _unique_slug(db: Session, name: str) -> str:
         slug = f"{base}-{suffix}"
         suffix += 1
     return slug
+
+
+def _first_workspace(db: Session, org_id: str) -> Workspace | None:
+    return (
+        db.query(Workspace)
+        .filter(Workspace.organization_id == org_id)
+        .order_by(Workspace.created_at.asc())
+        .first()
+    )
 
 
 def _session_response(user: User, org: Organization, membership: OrganizationMembership) -> dict:
@@ -116,6 +126,9 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> dict:
         mode="evaluation",
     )
     db.add_all([membership, workspace])
+    db.flush()
+    ensure_evaluation_context(db, org, workspace)
+
     try:
         db.commit()
     except IntegrityError:
@@ -141,6 +154,8 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> dict:
     )
     if not membership:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User has no organization membership")
+
+    ensure_evaluation_context(db, membership.organization, _first_workspace(db, membership.organization_id))
     db.commit()
     return _session_response(user, membership.organization, membership)
 
@@ -151,7 +166,11 @@ def logout(_: User = Depends(get_current_user)) -> dict:
 
 
 @router.get("/me")
-def me(ctx: AuthContext = Depends(get_auth_context)) -> dict:
+def me(ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
+    if ctx.organization:
+        ensure_evaluation_context(db, ctx.organization, _first_workspace(db, ctx.organization.id))
+        db.commit()
+
     orgs = [
         {
             "id": membership.organization.id,
