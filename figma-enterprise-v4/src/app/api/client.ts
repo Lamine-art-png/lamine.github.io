@@ -236,8 +236,11 @@ export const apiClient = {
   evidence: {
     list: () => get("/v1/evidence"),
     summary: () => get("/v1/evidence/summary"),
-    upload: (file: File, provider = "manual_csv") =>
-      upload(`/v1/evidence/upload?provider=${encodeURIComponent(provider)}`, file),
+    upload: (file: File, provider = "manual_csv", workspaceId?: string) => {
+      const query = new URLSearchParams({ provider });
+      if (workspaceId) query.set("workspace_id", workspaceId);
+      return upload(`/v1/evidence/upload?${query.toString()}`, file);
+    },
     uploadMetadata: (payload: unknown) => post("/v1/evidence", payload),
   },
 

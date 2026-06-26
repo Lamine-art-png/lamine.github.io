@@ -452,11 +452,11 @@ export function Integrations() {
   async function startOAuthConnector() {
     if (!selected) return;
     const profile = profileFor(selected.id, selected);
+
     setBusy("oauth");
     setMessage("");
 
     try {
-      const activeConnection = await ensureConnection();
       const result = await apiClient.connectorHub.oauthStart({
         provider: selected.id,
         workspace_id: currentWorkspace?.id,
@@ -468,69 +468,58 @@ export function Integrations() {
         },
       }) as AnyRecord;
 
-      setConnection(result.connection || activeConnection);
+      setConnection(result.connection || null);
 
       if (result.auth_url) {
-        setMessage(`${profile.title} OAuth is ready. Redirecting to provider authorization.`);
+        setMessage(`${profile.title} authorization is ready. Redirecting to provider.`);
         window.location.assign(result.auth_url);
       } else {
-        setMessage(result.message || `${profile.title} OAuth is not configured yet.`);
+        setMessage(result.message || `${profile.title} connected for internal testing.`);
       }
 
       await refresh();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not start OAuth.");
+      setMessage(error instanceof Error ? error.message : "Could not connect account. Confirm the backend is deployed with /v1/connectors/oauth/start.");
     } finally {
       setBusy("");
     }
   }
 
-  async function saveConnector(status = "test_passed") {
+  async function saveConnector(status = "connected") {
     if (!selected) return;
 
     const profile = profileFor(selected.id, selected);
-    setBusy("save");
-    setMessage("");
 
     if (profile.method === "oauth") {
       await startOAuthConnector();
       return;
     }
 
+    setBusy("save");
+    setMessage("");
+
     try {
-      const activeConnection = await ensureConnection();
-      const credentialRef =
-        config.credential_ref ||
-        config.api_key ||
-        config.account_email ||
-        config.provider_name ||
-        `${selected.id}_internal_connection`;
-
-      const safeConfig: Record<string, string> = {};
-      for (const [key, value] of Object.entries(config)) {
-        if (/secret|token|password|api_key|credential|key/i.test(key)) {
-          safeConfig[key] = value ? "submitted_to_backend_sanitizer" : "";
-        } else {
-          safeConfig[key] = value;
-        }
-      }
-
-      const result = await apiClient.connectorHub.update(activeConnection.id, {
-        status,
-        credentials_ref: String(credentialRef),
+      const result = await apiClient.connectorHub.connect({
+        provider: selected.id as any,
+        workspace_id: currentWorkspace?.id,
+        mode: profile.method,
+        display_name: profile.title,
         config: {
-          ...safeConfig,
+          ...config,
           connector_type: profile.type,
           provider_label: profile.title,
           internal_testing: true,
+          requested_status: status,
         },
+        read_context_enabled: true,
+        send_reports_enabled: profile.type === "account",
       }) as AnyRecord;
 
-      setConnection(result.connection || activeConnection);
-      setMessage(`${profile.title} connected for internal testing.`);
+      setConnection(result.connection || null);
+      setMessage(result.message || `${profile.title} connected.`);
       await refresh();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Could not save connector.");
+      setMessage(error instanceof Error ? error.message : "Could not connect provider. Confirm the backend is deployed with /v1/connectors/connect.");
     } finally {
       setBusy("");
     }
@@ -571,21 +560,21 @@ export function Integrations() {
   }
 
   async function uploadFile(file?: File) {
-    if (!file) return;
+    if (!file || !selected) return;
 
     setBusy("upload");
     setMessage("");
     setUploadResult(null);
 
     try {
-      const activeConnection = await ensureConnection();
-      const result = await apiClient.connectorHub.upload(activeConnection.id, file) as AnyRecord;
+      const result = await apiClient.evidence.upload(file, selected.id, currentWorkspace?.id) as AnyRecord;
+
       setUploadResult(result);
-      setConnection(result.connection || activeConnection);
+      setConnection(result.connection || connection);
       setMessage(`Imported ${pretty(result.evidence_records_created, "0")} evidence records from ${file.name}.`);
       await refresh();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Upload failed.");
+      setMessage(error instanceof Error ? error.message : "Upload failed. Confirm the backend is deployed with /v1/evidence/upload.");
     } finally {
       setBusy("");
     }
