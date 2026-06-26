@@ -3,6 +3,7 @@ import { LogOut } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import logoImg from "../../imports/agro-ai-logo-1.png";
+import { IntelligenceFabric } from "./IntelligenceFabric";
 
 export function MainLayout() {
   const { currentOrganization, currentWorkspace, logout } = useAuth();
@@ -173,6 +174,7 @@ export function MainLayout() {
       </aside>
 
       <main className="flex-1 overflow-auto">
+        <IntelligenceFabric />
         <Outlet />
       </main>
     </div>

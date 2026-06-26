@@ -105,6 +105,62 @@ def ensure_evaluation_context(
         db.add(block)
         db.flush()
 
+    enriched_config = dict(block.config or {})
+    enriched_config.setdefault("source", "evaluation_sample")
+    enriched_config.setdefault(
+        "sample_notice",
+        "Evaluation sample only. Connect live data before operational use.",
+    )
+    enriched_config.setdefault(
+        "assurance_readiness",
+        {
+            "status": "evaluation_ready",
+            "operational_use": False,
+            "missing_before_live": [
+                "live controller credentials",
+                "recent live telemetry",
+                "verified water budget",
+                "operator approval trail",
+            ],
+        },
+    )
+    enriched_config.setdefault(
+        "evidence_sources",
+        [
+            {
+                "name": "Evaluation telemetry sample",
+                "status": "available",
+                "source": "evaluation_sample",
+                "operational_use": False,
+            },
+            {
+                "name": "Controller integration",
+                "status": "missing_credentials",
+                "source": "live_required",
+                "operational_use": False,
+            },
+            {
+                "name": "Manual evidence upload",
+                "status": "available",
+                "source": "operator_upload",
+                "operational_use": False,
+            },
+        ],
+    )
+    enriched_config.setdefault(
+        "report_readiness",
+        {
+            "status": "draft_ready_from_evaluation_sample",
+            "operational_use": False,
+            "missing_for_certified_report": [
+                "live source credentials",
+                "recent controller events",
+                "reviewer approval",
+            ],
+        },
+    )
+    block.config = enriched_config
+
     telemetry_exists = (
         db.query(Telemetry.id)
         .filter(and_(Telemetry.tenant_id == org.id, Telemetry.block_id == block.id))
@@ -118,6 +174,7 @@ def ensure_evaluation_context(
             ("et0", now - timedelta(hours=6), 4.1, "mm/day", "evaluation_sample"),
             ("flow", now - timedelta(hours=10), 18.6, "m3/hour", "evaluation_sample"),
             ("weather", now - timedelta(hours=3), 27.2, "C", "evaluation_sample"),
+            ("valve_state", now - timedelta(hours=1), 1.0, "open_flag", "evaluation_sample"),
             ("soil_vwc", now - timedelta(days=1), 23.4, "%", "evaluation_sample"),
         ]
         for kind, ts, value, unit, source in rows:
@@ -139,6 +196,47 @@ def ensure_evaluation_context(
                 )
             )
         db.flush()
+
+    required_telemetry_rows = [
+        ("soil_vwc", datetime.utcnow() - timedelta(hours=2), 24.8, "%"),
+        ("et0", datetime.utcnow() - timedelta(hours=6), 4.1, "mm/day"),
+        ("flow", datetime.utcnow() - timedelta(hours=10), 18.6, "m3/hour"),
+        ("weather", datetime.utcnow() - timedelta(hours=3), 27.2, "C"),
+        ("valve_state", datetime.utcnow() - timedelta(hours=1), 1.0, "open_flag"),
+    ]
+    for kind, ts, value, unit in required_telemetry_rows:
+        exists = (
+            db.query(Telemetry.id)
+            .filter(
+                and_(
+                    Telemetry.tenant_id == org.id,
+                    Telemetry.block_id == block.id,
+                    Telemetry.type == kind,
+                )
+            )
+            .first()
+        )
+        if exists:
+            continue
+        db.add(
+            Telemetry(
+                id=_id(),
+                tenant_id=org.id,
+                block_id=block.id,
+                type=kind,
+                timestamp=ts,
+                value=value,
+                unit=unit,
+                source="evaluation_sample",
+                meta_data={
+                    "source": "evaluation_sample",
+                    "workspace_id": workspace.id,
+                    "operational_use": False,
+                    "sample_notice": "Evaluation sample only. Connect live data before operational use.",
+                },
+            )
+        )
+    db.flush()
 
     recommendation_exists = (
         db.query(Recommendation.id)
