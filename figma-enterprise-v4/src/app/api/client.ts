@@ -1,7 +1,12 @@
+const isBrowser = typeof window !== "undefined";
+const isLocalFrontend =
+  isBrowser &&
+  ["localhost", "127.0.0.1", "0.0.0.0"].includes(window.location.hostname);
+
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_URL ||
-  "https://api.agroai-pilot.com";
+  (isLocalFrontend ? "http://localhost:8000" : "https://api.agroai-pilot.com");
 
 const tokenKey = "agroai_access_token";
 
