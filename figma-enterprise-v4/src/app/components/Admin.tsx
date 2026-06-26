@@ -1,98 +1,90 @@
-import { useState } from "react";
-import { apiClient } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
-import { BG, BORDER, InlineState, MUTED, PortalButton, SURFACE, TEXT } from "./portalUi";
+import { BG, BORDER, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
 
-function extractUrl(response: unknown) {
-  if (!response || typeof response !== "object") return "";
-  const data = response as Record<string, unknown>;
-  return typeof data.url === "string" ? data.url : typeof data.checkout_url === "string" ? data.checkout_url : "";
+function safe(value: unknown, fallback = "—") {
+  if (value === null || value === undefined || value === "") return fallback;
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+  return fallback;
 }
 
 export function Admin() {
-  const { currentOrganization, currentWorkspace, entitlements } = useAuth();
-  const [billingMessage, setBillingMessage] = useState("");
-  const entitlementEntries = Object.entries(entitlements).slice(0, 8);
+  const { user, currentOrganization, currentWorkspace } = useAuth();
 
-  async function redirectWith(loader: () => Promise<unknown>) {
-    setBillingMessage("");
-    try {
-      const response = await loader();
-      const url = extractUrl(response);
-      if (!url) {
-        setBillingMessage("Billing is not configured yet.");
-        return;
-      }
-      window.location.assign(url);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Billing is not configured yet.";
-      setBillingMessage(message.toLowerCase().includes("stripe") ? "Billing is not configured yet." : message);
-    }
-  }
+  const plan = safe(currentOrganization?.plan, "Free");
+  const role = safe(currentOrganization?.role, "Owner");
+  const workspace = safe(currentWorkspace?.name, "Demo workspace");
+  const org = safe(currentOrganization?.name, "AGRO-AI workspace");
 
   return (
     <div className="min-h-screen" style={{ background: BG }}>
-      <header className="bg-[#FFFEFA] border-b border-[rgba(16,35,27,0.12)] px-8 py-5">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-6">
-            <h1 className="text-2xl font-bold text-[#10231B]">Admin</h1>
-            <span className="px-2.5 py-1 bg-[#F6F4EE] border border-[rgba(16,35,27,0.12)] rounded text-xs font-medium text-[#68776F]">
-              Settings
-            </span>
+      <header className="px-8 py-7" style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}>
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <div className="flex items-center gap-2 mb-3">
+              <StatusBadge label="Settings" />
+              <StatusBadge label={`${plan} plan`} tone={String(plan).toLowerCase() === "free" ? "warn" : "good"} />
+            </div>
+            <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: TEXT }}>Settings</h1>
+            <p className="mt-2 max-w-2xl text-[14px] leading-relaxed" style={{ color: MUTED }}>
+              Manage workspace access, plan status, billing readiness, and operational configuration.
+            </p>
           </div>
+
+          <PortalButton onClick={() => window.location.assign("/integrations")}>
+            Set up connectors
+          </PortalButton>
         </div>
       </header>
-      <div className="p-8">
-        <div className="bg-[#FFFEFA] border border-[rgba(16,35,27,0.12)] rounded-xl p-8">
-          <h2 className="text-lg font-bold text-[#10231B] mb-4">System Administration</h2>
-          <div className="grid lg:grid-cols-3 gap-4">
-            <AdminMetric label="Organization" value={currentOrganization?.name || "Unavailable"} />
-            <AdminMetric label="Workspace" value={currentWorkspace?.name || "Evaluation workspace"} />
-            <AdminMetric label="Role" value={currentOrganization?.role || "member"} />
-            <AdminMetric label="Plan" value={currentOrganization?.plan || "free"} />
-            <AdminMetric label="Subscription" value={currentOrganization?.subscription_status || "inactive"} />
-            <AdminMetric label="Billing" value={billingMessage || "Available when backend returns a billing URL"} />
-          </div>
 
-          <div className="mt-8 border-t border-[rgba(16,35,27,0.12)] pt-6">
-            <div className="flex items-center justify-between gap-4">
-              <div>
-                <h3 className="text-sm font-bold text-[#10231B]">Billing</h3>
-                <p className="text-sm text-[#68776F] mt-1">Upgrade and billing management use the live backend billing endpoints.</p>
-              </div>
-              <div className="flex items-center gap-2">
-                <PortalButton variant="secondary" onClick={() => redirectWith(apiClient.billing.createPortalSession)}>Manage billing</PortalButton>
-                <PortalButton onClick={() => redirectWith(apiClient.billing.createCheckoutSession)}>Upgrade</PortalButton>
-              </div>
-            </div>
-            {billingMessage ? <div className="mt-4"><InlineState title={billingMessage} /></div> : null}
-          </div>
+      <main className="px-8 py-6 space-y-5" style={{ maxWidth: 1100 }}>
+        <section className="grid grid-cols-3 gap-5">
+          <Card title="Organization" rows={[
+            ["Name", org],
+            ["User", safe(user?.email, "Authenticated user")],
+            ["Role", role],
+          ]} />
 
-          <div className="mt-8 border-t border-[rgba(16,35,27,0.12)] pt-6">
-            <h3 className="text-sm font-bold text-[#10231B] mb-3">Entitlements</h3>
-            {entitlementEntries.length ? (
-              <div className="grid md:grid-cols-2 gap-2">
-                {entitlementEntries.map(([key, value]) => (
-                  <div key={key} className="flex items-center justify-between rounded-md border border-[rgba(16,35,27,0.1)] bg-[#F6F4EE] px-3 py-2">
-                    <span className="text-[12px] text-[#68776F]">{key}</span>
-                    <span className="text-[12px] font-semibold text-[#10231B]">{String(value)}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-[#68776F]">No entitlement data returned for this session.</p>
-            )}
+          <Card title="Workspace" rows={[
+            ["Active workspace", workspace],
+            ["Mode", "Demo / evaluation"],
+            ["Live sync", "Not enabled"],
+          ]} />
+
+          <Card title="Plan" rows={[
+            ["Current plan", plan],
+            ["Billing", "Not connected"],
+            ["Upgrade path", "Pilot → Pro → Enterprise"],
+          ]} />
+        </section>
+
+        <section className="rounded-2xl p-6" style={{ background: "#0D2B1E", border: "1px solid rgba(255,255,255,0.08)" }}>
+          <div className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: "rgba(155,216,75,0.65)" }}>
+            What matters next
           </div>
-        </div>
-      </div>
+          <h2 className="text-[22px] font-semibold mb-2" style={{ color: "white" }}>
+            Connect one real source before adding more dashboards.
+          </h2>
+          <p className="text-[13px] leading-relaxed max-w-3xl" style={{ color: "rgba(255,255,255,0.68)" }}>
+            The product becomes valuable when WiseConn, Talgil, weather, ET, or uploaded evidence flows into the same decision layer. Until then, the portal must clearly label demo data and avoid fake live claims.
+          </p>
+        </section>
+      </main>
     </div>
   );
 }
-function AdminMetric({ label, value }: { label: string; value: string }) {
+
+function Card({ title, rows }: { title: string; rows: [string, string][] }) {
   return (
-    <div className="rounded-lg border border-[rgba(16,35,27,0.1)] bg-[#F6F4EE] p-4">
-      <div className="text-[11px] font-semibold uppercase tracking-widest text-[#68776F]">{label}</div>
-      <div className="mt-2 text-sm font-semibold text-[#10231B]">{value}</div>
-    </div>
+    <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+      <div className="text-[10px] font-semibold uppercase tracking-widest mb-4" style={{ color: MUTED }}>{title}</div>
+      <div className="space-y-3">
+        {rows.map(([label, value]) => (
+          <div key={label} className="flex justify-between gap-4 text-[13px]">
+            <span style={{ color: MUTED }}>{label}</span>
+            <span className="font-semibold text-right" style={{ color: TEXT }}>{value}</span>
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
