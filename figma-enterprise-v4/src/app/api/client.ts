@@ -167,6 +167,17 @@ export type ConnectorStartPayload = {
   metadata?: Record<string, unknown>;
 };
 
+export type ConnectorConnectPayload = {
+  provider: ConnectorProvider;
+  workspace_id?: string;
+  mode?: string;
+  display_name?: string;
+  config?: Record<string, unknown>;
+  scopes?: string[];
+  read_context_enabled?: boolean;
+  send_reports_enabled?: boolean;
+};
+
 export type IntelligenceActionPayload = {
   action:
     | "field_diagnosis"
@@ -266,12 +277,16 @@ export const apiClient = {
     catalog: () => get("/v1/connectors/catalog"),
     connections: () => get("/v1/connectors/connections"),
     create: (payload: unknown) => post("/v1/connectors/connections", payload),
+    connect: (payload: ConnectorConnectPayload) => post("/v1/connectors/connect", payload),
     start: (payload: ConnectorStartPayload) => post("/v1/connectors/start", payload),
     oauthStart: (payload: unknown) => post("/v1/connectors/oauth/start", payload),
     get: (connectionId: string) => get(`/v1/connectors/connections/${encodeURIComponent(connectionId)}`),
     update: (connectionId: string, payload: unknown) => patch(`/v1/connectors/connections/${encodeURIComponent(connectionId)}`, payload),
     test: (connectionId: string) => post(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/test`),
     upload: (connectionId: string, file: File) => upload(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/upload`, file),
+    data: (connectionId: string) => get(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/data`),
+    dataSources: () => get("/v1/connectors/data-sources"),
+    jobs: () => get("/v1/connectors/jobs"),
     mappingSuggestions: (connectionId: string) => get(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/mapping/suggestions`),
     saveMapping: (connectionId: string, mapping: Record<string, string>) =>
       post(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/mapping`, { mapping }),
