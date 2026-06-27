@@ -358,14 +358,28 @@ async def upload_evidence_file(
 
     data = await file.read()
 
-    return ingest_upload(
-        db,
-        tenant_id=tenant_id,
-        connection=connection,
-        filename=file.filename or "upload",
-        content_type=file.content_type,
-        data=data,
-    )
+    try:
+        return ingest_upload(
+            db,
+            tenant_id=tenant_id,
+            connection=connection,
+            filename=file.filename or "upload",
+            content_type=file.content_type,
+            data=data,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "error": "upload_ingestion_failed",
+                "message": str(exc),
+                "provider": provider,
+                "filename": file.filename,
+            },
+        )
 
 
 @router.get("/connectors/data-sources")
