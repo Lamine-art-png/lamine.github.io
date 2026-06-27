@@ -40,7 +40,7 @@ type ConnectorProfile = {
   drawerDescription: string;
   primaryAction: string;
   method: "oauth" | "api_credentials" | "manual_upload" | "custom_api";
-  authPattern: "oauth" | "provider_api" | "manual_upload" | "enterprise_api";
+  authPattern: "oauth" | "provider_api" | "manual_upload" | "enterprise_api" | "service_account";
   fields: ConnectorField[];
   permissions: string[];
   dataObjects: string[];
@@ -217,6 +217,111 @@ const PROFILES: Record<string, ConnectorProfile> = {
     dataObjects: ["folders", "documents", "spreadsheets", "PDFs", "file metadata"],
     launchSteps: ["Customer clicks Continue with Google", "Consent screen opens", "Folder context is selected", "Documents are indexed as evidence"],
     fields: [{ key: "field_scope", label: "Folder or context hint", placeholder: "Water reports / irrigation exports / compliance docs" }],
+  },
+  dropbox: {
+    id: "dropbox",
+    title: "Dropbox",
+    subtitle: "Files + folders",
+    type: "account",
+    logoUrl: "https://www.google.com/s2/favicons?domain=dropbox.com&sz=128",
+    logoFallback: "Db",
+    logoBg: "#EFF6FF",
+    logoColor: "#0061FF",
+    cardDescription: "Authorize Dropbox folders containing field evidence, PDFs, spreadsheets, and grower records.",
+    drawerTitle: "Authorize Dropbox",
+    drawerDescription: "A Dropbox consent flow for approved customer folders and files. AGRO-AI stores cited file context, not raw secrets.",
+    primaryAction: "Continue with Dropbox",
+    method: "oauth",
+    authPattern: "oauth",
+    supportsUpload: false,
+    permissions: ["View approved Dropbox folders", "Read selected files and metadata", "Create citation-ready document evidence"],
+    dataObjects: ["folders", "files", "PDFs", "spreadsheets", "file metadata"],
+    launchSteps: ["Customer clicks Continue with Dropbox", "Dropbox consent screen opens", "AGRO-AI receives callback", "Server exchanges code and stores provider token reference"],
+    fields: [{ key: "field_scope", label: "Folder or context hint", placeholder: "Irrigation exports / assurance evidence / field reports" }],
+  },
+  box: {
+    id: "box",
+    title: "Box",
+    subtitle: "Enterprise files",
+    type: "account",
+    logoUrl: "https://www.google.com/s2/favicons?domain=box.com&sz=128",
+    logoFallback: "Bx",
+    logoBg: "#EFF6FF",
+    logoColor: "#0061D5",
+    cardDescription: "Authorize Box folders for enterprise documents, audit packets, PDFs, and spreadsheets.",
+    drawerTitle: "Authorize Box",
+    drawerDescription: "Box follows the same consent-first pattern: approved folders become cited evidence, and token exchange stays server-side.",
+    primaryAction: "Continue with Box",
+    method: "oauth",
+    authPattern: "oauth",
+    supportsUpload: false,
+    permissions: ["View approved Box folders", "Read selected documents and metadata", "Create citation-ready enterprise file evidence"],
+    dataObjects: ["folders", "files", "PDFs", "spreadsheets", "enterprise metadata"],
+    launchSteps: ["Customer clicks Continue with Box", "Box consent screen opens", "AGRO-AI receives callback", "Server exchanges code and stores provider token reference"],
+    fields: [{ key: "field_scope", label: "Folder or context hint", placeholder: "Audit packets / water reports / customer evidence" }],
+  },
+  slack: {
+    id: "slack",
+    title: "Slack",
+    subtitle: "Operations context",
+    type: "account",
+    logoUrl: "https://www.google.com/s2/favicons?domain=slack.com&sz=128",
+    logoFallback: "S",
+    logoBg: "#FDF2F8",
+    logoColor: "#611F69",
+    cardDescription: "Authorize Slack for approved operations-channel context, files, and field handoffs.",
+    drawerTitle: "Authorize Slack",
+    drawerDescription: "Slack context is labeled as operational evidence and should never be shown as connected until provider consent succeeds.",
+    primaryAction: "Continue with Slack",
+    method: "oauth",
+    authPattern: "oauth",
+    supportsUpload: false,
+    permissions: ["View approved channel metadata", "Read selected files and operational messages", "Create cited handoff context"],
+    dataObjects: ["channels", "messages", "files", "operator handoffs"],
+    launchSteps: ["Customer clicks Continue with Slack", "Slack consent screen opens", "AGRO-AI receives callback", "Server exchanges code and stores provider token reference"],
+    fields: [{ key: "field_scope", label: "Channel / context hint", placeholder: "#field-ops, irrigation handoffs, files" }],
+  },
+  salesforce: {
+    id: "salesforce",
+    title: "Salesforce",
+    subtitle: "Customer operations",
+    type: "account",
+    logoUrl: "https://www.google.com/s2/favicons?domain=salesforce.com&sz=128",
+    logoFallback: "SF",
+    logoBg: "#EFF6FF",
+    logoColor: "#0B5CAB",
+    cardDescription: "Authorize Salesforce customer context for accounts, cases, and enterprise assurance workflows.",
+    drawerTitle: "Authorize Salesforce",
+    drawerDescription: "Salesforce context supports customer-success and assurance workflows after provider consent and server-side token exchange.",
+    primaryAction: "Continue with Salesforce",
+    method: "oauth",
+    authPattern: "oauth",
+    supportsUpload: false,
+    permissions: ["Read approved account context", "Read cases and customer notes", "Use context in reports and assurance workflows"],
+    dataObjects: ["accounts", "contacts", "cases", "opportunities", "customer notes"],
+    launchSteps: ["Customer clicks Continue with Salesforce", "Salesforce consent screen opens", "AGRO-AI receives callback", "Server exchanges code and stores provider token reference"],
+    fields: [{ key: "account_hint", label: "Salesforce user / org hint", placeholder: "customer-success@company.com", type: "email" }],
+  },
+  google_earth_engine: {
+    id: "google_earth_engine",
+    title: "Google Earth Engine",
+    subtitle: "Geospatial project",
+    type: "data_provider",
+    logoUrl: "https://www.google.com/s2/favicons?domain=earthengine.google.com&sz=128",
+    logoFallback: "GEE",
+    logoBg: "#ECFDF5",
+    logoColor: "#047857",
+    cardDescription: "Verify Earth Engine project and service-account readiness for remote-sensing context.",
+    drawerTitle: "Verify Google Earth Engine",
+    drawerDescription: "Earth Engine uses project/service-account configuration, not customer OAuth consent. The portal reports readiness without exposing env values.",
+    primaryAction: "Verify service account",
+    method: "api_credentials",
+    authPattern: "service_account",
+    supportsUpload: false,
+    permissions: ["Use configured Earth Engine project", "Read approved geospatial assets", "Bring remote-sensing context into reports"],
+    dataObjects: ["project assets", "imagery layers", "ET/geospatial context", "field boundary references"],
+    launchSteps: ["Platform sets project ID", "Platform sets service-account JSON", "Backend verifies env readiness", "Geospatial context can be cited in intelligence outputs"],
+    fields: [{ key: "field_scope", label: "Project / asset scope note", placeholder: "Earth Engine project, field assets, geospatial layers" }],
   },
   weather: {
     id: "weather",
@@ -411,7 +516,7 @@ export function Integrations() {
   async function saveConnector() {
     if (!selected) return;
     const profile = profileFor(selected.id, selected);
-    if (profile.authPattern === "oauth") { await launchAuthorization(); return; }
+    if (profile.authPattern === "oauth" || profile.authPattern === "service_account") { await launchAuthorization(); return; }
     if (profile.authPattern === "manual_upload") { setMessage("Use the upload area below to attach evidence files."); return; }
     setBusy("save"); setMessage(""); setLaunchResult(null);
     try {
@@ -458,7 +563,7 @@ export function Integrations() {
             return <article key={connector.id} className="rounded-2xl p-5 flex flex-col min-h-[258px]" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
               <div className="flex items-start justify-between gap-3 mb-4"><div className="flex items-center gap-3"><ConnectorLogo profile={profile} /><div><div className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: MUTED }}>{TYPE_LABEL[profile.type]}</div><h3 className="text-[16px] font-semibold" style={{ color: TEXT }}>{profile.title}</h3></div></div><StatusBadge label={status} tone={statusTone(String(live?.status || connector.status || ""))} /></div>
               <p className="text-[12px] leading-relaxed mb-2" style={{ color: MUTED }}>{profile.subtitle}</p><p className="text-[12px] leading-relaxed mb-4 flex-1" style={{ color: MUTED }}>{profile.cardDescription}</p>
-              <div className="flex flex-wrap gap-1.5 mb-4"><Chip>{TYPE_LABEL[profile.type]}</Chip><Chip>{profile.authPattern === "oauth" ? "OAuth consent" : profile.authPattern === "manual_upload" ? "file upload" : "provider access"}</Chip>{profile.supportsUpload ? <Chip>upload now</Chip> : null}</div>
+              <div className="flex flex-wrap gap-1.5 mb-4"><Chip>{TYPE_LABEL[profile.type]}</Chip><Chip>{profile.authPattern === "oauth" ? "OAuth consent" : profile.authPattern === "service_account" ? "service account" : profile.authPattern === "manual_upload" ? "file upload" : "provider access"}</Chip>{profile.supportsUpload ? <Chip>upload now</Chip> : null}</div>
               <button type="button" onClick={() => openConnector({ ...connector, connection: live })} className="h-10 rounded-lg text-[12px] font-semibold" style={{ background: "#16533C", color: "white" }}>{busy === connector.id ? "Opening..." : live ? "Manage connection" : "Connect"}</button>
             </article>;
           })}

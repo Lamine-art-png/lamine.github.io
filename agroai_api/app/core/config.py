@@ -100,6 +100,12 @@ class Settings(BaseSettings):
     # Render free instances have ephemeral disk; use a Render Disk/R2/S3 later
     # for production retention. This makes uploads functional immediately.
     CONNECTOR_UPLOAD_DIR: str = "/tmp/agroai_uploads"
+    DROPBOX_OAUTH_CLIENT_ID: str = ""
+    BOX_OAUTH_CLIENT_ID: str = ""
+    SLACK_OAUTH_CLIENT_ID: str = ""
+    SALESFORCE_OAUTH_CLIENT_ID: str = ""
+    GOOGLE_EARTH_ENGINE_PROJECT_ID: str = ""
+    GOOGLE_EARTH_ENGINE_SERVICE_ACCOUNT_JSON: str = ""
 
     # Strip whitespace/tabs from env vars that may be copy-pasted with junk
     @field_validator("*", mode="before")

@@ -158,6 +158,11 @@ export type ConnectorProvider =
   | "gmail"
   | "outlook"
   | "google_drive"
+  | "dropbox"
+  | "box"
+  | "slack"
+  | "salesforce"
+  | "google_earth_engine"
   | "custom_api";
 
 export type ConnectorStartPayload = {

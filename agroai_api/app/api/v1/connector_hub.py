@@ -30,10 +30,10 @@ router = APIRouter(tags=["connector-hub-actions"])
 
 ProviderId = Literal[
     "wiseconn", "talgil", "weather", "openet", "manual_csv",
-    "gmail", "outlook", "google_drive", "custom_api",
+    "gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce", "google_earth_engine", "custom_api",
 ]
 
-ACCOUNT_PROVIDERS = {"gmail", "outlook", "google_drive"}
+ACCOUNT_PROVIDERS = {"gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce"}
 UPLOAD_PROVIDERS = {"wiseconn", "talgil", "manual_csv", "weather", "openet"}
 
 
@@ -49,7 +49,7 @@ class ConnectorConnectRequest(BaseModel):
 
 
 class OAuthStartRequest(BaseModel):
-    provider: Literal["gmail", "outlook", "google_drive"]
+    provider: Literal["gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce"]
     workspace_id: str | None = None
     redirect_url: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -83,6 +83,14 @@ def capabilities(provider: str) -> list[str]:
         return ["email_context", "attachment_context", "report_delivery", "read_approved_context"]
     if provider == "google_drive":
         return ["folder_context", "document_context", "spreadsheet_context", "pdf_context"]
+    if provider in {"dropbox", "box"}:
+        return ["folder_context", "file_context", "document_context", "pdf_context"]
+    if provider == "slack":
+        return ["channel_context", "message_context", "file_context", "handoff_context"]
+    if provider == "salesforce":
+        return ["account_context", "case_context", "contact_context", "customer_success_context"]
+    if provider == "google_earth_engine":
+        return ["project_readiness", "remote_sensing_context", "geospatial_asset_context"]
     if provider == "weather":
         return ["forecast_context", "station_upload", "api_weather_context"]
     if provider == "openet":

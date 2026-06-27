@@ -592,9 +592,12 @@ class AssuranceRepository:
 def render_passport_pdf(package: dict[str, Any]) -> bytes:
     from io import BytesIO
 
-    from reportlab.lib.pagesizes import letter
-    from reportlab.lib.styles import getSampleStyleSheet
-    from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+    try:
+        from reportlab.lib.pagesizes import letter
+        from reportlab.lib.styles import getSampleStyleSheet
+        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+    except ModuleNotFoundError:
+        return _minimal_passport_pdf(package)
 
     buf = BytesIO()
     doc = SimpleDocTemplate(buf, pagesize=letter, title="Assurance Passport Audit Readiness")
@@ -635,3 +638,36 @@ def render_passport_pdf(package: dict[str, Any]) -> bytes:
     add_body(f"Generated at {package['audit_trail']['generated_at']}. Scope: audit readiness evidence package for reviewer evaluation.")
     doc.build(story)
     return buf.getvalue()
+
+
+def _minimal_passport_pdf(package: dict[str, Any]) -> bytes:
+    passport = package["passport"]
+    readiness = package["readiness"]
+    lines = [
+        "Assurance Passport - Audit Readiness",
+        package["disclaimer"],
+        f"Farm: {passport.get('farm_name')} | Crop: {passport.get('crop') or 'not provided'} | Period: {passport.get('reporting_period')}",
+        f"Readiness Score: {readiness['readiness_score']}% - {readiness['status']}.",
+        f"Risk Score: {readiness['risk_score']} ({readiness['risk_level']}).",
+        "Audit readiness evidence package for reviewer evaluation.",
+    ]
+    text = "\\n".join(line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)") for line in lines)
+    stream = f"BT /F1 10 Tf 72 740 Td ({text}) Tj ET".encode("latin-1", errors="replace")
+    objects = [
+        b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n",
+        b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n",
+        b"3 0 obj << /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >> endobj\n",
+        b"4 0 obj << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> endobj\n",
+        b"5 0 obj << /Length " + str(len(stream)).encode() + b" >> stream\n" + stream + b"\nendstream endobj\n",
+    ]
+    pdf = bytearray(b"%PDF-1.4\n")
+    offsets = [0]
+    for obj in objects:
+        offsets.append(len(pdf))
+        pdf.extend(obj)
+    xref = len(pdf)
+    pdf.extend(f"xref\n0 {len(objects) + 1}\n0000000000 65535 f \n".encode())
+    for offset in offsets[1:]:
+        pdf.extend(f"{offset:010d} 00000 n \n".encode())
+    pdf.extend(f"trailer << /Size {len(objects) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode())
+    return bytes(pdf)
