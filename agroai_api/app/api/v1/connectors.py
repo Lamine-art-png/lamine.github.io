@@ -20,6 +20,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from fastapi.responses import Response
 from pydantic import BaseModel, Field
+from sqlalchemy import inspect, text as sql_text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -250,7 +251,45 @@ class ReportGenerateRequest(BaseModel):
 
 
 def ensure_schema(db: Session) -> None:
-    Base.metadata.create_all(bind=db.get_bind(), tables=TABLES)
+    """Create connector tables and gently add missing columns in deployed DBs.
+
+    SQLAlchemy create_all() creates missing tables but does not alter existing
+    tables. The production API may already have older connector tables, so file
+    upload can 500 when DataSource/EvidenceRecord columns are missing. This keeps
+    the connector hub self-healing until we formalize this into Alembic.
+    """
+    bind = db.get_bind()
+    Base.metadata.create_all(bind=bind, tables=TABLES)
+
+    inspector = inspect(bind)
+    dialect = bind.dialect.name
+
+    def ddl_type(column) -> str:
+        name = column.type.__class__.__name__.lower()
+        if "json" in name:
+            return "JSONB" if dialect == "postgresql" else "JSON"
+        if "datetime" in name:
+            return "TIMESTAMP"
+        if "float" in name:
+            return "DOUBLE PRECISION" if dialect == "postgresql" else "FLOAT"
+        return "TEXT"
+
+    for table in TABLES:
+        try:
+            existing = {column["name"] for column in inspector.get_columns(table.name)}
+        except Exception:
+            continue
+
+        for column in table.columns:
+            if column.name in existing:
+                continue
+
+            ddl = f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {ddl_type(column)}'
+            try:
+                db.execute(sql_text(ddl))
+                db.commit()
+            except Exception:
+                db.rollback()
 
 
 
@@ -290,13 +329,28 @@ def safe_filename(name: str | None) -> str:
 
 
 def save_upload_bytes(tenant_id: str, connection_id: str, filename: str | None, data: bytes) -> str:
-    root = Path(settings.CONNECTOR_UPLOAD_DIR)
-    target_dir = root / safe_filename(tenant_id) / safe_filename(connection_id)
-    target_dir.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha256(data).hexdigest()[:16]
-    target = target_dir / f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}-{digest}-{safe_filename(filename)}"
-    target.write_bytes(data)
-    return str(target)
+    safe_name = safe_filename(filename)
+    stamp = datetime.utcnow().strftime("%Y%m%d%H%M%S")
+
+    roots = [
+        Path(settings.CONNECTOR_UPLOAD_DIR),
+        Path("/tmp/agroai_uploads"),
+    ]
+
+    for root in roots:
+        try:
+            target_dir = root / safe_filename(tenant_id) / safe_filename(connection_id)
+            target_dir.mkdir(parents=True, exist_ok=True)
+            target = target_dir / f"{stamp}-{digest}-{safe_name}"
+            target.write_bytes(data)
+            return str(target)
+        except OSError:
+            continue
+
+    # Last-resort: do not fail ingestion only because disk storage is unavailable.
+    # Raw text and parsed rows are still stored in DataSource.metadata_json/raw_text.
+    return f"inline://sha256/{digest}/{safe_name}"
 
 
 def oauth_url(provider: str, state: str, redirect_url: str) -> tuple[str | None, str | None]:
