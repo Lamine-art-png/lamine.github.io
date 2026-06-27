@@ -24,7 +24,9 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "dev-secret-key-change-in-production-min-32-chars"
     WEBHOOK_SECRET: str = "dev-webhook-secret-change-in-production"
     ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
+    # Internal pilots need stable sessions while validating connector uploads and sync.
+    # Override in production with a stricter value once refresh-token auth is added.
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080
 
     # App
     APP_NAME: str = "AGRO-AI API"
