@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { apiClient } from "../api/client";
+import { apiClient, ReportFactoryPayload } from "../api/client";
 import { arrayFromUnknown, usePortalResource } from "../hooks/usePortalResource";
 import { BG, BORDER, InlineState, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
 
@@ -20,6 +20,9 @@ export function Reports() {
   const [format, setFormat] = useState<"markdown" | "pdf">("pdf");
   const [message, setMessage] = useState("");
   const [preview, setPreview] = useState("");
+  const [factoryPreview, setFactoryPreview] = useState<any>(null);
+  const [factoryType, setFactoryType] = useState<ReportFactoryPayload["report_type"]>("executive_brief");
+  const [factoryAudience, setFactoryAudience] = useState<ReportFactoryPayload["audience"]>("owner");
   const [artifact, setArtifact] = useState<Report | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -50,6 +53,21 @@ export function Reports() {
     link.download = artifact?.filename || "agro-ai-report";
     link.click();
     URL.revokeObjectURL(url);
+  }
+
+  async function generateFactoryPreview() {
+    setLoading(true);
+    setMessage("");
+
+    try {
+      const result = await apiClient.reportFactory.generate({ report_type: factoryType, audience: factoryAudience }) as any;
+      setFactoryPreview(result.report || null);
+      setMessage("Report factory preview generated.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Report factory failed.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   return (
@@ -112,6 +130,51 @@ export function Reports() {
           </section>
         ) : null}
 
+        <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <div className="flex items-start justify-between gap-5 mb-4">
+            <div>
+              <h2 className="text-[20px] font-semibold" style={{ color: TEXT }}>Report Factory</h2>
+              <p className="mt-2 text-[13px] leading-relaxed" style={{ color: MUTED }}>
+                Preview a structured operating report from readiness, exceptions, decisions, and evidence appendix.
+              </p>
+            </div>
+            <PortalButton onClick={generateFactoryPreview} disabled={loading}>{loading ? "Generating…" : "Generate preview"}</PortalButton>
+          </div>
+          <div className="grid grid-cols-3 gap-3">
+            <label className="text-[12px]" style={{ color: MUTED }}>
+              Factory report
+              <select value={factoryType} onChange={(event) => setFactoryType(event.target.value as ReportFactoryPayload["report_type"])} className="mt-1 h-10 w-full rounded-lg px-3 outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
+                <option value="water_use_summary">Water use summary</option>
+                <option value="compliance_packet">Compliance packet</option>
+                <option value="exception_report">Exception report</option>
+                <option value="executive_brief">Executive brief</option>
+                <option value="grower_recommendation">Grower recommendation</option>
+              </select>
+            </label>
+            <label className="text-[12px]" style={{ color: MUTED }}>
+              Audience
+              <select value={factoryAudience} onChange={(event) => setFactoryAudience(event.target.value as ReportFactoryPayload["audience"])} className="mt-1 h-10 w-full rounded-lg px-3 outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
+                <option value="operator">Operator</option>
+                <option value="owner">Owner</option>
+                <option value="agency">Agency</option>
+                <option value="lender">Lender</option>
+                <option value="investor">Investor</option>
+                <option value="grower">Grower</option>
+              </select>
+            </label>
+          </div>
+          {factoryPreview ? (
+            <div className="mt-5 rounded-xl p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+              <h3 className="text-[15px] font-semibold" style={{ color: TEXT }}>{factoryPreview.title}</h3>
+              <p className="mt-2 text-[13px] leading-relaxed" style={{ color: MUTED }}>{factoryPreview.executive_summary}</p>
+              <div className="mt-4 grid grid-cols-2 gap-4">
+                <PreviewList title="Findings" items={factoryPreview.key_findings || []} />
+                <PreviewList title="Next actions" items={factoryPreview.recommended_next_actions || []} />
+              </div>
+            </div>
+          ) : null}
+        </section>
+
         <section className="grid grid-cols-2 gap-4">
           {rows.length ? rows.map((report, index) => (
             <article key={report.id || index} className="rounded-xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
@@ -129,6 +192,17 @@ export function Reports() {
           )}
         </section>
       </main>
+    </div>
+  );
+}
+
+function PreviewList({ title, items }: { title: string; items: unknown[] }) {
+  return (
+    <div>
+      <div className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: MUTED }}>{title}</div>
+      <div className="space-y-1">
+        {items.length ? items.map((item, index) => <div key={index} className="text-[12px] leading-relaxed" style={{ color: TEXT }}>• {String(item)}</div>) : <div className="text-[12px]" style={{ color: MUTED }}>None listed.</div>}
+      </div>
     </div>
   );
 }

@@ -10,6 +10,11 @@ export function MainLayout() {
 
   const operateItems = [
     { name: "Command Center", path: "/" },
+    { name: "Readiness", path: "/readiness" },
+    { name: "Fields", path: "/fields" },
+    { name: "Exceptions", path: "/exceptions" },
+    { name: "Decision Workbench", path: "/decision-workbench" },
+    { name: "Report Factory", path: "/report-factory" },
     { name: "Decisions", path: "/operations" },
     { name: "Evidence", path: "/evidence" },
     { name: "Reports", path: "/reports" },

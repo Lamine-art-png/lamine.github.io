@@ -202,6 +202,24 @@ export type IntelligenceAskPayload = {
   output_format?: string;
 };
 
+export type WorkbenchRunPayload = {
+  workspace_id?: string;
+  field_id?: string;
+  mode?: "daily" | "field" | "compliance" | "irrigation";
+};
+
+export type ReportFactoryPayload = {
+  report_type:
+    | "water_use_summary"
+    | "compliance_packet"
+    | "exception_report"
+    | "executive_brief"
+    | "grower_recommendation";
+  workspace_id?: string;
+  field_id?: string;
+  audience?: "operator" | "owner" | "agency" | "lender" | "investor" | "grower";
+};
+
 export const apiClient = {
   get,
   post,
@@ -279,6 +297,33 @@ export const apiClient = {
     brief: () => get("/v1/intelligence/brief"),
     ask: (payload: IntelligenceAskPayload) => post("/v1/intelligence/ask", payload),
     action: (payload: IntelligenceActionPayload) => post("/v1/intelligence/action", payload),
+  },
+
+  readiness: {
+    summary: (workspaceId?: string) => get(`/v1/readiness/summary${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`),
+  },
+
+  fields: {
+    intelligence: (workspaceId?: string) => get(`/v1/fields/intelligence${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`),
+  },
+
+  exceptions: {
+    list: (workspaceId?: string) => get(`/v1/exceptions${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`),
+  },
+
+  decisions: {
+    workbench: (workspaceId?: string, fieldId?: string) => {
+      const query = new URLSearchParams();
+      if (workspaceId) query.set("workspace_id", workspaceId);
+      if (fieldId) query.set("field_id", fieldId);
+      const suffix = query.toString() ? `?${query.toString()}` : "";
+      return get(`/v1/decisions/workbench${suffix}`);
+    },
+    runWorkbench: (payload: WorkbenchRunPayload) => post("/v1/decisions/workbench/run", payload),
+  },
+
+  reportFactory: {
+    generate: (payload: ReportFactoryPayload) => post("/v1/reports/factory", payload),
   },
 
   connectorHub: {

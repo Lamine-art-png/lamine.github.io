@@ -8,6 +8,7 @@ import { Reports } from "./components/Reports";
 import { Agents } from "./components/Agents";
 import { Intelligence } from "./components/Intelligence";
 import { Integrations } from "./components/Integrations";
+import { DecisionWorkbench, Exceptions, Fields, Readiness, ReportFactory } from "./components/OperatorCockpit";
 import { Sources } from "./components/Sources";
 import { Audit } from "./components/Audit";
 import { Admin } from "./components/Admin";
@@ -18,6 +19,11 @@ export const router = createBrowserRouter([
     Component: MainLayout,
     children: [
       { index: true, Component: Overview },
+      { path: "readiness", Component: Readiness },
+      { path: "fields", Component: Fields },
+      { path: "exceptions", Component: Exceptions },
+      { path: "decision-workbench", Component: DecisionWorkbench },
+      { path: "report-factory", Component: ReportFactory },
       { path: "operations", Component: Operations },
       { path: "assurance", Component: Assurance },
       { path: "evidence", Component: Evidence },

@@ -33,30 +33,25 @@ export function Operations() {
   const summary = evidenceState.data || brief.evidence_summary || {};
   const hasEvidence = Number(summary.evidence_count || 0) > 0;
 
-  const decisionQuestions: Record<string, string> = {
-    operator_today:
-      "Generate today's operator decision from the current evidence. Tell me what to do, what evidence supports it, what is missing, and what risk remains.",
-    water_risk:
-      "Assess water operations risk from the current evidence. Prioritize missing data, overwatering risk, compliance risk, and next actions.",
-    compliance_packet:
-      "Prepare a compliance-oriented decision brief. Use only evidence available. List citations, missing proof, and what must be collected next.",
-    manager_priority:
-      "Prioritize the blocks or operational issues that need attention first. Explain the reasoning and the evidence gaps.",
-  };
-
   async function runDecision(mode = decisionMode) {
     setDecisionMode(mode);
     setLoading(true);
     setMessage("");
 
     try {
-      const response = await apiClient.intelligence.ask({
-        question: decisionQuestions[mode],
+      const runMode =
+        mode === "compliance_packet"
+          ? "compliance"
+          : mode === "water_risk"
+            ? "irrigation"
+            : mode === "manager_priority"
+              ? "field"
+              : "daily";
+      const response = await apiClient.decisions.runWorkbench({
         workspace_id: currentWorkspace?.id,
-        customer_mode: "farmland_manager",
-        output_format: "decision",
+        mode: runMode,
       }) as AnyRecord;
-      setResult(response);
+      setResult((response.decisions || [])[0] || response);
       await Promise.all([briefState.refresh(), evidenceState.refresh()]);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Decision run failed.");
@@ -157,13 +152,14 @@ export function Operations() {
           ) : (
             <div className="space-y-4">
               <div className="rounded-xl p-5 text-[14px] leading-relaxed whitespace-pre-wrap" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
-                {text(result.answer || result.summary || result.message, "Decision completed.")}
+                {text(result.recommendation || result.answer || result.summary || result.message, "Decision completed.")}
+                {result.why ? `\n\n${text(result.why)}` : ""}
               </div>
 
               <List title="Evidence used" items={asArray(result.what_i_used || result.evidence_used)} />
-              <List title="Missing data" items={asArray(result.what_is_missing || result.missing_data)} />
-              <List title="Risks / uncertainty" items={asArray(result.risks || result.risk_flags)} />
-              <List title="Next actions" items={asArray(result.next_actions)} />
+              <List title="Missing data" items={asArray(result.what_is_missing || result.missing_data || result.missing_evidence)} />
+              <List title="Risks / uncertainty" items={asArray(result.risks || result.risk_flags || [result.risk_level].filter(Boolean))} />
+              <List title="Next actions" items={asArray(result.next_actions || result.operator_instructions)} />
               <List title="Citations" items={asArray(result.citations)} />
             </div>
           )}
