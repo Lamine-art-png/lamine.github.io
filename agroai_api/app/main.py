@@ -24,7 +24,6 @@ VERSION = "2.0.0"
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle — starts scheduler after Alembic migrations."""
 
-    # Start background scheduler if enabled (sync runs on schedule, NOT blocking startup)
     if settings.ENABLE_SCHEDULER and settings.WISECONN_API_KEY:
         from app.core.scheduler import start_scheduler
 
@@ -34,9 +33,8 @@ async def lifespan(app: FastAPI):
         logger.info("Background scheduler disabled (ENABLE_SCHEDULER=%s, API key set=%s)",
                     settings.ENABLE_SCHEDULER, bool(settings.WISECONN_API_KEY))
 
-    yield  # App is running
+    yield
 
-    # Shutdown
     if settings.ENABLE_SCHEDULER:
         from app.core.scheduler import stop_scheduler
         stop_scheduler()
@@ -46,6 +44,26 @@ app = FastAPI(
     title="AGRO-AI API",
     version=VERSION,
     lifespan=lifespan,
+)
+
+ALLOWED_ORIGINS = [
+    "https://app.agroai-pilot.com",
+    "https://agroai-pilot.com",
+    "https://www.agroai-pilot.com",
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+]
+if getattr(settings, "APP_URL", "") and settings.APP_URL not in ALLOWED_ORIGINS:
+    ALLOWED_ORIGINS.append(settings.APP_URL)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -68,40 +86,28 @@ async def health_v1() -> Dict[str, str]:
     return await health_payload()
 
 
-# SaaS auth + billing routes
 from app.api.v1.auth import router as auth_router  # noqa: E402
 from app.api.v1.billing import router as billing_router  # noqa: E402
 
 app.include_router(auth_router, prefix="/v1")
 app.include_router(billing_router, prefix="/v1")
 
-# SaaS workspace / tenant / entitlement routes
 from app.api.v1.saas import router as saas_router  # noqa: E402
 app.include_router(saas_router, prefix="/v1")
 
-# Assurance Passport routes
 from app.api.v1.assurance import router as assurance_router  # noqa: E402
 app.include_router(assurance_router, prefix="/v1")
 
-
-# WiseConn integration routes
 from app.api.v1.wiseconn import router as wiseconn_router  # noqa: E402
-
 app.include_router(wiseconn_router, prefix="/v1")
 
-# Decisioning routes (water state + recommendations)
 from app.api.v1.decisioning import router as decisioning_router  # noqa: E402
-
 app.include_router(decisioning_router, prefix="/v1")
 
-# Execution assurance routes (verification + outcome tracking)
 from app.api.v1.execution_assurance import router as execution_router  # noqa: E402
-
 app.include_router(execution_router, prefix="/v1")
 
-# Forecast routes (VWC forecast, accuracy, optimization)
 from app.api.v1.forecast import router as forecast_router  # noqa: E402
-
 app.include_router(forecast_router, prefix="/v1")
 
 from app.api.v1.intelligence import router as intelligence_router  # noqa: E402
@@ -137,14 +143,9 @@ app.include_router(connector_launch_router, prefix="/v1")
 from app.api.v1.connectors import router as connectors_router  # noqa: E402
 app.include_router(connectors_router, prefix="/v1")
 
-
-# Prometheus metrics endpoint
 from app.core.metrics import metrics_endpoint  # noqa: E402
-
 app.get("/metrics")(metrics_endpoint)
 
-
-# Request metrics middleware
 import time  # noqa: E402
 from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
 from starlette.requests import Request  # noqa: E402
