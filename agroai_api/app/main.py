@@ -143,6 +143,10 @@ app.include_router(connector_launch_router, prefix="/v1")
 from app.api.v1.connectors import router as connectors_router  # noqa: E402
 app.include_router(connectors_router, prefix="/v1")
 
+from app.api.v1.evaluation import legacy_router as evaluation_legacy_router, router as evaluation_router  # noqa: E402
+app.include_router(evaluation_router)
+app.include_router(evaluation_legacy_router)
+
 from app.core.metrics import metrics_endpoint  # noqa: E402
 app.get("/metrics")(metrics_endpoint)
 

@@ -33,6 +33,11 @@ ProviderId = Literal[
     "gmail",
     "outlook",
     "google_drive",
+    "dropbox",
+    "box",
+    "slack",
+    "salesforce",
+    "google_earth_engine",
     "custom_api",
 ]
 
@@ -69,6 +74,50 @@ CONNECTOR_MANIFESTS: dict[str, dict[str, Any]] = {
         "data_objects": ["folders", "documents", "spreadsheets", "PDFs", "file metadata"],
         "required_env": ["GOOGLE_OAUTH_CLIENT_ID"],
         "production_next": "Create Google OAuth client and enable a folder-picker flow after authorization.",
+    },
+    "dropbox": {
+        "provider": "dropbox",
+        "auth_pattern": "oauth",
+        "label": "Dropbox",
+        "headline": "Authorize Dropbox folders",
+        "authorization_cta": "Continue with Dropbox",
+        "permissions": ["View approved folders and files", "Read PDFs, spreadsheets, and field evidence", "Create citation-ready file evidence"],
+        "data_objects": ["folders", "files", "PDFs", "spreadsheets", "file metadata"],
+        "required_env": ["DROPBOX_OAUTH_CLIENT_ID"],
+        "production_next": "Set DROPBOX_OAUTH_CLIENT_ID and exchange the callback code server-side for a token reference.",
+    },
+    "box": {
+        "provider": "box",
+        "auth_pattern": "oauth",
+        "label": "Box",
+        "headline": "Authorize Box folders",
+        "authorization_cta": "Continue with Box",
+        "permissions": ["View approved enterprise folders", "Read PDFs, spreadsheets, and evidence packets", "Create citation-ready file evidence"],
+        "data_objects": ["folders", "files", "PDFs", "spreadsheets", "enterprise file metadata"],
+        "required_env": ["BOX_OAUTH_CLIENT_ID"],
+        "production_next": "Set BOX_OAUTH_CLIENT_ID and exchange the callback code server-side for a token reference.",
+    },
+    "slack": {
+        "provider": "slack",
+        "auth_pattern": "oauth",
+        "label": "Slack",
+        "headline": "Authorize Slack operational context",
+        "authorization_cta": "Continue with Slack",
+        "permissions": ["View approved channel metadata", "Read approved files and operational messages", "Create cited handoff context"],
+        "data_objects": ["channels", "messages", "files", "operator handoffs"],
+        "required_env": ["SLACK_OAUTH_CLIENT_ID"],
+        "production_next": "Set SLACK_OAUTH_CLIENT_ID and exchange the callback code server-side for a token reference.",
+    },
+    "salesforce": {
+        "provider": "salesforce",
+        "auth_pattern": "oauth",
+        "label": "Salesforce",
+        "headline": "Authorize Salesforce customer context",
+        "authorization_cta": "Continue with Salesforce",
+        "permissions": ["Read approved customer account context", "Read cases and customer-success notes", "Use context in reports and assurance workflows"],
+        "data_objects": ["accounts", "contacts", "cases", "opportunities", "customer notes"],
+        "required_env": ["SALESFORCE_OAUTH_CLIENT_ID"],
+        "production_next": "Set SALESFORCE_OAUTH_CLIENT_ID and exchange the callback code server-side for a token reference.",
     },
     "outlook": {
         "provider": "outlook",
@@ -130,6 +179,17 @@ CONNECTOR_MANIFESTS: dict[str, dict[str, Any]] = {
         "required_env": ["OPENET_API_KEY"],
         "production_next": "Set provider API credentials or connect customer-approved ET export source.",
     },
+    "google_earth_engine": {
+        "provider": "google_earth_engine",
+        "auth_pattern": "service_account",
+        "label": "Google Earth Engine",
+        "headline": "Verify Earth Engine project access",
+        "authorization_cta": "Verify service account",
+        "permissions": ["Use configured Earth Engine project", "Read approved geospatial assets", "Bring remote-sensing context into reports"],
+        "data_objects": ["project assets", "imagery layers", "ET/geospatial context", "field boundary references"],
+        "required_env": ["GOOGLE_EARTH_ENGINE_PROJECT_ID", "GOOGLE_EARTH_ENGINE_SERVICE_ACCOUNT_JSON"],
+        "production_next": "Set Earth Engine project ID and service-account JSON env vars. No OAuth consent screen is used.",
+    },
     "weather": {
         "provider": "weather",
         "auth_pattern": "provider_api",
@@ -190,6 +250,8 @@ def manifest_for(provider: str) -> dict[str, Any]:
         raise HTTPException(status_code=404, detail="Unknown connector provider")
     configured = all(os.getenv(name, "").strip() for name in item.get("required_env", []))
     readiness = "ready_to_authorize" if configured else "needs_platform_setup"
+    if item["auth_pattern"] == "service_account":
+        readiness = "service_account_ready" if configured else "needs_service_account"
     if not item.get("required_env"):
         readiness = "ready_to_configure"
     return {
@@ -247,11 +309,14 @@ async def start_launch_authorization(payload: LaunchStartRequest, tenant_id: str
 
     auth_url = None
     auth_error = None
+    state = None
     if auth_pattern == "oauth":
-        state = f"{connection.id}:{tenant_id}:{int(datetime.utcnow().timestamp())}"
+        state = os.urandom(24).hex()
         redirect_url = payload.redirect_url or API_OAUTH_CALLBACK_URL
         auth_url, auth_error = oauth_url(payload.provider, state, redirect_url)
         status = "oauth_ready" if auth_url else "platform_setup_required"
+    elif auth_pattern == "service_account":
+        status = "service_account_ready" if manifest["configured"] else "service_account_missing"
     else:
         status = "provider_access_ready" if manifest["configured"] else "provider_access_requested"
 
@@ -265,6 +330,7 @@ async def start_launch_authorization(payload: LaunchStartRequest, tenant_id: str
         "access_note": payload.access_note,
         "oauth_error": auth_error,
         "auth_url_available": bool(auth_url),
+        "oauth_state": state,
     }))
     connection.config_json = merged
     connection.status = status
@@ -363,8 +429,10 @@ async def oauth_callback(
     ensure_schema(db)
     connection = None
     if state:
-        connection_id = state.split(":", 1)[0]
-        connection = db.get(ConnectorConnection, connection_id)
+        rows = db.query(ConnectorConnection).order_by(ConnectorConnection.updated_at.desc()).limit(500).all()
+        connection = next((row for row in rows if (row.config_json or {}).get("oauth_state") == state), None)
+        if connection is None and ":" in state:
+            connection = db.get(ConnectorConnection, state.split(":", 1)[0])
     if connection:
         merged = dict(connection.config_json or {})
         merged.update(sanitize_config({

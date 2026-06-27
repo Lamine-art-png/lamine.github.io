@@ -49,6 +49,11 @@ ProviderId = Literal[
     "gmail",
     "outlook",
     "google_drive",
+    "dropbox",
+    "box",
+    "slack",
+    "salesforce",
+    "google_earth_engine",
     "custom_api",
 ]
 
@@ -150,6 +155,71 @@ CATALOG: list[dict[str, Any]] = [
         "promise": "Drive sync is prepared but not enabled yet.",
     },
     {
+        "id": "dropbox",
+        "name": "Dropbox",
+        "category": "Document evidence",
+        "status": "not_configured",
+        "required_plan": "pro",
+        "connection_methods": ["oauth"],
+        "upload_supported": False,
+        "imports": ["folders", "files", "PDFs", "spreadsheets", "image metadata"],
+        "used_by": ["Evidence", "Reports", "Assurance"],
+        "promise": "OAuth Dropbox folder evidence ingestion is ready when the Dropbox client ID is configured.",
+        "required_env": ["DROPBOX_OAUTH_CLIENT_ID"],
+    },
+    {
+        "id": "box",
+        "name": "Box",
+        "category": "Document evidence",
+        "status": "not_configured",
+        "required_plan": "pro",
+        "connection_methods": ["oauth"],
+        "upload_supported": False,
+        "imports": ["folders", "files", "PDFs", "spreadsheets", "enterprise records"],
+        "used_by": ["Evidence", "Reports", "Assurance"],
+        "promise": "OAuth Box folder evidence ingestion is ready when the Box client ID is configured.",
+        "required_env": ["BOX_OAUTH_CLIENT_ID"],
+    },
+    {
+        "id": "slack",
+        "name": "Slack",
+        "category": "Operations context",
+        "status": "not_configured",
+        "required_plan": "pro",
+        "connection_methods": ["oauth"],
+        "upload_supported": False,
+        "imports": ["channels", "messages", "files", "operator handoffs"],
+        "used_by": ["Evidence", "Ask AGRO-AI", "Reports"],
+        "promise": "OAuth Slack context ingestion is ready when the Slack client ID is configured.",
+        "required_env": ["SLACK_OAUTH_CLIENT_ID"],
+    },
+    {
+        "id": "salesforce",
+        "name": "Salesforce",
+        "category": "Customer operations",
+        "status": "not_configured",
+        "required_plan": "enterprise",
+        "connection_methods": ["oauth"],
+        "upload_supported": False,
+        "imports": ["accounts", "contacts", "cases", "opportunities", "customer notes"],
+        "used_by": ["Reports", "Assurance", "Customer success"],
+        "promise": "OAuth Salesforce context is ready when the Salesforce client ID is configured.",
+        "required_env": ["SALESFORCE_OAUTH_CLIENT_ID"],
+    },
+    {
+        "id": "google_earth_engine",
+        "name": "Google Earth Engine",
+        "category": "Geospatial intelligence",
+        "status": "not_configured",
+        "required_plan": "enterprise",
+        "connection_methods": ["service_account"],
+        "upload_supported": False,
+        "imports": ["field imagery", "ET/geospatial layers", "remote sensing context", "project assets"],
+        "used_by": ["Decisions", "Reports", "Assurance"],
+        "promise": "Google Earth Engine is ready when project and service-account env vars are configured.",
+        "required_env": ["GOOGLE_EARTH_ENGINE_PROJECT_ID", "GOOGLE_EARTH_ENGINE_SERVICE_ACCOUNT_JSON"],
+    },
+    {
         "id": "custom_api",
         "name": "Custom API",
         "category": "Enterprise systems",
@@ -209,7 +279,7 @@ class ConnectorStartRequest(BaseModel):
 
 
 class OAuthStartRequest(BaseModel):
-    provider: Literal["gmail", "outlook", "google_drive"]
+    provider: Literal["gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce"]
     workspace_id: str | None = None
     redirect_url: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -388,12 +458,74 @@ def oauth_url(provider: str, state: str, redirect_url: str) -> tuple[str | None,
         }
         return "https://login.microsoftonline.com/common/oauth2/v2.0/authorize?" + urllib.parse.urlencode(params), None
 
+    if provider == "dropbox":
+        client_id = os.getenv("DROPBOX_OAUTH_CLIENT_ID", "").strip()
+        if not client_id:
+            return None, "Missing DROPBOX_OAUTH_CLIENT_ID. Dropbox OAuth cannot start yet."
+        params = {
+            "client_id": client_id,
+            "redirect_uri": redirect_url,
+            "response_type": "code",
+            "token_access_type": "offline",
+            "state": state,
+        }
+        return "https://www.dropbox.com/oauth2/authorize?" + urllib.parse.urlencode(params), None
+
+    if provider == "box":
+        client_id = os.getenv("BOX_OAUTH_CLIENT_ID", "").strip()
+        if not client_id:
+            return None, "Missing BOX_OAUTH_CLIENT_ID. Box OAuth cannot start yet."
+        params = {"client_id": client_id, "redirect_uri": redirect_url, "response_type": "code", "state": state}
+        return "https://account.box.com/api/oauth2/authorize?" + urllib.parse.urlencode(params), None
+
+    if provider == "slack":
+        client_id = os.getenv("SLACK_OAUTH_CLIENT_ID", "").strip()
+        if not client_id:
+            return None, "Missing SLACK_OAUTH_CLIENT_ID. Slack OAuth cannot start yet."
+        params = {
+            "client_id": client_id,
+            "redirect_uri": redirect_url,
+            "scope": "channels:read,files:read,users:read",
+            "state": state,
+        }
+        return "https://slack.com/oauth/v2/authorize?" + urllib.parse.urlencode(params), None
+
+    if provider == "salesforce":
+        client_id = os.getenv("SALESFORCE_OAUTH_CLIENT_ID", "").strip()
+        if not client_id:
+            return None, "Missing SALESFORCE_OAUTH_CLIENT_ID. Salesforce OAuth cannot start yet."
+        params = {
+            "client_id": client_id,
+            "redirect_uri": redirect_url,
+            "response_type": "code",
+            "scope": "api refresh_token",
+            "state": state,
+        }
+        return "https://login.salesforce.com/services/oauth2/authorize?" + urllib.parse.urlencode(params), None
+
     return None, "Unsupported OAuth provider."
 
 
 
 def catalog_item(provider: str) -> dict[str, Any] | None:
     return next((item for item in CATALOG if item["id"] == provider), None)
+
+
+def connector_readiness(item: dict[str, Any]) -> dict[str, Any]:
+    required = list(item.get("required_env") or [])
+    missing = [name for name in required if not os.getenv(name, "").strip()]
+    configured_env = [name for name in required if name not in missing]
+    configured = not missing
+    status = item.get("status", "available")
+    if required:
+        status = "service_account_ready" if configured and "service_account" in item.get("connection_methods", []) else "ready_to_authorize" if configured else "not_configured"
+    return {
+        **item,
+        "configured": configured,
+        "configured_env": configured_env,
+        "missing_env": missing,
+        "status": status,
+    }
 
 
 def row_to_dict(row: Any) -> dict[str, Any]:
@@ -872,7 +1004,11 @@ async def connector_catalog(tenant_id: str = Depends(require_current_tenant_id),
     ensure_schema(db)
     connections = db.query(ConnectorConnection).filter(ConnectorConnection.tenant_id == tenant_id).all()
     by_provider = {row.provider: public_connection(row) for row in connections}
-    connectors = [{**item, "connection": by_provider.get(item["id"]), "status": by_provider.get(item["id"], {}).get("status", item["status"])} for item in CATALOG]
+    connectors = []
+    for item in CATALOG:
+        ready = connector_readiness(item)
+        live = by_provider.get(item["id"])
+        connectors.append({**ready, "connection": live, "status": live.get("status", ready["status"]) if live else ready["status"]})
     return {"status": "ok", "tenant_id": tenant_id, "connectors": connectors, "principles": ["No fake live connections.", "Export upload works now.", "Every imported source becomes citation-ready evidence."]}
 
 
