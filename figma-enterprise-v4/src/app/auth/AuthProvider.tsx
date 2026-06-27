@@ -93,6 +93,35 @@ function getAccessToken(response: unknown) {
   return typeof data.access_token === "string" ? data.access_token : null;
 }
 
+function jwtPayload(token: string): Record<string, unknown> | null {
+  try {
+    const payload = token.split(".")[1];
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    return JSON.parse(window.atob(padded));
+  } catch {
+    return null;
+  }
+}
+
+function isExpiredToken(token: string | null) {
+  if (!token) return false;
+  const payload = jwtPayload(token);
+  const exp = payload?.exp;
+  if (typeof exp !== "number") return false;
+  return exp <= Math.floor(Date.now() / 1000) + 30;
+}
+
+function getStoredToken() {
+  const stored = localStorage.getItem(tokenKey);
+  if (isExpiredToken(stored)) {
+    localStorage.removeItem(tokenKey);
+    return null;
+  }
+  return stored;
+}
+
 function objectFromResponse<T>(response: unknown): T | null {
   return response && typeof response === "object" ? (response as T) : null;
 }
@@ -121,7 +150,7 @@ function normalizeMe(response: unknown) {
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(tokenKey));
+  const [token, setToken] = useState<string | null>(() => getStoredToken());
   const [user, setUser] = useState<User | null>(null);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [currentOrganization, setCurrentOrganization] = useState<Organization | null>(null);
@@ -145,6 +174,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshMe = useCallback(async () => {
+    if (isExpiredToken(localStorage.getItem(tokenKey))) {
+      clearSession();
+      return;
+    }
+
     const meResponse = await apiClient.me();
     const orgsResponse = await apiClient.getOrgs().catch(() => null);
     const workspacesResponse = await apiClient.getWorkspaces().catch(() => null);
@@ -170,7 +204,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ...normalized.entitlements,
       ...INTERNAL_TEST_ENTITLEMENTS,
     });
-  }, []);
+  }, [clearSession]);
 
   const login = useCallback(
     async (email: string, password: string) => {
@@ -210,6 +244,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     window.addEventListener("agroai:unauthorized", clearSession);
     return () => window.removeEventListener("agroai:unauthorized", clearSession);
+  }, [clearSession]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      if (isExpiredToken(localStorage.getItem(tokenKey))) {
+        clearSession();
+      }
+    }, 60_000);
+    return () => window.clearInterval(interval);
   }, [clearSession]);
 
   useEffect(() => {
@@ -258,11 +301,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 }
 
 export function useAuth() {
-  const context = useContext(AuthContext);
-
-  if (!context) {
-    throw new Error("useAuth must be used inside AuthProvider.");
-  }
-
-  return context;
+  const ctx = useContext(AuthContext);
+  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
+  return ctx;
 }
