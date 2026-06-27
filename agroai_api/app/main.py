@@ -48,6 +48,26 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+
+async def health_payload() -> Dict[str, str]:
+    return {
+        "status": "ok",
+        "service": "agroai-api",
+        "version": VERSION,
+        "checked_at": datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z",
+    }
+
+
+@app.get("/health")
+async def health_root() -> Dict[str, str]:
+    return await health_payload()
+
+
+@app.get("/v1/health")
+async def health_v1() -> Dict[str, str]:
+    return await health_payload()
+
+
 # SaaS auth + billing routes
 from app.api.v1.auth import router as auth_router  # noqa: E402
 from app.api.v1.billing import router as billing_router  # noqa: E402
