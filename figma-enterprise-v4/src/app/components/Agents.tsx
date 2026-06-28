@@ -23,7 +23,7 @@ export function Agents() {
     try {
       setRunningTask(task);
       const result = await apiClient.agents.run({ task, workspace_id: currentWorkspace?.id }) as { status?: string; demo_fallback?: boolean };
-      setRunMessage(result.status === "unavailable" || result.demo_fallback ? "AI provider unavailable." : "Agent run returned.");
+      setRunMessage(result.status === "unavailable" || result.demo_fallback ? "Agent run returned in safe mode." : "Agent run returned.");
       await runs.refresh();
     } catch (error) {
       setRunMessage(error instanceof Error ? error.message : "Agent orchestration endpoint not connected yet.");

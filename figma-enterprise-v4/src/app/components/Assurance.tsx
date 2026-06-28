@@ -23,7 +23,7 @@ export function Assurance() {
         workspace_id: currentWorkspace?.id,
         inputs: { source: "assurance" },
       }) as { status?: string; demo_fallback?: boolean; output?: unknown };
-      setAgentMessage(result.status === "unavailable" || result.demo_fallback ? "AI provider unavailable." : "Assurance review returned.");
+      setAgentMessage(result.status === "unavailable" || result.demo_fallback ? "Assurance review returned in safe mode." : "Assurance review returned.");
     } catch (error) {
       setAgentMessage(error instanceof Error ? error.message : "AI assurance endpoint unavailable.");
     } finally {

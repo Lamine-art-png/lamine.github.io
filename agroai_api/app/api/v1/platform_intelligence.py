@@ -66,6 +66,13 @@ RUN_TASK_MAP: dict[str, str] = {
     "readiness_analysis": "assurance_review",
 }
 
+CUSTOMER_STATUS_LABELS = {
+    "ready": "Ready",
+    "needs_more_data": "Needs more data",
+    "using_safe_mode": "Safe operating mode",
+    "action_required": "Action required",
+}
+
 
 def _items(context: Any, item_type: str) -> list[dict[str, Any]]:
     return [item for item in context.evidence if item.get("type") == item_type]
@@ -357,6 +364,45 @@ def _result_payload(task: str, question: str, body: dict[str, Any], context_bund
     }
 
 
+def _customer_status(
+    *,
+    result_payload: dict[str, Any],
+    model_status: str,
+    internal_status: str,
+    verification_status: str,
+    sample_mode: bool,
+    missing_data: list[str],
+) -> tuple[str, str]:
+    if model_status == "fallback" or internal_status != "ok" or result_payload.get("_safe_mode"):
+        status = "using_safe_mode"
+    elif verification_status == "partial" and missing_data:
+        status = "needs_more_data"
+    elif sample_mode or missing_data:
+        status = "needs_more_data"
+    elif result_payload.get("risk_flags") or result_payload.get("missing_evidence"):
+        status = "action_required"
+    else:
+        status = "ready"
+    return status, CUSTOMER_STATUS_LABELS[status]
+
+
+def _internal_debug(
+    *,
+    model_status: str,
+    provider: str,
+    model: str | None,
+    result_error: str | None,
+    fallback_active: bool,
+) -> dict[str, Any]:
+    return {
+        "model_status": model_status,
+        "provider": provider,
+        "model": model,
+        "error_code": result_error,
+        "fallback_active": fallback_active,
+    }
+
+
 def _claimed_number_warnings(result: dict[str, Any], evidence_summary: dict[str, Any]) -> list[str]:
     text = " ".join(str(value) for value in result.values() if isinstance(value, (str, int, float)))
     expected = {
@@ -549,8 +595,12 @@ async def intelligence_run(
     model_status = "live" if result.status == "ok" and not result.demo_fallback else "fallback"
     if not model_router.status()["configured"]:
         model_status = "fallback" if result.demo_fallback else "unavailable"
+    if result.demo_fallback:
+        model_status = "fallback"
 
     result_payload = _result_payload(payload.task, payload.question, body, context_bundle, model_status, result.provider, result.model)
+    if body.get("_safe_mode"):
+        result_payload["_safe_mode"] = True
     result_payload, sample_warnings = _apply_sample_guard(result_payload)
     result_payload, numeric_warnings = _apply_numeric_guard(
         result_payload,
@@ -567,12 +617,38 @@ async def intelligence_run(
         verification.risk_flags.extend(guard_warnings)
         verification.status = "partial"
 
+    fallback_active = bool(result.demo_fallback or result_payload.get("_safe_mode") or model_status == "fallback")
+    internal_status = "provider_unavailable" if result.demo_fallback and result.status != "ok" else result.status
+    safe_mode_recovery = bool(result_payload.get("_safe_mode"))
+    customer_status, customer_status_label = _customer_status(
+        result_payload=result_payload,
+        model_status=model_status,
+        internal_status=internal_status,
+        verification_status=verification.status,
+        sample_mode=bool(context_bundle.get("sample_mode")),
+        missing_data=result_payload.get("missing_data") or context.missing_data,
+    )
+
+    status = "completed" if result.status == "ok" or fallback_active else "unavailable"
+    public_model_status = model_status if status == "completed" else "unavailable"
+    result_payload.pop("_safe_mode", None)
+
     return IntelligenceRunResponse(
-        status="completed" if result.status == "ok" else "unavailable",
+        status=status,
         task=payload.task,
         model=result.model,
-        model_status=model_status if result.status == "ok" or result.demo_fallback else "unavailable",
+        model_status=public_model_status,
         provider=result.provider,
+        customer_status=customer_status,
+        customer_status_label=customer_status_label,
+        internal_status=internal_status,
+        internal_debug=_internal_debug(
+            model_status=model_status,
+            provider=result.provider,
+            model=result.model,
+            result_error=result.error or ("safe_mode_recovery" if safe_mode_recovery else None),
+            fallback_active=fallback_active,
+        ),
         sample_mode=bool(context_bundle.get("sample_mode")),
         evidence_summary=context_bundle.get("evidence_summary") or {},
         result=result_payload,
