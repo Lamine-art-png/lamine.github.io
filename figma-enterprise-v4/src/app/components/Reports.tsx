@@ -68,7 +68,15 @@ export function Reports() {
           question: `Generate a ${factoryType} report for a ${factoryAudience} audience using tenant evidence only.`,
           audience: factoryAudience,
         }) as any;
-        setFactoryPreview(live.result || null);
+        setFactoryPreview({
+          ...(live.result || {}),
+          model_status: live.model_status,
+          model: live.model,
+          sample_mode: live.sample_mode,
+          confidence: live.confidence,
+          citations: live.citations,
+          verification: live.verification,
+        });
       } else {
         setFactoryPreview(result.report || null);
       }
@@ -180,6 +188,7 @@ export function Reports() {
               <p className="mt-2 text-[13px] leading-relaxed" style={{ color: MUTED }}>{factoryPreview.executive_summary}</p>
               <div className="mt-3 flex gap-2">
                 <StatusBadge label={String(factoryPreview.model_status || (aiState.data?.configured ? "live" : "fallback"))} tone={factoryPreview.model_status === "live" ? "good" : "warn"} />
+                {factoryPreview.sample_mode ? <StatusBadge label="Evaluation sample" tone="warn" /> : null}
                 <StatusBadge label={String(factoryPreview.confidence || "low")} />
               </div>
               <div className="mt-4 grid grid-cols-2 gap-4">

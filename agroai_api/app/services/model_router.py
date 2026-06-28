@@ -9,13 +9,13 @@ from app.services.ai_gateway import AIGateway, AIGatewayResult
 
 
 TASK_PROFILES = {
-    "chat": "fast",
+    "chat": "reasoning",
     "readiness_analysis": "fast",
     "field_diagnosis": "reasoning",
     "exception_triage": "reasoning",
     "decision_workbench": "reasoning",
     "report_factory": "report",
-    "connector_diagnosis": "fast",
+    "connector_diagnosis": "reasoning",
 }
 
 

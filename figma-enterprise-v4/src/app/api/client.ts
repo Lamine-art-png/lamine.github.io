@@ -86,6 +86,21 @@ async function download(path: string): Promise<Blob> {
   return response.blob();
 }
 
+async function downloadPost(path: string, payload?: unknown): Promise<Blob> {
+  const token = localStorage.getItem(tokenKey);
+  const headers = new Headers();
+  headers.set("Content-Type", "application/json");
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    headers,
+    body: payload ? JSON.stringify(payload) : undefined,
+  });
+  if (!response.ok) throw new Error(`Download failed with status ${response.status}`);
+  return response.blob();
+}
+
 function get<T>(path: string, token?: string | null) {
   return request<T>(path, { token });
 }
@@ -346,6 +361,7 @@ export const apiClient = {
 
   reportFactory: {
     generate: (payload: ReportFactoryPayload) => post("/v1/reports/factory", payload),
+    pdf: (payload: ReportFactoryPayload) => downloadPost("/v1/reports/factory/pdf", payload),
   },
 
   connectorHub: {

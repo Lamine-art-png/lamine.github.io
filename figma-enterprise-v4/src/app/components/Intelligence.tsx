@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { apiClient } from "../api/client";
+import { apiClient, ReportFactoryPayload } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { usePortalResource } from "../hooks/usePortalResource";
 import { BG, BORDER, InlineState, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
@@ -49,12 +49,22 @@ export function Intelligence() {
   const [reporting, setReporting] = useState(false);
   const [result, setResult] = useState<AnyRecord | null>(null);
   const [report, setReport] = useState<AnyRecord | null>(null);
+  const [reportRequest, setReportRequest] = useState<ReportFactoryPayload | null>(null);
   const [error, setError] = useState("");
 
   const prompts = useMemo(() => PROMPTS[mode] || PROMPTS.farmland_manager, [mode]);
   const brief = briefState.data || {};
   const modelStatus = statusState.data || {};
   const summary = result?.evidence_summary || brief.evidence_summary || {};
+
+  function reportTypeForPrompt(prompt: string): ReportFactoryPayload["report_type"] {
+    const lower = prompt.toLowerCase();
+    if (lower.includes("compliance") || lower.includes("assurance")) return "compliance_packet";
+    if (lower.includes("exception") || lower.includes("risk")) return "exception_report";
+    if (lower.includes("grower") || lower.includes("operator") || lower.includes("what should i do")) return "grower_recommendation";
+    if (lower.includes("water use") || lower.includes("irrigation") || lower.includes("et")) return "water_use_summary";
+    return "executive_brief";
+  }
 
   async function ask(prompt = question) {
     const clean = prompt.trim();
@@ -72,7 +82,17 @@ export function Intelligence() {
         customer_mode: mode,
         output_format: format,
       }) as AnyRecord;
-      setResult(response.result || response);
+      setResult({
+        ...(response.result || response),
+        model_status: response.model_status,
+        model: response.model,
+        provider: response.provider,
+        confidence: response.confidence,
+        sample_mode: response.sample_mode,
+        evidence_summary: response.evidence_summary,
+        citations: response.citations,
+        verification: response.verification,
+      });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ask AGRO-AI failed.");
     } finally {
@@ -80,17 +100,19 @@ export function Intelligence() {
     }
   }
 
-  async function generateReport(reportType = "evidence_summary", reportFormat: "markdown" | "pdf" = "pdf") {
+  async function generateReport() {
     setReporting(true);
     setError("");
 
     try {
-      const response = await apiClient.reports.generate({
-        report_type: reportType,
+      const payload: ReportFactoryPayload = {
+        report_type: reportTypeForPrompt(question),
         workspace_id: currentWorkspace?.id,
-        format: reportFormat,
-      }) as AnyRecord;
-      setReport(response);
+        audience: mode === "farmer" ? "grower" : mode === "water_agency" ? "agency" : "owner",
+      };
+      const response = await apiClient.reportFactory.generate(payload) as AnyRecord;
+      setReport(response.report || response);
+      setReportRequest(payload);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Report generation failed.");
     } finally {
@@ -99,14 +121,12 @@ export function Intelligence() {
   }
 
   async function downloadArtifact() {
-    const artifactId = report?.artifact?.id;
-    if (!artifactId) return;
-
-    const blob = await apiClient.artifacts.download(artifactId);
+    if (!reportRequest) return;
+    const blob = await apiClient.reportFactory.pdf(reportRequest);
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = report.artifact.filename || "agro-ai-report.pdf";
+    link.download = `agro-ai-${reportRequest.report_type}.pdf`;
     link.click();
     URL.revokeObjectURL(url);
   }
@@ -115,8 +135,8 @@ export function Intelligence() {
     <div className="min-h-screen" style={{ background: BG }}>
       <header className="px-8 py-8" style={{ background: "#0D2B1E", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
         <div className="max-w-5xl">
-          <div className="flex items-center gap-2 mb-4">
-            <StatusBadge label={brief.mode === "live" ? "Live brain" : "Evidence-grounded"} tone="good" />
+            <div className="flex items-center gap-2 mb-4">
+            <StatusBadge label={result?.sample_mode || brief.sample_mode ? "Evaluation sample" : brief.mode === "live" ? "Live brain" : "Evidence-grounded"} tone={result?.sample_mode || brief.sample_mode ? "warn" : "good"} />
             <StatusBadge label={`${summary.readiness_score ?? 0}% readiness`} tone={(summary.readiness_score || 0) > 50 ? "good" : "warn"} />
           </div>
           <h1 className="text-[34px] font-semibold tracking-tight" style={{ color: "white" }}>Ask AGRO-AI</h1>
@@ -163,7 +183,7 @@ export function Intelligence() {
 
             <div className="mt-4 flex flex-wrap gap-2">
               <PortalButton onClick={() => ask()} disabled={loading}>{loading ? "Thinking…" : "Ask AGRO-AI"}</PortalButton>
-              <PortalButton variant="secondary" onClick={() => generateReport("evidence_summary", "pdf")} disabled={reporting}>{reporting ? "Generating…" : "Generate PDF report"}</PortalButton>
+              <PortalButton variant="secondary" onClick={() => generateReport()} disabled={reporting}>{reporting ? "Generating…" : "Generate PDF report"}</PortalButton>
               <PortalButton variant="secondary" onClick={() => window.location.assign("/integrations")}>Improve with connectors</PortalButton>
             </div>
 
@@ -180,6 +200,7 @@ export function Intelligence() {
             <div className="text-[10px] font-semibold uppercase tracking-widest mb-3" style={{ color: MUTED }}>Current context</div>
             <Info label="Workspace" value={text(currentWorkspace?.name || brief.workspace?.name, "Workspace")} />
             <Info label="Mode" value={text(result?.mode || brief.mode, "demo")} />
+            <Info label="Sample mode" value={result?.sample_mode || brief.sample_mode ? "Evaluation sample" : "Customer evidence"} />
             <Info label="Model status" value={text(result?.model_status || (modelStatus.fallback_active ? "fallback" : modelStatus.configured ? "live" : "offline"))} />
             <Info label="Provider" value={text(result?.provider || modelStatus.provider, "offline")} />
             <Info label="Model" value={text(result?.model || modelStatus.model, "Not configured")} />
@@ -192,7 +213,10 @@ export function Intelligence() {
         <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
           <div className="flex items-center justify-between gap-4 mb-4">
             <h2 className="text-[20px] font-semibold" style={{ color: TEXT }}>AGRO-AI answer</h2>
-            <StatusBadge label={loading ? "Thinking" : result ? "Generated" : "Ready"} tone={result ? "good" : "neutral"} />
+            <div className="flex gap-2">
+              {result?.sample_mode ? <StatusBadge label="Evaluation sample" tone="warn" /> : null}
+              <StatusBadge label={loading ? "Thinking" : result ? "Generated" : "Ready"} tone={result ? "good" : "neutral"} />
+            </div>
           </div>
 
           {!result && !loading ? <InlineState title="Ask a question above." detail="The response will show answer, evidence used, missing data, risks, next actions, and citations." /> : null}
@@ -204,6 +228,12 @@ export function Intelligence() {
                 {text(result.answer || result.summary || result.message, "AGRO-AI completed the request.")}
               </div>
 
+              <div className="grid grid-cols-4 gap-3">
+                <Info label="Model status" value={text(result.model_status)} />
+                <Info label="Selected model" value={text(result.model, "Not configured")} />
+                <Info label="Confidence" value={text(result.confidence, "low")} />
+                <Info label="Verification" value={text(result.verification?.status, "partial")} />
+              </div>
               <List title="Verification warnings" items={asArray(result.verification?.risk_flags)} />
               <List title="Evidence used" items={asArray(result.what_i_used || result.evidence_used)} />
               <List title="Missing data" items={asArray(result.what_is_missing || result.missing_data)} />
@@ -217,10 +247,21 @@ export function Intelligence() {
         {report ? (
           <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
             <div className="flex items-center justify-between gap-4 mb-4">
-              <h2 className="text-[20px] font-semibold" style={{ color: TEXT }}>{report.artifact?.title || "Generated report"}</h2>
-              <PortalButton onClick={downloadArtifact}>Download</PortalButton>
+              <div>
+                <h2 className="text-[20px] font-semibold" style={{ color: TEXT }}>{report.title || "Structured report"}</h2>
+                <p className="mt-1 text-[12px]" style={{ color: MUTED }}>{reportRequest ? "Structured report ready — PDF export enabled" : "Structured report ready — PDF export not yet enabled"}</p>
+              </div>
+              <PortalButton onClick={downloadArtifact} disabled={!reportRequest}>Download PDF</PortalButton>
             </div>
-            <pre className="max-h-[420px] overflow-auto rounded-xl p-4 text-[12px] whitespace-pre-wrap" style={{ background: BG, color: TEXT, border: `1px solid ${BORDER}` }}>{report.preview}</pre>
+            <div className="space-y-4">
+              <div className="rounded-xl p-4 text-[13px] leading-relaxed" style={{ background: BG, color: TEXT, border: `1px solid ${BORDER}` }}>{text(report.executive_summary)}</div>
+              <div className="grid grid-cols-2 gap-4">
+                <List title="Key findings" items={asArray(report.key_findings)} />
+                <List title="Missing evidence" items={asArray(report.missing_evidence)} />
+                <List title="Decisions" items={asArray(report.decisions)} />
+                <List title="Evidence appendix" items={asArray(report.evidence_appendix)} />
+              </div>
+            </div>
           </section>
         ) : null}
       </main>

@@ -6,6 +6,7 @@ from app.core.security import create_access_token
 from app.models.operational_records import DataSource, EvidenceRecord
 from app.models.saas import Organization, OrganizationMembership, User, Workspace
 from app.schemas.ai import ToolCitation
+from app.services.ai_gateway import AIGatewayResult
 from app.services.citation_verifier import verify_citations
 from app.services.intelligence_context import build_intelligence_context
 
@@ -152,3 +153,113 @@ def test_decision_workbench_still_works(client, db, monkeypatch):
     body = response.json()
     assert body["result"]["summary"]
     assert "missing_evidence" in body["result"]
+
+
+def test_sample_mode_answer_cannot_claim_real_customer_evidence(client, db, monkeypatch):
+    user, org, workspace = _seed_auth_context(db)
+    monkeypatch.setattr("app.services.model_router.settings.AI_PROVIDER", "openai_compatible")
+    monkeypatch.setattr("app.services.model_router.settings.AI_BASE_URL", "https://models.example.test/v1")
+    monkeypatch.setattr("app.services.model_router.settings.AI_API_KEY", "test-key")
+    monkeypatch.setattr("app.services.model_router.settings.AI_MODEL", "base-model")
+    monkeypatch.setattr("app.services.model_router.settings.AI_REASONING_MODEL", "reasoning-model")
+
+    async def fake_chat(self, messages, temperature=0.2, response_format=None, model_override=None):
+        return AIGatewayResult(
+            status="ok",
+            content='{"summary":"This real customer evidence shows 34 evidence records and 90% readiness.","confidence":"high"}',
+            provider="mock",
+            model=model_override or self.model,
+        )
+
+    monkeypatch.setattr("app.services.ai_gateway.AIGateway.chat", fake_chat)
+
+    response = client.post(
+        "/v1/intelligence/run",
+        json={"task": "chat", "question": "What is ready?", "workspace_id": workspace.id},
+        headers=_headers(user.id, org.id),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["sample_mode"] is True
+    assert body["result"]["summary"].startswith("Evaluation sample — not customer production data.")
+    assert "real customer evidence" not in body["result"]["summary"].lower()
+    assert body["confidence"] == "low"
+    assert body["verification"]["risk_flags"]
+
+
+def test_ask_agro_ai_uses_reasoning_model_not_fast_model(client, db, monkeypatch):
+    user, org, workspace = _seed_auth_context(db)
+    seen: dict[str, str | None] = {}
+    monkeypatch.setattr("app.services.model_router.settings.AI_PROVIDER", "openai_compatible")
+    monkeypatch.setattr("app.services.model_router.settings.AI_BASE_URL", "https://models.example.test/v1")
+    monkeypatch.setattr("app.services.model_router.settings.AI_API_KEY", "test-key")
+    monkeypatch.setattr("app.services.model_router.settings.AI_MODEL", "base-model")
+    monkeypatch.setattr("app.services.model_router.settings.AI_FAST_MODEL", "fast-model")
+    monkeypatch.setattr("app.services.model_router.settings.AI_REASONING_MODEL", "reasoning-model")
+
+    async def fake_chat(self, messages, temperature=0.2, response_format=None, model_override=None):
+        seen["model"] = model_override or self.model
+        return AIGatewayResult(
+            status="ok",
+            content='{"summary":"Evaluation sample — not customer production data. Connect evidence before acting.","confidence":"low"}',
+            provider="mock",
+            model=model_override or self.model,
+        )
+
+    monkeypatch.setattr("app.services.ai_gateway.AIGateway.chat", fake_chat)
+
+    response = client.post(
+        "/v1/intelligence/run",
+        json={"task": "chat", "question": "What should I do?", "workspace_id": workspace.id},
+        headers=_headers(user.id, org.id),
+    )
+
+    assert response.status_code == 200
+    assert seen["model"] == "reasoning-model"
+    assert response.json()["model"] == "reasoning-model"
+
+
+def test_intelligence_numeric_claim_guard_downgrades_unsupported_counts(client, db, monkeypatch):
+    user, org, workspace = _seed_auth_context(db)
+    monkeypatch.setattr("app.services.model_router.settings.AI_PROVIDER", "openai_compatible")
+    monkeypatch.setattr("app.services.model_router.settings.AI_BASE_URL", "https://models.example.test/v1")
+    monkeypatch.setattr("app.services.model_router.settings.AI_API_KEY", "test-key")
+    monkeypatch.setattr("app.services.model_router.settings.AI_MODEL", "base-model")
+    monkeypatch.setattr("app.services.model_router.settings.AI_REASONING_MODEL", "reasoning-model")
+
+    async def fake_chat(self, messages, temperature=0.2, response_format=None, model_override=None):
+        return AIGatewayResult(
+            status="ok",
+            content='{"summary":"Evaluation sample — not customer production data. There are 17 data sources and 90% readiness.","confidence":"high"}',
+            provider="mock",
+            model=model_override or self.model,
+        )
+
+    monkeypatch.setattr("app.services.ai_gateway.AIGateway.chat", fake_chat)
+
+    response = client.post(
+        "/v1/intelligence/run",
+        json={"task": "chat", "question": "Summarize readiness", "workspace_id": workspace.id},
+        headers=_headers(user.id, org.id),
+    )
+
+    body = response.json()
+    assert response.status_code == 200
+    assert body["confidence"] == "low"
+    assert "17 data sources" not in body["result"]["summary"]
+    assert any("Unsupported numeric claim" in warning for warning in body["verification"]["risk_flags"])
+
+
+def test_report_factory_pdf_endpoint_returns_pdf(client, db):
+    user, org, workspace = _seed_auth_context(db)
+
+    response = client.post(
+        "/v1/reports/factory/pdf",
+        json={"report_type": "executive_brief", "workspace_id": workspace.id, "audience": "owner"},
+        headers=_headers(user.id, org.id),
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/pdf")
+    assert response.content.startswith(b"%PDF")
