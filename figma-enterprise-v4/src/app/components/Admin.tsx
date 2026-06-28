@@ -1,4 +1,7 @@
+import { useCallback } from "react";
+import { apiClient } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
+import { usePortalResource } from "../hooks/usePortalResource";
 import { BG, BORDER, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
 
 function safe(value: unknown, fallback = "—") {
@@ -9,6 +12,8 @@ function safe(value: unknown, fallback = "—") {
 
 export function Admin() {
   const { user, currentOrganization, currentWorkspace } = useAuth();
+  const aiState = usePortalResource<Record<string, unknown>>(useCallback(() => apiClient.ai.status(), []));
+  const ai = aiState.data || {};
 
   return (
     <div className="min-h-screen" style={{ background: BG }}>
@@ -47,6 +52,33 @@ export function Admin() {
             ["Reports", "Unlocked"],
             ["Ask AGRO-AI", "Unlocked"],
           ]} />
+        </section>
+
+        <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <div className="flex items-start justify-between gap-4 mb-4">
+            <div>
+              <div className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: MUTED }}>Intelligence backend</div>
+              <h2 className="text-[20px] font-semibold" style={{ color: TEXT }}>Model runtime</h2>
+            </div>
+            <PortalButton variant="secondary" onClick={aiState.refresh}>Refresh</PortalButton>
+          </div>
+          <div className="grid grid-cols-3 gap-5">
+            <Card title="Status" rows={[
+              ["Configured", safe(ai.configured, "false")],
+              ["Provider", safe(ai.provider, "offline")],
+              ["Mode", safe(ai.mode, "offline")],
+            ]} />
+            <Card title="Model" rows={[
+              ["Model", safe(ai.model, "Not configured")],
+              ["Fallback active", safe(ai.fallback_active, "true")],
+              ["Base URL", safe(ai.base_url_present, "false")],
+            ]} />
+            <Card title="Missing env" rows={[
+              ["Required values", Array.isArray(ai.missing_env) && ai.missing_env.length ? String(ai.missing_env.join(", ")) : "None"],
+              ["Verification", aiState.error ? aiState.error : "Status endpoint healthy"],
+              ["Action", "Test from Intelligence panel"],
+            ]} />
+          </div>
         </section>
 
         <section className="rounded-2xl p-6" style={{ background: "#0D2B1E", border: "1px solid rgba(255,255,255,0.08)" }}>

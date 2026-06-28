@@ -24,6 +24,7 @@ export function Operations() {
   const { currentWorkspace } = useAuth();
   const briefState = usePortalResource<AnyRecord>(useCallback(() => apiClient.intelligence.brief(), []));
   const evidenceState = usePortalResource<AnyRecord>(useCallback(() => apiClient.evidence.summary(), []));
+  const statusState = usePortalResource<AnyRecord>(useCallback(() => apiClient.ai.status(), []));
   const [result, setResult] = useState<AnyRecord | null>(null);
   const [decisionMode, setDecisionMode] = useState("operator_today");
   const [loading, setLoading] = useState(false);
@@ -51,7 +52,16 @@ export function Operations() {
         workspace_id: currentWorkspace?.id,
         mode: runMode,
       }) as AnyRecord;
-      setResult((response.decisions || [])[0] || response);
+      if (statusState.data?.configured) {
+        const modelResponse = await apiClient.intelligence.run({
+          task: "decision_workbench",
+          question: `Generate an operator-ready ${mode} decision using current tenant evidence only.`,
+          workspace_id: currentWorkspace?.id,
+        }) as AnyRecord;
+        setResult(modelResponse.result || modelResponse);
+      } else {
+        setResult((response.decisions || [])[0] || response);
+      }
       await Promise.all([briefState.refresh(), evidenceState.refresh()]);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Decision run failed.");
@@ -115,6 +125,7 @@ export function Operations() {
       <main className="px-8 py-6 space-y-5" style={{ maxWidth: 1220 }}>
         {briefState.error ? <InlineState title={briefState.error} /> : null}
         {evidenceState.error ? <InlineState title={evidenceState.error} /> : null}
+        {statusState.error ? <InlineState title={statusState.error} /> : null}
         {message ? <InlineState title={message} /> : null}
 
         <section className="grid grid-cols-4 gap-4">
@@ -142,6 +153,7 @@ export function Operations() {
           <div className="flex items-center justify-between gap-4 mb-4">
             <h2 className="text-[20px] font-semibold" style={{ color: TEXT }}>Decision output</h2>
             <div className="flex gap-2">
+              <StatusBadge label={text(result?.model_status || (statusState.data?.configured ? "live" : "fallback"))} tone={result?.model_status === "live" ? "good" : "warn"} />
               <StatusBadge label={result ? result.confidence || "generated" : "not run"} tone={result ? "good" : "neutral"} />
               <PortalButton variant="secondary" onClick={generatePdf} disabled={loading}>{loading ? "Working…" : "Generate PDF"}</PortalButton>
             </div>
@@ -158,6 +170,7 @@ export function Operations() {
 
               <List title="Evidence used" items={asArray(result.what_i_used || result.evidence_used)} />
               <List title="Missing data" items={asArray(result.what_is_missing || result.missing_data || result.missing_evidence)} />
+              <List title="Verification warnings" items={asArray(result.verification?.risk_flags)} />
               <List title="Risks / uncertainty" items={asArray(result.risks || result.risk_flags || [result.risk_level].filter(Boolean))} />
               <List title="Next actions" items={asArray(result.next_actions || result.operator_instructions)} />
               <List title="Citations" items={asArray(result.citations)} />

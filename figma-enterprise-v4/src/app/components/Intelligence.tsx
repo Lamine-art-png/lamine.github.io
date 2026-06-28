@@ -41,6 +41,7 @@ function text(value: unknown, fallback = "—") {
 export function Intelligence() {
   const { currentWorkspace } = useAuth();
   const briefState = usePortalResource<AnyRecord>(useCallback(() => apiClient.intelligence.brief(), []));
+  const statusState = usePortalResource<AnyRecord>(useCallback(() => apiClient.ai.status(), []));
   const [mode, setMode] = useState("farmland_manager");
   const [question, setQuestion] = useState("What should I do today?");
   const [format, setFormat] = useState("answer");
@@ -52,6 +53,7 @@ export function Intelligence() {
 
   const prompts = useMemo(() => PROMPTS[mode] || PROMPTS.farmland_manager, [mode]);
   const brief = briefState.data || {};
+  const modelStatus = statusState.data || {};
   const summary = result?.evidence_summary || brief.evidence_summary || {};
 
   async function ask(prompt = question) {
@@ -70,7 +72,7 @@ export function Intelligence() {
         customer_mode: mode,
         output_format: format,
       }) as AnyRecord;
-      setResult(response);
+      setResult(response.result || response);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ask AGRO-AI failed.");
     } finally {
@@ -127,6 +129,7 @@ export function Intelligence() {
       <main className="px-8 py-7 space-y-6" style={{ maxWidth: 1180 }}>
         {error ? <InlineState title={error} /> : null}
         {briefState.error ? <InlineState title={briefState.error} /> : null}
+        {statusState.error ? <InlineState title={statusState.error} /> : null}
 
         <section className="grid gap-5" style={{ gridTemplateColumns: "1.45fr 0.55fr" }}>
           <div className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
@@ -177,6 +180,9 @@ export function Intelligence() {
             <div className="text-[10px] font-semibold uppercase tracking-widest mb-3" style={{ color: MUTED }}>Current context</div>
             <Info label="Workspace" value={text(currentWorkspace?.name || brief.workspace?.name, "Workspace")} />
             <Info label="Mode" value={text(result?.mode || brief.mode, "demo")} />
+            <Info label="Model status" value={text(result?.model_status || (modelStatus.fallback_active ? "fallback" : modelStatus.configured ? "live" : "offline"))} />
+            <Info label="Provider" value={text(result?.provider || modelStatus.provider, "offline")} />
+            <Info label="Model" value={text(result?.model || modelStatus.model, "Not configured")} />
             <Info label="Evidence records" value={text(summary.evidence_count, "0")} />
             <Info label="Source files" value={text(summary.source_count, "0")} />
             <Info label="Readiness" value={`${text(summary.readiness_score, "0")}%`} />
@@ -198,6 +204,7 @@ export function Intelligence() {
                 {text(result.answer || result.summary || result.message, "AGRO-AI completed the request.")}
               </div>
 
+              <List title="Verification warnings" items={asArray(result.verification?.risk_flags)} />
               <List title="Evidence used" items={asArray(result.what_i_used || result.evidence_used)} />
               <List title="Missing data" items={asArray(result.what_is_missing || result.missing_data)} />
               <List title="Risks / uncertainty" items={asArray(result.risks || result.risk_flags)} />
