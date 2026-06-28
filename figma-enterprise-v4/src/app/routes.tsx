@@ -14,6 +14,7 @@ import { Audit } from "./components/Audit";
 import { Admin } from "./components/Admin";
 import {
   BillingPage,
+  AdminRequestsPage,
   OnboardingPage,
   PricingPage,
   ProfilePage,
@@ -46,6 +47,7 @@ export const router = createBrowserRouter([
       { path: "sources", Component: Sources },
       { path: "audit", Component: Audit },
       { path: "admin", Component: Admin },
+      { path: "admin/requests", Component: AdminRequestsPage },
       { path: "pricing", Component: PricingPage },
       { path: "profile", Component: ProfilePage },
       { path: "billing", Component: BillingPage },

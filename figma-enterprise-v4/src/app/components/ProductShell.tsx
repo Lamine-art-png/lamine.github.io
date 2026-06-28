@@ -30,7 +30,8 @@ type BillingSummary = {
   usage_summary: Record<string, unknown>;
   upgrade_options: Plan[];
   service_add_ons: { id: string; name: string; price: string; description: string }[];
-  payment_provider_configured: boolean;
+  annual_savings?: string;
+  invoices?: unknown[];
 };
 
 type ShellResponse = {
@@ -43,9 +44,17 @@ type ShellResponse = {
 const faq = [
   ["What counts as a workspace?", "A workspace is the farm, site, or operating scope where AGRO-AI organizes field activity, evidence, reports, and connected systems."],
   ["Can I start free?", "Yes. Free is built for pilot use with limited uploads, limited AGRO-AI runs, basic field updates, and basic reports."],
+  ["What is included in Professional?", "Professional includes the full field operating loop, core WaterOps and Assurance workflows, connector access, standard reports, and buyer-ready exports."],
+  ["Who is Network for?", "Network is built for multi-farm groups, water agencies, exporters, lenders, insurers, and sourcing teams."],
   ["Do you support annual billing?", "Yes. Professional is available monthly or annually. Network is scoped annually or monthly with the AGRO-AI team."],
+  ["Do you support WiseConn, Talgil, OpenET, Google Drive, Outlook, Gmail, Dropbox, Slack, Salesforce?", "Yes. AGRO-AI supports field controllers, cloud drives, email, files, ET, communication, and CRM systems through the connector hub."],
+  ["Can AGRO-AI generate reports and PDFs?", "Yes. Reports can be generated from workspace evidence, and PDF export is available where report export is enabled."],
   ["Do you support water agencies and grower networks?", "Yes. Network is designed for multi-farm dashboards, supplier workflows, role controls, APIs, and customer success."],
   ["Can AGRO-AI connect to existing field systems?", "Yes. Connector access is included on paid plans, with custom integrations available when systems need special handling."],
+  ["Can I request a custom integration?", "Yes. Integration requests are tracked and visible in Admin for follow-up."],
+  ["What happens if I need onboarding help?", "You can request onboarding from Support or Onboarding, and AGRO-AI will track the request."],
+  ["How secure is my data?", "Workspace access is authenticated and organization-scoped. Private evidence stays tied to your workspace."],
+  ["Can I cancel or change plans?", "Plan changes can be requested from Billing, and Network changes are handled with the AGRO-AI team."],
   ["Is my data used to train models?", "Customer evidence is used to power your workspace experience. AGRO-AI should not treat your private field records as public training data."],
   ["How do integrations work?", "Connected systems bring files, emails, controller data, or evidence into the workspace so the field operating loop can act on it."],
 ];
@@ -124,15 +133,44 @@ export function PricingPage() {
   const selectPlan = async (plan: Plan) => {
     setMessage("");
     try {
+      const hasSession = Boolean(localStorage.getItem("agroai_access_token"));
+      if (!hasSession && plan.id === "free") {
+        setMessage("Create your account to start free.");
+        return;
+      }
+      if (!hasSession && plan.id === "professional") {
+        const response = await apiClient.sales.contact({
+          type: "upgrade",
+          subject: "Professional plan request",
+          message: "Customer requested Professional pricing follow-up from public pricing.",
+          source_page: "pricing",
+        }) as Record<string, unknown>;
+        setMessage(`${safe(response.message, "Upgrade request received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
+        return;
+      }
+      if (plan.id === "network") {
+        const response = await apiClient.sales.networkInquiry({
+          type: "network_plan",
+          subject: "Network plan inquiry",
+          message: "Customer requested Network pricing follow-up.",
+          source_page: "pricing",
+        }) as Record<string, unknown>;
+        setMessage(`${safe(response.message, "Network inquiry received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
+        return;
+      }
       const response = await apiClient.billing.checkout({ plan_id: plan.id, billing_period: billingPeriod }) as Record<string, unknown>;
-      setMessage(safe(response.message, "Upgrade flow is ready."));
+      if (typeof response.checkout_url === "string") {
+        window.location.assign(response.checkout_url);
+        return;
+      }
+      setMessage(`${safe(response.message, "Upgrade request received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Upgrade flow is ready. Live billing setup is required before checkout.");
+      setMessage(error instanceof Error ? error.message : "Upgrade request received.");
     }
   };
 
   return (
-    <Page title="Pricing" subtitle="Choose the AGRO-AI plan that matches the operating room you need to run.">
+    <Page title="AGRO-AI pricing" subtitle="Start with a field operating workspace. Scale to networks, agencies, and multi-farm organizations.">
       <div className="inline-flex rounded-lg p-1" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
         {(["monthly", "annual"] as const).map((period) => (
           <button
@@ -183,17 +221,41 @@ export function PricingPage() {
 
 export function ProfilePage() {
   const profileState = usePortalResource<Record<string, unknown>>(useCallback(() => apiClient.account.profile(), []));
+  const [name, setName] = useState("");
+  const [message, setMessage] = useState("");
   const profile = profileState.data || {};
   const user = (profile.user || {}) as Record<string, unknown>;
+  const organization = (profile.organization || {}) as Record<string, unknown>;
   const workspace = (profile.workspace || {}) as Record<string, unknown>;
   const plan = (profile.plan || {}) as Record<string, unknown>;
+
+  const save = async () => {
+    const response = await apiClient.account.updateProfile({ name: name || user.name }) as Record<string, unknown>;
+    setMessage("Profile updated.");
+    setName(String(((response.user || {}) as Record<string, unknown>).name || ""));
+    await profileState.refresh();
+  };
+
   return (
-    <Page title="Profile" subtitle="Your account, workspace, and plan at a glance.">
-      <Panel title="Account">
+    <Page title="Profile" subtitle="Manage your account, organization, workspace, plan, security, and requests.">
+      {message ? <div className="rounded-lg px-4 py-3 text-[13px]" style={{ background: "#F0FDF4", color: "#15803D", border: "1px solid #BBF7D0" }}>{message}</div> : null}
+      <Panel title="Personal profile" action={<PortalButton onClick={save}>Save profile</PortalButton>}>
+        <label className="block text-[12px] mb-4" style={{ color: MUTED }}>
+          Name
+          <input value={name || String(user.name || "")} onChange={(event) => setName(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />
+        </label>
         <Row label="Name" value={user.name} />
         <Row label="Email" value={user.email} />
+      </Panel>
+      <Panel title="Organization">
+        <Row label="Company" value={organization.name} />
         <Row label="Role" value={profile.role} />
+      </Panel>
+      <Panel title="Workspace">
         <Row label="Workspace" value={workspace.name} />
+        <Row label="Mode" value={workspace.mode === "live" ? "Live operations" : "Evaluation workspace"} />
+      </Panel>
+      <Panel title="Plan">
         <Row label="Plan" value={plan.name} />
         <Row label="Account status" value={profile.account_status} />
       </Panel>
@@ -210,7 +272,11 @@ export function BillingPage() {
 
   const upgrade = async (plan: Plan) => {
     const response = await apiClient.billing.checkout({ plan_id: plan.id, billing_period: billingPeriod }) as Record<string, unknown>;
-    setMessage(safe(response.message));
+    if (typeof response.checkout_url === "string") {
+      window.location.assign(response.checkout_url);
+      return;
+    }
+    setMessage(`${safe(response.message, "Upgrade request received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
   };
 
   return (
@@ -222,11 +288,11 @@ export function BillingPage() {
           <Row label="Status" value={billing?.billing_status} />
           <Row label="Monthly price" value={billing?.monthly_price} />
           <Row label="Annual price" value={billing?.annual_price} />
-          <Row label="Live billing" value={billing?.payment_provider_configured ? "Configured" : "Setup required"} />
+          <Row label="Annual savings" value={billing?.annual_savings} />
         </Panel>
         <Panel title="Usage summary">
           <Row label="Uploads" value={usage.uploads} />
-          <Row label="AGRO-AI runs" value={usage.ai_runs} />
+          <Row label="AGRO-AI runs" value={usage.agro_ai_runs} />
           <Row label="Reports" value={usage.reports} />
           <Row label="Field updates" value={usage.field_updates} />
         </Panel>
@@ -248,6 +314,11 @@ export function BillingPage() {
           ))}
         </div>
       </Panel>
+      <Panel title="Invoices">
+        <p className="text-[13px]" style={{ color: MUTED }}>
+          Invoices will appear here when live billing has started.
+        </p>
+      </Panel>
     </Page>
   );
 }
@@ -256,6 +327,8 @@ export function SecurityPage() {
   const securityState = usePortalResource<Record<string, unknown>>(useCallback(() => apiClient.account.security(), []));
   const [message, setMessage] = useState("");
   const security = securityState.data || {};
+  const emailVerification = (security.email_verification || {}) as Record<string, unknown>;
+  const twoFactor = (security.two_factor || {}) as Record<string, unknown>;
 
   const requestVerification = async () => {
     const response = await apiClient.account.requestEmailVerification() as Record<string, unknown>;
@@ -270,11 +343,11 @@ export function SecurityPage() {
     <Page title="Security" subtitle="Keep account access ready for production operations.">
       {message ? <div className="rounded-lg px-4 py-3 text-[13px]" style={{ background: "#FFFBEB", color: "#92400E", border: "1px solid #FCD34D" }}>{message}</div> : null}
       <Panel title="Verification">
-        <Row label="Email verification" value={security.email_verified ? "Verified" : "Not verified"} />
-        <Row label="Two-factor verification" value={security.two_factor_enabled ? "Enabled" : "Not enabled"} />
+        <Row label="Email verification" value={emailVerification.customer_label} />
+        <Row label="Two-factor verification" value={twoFactor.customer_label} />
         <div className="flex gap-3 pt-4">
-          <PortalButton onClick={requestVerification}>Send verification email</PortalButton>
-          <PortalButton variant="secondary" onClick={startTwoFactor}>Set up 2FA</PortalButton>
+          <PortalButton onClick={requestVerification}>{safe(emailVerification.action_label, "Request verification")}</PortalButton>
+          <PortalButton variant="secondary" onClick={startTwoFactor}>{safe(twoFactor.action_label, "Request two-factor setup")}</PortalButton>
         </div>
       </Panel>
       <Panel title="Sessions">
@@ -296,7 +369,7 @@ export function SupportPage() {
 
   const submit = async () => {
     const response = await apiClient.support.ticket({ category, subject, message, workspace_id: currentWorkspace?.id }) as Record<string, unknown>;
-    setResult(safe(response.message));
+    setResult(`${safe(response.message, "Thanks - your request was received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
     setSubject("");
     setMessage("");
   };
@@ -308,7 +381,7 @@ export function SupportPage() {
         <Panel title="Options">
           <div className="space-y-3">
             {options.map((option) => (
-              <button key={option.id} type="button" onClick={() => setCategory(option.type as typeof category)} className="w-full rounded-lg p-4 text-left" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+              <button key={option.id} type="button" onClick={() => setCategory(option.type === "bug" ? "issue" : option.type as typeof category)} className="w-full rounded-lg p-4 text-left" style={{ background: BG, border: `1px solid ${BORDER}` }}>
                 <div className="font-semibold text-[13px]" style={{ color: TEXT }}>{option.label}</div>
                 <div className="mt-1 text-[12px]" style={{ color: MUTED }}>{option.type}</div>
               </button>
@@ -328,6 +401,89 @@ export function SupportPage() {
             <textarea value={message} onChange={(event) => setMessage(event.target.value)} placeholder="What do you need?" className="min-h-[140px] w-full rounded-lg px-3 py-2 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />
             <PortalButton disabled={!subject.trim() || !message.trim()} onClick={submit}>Send request</PortalButton>
           </div>
+        </Panel>
+      </div>
+    </Page>
+  );
+}
+
+type AdminRequest = {
+  id: string;
+  type: string;
+  priority: "low" | "medium" | "high" | "urgent";
+  company?: string;
+  subject: string;
+  requester?: string;
+  status: "received" | "triaged" | "in_progress" | "waiting_on_customer" | "closed";
+  created_at?: string;
+  source_page?: string;
+  message?: string;
+};
+
+export function AdminRequestsPage() {
+  const [tab, setTab] = useState("all");
+  const [selected, setSelected] = useState<AdminRequest | null>(null);
+  const requestState = usePortalResource<{ requests: AdminRequest[] }>(
+    useCallback(() => apiClient.adminRequests.list(tab === "all" ? undefined : tab), [tab]),
+  );
+  const requests = requestState.data?.requests || [];
+  const tabs = [
+    ["all", "All"],
+    ["support", "Support"],
+    ["sales", "Sales"],
+    ["integration", "Integrations"],
+    ["onboarding", "Onboarding"],
+    ["bug", "Bugs"],
+    ["upgrade", "Upgrade requests"],
+  ];
+
+  const update = async (request: AdminRequest, status: AdminRequest["status"]) => {
+    await apiClient.adminRequests.update(request.id, { status });
+    setSelected({ ...request, status });
+    await requestState.refresh();
+  };
+
+  return (
+    <Page title="Requests" subtitle="Track support, sales, onboarding, integrations, bugs, and upgrade requests.">
+      <div className="flex flex-wrap gap-2">
+        {tabs.map(([value, label]) => (
+          <button key={value} type="button" onClick={() => setTab(value)} className="rounded-lg px-3 py-2 text-[12px] font-medium" style={{ background: tab === value ? GREEN : SURFACE, color: tab === value ? "white" : TEXT, border: `1px solid ${BORDER}` }}>{label}</button>
+        ))}
+      </div>
+      <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
+        <section className="rounded-lg overflow-hidden" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <div className="grid grid-cols-[110px_90px_1fr_150px_120px_120px] gap-3 px-4 py-3 text-[11px] font-semibold uppercase" style={{ color: MUTED, borderBottom: `1px solid ${BORDER}` }}>
+            <span>Type</span><span>Priority</span><span>Subject</span><span>Requester</span><span>Status</span><span>Created</span>
+          </div>
+          {requests.map((request) => (
+            <button key={request.id} type="button" onClick={() => setSelected(request)} className="grid w-full grid-cols-[110px_90px_1fr_150px_120px_120px] gap-3 px-4 py-3 text-left text-[12px]" style={{ color: TEXT, borderBottom: `1px solid ${BORDER}` }}>
+              <span>{request.type}</span>
+              <span>{request.priority}</span>
+              <span className="font-medium">{request.subject}</span>
+              <span>{request.requester || request.company || "Customer"}</span>
+              <span>{request.status.replaceAll("_", " ")}</span>
+              <span>{request.created_at ? new Date(request.created_at).toLocaleDateString() : "Today"}</span>
+            </button>
+          ))}
+          {!requests.length ? <div className="p-6 text-[13px]" style={{ color: MUTED }}>No requests in this view.</div> : null}
+        </section>
+        <Panel title="Request detail">
+          {selected ? (
+            <div className="space-y-3 text-[13px]">
+              <Row label="Type" value={selected.type} />
+              <Row label="Company" value={selected.company} />
+              <Row label="Requester" value={selected.requester} />
+              <Row label="Source" value={selected.source_page} />
+              <p className="leading-relaxed" style={{ color: MUTED }}>{selected.message}</p>
+              <div className="flex flex-wrap gap-2 pt-3">
+                {(["triaged", "in_progress", "waiting_on_customer", "closed"] as const).map((status) => (
+                  <PortalButton key={status} variant="secondary" onClick={() => update(selected, status)}>{status.replaceAll("_", " ")}</PortalButton>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-[13px]" style={{ color: MUTED }}>Select a request to review and update status.</p>
+          )}
         </Panel>
       </div>
     </Page>
@@ -366,27 +522,57 @@ export function TeamPage() {
 }
 
 export function OnboardingPage() {
+  const onboardingState = usePortalResource<Record<string, unknown>>(useCallback(() => apiClient.onboarding.state(), []));
+  const [selectedPlan, setSelectedPlan] = useState("free");
+  const [organizationType, setOrganizationType] = useState("Farm / grower");
+  const [acresOrSites, setAcresOrSites] = useState("");
+  const [primaryGoal, setPrimaryGoal] = useState("Water risk");
+  const [message, setMessage] = useState("");
   const goals = useMemo(() => [
-    "Manage water risk",
-    "Generate compliance packet",
-    "Organize field evidence",
-    "Track operator tasks",
-    "Connect field systems",
-    "Prepare owner/lender report",
+    "Water risk",
+    "Compliance reporting",
+    "Field operations",
+    "Evidence organization",
+    "Integrations",
+    "Network rollout",
   ], []);
+
+  const save = async () => {
+    await apiClient.onboarding.update({
+      current_step: "start_operating",
+      selected_plan: selectedPlan,
+      organization_type: organizationType,
+      acres_or_sites: acresOrSites,
+      primary_goal: primaryGoal,
+      completed_steps: ["account", "organization", "scope", "plan"],
+    });
+    const response = await apiClient.onboarding.complete() as Record<string, unknown>;
+    setMessage(safe(response.message));
+    await onboardingState.refresh();
+  };
+
   return (
-    <Page title="Onboarding" subtitle="A short path from account setup to Command Center.">
+    <Page title="Onboarding" subtitle="Your workspace is ready. Start by giving AGRO-AI the evidence it needs to help you operate.">
+      {message ? <div className="rounded-lg px-4 py-3 text-[13px]" style={{ background: "#F0FDF4", color: "#15803D", border: "1px solid #BBF7D0" }}>{message}</div> : null}
       <div className="grid gap-4 md:grid-cols-5">
-        {["Create workspace", "Choose role", "Choose first goal", "Add first source", "Open Command Center"].map((step, index) => (
+        {["Create your account", "Organization", "Scope", "Plan", "Start operating"].map((step, index) => (
           <div key={step} className="rounded-lg p-4" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
             <div className="text-[11px] font-semibold" style={{ color: GREEN }}>Step {index + 1}</div>
             <div className="mt-2 font-semibold text-[14px]" style={{ color: TEXT }}>{step}</div>
           </div>
         ))}
       </div>
-      <Panel title="First goals">
-        <div className="grid gap-3 md:grid-cols-3">
-          {goals.map((goal) => <div key={goal} className="rounded-lg px-4 py-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>{goal}</div>)}
+      <Panel title="Workspace setup" action={<PortalButton onClick={save}>Start operating</PortalButton>}>
+        <div className="grid gap-4 md:grid-cols-2">
+          <label className="text-[12px]" style={{ color: MUTED }}>Organization type<select value={organizationType} onChange={(event) => setOrganizationType(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}><option>Farm / grower</option><option>Farmland manager</option><option>Water agency / district</option><option>Lender / insurer</option><option>Food / sustainability buyer</option><option>Advisor / consultant</option><option>Other</option></select></label>
+          <label className="text-[12px]" style={{ color: MUTED }}>Acres, sites, or farms managed<input value={acresOrSites} onChange={(event) => setAcresOrSites(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} /></label>
+          <label className="text-[12px]" style={{ color: MUTED }}>Main operating goal<select value={primaryGoal} onChange={(event) => setPrimaryGoal(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>{goals.map((goal) => <option key={goal}>{goal}</option>)}</select></label>
+          <label className="text-[12px]" style={{ color: MUTED }}>Plan<select value={selectedPlan} onChange={(event) => setSelectedPlan(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}><option value="free">Free</option><option value="professional">Professional</option><option value="network">Network</option></select></label>
+        </div>
+      </Panel>
+      <Panel title="Start operating">
+        <div className="grid gap-3 md:grid-cols-4">
+          {["Upload first evidence file", "Connect existing systems", "Add a field update", "Ask AGRO-AI"].map((item) => <div key={item} className="rounded-lg px-4 py-3 text-[13px] font-medium" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>{item}</div>)}
         </div>
       </Panel>
     </Page>
