@@ -202,6 +202,21 @@ export type IntelligenceAskPayload = {
   output_format?: string;
 };
 
+export type IntelligenceRunPayload = {
+  task:
+    | "chat"
+    | "field_diagnosis"
+    | "exception_triage"
+    | "decision_workbench"
+    | "report_factory"
+    | "connector_diagnosis"
+    | "readiness_analysis";
+  question: string;
+  workspace_id?: string;
+  field_id?: string;
+  audience?: string;
+};
+
 export type WorkbenchRunPayload = {
   workspace_id?: string;
   field_id?: string;
@@ -286,6 +301,7 @@ export const apiClient = {
   },
 
   ai: {
+    status: () => get("/v1/ai/status"),
     chat: (payload: AiRequestPayload) => post("/v1/ai/chat", payload),
     irrigationRecommendation: (payload: AiRequestPayload) => post("/v1/ai/irrigation-recommendation", payload),
     assuranceReview: (payload: AiRequestPayload) => post("/v1/ai/assurance-review", payload),
@@ -295,7 +311,13 @@ export const apiClient = {
 
   intelligence: {
     brief: () => get("/v1/intelligence/brief"),
-    ask: (payload: IntelligenceAskPayload) => post("/v1/intelligence/ask", payload),
+    run: (payload: IntelligenceRunPayload) => post("/v1/intelligence/run", payload),
+    ask: (payload: IntelligenceAskPayload) =>
+      post("/v1/intelligence/run", {
+        task: "chat",
+        question: payload.question,
+        workspace_id: payload.workspace_id,
+      }),
     action: (payload: IntelligenceActionPayload) => post("/v1/intelligence/action", payload),
   },
 

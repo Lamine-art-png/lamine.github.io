@@ -61,13 +61,18 @@ class AIGateway:
         *,
         temperature: float = 0.2,
         response_format: dict[str, Any] | None = None,
+        model_override: str | None = None,
     ) -> AIGatewayResult:
         if not self.is_configured:
             return self._offline_fallback(messages)
 
         try:
             if self.provider == "ollama":
+                if model_override:
+                    return await self._chat_ollama(messages, temperature, model_override=model_override)
                 return await self._chat_ollama(messages, temperature)
+            if model_override:
+                return await self._chat_openai_compatible(messages, temperature, response_format, model_override=model_override)
             return await self._chat_openai_compatible(messages, temperature, response_format)
         except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
             return AIGatewayResult(
@@ -111,9 +116,10 @@ class AIGateway:
         messages: list[dict[str, str]],
         temperature: float,
         response_format: dict[str, Any] | None,
+        model_override: str | None = None,
     ) -> AIGatewayResult:
         payload: dict[str, Any] = {
-            "model": self.model,
+            "model": model_override or self.model,
             "messages": messages,
             "temperature": temperature,
             "max_tokens": 1600,
@@ -160,7 +166,7 @@ class AIGateway:
             status="ok",
             content=content,
             provider=self.provider,
-            model=self.model,
+            model=model_override or self.model,
             raw=body,
         )
 
@@ -168,12 +174,13 @@ class AIGateway:
         self,
         messages: list[dict[str, str]],
         temperature: float,
+        model_override: str | None = None,
     ) -> AIGatewayResult:
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response = await client.post(
                 f"{self.base_url}/api/chat",
                 json={
-                    "model": self.model,
+                    "model": model_override or self.model,
                     "messages": messages,
                     "stream": False,
                     "options": {"temperature": temperature},
@@ -187,7 +194,7 @@ class AIGateway:
             status="ok",
             content=content,
             provider="ollama",
-            model=self.model,
+            model=model_override or self.model,
             raw=body,
         )
 

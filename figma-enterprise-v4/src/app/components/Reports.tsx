@@ -15,6 +15,7 @@ type Report = {
 
 export function Reports() {
   const reports = usePortalResource<unknown>(useCallback(() => apiClient.reports.list(), []));
+  const aiState = usePortalResource<any>(useCallback(() => apiClient.ai.status(), []));
   const rows = arrayFromUnknown<Report>(reports.data, ["reports", "items", "artifacts", "data"]);
   const [reportType, setReportType] = useState("evidence_summary");
   const [format, setFormat] = useState<"markdown" | "pdf">("pdf");
@@ -61,7 +62,16 @@ export function Reports() {
 
     try {
       const result = await apiClient.reportFactory.generate({ report_type: factoryType, audience: factoryAudience }) as any;
-      setFactoryPreview(result.report || null);
+      if (aiState.data?.configured) {
+        const live = await apiClient.intelligence.run({
+          task: "report_factory",
+          question: `Generate a ${factoryType} report for a ${factoryAudience} audience using tenant evidence only.`,
+          audience: factoryAudience,
+        }) as any;
+        setFactoryPreview(live.result || null);
+      } else {
+        setFactoryPreview(result.report || null);
+      }
       setMessage("Report factory preview generated.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Report factory failed.");
@@ -90,6 +100,7 @@ export function Reports() {
 
       <main className="px-8 py-6 space-y-5" style={{ maxWidth: 1220 }}>
         {reports.error ? <InlineState title={reports.error} /> : null}
+        {aiState.error ? <InlineState title={aiState.error} /> : null}
         {message ? <InlineState title={message} /> : null}
 
         <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
@@ -167,9 +178,16 @@ export function Reports() {
             <div className="mt-5 rounded-xl p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
               <h3 className="text-[15px] font-semibold" style={{ color: TEXT }}>{factoryPreview.title}</h3>
               <p className="mt-2 text-[13px] leading-relaxed" style={{ color: MUTED }}>{factoryPreview.executive_summary}</p>
+              <div className="mt-3 flex gap-2">
+                <StatusBadge label={String(factoryPreview.model_status || (aiState.data?.configured ? "live" : "fallback"))} tone={factoryPreview.model_status === "live" ? "good" : "warn"} />
+                <StatusBadge label={String(factoryPreview.confidence || "low")} />
+              </div>
               <div className="mt-4 grid grid-cols-2 gap-4">
                 <PreviewList title="Findings" items={factoryPreview.key_findings || []} />
                 <PreviewList title="Next actions" items={factoryPreview.recommended_next_actions || []} />
+              </div>
+              <div className="mt-4">
+                <PreviewList title="Missing evidence" items={factoryPreview.missing_evidence || []} />
               </div>
             </div>
           ) : null}

@@ -34,6 +34,16 @@ class VerificationResult(BaseModel):
     citations: list[ToolCitation] = Field(default_factory=list)
 
 
+class AIStatusResponse(BaseModel):
+    configured: bool
+    provider: str
+    base_url_present: bool
+    model: str | None = None
+    mode: Literal["openai_compatible", "ollama", "offline"]
+    missing_env: list[str] = Field(default_factory=list)
+    fallback_active: bool = False
+
+
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1)
     workspace_id: str | None = None
@@ -77,3 +87,32 @@ class AgentRunResponse(BaseModel):
     citations: list[ToolCitation] = Field(default_factory=list)
     verification: VerificationResult
     demo_fallback: bool = False
+
+
+class IntelligenceRunRequest(BaseModel):
+    task: Literal[
+        "chat",
+        "field_diagnosis",
+        "exception_triage",
+        "decision_workbench",
+        "report_factory",
+        "connector_diagnosis",
+        "readiness_analysis",
+    ] = "chat"
+    question: str = Field(..., min_length=1)
+    workspace_id: str | None = None
+    field_id: str | None = None
+    audience: str | None = None
+
+
+class IntelligenceRunResponse(BaseModel):
+    status: Literal["completed", "unavailable"]
+    task: str
+    model: str | None = None
+    model_status: Literal["live", "fallback", "unavailable"]
+    provider: str
+    result: dict[str, Any]
+    citations: list[ToolCitation] = Field(default_factory=list)
+    verification: VerificationResult
+    missing_data: list[str] = Field(default_factory=list)
+    confidence: str = "low"
