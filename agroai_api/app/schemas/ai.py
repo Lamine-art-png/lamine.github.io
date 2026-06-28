@@ -111,6 +111,10 @@ class IntelligenceRunResponse(BaseModel):
     model: str | None = None
     model_status: Literal["live", "fallback", "unavailable"]
     provider: str
+    customer_status: Literal["ready", "needs_more_data", "using_safe_mode", "action_required"]
+    customer_status_label: str
+    internal_status: str | None = None
+    internal_debug: dict[str, Any] = Field(default_factory=dict)
     sample_mode: bool = False
     evidence_summary: dict[str, Any] = Field(default_factory=dict)
     result: dict[str, Any]

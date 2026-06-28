@@ -284,10 +284,46 @@ def parse_model_json(content: str) -> dict[str, Any]:
     """Parse a model JSON object, tolerating fenced or prefaced output."""
     text = extract_final_answer(content)
     if not text:
-        return {"summary": "", "customer_safe": True}
+        return {
+            "summary": "",
+            "available_data": [],
+            "missing_data": ["customer-safe model output"],
+            "recommended_next_actions": ["retry_with_grounded_context"],
+            "confidence": "low",
+            "customer_safe": True,
+            "_safe_mode": True,
+        }
 
     try:
         value = json.loads(text)
     except json.JSONDecodeError:
-        return {"summary": text, "customer_safe": True}
-    return value if isinstance(value, dict) else {"result": value, "customer_safe": True}
+        start = text.find("{")
+        end = text.rfind("}")
+        if start >= 0 and end > start:
+            try:
+                value = json.loads(text[start : end + 1])
+            except json.JSONDecodeError:
+                value = None
+            else:
+                if isinstance(value, dict):
+                    return value
+        return {
+            "summary": text,
+            "available_data": [],
+            "missing_data": ["structured model JSON"],
+            "recommended_next_actions": ["review current evidence context", "retry request"],
+            "confidence": "low",
+            "customer_safe": True,
+            "_safe_mode": True,
+        }
+    if isinstance(value, dict):
+        return value
+    return {
+        "summary": str(value),
+        "available_data": [],
+        "missing_data": ["structured model JSON object"],
+        "recommended_next_actions": ["review current evidence context", "retry request"],
+        "confidence": "low",
+        "customer_safe": True,
+        "_safe_mode": True,
+    }

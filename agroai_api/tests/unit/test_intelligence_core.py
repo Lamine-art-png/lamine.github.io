@@ -94,10 +94,14 @@ def test_intelligence_run_returns_structured_fallback(client, db, monkeypatch):
 
     assert response.status_code == 200
     body = response.json()
+    assert body["status"] == "completed"
     assert body["model_status"] == "fallback"
+    assert body["customer_status"] == "using_safe_mode"
+    assert body["customer_status_label"] == "Safe operating mode"
     assert body["provider"] == "offline"
     assert body["result"]["summary"]
     assert isinstance(body["missing_data"], list)
+    assert body["internal_debug"]["fallback_active"] is True
 
 
 def test_citation_verifier_catches_missing_citations():
@@ -249,6 +253,68 @@ def test_intelligence_numeric_claim_guard_downgrades_unsupported_counts(client, 
     assert body["confidence"] == "low"
     assert "17 data sources" not in body["result"]["summary"]
     assert any("Unsupported numeric claim" in warning for warning in body["verification"]["risk_flags"])
+
+
+def test_intelligence_run_strips_think_output(client, db, monkeypatch):
+    user, org, workspace = _seed_auth_context(db)
+    monkeypatch.setattr("app.services.model_router.settings.AI_PROVIDER", "openai_compatible")
+    monkeypatch.setattr("app.services.model_router.settings.AI_BASE_URL", "https://models.example.test/v1")
+    monkeypatch.setattr("app.services.model_router.settings.AI_API_KEY", "test-key")
+    monkeypatch.setattr("app.services.model_router.settings.AI_MODEL", "base-model")
+    monkeypatch.setattr("app.services.model_router.settings.AI_REASONING_MODEL", "reasoning-model")
+
+    async def fake_chat(self, messages, temperature=0.2, response_format=None, model_override=None):
+        return AIGatewayResult(
+            status="ok",
+            content='<think>private reasoning</think>{"summary":"Evaluation sample — not customer production data. Connect evidence before acting.","confidence":"low"}',
+            provider="mock",
+            model=model_override or self.model,
+        )
+
+    monkeypatch.setattr("app.services.ai_gateway.AIGateway.chat", fake_chat)
+
+    response = client.post(
+        "/v1/intelligence/run",
+        json={"task": "chat", "question": "What should I do?", "workspace_id": workspace.id},
+        headers=_headers(user.id, org.id),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert "<think>" not in str(body)
+    assert "private reasoning" not in str(body)
+
+
+def test_intelligence_run_recovers_from_prose_in_safe_mode(client, db, monkeypatch):
+    user, org, workspace = _seed_auth_context(db)
+    monkeypatch.setattr("app.services.model_router.settings.AI_PROVIDER", "openai_compatible")
+    monkeypatch.setattr("app.services.model_router.settings.AI_BASE_URL", "https://models.example.test/v1")
+    monkeypatch.setattr("app.services.model_router.settings.AI_API_KEY", "test-key")
+    monkeypatch.setattr("app.services.model_router.settings.AI_MODEL", "base-model")
+    monkeypatch.setattr("app.services.model_router.settings.AI_REASONING_MODEL", "reasoning-model")
+
+    async def fake_chat(self, messages, temperature=0.2, response_format=None, model_override=None):
+        return AIGatewayResult(
+            status="ok",
+            content="Here is the operator answer: connect your controller export first and verify telemetry freshness.",
+            provider="mock",
+            model=model_override or self.model,
+        )
+
+    monkeypatch.setattr("app.services.ai_gateway.AIGateway.chat", fake_chat)
+
+    response = client.post(
+        "/v1/intelligence/run",
+        json={"task": "chat", "question": "What should I do?", "workspace_id": workspace.id},
+        headers=_headers(user.id, org.id),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "completed"
+    assert body["customer_status"] == "using_safe_mode"
+    assert body["result"]["summary"]
+    assert body["internal_debug"]["fallback_active"] is True
 
 
 def test_report_factory_pdf_endpoint_returns_pdf(client, db):
