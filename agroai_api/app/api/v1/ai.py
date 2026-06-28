@@ -15,6 +15,7 @@ from app.models.recommendation import Recommendation
 from app.models.saas import Organization, Workspace
 from app.models.telemetry import Telemetry
 from app.schemas.ai import (
+    AIStatusResponse,
     AgentRunRequest,
     AgentRunResponse,
     ChatRequest,
@@ -24,6 +25,7 @@ from app.schemas.ai import (
     VerificationResult,
 )
 from app.services.ai_gateway import AIGateway, parse_model_json
+from app.services.model_router import ModelRouter
 from app.services.evaluation_seed import ensure_evaluation_context
 
 router = APIRouter(tags=["ai"])
@@ -84,6 +86,17 @@ TASK_PROMPTS: dict[str, str] = {
         "Return JSON with readiness_status, blockers, evidence_to_refresh, "
         "risk_flags, and next_action."
     ),
+}
+
+TASK_PROFILE_MAP = {
+    "chat": "chat",
+    "irrigation_recommendation": "field_diagnosis",
+    "assurance_review": "readiness_analysis",
+    "report_draft": "report_factory",
+    "integration_diagnosis": "connector_diagnosis",
+    "gap_analysis": "readiness_analysis",
+    "proof_draft": "report_factory",
+    "readiness_refresh": "readiness_analysis",
 }
 
 
@@ -396,7 +409,7 @@ async def _run_ai(
     context: EvidenceContext,
     temperature: float = 0.2,
 ) -> tuple[dict[str, Any], Any]:
-    gateway = AIGateway()
+    router = ModelRouter()
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {
@@ -408,8 +421,9 @@ async def _run_ai(
             ),
         },
     ]
-    result = await gateway.chat(
-        messages,
+    result, _selection = await router.run(
+        task=TASK_PROFILE_MAP.get(task, "chat"),
+        messages=messages,
         temperature=temperature,
         response_format={"type": "json_object"},
     )
@@ -417,6 +431,12 @@ async def _run_ai(
     if result.status != "ok" or _weak_or_empty(body):
         body = _deterministic_body(context)
     return body, result
+
+
+@router.get("/ai/status", response_model=AIStatusResponse)
+async def ai_status() -> AIStatusResponse:
+    model_router = ModelRouter()
+    return AIStatusResponse(**model_router.status())
 
 
 @router.get("/ai/context", response_model=EvidenceContext)

@@ -11,14 +11,20 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
+from app.api.deps import get_current_user
 from app.core.security import require_current_tenant_id
 from app.db.base import get_db
+from app.models.saas import User
 from app.api.v1.ai import (
     _deterministic_body,
     _get_evidence_context,
     _run_ai,
     _verification,
 )
+from app.schemas.ai import IntelligenceRunRequest, IntelligenceRunResponse
+from app.services.citation_verifier import verify_citations
+from app.services.intelligence_context import build_intelligence_context
+from app.services.model_router import ModelRouter
 
 
 router = APIRouter(prefix="/intelligence", tags=["platform-intelligence"])
@@ -46,6 +52,16 @@ ACTION_TASK_MAP: dict[str, str] = {
     "evidence_gap_analysis": "gap_analysis",
     "integration_diagnosis": "integration_diagnosis",
     "report_draft": "report_draft",
+}
+
+RUN_TASK_MAP: dict[str, str] = {
+    "chat": "chat",
+    "field_diagnosis": "irrigation_recommendation",
+    "exception_triage": "gap_analysis",
+    "decision_workbench": "irrigation_recommendation",
+    "report_factory": "report_draft",
+    "connector_diagnosis": "integration_diagnosis",
+    "readiness_analysis": "assurance_review",
 }
 
 
@@ -246,6 +262,79 @@ def _brief_from_context(context: Any) -> dict[str, Any]:
     }
 
 
+def _result_payload(task: str, question: str, body: dict[str, Any], context_bundle: dict[str, Any], model_status: str, provider: str, model: str | None) -> dict[str, Any]:
+    context = context_bundle["evidence_context"]
+    readiness = context_bundle.get("readiness") or {}
+    fields = context_bundle.get("fields") or {}
+    exceptions_payload = context_bundle.get("exceptions") or {}
+
+    if task == "decision_workbench":
+        return {
+            "summary": body.get("recommendation") or body.get("summary") or "Collect missing data first before approving an operating decision.",
+            "recommendation": body.get("recommendation") or body.get("summary"),
+            "why": body.get("why") or body.get("summary"),
+            "evidence_used": body.get("evidence_used") or body.get("available_data") or [],
+            "missing_evidence": body.get("missing_data") or context.missing_data,
+            "operator_instructions": body.get("next_actions") or body.get("recommendations") or [],
+            "risk_flags": body.get("risk_flags") or body.get("risks") or [],
+            "confidence": body.get("confidence") or "low",
+            "model_status": model_status,
+            "provider": provider,
+            "model": model,
+        }
+
+    if task == "report_factory":
+        return {
+            "title": body.get("title") or "AGRO-AI operating report",
+            "executive_summary": body.get("summary") or "Evidence-backed report draft generated.",
+            "key_findings": body.get("sections") or body.get("available_data") or [],
+            "missing_evidence": body.get("missing_data") or context.missing_data,
+            "recommended_next_actions": body.get("next_actions") or body.get("recommendations") or [],
+            "reviewer_notes": body.get("reviewer_notes") or body.get("risk_flags") or [],
+            "confidence": body.get("confidence") or "low",
+            "model_status": model_status,
+            "provider": provider,
+            "model": model,
+        }
+
+    if task == "connector_diagnosis":
+        return {
+            "summary": body.get("summary") or "Connector readiness diagnosis generated.",
+            "connected_integrations": [
+                row.get("name")
+                for row in _integration_status(context)
+                if row.get("status") in {"connected", "ready", "available", "synced"}
+            ],
+            "available_sample_data": body.get("available_data") or readiness.get("present_source_types") or [],
+            "missing_credentials": [
+                row.get("name")
+                for row in _integration_status(context)
+                if row.get("status") in {"missing_credentials", "not_configured", "setup_required"}
+            ],
+            "next_steps_to_go_live": body.get("next_actions") or body.get("recommendations") or [],
+            "confidence": body.get("confidence") or "low",
+            "model_status": model_status,
+            "provider": provider,
+            "model": model,
+        }
+
+    return {
+        "summary": body.get("summary") or body.get("answer") or f"AGRO-AI completed {task}.",
+        "question": question,
+        "available_data": body.get("available_data") or body.get("evidence_used") or [],
+        "missing_data": body.get("missing_data") or context.missing_data,
+        "recommendations": body.get("recommendations") or body.get("next_actions") or [],
+        "risk_flags": body.get("risk_flags") or body.get("risks") or [],
+        "readiness_level": readiness.get("readiness_level"),
+        "field_count": len((fields.get("fields") or [])) if isinstance(fields, dict) else 0,
+        "exception_count": len((exceptions_payload.get("exceptions") or [])) if isinstance(exceptions_payload, dict) else 0,
+        "confidence": body.get("confidence") or "low",
+        "model_status": model_status,
+        "provider": provider,
+        "model": model,
+    }
+
+
 @router.get("/brief")
 async def intelligence_brief(
     tenant_id: str = Depends(require_current_tenant_id),
@@ -327,3 +416,61 @@ async def intelligence_action(
         "demo_fallback": result.demo_fallback,
         "raw": body,
     }
+
+
+@router.post("/run", response_model=IntelligenceRunResponse)
+async def intelligence_run(
+    payload: IntelligenceRunRequest,
+    tenant_id: str = Depends(require_current_tenant_id),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> IntelligenceRunResponse:
+    try:
+        context_bundle = build_intelligence_context(
+            db=db,
+            tenant_id=tenant_id,
+            user=user,
+            workspace_id=payload.workspace_id,
+            field_id=payload.field_id,
+            audience=payload.audience,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+    context = context_bundle["evidence_context"]
+    mapped_task = RUN_TASK_MAP.get(payload.task, "chat")
+    instruction = payload.question
+    if payload.audience:
+        instruction = f"Audience: {payload.audience}. {instruction}"
+
+    body, result = await _run_ai(
+        task=mapped_task,
+        user_instruction=instruction,
+        context=context,
+    )
+
+    model_router = ModelRouter()
+    model_status = "live" if result.status == "ok" and not result.demo_fallback else "fallback"
+    if not model_router.status()["configured"]:
+        model_status = "fallback" if result.demo_fallback else "unavailable"
+
+    result_payload = _result_payload(payload.task, payload.question, body, context_bundle, model_status, result.provider, result.model)
+    verification, result_payload = verify_citations(
+        citations=context.citations,
+        result=result_payload,
+        tenant_id=tenant_id,
+        workspace_id=context.workspace_id,
+    )
+
+    return IntelligenceRunResponse(
+        status="completed" if result.status == "ok" else "unavailable",
+        task=payload.task,
+        model=result.model,
+        model_status=model_status if result.status == "ok" or result.demo_fallback else "unavailable",
+        provider=result.provider,
+        result=result_payload,
+        citations=verification.citations,
+        verification=verification,
+        missing_data=result_payload.get("missing_data") or context.missing_data,
+        confidence=str(result_payload.get("confidence") or "low"),
+    )

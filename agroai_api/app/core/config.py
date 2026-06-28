@@ -94,6 +94,10 @@ class Settings(BaseSettings):
     AI_BASE_URL: str = ""
     AI_API_KEY: str = ""
     AI_MODEL: str = ""
+    AI_FAST_MODEL: str = ""
+    AI_REASONING_MODEL: str = ""
+    AI_REPORT_MODEL: str = ""
+    AI_LOCAL_MODEL: str = ""
     AI_TIMEOUT_SECONDS: int = 30
 
     # Connector ingestion / uploaded evidence storage.

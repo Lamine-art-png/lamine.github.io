@@ -1,0 +1,141 @@
+"""Tenant-safe intelligence context builder for model-powered AGRO-AI routes."""
+from __future__ import annotations
+
+from typing import Any
+
+from sqlalchemy.orm import Session
+
+from app.api.deps import require_workspace_access
+from app.models.operational_records import DataSource, EvidenceRecord
+from app.models.saas import User, Workspace
+from app.schemas.ai import EvidenceContext, ToolCitation
+from app.services.operator_cockpit import build_context, decision_workbench, exceptions, field_intelligence, readiness_summary, report_factory
+
+
+SECRET_HINTS = ("secret", "token", "password", "api_key", "apikey", "oauth_code", "credential", "private_key")
+
+
+def _redact(value: Any) -> Any:
+    if isinstance(value, dict):
+        clean = {}
+        for key, item in value.items():
+            if any(hint in key.lower() for hint in SECRET_HINTS):
+                continue
+            clean[key] = _redact(item)
+        return clean
+    if isinstance(value, list):
+        return [_redact(item) for item in value]
+    return value
+
+
+def _tool_citations(ctx: Any, workspace_id: str | None) -> list[ToolCitation]:
+    citations: list[ToolCitation] = []
+    for record in ctx.evidence[:60]:
+        citations.append(
+            ToolCitation(
+                source_type=record.evidence_type,
+                source_id=record.id,
+                title=record.title,
+                tenant_id=ctx.organization_id,
+                workspace_id=workspace_id or record.workspace_id,
+                fields=["title", "summary", "evidence_type", "occurred_at"],
+                trace={"citation_label": record.citation_label},
+            )
+        )
+    return citations
+
+
+def build_intelligence_context(
+    *,
+    db: Session,
+    tenant_id: str,
+    user: User | None = None,
+    workspace_id: str | None = None,
+    field_id: str | None = None,
+    audience: str | None = None,
+) -> dict[str, Any]:
+    workspace: Workspace | None = None
+    if workspace_id and user is not None:
+        workspace, _membership = require_workspace_access(workspace_id, user, db)
+        if workspace.organization_id != tenant_id:
+            raise ValueError("Workspace tenant mismatch")
+    elif workspace_id:
+        workspace = db.query(Workspace).filter(Workspace.id == workspace_id, Workspace.organization_id == tenant_id).first()
+        if workspace is None:
+            raise ValueError("Workspace not found")
+
+    cockpit = build_context(db, tenant_id, workspace)
+    readiness = readiness_summary(cockpit)
+    fields = field_intelligence(cockpit)
+    exception_rows = exceptions(cockpit)
+    decisions = decision_workbench(cockpit, field_id=field_id)
+    reports = report_factory(cockpit, report_type="executive_brief", audience=audience, field_id=field_id)
+
+    data_sources = [
+        {
+            "id": row.id,
+            "provider": row.provider,
+            "source_type": row.source_type,
+            "filename": row.filename,
+            "status": row.status,
+            "metadata_json": _redact(row.metadata_json or {}),
+        }
+        for row in cockpit.sources[:30]
+    ]
+    evidence_rows = [
+        {
+            "id": row.id,
+            "type": row.evidence_type,
+            "title": row.title,
+            "summary": row.summary,
+            "field_id": row.field_id,
+            "block_id": row.block_id,
+            "occurred_at": row.occurred_at.isoformat() if row.occurred_at else None,
+            "metadata_json": _redact(row.metadata_json or {}),
+        }
+        for row in cockpit.evidence[:60]
+    ]
+
+    citations = _tool_citations(cockpit, workspace.id if workspace else workspace_id)
+    evidence_context = EvidenceContext(
+        organization_id=tenant_id,
+        workspace_id=workspace.id if workspace else workspace_id,
+        block_id=field_id,
+        crop_type=workspace.crop if workspace else None,
+        region=workspace.region if workspace else None,
+        evidence=[
+            {"type": "readiness_summary", "payload": _redact(readiness)},
+            {"type": "field_intelligence", "payload": _redact(fields)},
+            {"type": "exceptions", "payload": _redact(exception_rows)},
+            {"type": "decision_workbench", "payload": _redact(decisions)},
+            {"type": "report_factory", "payload": _redact(reports)},
+        ]
+        + evidence_rows
+        + data_sources,
+        missing_data=list(
+            dict.fromkeys(
+                item
+                for item in (readiness.get("missing_source_types") or [])
+                + [item.get("recommended_action") for item in exception_rows.get("exceptions", []) if item.get("severity") in {"critical", "high"}]
+                if item
+            )
+        ),
+        citations=citations,
+    )
+
+    return {
+        "workspace": {
+            "id": workspace.id if workspace else workspace_id,
+            "name": workspace.name if workspace else None,
+            "crop": workspace.crop if workspace else None,
+            "region": workspace.region if workspace else None,
+            "mode": workspace.mode if workspace else None,
+        },
+        "readiness": _redact(readiness),
+        "fields": _redact(fields),
+        "exceptions": _redact(exception_rows),
+        "decisions": _redact(decisions),
+        "reports": _redact(reports),
+        "evidence_context": evidence_context,
+        "citations": citations,
+    }
