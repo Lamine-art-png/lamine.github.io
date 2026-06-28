@@ -1,5 +1,5 @@
 import { Outlet, NavLink } from "react-router";
-import { LogOut } from "lucide-react";
+import { CreditCard, HelpCircle, LogOut, Plus, Settings, Shield, UserCircle } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import logoImg from "../../imports/agro-ai-logo-1.png";
@@ -10,6 +10,8 @@ export function MainLayout() {
 
   const operateItems = [
     { name: "Command Center", path: "/" },
+    { name: "Field Queue", path: "/field-queue" },
+    { name: "Tasks", path: "/tasks" },
     { name: "Decisions", path: "/operations" },
     { name: "Evidence", path: "/evidence" },
     { name: "Reports", path: "/reports" },
@@ -20,15 +22,20 @@ export function MainLayout() {
     { name: "Ask AGRO-AI", path: "/intelligence" },
     { name: "Readiness", path: "/readiness" },
     { name: "Exceptions", path: "/exceptions" },
-    { name: "Fields", path: "/fields" },
-    { name: "Decision Workbench", path: "/decision-workbench" },
-    { name: "Report Factory", path: "/report-factory" },
-    { name: "Automations", path: "/agents" },
   ];
 
-  const adminItems = [
+  const workspaceItems = [
     { name: "Sources", path: "/sources" },
-    { name: "Admin", path: "/admin" },
+    { name: "Team", path: "/team" },
+    { name: "Settings", path: "/settings" },
+  ];
+
+  const accountItems = [
+    { name: "Profile", path: "/profile", icon: UserCircle },
+    { name: "Billing", path: "/billing", icon: CreditCard },
+    { name: "Security", path: "/security", icon: Shield },
+    { name: "Support", path: "/support", icon: HelpCircle },
+    { name: "Admin", path: "/admin", icon: Settings },
   ];
 
   return (
@@ -42,38 +49,73 @@ export function MainLayout() {
             <div>
               <div className="text-white font-semibold text-[13px] tracking-tight leading-tight">AGRO-AI</div>
               <div className="text-[11px] leading-tight" style={{ color: "rgba(255,255,255,0.38)" }}>
-                Water Intelligence OS
+                Field operating room
               </div>
             </div>
           </div>
+          <div className="mt-5 rounded-lg px-3 py-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+            <div className="text-[10px] font-semibold uppercase" style={{ color: "rgba(255,255,255,0.34)" }}>Workspace</div>
+            <div className="mt-1 truncate text-[13px] font-medium" style={{ color: "white" }}>{currentWorkspace?.name || "Evaluation workspace"}</div>
+            <div className="mt-1 truncate text-[11px]" style={{ color: "rgba(255,255,255,0.46)" }}>{currentOrganization?.name || "Organization"}</div>
+          </div>
+          <NavLink
+            to="/"
+            className="mt-3 flex h-9 items-center justify-center gap-2 rounded-lg text-[12px] font-semibold"
+            style={{ background: "#DDEB8F", color: "#10231B" }}
+          >
+            <Plus className="h-3.5 w-3.5" />
+            New operation
+          </NavLink>
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
           <NavSection title="Operate" items={operateItems} />
           <NavSection title="Intelligence" items={intelligenceItems} />
-          <NavSection title="Admin" items={adminItems} />
+          <NavSection title="Workspace" items={workspaceItems} />
         </nav>
 
-        <div className="px-3 pb-4">
-          <div className="rounded-lg px-4 py-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
-            <div className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: "rgba(255,255,255,0.28)" }}>
-              {currentOrganization?.name || "Organization"}
+        <div className="space-y-2 px-3 pb-4">
+          <NavLink
+            to="/pricing"
+            className="flex h-10 items-center justify-between rounded-md px-3 text-[12px] font-medium"
+            style={({ isActive }) => ({
+              background: isActive ? "#0B2A1F" : "rgba(255,255,255,0.04)",
+              color: "rgba(255,255,255,0.78)",
+              border: "1px solid rgba(255,255,255,0.07)",
+            })}
+          >
+            <span>{currentOrganization?.plan === "network" ? "Network" : currentOrganization?.plan === "professional" ? "Professional" : "Free"}</span>
+            <span style={{ color: "rgba(255,255,255,0.42)" }}>Plan</span>
+          </NavLink>
+          <div className="rounded-lg p-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+            <div className="px-2 pb-2 text-[11px]" style={{ color: "rgba(255,255,255,0.44)" }}>
+              Account
             </div>
-            <div className="space-y-1 text-[11px] leading-relaxed" style={{ color: "rgba(255,255,255,0.42)" }}>
-              <div>Plan: <span style={{ color: "rgba(255,255,255,0.62)" }}>{currentOrganization?.plan || "free"}</span></div>
-              <div>Status: <span style={{ color: "rgba(255,255,255,0.62)" }}>{currentOrganization?.subscription_status || "inactive"}</span></div>
-              <div>Role: <span style={{ color: "rgba(255,255,255,0.62)" }}>{currentOrganization?.role || "member"}</span></div>
-              <div>Workspace: <span style={{ color: "rgba(255,255,255,0.62)" }}>{currentWorkspace?.name || "Evaluation workspace"}</span></div>
+            <div className="space-y-1">
+              {accountItems.map((item) => (
+                <NavLink
+                  key={item.path}
+                  to={item.path}
+                  className="flex h-8 items-center gap-2 rounded-md px-2 text-[12px]"
+                  style={({ isActive }) => ({
+                    background: isActive ? "rgba(255,255,255,0.08)" : "transparent",
+                    color: isActive ? "white" : "rgba(255,255,255,0.56)",
+                  })}
+                >
+                  <item.icon className="h-3.5 w-3.5" />
+                  {item.name}
+                </NavLink>
+              ))}
+              <button
+                type="button"
+                onClick={logout}
+                className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[12px] transition-colors hover:bg-white/10"
+                style={{ color: "rgba(255,255,255,0.56)" }}
+              >
+                <LogOut className="h-3.5 w-3.5" />
+                Log out
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={logout}
-              className="mt-3 flex h-8 w-full items-center justify-center gap-2 rounded-md text-[12px] font-medium transition-colors hover:bg-white/10"
-              style={{ color: "rgba(255,255,255,0.72)" }}
-            >
-              <LogOut className="w-3.5 h-3.5" />
-              Logout
-            </button>
           </div>
         </div>
       </aside>

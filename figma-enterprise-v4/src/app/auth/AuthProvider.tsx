@@ -192,8 +192,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       ...(normalized.currentOrganization || {}),
       ...(billing?.plan ? { plan: billing.plan } : {}),
       ...(billing?.subscription_status ? { subscription_status: billing.subscription_status } : {}),
-      plan: "internal",
-      subscription_status: "active",
     };
 
     setUser(normalized.user);
