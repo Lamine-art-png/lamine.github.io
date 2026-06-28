@@ -16,12 +16,12 @@ const MODES = [
 ];
 
 const PROMPTS: Record<string, string[]> = {
-  farmer: ["What should I do today?", "Am I overwatering this block?", "Explain the recommendation in simple language."],
-  farmland_manager: ["Which blocks need attention first?", "Where is our evidence weak?", "What should my operator do today?"],
-  water_agency: ["What evidence supports this water use claim?", "What is missing for a compliance review?", "Generate an assurance packet."],
-  lender: ["Summarize operational water risk.", "What data improves underwriting confidence?", "Show evidence quality by source."],
-  government: ["Summarize program-level readiness.", "What data is missing across participants?", "Create a field evidence packet."],
-  consultant: ["Draft a client-facing water operations summary.", "Identify data gaps before the next farm visit.", "Prepare an irrigation decision explanation."],
+  farmer: ["What should I do today?", "Am I overwatering this block?", "Draft a grower checklist."],
+  farmland_manager: ["Which blocks need attention first?", "What should my operator do today?", "What evidence is still missing?"],
+  water_agency: ["What supports this water use claim?", "What is missing for a compliance review?", "Generate a compliance report."],
+  lender: ["Summarize operational water risk.", "Which issues need executive attention?", "Prepare an executive brief."],
+  government: ["Summarize readiness across this workspace.", "What data gaps block review?", "Generate a field evidence packet."],
+  consultant: ["Draft a client-ready operations summary.", "Explain the current water risk.", "Generate a report for the next visit."],
 };
 
 function asArray(value: unknown): unknown[] {
@@ -38,15 +38,50 @@ function text(value: unknown, fallback = "—") {
   }
 }
 
+function readinessLabel(summary: AnyRecord) {
+  const score = Number(summary.readiness_score || 0);
+  if (score >= 70) return "Ready";
+  if (score >= 35) return "In review";
+  return "Needs data";
+}
+
+function evidenceQuality(summary: AnyRecord) {
+  const score = Number(summary.readiness_score || 0);
+  if (score >= 70) return "Strong";
+  if (score >= 35) return "Partial";
+  return "Missing";
+}
+
+function nextBestStep(summary: AnyRecord) {
+  const missing = asArray(summary.missing_source_types).map(String);
+  if (missing.length) return "Connect sources";
+  if (Number(summary.evidence_count || 0) === 0) return "Upload files";
+  return "Run decision";
+}
+
+function reportTypeForPrompt(prompt: string): ReportFactoryPayload["report_type"] {
+  const lower = prompt.toLowerCase();
+  if (lower.includes("compliance") || lower.includes("assurance")) return "compliance_packet";
+  if (lower.includes("exception") || lower.includes("risk")) return "exception_report";
+  if (lower.includes("grower") || lower.includes("operator") || lower.includes("what should i do")) return "grower_recommendation";
+  if (lower.includes("water use") || lower.includes("irrigation") || lower.includes("et")) return "water_use_summary";
+  return "executive_brief";
+}
+
+function resultAnswer(result: AnyRecord | null) {
+  if (!result) return "AGRO-AI completed the request.";
+  return text(result.answer || result.summary || result.message, "AGRO-AI completed the request.");
+}
+
 export function Intelligence() {
   const { currentWorkspace } = useAuth();
   const briefState = usePortalResource<AnyRecord>(useCallback(() => apiClient.intelligence.brief(), []));
-  const statusState = usePortalResource<AnyRecord>(useCallback(() => apiClient.ai.status(), []));
   const [mode, setMode] = useState("farmland_manager");
   const [question, setQuestion] = useState("What should I do today?");
   const [format, setFormat] = useState("answer");
   const [loading, setLoading] = useState(false);
   const [reporting, setReporting] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [result, setResult] = useState<AnyRecord | null>(null);
   const [report, setReport] = useState<AnyRecord | null>(null);
   const [reportRequest, setReportRequest] = useState<ReportFactoryPayload | null>(null);
@@ -54,17 +89,7 @@ export function Intelligence() {
 
   const prompts = useMemo(() => PROMPTS[mode] || PROMPTS.farmland_manager, [mode]);
   const brief = briefState.data || {};
-  const modelStatus = statusState.data || {};
   const summary = result?.evidence_summary || brief.evidence_summary || {};
-
-  function reportTypeForPrompt(prompt: string): ReportFactoryPayload["report_type"] {
-    const lower = prompt.toLowerCase();
-    if (lower.includes("compliance") || lower.includes("assurance")) return "compliance_packet";
-    if (lower.includes("exception") || lower.includes("risk")) return "exception_report";
-    if (lower.includes("grower") || lower.includes("operator") || lower.includes("what should i do")) return "grower_recommendation";
-    if (lower.includes("water use") || lower.includes("irrigation") || lower.includes("et")) return "water_use_summary";
-    return "executive_brief";
-  }
 
   async function ask(prompt = question) {
     const clean = prompt.trim();
@@ -73,7 +98,6 @@ export function Intelligence() {
     setQuestion(clean);
     setLoading(true);
     setError("");
-    setReport(null);
 
     try {
       const response = await apiClient.intelligence.ask({
@@ -84,14 +108,13 @@ export function Intelligence() {
       }) as AnyRecord;
       setResult({
         ...(response.result || response),
-        model_status: response.model_status,
-        model: response.model,
-        provider: response.provider,
+        customer_status: response.customer_status,
+        customer_status_label: response.customer_status_label,
         confidence: response.confidence,
-        sample_mode: response.sample_mode,
         evidence_summary: response.evidence_summary,
         citations: response.citations,
         verification: response.verification,
+        missing_data: response.missing_data,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Ask AGRO-AI failed.");
@@ -120,28 +143,48 @@ export function Intelligence() {
     }
   }
 
-  async function downloadArtifact() {
-    if (!reportRequest) return;
-    const blob = await apiClient.reportFactory.pdf(reportRequest);
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `agro-ai-${reportRequest.report_type}.pdf`;
-    link.click();
-    URL.revokeObjectURL(url);
+  async function downloadPdf() {
+    setDownloading(true);
+    setError("");
+    let payload = reportRequest;
+
+    try {
+      if (!payload) {
+        payload = {
+          report_type: reportTypeForPrompt(question),
+          workspace_id: currentWorkspace?.id,
+          audience: mode === "farmer" ? "grower" : mode === "water_agency" ? "agency" : "owner",
+        };
+        const response = await apiClient.reportFactory.generate(payload) as AnyRecord;
+        setReport(response.report || response);
+        setReportRequest(payload);
+      }
+
+      const blob = await apiClient.reportFactory.pdf(payload);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `agro-ai-${payload.report_type}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      setError("Report preview ready. PDF export needs retry.");
+    } finally {
+      setDownloading(false);
+    }
   }
 
   return (
     <div className="min-h-screen" style={{ background: BG }}>
       <header className="px-8 py-8" style={{ background: "#0D2B1E", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
         <div className="max-w-5xl">
-            <div className="flex items-center gap-2 mb-4">
-            <StatusBadge label={result?.sample_mode || brief.sample_mode ? "Evaluation sample" : brief.mode === "live" ? "Live brain" : "Evidence-grounded"} tone={result?.sample_mode || brief.sample_mode ? "warn" : "good"} />
-            <StatusBadge label={`${summary.readiness_score ?? 0}% readiness`} tone={(summary.readiness_score || 0) > 50 ? "good" : "warn"} />
+          <div className="flex items-center gap-2 mb-4">
+            <StatusBadge label={result?.customer_status_label || "Ready"} tone={result?.customer_status === "ready" ? "good" : result?.customer_status === "action_required" ? "warn" : "neutral"} />
+            <StatusBadge label={`Workspace readiness: ${readinessLabel(summary)}`} tone={readinessLabel(summary) === "Ready" ? "good" : "warn"} />
           </div>
           <h1 className="text-[34px] font-semibold tracking-tight" style={{ color: "white" }}>Ask AGRO-AI</h1>
           <p className="mt-3 max-w-3xl text-[14px] leading-relaxed" style={{ color: "rgba(255,255,255,0.68)" }}>
-            Ask questions over imported evidence, connector readiness, missing data, water risk, and reportable proof.
+            Ask for field priorities, water risk explanation, operator checklists, missing evidence, or a report-ready summary.
           </p>
         </div>
       </header>
@@ -149,20 +192,19 @@ export function Intelligence() {
       <main className="px-8 py-7 space-y-6" style={{ maxWidth: 1180 }}>
         {error ? <InlineState title={error} /> : null}
         {briefState.error ? <InlineState title={briefState.error} /> : null}
-        {statusState.error ? <InlineState title={statusState.error} /> : null}
 
         <section className="grid gap-5" style={{ gridTemplateColumns: "1.45fr 0.55fr" }}>
           <div className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
             <div className="grid grid-cols-2 gap-3 mb-4">
               <label className="text-[12px]" style={{ color: MUTED }}>
-                Customer mode
+                Audience
                 <select value={mode} onChange={(event) => setMode(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
                   {MODES.map(([id, label]) => <option key={id} value={id}>{label}</option>)}
                 </select>
               </label>
 
               <label className="text-[12px]" style={{ color: MUTED }}>
-                Output
+                Response
                 <select value={format} onChange={(event) => setFormat(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
                   <option value="answer">Answer</option>
                   <option value="decision">Decision</option>
@@ -178,13 +220,13 @@ export function Intelligence() {
               rows={6}
               className="w-full resize-none rounded-xl px-4 py-4 text-[14px] outline-none"
               style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}
-              placeholder="Ask AGRO-AI what to do, what is missing, what changed, or what to report."
+              placeholder="Ask what needs attention, what evidence is missing, what action to take, or what report to generate."
             />
 
             <div className="mt-4 flex flex-wrap gap-2">
-              <PortalButton onClick={() => ask()} disabled={loading}>{loading ? "Thinking…" : "Ask AGRO-AI"}</PortalButton>
-              <PortalButton variant="secondary" onClick={() => generateReport()} disabled={reporting}>{reporting ? "Generating…" : "Generate PDF report"}</PortalButton>
-              <PortalButton variant="secondary" onClick={() => window.location.assign("/integrations")}>Improve with connectors</PortalButton>
+              <PortalButton onClick={() => ask()} disabled={loading}>{loading ? "Working…" : "Ask AGRO-AI"}</PortalButton>
+              <PortalButton variant="secondary" onClick={generateReport} disabled={reporting}>{reporting ? "Generating…" : "Generate report"}</PortalButton>
+              <PortalButton variant="secondary" onClick={downloadPdf} disabled={downloading}>{downloading ? "Preparing…" : "Download PDF"}</PortalButton>
             </div>
 
             <div className="mt-5 flex flex-wrap gap-2">
@@ -197,16 +239,19 @@ export function Intelligence() {
           </div>
 
           <div className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-            <div className="text-[10px] font-semibold uppercase tracking-widest mb-3" style={{ color: MUTED }}>Current context</div>
-            <Info label="Workspace" value={text(currentWorkspace?.name || brief.workspace?.name, "Workspace")} />
-            <Info label="Mode" value={text(result?.mode || brief.mode, "demo")} />
-            <Info label="Sample mode" value={result?.sample_mode || brief.sample_mode ? "Evaluation sample" : "Customer evidence"} />
-            <Info label="Model status" value={text(result?.model_status || (modelStatus.fallback_active ? "fallback" : modelStatus.configured ? "live" : "offline"))} />
-            <Info label="Provider" value={text(result?.provider || modelStatus.provider, "offline")} />
-            <Info label="Model" value={text(result?.model || modelStatus.model, "Not configured")} />
-            <Info label="Evidence records" value={text(summary.evidence_count, "0")} />
-            <Info label="Source files" value={text(summary.source_count, "0")} />
-            <Info label="Readiness" value={`${text(summary.readiness_score, "0")}%`} />
+            <div className="text-[10px] font-semibold uppercase tracking-widest mb-3" style={{ color: MUTED }}>What AGRO-AI can do</div>
+            <List title="Capabilities" items={[
+              "Prioritize fields",
+              "Explain water risk",
+              "Draft operator checklist",
+              "Generate compliance report",
+              "Identify missing evidence",
+            ]} />
+            <div className="mt-4">
+              <ReadinessRow label="Data readiness" value={readinessLabel(summary)} />
+              <ReadinessRow label="Evidence quality" value={evidenceQuality(summary)} />
+              <ReadinessRow label="Next best step" value={nextBestStep(summary)} />
+            </div>
           </div>
         </section>
 
@@ -214,32 +259,33 @@ export function Intelligence() {
           <div className="flex items-center justify-between gap-4 mb-4">
             <h2 className="text-[20px] font-semibold" style={{ color: TEXT }}>AGRO-AI answer</h2>
             <div className="flex gap-2">
-              {result?.sample_mode ? <StatusBadge label="Evaluation sample" tone="warn" /> : null}
-              <StatusBadge label={loading ? "Thinking" : result ? "Generated" : "Ready"} tone={result ? "good" : "neutral"} />
+              <StatusBadge label={loading ? "Working" : result?.customer_status_label || "Ready"} tone={result?.customer_status === "ready" ? "good" : result?.customer_status === "action_required" ? "warn" : "neutral"} />
+              <StatusBadge label={`Confidence: ${text(result?.confidence, "low")}`} />
             </div>
           </div>
 
-          {!result && !loading ? <InlineState title="Ask a question above." detail="The response will show answer, evidence used, missing data, risks, next actions, and citations." /> : null}
+          {!result && !loading ? <InlineState title="Ask a question above." detail="The response will show what needs attention, what evidence supports it, what is missing, and what to do next." /> : null}
           {loading ? <InlineState title="AGRO-AI is reading the current evidence context…" /> : null}
 
           {result ? (
             <div className="space-y-4">
               <div className="rounded-xl p-5 whitespace-pre-wrap text-[14px] leading-relaxed" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
-                {text(result.answer || result.summary || result.message, "AGRO-AI completed the request.")}
+                {resultAnswer(result)}
               </div>
 
-              <div className="grid grid-cols-4 gap-3">
-                <Info label="Model status" value={text(result.model_status)} />
-                <Info label="Selected model" value={text(result.model, "Not configured")} />
-                <Info label="Confidence" value={text(result.confidence, "low")} />
-                <Info label="Verification" value={text(result.verification?.status, "partial")} />
+              <div className="grid grid-cols-2 gap-4">
+                <List title="Recommended next actions" items={asArray(result.next_actions || result.recommendations)} />
+                <List title="Missing information" items={asArray(result.what_is_missing || result.missing_data)} />
               </div>
-              <List title="Verification warnings" items={asArray(result.verification?.risk_flags)} />
-              <List title="Evidence used" items={asArray(result.what_i_used || result.evidence_used)} />
-              <List title="Missing data" items={asArray(result.what_is_missing || result.missing_data)} />
-              <List title="Risks / uncertainty" items={asArray(result.risks || result.risk_flags)} />
-              <List title="Next actions" items={asArray(result.next_actions)} />
-              <List title="Citations" items={asArray(result.citations)} />
+              <div className="grid grid-cols-2 gap-4">
+                <List title="Evidence used" items={asArray(result.what_i_used || result.evidence_used || result.available_data)} />
+                <List title="Confidence notes" items={asArray(result.verification?.risk_flags)} />
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <PortalButton variant="secondary" onClick={generateReport} disabled={reporting}>{reporting ? "Generating…" : "Generate report"}</PortalButton>
+                <PortalButton variant="secondary" onClick={downloadPdf} disabled={downloading}>{downloading ? "Preparing…" : "Download PDF"}</PortalButton>
+              </div>
             </div>
           ) : null}
         </section>
@@ -249,9 +295,9 @@ export function Intelligence() {
             <div className="flex items-center justify-between gap-4 mb-4">
               <div>
                 <h2 className="text-[20px] font-semibold" style={{ color: TEXT }}>{report.title || "Structured report"}</h2>
-                <p className="mt-1 text-[12px]" style={{ color: MUTED }}>{reportRequest ? "Structured report ready — PDF export enabled" : "Structured report ready — PDF export not yet enabled"}</p>
+                <p className="mt-1 text-[12px]" style={{ color: MUTED }}>Structured report preview ready.</p>
               </div>
-              <PortalButton onClick={downloadArtifact} disabled={!reportRequest}>Download PDF</PortalButton>
+              <PortalButton onClick={downloadPdf} disabled={downloading}>{downloading ? "Preparing…" : "Download PDF"}</PortalButton>
             </div>
             <div className="space-y-4">
               <div className="rounded-xl p-4 text-[13px] leading-relaxed" style={{ background: BG, color: TEXT, border: `1px solid ${BORDER}` }}>{text(report.executive_summary)}</div>
@@ -269,7 +315,7 @@ export function Intelligence() {
   );
 }
 
-function Info({ label, value }: { label: string; value: string }) {
+function ReadinessRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between gap-4 border-b py-3 last:border-b-0" style={{ borderColor: BORDER }}>
       <span className="text-[12px]" style={{ color: MUTED }}>{label}</span>

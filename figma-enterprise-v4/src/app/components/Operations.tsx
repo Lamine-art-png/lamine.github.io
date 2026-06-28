@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import { apiClient } from "../api/client";
+import { apiClient, ReportFactoryPayload } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { usePortalResource } from "../hooks/usePortalResource";
 import { BG, BORDER, InlineState, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
@@ -20,12 +20,32 @@ function text(value: unknown, fallback = "—") {
   }
 }
 
+function operationalReadiness(summary: AnyRecord) {
+  const score = Number(summary.readiness_score || 0);
+  if (score >= 70) return "Ready";
+  if (score >= 35) return "In review";
+  return "Needs data";
+}
+
+function evidenceBasis(summary: AnyRecord) {
+  if (Number(summary.evidence_count || 0) > 0) return "Available";
+  return "Missing";
+}
+
+function reportTypeForDecision(mode: string): ReportFactoryPayload["report_type"] {
+  if (mode === "compliance_packet") return "compliance_packet";
+  if (mode === "water_risk") return "water_use_summary";
+  if (mode === "manager_priority") return "executive_brief";
+  return "grower_recommendation";
+}
+
 export function Operations() {
   const { currentWorkspace } = useAuth();
   const briefState = usePortalResource<AnyRecord>(useCallback(() => apiClient.intelligence.brief(), []));
   const evidenceState = usePortalResource<AnyRecord>(useCallback(() => apiClient.evidence.summary(), []));
-  const statusState = usePortalResource<AnyRecord>(useCallback(() => apiClient.ai.status(), []));
   const [result, setResult] = useState<AnyRecord | null>(null);
+  const [report, setReport] = useState<AnyRecord | null>(null);
+  const [reportRequest, setReportRequest] = useState<ReportFactoryPayload | null>(null);
   const [decisionMode, setDecisionMode] = useState("operator_today");
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState("");
@@ -40,40 +60,51 @@ export function Operations() {
     setMessage("");
 
     try {
-      const runMode =
-        mode === "compliance_packet"
-          ? "compliance"
-          : mode === "water_risk"
-            ? "irrigation"
-            : mode === "manager_priority"
-              ? "field"
-              : "daily";
-      const response = await apiClient.decisions.runWorkbench({
+      const response = await apiClient.intelligence.run({
+        task: "decision_workbench",
+        question: `Generate an operator-ready ${mode} decision using current tenant evidence only.`,
         workspace_id: currentWorkspace?.id,
-        mode: runMode,
       }) as AnyRecord;
-      if (statusState.data?.configured) {
-        const modelResponse = await apiClient.intelligence.run({
-          task: "decision_workbench",
-          question: `Generate an operator-ready ${mode} decision using current tenant evidence only.`,
-          workspace_id: currentWorkspace?.id,
-        }) as AnyRecord;
-        setResult({
-          ...(modelResponse.result || modelResponse),
-          model_status: modelResponse.model_status,
-          model: modelResponse.model,
-          sample_mode: modelResponse.sample_mode,
-          evidence_summary: modelResponse.evidence_summary,
-          confidence: modelResponse.confidence,
-          citations: modelResponse.citations,
-          verification: modelResponse.verification,
-        });
-      } else {
-        setResult((response.decisions || [])[0] || response);
-      }
+
+      setResult({
+        ...(response.result || response),
+        customer_status: response.customer_status,
+        customer_status_label: response.customer_status_label,
+        confidence: response.confidence,
+        evidence_summary: response.evidence_summary,
+        citations: response.citations,
+        verification: response.verification,
+        missing_data: response.missing_data,
+      });
       await Promise.all([briefState.refresh(), evidenceState.refresh()]);
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Decision run failed.");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function ensureReport() {
+    const payload: ReportFactoryPayload = {
+      report_type: reportTypeForDecision(decisionMode),
+      workspace_id: currentWorkspace?.id,
+      audience: decisionMode === "operator_today" ? "operator" : decisionMode === "compliance_packet" ? "agency" : "owner",
+    };
+    const response = await apiClient.reportFactory.generate(payload) as AnyRecord;
+    setReport(response.report || response);
+    setReportRequest(payload);
+    return payload;
+  }
+
+  async function generateReport() {
+    setLoading(true);
+    setMessage("");
+
+    try {
+      await ensureReport();
+      setMessage("Structured report preview ready.");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Report generation failed.");
     } finally {
       setLoading(false);
     }
@@ -84,26 +115,16 @@ export function Operations() {
     setMessage("");
 
     try {
-      const response = await apiClient.reports.generate({
-        report_type: "water_decision",
-        workspace_id: currentWorkspace?.id,
-        format: "pdf",
-      }) as AnyRecord;
-
-      const artifactId = response?.artifact?.id;
-      if (artifactId) {
-        const blob = await apiClient.artifacts.download(artifactId);
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = response.artifact.filename || "agro-ai-water-decision.pdf";
-        link.click();
-        URL.revokeObjectURL(url);
-      }
-
-      setMessage("Water decision PDF generated.");
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "PDF generation failed.");
+      const payload = reportRequest || await ensureReport();
+      const blob = await apiClient.reportFactory.pdf(payload);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `agro-ai-${payload.report_type}.pdf`;
+      link.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      setMessage("Report preview ready. PDF export needs retry.");
     } finally {
       setLoading(false);
     }
@@ -115,12 +136,12 @@ export function Operations() {
         <div className="flex items-start justify-between gap-6">
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <StatusBadge label="Decision Engine" tone="good" />
-              <StatusBadge label={hasEvidence ? "Evidence available" : "Needs evidence"} tone={hasEvidence ? "good" : "warn"} />
+              <StatusBadge label="Operating status" tone="good" />
+              <StatusBadge label={hasEvidence ? "Evidence base available" : "Needs evidence"} tone={hasEvidence ? "good" : "warn"} />
             </div>
             <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: TEXT }}>Decisions</h1>
             <p className="mt-2 max-w-3xl text-[14px] leading-relaxed" style={{ color: MUTED }}>
-              Turn uploaded controller, telemetry, ET/weather, and field evidence into operator decisions, risk briefs, and exportable water decision reports.
+              Turn workspace evidence into operator action, water risk review, compliance preparation, and manager-ready field priorities.
             </p>
           </div>
 
@@ -134,27 +155,26 @@ export function Operations() {
       <main className="px-8 py-6 space-y-5" style={{ maxWidth: 1220 }}>
         {briefState.error ? <InlineState title={briefState.error} /> : null}
         {evidenceState.error ? <InlineState title={evidenceState.error} /> : null}
-        {statusState.error ? <InlineState title={statusState.error} /> : null}
         {message ? <InlineState title={message} /> : null}
 
         <section className="grid grid-cols-4 gap-4">
-          <Metric label="Evidence records" value={text(summary.evidence_count, "0")} />
-          <Metric label="Source files" value={text(summary.source_count, "0")} />
-          <Metric label="Readiness" value={`${text(summary.readiness_score, "0")}%`} />
-          <Metric label="Mode" value={text(result?.mode || brief.mode, "internal")} />
+          <Metric label="Operating status" value={result?.customer_status_label || "Ready"} />
+          <Metric label="Active issues" value={String(asArray(result?.risk_flags || result?.risks).length)} />
+          <Metric label="Evidence basis" value={evidenceBasis(summary)} />
+          <Metric label="Workspace readiness" value={operationalReadiness(summary)} />
         </section>
 
         <section className="grid grid-cols-4 gap-3">
-          <DecisionCard title="Operator today" active={decisionMode === "operator_today"} onClick={() => runDecision("operator_today")} />
+          <DecisionCard title="Today's priority" active={decisionMode === "operator_today"} onClick={() => runDecision("operator_today")} />
           <DecisionCard title="Water risk" active={decisionMode === "water_risk"} onClick={() => runDecision("water_risk")} />
           <DecisionCard title="Compliance packet" active={decisionMode === "compliance_packet"} onClick={() => runDecision("compliance_packet")} />
-          <DecisionCard title="Manager priority" active={decisionMode === "manager_priority"} onClick={() => runDecision("manager_priority")} />
+          <DecisionCard title="Manager brief" active={decisionMode === "manager_priority"} onClick={() => runDecision("manager_priority")} />
         </section>
 
         {!hasEvidence ? (
           <InlineState
-            title="No imported evidence yet."
-            detail="Upload a controller export, CSV, JSON, TXT, or PDF text file first. Decisions will still explain what is missing, but they should not pretend to be operational."
+            title="The workspace still needs evidence."
+            detail="Upload recent controller exports, field notes, ET, flow, or soil records so the next decision can move from setup guidance into operations."
           />
         ) : null}
 
@@ -162,31 +182,46 @@ export function Operations() {
           <div className="flex items-center justify-between gap-4 mb-4">
             <h2 className="text-[20px] font-semibold" style={{ color: TEXT }}>Decision output</h2>
             <div className="flex gap-2">
-              <StatusBadge label={text(result?.model_status || (statusState.data?.configured ? "live" : "fallback"))} tone={result?.model_status === "live" ? "good" : "warn"} />
-              {result?.sample_mode ? <StatusBadge label="Evaluation sample" tone="warn" /> : null}
-              <StatusBadge label={result ? result.confidence || "generated" : "not run"} tone={result ? "good" : "neutral"} />
+              <StatusBadge label={result?.customer_status_label || "Ready"} tone={result?.customer_status === "ready" ? "good" : result?.customer_status === "action_required" ? "warn" : "neutral"} />
+              <StatusBadge label={`Confidence: ${text(result?.confidence, "low")}`} />
+              <PortalButton variant="secondary" onClick={generateReport} disabled={loading}>{loading ? "Working…" : "Generate report"}</PortalButton>
               <PortalButton variant="secondary" onClick={generatePdf} disabled={loading}>{loading ? "Working…" : "Generate PDF"}</PortalButton>
             </div>
           </div>
 
           {!result ? (
-            <InlineState title="No decision run yet." detail="Choose a decision mode above or click Run decision." />
+            <InlineState title="Choose a decision card to run the current workspace." detail="AGRO-AI will return the action, why it matters, the risk level, evidence used, and what still needs confirmation." />
           ) : (
             <div className="space-y-4">
-              <div className="rounded-xl p-5 text-[14px] leading-relaxed whitespace-pre-wrap" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
-                {text(result.recommendation || result.answer || result.summary || result.message, "Decision completed.")}
-                {result.why ? `\n\n${text(result.why)}` : ""}
+              <div className="grid grid-cols-3 gap-4">
+                <Panel title="Recommended action" body={text(result.recommendation || result.answer || result.summary, "Decision completed.")} />
+                <Panel title="Why it matters" body={text(result.why || result.summary, "Operational rationale captured.")} />
+                <Panel title="Risk level" body={text((asArray(result.risks || result.risk_flags)[0]) || result.risk_level, "Under review")} />
               </div>
 
-              <List title="Evidence used" items={asArray(result.what_i_used || result.evidence_used)} />
-              <List title="Missing data" items={asArray(result.what_is_missing || result.missing_data || result.missing_evidence)} />
-              <List title="Verification warnings" items={asArray(result.verification?.risk_flags)} />
-              <List title="Risks / uncertainty" items={asArray(result.risks || result.risk_flags || [result.risk_level].filter(Boolean))} />
-              <List title="Next actions" items={asArray(result.next_actions || result.operator_instructions)} />
-              <List title="Citations" items={asArray(result.citations)} />
+              <div className="grid grid-cols-2 gap-4">
+                <List title="Operator checklist" items={asArray(result.next_actions || result.operator_instructions)} />
+                <List title="Missing information" items={asArray(result.what_is_missing || result.missing_data || result.missing_evidence)} />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <List title="Evidence used" items={asArray(result.what_i_used || result.evidence_used)} />
+                <List title="Operational warnings" items={asArray(result.verification?.risk_flags || result.risk_flags)} />
+              </div>
             </div>
           )}
         </section>
+
+        {report ? (
+          <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+            <h2 className="text-[20px] font-semibold mb-4" style={{ color: TEXT }}>{report.title || "Structured report preview"}</h2>
+            <div className="grid grid-cols-2 gap-4">
+              <List title="Key findings" items={asArray(report.key_findings)} />
+              <List title="Next actions" items={asArray(report.recommended_next_actions)} />
+              <List title="Missing evidence" items={asArray(report.missing_evidence)} />
+              <List title="Evidence appendix" items={asArray(report.evidence_appendix)} />
+            </div>
+          </section>
+        ) : null}
       </main>
     </div>
   );
@@ -215,9 +250,18 @@ function DecisionCard({ title, active, onClick }: { title: string; active: boole
     >
       <div className="text-[13px] font-semibold">{title}</div>
       <div className="text-[11px] mt-1" style={{ color: active ? "rgba(255,255,255,0.62)" : MUTED }}>
-        Generate grounded decision
+        Run current workspace decision
       </div>
     </button>
+  );
+}
+
+function Panel({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="rounded-xl p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+      <div className="text-[10px] font-semibold uppercase tracking-widest mb-3" style={{ color: MUTED }}>{title}</div>
+      <div className="text-[13px] leading-relaxed" style={{ color: TEXT }}>{body}</div>
+    </div>
   );
 }
 

@@ -69,15 +69,15 @@ export function IntelligenceFabric() {
           <div>
             <div className="flex items-center gap-2 mb-1">
               <h2 className="text-[15px] font-semibold" style={{ color: TEXT }}>AGRO-AI Intelligence Fabric</h2>
-              <StatusBadge label={brief.mode === "live" ? "Live mode" : "Evaluation sample"} tone={brief.mode === "live" ? "good" : "warn"} />
-              <StatusBadge label="Brain available platform-wide" tone="good" />
+              <StatusBadge label={brief.mode === "live" ? "Operational context" : "Workspace in review"} tone={brief.mode === "live" ? "good" : "warn"} />
+              <StatusBadge label="Shared intelligence layer" tone="good" />
             </div>
             <p className="text-[12px]" style={{ color: MUTED }}>
-              One evidence layer powering WaterOps, Assurance, Evidence, Reports, Agents, Integrations, and the chatbot.
+              One evidence layer powering WaterOps, Assurance, Evidence, Reports, Agents, and Integrations.
             </p>
           </div>
           <div className="flex gap-2">
-            <PortalButton variant="secondary" onClick={briefState.refresh}>Refresh brain</PortalButton>
+            <PortalButton variant="secondary" onClick={briefState.refresh}>Refresh</PortalButton>
             <PortalButton onClick={() => run("field_diagnosis")} disabled={Boolean(runningAction)}>
               {runningAction === "field_diagnosis" ? "Running…" : "Run diagnosis"}
             </PortalButton>
@@ -146,9 +146,7 @@ export function IntelligenceFabric() {
                   <div className="text-[11px] font-semibold uppercase tracking-widest" style={{ color: "rgba(255,255,255,0.45)" }}>
                     Action result · {actionResult.action}
                   </div>
-                  <span className="text-[11px]" style={{ color: "rgba(255,255,255,0.55)" }}>
-                    {actionResult.provider || "provider"} / {actionResult.model || "model"}
-                  </span>
+                  <StatusBadge label={actionResult.status === "completed" ? "Ready" : "Action required"} tone={actionResult.status === "completed" ? "good" : "warn"} />
                 </div>
                 <div className="text-[13px] leading-relaxed" style={{ color: "rgba(255,255,255,0.82)" }}>
                   {actionResult.summary || "Action completed."}
