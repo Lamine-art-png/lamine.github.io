@@ -70,6 +70,16 @@ def build_intelligence_context(
     exception_rows = exceptions(cockpit)
     decisions = decision_workbench(cockpit, field_id=field_id)
     reports = report_factory(cockpit, report_type="executive_brief", audience=audience, field_id=field_id)
+    evidence_summary = {
+        "sample_mode": bool(readiness.get("sample_mode")),
+        "evidence_count": int(readiness.get("evidence_records") or 0),
+        "source_count": int(readiness.get("data_sources") or 0),
+        "readiness_score": int(readiness.get("readiness_score") or 0),
+        "readiness_level": readiness.get("readiness_level"),
+        "connected_sources": int(readiness.get("connected_sources") or 0),
+        "present_source_types": readiness.get("present_source_types") or [],
+        "missing_source_types": readiness.get("missing_source_types") or [],
+    }
 
     data_sources = [
         {
@@ -136,6 +146,8 @@ def build_intelligence_context(
         "exceptions": _redact(exception_rows),
         "decisions": _redact(decisions),
         "reports": _redact(reports),
+        "sample_mode": evidence_summary["sample_mode"],
+        "evidence_summary": evidence_summary,
         "evidence_context": evidence_context,
         "citations": citations,
     }

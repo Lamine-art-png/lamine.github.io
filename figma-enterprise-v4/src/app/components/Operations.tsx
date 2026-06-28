@@ -58,7 +58,16 @@ export function Operations() {
           question: `Generate an operator-ready ${mode} decision using current tenant evidence only.`,
           workspace_id: currentWorkspace?.id,
         }) as AnyRecord;
-        setResult(modelResponse.result || modelResponse);
+        setResult({
+          ...(modelResponse.result || modelResponse),
+          model_status: modelResponse.model_status,
+          model: modelResponse.model,
+          sample_mode: modelResponse.sample_mode,
+          evidence_summary: modelResponse.evidence_summary,
+          confidence: modelResponse.confidence,
+          citations: modelResponse.citations,
+          verification: modelResponse.verification,
+        });
       } else {
         setResult((response.decisions || [])[0] || response);
       }
@@ -154,6 +163,7 @@ export function Operations() {
             <h2 className="text-[20px] font-semibold" style={{ color: TEXT }}>Decision output</h2>
             <div className="flex gap-2">
               <StatusBadge label={text(result?.model_status || (statusState.data?.configured ? "live" : "fallback"))} tone={result?.model_status === "live" ? "good" : "warn"} />
+              {result?.sample_mode ? <StatusBadge label="Evaluation sample" tone="warn" /> : null}
               <StatusBadge label={result ? result.confidence || "generated" : "not run"} tone={result ? "good" : "neutral"} />
               <PortalButton variant="secondary" onClick={generatePdf} disabled={loading}>{loading ? "Working…" : "Generate PDF"}</PortalButton>
             </div>
