@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user
 from app.core.security import require_current_tenant_id
 from app.db.base import get_db
-from app.models.saas import User
+from app.models.saas import User, Workspace
 from app.api.v1.ai import (
     _deterministic_body,
     _get_evidence_context,
@@ -25,6 +25,7 @@ from app.api.v1.ai import (
 )
 from app.schemas.ai import IntelligenceRunRequest, IntelligenceRunResponse
 from app.services.citation_verifier import verify_citations
+from app.services.field_operating_loop import audit_trail, build_field_ops_context, command_center, list_tasks
 from app.services.intelligence_context import build_intelligence_context
 from app.services.model_router import ModelRouter
 
@@ -403,6 +404,13 @@ def _internal_debug(
     }
 
 
+def _workspace_row(db: Session, tenant_id: str, workspace_id: str | None) -> Workspace | None:
+    query = db.query(Workspace).filter(Workspace.organization_id == tenant_id)
+    if workspace_id:
+        return query.filter(Workspace.id == workspace_id).first()
+    return query.order_by(Workspace.created_at.asc()).first()
+
+
 def _claimed_number_warnings(result: dict[str, Any], evidence_summary: dict[str, Any]) -> list[str]:
     text = " ".join(str(value) for value in result.values() if isinstance(value, (str, int, float)))
     expected = {
@@ -601,6 +609,16 @@ async def intelligence_run(
     result_payload = _result_payload(payload.task, payload.question, body, context_bundle, model_status, result.provider, result.model)
     if body.get("_safe_mode"):
         result_payload["_safe_mode"] = True
+    workspace = _workspace_row(db, tenant_id, payload.workspace_id)
+    field_ops_ctx = build_field_ops_context(db=db, organization_id=tenant_id, workspace=workspace)
+    command_state = command_center(field_ops_ctx)
+    result_payload["command_center_state"] = {
+        "operating_status": command_state.get("operating_status"),
+        "today_priority": command_state.get("today_priority"),
+        "field_queue": command_state.get("field_queue", [])[:5],
+    }
+    result_payload["operator_tasks"] = list_tasks(field_ops_ctx)[:6]
+    result_payload["audit_events"] = audit_trail(field_ops_ctx)[:8]
     result_payload, sample_warnings = _apply_sample_guard(result_payload)
     result_payload, numeric_warnings = _apply_numeric_guard(
         result_payload,

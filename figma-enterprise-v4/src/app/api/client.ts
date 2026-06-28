@@ -250,6 +250,56 @@ export type ReportFactoryPayload = {
   audience?: "operator" | "owner" | "agency" | "lender" | "investor" | "grower";
 };
 
+export type FieldOpsTaskPayload = {
+  title: string;
+  field?: string;
+  block?: string;
+  assigned_to?: string;
+  priority?: "high" | "medium" | "low";
+  why: string;
+  instructions?: string[];
+  evidence_required?: string[];
+  source_exception_id?: string;
+  source_decision_id?: string;
+  created_from?: "exception" | "decision" | "missing_evidence" | "manual" | "field_update";
+  workspace_id?: string;
+};
+
+export type FieldOpsTaskStatusPayload = {
+  status: "open" | "in_progress" | "blocked" | "done" | "needs_review";
+  workspace_id?: string;
+};
+
+export type FieldUpdatePayload = {
+  field_id?: string;
+  field_name?: string;
+  block?: string;
+  crop?: string;
+  update_text: string;
+  event_type: "observation" | "meter_reading" | "irrigation_event" | "issue" | "photo_note" | "operator_note" | "compliance_note";
+  occurred_at?: string;
+  water_gallons?: number;
+  flow_gpm?: number;
+  duration_minutes?: number;
+  attachments?: Record<string, unknown>[];
+  workspace_id?: string;
+};
+
+export type FieldMessagePayload = {
+  message: string;
+  sender_role: "operator" | "manager" | "agency" | "advisor";
+  channel: "portal" | "email" | "sms" | "whatsapp" | "slack" | "teams";
+  field_hint?: string;
+  workspace_id?: string;
+};
+
+export type AutopilotReportPayload = {
+  audience: "operator" | "manager" | "owner" | "agency" | "lender" | "grower";
+  scope: "today" | "weekly" | "field" | "compliance" | "exceptions";
+  field_id?: string;
+  workspace_id?: string;
+};
+
 export const apiClient = {
   get,
   post,
@@ -362,6 +412,17 @@ export const apiClient = {
   reportFactory: {
     generate: (payload: ReportFactoryPayload) => post("/v1/reports/factory", payload),
     pdf: (payload: ReportFactoryPayload) => downloadPost("/v1/reports/factory/pdf", payload),
+  },
+
+  fieldOps: {
+    commandCenter: (workspaceId?: string) => get(`/v1/field-ops/command-center${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`),
+    tasks: (workspaceId?: string) => get(`/v1/field-ops/tasks${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`),
+    createTask: (payload: FieldOpsTaskPayload) => post("/v1/field-ops/tasks/create", payload),
+    updateTaskStatus: (taskId: string, payload: FieldOpsTaskStatusPayload) => post(`/v1/field-ops/tasks/${encodeURIComponent(taskId)}/status`, payload),
+    fieldUpdate: (payload: FieldUpdatePayload) => post("/v1/field-ops/field-update", payload),
+    fieldMessage: (payload: FieldMessagePayload) => post("/v1/field-ops/field-message", payload),
+    autopilotReport: (payload: AutopilotReportPayload) => post("/v1/field-ops/autopilot-report", payload),
+    auditTrail: (workspaceId?: string) => get(`/v1/field-ops/audit-trail${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`),
   },
 
   connectorHub: {
