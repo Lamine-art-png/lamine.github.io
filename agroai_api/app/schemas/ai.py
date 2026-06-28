@@ -111,6 +111,8 @@ class IntelligenceRunResponse(BaseModel):
     model: str | None = None
     model_status: Literal["live", "fallback", "unavailable"]
     provider: str
+    sample_mode: bool = False
+    evidence_summary: dict[str, Any] = Field(default_factory=dict)
     result: dict[str, Any]
     citations: list[ToolCitation] = Field(default_factory=list)
     verification: VerificationResult

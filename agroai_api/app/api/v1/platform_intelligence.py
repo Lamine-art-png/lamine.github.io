@@ -5,9 +5,11 @@ WaterOps, Assurance, Evidence, Reports, Agents, Integrations, and Intelligence.
 """
 from __future__ import annotations
 
+import io
+import re
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Response
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -267,10 +269,14 @@ def _result_payload(task: str, question: str, body: dict[str, Any], context_bund
     readiness = context_bundle.get("readiness") or {}
     fields = context_bundle.get("fields") or {}
     exceptions_payload = context_bundle.get("exceptions") or {}
+    sample_mode = bool(context_bundle.get("sample_mode"))
+    evidence_summary = context_bundle.get("evidence_summary") or {}
+    sample_prefix = "Evaluation sample — not customer production data. "
 
     if task == "decision_workbench":
+        summary = body.get("recommendation") or body.get("summary") or "Collect missing data first before approving an operating decision."
         return {
-            "summary": body.get("recommendation") or body.get("summary") or "Collect missing data first before approving an operating decision.",
+            "summary": f"{sample_prefix}{summary}" if sample_mode else summary,
             "recommendation": body.get("recommendation") or body.get("summary"),
             "why": body.get("why") or body.get("summary"),
             "evidence_used": body.get("evidence_used") or body.get("available_data") or [],
@@ -281,25 +287,36 @@ def _result_payload(task: str, question: str, body: dict[str, Any], context_bund
             "model_status": model_status,
             "provider": provider,
             "model": model,
+            "sample_mode": sample_mode,
+            "evidence_summary": evidence_summary,
         }
 
     if task == "report_factory":
+        deterministic_report = (context_bundle.get("reports") or {}).get("report") or {}
+        summary = body.get("summary") or deterministic_report.get("executive_summary") or "Evidence-backed report draft generated."
         return {
-            "title": body.get("title") or "AGRO-AI operating report",
-            "executive_summary": body.get("summary") or "Evidence-backed report draft generated.",
-            "key_findings": body.get("sections") or body.get("available_data") or [],
-            "missing_evidence": body.get("missing_data") or context.missing_data,
-            "recommended_next_actions": body.get("next_actions") or body.get("recommendations") or [],
+            "title": body.get("title") or deterministic_report.get("title") or "AGRO-AI operating report",
+            "executive_summary": f"{sample_prefix}{summary}" if sample_mode else summary,
+            "key_findings": body.get("sections") or body.get("available_data") or deterministic_report.get("key_findings") or [],
+            "field_summary": deterministic_report.get("field_summary") or [],
+            "exceptions": deterministic_report.get("exceptions") or [],
+            "decisions": deterministic_report.get("decisions") or [],
+            "missing_evidence": body.get("missing_data") or deterministic_report.get("missing_evidence") or context.missing_data,
+            "evidence_appendix": deterministic_report.get("evidence_appendix") or [],
+            "recommended_next_actions": body.get("next_actions") or body.get("recommendations") or deterministic_report.get("recommended_next_actions") or [],
             "reviewer_notes": body.get("reviewer_notes") or body.get("risk_flags") or [],
             "confidence": body.get("confidence") or "low",
             "model_status": model_status,
             "provider": provider,
             "model": model,
+            "sample_mode": sample_mode,
+            "evidence_summary": evidence_summary,
         }
 
     if task == "connector_diagnosis":
+        summary = body.get("summary") or "Connector readiness diagnosis generated."
         return {
-            "summary": body.get("summary") or "Connector readiness diagnosis generated.",
+            "summary": f"{sample_prefix}{summary}" if sample_mode else summary,
             "connected_integrations": [
                 row.get("name")
                 for row in _integration_status(context)
@@ -316,10 +333,13 @@ def _result_payload(task: str, question: str, body: dict[str, Any], context_bund
             "model_status": model_status,
             "provider": provider,
             "model": model,
+            "sample_mode": sample_mode,
+            "evidence_summary": evidence_summary,
         }
 
+    summary = body.get("summary") or body.get("answer") or f"AGRO-AI completed {task}."
     return {
-        "summary": body.get("summary") or body.get("answer") or f"AGRO-AI completed {task}.",
+        "summary": f"{sample_prefix}{summary}" if sample_mode else summary,
         "question": question,
         "available_data": body.get("available_data") or body.get("evidence_used") or [],
         "missing_data": body.get("missing_data") or context.missing_data,
@@ -332,16 +352,92 @@ def _result_payload(task: str, question: str, body: dict[str, Any], context_bund
         "model_status": model_status,
         "provider": provider,
         "model": model,
+        "sample_mode": sample_mode,
+        "evidence_summary": evidence_summary,
     }
+
+
+def _claimed_number_warnings(result: dict[str, Any], evidence_summary: dict[str, Any]) -> list[str]:
+    text = " ".join(str(value) for value in result.values() if isinstance(value, (str, int, float)))
+    expected = {
+        "evidence records": int(evidence_summary.get("evidence_count") or 0),
+        "data sources": int(evidence_summary.get("source_count") or 0),
+        "source files": int(evidence_summary.get("source_count") or 0),
+        "readiness": int(evidence_summary.get("readiness_score") or 0),
+    }
+    warnings: list[str] = []
+    for label, actual in expected.items():
+        pattern = r"(\d+)\s*%?\s+" + re.escape(label) if label != "readiness" else r"(\d+)\s*%\s*readiness|readiness\s*(?:is|score)?\s*(\d+)\s*%"
+        for match in re.finditer(pattern, text, flags=re.IGNORECASE):
+            claimed = next((int(group) for group in match.groups() if group), actual)
+            if claimed != actual:
+                warnings.append(f"Unsupported numeric claim: claimed {claimed} for {label}, actual value is {actual}.")
+    return warnings
+
+
+def _apply_numeric_guard(result: dict[str, Any], evidence_summary: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    warnings = _claimed_number_warnings(result, evidence_summary)
+    if not warnings:
+        return result, []
+    clean = dict(result)
+    prefix = "Evaluation sample — not customer production data. " if clean.get("sample_mode") else ""
+    clean["summary"] = (
+        f"{prefix}AGRO-AI removed unsupported numeric claims. "
+        f"Current context contains {evidence_summary.get('evidence_count', 0)} evidence records, "
+        f"{evidence_summary.get('source_count', 0)} data sources, and "
+        f"{evidence_summary.get('readiness_score', 0)}% readiness."
+    )
+    clean["confidence"] = "low"
+    clean["risk_flags"] = list(dict.fromkeys((clean.get("risk_flags") or []) + warnings))
+    return clean, warnings
+
+
+def _apply_sample_guard(result: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    if not result.get("sample_mode"):
+        return result, []
+    summary = str(result.get("summary") or result.get("executive_summary") or "")
+    summary_without_notice = summary.replace("Evaluation sample — not customer production data.", "", 1).strip()
+    warnings: list[str] = []
+    if not summary.startswith("Evaluation sample — not customer production data."):
+        warnings.append("Sample-mode answer did not begin with the required evaluation sample notice.")
+    if re.search(r"\b(real|production|live)\s+customer\s+evidence\b", summary_without_notice, flags=re.IGNORECASE):
+        warnings.append("Sample-mode answer phrased evaluation data as customer production evidence.")
+    if not warnings:
+        return result, []
+    clean = dict(result)
+    clean["summary"] = (
+        "Evaluation sample — not customer production data. "
+        "This answer is based only on evaluation sample context. Connect or upload customer evidence before using it operationally."
+    )
+    if "executive_summary" in clean:
+        clean["executive_summary"] = clean["summary"]
+    clean["confidence"] = "low"
+    clean["risk_flags"] = list(dict.fromkeys((clean.get("risk_flags") or []) + warnings))
+    return clean, warnings
 
 
 @router.get("/brief")
 async def intelligence_brief(
     tenant_id: str = Depends(require_current_tenant_id),
+    user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    context = _get_evidence_context(db=db, tenant_id=tenant_id)
-    return _brief_from_context(context)
+    try:
+        context_bundle = build_intelligence_context(db=db, tenant_id=tenant_id, user=user)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {
+        "status": "ok",
+        "mode": "evaluation" if context_bundle.get("sample_mode") else "live",
+        "sample_mode": bool(context_bundle.get("sample_mode")),
+        "workspace": context_bundle.get("workspace") or {},
+        "evidence_summary": context_bundle.get("evidence_summary") or {},
+        "missing_data": (context_bundle["evidence_context"]).missing_data,
+        "citations": [
+            citation.model_dump(mode="python") if hasattr(citation, "model_dump") else citation
+            for citation in context_bundle.get("citations", [])
+        ],
+    }
 
 
 @router.post("/action")
@@ -455,12 +551,21 @@ async def intelligence_run(
         model_status = "fallback" if result.demo_fallback else "unavailable"
 
     result_payload = _result_payload(payload.task, payload.question, body, context_bundle, model_status, result.provider, result.model)
+    result_payload, sample_warnings = _apply_sample_guard(result_payload)
+    result_payload, numeric_warnings = _apply_numeric_guard(
+        result_payload,
+        context_bundle.get("evidence_summary") or {},
+    )
     verification, result_payload = verify_citations(
         citations=context.citations,
         result=result_payload,
         tenant_id=tenant_id,
         workspace_id=context.workspace_id,
     )
+    guard_warnings = sample_warnings + numeric_warnings
+    if guard_warnings:
+        verification.risk_flags.extend(guard_warnings)
+        verification.status = "partial"
 
     return IntelligenceRunResponse(
         status="completed" if result.status == "ok" else "unavailable",
@@ -468,6 +573,8 @@ async def intelligence_run(
         model=result.model,
         model_status=model_status if result.status == "ok" or result.demo_fallback else "unavailable",
         provider=result.provider,
+        sample_mode=bool(context_bundle.get("sample_mode")),
+        evidence_summary=context_bundle.get("evidence_summary") or {},
         result=result_payload,
         citations=verification.citations,
         verification=verification,
