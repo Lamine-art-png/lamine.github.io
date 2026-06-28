@@ -12,6 +12,16 @@ import { DecisionWorkbench, Exceptions, Fields, Readiness, ReportFactory } from 
 import { Sources } from "./components/Sources";
 import { Audit } from "./components/Audit";
 import { Admin } from "./components/Admin";
+import {
+  BillingPage,
+  OnboardingPage,
+  PricingPage,
+  ProfilePage,
+  SecurityPage,
+  SupportPage,
+  TeamPage,
+  WorkspaceSettingsPage,
+} from "./components/ProductShell";
 
 export const router = createBrowserRouter([
   {
@@ -19,6 +29,8 @@ export const router = createBrowserRouter([
     Component: MainLayout,
     children: [
       { index: true, Component: Overview },
+      { path: "field-queue", Component: Overview },
+      { path: "tasks", Component: Overview },
       { path: "readiness", Component: Readiness },
       { path: "fields", Component: Fields },
       { path: "exceptions", Component: Exceptions },
@@ -34,6 +46,14 @@ export const router = createBrowserRouter([
       { path: "sources", Component: Sources },
       { path: "audit", Component: Audit },
       { path: "admin", Component: Admin },
+      { path: "pricing", Component: PricingPage },
+      { path: "profile", Component: ProfilePage },
+      { path: "billing", Component: BillingPage },
+      { path: "security", Component: SecurityPage },
+      { path: "support", Component: SupportPage },
+      { path: "settings", Component: WorkspaceSettingsPage },
+      { path: "team", Component: TeamPage },
+      { path: "onboarding", Component: OnboardingPage },
     ],
   },
 ]);

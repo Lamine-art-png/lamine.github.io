@@ -21,12 +21,12 @@ export function Admin() {
         <div className="flex items-start justify-between gap-6">
           <div>
             <div className="flex items-center gap-2 mb-3">
-              <StatusBadge label="Internal testing" tone="good" />
-              <StatusBadge label="All features unlocked" tone="good" />
+              <StatusBadge label="Admin" tone="neutral" />
+              <StatusBadge label="Workspace controls" tone="good" />
             </div>
             <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: TEXT }}>System Administration</h1>
             <p className="mt-2 max-w-2xl text-[14px] leading-relaxed" style={{ color: MUTED }}>
-              Billing gates are disabled while AGRO-AI is being validated end-to-end. Pricing and paywalls should be added only after the product workflow is proven.
+              Manage workspace configuration, connected systems, billing readiness, and administrative controls.
             </p>
           </div>
           <PortalButton onClick={() => window.location.assign("/integrations")}>Set up connectors</PortalButton>
@@ -38,12 +38,12 @@ export function Admin() {
           <Card title="Organization" rows={[
             ["Name", safe(currentOrganization?.name, "AGRO-AI")],
             ["User", safe(user?.email, "Authenticated user")],
-            ["Access", "Internal testing"],
+            ["Plan", safe(currentOrganization?.plan, "free")],
           ]} />
 
           <Card title="Workspace" rows={[
             ["Active workspace", safe(currentWorkspace?.name, "Workspace")],
-            ["Mode", "Internal validation"],
+            ["Mode", safe(currentWorkspace?.status || currentWorkspace?.evaluation_status, "Evaluation")],
             ["Live sync", "Credential-gated"],
           ]} />
 
@@ -86,10 +86,10 @@ export function Admin() {
             Internal rule
           </div>
           <h2 className="text-[22px] font-semibold mb-2" style={{ color: "white" }}>
-            Prove the machine before monetizing the machine.
+            Keep the operating room accountable.
           </h2>
           <p className="text-[13px] leading-relaxed max-w-3xl" style={{ color: "rgba(255,255,255,0.68)" }}>
-            Every connector, evidence, decision, report, and AI workflow should work internally before we reintroduce tiering, billing, or usage limits.
+            Every connector, evidence record, decision, report, and field update should remain tied to the active workspace and organization.
           </p>
         </section>
       </main>

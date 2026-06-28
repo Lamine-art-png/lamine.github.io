@@ -300,6 +300,18 @@ export type AutopilotReportPayload = {
   workspace_id?: string;
 };
 
+export type ProductCheckoutPayload = {
+  plan_id: "free" | "professional" | "network";
+  billing_period: "monthly" | "annual";
+};
+
+export type SupportTicketPayload = {
+  category: "support" | "integration" | "issue" | "onboarding" | "sales";
+  subject: string;
+  message: string;
+  workspace_id?: string;
+};
+
 export const apiClient = {
   get,
   post,
@@ -319,6 +331,25 @@ export const apiClient = {
     status: () => get("/v1/billing/status"),
     createCheckoutSession: () => post("/v1/billing/create-checkout-session"),
     createPortalSession: () => post("/v1/billing/create-portal-session"),
+    summary: () => get("/v1/billing/summary"),
+    checkout: (payload: ProductCheckoutPayload) => post("/v1/billing/checkout", payload),
+  },
+
+  product: {
+    plans: () => get("/v1/product/plans"),
+    shell: () => get("/v1/app/shell"),
+  },
+
+  account: {
+    profile: () => get("/v1/account/profile"),
+    security: () => get("/v1/account/security"),
+    requestEmailVerification: () => post("/v1/account/email-verification/request"),
+    startTwoFactor: () => post("/v1/account/two-factor/start"),
+  },
+
+  support: {
+    options: () => get("/v1/support/options"),
+    ticket: (payload: SupportTicketPayload) => post("/v1/support/ticket", payload),
   },
 
   orgs: {
