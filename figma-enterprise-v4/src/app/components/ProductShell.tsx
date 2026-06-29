@@ -1,5 +1,5 @@
-import { ReactNode, useCallback, useMemo, useState } from "react";
-import { ChevronDown, ChevronUp, Lock, Mail, ShieldCheck, Users } from "lucide-react";
+import { ReactNode, useCallback, useState } from "react";
+import { Lock, Mail, ShieldCheck, Users } from "lucide-react";
 import { apiClient, ProductCheckoutPayload, SupportTicketPayload, TeamInvitationPayload } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { usePortalResource } from "../hooks/usePortalResource";
@@ -11,13 +11,13 @@ type Plan = {
   public_price_monthly: string;
   public_price_annual: string;
   recommended_buyer: string;
-  included_limits: Record<string, string>;
+  included_limits?: Record<string, string>;
   features: string[];
   locked_features?: string[];
-  support_level: string;
+  support_level?: string;
   cta_label: string;
   annual_savings_badge?: string | null;
-  is_custom_pricing: boolean;
+  is_custom_pricing?: boolean;
 };
 
 type ProductPlans = {
@@ -26,39 +26,38 @@ type ProductPlans = {
 };
 
 type BillingSummary = {
-  current_plan: Plan;
-  billing_status: string;
-  monthly_price: string;
-  annual_price: string;
-  usage_summary: Record<string, unknown>;
-  upgrade_options: Plan[];
-  service_add_ons: { id: string; name: string; price: string; description: string }[];
+  current_plan?: Plan;
+  billing_status?: string;
+  monthly_price?: string;
+  annual_price?: string;
+  usage_summary?: Record<string, unknown>;
+  upgrade_options?: Plan[];
+  service_add_ons?: { id: string; name: string; price: string; description: string }[];
   annual_savings?: string;
   entitlements?: Record<string, unknown>;
 };
 
-type ShellResponse = {
-  user?: { name?: string; email?: string };
-  workspace?: { name?: string; mode?: string };
-  organization?: { name?: string; status?: string };
-  plan?: Plan;
-  entitlements?: Record<string, unknown>;
-  usage?: Record<string, unknown>;
+type AdminRequest = {
+  id: string;
+  type: string;
+  priority?: "low" | "medium" | "high" | "urgent";
+  company?: string;
+  subject?: string;
+  requester?: string;
+  status?: "received" | "triaged" | "in_progress" | "waiting_on_customer" | "closed";
+  created_at?: string;
+  source_page?: string;
+  message?: string;
 };
 
-type TeamMembersResponse = {
-  members: { id: string; name?: string; email?: string; role?: string }[];
-};
-
-type TeamInvitationsResponse = {
-  invitations: { id: string; email: string; role: string; status: string; created_at?: string }[];
-};
+type TeamMember = { id: string; name?: string; email?: string; role?: string };
+type TeamInvitation = { id: string; email: string; role: string; status: string; created_at?: string };
 
 const faq = [
   ["What is AGRO-AI built for?", "AGRO-AI helps farms, water agencies, advisors, lenders, insurers, and agricultural networks operate from one secure evidence workspace."],
   ["What does Free include?", "Free is for pilots and early testing. It includes one workspace, one user, limited uploads, limited AGRO-AI messages, and basic readiness."],
-  ["When do I move to Professional?", "Professional is the step up when you need report generation, PDF output, connectors, water risk briefs, and regular operating use."],
-  ["When do I need Team?", "Team is the right fit when multiple operators, advisors, or managers need shared evidence, role controls, and invite workflows."],
+  ["When do I move to Professional?", "Professional is for commercial farms and advisors that need reports, PDF output, connectors, water risk briefs, and operating use."],
+  ["When do I need Team?", "Team is for operators, advisors, and managers who need shared evidence, role controls, and invite workflows."],
   ["Who is Network for?", "Network is built for grower networks, water districts, exporters, lenders, insurers, and multi-farm programs."],
   ["What happens above Network?", "Larger deployments move to Enterprise for custom seats, governance, security review, and tailored reporting."],
 ];
@@ -69,6 +68,10 @@ function safe(value: unknown, fallback = "Not available") {
   return fallback;
 }
 
+function isEnabled(value: unknown) {
+  return value === true || value === "true" || value === "enabled";
+}
+
 function Page({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
   return (
     <div className="min-h-screen" style={{ background: BG }}>
@@ -76,7 +79,7 @@ function Page({ title, subtitle, children }: { title: string; subtitle?: string;
         <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: TEXT }}>{title}</h1>
         {subtitle ? <p className="mt-2 max-w-3xl text-[14px] leading-relaxed" style={{ color: MUTED }}>{subtitle}</p> : null}
       </header>
-      <main className="space-y-5 px-8 py-6" style={{ maxWidth: 1180 }}>{children}</main>
+      <main className="space-y-5 px-8 py-6" style={{ maxWidth: 1240 }}>{children}</main>
     </div>
   );
 }
@@ -102,6 +105,28 @@ function Row({ label, value }: { label: string; value: unknown }) {
   );
 }
 
+function Banner({ message, tone = "good" }: { message: string; tone?: "good" | "warn" }) {
+  const good = tone === "good";
+  return (
+    <div className="rounded-lg px-4 py-3 text-[13px]" style={{ background: good ? "#F0FDF4" : "#FFFBEB", color: good ? "#15803D" : "#92400E", border: good ? "1px solid #BBF7D0" : "1px solid #FCD34D" }}>
+      {message}
+    </div>
+  );
+}
+
+function FaqItem({ question, answer }: { question: string; answer: string }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <button type="button" onClick={() => setOpen((value) => !value)} className="w-full rounded-xl px-4 py-3 text-left" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+      <div className="flex items-center justify-between gap-4">
+        <span className="text-[14px] font-semibold" style={{ color: TEXT }}>{question}</span>
+        <span className="text-[18px]" style={{ color: MUTED }}>{open ? "−" : "+"}</span>
+      </div>
+      {open ? <p className="mt-3 text-[13px] leading-6" style={{ color: MUTED }}>{answer}</p> : null}
+    </button>
+  );
+}
+
 function UpgradeModal({ title, body, cta, onClose, onConfirm }: { title: string; body: string; cta: string; onClose: () => void; onConfirm: () => void }) {
   return (
     <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 px-4">
@@ -124,8 +149,10 @@ function UpgradeModal({ title, body, cta, onClose, onConfirm }: { title: string;
 function PlanCard({ plan, billingPeriod, onSelect }: { plan: Plan; billingPeriod: "monthly" | "annual"; onSelect: (plan: Plan) => void }) {
   const price = billingPeriod === "annual" ? plan.public_price_annual : plan.public_price_monthly;
   const highlighted = plan.id === "professional";
+  const limits = Object.values(plan.included_limits || {});
+
   return (
-    <section className="flex min-h-[520px] flex-col rounded-[20px] p-6" style={{ background: SURFACE, border: `1px solid ${highlighted ? GREEN : BORDER}`, boxShadow: highlighted ? "0 12px 50px rgba(28,89,55,0.08)" : "none" }}>
+    <section className="flex min-h-[540px] flex-col rounded-[20px] p-6" style={{ background: SURFACE, border: `1px solid ${highlighted ? GREEN : BORDER}`, boxShadow: highlighted ? "0 12px 50px rgba(28,89,55,0.08)" : "none" }}>
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-[24px] font-semibold" style={{ color: TEXT }}>{plan.name}</h2>
@@ -135,12 +162,10 @@ function PlanCard({ plan, billingPeriod, onSelect }: { plan: Plan; billingPeriod
       </div>
       <div className="mt-6 text-[34px] font-semibold" style={{ color: TEXT }}>{price}</div>
       <div className="mt-5 space-y-2 text-[13px]" style={{ color: TEXT }}>
-        {Object.values(plan.included_limits).map((limit) => <div key={limit}>{limit}</div>)}
+        {limits.map((limit) => <div key={limit}>✓ {limit}</div>)}
       </div>
       <div className="mt-6 space-y-2">
-        {plan.features.map((feature) => (
-          <div key={feature} className="text-[13px] leading-6" style={{ color: TEXT }}>{feature}</div>
-        ))}
+        {plan.features.map((feature) => <div key={feature} className="text-[13px] leading-6" style={{ color: TEXT }}>✓ {feature}</div>)}
       </div>
       {plan.locked_features?.length ? (
         <div className="mt-6 rounded-xl p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
@@ -175,13 +200,12 @@ export function PricingPage() {
         setMessage("Create your account to start free.");
         return;
       }
-      if (!hasSession && (plan.id === "network" || plan.id === "enterprise")) {
-        const response = await apiClient.sales.contact({
-          type: "sales",
-          subject: `${plan.name} pricing request`,
-          message: `Customer requested ${plan.name} pricing follow-up from public pricing.`,
-          source_page: "pricing",
-        }) as Record<string, unknown>;
+      if (!hasSession) {
+        setMessage("Create an AGRO-AI account to continue with this plan.");
+        return;
+      }
+      if (plan.id === "enterprise") {
+        const response = await apiClient.sales.contact({ type: "sales", subject: "Enterprise pricing request", message: "Customer requested Enterprise pricing follow-up.", source_page: "pricing" }) as Record<string, unknown>;
         setMessage(String(response.message || "Sales request received."));
         return;
       }
@@ -190,7 +214,6 @@ export function PricingPage() {
         window.location.assign(response.checkout_url);
         return;
       }
-      setMessage(String(response.message || "Upgrade request received."));
       setMessage(`${safe(response.message, "Upgrade request received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Upgrade request received.");
@@ -200,15 +223,14 @@ export function PricingPage() {
   return (
     <Page title="AGRO-AI pricing" subtitle="A new kind of agricultural intelligence is here. Scale from pilot workspaces to operating teams, grower networks, and enterprise programs.">
       <div className="inline-flex rounded-xl p-1" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-    <Page title="AGRO-AI pricing" subtitle="Start with a field operating workspace. Scale to networks, agencies, and multi-farm organizations.">
-      <div className="inline-flex rounded-lg p-1" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
         {(["monthly", "annual"] as const).map((period) => (
           <button key={period} type="button" onClick={() => setBillingPeriod(period)} className="rounded-lg px-4 py-2 text-[13px] font-medium capitalize" style={{ background: billingPeriod === period ? GREEN : "transparent", color: billingPeriod === period ? "white" : TEXT }}>
             {period}
           </button>
         ))}
       </div>
-      {message ? <div className="rounded-lg border border-[#D8E5CB] bg-[#F8FBF3] px-4 py-3 text-[13px]" style={{ color: "#385544" }}>{message}</div> : null}
+      {plansState.error ? <Banner tone="warn" message={plansState.error} /> : null}
+      {message ? <Banner message={message} /> : null}
       <div className="grid gap-5 xl:grid-cols-5">
         {(plansState.data?.plans || []).map((plan) => <PlanCard key={plan.id} plan={plan} billingPeriod={billingPeriod} onSelect={selectPlan} />)}
       </div>
@@ -232,8 +254,6 @@ export function ProfilePage() {
   const plan = (profile.plan || {}) as Record<string, unknown>;
 
   const save = async () => {
-    await apiClient.account.updateProfile({ name: name || user.name });
-    setMessage("Profile updated.");
     const response = await apiClient.account.updateProfile({ name: name || user.name }) as Record<string, unknown>;
     setMessage("Profile updated.");
     setName(String(((response.user || {}) as Record<string, unknown>).name || ""));
@@ -242,7 +262,8 @@ export function ProfilePage() {
 
   return (
     <Page title="Profile" subtitle="Manage your personal profile, organization identity, and workspace context.">
-      {message ? <Banner tone="good" message={message} /> : null}
+      {message ? <Banner message={message} /> : null}
+      {profileState.error ? <Banner tone="warn" message={profileState.error} /> : null}
       <Panel title="Personal profile" action={<PortalButton onClick={save}>Save profile</PortalButton>}>
         <label className="mb-4 block text-[12px]" style={{ color: MUTED }}>
           Name
@@ -250,18 +271,6 @@ export function ProfilePage() {
         </label>
         <Row label="Email" value={user.email} />
         <Row label="Organization" value={organization.name} />
-    <Page title="Profile" subtitle="Manage your account, organization, workspace, plan, security, and requests.">
-      {message ? <div className="rounded-lg px-4 py-3 text-[13px]" style={{ background: "#F0FDF4", color: "#15803D", border: "1px solid #BBF7D0" }}>{message}</div> : null}
-      <Panel title="Personal profile" action={<PortalButton onClick={save}>Save profile</PortalButton>}>
-        <label className="block text-[12px] mb-4" style={{ color: MUTED }}>
-          Name
-          <input value={name || String(user.name || "")} onChange={(event) => setName(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />
-        </label>
-        <Row label="Name" value={user.name} />
-        <Row label="Email" value={user.email} />
-      </Panel>
-      <Panel title="Organization">
-        <Row label="Company" value={organization.name} />
         <Row label="Role" value={profile.role} />
       </Panel>
       <Panel title="Workspace">
@@ -295,8 +304,9 @@ export function BillingPage() {
   };
 
   return (
-    <Page title="Billing" subtitle="Review your current plan, usage, and upgrade paths without exposing internal billing setup details.">
-      {message ? <Banner tone="good" message={message} /> : null}
+    <Page title="Billing" subtitle="Review your current plan, usage, and upgrade paths.">
+      {message ? <Banner message={message} /> : null}
+      {summaryState.error ? <Banner tone="warn" message={summaryState.error} /> : null}
       <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
         <Panel title="Current plan">
           <Row label="Plan" value={summary?.current_plan?.name} />
@@ -312,7 +322,6 @@ export function BillingPage() {
           <Row label="Field updates" value={summary?.usage_summary?.field_updates} />
         </Panel>
       </div>
-
       <Panel title="Upgrade options">
         <div className="mb-4 inline-flex rounded-lg p-1" style={{ background: BG, border: `1px solid ${BORDER}` }}>
           {(["monthly", "annual"] as const).map((period) => (
@@ -327,14 +336,11 @@ export function BillingPage() {
               <div className="font-semibold text-[16px]" style={{ color: TEXT }}>{plan.name}</div>
               <div className="mt-1 text-[13px]" style={{ color: MUTED }}>{checkoutPeriod === "annual" ? plan.public_price_annual : plan.public_price_monthly}</div>
               <div className="mt-3 text-[13px] leading-6" style={{ color: TEXT }}>{plan.recommended_buyer}</div>
-              <div className="mt-4">
-                <PortalButton onClick={() => requestUpgrade(plan.id)}>{plan.cta_label}</PortalButton>
-              </div>
+              <div className="mt-4"><PortalButton onClick={() => requestUpgrade(plan.id)}>{plan.cta_label}</PortalButton></div>
             </div>
           ))}
         </div>
       </Panel>
-
       <Panel title="Add-ons">
         <div className="grid gap-4 md:grid-cols-3">
           {(summary?.service_add_ons || []).map((service) => (
@@ -345,11 +351,6 @@ export function BillingPage() {
             </div>
           ))}
         </div>
-      </Panel>
-      <Panel title="Invoices">
-        <p className="text-[13px]" style={{ color: MUTED }}>
-          Invoices will appear here when live billing has started.
-        </p>
       </Panel>
     </Page>
   );
@@ -375,13 +376,16 @@ export function SecurityPage() {
 
   return (
     <Page title="Security" subtitle="Protect workspace access and route verification or additional controls professionally.">
-      {message ? <Banner tone="good" message={message} /> : null}
+      {message ? <Banner message={message} /> : null}
+      {securityState.error ? <Banner tone="warn" message={securityState.error} /> : null}
       <div className="grid gap-5 md:grid-cols-2">
         <Panel title="Email verification" action={<PortalButton onClick={resend}>{safe(emailVerification.action_label, "Resend verification email")}</PortalButton>}>
+          <ShieldCheck className="mb-3 h-5 w-5" style={{ color: GREEN }} />
           <Row label="Status" value={emailVerification.customer_label} />
           <Row label="Verification state" value={verification?.status || emailVerification.status} />
         </Panel>
         <Panel title="Two-factor access" action={<PortalButton variant="secondary" onClick={requestTwoFactor}>{safe(twoFactor.action_label, "Request two-factor setup")}</PortalButton>}>
+          <ShieldCheck className="mb-3 h-5 w-5" style={{ color: GREEN }} />
           <Row label="Status" value={twoFactor.customer_label} />
           <Row label="Availability" value="Available on request" />
         </Panel>
@@ -396,13 +400,13 @@ export function SupportPage() {
 
   const submit = async () => {
     const response = await apiClient.support.ticket(form) as Record<string, unknown>;
-    setMessage(String(response.message || "Thanks - your request was received."));
+    setMessage(String(response.message || "Thanks — your request was received."));
     setForm({ category: "support", subject: "", message: "", source_page: "support" });
   };
 
   return (
     <Page title="Support" subtitle="Request onboarding, integration help, operational support, or report review from the AGRO-AI team.">
-      {message ? <Banner tone="good" message={message} /> : null}
+      {message ? <Banner message={message} /> : null}
       <Panel title="Contact support" action={<PortalButton onClick={submit}>Send request</PortalButton>}>
         <div className="grid gap-4 md:grid-cols-2">
           <label className="text-[12px]" style={{ color: MUTED }}>
@@ -430,16 +434,30 @@ export function SupportPage() {
 }
 
 export function AdminRequestsPage() {
-  const state = usePortalResource<{ requests: Record<string, unknown>[] }>(useCallback(() => apiClient.adminRequests.list(), []));
-  const [selected, setSelected] = useState<Record<string, unknown> | null>(null);
+  const [tab, setTab] = useState("all");
+  const [selected, setSelected] = useState<AdminRequest | null>(null);
+  const requestState = usePortalResource<{ requests: AdminRequest[] }>(useCallback(() => apiClient.adminRequests.list(tab === "all" ? undefined : tab), [tab]));
+  const requests = requestState.data?.requests || [];
+  const tabs = [["all", "All"], ["support", "Support"], ["sales", "Sales"], ["integration", "Integrations"], ["onboarding", "Onboarding"], ["bug", "Bugs"], ["upgrade", "Upgrade requests"]];
+
+  const updateStatus = async (status: NonNullable<AdminRequest["status"]>) => {
+    if (!selected?.id) return;
+    const response = await apiClient.adminRequests.update(selected.id, { status }) as { request?: AdminRequest };
+    setSelected(response.request || { ...selected, status });
+    await requestState.refresh();
+  };
 
   return (
     <Page title="Requests" subtitle="Review tracked support, onboarding, integration, upgrade, and sales requests for your organization.">
-      <div className="grid gap-5 lg:grid-cols-[0.92fr_1.08fr]">
+      <div className="flex flex-wrap gap-2">
+        {tabs.map(([id, label]) => <button key={id} type="button" onClick={() => setTab(id)} className="rounded-lg px-3 py-2 text-[12px]" style={{ background: tab === id ? GREEN : SURFACE, color: tab === id ? "white" : TEXT, border: `1px solid ${BORDER}` }}>{label}</button>)}
+      </div>
+      {requestState.error ? <Banner tone="warn" message={requestState.error} /> : null}
+      <div className="grid gap-5 lg:grid-cols-[0.95fr_1.05fr]">
         <Panel title="Inbox">
           <div className="space-y-3">
-            {(state.data?.requests || []).map((row) => (
-              <button key={String(row.id)} type="button" onClick={() => setSelected(row)} className="w-full rounded-xl px-4 py-3 text-left" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+            {requests.map((row) => (
+              <button key={row.id} type="button" onClick={() => setSelected(row)} className="w-full rounded-xl px-4 py-3 text-left" style={{ background: selected?.id === row.id ? "#EEF8E8" : BG, border: `1px solid ${BORDER}` }}>
                 <div className="flex items-center justify-between gap-3">
                   <div className="font-semibold text-[13px]" style={{ color: TEXT }}>{safe(row.subject)}</div>
                   <StatusBadge label={safe(row.status)} tone="neutral" />
@@ -447,9 +465,10 @@ export function AdminRequestsPage() {
                 <div className="mt-1 text-[12px]" style={{ color: MUTED }}>{safe(row.type)} • {safe(row.requester)}</div>
               </button>
             ))}
+            {!requests.length ? <p className="text-[13px]" style={{ color: MUTED }}>No requests yet.</p> : null}
           </div>
         </Panel>
-        <Panel title="Request detail">
+        <Panel title="Request detail" action={selected ? <PortalButton variant="secondary" onClick={() => updateStatus("closed")}>Close request</PortalButton> : null}>
           {selected ? (
             <div className="space-y-3">
               <Row label="Subject" value={selected.subject} />
@@ -457,193 +476,70 @@ export function AdminRequestsPage() {
               <Row label="Requester" value={selected.requester} />
               <Row label="Status" value={selected.status} />
               <Row label="Priority" value={selected.priority} />
-            </div>
-          ) : (
-            <p className="text-[13px]" style={{ color: MUTED }}>Select a request to review its details.</p>
-          )}
-        </Panel>
-      </div>
-    </Page>
-  );
-}
-
-type AdminRequest = {
-  id: string;
-  type: string;
-  priority: "low" | "medium" | "high" | "urgent";
-  company?: string;
-  subject: string;
-  requester?: string;
-  status: "received" | "triaged" | "in_progress" | "waiting_on_customer" | "closed";
-  created_at?: string;
-  source_page?: string;
-  message?: string;
-};
-
-export function AdminRequestsPage() {
-  const [tab, setTab] = useState("all");
-  const [selected, setSelected] = useState<AdminRequest | null>(null);
-  const requestState = usePortalResource<{ requests: AdminRequest[] }>(
-    useCallback(() => apiClient.adminRequests.list(tab === "all" ? undefined : tab), [tab]),
-  );
-  const requests = requestState.data?.requests || [];
-  const tabs = [
-    ["all", "All"],
-    ["support", "Support"],
-    ["sales", "Sales"],
-    ["integration", "Integrations"],
-    ["onboarding", "Onboarding"],
-    ["bug", "Bugs"],
-    ["upgrade", "Upgrade requests"],
-  ];
-
-  const update = async (request: AdminRequest, status: AdminRequest["status"]) => {
-    await apiClient.adminRequests.update(request.id, { status });
-    setSelected({ ...request, status });
-    await requestState.refresh();
-  };
-
-  return (
-    <Page title="Requests" subtitle="Track support, sales, onboarding, integrations, bugs, and upgrade requests.">
-      <div className="flex flex-wrap gap-2">
-        {tabs.map(([value, label]) => (
-          <button key={value} type="button" onClick={() => setTab(value)} className="rounded-lg px-3 py-2 text-[12px] font-medium" style={{ background: tab === value ? GREEN : SURFACE, color: tab === value ? "white" : TEXT, border: `1px solid ${BORDER}` }}>{label}</button>
-        ))}
-      </div>
-      <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
-        <section className="rounded-lg overflow-hidden" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-          <div className="grid grid-cols-[110px_90px_1fr_150px_120px_120px] gap-3 px-4 py-3 text-[11px] font-semibold uppercase" style={{ color: MUTED, borderBottom: `1px solid ${BORDER}` }}>
-            <span>Type</span><span>Priority</span><span>Subject</span><span>Requester</span><span>Status</span><span>Created</span>
-          </div>
-          {requests.map((request) => (
-            <button key={request.id} type="button" onClick={() => setSelected(request)} className="grid w-full grid-cols-[110px_90px_1fr_150px_120px_120px] gap-3 px-4 py-3 text-left text-[12px]" style={{ color: TEXT, borderBottom: `1px solid ${BORDER}` }}>
-              <span>{request.type}</span>
-              <span>{request.priority}</span>
-              <span className="font-medium">{request.subject}</span>
-              <span>{request.requester || request.company || "Customer"}</span>
-              <span>{request.status.replaceAll("_", " ")}</span>
-              <span>{request.created_at ? new Date(request.created_at).toLocaleDateString() : "Today"}</span>
-            </button>
-          ))}
-          {!requests.length ? <div className="p-6 text-[13px]" style={{ color: MUTED }}>No requests in this view.</div> : null}
-        </section>
-        <Panel title="Request detail">
-          {selected ? (
-            <div className="space-y-3 text-[13px]">
-              <Row label="Type" value={selected.type} />
-              <Row label="Company" value={selected.company} />
-              <Row label="Requester" value={selected.requester} />
               <Row label="Source" value={selected.source_page} />
-              <p className="leading-relaxed" style={{ color: MUTED }}>{selected.message}</p>
-              <div className="flex flex-wrap gap-2 pt-3">
-                {(["triaged", "in_progress", "waiting_on_customer", "closed"] as const).map((status) => (
-                  <PortalButton key={status} variant="secondary" onClick={() => update(selected, status)}>{status.replaceAll("_", " ")}</PortalButton>
-                ))}
-              </div>
+              <p className="rounded-lg p-4 text-[13px] leading-6" style={{ background: BG, color: TEXT, border: `1px solid ${BORDER}` }}>{safe(selected.message, "No message provided.")}</p>
             </div>
-          ) : (
-            <p className="text-[13px]" style={{ color: MUTED }}>Select a request to review and update status.</p>
-          )}
+          ) : <p className="text-[13px]" style={{ color: MUTED }}>Select a request to review its details.</p>}
         </Panel>
       </div>
     </Page>
   );
 }
 
-export function WorkspaceSettingsPage() {
-  const shellState = usePortalResource<ShellResponse>(useCallback(() => apiClient.product.shell(), []));
+function LockedTeamCard({ onUpgrade }: { onUpgrade: () => void }) {
   return (
-    <Page title="Workspace settings" subtitle="Manage the operating workspace that powers Command Center.">
-      <Panel title="Workspace">
-        <Row label="Name" value={shellState.data?.workspace?.name} />
-        <Row label="Mode" value={shellState.data?.workspace?.mode === "live" ? "Live operations" : "Evaluation workspace"} />
-        <Row label="Plan" value={shellState.data?.plan?.name} />
-      </Panel>
-    </Page>
+    <Panel title="Team invitations are locked" action={<PortalButton onClick={onUpgrade}>Upgrade to Team</PortalButton>}>
+      <div className="flex items-start gap-3">
+        <Lock className="mt-1 h-5 w-5" style={{ color: GREEN }} />
+        <p className="text-[13px] leading-6" style={{ color: MUTED }}>Team invitations, role controls, and shared evidence workflows are included in the Team plan.</p>
+      </div>
+    </Panel>
   );
 }
 
 export function TeamPage() {
-  const { entitlements } = useAuth();
-  const membersState = usePortalResource<TeamMembersResponse>(useCallback(() => apiClient.team.members(), []));
-  const invitationsState = usePortalResource<TeamInvitationsResponse>(useCallback(() => apiClient.team.invitations(), []), { enabled: Boolean(entitlements.can_invite_team) });
-  const [modalOpen, setModalOpen] = useState(false);
-  const [invite, setInvite] = useState<TeamInvitationPayload>({ email: "", role: "viewer" });
+  const { user, currentWorkspace, entitlements } = useAuth();
+  const canInvite = isEnabled(entitlements.can_invite_team) || isEnabled(entitlements.all_features) || isEnabled(entitlements.internal_testing);
+  const membersState = usePortalResource<{ members: TeamMember[] }>(useCallback(() => apiClient.team.members(), []));
+  const invitationsState = usePortalResource<{ invitations: TeamInvitation[] }>(useCallback(() => apiClient.team.invitations(), []));
+  const [invite, setInvite] = useState<TeamInvitationPayload>({ email: "", role: "operator" });
   const [message, setMessage] = useState("");
   const [upgradeOpen, setUpgradeOpen] = useState(false);
 
-  const submitInvite = async () => {
-    try {
-      const response = await apiClient.team.invite(invite) as Record<string, unknown>;
-      setMessage(String(response.message || "Invitation created."));
-      setModalOpen(false);
-      setInvite({ email: "", role: "viewer" });
-      await invitationsState.refresh();
-    } catch (error) {
-      if (error instanceof Error && (error as { status?: number }).status === 402) {
-        setUpgradeOpen(true);
-        return;
-      }
-      setMessage(error instanceof Error ? error.message : "Invitation could not be created.");
+  const sendInvite = async () => {
+    if (!canInvite) {
+      setUpgradeOpen(true);
+      return;
     }
+    const response = await apiClient.team.invite(invite) as Record<string, unknown>;
+    setMessage(String(response.message || "Invitation created."));
+    setInvite({ email: "", role: "operator" });
+    await invitationsState.refresh();
   };
 
-  if (!entitlements.can_invite_team) {
-    return (
-      <Page title="Team" subtitle="Coordinate field teams, water risk, compliance evidence, and executive reporting.">
-        {upgradeOpen ? <UpgradeModal title="Team invitations are available on the Team plan." body="Invite workflows, role controls, and shared team administration are included in Team." cta="Upgrade to Team" onClose={() => setUpgradeOpen(false)} onConfirm={() => window.location.assign("/pricing")} /> : null}
-        <Panel title="Team feature locked">
-          <div className="flex items-start gap-4 rounded-xl p-5" style={{ background: BG, border: `1px solid ${BORDER}` }}>
-            <Users className="mt-1 h-5 w-5" style={{ color: GREEN }} />
-            <div>
-              <div className="text-[16px] font-semibold" style={{ color: TEXT }}>Team invitations are available on the Team plan.</div>
-              <p className="mt-2 text-[13px] leading-6" style={{ color: MUTED }}>Upgrade to unlock member invites, role controls, and a shared evidence library for operators and managers.</p>
-              <div className="mt-4">
-                <PortalButton onClick={() => setUpgradeOpen(true)}>Upgrade to Team</PortalButton>
-              </div>
-            </div>
-          </div>
-        </Panel>
-      </Page>
-    );
-  }
+  const startTeamUpgrade = async () => {
+    const response = await apiClient.billing.checkout({ plan_id: "team", billing_period: "monthly" }) as Record<string, unknown>;
+    if (typeof response.checkout_url === "string") window.location.assign(response.checkout_url);
+    else setMessage(String(response.message || "Upgrade request received."));
+    setUpgradeOpen(false);
+  };
 
   return (
-    <Page title="Team" subtitle="Invite members, manage collaboration, and keep workspace access aligned with your operating team.">
-      {message ? <Banner tone="good" message={message} /> : null}
-      <div className="grid gap-5 lg:grid-cols-[1fr_1fr]">
-        <Panel title="Members" action={<PortalButton onClick={() => setModalOpen(true)}>Invite member</PortalButton>}>
-          <div className="space-y-3">
-            {(membersState.data?.members || []).map((member) => (
-              <div key={member.id} className="rounded-xl px-4 py-3" style={{ background: BG, border: `1px solid ${BORDER}` }}>
-                <div className="font-semibold text-[13px]" style={{ color: TEXT }}>{safe(member.name, member.email)}</div>
-                <div className="mt-1 text-[12px]" style={{ color: MUTED }}>{safe(member.email)} • {safe(member.role)}</div>
-              </div>
-            ))}
-          </div>
-        </Panel>
-        <Panel title="Pending invites">
-          <div className="space-y-3">
-            {(invitationsState.data?.invitations || []).map((invitation) => (
-              <div key={invitation.id} className="rounded-xl px-4 py-3" style={{ background: BG, border: `1px solid ${BORDER}` }}>
-                <div className="font-semibold text-[13px]" style={{ color: TEXT }}>{invitation.email}</div>
-                <div className="mt-1 text-[12px]" style={{ color: MUTED }}>{invitation.role} • {invitation.status}</div>
-              </div>
-            ))}
-            {!invitationsState.data?.invitations?.length ? <div className="text-[13px]" style={{ color: MUTED }}>No pending invitations.</div> : null}
-          </div>
-        </Panel>
-      </div>
-
-      {modalOpen ? (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/35 px-4">
-          <div className="w-full max-w-[420px] rounded-2xl p-6" style={{ background: "#FFFDF8", border: `1px solid ${BORDER}` }}>
-            <div className="mb-4 text-[20px] font-semibold" style={{ color: TEXT }}>Invite team member</div>
-            <label className="block text-[12px]" style={{ color: MUTED }}>
+    <Page title="Team" subtitle="Invite and manage the people operating inside this AGRO-AI workspace.">
+      {message ? <Banner message={message} /> : null}
+      <Panel title="Current user">
+        <Row label="Name" value={user?.name} />
+        <Row label="Email" value={user?.email} />
+        <Row label="Workspace" value={currentWorkspace?.name} />
+      </Panel>
+      {canInvite ? (
+        <Panel title="Invite team member" action={<PortalButton onClick={sendInvite}>Send invitation</PortalButton>}>
+          <div className="grid gap-4 md:grid-cols-[1fr_220px]">
+            <label className="text-[12px]" style={{ color: MUTED }}>
               Email
-              <input value={invite.email} onChange={(event) => setInvite({ ...invite, email: event.target.value })} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />
+              <input value={invite.email} onChange={(event) => setInvite({ ...invite, email: event.target.value })} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} placeholder="teammate@company.com" />
             </label>
-            <label className="mt-4 block text-[12px]" style={{ color: MUTED }}>
+            <label className="text-[12px]" style={{ color: MUTED }}>
               Role
               <select value={invite.role} onChange={(event) => setInvite({ ...invite, role: event.target.value as TeamInvitationPayload["role"] })} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
                 <option value="owner">Owner</option>
@@ -653,104 +549,77 @@ export function TeamPage() {
                 <option value="viewer">Viewer</option>
               </select>
             </label>
-            <div className="mt-5 flex gap-3">
-              <PortalButton onClick={submitInvite}>Send invite</PortalButton>
-              <PortalButton variant="secondary" onClick={() => setModalOpen(false)}>Cancel</PortalButton>
-            </div>
           </div>
-        </div>
-      ) : null}
+        </Panel>
+      ) : <LockedTeamCard onUpgrade={() => setUpgradeOpen(true)} />}
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Panel title="Members">
+          <div className="space-y-2">
+            {(membersState.data?.members || []).map((member) => <Row key={member.id} label={safe(member.name || member.email)} value={member.role} />)}
+            {membersState.error ? <p className="text-[13px]" style={{ color: MUTED }}>{membersState.error}</p> : null}
+          </div>
+        </Panel>
+        <Panel title="Invitations">
+          <div className="space-y-2">
+            {(invitationsState.data?.invitations || []).map((row) => <Row key={row.id} label={row.email} value={row.status} />)}
+            {invitationsState.error ? <p className="text-[13px]" style={{ color: MUTED }}>{invitationsState.error}</p> : null}
+          </div>
+        </Panel>
+      </div>
+      {upgradeOpen ? <UpgradeModal title="Upgrade to Team" body="Team invitations and role controls are included in the Team plan." cta="Upgrade to Team" onClose={() => setUpgradeOpen(false)} onConfirm={startTeamUpgrade} /> : null}
     </Page>
   );
 }
 
 export function OnboardingPage() {
-  const onboardingState = usePortalResource<Record<string, unknown>>(useCallback(() => apiClient.onboarding.state(), []));
-  const [selectedPlan, setSelectedPlan] = useState("free");
-  const [organizationType, setOrganizationType] = useState("Farm / grower");
-  const [acresOrSites, setAcresOrSites] = useState("");
-  const [primaryGoal, setPrimaryGoal] = useState("Water risk");
+  const state = usePortalResource<{ onboarding: Record<string, unknown> }>(useCallback(() => apiClient.onboarding.state(), []));
   const [message, setMessage] = useState("");
+  const onboarding = state.data?.onboarding || {};
 
-  const save = async () => {
-    await apiClient.onboarding.update({
-      current_step: "start_operating",
-      selected_plan: selectedPlan,
-      organization_type: organizationType,
-      acres_or_sites: acresOrSites,
-      primary_goal: primaryGoal,
-      completed_steps: ["account", "organization", "scope", "plan"],
-    });
+  const updateStep = async (step: string) => {
+    await apiClient.onboarding.update({ current_step: step, completed_steps: [step] });
+    setMessage("Onboarding updated.");
+    await state.refresh();
+  };
+
+  const complete = async () => {
     const response = await apiClient.onboarding.complete() as Record<string, unknown>;
-    setMessage(safe(response.message));
-    await onboardingState.refresh();
+    setMessage(String(response.message || "Your workspace is ready."));
+    await state.refresh();
   };
 
   return (
-    <Page title="Onboarding" subtitle="Turn agricultural evidence into decisions, reports, and operating clarity.">
-      {message ? <Banner tone="good" message={message} /> : null}
-      <Panel title="Workspace setup" action={<PortalButton onClick={save}>Start operating</PortalButton>}>
-        <div className="grid gap-4 md:grid-cols-2">
-          <InputField label="Organization type">
-            <select value={organizationType} onChange={(event) => setOrganizationType(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
-              <option>Farm / grower</option>
-              <option>Water agency / district</option>
-              <option>Advisor / consultant</option>
-              <option>Agricultural network</option>
-              <option>Other</option>
-            </select>
-          </InputField>
-          <InputField label="Acres, sites, or farms managed">
-            <input value={acresOrSites} onChange={(event) => setAcresOrSites(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />
-          </InputField>
-          <InputField label="Primary operating goal">
-            <select value={primaryGoal} onChange={(event) => setPrimaryGoal(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
-              <option>Water risk</option>
-              <option>Compliance reporting</option>
-              <option>Evidence management</option>
-              <option>Executive reporting</option>
-            </select>
-          </InputField>
-          <InputField label="Plan">
-            <select value={selectedPlan} onChange={(event) => setSelectedPlan(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
-              <option value="free">Free</option>
-              <option value="professional">Professional</option>
-              <option value="team">Team</option>
-              <option value="network">Network</option>
-            </select>
-          </InputField>
+    <Page title="Onboarding" subtitle="Set up the operating context AGRO-AI needs before it can help your team move faster.">
+      {message ? <Banner message={message} /> : null}
+      {state.error ? <Banner tone="warn" message={state.error} /> : null}
+      <Panel title="Workspace setup" action={<PortalButton onClick={complete}>Complete onboarding</PortalButton>}>
+        <Row label="Current step" value={onboarding.current_step} />
+        <Row label="Selected plan" value={onboarding.selected_plan} />
+        <Row label="Organization type" value={onboarding.organization_type} />
+        <Row label="Primary goal" value={onboarding.primary_goal} />
+        <div className="mt-4 flex flex-wrap gap-2">
+          {["organization", "scope", "plan", "start_operating"].map((step) => <PortalButton key={step} variant="secondary" onClick={() => updateStep(step)}>{step.replace("_", " ")}</PortalButton>)}
         </div>
       </Panel>
     </Page>
   );
 }
 
-function Banner({ tone, message }: { tone: "good" | "warn"; message: string }) {
+export function WorkspaceSettingsPage() {
   return (
-    <div className="rounded-lg px-4 py-3 text-[13px]" style={{ background: tone === "good" ? "#F0FDF4" : "#FFFBEB", color: tone === "good" ? "#15803D" : "#92400E", border: tone === "good" ? "1px solid #BBF7D0" : "1px solid #FCD34D" }}>
-      {message}
-    </div>
-  );
-}
-
-function FaqItem({ question, answer }: { question: string; answer: string }) {
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="rounded-xl" style={{ border: `1px solid ${BORDER}`, background: BG }}>
-      <button type="button" onClick={() => setOpen((value) => !value)} className="flex w-full items-center justify-between px-4 py-4 text-left">
-        <span className="text-[14px] font-semibold" style={{ color: TEXT }}>{question}</span>
-        {open ? <ChevronUp className="h-4 w-4" style={{ color: MUTED }} /> : <ChevronDown className="h-4 w-4" style={{ color: MUTED }} />}
-      </button>
-      {open ? <div className="px-4 pb-4 text-[13px] leading-6" style={{ color: MUTED }}>{answer}</div> : null}
-    </div>
-  );
-}
-
-function InputField({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="text-[12px]" style={{ color: MUTED }}>
-      {label}
-      {children}
-    </label>
+    <Page title="Settings" subtitle="Workspace configuration and operating preferences for AGRO-AI.">
+      <Panel title="Workspace settings">
+        <div className="flex items-start gap-3">
+          <Users className="mt-1 h-5 w-5" style={{ color: GREEN }} />
+          <p className="text-[13px] leading-6" style={{ color: MUTED }}>Workspace-level configuration is prepared for sources, team roles, notifications, and operating preferences.</p>
+        </div>
+      </Panel>
+      <Panel title="Secure workspace access">
+        <div className="flex items-start gap-3">
+          <Mail className="mt-1 h-5 w-5" style={{ color: GREEN }} />
+          <p className="text-[13px] leading-6" style={{ color: MUTED }}>Verified accounts and role-aware access keep the portal focused on serious agricultural operators and partners.</p>
+        </div>
+      </Panel>
+    </Page>
   );
 }
