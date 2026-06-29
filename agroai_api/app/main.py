@@ -58,9 +58,16 @@ ALLOWED_ORIGINS = [
 if getattr(settings, "APP_URL", "") and settings.APP_URL not in ALLOWED_ORIGINS:
     ALLOWED_ORIGINS.append(settings.APP_URL)
 
+# Cloudflare Pages preview deployments use generated subdomains such as:
+#   https://<hash>.agroai-portal.pages.dev
+# The production custom domain is already allowed above. This regex keeps preview
+# deployments testable without opening CORS to every origin on the internet.
+ALLOWED_ORIGIN_REGEX = r"^https://([a-z0-9-]+\.)?(agroai-portal|lamine-github-io|agroai-command-center-v2-preview)\.pages\.dev$"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -118,7 +125,6 @@ app.include_router(workbench_router, prefix="/v1")
 
 from app.api.v1.compliance import router as compliance_router  # noqa: E402
 app.include_router(compliance_router, prefix="/v1")
-
 from app.api.v1.controllers import router as controllers_router  # noqa: E402
 app.include_router(controllers_router, prefix="/v1")
 
