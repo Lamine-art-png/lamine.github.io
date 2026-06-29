@@ -11,7 +11,7 @@ import { Integrations } from "./components/Integrations";
 import { DecisionWorkbench, Exceptions, Fields, Readiness, ReportFactory } from "./components/OperatorCockpit";
 import { Sources } from "./components/Sources";
 import { Audit } from "./components/Audit";
-import { Admin } from "./components/Admin";
+import { Admin, SystemHealthPage } from "./components/Admin";
 import {
   BillingPage,
   AdminRequestsPage,
@@ -47,6 +47,7 @@ export const router = createBrowserRouter([
       { path: "sources", Component: Sources },
       { path: "audit", Component: Audit },
       { path: "admin", Component: Admin },
+      { path: "admin/system", Component: SystemHealthPage },
       { path: "admin/requests", Component: AdminRequestsPage },
       { path: "pricing", Component: PricingPage },
       { path: "profile", Component: ProfilePage },

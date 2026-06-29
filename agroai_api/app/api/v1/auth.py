@@ -9,11 +9,12 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.api.deps import AuthContext, get_auth_context, get_current_user
+from app.api.deps import AuthContext, get_auth_context, get_current_user, get_current_user_optional
 from app.core.security import create_access_token
 from app.db.base import get_db
 from app.models.saas import Organization, OrganizationMembership, User, Workspace
 from app.services.entitlements import serialize_entitlements
+from app.services.email_verification import confirm_verification, create_verification_token, send_or_log_verification
 from app.services.evaluation_seed import ensure_evaluation_context
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -49,6 +50,24 @@ class LoginRequest(BaseModel):
         if "@" not in value or "." not in value.rsplit("@", 1)[-1]:
             raise ValueError("valid email required")
         return value
+
+
+class EmailVerificationRequest(BaseModel):
+    email: str | None = None
+
+    @field_validator("email")
+    @classmethod
+    def valid_optional_email(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip().lower()
+        if "@" not in value or "." not in value.rsplit("@", 1)[-1]:
+            raise ValueError("valid email required")
+        return value
+
+
+class EmailVerificationConfirmRequest(BaseModel):
+    token: str = Field(min_length=12)
 
 
 def _slugify(value: str) -> str:
@@ -93,6 +112,14 @@ def _session_response(user: User, org: Organization, membership: OrganizationMem
     }
 
 
+def _verification_payload(user: User) -> dict:
+    return {
+        "email": user.email,
+        "status": user.email_verification_status,
+        "verified_at": user.email_verified_at.isoformat() if user.email_verified_at else None,
+    }
+
+
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> dict:
     email = payload.email.lower()
@@ -103,6 +130,7 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> dict:
         email=email,
         name=payload.name,
         password_hash=pwd_context.hash(payload.password),
+        email_verification_status="unverified",
     )
     db.add(user)
     db.flush()
@@ -130,6 +158,8 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> dict:
     ensure_evaluation_context(db, org, workspace)
 
     try:
+        token = create_verification_token(db, user)
+        delivery = send_or_log_verification(db, user, token)
         db.commit()
     except IntegrityError:
         db.rollback()
@@ -137,7 +167,22 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> dict:
     db.refresh(user)
     db.refresh(org)
     db.refresh(membership)
-    return _session_response(user, org, membership)
+    return {
+        "status": "verification_required",
+        "message": "Verify your email to activate your AGRO-AI workspace.",
+        "verification": _verification_payload(user),
+        "delivery": "verification_email_sent" if delivery["provider_configured"] else "verification_request_received",
+        "user": {"id": user.id, "email": user.email, "name": user.name, "is_active": user.is_active},
+        "current_organization": {
+            "id": org.id,
+            "name": org.name,
+            "slug": org.slug,
+            "plan": org.plan,
+            "subscription_status": org.subscription_status,
+            "role": membership.role,
+        },
+        "entitlements": serialize_entitlements(org),
+    }
 
 
 @router.post("/login")
@@ -145,6 +190,14 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> dict:
     user = db.query(User).filter(User.email == payload.email.lower()).first()
     if not user or not user.password_hash or not pwd_context.verify(payload.password, user.password_hash):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+    if user.email_verification_status != "verified" or not user.email_verified_at:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "email_verification_required",
+                "message": "Verify your email to activate your AGRO-AI workspace.",
+            },
+        )
     user.last_login_at = datetime.utcnow()
     membership = (
         db.query(OrganizationMembership)
@@ -163,6 +216,30 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> dict:
 @router.post("/logout")
 def logout(_: User = Depends(get_current_user)) -> dict:
     return {"ok": True}
+
+
+@router.post("/email-verification/request")
+def request_email_verification(payload: EmailVerificationRequest, db: Session = Depends(get_db), user: User | None = Depends(get_current_user_optional)) -> dict:
+    target = user
+    if not target and payload.email:
+        target = db.query(User).filter(User.email == payload.email.lower()).first()
+    if target and (target.email_verification_status != "verified" or not target.email_verified_at):
+        token = create_verification_token(db, target)
+        send_or_log_verification(db, target, token)
+        db.commit()
+    return {"message": "If an account exists, we sent a verification email."}
+
+
+@router.post("/email-verification/confirm")
+def email_verification_confirm(payload: EmailVerificationConfirmRequest, db: Session = Depends(get_db)) -> dict:
+    user = confirm_verification(db, payload.token)
+    if not user:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification link is invalid or expired")
+    return {
+        "status": "verified",
+        "message": "Your AGRO-AI workspace email has been verified.",
+        "verification": _verification_payload(user),
+    }
 
 
 @router.get("/me")
@@ -191,4 +268,5 @@ def me(ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_d
         "plan": current["plan"] if current else None,
         "subscription_status": current["subscription_status"] if current else None,
         "entitlements": serialize_entitlements(ctx.organization) if ctx.organization else None,
+        "verification": _verification_payload(ctx.user),
     }
