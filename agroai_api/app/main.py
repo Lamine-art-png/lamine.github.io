@@ -12,6 +12,8 @@ from fastapi import Body, FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, Response
 from pydantic import BaseModel, Field
+from sqlalchemy import inspect, text
+from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import settings
 
@@ -20,9 +22,71 @@ logger = logging.getLogger(__name__)
 VERSION = "2.0.0"
 
 
+def ensure_saas_portal_runtime_schema() -> None:
+    """Repair the small v2.1 auth schema before request handling.
+
+    The portal auth routes load the SQLAlchemy User model, which includes the
+    email verification columns added in SaaS Portal v2.1. If a deployment runs
+    new code before those columns/tables exist, even a fake login can raise a
+    database-level 500 before the API can return a normal 401/403 response.
+
+    This guard is intentionally narrow, idempotent, and fast. Alembic remains the
+    source of truth; this only prevents production auth from breaking when a live
+    database is one migration behind or an earlier migration partially failed.
+    """
+
+    try:
+        from app.db.base import engine
+
+        with engine.begin() as connection:
+            inspector = inspect(connection)
+            tables = set(inspector.get_table_names())
+            if "users" not in tables:
+                return
+
+            user_columns = {column["name"] for column in inspector.get_columns("users")}
+            if "email_verified_at" not in user_columns:
+                connection.execute(text("ALTER TABLE users ADD COLUMN email_verified_at TIMESTAMP"))
+            if "email_verification_status" not in user_columns:
+                connection.execute(text("ALTER TABLE users ADD COLUMN email_verification_status VARCHAR DEFAULT 'unverified'"))
+            connection.execute(text("UPDATE users SET email_verification_status = 'unverified' WHERE email_verification_status IS NULL"))
+
+            if "email_verification_tokens" not in tables:
+                connection.execute(text("""
+                    CREATE TABLE IF NOT EXISTS email_verification_tokens (
+                        id VARCHAR PRIMARY KEY,
+                        user_id VARCHAR NOT NULL,
+                        token_hash VARCHAR NOT NULL UNIQUE,
+                        expires_at TIMESTAMP NOT NULL,
+                        used_at TIMESTAMP,
+                        created_at TIMESTAMP NOT NULL
+                    )
+                """))
+
+            if "team_invitations" not in tables:
+                connection.execute(text("""
+                    CREATE TABLE IF NOT EXISTS team_invitations (
+                        id VARCHAR PRIMARY KEY,
+                        organization_id VARCHAR NOT NULL,
+                        email VARCHAR NOT NULL,
+                        role VARCHAR NOT NULL,
+                        status VARCHAR NOT NULL,
+                        invited_by_user_id VARCHAR NOT NULL,
+                        token_hash VARCHAR UNIQUE,
+                        expires_at TIMESTAMP,
+                        created_at TIMESTAMP NOT NULL,
+                        updated_at TIMESTAMP NOT NULL
+                    )
+                """))
+    except SQLAlchemyError:
+        logger.exception("SaaS Portal v2.1 runtime schema guard failed")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup/shutdown lifecycle — starts scheduler after Alembic migrations."""
+
+    ensure_saas_portal_runtime_schema()
 
     if settings.ENABLE_SCHEDULER and settings.WISECONN_API_KEY:
         from app.core.scheduler import start_scheduler
@@ -58,9 +122,16 @@ ALLOWED_ORIGINS = [
 if getattr(settings, "APP_URL", "") and settings.APP_URL not in ALLOWED_ORIGINS:
     ALLOWED_ORIGINS.append(settings.APP_URL)
 
+# Cloudflare Pages preview deployments use generated subdomains such as:
+#   https://<hash>.agroai-portal.pages.dev
+# The production custom domain is already allowed above. This regex keeps preview
+# deployments testable without opening CORS to every origin on the internet.
+ALLOWED_ORIGIN_REGEX = r"^https://([a-z0-9-]+\.)?(agroai-portal|lamine-github-io|agroai-command-center-v2-preview)\.pages\.dev$"
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -118,7 +189,6 @@ app.include_router(workbench_router, prefix="/v1")
 
 from app.api.v1.compliance import router as compliance_router  # noqa: E402
 app.include_router(compliance_router, prefix="/v1")
-
 from app.api.v1.controllers import router as controllers_router  # noqa: E402
 app.include_router(controllers_router, prefix="/v1")
 
