@@ -1,11 +1,32 @@
 from __future__ import annotations
 
 import json
+import logging
 import smtplib
 from email.message import EmailMessage
-from urllib import request
+from email.utils import parseaddr
+from urllib import error, request
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
+
+
+def _configured_from_email() -> str:
+    return (settings.FROM_EMAIL or "").strip()
+
+
+def _from_address() -> str:
+    return parseaddr(_configured_from_email())[1] or _configured_from_email()
+
+
+def _from_domain() -> str:
+    address = _from_address()
+    return address.rsplit("@", 1)[-1].lower() if "@" in address else ""
+
+
+def _verification_base_url() -> str:
+    return (settings.RESEND_APP_URL or settings.APP_URL or "https://app.agroai-pilot.com").strip().rstrip("/")
 
 
 def delivery_status() -> dict:
@@ -23,28 +44,55 @@ def delivery_status() -> dict:
             missing.append("SENDGRID_API_KEY")
         if not settings.SMTP_HOST:
             missing.append("SMTP_HOST")
+    provider = "smtp" if smtp_ready else "resend" if resend_ready else "sendgrid" if sendgrid_ready else "none"
     return {
         "configured": configured,
-        "provider": "smtp" if smtp_ready else "resend" if resend_ready else "sendgrid" if sendgrid_ready else "none",
+        "provider": provider,
         "missing_env": sorted(set(missing)),
+        "from_email_configured": bool(settings.FROM_EMAIL),
+        "from_email_domain": _from_domain(),
+        "resend_configured": bool(settings.RESEND_API_KEY),
+        "sendgrid_configured": bool(settings.SENDGRID_API_KEY),
+        "smtp_configured": smtp_ready,
+        "resend_app_url_configured": bool(settings.RESEND_APP_URL),
+        "verification_base_url": _verification_base_url(),
     }
 
 
-def send_email(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> bool:
+def send_email(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> dict:
+    """Send one email and return a safe operational result.
+
+    This intentionally returns a dict instead of raising. Auth and onboarding
+    flows must never claim an email was sent unless the provider accepted it.
+    """
+
     status = delivery_status()
     if not status["configured"]:
-        return False
+        logger.warning("Email delivery not configured: missing=%s", status["missing_env"])
+        return {
+            "ok": False,
+            "provider": "none",
+            "reason": "email_provider_not_configured",
+            "status": status,
+        }
+
     provider = status["provider"]
-    if provider == "smtp":
-        return _send_smtp(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body)
-    if provider == "resend":
-        return _send_resend(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body)
-    if provider == "sendgrid":
-        return _send_sendgrid(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body)
-    return False
+    logger.info("Sending email through %s to %s from_domain=%s", provider, to_email, status.get("from_email_domain"))
+    try:
+        if provider == "smtp":
+            return _send_smtp(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body)
+        if provider == "resend":
+            return _send_resend(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body)
+        if provider == "sendgrid":
+            return _send_sendgrid(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body)
+    except Exception as exc:  # pragma: no cover - production network/provider path
+        logger.exception("Email delivery failed before provider response provider=%s", provider)
+        return {"ok": False, "provider": provider, "reason": exc.__class__.__name__}
+
+    return {"ok": False, "provider": provider, "reason": "unsupported_provider"}
 
 
-def _send_smtp(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> bool:
+def _send_smtp(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> dict:
     message = EmailMessage()
     message["Subject"] = subject
     message["From"] = settings.FROM_EMAIL
@@ -56,10 +104,11 @@ def _send_smtp(*, to_email: str, subject: str, text_body: str, html_body: str | 
         smtp.starttls()
         smtp.login(settings.SMTP_USERNAME, settings.SMTP_PASSWORD)
         smtp.send_message(message)
-    return True
+    logger.info("SMTP email accepted to=%s", to_email)
+    return {"ok": True, "provider": "smtp", "status_code": 250, "reason": "accepted"}
 
 
-def _send_resend(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> bool:
+def _send_resend(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> dict:
     payload = json.dumps(
         {
             "from": settings.FROM_EMAIL,
@@ -75,15 +124,39 @@ def _send_resend(*, to_email: str, subject: str, text_body: str, html_body: str 
         headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}", "Content-Type": "application/json"},
         method="POST",
     )
-    with request.urlopen(req, timeout=15) as response:
-        return 200 <= response.status < 300
+    try:
+        with request.urlopen(req, timeout=15) as response:
+            body = response.read().decode("utf-8", errors="replace")
+            ok = 200 <= response.status < 300
+            logger.info("Resend email response status=%s body=%s", response.status, body[:500])
+            return {
+                "ok": ok,
+                "provider": "resend",
+                "status_code": response.status,
+                "reason": "accepted" if ok else "provider_rejected",
+                "provider_response": body[:500],
+            }
+    except error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        logger.error("Resend email failed status=%s body=%s", exc.code, body[:1000])
+        return {
+            "ok": False,
+            "provider": "resend",
+            "status_code": exc.code,
+            "reason": "provider_rejected",
+            "provider_response": body[:1000],
+        }
+    except Exception as exc:
+        logger.exception("Resend email delivery failed before response")
+        return {"ok": False, "provider": "resend", "reason": exc.__class__.__name__}
 
 
-def _send_sendgrid(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> bool:
+def _send_sendgrid(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> dict:
+    from_address = _from_address()
     payload = json.dumps(
         {
             "personalizations": [{"to": [{"email": to_email}]}],
-            "from": {"email": settings.FROM_EMAIL},
+            "from": {"email": from_address, "name": "AGRO-AI"},
             "subject": subject,
             "content": [
                 {"type": "text/plain", "value": text_body},
@@ -97,5 +170,12 @@ def _send_sendgrid(*, to_email: str, subject: str, text_body: str, html_body: st
         headers={"Authorization": f"Bearer {settings.SENDGRID_API_KEY}", "Content-Type": "application/json"},
         method="POST",
     )
-    with request.urlopen(req, timeout=15) as response:
-        return 200 <= response.status < 300
+    try:
+        with request.urlopen(req, timeout=15) as response:
+            ok = 200 <= response.status < 300
+            logger.info("SendGrid email response status=%s", response.status)
+            return {"ok": ok, "provider": "sendgrid", "status_code": response.status, "reason": "accepted" if ok else "provider_rejected"}
+    except error.HTTPError as exc:
+        body = exc.read().decode("utf-8", errors="replace")
+        logger.error("SendGrid email failed status=%s body=%s", exc.code, body[:1000])
+        return {"ok": False, "provider": "sendgrid", "status_code": exc.code, "reason": "provider_rejected", "provider_response": body[:1000]}
