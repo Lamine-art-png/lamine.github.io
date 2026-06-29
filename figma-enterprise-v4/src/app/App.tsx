@@ -1,6 +1,7 @@
 import { RouterProvider } from "react-router";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
 import { AuthScreen } from "./components/AuthScreen";
+import { PricingPage } from "./components/ProductShell";
 import { router } from "./routes";
 
 export default function App() {
@@ -23,6 +24,9 @@ function AuthenticatedApp() {
   }
 
   if (!isAuthenticated) {
+    if (window.location.pathname === "/pricing") {
+      return <PricingPage />;
+    }
     return <AuthScreen />;
   }
 

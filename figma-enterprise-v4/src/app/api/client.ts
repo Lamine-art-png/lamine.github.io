@@ -1,12 +1,10 @@
-const isBrowser = typeof window !== "undefined";
-const isLocalFrontend =
-  isBrowser &&
-  ["localhost", "127.0.0.1", "0.0.0.0"].includes(window.location.hostname);
-
 export const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ||
   import.meta.env.VITE_API_URL ||
-  (isLocalFrontend ? "http://localhost:8000" : "https://api.agroai-pilot.com");
+  "https://api.agroai-pilot.com";
+
+export const API_BASE_URL_SOURCE =
+  import.meta.env.VITE_API_BASE_URL ? "VITE_API_BASE_URL" : import.meta.env.VITE_API_URL ? "VITE_API_URL" : "default";
 
 const tokenKey = "agroai_access_token";
 
@@ -309,7 +307,39 @@ export type SupportTicketPayload = {
   category: "support" | "integration" | "issue" | "onboarding" | "sales";
   subject: string;
   message: string;
+  name?: string;
+  email?: string;
+  company?: string;
+  role?: string;
   workspace_id?: string;
+  source_page?: string;
+};
+
+export type OnboardingPayload = {
+  current_step?: string;
+  selected_plan?: string;
+  organization_type?: string;
+  acres_or_sites?: string;
+  primary_goal?: string;
+  completed_steps?: string[];
+  workspace_id?: string;
+};
+
+export type ConversationPayload = {
+  title?: string;
+  workspace_id?: string;
+  message?: string;
+};
+
+export type ConversationMessagePayload = {
+  content: string;
+  audience?: string;
+  output?: string;
+};
+
+export type AdminRequestUpdatePayload = {
+  status?: "received" | "triaged" | "in_progress" | "waiting_on_customer" | "closed";
+  priority?: "low" | "medium" | "high" | "urgent";
 };
 
 export const apiClient = {
@@ -341,15 +371,46 @@ export const apiClient = {
   },
 
   account: {
+    me: () => get("/v1/account/me"),
     profile: () => get("/v1/account/profile"),
+    updateProfile: (payload: unknown) => patch("/v1/account/profile", payload),
     security: () => get("/v1/account/security"),
     requestEmailVerification: () => post("/v1/account/email-verification/request"),
     startTwoFactor: () => post("/v1/account/two-factor/start"),
   },
 
+  onboarding: {
+    state: () => get("/v1/onboarding/state"),
+    start: (payload?: OnboardingPayload) => post("/v1/onboarding/start", payload),
+    update: (payload: OnboardingPayload) => patch("/v1/onboarding/state", payload),
+    complete: () => post("/v1/onboarding/complete"),
+    request: (payload: SupportTicketPayload) => post("/v1/onboarding/request", payload),
+    requestHelp: (payload: unknown) => post("/v1/onboarding/request-help", payload),
+  },
+
   support: {
     options: () => get("/v1/support/options"),
     ticket: (payload: SupportTicketPayload) => post("/v1/support/ticket", payload),
+  },
+
+  sales: {
+    contact: (payload: unknown) => post("/v1/sales/contact", payload),
+    networkInquiry: (payload: unknown) => post("/v1/sales/network-inquiry", payload),
+  },
+
+  conversations: {
+    list: () => get("/v1/conversations"),
+    create: (payload: ConversationPayload) => post("/v1/conversations", payload),
+    get: (conversationId: string) => get(`/v1/conversations/${encodeURIComponent(conversationId)}`),
+    message: (conversationId: string, payload: ConversationMessagePayload) =>
+      post(`/v1/conversations/${encodeURIComponent(conversationId)}/messages`, payload),
+    delete: (conversationId: string) => remove(`/v1/conversations/${encodeURIComponent(conversationId)}`),
+  },
+
+  adminRequests: {
+    list: (type?: string) => get(`/v1/admin/requests${type ? `?type=${encodeURIComponent(type)}` : ""}`),
+    update: (requestId: string, payload: AdminRequestUpdatePayload) => patch(`/v1/admin/requests/${encodeURIComponent(requestId)}`, payload),
+    system: () => get("/v1/admin/system"),
   },
 
   orgs: {
