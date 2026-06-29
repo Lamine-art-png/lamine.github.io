@@ -35,6 +35,7 @@ export function MainLayout() {
     { name: "Billing", path: "/billing", icon: CreditCard },
     { name: "Security", path: "/security", icon: Shield },
     { name: "Support", path: "/support", icon: HelpCircle },
+    { name: "Requests", path: "/admin/requests", icon: HelpCircle },
     { name: "Admin", path: "/admin", icon: Settings },
   ];
 

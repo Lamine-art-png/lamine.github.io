@@ -1,145 +1,118 @@
-import { KeyboardEvent, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiClient, ReportFactoryPayload } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
-import { BG, BORDER, InlineState, MUTED, PortalButton, SURFACE, TEXT } from "./portalUi";
+import { usePortalResource } from "../hooks/usePortalResource";
+import { BG, BORDER, InlineState, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
 
 type AnyRecord = Record<string, any>;
-type ChatMessage = {
-  id: string;
-  role: "user" | "assistant" | "system";
-  content: string;
-  created_at?: string;
-  recommended_actions?: { id: string; label: string; action?: string }[];
-  missing_data?: unknown[];
-  evidence_used?: unknown[];
-  artifacts?: unknown[];
-};
-type Conversation = { id: string; title: string; messages?: ChatMessage[] };
 
-const suggestions = [
+const PROMPTS = [
   "What needs attention today?",
   "Generate a water risk brief.",
   "What evidence is missing?",
   "Create an operator checklist.",
   "Prepare a compliance packet.",
+  "Draft an owner update.",
 ];
 
-function text(value: unknown, fallback = "") {
+const AUDIENCES = ["operator", "manager", "owner", "agency", "lender"];
+const OUTPUTS = ["answer", "report", "checklist", "email draft"];
+
+function asArray(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function text(value: unknown, fallback = "Not available") {
   if (value === null || value === undefined || value === "") return fallback;
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
-  try { return JSON.stringify(value); } catch { return fallback; }
+  try {
+    return JSON.stringify(value);
+  } catch {
+    return fallback;
+  }
 }
 
 function reportTypeForPrompt(prompt: string): ReportFactoryPayload["report_type"] {
   const lower = prompt.toLowerCase();
-  if (lower.includes("compliance") || lower.includes("assurance") || lower.includes("packet")) return "compliance_packet";
+  if (lower.includes("compliance") || lower.includes("packet")) return "compliance_packet";
+  if (lower.includes("water")) return "water_use_summary";
   if (lower.includes("exception") || lower.includes("risk")) return "exception_report";
-  if (lower.includes("grower") || lower.includes("operator") || lower.includes("checklist")) return "grower_recommendation";
-  if (lower.includes("water use") || lower.includes("irrigation") || lower.includes("et")) return "water_use_summary";
+  if (lower.includes("operator") || lower.includes("grower") || lower.includes("checklist")) return "grower_recommendation";
   return "executive_brief";
 }
 
-function customerAnswer(response: AnyRecord) {
-  const result = response.result || response;
-  return text(result.answer || result.summary || result.executive_summary || result.message, "AGRO-AI completed the request.");
+function lastAssistant(messages: AnyRecord[]) {
+  return [...messages].reverse().find((message) => message.role === "assistant") || null;
+}
+
+function actionsFrom(message: AnyRecord | null): AnyRecord[] {
+  const first = asArray(message?.artifacts)[0] as AnyRecord | undefined;
+  return asArray(first?.actions) as AnyRecord[];
+}
+
+function List({ title, items, empty = "None yet." }: { title: string; items: unknown[]; empty?: string }) {
+  return (
+    <div className="rounded-lg p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+      <div className="text-[11px] font-semibold uppercase mb-3" style={{ color: MUTED }}>{title}</div>
+      <div className="space-y-2">
+        {items.length ? items.map((item, index) => <div key={`${title}-${index}`} className="text-[13px] leading-relaxed" style={{ color: TEXT }}>{text(item)}</div>) : <div className="text-[13px]" style={{ color: MUTED }}>{empty}</div>}
+      </div>
+    </div>
+  );
 }
 
 export function Intelligence() {
   const { currentWorkspace } = useAuth();
-  const [conversations, setConversations] = useState<Conversation[]>([]);
+  const conversationState = usePortalResource<{ conversations: AnyRecord[] }>(useCallback(() => apiClient.conversations.list(), []));
   const [conversationId, setConversationId] = useState<string>("");
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<AnyRecord[]>([]);
+  const [question, setQuestion] = useState("What needs attention today?");
   const [audience, setAudience] = useState("manager");
   const [output, setOutput] = useState("answer");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [reportPayload, setReportPayload] = useState<ReportFactoryPayload | null>(null);
+  const [reportMessage, setReportMessage] = useState("");
 
-  const sortedConversations = useMemo(() => conversations.slice(0, 8), [conversations]);
+  const conversations = conversationState.data?.conversations || [];
+  const assistant = useMemo(() => lastAssistant(messages), [messages]);
+  const artifactActions = actionsFrom(assistant);
 
-  async function refreshConversations() {
-    try {
-      const response = await apiClient.request<AnyRecord>("/v1/conversations");
-      setConversations(response.conversations || []);
-    } catch {
-      setConversations([]);
-    }
+  async function loadConversation(id: string) {
+    setConversationId(id);
+    const response = await apiClient.conversations.get(id) as AnyRecord;
+    setMessages(asArray(response.messages) as AnyRecord[]);
   }
+
+  useEffect(() => {
+    if (!conversationId && conversations[0]?.id) {
+      loadConversation(conversations[0].id).catch(() => null);
+    }
+  }, [conversationId, conversations]);
 
   async function newChat() {
-    setError("");
-    const response = await apiClient.request<AnyRecord>("/v1/conversations", { method: "POST", body: JSON.stringify({ title: "New AGRO-AI chat" }) });
-    const conversation = response.conversation as Conversation;
-    setConversationId(conversation.id);
+    setConversationId("");
     setMessages([]);
-    await refreshConversations();
+    setQuestion("What needs attention today?");
+    setReportMessage("");
   }
 
-  async function openConversation(id: string) {
-    const response = await apiClient.request<AnyRecord>(`/v1/conversations/${encodeURIComponent(id)}`);
-    setConversationId(id);
-    setMessages(response.conversation?.messages || []);
-  }
-
-  useEffect(() => { refreshConversations(); }, []);
-
-  async function sendMessage(prompt = input) {
+  async function send(prompt = question) {
     const clean = prompt.trim();
-    if (!clean || loading) return;
-    setInput("");
+    if (!clean) return;
+    setQuestion("");
     setLoading(true);
     setError("");
-
-    let activeConversationId = conversationId;
+    setReportMessage("");
     try {
-      if (!activeConversationId) {
-        const response = await apiClient.request<AnyRecord>("/v1/conversations", { method: "POST", body: JSON.stringify({ title: clean.slice(0, 80) }) });
-        activeConversationId = response.conversation.id;
-        setConversationId(activeConversationId);
-      }
-
-      const userMessage: ChatMessage = { id: `local_${Date.now()}`, role: "user", content: clean };
-      setMessages((current) => [...current, userMessage]);
-
-      const isReport = /report|pdf|brief|packet|summary/i.test(clean) || output === "report";
-      if (isReport) {
-        const payload: ReportFactoryPayload = {
-          report_type: reportTypeForPrompt(clean),
-          workspace_id: currentWorkspace?.id,
-          audience: audience === "agency" ? "agency" : audience === "operator" ? "operator" : "owner",
-        };
-        const report = await apiClient.reportFactory.generate(payload) as AnyRecord;
-        setReportPayload(payload);
-        const content = text(report.report?.executive_summary || report.report?.title || "Report preview is ready.");
-        const assistant: ChatMessage = {
-          id: `assistant_${Date.now()}`,
-          role: "assistant",
-          content,
-          recommended_actions: [
-            { id: "download_pdf", label: "Download PDF", action: "pdf" },
-            { id: "save_report", label: "Save to Reports", action: "report" },
-          ],
-          missing_data: report.report?.missing_evidence || [],
-          evidence_used: report.report?.evidence_appendix || [],
-        };
-        setMessages((current) => [...current, assistant]);
-        await apiClient.request(`/v1/conversations/${encodeURIComponent(activeConversationId)}/messages`, { method: "POST", body: JSON.stringify({ content: clean, audience, output }) });
+      if (!conversationId) {
+        const response = await apiClient.conversations.create({ title: clean.slice(0, 80), message: clean, workspace_id: currentWorkspace?.id }) as AnyRecord;
+        setConversationId(response.conversation.id);
+        setMessages(asArray(response.messages) as AnyRecord[]);
+        await conversationState.refresh();
       } else {
-        const response = await apiClient.intelligence.ask({ question: clean, workspace_id: currentWorkspace?.id, customer_mode: audience, output_format: output }) as AnyRecord;
-        const result = response.result || response;
-        const assistant: ChatMessage = {
-          id: `assistant_${Date.now()}`,
-          role: "assistant",
-          content: customerAnswer(response),
-          recommended_actions: (result.next_actions || result.recommendations || []).map((item: unknown, index: number) => ({ id: `action_${index}`, label: text(item, "Review action") })),
-          missing_data: result.what_is_missing || result.missing_data || [],
-          evidence_used: result.what_i_used || result.evidence_used || [],
-        };
-        setMessages((current) => [...current, assistant]);
-        await apiClient.request(`/v1/conversations/${encodeURIComponent(activeConversationId)}/messages`, { method: "POST", body: JSON.stringify({ content: clean, audience, output }) });
+        const response = await apiClient.conversations.message(conversationId, { content: clean, audience, output }) as AnyRecord;
+        setMessages((current) => [...current, { role: "user", content: clean }, response.message]);
       }
-      await refreshConversations();
     } catch (err) {
       setError(err instanceof Error ? err.message : "AGRO-AI could not complete the request.");
     } finally {
@@ -147,85 +120,102 @@ export function Intelligence() {
     }
   }
 
-  async function downloadPdf() {
-    if (!reportPayload) return;
-    const blob = await apiClient.reportFactory.pdf(reportPayload);
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = `agro-ai-${reportPayload.report_type}.pdf`;
-    link.click();
-    URL.revokeObjectURL(url);
-  }
-
-  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      sendMessage();
+  async function generateReport(download = false) {
+    const source = assistant?.content || question || "Draft an owner update.";
+    const payload: ReportFactoryPayload = {
+      report_type: reportTypeForPrompt(source),
+      workspace_id: currentWorkspace?.id,
+      audience: audience === "operator" ? "operator" : audience === "agency" ? "agency" : audience === "lender" ? "lender" : "owner",
+    };
+    try {
+      if (download) {
+        const blob = await apiClient.reportFactory.pdf(payload);
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `agro-ai-${payload.report_type}.pdf`;
+        link.click();
+        URL.revokeObjectURL(url);
+        setReportMessage("PDF downloaded.");
+        return;
+      }
+      await apiClient.reportFactory.generate(payload);
+      setReportMessage("Structured report ready.");
+    } catch {
+      setReportMessage(download ? "Structured report ready - PDF export needs retry." : "Report request could not be completed.");
     }
   }
 
   return (
-    <div className="flex h-[calc(100vh-0px)]" style={{ background: BG }}>
-      <aside className="hidden w-[260px] border-r lg:block" style={{ background: SURFACE, borderColor: BORDER }}>
-        <div className="p-4 border-b" style={{ borderColor: BORDER }}>
-          <button type="button" onClick={newChat} className="h-10 w-full rounded-xl text-[13px] font-semibold" style={{ background: "#050505", color: "white" }}>New chat</button>
+    <div className="min-h-screen" style={{ background: BG }}>
+      <header className="px-8 py-8" style={{ background: "#0D2B1E", borderBottom: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className="max-w-5xl">
+          <StatusBadge label="Workspace intelligence" tone="good" />
+          <h1 className="mt-4 text-[34px] font-semibold tracking-tight" style={{ color: "white" }}>Ask AGRO-AI</h1>
+          <p className="mt-3 max-w-3xl text-[14px] leading-relaxed" style={{ color: "rgba(255,255,255,0.68)" }}>
+            Ask for field priorities, water risk, evidence gaps, operator checklists, compliance packets, or owner updates.
+          </p>
         </div>
-        <div className="p-3 space-y-1 overflow-y-auto">
-          {sortedConversations.map((conversation) => (
-            <button key={conversation.id} type="button" onClick={() => openConversation(conversation.id)} className="w-full truncate rounded-lg px-3 py-2 text-left text-[13px]" style={{ background: conversation.id === conversationId ? BG : "transparent", color: TEXT }}>
-              {conversation.title || "AGRO-AI chat"}
-            </button>
-          ))}
-        </div>
-      </aside>
+      </header>
 
-      <main className="flex min-w-0 flex-1 flex-col">
-        <header className="px-8 py-6 border-b" style={{ background: SURFACE, borderColor: BORDER }}>
-          <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: TEXT }}>Ask AGRO-AI</h1>
-          <p className="mt-2 max-w-3xl text-[14px]" style={{ color: MUTED }}>Ask about field priorities, missing evidence, operator tasks, water risk, compliance packets, or reports.</p>
-        </header>
-
-        <section className="flex-1 overflow-y-auto px-8 py-6">
-          <div className="mx-auto max-w-4xl space-y-4">
-            {error ? <InlineState title={error} /> : null}
-            {!messages.length ? (
-              <div className="rounded-2xl p-8 text-center" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-                <div className="text-[22px] font-semibold" style={{ color: TEXT }}>What should AGRO-AI help you run?</div>
-                <p className="mt-2 text-[14px]" style={{ color: MUTED }}>Start with a question or choose a prompt below.</p>
-                <div className="mt-6 flex flex-wrap justify-center gap-2">{suggestions.map((item) => <button key={item} type="button" onClick={() => sendMessage(item)} className="rounded-full px-4 py-2 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>{item}</button>)}</div>
-              </div>
-            ) : null}
-
-            {messages.map((message) => (
-              <div key={message.id} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                <div className="max-w-[78%] rounded-2xl px-5 py-4 text-[14px] leading-relaxed" style={{ background: message.role === "user" ? "#0D2B1E" : SURFACE, color: message.role === "user" ? "white" : TEXT, border: message.role === "user" ? "none" : `1px solid ${BORDER}` }}>
-                  <div className="whitespace-pre-wrap">{message.content}</div>
-                  {message.role === "assistant" && message.recommended_actions?.length ? <div className="mt-4 flex flex-wrap gap-2">{message.recommended_actions.map((action) => <button key={action.id} type="button" onClick={action.action === "pdf" ? downloadPdf : undefined} className="rounded-full px-3 py-1.5 text-[12px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>{action.label}</button>)}</div> : null}
-                  {message.role === "assistant" && message.missing_data?.length ? <div className="mt-4 text-[12px]" style={{ color: MUTED }}><strong>Missing information:</strong> {message.missing_data.map(text).join(", ")}</div> : null}
-                </div>
-              </div>
+      <main className="grid gap-5 px-8 py-7" style={{ gridTemplateColumns: "280px minmax(0, 1fr)", maxWidth: 1280 }}>
+        <aside className="rounded-lg p-4 h-fit" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <PortalButton onClick={newChat}>New chat</PortalButton>
+          <div className="mt-5 text-[11px] font-semibold uppercase" style={{ color: MUTED }}>History</div>
+          <div className="mt-3 space-y-2">
+            {conversations.map((conversation) => (
+              <button key={conversation.id} onClick={() => loadConversation(conversation.id)} className="w-full rounded-lg px-3 py-2 text-left text-[12px]" style={{ background: conversationId === conversation.id ? BG : "transparent", border: `1px solid ${BORDER}`, color: TEXT }}>
+                {conversation.title}
+              </button>
             ))}
-            {loading ? <InlineState title="AGRO-AI is working…" detail="Reading workspace context and preparing a useful answer." /> : null}
+            {!conversations.length ? <div className="text-[12px]" style={{ color: MUTED }}>No conversations yet.</div> : null}
+          </div>
+        </aside>
+
+        <section className="space-y-5">
+          {error ? <InlineState title={error} /> : null}
+          {reportMessage ? <InlineState title={reportMessage} /> : null}
+
+          <div className="rounded-lg p-5 min-h-[420px]" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+            <div className="space-y-4">
+              {messages.map((message, index) => (
+                <div key={message.id || index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                  <div className="max-w-[78%] rounded-lg px-4 py-3 text-[14px] leading-relaxed whitespace-pre-wrap" style={{ background: message.role === "user" ? "#0D2B1E" : BG, color: message.role === "user" ? "white" : TEXT, border: `1px solid ${message.role === "user" ? "#0D2B1E" : BORDER}` }}>
+                    {message.content}
+                  </div>
+                </div>
+              ))}
+              {loading ? <InlineState title="AGRO-AI is preparing the response." /> : null}
+              {!messages.length && !loading ? <InlineState title="Start with a suggested prompt or ask your own question." /> : null}
+            </div>
+          </div>
+
+          {assistant ? (
+            <div className="grid gap-4 md:grid-cols-3">
+              <List title="Recommended actions" items={asArray(assistant.recommended_actions)} />
+              <List title="Missing information" items={asArray(assistant.missing_data)} />
+              <List title="Artifact actions" items={artifactActions.map((action) => action.label || action.type)} />
+            </div>
+          ) : null}
+
+          <div className="rounded-lg p-4" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+            <div className="mb-4 flex flex-wrap gap-2">
+              {PROMPTS.map((prompt) => (
+                <button key={prompt} type="button" onClick={() => send(prompt)} className="rounded-full px-3 py-2 text-[12px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>{prompt}</button>
+              ))}
+            </div>
+            <div className="grid gap-3 md:grid-cols-[1fr_160px_160px]">
+              <textarea value={question} onChange={(event) => setQuestion(event.target.value)} rows={2} placeholder="Ask AGRO-AI..." className="resize-none rounded-lg px-4 py-3 text-[14px] outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />
+              <select value={audience} onChange={(event) => setAudience(event.target.value)} className="h-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>{AUDIENCES.map((item) => <option key={item}>{item}</option>)}</select>
+              <select value={output} onChange={(event) => setOutput(event.target.value)} className="h-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>{OUTPUTS.map((item) => <option key={item}>{item}</option>)}</select>
+            </div>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <PortalButton onClick={() => send()} disabled={loading}>{loading ? "Working" : "Send"}</PortalButton>
+              <PortalButton variant="secondary" onClick={() => generateReport(false)}>Generate report</PortalButton>
+              <PortalButton variant="secondary" onClick={() => generateReport(true)}>Download PDF</PortalButton>
+            </div>
           </div>
         </section>
-
-        <footer className="border-t px-8 py-4" style={{ background: SURFACE, borderColor: BORDER }}>
-          <div className="mx-auto max-w-4xl">
-            <div className="mb-3 flex flex-wrap gap-3">
-              <select value={audience} onChange={(event) => setAudience(event.target.value)} className="h-9 rounded-lg px-3 text-[12px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
-                <option value="operator">Operator</option><option value="manager">Manager</option><option value="owner">Owner</option><option value="agency">Agency</option><option value="lender">Lender</option>
-              </select>
-              <select value={output} onChange={(event) => setOutput(event.target.value)} className="h-9 rounded-lg px-3 text-[12px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
-                <option value="answer">Answer</option><option value="report">Report</option><option value="checklist">Checklist</option><option value="email_draft">Email draft</option>
-              </select>
-            </div>
-            <div className="flex gap-3 rounded-2xl p-2" style={{ background: BG, border: `1px solid ${BORDER}` }}>
-              <textarea value={input} onChange={(event) => setInput(event.target.value)} onKeyDown={onKeyDown} rows={1} placeholder="Message AGRO-AI…" className="min-h-[44px] flex-1 resize-none bg-transparent px-3 py-3 text-[14px] outline-none" style={{ color: TEXT }} />
-              <button type="button" onClick={() => sendMessage()} disabled={loading || !input.trim()} className="h-11 rounded-xl px-5 text-[13px] font-semibold disabled:opacity-50" style={{ background: "#050505", color: "white" }}>Send</button>
-            </div>
-          </div>
-        </footer>
       </main>
     </div>
   );
