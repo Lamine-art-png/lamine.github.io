@@ -362,6 +362,23 @@ export type AdminRequestUpdatePayload = {
   priority?: "low" | "medium" | "high" | "urgent";
 };
 
+export type ConversationPayload = {
+  title?: string;
+  workspace_id?: string;
+  message?: string;
+};
+
+export type ConversationMessagePayload = {
+  content: string;
+  audience?: string;
+  output?: string;
+};
+
+export type AdminRequestUpdatePayload = {
+  status?: "received" | "triaged" | "in_progress" | "waiting_on_customer" | "closed";
+  priority?: "low" | "medium" | "high" | "urgent";
+};
+
 export const apiClient = {
   get,
   post,

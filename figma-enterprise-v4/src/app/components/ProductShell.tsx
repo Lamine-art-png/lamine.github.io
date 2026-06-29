@@ -191,6 +191,7 @@ export function PricingPage() {
         return;
       }
       setMessage(String(response.message || "Upgrade request received."));
+      setMessage(`${safe(response.message, "Upgrade request received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Upgrade request received.");
     }
@@ -199,6 +200,8 @@ export function PricingPage() {
   return (
     <Page title="AGRO-AI pricing" subtitle="A new kind of agricultural intelligence is here. Scale from pilot workspaces to operating teams, grower networks, and enterprise programs.">
       <div className="inline-flex rounded-xl p-1" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+    <Page title="AGRO-AI pricing" subtitle="Start with a field operating workspace. Scale to networks, agencies, and multi-farm organizations.">
+      <div className="inline-flex rounded-lg p-1" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
         {(["monthly", "annual"] as const).map((period) => (
           <button key={period} type="button" onClick={() => setBillingPeriod(period)} className="rounded-lg px-4 py-2 text-[13px] font-medium capitalize" style={{ background: billingPeriod === period ? GREEN : "transparent", color: billingPeriod === period ? "white" : TEXT }}>
             {period}
@@ -231,6 +234,9 @@ export function ProfilePage() {
   const save = async () => {
     await apiClient.account.updateProfile({ name: name || user.name });
     setMessage("Profile updated.");
+    const response = await apiClient.account.updateProfile({ name: name || user.name }) as Record<string, unknown>;
+    setMessage("Profile updated.");
+    setName(String(((response.user || {}) as Record<string, unknown>).name || ""));
     await profileState.refresh();
   };
 
@@ -244,7 +250,25 @@ export function ProfilePage() {
         </label>
         <Row label="Email" value={user.email} />
         <Row label="Organization" value={organization.name} />
+    <Page title="Profile" subtitle="Manage your account, organization, workspace, plan, security, and requests.">
+      {message ? <div className="rounded-lg px-4 py-3 text-[13px]" style={{ background: "#F0FDF4", color: "#15803D", border: "1px solid #BBF7D0" }}>{message}</div> : null}
+      <Panel title="Personal profile" action={<PortalButton onClick={save}>Save profile</PortalButton>}>
+        <label className="block text-[12px] mb-4" style={{ color: MUTED }}>
+          Name
+          <input value={name || String(user.name || "")} onChange={(event) => setName(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />
+        </label>
+        <Row label="Name" value={user.name} />
+        <Row label="Email" value={user.email} />
+      </Panel>
+      <Panel title="Organization">
+        <Row label="Company" value={organization.name} />
+        <Row label="Role" value={profile.role} />
+      </Panel>
+      <Panel title="Workspace">
         <Row label="Workspace" value={workspace.name} />
+        <Row label="Mode" value={workspace.mode === "live" ? "Live operations" : "Evaluation workspace"} />
+      </Panel>
+      <Panel title="Plan">
         <Row label="Plan" value={plan.name} />
       </Panel>
     </Page>
@@ -321,6 +345,11 @@ export function BillingPage() {
             </div>
           ))}
         </div>
+      </Panel>
+      <Panel title="Invoices">
+        <p className="text-[13px]" style={{ color: MUTED }}>
+          Invoices will appear here when live billing has started.
+        </p>
       </Panel>
     </Page>
   );
@@ -431,6 +460,89 @@ export function AdminRequestsPage() {
             </div>
           ) : (
             <p className="text-[13px]" style={{ color: MUTED }}>Select a request to review its details.</p>
+          )}
+        </Panel>
+      </div>
+    </Page>
+  );
+}
+
+type AdminRequest = {
+  id: string;
+  type: string;
+  priority: "low" | "medium" | "high" | "urgent";
+  company?: string;
+  subject: string;
+  requester?: string;
+  status: "received" | "triaged" | "in_progress" | "waiting_on_customer" | "closed";
+  created_at?: string;
+  source_page?: string;
+  message?: string;
+};
+
+export function AdminRequestsPage() {
+  const [tab, setTab] = useState("all");
+  const [selected, setSelected] = useState<AdminRequest | null>(null);
+  const requestState = usePortalResource<{ requests: AdminRequest[] }>(
+    useCallback(() => apiClient.adminRequests.list(tab === "all" ? undefined : tab), [tab]),
+  );
+  const requests = requestState.data?.requests || [];
+  const tabs = [
+    ["all", "All"],
+    ["support", "Support"],
+    ["sales", "Sales"],
+    ["integration", "Integrations"],
+    ["onboarding", "Onboarding"],
+    ["bug", "Bugs"],
+    ["upgrade", "Upgrade requests"],
+  ];
+
+  const update = async (request: AdminRequest, status: AdminRequest["status"]) => {
+    await apiClient.adminRequests.update(request.id, { status });
+    setSelected({ ...request, status });
+    await requestState.refresh();
+  };
+
+  return (
+    <Page title="Requests" subtitle="Track support, sales, onboarding, integrations, bugs, and upgrade requests.">
+      <div className="flex flex-wrap gap-2">
+        {tabs.map(([value, label]) => (
+          <button key={value} type="button" onClick={() => setTab(value)} className="rounded-lg px-3 py-2 text-[12px] font-medium" style={{ background: tab === value ? GREEN : SURFACE, color: tab === value ? "white" : TEXT, border: `1px solid ${BORDER}` }}>{label}</button>
+        ))}
+      </div>
+      <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
+        <section className="rounded-lg overflow-hidden" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <div className="grid grid-cols-[110px_90px_1fr_150px_120px_120px] gap-3 px-4 py-3 text-[11px] font-semibold uppercase" style={{ color: MUTED, borderBottom: `1px solid ${BORDER}` }}>
+            <span>Type</span><span>Priority</span><span>Subject</span><span>Requester</span><span>Status</span><span>Created</span>
+          </div>
+          {requests.map((request) => (
+            <button key={request.id} type="button" onClick={() => setSelected(request)} className="grid w-full grid-cols-[110px_90px_1fr_150px_120px_120px] gap-3 px-4 py-3 text-left text-[12px]" style={{ color: TEXT, borderBottom: `1px solid ${BORDER}` }}>
+              <span>{request.type}</span>
+              <span>{request.priority}</span>
+              <span className="font-medium">{request.subject}</span>
+              <span>{request.requester || request.company || "Customer"}</span>
+              <span>{request.status.replaceAll("_", " ")}</span>
+              <span>{request.created_at ? new Date(request.created_at).toLocaleDateString() : "Today"}</span>
+            </button>
+          ))}
+          {!requests.length ? <div className="p-6 text-[13px]" style={{ color: MUTED }}>No requests in this view.</div> : null}
+        </section>
+        <Panel title="Request detail">
+          {selected ? (
+            <div className="space-y-3 text-[13px]">
+              <Row label="Type" value={selected.type} />
+              <Row label="Company" value={selected.company} />
+              <Row label="Requester" value={selected.requester} />
+              <Row label="Source" value={selected.source_page} />
+              <p className="leading-relaxed" style={{ color: MUTED }}>{selected.message}</p>
+              <div className="flex flex-wrap gap-2 pt-3">
+                {(["triaged", "in_progress", "waiting_on_customer", "closed"] as const).map((status) => (
+                  <PortalButton key={status} variant="secondary" onClick={() => update(selected, status)}>{status.replaceAll("_", " ")}</PortalButton>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <p className="text-[13px]" style={{ color: MUTED }}>Select a request to review and update status.</p>
           )}
         </Panel>
       </div>

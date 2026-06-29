@@ -114,6 +114,13 @@ export function Intelligence() {
     } finally {
       setLoading(false);
     }
+  }, [conversationId, conversations]);
+
+  async function newChat() {
+    setConversationId("");
+    setMessages([]);
+    setQuestion("What needs attention today?");
+    setReportMessage("");
   }
 
   async function generateReport(download = false) {
