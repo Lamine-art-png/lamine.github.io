@@ -96,14 +96,18 @@ class Settings(BaseSettings):
     STRIPE_PRICE_PRO: str = ""
     STRIPE_PRICE_ENTERPRISE: str = ""
 
-    # Email delivery
+    # Email delivery and verification operations.
+    # RESEND_APP_URL is intentionally separate from APP_URL so verification
+    # links can be routed without disturbing other portal/runtime config.
     RESEND_API_KEY: str = ""
+    RESEND_APP_URL: str = ""
     SENDGRID_API_KEY: str = ""
     SMTP_HOST: str = ""
     SMTP_PORT: int = 587
     SMTP_USERNAME: str = ""
     SMTP_PASSWORD: str = ""
     FROM_EMAIL: str = ""
+    EMAIL_ADMIN_TOKEN: str = ""
 
     # AI gateway. Leave unset to keep startup safe and return deterministic
     # unavailable responses instead of fabricated model output.
