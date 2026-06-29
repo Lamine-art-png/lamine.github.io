@@ -1,12 +1,13 @@
 from __future__ import annotations
 
+import logging
 import re
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from passlib.context import CryptContext
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.api.deps import AuthContext, get_auth_context, get_current_user, get_current_user_optional
@@ -19,6 +20,9 @@ from app.services.evaluation_seed import ensure_evaluation_context
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+logger = logging.getLogger(__name__)
+
+GENERIC_VERIFICATION_MESSAGE = "If an account exists, we sent a verification email."
 
 
 class RegisterRequest(BaseModel):
@@ -120,6 +124,20 @@ def _verification_payload(user: User) -> dict:
     }
 
 
+def _best_effort_send_verification(db: Session, user: User) -> dict:
+    """Create/send a verification token without letting delivery issues break auth UX."""
+
+    try:
+        token = create_verification_token(db, user)
+        delivery = send_or_log_verification(db, user, token)
+        db.commit()
+        return delivery
+    except Exception:
+        db.rollback()
+        logger.exception("Email verification delivery failed for user_id=%s", getattr(user, "id", None))
+        return {"delivery": "received", "provider_configured": False}
+
+
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> dict:
     email = payload.email.lower()
@@ -158,20 +176,21 @@ def register(payload: RegisterRequest, db: Session = Depends(get_db)) -> dict:
     ensure_evaluation_context(db, org, workspace)
 
     try:
-        token = create_verification_token(db, user)
-        delivery = send_or_log_verification(db, user, token)
         db.commit()
     except IntegrityError:
         db.rollback()
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Registration could not be completed")
+
     db.refresh(user)
     db.refresh(org)
     db.refresh(membership)
+    delivery = _best_effort_send_verification(db, user)
+    db.refresh(user)
     return {
         "status": "verification_required",
         "message": "Verify your email to activate your AGRO-AI workspace.",
         "verification": _verification_payload(user),
-        "delivery": "verification_email_sent" if delivery["provider_configured"] else "verification_request_received",
+        "delivery": "verification_email_sent" if delivery.get("provider_configured") else "verification_request_received",
         "user": {"id": user.id, "email": user.email, "name": user.name, "is_active": user.is_active},
         "current_organization": {
             "id": org.id,
@@ -220,14 +239,16 @@ def logout(_: User = Depends(get_current_user)) -> dict:
 
 @router.post("/email-verification/request")
 def request_email_verification(payload: EmailVerificationRequest, db: Session = Depends(get_db), user: User | None = Depends(get_current_user_optional)) -> dict:
-    target = user
-    if not target and payload.email:
-        target = db.query(User).filter(User.email == payload.email.lower()).first()
-    if target and (target.email_verification_status != "verified" or not target.email_verified_at):
-        token = create_verification_token(db, target)
-        send_or_log_verification(db, target, token)
-        db.commit()
-    return {"message": "If an account exists, we sent a verification email."}
+    try:
+        target = user
+        if not target and payload.email:
+            target = db.query(User).filter(User.email == payload.email.lower()).first()
+        if target and (target.email_verification_status != "verified" or not target.email_verified_at):
+            _best_effort_send_verification(db, target)
+    except (SQLAlchemyError, Exception):
+        db.rollback()
+        logger.exception("Email verification resend failed")
+    return {"message": GENERIC_VERIFICATION_MESSAGE}
 
 
 @router.post("/email-verification/confirm")
