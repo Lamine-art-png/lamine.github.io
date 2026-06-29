@@ -23,17 +23,7 @@ VERSION = "2.0.0"
 
 
 def ensure_saas_portal_runtime_schema() -> None:
-    """Repair the small v2.1 auth schema before request handling.
-
-    The portal auth routes load the SQLAlchemy User model, which includes the
-    email verification columns added in SaaS Portal v2.1. If a deployment runs
-    new code before those columns/tables exist, even a fake login can raise a
-    database-level 500 before the API can return a normal 401/403 response.
-
-    This guard is intentionally narrow, idempotent, and fast. Alembic remains the
-    source of truth; this only prevents production auth from breaking when a live
-    database is one migration behind or an earlier migration partially failed.
-    """
+    """Repair the small v2.1 auth schema before request handling."""
 
     try:
         from app.db.base import engine
@@ -122,10 +112,6 @@ ALLOWED_ORIGINS = [
 if getattr(settings, "APP_URL", "") and settings.APP_URL not in ALLOWED_ORIGINS:
     ALLOWED_ORIGINS.append(settings.APP_URL)
 
-# Cloudflare Pages preview deployments use generated subdomains such as:
-#   https://<hash>.agroai-portal.pages.dev
-# The production custom domain is already allowed above. This regex keeps preview
-# deployments testable without opening CORS to every origin on the internet.
 ALLOWED_ORIGIN_REGEX = r"^https://([a-z0-9-]+\.)?(agroai-portal|lamine-github-io|agroai-command-center-v2-preview)\.pages\.dev$"
 
 app.add_middleware(
@@ -155,6 +141,25 @@ async def health_root() -> Dict[str, str]:
 @app.get("/v1/health")
 async def health_v1() -> Dict[str, str]:
     return await health_payload()
+
+
+@app.get("/v1/auth/email-delivery/status")
+async def email_delivery_runtime_status() -> Dict[str, Any]:
+    from app.services.email_delivery import delivery_status
+
+    current = delivery_status()
+    return {
+        "configured": current.get("configured"),
+        "provider": current.get("provider"),
+        "missing_env": current.get("missing_env", []),
+        "from_email_configured": current.get("from_email_configured"),
+        "from_email_domain": current.get("from_email_domain"),
+        "resend_configured": current.get("resend_configured"),
+        "sendgrid_configured": current.get("sendgrid_configured"),
+        "smtp_configured": current.get("smtp_configured"),
+        "resend_app_url_configured": current.get("resend_app_url_configured"),
+        "verification_base_url": current.get("verification_base_url"),
+    }
 
 
 from app.api.v1.auth import router as auth_router  # noqa: E402
@@ -218,30 +223,3 @@ app.include_router(operator_cockpit_router, prefix="/v1")
 
 from app.api.v1.field_operations import router as field_operations_router  # noqa: E402
 app.include_router(field_operations_router, prefix="/v1")
-
-from app.api.v1.product_shell import router as product_shell_router  # noqa: E402
-app.include_router(product_shell_router, prefix="/v1")
-
-from app.api.v1.evaluation import legacy_router as evaluation_legacy_router, router as evaluation_router  # noqa: E402
-app.include_router(evaluation_router)
-app.include_router(evaluation_legacy_router)
-
-from app.core.metrics import metrics_endpoint  # noqa: E402
-app.get("/metrics")(metrics_endpoint)
-
-import time  # noqa: E402
-from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
-from starlette.requests import Request  # noqa: E402
-from app.core.metrics import api_requests, api_latency  # noqa: E402
-
-
-class MetricsMiddleware(BaseHTTPMiddleware):
-    async def dispatch(self, request: Request, call_next):
-        start = time.time()
-        response = await call_next(request)
-        elapsed = time.time() - start
-        endpoint = request.url.path
-        method = request.method
-        api_requests.labels(method=method, endpoint=endpoint, status=response.status_code).inc()
-        api_latency.labels(method=method, endpoint=endpoint).observe(elapsed)
-        return response
