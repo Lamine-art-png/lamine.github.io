@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import secrets
 from datetime import datetime, timedelta
 from html import escape
@@ -29,6 +30,16 @@ def create_verification_token(db: Session, user: User) -> str:
     db.add(row)
     db.flush()
     return token
+
+
+def verification_base_url() -> str:
+    """Return the public portal URL used in verification links.
+
+    RESEND_APP_URL is intentionally supported so email/link routing can be
+    configured independently from the main portal APP_URL used elsewhere.
+    """
+
+    return (os.getenv("RESEND_APP_URL") or settings.APP_URL or "https://app.agroai-pilot.com").strip().rstrip("/")
 
 
 def _verification_email_html(*, verification_url: str) -> str:
@@ -80,7 +91,7 @@ def _verification_email_html(*, verification_url: str) -> str:
 
 def send_or_log_verification(db: Session, user: User, token: str) -> dict:
     status = delivery_status()
-    verification_url = f"{settings.APP_URL.rstrip('/')}/verify-email?token={token}"
+    verification_url = f"{verification_base_url()}/verify-email?token={token}"
     subject = "Confirm your AGRO-AI email address"
     body = (
         "Confirm your email address to activate your AGRO-AI Enterprise Portal workspace.\n\n"
