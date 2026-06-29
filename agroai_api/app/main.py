@@ -22,8 +22,19 @@ logger = logging.getLogger(__name__)
 VERSION = "2.0.0"
 
 
+def _ensure_column(connection, inspector, table: str, column: str, ddl: str) -> None:
+    columns = {item["name"] for item in inspector.get_columns(table)}
+    if column not in columns:
+        connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {ddl}"))
+
+
 def ensure_saas_portal_runtime_schema() -> None:
-    """Repair the small v2.1 auth schema before request handling."""
+    """Repair the small v2.1 auth schema before request handling.
+
+    Alembic remains the source of truth. This is an emergency runtime guard for
+    production so auth/email verification does not fail when a Render startup
+    migration was partial, skipped, or blocked by existing objects.
+    """
 
     try:
         from app.db.base import engine
@@ -34,13 +45,12 @@ def ensure_saas_portal_runtime_schema() -> None:
             if "users" not in tables:
                 return
 
-            user_columns = {column["name"] for column in inspector.get_columns("users")}
-            if "email_verified_at" not in user_columns:
-                connection.execute(text("ALTER TABLE users ADD COLUMN email_verified_at TIMESTAMP"))
-            if "email_verification_status" not in user_columns:
-                connection.execute(text("ALTER TABLE users ADD COLUMN email_verification_status VARCHAR DEFAULT 'unverified'"))
+            _ensure_column(connection, inspector, "users", "email_verified_at", "email_verified_at TIMESTAMP")
+            inspector = inspect(connection)
+            _ensure_column(connection, inspector, "users", "email_verification_status", "email_verification_status VARCHAR DEFAULT 'unverified'")
             connection.execute(text("UPDATE users SET email_verification_status = 'unverified' WHERE email_verification_status IS NULL"))
 
+            tables = set(inspect(connection).get_table_names())
             if "email_verification_tokens" not in tables:
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS email_verification_tokens (
@@ -52,7 +62,20 @@ def ensure_saas_portal_runtime_schema() -> None:
                         created_at TIMESTAMP NOT NULL
                     )
                 """))
+            else:
+                inspector = inspect(connection)
+                for column, ddl in [
+                    ("id", "id VARCHAR"),
+                    ("user_id", "user_id VARCHAR"),
+                    ("token_hash", "token_hash VARCHAR"),
+                    ("expires_at", "expires_at TIMESTAMP"),
+                    ("used_at", "used_at TIMESTAMP"),
+                    ("created_at", "created_at TIMESTAMP"),
+                ]:
+                    _ensure_column(connection, inspector, "email_verification_tokens", column, ddl)
+                    inspector = inspect(connection)
 
+            tables = set(inspect(connection).get_table_names())
             if "team_invitations" not in tables:
                 connection.execute(text("""
                     CREATE TABLE IF NOT EXISTS team_invitations (
@@ -68,6 +91,22 @@ def ensure_saas_portal_runtime_schema() -> None:
                         updated_at TIMESTAMP NOT NULL
                     )
                 """))
+            else:
+                inspector = inspect(connection)
+                for column, ddl in [
+                    ("id", "id VARCHAR"),
+                    ("organization_id", "organization_id VARCHAR"),
+                    ("email", "email VARCHAR"),
+                    ("role", "role VARCHAR"),
+                    ("status", "status VARCHAR"),
+                    ("invited_by_user_id", "invited_by_user_id VARCHAR"),
+                    ("token_hash", "token_hash VARCHAR"),
+                    ("expires_at", "expires_at TIMESTAMP"),
+                    ("created_at", "created_at TIMESTAMP"),
+                    ("updated_at", "updated_at TIMESTAMP"),
+                ]:
+                    _ensure_column(connection, inspector, "team_invitations", column, ddl)
+                    inspector = inspect(connection)
     except SQLAlchemyError:
         logger.exception("SaaS Portal v2.1 runtime schema guard failed")
 
@@ -164,53 +203,73 @@ async def email_delivery_runtime_status() -> Dict[str, Any]:
 
 @app.post("/v1/auth/email-verification/request")
 async def email_verification_request_runtime(payload: Dict[str, Any] = Body(default_factory=dict)) -> Dict[str, Any]:
-    """Operational override for verification email delivery.
+    """Operational resend route with truthful provider status."""
 
-    This route is registered before the older auth router so the portal gets a
-    truthful delivery response and the backend always reaches the Resend send
-    path for existing unverified accounts.
-    """
-
+    stage = "validate_email"
     email = str(payload.get("email") or "").strip().lower()
     if not email or "@" not in email or "." not in email.rsplit("@", 1)[-1]:
         raise HTTPException(status_code=422, detail="valid email required")
 
     from app.db.base import SessionLocal
     from app.models.saas import User
-    from app.services.email_verification import create_verification_token, send_or_log_verification
+    from app.services.email_delivery import send_email
+    from app.services.email_verification import _verification_email_html, create_verification_token, verification_base_url
 
     db = SessionLocal()
     try:
+        stage = "schema_guard"
+        ensure_saas_portal_runtime_schema()
+
+        stage = "find_user"
         user = db.query(User).filter(User.email == email).first()
         if not user:
             return {
                 "message": "If an account exists, we processed the verification request.",
-                "delivery": {"delivery": "unknown", "provider": "none", "reason": "account_not_found"},
+                "delivery": {"delivery": "unknown", "provider": "none", "reason": "account_not_found", "stage": stage},
             }
         if user.email_verification_status == "verified" and user.email_verified_at:
             return {
                 "message": "This account is already verified.",
-                "delivery": {"delivery": "not_needed", "provider": "none", "reason": "already_verified"},
+                "delivery": {"delivery": "not_needed", "provider": "none", "reason": "already_verified", "stage": stage},
             }
+
+        stage = "create_token"
         token = create_verification_token(db, user)
-        delivery = send_or_log_verification(db, user, token)
         db.commit()
-        state = delivery.get("delivery")
-        if state == "sent":
-            message = "We sent a verification link to your email."
-        elif state == "failed":
-            message = "Email verification is required, but the email provider did not accept the message."
-        elif state == "not_configured":
-            message = "Email verification is required, but delivery is not configured yet."
-        else:
-            message = "If an account exists, we processed the verification request."
-        return {"message": message, "delivery": delivery}
+
+        stage = "send_email"
+        verification_url = f"{verification_base_url()}/verify-email?token={token}"
+        result = send_email(
+            to_email=user.email,
+            subject="Confirm your AGRO-AI email address",
+            text_body=(
+                "Confirm your email address to activate your AGRO-AI Enterprise Portal workspace.\n\n"
+                f"Open this link: {verification_url}\n\n"
+                "This link expires in 24 hours."
+            ),
+            html_body=_verification_email_html(verification_url=verification_url),
+        )
+        if result.get("ok"):
+            return {
+                "message": "We sent a verification link to your email.",
+                "delivery": {"delivery": "sent", "provider": result.get("provider"), "status_code": result.get("status_code"), "reason": "accepted", "stage": stage},
+            }
+        return {
+            "message": "Email verification is required, but the email provider did not accept the message.",
+            "delivery": {
+                "delivery": "failed",
+                "provider": result.get("provider") or "none",
+                "status_code": result.get("status_code"),
+                "reason": result.get("reason") or "provider_failed",
+                "stage": stage,
+            },
+        }
     except Exception as exc:
         db.rollback()
-        logger.exception("Verification email operational route failed")
+        logger.exception("Verification email operational route failed stage=%s", stage)
         return {
             "message": "Email verification is required, but the verification email could not be sent.",
-            "delivery": {"delivery": "failed", "provider": "none", "reason": exc.__class__.__name__},
+            "delivery": {"delivery": "failed", "provider": "none", "reason": exc.__class__.__name__, "stage": stage},
         }
     finally:
         db.close()
