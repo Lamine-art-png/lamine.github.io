@@ -162,6 +162,60 @@ async def email_delivery_runtime_status() -> Dict[str, Any]:
     }
 
 
+@app.post("/v1/auth/email-verification/request")
+async def email_verification_request_runtime(payload: Dict[str, Any] = Body(default_factory=dict)) -> Dict[str, Any]:
+    """Operational override for verification email delivery.
+
+    This route is registered before the older auth router so the portal gets a
+    truthful delivery response and the backend always reaches the Resend send
+    path for existing unverified accounts.
+    """
+
+    email = str(payload.get("email") or "").strip().lower()
+    if not email or "@" not in email or "." not in email.rsplit("@", 1)[-1]:
+        raise HTTPException(status_code=422, detail="valid email required")
+
+    from app.db.base import SessionLocal
+    from app.models.saas import User
+    from app.services.email_verification import create_verification_token, send_or_log_verification
+
+    db = SessionLocal()
+    try:
+        user = db.query(User).filter(User.email == email).first()
+        if not user:
+            return {
+                "message": "If an account exists, we processed the verification request.",
+                "delivery": {"delivery": "unknown", "provider": "none", "reason": "account_not_found"},
+            }
+        if user.email_verification_status == "verified" and user.email_verified_at:
+            return {
+                "message": "This account is already verified.",
+                "delivery": {"delivery": "not_needed", "provider": "none", "reason": "already_verified"},
+            }
+        token = create_verification_token(db, user)
+        delivery = send_or_log_verification(db, user, token)
+        db.commit()
+        state = delivery.get("delivery")
+        if state == "sent":
+            message = "We sent a verification link to your email."
+        elif state == "failed":
+            message = "Email verification is required, but the email provider did not accept the message."
+        elif state == "not_configured":
+            message = "Email verification is required, but delivery is not configured yet."
+        else:
+            message = "If an account exists, we processed the verification request."
+        return {"message": message, "delivery": delivery}
+    except Exception as exc:
+        db.rollback()
+        logger.exception("Verification email operational route failed")
+        return {
+            "message": "Email verification is required, but the verification email could not be sent.",
+            "delivery": {"delivery": "failed", "provider": "none", "reason": exc.__class__.__name__},
+        }
+    finally:
+        db.close()
+
+
 from app.api.v1.auth import router as auth_router  # noqa: E402
 from app.api.v1.billing import router as billing_router  # noqa: E402
 
