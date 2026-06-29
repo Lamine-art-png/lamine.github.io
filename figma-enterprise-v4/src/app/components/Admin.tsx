@@ -1,4 +1,5 @@
-import { useCallback } from "react";
+import { useCallback, useState } from "react";
+import { ChevronDown, ChevronUp } from "lucide-react";
 import { apiClient } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { usePortalResource } from "../hooks/usePortalResource";
@@ -11,116 +12,112 @@ function safe(value: unknown, fallback = "—") {
 }
 
 export function Admin() {
-  const { user, currentOrganization, currentWorkspace } = useAuth();
-  const aiState = usePortalResource<Record<string, unknown>>(useCallback(() => apiClient.ai.status(), []));
-  const systemState = usePortalResource<Record<string, unknown>>(useCallback(() => apiClient.adminRequests.system(), []));
-  const ai = aiState.data || {};
-  const system = systemState.data || {};
-  const cloudflare = (system.cloudflare || {}) as Record<string, unknown>;
+  const { currentOrganization, entitlements } = useAuth();
+  const canAccessAdminRequests = Boolean(entitlements.can_access_admin_requests);
 
   return (
     <div className="min-h-screen" style={{ background: BG }}>
       <header className="px-8 py-7" style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}>
         <div className="flex items-start justify-between gap-6">
           <div>
-            <div className="flex items-center gap-2 mb-3">
+            <div className="mb-3 flex items-center gap-2">
               <StatusBadge label="Admin" tone="neutral" />
               <StatusBadge label="Workspace controls" tone="good" />
             </div>
-            <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: TEXT }}>System Administration</h1>
+            <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: TEXT }}>Administration</h1>
             <p className="mt-2 max-w-2xl text-[14px] leading-relaxed" style={{ color: MUTED }}>
-              Manage workspace configuration, connected systems, billing readiness, and administrative controls.
+              Coordinate workspace operations, routing, and escalation from one clean administrative surface.
             </p>
           </div>
-          <PortalButton onClick={() => window.location.assign("/integrations")}>Set up connectors</PortalButton>
+          <PortalButton onClick={() => window.location.assign("/admin/system")}>Open System Health</PortalButton>
         </div>
       </header>
 
-      <main className="px-8 py-6 space-y-5" style={{ maxWidth: 1100 }}>
+      <main className="space-y-5 px-8 py-6" style={{ maxWidth: 1100 }}>
         <section className="grid grid-cols-3 gap-5">
           <Card title="Organization" rows={[
-            ["Name", safe(currentOrganization?.name, "AGRO-AI")],
-            ["User", safe(user?.email, "Authenticated user")],
+            ["Organization", safe(currentOrganization?.name, "AGRO-AI")],
             ["Plan", safe(currentOrganization?.plan, "free")],
+            ["Status", safe(currentOrganization?.subscription_status, "inactive")],
           ]} />
-
-          <Card title="Workspace" rows={[
-            ["Active workspace", safe(currentWorkspace?.name, "Workspace")],
-            ["Mode", safe(currentWorkspace?.status || currentWorkspace?.evaluation_status, "Evaluation")],
-            ["Live sync", "Credential-gated"],
+          <Card title="Team operations" rows={[
+            ["Invites", Boolean(entitlements.can_invite_team) ? "Available" : "Upgrade to Team"],
+            ["Admin requests", canAccessAdminRequests ? "Available" : "Upgrade to Team"],
+            ["Network rollups", Boolean(entitlements.can_access_network_rollups) ? "Available" : "Upgrade to Network"],
           ]} />
-
-          <Card title="Feature gates" rows={[
-            ["Connectors", "Unlocked"],
-            ["Reports", "Unlocked"],
-            ["Ask AGRO-AI", "Unlocked"],
+          <Card title="Support" rows={[
+            ["Support level", safe(entitlements.support_level, "basic")],
+            ["Security", Boolean(entitlements.can_access_enterprise_security) ? "Enterprise controls" : "Standard controls"],
+            ["Workspace routing", "Organization scoped"],
           ]} />
         </section>
 
         <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-          <div className="flex items-start justify-between gap-4 mb-4">
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: MUTED }}>Intelligence backend</div>
-              <h2 className="text-[20px] font-semibold" style={{ color: TEXT }}>Model runtime</h2>
+          <div className="mb-4 text-[10px] font-semibold uppercase tracking-widest" style={{ color: MUTED }}>Administrative focus</div>
+          <div className="grid gap-4 md:grid-cols-2">
+            {[
+              "Build trusted reports from real field proof.",
+              "Coordinate field teams, water risk, compliance evidence, and executive reporting.",
+              "Turn agricultural evidence into decisions.",
+              "Operate fields, evidence, water risk, and reports from one secure workspace.",
+            ].map((line) => (
+              <div key={line} className="rounded-xl p-4 text-[13px] leading-6" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
+                {line}
+              </div>
+            ))}
+          </div>
+        </section>
+      </main>
+    </div>
+  );
+}
+
+export function SystemHealthPage() {
+  const state = usePortalResource<Record<string, unknown>>(useCallback(() => apiClient.adminRequests.system(), []));
+  const [open, setOpen] = useState(false);
+  const data = state.data || {};
+  const technical = (data.technical_details || {}) as Record<string, unknown>;
+
+  return (
+    <div className="min-h-screen" style={{ background: BG }}>
+      <header className="px-8 py-7" style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}>
+        <div className="flex items-start justify-between gap-6">
+          <div>
+            <div className="mb-3 flex items-center gap-2">
+              <StatusBadge label="System Health" tone="good" />
+              <StatusBadge label="Owner or admin only" tone="neutral" />
             </div>
-            <PortalButton variant="secondary" onClick={aiState.refresh}>Refresh</PortalButton>
+            <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: TEXT }}>System Health</h1>
+            <p className="mt-2 max-w-2xl text-[14px] leading-relaxed" style={{ color: MUTED }}>
+              Review release status, service readiness, and production setup without exposing technical runtime language in the main customer workspace.
+            </p>
           </div>
-          <div className="grid grid-cols-3 gap-5">
-            <Card title="Status" rows={[
-              ["Configured", safe(ai.configured, "false")],
-              ["Provider", safe(ai.provider, "offline")],
-              ["Mode", safe(ai.mode, "offline")],
-            ]} />
-            <Card title="Model" rows={[
-              ["Model", safe(ai.model, "Not configured")],
-              ["Fallback active", safe(ai.fallback_active, "true")],
-              ["Base URL", safe(ai.base_url_present, "false")],
-            ]} />
-            <Card title="Missing env" rows={[
-              ["Required values", Array.isArray(ai.missing_env) && ai.missing_env.length ? String(ai.missing_env.join(", ")) : "None"],
-              ["Verification", aiState.error ? aiState.error : "Status endpoint healthy"],
-              ["Action", "Test from Intelligence panel"],
-            ]} />
-          </div>
+          <PortalButton variant="secondary" onClick={state.refresh}>Refresh</PortalButton>
+        </div>
+      </header>
+
+      <main className="space-y-5 px-8 py-6" style={{ maxWidth: 1100 }}>
+        <section className="grid grid-cols-2 gap-5 md:grid-cols-3">
+          <Card title="Core services" rows={[["API", safe(data.api)], ["Intelligence", safe(data.intelligence)], ["Billing", safe(data.billing)]]} />
+          <Card title="Delivery" rows={[["Email delivery", safe(data.email_delivery)], ["Frontend release", safe(data.frontend_release)], ["Backend release", safe(data.backend_release)]]} />
+          <Card title="Observability" rows={[["Last checked", safe(data.last_checked_at)], ["Status endpoint", state.error ? state.error : "Healthy"], ["Workspace access", "Owner and admin scoped"]]} />
         </section>
 
         <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-          <div className="flex items-start justify-between gap-4 mb-4">
+          <button type="button" onClick={() => setOpen((value) => !value)} className="flex w-full items-center justify-between text-left">
             <div>
-              <div className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: MUTED }}>Deployment</div>
-              <h2 className="text-[20px] font-semibold" style={{ color: TEXT }}>Cloudflare and API build state</h2>
+              <div className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: MUTED }}>Technical details</div>
+              <div className="mt-2 text-[18px] font-semibold" style={{ color: TEXT }}>Advanced system context</div>
             </div>
-            <PortalButton variant="secondary" onClick={systemState.refresh}>Refresh</PortalButton>
-          </div>
-          <div className="grid grid-cols-3 gap-5">
-            <Card title="Frontend" rows={[
-              ["Build root", safe(cloudflare.build_root, "figma-enterprise-v4")],
-              ["Build command", safe(cloudflare.build_command, "npm run build")],
-              ["Output", safe(cloudflare.output_directory, "dist")],
-            ]} />
-            <Card title="Release" rows={[
-              ["Production branch", safe(cloudflare.production_branch, "main")],
-              ["Build version", safe(system.build_version, "local")],
-              ["API URL env", safe(system.api_url_env, "VITE_API_BASE_URL")],
-            ]} />
-            <Card title="Backend" rows={[
-              ["API base", safe(system.api_base_url, "Configured by environment")],
-              ["System endpoint", systemState.error ? systemState.error : "Healthy"],
-              ["Billing", "Admin-visible only"],
-            ]} />
-          </div>
-        </section>
+            {open ? <ChevronUp className="h-4 w-4" style={{ color: MUTED }} /> : <ChevronDown className="h-4 w-4" style={{ color: MUTED }} />}
+          </button>
 
-        <section className="rounded-2xl p-6" style={{ background: "#0D2B1E", border: "1px solid rgba(255,255,255,0.08)" }}>
-          <div className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: "rgba(155,216,75,0.65)" }}>
-            Internal rule
-          </div>
-          <h2 className="text-[22px] font-semibold mb-2" style={{ color: "white" }}>
-            Keep the operating room accountable.
-          </h2>
-          <p className="text-[13px] leading-relaxed max-w-3xl" style={{ color: "rgba(255,255,255,0.68)" }}>
-            Every connector, evidence record, decision, report, and field update should remain tied to the active workspace and organization.
-          </p>
+          {open ? (
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              <Card title="Intelligence" rows={[["Provider", safe(technical.provider)], ["Model", safe(technical.model)], ["Fallback", safe(technical.fallback)]]} />
+              <Card title="Environment" rows={[["API URL", safe(technical.api_url)], ["App URL", safe(technical.app_url)], ["Missing env", Array.isArray(technical.env_names) && technical.env_names.length ? technical.env_names.join(", ") : "None"]]} />
+            </div>
+          ) : null}
         </section>
       </main>
     </div>
@@ -130,12 +127,12 @@ export function Admin() {
 function Card({ title, rows }: { title: string; rows: [string, string][] }) {
   return (
     <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-      <div className="text-[10px] font-semibold uppercase tracking-widest mb-4" style={{ color: MUTED }}>{title}</div>
+      <div className="mb-4 text-[10px] font-semibold uppercase tracking-widest" style={{ color: MUTED }}>{title}</div>
       <div className="space-y-3">
         {rows.map(([label, value]) => (
           <div key={label} className="flex justify-between gap-4 text-[13px]">
             <span style={{ color: MUTED }}>{label}</span>
-            <span className="font-semibold text-right" style={{ color: TEXT }}>{value}</span>
+            <span className="text-right font-semibold" style={{ color: TEXT }}>{value}</span>
           </div>
         ))}
       </div>

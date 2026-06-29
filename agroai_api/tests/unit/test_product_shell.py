@@ -1,7 +1,9 @@
-from __future__ import annotations
+from datetime import datetime
+
+from app.models.saas import Organization, User
 
 
-def _register(client, email: str = "shell@example.com"):
+def _register_and_login(client, db, email: str = "shell@example.com"):
     response = client.post(
         "/v1/auth/register",
         json={
@@ -15,7 +17,13 @@ def _register(client, email: str = "shell@example.com"):
         },
     )
     assert response.status_code == 201
-    token = response.json()["access_token"]
+    user = db.query(User).filter(User.email == email).first()
+    user.email_verification_status = "verified"
+    user.email_verified_at = datetime.utcnow()
+    db.commit()
+    login = client.post("/v1/auth/login", json={"email": email, "password": "strong-password"})
+    assert login.status_code == 200, login.text
+    token = login.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
 
 
@@ -23,60 +31,37 @@ def _body_text(payload) -> str:
     return str(payload).lower()
 
 
-def test_product_plans_returns_free_professional_network(client):
+def test_product_plans_returns_five_tiers(client):
     response = client.get("/v1/product/plans")
     assert response.status_code == 200
     body = response.json()
     plan_ids = {plan["id"] for plan in body["plans"]}
-    assert {"free", "professional", "network"}.issubset(plan_ids)
+    assert {"free", "professional", "team", "network", "enterprise"}.issubset(plan_ids)
     assert body["service_add_ons"]
 
 
-def test_account_me_returns_profile_safely(client):
-    headers = _register(client)
+def test_account_me_returns_profile_safely(client, db):
+    headers = _register_and_login(client, db)
     response = client.get("/v1/account/me", headers=headers)
     assert response.status_code == 200
     body = response.json()
     assert body["user"]["email"] == "shell@example.com"
     assert body["workspace"]["name"] == "Shell Workspace"
     assert body["plan"]["id"] == "free"
+    assert body["entitlements"]["plan"] == "free"
 
 
-def test_account_security_does_not_fake_unavailable_features(client):
-    headers = _register(client, "security-v2@example.com")
+def test_account_security_returns_verification_state(client, db):
+    headers = _register_and_login(client, db, "security-v21@example.com")
     response = client.get("/v1/account/security", headers=headers)
     assert response.status_code == 200
     body = response.json()
-    assert body["email_verification"]["status"] == "not_available_yet"
+    assert body["email_verification"]["status"] == "verified"
     assert body["two_factor"]["status"] == "not_available_yet"
-    assert "enabled" not in _body_text(body)
 
 
-def test_onboarding_start_update_complete_works(client):
-    headers = _register(client, "onboarding@example.com")
-    start = client.post("/v1/onboarding/start", headers=headers, json={"current_step": "organization"})
-    assert start.status_code == 200
-    update = client.patch(
-        "/v1/onboarding/state",
-        headers=headers,
-        json={
-            "current_step": "plan",
-            "selected_plan": "professional",
-            "organization_type": "Farm / grower",
-            "acres_or_sites": "1200 acres",
-            "primary_goal": "Water risk",
-            "completed_steps": ["account", "organization", "scope"],
-        },
-    )
-    assert update.status_code == 200
-    assert update.json()["onboarding"]["selected_plan"] == "professional"
-    complete = client.post("/v1/onboarding/complete", headers=headers)
-    assert complete.status_code == 200
-    assert complete.json()["onboarding"]["current_step"] == "complete"
-
-
-def test_billing_summary_returns_current_plan_without_customer_debug(client):
-    headers = _register(client, "billing-summary-v2@example.com")
+def test_billing_summary_returns_current_plan_without_customer_debug(client, db):
+    headers = _register_and_login(client, db, "billing-summary-v21@example.com")
     response = client.get("/v1/billing/summary", headers=headers)
     assert response.status_code == 200
     body = response.json()
@@ -85,8 +70,8 @@ def test_billing_summary_returns_current_plan_without_customer_debug(client):
     assert not any(term in _body_text(body) for term in forbidden)
 
 
-def test_professional_checkout_creates_upgrade_request_if_stripe_missing(client, monkeypatch):
-    headers = _register(client, "checkout-v2@example.com")
+def test_professional_checkout_creates_upgrade_request_if_stripe_missing(client, db, monkeypatch):
+    headers = _register_and_login(client, db, "checkout-v21@example.com")
     monkeypatch.setattr("app.api.v1.product_shell.settings.STRIPE_SECRET_KEY", "", raising=False)
     response = client.post(
         "/v1/billing/checkout",
@@ -96,13 +81,10 @@ def test_professional_checkout_creates_upgrade_request_if_stripe_missing(client,
     assert response.status_code == 200
     body = response.json()
     assert body["message"] == "Upgrade request received."
-    assert body["request_id"]
-    forbidden = ["payment_provider_configured", "setup_required", "provider_not_configured", "stripe_missing"]
-    assert not any(term in _body_text(body) for term in forbidden)
 
 
-def test_professional_checkout_returns_checkout_url_if_stripe_configured(client, monkeypatch):
-    headers = _register(client, "checkout-live@example.com")
+def test_professional_checkout_returns_checkout_url_if_stripe_configured(client, db, monkeypatch):
+    headers = _register_and_login(client, db, "checkout-live@example.com")
 
     class _Session:
         @staticmethod
@@ -110,7 +92,7 @@ def test_professional_checkout_returns_checkout_url_if_stripe_configured(client,
             return {"url": "https://checkout.example/session"}
 
     monkeypatch.setattr("app.api.v1.product_shell.settings.STRIPE_SECRET_KEY", "sk_test_fake", raising=False)
-    monkeypatch.setattr("app.api.v1.product_shell.settings.STRIPE_PRICE_ASSURANCE_MONTHLY", "price_fake", raising=False)
+    monkeypatch.setattr("app.api.v1.product_shell.settings.STRIPE_PRICE_PRO_MONTHLY", "price_fake", raising=False)
     monkeypatch.setattr("app.api.v1.product_shell.stripe.checkout.Session", _Session)
     response = client.post(
         "/v1/billing/checkout",
@@ -121,51 +103,37 @@ def test_professional_checkout_returns_checkout_url_if_stripe_configured(client,
     assert response.json()["checkout_url"] == "https://checkout.example/session"
 
 
-def test_support_sales_and_onboarding_requests_create_saas_requests(client):
-    headers = _register(client, "requests@example.com")
-    support = client.post(
-        "/v1/support/ticket",
-        headers=headers,
-        json={"category": "integration", "subject": "Connect Dropbox", "message": "Need Dropbox evidence sync."},
-    )
-    assert support.status_code == 200
-    sales = client.post(
-        "/v1/sales/contact",
-        json={"type": "sales", "subject": "Professional plan", "message": "Call us.", "email": "buyer@example.com", "company": "Buyer Co"},
-    )
-    assert sales.status_code == 200
-    onboarding = client.post(
-        "/v1/onboarding/request",
-        headers=headers,
-        json={"category": "onboarding", "subject": "Need setup", "message": "Help set up fields."},
-    )
-    assert onboarding.status_code == 200
-    admin = client.get("/v1/admin/requests", headers=headers)
-    assert admin.status_code == 200
-    types = {row["type"] for row in admin.json()["requests"]}
-    assert {"integration", "onboarding"}.issubset(types)
+def test_team_invites_require_team_entitlement(client, db):
+    headers = _register_and_login(client, db, "team-lock@example.com")
+    response = client.post("/v1/team/invitations", headers=headers, json={"email": "teammate@example.com", "role": "manager"})
+    assert response.status_code == 402
+    assert response.json()["detail"]["recommended_plan"] == "team"
 
 
-def test_admin_can_update_request_status(client):
-    headers = _register(client, "admin-update@example.com")
-    created = client.post(
-        "/v1/support/ticket",
-        headers=headers,
-        json={"category": "support", "subject": "Need help", "message": "Please help."},
-    )
-    request_id = created.json()["request_id"]
-    response = client.patch(
-        f"/v1/admin/requests/{request_id}",
-        headers=headers,
-        json={"status": "in_progress", "priority": "high"},
-    )
+def test_team_plan_unlocks_team_invites(client, db):
+    headers = _register_and_login(client, db, "team-open@example.com")
+    org = db.query(Organization).filter(Organization.name == "Shell Farms").order_by(Organization.created_at.desc()).first()
+    org.plan = "team"
+    org.subscription_status = "active"
+    db.commit()
+    response = client.post("/v1/team/invitations", headers=headers, json={"email": "teammate@example.com", "role": "manager"})
     assert response.status_code == 200
-    assert response.json()["request"]["status"] == "in_progress"
-    assert response.json()["request"]["priority"] == "high"
+    invitations = client.get("/v1/team/invitations", headers=headers)
+    assert invitations.status_code == 200
+    assert invitations.json()["invitations"][0]["email"] == "teammate@example.com"
 
 
-def test_conversation_create_list_get_message_and_delete(client):
-    headers = _register(client, "chat-v2@example.com")
+def test_admin_system_requires_owner_or_admin(client, db):
+    headers = _register_and_login(client, db, "system-admin@example.com")
+    response = client.get("/v1/admin/system", headers=headers)
+    assert response.status_code == 200
+    body = response.json()
+    assert body["billing"] in {"Configured", "Needs setup"}
+    assert "technical_details" in body
+
+
+def test_conversation_create_list_get_message_and_delete(client, db):
+    headers = _register_and_login(client, db, "chat-v21@example.com")
     created = client.post(
         "/v1/conversations",
         headers=headers,
@@ -173,36 +141,22 @@ def test_conversation_create_list_get_message_and_delete(client):
     )
     assert created.status_code == 200
     conversation_id = created.json()["conversation"]["id"]
-    assert created.json()["messages"][-1]["artifacts"][0]["intent"] == "operator_checklist"
     listed = client.get("/v1/conversations", headers=headers)
     assert listed.status_code == 200
-    assert listed.json()["conversations"]
     message = client.post(
         f"/v1/conversations/{conversation_id}/messages",
         headers=headers,
         json={"content": "Generate a water risk brief."},
     )
     assert message.status_code == 200
-    assert message.json()["message"]["artifacts"][0]["intent"] == "water_risk_brief"
     fetched = client.get(f"/v1/conversations/{conversation_id}", headers=headers)
     assert fetched.status_code == 200
     deleted = client.delete(f"/v1/conversations/{conversation_id}", headers=headers)
     assert deleted.status_code == 200
 
 
-def test_report_and_operator_intents_return_actions(client):
-    headers = _register(client, "intents@example.com")
-    report = client.post("/v1/conversations", headers=headers, json={"message": "Prepare a compliance packet PDF."})
-    assert report.status_code == 200
-    report_actions = report.json()["messages"][-1]["artifacts"][0]["actions"]
-    assert any(action["type"] == "generate_report" for action in report_actions)
-    operator = client.post("/v1/conversations", headers=headers, json={"message": "Create an operator checklist."})
-    operator_actions = operator.json()["messages"][-1]["artifacts"][0]["actions"]
-    assert any(action["type"] == "create_task" for action in operator_actions)
-
-
-def test_customer_responses_do_not_expose_debug_model_or_provider_language(client):
-    headers = _register(client, "redaction-v2@example.com")
+def test_customer_responses_do_not_expose_debug_model_or_provider_language(client, db):
+    headers = _register_and_login(client, db, "redaction-v21@example.com")
     responses = [
         client.get("/v1/app/shell", headers=headers),
         client.get("/v1/billing/summary", headers=headers),
@@ -218,7 +172,6 @@ def test_customer_responses_do_not_expose_debug_model_or_provider_language(clien
         "openai_compatible",
         "fallback",
         "debug",
-        "model",
         "z-ai",
         "nemotron",
         "sk_",

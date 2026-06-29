@@ -18,8 +18,9 @@ from app.models.decision_run import DecisionRun
 from app.models.execution_verification import ExecutionVerification
 from app.models.forecast import Forecast
 from app.models.saas import (
-    BillingEvent, Conversation, ConversationMessage, OnboardingState,
-    Organization, OrganizationMembership, SaaSRequest, UsageEvent, User, Workspace
+    BillingEvent, Conversation, ConversationMessage, EmailVerificationToken,
+    OnboardingState, Organization, OrganizationMembership, SaaSRequest,
+    TeamInvitation, UsageEvent, User, Workspace
 )
 from app.models.compliance import (
     ComplianceJurisdiction, ComplianceOrganizationRole, ComplianceParcel,
@@ -63,10 +64,12 @@ __all__ = [
     "BillingEvent",
     "Conversation",
     "ConversationMessage",
+    "EmailVerificationToken",
     "OnboardingState",
     "Organization",
     "OrganizationMembership",
     "SaaSRequest",
+    "TeamInvitation",
     "UsageEvent",
     "User",
     "Workspace",

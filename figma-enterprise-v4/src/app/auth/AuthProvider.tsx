@@ -1,13 +1,5 @@
-import {
-  createContext,
-  ReactNode,
-  useCallback,
-  useContext,
-  useEffect,
-  useMemo,
-  useState,
-} from "react";
-import { apiClient, LoginPayload, RegisterPayload } from "../api/client";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { apiClient, ApiError, LoginPayload, RegisterPayload } from "../api/client";
 
 const tokenKey = "agroai_access_token";
 
@@ -32,9 +24,10 @@ type Workspace = {
   evaluation_status?: string;
 };
 
-type BillingStatus = {
-  plan?: string;
-  subscription_status?: string;
+type VerificationState = {
+  email?: string;
+  status?: string;
+  message?: string;
 };
 
 type AuthContextValue = {
@@ -46,52 +39,17 @@ type AuthContextValue = {
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
+  verification: VerificationState | null;
   login: (email: string, password: string) => Promise<void>;
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
+  requestVerification: (email?: string) => Promise<string>;
+  confirmVerification: (token: string) => Promise<void>;
+  clearVerification: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-
-const INTERNAL_TEST_ENTITLEMENTS: Record<string, unknown> = {
-  internal_testing: true,
-  all_features: true,
-  connectors: true,
-  connector_uploads: true,
-  report_exports: true,
-  reports: true,
-  can_export_reports: true,
-  ai: true,
-  agents: true,
-  evidence: true,
-  decisions: true,
-  admin: true,
-  billing: true,
-  integrations: true,
-};
-
-function arrayFromResponse<T>(response: unknown, key: string): T[] {
-  if (Array.isArray(response)) {
-    return response as T[];
-  }
-
-  if (response && typeof response === "object" && key in response) {
-    const value = (response as Record<string, unknown>)[key];
-    return Array.isArray(value) ? (value as T[]) : [];
-  }
-
-  return [];
-}
-
-function getAccessToken(response: unknown) {
-  if (!response || typeof response !== "object") {
-    return null;
-  }
-
-  const data = response as Record<string, unknown>;
-  return typeof data.access_token === "string" ? data.access_token : null;
-}
 
 function jwtPayload(token: string): Record<string, unknown> | null {
   try {
@@ -122,30 +80,32 @@ function getStoredToken() {
   return stored;
 }
 
-function objectFromResponse<T>(response: unknown): T | null {
-  return response && typeof response === "object" ? (response as T) : null;
+function arrayFromResponse<T>(response: unknown, key: string): T[] {
+  if (Array.isArray(response)) return response as T[];
+  if (response && typeof response === "object" && key in response) {
+    const value = (response as Record<string, unknown>)[key];
+    return Array.isArray(value) ? (value as T[]) : [];
+  }
+  return [];
+}
+
+function getAccessToken(response: unknown) {
+  if (!response || typeof response !== "object") return null;
+  const data = response as Record<string, unknown>;
+  return typeof data.access_token === "string" ? data.access_token : null;
 }
 
 function normalizeMe(response: unknown) {
-  const data =
-    response && typeof response === "object" ? (response as Record<string, unknown>) : {};
-  const organization = (data.organization || data.currentOrganization || null) as Organization | null;
-  const organizations = Array.isArray(data.organizations)
-    ? (data.organizations as Organization[])
-    : organization
-      ? [organization]
-      : [];
-  const workspace = (data.workspace || data.currentWorkspace || null) as Workspace | null;
-
+  const data = response && typeof response === "object" ? (response as Record<string, unknown>) : {};
+  const currentOrganization = (data.current_organization || null) as Organization | null;
+  const organizations = Array.isArray(data.organizations) ? (data.organizations as Organization[]) : currentOrganization ? [currentOrganization] : [];
   return {
     user: (data.user || null) as User | null,
     organizations,
-    currentOrganization: organization || organizations[0] || null,
-    currentWorkspace: workspace,
-    entitlements: {
-      ...(((data.entitlements || {}) as Record<string, unknown>) || {}),
-      ...INTERNAL_TEST_ENTITLEMENTS,
-    },
+    currentOrganization: currentOrganization || organizations[0] || null,
+    currentWorkspace: null as Workspace | null,
+    entitlements: ((data.entitlements || {}) as Record<string, unknown>) || {},
+    verification: (data.verification || null) as VerificationState | null,
   };
 }
 
@@ -156,6 +116,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentOrganization, setCurrentOrganization] = useState<Organization | null>(null);
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
   const [entitlements, setEntitlements] = useState<Record<string, unknown>>({});
+  const [verification, setVerification] = useState<VerificationState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   const clearSession = useCallback(() => {
@@ -168,6 +129,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setEntitlements({});
   }, []);
 
+  const clearVerification = useCallback(() => {
+    setVerification(null);
+  }, []);
+
   const applyToken = useCallback((nextToken: string) => {
     localStorage.setItem(tokenKey, nextToken);
     setToken(nextToken);
@@ -178,66 +143,74 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       clearSession();
       return;
     }
-
     const meResponse = await apiClient.me();
     const orgsResponse = await apiClient.getOrgs().catch(() => null);
     const workspacesResponse = await apiClient.getWorkspaces().catch(() => null);
-    const billingResponse = await apiClient.getBillingStatus().catch(() => null);
     const normalized = normalizeMe(meResponse);
     const orgs = arrayFromResponse<Organization>(orgsResponse, "organizations");
     const workspaces = arrayFromResponse<Workspace>(workspacesResponse, "workspaces");
-    const billing = objectFromResponse<BillingStatus>(billingResponse);
-    const organization = {
-      ...(orgs[0] || {}),
-      ...(normalized.currentOrganization || {}),
-      ...(billing?.plan ? { plan: billing.plan } : {}),
-      ...(billing?.subscription_status ? { subscription_status: billing.subscription_status } : {}),
-    };
-
     setUser(normalized.user);
     setOrganizations(orgs.length ? orgs : normalized.organizations);
-    setCurrentOrganization(Object.keys(organization).length ? organization : null);
-    setCurrentWorkspace(workspaces[0] || normalized.currentWorkspace || null);
-    setEntitlements({
-      ...normalized.entitlements,
-      ...INTERNAL_TEST_ENTITLEMENTS,
+    setCurrentOrganization(normalized.currentOrganization || orgs[0] || null);
+    setCurrentWorkspace(workspaces[0] || null);
+    setEntitlements(normalized.entitlements);
+    setVerification(normalized.verification);
+  }, [clearSession]);
+
+  const handleVerificationRequired = useCallback((error: ApiError, fallbackEmail?: string) => {
+    clearSession();
+    setVerification({
+      email: fallbackEmail,
+      status: "unverified",
+      message: error.message || "Verify your email to activate your AGRO-AI workspace.",
     });
   }, [clearSession]);
 
-  const login = useCallback(
-    async (email: string, password: string) => {
+  const login = useCallback(async (email: string, password: string) => {
+    try {
       const response = await apiClient.login({ email, password } satisfies LoginPayload);
       const nextToken = getAccessToken(response);
-
       if (!nextToken) {
         throw new Error("Login response did not include an access token.");
       }
-
       applyToken(nextToken);
+      setVerification(null);
       await refreshMe();
-    },
-    [applyToken, refreshMe],
-  );
-
-  const register = useCallback(
-    async (payload: RegisterPayload) => {
-      const response = await apiClient.register(payload);
-      const nextToken = getAccessToken(response);
-
-      if (!nextToken) {
-        throw new Error("Registration response did not include an access token.");
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError.code === "email_verification_required") {
+        handleVerificationRequired(apiError, email);
       }
+      throw error;
+    }
+  }, [applyToken, handleVerificationRequired, refreshMe]);
 
-      applyToken(nextToken);
-      await refreshMe();
-    },
-    [applyToken, refreshMe],
-  );
+  const register = useCallback(async (payload: RegisterPayload) => {
+    const response = await apiClient.register(payload) as Record<string, unknown>;
+    setVerification({
+      email: payload.email,
+      status: String((response.verification as Record<string, unknown> | undefined)?.status || "unverified"),
+      message: String(response.message || "Verify your email to activate your AGRO-AI workspace."),
+    });
+    clearSession();
+  }, [clearSession]);
 
   const logout = useCallback(async () => {
     await apiClient.logout().catch(() => null);
     clearSession();
   }, [clearSession]);
+
+  const requestVerification = useCallback(async (email?: string) => {
+    const response = await apiClient.auth.requestEmailVerification(email ? { email } : undefined) as Record<string, unknown>;
+    const message = String(response.message || "If an account exists, we sent a verification email.");
+    setVerification((current) => ({ ...(current || {}), email: email || current?.email, message }));
+    return message;
+  }, []);
+
+  const confirmVerification = useCallback(async (token: string) => {
+    await apiClient.auth.confirmEmailVerification({ token });
+    setVerification((current) => current ? { ...current, status: "verified", message: "Email verified. Sign in to continue." } : null);
+  }, []);
 
   useEffect(() => {
     window.addEventListener("agroai:unauthorized", clearSession);
@@ -258,48 +231,43 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
       return;
     }
-
     setIsLoading(true);
     refreshMe()
-      .catch(() => clearSession())
+      .catch((error) => {
+        const apiError = error as ApiError;
+        if (apiError.code === "email_verification_required") {
+          handleVerificationRequired(apiError);
+        } else {
+          clearSession();
+        }
+      })
       .finally(() => setIsLoading(false));
-  }, [clearSession, refreshMe, token]);
+  }, [clearSession, handleVerificationRequired, refreshMe, token]);
 
-  const value = useMemo<AuthContextValue>(
-    () => ({
-      user,
-      organizations,
-      currentOrganization,
-      currentWorkspace,
-      entitlements,
-      token,
-      isLoading,
-      isAuthenticated: Boolean(token && user),
-      login,
-      register,
-      logout,
-      refreshMe,
-    }),
-    [
-      user,
-      organizations,
-      currentOrganization,
-      currentWorkspace,
-      entitlements,
-      token,
-      isLoading,
-      login,
-      register,
-      logout,
-      refreshMe,
-    ],
-  );
+  const value = useMemo<AuthContextValue>(() => ({
+    user,
+    organizations,
+    currentOrganization,
+    currentWorkspace,
+    entitlements,
+    token,
+    isLoading,
+    isAuthenticated: Boolean(token && user),
+    verification,
+    login,
+    register,
+    logout,
+    refreshMe,
+    requestVerification,
+    confirmVerification,
+    clearVerification,
+  }), [clearVerification, confirmVerification, currentOrganization, currentWorkspace, entitlements, isLoading, login, logout, organizations, refreshMe, register, requestVerification, token, user, verification]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
 
 export function useAuth() {
-  const ctx = useContext(AuthContext);
-  if (!ctx) throw new Error("useAuth must be used inside AuthProvider");
-  return ctx;
+  const value = useContext(AuthContext);
+  if (!value) throw new Error("useAuth must be used within AuthProvider");
+  return value;
 }

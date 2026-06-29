@@ -76,17 +76,34 @@ class Settings(BaseSettings):
     API_URL: str = "https://api.agroai-pilot.com"
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_SUCCESS_URL: str = ""
+    STRIPE_CANCEL_URL: str = ""
 
     # Current AGRO-AI commercial offers
     STRIPE_PRICE_ASSURANCE_AUDIT_FARM: str = ""
     STRIPE_PRICE_ASSURANCE_AUDIT_NETWORK: str = ""
     STRIPE_PRICE_WATEROPS_MONTHLY: str = ""
     STRIPE_PRICE_ASSURANCE_MONTHLY: str = ""
+    STRIPE_PRICE_PRO_MONTHLY: str = ""
+    STRIPE_PRICE_PRO_ANNUAL: str = ""
+    STRIPE_PRICE_TEAM_MONTHLY: str = ""
+    STRIPE_PRICE_TEAM_ANNUAL: str = ""
+    STRIPE_PRICE_NETWORK_MONTHLY: str = ""
+    STRIPE_PRICE_NETWORK_ANNUAL: str = ""
 
     # Legacy names kept for backwards compatibility with older frontends/tests.
     STRIPE_PRICE_PILOT: str = ""
     STRIPE_PRICE_PRO: str = ""
     STRIPE_PRICE_ENTERPRISE: str = ""
+
+    # Email delivery
+    RESEND_API_KEY: str = ""
+    SENDGRID_API_KEY: str = ""
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    FROM_EMAIL: str = ""
 
     # AI gateway. Leave unset to keep startup safe and return deterministic
     # unavailable responses instead of fabricated model output.

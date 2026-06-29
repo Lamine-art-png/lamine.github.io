@@ -12,7 +12,15 @@ from app.services.intelligence_context import build_intelligence_context
 
 
 def _seed_auth_context(db):
-    user = User(id="user-1", email="owner@example.com", name="Owner", password_hash="x", is_active=True)
+    user = User(
+        id="user-1",
+        email="owner@example.com",
+        name="Owner",
+        password_hash="x",
+        is_active=True,
+        email_verification_status="verified",
+        email_verified_at=datetime.utcnow(),
+    )
     org = Organization(id="org-1", name="Org One", slug="org-one", owner_user_id=user.id, plan="free", subscription_status="inactive")
     membership = OrganizationMembership(id="membership-1", organization_id=org.id, user_id=user.id, role="owner")
     workspace = Workspace(id="ws-1", organization_id=org.id, name="Primary Workspace", crop="almonds", region="CA", mode="evaluation")

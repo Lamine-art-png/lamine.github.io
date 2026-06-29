@@ -16,17 +16,27 @@ from app.models.saas import (
     ConversationMessage,
     OnboardingState,
     SaaSRequest,
+    TeamInvitation,
     UsageEvent,
     Workspace,
 )
-from app.services.entitlements import require_owner_or_admin, serialize_entitlements
+from app.services.email_delivery import delivery_status
+from app.services.entitlements import (
+    assert_can_access_admin_requests,
+    assert_can_invite_team,
+    get_plan_limits,
+    organization_user_count,
+    require_owner_or_admin,
+    serialize_entitlements,
+)
 from app.services.product_plans import plan_by_id, public_plans, service_add_ons, upgrade_options
 
 router = APIRouter(tags=["product-shell"])
 
-RequestType = Literal["support", "bug", "integration", "onboarding", "sales", "upgrade", "network_plan"]
+RequestType = Literal["support", "bug", "integration", "onboarding", "sales", "upgrade", "network_plan", "team_invite"]
 RequestStatus = Literal["received", "triaged", "in_progress", "waiting_on_customer", "closed"]
 Priority = Literal["low", "medium", "high", "urgent"]
+InviteRole = Literal["owner", "admin", "manager", "operator", "viewer"]
 
 
 class ProfileUpdateRequest(BaseModel):
@@ -36,7 +46,7 @@ class ProfileUpdateRequest(BaseModel):
 
 
 class CheckoutRequest(BaseModel):
-    plan_id: Literal["free", "professional", "network"]
+    plan_id: Literal["free", "professional", "team", "network", "enterprise"]
     billing_period: Literal["monthly", "annual"] = "monthly"
 
 
@@ -93,6 +103,11 @@ class AdminRequestUpdate(BaseModel):
     priority: Priority | None = None
 
 
+class TeamInvitationCreateRequest(BaseModel):
+    email: str = Field(min_length=3, max_length=240)
+    role: InviteRole = "viewer"
+
+
 def _require_org(ctx: AuthContext):
     if not ctx.organization or not ctx.membership:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required")
@@ -132,16 +147,13 @@ def _usage_summary(db: Session, org_id: str) -> dict:
 
 
 def _price_id(plan_id: str, billing_period: str) -> str | None:
-    if plan_id != "professional":
-        return None
     annual = billing_period == "annual"
-    return (
-        getattr(settings, "STRIPE_PRICE_PRO_ANNUAL", None)
-        if annual
-        else getattr(settings, "STRIPE_PRICE_ASSURANCE_MONTHLY", None)
-        or getattr(settings, "STRIPE_PRICE_PRO", None)
-        or getattr(settings, "STRIPE_PRICE_WATEROPS_MONTHLY", None)
-    )
+    matrix = {
+        "professional": settings.STRIPE_PRICE_PRO_ANNUAL if annual else (settings.STRIPE_PRICE_PRO_MONTHLY or settings.STRIPE_PRICE_ASSURANCE_MONTHLY or settings.STRIPE_PRICE_PRO or settings.STRIPE_PRICE_WATEROPS_MONTHLY),
+        "team": settings.STRIPE_PRICE_TEAM_ANNUAL if annual else settings.STRIPE_PRICE_TEAM_MONTHLY,
+        "network": settings.STRIPE_PRICE_NETWORK_ANNUAL if annual else settings.STRIPE_PRICE_NETWORK_MONTHLY,
+    }
+    return matrix.get(plan_id)
 
 
 def _technical_billing_ready(plan_id: str, billing_period: str) -> bool:
@@ -239,27 +251,29 @@ def _profile(ctx: AuthContext, db: Session) -> dict:
         "role": membership.role,
         "plan": plan,
         "account_status": org.subscription_status or "inactive",
-        "security": _security_payload(),
+        "security": _security_payload(ctx),
+        "entitlements": serialize_entitlements(org),
         "created_at": ctx.user.created_at.isoformat() if ctx.user.created_at else None,
     }
 
 
-def _security_payload() -> dict:
+def _security_payload(ctx: AuthContext) -> dict:
+    verified = bool(ctx.user.email_verified_at and ctx.user.email_verification_status == "verified")
     return {
         "email_verification": {
-            "status": "not_available_yet",
-            "customer_label": "Verification request available",
-            "action_label": "Request verification",
+            "status": "verified" if verified else "unverified",
+            "customer_label": "Verified" if verified else "Verification required",
+            "action_label": "Verified" if verified else "Resend verification email",
         },
         "two_factor": {
             "status": "not_available_yet",
-            "customer_label": "Request two-factor setup",
+            "customer_label": "Two-factor setup available on request",
             "action_label": "Request two-factor setup",
         },
         "login_methods": ["password"],
         "active_sessions": [],
         "recommended_security_actions": [
-            "Request email verification",
+            "Verify your email address" if not verified else "Review active sessions",
             "Request two-factor setup",
         ],
     }
@@ -292,6 +306,7 @@ def _billing_summary(ctx: AuthContext, db: Session, *, admin: bool = False) -> d
         "service_add_ons": service_add_ons(),
         "annual_savings": "Professional annual billing saves 17%.",
         "invoices": [],
+        "entitlements": serialize_entitlements(org),
     }
     if admin:
         payload["billing_setup"] = {
@@ -472,7 +487,7 @@ def update_account_profile(payload: ProfileUpdateRequest, ctx: AuthContext = Dep
 
 @router.get("/account/security")
 def account_security(_ctx: AuthContext = Depends(get_auth_context)) -> dict:
-    return _security_payload()
+    return _security_payload(_ctx)
 
 
 @router.post("/account/email-verification/request")
@@ -568,7 +583,10 @@ def billing_checkout(payload: CheckoutRequest, ctx: AuthContext = Depends(get_au
     selected = plan_by_id(payload.plan_id)
     if selected["id"] == "free":
         return {"status": "available", "message": "Free workspace is ready.", "plan": selected}
-    if selected["id"] == "network":
+    if selected["id"] == "enterprise":
+        row = _create_saas_request(db, ctx=ctx, request_type="sales", subject="Enterprise pricing request", message="Customer requested Enterprise follow-up.", source_page="billing", metadata={"billing_period": payload.billing_period})
+        return {"status": "received", "message": "Sales request received.", "request_id": row.id, "plan": selected}
+    if selected["id"] == "network" and not _technical_billing_ready(payload.plan_id, payload.billing_period):
         row = _create_saas_request(db, ctx=ctx, request_type="network_plan", subject="Network plan inquiry", message="Customer requested Network plan follow-up.", source_page="billing", metadata={"billing_period": payload.billing_period})
         return {"status": "received", "message": "Network inquiry received.", "request_id": row.id, "plan": selected}
     if _technical_billing_ready(payload.plan_id, payload.billing_period):
@@ -577,15 +595,15 @@ def billing_checkout(payload: CheckoutRequest, ctx: AuthContext = Depends(get_au
             session = stripe.checkout.Session.create(
                 mode="subscription",
                 line_items=[{"price": _price_id(payload.plan_id, payload.billing_period), "quantity": 1}],
-                success_url=f"{settings.APP_URL}/billing?checkout=success",
-                cancel_url=f"{settings.APP_URL}/billing?checkout=cancelled",
+                success_url=settings.STRIPE_SUCCESS_URL or f"{settings.APP_URL}/billing?checkout=success",
+                cancel_url=settings.STRIPE_CANCEL_URL or f"{settings.APP_URL}/billing?checkout=cancelled",
                 client_reference_id=org.id,
                 metadata={"organization_id": org.id, "plan": selected["id"], "billing_period": payload.billing_period},
             )
             return {"status": "checkout_ready", "checkout_url": session["url"], "plan": selected}
         except Exception:
             pass
-    row = _create_saas_request(db, ctx=ctx, request_type="upgrade", subject="Professional upgrade request", message="Customer requested Professional upgrade.", source_page="billing", metadata={"plan_id": payload.plan_id, "billing_period": payload.billing_period})
+    row = _create_saas_request(db, ctx=ctx, request_type="upgrade", subject=f"{selected['name']} upgrade request", message="Customer requested an upgrade.", source_page="billing", metadata={"plan_id": payload.plan_id, "billing_period": payload.billing_period})
     return {"status": "received", "message": "Upgrade request received.", "request_id": row.id, "plan": selected}
 
 
@@ -623,6 +641,7 @@ def network_inquiry(payload: SaaSRequestPayload, db: Session = Depends(get_db)) 
 def admin_requests(type: str | None = None, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
     org, membership = _require_org(ctx)
     require_owner_or_admin(membership.role)
+    assert_can_access_admin_requests(org)
     query = db.query(SaaSRequest).filter(SaaSRequest.organization_id == org.id)
     if type:
         query = query.filter(SaaSRequest.type == type)
@@ -634,6 +653,7 @@ def admin_requests(type: str | None = None, ctx: AuthContext = Depends(get_auth_
 def update_admin_request(request_id: str, payload: AdminRequestUpdate, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
     org, membership = _require_org(ctx)
     require_owner_or_admin(membership.role)
+    assert_can_access_admin_requests(org)
     row = db.get(SaaSRequest, request_id)
     if not row or row.organization_id != org.id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Request not found")
@@ -648,23 +668,98 @@ def update_admin_request(request_id: str, payload: AdminRequestUpdate, ctx: Auth
 
 @router.get("/admin/system")
 def admin_system(ctx: AuthContext = Depends(get_auth_context)) -> dict:
-    _org, membership = _require_org(ctx)
+    org, membership = _require_org(ctx)
     require_owner_or_admin(membership.role)
+    billing_setup = {
+        "configured": bool(settings.STRIPE_SECRET_KEY),
+        "needs_setup": not bool(settings.STRIPE_SECRET_KEY and (_price_id("professional", "monthly") or _price_id("team", "monthly") or _price_id("network", "monthly"))),
+    }
+    email_setup = delivery_status()
     return {
-        "api_base_url": getattr(settings, "APP_URL", ""),
-        "build_version": getattr(settings, "APP_VERSION", "local"),
-        "api_url_env": "VITE_API_BASE_URL or VITE_API_URL",
-        "cloudflare": {
-            "build_root": "figma-enterprise-v4",
-            "build_command": "npm run build or pnpm run build",
-            "output_directory": "dist",
-            "production_branch": "main",
-        },
-        "billing_setup": {
-            "stripe_secret_present": bool(getattr(settings, "STRIPE_SECRET_KEY", None)),
-            "professional_price_present": bool(_price_id("professional", "monthly")),
+        "api": "Healthy",
+        "intelligence": "Healthy",
+        "billing": "Configured" if billing_setup["configured"] else "Needs setup",
+        "email_delivery": "Configured" if email_setup["configured"] else "Needs setup",
+        "frontend_release": getattr(settings, "VERSION", "local"),
+        "backend_release": getattr(settings, "VERSION", "local"),
+        "last_checked_at": datetime.utcnow().isoformat() + "Z",
+        "technical_details": {
+            "provider": getattr(settings, "AI_PROVIDER", "") or "offline",
+            "model": getattr(settings, "AI_MODEL", "") or "offline",
+            "fallback": not bool(getattr(settings, "AI_PROVIDER", "")),
+            "env_names": email_setup["missing_env"],
+            "api_url": getattr(settings, "API_URL", ""),
+            "app_url": getattr(settings, "APP_URL", ""),
+            "organization_id": org.id,
+            "billing_setup": billing_setup,
         },
     }
+
+
+def _serialize_invitation(row: TeamInvitation) -> dict:
+    return {
+        "id": row.id,
+        "email": row.email,
+        "role": row.role,
+        "status": row.status,
+        "created_at": row.created_at.isoformat() if row.created_at else None,
+        "updated_at": row.updated_at.isoformat() if row.updated_at else None,
+    }
+
+
+@router.get("/team/members")
+def team_members(ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
+    org, _membership = _require_org(ctx)
+    members = [
+        {
+            "id": membership.user.id,
+            "name": membership.user.name,
+            "email": membership.user.email,
+            "role": membership.role,
+        }
+        for membership in org.memberships
+    ]
+    return {"members": members, "count": len(members)}
+
+
+@router.get("/team/invitations")
+def list_team_invitations(ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
+    org, membership = _require_org(ctx)
+    require_owner_or_admin(membership.role)
+    assert_can_invite_team(org)
+    rows = db.query(TeamInvitation).filter(TeamInvitation.organization_id == org.id).order_by(TeamInvitation.created_at.desc()).all()
+    return {"invitations": [_serialize_invitation(row) for row in rows]}
+
+
+@router.post("/team/invitations")
+def create_team_invitation(payload: TeamInvitationCreateRequest, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
+    org, membership = _require_org(ctx)
+    require_owner_or_admin(membership.role)
+    assert_can_invite_team(org)
+    row = TeamInvitation(
+        organization_id=org.id,
+        email=payload.email.strip().lower(),
+        role=payload.role,
+        status="pending",
+        invited_by_user_id=ctx.user.id,
+    )
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return {"status": "received", "message": "Invitation created.", "invitation": _serialize_invitation(row)}
+
+
+@router.delete("/team/invitations/{invitation_id}")
+def delete_team_invitation(invitation_id: str, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
+    org, membership = _require_org(ctx)
+    require_owner_or_admin(membership.role)
+    assert_can_invite_team(org)
+    row = db.get(TeamInvitation, invitation_id)
+    if not row or row.organization_id != org.id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Invitation not found")
+    row.status = "revoked"
+    db.commit()
+    return {"ok": True}
 
 
 @router.get("/conversations")
@@ -740,6 +835,7 @@ def delete_conversation(conversation_id: str, ctx: AuthContext = Depends(get_aut
 @router.get("/app/shell")
 def app_shell(ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
     profile = _profile(ctx, db)
+    org, _membership = _require_org(ctx)
     return {
         "user": profile["user"],
         "organization": profile["organization"],
@@ -756,8 +852,12 @@ def app_shell(ctx: AuthContext = Depends(get_auth_context), db: Session = Depend
             {"id": "agro_ai_chat", "label": "Ask AGRO-AI", "path": "/intelligence"},
             {"id": "generate_report", "label": "Generate report", "path": "/reports"},
         ],
-        "security": _security_payload(),
+        "security": _security_payload(ctx),
         "billing": _billing_summary(ctx, db),
         "support": _support_options(),
         "entitlements": serialize_entitlements(ctx.organization) if ctx.organization else {},
+        "usage": {
+            "members": organization_user_count(db, org),
+            **_usage_summary(db, org.id),
+        },
     }

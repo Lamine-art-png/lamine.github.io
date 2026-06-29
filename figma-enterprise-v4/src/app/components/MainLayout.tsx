@@ -1,12 +1,18 @@
 import { Outlet, NavLink } from "react-router";
-import { CreditCard, HelpCircle, LogOut, Plus, Settings, Shield, UserCircle } from "lucide-react";
+import { CreditCard, HelpCircle, Lock, LogOut, Plus, Settings, Shield, UserCircle } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import logoImg from "../../imports/agro-ai-logo-1.png";
 import { OperatingStatusBar } from "./OperatingStatusBar";
 
 export function MainLayout() {
-  const { currentOrganization, currentWorkspace, logout } = useAuth();
+  const { currentOrganization, currentWorkspace, entitlements, logout } = useAuth();
+  const role = currentOrganization?.role;
+  const canInviteTeam = Boolean(entitlements.can_invite_team);
+  const canAccessAdminRequests = Boolean(entitlements.can_access_admin_requests);
+  const canUseConnectors = Boolean(entitlements.can_use_connectors);
+  const canGeneratePdf = Boolean(entitlements.can_generate_pdf);
+  const isAdminUser = role === "owner" || role === "admin";
 
   const operateItems = [
     { name: "Command Center", path: "/" },
@@ -26,7 +32,7 @@ export function MainLayout() {
 
   const workspaceItems = [
     { name: "Sources", path: "/sources" },
-    { name: "Team", path: "/team" },
+    { name: "Team", path: "/team", locked: !canInviteTeam },
     { name: "Settings", path: "/settings" },
   ];
 
@@ -35,8 +41,9 @@ export function MainLayout() {
     { name: "Billing", path: "/billing", icon: CreditCard },
     { name: "Security", path: "/security", icon: Shield },
     { name: "Support", path: "/support", icon: HelpCircle },
-    { name: "Requests", path: "/admin/requests", icon: HelpCircle },
+    { name: "Requests", path: "/admin/requests", icon: HelpCircle, locked: !canAccessAdminRequests },
     { name: "Admin", path: "/admin", icon: Settings },
+    ...(isAdminUser ? [{ name: "System Health", path: "/admin/system", icon: Shield }] : []),
   ];
 
   return (
@@ -70,7 +77,7 @@ export function MainLayout() {
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
-          <NavSection title="Operate" items={operateItems} />
+          <NavSection title="Operate" items={operateItems.map((item) => item.name === "Reports" ? { ...item, locked: !canGeneratePdf } : item.name === "Connectors" ? { ...item, locked: !canUseConnectors } : item)} />
           <NavSection title="Intelligence" items={intelligenceItems} />
           <NavSection title="Workspace" items={workspaceItems} />
         </nav>
@@ -129,7 +136,7 @@ export function MainLayout() {
   );
 }
 
-function NavSection({ title, items }: { title: string; items: { name: string; path: string }[] }) {
+function NavSection({ title, items }: { title: string; items: { name: string; path: string; locked?: boolean }[] }) {
   return (
     <div>
       <div className="text-[10px] font-semibold uppercase tracking-widest px-3 mb-1" style={{ color: "rgba(255,255,255,0.25)" }}>
@@ -150,7 +157,10 @@ function NavSection({ title, items }: { title: string; items: { name: string; pa
               borderLeft: isActive ? "2px solid #1F7350" : "2px solid transparent",
             })}
           >
-            {item.name}
+            <span className="flex items-center gap-2">
+              {item.name}
+              {item.locked ? <Lock className="h-3.5 w-3.5 opacity-70" /> : null}
+            </span>
           </NavLink>
         ))}
       </div>
