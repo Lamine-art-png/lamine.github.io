@@ -5,7 +5,8 @@ import logging
 import smtplib
 from email.message import EmailMessage
 from email.utils import parseaddr
-from urllib import error, request
+
+import httpx
 
 from app.core.config import settings
 
@@ -32,9 +33,23 @@ def _verification_base_url() -> str:
 def _safe_provider_response(value: str | None) -> str | None:
     if not value:
         return None
-    # Provider errors do not include our API key, but keep the response capped so
-    # operational diagnostics can be surfaced safely in the portal console.
-    return value.replace(settings.RESEND_API_KEY, "[redacted]")[:1000] if settings.RESEND_API_KEY else value[:1000]
+    if settings.RESEND_API_KEY:
+        value = value.replace(settings.RESEND_API_KEY, "[redacted]")
+    return value[:1000]
+
+
+def _provider_rejection_reason(body: str | None) -> str:
+    body = body or ""
+    try:
+        parsed = json.loads(body)
+        message = parsed.get("message") or parsed.get("error") or parsed.get("name")
+        if message:
+            safe = str(message).strip().replace("\n", " ")[:220]
+            return f"provider_rejected: {safe}"
+    except Exception:
+        pass
+    safe_body = body.strip().replace("\n", " ")[:220]
+    return f"provider_rejected: {safe_body}" if safe_body else "provider_rejected"
 
 
 def delivery_status() -> dict:
@@ -69,11 +84,7 @@ def delivery_status() -> dict:
 
 
 def send_email(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> dict:
-    """Send one email and return a safe operational result.
-
-    Auth and onboarding flows must never claim an email was sent unless the
-    provider accepted it. The returned provider response is capped and redacted.
-    """
+    """Send one email and return a safe operational result."""
 
     status = delivery_status()
     if not status["configured"]:
@@ -119,78 +130,70 @@ def _send_smtp(*, to_email: str, subject: str, text_body: str, html_body: str | 
 
 def _send_resend(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> dict:
     from_address = _from_address()
-    payload = json.dumps(
-        {
-            # Use the raw verified sender address instead of a display-name string.
-            # This removes one common source of provider-side 403 validation errors
-            # while keeping the AGRO-AI branding inside the email template itself.
-            "from": from_address,
-            "to": [to_email],
-            "subject": subject,
-            "text": text_body,
-            "html": html_body or f"<p>{text_body}</p>",
-        }
-    ).encode()
-    req = request.Request(
-        "https://api.resend.com/emails",
-        data=payload,
-        headers={"Authorization": f"Bearer {settings.RESEND_API_KEY}", "Content-Type": "application/json"},
-        method="POST",
-    )
+    payload = {
+        "from": from_address,
+        "to": [to_email],
+        "subject": subject,
+        "text": text_body,
+        "html": html_body or f"<p>{text_body}</p>",
+    }
+    headers = {
+        "Authorization": f"Bearer {settings.RESEND_API_KEY}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+        "User-Agent": "agro-ai-api/2.0 (+https://app.agroai-pilot.com)",
+    }
     try:
-        with request.urlopen(req, timeout=15) as response:
-            body = response.read().decode("utf-8", errors="replace")
-            ok = 200 <= response.status < 300
-            logger.info("Resend email response status=%s body=%s", response.status, body[:500])
+        with httpx.Client(timeout=20, headers=headers, follow_redirects=False) as client:
+            response = client.post("https://api.resend.com/emails", json=payload)
+        body = response.text
+        ok = 200 <= response.status_code < 300
+        if ok:
+            logger.info("Resend email response status=%s body=%s", response.status_code, body[:500])
             return {
-                "ok": ok,
+                "ok": True,
                 "provider": "resend",
-                "status_code": response.status,
-                "reason": "accepted" if ok else "provider_rejected",
+                "status_code": response.status_code,
+                "reason": "accepted",
                 "provider_response": _safe_provider_response(body),
                 "from_address": from_address,
             }
-    except error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        logger.error("Resend email failed status=%s body=%s", exc.code, body[:1000])
+        logger.error("Resend email failed status=%s body=%s", response.status_code, body[:1000])
         return {
             "ok": False,
             "provider": "resend",
-            "status_code": exc.code,
-            "reason": "provider_rejected",
+            "status_code": response.status_code,
+            "reason": _provider_rejection_reason(body),
             "provider_response": _safe_provider_response(body),
             "from_address": from_address,
         }
-    except Exception as exc:
-        logger.exception("Resend email delivery failed before response")
+    except httpx.HTTPError as exc:
+        logger.exception("Resend email delivery failed before provider response")
         return {"ok": False, "provider": "resend", "reason": exc.__class__.__name__, "from_address": from_address}
 
 
 def _send_sendgrid(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> dict:
     from_address = _from_address()
-    payload = json.dumps(
-        {
-            "personalizations": [{"to": [{"email": to_email}]}],
-            "from": {"email": from_address, "name": "AGRO-AI"},
-            "subject": subject,
-            "content": [
-                {"type": "text/plain", "value": text_body},
-                {"type": "text/html", "value": html_body or f"<p>{text_body}</p>"},
-            ],
-        }
-    ).encode()
-    req = request.Request(
-        "https://api.sendgrid.com/v3/mail/send",
-        data=payload,
-        headers={"Authorization": f"Bearer {settings.SENDGRID_API_KEY}", "Content-Type": "application/json"},
-        method="POST",
-    )
+    payload = {
+        "personalizations": [{"to": [{"email": to_email}]}],
+        "from": {"email": from_address, "name": "AGRO-AI"},
+        "subject": subject,
+        "content": [
+            {"type": "text/plain", "value": text_body},
+            {"type": "text/html", "value": html_body or f"<p>{text_body}</p>"},
+        ],
+    }
+    headers = {"Authorization": f"Bearer {settings.SENDGRID_API_KEY}", "Content-Type": "application/json", "Accept": "application/json"}
     try:
-        with request.urlopen(req, timeout=15) as response:
-            ok = 200 <= response.status < 300
-            logger.info("SendGrid email response status=%s", response.status)
-            return {"ok": ok, "provider": "sendgrid", "status_code": response.status, "reason": "accepted" if ok else "provider_rejected"}
-    except error.HTTPError as exc:
-        body = exc.read().decode("utf-8", errors="replace")
-        logger.error("SendGrid email failed status=%s body=%s", exc.code, body[:1000])
-        return {"ok": False, "provider": "sendgrid", "status_code": exc.code, "reason": "provider_rejected", "provider_response": _safe_provider_response(body)}
+        with httpx.Client(timeout=20, headers=headers) as client:
+            response = client.post("https://api.sendgrid.com/v3/mail/send", json=payload)
+        body = response.text
+        ok = 200 <= response.status_code < 300
+        if ok:
+            logger.info("SendGrid email response status=%s", response.status_code)
+            return {"ok": True, "provider": "sendgrid", "status_code": response.status_code, "reason": "accepted"}
+        logger.error("SendGrid email failed status=%s body=%s", response.status_code, body[:1000])
+        return {"ok": False, "provider": "sendgrid", "status_code": response.status_code, "reason": _provider_rejection_reason(body), "provider_response": _safe_provider_response(body)}
+    except httpx.HTTPError as exc:
+        logger.exception("SendGrid email delivery failed before provider response")
+        return {"ok": False, "provider": "sendgrid", "reason": exc.__class__.__name__}
