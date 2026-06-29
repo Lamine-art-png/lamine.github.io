@@ -29,6 +29,14 @@ def _verification_base_url() -> str:
     return (settings.RESEND_APP_URL or settings.APP_URL or "https://app.agroai-pilot.com").strip().rstrip("/")
 
 
+def _safe_provider_response(value: str | None) -> str | None:
+    if not value:
+        return None
+    # Provider errors do not include our API key, but keep the response capped so
+    # operational diagnostics can be surfaced safely in the portal console.
+    return value.replace(settings.RESEND_API_KEY, "[redacted]")[:1000] if settings.RESEND_API_KEY else value[:1000]
+
+
 def delivery_status() -> dict:
     smtp_ready = all([settings.SMTP_HOST, settings.SMTP_USERNAME, settings.SMTP_PASSWORD, settings.FROM_EMAIL])
     resend_ready = bool(settings.RESEND_API_KEY and settings.FROM_EMAIL)
@@ -51,6 +59,7 @@ def delivery_status() -> dict:
         "missing_env": sorted(set(missing)),
         "from_email_configured": bool(settings.FROM_EMAIL),
         "from_email_domain": _from_domain(),
+        "from_address": _from_address(),
         "resend_configured": bool(settings.RESEND_API_KEY),
         "sendgrid_configured": bool(settings.SENDGRID_API_KEY),
         "smtp_configured": smtp_ready,
@@ -62,8 +71,8 @@ def delivery_status() -> dict:
 def send_email(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> dict:
     """Send one email and return a safe operational result.
 
-    This intentionally returns a dict instead of raising. Auth and onboarding
-    flows must never claim an email was sent unless the provider accepted it.
+    Auth and onboarding flows must never claim an email was sent unless the
+    provider accepted it. The returned provider response is capped and redacted.
     """
 
     status = delivery_status()
@@ -77,7 +86,7 @@ def send_email(*, to_email: str, subject: str, text_body: str, html_body: str | 
         }
 
     provider = status["provider"]
-    logger.info("Sending email through %s to %s from_domain=%s", provider, to_email, status.get("from_email_domain"))
+    logger.info("Sending email through %s to=%s from=%s", provider, to_email, status.get("from_address"))
     try:
         if provider == "smtp":
             return _send_smtp(to_email=to_email, subject=subject, text_body=text_body, html_body=html_body)
@@ -109,9 +118,13 @@ def _send_smtp(*, to_email: str, subject: str, text_body: str, html_body: str | 
 
 
 def _send_resend(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> dict:
+    from_address = _from_address()
     payload = json.dumps(
         {
-            "from": settings.FROM_EMAIL,
+            # Use the raw verified sender address instead of a display-name string.
+            # This removes one common source of provider-side 403 validation errors
+            # while keeping the AGRO-AI branding inside the email template itself.
+            "from": from_address,
             "to": [to_email],
             "subject": subject,
             "text": text_body,
@@ -134,7 +147,8 @@ def _send_resend(*, to_email: str, subject: str, text_body: str, html_body: str 
                 "provider": "resend",
                 "status_code": response.status,
                 "reason": "accepted" if ok else "provider_rejected",
-                "provider_response": body[:500],
+                "provider_response": _safe_provider_response(body),
+                "from_address": from_address,
             }
     except error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
@@ -144,11 +158,12 @@ def _send_resend(*, to_email: str, subject: str, text_body: str, html_body: str 
             "provider": "resend",
             "status_code": exc.code,
             "reason": "provider_rejected",
-            "provider_response": body[:1000],
+            "provider_response": _safe_provider_response(body),
+            "from_address": from_address,
         }
     except Exception as exc:
         logger.exception("Resend email delivery failed before response")
-        return {"ok": False, "provider": "resend", "reason": exc.__class__.__name__}
+        return {"ok": False, "provider": "resend", "reason": exc.__class__.__name__, "from_address": from_address}
 
 
 def _send_sendgrid(*, to_email: str, subject: str, text_body: str, html_body: str | None = None) -> dict:
@@ -178,4 +193,4 @@ def _send_sendgrid(*, to_email: str, subject: str, text_body: str, html_body: st
     except error.HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
         logger.error("SendGrid email failed status=%s body=%s", exc.code, body[:1000])
-        return {"ok": False, "provider": "sendgrid", "status_code": exc.code, "reason": "provider_rejected", "provider_response": body[:1000]}
+        return {"ok": False, "provider": "sendgrid", "status_code": exc.code, "reason": "provider_rejected", "provider_response": _safe_provider_response(body)}
