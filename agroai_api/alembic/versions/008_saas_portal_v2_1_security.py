@@ -13,83 +13,68 @@ branch_labels = None
 depends_on = None
 
 
+# Render starts the API with:
+#   alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+#
+# This migration must finish quickly before Uvicorn can bind Render's port.
+# Keep it intentionally online-safe: no foreign-key creation, no index DDL, and
+# no table rewrites. Add stricter constraints/indexes later in a separate
+# post-deploy migration after the service is healthy.
+
+
 def _has_table(name: str) -> bool:
     return name in sa.inspect(op.get_bind()).get_table_names()
 
 
 def _has_column(table: str, column: str) -> bool:
+    if not _has_table(table):
+        return False
     return column in {item["name"] for item in sa.inspect(op.get_bind()).get_columns(table)}
-
-
-def _create_index(name: str, table: str, columns: list[str], unique: bool = False) -> None:
-    existing = {idx["name"] for idx in sa.inspect(op.get_bind()).get_indexes(table)}
-    if name not in existing:
-        op.create_index(name, table, columns, unique=unique)
 
 
 def upgrade() -> None:
     if _has_table("users") and not _has_column("users", "email_verified_at"):
         op.add_column("users", sa.Column("email_verified_at", sa.DateTime(), nullable=True))
     if _has_table("users") and not _has_column("users", "email_verification_status"):
-        op.add_column("users", sa.Column("email_verification_status", sa.String(), nullable=False, server_default="unverified"))
-    if _has_table("users"):
-        _create_index("ix_users_email_verification_status", "users", ["email_verification_status"])
-
-    if not _has_table("email_verification_tokens"):
-        op.create_table(
-            "email_verification_tokens",
-            sa.Column("id", sa.String(), nullable=False),
-            sa.Column("user_id", sa.String(), nullable=False),
-            sa.Column("token_hash", sa.String(), nullable=False),
-            sa.Column("expires_at", sa.DateTime(), nullable=False),
-            sa.Column("used_at", sa.DateTime(), nullable=True),
-            sa.Column("created_at", sa.DateTime(), nullable=False),
-            sa.ForeignKeyConstraint(["user_id"], ["users.id"]),
-            sa.PrimaryKeyConstraint("id"),
-            sa.UniqueConstraint("token_hash"),
+        op.add_column(
+            "users",
+            sa.Column("email_verification_status", sa.String(), nullable=True, server_default="unverified"),
         )
-    for name, columns, unique in [
-        ("ix_email_verification_tokens_id", ["id"], False),
-        ("ix_email_verification_tokens_user_id", ["user_id"], False),
-        ("ix_email_verification_tokens_token_hash", ["token_hash"], True),
-        ("ix_email_verification_tokens_expires_at", ["expires_at"], False),
-        ("ix_email_verification_tokens_created_at", ["created_at"], False),
-    ]:
-        _create_index(name, "email_verification_tokens", columns, unique=unique)
 
-    if not _has_table("team_invitations"):
-        op.create_table(
-            "team_invitations",
-            sa.Column("id", sa.String(), nullable=False),
-            sa.Column("organization_id", sa.String(), nullable=False),
-            sa.Column("email", sa.String(), nullable=False),
-            sa.Column("role", sa.String(), nullable=False),
-            sa.Column("status", sa.String(), nullable=False),
-            sa.Column("invited_by_user_id", sa.String(), nullable=False),
-            sa.Column("token_hash", sa.String(), nullable=True),
-            sa.Column("expires_at", sa.DateTime(), nullable=True),
-            sa.Column("created_at", sa.DateTime(), nullable=False),
-            sa.Column("updated_at", sa.DateTime(), nullable=False),
-            sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"]),
-            sa.ForeignKeyConstraint(["invited_by_user_id"], ["users.id"]),
-            sa.PrimaryKeyConstraint("id"),
-            sa.UniqueConstraint("token_hash"),
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS email_verification_tokens (
+            id VARCHAR PRIMARY KEY,
+            user_id VARCHAR NOT NULL,
+            token_hash VARCHAR NOT NULL UNIQUE,
+            expires_at TIMESTAMP NOT NULL,
+            used_at TIMESTAMP,
+            created_at TIMESTAMP NOT NULL
         )
-    for name, columns, unique in [
-        ("ix_team_invitations_id", ["id"], False),
-        ("ix_team_invitations_organization_id", ["organization_id"], False),
-        ("ix_team_invitations_email", ["email"], False),
-        ("ix_team_invitations_status", ["status"], False),
-        ("ix_team_invitations_invited_by_user_id", ["invited_by_user_id"], False),
-        ("ix_team_invitations_token_hash", ["token_hash"], True),
-        ("ix_team_invitations_created_at", ["created_at"], False),
-    ]:
-        _create_index(name, "team_invitations", columns, unique=unique)
+        """
+    )
+    op.execute(
+        """
+        CREATE TABLE IF NOT EXISTS team_invitations (
+            id VARCHAR PRIMARY KEY,
+            organization_id VARCHAR NOT NULL,
+            email VARCHAR NOT NULL,
+            role VARCHAR NOT NULL,
+            status VARCHAR NOT NULL,
+            invited_by_user_id VARCHAR NOT NULL,
+            token_hash VARCHAR UNIQUE,
+            expires_at TIMESTAMP,
+            created_at TIMESTAMP NOT NULL,
+            updated_at TIMESTAMP NOT NULL
+        )
+        """
+    )
 
 
 def downgrade() -> None:
-    op.drop_table("team_invitations")
-    op.drop_table("email_verification_tokens")
-    op.drop_index("ix_users_email_verification_status", table_name="users")
-    op.drop_column("users", "email_verification_status")
-    op.drop_column("users", "email_verified_at")
+    op.execute("DROP TABLE IF EXISTS team_invitations")
+    op.execute("DROP TABLE IF EXISTS email_verification_tokens")
+    if _has_table("users") and _has_column("users", "email_verification_status"):
+        op.drop_column("users", "email_verification_status")
+    if _has_table("users") and _has_column("users", "email_verified_at"):
+        op.drop_column("users", "email_verified_at")
