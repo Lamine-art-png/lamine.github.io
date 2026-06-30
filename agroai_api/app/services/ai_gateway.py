@@ -84,10 +84,37 @@ class AIGateway:
                     }
                 ),
                 provider=self.provider or "unconfigured",
-                model=self.model or None,
+                model=model_override or self.model or None,
                 demo_fallback=True,
                 error=str(exc),
             )
+
+    def _headers(self) -> dict[str, str]:
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        if "openrouter.ai" in self.base_url.lower():
+            headers["HTTP-Referer"] = settings.APP_URL or "https://app.agroai-pilot.com"
+            headers["X-Title"] = "AGRO-AI Enterprise Portal"
+        return headers
+
+    def _message_content(self, body: dict[str, Any]) -> str:
+        message = body["choices"][0].get("message") or {}
+        value = message.get("content")
+        if isinstance(value, str):
+            return value
+        if isinstance(value, list):
+            parts: list[str] = []
+            for item in value:
+                if isinstance(item, str):
+                    parts.append(item)
+                elif isinstance(item, dict):
+                    piece = item.get("text") or item.get("content")
+                    if isinstance(piece, str):
+                        parts.append(piece)
+            return "\n".join(parts)
+        return ""
 
     async def _post_openai_payload(
         self,
@@ -122,19 +149,16 @@ class AIGateway:
             "model": model_override or self.model,
             "messages": messages,
             "temperature": temperature,
-            "max_tokens": 1600,
+            "max_tokens": 2200,
         }
         if response_format:
             payload["response_format"] = response_format
 
-        headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-        }
+        headers = self._headers()
 
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             body = await self._post_openai_payload(client, headers, payload)
-            raw_content = body["choices"][0]["message"]["content"]
+            raw_content = self._message_content(body)
             content = extract_final_answer(raw_content)
 
             if not content:
@@ -144,7 +168,7 @@ class AIGateway:
                     {"role": "user", "content": FINAL_ANSWER_PROMPT},
                 ]
                 final_body = await self._post_openai_payload(client, headers, final_payload)
-                final_raw = final_body["choices"][0]["message"]["content"]
+                final_raw = self._message_content(final_body)
                 content = extract_final_answer(final_raw)
                 body = {"first_response": body, "final_response": final_body}
 
@@ -254,14 +278,12 @@ def extract_final_answer(content: str) -> str:
 
     text = _strip_markdown_fences(text)
 
-    # Recover JSON object when wrapped in prose.
     start = text.find("{")
     end = text.rfind("}")
     if start >= 0 and end > start:
         text = text[start : end + 1].strip()
 
-    # Reject obvious scratchpad/prose reasoning leaks.
-    unsafe_markers = [
+    blocked_markers = [
         "okay, so i'm",
         "let me think",
         "i need to figure",
@@ -270,7 +292,7 @@ def extract_final_answer(content: str) -> str:
         "i'm trying to figure",
     ]
     low = text.lower()
-    if any(marker in low for marker in unsafe_markers):
+    if any(marker in low for marker in blocked_markers):
         return ""
 
     return text.strip()
