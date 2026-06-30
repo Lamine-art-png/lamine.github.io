@@ -24,67 +24,72 @@ from app.schemas.ai import (
     ToolCitation,
     VerificationResult,
 )
-from app.services.ai_gateway import AIGateway, parse_model_json
+from app.services.ai_gateway import parse_model_json
 from app.services.model_router import ModelRouter
 from app.services.evaluation_seed import ensure_evaluation_context
 
 router = APIRouter(tags=["ai"])
 
 
-SYSTEM_PROMPT = """You are AGRO-AI, an agriculture intelligence engine.
+SYSTEM_PROMPT = """You are AGRO-AI, an enterprise agriculture operating intelligence agent.
 
 Return valid JSON only. Never include chain-of-thought, scratchpad, <think>, markdown fences, or hidden reasoning.
 
 Use this JSON shape:
 {
-  "summary": "...",
+  "summary": "natural executive answer to the user",
+  "answer": "same answer, written naturally if useful",
   "available_data": [],
   "missing_data": [],
-  "integration_status": [],
+  "agent_plan": [],
+  "work_completed": [],
   "recommendations": [],
   "next_actions": [],
+  "risk_flags": [],
   "confidence": "low|medium|high",
   "customer_safe": true
 }
 
-Rules:
-- Do not invent sensor data, integrations, compliance status, prices, or yields.
-- Use only the provided tenant-scoped evidence.
-- If evidence is evaluation_sample, label it as evaluation_sample.
-- Never claim WiseConn, Talgil, weather, OpenET, or controller data is live unless the evidence says connected/live.
-- If context is incomplete, still provide a useful operational diagnosis.
-- Keep output executive-readable, practical, and agriculture-specific.
+Operating rules:
+- You are not a generic chatbot. You are the operating layer for AGRO-AI / Terris: irrigation, water, compliance, evidence, field operations, reports, and connected agriculture data.
+- Think like an operations lead: inspect the workspace evidence, explain what matters, identify blockers, plan the work, and produce next actions.
+- Answer the user's actual question first. Do not sound like a static template.
+- Use only tenant-scoped evidence provided in the context. Do not invent live telemetry, connected integrations, yields, compliance status, savings, prices, customer facts, or sensor values.
+- Distinguish sample, missing, stale, uploaded, inferred, and live evidence.
+- If evidence is incomplete, still produce a useful operating plan. Say what can be done now, what cannot be trusted yet, and what evidence is needed next.
+- Keep the tone natural, direct, specific, and serious. No buzzwords. No debug/runtime/provider language.
 """
 
-
 TASK_PROMPTS: dict[str, str] = {
-    "chat": "Answer the operator's question using only the evidence context.",
+    "chat": (
+        "Act as the AGRO-AI operating agent. Answer the operator's question naturally, then return the concrete work plan, "
+        "evidence used, missing evidence, and next actions. Do not return a canned status paragraph."
+    ),
     "irrigation_recommendation": (
-        "Return JSON with recommendation, confidence, evidence_used, missing_data, "
-        "risk_flags, and next_action for irrigation operations."
+        "Prepare an irrigation operating recommendation. Return recommendation, confidence, evidence_used, missing_data, "
+        "risk_flags, operator checklist, and next_action."
     ),
     "assurance_review": (
-        "Return JSON with readiness_gaps, blocker_severity, evidence_needed, "
-        "reviewer_safe_language, and next_action."
+        "Run an assurance review. Return readiness_gaps, blocker_severity, evidence_needed, reviewer-safe language, "
+        "and next_action."
     ),
     "report_draft": (
-        "Draft structured report sections using only available data. Return JSON "
-        "with title, sections, citations, missing_data, and reviewer_notes."
+        "Draft an owner-ready report from available evidence. Return title, sections, citations, missing_data, "
+        "reviewer_notes, and next_action."
     ),
     "integration_diagnosis": (
-        "Diagnose integration readiness. Return JSON with status, observed_signals, "
-        "missing_integrations, risks, and next_action."
+        "Diagnose integration readiness. Return connected or missing systems, observed_signals, risks, setup blockers, "
+        "and next_action."
     ),
     "gap_analysis": (
-        "Return JSON with readiness_gaps, severity, evidence_needed, and next_action."
+        "Find evidence and operating gaps. Return readiness_gaps, severity, evidence_needed, owner impact, and next_action."
     ),
     "proof_draft": (
-        "Return JSON with proof_summary, evidence_used, reviewer_safe_language, "
+        "Prepare an evidence-backed proof draft. Return proof_summary, evidence_used, reviewer-safe language, "
         "missing_data, and next_action."
     ),
     "readiness_refresh": (
-        "Return JSON with readiness_status, blockers, evidence_to_refresh, "
-        "risk_flags, and next_action."
+        "Refresh operating readiness. Return readiness_status, blockers, evidence_to_refresh, risk_flags, and next_action."
     ),
 }
 
@@ -338,36 +343,145 @@ def _verification(status_value: str, context: EvidenceContext) -> VerificationRe
     )
 
 
-def _deterministic_body(context: EvidenceContext) -> dict[str, Any]:
-    available: list[str] = []
-    for item in context.evidence:
-        item_type = item.get("type", "evidence")
-        source = item.get("source")
-        label = f"{item_type}" + (f" ({source})" if source else "")
-        available.append(label)
+def _evidence_label(item: dict[str, Any]) -> str:
+    item_type = item.get("type", "evidence")
+    if item_type == "workspace":
+        details = [item.get("name"), item.get("crop"), item.get("region")]
+        return "Workspace profile" + (f" — {', '.join(str(x) for x in details if x)}" if any(details) else "")
+    if item_type == "block":
+        details = [item.get("name"), item.get("crop_type"), item.get("soil_type")]
+        return "Field/block profile" + (f" — {', '.join(str(x) for x in details if x)}" if any(details) else "")
+    if item_type == "telemetry_recent":
+        return f"Recent telemetry records — {len(item.get('records') or [])} rows"
+    if item_type == "recommendation_recent":
+        return "Most recent irrigation recommendation"
+    if item_type == "integration_readiness":
+        return "Integration readiness map"
+    source = item.get("source")
+    return f"{item_type}" + (f" ({source})" if source else "")
+
+
+def _question_intent(user_instruction: str, task: str) -> str:
+    text = f"{task} {user_instruction}".lower()
+    checks = [
+        ("irrigation", ["irrigation", "water", "et", "soil", "moisture", "valve", "flow", "schedule"]),
+        ("compliance", ["compliance", "report", "audit", "assurance", "evidence", "packet", "agency", "nrds", "water use"]),
+        ("integration", ["integrat", "connector", "wiseconn", "talgil", "john deere", "deere", "api", "upload", "source"]),
+        ("field_ops", ["task", "operator", "field", "exception", "priority", "checklist", "work order", "decision"]),
+        ("data_work", ["data", "csv", "pdf", "scattered", "organize", "analyze", "dataset", "documents"]),
+    ]
+    for intent, keywords in checks:
+        if any(keyword in text for keyword in keywords):
+            return intent
+    return "general"
+
+
+def _deterministic_body(
+    context: EvidenceContext,
+    *,
+    user_instruction: str = "",
+    task: str = "chat",
+) -> dict[str, Any]:
+    available = [_evidence_label(item) for item in context.evidence]
+    missing = list(dict.fromkeys(context.missing_data))
+    intent = _question_intent(user_instruction, task)
+    workspace_phrase = "this workspace"
+    workspace = next((item for item in context.evidence if item.get("type") == "workspace"), None)
+    if workspace and workspace.get("name"):
+        workspace_phrase = f"the {workspace.get('name')} workspace"
+
+    intent_summaries = {
+        "irrigation": (
+            f"For irrigation work in {workspace_phrase}, I can organize the current field profile and evidence trail, "
+            "but I would not approve a live irrigation recommendation until controller, flow, ET/weather, and recent field telemetry are connected or uploaded."
+        ),
+        "compliance": (
+            f"For compliance or assurance work in {workspace_phrase}, I can start assembling the evidence map now. "
+            "The blocker is not the report format; it is missing live, traceable records that prove water use, field activity, and source provenance."
+        ),
+        "integration": (
+            f"For integration work in {workspace_phrase}, the next move is to turn each source into a verified data lane: credentials or exports, normalized records, freshness checks, and evidence citations."
+        ),
+        "field_ops": (
+            f"For field operations in {workspace_phrase}, I can turn the current context into a work queue, but the system still needs live source evidence before decisions should be treated as operational instructions."
+        ),
+        "data_work": (
+            f"For scattered data in {workspace_phrase}, the right workflow is ingestion first, then normalization, evidence linking, gap detection, and finally report or decision generation."
+        ),
+        "general": (
+            f"I can help operate {workspace_phrase} by turning the available evidence into priorities, reports, checklists, and decisions. "
+            "Right now the safest answer is to separate what is already known from what still needs live evidence."
+        ),
+    }
+
+    plans = {
+        "irrigation": [
+            "Map field/block profile, crop, soil, acreage, and water budget.",
+            "Attach recent controller events, flow, ET/weather, and soil/field observations.",
+            "Flag stale or missing measurements before recommending runtime or volume.",
+            "Generate an operator checklist and reviewer-safe irrigation decision.",
+        ],
+        "compliance": [
+            "Collect water accounting, source provenance, field activity, and reporting period boundaries.",
+            "Link every claim to an evidence record or mark it as missing.",
+            "Draft the packet with reviewer-safe language and a missing-evidence appendix.",
+            "Create follow-up tasks for unresolved gaps before customer or agency delivery.",
+        ],
+        "integration": [
+            "Verify each connector or upload path separately.",
+            "Normalize records into fields, telemetry, evidence, decisions, and reports.",
+            "Run freshness and completeness checks after every ingest.",
+            "Expose only customer-safe readiness status in the portal.",
+        ],
+        "field_ops": [
+            "Convert the current context into field priorities and exceptions.",
+            "Create tasks for missing evidence, source setup, and operator confirmation.",
+            "Keep decisions in review until live evidence is attached.",
+            "Generate an audit trail for every action taken in the workspace.",
+        ],
+        "data_work": [
+            "Ingest files and machine data without losing source identity.",
+            "Classify records by field, date, source, event type, and confidence.",
+            "Detect duplicates, stale records, missing periods, and contradictions.",
+            "Turn the clean evidence graph into decisions, reports, and next actions.",
+        ],
+        "general": [
+            "Separate available evidence from missing evidence.",
+            "Find the highest-risk blocker first.",
+            "Create the next operating task instead of giving a vague answer.",
+            "Escalate to report, assurance, or decision mode when enough evidence exists.",
+        ],
+    }
+
+    next_actions = [
+        "Connect WiseConn, Talgil, John Deere, ET/weather, or upload the latest exports.",
+        "Confirm the field profile: crop, acreage, soil, water budget, and reporting period.",
+        "Attach recent telemetry or operator notes before approving operational recommendations.",
+    ]
+    if missing:
+        next_actions.insert(0, f"Resolve the first missing evidence item: {missing[0]}.")
 
     return {
-        "summary": (
-            "AGRO-AI can authenticate this organization and inspect its evaluation workspace. "
-            "Starter field context is available, but live controller and sensor integrations are not connected yet."
-        ),
+        "summary": intent_summaries[intent],
+        "answer": intent_summaries[intent],
         "available_data": available,
-        "missing_data": context.missing_data,
+        "missing_data": missing,
         "integration_status": _integration_status(),
-        "recommendations": [
-            "Use the evaluation sample only for product walkthrough and QA.",
-            "Connect WiseConn or Talgil credentials, or upload recent controller exports.",
-            "Confirm crop, acreage, soil type, water budget, and recent irrigation history before operational recommendations.",
-            "Run an assurance review after live telemetry is connected.",
+        "agent_plan": plans[intent],
+        "work_completed": [
+            "Read the tenant-scoped workspace context.",
+            "Separated current evidence from missing operating evidence.",
+            "Prepared a safe next-step plan without inventing live data.",
         ],
-        "next_actions": [
-            "connect_source",
-            "upload_recent_telemetry",
-            "confirm_field_profile",
-            "run_assurance_review",
+        "recommendations": plans[intent][:3],
+        "next_actions": next_actions,
+        "risk_flags": [
+            "Do not treat sample or incomplete evidence as live operating truth.",
+            "Do not issue irrigation, compliance, or customer-facing claims until source provenance is attached.",
         ],
-        "confidence": "low",
+        "confidence": "low" if missing else "medium",
         "customer_safe": True,
+        "agent_mode": "deterministic_operating_plan",
     }
 
 
@@ -429,7 +543,7 @@ async def _run_ai(
     )
     body = parse_model_json(result.content)
     if result.status != "ok" or _weak_or_empty(body):
-        body = _deterministic_body(context)
+        body = _deterministic_body(context, user_instruction=user_instruction, task=task)
     return body, result
 
 
