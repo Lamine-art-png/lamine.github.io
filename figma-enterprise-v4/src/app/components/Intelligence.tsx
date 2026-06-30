@@ -11,35 +11,52 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-function text(value: unknown) {
-  if (value === null || value === undefined || value === "") return "";
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+function tryJson(value: string): AnyRecord | null {
   try {
-    return JSON.stringify(value, null, 2);
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as AnyRecord : null;
   } catch {
-    return "";
+    return null;
   }
+}
+
+function rescueJsonField(value: string, key: string) {
+  const match = value.match(new RegExp(`"${key}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)`, "s"));
+  if (!match) return "";
+  try {
+    return JSON.parse(`"${match[1]}"`);
+  } catch {
+    return match[1].replace(/\\n/g, "\n").replace(/\\"/g, "\"").trim();
+  }
+}
+
+function humanText(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "";
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const parsed = tryJson(trimmed);
+    if (parsed) return humanText(parsed.answer || parsed.summary || parsed.message || parsed.content || "");
+    if (trimmed.startsWith("{")) {
+      return rescueJsonField(trimmed, "answer") || rescueJsonField(trimmed, "summary") || "I can help. Ask one specific field, irrigation, compliance, or evidence question and I will work from the connected data.";
+    }
+    return trimmed;
+  }
+  if (typeof value === "object") {
+    const row = value as AnyRecord;
+    return humanText(row.answer || row.summary || row.message || row.content || row.recommendation || row.next_step || row.why || "");
+  }
+  return "";
 }
 
 function lines(value: unknown): string[] {
   if (!value) return [];
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => {
-        if (typeof item === "string") return item;
-        if (item && typeof item === "object") {
-          const row = item as AnyRecord;
-          return row.label || row.title || row.name || row.summary || row.recommendation || row.next_step || row.why || text(row);
-        }
-        return text(item);
-      })
-      .filter(Boolean);
-  }
-  return [text(value)].filter(Boolean);
+  if (Array.isArray(value)) return value.map((item) => humanText(item)).filter(Boolean);
+  return [humanText(value)].filter(Boolean);
 }
 
 function compactBullets(value: unknown) {
-  const rows = lines(value).slice(0, 5);
+  const rows = lines(value).filter((row) => row !== "structured model JSON").slice(0, 4);
   if (!rows.length) return "";
   return rows.map((row) => `• ${row}`).join("\n");
 }
@@ -53,12 +70,12 @@ function operationalAnswer(response: AnyRecord) {
   }
 
   const result = response.result && typeof response.result === "object" ? response.result : response.raw && typeof response.raw === "object" ? response.raw : response;
-  const primary = text(result.answer || result.summary || result.executive_summary || response.output || response.message || result.content).trim();
+  const primary = humanText(result.answer || result.summary || result.executive_summary || response.output || response.message || result.content).trim();
   const nextSteps = compactBullets(result.next_actions || result.recommendations || result.operator_tasks);
   const missing = compactBullets(result.missing_evidence || result.missing_data || response.missing_data);
   const risks = compactBullets(result.risk_flags || result.risks || result.reviewer_notes);
 
-  const sections = [primary];
+  const sections = [primary || "I can help. Ask one specific field, irrigation, compliance, or evidence question and I will work from the connected data."];
   if (nextSteps) sections.push(`Next steps\n${nextSteps}`);
   if (missing) sections.push(`Missing evidence\n${missing}`);
   if (risks) sections.push(`Risks\n${risks}`);
@@ -68,8 +85,8 @@ function operationalAnswer(response: AnyRecord) {
 
 function cleanHistory(messages: AnyRecord[]) {
   return messages
-    .slice(-12)
-    .map((message) => ({ role: message.role === "user" ? "user" : "assistant", content: text(message.content).slice(0, 2200) }))
+    .slice(-4)
+    .map((message) => ({ role: message.role === "user" ? "user" : "assistant", content: humanText(message.content).slice(0, 900) }))
     .filter((message) => message.content.trim());
 }
 
@@ -275,12 +292,12 @@ export function Intelligence() {
                     border: `1px solid ${message.role === "user" ? "#10231B" : BORDER}`,
                   }}
                 >
-                  {text(message.content)}
+                  {humanText(message.content)}
                 </div>
               </div>
             ))}
 
-            {loading ? <div className="text-[13px]" style={{ color: MUTED }}>{uploading ? "Uploading evidence before analysis." : "Reading evidence, history, and workspace context."}</div> : null}
+            {loading ? <div className="text-[13px]" style={{ color: MUTED }}>{uploading ? "Uploading evidence before analysis." : "Reading evidence and preparing a short answer."}</div> : null}
             {error ? <div className="rounded-xl px-4 py-3 text-[13px]" style={{ color: "#A4492F", background: "#FFF7F2", border: `1px solid ${BORDER}` }}>{error}</div> : null}
           </div>
 
