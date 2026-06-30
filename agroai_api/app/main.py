@@ -3,15 +3,13 @@
 from __future__ import annotations
 
 import datetime
-import io
 import logging
 from contextlib import asynccontextmanager
-from typing import Any, Dict, List
+from typing import Any, Dict
 
-from fastapi import Body, FastAPI, HTTPException
+from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, Response
-from pydantic import BaseModel, Field
+from fastapi.responses import JSONResponse
 from sqlalchemy import inspect, text
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -143,6 +141,7 @@ ALLOWED_ORIGINS = [
     "https://app.agroai-pilot.com",
     "https://agroai-pilot.com",
     "https://www.agroai-pilot.com",
+    "https://api.agroai-pilot.com",
     "http://localhost:5173",
     "http://127.0.0.1:5173",
     "http://localhost:3000",
@@ -159,8 +158,59 @@ app.add_middleware(
     allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
+    expose_headers=["x-agroai-runtime", "x-agroai-error"],
 )
+
+
+def _origin_allowed(origin: str) -> bool:
+    if origin in ALLOWED_ORIGINS:
+        return True
+    return bool(origin.endswith(".pages.dev") and ("agroai-portal" in origin or "lamine-github-io" in origin or "agroai-command-center-v2-preview" in origin))
+
+
+def _add_runtime_cors_headers(response: JSONResponse, origin: str | None) -> JSONResponse:
+    if origin and _origin_allowed(origin):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Vary"] = "Origin"
+    response.headers["x-agroai-runtime"] = VERSION
+    return response
+
+
+@app.middleware("http")
+async def runtime_error_boundary(request: Request, call_next):
+    """Keep browser diagnostics truthful even when a route crashes.
+
+    Without this, an internal 500 can appear in Chrome as a CORS failure, which
+    hides the real backend issue. This middleware preserves CORS headers and
+    returns a small JSON error envelope instead of letting the browser lie.
+    """
+
+    origin = request.headers.get("origin")
+    try:
+        response = await call_next(request)
+    except Exception as exc:  # pragma: no cover - production safety boundary
+        logger.exception("Unhandled API error path=%s", request.url.path)
+        payload = {
+            "status": "error",
+            "error": "backend_runtime_error",
+            "path": request.url.path,
+            "reason": exc.__class__.__name__,
+            "checked_at": datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        }
+        response = JSONResponse(payload, status_code=500)
+        response.headers["x-agroai-error"] = exc.__class__.__name__
+        return _add_runtime_cors_headers(response, origin)
+
+    if origin and _origin_allowed(origin):
+        response.headers.setdefault("Access-Control-Allow-Origin", origin)
+        response.headers.setdefault("Access-Control-Allow-Credentials", "true")
+        response.headers.setdefault("Vary", "Origin")
+    response.headers.setdefault("x-agroai-runtime", VERSION)
+    return response
 
 
 async def health_payload() -> Dict[str, str]:
@@ -180,6 +230,27 @@ async def health_root() -> Dict[str, str]:
 @app.get("/v1/health")
 async def health_v1() -> Dict[str, str]:
     return await health_payload()
+
+
+@app.get("/v1/runtime/ai-status")
+async def ai_runtime_status() -> Dict[str, Any]:
+    from app.services.model_router import ModelRouter
+
+    router = ModelRouter()
+    status_payload = router.status()
+    return {
+        "status": "ok",
+        "runtime": VERSION,
+        "configured": status_payload.get("configured"),
+        "provider": status_payload.get("provider"),
+        "mode": status_payload.get("mode"),
+        "base_url_present": status_payload.get("base_url_present"),
+        "selected_model": status_payload.get("model"),
+        "missing_env": status_payload.get("missing_env", []),
+        "fallback_active": status_payload.get("fallback_active"),
+        "profiles": status_payload.get("profiles", {}),
+        "checked_at": datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z",
+    }
 
 
 @app.get("/v1/auth/email-delivery/status")
