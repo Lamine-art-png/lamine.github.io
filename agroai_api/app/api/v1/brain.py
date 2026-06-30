@@ -135,33 +135,62 @@ async def model_smoke() -> dict[str, Any]:
     """
 
     model_router = ModelRouter()
-    selected = model_router.select("chat")
-    result, selection = await model_router.run(
-        task="chat",
-        messages=[
+    messages = [
+        {
+            "role": "system",
+            "content": "Return valid JSON only: {\"summary\": string, \"answer\": string, \"customer_safe\": true}",
+        },
+        {
+            "role": "user",
+            "content": "Say that AGRO-AI live model routing is working in one short sentence.",
+        },
+    ]
+    models = _dedupe_models([model_router.reasoning_model, model_router.default_model, *model_router.fallback_models])
+    attempts: list[dict[str, Any]] = []
+    last_body: dict[str, Any] = {}
+    for model in models:
+        result = await model_router.gateway.chat(
+            messages,
+            temperature=0.1,
+            response_format={"type": "json_object"},
+            model_override=model,
+        )
+        body = parse_model_json(result.content)
+        last_body = body
+        live = result.status == "ok" and not result.demo_fallback and bool(body.get("summary") or body.get("answer"))
+        attempts.append(
             {
-                "role": "system",
-                "content": "Return valid JSON only: {\"summary\": string, \"answer\": string, \"customer_safe\": true}",
-            },
-            {
-                "role": "user",
-                "content": "Say that AGRO-AI live model routing is working in one short sentence.",
-            },
-        ],
-        temperature=0.1,
-        response_format={"type": "json_object"},
-    )
-    body = parse_model_json(result.content)
-    live = result.status == "ok" and not result.demo_fallback and bool(body.get("summary") or body.get("answer"))
+                "model": model,
+                "selected_model": result.model or model,
+                "gateway_status": result.status,
+                "demo_fallback": result.demo_fallback,
+                "error": result.error,
+                "summary": body.get("summary") or body.get("answer") or "",
+            }
+        )
+        if live:
+            return {
+                "status": "ok",
+                "live_model_response": True,
+                "provider": result.provider,
+                "selected_model": result.model or model,
+                "gateway_status": result.status,
+                "demo_fallback": result.demo_fallback,
+                "error": result.error,
+                "summary": body.get("summary") or body.get("answer") or "",
+                "attempts": attempts,
+            }
+
     return {
-        "status": "ok" if live else "failed",
-        "live_model_response": live,
-        "provider": result.provider,
-        "selected_model": result.model or selection.model or selected.model,
-        "gateway_status": result.status,
-        "demo_fallback": result.demo_fallback,
-        "error": result.error,
-        "summary": body.get("summary") or body.get("answer") or "",
+        "status": "failed",
+        "live_model_response": False,
+        "provider": model_router.gateway.raw_provider or model_router.gateway.provider,
+        "selected_model": models[0] if models else None,
+        "gateway_status": attempts[-1]["gateway_status"] if attempts else "not_configured",
+        "demo_fallback": True,
+        "error": attempts[-1]["error"] if attempts else "no_models_configured",
+        "summary": last_body.get("summary") or last_body.get("answer") or "",
+        "attempts": attempts,
     }
 
 
