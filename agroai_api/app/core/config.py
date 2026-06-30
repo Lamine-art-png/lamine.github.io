@@ -114,16 +114,17 @@ class Settings(BaseSettings):
     AI_PROVIDER: str = ""
     AI_BASE_URL: str = ""
     AI_API_KEY: str = ""
+    OPENROUTER_API_KEY: str = ""
     AI_MODEL: str = ""
     AI_FAST_MODEL: str = ""
     AI_REASONING_MODEL: str = ""
     AI_REPORT_MODEL: str = ""
     AI_LOCAL_MODEL: str = ""
-    # Comma-separated OpenAI-compatible backup models. Used when the primary
-    # hosted model is rejected/unavailable, so AGRO-AI does not silently fall
-    # into deterministic fallback because of one bad model id.
-    AI_MODEL_FALLBACKS: str = "z-ai/glm-5.2,z-ai/glm-4.5,qwen/qwen3-max,deepseek/deepseek-r1-0528"
-    AI_TIMEOUT_SECONDS: int = 30
+    # Comma-separated OpenAI-compatible backup models. Paid models are first for
+    # real production quality; free models are last-resort dev fallbacks for
+    # accounts without credits.
+    AI_MODEL_FALLBACKS: str = "z-ai/glm-5.2,z-ai/glm-5-turbo,qwen/qwen3-max-thinking,qwen/qwen3-max,qwen/qwen3-coder-plus,qwen/qwen3-next-80b-a3b-instruct,z-ai/glm-4.5,z-ai/glm-4.5-air,deepseek/deepseek-v3.1-terminus,nvidia/nemotron-3-ultra-550b-a55b:free,cohere/north-mini-code:free"
+    AI_TIMEOUT_SECONDS: int = 60
 
     # Connector ingestion / uploaded evidence storage.
     # Render free instances have ephemeral disk; use a Render Disk/R2/S3 later
