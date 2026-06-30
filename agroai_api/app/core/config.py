@@ -119,6 +119,10 @@ class Settings(BaseSettings):
     AI_REASONING_MODEL: str = ""
     AI_REPORT_MODEL: str = ""
     AI_LOCAL_MODEL: str = ""
+    # Comma-separated OpenAI-compatible backup models. Used when the primary
+    # hosted model is rejected/unavailable, so AGRO-AI does not silently fall
+    # into deterministic fallback because of one bad model id.
+    AI_MODEL_FALLBACKS: str = "z-ai/glm-5.2,z-ai/glm-4.5,qwen/qwen3-max,deepseek/deepseek-r1-0528"
     AI_TIMEOUT_SECONDS: int = 30
 
     # Connector ingestion / uploaded evidence storage.
