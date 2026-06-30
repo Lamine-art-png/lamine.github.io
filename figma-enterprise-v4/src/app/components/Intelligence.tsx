@@ -3,7 +3,7 @@ import { Paperclip, Plus, X } from "lucide-react";
 import { apiClient } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { usePortalResource } from "../hooks/usePortalResource";
-import { BG, BORDER, GREEN, MUTED, PortalButton, SURFACE, TEXT } from "./portalUi";
+import { BG, BORDER, MUTED, PortalButton, SURFACE, TEXT } from "./portalUi";
 
 type AnyRecord = Record<string, any>;
 
@@ -38,29 +38,32 @@ function lines(value: unknown): string[] {
   return [text(value)].filter(Boolean);
 }
 
-function section(label: string, value: unknown) {
-  const rows = lines(value);
+function compactBullets(value: unknown) {
+  const rows = lines(value).slice(0, 5);
   if (!rows.length) return "";
-  return `${label}\n${rows.map((row) => `• ${row}`).join("\n")}`;
+  return rows.map((row) => `• ${row}`).join("\n");
 }
 
 function operationalAnswer(response: AnyRecord) {
-  const result = response.result && typeof response.result === "object" ? response.result : response;
-  const direct = result.answer || result.summary || result.executive_summary || response.output || response.message || result.content;
-  const primary = text(direct).trim();
-  const sections = [
-    primary,
-    section("What I checked", result.work_completed),
-    section("Evidence used", result.evidence_used || result.available_data || result.key_findings || result.field_summary),
-    section("What is missing", result.missing_evidence || result.missing_data || response.missing_data),
-    section("Operating plan", result.operating_plan || result.agent_plan || result.recommendations || result.recommended_next_actions || result.operator_instructions),
-    section("Next steps", result.next_actions || result.operator_tasks),
-    section("Risks to watch", result.risk_flags || result.risks || result.reviewer_notes),
-  ].filter(Boolean);
+  if (response.status && response.status !== "completed" && response.status !== "ok") {
+    throw new Error("Live AGRO-AI intelligence is not connected yet. I will not show a fake AI answer.");
+  }
+  if (response.model_status && response.model_status !== "live") {
+    throw new Error("Live AGRO-AI intelligence is not connected yet. I will not show a fake AI answer.");
+  }
 
-  return sections.length
-    ? sections.join("\n\n")
-    : "I received the request, but the operating engine did not return enough usable detail. Add field, sensor, ET/weather, document, or operator evidence and I can turn it into a decision brief, report, checklist, or evidence plan.";
+  const result = response.result && typeof response.result === "object" ? response.result : response.raw && typeof response.raw === "object" ? response.raw : response;
+  const primary = text(result.answer || result.summary || result.executive_summary || response.output || response.message || result.content).trim();
+  const nextSteps = compactBullets(result.next_actions || result.recommendations || result.operator_tasks);
+  const missing = compactBullets(result.missing_evidence || result.missing_data || response.missing_data);
+  const risks = compactBullets(result.risk_flags || result.risks || result.reviewer_notes);
+
+  const sections = [primary];
+  if (nextSteps) sections.push(`Next steps\n${nextSteps}`);
+  if (missing) sections.push(`Missing evidence\n${missing}`);
+  if (risks) sections.push(`Risks\n${risks}`);
+
+  return sections.filter(Boolean).join("\n\n");
 }
 
 function cleanHistory(messages: AnyRecord[]) {
@@ -246,21 +249,18 @@ export function Intelligence() {
 
         <section className="flex min-h-[78vh] flex-col rounded-xl" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
           <div className="border-b px-6 py-5" style={{ borderColor: BORDER }}>
-            <div className="mb-3 inline-flex items-center rounded-full px-3 py-1 text-[11px] font-semibold uppercase tracking-widest" style={{ background: BG, color: GREEN, border: `1px solid ${BORDER}` }}>
-              AGRO-AI Brain
-            </div>
             <h1 className="text-[26px] font-semibold tracking-tight" style={{ color: TEXT }}>Ask AGRO-AI</h1>
             <p className="mt-2 max-w-[820px] text-[14px] leading-6" style={{ color: MUTED }}>
-              Use this like an operating room for agriculture work: upload evidence, inspect scattered context, find gaps, organize field priorities, draft reports, prepare packets, and turn messy workspace data into action.
+              Upload evidence, inspect scattered context, find gaps, organize field priorities, draft reports, prepare packets, and turn workspace data into action.
             </p>
           </div>
 
           <div className="flex-1 space-y-4 overflow-auto px-6 py-6">
             {!messages.length ? (
               <div className="mx-auto mt-20 max-w-[660px] text-center">
-                <h2 className="text-[24px] font-semibold" style={{ color: TEXT }}>What should AGRO-AI work through?</h2>
+                <h2 className="text-[24px] font-semibold" style={{ color: TEXT }}>What should we work through?</h2>
                 <p className="mt-3 text-[14px] leading-7" style={{ color: MUTED }}>
-                  Start with a field, report, compliance requirement, customer account, irrigation decision, evidence gap, or messy dataset. The workspace context and uploaded files stay attached in the background.
+                  Start with a field, report, compliance requirement, customer account, irrigation decision, evidence gap, or messy dataset. Workspace context and uploaded files stay attached in the background.
                 </p>
               </div>
             ) : null}
@@ -280,8 +280,8 @@ export function Intelligence() {
               </div>
             ))}
 
-            {loading ? <div className="text-[13px]" style={{ color: MUTED }}>{uploading ? "Uploading evidence before AGRO-AI reads it." : "AGRO-AI is reading evidence, history, and workspace context."}</div> : null}
-            {error ? <div className="text-[13px]" style={{ color: "#A4492F" }}>{error}</div> : null}
+            {loading ? <div className="text-[13px]" style={{ color: MUTED }}>{uploading ? "Uploading evidence before analysis." : "Reading evidence, history, and workspace context."}</div> : null}
+            {error ? <div className="rounded-xl px-4 py-3 text-[13px]" style={{ color: "#A4492F", background: "#FFF7F2", border: `1px solid ${BORDER}` }}>{error}</div> : null}
           </div>
 
           <div className="border-t px-6 py-5" style={{ borderColor: BORDER }}>
