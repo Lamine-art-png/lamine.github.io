@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ToolCitation(BaseModel):
@@ -133,3 +133,23 @@ class IntelligenceRunResponse(BaseModel):
     risk: list[Any] | str | None = None
     recommendation: Any = None
     next_action: Any = None
+
+    @model_validator(mode="after")
+    def fill_legacy_portal_fields(self) -> "IntelligenceRunResponse":
+        result = self.result or {}
+        summary = (
+            self.summary
+            or result.get("summary")
+            or result.get("executive_summary")
+            or result.get("recommendation")
+            or result.get("why")
+            or "AGRO-AI reviewed the workspace context and produced an operating response."
+        )
+        self.summary = str(summary)
+        self.answer = self.answer or self.summary
+        self.evidence_used = self.evidence_used or list(result.get("evidence_used") or result.get("available_data") or result.get("key_findings") or [])
+        self.missing_evidence = self.missing_evidence or list(result.get("missing_evidence") or result.get("missing_data") or self.missing_data or [])
+        self.risk = self.risk or result.get("risk_flags") or result.get("risks") or []
+        self.recommendation = self.recommendation or result.get("recommendation") or result.get("recommendations") or []
+        self.next_action = self.next_action or result.get("next_actions") or result.get("operator_instructions") or []
+        return self
