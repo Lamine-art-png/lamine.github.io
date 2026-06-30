@@ -8,12 +8,14 @@ from app.core.config import settings
 from app.services.ai_gateway import AIGateway, AIGatewayResult
 
 
-# Verified OpenRouter ids. Keep Chinese-first routing, but use model ids that
-# OpenRouter actually publishes so production does not silently fall into safe mode.
+# Verified OpenRouter ids. Paid frontier models are preferred for production.
+# Free models are included as emergency/dev fallbacks so a 402 on the paid model
+# does not make the product look dead while the OpenRouter account is unfunded.
 DEFAULT_FRONTIER_MODEL = "z-ai/glm-5.2"
 DEFAULT_FAST_MODEL = "qwen/qwen3-next-80b-a3b-instruct"
 DEFAULT_REPORT_MODEL = "qwen/qwen3-max"
 DEFAULT_MODEL_FALLBACKS = [
+    # Paid production-grade options.
     "z-ai/glm-5.2",
     "z-ai/glm-5-turbo",
     "qwen/qwen3-max-thinking",
@@ -23,6 +25,9 @@ DEFAULT_MODEL_FALLBACKS = [
     "z-ai/glm-4.5",
     "z-ai/glm-4.5-air",
     "deepseek/deepseek-v3.1-terminus",
+    # Free/dev fallbacks. Do not treat these as final production quality.
+    "nvidia/nemotron-3-ultra-550b-a55b:free",
+    "cohere/north-mini-code:free",
 ]
 
 TASK_PROFILES = {
