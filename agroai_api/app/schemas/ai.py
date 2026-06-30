@@ -122,3 +122,14 @@ class IntelligenceRunResponse(BaseModel):
     verification: VerificationResult
     missing_data: list[str] = Field(default_factory=list)
     confidence: str = "low"
+
+    # Backward-compatible top-level fields for older deployed portal bundles.
+    # This prevents the UI from showing only "Risk and confidence: low" while
+    # Cloudflare is still serving a cached frontend build.
+    summary: str | None = None
+    answer: str | None = None
+    evidence_used: list[Any] = Field(default_factory=list)
+    missing_evidence: list[Any] = Field(default_factory=list)
+    risk: list[Any] | str | None = None
+    recommendation: Any = None
+    next_action: Any = None
