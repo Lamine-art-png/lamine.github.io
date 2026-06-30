@@ -21,33 +21,60 @@ function text(value: unknown) {
   }
 }
 
-function operationalAnswer(response: AnyRecord) {
-  const direct = response.answer || response.message || response.content || response.output || response.result;
-  if (typeof direct === "string" && direct.trim()) return direct;
+function lines(value: unknown): string[] {
+  if (!value) return [];
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object") {
+          const row = item as AnyRecord;
+          return row.label || row.title || row.name || row.summary || row.next_step || text(row);
+        }
+        return text(item);
+      })
+      .filter(Boolean);
+  }
+  return [text(value)].filter(Boolean);
+}
 
+function block(label: string, value: unknown) {
+  const rows = lines(value);
+  if (!rows.length) return "";
+  return `${label}:\n${rows.map((row) => `• ${row}`).join("\n")}`;
+}
+
+function operationalAnswer(response: AnyRecord) {
+  const result = response.result && typeof response.result === "object" ? response.result : response;
+  const direct = result.executive_summary || result.summary || result.answer || response.output || response.message || result.content;
   const sections = [
-    ["Decision summary", response.decision_summary || response.summary],
-    ["Evidence used", response.evidence_used || response.evidence],
-    ["Missing evidence", response.missing_evidence || response.gaps],
-    ["Risk and confidence", response.risk || response.confidence],
-    ["Recommended next action", response.next_action || response.recommendation],
-  ]
-    .filter(([, value]) => value !== undefined && value !== null && value !== "")
-    .map(([label, value]) => `${label}:\n${text(value)}`);
+    direct ? `Summary:\n${text(direct)}` : "",
+    block("Evidence used", result.evidence_used || result.available_data || result.key_findings || result.field_summary),
+    block("Missing evidence", result.missing_evidence || result.missing_data || response.missing_data),
+    block("Recommendations", result.recommendations || result.recommended_next_actions || result.operator_instructions),
+    block("Next actions", result.next_actions || result.operator_tasks),
+    block("Risk flags", result.risk_flags || result.risks || result.reviewer_notes),
+  ].filter(Boolean);
+
+  const footer = [
+    result.confidence || response.confidence ? `Confidence: ${result.confidence || response.confidence}` : "",
+    response.model_status || response.status ? `Engine status: ${response.model_status || response.status}` : "",
+    response.provider || response.model ? `Runtime: ${[response.provider, response.model].filter(Boolean).join(" / ")}` : "",
+  ].filter(Boolean);
 
   return sections.length
-    ? sections.join("\n\n")
+    ? [...sections, footer.join(" · ")].filter(Boolean).join("\n\n")
     : "AGRO-AI received the request, but the operating engine did not return a structured answer yet. Add field, sensor, ET/weather, document, or operator evidence so the engine can produce a stronger decision brief.";
 }
 
 async function runOperatingBrain(question: string, workspaceId?: string) {
   try {
     const response = await apiClient.intelligence.run({ task: "chat", question, workspace_id: workspaceId }) as AnyRecord;
-    return { role: "assistant", content: operationalAnswer(response), engine: "intelligence" };
+    return { role: "assistant", content: operationalAnswer(response), engine: response.provider || "intelligence", meta: response };
   } catch (primaryError) {
     try {
-      const response = await apiClient.ai.chat({ task: "chat", message: question, workspace_id: workspaceId }) as AnyRecord;
-      return { role: "assistant", content: operationalAnswer(response), engine: "ai" };
+      const response = await apiClient.ai.chat({ message: question, workspace_id: workspaceId }) as AnyRecord;
+      return { role: "assistant", content: operationalAnswer(response), engine: response.provider || "ai", meta: response };
     } catch {
       throw primaryError;
     }
@@ -73,16 +100,35 @@ export function Intelligence() {
   }, []);
 
   useEffect(() => {
-    if (!conversationId && conversations[0]?.id) {
+    if (!conversationId && conversations[0]?.id && messages.length === 0) {
       loadConversation(String(conversations[0].id)).catch(() => null);
     }
-  }, [conversationId, conversations, loadConversation]);
+  }, [conversationId, conversations, loadConversation, messages.length]);
 
   async function newChat() {
     setConversationId("");
     setMessages([]);
     setQuestion("");
     setError("");
+  }
+
+  async function persistChat(userText: string, assistantText: string) {
+    try {
+      if (!conversationId) {
+        const response = await apiClient.conversations.create({
+          title: userText.slice(0, 80),
+          message: userText,
+          workspace_id: currentWorkspace?.id,
+        }) as AnyRecord;
+        const nextId = String(response.conversation?.id || "");
+        if (nextId) setConversationId(nextId);
+        await conversationState.refresh().catch(() => null);
+      } else {
+        await apiClient.conversations.message(conversationId, { content: userText, output: assistantText }).catch(() => null);
+      }
+    } catch {
+      return;
+    }
   }
 
   async function send(prompt = question) {
@@ -98,34 +144,9 @@ export function Intelligence() {
     try {
       const assistantMessage = await runOperatingBrain(clean, currentWorkspace?.id);
       setMessages((current) => [...current, assistantMessage]);
-
-      if (!conversationId) {
-        const response = await apiClient.conversations.create({
-          title: clean.slice(0, 80),
-          message: clean,
-          workspace_id: currentWorkspace?.id,
-        }) as AnyRecord;
-        const nextId = String(response.conversation?.id || "");
-        setConversationId(nextId);
-        await conversationState.refresh();
-      } else {
-        await apiClient.conversations.message(conversationId, { content: clean, output: assistantMessage.content }).catch(() => null);
-      }
+      persistChat(clean, assistantMessage.content).catch(() => null);
     } catch (err) {
-      try {
-        if (!conversationId) {
-          const response = await apiClient.conversations.create({ title: clean.slice(0, 80), message: clean, workspace_id: currentWorkspace?.id }) as AnyRecord;
-          setConversationId(String(response.conversation?.id || ""));
-          setMessages(asArray(response.messages) as AnyRecord[]);
-          await conversationState.refresh();
-        } else {
-          const response = await apiClient.conversations.message(conversationId, { content: clean }) as AnyRecord;
-          setMessages((current) => [...current, response.message || { role: "assistant", content: text(response) }]);
-        }
-      } catch {
-        setError(err instanceof Error ? err.message : "AGRO-AI could not complete the request.");
-        setMessages((current) => current.filter((message) => message !== userMessage));
-      }
+      setError(err instanceof Error ? err.message : "AGRO-AI could not complete the request.");
     } finally {
       setLoading(false);
     }
@@ -166,7 +187,7 @@ export function Intelligence() {
         <section className="flex min-h-[78vh] flex-col rounded-xl" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
           <div className="border-b px-6 py-5" style={{ borderColor: BORDER }}>
             <div className="mb-3 grid gap-3 md:grid-cols-4">
-              {["AI engine: online", "Data ingestion: ready", "Evidence pipeline: ready", "Reports: plan-gated"].map((item) => (
+              {["AI engine: live", "Data ingestion: ready", "Evidence pipeline: ready", "Reports: plan-gated"].map((item) => (
                 <div key={item} className="rounded-lg px-3 py-2 text-[12px] font-medium" style={{ background: BG, color: TEXT, border: `1px solid ${BORDER}` }}>
                   <span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ background: GREEN }} />
                   {item}
@@ -200,11 +221,16 @@ export function Intelligence() {
                   }}
                 >
                   {text(message.content)}
+                  {message.role === "assistant" && message.engine ? (
+                    <div className="mt-3 border-t pt-2 text-[11px]" style={{ borderColor: BORDER, color: MUTED }}>
+                      Runtime: {message.engine}
+                    </div>
+                  ) : null}
                 </div>
               </div>
             ))}
 
-            {loading ? <div className="text-[13px]" style={{ color: MUTED }}>AGRO-AI is preparing the response.</div> : null}
+            {loading ? <div className="text-[13px]" style={{ color: MUTED }}>AGRO-AI is reading the workspace evidence and preparing the response.</div> : null}
             {error ? <div className="text-[13px]" style={{ color: "#A4492F" }}>{error}</div> : null}
           </div>
 
