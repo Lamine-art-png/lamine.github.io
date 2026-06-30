@@ -8,19 +8,21 @@ from app.core.config import settings
 from app.services.ai_gateway import AIGateway, AIGatewayResult
 
 
-# Chinese-first frontier routing for the AGRO-AI operating brain.
-# Operators can still override these with env vars, but the production default
-# should favor models currently positioned for agentic work, long-context RAG,
-# tool use, and natural enterprise dialogue instead of a brittle single model id.
-DEFAULT_FRONTIER_MODEL = "z-ai/glm-5-turbo"
+# Verified OpenRouter ids. Keep Chinese-first routing, but use model ids that
+# OpenRouter actually publishes so production does not silently fall into safe mode.
+DEFAULT_FRONTIER_MODEL = "z-ai/glm-5.2"
 DEFAULT_FAST_MODEL = "qwen/qwen3-next-80b-a3b-instruct"
 DEFAULT_REPORT_MODEL = "qwen/qwen3-max"
 DEFAULT_MODEL_FALLBACKS = [
+    "z-ai/glm-5.2",
     "z-ai/glm-5-turbo",
+    "qwen/qwen3-max-thinking",
     "qwen/qwen3-max",
-    "qwen/qwen3-coder",
-    "qwen/qwen3-235b-a22b-instruct-2507",
+    "qwen/qwen3-coder-plus",
+    "qwen/qwen3-next-80b-a3b-instruct",
+    "z-ai/glm-4.5",
     "z-ai/glm-4.5-air",
+    "deepseek/deepseek-v3.1-terminus",
 ]
 
 TASK_PROFILES = {
@@ -47,7 +49,7 @@ class ModelRouter:
         configured_default = (settings.AI_MODEL or "").strip()
         self.default_model = configured_default or DEFAULT_FRONTIER_MODEL
         self.fast_model = (settings.AI_FAST_MODEL or "").strip() or DEFAULT_FAST_MODEL
-        self.reasoning_model = (settings.AI_REASONING_MODEL or "").strip() or DEFAULT_FRONTIER_MODEL
+        self.reasoning_model = (settings.AI_REASONING_MODEL or "").strip() or self.default_model
         self.report_model = (settings.AI_REPORT_MODEL or "").strip() or DEFAULT_REPORT_MODEL
         self.local_model = (settings.AI_LOCAL_MODEL or "").strip() or self.default_model
         configured_fallbacks = [
@@ -73,7 +75,7 @@ class ModelRouter:
         missing: list[str] = []
         if not settings.AI_PROVIDER:
             missing.append("AI_PROVIDER")
-        if not settings.AI_BASE_URL:
+        if not settings.AI_BASE_URL and provider not in {"openrouter", "openrouter.ai"}:
             missing.append("AI_BASE_URL")
         if provider not in {"", "ollama"} and not settings.AI_API_KEY:
             missing.append("AI_API_KEY")
@@ -82,13 +84,13 @@ class ModelRouter:
     def status(self) -> dict[str, Any]:
         selected = self.select("chat")
         return {
-            "configured": self.gateway.is_configured,
-            "provider": self.gateway.provider or "offline",
+            "configured": self.gateway.is_configured_for(selected.model),
+            "provider": self.gateway.raw_provider or self.gateway.provider or "offline",
             "base_url_present": bool(self.gateway.base_url),
             "model": selected.model,
             "mode": self.mode(),
             "missing_env": self.missing_env(),
-            "fallback_active": not self.gateway.is_configured,
+            "fallback_active": not self.gateway.is_configured_for(selected.model),
             "profiles": {
                 "fast": self.fast_model,
                 "reasoning": self.reasoning_model,
@@ -121,7 +123,7 @@ class ModelRouter:
             "temperature": temperature,
             "response_format": response_format,
         }
-        if selection.model and selection.model != self.gateway.model:
+        if selection.model:
             chat_kwargs["model_override"] = selection.model
         result = await self.gateway.chat(messages, **chat_kwargs)
         return result, selection

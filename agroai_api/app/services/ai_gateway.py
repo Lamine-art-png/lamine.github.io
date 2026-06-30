@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from dataclasses import dataclass
 from typing import Any
@@ -56,13 +57,39 @@ class AIGatewayResult:
     error: str | None = None
 
 
+def _normalize_provider(value: str) -> str:
+    provider = (value or "").strip().lower()
+    if provider in {"openrouter", "openrouter.ai", "openai", "openai-compatible", "openai_compatible"}:
+        return "openai_compatible"
+    return provider
+
+
+def _normalize_base_url(value: str, provider: str) -> str:
+    base_url = (value or "").strip().rstrip("/")
+    # Most setup mistakes put the full chat-completions URL in AI_BASE_URL.
+    # The gateway appends /chat/completions itself, so normalize that here.
+    suffixes = ("/chat/completions", "/completions")
+    changed = True
+    while changed:
+        changed = False
+        for suffix in suffixes:
+            if base_url.lower().endswith(suffix):
+                base_url = base_url[: -len(suffix)].rstrip("/")
+                changed = True
+    if not base_url and provider == "openai_compatible" and (settings.AI_API_KEY or os.getenv("OPENROUTER_API_KEY")):
+        base_url = "https://openrouter.ai/api/v1"
+    return base_url
+
+
 class AIGateway:
     """Thin gateway for OpenAI-compatible chat completions and Ollama."""
 
     def __init__(self) -> None:
-        self.provider = (settings.AI_PROVIDER or "").strip().lower()
-        self.base_url = (settings.AI_BASE_URL or "").strip().rstrip("/")
-        self.api_key = (settings.AI_API_KEY or "").strip()
+        raw_provider = (settings.AI_PROVIDER or "").strip().lower()
+        self.provider = _normalize_provider(raw_provider)
+        self.raw_provider = raw_provider
+        self.base_url = _normalize_base_url(settings.AI_BASE_URL or "", self.provider)
+        self.api_key = (settings.AI_API_KEY or os.getenv("OPENROUTER_API_KEY") or "").strip()
         self.model = (settings.AI_MODEL or "").strip()
         self.fallback_models = [
             model.strip()
@@ -73,9 +100,13 @@ class AIGateway:
 
     @property
     def is_configured(self) -> bool:
+        return self.is_configured_for(self.model)
+
+    def is_configured_for(self, model: str | None = None) -> bool:
+        selected_model = (model or self.model or "").strip()
         if self.provider == "ollama":
-            return bool(self.base_url and self.model)
-        return bool(self.provider and self.base_url and self.model and self.api_key)
+            return bool(self.base_url and selected_model)
+        return bool(self.provider and self.base_url and selected_model and self.api_key)
 
     def _with_agroai_context(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
         enriched = [dict(message) for message in messages]
@@ -102,8 +133,9 @@ class AIGateway:
         model_override: str | None = None,
     ) -> AIGatewayResult:
         messages = self._with_agroai_context(messages)
-        if not self.is_configured:
-            return self._offline_fallback(messages)
+        selected_model = (model_override or self.model or "").strip()
+        if not self.is_configured_for(selected_model):
+            return self._offline_fallback(messages, selected_model or None)
 
         try:
             if self.provider == "ollama":
@@ -128,8 +160,8 @@ class AIGateway:
                         "customer_safe": True,
                     }
                 ),
-                provider=self.provider or "unconfigured",
-                model=model_override or self.model or None,
+                provider=self.raw_provider or self.provider or "unconfigured",
+                model=selected_model or None,
                 demo_fallback=True,
                 error=str(exc),
             )
@@ -161,24 +193,21 @@ class AIGateway:
             joined = "\n".join(parts).strip()
             if joined:
                 return joined
-        # Some reasoning models separate the reasoning trace from final content.
-        # Use it only as an intermediate artifact for the second final-answer pass;
-        # extract_final_answer still blocks scratchpad from being returned directly.
         reasoning = message.get("reasoning") or message.get("reasoning_content")
         return reasoning if isinstance(reasoning, str) else ""
 
     async def _post_openai_payload(self, client: httpx.AsyncClient, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
-        response = await client.post(f"{self.base_url}/chat/completions", headers=headers, json=payload)
+        endpoint = f"{self.base_url}/chat/completions"
+        response = await client.post(endpoint, headers=headers, json=payload)
         if response.status_code in {400, 422} and "response_format" in payload:
             retry_payload = dict(payload)
             retry_payload.pop("response_format", None)
-            response = await client.post(f"{self.base_url}/chat/completions", headers=headers, json=retry_payload)
+            response = await client.post(endpoint, headers=headers, json=retry_payload)
         response.raise_for_status()
         return response.json()
 
     def _should_try_next_model(self, exc: httpx.HTTPStatusError) -> bool:
         status_code = exc.response.status_code if exc.response is not None else 0
-        # 401/403 usually means bad key or provider account authorization, not a bad model id.
         if status_code in {401, 403}:
             return False
         return status_code in {400, 404, 408, 409, 422, 429, 500, 502, 503, 504}
@@ -251,7 +280,7 @@ class AIGateway:
                 if errors:
                     raw = {"selected_model_response": body, "previous_model_errors": errors}
 
-                return AIGatewayResult(status="ok", content=content, provider=self.provider, model=candidate_model, raw=raw)
+                return AIGatewayResult(status="ok", content=content, provider=self.raw_provider or self.provider, model=candidate_model, raw=raw)
 
         raise ValueError("All configured AI models failed: " + " | ".join(errors))
 
@@ -272,15 +301,24 @@ class AIGateway:
         content = extract_final_answer(body.get("message", {}).get("content", ""))
         return AIGatewayResult(status="ok", content=content, provider="ollama", model=model_override or self.model, raw=body)
 
-    def _offline_fallback(self, messages: list[dict[str, str]]) -> AIGatewayResult:
+    def _offline_fallback(self, messages: list[dict[str, str]], selected_model: str | None = None) -> AIGatewayResult:
         user_message = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
+        missing = []
+        if not self.provider:
+            missing.append("AI_PROVIDER")
+        if not self.base_url:
+            missing.append("AI_BASE_URL")
+        if self.provider != "ollama" and not self.api_key:
+            missing.append("AI_API_KEY or OPENROUTER_API_KEY")
+        if not selected_model:
+            missing.append("AI_MODEL or model override")
         content = json.dumps(
             {
                 "status": "unavailable",
                 "summary": "I can see the request, but live inference is not available. I should not pretend to analyze the workspace with a model until the provider is reachable.",
                 "answer": "I can see the request, but live inference is not available. I should not pretend to analyze the workspace with a model until the provider is reachable.",
                 "request_received": user_message[:500],
-                "missing_data": ["live model provider"],
+                "missing_data": missing or ["live model provider"],
                 "risk_flags": ["No live model inference was performed."],
                 "agent_plan": ["Configure the hosted model provider, then rerun the request against tenant-scoped workspace context."],
                 "recommendations": ["Keep this in safe mode until the hosted model endpoint is reachable."],
@@ -288,7 +326,7 @@ class AIGateway:
                 "customer_safe": True,
             }
         )
-        return AIGatewayResult(status="unavailable", content=content, provider="offline", model=None, demo_fallback=True)
+        return AIGatewayResult(status="unavailable", content=content, provider=self.raw_provider or self.provider or "offline", model=selected_model, demo_fallback=True)
 
 
 def _strip_markdown_fences(text: str) -> str:
