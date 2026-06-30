@@ -1,4 +1,4 @@
-"""Live AGRO-AI operating brain endpoint."""
+"""Live AGRO-AI operating intelligence endpoint."""
 from __future__ import annotations
 
 import json
@@ -16,7 +16,7 @@ from app.services.ai_gateway import parse_model_json
 from app.services.intelligence_context import build_intelligence_context
 from app.services.model_router import ModelRouter
 
-router = APIRouter(prefix="/intelligence", tags=["agro-ai-brain"])
+router = APIRouter(prefix="/intelligence", tags=["agro-ai-intelligence"])
 
 
 class BrainRunRequest(BaseModel):
@@ -28,8 +28,8 @@ class BrainRunRequest(BaseModel):
     uploaded_evidence: list[dict[str, Any]] = Field(default_factory=list)
 
 
-BRAIN_SYSTEM_PROMPT = """
-You are AGRO-AI Brain, the enterprise operating intelligence layer inside AGRO-AI.
+OPERATING_SYSTEM_PROMPT = """
+You are AGRO-AI's enterprise operating intelligence layer.
 
 You are not a canned chatbot. You operate like a serious agriculture operations lead with model intelligence behind the product. Your job is to take fragmented workspace context, uploaded files, telemetry and evidence summaries, compliance requirements, field operations, and conversation history, then turn them into useful work.
 
@@ -97,8 +97,8 @@ def _brain_fallback(payload: BrainRunRequest, context_bundle: dict[str, Any], er
     uploaded = payload.uploaded_evidence or []
     first_missing = missing[0] if missing else "live model response"
     return {
-        "summary": "I can read the workspace context and uploaded evidence, but live model reasoning did not complete. I will not pretend the full AGRO-AI brain ran.",
-        "answer": "I can read the workspace context and uploaded evidence, but live model reasoning did not complete. The safe move is to keep this in review, resolve the first blocker, and rerun the request once live inference returns a usable answer.",
+        "summary": "Live model reasoning did not complete, so I will not pretend this is a completed analysis.",
+        "answer": "Live model reasoning did not complete, so I will not pretend this is a completed analysis. The safe move is to inspect the model runtime diagnostic, fix the first runtime blocker, and rerun the request with the same workspace context.",
         "work_completed": [
             "Loaded tenant-scoped workspace context.",
             "Attached uploaded evidence to the request." if uploaded else "Checked for uploaded evidence attached to the request.",
@@ -112,17 +112,56 @@ def _brain_fallback(payload: BrainRunRequest, context_bundle: dict[str, Any], er
         "missing_evidence": missing or ["live model response"],
         "operating_plan": [
             f"Resolve the first blocker: {first_missing}.",
-            "Attach source provenance to every claim before generating reports or decisions.",
-            "Rerun AGRO-AI Brain after model routing is live.",
+            "Run the live model smoke test to separate provider/model failure from workspace-context failure.",
+            "Rerun the request after the provider returns a usable final answer.",
         ],
         "recommendations": [
             "Do not use this as a final irrigation, compliance, or customer-facing decision until live inference completes.",
-            "Use uploads/connectors to increase workspace evidence coverage, then rerun the request.",
+            "Inspect the Network response for internal_debug before changing prompts again.",
         ],
-        "next_actions": ["Check model routing", "Upload or connect missing evidence", "Rerun AGRO-AI Brain"],
+        "next_actions": ["Run model smoke test", "Inspect brain run internal_debug", "Rerun Ask AGRO-AI"],
         "risk_flags": ["Live model inference did not complete."] + ([str(error)[:240]] if error else []),
         "confidence": "low",
         "customer_safe": True,
+    }
+
+
+@router.get("/brain/model-smoke")
+async def model_smoke() -> dict[str, Any]:
+    """Call the selected provider/model with a fixed tiny prompt.
+
+    This endpoint distinguishes "configured" from "actually returns a usable model response".
+    It does not accept user prompt text and does not expose secrets.
+    """
+
+    model_router = ModelRouter()
+    selected = model_router.select("chat")
+    result, selection = await model_router.run(
+        task="chat",
+        messages=[
+            {
+                "role": "system",
+                "content": "Return valid JSON only: {\"summary\": string, \"answer\": string, \"customer_safe\": true}",
+            },
+            {
+                "role": "user",
+                "content": "Say that AGRO-AI live model routing is working in one short sentence.",
+            },
+        ],
+        temperature=0.1,
+        response_format={"type": "json_object"},
+    )
+    body = parse_model_json(result.content)
+    live = result.status == "ok" and not result.demo_fallback and bool(body.get("summary") or body.get("answer"))
+    return {
+        "status": "ok" if live else "failed",
+        "live_model_response": live,
+        "provider": result.provider,
+        "selected_model": result.model or selection.model or selected.model,
+        "gateway_status": result.status,
+        "demo_fallback": result.demo_fallback,
+        "error": result.error,
+        "summary": body.get("summary") or body.get("answer") or "",
     }
 
 
@@ -165,12 +204,12 @@ async def brain_run(
         },
     }
 
-    messages: list[dict[str, str]] = [{"role": "system", "content": BRAIN_SYSTEM_PROMPT}]
+    messages: list[dict[str, str]] = [{"role": "system", "content": OPERATING_SYSTEM_PROMPT}]
     messages.extend(_trim_history(payload.history))
     messages.append(
         {
             "role": "user",
-            "content": "Run AGRO-AI Brain on this request. Work naturally, but return the required JSON shape only.\n\n"
+            "content": "Run the operating intelligence layer on this request. Work naturally, but return the required JSON shape only.\n\n"
             + json.dumps(request_context, default=str)[:180000],
         }
     )
@@ -178,6 +217,7 @@ async def brain_run(
     models = _dedupe_models([model_router.reasoning_model, model_router.default_model, *model_router.fallback_models])
     last_error: str | None = None
     last_result = None
+    attempts: list[dict[str, Any]] = []
 
     for model in models:
         result = await model_router.gateway.chat(
@@ -187,6 +227,15 @@ async def brain_run(
             model_override=model,
         )
         last_result = result
+        attempts.append(
+            {
+                "model": model,
+                "status": result.status,
+                "demo_fallback": result.demo_fallback,
+                "provider": result.provider,
+                "error": (result.error or "")[:500],
+            }
+        )
         if result.status != "ok" or result.demo_fallback:
             last_error = result.error or result.status
             continue
@@ -212,8 +261,10 @@ async def brain_run(
                 "evidence_summary": context_bundle.get("evidence_summary") or {},
                 "missing_data": body.get("missing_evidence") or getattr(evidence_context, "missing_data", []),
                 "confidence": body.get("confidence") or "low",
+                "internal_debug": {"selected_model": result.model, "attempts": attempts},
             }
         last_error = "model_returned_unusable_body"
+        attempts[-1]["error"] = last_error
 
     fallback = _brain_fallback(payload, context_bundle, last_error)
     return {
@@ -225,4 +276,8 @@ async def brain_run(
         "missing_data": fallback.get("missing_evidence") or getattr(evidence_context, "missing_data", []),
         "confidence": "low",
         "internal_status": getattr(last_result, "status", None) if last_result else "not_configured",
+        "internal_debug": {
+            "last_error": last_error,
+            "attempts": attempts,
+        },
     }
