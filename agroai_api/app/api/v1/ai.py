@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import require_current_tenant_id
 from app.db.base import get_db
+from app.api.v1.brain import compact_local_messages, is_local_ai, local_plain_body
 from app.models.block import Block
 from app.models.recommendation import Recommendation
 from app.models.saas import Organization, Workspace
@@ -408,8 +409,32 @@ async def _run_ai(
     user_instruction: str,
     context: EvidenceContext,
     temperature: float = 0.2,
+    history: list[dict[str, Any]] | None = None,
+    audience: str | None = None,
+    uploaded_evidence: list[dict[str, Any]] | None = None,
 ) -> tuple[dict[str, Any], Any]:
     router = ModelRouter()
+    if is_local_ai():
+        messages = compact_local_messages(
+            question=user_instruction,
+            context=context,
+            history=history,
+            audience=audience,
+            uploaded_evidence=uploaded_evidence,
+        )
+        result, _selection = await router.run(
+            task=TASK_PROFILE_MAP.get(task, "chat"),
+            messages=messages,
+            temperature=temperature,
+            response_format=None,
+        )
+        answer = str(result.content or "").strip()
+        if not answer or result.status != "ok":
+            body = _deterministic_body(context)
+            fallback_answer = str(body.get("summary") or "AGRO-AI could not produce a live local answer.")
+            return local_plain_body(fallback_answer, context, question=user_instruction), result
+        return local_plain_body(answer, context, question=user_instruction), result
+
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {

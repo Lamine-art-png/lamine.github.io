@@ -183,13 +183,17 @@ class AIGateway:
                     "model": model_override or self.model,
                     "messages": messages,
                     "stream": False,
-                    "options": {"temperature": temperature},
+                    "options": {
+                        "num_predict": 100,
+                        "num_ctx": 1024,
+                        "temperature": 0.15,
+                    },
                 },
             )
             response.raise_for_status()
             body = response.json()
 
-        content = extract_final_answer(body.get("message", {}).get("content", ""))
+        content = extract_customer_text(body.get("message", {}).get("content", ""))
         return AIGatewayResult(
             status="ok",
             content=content,
@@ -231,6 +235,27 @@ def _strip_markdown_fences(text: str) -> str:
         lines = [line for line in text.splitlines() if not line.strip().startswith("```")]
         return "\n".join(lines).strip()
     return text.strip()
+
+
+def _json_answer_text(text: str) -> str:
+    try:
+        value = json.loads(text)
+    except json.JSONDecodeError:
+        start = text.find("{")
+        end = text.rfind("}")
+        if start < 0 or end <= start:
+            return ""
+        try:
+            value = json.loads(text[start : end + 1])
+        except json.JSONDecodeError:
+            return ""
+    if not isinstance(value, dict):
+        return ""
+    for key in ("answer", "summary", "message", "content"):
+        candidate = value.get(key)
+        if isinstance(candidate, str) and candidate.strip():
+            return candidate.strip()
+    return ""
 
 
 def extract_final_answer(content: str) -> str:
@@ -276,6 +301,17 @@ def extract_final_answer(content: str) -> str:
     return text.strip()
 
 
+def extract_customer_text(content: str) -> str:
+    """Return plain customer-facing text from local/open model output."""
+    text = extract_final_answer(content)
+    if not text:
+        return ""
+    json_text = _json_answer_text(text)
+    if json_text:
+        return extract_final_answer(json_text)
+    return text
+
+
 def sanitize_model_text(content: str) -> str:
     return extract_final_answer(content)
 
@@ -310,7 +346,7 @@ def parse_model_json(content: str) -> dict[str, Any]:
         return {
             "summary": text,
             "available_data": [],
-            "missing_data": ["structured model JSON"],
+            "missing_data": [],
             "recommended_next_actions": ["review current evidence context", "retry request"],
             "confidence": "low",
             "customer_safe": True,
@@ -321,7 +357,7 @@ def parse_model_json(content: str) -> dict[str, Any]:
     return {
         "summary": str(value),
         "available_data": [],
-        "missing_data": ["structured model JSON object"],
+        "missing_data": [],
         "recommended_next_actions": ["review current evidence context", "retry request"],
         "confidence": "low",
         "customer_safe": True,

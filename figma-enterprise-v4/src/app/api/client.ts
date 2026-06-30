@@ -228,6 +228,8 @@ export type IntelligenceRunPayload = {
   workspace_id?: string;
   field_id?: string;
   audience?: string;
+  history?: { role: string; content: string }[];
+  uploaded_evidence?: Record<string, unknown>[];
 };
 
 export type WorkbenchRunPayload = {
@@ -297,6 +299,12 @@ export type AutopilotReportPayload = {
   field_id?: string;
   workspace_id?: string;
 };
+
+function providerForUpload(file: File) {
+  const name = file.name.toLowerCase();
+  if (name.endsWith(".csv")) return "manual_csv";
+  return "chat_upload";
+}
 
 export type ProductCheckoutPayload = {
   plan_id: "free" | "professional" | "network";
@@ -436,8 +444,8 @@ export const apiClient = {
   evidence: {
     list: () => get("/v1/evidence"),
     summary: () => get("/v1/evidence/summary"),
-    upload: (file: File, provider = "manual_csv", workspaceId?: string) => {
-      const query = new URLSearchParams({ provider });
+    upload: (file: File, provider?: string, workspaceId?: string) => {
+      const query = new URLSearchParams({ provider: provider || providerForUpload(file) });
       if (workspaceId) query.set("workspace_id", workspaceId);
       return upload(`/v1/evidence/upload?${query.toString()}`, file);
     },
@@ -473,6 +481,7 @@ export const apiClient = {
 
   intelligence: {
     brief: () => get("/v1/intelligence/brief"),
+    brainRun: (payload: IntelligenceRunPayload) => post("/v1/intelligence/brain/run", payload),
     run: (payload: IntelligenceRunPayload) => post("/v1/intelligence/run", payload),
     ask: (payload: IntelligenceAskPayload) =>
       post("/v1/intelligence/run", {

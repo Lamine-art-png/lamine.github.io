@@ -103,6 +103,8 @@ class IntelligenceRunRequest(BaseModel):
     workspace_id: str | None = None
     field_id: str | None = None
     audience: str | None = None
+    history: list[dict[str, Any]] = Field(default_factory=list)
+    uploaded_evidence: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class IntelligenceRunResponse(BaseModel):
