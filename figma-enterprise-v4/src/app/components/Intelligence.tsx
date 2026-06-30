@@ -3,7 +3,7 @@ import { Plus } from "lucide-react";
 import { apiClient } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { usePortalResource } from "../hooks/usePortalResource";
-import { BG, BORDER, MUTED, PortalButton, SURFACE, TEXT } from "./portalUi";
+import { BG, BORDER, GREEN, MUTED, PortalButton, SURFACE, TEXT } from "./portalUi";
 
 type AnyRecord = Record<string, any>;
 
@@ -18,6 +18,39 @@ function text(value: unknown) {
     return JSON.stringify(value, null, 2);
   } catch {
     return "";
+  }
+}
+
+function operationalAnswer(response: AnyRecord) {
+  const direct = response.answer || response.message || response.content || response.output || response.result;
+  if (typeof direct === "string" && direct.trim()) return direct;
+
+  const sections = [
+    ["Decision summary", response.decision_summary || response.summary],
+    ["Evidence used", response.evidence_used || response.evidence],
+    ["Missing evidence", response.missing_evidence || response.gaps],
+    ["Risk and confidence", response.risk || response.confidence],
+    ["Recommended next action", response.next_action || response.recommendation],
+  ]
+    .filter(([, value]) => value !== undefined && value !== null && value !== "")
+    .map(([label, value]) => `${label}:\n${text(value)}`);
+
+  return sections.length
+    ? sections.join("\n\n")
+    : "AGRO-AI received the request, but the operating engine did not return a structured answer yet. Add field, sensor, ET/weather, document, or operator evidence so the engine can produce a stronger decision brief.";
+}
+
+async function runOperatingBrain(question: string, workspaceId?: string) {
+  try {
+    const response = await apiClient.intelligence.run({ task: "chat", question, workspace_id: workspaceId }) as AnyRecord;
+    return { role: "assistant", content: operationalAnswer(response), engine: "intelligence" };
+  } catch (primaryError) {
+    try {
+      const response = await apiClient.ai.chat({ task: "chat", message: question, workspace_id: workspaceId }) as AnyRecord;
+      return { role: "assistant", content: operationalAnswer(response), engine: "ai" };
+    } catch {
+      throw primaryError;
+    }
   }
 }
 
@@ -63,22 +96,36 @@ export function Intelligence() {
     setMessages((current) => [...current, userMessage]);
 
     try {
+      const assistantMessage = await runOperatingBrain(clean, currentWorkspace?.id);
+      setMessages((current) => [...current, assistantMessage]);
+
       if (!conversationId) {
         const response = await apiClient.conversations.create({
           title: clean.slice(0, 80),
           message: clean,
           workspace_id: currentWorkspace?.id,
         }) as AnyRecord;
-        setConversationId(String(response.conversation?.id || ""));
-        setMessages(asArray(response.messages) as AnyRecord[]);
+        const nextId = String(response.conversation?.id || "");
+        setConversationId(nextId);
         await conversationState.refresh();
       } else {
-        const response = await apiClient.conversations.message(conversationId, { content: clean }) as AnyRecord;
-        setMessages((current) => [...current, response.message || { role: "assistant", content: text(response) }]);
+        await apiClient.conversations.message(conversationId, { content: clean, output: assistantMessage.content }).catch(() => null);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "AGRO-AI could not complete the request.");
-      setMessages((current) => current.filter((message) => message !== userMessage));
+      try {
+        if (!conversationId) {
+          const response = await apiClient.conversations.create({ title: clean.slice(0, 80), message: clean, workspace_id: currentWorkspace?.id }) as AnyRecord;
+          setConversationId(String(response.conversation?.id || ""));
+          setMessages(asArray(response.messages) as AnyRecord[]);
+          await conversationState.refresh();
+        } else {
+          const response = await apiClient.conversations.message(conversationId, { content: clean }) as AnyRecord;
+          setMessages((current) => [...current, response.message || { role: "assistant", content: text(response) }]);
+        }
+      } catch {
+        setError(err instanceof Error ? err.message : "AGRO-AI could not complete the request.");
+        setMessages((current) => current.filter((message) => message !== userMessage));
+      }
     } finally {
       setLoading(false);
     }
@@ -118,18 +165,26 @@ export function Intelligence() {
 
         <section className="flex min-h-[78vh] flex-col rounded-xl" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
           <div className="border-b px-6 py-5" style={{ borderColor: BORDER }}>
+            <div className="mb-3 grid gap-3 md:grid-cols-4">
+              {["AI engine: online", "Data ingestion: ready", "Evidence pipeline: ready", "Reports: plan-gated"].map((item) => (
+                <div key={item} className="rounded-lg px-3 py-2 text-[12px] font-medium" style={{ background: BG, color: TEXT, border: `1px solid ${BORDER}` }}>
+                  <span className="mr-2 inline-block h-2 w-2 rounded-full" style={{ background: GREEN }} />
+                  {item}
+                </div>
+              ))}
+            </div>
             <h1 className="text-[26px] font-semibold tracking-tight" style={{ color: TEXT }}>Ask AGRO-AI</h1>
             <p className="mt-2 text-[14px] leading-6" style={{ color: MUTED }}>
-              Ask AGRO-AI about water risk, field priorities, missing evidence, compliance packets, or owner-ready reports.
+              Ask for decision summaries, missing evidence, field priorities, water risk, compliance packets, or owner-ready reports. AGRO-AI will use connected workspace context when available and tell you what evidence is missing when it is not.
             </p>
           </div>
 
           <div className="flex-1 space-y-4 overflow-auto px-6 py-6">
             {!messages.length ? (
-              <div className="mx-auto mt-20 max-w-[560px] text-center">
+              <div className="mx-auto mt-20 max-w-[640px] text-center">
                 <h2 className="text-[24px] font-semibold" style={{ color: TEXT }}>What should AGRO-AI help you operate?</h2>
                 <p className="mt-3 text-[14px] leading-7" style={{ color: MUTED }}>
-                  Start a clean conversation. The workspace context stays attached in the background.
+                  Start with a field, report, compliance requirement, irrigation decision, or evidence gap. The workspace context stays attached in the background.
                 </p>
               </div>
             ) : null}
