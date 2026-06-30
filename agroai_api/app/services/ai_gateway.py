@@ -27,6 +27,19 @@ Use this exact JSON shape when possible:
 }
 """
 
+AGRO_AI_OPERATING_CONTEXT = """
+You are AGRO-AI's live operating intelligence layer, not a generic chatbot.
+AGRO-AI turns fragmented agriculture data into decisions, evidence records, alerts, and enterprise reporting.
+The first wedge is irrigation, water-use, compliance, and field operations. The broader product direction is Terris: a field intelligence layer and operating evidence graph for agriculture.
+Customers include growers, farm managers, agronomists, irrigation professionals, water agencies, NRDs, districts, lenders, insurers, exporters, and enterprise agriculture teams.
+Important source families include John Deere Operations Center, WiseConn, Talgil, controllers, flow meters, ET/weather/OpenET, soil moisture, satellite analytics, field logs, operator notes, CSV/PDF uploads, groundwater, nitrate, chemigation, and customer workspace records.
+Always preserve provenance: measured, reported, estimated, inferred, sample, and missing are different.
+
+Your job is to explain what is happening, find missing evidence and contradictions, turn field and water records into recommendations, checklists, assurance packets, reports, and next actions.
+Sound natural, calm, direct, and specific. Answer the user's actual question first. Do not repeat the same template. Do not invent live integrations, telemetry, yields, compliance status, savings, or customer facts.
+Return valid JSON only. Put the natural answer in summary and answer. Keep arrays concise and operational.
+"""
+
 
 @dataclass
 class AIGatewayResult:
@@ -55,6 +68,14 @@ class AIGateway:
             return bool(self.base_url and self.model)
         return bool(self.provider and self.base_url and self.model and self.api_key)
 
+    def _with_agroai_context(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
+        enriched = [dict(message) for message in messages]
+        for message in enriched:
+            if message.get("role") == "system":
+                message["content"] = f"{message.get('content', '')}\n\n{AGRO_AI_OPERATING_CONTEXT}".strip()
+                return enriched
+        return [{"role": "system", "content": AGRO_AI_OPERATING_CONTEXT}] + enriched
+
     async def chat(
         self,
         messages: list[dict[str, str]],
@@ -63,6 +84,7 @@ class AIGateway:
         response_format: dict[str, Any] | None = None,
         model_override: str | None = None,
     ) -> AIGatewayResult:
+        messages = self._with_agroai_context(messages)
         if not self.is_configured:
             return self._offline_fallback(messages)
 
@@ -79,7 +101,11 @@ class AIGateway:
                 status="unavailable",
                 content=json.dumps(
                     {
-                        "summary": "AI provider unavailable. AGRO-AI returned a safe deterministic response.",
+                        "summary": "I could not reach the live model provider for this request. The workspace evidence layer is still available, but no live model inference was completed.",
+                        "available_data": [],
+                        "missing_data": ["live model response"],
+                        "recommendations": ["Retry once the model provider is reachable."],
+                        "next_actions": ["check_model_provider", "retry_with_workspace_context"],
                         "customer_safe": True,
                     }
                 ),
@@ -175,11 +201,11 @@ class AIGateway:
         if not content:
             content = json.dumps(
                 {
-                    "summary": "AI provider returned no customer-safe final answer.",
+                    "summary": "The model provider returned a response, but not in a customer-safe final format. I need one clean retry with the same workspace context.",
                     "available_data": [],
                     "missing_data": ["customer-safe final model answer"],
                     "integration_status": [],
-                    "recommendations": [],
+                    "recommendations": ["Retry with the same workspace context and a stricter final-answer instruction."],
                     "next_actions": ["retry_with_grounded_context"],
                     "confidence": "low",
                     "customer_safe": True,
@@ -227,17 +253,12 @@ class AIGateway:
         content = json.dumps(
             {
                 "status": "unavailable",
-                "summary": (
-                    "AI unavailable/demo fallback: no model provider is configured, "
-                    "so AGRO-AI did not generate a live intelligence result."
-                ),
+                "summary": "I can see the request, but live inference is not available. I should not pretend to analyze the workspace with a model until the provider is reachable.",
                 "request_received": user_message[:500],
-                "missing_data": ["AI_PROVIDER", "AI_BASE_URL", "AI_MODEL"],
-                "risk_flags": ["No model inference was performed."],
-                "next_action": (
-                    "Configure an OpenAI-compatible hosted endpoint or local Ollama "
-                    "runtime, then retry with verified workspace evidence."
-                ),
+                "missing_data": ["live model provider"],
+                "risk_flags": ["No live model inference was performed."],
+                "recommendations": ["Keep this in safe mode until the hosted model endpoint is reachable."],
+                "next_actions": ["configure_model_provider", "retry_with_workspace_context"],
                 "customer_safe": True,
             }
         )
