@@ -68,16 +68,24 @@ Required JSON shape:
 }
 """
 
+LOCAL_OPERATING_SYSTEM_PROMPT = """
+/no_think
+You are AGRO-AI. Use a small local model, so be concise.
+Answer as a useful agriculture operating assistant, not as a system diagnostic.
+Do not invent live data. If data is missing, say what is missing and what to do next.
+Return valid JSON only with: summary, answer, work_completed, evidence_used, missing_evidence, recommendations, next_actions, risk_flags, confidence, customer_safe.
+"""
 
-def _trim_history(history: list[dict[str, Any]]) -> list[dict[str, str]]:
+
+def _trim_history(history: list[dict[str, Any]], limit: int = 12, max_chars: int = 2500) -> list[dict[str, str]]:
     clean: list[dict[str, str]] = []
-    for row in history[-12:]:
+    for row in history[-limit:]:
         role = str(row.get("role") or "").lower()
         if role not in {"user", "assistant"}:
             continue
         content = str(row.get("content") or "").strip()
         if content:
-            clean.append({"role": role, "content": content[:2500]})
+            clean.append({"role": role, "content": content[:max_chars]})
     return clean
 
 
@@ -88,6 +96,19 @@ def _dedupe_models(models: list[str | None]) -> list[str]:
         if value and value not in clean:
             clean.append(value)
     return clean
+
+
+def _compact(value: Any, max_chars: int = 1600) -> Any:
+    if isinstance(value, dict):
+        compacted: dict[str, Any] = {}
+        for key, item in list(value.items())[:18]:
+            compacted[str(key)] = _compact(item, max_chars=500)
+        return compacted
+    if isinstance(value, list):
+        return [_compact(item, max_chars=500) for item in value[:8]]
+    if isinstance(value, str):
+        return value[:max_chars]
+    return value
 
 
 def _brain_fallback(payload: BrainRunRequest, context_bundle: dict[str, Any], error: str | None = None) -> dict[str, Any]:
@@ -128,25 +149,13 @@ def _brain_fallback(payload: BrainRunRequest, context_bundle: dict[str, Any], er
 
 @router.get("/brain/model-smoke")
 async def model_smoke() -> dict[str, Any]:
-    """Call the selected provider/model with a fixed tiny prompt.
-
-    This endpoint distinguishes "configured" from "actually returns a usable model response".
-    It does not accept user prompt text and does not expose secrets.
-    """
-
     model_router = ModelRouter()
     selected = model_router.select("chat")
     result, selection = await model_router.run(
         task="chat",
         messages=[
-            {
-                "role": "system",
-                "content": "Return valid JSON only: {\"summary\": string, \"answer\": string, \"customer_safe\": true}",
-            },
-            {
-                "role": "user",
-                "content": "Say that AGRO-AI live model routing is working in one short sentence.",
-            },
+            {"role": "system", "content": "Return valid JSON only: {\"summary\": string, \"answer\": string, \"customer_safe\": true}"},
+            {"role": "user", "content": "/no_think Say that AGRO-AI live model routing is working in one short sentence."},
         ],
         temperature=0.1,
         response_format={"type": "json_object"},
@@ -186,12 +195,16 @@ async def brain_run(
 
     model_router = ModelRouter()
     evidence_context = context_bundle["evidence_context"]
+    is_local = model_router.mode() == "ollama"
+    evidence_limit = 10 if is_local else 90
+    citation_limit = 6 if is_local else 40
+
     request_context = {
         "question": payload.question,
         "audience": payload.audience or "operator",
         "workspace": context_bundle.get("workspace") or {},
         "evidence_summary": context_bundle.get("evidence_summary") or {},
-        "uploaded_evidence": payload.uploaded_evidence[:10],
+        "uploaded_evidence": payload.uploaded_evidence[:4 if is_local else 10],
         "missing_data": getattr(evidence_context, "missing_data", []),
         "tenant_context": {
             "readiness": context_bundle.get("readiness") or {},
@@ -199,18 +212,26 @@ async def brain_run(
             "exceptions": context_bundle.get("exceptions") or {},
             "decisions": context_bundle.get("decisions") or {},
             "reports": context_bundle.get("reports") or {},
-            "evidence": getattr(evidence_context, "evidence", [])[:90],
-            "citations": [citation.model_dump(mode="python") for citation in getattr(evidence_context, "citations", [])[:40]],
+            "evidence": getattr(evidence_context, "evidence", [])[:evidence_limit],
+            "citations": [citation.model_dump(mode="python") for citation in getattr(evidence_context, "citations", [])[:citation_limit]],
         },
     }
+    if is_local:
+        request_context = _compact(request_context, max_chars=6500)
 
-    messages: list[dict[str, str]] = [{"role": "system", "content": OPERATING_SYSTEM_PROMPT}]
-    messages.extend(_trim_history(payload.history))
+    system_prompt = LOCAL_OPERATING_SYSTEM_PROMPT if is_local else OPERATING_SYSTEM_PROMPT
+    history = _trim_history(payload.history, limit=4 if is_local else 12, max_chars=700 if is_local else 2500)
+    prompt_prefix = "/no_think\n" if is_local else ""
+    max_context_chars = 6500 if is_local else 180000
+
+    messages: list[dict[str, str]] = [{"role": "system", "content": system_prompt}]
+    messages.extend(history)
     messages.append(
         {
             "role": "user",
-            "content": "Run the operating intelligence layer on this request. Work naturally, but return the required JSON shape only.\n\n"
-            + json.dumps(request_context, default=str)[:180000],
+            "content": prompt_prefix
+            + "Run the operating intelligence layer on this request. Work naturally, but return the required JSON shape only.\n\n"
+            + json.dumps(request_context, default=str)[:max_context_chars],
         }
     )
 
@@ -220,22 +241,16 @@ async def brain_run(
     attempts: list[dict[str, Any]] = []
 
     for model in models:
+        if is_local and "/" in model:
+            continue
         result = await model_router.gateway.chat(
             messages,
-            temperature=0.42,
+            temperature=0.25 if is_local else 0.42,
             response_format={"type": "json_object"},
             model_override=model,
         )
         last_result = result
-        attempts.append(
-            {
-                "model": model,
-                "status": result.status,
-                "demo_fallback": result.demo_fallback,
-                "provider": result.provider,
-                "error": (result.error or "")[:500],
-            }
-        )
+        attempts.append({"model": model, "status": result.status, "demo_fallback": result.demo_fallback, "provider": result.provider, "error": (result.error or "")[:500]})
         if result.status != "ok" or result.demo_fallback:
             last_error = result.error or result.status
             continue
@@ -257,11 +272,11 @@ async def brain_run(
                 "status": "completed",
                 "model_status": "live",
                 "result": body,
-                "citations": [citation.model_dump(mode="python") for citation in getattr(evidence_context, "citations", [])],
+                "citations": [citation.model_dump(mode="python") for citation in getattr(evidence_context, "citations", [])[:citation_limit]],
                 "evidence_summary": context_bundle.get("evidence_summary") or {},
                 "missing_data": body.get("missing_evidence") or getattr(evidence_context, "missing_data", []),
                 "confidence": body.get("confidence") or "low",
-                "internal_debug": {"selected_model": result.model, "attempts": attempts},
+                "internal_debug": {"selected_model": result.model, "attempts": attempts, "local_ollama_mode": is_local},
             }
         last_error = "model_returned_unusable_body"
         attempts[-1]["error"] = last_error
@@ -271,13 +286,10 @@ async def brain_run(
         "status": "unavailable",
         "model_status": "fallback",
         "result": fallback,
-        "citations": [citation.model_dump(mode="python") for citation in getattr(evidence_context, "citations", [])],
+        "citations": [citation.model_dump(mode="python") for citation in getattr(evidence_context, "citations", [])[:citation_limit]],
         "evidence_summary": context_bundle.get("evidence_summary") or {},
         "missing_data": fallback.get("missing_evidence") or getattr(evidence_context, "missing_data", []),
         "confidence": "low",
         "internal_status": getattr(last_result, "status", None) if last_result else "not_configured",
-        "internal_debug": {
-            "last_error": last_error,
-            "attempts": attempts,
-        },
+        "internal_debug": {"last_error": last_error, "attempts": attempts, "local_ollama_mode": is_local},
     }
