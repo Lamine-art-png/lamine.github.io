@@ -159,7 +159,7 @@ app.add_middleware(
     allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
+    allow_headers=["*"]
 )
 
 
@@ -303,6 +303,9 @@ app.include_router(forecast_router, prefix="/v1")
 
 from app.api.v1.intelligence import router as intelligence_router  # noqa: E402
 app.include_router(intelligence_router, prefix="/v1")
+
+from app.api.v1.brain import router as brain_router  # noqa: E402
+app.include_router(brain_router, prefix="/v1")
 
 from app.api.v1.workbench import router as workbench_router  # noqa: E402
 app.include_router(workbench_router, prefix="/v1")
