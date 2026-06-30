@@ -8,12 +8,20 @@ from app.core.config import settings
 from app.services.ai_gateway import AIGateway, AIGatewayResult
 
 
-# Frontier Chinese-first routing. Operators can still override every value with
-# env vars, but AGRO-AI should not silently fall back to weak defaults when an
-# OpenAI-compatible gateway is configured.
-DEFAULT_FRONTIER_MODEL = "z-ai/glm-5.2"
-DEFAULT_FAST_MODEL = "z-ai/glm-5.2"
-DEFAULT_REPORT_MODEL = "z-ai/glm-5.2"
+# Chinese-first frontier routing for the AGRO-AI operating brain.
+# Operators can still override these with env vars, but the production default
+# should favor models currently positioned for agentic work, long-context RAG,
+# tool use, and natural enterprise dialogue instead of a brittle single model id.
+DEFAULT_FRONTIER_MODEL = "z-ai/glm-5-turbo"
+DEFAULT_FAST_MODEL = "qwen/qwen3-next-80b-a3b-instruct"
+DEFAULT_REPORT_MODEL = "qwen/qwen3-max"
+DEFAULT_MODEL_FALLBACKS = [
+    "z-ai/glm-5-turbo",
+    "qwen/qwen3-max",
+    "qwen/qwen3-coder",
+    "qwen/qwen3-235b-a22b-instruct-2507",
+    "z-ai/glm-4.5-air",
+]
 
 TASK_PROFILES = {
     "chat": "reasoning",
@@ -39,14 +47,18 @@ class ModelRouter:
         configured_default = (settings.AI_MODEL or "").strip()
         self.default_model = configured_default or DEFAULT_FRONTIER_MODEL
         self.fast_model = (settings.AI_FAST_MODEL or "").strip() or DEFAULT_FAST_MODEL
-        self.reasoning_model = (settings.AI_REASONING_MODEL or "").strip() or self.default_model
+        self.reasoning_model = (settings.AI_REASONING_MODEL or "").strip() or DEFAULT_FRONTIER_MODEL
         self.report_model = (settings.AI_REPORT_MODEL or "").strip() or DEFAULT_REPORT_MODEL
         self.local_model = (settings.AI_LOCAL_MODEL or "").strip() or self.default_model
-        self.fallback_models = [
+        configured_fallbacks = [
             model.strip()
             for model in (settings.AI_MODEL_FALLBACKS or "").split(",")
             if model.strip()
         ]
+        self.fallback_models = []
+        for model in [*configured_fallbacks, *DEFAULT_MODEL_FALLBACKS]:
+            if model and model not in self.fallback_models:
+                self.fallback_models.append(model)
 
     def mode(self) -> str:
         provider = (settings.AI_PROVIDER or "").strip().lower()

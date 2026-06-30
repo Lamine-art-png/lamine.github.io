@@ -49,6 +49,8 @@ class ChatRequest(BaseModel):
     workspace_id: str | None = None
     block_id: str | None = None
     evidence_ids: list[str] = Field(default_factory=list)
+    uploaded_evidence: list[dict[str, Any]] = Field(default_factory=list)
+    history: list[dict[str, Any]] = Field(default_factory=list)
     temperature: float = Field(default=0.2, ge=0, le=1)
 
 
@@ -103,6 +105,8 @@ class IntelligenceRunRequest(BaseModel):
     workspace_id: str | None = None
     field_id: str | None = None
     audience: str | None = None
+    history: list[dict[str, Any]] = Field(default_factory=list)
+    uploaded_evidence: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class IntelligenceRunResponse(BaseModel):
@@ -146,7 +150,7 @@ class IntelligenceRunResponse(BaseModel):
             or "AGRO-AI reviewed the workspace context and produced an operating response."
         )
         self.summary = str(summary)
-        self.answer = self.answer or self.summary
+        self.answer = self.answer or result.get("answer") or self.summary
         self.evidence_used = self.evidence_used or list(result.get("evidence_used") or result.get("available_data") or result.get("key_findings") or [])
         self.missing_evidence = self.missing_evidence or list(result.get("missing_evidence") or result.get("missing_data") or self.missing_data or [])
         self.risk = self.risk or result.get("risk_flags") or result.get("risks") or []
