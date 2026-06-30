@@ -277,9 +277,11 @@ async def email_verification_request_runtime(payload: Dict[str, Any] = Body(defa
 
 from app.api.v1.auth import router as auth_router  # noqa: E402
 from app.api.v1.billing import router as billing_router  # noqa: E402
+from app.api.v1.product_shell import router as product_shell_router  # noqa: E402
 
 app.include_router(auth_router, prefix="/v1")
 app.include_router(billing_router, prefix="/v1")
+app.include_router(product_shell_router, prefix="/v1")
 
 from app.api.v1.saas import router as saas_router  # noqa: E402
 app.include_router(saas_router, prefix="/v1")
