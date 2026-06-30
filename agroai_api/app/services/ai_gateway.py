@@ -45,6 +45,14 @@ Sound natural, calm, direct, and specific. Answer the user's actual question fir
 Return valid JSON only. Put the natural answer in summary and answer. Keep arrays concise and operational.
 """
 
+LOCAL_OLLAMA_SYSTEM_PROMPT = """
+/no_think
+You are AGRO-AI. Answer naturally and briefly for an agriculture operations user.
+Use only the supplied context. Do not invent telemetry, acreage, integrations, or compliance status.
+Return valid JSON only with keys: summary, answer, work_completed, evidence_used, missing_evidence, recommendations, next_actions, risk_flags, confidence, customer_safe.
+Keep the answer useful, concrete, and under 180 words.
+"""
+
 
 @dataclass
 class AIGatewayResult:
@@ -66,8 +74,6 @@ def _normalize_provider(value: str) -> str:
 
 def _normalize_base_url(value: str, provider: str) -> str:
     base_url = (value or "").strip().rstrip("/")
-    # Most setup mistakes put the full chat-completions URL in AI_BASE_URL.
-    # The gateway appends /chat/completions itself, so normalize that here.
     suffixes = ("/chat/completions", "/completions")
     changed = True
     while changed:
@@ -109,6 +115,8 @@ class AIGateway:
         return bool(self.provider and self.base_url and selected_model and self.api_key)
 
     def _with_agroai_context(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
+        if self.provider == "ollama":
+            return self._local_ollama_messages(messages)
         enriched = [dict(message) for message in messages]
         for message in enriched:
             if message.get("role") == "system":
@@ -116,12 +124,27 @@ class AIGateway:
                 return enriched
         return [{"role": "system", "content": AGRO_AI_OPERATING_CONTEXT}] + enriched
 
+    def _local_ollama_messages(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
+        user_parts: list[str] = []
+        for message in messages[-4:]:
+            role = message.get("role") or "user"
+            content = str(message.get("content") or "")
+            if not content.strip():
+                continue
+            user_parts.append(f"{role}: {content[:2500]}")
+        compact = "\n\n".join(user_parts)[-6500:]
+        return [
+            {"role": "system", "content": LOCAL_OLLAMA_SYSTEM_PROMPT},
+            {"role": "user", "content": f"/no_think\nUse this compact request context and answer as AGRO-AI.\n\n{compact}"},
+        ]
+
     def _candidate_models(self, primary: str | None) -> list[str]:
         candidates: list[str] = []
         for model in [primary or self.model, *self.fallback_models]:
             clean = (model or "").strip()
-            if clean and clean not in candidates:
-                candidates.append(clean)
+            if clean and not (self.provider == "ollama" and "/" in clean):
+                if clean not in candidates:
+                    candidates.append(clean)
         return candidates
 
     async def chat(
@@ -139,9 +162,7 @@ class AIGateway:
 
         try:
             if self.provider == "ollama":
-                if model_override:
-                    return await self._chat_ollama(messages, temperature, model_override=model_override)
-                return await self._chat_ollama(messages, temperature)
+                return await self._chat_ollama(messages, temperature, model_override=model_override)
             if model_override:
                 return await self._chat_openai_compatible(messages, temperature, response_format, model_override=model_override)
             return await self._chat_openai_compatible(messages, temperature, response_format)
@@ -285,21 +306,39 @@ class AIGateway:
         raise ValueError("All configured AI models failed: " + " | ".join(errors))
 
     async def _chat_ollama(self, messages: list[dict[str, str]], temperature: float, model_override: str | None = None) -> AIGatewayResult:
+        selected_model = model_override or self.model
+        payload = {
+            "model": selected_model,
+            "messages": messages,
+            "stream": False,
+            "options": {
+                "temperature": min(float(temperature or 0.2), 0.35),
+                "num_predict": 360,
+                "num_ctx": 2048,
+            },
+        }
         async with httpx.AsyncClient(timeout=self.timeout) as client:
-            response = await client.post(
-                f"{self.base_url}/api/chat",
-                json={
-                    "model": model_override or self.model,
-                    "messages": messages,
-                    "stream": False,
-                    "options": {"temperature": temperature},
-                },
-            )
+            response = await client.post(f"{self.base_url}/api/chat", json=payload)
             response.raise_for_status()
             body = response.json()
 
         content = extract_final_answer(body.get("message", {}).get("content", ""))
-        return AIGatewayResult(status="ok", content=content, provider="ollama", model=model_override or self.model, raw=body)
+        if not content:
+            content = json.dumps(
+                {
+                    "summary": "I can help with that. The local model is connected, but it returned an empty final answer, so I need a shorter request or more focused evidence.",
+                    "answer": "I can help with that. The local model is connected, but it returned an empty final answer, so I need a shorter request or more focused evidence.",
+                    "work_completed": ["Reached local Ollama model."],
+                    "evidence_used": [],
+                    "missing_evidence": ["focused request or relevant evidence"],
+                    "recommendations": ["Ask one specific field, water, compliance, or report question at a time."],
+                    "next_actions": ["Send a shorter prompt"],
+                    "risk_flags": ["Local small model returned empty content."],
+                    "confidence": "low",
+                    "customer_safe": True,
+                }
+            )
+        return AIGatewayResult(status="ok", content=content, provider="ollama", model=selected_model, raw=body)
 
     def _offline_fallback(self, messages: list[dict[str, str]], selected_model: str | None = None) -> AIGatewayResult:
         user_message = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
