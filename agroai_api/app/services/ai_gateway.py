@@ -45,9 +45,10 @@ Return valid JSON only. Put the natural answer in summary and answer.
 LOCAL_OLLAMA_SYSTEM_PROMPT = """
 /no_think
 You are AGRO-AI, an agriculture operations assistant.
-Answer the user in normal customer-facing text, not JSON.
-Be brief, natural, and specific. Maximum 90 words.
-If data is missing, say what is missing and what the user can do next.
+Answer the user's exact question in normal customer-facing text, not JSON.
+Be brief, natural, and specific. Maximum 80 words.
+If data is missing, say what is missing and what the useful next step is.
+Never repeat generic onboarding copy. Do not say "ask one specific question" when the user already asked one.
 Do not invent telemetry, acreage, integrations, water use, compliance status, or savings.
 """
 
@@ -89,12 +90,6 @@ def _strip_markdown_fences(value: str) -> str:
 
 
 def clean_model_text(content: str) -> str:
-    """Clean model text into customer-facing text.
-
-    Local small Qwen models can leak JSON-ish envelopes or thinking traces. This
-    function extracts only the natural answer/summary before the UI sees it.
-    """
-
     text = (content or "").strip()
     if not text:
         return ""
@@ -126,7 +121,7 @@ def clean_model_text(content: str) -> str:
             return str(rescued).strip()
 
     if text.lstrip().startswith("{"):
-        return "I can help with that. I have limited live workspace evidence right now, so the useful next step is to connect or upload the relevant field, irrigation, weather, controller, or compliance data, then ask one specific question."
+        return ""
 
     return text.strip()
 
@@ -176,6 +171,38 @@ def parse_model_json(content: str) -> dict[str, Any]:
     }
 
 
+def _extract_question(messages: list[dict[str, str]]) -> str:
+    for message in reversed(messages):
+        if message.get("role") != "user":
+            continue
+        content = str(message.get("content") or "")
+        for pattern in [r"QUESTION:\s*(.+?)(?:\n|$)", r'"question"\s*:\s*"((?:[^"\\]|\\.)*)"']:
+            match = re.search(pattern, content, flags=re.IGNORECASE | re.DOTALL)
+            if match:
+                value = match.group(1).strip()
+                try:
+                    value = json.loads(f'"{value}"')
+                except Exception:
+                    value = value.replace('\\n', ' ').replace('\\"', '"')
+                return str(value).strip()[:500]
+        if content.strip():
+            return content.strip()[:500]
+    return ""
+
+
+def _question_aware_local_fallback(question: str) -> str:
+    q = (question or "").lower()
+    if any(term in q for term in ["john deere", "deere", "operations center"]):
+        return "Yes. John Deere Operations Center is one of the core systems AGRO-AI should connect to: fields, equipment activity, operations data, boundaries, and work records. Once connected, I can help turn that data into irrigation context, compliance evidence, field priorities, and customer-ready reports."
+    if any(term in q for term in ["how much water", "water should", "irrigat", "put here"]):
+        return "I cannot give an exact irrigation amount yet because I need the field, crop, soil moisture, recent irrigation, weather/ET, flow rate, and controller status. The next useful step is to connect telemetry or upload the field data; then I can calculate a defensible recommendation instead of guessing."
+    if any(term in q for term in ["what are you good", "what can you do", "capabilities", "good at"]):
+        return "I am best at turning messy agriculture context into action: irrigation decisions, evidence gaps, compliance packets, field-priority lists, customer reports, and integration checks across systems like John Deere, WiseConn, Talgil, weather, soil moisture, and uploaded files."
+    if any(term in q for term in ["hi", "hello", "hey"]):
+        return "Yes — I can help. Ask me about a field, irrigation decision, compliance report, uploaded file, integration, or customer account, and I will separate what we know from what is missing."
+    return "I can help with that. Based on the current workspace, I should first separate what data is available from what is missing, then turn the request into a field action, report, integration check, or evidence gap list."
+
+
 class AIGateway:
     """Thin gateway for OpenAI-compatible chat completions and Ollama."""
 
@@ -210,16 +237,24 @@ class AIGateway:
         return [{"role": "system", "content": AGRO_AI_OPERATING_CONTEXT}] + enriched
 
     def _local_ollama_messages(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
-        user_parts: list[str] = []
+        question = _extract_question(messages)
+        context_parts: list[str] = []
         for message in messages[-3:]:
             role = message.get("role") or "user"
             content = str(message.get("content") or "").strip()
             if content:
-                user_parts.append(f"{role}: {content[:900]}")
-        compact = "\n\n".join(user_parts)[-2200:]
+                context_parts.append(f"{role}: {content[:700]}")
+        compact = "\n\n".join(context_parts)[-1600:]
         return [
             {"role": "system", "content": LOCAL_OLLAMA_SYSTEM_PROMPT},
-            {"role": "user", "content": f"/no_think\n{compact}\n\nAnswer in normal text only. No JSON."},
+            {
+                "role": "user",
+                "content": (
+                    f"/no_think\nQUESTION: {question}\n\n"
+                    f"Compact context:\n{compact}\n\n"
+                    "Answer QUESTION directly in normal text only. No JSON. No generic onboarding copy."
+                ),
+            },
         ]
 
     def _candidate_models(self, primary: str | None) -> list[str]:
@@ -347,23 +382,27 @@ class AIGateway:
 
     async def _chat_ollama(self, messages: list[dict[str, str]], temperature: float, model_override: str | None = None) -> AIGatewayResult:
         selected_model = model_override or self.model
+        question = _extract_question(messages)
         payload = {
             "model": selected_model,
             "messages": messages,
             "stream": False,
+            "think": False,
+            "keep_alive": "30m",
             "options": {
-                "temperature": min(float(temperature or 0.15), 0.25),
-                "num_predict": 120,
-                "num_ctx": 1024,
+                "temperature": min(float(temperature or 0.1), 0.2),
+                "num_predict": 80,
+                "num_ctx": 768,
             },
         }
-        async with httpx.AsyncClient(timeout=min(self.timeout, 45)) as client:
+        async with httpx.AsyncClient(timeout=min(self.timeout, 30)) as client:
             response = await client.post(f"{self.base_url}/api/chat", json=payload)
             response.raise_for_status()
             body = response.json()
-        content = clean_model_text(body.get("message", {}).get("content", ""))
+        message = body.get("message", {}) if isinstance(body, dict) else {}
+        content = clean_model_text(message.get("content", "") or body.get("response", ""))
         if not content:
-            content = "I can help. Ask one specific irrigation, field, compliance, or evidence question, and I will work from the connected data without inventing missing facts."
+            content = _question_aware_local_fallback(question)
         return AIGatewayResult(status="ok", content=content, provider="ollama", model=selected_model, raw=body)
 
     def _offline_fallback(self, messages: list[dict[str, str]], selected_model: str | None = None) -> AIGatewayResult:
