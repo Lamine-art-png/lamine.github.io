@@ -8,9 +8,16 @@ from app.core.config import settings
 from app.services.ai_gateway import AIGateway, AIGatewayResult
 
 
+# Frontier Chinese-first routing. Operators can still override every value with
+# env vars, but AGRO-AI should not silently fall back to weak defaults when an
+# OpenAI-compatible gateway is configured.
+DEFAULT_FRONTIER_MODEL = "z-ai/glm-5.2"
+DEFAULT_FAST_MODEL = "z-ai/glm-5.2"
+DEFAULT_REPORT_MODEL = "z-ai/glm-5.2"
+
 TASK_PROFILES = {
     "chat": "reasoning",
-    "readiness_analysis": "fast",
+    "readiness_analysis": "reasoning",
     "field_diagnosis": "reasoning",
     "exception_triage": "reasoning",
     "decision_workbench": "reasoning",
@@ -29,10 +36,11 @@ class ModelSelection:
 class ModelRouter:
     def __init__(self) -> None:
         self.gateway = AIGateway()
-        self.default_model = (settings.AI_MODEL or "").strip()
-        self.fast_model = (settings.AI_FAST_MODEL or "").strip() or self.default_model
+        configured_default = (settings.AI_MODEL or "").strip()
+        self.default_model = configured_default or DEFAULT_FRONTIER_MODEL
+        self.fast_model = (settings.AI_FAST_MODEL or "").strip() or DEFAULT_FAST_MODEL
         self.reasoning_model = (settings.AI_REASONING_MODEL or "").strip() or self.default_model
-        self.report_model = (settings.AI_REPORT_MODEL or "").strip() or self.default_model
+        self.report_model = (settings.AI_REPORT_MODEL or "").strip() or DEFAULT_REPORT_MODEL
         self.local_model = (settings.AI_LOCAL_MODEL or "").strip() or self.default_model
 
     def mode(self) -> str:
@@ -50,25 +58,29 @@ class ModelRouter:
             missing.append("AI_PROVIDER")
         if not settings.AI_BASE_URL:
             missing.append("AI_BASE_URL")
-        if not settings.AI_MODEL and not settings.AI_LOCAL_MODEL:
-            missing.append("AI_MODEL")
         if provider not in {"", "ollama"} and not settings.AI_API_KEY:
             missing.append("AI_API_KEY")
         return missing
 
     def status(self) -> dict[str, Any]:
+        selected = self.select("chat")
         return {
             "configured": self.gateway.is_configured,
             "provider": self.gateway.provider or "offline",
             "base_url_present": bool(self.gateway.base_url),
-            "model": self.default_model or self.local_model or None,
+            "model": selected.model,
             "mode": self.mode(),
             "missing_env": self.missing_env(),
             "fallback_active": not self.gateway.is_configured,
+            "profiles": {
+                "fast": self.fast_model,
+                "reasoning": self.reasoning_model,
+                "report": self.report_model,
+            },
         }
 
     def select(self, task: str) -> ModelSelection:
-        profile = TASK_PROFILES.get(task, "fast")
+        profile = TASK_PROFILES.get(task, "reasoning")
         model = self.fast_model
         if profile == "reasoning":
             model = self.reasoning_model
