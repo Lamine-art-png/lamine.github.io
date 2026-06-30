@@ -50,9 +50,9 @@ function operationalAnswer(response: AnyRecord) {
   const primary = text(direct).trim();
   const sections = [
     primary,
-    section("What I used", result.evidence_used || result.available_data || result.key_findings || result.field_summary),
+    section("What I checked", result.work_completed || result.evidence_used || result.available_data || result.key_findings || result.field_summary),
     section("What is missing", result.missing_evidence || result.missing_data || response.missing_data),
-    section("Recommended work", result.agent_plan || result.recommendations || result.recommended_next_actions || result.operator_instructions),
+    section("Operating plan", result.agent_plan || result.recommendations || result.recommended_next_actions || result.operator_instructions),
     section("Next steps", result.next_actions || result.operator_tasks),
     section("Risks to watch", result.risk_flags || result.risks || result.reviewer_notes),
   ].filter(Boolean);
@@ -62,18 +62,28 @@ function operationalAnswer(response: AnyRecord) {
     : "I received the request, but the operating engine did not return enough usable detail. Add field, sensor, ET/weather, document, or operator evidence and I can turn it into a decision brief, report, checklist, or evidence plan.";
 }
 
-async function runOperatingBrain(question: string, workspaceId?: string) {
+function buildConversationPrompt(question: string, messages: AnyRecord[]) {
+  const recent = messages
+    .slice(-8)
+    .map((message) => `${message.role === "user" ? "User" : "AGRO-AI"}: ${text(message.content).slice(0, 1400)}`)
+    .join("\n\n");
+  if (!recent) return question;
+  return `Conversation context for continuity, do not repeat yourself unless useful:\n${recent}\n\nCurrent user request:\n${question}`;
+}
+
+async function runOperatingBrain(question: string, workspaceId?: string, history: AnyRecord[] = []) {
+  const engineQuestion = buildConversationPrompt(question, history);
   try {
     const response = await apiClient.intelligence.run({
       task: "chat",
-      question,
+      question: engineQuestion,
       workspace_id: workspaceId,
       audience: "operator",
     }) as AnyRecord;
     return { role: "assistant", content: operationalAnswer(response), meta: response };
   } catch (primaryError) {
     try {
-      const response = await apiClient.ai.chat({ message: question, workspace_id: workspaceId }) as AnyRecord;
+      const response = await apiClient.ai.chat({ message: engineQuestion, workspace_id: workspaceId }) as AnyRecord;
       return { role: "assistant", content: operationalAnswer(response), meta: response };
     } catch {
       throw primaryError;
@@ -136,13 +146,14 @@ export function Intelligence() {
     if (!clean || loading) return;
 
     const userMessage = { role: "user", content: clean };
+    const history = messages;
     setQuestion("");
     setLoading(true);
     setError("");
     setMessages((current) => [...current, userMessage]);
 
     try {
-      const assistantMessage = await runOperatingBrain(clean, currentWorkspace?.id);
+      const assistantMessage = await runOperatingBrain(clean, currentWorkspace?.id, history);
       setMessages((current) => [...current, assistantMessage]);
       persistChat(clean, assistantMessage.content).catch(() => null);
     } catch (err) {
