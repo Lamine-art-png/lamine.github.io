@@ -50,6 +50,38 @@ function actionsFrom(message: AnyRecord | null): AnyRecord[] {
   return asArray(first?.actions) as AnyRecord[];
 }
 
+function normalizeAssistantResponse(response: unknown): AnyRecord {
+  const payload = response && typeof response === "object" ? (response as AnyRecord) : {};
+  const result = payload.result && typeof payload.result === "object" ? payload.result as AnyRecord : {};
+  const summary =
+    result.answer ||
+    result.summary ||
+    payload.answer ||
+    payload.summary ||
+    payload.content ||
+    "AGRO-AI prepared a workspace response.";
+  const sections = [
+    ["Decision summary", summary],
+    ["Evidence used", asArray(payload.citations || result.citations || result.evidence_used).map(text).join("\n")],
+    ["Missing evidence", asArray(payload.missing_data || result.missing_data).map(text).join("\n")],
+    ["Risks and confidence", [payload.confidence || result.confidence, ...(asArray(payload.verification?.warnings || result.warnings))].filter(Boolean).map(text).join("\n")],
+    ["Recommended next action", asArray(result.recommended_next_actions || payload.recommended_actions || result.actions).map(text).join("\n")],
+  ].filter(([, value]) => String(value || "").trim());
+
+  return {
+    id: `assistant-${Date.now()}`,
+    role: "assistant",
+    content: sections.map(([title, value]) => `${title}\n${value}`).join("\n\n"),
+    citations: asArray(payload.citations || result.citations),
+    missing_data: asArray(payload.missing_data || result.missing_data),
+    recommended_actions: asArray(result.recommended_next_actions || payload.recommended_actions || result.actions),
+    model_status: payload.model_status || result.model_status || payload.status,
+    model: payload.model || result.model,
+    confidence: payload.confidence || result.confidence,
+    verification: payload.verification || result.verification,
+  };
+}
+
 function List({ title, items, empty = "None yet." }: { title: string; items: unknown[]; empty?: string }) {
   return (
     <div className="rounded-lg p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
@@ -103,18 +135,34 @@ export function Intelligence() {
     setLoading(true);
     setError("");
     setReportMessage("");
+    setMessages((current) => [...current, { id: `user-${Date.now()}`, role: "user", content: clean }]);
     try {
-      if (!conversationId) {
-        const response = await apiClient.conversations.create({ title: clean.slice(0, 80), message: clean, workspace_id: currentWorkspace?.id }) as AnyRecord;
-        setConversationId(response.conversation.id);
-        setMessages(asArray(response.messages) as AnyRecord[]);
-        await conversationState.refresh();
-      } else {
-        const response = await apiClient.conversations.message(conversationId, { content: clean, audience, output }) as AnyRecord;
-        setMessages((current) => [...current, { role: "user", content: clean }, response.message]);
-      }
+      const response = await apiClient.intelligence.run({
+        task: "chat",
+        question: clean,
+        workspace_id: currentWorkspace?.id,
+        audience,
+      }) as AnyRecord;
+      setMessages((current) => [...current, normalizeAssistantResponse(response)]);
     } catch (err) {
-      setError(err instanceof Error ? err.message : "AGRO-AI could not complete the request.");
+      try {
+        const response = await apiClient.ai.chat({ task: "chat", message: clean, workspace_id: currentWorkspace?.id }) as AnyRecord;
+        setMessages((current) => [...current, normalizeAssistantResponse(response)]);
+      } catch {
+        try {
+          if (!conversationId) {
+            const response = await apiClient.conversations.create({ title: clean.slice(0, 80), message: clean, workspace_id: currentWorkspace?.id }) as AnyRecord;
+            setConversationId(response.conversation.id);
+            setMessages(asArray(response.messages) as AnyRecord[]);
+            await conversationState.refresh();
+          } else {
+            const response = await apiClient.conversations.message(conversationId, { content: clean, audience, output }) as AnyRecord;
+            setMessages((current) => [...current, response.message]);
+          }
+        } catch (fallbackError) {
+          setError(fallbackError instanceof Error ? fallbackError.message : err instanceof Error ? err.message : "AGRO-AI could not complete the request.");
+        }
+      }
     } finally {
       setLoading(false);
     }
@@ -194,7 +242,7 @@ export function Intelligence() {
             <div className="grid gap-4 md:grid-cols-3">
               <List title="Recommended actions" items={asArray(assistant.recommended_actions)} />
               <List title="Missing information" items={asArray(assistant.missing_data)} />
-              <List title="Artifact actions" items={artifactActions.map((action) => action.label || action.type)} />
+              <List title="Citations and status" items={[assistant.model_status ? `Model status: ${assistant.model_status}` : "", assistant.model ? `Model: ${assistant.model}` : "", assistant.confidence ? `Confidence: ${assistant.confidence}` : "", ...asArray(assistant.citations).map(text), ...artifactActions.map((action) => action.label || action.type)].filter(Boolean)} />
             </div>
           ) : null}
 

@@ -12,8 +12,10 @@ function safe(value: unknown, fallback = "—") {
 
 export function Admin() {
   const { user, currentOrganization, currentWorkspace } = useAuth();
+  const role = String(currentOrganization?.role || "member").toLowerCase();
+  const canViewSystem = role === "owner" || role === "admin";
   const aiState = usePortalResource<Record<string, unknown>>(useCallback(() => apiClient.ai.status(), []));
-  const systemState = usePortalResource<Record<string, unknown>>(useCallback(() => apiClient.adminRequests.system(), []));
+  const systemState = usePortalResource<Record<string, unknown>>(useCallback(() => canViewSystem ? apiClient.adminRequests.system() : Promise.resolve({}), [canViewSystem]));
   const ai = aiState.data || {};
   const system = systemState.data || {};
   const cloudflare = (system.cloudflare || {}) as Record<string, unknown>;
@@ -84,7 +86,7 @@ export function Admin() {
           </div>
         </section>
 
-        <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+        {canViewSystem ? <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
           <div className="flex items-start justify-between gap-4 mb-4">
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: MUTED }}>Deployment</div>
@@ -109,7 +111,13 @@ export function Admin() {
               ["Billing", "Admin-visible only"],
             ]} />
           </div>
-        </section>
+        </section> : <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <div className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: MUTED }}>System health</div>
+          <h2 className="text-[20px] font-semibold" style={{ color: TEXT }}>Admin access required</h2>
+          <p className="mt-2 text-[13px] leading-relaxed" style={{ color: MUTED }}>
+            Deployment and system-health details are available to organization owners and admins.
+          </p>
+        </section>}
 
         <section className="rounded-2xl p-6" style={{ background: "#0D2B1E", border: "1px solid rgba(255,255,255,0.08)" }}>
           <div className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: "rgba(155,216,75,0.65)" }}>

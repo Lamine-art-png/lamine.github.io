@@ -337,6 +337,10 @@ export type ConversationMessagePayload = {
   output?: string;
 };
 
+export type EmailVerificationConfirmPayload = {
+  token: string;
+};
+
 export type AdminRequestUpdatePayload = {
   status?: "received" | "triaged" | "in_progress" | "waiting_on_customer" | "closed";
   priority?: "low" | "medium" | "high" | "urgent";
@@ -355,6 +359,7 @@ export const apiClient = {
     login: (payload: LoginPayload) => post("/v1/auth/login", payload),
     logout: () => post("/v1/auth/logout"),
     me: () => get("/v1/auth/me"),
+    confirmEmailVerification: (payload: EmailVerificationConfirmPayload) => post("/v1/account/email-verification/confirm", payload),
   },
 
   billing: {

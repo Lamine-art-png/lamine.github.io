@@ -12,6 +12,8 @@ import { DecisionWorkbench, Exceptions, Fields, Readiness, ReportFactory } from 
 import { Sources } from "./components/Sources";
 import { Audit } from "./components/Audit";
 import { Admin } from "./components/Admin";
+import { RouteRecovery } from "./components/RouteRecovery";
+import { VerifyEmailPage } from "./components/VerifyEmail";
 import {
   BillingPage,
   AdminRequestsPage,
@@ -25,9 +27,11 @@ import {
 } from "./components/ProductShell";
 
 export const router = createBrowserRouter([
+  { path: "/verify-email", Component: VerifyEmailPage },
   {
     path: "/",
     Component: MainLayout,
+    errorElement: <RouteRecovery />,
     children: [
       { index: true, Component: Overview },
       { path: "field-queue", Component: Overview },
@@ -56,6 +60,7 @@ export const router = createBrowserRouter([
       { path: "settings", Component: WorkspaceSettingsPage },
       { path: "team", Component: TeamPage },
       { path: "onboarding", Component: OnboardingPage },
+      { path: "*", Component: RouteRecovery },
     ],
   },
 ]);

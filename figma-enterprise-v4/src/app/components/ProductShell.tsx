@@ -5,7 +5,7 @@ import { usePortalResource } from "../hooks/usePortalResource";
 import { BG, BORDER, GREEN, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
 
 type Plan = {
-  id: "free" | "professional" | "network";
+  id: "free" | "professional" | "team" | "network" | "enterprise";
   name: string;
   public_price_monthly: string;
   public_price_annual: string;
@@ -58,6 +58,86 @@ const faq = [
   ["Is my data used to train models?", "Customer evidence is used to power your workspace experience. AGRO-AI should not treat your private field records as public training data."],
   ["How do integrations work?", "Connected systems bring files, emails, controller data, or evidence into the workspace so the field operating loop can act on it."],
 ];
+
+const LOCAL_PRODUCT_PLANS: ProductPlans = {
+  plans: [
+    {
+      id: "free",
+      name: "Free",
+      public_price_monthly: "$0/mo",
+      public_price_annual: "$0/yr",
+      recommended_buyer: "Evaluation workspaces and small pilot teams getting organized.",
+      included_limits: { seats: "1 user", workspaces: "1 evaluation workspace", ai: "Limited AGRO-AI messages" },
+      features: ["Basic readiness view", "Manual evidence upload", "Starter field context", "Locked reports, connectors, team seats, and advanced AI"],
+      support_level: "Self-guided setup",
+      cta_label: "Start free",
+      is_custom_pricing: false,
+    },
+    {
+      id: "professional",
+      name: "Professional",
+      public_price_monthly: "$299/mo",
+      public_price_annual: "$2,990/yr",
+      recommended_buyer: "Growers and operators ready to run WaterOps, evidence, and reports in one workspace.",
+      included_limits: { seats: "3 users", workspaces: "3 workspaces", reports: "Report generation and PDF-ready exports" },
+      features: ["Water risk briefs", "Operating recommendations", "Evidence ingestion", "Compliance drafts", "Standard connectors"],
+      support_level: "Standard support",
+      cta_label: "Upgrade to Professional",
+      is_custom_pricing: false,
+    },
+    {
+      id: "team",
+      name: "Team",
+      public_price_monthly: "$799/mo",
+      public_price_annual: "$7,990/yr",
+      recommended_buyer: "Multi-person operations teams coordinating evidence, field tasks, reports, and approvals.",
+      included_limits: { seats: "10 users", workspaces: "10 workspaces", roles: "Role controls and team invites" },
+      features: ["Shared evidence library", "Team invites", "Advanced report workflows", "Connector workflows", "Priority support"],
+      support_level: "Priority support",
+      cta_label: "Request Team",
+      is_custom_pricing: false,
+    },
+    {
+      id: "network",
+      name: "Network",
+      public_price_monthly: "$1,500/mo",
+      public_price_annual: "$15,000/yr",
+      recommended_buyer: "Water agencies, grower networks, exporters, lenders, insurers, and sourcing programs.",
+      included_limits: { scope: "Up to 50k acres or 50 workspaces", seats: "25 users", rollups: "Network rollups and partner reporting" },
+      features: ["Multi-workspace dashboards", "Evidence rollups", "Customer reporting", "Priority onboarding", "Program-level views"],
+      support_level: "Priority onboarding",
+      cta_label: "Contact sales",
+      is_custom_pricing: false,
+    },
+    {
+      id: "enterprise",
+      name: "Enterprise",
+      public_price_monthly: "Custom",
+      public_price_annual: "Custom",
+      recommended_buyer: "Organizations needing governance review, custom integrations, security process, and enterprise support.",
+      included_limits: { seats: "Custom seats", data: "Custom data scope", security: "Security and governance review" },
+      features: ["Custom integrations", "SSO/SAML planning when available", "Enterprise support", "Security review", "Custom reporting scope"],
+      support_level: "Enterprise success",
+      cta_label: "Contact sales",
+      is_custom_pricing: true,
+    },
+  ],
+  service_add_ons: [
+    { id: "onboarding", name: "Onboarding", price: "Scoped", description: "Workspace launch, first evidence review, connector planning, and operating workflow setup." },
+    { id: "custom_integration", name: "Custom integration", price: "Scoped", description: "Planning and implementation support for systems that need special handling." },
+    { id: "network_rollout", name: "Network rollout", price: "Scoped", description: "Program setup for agencies, multi-farm groups, or buyer networks." },
+  ],
+};
+
+function productPlansWithFallback(remote?: ProductPlans | null): ProductPlans {
+  const byId = new Map<string, Plan>();
+  for (const plan of LOCAL_PRODUCT_PLANS.plans) byId.set(plan.id, plan);
+  for (const plan of remote?.plans || []) byId.set(plan.id, { ...byId.get(plan.id), ...plan } as Plan);
+  return {
+    plans: LOCAL_PRODUCT_PLANS.plans.map((plan) => byId.get(plan.id) || plan),
+    service_add_ons: remote?.service_add_ons?.length ? remote.service_add_ons : LOCAL_PRODUCT_PLANS.service_add_ons,
+  };
+}
 
 function safe(value: unknown, fallback = "Not available") {
   if (value === null || value === undefined || value === "") return fallback;
@@ -129,6 +209,8 @@ export function PricingPage() {
   const plansState = usePortalResource<ProductPlans>(useCallback(() => apiClient.product.plans(), []));
   const [billingPeriod, setBillingPeriod] = useState<"monthly" | "annual">("monthly");
   const [message, setMessage] = useState("");
+  const productPlans = productPlansWithFallback(plansState.data);
+  const usingLocalFallback = !plansState.data?.plans?.length || Boolean(plansState.error);
 
   const selectPlan = async (plan: Plan) => {
     setMessage("");
@@ -136,29 +218,30 @@ export function PricingPage() {
       const hasSession = Boolean(localStorage.getItem("agroai_access_token"));
       if (!hasSession && plan.id === "free") {
         setMessage("Create your account to start free.");
+        window.history.replaceState(null, "", "/?mode=register");
         return;
       }
-      if (!hasSession && plan.id === "professional") {
+      if (!hasSession && ["professional", "team", "enterprise"].includes(plan.id)) {
         const response = await apiClient.sales.contact({
           type: "upgrade",
-          subject: "Professional plan request",
-          message: "Customer requested Professional pricing follow-up from public pricing.",
+          subject: `${plan.name} plan request`,
+          message: `Customer requested ${plan.name} pricing follow-up from public pricing.`,
           source_page: "pricing",
         }) as Record<string, unknown>;
         setMessage(`${safe(response.message, "Upgrade request received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
         return;
       }
-      if (plan.id === "network") {
+      if (plan.id === "network" || plan.id === "enterprise" || plan.id === "team") {
         const response = await apiClient.sales.networkInquiry({
           type: "network_plan",
-          subject: "Network plan inquiry",
-          message: "Customer requested Network pricing follow-up.",
+          subject: `${plan.name} plan inquiry`,
+          message: `Customer requested ${plan.name} pricing follow-up.`,
           source_page: "pricing",
         }) as Record<string, unknown>;
         setMessage(`${safe(response.message, "Network inquiry received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
         return;
       }
-      const response = await apiClient.billing.checkout({ plan_id: plan.id, billing_period: billingPeriod }) as Record<string, unknown>;
+      const response = await apiClient.billing.checkout({ plan_id: plan.id as "free" | "professional" | "network", billing_period: billingPeriod }) as Record<string, unknown>;
       if (typeof response.checkout_url === "string") {
         window.location.assign(response.checkout_url);
         return;
@@ -186,16 +269,17 @@ export function PricingPage() {
       </div>
 
       {message ? <div className="rounded-lg px-4 py-3 text-[13px]" style={{ background: "#FFFBEB", color: "#92400E", border: "1px solid #FCD34D" }}>{message}</div> : null}
+      {usingLocalFallback ? <div className="rounded-lg px-4 py-3 text-[13px]" style={{ background: SURFACE, color: MUTED, border: `1px solid ${BORDER}` }}>Pricing is available. Live plan details will refresh when the API responds.</div> : null}
 
-      <div className="grid gap-5 lg:grid-cols-3">
-        {(plansState.data?.plans || []).map((plan) => (
+      <div className="grid gap-5 lg:grid-cols-3 xl:grid-cols-5">
+        {productPlans.plans.map((plan) => (
           <PlanCard key={plan.id} plan={plan} billingPeriod={billingPeriod} onSelect={selectPlan} />
         ))}
       </div>
 
       <Panel title="Services">
         <div className="grid gap-4 md:grid-cols-3">
-          {(plansState.data?.service_add_ons || []).map((service) => (
+          {productPlans.service_add_ons.map((service) => (
             <div key={service.id} className="rounded-lg p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
               <div className="font-semibold text-[14px]" style={{ color: TEXT }}>{service.name}</div>
               <div className="mt-2 text-[13px] font-medium" style={{ color: GREEN }}>{service.price}</div>
@@ -271,7 +355,7 @@ export function BillingPage() {
   const usage = billing?.usage_summary || {};
 
   const upgrade = async (plan: Plan) => {
-    const response = await apiClient.billing.checkout({ plan_id: plan.id, billing_period: billingPeriod }) as Record<string, unknown>;
+    const response = await apiClient.billing.checkout({ plan_id: plan.id as "free" | "professional" | "network", billing_period: billingPeriod }) as Record<string, unknown>;
     if (typeof response.checkout_url === "string") {
       window.location.assign(response.checkout_url);
       return;
@@ -505,16 +589,50 @@ export function WorkspaceSettingsPage() {
 
 export function TeamPage() {
   const shellState = usePortalResource<ShellResponse>(useCallback(() => apiClient.product.shell(), []));
+  const { currentWorkspace } = useAuth();
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("member");
+  const [message, setMessage] = useState("");
+
+  const sendInvite = async () => {
+    const response = await apiClient.support.ticket({
+      category: "support",
+      subject: "Team invitation request",
+      message: `Please invite ${inviteEmail} as ${inviteRole}.`,
+      workspace_id: currentWorkspace?.id,
+      source_page: "team",
+    }) as Record<string, unknown>;
+    setMessage(`${safe(response.message, "Team invitation request received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
+    setInviteEmail("");
+  };
+
   return (
     <Page title="Team" subtitle="Invite and role controls are prepared for workspace collaboration.">
+      {message ? <div className="rounded-lg px-4 py-3 text-[13px]" style={{ background: "#F0FDF4", color: "#15803D", border: "1px solid #BBF7D0" }}>{message}</div> : null}
       <Panel title="Current user">
         <Row label="Name" value={shellState.data?.user?.name} />
         <Row label="Email" value={shellState.data?.user?.email} />
         <Row label="Workspace" value={shellState.data?.workspace?.name} />
       </Panel>
+      <Panel title="Invite teammate" action={<PortalButton disabled={!inviteEmail.trim()} onClick={sendInvite}>Send invite request</PortalButton>}>
+        <div className="grid gap-4 md:grid-cols-[1fr_180px]">
+          <label className="text-[12px]" style={{ color: MUTED }}>
+            Email
+            <input value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} type="email" placeholder="operator@example.com" className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />
+          </label>
+          <label className="text-[12px]" style={{ color: MUTED }}>
+            Role
+            <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
+              <option value="member">Member</option>
+              <option value="admin">Admin</option>
+              <option value="viewer">Viewer</option>
+            </select>
+          </label>
+        </div>
+      </Panel>
       <Panel title="Role controls">
         <p className="text-[13px] leading-relaxed" style={{ color: MUTED }}>
-          Team invitations and role administration are ready for workspace collaboration setup. Current access remains scoped to authenticated workspace members.
+          Access remains scoped to authenticated workspace members. Team invite requests are tracked for secure account provisioning.
         </p>
       </Panel>
     </Page>
