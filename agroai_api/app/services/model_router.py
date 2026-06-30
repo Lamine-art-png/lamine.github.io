@@ -42,6 +42,11 @@ class ModelRouter:
         self.reasoning_model = (settings.AI_REASONING_MODEL or "").strip() or self.default_model
         self.report_model = (settings.AI_REPORT_MODEL or "").strip() or DEFAULT_REPORT_MODEL
         self.local_model = (settings.AI_LOCAL_MODEL or "").strip() or self.default_model
+        self.fallback_models = [
+            model.strip()
+            for model in (settings.AI_MODEL_FALLBACKS or "").split(",")
+            if model.strip()
+        ]
 
     def mode(self) -> str:
         provider = (settings.AI_PROVIDER or "").strip().lower()
@@ -76,6 +81,7 @@ class ModelRouter:
                 "fast": self.fast_model,
                 "reasoning": self.reasoning_model,
                 "report": self.report_model,
+                "fallbacks": self.fallback_models,
             },
         }
 
