@@ -118,6 +118,9 @@ def _base_safeguards(provider: str) -> list[str]:
         "verified provider authentication",
         "customer-authorized connection record",
         "field/farm/zone mapping confirmed",
+        "write scope verified on provider account",
+        "water budget checked",
+        "safe operating window checked",
         "readback verification after provider write",
         "human approval before physical execution",
         "audit job persisted before execution",
@@ -250,6 +253,18 @@ def _operator_message(provider: str, tier: str, snapshot: dict[str, Any]) -> str
     return f"{provider} is configured but blocked for live execution. Resolve auth/read checks before any physical command path."
 
 
+def _execution_controls_missing(payload: ControllerExecutionPrepareRequest) -> list[str]:
+    metadata = payload.metadata or {}
+    required = [
+        ("customer_authorized", "customer_authorized=true"),
+        ("mapping_confirmed", "mapping_confirmed=true"),
+        ("write_scope_verified", "write_scope_verified=true"),
+        ("water_budget_checked", "water_budget_checked=true"),
+        ("safety_window_checked", "safety_window_checked=true"),
+    ]
+    return [label for key, label in required if not bool(metadata.get(key))]
+
+
 @router.get("/environments", response_model=ControllerEnvironmentResponse)
 async def get_controller_environments() -> ControllerEnvironmentResponse:
     """Return source-aware controller environment summary for portal UI."""
@@ -331,6 +346,8 @@ async def get_execution_readiness(
             "provider credentials validated in AGRO-AI runtime",
             "farm/field/zone mapping reviewed by user",
             "write scope verified on provider account",
+            "water budget checked",
+            "safe operating window checked",
             "dry-run execution packet reviewed",
             "human approval captured",
             "provider readback verification after write",
@@ -376,7 +393,7 @@ async def customer_connect_controller(
         "capabilities_requested": ["read_sync"] + (["schedule_write"] if payload.request_write_access else []),
         "capabilities_enabled": ["export_upload"] + (["read_sync_candidate"] if payload.enable_read_sync else []),
         "physical_execution_enabled": False,
-        "physical_execution_reason": "Requires live provider validation, field mapping, write-scope verification, and human approval.",
+        "physical_execution_reason": "Requires live provider validation, field mapping, write-scope verification, water-budget check, safe-window check, and human approval.",
     })
     connection.config_json = merged
     connection.last_test_at = datetime.utcnow()
@@ -426,11 +443,13 @@ async def prepare_controller_execution(
     """Prepare or dry-run a controller execution packet.
 
     Only WiseConn schedule_irrigation can be promoted to a real provider write
-    in this runtime, and only when approval_confirmed=True and dry_run=False.
-    Talgil and direct valve/pump commands stay as approval packets until their
-    provider-specific write contracts are implemented and verified.
+    in this runtime, and only when approval_confirmed=True, dry_run=False, and
+    customer_authorized/mapping_confirmed/write_scope_verified/water_budget_checked/
+    safety_window_checked are all true. Talgil and direct valve/pump commands stay
+    as approval packets until their provider-specific write contracts are implemented.
     """
     readiness = _readiness_card(await (_wiseconn_snapshot() if payload.provider == "wiseconn" else _talgil_snapshot()))
+    missing_controls = _execution_controls_missing(payload)
     execution_packet = {
         "provider": payload.provider,
         "command": payload.command,
@@ -444,6 +463,10 @@ async def prepare_controller_execution(
         "dry_run": payload.dry_run,
         "approval_confirmed": payload.approval_confirmed,
         "metadata": payload.metadata,
+        "hard_gate_checks": {
+            "passed": not missing_controls,
+            "missing": missing_controls,
+        },
         "readiness": readiness,
     }
 
@@ -453,6 +476,7 @@ async def prepare_controller_execution(
         and readiness["live_write"]
         and payload.approval_confirmed
         and not payload.dry_run
+        and not missing_controls
         and payload.zone_id
         and payload.start_time
         and payload.duration_minutes
@@ -469,7 +493,7 @@ async def prepare_controller_execution(
                 "executed": False,
                 "approval_required": True,
                 "reason": _not_executed_reason(payload, readiness),
-                "next_step": "Create/approve the operation packet, verify mapping and provider scopes, then rerun with dry_run=false only for supported WiseConn schedule writes.",
+                "next_step": "Create/approve the operation packet, verify mapping/provider scopes/water budget/safety window, then rerun with dry_run=false only for supported WiseConn schedule writes.",
             },
             status_value="approval_required",
         )
@@ -526,6 +550,9 @@ def _not_executed_reason(payload: ControllerExecutionPrepareRequest, readiness: 
         reasons.append("dry_run is enabled")
     if not payload.approval_confirmed:
         reasons.append("human approval has not been confirmed")
+    missing_controls = _execution_controls_missing(payload)
+    if missing_controls:
+        reasons.append("missing hard gates: " + ", ".join(missing_controls))
     if payload.provider != "wiseconn":
         reasons.append("only WiseConn schedule-write is wired in this runtime")
     if payload.command != "schedule_irrigation":
