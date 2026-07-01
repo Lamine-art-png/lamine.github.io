@@ -76,17 +76,38 @@ class Settings(BaseSettings):
     API_URL: str = "https://api.agroai-pilot.com"
     STRIPE_SECRET_KEY: str = ""
     STRIPE_WEBHOOK_SECRET: str = ""
+    STRIPE_SUCCESS_URL: str = ""
+    STRIPE_CANCEL_URL: str = ""
 
     # Current AGRO-AI commercial offers
     STRIPE_PRICE_ASSURANCE_AUDIT_FARM: str = ""
     STRIPE_PRICE_ASSURANCE_AUDIT_NETWORK: str = ""
     STRIPE_PRICE_WATEROPS_MONTHLY: str = ""
     STRIPE_PRICE_ASSURANCE_MONTHLY: str = ""
+    STRIPE_PRICE_PRO_MONTHLY: str = ""
+    STRIPE_PRICE_PRO_ANNUAL: str = ""
+    STRIPE_PRICE_TEAM_MONTHLY: str = ""
+    STRIPE_PRICE_TEAM_ANNUAL: str = ""
+    STRIPE_PRICE_NETWORK_MONTHLY: str = ""
+    STRIPE_PRICE_NETWORK_ANNUAL: str = ""
 
     # Legacy names kept for backwards compatibility with older frontends/tests.
     STRIPE_PRICE_PILOT: str = ""
     STRIPE_PRICE_PRO: str = ""
     STRIPE_PRICE_ENTERPRISE: str = ""
+
+    # Email delivery and verification operations.
+    # RESEND_APP_URL is intentionally separate from APP_URL so verification
+    # links can be routed without disturbing other portal/runtime config.
+    RESEND_API_KEY: str = ""
+    RESEND_APP_URL: str = ""
+    SENDGRID_API_KEY: str = ""
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USERNAME: str = ""
+    SMTP_PASSWORD: str = ""
+    FROM_EMAIL: str = ""
+    EMAIL_ADMIN_TOKEN: str = ""
 
     # AI gateway. Leave unset to keep startup safe and return deterministic
     # unavailable responses instead of fabricated model output.
@@ -98,6 +119,10 @@ class Settings(BaseSettings):
     AI_REASONING_MODEL: str = ""
     AI_REPORT_MODEL: str = ""
     AI_LOCAL_MODEL: str = ""
+    # Comma-separated OpenAI-compatible backup models. Used when the primary
+    # hosted model is rejected/unavailable, so AGRO-AI does not silently fall
+    # into deterministic fallback because of one bad model id.
+    AI_MODEL_FALLBACKS: str = "z-ai/glm-5.2,z-ai/glm-4.5,qwen/qwen3-max,deepseek/deepseek-r1-0528"
     AI_TIMEOUT_SECONDS: int = 30
 
     # Connector ingestion / uploaded evidence storage.

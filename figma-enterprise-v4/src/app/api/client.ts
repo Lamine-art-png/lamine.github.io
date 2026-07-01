@@ -53,9 +53,13 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const data = await parseResponse(response);
 
   if (!response.ok) {
+    const detail =
+      data && typeof data === "object" && "detail" in data ? (data as Record<string, unknown>).detail : null;
     const message =
-      data && typeof data === "object" && "detail" in data
-        ? String(data.detail)
+      detail && typeof detail === "object" && "message" in detail
+        ? String((detail as Record<string, unknown>).message)
+        : data && typeof data === "object" && "detail" in data
+          ? String(data.detail)
         : data && typeof data === "object" && "message" in data
           ? String(data.message)
           : `Request failed with status ${response.status}`;
@@ -63,6 +67,9 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     const error = new Error(message) as ApiError;
     error.status = response.status;
     error.details = data;
+    if (detail && typeof detail === "object" && "code" in detail) {
+      error.code = String((detail as Record<string, unknown>).code);
+    }
 
     if (response.status === 401) {
       window.dispatchEvent(new Event("agroai:unauthorized"));
@@ -307,8 +314,21 @@ function providerForUpload(file: File) {
 }
 
 export type ProductCheckoutPayload = {
-  plan_id: "free" | "professional" | "network";
+  plan_id: "free" | "professional" | "team" | "network" | "enterprise";
   billing_period: "monthly" | "annual";
+};
+
+export type EmailVerificationRequestPayload = {
+  email?: string;
+};
+
+export type EmailVerificationConfirmPayload = {
+  token: string;
+};
+
+export type TeamInvitationPayload = {
+  email: string;
+  role: "owner" | "admin" | "manager" | "operator" | "viewer";
 };
 
 export type SupportTicketPayload = {
@@ -424,6 +444,13 @@ export const apiClient = {
     list: (type?: string) => get(`/v1/admin/requests${type ? `?type=${encodeURIComponent(type)}` : ""}`),
     update: (requestId: string, payload: AdminRequestUpdatePayload) => patch(`/v1/admin/requests/${encodeURIComponent(requestId)}`, payload),
     system: () => get("/v1/admin/system"),
+  },
+
+  team: {
+    members: () => get("/v1/team/members"),
+    invitations: () => get("/v1/team/invitations"),
+    invite: (payload: TeamInvitationPayload) => post("/v1/team/invitations", payload),
+    revoke: (invitationId: string) => remove(`/v1/team/invitations/${encodeURIComponent(invitationId)}`),
   },
 
   orgs: {

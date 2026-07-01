@@ -1,6 +1,7 @@
 """Test configuration and fixtures."""
 import asyncio
 import inspect
+import os
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -31,15 +32,12 @@ def pytest_pyfunc_call(pyfuncitem):
     return True
 
 
-# Test database
-TEST_DATABASE_URL = "sqlite:///./test.db"
-engine = create_engine(TEST_DATABASE_URL, connect_args={"check_same_thread": False})
-TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
 @pytest.fixture(scope="function")
-def db():
+def db(tmp_path):
     """Create test database and session."""
+    db_path = tmp_path / "test.db"
+    engine = create_engine(f"sqlite:///{db_path}", connect_args={"check_same_thread": False})
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
     session = TestingSessionLocal()
 
@@ -48,6 +46,9 @@ def db():
     finally:
         session.close()
         Base.metadata.drop_all(bind=engine)
+        engine.dispose()
+        if db_path.exists():
+            os.remove(db_path)
 
 
 @pytest.fixture(scope="function")

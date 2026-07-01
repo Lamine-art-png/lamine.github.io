@@ -27,10 +27,14 @@ class User(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     last_login_at = Column(DateTime, nullable=True)
     is_active = Column(Boolean, default=True, nullable=False)
+    email_verified_at = Column(DateTime, nullable=True)
+    email_verification_status = Column(String, default="unverified", nullable=False, index=True)
 
     owned_organizations = relationship("Organization", back_populates="owner")
     memberships = relationship("OrganizationMembership", back_populates="user", cascade="all, delete-orphan")
     usage_events = relationship("UsageEvent", back_populates="user")
+    email_verification_tokens = relationship("EmailVerificationToken", back_populates="user", cascade="all, delete-orphan")
+    team_invitations_sent = relationship("TeamInvitation", back_populates="invited_by_user", cascade="all, delete-orphan")
 
 
 class Organization(Base):
@@ -188,3 +192,33 @@ class OnboardingState(Base):
     completed_steps_json = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class EmailVerificationToken(Base):
+    __tablename__ = "email_verification_tokens"
+
+    id = Column(String, primary_key=True, default=new_id, index=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    token_hash = Column(String, nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    user = relationship("User", back_populates="email_verification_tokens")
+
+
+class TeamInvitation(Base):
+    __tablename__ = "team_invitations"
+
+    id = Column(String, primary_key=True, default=new_id, index=True)
+    organization_id = Column(String, ForeignKey("organizations.id"), nullable=False, index=True)
+    email = Column(String, nullable=False, index=True)
+    role = Column(String, default="viewer", nullable=False)
+    status = Column(String, default="pending", nullable=False, index=True)
+    invited_by_user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
+    token_hash = Column(String, nullable=True, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    invited_by_user = relationship("User", back_populates="team_invitations_sent")

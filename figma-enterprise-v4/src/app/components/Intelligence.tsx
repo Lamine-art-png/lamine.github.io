@@ -3,7 +3,7 @@ import { ChevronDown, ChevronRight, PanelLeftClose, PanelLeftOpen, RotateCcw, Se
 import { apiClient, ReportFactoryPayload } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { usePortalResource } from "../hooks/usePortalResource";
-import { BG, BORDER, InlineState, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
+import { BG, BORDER, MUTED, PortalButton, SURFACE, TEXT } from "./portalUi";
 
 type AnyRecord = Record<string, any>;
 
@@ -35,13 +35,12 @@ function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
-function text(value: unknown, fallback = "Not available") {
-  if (value === null || value === undefined || value === "") return fallback;
-  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
+function tryJson(value: string): AnyRecord | null {
   try {
-    return JSON.stringify(value);
+    const parsed = JSON.parse(value);
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed) ? parsed as AnyRecord : null;
   } catch {
-    return fallback;
+    return null;
   }
 }
 
@@ -107,8 +106,23 @@ function reportTypeForPrompt(prompt: string): ReportFactoryPayload["report_type"
   return "executive_brief";
 }
 
-function lastAssistant(messages: AnyRecord[]) {
-  return [...messages].reverse().find((message) => message.role === "assistant") || null;
+function humanText(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "";
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    const parsed = tryJson(trimmed);
+    if (parsed) return humanText(parsed.answer || parsed.summary || parsed.message || parsed.content || "");
+    if (trimmed.startsWith("{")) {
+      return rescueJsonField(trimmed, "answer") || rescueJsonField(trimmed, "summary") || "I can help. Ask one specific field, irrigation, compliance, or evidence question and I will work from the connected data.";
+    }
+    return trimmed;
+  }
+  if (typeof value === "object") {
+    const row = value as AnyRecord;
+    return humanText(row.answer || row.summary || row.message || row.content || row.recommendation || row.next_step || row.why || "");
+  }
+  return "";
 }
 
 function fileTypeLabel(file: File) {
@@ -197,11 +211,10 @@ function DetailDisclosure({ details, defaultOpen = false }: { details: AnyRecord
 export function Intelligence() {
   const { currentWorkspace } = useAuth();
   const conversationState = usePortalResource<{ conversations: AnyRecord[] }>(useCallback(() => apiClient.conversations.list(), []));
-  const [conversationId, setConversationId] = useState<string>("");
+  const [conversationId, setConversationId] = useState("");
   const [messages, setMessages] = useState<AnyRecord[]>([]);
-  const [question, setQuestion] = useState("What needs attention today?");
-  const [audience, setAudience] = useState("manager");
-  const [output, setOutput] = useState("answer");
+  const [question, setQuestion] = useState("");
+  const [selectedFiles, setSelectedFiles] = useState<File[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingCopy, setLoadingCopy] = useState("Preparing answer...");
   const [error, setError] = useState("");
@@ -219,17 +232,18 @@ export function Intelligence() {
     localStorage.setItem(SIDEBAR_KEY, sidebarCollapsed ? "true" : "false");
   }, [sidebarCollapsed]);
 
-  async function loadConversation(id: string) {
+  const loadConversation = useCallback(async (id: string) => {
     setConversationId(id);
+    setError("");
     const response = await apiClient.conversations.get(id) as AnyRecord;
     setMessages(asArray(response.messages).map((message) => ({ ...message, content: humanText((message as AnyRecord).content) })) as AnyRecord[]);
   }
 
   useEffect(() => {
-    if (!conversationId && conversations[0]?.id) {
-      loadConversation(conversations[0].id).catch(() => null);
+    if (!conversationId && conversations[0]?.id && messages.length === 0) {
+      loadConversation(String(conversations[0].id)).catch(() => null);
     }
-  }, [conversationId, conversations]);
+  }, [conversationId, conversations, loadConversation, messages.length]);
 
   async function newChat() {
     setConversationId("");
@@ -319,33 +333,15 @@ export function Intelligence() {
         setError(err instanceof Error ? err.message : "AGRO-AI could not complete the request.");
       }
     } finally {
+      setUploading(false);
       setLoading(false);
     }
   }
 
-  async function generateReport(download = false) {
-    const source = assistant?.content || question || "Draft an owner update.";
-    const payload: ReportFactoryPayload = {
-      report_type: reportTypeForPrompt(source),
-      workspace_id: currentWorkspace?.id,
-      audience: audience === "operator" ? "operator" : audience === "agency" ? "agency" : audience === "lender" ? "lender" : "owner",
-    };
-    try {
-      if (download) {
-        const blob = await apiClient.reportFactory.pdf(payload);
-        const url = URL.createObjectURL(blob);
-        const link = document.createElement("a");
-        link.href = url;
-        link.download = `agro-ai-${payload.report_type}.pdf`;
-        link.click();
-        URL.revokeObjectURL(url);
-        setReportMessage("PDF downloaded.");
-        return;
-      }
-      await apiClient.reportFactory.generate(payload);
-      setReportMessage("Structured report ready.");
-    } catch {
-      setReportMessage(download ? "Structured report ready - PDF export needs retry." : "Report request could not be completed.");
+  function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      send().catch(() => null);
     }
   }
 

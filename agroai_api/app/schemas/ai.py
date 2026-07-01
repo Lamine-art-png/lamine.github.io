@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class ToolCitation(BaseModel):
@@ -49,6 +49,8 @@ class ChatRequest(BaseModel):
     workspace_id: str | None = None
     block_id: str | None = None
     evidence_ids: list[str] = Field(default_factory=list)
+    uploaded_evidence: list[dict[str, Any]] = Field(default_factory=list)
+    history: list[dict[str, Any]] = Field(default_factory=list)
     temperature: float = Field(default=0.2, ge=0, le=1)
 
 
@@ -124,3 +126,34 @@ class IntelligenceRunResponse(BaseModel):
     verification: VerificationResult
     missing_data: list[str] = Field(default_factory=list)
     confidence: str = "low"
+
+    # Backward-compatible top-level fields for older deployed portal bundles.
+    # This prevents the UI from showing only "Risk and confidence: low" while
+    # Cloudflare is still serving a cached frontend build.
+    summary: str | None = None
+    answer: str | None = None
+    evidence_used: list[Any] = Field(default_factory=list)
+    missing_evidence: list[Any] = Field(default_factory=list)
+    risk: list[Any] | str | None = None
+    recommendation: Any = None
+    next_action: Any = None
+
+    @model_validator(mode="after")
+    def fill_legacy_portal_fields(self) -> "IntelligenceRunResponse":
+        result = self.result or {}
+        summary = (
+            self.summary
+            or result.get("summary")
+            or result.get("executive_summary")
+            or result.get("recommendation")
+            or result.get("why")
+            or "AGRO-AI reviewed the workspace context and produced an operating response."
+        )
+        self.summary = str(summary)
+        self.answer = self.answer or result.get("answer") or self.summary
+        self.evidence_used = self.evidence_used or list(result.get("evidence_used") or result.get("available_data") or result.get("key_findings") or [])
+        self.missing_evidence = self.missing_evidence or list(result.get("missing_evidence") or result.get("missing_data") or self.missing_data or [])
+        self.risk = self.risk or result.get("risk_flags") or result.get("risks") or []
+        self.recommendation = self.recommendation or result.get("recommendation") or result.get("recommendations") or []
+        self.next_action = self.next_action or result.get("next_actions") or result.get("operator_instructions") or []
+        return self

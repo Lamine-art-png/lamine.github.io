@@ -10,7 +10,14 @@ from app.models.telemetry import Telemetry
 
 
 def _auth_workspace(db, *, email="loop@example.com", org_id="org-loop", workspace_id="workspace-loop"):
-    user = User(id=f"user-{org_id}", email=email, name="Loop User", password_hash="test")
+    user = User(
+        id=f"user-{org_id}",
+        email=email,
+        name="Loop User",
+        password_hash="test",
+        email_verification_status="verified",
+        email_verified_at=datetime.utcnow(),
+    )
     org = Organization(id=org_id, name="Loop Farms", slug=org_id, owner_user_id=user.id, plan="pro", subscription_status="active")
     membership = OrganizationMembership(organization_id=org.id, user_id=user.id, role="owner")
     workspace = Workspace(id=workspace_id, organization_id=org.id, name="Command Center", crop="Almonds", region="California", mode="live")

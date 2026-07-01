@@ -10,7 +10,14 @@ from app.models.telemetry import Telemetry
 
 
 def _auth_workspace(db, *, email="operator@example.com", org_id="org-cockpit", workspace_id="workspace-cockpit"):
-    user = User(id=f"user-{org_id}", email=email, name="Operator", password_hash="test")
+    user = User(
+        id=f"user-{org_id}",
+        email=email,
+        name="Operator",
+        password_hash="test",
+        email_verification_status="verified",
+        email_verified_at=datetime.utcnow(),
+    )
     org = Organization(id=org_id, name="Cockpit Farms", slug=org_id, owner_user_id=user.id, plan="pro", subscription_status="active")
     membership = OrganizationMembership(organization_id=org.id, user_id=user.id, role="owner")
     workspace = Workspace(id=workspace_id, organization_id=org.id, name="Daily Ops", crop="Almonds", region="California", mode="live")
@@ -205,4 +212,3 @@ def test_operator_cockpit_does_not_return_secret_values_or_raw_oauth_codes(clien
     payload = "\n".join(response.text for response in responses)
     assert "raw-secret-code" not in payload
     assert "secret-value" not in payload
-

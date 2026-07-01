@@ -26,8 +26,31 @@ import {
   WorkspaceSettingsPage,
 } from "./components/ProductShell";
 
+function PortalRouteError() {
+  return (
+    <div className="min-h-screen bg-[#F6F4EE] px-6 py-12 text-[#10231B]">
+      <div className="mx-auto max-w-[720px] rounded-2xl border border-[#D6DDD0] bg-[#FFFDF8] p-8 shadow-[0_20px_60px_rgba(16,35,27,0.08)]">
+        <div className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#2D6A4F]">AGRO-AI Enterprise Portal</div>
+        <h1 className="mt-3 text-[30px] font-semibold tracking-tight">This workspace screen is not ready yet.</h1>
+        <p className="mt-3 text-[14px] leading-7 text-[#65736A]">
+          The portal recovered safely instead of showing a developer error. Continue to the operating room or sign in again.
+        </p>
+        <div className="mt-6 flex gap-3">
+          <a href="/" className="rounded-lg bg-[#10231B] px-4 py-2 text-[13px] font-medium text-white">Continue to portal</a>
+          <a href="/pricing" className="rounded-lg border border-[#D6DDD0] bg-white px-4 py-2 text-[13px] font-medium text-[#10231B]">View pricing</a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export const router = createBrowserRouter([
   { path: "/verify-email", Component: VerifyEmailPage },
+  {
+    path: "/verify-email",
+    Component: VerifyEmailPage,
+    errorElement: <PortalRouteError />,
+  },
   {
     path: "/",
     Component: MainLayout,
@@ -51,6 +74,7 @@ export const router = createBrowserRouter([
       { path: "sources", Component: Sources },
       { path: "audit", Component: Audit },
       { path: "admin", Component: Admin },
+      { path: "admin/system", Component: SystemHealthPage },
       { path: "admin/requests", Component: AdminRequestsPage },
       { path: "pricing", Component: PricingPage },
       { path: "profile", Component: ProfilePage },
@@ -62,5 +86,9 @@ export const router = createBrowserRouter([
       { path: "onboarding", Component: OnboardingPage },
       { path: "*", Component: RouteRecovery },
     ],
+  },
+  {
+    path: "*",
+    element: <PortalRouteError />,
   },
 ]);
