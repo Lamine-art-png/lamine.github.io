@@ -81,7 +81,7 @@ function VerificationPanel() {
 }
 
 export function AuthScreen() {
-  const { login, register, confirmVerification } = useAuth();
+  const { login, register, verification, confirmVerification } = useAuth();
   const [mode, setMode] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     const requested = params.get("mode") || params.get("auth");
