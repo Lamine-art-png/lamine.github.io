@@ -11,7 +11,7 @@ import { Integrations } from "./components/Integrations";
 import { DecisionWorkbench, Exceptions, Fields, Readiness, ReportFactory } from "./components/OperatorCockpit";
 import { Sources } from "./components/Sources";
 import { Audit } from "./components/Audit";
-import { Admin } from "./components/Admin";
+import { Admin, SystemHealthPage } from "./components/Admin";
 import { RouteRecovery } from "./components/RouteRecovery";
 import { VerifyEmailPage } from "./components/VerifyEmail";
 import {
@@ -45,7 +45,6 @@ function PortalRouteError() {
 }
 
 export const router = createBrowserRouter([
-  { path: "/verify-email", Component: VerifyEmailPage },
   {
     path: "/verify-email",
     Component: VerifyEmailPage,
