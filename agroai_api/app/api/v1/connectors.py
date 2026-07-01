@@ -46,6 +46,7 @@ ProviderId = Literal[
     "weather",
     "openet",
     "manual_csv",
+    "chat_upload",
     "gmail",
     "outlook",
     "google_drive",
@@ -93,6 +94,18 @@ CATALOG: list[dict[str, Any]] = [
         "imports": ["CSV", "JSON", "TXT", "PDF text", "operator notes", "field logs"],
         "used_by": ["Evidence", "Reports", "Ask AGRO-AI", "Decisions"],
         "promise": "Upload fragmented evidence and convert it into citation-ready operational context.",
+    },
+    {
+        "id": "chat_upload",
+        "name": "Chat file import",
+        "category": "Manual evidence",
+        "status": "upload_ready",
+        "required_plan": "free",
+        "connection_methods": ["manual_upload"],
+        "upload_supported": True,
+        "imports": ["CSV", "spreadsheets", "PDF metadata", "text documents", "JSON", "geospatial files", "archives"],
+        "used_by": ["Ask AGRO-AI", "Evidence", "Reports"],
+        "promise": "Import files into the current chat and attach their metadata to the next AGRO-AI request.",
     },
     {
         "id": "weather",
@@ -716,8 +729,14 @@ def infer_source_type(filename: str, content_type: str | None, provider: str) ->
         return "pdf"
     if lower.endswith((".xls", ".xlsx")):
         return "spreadsheet"
-    if lower.endswith(".json"):
+    if lower.endswith((".json", ".geojson")):
         return "custom_api_payload"
+    if lower.endswith((".txt", ".md")):
+        return "text_document"
+    if lower.endswith(".kml"):
+        return "geospatial_file"
+    if lower.endswith(".zip"):
+        return "archive"
     if provider in {"wiseconn", "talgil"}:
         return "controller_export"
     return "telemetry_csv"
@@ -1269,7 +1288,7 @@ async def upload_evidence_file(
         tenant_id=tenant_id,
         provider=provider,
         workspace_id=workspace_id,
-        mode="manual_upload" if provider == "manual_csv" else "export_upload",
+        mode="manual_upload" if provider in {"manual_csv", "chat_upload"} else "export_upload",
         display_name=(catalog_item(provider) or {}).get("name"),
         config={"created_from": "direct_evidence_upload"},
     )

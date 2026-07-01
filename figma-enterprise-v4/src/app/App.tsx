@@ -2,6 +2,7 @@ import { RouterProvider } from "react-router";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
 import { AuthScreen } from "./components/AuthScreen";
 import { PricingPage } from "./components/ProductShell";
+import { VerifyEmailPage } from "./components/VerifyEmail";
 import { router } from "./routes";
 
 export default function App() {
@@ -23,10 +24,15 @@ function AuthenticatedApp() {
     );
   }
 
+  if (window.location.pathname === "/verify-email") {
+    return <VerifyEmailPage />;
+  }
+
+  if (window.location.pathname === "/pricing" && !isAuthenticated) {
+    return <PricingPage />;
+  }
+
   if (!isAuthenticated) {
-    if (window.location.pathname === "/pricing") {
-      return <PricingPage />;
-    }
     return <AuthScreen />;
   }
 

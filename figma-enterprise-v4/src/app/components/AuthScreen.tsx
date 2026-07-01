@@ -81,8 +81,12 @@ function VerificationPanel() {
 }
 
 export function AuthScreen() {
-  const { login, register, verification, confirmVerification } = useAuth();
-  const [mode, setMode] = useState("login");
+  const { login, register } = useAuth();
+  const [mode, setMode] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requested = params.get("mode") || params.get("auth");
+    return requested === "register" || requested === "create" ? "register" : "login";
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
   const [loginForm, setLoginForm] = useState({ email: "", password: "" });

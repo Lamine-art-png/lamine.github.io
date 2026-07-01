@@ -11,8 +11,9 @@ import { Integrations } from "./components/Integrations";
 import { DecisionWorkbench, Exceptions, Fields, Readiness, ReportFactory } from "./components/OperatorCockpit";
 import { Sources } from "./components/Sources";
 import { Audit } from "./components/Audit";
-import { Admin, SystemHealthPage } from "./components/Admin";
-import { VerifyEmailPage } from "./components/VerifyEmailPage";
+import { Admin } from "./components/Admin";
+import { RouteRecovery } from "./components/RouteRecovery";
+import { VerifyEmailPage } from "./components/VerifyEmail";
 import {
   BillingPage,
   AdminRequestsPage,
@@ -44,6 +45,7 @@ function PortalRouteError() {
 }
 
 export const router = createBrowserRouter([
+  { path: "/verify-email", Component: VerifyEmailPage },
   {
     path: "/verify-email",
     Component: VerifyEmailPage,
@@ -52,7 +54,7 @@ export const router = createBrowserRouter([
   {
     path: "/",
     Component: MainLayout,
-    errorElement: <PortalRouteError />,
+    errorElement: <RouteRecovery />,
     children: [
       { index: true, Component: Overview },
       { path: "field-queue", Component: Overview },
@@ -82,6 +84,7 @@ export const router = createBrowserRouter([
       { path: "settings", Component: WorkspaceSettingsPage },
       { path: "team", Component: TeamPage },
       { path: "onboarding", Component: OnboardingPage },
+      { path: "*", Component: RouteRecovery },
     ],
   },
   {

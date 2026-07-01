@@ -62,6 +62,86 @@ const faq = [
   ["What happens above Network?", "Larger deployments move to Enterprise for custom seats, governance, security review, and tailored reporting."],
 ];
 
+const LOCAL_PRODUCT_PLANS: ProductPlans = {
+  plans: [
+    {
+      id: "free",
+      name: "Free",
+      public_price_monthly: "$0/mo",
+      public_price_annual: "$0/yr",
+      recommended_buyer: "Evaluation workspaces and small pilot teams getting organized.",
+      included_limits: { seats: "1 user", workspaces: "1 evaluation workspace", ai: "Limited AGRO-AI messages" },
+      features: ["Basic readiness view", "Manual evidence upload", "Starter field context", "Locked reports, connectors, team seats, and advanced AI"],
+      support_level: "Self-guided setup",
+      cta_label: "Start free",
+      is_custom_pricing: false,
+    },
+    {
+      id: "professional",
+      name: "Professional",
+      public_price_monthly: "$299/mo",
+      public_price_annual: "$2,990/yr",
+      recommended_buyer: "Growers and operators ready to run WaterOps, evidence, and reports in one workspace.",
+      included_limits: { seats: "3 users", workspaces: "3 workspaces", reports: "Report generation and PDF-ready exports" },
+      features: ["Water risk briefs", "Operating recommendations", "Evidence ingestion", "Compliance drafts", "Standard connectors"],
+      support_level: "Standard support",
+      cta_label: "Upgrade to Professional",
+      is_custom_pricing: false,
+    },
+    {
+      id: "team",
+      name: "Team",
+      public_price_monthly: "$799/mo",
+      public_price_annual: "$7,990/yr",
+      recommended_buyer: "Multi-person operations teams coordinating evidence, field tasks, reports, and approvals.",
+      included_limits: { seats: "10 users", workspaces: "10 workspaces", roles: "Role controls and team invites" },
+      features: ["Shared evidence library", "Team invites", "Advanced report workflows", "Connector workflows", "Priority support"],
+      support_level: "Priority support",
+      cta_label: "Request Team",
+      is_custom_pricing: false,
+    },
+    {
+      id: "network",
+      name: "Network",
+      public_price_monthly: "$1,500/mo",
+      public_price_annual: "$15,000/yr",
+      recommended_buyer: "Water agencies, grower networks, exporters, lenders, insurers, and sourcing programs.",
+      included_limits: { scope: "Up to 50k acres or 50 workspaces", seats: "25 users", rollups: "Network rollups and partner reporting" },
+      features: ["Multi-workspace dashboards", "Evidence rollups", "Customer reporting", "Priority onboarding", "Program-level views"],
+      support_level: "Priority onboarding",
+      cta_label: "Contact sales",
+      is_custom_pricing: false,
+    },
+    {
+      id: "enterprise",
+      name: "Enterprise",
+      public_price_monthly: "Custom",
+      public_price_annual: "Custom",
+      recommended_buyer: "Organizations needing governance review, custom integrations, security process, and enterprise support.",
+      included_limits: { seats: "Custom seats", data: "Custom data scope", security: "Security and governance review" },
+      features: ["Custom integrations", "SSO/SAML planning when available", "Enterprise support", "Security review", "Custom reporting scope"],
+      support_level: "Enterprise success",
+      cta_label: "Contact sales",
+      is_custom_pricing: true,
+    },
+  ],
+  service_add_ons: [
+    { id: "onboarding", name: "Onboarding", price: "Scoped", description: "Workspace launch, first evidence review, connector planning, and operating workflow setup." },
+    { id: "custom_integration", name: "Custom integration", price: "Scoped", description: "Planning and implementation support for systems that need special handling." },
+    { id: "network_rollout", name: "Network rollout", price: "Scoped", description: "Program setup for agencies, multi-farm groups, or buyer networks." },
+  ],
+};
+
+function productPlansWithFallback(remote?: ProductPlans | null): ProductPlans {
+  const byId = new Map<string, Plan>();
+  for (const plan of LOCAL_PRODUCT_PLANS.plans) byId.set(plan.id, plan);
+  for (const plan of remote?.plans || []) byId.set(plan.id, { ...byId.get(plan.id), ...plan } as Plan);
+  return {
+    plans: LOCAL_PRODUCT_PLANS.plans.map((plan) => byId.get(plan.id) || plan),
+    service_add_ons: remote?.service_add_ons?.length ? remote.service_add_ons : LOCAL_PRODUCT_PLANS.service_add_ons,
+  };
+}
+
 function safe(value: unknown, fallback = "Not available") {
   if (value === null || value === undefined || value === "") return fallback;
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
@@ -191,6 +271,8 @@ export function PricingPage() {
   const plansState = usePortalResource<ProductPlans>(useCallback(() => apiClient.product.plans(), []));
   const [billingPeriod, setBillingPeriod] = useState<"monthly" | "annual">("monthly");
   const [message, setMessage] = useState("");
+  const productPlans = productPlansWithFallback(plansState.data);
+  const usingLocalFallback = !plansState.data?.plans?.length || Boolean(plansState.error);
 
   const selectPlan = async (plan: Plan) => {
     setMessage("");
@@ -198,18 +280,30 @@ export function PricingPage() {
       const hasSession = Boolean(localStorage.getItem("agroai_access_token"));
       if (!hasSession && plan.id === "free") {
         setMessage("Create your account to start free.");
+        window.history.replaceState(null, "", "/?mode=register");
         return;
       }
-      if (!hasSession) {
-        setMessage("Create an AGRO-AI account to continue with this plan.");
+      if (!hasSession && ["professional", "team", "enterprise"].includes(plan.id)) {
+        const response = await apiClient.sales.contact({
+          type: "upgrade",
+          subject: `${plan.name} plan request`,
+          message: `Customer requested ${plan.name} pricing follow-up from public pricing.`,
+          source_page: "pricing",
+        }) as Record<string, unknown>;
+        setMessage(`${safe(response.message, "Upgrade request received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
         return;
       }
-      if (plan.id === "enterprise") {
-        const response = await apiClient.sales.contact({ type: "sales", subject: "Enterprise pricing request", message: "Customer requested Enterprise pricing follow-up.", source_page: "pricing" }) as Record<string, unknown>;
-        setMessage(String(response.message || "Sales request received."));
+      if (plan.id === "network" || plan.id === "enterprise" || plan.id === "team") {
+        const response = await apiClient.sales.networkInquiry({
+          type: "network_plan",
+          subject: `${plan.name} plan inquiry`,
+          message: `Customer requested ${plan.name} pricing follow-up.`,
+          source_page: "pricing",
+        }) as Record<string, unknown>;
+        setMessage(`${safe(response.message, "Network inquiry received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
         return;
       }
-      const response = await apiClient.billing.checkout({ plan_id: plan.id, billing_period: billingPeriod } satisfies ProductCheckoutPayload) as Record<string, unknown>;
+      const response = await apiClient.billing.checkout({ plan_id: plan.id as "free" | "professional" | "network", billing_period: billingPeriod }) as Record<string, unknown>;
       if (typeof response.checkout_url === "string") {
         window.location.assign(response.checkout_url);
         return;
@@ -229,14 +323,36 @@ export function PricingPage() {
           </button>
         ))}
       </div>
-      {plansState.error ? <Banner tone="warn" message={plansState.error} /> : null}
-      {message ? <Banner message={message} /> : null}
-      <div className="grid gap-5 xl:grid-cols-5">
-        {(plansState.data?.plans || []).map((plan) => <PlanCard key={plan.id} plan={plan} billingPeriod={billingPeriod} onSelect={selectPlan} />)}
+
+      {message ? <div className="rounded-lg px-4 py-3 text-[13px]" style={{ background: "#FFFBEB", color: "#92400E", border: "1px solid #FCD34D" }}>{message}</div> : null}
+      {usingLocalFallback ? <div className="rounded-lg px-4 py-3 text-[13px]" style={{ background: SURFACE, color: MUTED, border: `1px solid ${BORDER}` }}>Pricing is available. Live plan details will refresh when the API responds.</div> : null}
+
+      <div className="grid gap-5 lg:grid-cols-3 xl:grid-cols-5">
+        {productPlans.plans.map((plan) => (
+          <PlanCard key={plan.id} plan={plan} billingPeriod={billingPeriod} onSelect={selectPlan} />
+        ))}
       </div>
-      <Panel title="Frequently asked questions">
-        <div className="space-y-3">
-          {faq.map(([question, answer]) => <FaqItem key={question} question={question} answer={answer} />)}
+
+      <Panel title="Services">
+        <div className="grid gap-4 md:grid-cols-3">
+          {productPlans.service_add_ons.map((service) => (
+            <div key={service.id} className="rounded-lg p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+              <div className="font-semibold text-[14px]" style={{ color: TEXT }}>{service.name}</div>
+              <div className="mt-2 text-[13px] font-medium" style={{ color: GREEN }}>{service.price}</div>
+              <p className="mt-2 text-[12px] leading-relaxed" style={{ color: MUTED }}>{service.description}</p>
+            </div>
+          ))}
+        </div>
+      </Panel>
+
+      <Panel title="FAQ">
+        <div className="grid gap-4 md:grid-cols-2">
+          {faq.map(([question, answer]) => (
+            <div key={question}>
+              <div className="font-semibold text-[13px]" style={{ color: TEXT }}>{question}</div>
+              <p className="mt-1 text-[12px] leading-relaxed" style={{ color: MUTED }}>{answer}</p>
+            </div>
+          ))}
         </div>
       </Panel>
     </Page>
@@ -290,16 +406,11 @@ export function BillingPage() {
   const [checkoutPeriod, setCheckoutPeriod] = useState<"monthly" | "annual">("monthly");
   const summary = summaryState.data;
 
-  const requestUpgrade = async (planId: ProductCheckoutPayload["plan_id"]) => {
-    try {
-      const response = await apiClient.billing.checkout({ plan_id: planId, billing_period: checkoutPeriod }) as Record<string, unknown>;
-      if (typeof response.checkout_url === "string") {
-        window.location.assign(response.checkout_url);
-        return;
-      }
-      setMessage(String(response.message || "Upgrade request received. AGRO-AI will follow up."));
-    } catch (error) {
-      setMessage(error instanceof Error ? error.message : "Upgrade request received.");
+  const upgrade = async (plan: Plan) => {
+    const response = await apiClient.billing.checkout({ plan_id: plan.id as "free" | "professional" | "network", billing_period: billingPeriod }) as Record<string, unknown>;
+    if (typeof response.checkout_url === "string") {
+      window.location.assign(response.checkout_url);
+      return;
     }
   };
 
@@ -498,39 +609,52 @@ function LockedTeamCard({ onUpgrade }: { onUpgrade: () => void }) {
 }
 
 export function TeamPage() {
-  const { user, currentWorkspace, entitlements } = useAuth();
-  const canInvite = isEnabled(entitlements.can_invite_team) || isEnabled(entitlements.all_features) || isEnabled(entitlements.internal_testing);
-  const membersState = usePortalResource<{ members: TeamMember[] }>(useCallback(() => apiClient.team.members(), []));
-  const invitationsState = usePortalResource<{ invitations: TeamInvitation[] }>(useCallback(() => apiClient.team.invitations(), []));
-  const [invite, setInvite] = useState<TeamInvitationPayload>({ email: "", role: "operator" });
+  const shellState = usePortalResource<ShellResponse>(useCallback(() => apiClient.product.shell(), []));
+  const { currentWorkspace } = useAuth();
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviteRole, setInviteRole] = useState("member");
   const [message, setMessage] = useState("");
-  const [upgradeOpen, setUpgradeOpen] = useState(false);
 
   const sendInvite = async () => {
-    if (!canInvite) {
-      setUpgradeOpen(true);
-      return;
-    }
-    const response = await apiClient.team.invite(invite) as Record<string, unknown>;
-    setMessage(String(response.message || "Invitation created."));
-    setInvite({ email: "", role: "operator" });
-    await invitationsState.refresh();
-  };
-
-  const startTeamUpgrade = async () => {
-    const response = await apiClient.billing.checkout({ plan_id: "team", billing_period: "monthly" }) as Record<string, unknown>;
-    if (typeof response.checkout_url === "string") window.location.assign(response.checkout_url);
-    else setMessage(String(response.message || "Upgrade request received."));
-    setUpgradeOpen(false);
+    const response = await apiClient.support.ticket({
+      category: "support",
+      subject: "Team invitation request",
+      message: `Please invite ${inviteEmail} as ${inviteRole}.`,
+      workspace_id: currentWorkspace?.id,
+      source_page: "team",
+    }) as Record<string, unknown>;
+    setMessage(`${safe(response.message, "Team invitation request received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
+    setInviteEmail("");
   };
 
   return (
-    <Page title="Team" subtitle="Invite and manage the people operating inside this AGRO-AI workspace.">
-      {message ? <Banner message={message} /> : null}
+    <Page title="Team" subtitle="Invite and role controls are prepared for workspace collaboration.">
+      {message ? <div className="rounded-lg px-4 py-3 text-[13px]" style={{ background: "#F0FDF4", color: "#15803D", border: "1px solid #BBF7D0" }}>{message}</div> : null}
       <Panel title="Current user">
-        <Row label="Name" value={user?.name} />
-        <Row label="Email" value={user?.email} />
-        <Row label="Workspace" value={currentWorkspace?.name} />
+        <Row label="Name" value={shellState.data?.user?.name} />
+        <Row label="Email" value={shellState.data?.user?.email} />
+        <Row label="Workspace" value={shellState.data?.workspace?.name} />
+      </Panel>
+      <Panel title="Invite teammate" action={<PortalButton disabled={!inviteEmail.trim()} onClick={sendInvite}>Send invite request</PortalButton>}>
+        <div className="grid gap-4 md:grid-cols-[1fr_180px]">
+          <label className="text-[12px]" style={{ color: MUTED }}>
+            Email
+            <input value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} type="email" placeholder="operator@example.com" className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />
+          </label>
+          <label className="text-[12px]" style={{ color: MUTED }}>
+            Role
+            <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
+              <option value="member">Member</option>
+              <option value="admin">Admin</option>
+              <option value="viewer">Viewer</option>
+            </select>
+          </label>
+        </div>
+      </Panel>
+      <Panel title="Role controls">
+        <p className="text-[13px] leading-relaxed" style={{ color: MUTED }}>
+          Access remains scoped to authenticated workspace members. Team invite requests are tracked for secure account provisioning.
+        </p>
       </Panel>
       {canInvite ? (
         <Panel title="Invite team member" action={<PortalButton onClick={sendInvite}>Send invitation</PortalButton>}>

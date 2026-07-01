@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import require_current_tenant_id
 from app.db.base import get_db
+from app.api.v1.brain import compact_local_messages, is_local_ai, local_plain_body
 from app.models.block import Block
 from app.models.recommendation import Recommendation
 from app.models.saas import Organization, Workspace
@@ -424,56 +425,39 @@ def _weak_or_empty(body: dict[str, Any]) -> bool:
     return any(marker in primary for marker in bad)
 
 
-def _compact_context(context: EvidenceContext) -> dict[str, Any]:
-    return {
-        "organization_id": context.organization_id,
-        "workspace_id": context.workspace_id,
-        "block_id": context.block_id,
-        "crop_type": context.crop_type,
-        "region": context.region,
-        "evidence": context.evidence[:80],
-        "missing_data": context.missing_data,
-        "citations": [citation.model_dump(mode="python") for citation in context.citations[:40]],
-    }
-
-
-def _normalize_agent_body(body: dict[str, Any], plan: dict[str, Any], context: EvidenceContext) -> dict[str, Any]:
-    clean = dict(body)
-    if not clean.get("summary") and clean.get("answer"):
-        clean["summary"] = clean["answer"]
-    if not clean.get("answer") and clean.get("summary"):
-        clean["answer"] = clean["summary"]
-    if not clean.get("agent_plan"):
-        clean["agent_plan"] = plan.get("operations_to_run") or plan.get("answer_strategy") or []
-    if not clean.get("work_completed"):
-        clean["work_completed"] = [
-            "Read tenant-scoped workspace context.",
-            "Built an execution plan before answering.",
-            "Separated usable evidence from missing or untrusted evidence.",
-        ]
-    if not clean.get("missing_data"):
-        clean["missing_data"] = context.missing_data
-    if not clean.get("available_data"):
-        clean["available_data"] = [_evidence_label(item) for item in context.evidence]
-    if not clean.get("next_actions") and clean.get("recommendations"):
-        clean["next_actions"] = clean["recommendations"]
-    clean["customer_safe"] = bool(clean.get("customer_safe", True))
-    return clean
-
-
-async def _run_ai(*, task: str, user_instruction: str, context: EvidenceContext, temperature: float = 0.2) -> tuple[dict[str, Any], Any]:
-    """Run AGRO-AI as a two-step planner/executor when a live model is configured.
-
-    This is the real intelligence path: first the model plans what kind of agriculture work is required,
-    then the same live model answers against tenant-scoped context. If the provider is unreachable or
-    returns unsafe/empty output, we return an explicit deterministic safe-mode operating plan instead.
-    """
+async def _run_ai(
+    *,
+    task: str,
+    user_instruction: str,
+    context: EvidenceContext,
+    temperature: float = 0.2,
+    history: list[dict[str, Any]] | None = None,
+    audience: str | None = None,
+    uploaded_evidence: list[dict[str, Any]] | None = None,
+) -> tuple[dict[str, Any], Any]:
     router = ModelRouter()
-    context_json = json.dumps(_compact_context(context), default=str)
-    task_instruction = TASK_PROMPTS.get(task, TASK_PROMPTS["chat"])
-    model_task = TASK_PROFILE_MAP.get(task, "chat")
+    if is_local_ai():
+        messages = compact_local_messages(
+            question=user_instruction,
+            context=context,
+            history=history,
+            audience=audience,
+            uploaded_evidence=uploaded_evidence,
+        )
+        result, _selection = await router.run(
+            task=TASK_PROFILE_MAP.get(task, "chat"),
+            messages=messages,
+            temperature=temperature,
+            response_format=None,
+        )
+        answer = str(result.content or "").strip()
+        if not answer or result.status != "ok":
+            body = _deterministic_body(context)
+            fallback_answer = str(body.get("summary") or "AGRO-AI could not produce a live local answer.")
+            return local_plain_body(fallback_answer, context, question=user_instruction), result
+        return local_plain_body(answer, context, question=user_instruction), result
 
-    planner_messages = [
+    messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {
             "role": "user",

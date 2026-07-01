@@ -103,9 +103,8 @@ class AdminRequestUpdate(BaseModel):
     priority: Priority | None = None
 
 
-class TeamInvitationCreateRequest(BaseModel):
-    email: str = Field(min_length=3, max_length=240)
-    role: InviteRole = "viewer"
+class EmailVerificationConfirmRequest(BaseModel):
+    token: str = Field(min_length=8, max_length=512)
 
 
 def _require_org(ctx: AuthContext):
@@ -502,6 +501,26 @@ def request_email_verification(ctx: AuthContext = Depends(get_auth_context), db:
         metadata={"security_request": "email_verification"},
     )
     return {"status": "received", "message": "Verification request received.", "request_id": row.id}
+
+
+@router.post("/account/email-verification/confirm")
+def confirm_email_verification(payload: EmailVerificationConfirmRequest, db: Session = Depends(get_db)) -> dict:
+    token = payload.token.strip()
+    if not token or len(token) < 8:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification link is invalid or expired.")
+    row = _create_saas_request(
+        db,
+        request_type="support",
+        subject="Email verification link opened",
+        message="Customer opened an email verification link. Manual verification workflow should confirm the token server-side before changing account state.",
+        source_page="verify-email",
+        metadata={"security_request": "email_verification_confirm", "token_received": True},
+    )
+    return {
+        "status": "received",
+        "message": "Verification link received. Your account security request is being processed.",
+        "request_id": row.id,
+    }
 
 
 @router.post("/account/two-factor/start")

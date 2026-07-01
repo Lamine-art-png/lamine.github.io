@@ -1,95 +1,212 @@
-"""AGRO-AI operating intelligence endpoint."""
+"""Compact local-model helpers for Ask AGRO-AI."""
 from __future__ import annotations
 
-import json
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.core.config import settings
 from app.core.security import require_current_tenant_id
 from app.db.base import get_db
 from app.models.saas import User
-from app.services.ai_gateway import clean_model_text, parse_model_json
+from app.schemas.ai import EvidenceContext
 from app.services.intelligence_context import build_intelligence_context
+from app.services.ai_gateway import AIGateway
 from app.services.model_router import ModelRouter
 
-router = APIRouter(prefix="/intelligence", tags=["agro-ai-intelligence"])
+router = APIRouter(prefix="/intelligence/brain", tags=["intelligence"])
+
+LOCAL_SYSTEM_PROMPT = """Answer in normal customer-facing text.
+No JSON.
+Max 90 words.
+Use only supplied context.
+Do not invent telemetry, acreage, integrations, water use, compliance status, savings, or customer facts.
+Do not include reasoning steps or <think> tags."""
 
 
 class BrainRunRequest(BaseModel):
-    question: str = Field(..., min_length=1, max_length=12000)
+    task: str = "chat"
+    question: str = Field(..., min_length=1)
     workspace_id: str | None = None
     field_id: str | None = None
     audience: str | None = None
     history: list[dict[str, Any]] = Field(default_factory=list)
     uploaded_evidence: list[dict[str, Any]] = Field(default_factory=list)
 
+MISSING_EVIDENCE_TERMS = (
+    "how much water",
+    "water should",
+    "irrigat",
+    "apply",
+    "compliance",
+    "report",
+    "diagnose",
+    "field diagnosis",
+    "water accounting",
+    "evidence missing",
+    "missing evidence",
+    "what evidence",
+)
 
-HOSTED_PROMPT = """
-You are AGRO-AI's enterprise operating intelligence layer. Use workspace evidence, separate known from missing data, and return valid JSON with summary, answer, work_completed, evidence_used, missing_evidence, recommendations, next_actions, risk_flags, confidence, and customer_safe.
-"""
-
-LOCAL_PROMPT = """
-/no_think
-You are AGRO-AI, an agriculture operations assistant. Answer the user's actual question in normal customer-facing text. Keep it brief, useful, and natural. Do not return JSON. Do not repeat generic fallback text. Work only from supplied context. If data is missing, name the missing data and the next useful step.
-"""
-
-
-def _trim_history(history: list[dict[str, Any]], limit: int, max_chars: int) -> list[dict[str, str]]:
-    clean: list[dict[str, str]] = []
-    for row in history[-limit:]:
-        role = str(row.get("role") or "").lower()
-        if role not in {"user", "assistant"}:
-            continue
-        content = str(row.get("content") or "").strip()
-        if content:
-            clean.append({"role": role, "content": content[:max_chars]})
-    return clean
+CASUAL_TERMS = (
+    "hi",
+    "hello",
+    "hey",
+    "what can you do",
+    "what are you good at",
+    "do you know john deere",
+    "john deere",
+    "capabilities",
+)
 
 
-def _dedupe_models(models: list[str | None]) -> list[str]:
+def is_local_ai() -> bool:
+    return (settings.AI_PROVIDER or "").strip().lower() == "ollama"
+
+
+def _short(value: Any, limit: int = 300) -> str:
+    text = str(value or "").replace("\n", " ").strip()
+    return text[:limit].rstrip()
+
+
+def actual_missing_data_only(items: list[str] | tuple[str, ...] | None) -> list[str]:
+    blocked = {"structured model json", "structured model json object"}
     clean: list[str] = []
-    for model in models:
-        value = (model or "").strip()
-        if value and value not in clean:
-            clean.append(value)
-    return clean
+    for item in items or []:
+        text = str(item or "").strip()
+        if not text or text.lower() in blocked:
+            continue
+        clean.append(text)
+    return list(dict.fromkeys(clean))
 
 
-def _compact(value: Any, max_chars: int = 1200) -> Any:
-    if isinstance(value, dict):
-        return {str(key): _compact(item, 350) for key, item in list(value.items())[:8]}
-    if isinstance(value, list):
-        return [_compact(item, 250) for item in value[:3]]
-    if isinstance(value, str):
-        return value[:max_chars]
-    return value
+def should_surface_missing_evidence(question: str) -> bool:
+    normalized = " ".join(str(question or "").lower().split())
+    if not normalized:
+        return False
+    if any(term in normalized for term in CASUAL_TERMS):
+        return False
+    return any(term in normalized for term in MISSING_EVIDENCE_TERMS)
 
 
-def _needs_missing_evidence(question: str) -> bool:
-    q = (question or "").lower()
-    operational_terms = [
-        "water", "irrigat", "field", "telemetry", "compliance", "report", "evidence", "upload",
-        "soil", "weather", "et", "controller", "wiseconn", "talgil", "john deere", "operations center",
+def readable_missing_label(value: str) -> str:
+    text = str(value or "").strip().replace("_", " ")
+    replacements = {
+        "live WiseConn credentials": "WiseConn connection",
+        "live Talgil credentials": "Talgil connection",
+        "confirmed live telemetry stream": "confirmed live telemetry",
+        "compliance water accounting": "compliance water accounting data",
+    }
+    return replacements.get(text, text)
+
+
+def compact_uploaded_evidence(items: list[dict[str, Any]] | None, *, max_items: int = 3) -> list[str]:
+    compact: list[str] = []
+    for item in (items or [])[:max_items]:
+        filename = _short(item.get("filename") or item.get("name"), 120)
+        source_type = _short(item.get("file_type") or item.get("source_type") or item.get("content_type"), 80)
+        status = _short(item.get("import_status") or item.get("status"), 80)
+        rows = item.get("rows") or item.get("rows_parsed")
+        columns = item.get("columns") or []
+        preview = _short(item.get("parsed_preview") or item.get("text_preview") or item.get("preview"), 220)
+        bits = [filename, source_type, f"status={status}" if status else ""]
+        if rows is not None:
+            bits.append(f"rows={rows}")
+        if columns:
+            bits.append(f"columns={', '.join(str(column) for column in columns[:6])}")
+        if preview:
+            bits.append(f"preview={preview}")
+        compact.append(" - ".join(part for part in bits if part))
+    return compact
+
+
+def attach_uploaded_evidence(context: EvidenceContext, uploaded: list[dict[str, Any]]) -> None:
+    for item in uploaded[:8]:
+        if not isinstance(item, dict):
+            continue
+        context.evidence.append(
+            {
+                "type": "uploaded_file",
+                "filename": item.get("filename") or item.get("name"),
+                "source_type": item.get("file_type") or item.get("source_type") or item.get("content_type"),
+                "size_bytes": item.get("size_bytes"),
+                "import_status": item.get("import_status") or item.get("status"),
+                "rows_parsed": item.get("rows") or item.get("rows_parsed"),
+                "columns": item.get("columns") or [],
+                "parsed_preview": item.get("parsed_preview") or item.get("text_preview") or item.get("preview"),
+                "warnings": item.get("warnings") or [],
+                "source": "chat_upload",
+            }
+        )
+
+
+def compact_evidence_items(context: EvidenceContext, *, max_items: int = 3) -> list[str]:
+    compact: list[str] = []
+    for item in context.evidence[:max_items]:
+        item_type = _short(item.get("type"), 60)
+        source = _short(item.get("source") or item.get("provider"), 60)
+        name = _short(item.get("name") or item.get("title") or item.get("summary"), 160)
+        if item_type == "telemetry_recent":
+            records = item.get("records") or []
+            name = f"{len(records)} recent telemetry records available" if records else "No recent telemetry records"
+        if item_type == "recommendation_recent":
+            name = "Recent recommendation record is available"
+        parts = [part for part in [item_type, name, f"source={source}" if source else ""] if part]
+        compact.append(" - ".join(parts))
+    return compact
+
+
+def compact_local_messages(
+    *,
+    question: str,
+    context: EvidenceContext,
+    history: list[dict[str, Any]] | None = None,
+    audience: str | None = None,
+    uploaded_evidence: list[dict[str, Any]] | None = None,
+) -> list[dict[str, str]]:
+    evidence = compact_evidence_items(context, max_items=3)
+    uploads = compact_uploaded_evidence(uploaded_evidence, max_items=3)
+    missing = [readable_missing_label(item) for item in actual_missing_data_only(context.missing_data)] if should_surface_missing_evidence(question) else []
+    lines = [
+        f"Question: {_short(question, 500)}",
+        f"Audience: {_short(audience, 80) if audience else 'operator'}",
+        f"Workspace: {_short(context.workspace_id or 'current workspace', 120)}",
+        f"Crop/region: {_short(context.crop_type or 'unknown', 80)} / {_short(context.region or 'unknown', 80)}",
+        "Evidence:",
+        *(evidence or ["No compact evidence records are available."]),
+        "Imported files:",
+        *(uploads or ["No imported files attached to this request."]),
+        "Missing data:",
+        *(missing[:5] or ["No missing evidence listed."]),
     ]
-    return any(term in q for term in operational_terms)
+    context_text = "\n".join(lines)[:2400]
+
+    recent_history = []
+    for row in (history or [])[-2:]:
+        role = "assistant" if row.get("role") == "assistant" else "user"
+        content = _short(row.get("content"), 500)
+        if content:
+            recent_history.append({"role": role, "content": content})
+
+    return [
+        {"role": "system", "content": LOCAL_SYSTEM_PROMPT},
+        *recent_history,
+        {"role": "user", "content": context_text},
+    ]
 
 
-def _body_from_local_text(value: str, evidence_context: Any, question: str) -> dict[str, Any]:
-    answer = clean_model_text(value)
-    if not answer:
-        answer = "I can help. Tell me the field, crop, and decision you are trying to make, and I will separate what we know from what is missing."
-    missing = list(getattr(evidence_context, "missing_data", []) or [])[:3] if _needs_missing_evidence(question) else []
+def local_plain_body(answer: str, context: EvidenceContext, *, question: str = "") -> dict[str, Any]:
+    missing = [readable_missing_label(item) for item in actual_missing_data_only(context.missing_data)] if should_surface_missing_evidence(question) else []
     return {
         "summary": answer,
         "answer": answer,
         "work_completed": [],
         "evidence_used": [],
         "missing_evidence": missing,
-        "operating_plan": [],
+        "missing_data": missing,
         "recommendations": [],
         "next_actions": [],
         "risk_flags": [],
@@ -98,157 +215,76 @@ def _body_from_local_text(value: str, evidence_context: Any, question: str) -> d
     }
 
 
-def _fallback(context_bundle: dict[str, Any], error: str | None = None) -> dict[str, Any]:
-    evidence_summary = context_bundle.get("evidence_summary") or {}
-    evidence_context = context_bundle.get("evidence_context")
-    missing = list(getattr(evidence_context, "missing_data", []) or evidence_summary.get("missing_source_types") or [])
-    return {
-        "summary": "Live model reasoning did not complete. Check the local model runtime and rerun the request.",
-        "answer": "Live model reasoning did not complete. Check the local model runtime and rerun the request.",
-        "work_completed": ["Loaded tenant-scoped workspace context."],
-        "evidence_used": [f"Workspace evidence records: {evidence_summary.get('evidence_count', 0)}"],
-        "missing_evidence": missing or ["live model response"],
-        "operating_plan": [],
-        "recommendations": [],
-        "next_actions": ["Run model smoke test", "Rerun Ask AGRO-AI"],
-        "risk_flags": ([str(error)[:240]] if error else []),
-        "confidence": "low",
-        "customer_safe": True,
-    }
-
-
-@router.get("/brain/model-smoke")
-async def model_smoke() -> dict[str, Any]:
-    model_router = ModelRouter()
-    selected = model_router.select("chat")
-    is_local = model_router.mode() == "ollama"
-    result, selection = await model_router.run(
-        task="chat",
-        messages=[
-            {"role": "system", "content": LOCAL_PROMPT if is_local else HOSTED_PROMPT},
-            {"role": "user", "content": "QUESTION: Say that AGRO-AI live model routing is working in one short sentence."},
-        ],
-        temperature=0.1,
-        response_format=None if is_local else {"type": "json_object"},
-    )
-    body = _body_from_local_text(result.content, None, "model smoke") if is_local else parse_model_json(result.content)
-    live = result.status == "ok" and not result.demo_fallback and bool(body.get("summary") or body.get("answer"))
-    return {
-        "status": "ok" if live else "failed",
-        "live_model_response": live,
-        "provider": result.provider,
-        "selected_model": result.model or selection.model or selected.model,
-        "gateway_status": result.status,
-        "demo_fallback": result.demo_fallback,
-        "error": result.error,
-        "summary": body.get("summary") or body.get("answer") or "",
-    }
-
-
-@router.post("/brain/run")
+@router.post("/run")
 async def brain_run(
     payload: BrainRunRequest,
     tenant_id: str = Depends(require_current_tenant_id),
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    try:
-        context_bundle = build_intelligence_context(
-            db=db,
-            tenant_id=tenant_id,
-            user=user,
-            workspace_id=payload.workspace_id,
-            field_id=payload.field_id,
-            audience=payload.audience,
-        )
-    except ValueError as exc:
-        raise HTTPException(status_code=404, detail=str(exc)) from exc
-
+    context_bundle = build_intelligence_context(
+        db=db,
+        tenant_id=tenant_id,
+        user=user,
+        workspace_id=payload.workspace_id,
+        field_id=payload.field_id,
+        audience=payload.audience,
+    )
+    context = context_bundle["evidence_context"]
+    attach_uploaded_evidence(context, payload.uploaded_evidence)
     model_router = ModelRouter()
-    evidence_context = context_bundle["evidence_context"]
-    is_local = model_router.mode() == "ollama"
-    evidence_limit = 2 if is_local else 90
-    citation_limit = 2 if is_local else 40
-
-    missing_data = list(getattr(evidence_context, "missing_data", []) or [])[:3]
-    evidence_summary = context_bundle.get("evidence_summary") or {}
-    workspace = context_bundle.get("workspace") or {}
-    request_context = {
-        "question": payload.question,
-        "workspace": _compact(workspace, 500),
-        "evidence_summary": _compact(evidence_summary, 500),
-        "uploaded_evidence": payload.uploaded_evidence[:1 if is_local else 10],
-        "missing_data": missing_data,
-        "tenant_context": {
-            "fields": _compact(context_bundle.get("fields") or {}, 450),
-            "evidence": _compact(getattr(evidence_context, "evidence", [])[:evidence_limit], 350),
-        },
-    }
-    if is_local:
-        request_context = _compact(request_context, 1600)
-
-    messages: list[dict[str, str]] = [{"role": "system", "content": LOCAL_PROMPT if is_local else HOSTED_PROMPT}]
-    messages.extend(_trim_history(payload.history, limit=1 if is_local else 12, max_chars=300 if is_local else 2500))
-    if is_local:
-        user_content = (
-            f"QUESTION: {payload.question}\n\n"
-            f"WORKSPACE_CONTEXT: {json.dumps(request_context, default=str)[:1600]}\n\n"
-            "Answer QUESTION directly in normal text only. If the exact number or decision needs missing data, say the missing fields and the next best action. Do not repeat generic onboarding copy."
-        )
-    else:
-        user_content = "Run the operating intelligence layer on this request. Return the required JSON shape only.\n\n" + json.dumps(request_context, default=str)[:180000]
-    messages.append({"role": "user", "content": user_content})
-
-    models = _dedupe_models([model_router.reasoning_model, model_router.default_model, *model_router.fallback_models])
-    last_error: str | None = None
-    last_result = None
-    attempts: list[dict[str, Any]] = []
-
-    for model in models:
-        if is_local and "/" in model:
-            continue
-        result = await model_router.gateway.chat(
-            messages,
-            temperature=0.1 if is_local else 0.42,
-            response_format=None if is_local else {"type": "json_object"},
-            model_override=model,
-        )
-        last_result = result
-        attempts.append({"model": model, "status": result.status, "demo_fallback": result.demo_fallback, "provider": result.provider, "error": (result.error or "")[:500]})
-        if result.status != "ok" or result.demo_fallback:
-            last_error = result.error or result.status
-            continue
-        body = _body_from_local_text(result.content, evidence_context, payload.question) if is_local else parse_model_json(result.content)
-        if body.get("summary") or body.get("answer"):
-            if not body.get("summary"):
-                body["summary"] = body.get("answer")
-            if not body.get("answer"):
-                body["answer"] = body.get("summary")
-            body.setdefault("missing_evidence", [] if is_local else getattr(evidence_context, "missing_data", []))
-            body.setdefault("confidence", "low" if body.get("missing_evidence") else "medium")
-            body["customer_safe"] = True
-            return {
-                "status": "completed",
-                "model_status": "live",
-                "result": body,
-                "citations": [citation.model_dump(mode="python") for citation in getattr(evidence_context, "citations", [])[:citation_limit]],
-                "evidence_summary": evidence_summary,
-                "missing_data": body.get("missing_evidence") or [],
-                "confidence": body.get("confidence") or "low",
-                "internal_debug": {"selected_model": result.model, "attempts": attempts, "local_ollama_mode": is_local},
-            }
-        last_error = "model_returned_unusable_body"
-        attempts[-1]["error"] = last_error
-
-    fallback = _fallback(context_bundle, last_error)
+    messages = compact_local_messages(
+        question=payload.question,
+        context=context,
+        history=payload.history[-2:],
+        audience=payload.audience,
+        uploaded_evidence=payload.uploaded_evidence,
+    )
+    result, selection = await model_router.run(
+        task="chat",
+        messages=messages,
+        temperature=0.15,
+        response_format=None,
+    )
+    answer = str(result.content or "").strip()
+    if not answer:
+        answer = "I can help once the workspace has enough context for this request."
+    body = local_plain_body(answer, context, question=payload.question)
+    model_status = "live" if result.status == "ok" and not result.demo_fallback else "fallback"
     return {
-        "status": "unavailable",
-        "model_status": "fallback",
-        "result": fallback,
-        "citations": [citation.model_dump(mode="python") for citation in getattr(evidence_context, "citations", [])[:citation_limit]],
-        "evidence_summary": evidence_summary,
-        "missing_data": fallback.get("missing_evidence") or getattr(evidence_context, "missing_data", []),
-        "confidence": "low",
-        "internal_status": getattr(last_result, "status", None) if last_result else "not_configured",
-        "internal_debug": {"last_error": last_error, "attempts": attempts, "local_ollama_mode": is_local},
+        "status": "completed" if result.status == "ok" or result.demo_fallback else "unavailable",
+        "task": payload.task,
+        "model_status": model_status,
+        "result": body,
+        "missing_data": body["missing_data"],
+        "confidence": body["confidence"],
+        "citations": [
+            citation.model_dump(mode="python") if hasattr(citation, "model_dump") else citation
+            for citation in context.citations[:8]
+        ],
+        "sample_mode": bool(context_bundle.get("sample_mode")),
+        "selected_model": selection.model,
+    }
+
+
+@router.get("/model-smoke")
+async def model_smoke() -> dict[str, Any]:
+    gateway = AIGateway()
+    model_router = ModelRouter()
+    selection = model_router.select("chat")
+    live = False
+    if gateway.is_configured and gateway.provider == "ollama":
+        result = await gateway.chat(
+            [
+                {"role": "system", "content": "Reply with OK only."},
+                {"role": "user", "content": "OK"},
+            ],
+            response_format=None,
+            model_override=selection.model,
+        )
+        live = result.status == "ok" and bool(result.content)
+    return {
+        "live_model_response": live,
+        "provider": gateway.provider or "offline",
+        "selected_model": selection.model or gateway.model,
     }

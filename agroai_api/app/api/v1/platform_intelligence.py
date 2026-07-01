@@ -411,6 +411,26 @@ def _workspace_row(db: Session, tenant_id: str, workspace_id: str | None) -> Wor
     return query.order_by(Workspace.created_at.asc()).first()
 
 
+def _attach_uploaded_evidence(context: Any, uploaded: list[dict[str, Any]]) -> None:
+    for item in uploaded[:8]:
+        if not isinstance(item, dict):
+            continue
+        context.evidence.append(
+            {
+                "type": "uploaded_file",
+                "filename": item.get("filename") or item.get("name"),
+                "source_type": item.get("file_type") or item.get("source_type") or item.get("content_type"),
+                "size_bytes": item.get("size_bytes"),
+                "import_status": item.get("import_status") or item.get("status"),
+                "rows_parsed": item.get("rows") or item.get("rows_parsed"),
+                "columns": item.get("columns") or [],
+                "parsed_preview": item.get("parsed_preview") or item.get("text_preview") or item.get("preview"),
+                "warnings": item.get("warnings") or [],
+                "source": "chat_upload",
+            }
+        )
+
+
 def _claimed_number_warnings(result: dict[str, Any], evidence_summary: dict[str, Any]) -> list[str]:
     text = " ".join(str(value) for value in result.values() if isinstance(value, (str, int, float)))
     expected = {
@@ -588,6 +608,7 @@ async def intelligence_run(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
     context = context_bundle["evidence_context"]
+    _attach_uploaded_evidence(context, payload.uploaded_evidence)
     mapped_task = RUN_TASK_MAP.get(payload.task, "chat")
     instruction = payload.question
     if payload.audience:
@@ -597,6 +618,9 @@ async def intelligence_run(
         task=mapped_task,
         user_instruction=instruction,
         context=context,
+        history=payload.history[-2:],
+        audience=payload.audience,
+        uploaded_evidence=payload.uploaded_evidence,
     )
 
     model_router = ModelRouter()
