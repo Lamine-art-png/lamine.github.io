@@ -7,10 +7,10 @@ import { actionMappingFor, alertFingerprint, alertGroup, alertKey, confidencePre
 const appSource = fs.readFileSync(new URL('../js/app.js', import.meta.url), 'utf8');
 const swSource = fs.readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
 
-test('mobile navigation uses five primary destinations with Ask Velia featured', () => {
+test('mobile navigation uses five primary destinations with Ask Terris featured', () => {
   assert.ok(appSource.includes('{ id: "today", label: "Today" }'));
   assert.ok(appSource.includes('{ id: "fields", label: "Fields" }'));
-  assert.ok(appSource.includes('{ id: "assistant", label: "Ask Velia", featured: true }'));
+  assert.ok(appSource.includes('{ id: "assistant", label: "Ask Terris", featured: true }'));
   assert.ok(appSource.includes('{ id: "alerts", label: "Alerts" }'));
   assert.ok(appSource.includes('{ id: "more", label: "More" }'));
   assert.ok(!appSource.includes('const nav = ["today", "fields", "alerts", "assistant", "reports", "settings"]'));
@@ -58,10 +58,10 @@ test('realistic Napa demo data showcases multiple blocks and activity', () => {
 
 test('decision actions map to safe primary and secondary CTAs', () => {
   assert.deepEqual(actionMappingFor('irrigate'), { primary: 'Log irrigation', secondary: 'Review reasoning', primaryAction: 'log', secondaryAction: 'reasoning' });
-  assert.deepEqual(actionMappingFor('check field first'), { primary: 'Record field check', secondary: 'Ask Velia', primaryAction: 'condition', secondaryAction: 'assistant' });
+  assert.deepEqual(actionMappingFor('check field first'), { primary: 'Record field check', secondary: 'Ask Terris', primaryAction: 'condition', secondaryAction: 'assistant' });
   assert.deepEqual(actionMappingFor('wait'), { primary: 'Set reminder', secondary: 'View weather risk', primaryAction: 'reminder', secondaryAction: 'weather' });
-  assert.deepEqual(actionMappingFor('monitor'), { primary: 'Update field condition', secondary: 'Ask Velia', primaryAction: 'condition', secondaryAction: 'assistant' });
-  assert.deepEqual(actionMappingFor('update missing data'), { primary: 'Complete field data', secondary: 'Ask Velia', primaryAction: 'field-detail', secondaryAction: 'assistant' });
+  assert.deepEqual(actionMappingFor('monitor'), { primary: 'Update field condition', secondary: 'Ask Terris', primaryAction: 'condition', secondaryAction: 'assistant' });
+  assert.deepEqual(actionMappingFor('update missing data'), { primary: 'Complete field data', secondary: 'Ask Terris', primaryAction: 'field-detail', secondaryAction: 'assistant' });
 });
 
 test('decision action normalization prevents incidental irrigate wording', () => {
@@ -104,7 +104,7 @@ test('generated alert keys remain dismissed until the condition changes', () => 
 
 test('recommendation context labels separate mode from risk', () => {
   assert.equal(recommendationContextLabel({ sourceMode: 'demo' }, {}, 'demo'), 'Demo preview');
-  assert.equal(recommendationContextLabel({ sourceMode: 'backend' }, {}, 'real'), 'Synced backend intelligence');
+  assert.equal(recommendationContextLabel({ sourceMode: 'backend' }, {}, 'real'), 'Backend intelligence refreshed');
   assert.equal(recommendationContextLabel({ sourceMode: 'local' }, { stale: false }, 'real'), 'Local fallback with fresh cached context');
   assert.equal(recommendationContextLabel({ sourceMode: 'offline' }, { stale: true }, 'real'), 'Stale offline fallback');
 });
@@ -120,6 +120,7 @@ test('experience source includes safe empty states, provenance, alerts, and load
   assert.ok(appSource.includes('alertFirstSeen'));
   assert.ok(appSource.includes('previous.fingerprint !== fingerprint'));
   assert.ok(!appSource.includes('state = recordRecommendationHistory(state, field.id, rec);\\n  persist();\\n  return'));
+  assert.ok(!appSource.includes('Ask Velia'));
 });
 
 test('service worker caches mobile modules for offline reload', () => {

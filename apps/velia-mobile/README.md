@@ -1,18 +1,18 @@
-# Velia Mobile Experience (AGRO-AI)
+# Terris Mobile Experience (AGRO-AI)
 
-Velia helps farms make better water decisions, act faster, and understand what happened across their fields.
+Terris helps farms make better water decisions, act faster, and understand what happened across their fields.
 
 This app is a mobile-first agricultural intelligence companion. It keeps the frontend-local **Agentic AI Brain architecture** for offline fallback, while live intelligence runs backend-first through `apps/velia-ai-api`.
 
 ## Mobile experience
 
-- Premium mobile shell with Velia wordmark, farm selector, sync/offline indicator, notifications, and profile access.
-- Five primary destinations: Today, Fields, Ask Velia, Alerts, and More.
-- Today is a daily field briefing with a hero recommendation, overnight changes, fields needing attention, water outlook, Ask Velia entry, recent activity, and farmer-friendly provenance.
+- Premium mobile shell with Terris wordmark, farm selector, sync/offline indicator, notifications, and profile access.
+- Five primary destinations: Today, Fields, Ask Terris, Alerts, and More.
+- Today is a daily field briefing with a hero recommendation, overnight changes, fields needing attention, water outlook, Ask Terris entry, recent activity, and farmer-friendly provenance.
 - Fields includes search, status filters, compact field cards, map-ready field visuals, detail timelines, field observations, irrigation history, and data-source status.
-- Ask Velia uses a chat-style interface, contextual field selector, suggested questions, voice orb, transcript preview, confirmation before saving actions, and source/confidence details.
+- Ask Terris uses a chat-style interface, contextual field selector, suggested questions, voice orb, transcript preview, confirmation before saving actions, and source/confidence details.
 - Alerts are actionable and cover heat, frost, rain, stale weather, missing observations, unavailable sensors/controllers, overdue verification, and recommendation changes.
-- More contains reports, farm profile, field setup, data sources, integrations, notifications, language, units, offline/sync, help, and About Velia. Demo controls are only shown in demo mode.
+- More contains reports, farm profile, field setup, data sources, integrations, notifications, language, units, offline/sync, help, and About Terris. Demo controls are only shown in demo mode.
 - Dynamic model/user text is escaped before HTML insertion.
 
 Demo mode uses realistic Napa Valley vineyard blocks so the product value is visible immediately without claiming live satellite or production automation.
@@ -257,10 +257,10 @@ The mobile app never stores LLM, embedding, or weather provider API keys. Provid
 ## Real Intelligence v1 UI behavior
 
 - Today renders immediately using local deterministic fallback.
-- When online, Velia refreshes the current field decision from the backend and caches it briefly.
+- When online, Terris refreshes the current field decision from the backend and caches it briefly.
 - If backend or providers are unavailable, local recommendations, observations, logs, voice actions, and sync queue behavior continue.
 - Weather cards show the age of the weather context.
-- Detailed provenance is tucked into the expandable `Why Velia recommended this` section so the farmer-facing screen stays simple.
+- Detailed provenance is tucked into the expandable `Why Terris recommended this` section so the farmer-facing screen stays simple.
 
 ## Local run with backend
 
