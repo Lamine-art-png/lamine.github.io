@@ -1,12 +1,14 @@
 import { ReactNode, useCallback, useState } from "react";
 import { Lock, Mail, ShieldCheck, Users } from "lucide-react";
-import { apiClient, ProductCheckoutPayload, SupportTicketPayload, TeamInvitationPayload } from "../api/client";
+import { apiClient, ProductCheckoutPayload, SupportTicketPayload } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { usePortalResource } from "../hooks/usePortalResource";
 import { BG, BORDER, GREEN, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
 
+type PlanId = "free" | "professional" | "team" | "network" | "enterprise";
+
 type Plan = {
-  id: "free" | "professional" | "team" | "network" | "enterprise";
+  id: PlanId;
   name: string;
   public_price_monthly: string;
   public_price_annual: string;
@@ -50,16 +52,20 @@ type AdminRequest = {
   message?: string;
 };
 
-type TeamMember = { id: string; name?: string; email?: string; role?: string };
-type TeamInvitation = { id: string; email: string; role: string; status: string; created_at?: string };
+type ShellResponse = {
+  user?: { id?: string; name?: string; email?: string };
+  organization?: { id?: string; name?: string };
+  workspace?: { id?: string; name?: string };
+  plan?: { id?: string; name?: string };
+};
 
 const faq = [
   ["What is AGRO-AI built for?", "AGRO-AI helps farms, water agencies, advisors, lenders, insurers, and agricultural networks operate from one secure evidence workspace."],
-  ["What does Free include?", "Free is for pilots and early testing. It includes one workspace, one user, limited uploads, limited AGRO-AI messages, and basic readiness."],
-  ["When do I move to Professional?", "Professional is for commercial farms and advisors that need reports, PDF output, connectors, water risk briefs, and operating use."],
-  ["When do I need Team?", "Team is for operators, advisors, and managers who need shared evidence, role controls, and invite workflows."],
+  ["What does Free include?", "Free is for evaluation. It includes one workspace, one user, limited uploads, sample reports, and basic readiness."],
+  ["When do I move to Professional?", "Professional is for commercial farms and advisors that need reports, PDF output, evidence imports, operator tasks, and standard connectors."],
+  ["When do I need Team?", "Team is for operating groups that need shared workspaces, role controls, controller readiness, field ops, and audit trails."],
   ["Who is Network for?", "Network is built for grower networks, water districts, exporters, lenders, insurers, and multi-farm programs."],
-  ["What happens above Network?", "Larger deployments move to Enterprise for custom seats, governance, security review, and tailored reporting."],
+  ["What happens above Network?", "Enterprise is for custom integrations, security review, SSO/SAML planning, dedicated rollout, custom SLAs, and program-specific reporting."],
 ];
 
 const LOCAL_PRODUCT_PLANS: ProductPlans = {
@@ -71,7 +77,8 @@ const LOCAL_PRODUCT_PLANS: ProductPlans = {
       public_price_annual: "$0/yr",
       recommended_buyer: "Evaluation workspaces and small pilot teams getting organized.",
       included_limits: { seats: "1 user", workspaces: "1 evaluation workspace", ai: "Limited AGRO-AI messages" },
-      features: ["Basic readiness view", "Manual evidence upload", "Starter field context", "Locked reports, connectors, team seats, and advanced AI"],
+      features: ["Basic readiness view", "Manual evidence upload", "Sample report workflow", "Starter field context"],
+      locked_features: ["Advanced connectors", "Report email delivery", "Controller readiness", "Team seats"],
       support_level: "Self-guided setup",
       cta_label: "Start free",
       is_custom_pricing: false,
@@ -81,11 +88,12 @@ const LOCAL_PRODUCT_PLANS: ProductPlans = {
       name: "Professional",
       public_price_monthly: "$299/mo",
       public_price_annual: "$2,990/yr",
-      recommended_buyer: "Growers and operators ready to run WaterOps, evidence, and reports in one workspace.",
-      included_limits: { seats: "3 users", workspaces: "3 workspaces", reports: "Report generation and PDF-ready exports" },
-      features: ["Water risk briefs", "Operating recommendations", "Evidence ingestion", "Compliance drafts", "Standard connectors"],
+      recommended_buyer: "Growers and operators ready to run AGRO-AI reports and field intelligence in one workspace.",
+      included_limits: { seats: "3 users", workspaces: "3 workspaces", reports: "PDF-ready reports" },
+      features: ["AGRO-AI reports", "Evidence imports", "Operator tasks", "Email report delivery", "Standard connector workflows"],
       support_level: "Standard support",
-      cta_label: "Upgrade to Professional",
+      cta_label: "Upgrade",
+      annual_savings_badge: "2 months free",
       is_custom_pricing: false,
     },
     {
@@ -93,11 +101,12 @@ const LOCAL_PRODUCT_PLANS: ProductPlans = {
       name: "Team",
       public_price_monthly: "$799/mo",
       public_price_annual: "$7,990/yr",
-      recommended_buyer: "Multi-person operations teams coordinating evidence, field tasks, reports, and approvals.",
-      included_limits: { seats: "10 users", workspaces: "10 workspaces", roles: "Role controls and team invites" },
-      features: ["Shared evidence library", "Team invites", "Advanced report workflows", "Connector workflows", "Priority support"],
+      recommended_buyer: "Operations teams coordinating field tasks, controller readiness, reports, approvals, and shared evidence.",
+      included_limits: { seats: "10 users", workspaces: "10 workspaces", roles: "Role controls" },
+      features: ["Shared evidence library", "Controller readiness", "Field operations", "Compliance reporting", "Priority support"],
       support_level: "Priority support",
-      cta_label: "Request Team",
+      cta_label: "Upgrade",
+      annual_savings_badge: "Team rollout savings",
       is_custom_pricing: false,
     },
     {
@@ -105,11 +114,12 @@ const LOCAL_PRODUCT_PLANS: ProductPlans = {
       name: "Network",
       public_price_monthly: "$1,500/mo",
       public_price_annual: "$15,000/yr",
-      recommended_buyer: "Water agencies, grower networks, exporters, lenders, insurers, and sourcing programs.",
-      included_limits: { scope: "Up to 50k acres or 50 workspaces", seats: "25 users", rollups: "Network rollups and partner reporting" },
-      features: ["Multi-workspace dashboards", "Evidence rollups", "Customer reporting", "Priority onboarding", "Program-level views"],
-      support_level: "Priority onboarding",
-      cta_label: "Contact sales",
+      recommended_buyer: "Water agencies, grower networks, exporters, lenders, insurers, and multi-site programs.",
+      included_limits: { scope: "Multi-site", seats: "25 users", rollups: "Network reporting" },
+      features: ["Multi-workspace rollups", "Customer/account reporting", "Advanced integrations", "Program dashboards", "Rollout support"],
+      support_level: "Priority rollout",
+      cta_label: "Talk to sales",
+      annual_savings_badge: "Program pricing",
       is_custom_pricing: false,
     },
     {
@@ -117,20 +127,32 @@ const LOCAL_PRODUCT_PLANS: ProductPlans = {
       name: "Enterprise",
       public_price_monthly: "Custom",
       public_price_annual: "Custom",
-      recommended_buyer: "Organizations needing governance review, custom integrations, security process, and enterprise support.",
-      included_limits: { seats: "Custom seats", data: "Custom data scope", security: "Security and governance review" },
-      features: ["Custom integrations", "SSO/SAML planning when available", "Enterprise support", "Security review", "Custom reporting scope"],
+      recommended_buyer: "Organizations needing governance review, custom controller/API integrations, security process, and dedicated support.",
+      included_limits: { seats: "Custom seats", data: "Custom data scope", security: "Security review" },
+      features: ["Custom integrations", "SSO/SAML planning", "Enterprise support", "Security review", "Custom SLAs"],
       support_level: "Enterprise success",
-      cta_label: "Contact sales",
+      cta_label: "Talk to sales",
       is_custom_pricing: true,
     },
   ],
   service_add_ons: [
-    { id: "onboarding", name: "Onboarding", price: "Scoped", description: "Workspace launch, first evidence review, connector planning, and operating workflow setup." },
-    { id: "custom_integration", name: "Custom integration", price: "Scoped", description: "Planning and implementation support for systems that need special handling." },
-    { id: "network_rollout", name: "Network rollout", price: "Scoped", description: "Program setup for agencies, multi-farm groups, or buyer networks." },
+    { id: "onboarding", name: "Onboarding & rollout", price: "Scoped", description: "Workspace launch, first evidence review, connector planning, operating workflows, and user enablement." },
+    { id: "custom_integration", name: "Custom integrations", price: "Scoped", description: "Provider-specific controller, ERP, district, sensor, or compliance-system integration work." },
+    { id: "security_review", name: "Enterprise security review", price: "Scoped", description: "Security documentation, access review, deployment architecture, and governance support." },
   ],
 };
+
+const COMPARISON_ROWS = [
+  { group: "Workspace", label: "Users", free: "1", professional: "3", team: "10", network: "25", enterprise: "Custom" },
+  { group: "Workspace", label: "Workspaces", free: "1", professional: "3", team: "10", network: "Multi-site", enterprise: "Custom" },
+  { group: "AI & Reports", label: "AGRO-AI messages", free: "Limited", professional: "Commercial", team: "Team", network: "Network", enterprise: "Custom" },
+  { group: "AI & Reports", label: "PDF reports", free: "Sample", professional: "✓", team: "✓", network: "Rollups", enterprise: "Custom" },
+  { group: "Controller & Field Ops", label: "Field tasks", free: "—", professional: "✓", team: "✓", network: "✓", enterprise: "✓" },
+  { group: "Controller & Field Ops", label: "Controller gateway", free: "—", professional: "Readiness", team: "Readiness + ops", network: "Advanced", enterprise: "Custom" },
+  { group: "Compliance", label: "Compliance packets", free: "—", professional: "Drafts", team: "✓", network: "Rollups", enterprise: "Custom" },
+  { group: "Integrations", label: "Evidence imports", free: "Limited", professional: "✓", team: "✓", network: "Advanced", enterprise: "Custom" },
+  { group: "Support", label: "Support level", free: "Self-guided", professional: "Standard", team: "Priority", network: "Rollout", enterprise: "Dedicated" },
+];
 
 function productPlansWithFallback(remote?: ProductPlans | null): ProductPlans {
   const byId = new Map<string, Plan>();
@@ -146,10 +168,6 @@ function safe(value: unknown, fallback = "Not available") {
   if (value === null || value === undefined || value === "") return fallback;
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
   return fallback;
-}
-
-function isEnabled(value: unknown) {
-  return value === true || value === "true" || value === "enabled";
 }
 
 function Page({ title, subtitle, children }: { title: string; subtitle?: string; children: ReactNode }) {
@@ -228,40 +246,30 @@ function UpgradeModal({ title, body, cta, onClose, onConfirm }: { title: string;
 
 function PlanCard({ plan, billingPeriod, onSelect }: { plan: Plan; billingPeriod: "monthly" | "annual"; onSelect: (plan: Plan) => void }) {
   const price = billingPeriod === "annual" ? plan.public_price_annual : plan.public_price_monthly;
-  const highlighted = plan.id === "professional";
-  const limits = Object.values(plan.included_limits || {});
+  const highlighted = plan.id === "team";
+  const limits = Object.values(plan.included_limits || {}).slice(0, 3);
+  const features = (plan.features || []).slice(0, 4);
 
   return (
-    <section className="flex min-h-[540px] flex-col rounded-[20px] p-6" style={{ background: SURFACE, border: `1px solid ${highlighted ? GREEN : BORDER}`, boxShadow: highlighted ? "0 12px 50px rgba(28,89,55,0.08)" : "none" }}>
-      <div className="flex items-start justify-between gap-4">
+    <section className="flex min-h-[430px] w-[260px] shrink-0 flex-col rounded-[22px] p-5 md:w-auto" style={{ background: highlighted ? "#0D2B1E" : SURFACE, border: `1px solid ${highlighted ? "#0D2B1E" : BORDER}`, boxShadow: highlighted ? "0 20px 70px rgba(13,43,30,0.18)" : "0 12px 38px rgba(16,35,27,0.06)" }}>
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-[24px] font-semibold" style={{ color: TEXT }}>{plan.name}</h2>
-          <p className="mt-2 text-[13px] leading-6" style={{ color: MUTED }}>{plan.recommended_buyer}</p>
+          <h2 className="text-[21px] font-semibold" style={{ color: highlighted ? "white" : TEXT }}>{plan.name}</h2>
+          <p className="mt-2 min-h-[54px] text-[12px] leading-5" style={{ color: highlighted ? "rgba(255,255,255,0.68)" : MUTED }}>{plan.recommended_buyer}</p>
         </div>
-        {plan.annual_savings_badge ? <StatusBadge label={plan.annual_savings_badge} tone="good" /> : null}
+        {highlighted ? <StatusBadge label="Most popular" tone="good" /> : plan.annual_savings_badge ? <StatusBadge label={plan.annual_savings_badge} tone="good" /> : null}
       </div>
-      <div className="mt-6 text-[34px] font-semibold" style={{ color: TEXT }}>{price}</div>
-      <div className="mt-5 space-y-2 text-[13px]" style={{ color: TEXT }}>
-        {limits.map((limit) => <div key={limit}>✓ {limit}</div>)}
+      <div className="mt-5 text-[30px] font-semibold" style={{ color: highlighted ? "white" : TEXT }}>{price}</div>
+      <div className="mt-4 space-y-2 text-[12px]" style={{ color: highlighted ? "rgba(255,255,255,0.82)" : TEXT }}>
+        {limits.map((limit) => <div key={limit} className="truncate">✓ {limit}</div>)}
       </div>
-      <div className="mt-6 space-y-2">
-        {plan.features.map((feature) => <div key={feature} className="text-[13px] leading-6" style={{ color: TEXT }}>✓ {feature}</div>)}
+      <div className="mt-5 space-y-2">
+        {features.map((feature) => <div key={feature} className="text-[12px] leading-5" style={{ color: highlighted ? "rgba(255,255,255,0.82)" : TEXT }}>✓ {feature}</div>)}
       </div>
-      {plan.locked_features?.length ? (
-        <div className="mt-6 rounded-xl p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
-          <div className="mb-2 text-[11px] font-semibold uppercase" style={{ color: MUTED }}>Locked on this tier</div>
-          <div className="space-y-2">
-            {plan.locked_features.map((feature) => (
-              <div key={feature} className="flex items-center gap-2 text-[12px]" style={{ color: MUTED }}>
-                <Lock className="h-3.5 w-3.5" />
-                {feature}
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
       <div className="mt-auto pt-6">
-        <PortalButton onClick={() => onSelect(plan)}>{plan.cta_label}</PortalButton>
+        <button type="button" onClick={() => onSelect(plan)} className="h-11 w-full rounded-xl text-[13px] font-semibold" style={{ background: highlighted ? "white" : "#0D2B1E", color: highlighted ? "#0D2B1E" : "white" }}>
+          {plan.id === "free" ? "Start free" : plan.id === "enterprise" || plan.id === "network" ? "Talk to sales" : "Upgrade"}
+        </button>
       </div>
     </section>
   );
@@ -283,27 +291,18 @@ export function PricingPage() {
         window.history.replaceState(null, "", "/?mode=register");
         return;
       }
-      if (!hasSession && ["professional", "team", "enterprise"].includes(plan.id)) {
+      if (!hasSession || plan.id === "network" || plan.id === "enterprise" || plan.id === "team") {
         const response = await apiClient.sales.contact({
-          type: "upgrade",
+          category: "sales",
+          type: plan.id === "network" ? "network_plan" : "upgrade",
           subject: `${plan.name} plan request`,
-          message: `Customer requested ${plan.name} pricing follow-up from public pricing.`,
+          message: `Customer requested ${plan.name} pricing follow-up from pricing page.`,
           source_page: "pricing",
         }) as Record<string, unknown>;
-        setMessage(`${safe(response.message, "Upgrade request received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
+        setMessage(`${safe(response.message, "Request received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
         return;
       }
-      if (plan.id === "network" || plan.id === "enterprise" || plan.id === "team") {
-        const response = await apiClient.sales.networkInquiry({
-          type: "network_plan",
-          subject: `${plan.name} plan inquiry`,
-          message: `Customer requested ${plan.name} pricing follow-up.`,
-          source_page: "pricing",
-        }) as Record<string, unknown>;
-        setMessage(`${safe(response.message, "Network inquiry received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
-        return;
-      }
-      const response = await apiClient.billing.checkout({ plan_id: plan.id as "free" | "professional" | "network", billing_period: billingPeriod }) as Record<string, unknown>;
+      const response = await apiClient.billing.checkout({ plan_id: plan.id, billing_period: billingPeriod } as ProductCheckoutPayload) as Record<string, unknown>;
       if (typeof response.checkout_url === "string") {
         window.location.assign(response.checkout_url);
         return;
@@ -315,47 +314,91 @@ export function PricingPage() {
   };
 
   return (
-    <Page title="AGRO-AI pricing" subtitle="A new kind of agricultural intelligence is here. Scale from pilot workspaces to operating teams, grower networks, and enterprise programs.">
-      <div className="inline-flex rounded-xl p-1" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-        {(["monthly", "annual"] as const).map((period) => (
-          <button key={period} type="button" onClick={() => setBillingPeriod(period)} className="rounded-lg px-4 py-2 text-[13px] font-medium capitalize" style={{ background: billingPeriod === period ? GREEN : "transparent", color: billingPeriod === period ? "white" : TEXT }}>
-            {period}
-          </button>
-        ))}
-      </div>
-
-      {message ? <div className="rounded-lg px-4 py-3 text-[13px]" style={{ background: "#FFFBEB", color: "#92400E", border: "1px solid #FCD34D" }}>{message}</div> : null}
-      {usingLocalFallback ? <div className="rounded-lg px-4 py-3 text-[13px]" style={{ background: SURFACE, color: MUTED, border: `1px solid ${BORDER}` }}>Pricing is available. Live plan details will refresh when the API responds.</div> : null}
-
-      <div className="grid gap-5 lg:grid-cols-3 xl:grid-cols-5">
-        {productPlans.plans.map((plan) => (
-          <PlanCard key={plan.id} plan={plan} billingPeriod={billingPeriod} onSelect={selectPlan} />
-        ))}
-      </div>
-
-      <Panel title="Services">
-        <div className="grid gap-4 md:grid-cols-3">
-          {productPlans.service_add_ons.map((service) => (
-            <div key={service.id} className="rounded-lg p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
-              <div className="font-semibold text-[14px]" style={{ color: TEXT }}>{service.name}</div>
-              <div className="mt-2 text-[13px] font-medium" style={{ color: GREEN }}>{service.price}</div>
-              <p className="mt-2 text-[12px] leading-relaxed" style={{ color: MUTED }}>{service.description}</p>
+    <div className="min-h-screen" style={{ background: BG }}>
+      <main className="mx-auto max-w-[1180px] px-5 py-10 md:px-8">
+        <section className="rounded-[28px] px-6 py-9 md:px-10 md:py-12" style={{ background: "#0D2B1E", color: "white" }}>
+          <div className="text-[12px] font-semibold uppercase tracking-[0.22em]" style={{ color: "rgba(255,255,255,0.64)" }}>AGRO-AI Pricing</div>
+          <div className="mt-5 grid gap-8 lg:grid-cols-[1fr_auto] lg:items-end">
+            <div>
+              <h1 className="max-w-3xl text-[40px] font-semibold leading-[1.04] tracking-tight md:text-[54px]">Choose the operating layer for your farm intelligence.</h1>
+              <p className="mt-5 max-w-2xl text-[15px] leading-7" style={{ color: "rgba(255,255,255,0.72)" }}>Start with a workspace, then scale into reports, controller readiness, field operations, compliance, and network reporting.</p>
             </div>
-          ))}
-        </div>
-      </Panel>
-
-      <Panel title="FAQ">
-        <div className="grid gap-4 md:grid-cols-2">
-          {faq.map(([question, answer]) => (
-            <div key={question}>
-              <div className="font-semibold text-[13px]" style={{ color: TEXT }}>{question}</div>
-              <p className="mt-1 text-[12px] leading-relaxed" style={{ color: MUTED }}>{answer}</p>
+            <div>
+              <div className="inline-flex rounded-full bg-white/10 p-1">
+                {(["monthly", "annual"] as const).map((period) => (
+                  <button key={period} type="button" onClick={() => setBillingPeriod(period)} className="rounded-full px-4 py-2 text-[13px] font-medium capitalize" style={{ background: billingPeriod === period ? "white" : "transparent", color: billingPeriod === period ? "#0D2B1E" : "white" }}>
+                    {period}
+                  </button>
+                ))}
+              </div>
+              <div className="mt-2 text-[12px]" style={{ color: "rgba(255,255,255,0.62)" }}>Annual plans include rollout savings.</div>
             </div>
-          ))}
+          </div>
+        </section>
+
+        <div className="mt-6 space-y-3">
+          {message ? <Banner tone="warn" message={message} /> : null}
+          {usingLocalFallback ? <Banner tone="warn" message="Using launch-safe local pricing while live plan details refresh." /> : null}
         </div>
-      </Panel>
-    </Page>
+
+        <section className="mt-7 overflow-x-auto pb-2">
+          <div className="grid min-w-[1040px] grid-cols-5 gap-4">
+            {productPlans.plans.map((plan) => <PlanCard key={plan.id} plan={plan} billingPeriod={billingPeriod} onSelect={selectPlan} />)}
+          </div>
+        </section>
+
+        <section className="mt-10 rounded-[24px] p-5 md:p-7" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <div className="mb-6 flex flex-wrap items-end justify-between gap-4">
+            <div>
+              <h2 className="text-[24px] font-semibold" style={{ color: TEXT }}>Compare plans</h2>
+              <p className="mt-2 text-[13px]" style={{ color: MUTED }}>Grouped by the operating capabilities enterprise buyers ask about first.</p>
+            </div>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[860px] border-collapse text-[13px]">
+              <thead>
+                <tr style={{ color: MUTED }}>
+                  <th className="py-3 text-left font-medium">Capability</th>
+                  {productPlans.plans.map((plan) => <th key={plan.id} className="py-3 text-center font-medium">{plan.name}</th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {COMPARISON_ROWS.map((row, index) => {
+                  const previous = COMPARISON_ROWS[index - 1];
+                  return (
+                    <tr key={`${row.group}-${row.label}`} style={{ borderTop: `1px solid ${BORDER}` }}>
+                      <td className="py-4">
+                        {previous?.group !== row.group ? <div className="mb-1 text-[10px] font-semibold uppercase tracking-widest" style={{ color: GREEN }}>{row.group}</div> : null}
+                        <div className="font-medium" style={{ color: TEXT }}>{row.label}</div>
+                      </td>
+                      {productPlans.plans.map((plan) => <td key={plan.id} className="px-3 py-4 text-center" style={{ color: TEXT }}>{safe((row as Record<string, string>)[plan.id], "—")}</td>)}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="mt-8 grid gap-4 md:grid-cols-3">
+          {productPlans.service_add_ons.map((item) => (
+            <article key={item.id} className="rounded-[20px] p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+              <div className="text-[12px] font-semibold uppercase tracking-widest" style={{ color: GREEN }}>Service add-on</div>
+              <h3 className="mt-3 text-[18px] font-semibold" style={{ color: TEXT }}>{item.name}</h3>
+              <div className="mt-2 text-[13px] font-medium" style={{ color: MUTED }}>{item.price}</div>
+              <p className="mt-3 text-[13px] leading-6" style={{ color: MUTED }}>{item.description}</p>
+            </article>
+          ))}
+        </section>
+
+        <section className="mt-8 rounded-[24px] p-5 md:p-7" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <h2 className="text-[24px] font-semibold" style={{ color: TEXT }}>Questions before launch</h2>
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            {faq.map(([question, answer]) => <FaqItem key={question} question={question} answer={answer} />)}
+          </div>
+        </section>
+      </main>
+    </div>
   );
 }
 
@@ -407,10 +450,15 @@ export function BillingPage() {
   const summary = summaryState.data;
 
   const upgrade = async (plan: Plan) => {
-    const response = await apiClient.billing.checkout({ plan_id: plan.id as "free" | "professional" | "network", billing_period: billingPeriod }) as Record<string, unknown>;
-    if (typeof response.checkout_url === "string") {
-      window.location.assign(response.checkout_url);
-      return;
+    try {
+      const response = await apiClient.billing.checkout({ plan_id: plan.id, billing_period: checkoutPeriod } as ProductCheckoutPayload) as Record<string, unknown>;
+      if (typeof response.checkout_url === "string") {
+        window.location.assign(response.checkout_url);
+        return;
+      }
+      setMessage(String(response.message || "Upgrade request received."));
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Upgrade request received.");
     }
   };
 
@@ -447,9 +495,10 @@ export function BillingPage() {
               <div className="font-semibold text-[16px]" style={{ color: TEXT }}>{plan.name}</div>
               <div className="mt-1 text-[13px]" style={{ color: MUTED }}>{checkoutPeriod === "annual" ? plan.public_price_annual : plan.public_price_monthly}</div>
               <div className="mt-3 text-[13px] leading-6" style={{ color: TEXT }}>{plan.recommended_buyer}</div>
-              <div className="mt-4"><PortalButton onClick={() => requestUpgrade(plan.id)}>{plan.cta_label}</PortalButton></div>
+              <div className="mt-4"><PortalButton onClick={() => upgrade(plan)}>{plan.cta_label}</PortalButton></div>
             </div>
           ))}
+          {!summary?.upgrade_options?.length ? <p className="text-[13px]" style={{ color: MUTED }}>No upgrade options returned yet.</p> : null}
         </div>
       </Panel>
       <Panel title="Add-ons">
@@ -518,7 +567,7 @@ export function SupportPage() {
   return (
     <Page title="Support" subtitle="Request onboarding, integration help, operational support, or report review from the AGRO-AI team.">
       {message ? <Banner message={message} /> : null}
-      <Panel title="Contact support" action={<PortalButton onClick={submit}>Send request</PortalButton>}>
+      <Panel title="Contact support" action={<PortalButton onClick={submit} disabled={!form.subject.trim() || !form.message.trim()}>Send request</PortalButton>}>
         <div className="grid gap-4 md:grid-cols-2">
           <label className="text-[12px]" style={{ color: MUTED }}>
             Request type
@@ -551,10 +600,10 @@ export function AdminRequestsPage() {
   const requests = requestState.data?.requests || [];
   const tabs = [["all", "All"], ["support", "Support"], ["sales", "Sales"], ["integration", "Integrations"], ["onboarding", "Onboarding"], ["bug", "Bugs"], ["upgrade", "Upgrade requests"]];
 
-  const updateStatus = async (status: NonNullable<AdminRequest["status"]>) => {
+  const updateStatus = async (statusValue: NonNullable<AdminRequest["status"]>) => {
     if (!selected?.id) return;
-    const response = await apiClient.adminRequests.update(selected.id, { status }) as { request?: AdminRequest };
-    setSelected(response.request || { ...selected, status });
+    const response = await apiClient.adminRequests.update(selected.id, { status: statusValue }) as { request?: AdminRequest };
+    setSelected(response.request || { ...selected, status: statusValue });
     await requestState.refresh();
   };
 
@@ -597,96 +646,101 @@ export function AdminRequestsPage() {
   );
 }
 
-function LockedTeamCard({ onUpgrade }: { onUpgrade: () => void }) {
-  return (
-    <Panel title="Team invitations are locked" action={<PortalButton onClick={onUpgrade}>Upgrade to Team</PortalButton>}>
-      <div className="flex items-start gap-3">
-        <Lock className="mt-1 h-5 w-5" style={{ color: GREEN }} />
-        <p className="text-[13px] leading-6" style={{ color: MUTED }}>Team invitations, role controls, and shared evidence workflows are included in the Team plan.</p>
-      </div>
-    </Panel>
-  );
-}
-
 export function TeamPage() {
   const shellState = usePortalResource<ShellResponse>(useCallback(() => apiClient.product.shell(), []));
+  const membersState = usePortalResource<{ members: { id: string; name?: string; email?: string; role?: string }[] }>(useCallback(() => apiClient.team.members(), []));
+  const invitationsState = usePortalResource<{ invitations: { id: string; email: string; status: string; role?: string }[] }>(useCallback(() => apiClient.team.invitations(), []));
   const { currentWorkspace } = useAuth();
   const [inviteEmail, setInviteEmail] = useState("");
-  const [inviteRole, setInviteRole] = useState("member");
+  const [inviteRole, setInviteRole] = useState<"owner" | "admin" | "manager" | "operator" | "viewer">("operator");
   const [message, setMessage] = useState("");
+  const [upgradeOpen, setUpgradeOpen] = useState(false);
+  const canInvite = ["team", "network", "enterprise"].includes(String(shellState.data?.plan?.id || ""));
 
-  const sendInvite = async () => {
-    const response = await apiClient.support.ticket({
-      category: "support",
-      subject: "Team invitation request",
-      message: `Please invite ${inviteEmail} as ${inviteRole}.`,
+  const startTeamUpgrade = async () => {
+    setUpgradeOpen(false);
+    const response = await apiClient.sales.contact({
+      category: "sales",
+      subject: "Team plan request",
+      message: "Customer requested Team plan access from the Team page.",
       workspace_id: currentWorkspace?.id,
       source_page: "team",
     }) as Record<string, unknown>;
-    setMessage(`${safe(response.message, "Team invitation request received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
-    setInviteEmail("");
+    setMessage(String(response.message || "Team upgrade request received."));
+  };
+
+  const sendInvite = async () => {
+    if (!inviteEmail.trim()) return;
+    try {
+      if (canInvite) {
+        const response = await apiClient.team.invite({ email: inviteEmail.trim(), role: inviteRole }) as Record<string, unknown>;
+        setMessage(String(response.message || "Invitation sent."));
+        await invitationsState.refresh();
+      } else {
+        const response = await apiClient.support.ticket({
+          category: "support",
+          subject: "Team invitation request",
+          message: `Please invite ${inviteEmail} as ${inviteRole}.`,
+          workspace_id: currentWorkspace?.id,
+          source_page: "team",
+        }) as Record<string, unknown>;
+        setMessage(`${safe(response.message, "Team invitation request received.")} ${response.request_id ? `Request ${response.request_id}` : ""}`.trim());
+      }
+      setInviteEmail("");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "Team invitation request received.");
+    }
   };
 
   return (
     <Page title="Team" subtitle="Invite and role controls are prepared for workspace collaboration.">
-      {message ? <div className="rounded-lg px-4 py-3 text-[13px]" style={{ background: "#F0FDF4", color: "#15803D", border: "1px solid #BBF7D0" }}>{message}</div> : null}
+      {message ? <Banner message={message} /> : null}
+      {shellState.error ? <Banner tone="warn" message={shellState.error} /> : null}
       <Panel title="Current user">
         <Row label="Name" value={shellState.data?.user?.name} />
         <Row label="Email" value={shellState.data?.user?.email} />
         <Row label="Workspace" value={shellState.data?.workspace?.name} />
+        <Row label="Plan" value={shellState.data?.plan?.name} />
       </Panel>
-      <Panel title="Invite teammate" action={<PortalButton disabled={!inviteEmail.trim()} onClick={sendInvite}>Send invite request</PortalButton>}>
-        <div className="grid gap-4 md:grid-cols-[1fr_180px]">
+      <Panel title="Invite teammate" action={<PortalButton disabled={!inviteEmail.trim()} onClick={sendInvite}>{canInvite ? "Send invitation" : "Request invite"}</PortalButton>}>
+        <div className="grid gap-4 md:grid-cols-[1fr_220px]">
           <label className="text-[12px]" style={{ color: MUTED }}>
             Email
-            <input value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} type="email" placeholder="operator@example.com" className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />
+            <input value={inviteEmail} onChange={(event) => setInviteEmail(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} placeholder="teammate@company.com" />
           </label>
           <label className="text-[12px]" style={{ color: MUTED }}>
             Role
-            <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value)} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
-              <option value="member">Member</option>
+            <select value={inviteRole} onChange={(event) => setInviteRole(event.target.value as typeof inviteRole)} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
+              <option value="owner">Owner</option>
               <option value="admin">Admin</option>
+              <option value="manager">Manager</option>
+              <option value="operator">Operator</option>
               <option value="viewer">Viewer</option>
             </select>
           </label>
         </div>
-      </Panel>
-      <Panel title="Role controls">
-        <p className="text-[13px] leading-relaxed" style={{ color: MUTED }}>
-          Access remains scoped to authenticated workspace members. Team invite requests are tracked for secure account provisioning.
-        </p>
-      </Panel>
-      {canInvite ? (
-        <Panel title="Invite team member" action={<PortalButton onClick={sendInvite}>Send invitation</PortalButton>}>
-          <div className="grid gap-4 md:grid-cols-[1fr_220px]">
-            <label className="text-[12px]" style={{ color: MUTED }}>
-              Email
-              <input value={invite.email} onChange={(event) => setInvite({ ...invite, email: event.target.value })} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} placeholder="teammate@company.com" />
-            </label>
-            <label className="text-[12px]" style={{ color: MUTED }}>
-              Role
-              <select value={invite.role} onChange={(event) => setInvite({ ...invite, role: event.target.value as TeamInvitationPayload["role"] })} className="mt-1 h-10 w-full rounded-lg px-3 text-[13px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
-                <option value="owner">Owner</option>
-                <option value="admin">Admin</option>
-                <option value="manager">Manager</option>
-                <option value="operator">Operator</option>
-                <option value="viewer">Viewer</option>
-              </select>
-            </label>
+        {!canInvite ? (
+          <div className="mt-4 rounded-lg p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+            <div className="flex items-start gap-3">
+              <Lock className="mt-1 h-5 w-5" style={{ color: GREEN }} />
+              <p className="text-[13px] leading-6" style={{ color: MUTED }}>Direct team invitations are included in Team, Network, and Enterprise. Free/Professional workspaces can submit an invite request.</p>
+            </div>
           </div>
-        </Panel>
-      ) : <LockedTeamCard onUpgrade={() => setUpgradeOpen(true)} />}
+        ) : null}
+      </Panel>
       <div className="grid gap-5 lg:grid-cols-2">
         <Panel title="Members">
           <div className="space-y-2">
             {(membersState.data?.members || []).map((member) => <Row key={member.id} label={safe(member.name || member.email)} value={member.role} />)}
             {membersState.error ? <p className="text-[13px]" style={{ color: MUTED }}>{membersState.error}</p> : null}
+            {!membersState.data?.members?.length ? <p className="text-[13px]" style={{ color: MUTED }}>No team members loaded yet.</p> : null}
           </div>
         </Panel>
         <Panel title="Invitations">
           <div className="space-y-2">
             {(invitationsState.data?.invitations || []).map((row) => <Row key={row.id} label={row.email} value={row.status} />)}
             {invitationsState.error ? <p className="text-[13px]" style={{ color: MUTED }}>{invitationsState.error}</p> : null}
+            {!invitationsState.data?.invitations?.length ? <p className="text-[13px]" style={{ color: MUTED }}>No invitations yet.</p> : null}
           </div>
         </Panel>
       </div>
