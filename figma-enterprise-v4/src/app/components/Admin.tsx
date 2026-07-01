@@ -12,14 +12,8 @@ function safe(value: unknown, fallback = "—") {
 }
 
 export function Admin() {
-  const { user, currentOrganization, currentWorkspace } = useAuth();
-  const role = String(currentOrganization?.role || "member").toLowerCase();
-  const canViewSystem = role === "owner" || role === "admin";
-  const aiState = usePortalResource<Record<string, unknown>>(useCallback(() => apiClient.ai.status(), []));
-  const systemState = usePortalResource<Record<string, unknown>>(useCallback(() => canViewSystem ? apiClient.adminRequests.system() : Promise.resolve({}), [canViewSystem]));
-  const ai = aiState.data || {};
-  const system = systemState.data || {};
-  const cloudflare = (system.cloudflare || {}) as Record<string, unknown>;
+  const { currentOrganization, entitlements } = useAuth();
+  const canAccessAdminRequests = Boolean(entitlements.can_access_admin_requests);
 
   return (
     <div className="min-h-screen" style={{ background: BG }}>
@@ -109,38 +103,14 @@ export function SystemHealthPage() {
           <Card title="Observability" rows={[["Last checked", safe(data.last_checked_at)], ["Status endpoint", state.error ? state.error : "Healthy"], ["Workspace access", "Owner and admin scoped"]]} />
         </section>
 
-        {canViewSystem ? <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-          <div className="flex items-start justify-between gap-4 mb-4">
+        <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <button type="button" onClick={() => setOpen((value) => !value)} className="flex w-full items-center justify-between text-left">
             <div>
               <div className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: MUTED }}>Technical details</div>
               <div className="mt-2 text-[18px] font-semibold" style={{ color: TEXT }}>Advanced system context</div>
             </div>
-            <PortalButton variant="secondary" onClick={systemState.refresh}>Refresh</PortalButton>
-          </div>
-          <div className="grid grid-cols-3 gap-5">
-            <Card title="Frontend" rows={[
-              ["Build root", safe(cloudflare.build_root, "figma-enterprise-v4")],
-              ["Build command", safe(cloudflare.build_command, "npm run build")],
-              ["Output", safe(cloudflare.output_directory, "dist")],
-            ]} />
-            <Card title="Release" rows={[
-              ["Production branch", safe(cloudflare.production_branch, "main")],
-              ["Build version", safe(system.build_version, "local")],
-              ["API URL env", safe(system.api_url_env, "VITE_API_BASE_URL")],
-            ]} />
-            <Card title="Backend" rows={[
-              ["API base", safe(system.api_base_url, "Configured by environment")],
-              ["System endpoint", systemState.error ? systemState.error : "Healthy"],
-              ["Billing", "Admin-visible only"],
-            ]} />
-          </div>
-        </section> : <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-          <div className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: MUTED }}>System health</div>
-          <h2 className="text-[20px] font-semibold" style={{ color: TEXT }}>Admin access required</h2>
-          <p className="mt-2 text-[13px] leading-relaxed" style={{ color: MUTED }}>
-            Deployment and system-health details are available to organization owners and admins.
-          </p>
-        </section>}
+            {open ? <ChevronUp className="h-4 w-4" style={{ color: MUTED }} /> : <ChevronDown className="h-4 w-4" style={{ color: MUTED }} />}
+          </button>
 
           {open ? (
             <div className="mt-5 grid gap-4 md:grid-cols-2">
