@@ -44,12 +44,15 @@ Return valid JSON only. Put the natural answer in summary and answer.
 
 LOCAL_OLLAMA_SYSTEM_PROMPT = """
 /no_think
-You are AGRO-AI, an agriculture operations assistant.
+You are AGRO-AI, a serious agriculture operations intelligence assistant.
 Answer the user's exact question in normal customer-facing text, not JSON.
-Be brief, natural, and specific. Maximum 80 words.
-If data is missing, say what is missing and what the useful next step is.
-Never repeat generic onboarding copy. Do not say "ask one specific question" when the user already asked one.
-Do not invent telemetry, acreage, integrations, water use, compliance status, or savings.
+Do not sound like a status bot. Do not repeat generic onboarding copy.
+Use the workspace context, imported file summaries, and recent chat history.
+Be useful: explain what you found, what it means, and what the operator should do next.
+When the user asks for a report, analysis, checklist, decision, or plan, produce a structured answer with clear sections.
+When data is missing, continue with a useful draft and clearly label what still needs verification.
+Never invent live telemetry, acreage, integrations, water use, compliance status, savings, or customer facts.
+Target length: 180-350 words unless the user asks for something shorter.
 """
 
 
@@ -176,7 +179,7 @@ def _extract_question(messages: list[dict[str, str]]) -> str:
         if message.get("role") != "user":
             continue
         content = str(message.get("content") or "")
-        for pattern in [r"QUESTION:\s*(.+?)(?:\n|$)", r'"question"\s*:\s*"((?:[^"\\]|\\.)*)"']:
+        for pattern in [r"QUESTION:\s*(.+?)(?:\n|$)", r"Question:\s*(.+?)(?:\n|$)", r'"question"\s*:\s*"((?:[^"\\]|\\.)*)"']:
             match = re.search(pattern, content, flags=re.IGNORECASE | re.DOTALL)
             if match:
                 value = match.group(1).strip()
@@ -184,23 +187,23 @@ def _extract_question(messages: list[dict[str, str]]) -> str:
                     value = json.loads(f'"{value}"')
                 except Exception:
                     value = value.replace('\\n', ' ').replace('\\"', '"')
-                return str(value).strip()[:500]
+                return str(value).strip()[:700]
         if content.strip():
-            return content.strip()[:500]
+            return content.strip()[:700]
     return ""
 
 
 def _question_aware_local_fallback(question: str) -> str:
     q = (question or "").lower()
     if any(term in q for term in ["john deere", "deere", "operations center"]):
-        return "Yes. John Deere Operations Center is one of the core systems AGRO-AI should connect to: fields, equipment activity, operations data, boundaries, and work records. Once connected, I can help turn that data into irrigation context, compliance evidence, field priorities, and customer-ready reports."
+        return "Yes. John Deere Operations Center is one of the systems AGRO-AI should connect to because it can carry field boundaries, machine activity, work records, and operational context. In a real customer workflow, I would use that data as one evidence source, then combine it with irrigation, ET/weather, flow, soil moisture, and compliance records before producing field priorities or customer-ready reports."
     if any(term in q for term in ["how much water", "water should", "irrigat", "put here"]):
-        return "I cannot give an exact irrigation amount yet because I need the field, crop, soil moisture, recent irrigation, weather/ET, flow rate, and controller status. The next useful step is to connect telemetry or upload the field data; then I can calculate a defensible recommendation instead of guessing."
+        return "I can help, but I should not guess an irrigation amount without the field, crop, acreage, soil type, recent irrigation, ET/weather, soil moisture, flow rate, and controller status. The useful next step is to upload or connect those records. Once they are present, I can calculate a defensible recommendation, explain the evidence behind it, and flag whether the recommendation is safe, uncertain, or blocked."
     if any(term in q for term in ["what are you good", "what can you do", "capabilities", "good at"]):
-        return "I am best at turning messy agriculture context into action: irrigation decisions, evidence gaps, compliance packets, field-priority lists, customer reports, and integration checks across systems like John Deere, WiseConn, Talgil, weather, soil moisture, and uploaded files."
+        return "I am best at turning messy agriculture context into decisions: reading uploaded files, finding evidence gaps, drafting compliance reports, building field-priority lists, preparing operator checklists, reviewing irrigation and water-accounting data, and translating raw records into customer-ready actions. My value should not be vague chat; it should be helping a farm, district, advisor, or lender decide what needs attention, what evidence supports it, and what to do next."
     if any(term in q for term in ["hi", "hello", "hey"]):
-        return "Yes — I can help. Ask me about a field, irrigation decision, compliance report, uploaded file, integration, or customer account, and I will separate what we know from what is missing."
-    return "I can help with that. Based on the current workspace, I should first separate what data is available from what is missing, then turn the request into a field action, report, integration check, or evidence gap list."
+        return "Yes — I can help. Give me a field, file, report, irrigation question, compliance requirement, or customer account. I will separate what is known, what is missing, what can be done now, and what should become an operator action."
+    return "I can help with that. I would start by separating the available evidence from the assumptions, then turn the request into one of four outputs: an operator action list, an evidence gap review, a field or irrigation decision, or a customer-ready report draft."
 
 
 class AIGateway:
@@ -239,20 +242,20 @@ class AIGateway:
     def _local_ollama_messages(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
         question = _extract_question(messages)
         context_parts: list[str] = []
-        for message in messages[-3:]:
+        for message in messages[-5:]:
             role = message.get("role") or "user"
             content = str(message.get("content") or "").strip()
             if content:
-                context_parts.append(f"{role}: {content[:700]}")
-        compact = "\n\n".join(context_parts)[-1600:]
+                context_parts.append(f"{role}: {content[:1100]}")
+        compact = "\n\n".join(context_parts)[-3600:]
         return [
             {"role": "system", "content": LOCAL_OLLAMA_SYSTEM_PROMPT},
             {
                 "role": "user",
                 "content": (
                     f"/no_think\nQUESTION: {question}\n\n"
-                    f"Compact context:\n{compact}\n\n"
-                    "Answer QUESTION directly in normal text only. No JSON. No generic onboarding copy."
+                    f"Workspace and recent context:\n{compact}\n\n"
+                    "Answer the QUESTION directly. Be specific, useful, and action-oriented. No JSON. No backend labels."
                 ),
             },
         ]
@@ -388,14 +391,15 @@ class AIGateway:
             "messages": messages,
             "stream": False,
             "think": False,
-            "keep_alive": "30m",
+            "keep_alive": "45m",
             "options": {
-                "temperature": min(float(temperature or 0.1), 0.2),
-                "num_predict": 80,
-                "num_ctx": 768,
+                "temperature": min(float(temperature or 0.18), 0.35),
+                "num_predict": 360,
+                "num_ctx": 2048,
+                "top_p": 0.9,
             },
         }
-        async with httpx.AsyncClient(timeout=min(self.timeout, 30)) as client:
+        async with httpx.AsyncClient(timeout=max(min(self.timeout, 75), 45)) as client:
             response = await client.post(f"{self.base_url}/api/chat", json=payload)
             response.raise_for_status()
             body = response.json()
