@@ -249,7 +249,7 @@ async def ai_runtime_status() -> Dict[str, Any]:
         "missing_env": status_payload.get("missing_env", []),
         "fallback_active": status_payload.get("fallback_active"),
         "profiles": status_payload.get("profiles", {}),
-        "checked_at": datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "checked_at": datetime.datetime.utcnow().isoformat() + "Z",
     }
 
 
@@ -378,6 +378,9 @@ app.include_router(intelligence_router, prefix="/v1")
 from app.api.v1.brain import router as brain_router  # noqa: E402
 app.include_router(brain_router, prefix="/v1")
 
+from app.api.v1.chat_artifacts import router as chat_artifacts_router  # noqa: E402
+app.include_router(chat_artifacts_router, prefix="/v1")
+
 from app.api.v1.workbench import router as workbench_router  # noqa: E402
 app.include_router(workbench_router, prefix="/v1")
 
@@ -391,9 +394,6 @@ app.include_router(talgil_router, prefix="/v1")
 
 from app.api.v1.ai import router as ai_router  # noqa: E402
 app.include_router(ai_router, prefix="/v1")
-
-from app.api.v1.brain import router as brain_router  # noqa: E402
-app.include_router(brain_router, prefix="/v1")
 
 from app.api.v1.agents import router as agents_router  # noqa: E402
 app.include_router(agents_router, prefix="/v1")
