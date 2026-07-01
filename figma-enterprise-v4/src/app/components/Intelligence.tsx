@@ -1,5 +1,5 @@
 import { KeyboardEvent, useEffect, useRef, useState } from "react";
-import { Download, FileText, PanelLeftClose, PanelLeftOpen, Send, UploadCloud, X } from "lucide-react";
+import { Download, FileText, Send, UploadCloud, X } from "lucide-react";
 import { API_BASE_URL, apiClient } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { BG, BORDER, MUTED, SURFACE, TEXT } from "./portalUi";
@@ -330,7 +330,7 @@ export function Intelligence() {
             <div className="flex items-center justify-between gap-3">
               <div className="text-[12px] font-semibold" style={{ color: TEXT }}>Ask AGRO-AI</div>
               <button type="button" onClick={() => setSidebarOpen(false)} className="rounded-lg p-2" style={{ border: `1px solid ${BORDER}`, color: MUTED }} title="Close sidebar">
-                <PanelLeftClose size={15} />
+                <X size={15} />
               </button>
             </div>
             <button type="button" onClick={() => remember([])} className="mt-4 w-full rounded-lg px-3 py-2 text-[12px] font-medium" style={{ background: "#0D2B1E", color: "white" }}>
@@ -358,7 +358,7 @@ export function Intelligence() {
               </div>
               {!sidebarOpen ? (
                 <button type="button" onClick={() => setSidebarOpen(true)} className="rounded-lg px-3 py-2 text-[12px] font-medium" style={{ background: "rgba(255,255,255,0.12)", color: "white" }}>
-                  <span className="inline-flex items-center gap-2"><PanelLeftOpen size={15} /> History</span>
+                  <span className="inline-flex items-center gap-2"><FileText size={15} /> History</span>
                 </button>
               ) : null}
             </div>
