@@ -1,9 +1,11 @@
-import { useEffect, useState } from "react";
+import { Component, ReactNode, useEffect, useState } from "react";
 import { RouterProvider } from "react-router";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
 import { AuthScreen } from "./components/AuthScreen";
 import { PricingPage } from "./components/ProductShell";
 import { VerifyEmailPage } from "./components/VerifyEmail";
+
+type PortalRuntimeBoundaryState = { error: string };
 
 function PortalBootFallback({ reason }: { reason?: string }) {
   return (
@@ -35,11 +37,32 @@ function PortalBootFallback({ reason }: { reason?: string }) {
   );
 }
 
+class PortalRuntimeBoundary extends Component<{ children: ReactNode }, PortalRuntimeBoundaryState> {
+  state: PortalRuntimeBoundaryState = { error: "" };
+
+  static getDerivedStateFromError(error: unknown): PortalRuntimeBoundaryState {
+    return { error: error instanceof Error ? `${error.name}: ${error.message}` : String(error) };
+  }
+
+  componentDidCatch(error: unknown) {
+    console.error("AGRO-AI portal render failed", error);
+  }
+
+  render() {
+    if (this.state.error) {
+      return <PortalBootFallback reason={this.state.error} />;
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   return (
-    <AuthProvider>
-      <AuthenticatedApp />
-    </AuthProvider>
+    <PortalRuntimeBoundary>
+      <AuthProvider>
+        <AuthenticatedApp />
+      </AuthProvider>
+    </PortalRuntimeBoundary>
   );
 }
 
