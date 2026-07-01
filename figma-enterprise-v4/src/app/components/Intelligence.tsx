@@ -1,5 +1,5 @@
 import { KeyboardEvent, useEffect, useRef, useState } from "react";
-import { Download, FileText, Send, UploadCloud, X } from "lucide-react";
+import { Download, FileText, Mail, Send, UploadCloud, X } from "lucide-react";
 import { API_BASE_URL, apiClient } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { BG, BORDER, MUTED, SURFACE, TEXT } from "./portalUi";
@@ -153,12 +153,34 @@ async function createReportPdf(payload: AnyRecord): Promise<Blob> {
   return response.blob();
 }
 
+async function emailReportPdf(payload: AnyRecord): Promise<AnyRecord> {
+  const token = window.localStorage.getItem("agroai_access_token");
+  const headers = new Headers({ "Content-Type": "application/json" });
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+
+  const response = await fetch(`${API_BASE_URL}/v1/intelligence/chat/report-email`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify(payload),
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || data.status === "not_sent") {
+    const reason = data?.delivery?.reason || data?.detail || `Report email failed with status ${response.status}`;
+    throw new Error(String(reason));
+  }
+
+  return data;
+}
+
 export function Intelligence() {
   const { currentWorkspace } = useAuth();
   const [messages, setMessages] = useState<AnyRecord[]>([]);
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [reportBusyId, setReportBusyId] = useState("");
+  const [reportEmailBusyId, setReportEmailBusyId] = useState("");
+  const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [fileImports, setFileImports] = useState<ChatFileImport[]>([]);
   const [sidebarOpen, setSidebarOpen] = useState(true);
@@ -231,16 +253,21 @@ export function Intelligence() {
     }
   }
 
-  async function downloadReportFor(message: AnyRecord) {
-    const artifact = message.artifact || {
+  function artifactFor(message: AnyRecord) {
+    return message.artifact || {
       title: buildReportTitle(message.question || "AGRO-AI report"),
       question: message.question || "AGRO-AI report",
       answer: safeText(message.content),
       uploaded_evidence: message.uploaded_evidence || [],
     };
+  }
+
+  async function downloadReportFor(message: AnyRecord) {
+    const artifact = artifactFor(message);
     const busyId = String(message.id || Date.now());
     setReportBusyId(busyId);
     setError("");
+    setNotice("");
     try {
       const blob = await createReportPdf(artifact);
       const url = URL.createObjectURL(blob);
@@ -258,11 +285,28 @@ export function Intelligence() {
     }
   }
 
+  async function emailReportFor(message: AnyRecord) {
+    const artifact = artifactFor(message);
+    const busyId = String(message.id || Date.now());
+    setReportEmailBusyId(busyId);
+    setError("");
+    setNotice("");
+    try {
+      const result = await emailReportPdf(artifact);
+      setNotice(`Report emailed to ${result.recipient || "your account email"}.`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "AGRO-AI could not email the PDF report.");
+    } finally {
+      setReportEmailBusyId("");
+    }
+  }
+
   async function send(prompt = question) {
     const clean = prompt.trim() || (fileImports.length ? "Summarize the files I imported." : "");
     if (!clean || loading || hasUploading || hasFailed) return;
     setQuestion("");
     setError("");
+    setNotice("");
     setLoading(true);
     const userMessage = { id: `user-${Date.now()}`, role: "user", content: clean };
     const withUser = [...messages, userMessage];
@@ -367,6 +411,7 @@ export function Intelligence() {
           <div className="flex-1 overflow-y-auto px-6 py-7">
             <div className="mx-auto max-w-[900px] space-y-5">
               {error ? <div className="rounded-xl px-4 py-3 text-[13px]" style={{ background: SURFACE, border: `1px solid ${BORDER}`, color: "#991B1B" }}>{error}</div> : null}
+              {notice ? <div className="rounded-xl px-4 py-3 text-[13px]" style={{ background: SURFACE, border: `1px solid ${BORDER}`, color: "#0D2B1E" }}>{notice}</div> : null}
               {!messages.length && !loading ? (
                 <section className="rounded-xl p-6" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
                   <div className="text-[12px] font-semibold uppercase" style={{ color: MUTED }}>Start a workspace thread</div>
@@ -392,6 +437,10 @@ export function Intelligence() {
                           <button type="button" onClick={() => downloadReportFor(message)} disabled={reportBusyId === String(message.id || index)} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-60" style={{ background: "#0D2B1E", color: "white" }}>
                             {reportBusyId === String(message.id || index) ? <FileText size={15} /> : <Download size={15} />}
                             {reportBusyId === String(message.id || index) ? "Preparing PDF..." : "Download PDF report"}
+                          </button>
+                          <button type="button" onClick={() => emailReportFor(message)} disabled={reportEmailBusyId === String(message.id || index)} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-60" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
+                            <Mail size={15} />
+                            {reportEmailBusyId === String(message.id || index) ? "Sending..." : "Email report to me"}
                           </button>
                         </div>
                       ) : null}
