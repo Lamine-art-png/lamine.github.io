@@ -172,9 +172,11 @@ export type AiRequestPayload = {
 export type ConnectorProvider =
   | "wiseconn"
   | "talgil"
+  | "universal_controller"
   | "weather"
   | "openet"
   | "manual_csv"
+  | "chat_upload"
   | "gmail"
   | "outlook"
   | "google_drive"
@@ -363,10 +365,6 @@ export type ConversationMessagePayload = {
   content: string;
   audience?: string;
   output?: string;
-};
-
-export type EmailVerificationConfirmPayload = {
-  token: string;
 };
 
 export type AdminRequestUpdatePayload = {
@@ -577,6 +575,14 @@ export const apiClient = {
       post(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/mapping`, { mapping }),
     sync: (connectionId: string) => post(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/sync`),
     delete: (connectionId: string) => remove(`/v1/connectors/connections/${encodeURIComponent(connectionId)}`),
+  },
+
+  controllers: {
+    environments: () => get("/v1/controllers/environments"),
+    dataContract: () => get("/v1/controllers/universal/data-contract"),
+    executionReadiness: (workspaceId?: string) => get(`/v1/controllers/execution-readiness${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`),
+    customerConnect: (payload: unknown) => post("/v1/controllers/customer-connect", payload),
+    prepareExecution: (payload: unknown) => post("/v1/controllers/execution/prepare", payload),
   },
 
   integrations: {
