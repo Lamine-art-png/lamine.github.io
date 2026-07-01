@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.agents.orchestrator import AgentOrchestrator
+from app.api.deps import AuthContext, get_auth_context
 from app.db.base import get_db
 from app.services.api_key_service import APIKeyService
 
@@ -104,3 +105,18 @@ def triage_assurance_passport(passport_id: str, context: AgentContext = Depends(
 def triage_workbench_session(session_id: str, context: AgentContext = Depends(_context)) -> dict[str, Any]:
     return context.orchestrator.triage_workbench_session(session_id, actor="agent")
 
+
+@router.post("/actions/plan")
+def user_action_plan(payload: dict[str, Any], ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Plan concrete work from a user request inside the authenticated portal."""
+    from app.api.v1.agentic_actions import ActionPlanRequest, post_action_plan
+
+    return post_action_plan(ActionPlanRequest(**payload), ctx=ctx, db=db)
+
+
+@router.post("/actions/execute")
+def user_action_execute(payload: dict[str, Any], ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict[str, Any]:
+    """Execute safe work or return an approval-required response."""
+    from app.api.v1.agentic_actions import ActionExecuteRequest, post_action_execute
+
+    return post_action_execute(ActionExecuteRequest(**payload), ctx=ctx, db=db)
