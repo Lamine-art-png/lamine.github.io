@@ -19,12 +19,13 @@ from app.services.model_router import ModelRouter
 
 router = APIRouter(prefix="/intelligence/brain", tags=["intelligence"])
 
-LOCAL_SYSTEM_PROMPT = """Answer in normal customer-facing text.
-No JSON.
-Max 90 words.
-Use only supplied context.
-Do not invent telemetry, acreage, integrations, water use, compliance status, savings, or customer facts.
-Do not include reasoning steps or <think> tags."""
+LOCAL_SYSTEM_PROMPT = """You are AGRO-AI, a serious agriculture operations intelligence operator.
+Answer in normal customer-facing text. No JSON. No debug labels. No <think> tags.
+Adapt to the user: short when casual, detailed when they ask for analysis, reports, decisions, documents, checklists, or plans.
+If the user asks for a report, write a real report draft with headings: Executive summary, Evidence used, Findings, Risks/assumptions, Recommended actions, Missing data.
+If evidence is thin, continue with a useful draft and clearly mark assumptions instead of refusing.
+Use only supplied context and uploaded evidence. Do not invent telemetry, acreage, integrations, water use, compliance status, savings, or customer facts.
+Do not repeat the same answer. Use recent history to move the work forward."""
 
 
 class BrainRunRequest(BaseModel):
@@ -42,7 +43,6 @@ MISSING_EVIDENCE_TERMS = (
     "irrigat",
     "apply",
     "compliance",
-    "report",
     "diagnose",
     "field diagnosis",
     "water accounting",
@@ -60,6 +60,18 @@ CASUAL_TERMS = (
     "do you know john deere",
     "john deere",
     "capabilities",
+)
+
+REPORT_TERMS = (
+    "report",
+    "pdf",
+    "document",
+    "packet",
+    "brief",
+    "analysis",
+    "memo",
+    "customer-ready",
+    "executive",
 )
 
 
@@ -83,12 +95,19 @@ def actual_missing_data_only(items: list[str] | tuple[str, ...] | None) -> list[
     return list(dict.fromkeys(clean))
 
 
+def wants_report(question: str) -> bool:
+    normalized = " ".join(str(question or "").lower().split())
+    return any(term in normalized for term in REPORT_TERMS)
+
+
 def should_surface_missing_evidence(question: str) -> bool:
     normalized = " ".join(str(question or "").lower().split())
     if not normalized:
         return False
     if any(term in normalized for term in CASUAL_TERMS):
         return False
+    if wants_report(normalized):
+        return True
     return any(term in normalized for term in MISSING_EVIDENCE_TERMS)
 
 
@@ -103,7 +122,7 @@ def readable_missing_label(value: str) -> str:
     return replacements.get(text, text)
 
 
-def compact_uploaded_evidence(items: list[dict[str, Any]] | None, *, max_items: int = 3) -> list[str]:
+def compact_uploaded_evidence(items: list[dict[str, Any]] | None, *, max_items: int = 5) -> list[str]:
     compact: list[str] = []
     for item in (items or [])[:max_items]:
         filename = _short(item.get("filename") or item.get("name"), 120)
@@ -111,12 +130,12 @@ def compact_uploaded_evidence(items: list[dict[str, Any]] | None, *, max_items: 
         status = _short(item.get("import_status") or item.get("status"), 80)
         rows = item.get("rows") or item.get("rows_parsed")
         columns = item.get("columns") or []
-        preview = _short(item.get("parsed_preview") or item.get("text_preview") or item.get("preview"), 220)
+        preview = _short(item.get("parsed_preview") or item.get("text_preview") or item.get("preview"), 500)
         bits = [filename, source_type, f"status={status}" if status else ""]
         if rows is not None:
             bits.append(f"rows={rows}")
         if columns:
-            bits.append(f"columns={', '.join(str(column) for column in columns[:6])}")
+            bits.append(f"columns={', '.join(str(column) for column in columns[:10])}")
         if preview:
             bits.append(f"preview={preview}")
         compact.append(" - ".join(part for part in bits if part))
@@ -124,7 +143,7 @@ def compact_uploaded_evidence(items: list[dict[str, Any]] | None, *, max_items: 
 
 
 def attach_uploaded_evidence(context: EvidenceContext, uploaded: list[dict[str, Any]]) -> None:
-    for item in uploaded[:8]:
+    for item in uploaded[:10]:
         if not isinstance(item, dict):
             continue
         context.evidence.append(
@@ -143,12 +162,12 @@ def attach_uploaded_evidence(context: EvidenceContext, uploaded: list[dict[str, 
         )
 
 
-def compact_evidence_items(context: EvidenceContext, *, max_items: int = 3) -> list[str]:
+def compact_evidence_items(context: EvidenceContext, *, max_items: int = 5) -> list[str]:
     compact: list[str] = []
     for item in context.evidence[:max_items]:
         item_type = _short(item.get("type"), 60)
         source = _short(item.get("source") or item.get("provider"), 60)
-        name = _short(item.get("name") or item.get("title") or item.get("summary"), 160)
+        name = _short(item.get("name") or item.get("title") or item.get("summary") or item.get("filename") or item.get("parsed_preview"), 260)
         if item_type == "telemetry_recent":
             records = item.get("records") or []
             name = f"{len(records)} recent telemetry records available" if records else "No recent telemetry records"
@@ -167,11 +186,12 @@ def compact_local_messages(
     audience: str | None = None,
     uploaded_evidence: list[dict[str, Any]] | None = None,
 ) -> list[dict[str, str]]:
-    evidence = compact_evidence_items(context, max_items=3)
-    uploads = compact_uploaded_evidence(uploaded_evidence, max_items=3)
+    evidence = compact_evidence_items(context, max_items=5)
+    uploads = compact_uploaded_evidence(uploaded_evidence, max_items=5)
     missing = [readable_missing_label(item) for item in actual_missing_data_only(context.missing_data)] if should_surface_missing_evidence(question) else []
+    report_instruction = "The user appears to want a report/document. Produce a report-quality draft with headings, not a one-paragraph refusal." if wants_report(question) else "Produce the most useful direct answer for the user's request."
     lines = [
-        f"Question: {_short(question, 500)}",
+        f"Question: {_short(question, 900)}",
         f"Audience: {_short(audience, 80) if audience else 'operator'}",
         f"Workspace: {_short(context.workspace_id or 'current workspace', 120)}",
         f"Crop/region: {_short(context.crop_type or 'unknown', 80)} / {_short(context.region or 'unknown', 80)}",
@@ -179,15 +199,17 @@ def compact_local_messages(
         *(evidence or ["No compact evidence records are available."]),
         "Imported files:",
         *(uploads or ["No imported files attached to this request."]),
-        "Missing data:",
-        *(missing[:5] or ["No missing evidence listed."]),
+        "Missing data to mention only if relevant:",
+        *(missing[:6] or ["No missing evidence listed."]),
+        "Response instruction:",
+        report_instruction,
     ]
-    context_text = "\n".join(lines)[:2400]
+    context_text = "\n".join(lines)[:5200]
 
     recent_history = []
-    for row in (history or [])[-2:]:
+    for row in (history or [])[-6:]:
         role = "assistant" if row.get("role") == "assistant" else "user"
-        content = _short(row.get("content"), 500)
+        content = _short(row.get("content"), 900)
         if content:
             recent_history.append({"role": role, "content": content})
 
@@ -236,14 +258,14 @@ async def brain_run(
     messages = compact_local_messages(
         question=payload.question,
         context=context,
-        history=payload.history[-2:],
+        history=payload.history[-6:],
         audience=payload.audience,
         uploaded_evidence=payload.uploaded_evidence,
     )
     result, selection = await model_router.run(
         task="chat",
         messages=messages,
-        temperature=0.15,
+        temperature=0.18,
         response_format=None,
     )
     answer = str(result.content or "").strip()
