@@ -1,3 +1,4 @@
+import type { ComponentType } from "react";
 import { createBrowserRouter } from "react-router";
 import { MainLayout } from "./components/MainLayout";
 import { RouteRecovery } from "./components/RouteRecovery";
@@ -42,7 +43,7 @@ function PortalRouteError() {
 
 const lazyComponent = (loader: () => Promise<Record<string, unknown>>, exportName: string) => async () => {
   const module = await loader();
-  return { Component: module[exportName] as React.ComponentType };
+  return { Component: module[exportName] as ComponentType };
 };
 
 export const router = createBrowserRouter([
