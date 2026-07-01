@@ -44,15 +44,23 @@ Return valid JSON only. Put the natural answer in summary and answer.
 
 LOCAL_OLLAMA_SYSTEM_PROMPT = """
 /no_think
-You are AGRO-AI, a serious agriculture operations intelligence assistant.
-Answer the user's exact question in normal customer-facing text, not JSON.
-Do not sound like a status bot. Do not repeat generic onboarding copy.
-Use the workspace context, imported file summaries, and recent chat history.
-Be useful: explain what you found, what it means, and what the operator should do next.
-When the user asks for a report, analysis, checklist, decision, or plan, produce a structured answer with clear sections.
-When data is missing, continue with a useful draft and clearly label what still needs verification.
-Never invent live telemetry, acreage, integrations, water use, compliance status, savings, or customer facts.
-Target length: 180-350 words unless the user asks for something shorter.
+You are AGRO-AI, a serious agriculture operations intelligence operator.
+You are not a generic chatbot and not a status bot.
+
+Behavior:
+- Answer the user's exact request directly, in normal customer-facing text.
+- Adapt to the user's intent. If they ask casually, be brief and useful. If they ask for a report, produce a serious report-style answer. If they ask for a plan, produce steps. If they ask for a decision, separate evidence, assumptions, recommendation, risk, and next action.
+- Use recent chat history, uploaded file summaries, workspace context, and available evidence.
+- When evidence is thin, still produce a useful draft and label assumptions instead of refusing.
+- Be specific about what can be done now and what needs verification.
+- Do not repeat the same answer. Learn from the last messages and move the work forward.
+- Do not output JSON, backend labels, missing-data debug labels, or <think> tags.
+- Never invent live telemetry, acreage, integrations, water use, compliance status, savings, or customer facts.
+
+Depth rule:
+- For normal questions: 2-5 short paragraphs.
+- For reports/analysis/checklists/decisions: use clear headings and bullets, usually 350-900 words if the question deserves it.
+- End with a concrete next action when useful.
 """
 
 
@@ -187,9 +195,9 @@ def _extract_question(messages: list[dict[str, str]]) -> str:
                     value = json.loads(f'"{value}"')
                 except Exception:
                     value = value.replace('\\n', ' ').replace('\\"', '"')
-                return str(value).strip()[:700]
+                return str(value).strip()[:1200]
         if content.strip():
-            return content.strip()[:700]
+            return content.strip()[:1200]
     return ""
 
 
@@ -197,6 +205,8 @@ def _question_aware_local_fallback(question: str) -> str:
     q = (question or "").lower()
     if any(term in q for term in ["john deere", "deere", "operations center"]):
         return "Yes. John Deere Operations Center is one of the systems AGRO-AI should connect to because it can carry field boundaries, machine activity, work records, and operational context. In a real customer workflow, I would use that data as one evidence source, then combine it with irrigation, ET/weather, flow, soil moisture, and compliance records before producing field priorities or customer-ready reports."
+    if any(term in q for term in ["pdf", "document", "report", "packet"]):
+        return "Yes. I can draft the report content now, and the portal should turn it into a downloadable artifact through the report factory. A serious AGRO-AI report should include an executive summary, evidence used, assumptions, water or field findings, risk flags, recommended actions, and an appendix of missing data. If uploaded files are present, I should use them as the evidence base instead of speaking generally."
     if any(term in q for term in ["how much water", "water should", "irrigat", "put here"]):
         return "I can help, but I should not guess an irrigation amount without the field, crop, acreage, soil type, recent irrigation, ET/weather, soil moisture, flow rate, and controller status. The useful next step is to upload or connect those records. Once they are present, I can calculate a defensible recommendation, explain the evidence behind it, and flag whether the recommendation is safe, uncertain, or blocked."
     if any(term in q for term in ["what are you good", "what can you do", "capabilities", "good at"]):
@@ -242,20 +252,22 @@ class AIGateway:
     def _local_ollama_messages(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
         question = _extract_question(messages)
         context_parts: list[str] = []
-        for message in messages[-5:]:
+        for message in messages[-7:]:
             role = message.get("role") or "user"
             content = str(message.get("content") or "").strip()
             if content:
-                context_parts.append(f"{role}: {content[:1100]}")
-        compact = "\n\n".join(context_parts)[-3600:]
+                context_parts.append(f"{role}: {content[:1800]}")
+        compact = "\n\n".join(context_parts)[-8000:]
         return [
             {"role": "system", "content": LOCAL_OLLAMA_SYSTEM_PROMPT},
             {
                 "role": "user",
                 "content": (
                     f"/no_think\nQUESTION: {question}\n\n"
-                    f"Workspace and recent context:\n{compact}\n\n"
-                    "Answer the QUESTION directly. Be specific, useful, and action-oriented. No JSON. No backend labels."
+                    f"Workspace, uploaded evidence, and recent context:\n{compact}\n\n"
+                    "Answer the QUESTION directly. Cater to the user's wording, depth, and desired output. "
+                    "If they ask for a report, make it report-like. If they ask for a PDF/document, draft the content and indicate it can be exported. "
+                    "No JSON. No backend labels."
                 ),
             },
         ]
@@ -386,6 +398,7 @@ class AIGateway:
     async def _chat_ollama(self, messages: list[dict[str, str]], temperature: float, model_override: str | None = None) -> AIGatewayResult:
         selected_model = model_override or self.model
         question = _extract_question(messages)
+        wants_depth = any(term in question.lower() for term in ["report", "analysis", "pdf", "document", "packet", "plan", "diagnose", "detailed", "explain"])
         payload = {
             "model": selected_model,
             "messages": messages,
@@ -394,12 +407,12 @@ class AIGateway:
             "keep_alive": "45m",
             "options": {
                 "temperature": min(float(temperature or 0.18), 0.35),
-                "num_predict": 360,
-                "num_ctx": 2048,
+                "num_predict": 900 if wants_depth else 520,
+                "num_ctx": 4096,
                 "top_p": 0.9,
             },
         }
-        async with httpx.AsyncClient(timeout=max(min(self.timeout, 75), 45)) as client:
+        async with httpx.AsyncClient(timeout=max(min(self.timeout, 120), 75)) as client:
             response = await client.post(f"{self.base_url}/api/chat", json=payload)
             response.raise_for_status()
             body = response.json()
