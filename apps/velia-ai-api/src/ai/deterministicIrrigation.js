@@ -1,3 +1,5 @@
+import { validateSensor, validateWeather } from "./confidenceEngine.js";
+
 const soilModifiers = {
   sand: 0.1,
   sandy: 0.1,
@@ -22,8 +24,11 @@ export function daysSince(dateValue) {
 export function buildNormalizedFieldContext({ field = {}, weather = {}, logs = [], observations = [], memory = {} }) {
   const recentObservation = observations[0] || memory.recentObservations?.[0] || {};
   const lastLog = logs[0] || memory.recentLogs?.[0] || null;
+  const rawCoords = field.coordinates || (field.lat != null && field.lon != null ? { lat: field.lat, lon: field.lon } : null);
   return {
     fieldId: field.id || field.fieldId || "unknown-field",
+    blockId: field.blockId || null,
+    zoneId: field.zoneId || null,
     name: field.name || "Field",
     crop: field.crop || null,
     acreage: field.acreage || field.area || null,
@@ -35,6 +40,17 @@ export function buildNormalizedFieldContext({ field = {}, weather = {}, logs = [
     controllerStatus: field.controllerStatus || field.controller || null,
     lastIrrigationAt: field.lastIrrigationAt || lastLog?.performedAt || null,
     recentObservation: recentObservation.condition || recentObservation.note || field.lastObservation || null,
+    observationTimestamp: recentObservation.createdAt || recentObservation.observedAt || recentObservation.timestamp || recentObservation.ts || null,
+    coordinates: rawCoords,
+    lat: field.lat ?? field.latitude ?? rawCoords?.lat ?? null,
+    lon: field.lon ?? field.longitude ?? rawCoords?.lon ?? null,
+    satelliteEvidence: field.satelliteEvidence || null,
+    ndvi: field.ndvi != null ? field.ndvi : null,
+    flowRateLph: field.flowRateLph ?? field.flowRate ?? null,
+    applicationRateMmPerHour: field.applicationRateMmPerHour ?? field.applicationRate ?? null,
+    sensorProvenance: field.sensorProvenance || field.sensorData?.provenance || null,
+    etProvenance: field.etProvenance || (weather?.evapotranspiration ? "weather_provider" : null),
+    controllerProvenance: field.controllerProvenance || (field.controllerStatus && field.controllerStatus !== "not connected" ? "controller" : null),
     weather,
     logs,
     observations,
@@ -60,11 +76,11 @@ function observationSignal(observation) {
   return { delta: 0, rule: null, label: "no strong observation signal" };
 }
 
-function sensorSignal(sensorData) {
-  const moisture = sensorData?.soilMoisturePercent ?? sensorData?.soilMoisture ?? null;
-  if (typeof moisture !== "number") return { delta: 0, rule: null, label: "no soil moisture sensor value" };
-  if (moisture <= 18) return { delta: 0.24, rule: "sensor_low_moisture", label: "sensor reports low moisture" };
-  if (moisture >= 38) return { delta: -0.25, rule: "sensor_high_moisture", label: "sensor reports high moisture" };
+function sensorSignal(sensorData, ctx = {}) {
+  const v = validateSensor(sensorData, ctx);
+  if (!v.usable) return { delta: 0, rule: null, label: "no trusted soil moisture sensor value" };
+  if (v.moisture <= 18) return { delta: 0.24, rule: "sensor_low_moisture", label: "sensor reports low moisture" };
+  if (v.moisture >= 38) return { delta: -0.25, rule: "sensor_high_moisture", label: "sensor reports high moisture" };
   return { delta: 0.02, rule: "sensor_moderate_moisture", label: "sensor moisture is moderate" };
 }
 
@@ -110,7 +126,7 @@ export function calculateDeterministicSignals(context) {
     confidenceDrivers.push(obs.label);
   }
 
-  const sensor = sensorSignal(ctx.sensorData);
+  const sensor = sensorSignal(ctx.sensorData, ctx);
   needScore += sensor.delta;
   if (sensor.rule) {
     rulesTriggered.push(sensor.rule);
@@ -131,15 +147,16 @@ export function calculateDeterministicSignals(context) {
     rulesTriggered.push("rain_likely");
     confidenceDrivers.push("rain forecast reduces irrigation urgency");
   }
-  if (ctx.weather?.stale) {
-    rulesTriggered.push("stale_weather");
-    assumptions.push("Weather is stale; confidence is reduced and field checks are prioritized.");
+  const weatherValidation = validateWeather(ctx.weather);
+  if (!weatherValidation.usable) {
+    rulesTriggered.push(ctx.weather?.stale ? "stale_weather" : "invalid_weather");
+    assumptions.push(`Weather is not valid (${weatherValidation.reason}); confidence is reduced and field checks are prioritized.`);
   }
 
   needScore = Math.max(0.05, Math.min(0.95, needScore));
   const pressureLabel = needScore >= 0.72 ? "high" : needScore >= 0.45 ? "moderate" : "low";
   const action = needScore >= 0.72 ? "irrigate" : needScore >= 0.45 ? "check field first" : ((ctx.weather?.rainChance || 0) >= 60 ? "wait" : "monitor");
-  const confidenceScore = Math.max(0.2, Math.min(0.95, needScore - missingData.length * 0.055 - (ctx.weather?.stale ? 0.12 : 0)));
+  const confidenceScore = Math.max(0.2, Math.min(0.95, needScore - missingData.length * 0.055 - (!weatherValidation.usable ? 0.12 : 0)));
 
   return {
     needScore,
@@ -166,7 +183,9 @@ export function deterministicDecisionFromSignals(signals, context) {
     action,
     timing: action === "irrigate" ? "Next 2-4 hours after a field check" : action === "wait" ? "Recheck after forecast rain window" : "Today before evening",
     urgency: signals.urgency,
-    estimatedDurationRange: action === "irrigate" ? "45-90 min, adjust to system flow and field check" : "0-30 min field check",
+    estimatedDurationRange: action === "irrigate"
+      ? "Add flow rate, application rate, target depth, and field details to calculate a duration."
+      : "0-30 min field check",
     reasons: [
       `Estimated water pressure is ${signals.pressureLabel} (${signals.needScore.toFixed(2)}) from field, weather, and observation signals.`,
       `Weather: ${context.weather?.forecastSummary || "not available"}`,
