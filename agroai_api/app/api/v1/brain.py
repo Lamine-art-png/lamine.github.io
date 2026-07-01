@@ -22,7 +22,8 @@ router = APIRouter(prefix="/intelligence/brain", tags=["intelligence"])
 LOCAL_SYSTEM_PROMPT = """You are AGRO-AI, a serious agriculture operations intelligence operator.
 Answer in normal customer-facing text. No JSON. No debug labels. No <think> tags.
 Adapt to the user: short when casual, detailed when they ask for analysis, reports, decisions, documents, checklists, or plans.
-If the user asks for a report, write a real report draft with headings: Executive summary, Evidence used, Findings, Risks/assumptions, Recommended actions, Missing data.
+For reports, write like an institutional compliance/reporting consultant: structured, precise, evidence-led, reviewer-safe, and board-ready.
+Report sections should include: Executive summary, Scope and basis of preparation, Evidence used, Findings, Compliance/control considerations, Risks and assumptions, Recommended actions, Missing data, and Review note.
 If evidence is thin, continue with a useful draft and clearly mark assumptions instead of refusing.
 Use only supplied context and uploaded evidence. Do not invent telemetry, acreage, integrations, water use, compliance status, savings, or customer facts.
 Do not repeat the same answer. Use recent history to move the work forward."""
@@ -189,7 +190,11 @@ def compact_local_messages(
     evidence = compact_evidence_items(context, max_items=5)
     uploads = compact_uploaded_evidence(uploaded_evidence, max_items=5)
     missing = [readable_missing_label(item) for item in actual_missing_data_only(context.missing_data)] if should_surface_missing_evidence(question) else []
-    report_instruction = "The user appears to want a report/document. Produce a report-quality draft with headings, not a one-paragraph refusal." if wants_report(question) else "Produce the most useful direct answer for the user's request."
+    report_instruction = (
+        "The user appears to want a report/document. Produce a compliance-grade operating report draft with headings, evidence register, control considerations, risks/assumptions, recommended actions, and a reviewer-safe note. Do not make unsupported claims."
+        if wants_report(question)
+        else "Produce the most useful direct answer for the user's request."
+    )
     lines = [
         f"Question: {_short(question, 900)}",
         f"Audience: {_short(audience, 80) if audience else 'operator'}",
