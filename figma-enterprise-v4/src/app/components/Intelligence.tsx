@@ -120,6 +120,11 @@ function isReportIntent(text: string) {
   return ["report", "pdf", "document", "packet", "brief", "memo", "analysis", "export"].some((term) => normalized.includes(term));
 }
 
+function shouldAutoEmailReport(text: string) {
+  const normalized = text.toLowerCase();
+  return ["email", "send", "mail"].some((term) => normalized.includes(term)) && isReportIntent(normalized);
+}
+
 function buildReportTitle(question: string) {
   const clean = question.replace(/\s+/g, " ").trim();
   if (!clean) return "AGRO-AI Operating Report";
@@ -132,6 +137,12 @@ function buildReportTitle(question: string) {
 function reportFilename(title: string) {
   const safe = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "agroai-report";
   return `${safe}.pdf`;
+}
+
+function riskLabel(action: AnyRecord) {
+  if (action.approval_required) return "Approval required";
+  if (action.risk_level === "low") return "Safe to execute";
+  return `${safeText(action.risk_level, "medium")} risk`;
 }
 
 async function createReportPdf(payload: AnyRecord): Promise<Blob> {
@@ -173,6 +184,19 @@ async function emailReportPdf(payload: AnyRecord): Promise<AnyRecord> {
   return data;
 }
 
+async function planAgenticActions(payload: AnyRecord): Promise<AnyRecord[]> {
+  try {
+    const response = await apiClient.post("/v1/agents/actions/plan", payload) as AnyRecord;
+    return Array.isArray(response.actions) ? response.actions : [];
+  } catch {
+    return [];
+  }
+}
+
+async function executeAgenticAction(payload: AnyRecord): Promise<AnyRecord> {
+  return apiClient.post("/v1/agents/actions/execute", payload) as Promise<AnyRecord>;
+}
+
 export function Intelligence() {
   const { currentWorkspace } = useAuth();
   const [messages, setMessages] = useState<AnyRecord[]>([]);
@@ -180,6 +204,7 @@ export function Intelligence() {
   const [loading, setLoading] = useState(false);
   const [reportBusyId, setReportBusyId] = useState("");
   const [reportEmailBusyId, setReportEmailBusyId] = useState("");
+  const [actionBusyId, setActionBusyId] = useState("");
   const [notice, setNotice] = useState("");
   const [error, setError] = useState("");
   const [fileImports, setFileImports] = useState<ChatFileImport[]>([]);
@@ -195,6 +220,11 @@ export function Intelligence() {
   function remember(rows: AnyRecord[]) {
     setMessages(rows);
     writeMemory(currentWorkspace?.id, rows);
+  }
+
+  function updateMessage(messageId: string, patcher: (message: AnyRecord) => AnyRecord) {
+    const next = messages.map((message) => String(message.id) === String(messageId) ? patcher(message) : message);
+    remember(next);
   }
 
   function updateImport(id: string, patch: Partial<ChatFileImport>) {
@@ -301,6 +331,31 @@ export function Intelligence() {
     }
   }
 
+  async function runAction(message: AnyRecord, action: AnyRecord) {
+    const actionId = String(action.id || `${message.id}-${action.action_type}`);
+    setActionBusyId(actionId);
+    setError("");
+    setNotice("");
+    try {
+      const result = await executeAgenticAction({
+        action_type: action.action_type,
+        workspace_id: currentWorkspace?.id,
+        payload: action.payload || {},
+        approval_confirmed: Boolean(action.approval_required),
+      });
+      updateMessage(String(message.id), (row) => ({
+        ...row,
+        agentic_actions: (row.agentic_actions || []).map((item: AnyRecord) => String(item.id) === actionId ? { ...item, execution_result: result, status: result.status || item.status } : item),
+      }));
+      const created = result.created_task || result.created_approval_task;
+      setNotice(created?.title ? `Action completed: ${created.title}` : `Action completed: ${safeText(result.action_type || action.action_type)}`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "AGRO-AI could not execute this action.");
+    } finally {
+      setActionBusyId("");
+    }
+  }
+
   async function send(prompt = question) {
     const clean = prompt.trim() || (fileImports.length ? "Summarize the files I imported." : "");
     if (!clean || loading || hasUploading || hasFailed) return;
@@ -330,21 +385,49 @@ export function Intelligence() {
       };
       const response = await apiClient.intelligence.brainRun(request).catch(() => apiClient.intelligence.run(request)) as AnyRecord;
       const assistantText = normalizeAssistantResponse(response);
+      const artifact = isReportIntent(clean)
+        ? {
+            kind: "pdf",
+            title: buildReportTitle(clean),
+            question: clean,
+            answer: assistantText,
+            uploaded_evidence: evidence,
+          }
+        : null;
+      let actions = await planAgenticActions({
+        instruction: clean,
+        workspace_id: currentWorkspace?.id,
+        answer: assistantText,
+        uploaded_evidence: evidence,
+        audience: "operator",
+      });
+
+      if (artifact && shouldAutoEmailReport(clean)) {
+        const emailAction = actions.find((item) => item.action_type === "email_report_to_user" && !item.approval_required);
+        if (emailAction) {
+          try {
+            const result = await executeAgenticAction({
+              action_type: emailAction.action_type,
+              workspace_id: currentWorkspace?.id,
+              payload: { ...emailAction.payload, ...artifact },
+              approval_confirmed: false,
+            });
+            actions = actions.map((item) => item.id === emailAction.id ? { ...item, execution_result: result, status: result.status || "executed" } : item);
+            if (result.status === "executed") setNotice(`Report emailed to ${result.recipient || "your account email"}.`);
+          } catch {
+            // Leave the visible action card so the user can retry manually.
+          }
+        }
+      }
+
       const assistantMessage = {
         id: `assistant-${Date.now()}`,
         role: "assistant",
         content: assistantText,
         question: clean,
         uploaded_evidence: evidence,
-        artifact: isReportIntent(clean)
-          ? {
-              kind: "pdf",
-              title: buildReportTitle(clean),
-              question: clean,
-              answer: assistantText,
-              uploaded_evidence: evidence,
-            }
-          : null,
+        artifact,
+        agentic_actions: actions,
       };
       const nextRows = [...withUser, assistantMessage];
       remember(nextRows);
@@ -385,7 +468,7 @@ export function Intelligence() {
               {messages.length ? `${messages.length} messages saved for this workspace on this device.` : "No saved messages yet."}
             </div>
             <div className="mt-3 rounded-lg p-3 text-[12px] leading-relaxed" style={{ background: BG, border: `1px solid ${BORDER}`, color: MUTED }}>
-              Report Factory is active for report, PDF, brief, memo, packet, and analysis requests.
+              Agentic mode is active: safe digital work can be executed; field/control actions are approval-gated.
             </div>
           </aside>
         ) : null}
@@ -397,7 +480,7 @@ export function Intelligence() {
                 <div className="inline-flex rounded-full px-3 py-1 text-[11px] font-semibold" style={{ background: "rgba(255,255,255,0.12)", color: "white" }}>Workspace intelligence</div>
                 <h1 className="mt-3 text-[28px] font-semibold tracking-tight" style={{ color: "white" }}>Ask AGRO-AI</h1>
                 <p className="mt-2 max-w-2xl text-[13px] leading-relaxed" style={{ color: "rgba(255,255,255,0.68)" }}>
-                  Ask operational questions, import files, and turn workspace context into reports, checklists, and next steps.
+                  Ask, import files, generate reports, create field tasks, record field updates, and prepare approval-gated operations.
                 </p>
               </div>
               {!sidebarOpen ? (
@@ -417,7 +500,7 @@ export function Intelligence() {
                   <div className="text-[12px] font-semibold uppercase" style={{ color: MUTED }}>Start a workspace thread</div>
                   <h2 className="mt-3 text-[24px] font-semibold" style={{ color: TEXT }}>Ask a question or import files.</h2>
                   <p className="mt-2 max-w-2xl text-[14px] leading-relaxed" style={{ color: MUTED }}>
-                    AGRO-AI can summarize uploaded records, explain field priorities, draft operator checklists, and create PDF report packets from the answer.
+                    AGRO-AI can now move from answer to action: generate reports, email them, create field tasks, record field messages as evidence, and prepare approval-gated controller work.
                   </p>
                   <div className="mt-5 flex flex-wrap gap-2">
                     {PROMPTS.map((prompt) => (
@@ -442,6 +525,31 @@ export function Intelligence() {
                             <Mail size={15} />
                             {reportEmailBusyId === String(message.id || index) ? "Sending..." : "Email report to me"}
                           </button>
+                        </div>
+                      ) : null}
+                      {message.role === "assistant" && Array.isArray(message.agentic_actions) && message.agentic_actions.length ? (
+                        <div className="mt-4 space-y-2 whitespace-normal">
+                          <div className="text-[11px] font-semibold uppercase" style={{ color: MUTED }}>Agentic actions</div>
+                          {message.agentic_actions.map((action: AnyRecord) => {
+                            const actionId = String(action.id || `${message.id}-${action.action_type}`);
+                            const executed = action.execution_result || ["executed", "approval_recorded"].includes(String(action.status));
+                            return (
+                              <div key={actionId} className="rounded-xl p-3" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+                                <div className="flex items-start justify-between gap-3">
+                                  <div>
+                                    <div className="text-[13px] font-semibold" style={{ color: TEXT }}>{safeText(action.title || action.action_type)}</div>
+                                    <div className="mt-1 text-[12px] leading-relaxed" style={{ color: MUTED }}>{safeText(action.description)}</div>
+                                    <div className="mt-2 text-[11px] font-semibold" style={{ color: action.approval_required ? "#92400E" : "#0D2B1E" }}>{riskLabel(action)}</div>
+                                    {action.approval_reason ? <div className="mt-1 text-[11px] leading-relaxed" style={{ color: MUTED }}>{safeText(action.approval_reason)}</div> : null}
+                                    {action.execution_result ? <div className="mt-1 text-[11px]" style={{ color: "#0D2B1E" }}>Result: {safeText(action.execution_result.status || "completed")}</div> : null}
+                                  </div>
+                                  <button type="button" onClick={() => runAction(message, action)} disabled={executed || actionBusyId === actionId} className="shrink-0 rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-50" style={{ background: action.approval_required ? "#92400E" : "#0D2B1E", color: "white" }}>
+                                    {executed ? "Done" : actionBusyId === actionId ? "Working..." : action.approval_required ? "Create approval task" : "Do it"}
+                                  </button>
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       ) : null}
                     </div>
