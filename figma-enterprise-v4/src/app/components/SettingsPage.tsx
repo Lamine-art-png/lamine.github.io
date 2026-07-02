@@ -1,10 +1,11 @@
+import type { ReactNode } from "react";
 import { Link } from "react-router";
 import { Bell, CreditCard, Database, Globe2, Lock, PlugZap, ShieldCheck, SlidersHorizontal, Users } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 import { LanguageSelector } from "./LanguageSelector";
 import { BG, BORDER, GREEN, MUTED, PortalButton, SURFACE, TEXT } from "./portalUi";
 
-function Card({ title, description, icon: Icon, children }: { title: string; description?: string; icon: any; children?: React.ReactNode }) {
+function Card({ title, description, icon: Icon, children }: { title: string; description?: string; icon: any; children?: ReactNode }) {
   return (
     <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
       <div className="flex items-start gap-3">
@@ -19,7 +20,7 @@ function Card({ title, description, icon: Icon, children }: { title: string; des
   );
 }
 
-function Row({ label, value, action }: { label: string; value: string; action?: React.ReactNode }) {
+function Row({ label, value, action }: { label: string; value: string; action?: ReactNode }) {
   return (
     <div className="flex items-center justify-between gap-5 border-t py-3 text-[13px]" style={{ borderColor: BORDER }}>
       <div>
