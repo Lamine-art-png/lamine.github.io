@@ -1,16 +1,16 @@
-import { useEffect, useState } from "react";
 import { Outlet, NavLink } from "react-router";
 import { CreditCard, HelpCircle, Lock, LogOut, Plus, Settings, Shield, UserCircle } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
-import { currentLocale, t } from "../i18n";
+import { useLocale } from "../hooks/useLocale";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import logoImg from "../../imports/agro-ai-logo-1.png";
 import { OperatingStatusBar } from "./OperatingStatusBar";
-import { LanguageSelector } from "./LanguageSelector";
+
+type NavItem = { name: string; path: string; locked?: boolean; upgradeTo?: string; icon?: any };
 
 export function MainLayout() {
   const { currentOrganization, currentWorkspace, entitlements, logout } = useAuth();
-  const [locale, setLocale] = useState(currentLocale());
+  const { t } = useLocale();
   const role = currentOrganization?.role;
   const canInviteTeam = Boolean(entitlements.can_invite_team);
   const canAccessAdminRequests = Boolean(entitlements.can_access_admin_requests);
@@ -18,42 +18,36 @@ export function MainLayout() {
   const canGeneratePdf = Boolean(entitlements.can_generate_pdf);
   const isAdminUser = role === "owner" || role === "admin";
 
-  useEffect(() => {
-    const listener = (() => setLocale(currentLocale())) as EventListener;
-    window.addEventListener("agroai:locale-change", listener);
-    return () => window.removeEventListener("agroai:locale-change", listener);
-  }, []);
-
-  const operateItems = [
-    { name: "Command Center", path: "/" },
-    { name: "Field Queue", path: "/field-queue" },
-    { name: "Tasks", path: "/tasks" },
-    { name: "Decisions", path: "/operations" },
-    { name: "Evidence", path: "/evidence" },
-    { name: "Reports", path: "/reports" },
-    { name: "Connectors", path: "/integrations" },
+  const operateItems: NavItem[] = [
+    { name: t("commandCenter"), path: "/" },
+    { name: t("fieldQueue"), path: "/field-queue" },
+    { name: t("tasks"), path: "/tasks" },
+    { name: t("decisions"), path: "/operations" },
+    { name: t("evidence"), path: "/evidence" },
+    { name: t("reports"), path: "/reports", locked: !canGeneratePdf, upgradeTo: "professional" },
+    { name: t("connectors"), path: "/integrations", locked: !canUseConnectors, upgradeTo: "professional" },
   ];
 
-  const intelligenceItems = [
-    { name: "Ask AGRO-AI", path: "/intelligence" },
-    { name: "Readiness", path: "/readiness" },
-    { name: "Exceptions", path: "/exceptions" },
+  const intelligenceItems: NavItem[] = [
+    { name: t("askAgroAi"), path: "/intelligence" },
+    { name: t("readiness"), path: "/readiness" },
+    { name: t("exceptions"), path: "/exceptions" },
   ];
 
-  const workspaceItems = [
-    { name: "Sources", path: "/sources" },
-    { name: "Team", path: "/team", locked: !canInviteTeam },
-    { name: "Settings", path: "/settings" },
+  const workspaceItems: NavItem[] = [
+    { name: t("sources"), path: "/sources" },
+    { name: t("team"), path: "/team", locked: !canInviteTeam, upgradeTo: "team" },
+    { name: t("settings"), path: "/settings" },
   ];
 
-  const accountItems = [
-    { name: "Profile", path: "/profile", icon: UserCircle },
-    { name: t("billing", locale), path: "/billing", icon: CreditCard },
-    { name: "Security", path: "/security", icon: Shield },
-    { name: "Support", path: "/support", icon: HelpCircle },
-    { name: "Requests", path: "/admin/requests", icon: HelpCircle, locked: !canAccessAdminRequests },
-    { name: "Admin", path: "/admin", icon: Settings },
-    ...(isAdminUser ? [{ name: "System Health", path: "/admin/system", icon: Shield }] : []),
+  const accountItems: NavItem[] = [
+    { name: t("profile"), path: "/profile", icon: UserCircle },
+    { name: t("billing"), path: "/billing", icon: CreditCard },
+    { name: t("security"), path: "/security", icon: Shield },
+    { name: t("support"), path: "/support", icon: HelpCircle },
+    { name: t("requests"), path: "/admin/requests", icon: HelpCircle, locked: !canAccessAdminRequests, upgradeTo: "team" },
+    { name: t("admin"), path: "/admin", icon: Settings },
+    ...(isAdminUser ? [{ name: t("systemHealth"), path: "/admin/system", icon: Shield }] : []),
   ];
 
   return (
@@ -66,81 +60,41 @@ export function MainLayout() {
             </div>
             <div>
               <div className="text-white font-semibold text-[13px] tracking-tight leading-tight">AGRO-AI</div>
-              <div className="text-[11px] leading-tight" style={{ color: "rgba(255,255,255,0.38)" }}>
-                {t("fieldOperatingRoom", locale)}
-              </div>
+              <div className="text-[11px] leading-tight" style={{ color: "rgba(255,255,255,0.38)" }}>{t("fieldOperatingRoom")}</div>
             </div>
           </div>
           <div className="mt-5 rounded-lg px-3 py-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
-            <div className="text-[10px] font-semibold uppercase" style={{ color: "rgba(255,255,255,0.34)" }}>{t("workspace", locale)}</div>
+            <div className="text-[10px] font-semibold uppercase" style={{ color: "rgba(255,255,255,0.34)" }}>{t("workspace")}</div>
             <div className="mt-1 truncate text-[13px] font-medium" style={{ color: "white" }}>{currentWorkspace?.name || "Evaluation workspace"}</div>
             <div className="mt-1 truncate text-[11px]" style={{ color: "rgba(255,255,255,0.46)" }}>{currentOrganization?.name || "Organization"}</div>
           </div>
-          <NavLink
-            to="/"
-            className="mt-3 flex h-9 items-center justify-center gap-2 rounded-lg text-[12px] font-semibold"
-            style={{ background: "#DDEB8F", color: "#10231B" }}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            {t("newOperation", locale)}
+          <NavLink to="/" className="mt-3 flex h-9 items-center justify-center gap-2 rounded-lg text-[12px] font-semibold" style={{ background: "#DDEB8F", color: "#10231B" }}>
+            <Plus className="h-3.5 w-3.5" /> {t("newOperation")}
           </NavLink>
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
-          <NavSection title={t("operate", locale)} items={operateItems.map((item) => item.name === "Reports" ? { ...item, locked: !canGeneratePdf } : item.name === "Connectors" ? { ...item, locked: !canUseConnectors } : item)} />
-          <NavSection title={t("intelligence", locale)} items={intelligenceItems} />
-          <NavSection title={t("workspace", locale)} items={workspaceItems} />
+          <NavSection title={t("operate")} items={operateItems} />
+          <NavSection title={t("intelligence")} items={intelligenceItems} />
+          <NavSection title={t("workspace")} items={workspaceItems} />
         </nav>
 
         <div className="space-y-2 px-3 pb-4">
-          <div className="rounded-md px-3 py-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
-            <LanguageSelector dark />
-          </div>
-          <NavLink
-            to="/pricing"
-            className="flex h-10 items-center justify-between rounded-md px-3 text-[12px] font-medium"
-            style={({ isActive }) => ({
-              background: isActive ? "#0B2A1F" : "rgba(255,255,255,0.04)",
-              color: "rgba(255,255,255,0.78)",
-              border: "1px solid rgba(255,255,255,0.07)",
-            })}
-          >
+          <NavLink to="/pricing" className="flex h-10 items-center justify-between rounded-md px-3 text-[12px] font-medium" style={({ isActive }) => ({ background: isActive ? "#0B2A1F" : "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.78)", border: "1px solid rgba(255,255,255,0.07)" })}>
             <span>{currentOrganization?.plan === "network" ? "Network" : currentOrganization?.plan === "team" ? "Team" : currentOrganization?.plan === "professional" ? "Professional" : "Free"}</span>
-            <span style={{ color: "rgba(255,255,255,0.42)" }}>Plan</span>
+            <span style={{ color: "rgba(255,255,255,0.42)" }}>{t("plan")}</span>
           </NavLink>
           <div className="rounded-lg p-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
-            <div className="px-2 pb-2 text-[11px]" style={{ color: "rgba(255,255,255,0.44)" }}>
-              {t("account", locale)}
-            </div>
+            <div className="px-2 pb-2 text-[11px]" style={{ color: "rgba(255,255,255,0.44)" }}>{t("account")}</div>
             <div className="space-y-1">
-              {accountItems.map((item) => (
-                <NavLink
-                  key={item.path}
-                  to={item.path}
-                  className="flex h-8 items-center gap-2 rounded-md px-2 text-[12px]"
-                  style={({ isActive }) => ({
-                    background: isActive ? "rgba(255,255,255,0.08)" : "transparent",
-                    color: isActive ? "white" : "rgba(255,255,255,0.56)",
-                  })}
-                >
-                  <item.icon className="h-3.5 w-3.5" />
-                  {item.name}
-                </NavLink>
-              ))}
-              <button
-                type="button"
-                onClick={logout}
-                className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[12px] transition-colors hover:bg-white/10"
-                style={{ color: "rgba(255,255,255,0.56)" }}
-              >
-                <LogOut className="h-3.5 w-3.5" />
-                Log out
+              {accountItems.map((item) => <AccountNavItem key={item.path} item={item} />)}
+              <button type="button" onClick={logout} className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[12px] transition-colors hover:bg-white/10" style={{ color: "rgba(255,255,255,0.56)" }}>
+                <LogOut className="h-3.5 w-3.5" /> {t("logout")}
               </button>
             </div>
           </div>
         </div>
       </aside>
-
       <main className="flex-1 overflow-auto">
         <OperatingStatusBar />
         <Outlet />
@@ -149,33 +103,34 @@ export function MainLayout() {
   );
 }
 
-function NavSection({ title, items }: { title: string; items: { name: string; path: string; locked?: boolean }[] }) {
+function AccountNavItem({ item }: { item: NavItem }) {
+  const Icon = item.icon;
+  const target = item.locked ? `/pricing?upgrade=${item.upgradeTo || "professional"}` : item.path;
+  return (
+    <NavLink key={item.path} to={target} className="flex h-8 items-center gap-2 rounded-md px-2 text-[12px]" style={({ isActive }) => ({ background: isActive && !item.locked ? "rgba(255,255,255,0.08)" : "transparent", color: isActive && !item.locked ? "white" : "rgba(255,255,255,0.56)" })}>
+      {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
+      <span className="min-w-0 flex-1 truncate">{item.name}</span>
+      {item.locked ? <Lock className="h-3.5 w-3.5 opacity-70" /> : null}
+    </NavLink>
+  );
+}
+
+function NavSection({ title, items }: { title: string; items: NavItem[] }) {
   return (
     <div>
-      <div className="text-[10px] font-semibold uppercase tracking-widest px-3 mb-1" style={{ color: "rgba(255,255,255,0.25)" }}>
-        {title}
-      </div>
+      <div className="text-[10px] font-semibold uppercase tracking-widest px-3 mb-1" style={{ color: "rgba(255,255,255,0.25)" }}>{title}</div>
       <div>
-        {items.map((item) => (
-          <NavLink
-            key={item.path}
-            to={item.path}
-            end={item.path === "/"}
-            className="flex items-center px-3 rounded-md text-[13px] transition-colors"
-            style={({ isActive }) => ({
-              height: 44,
-              background: isActive ? "#0B2A1F" : "transparent",
-              color: isActive ? "white" : "rgba(255,255,255,0.52)",
-              fontWeight: isActive ? 500 : 400,
-              borderLeft: isActive ? "2px solid #1F7350" : "2px solid transparent",
-            })}
-          >
-            <span className="flex items-center gap-2">
-              {item.name}
-              {item.locked ? <Lock className="h-3.5 w-3.5 opacity-70" /> : null}
-            </span>
-          </NavLink>
-        ))}
+        {items.map((item) => {
+          const target = item.locked ? `/pricing?upgrade=${item.upgradeTo || "professional"}` : item.path;
+          return (
+            <NavLink key={item.path} to={target} end={item.path === "/"} className="flex items-center px-3 rounded-md text-[13px] transition-colors" style={({ isActive }) => ({ height: 40, background: isActive && !item.locked ? "#0B2A1F" : "transparent", color: isActive && !item.locked ? "white" : "rgba(255,255,255,0.58)", fontWeight: isActive && !item.locked ? 500 : 400, borderLeft: isActive && !item.locked ? "2px solid #1F7350" : "2px solid transparent" })}>
+              <span className="flex min-w-0 items-center gap-2">
+                <span className="truncate">{item.name}</span>
+                {item.locked ? <Lock className="h-3.5 w-3.5 opacity-70" /> : null}
+              </span>
+            </NavLink>
+          );
+        })}
       </div>
     </div>
   );
