@@ -2,6 +2,8 @@ import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Download, FileText, Mail, MessageSquare, Plus, Search, Send, Trash2, UploadCloud, X } from "lucide-react";
 import { API_BASE_URL, apiClient } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
+import { currentLocale } from "../i18n";
+import { LanguageSelector } from "./LanguageSelector";
 import { BG, BORDER, MUTED, SURFACE, TEXT } from "./portalUi";
 
 type AnyRecord = Record<string, any>;
@@ -31,10 +33,10 @@ type ConversationSummary = {
 const LOCAL_THREADS_KEY = "agroai_intelligence_threads_v2";
 
 const PROMPTS = [
-  "What have you been checking?",
-  "Generate a customer-ready report from this workspace.",
-  "What evidence is missing?",
+  "What should I do with my data?",
   "Create an operator checklist.",
+  "What evidence is missing?",
+  "Generate a customer-ready report.",
 ];
 
 function asArray(value: unknown): unknown[] {
@@ -81,7 +83,7 @@ function writeLocalThreads(workspaceId: string | undefined, rows: ConversationSu
   try {
     window.localStorage.setItem(localScope(workspaceId), JSON.stringify(rows.slice(0, 80)));
   } catch {
-    // Local recovery memory is best-effort only.
+    // Best effort cache.
   }
 }
 
@@ -106,8 +108,6 @@ function uploadMetadata(item: ChatFileImport) {
   const source = response.data_source || {};
   const job = response.job || {};
   const output = job.output_json || {};
-  const rows = response.rows_parsed ?? output.rows_parsed;
-  const columns = response.columns || output.columns || source.metadata_json?.columns || [];
   const preview = asArray(response.evidence_preview)[0] as AnyRecord | undefined;
   return {
     filename: item.filename,
@@ -115,8 +115,8 @@ function uploadMetadata(item: ChatFileImport) {
     size_bytes: item.size_bytes,
     content_type: item.content_type,
     import_status: item.status,
-    rows_parsed: rows,
-    columns,
+    rows_parsed: response.rows_parsed ?? output.rows_parsed,
+    columns: response.columns || output.columns || source.metadata_json?.columns || [],
     parsed_preview: preview?.summary || preview?.title || source.raw_text?.slice?.(0, 900),
     warnings: response.warnings || output.warnings || [],
     data_source_id: source.id,
@@ -126,10 +126,7 @@ function uploadMetadata(item: ChatFileImport) {
 function normalizeAssistantResponse(response: unknown): string {
   const payload = response && typeof response === "object" ? (response as AnyRecord) : {};
   const result = payload.result && typeof payload.result === "object" ? payload.result as AnyRecord : {};
-  return safeText(
-    result.answer || result.summary || payload.answer || payload.summary || payload.content || result.executive_summary,
-    "I can help. Give me a field, file, irrigation question, compliance packet, or customer report request."
-  );
+  return safeText(result.answer || result.summary || payload.answer || payload.summary || payload.content || result.executive_summary, "I can help. Give me a field, file, irrigation question, compliance packet, or customer report request.");
 }
 
 function isReportIntent(text: string) {
@@ -143,23 +140,16 @@ function shouldAutoEmailReport(text: string) {
 }
 
 function buildReportTitle(question: string) {
-  const clean = question.replace(/\s+/g, " ").trim();
-  if (!clean) return "AGRO-AI Operating Report";
-  if (clean.toLowerCase().includes("customer")) return "AGRO-AI Customer-Ready Operating Report";
-  if (clean.toLowerCase().includes("compliance")) return "AGRO-AI Compliance Evidence Report";
-  if (clean.toLowerCase().includes("water")) return "AGRO-AI Water Use Intelligence Report";
+  const clean = question.replace(/\s+/g, " ").trim().toLowerCase();
+  if (clean.includes("customer")) return "AGRO-AI Customer-Ready Operating Report";
+  if (clean.includes("compliance")) return "AGRO-AI Compliance Evidence Report";
+  if (clean.includes("water")) return "AGRO-AI Water Use Intelligence Report";
   return "AGRO-AI Operating Report";
 }
 
 function reportFilename(title: string) {
   const safe = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "") || "agroai-report";
   return `${safe}.pdf`;
-}
-
-function riskLabel(action: AnyRecord) {
-  if (action.approval_required) return "Approval required";
-  if (action.risk_level === "low") return "Safe to execute";
-  return `${safeText(action.risk_level, "medium")} risk`;
 }
 
 function mapServerMessage(row: AnyRecord): AnyRecord {
@@ -173,25 +163,22 @@ function mapServerMessage(row: AnyRecord): AnyRecord {
     uploaded_evidence: row.uploaded_evidence || metadata.uploaded_evidence || [],
     artifact: row.artifact || metadata.artifact || null,
     agentic_actions: row.agentic_actions || metadata.agentic_actions || [],
+    model_status: row.model_status || metadata.model_status,
   };
+}
+
+function actionRiskLabel(action: AnyRecord) {
+  if (action.approval_required) return "Approval required";
+  if (action.risk_level === "low") return "Ready";
+  return `${safeText(action.risk_level, "medium")} risk`;
 }
 
 async function createReportPdf(payload: AnyRecord): Promise<Blob> {
   const token = window.localStorage.getItem("agroai_access_token");
   const headers = new Headers({ "Content-Type": "application/json" });
   if (token) headers.set("Authorization", `Bearer ${token}`);
-
-  const response = await fetch(`${API_BASE_URL}/v1/intelligence/chat/report-pdf`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(payload),
-  });
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new Error(text || `Report export failed with status ${response.status}`);
-  }
-
+  const response = await fetch(`${API_BASE_URL}/v1/intelligence/chat/report-pdf`, { method: "POST", headers, body: JSON.stringify(payload) });
+  if (!response.ok) throw new Error((await response.text().catch(() => "")) || `Report export failed with status ${response.status}`);
   return response.blob();
 }
 
@@ -199,19 +186,9 @@ async function emailReportPdf(payload: AnyRecord): Promise<AnyRecord> {
   const token = window.localStorage.getItem("agroai_access_token");
   const headers = new Headers({ "Content-Type": "application/json" });
   if (token) headers.set("Authorization", `Bearer ${token}`);
-
-  const response = await fetch(`${API_BASE_URL}/v1/intelligence/chat/report-email`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify(payload),
-  });
-
+  const response = await fetch(`${API_BASE_URL}/v1/intelligence/chat/report-email`, { method: "POST", headers, body: JSON.stringify(payload) });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok || data.status === "not_sent") {
-    const reason = data?.delivery?.reason || data?.detail || `Report email failed with status ${response.status}`;
-    throw new Error(String(reason));
-  }
-
+  if (!response.ok || data.status === "not_sent") throw new Error(String(data?.delivery?.reason || data?.detail || `Report email failed with status ${response.status}`));
   return data;
 }
 
@@ -234,7 +211,7 @@ export function Intelligence() {
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [activeConversationId, setActiveConversationId] = useState("");
   const [conversationSearch, setConversationSearch] = useState("");
-  const [historyStatus, setHistoryStatus] = useState<"loading" | "server" | "local" | "error">("loading");
+  const [historyStatus, setHistoryStatus] = useState<"loading" | "server" | "local">("loading");
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [reportBusyId, setReportBusyId] = useState("");
@@ -277,8 +254,8 @@ export function Intelligence() {
   function persistLocalThread(threadId: string, rows: AnyRecord[], title?: string) {
     const now = new Date().toISOString();
     const current = readLocalThreads(currentWorkspace?.id);
-    const existing = current.find((row) => row.id === threadId);
-    const nextThread: ConversationSummary = {
+    const existing = current.find((row) => row.id === threadId) as AnyRecord | undefined;
+    const nextThread = {
       id: threadId,
       title: title || existing?.title || titleFromPrompt(rows.find((row) => row.role === "user")?.content || "New chat"),
       workspace_id: currentWorkspace?.id,
@@ -288,28 +265,22 @@ export function Intelligence() {
       updated_at: now,
       status: "local",
       messages: rows,
-    } as ConversationSummary;
-    const next = [nextThread, ...current.filter((row) => row.id !== threadId)].slice(0, 80);
+    } as AnyRecord;
+    const next = [nextThread, ...current.filter((row) => row.id !== threadId)].slice(0, 80) as ConversationSummary[];
     writeLocalThreads(currentWorkspace?.id, next);
     setConversations(next);
   }
 
   function remember(rows: AnyRecord[]) {
     setMessages(rows);
-    if (activeConversationId && (historyStatus !== "server" || activeConversationId.startsWith("local-"))) {
-      persistLocalThread(activeConversationId, rows);
-    }
+    if (activeConversationId && (historyStatus !== "server" || activeConversationId.startsWith("local-"))) persistLocalThread(activeConversationId, rows);
   }
 
   async function createConversationIfNeeded(firstPrompt: string): Promise<string> {
     if (activeConversationId) return activeConversationId;
     if (historyStatus === "server") {
       try {
-        const created = await apiClient.post("/v1/intelligence/brain/conversations", {
-          title: titleFromPrompt(firstPrompt),
-          workspace_id: currentWorkspace?.id,
-          message: firstPrompt,
-        }) as AnyRecord;
+        const created = await apiClient.post("/v1/intelligence/brain/conversations", { title: titleFromPrompt(firstPrompt), workspace_id: currentWorkspace?.id, message: firstPrompt }) as AnyRecord;
         const conversation = created.conversation || created;
         const id = String(conversation.id || "");
         if (id) {
@@ -374,11 +345,6 @@ export function Intelligence() {
     setNotice("");
   }
 
-  function updateMessage(messageId: string, patcher: (message: AnyRecord) => AnyRecord) {
-    const next = messages.map((message) => String(message.id) === String(messageId) ? patcher(message) : message);
-    remember(next);
-  }
-
   function updateImport(id: string, patch: Partial<ChatFileImport>) {
     setFileImports((current) => current.map((item) => item.id === id ? { ...item, ...patch } : item));
   }
@@ -397,14 +363,7 @@ export function Intelligence() {
   }
 
   function onFilesSelected(files: FileList | null) {
-    const next = Array.from(files || []).map((file) => ({
-      id: `${file.name}-${file.size}-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-      file,
-      filename: file.name,
-      size_bytes: file.size,
-      content_type: file.type || "application/octet-stream",
-      status: "queued" as const,
-    }));
+    const next = Array.from(files || []).map((file) => ({ id: `${file.name}-${file.size}-${Date.now()}-${Math.random().toString(16).slice(2)}`, file, filename: file.name, size_bytes: file.size, content_type: file.type || "application/octet-stream", status: "queued" as const }));
     if (!next.length) return;
     setFileImports((current) => [...current, ...next]);
     next.forEach((item) => uploadFileImport(item).catch(() => null));
@@ -423,11 +382,7 @@ export function Intelligence() {
       return;
     }
     try {
-      const response = await apiClient.post(`/v1/intelligence/brain/conversations/${encodeURIComponent(conversationId)}/messages`, {
-        content,
-        output,
-        metadata,
-      }) as AnyRecord;
+      const response = await apiClient.post(`/v1/intelligence/brain/conversations/${encodeURIComponent(conversationId)}/messages`, { content, output, metadata }) as AnyRecord;
       if (response.conversation) {
         const updated = response.conversation as ConversationSummary;
         setConversations((current) => [updated, ...current.filter((row) => row.id !== updated.id)]);
@@ -441,12 +396,7 @@ export function Intelligence() {
   }
 
   function artifactFor(message: AnyRecord) {
-    return message.artifact || {
-      title: buildReportTitle(message.question || "AGRO-AI report"),
-      question: message.question || "AGRO-AI report",
-      answer: safeText(message.content),
-      uploaded_evidence: message.uploaded_evidence || [],
-    };
+    return message.artifact || { title: buildReportTitle(message.question || "AGRO-AI report"), question: message.question || "AGRO-AI report", answer: safeText(message.content), uploaded_evidence: message.uploaded_evidence || [] };
   }
 
   async function downloadReportFor(message: AnyRecord) {
@@ -494,16 +444,9 @@ export function Intelligence() {
     setError("");
     setNotice("");
     try {
-      const result = await executeAgenticAction({
-        action_type: action.action_type,
-        workspace_id: currentWorkspace?.id,
-        payload: action.payload || {},
-        approval_confirmed: Boolean(action.approval_required),
-      });
-      updateMessage(String(message.id), (row) => ({
-        ...row,
-        agentic_actions: (row.agentic_actions || []).map((item: AnyRecord) => String(item.id) === actionId ? { ...item, execution_result: result, status: result.status || item.status } : item),
-      }));
+      const result = await executeAgenticAction({ action_type: action.action_type, workspace_id: currentWorkspace?.id, payload: action.payload || {}, approval_confirmed: Boolean(action.approval_required) });
+      const next = messages.map((row) => String(row.id) === String(message.id) ? { ...row, agentic_actions: (row.agentic_actions || []).map((item: AnyRecord) => String(item.id) === actionId ? { ...item, execution_result: result, status: result.status || item.status } : item) } : row);
+      remember(next);
       const created = result.created_task || result.created_approval_task;
       setNotice(created?.title ? `Action completed: ${created.title}` : `Action completed: ${safeText(result.action_type || action.action_type)}`);
     } catch (err) {
@@ -520,77 +463,41 @@ export function Intelligence() {
     setError("");
     setNotice("");
     setLoading(true);
-
     const conversationId = await createConversationIfNeeded(clean);
     const userMessage = { id: `user-${Date.now()}`, role: "user", content: clean };
     const withUser = [...messages, userMessage];
     setMessages(withUser);
-
     try {
       const importedBeforeSend = fileImports.filter((item) => item.status === "imported");
       const newlyImported = await ensureQueuedUploads();
       const evidence = [...importedBeforeSend, ...newlyImported].map(uploadMetadata);
-      const history = withUser
-        .filter((row) => row.role === "user" || row.role === "assistant")
-        .slice(-10)
-        .map((row) => ({ role: row.role, content: safeText(row.content).slice(0, 1800) }));
-      const request = {
-        task: isReportIntent(clean) ? "report_factory" as const : "chat" as const,
-        question: clean,
-        workspace_id: currentWorkspace?.id,
-        audience: "operator",
-        history,
-        uploaded_evidence: evidence,
-      };
+      const history = withUser.filter((row) => row.role === "user" || row.role === "assistant").slice(-10).map((row) => ({ role: row.role, content: safeText(row.content).slice(0, 1800) }));
+      const request = { task: isReportIntent(clean) ? "report_factory" as const : "chat" as const, question: clean, workspace_id: currentWorkspace?.id, audience: "operator", history, uploaded_evidence: evidence, preferred_language: currentLocale() } as AnyRecord;
       const response = await apiClient.intelligence.brainRun(request).catch(() => apiClient.intelligence.run(request)) as AnyRecord;
       const assistantText = normalizeAssistantResponse(response);
-      const artifact = isReportIntent(clean)
-        ? {
-            kind: "pdf",
-            title: buildReportTitle(clean),
-            question: clean,
-            answer: assistantText,
-            uploaded_evidence: evidence,
-          }
-        : null;
-      let actions = await planAgenticActions({
-        instruction: clean,
-        workspace_id: currentWorkspace?.id,
-        answer: assistantText,
-        uploaded_evidence: evidence,
-        audience: "operator",
-      });
-
+      const modelStatus = String(response.model_status || response.status || "");
+      const degraded = modelStatus.includes("fallback") || modelStatus.includes("unavailable") || assistantText.toLowerCase().includes("could not reach a live model provider");
+      const artifact = isReportIntent(clean) ? { kind: "pdf", title: buildReportTitle(clean), question: clean, answer: assistantText, uploaded_evidence: evidence } : null;
+      let actions: AnyRecord[] = [];
+      if (!degraded && /\b(task|checklist|follow[- ]?up|email|send|approval|action)\b/i.test(clean)) {
+        actions = await planAgenticActions({ instruction: clean, workspace_id: currentWorkspace?.id, answer: assistantText, uploaded_evidence: evidence, audience: "operator" });
+      }
       if (artifact && shouldAutoEmailReport(clean)) {
         const emailAction = actions.find((item) => item.action_type === "email_report_to_user" && !item.approval_required);
         if (emailAction) {
           try {
-            const result = await executeAgenticAction({
-              action_type: emailAction.action_type,
-              workspace_id: currentWorkspace?.id,
-              payload: { ...emailAction.payload, ...artifact },
-              approval_confirmed: false,
-            });
+            const result = await executeAgenticAction({ action_type: emailAction.action_type, workspace_id: currentWorkspace?.id, payload: { ...emailAction.payload, ...artifact }, approval_confirmed: false });
             actions = actions.map((item) => item.id === emailAction.id ? { ...item, execution_result: result, status: result.status || "executed" } : item);
             if (result.status === "executed") setNotice(`Report emailed to ${result.recipient || "your account email"}.`);
           } catch {
-            // Leave the visible action card so the user can retry manually.
+            // Keep manual report buttons available.
           }
         }
       }
-
-      const assistantMessage = {
-        id: `assistant-${Date.now()}`,
-        role: "assistant",
-        content: assistantText,
-        question: clean,
-        uploaded_evidence: evidence,
-        artifact,
-        agentic_actions: actions,
-      };
+      const assistantMessage = { id: `assistant-${Date.now()}`, role: "assistant", content: assistantText, question: clean, uploaded_evidence: evidence, artifact, agentic_actions: actions, model_status: modelStatus };
       const nextRows = [...withUser, assistantMessage];
       setMessages(nextRows);
-      const metadata = { question: clean, uploaded_evidence: evidence, artifact, agentic_actions: actions };
+      const metadata = { question: clean, uploaded_evidence: evidence, artifact, agentic_actions: actions, model_status: modelStatus };
       await persistExchange(conversationId, clean, assistantText, metadata, nextRows);
       setFileImports([]);
     } catch (err) {
@@ -608,10 +515,6 @@ export function Intelligence() {
   }
 
   const sendDisabled = loading || hasUploading || hasFailed || (!question.trim() && !fileImports.length);
-  const memoryLabel = historyStatus === "server" ? "Account memory active" : historyStatus === "loading" ? "Loading memory" : "Local recovery memory";
-  const memoryDetail = historyStatus === "server"
-    ? `${conversations.length} saved chats are available for this workspace.`
-    : "Backend chat history is not reachable yet, so AGRO-AI is using this device as a recovery cache.";
 
   return (
     <div className="min-h-screen" style={{ background: BG }}>
@@ -620,13 +523,9 @@ export function Intelligence() {
           <aside className="flex min-h-screen flex-col border-r p-4" style={{ background: SURFACE, borderColor: BORDER }}>
             <div className="flex items-center justify-between gap-3">
               <div className="text-[12px] font-semibold" style={{ color: TEXT }}>Ask AGRO-AI</div>
-              <button type="button" onClick={() => setSidebarOpen(false)} className="rounded-lg p-2" style={{ border: `1px solid ${BORDER}`, color: MUTED }} title="Close sidebar">
-                <X size={15} />
-              </button>
+              <button type="button" onClick={() => setSidebarOpen(false)} className="rounded-lg p-2" style={{ border: `1px solid ${BORDER}`, color: MUTED }} title="Close sidebar"><X size={15} /></button>
             </div>
-            <button type="button" onClick={newChat} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium" style={{ background: "#0D2B1E", color: "white" }}>
-              <Plus size={14} /> New chat
-            </button>
+            <button type="button" onClick={newChat} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium" style={{ background: "#0D2B1E", color: "white" }}><Plus size={14} /> New chat</button>
             <label className="mt-4 flex items-center gap-2 rounded-lg px-3 py-2" style={{ background: BG, border: `1px solid ${BORDER}`, color: MUTED }}>
               <Search size={14} />
               <input value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Search chats" className="w-full bg-transparent text-[12px] outline-none" style={{ color: TEXT }} />
@@ -638,27 +537,16 @@ export function Intelligence() {
                 return (
                   <div key={row.id} className="group flex gap-2">
                     <button type="button" onClick={() => loadConversation(row.id)} className="min-w-0 flex-1 rounded-xl px-3 py-3 text-left" style={{ background: active ? "#EEF8E8" : BG, border: `1px solid ${active ? "rgba(13,43,30,0.32)" : BORDER}` }}>
-                      <div className="flex items-center gap-2">
-                        <MessageSquare size={13} style={{ color: active ? "#0D2B1E" : MUTED }} />
-                        <div className="truncate text-[12px] font-semibold" style={{ color: TEXT }}>{row.title || "New chat"}</div>
-                      </div>
+                      <div className="flex items-center gap-2"><MessageSquare size={13} style={{ color: active ? "#0D2B1E" : MUTED }} /><div className="truncate text-[12px] font-semibold" style={{ color: TEXT }}>{row.title || "New chat"}</div></div>
                       {row.preview ? <div className="mt-1 line-clamp-2 text-[11px] leading-4" style={{ color: MUTED }}>{row.preview}</div> : null}
                     </button>
-                    <button type="button" onClick={() => deleteConversation(row.id)} className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg group-hover:flex" style={{ border: `1px solid ${BORDER}`, color: MUTED }} title="Delete chat">
-                      <Trash2 size={14} />
-                    </button>
+                    <button type="button" onClick={() => deleteConversation(row.id)} className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg group-hover:flex" style={{ border: `1px solid ${BORDER}`, color: MUTED }} title="Delete chat"><Trash2 size={14} /></button>
                   </div>
                 );
               })}
-              {!filteredConversations.length ? <div className="rounded-lg p-3 text-[12px] leading-relaxed" style={{ background: BG, border: `1px solid ${BORDER}`, color: MUTED }}>No saved chats yet.</div> : null}
+              {!filteredConversations.length ? <div className="rounded-lg p-3 text-[12px] leading-relaxed" style={{ background: BG, border: `1px solid ${BORDER}`, color: MUTED }}>{historyStatus === "loading" ? "Loading chats…" : "No saved chats yet."}</div> : null}
             </div>
-            <div className="mt-4 rounded-lg p-3 text-[12px] leading-relaxed" style={{ background: BG, border: `1px solid ${BORDER}`, color: MUTED }}>
-              <div className="font-semibold" style={{ color: TEXT }}>{memoryLabel}</div>
-              <div className="mt-1">{memoryDetail}</div>
-            </div>
-            <div className="mt-3 rounded-lg p-3 text-[12px] leading-relaxed" style={{ background: BG, border: `1px solid ${BORDER}`, color: MUTED }}>
-              Agentic mode is active: safe digital work can be executed; field/control actions are approval-gated.
-            </div>
+            <div className="mt-4"><LanguageSelector compact /></div>
           </aside>
         ) : null}
 
@@ -668,15 +556,9 @@ export function Intelligence() {
               <div>
                 <div className="inline-flex rounded-full px-3 py-1 text-[11px] font-semibold" style={{ background: "rgba(255,255,255,0.12)", color: "white" }}>Workspace intelligence</div>
                 <h1 className="mt-3 text-[28px] font-semibold tracking-tight" style={{ color: "white" }}>Ask AGRO-AI</h1>
-                <p className="mt-2 max-w-2xl text-[13px] leading-relaxed" style={{ color: "rgba(255,255,255,0.68)" }}>
-                  Ask, import files, generate reports, create field tasks, record field updates, and prepare approval-gated operations.
-                </p>
+                <p className="mt-2 max-w-2xl text-[13px] leading-relaxed" style={{ color: "rgba(255,255,255,0.68)" }}>Ask, import files, generate reports, create field tasks, record field updates, and prepare approval-gated operations.</p>
               </div>
-              {!sidebarOpen ? (
-                <button type="button" onClick={() => setSidebarOpen(true)} className="rounded-lg px-3 py-2 text-[12px] font-medium" style={{ background: "rgba(255,255,255,0.12)", color: "white" }}>
-                  <span className="inline-flex items-center gap-2"><FileText size={15} /> History</span>
-                </button>
-              ) : null}
+              {!sidebarOpen ? <button type="button" onClick={() => setSidebarOpen(true)} className="rounded-lg px-3 py-2 text-[12px] font-medium" style={{ background: "rgba(255,255,255,0.12)", color: "white" }}><span className="inline-flex items-center gap-2"><FileText size={15} /> History</span></button> : null}
             </div>
           </header>
 
@@ -688,85 +570,59 @@ export function Intelligence() {
                 <section className="rounded-xl p-6" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
                   <div className="text-[12px] font-semibold uppercase" style={{ color: MUTED }}>Start a workspace thread</div>
                   <h2 className="mt-3 text-[24px] font-semibold" style={{ color: TEXT }}>Ask a question or import files.</h2>
-                  <p className="mt-2 max-w-2xl text-[14px] leading-relaxed" style={{ color: MUTED }}>
-                    AGRO-AI can now save threads, reload past work, and move from answer to action: reports, email delivery, field tasks, field evidence, and approval-gated controller work.
-                  </p>
-                  <div className="mt-5 flex flex-wrap gap-2">
-                    {PROMPTS.map((prompt) => (
-                      <button key={prompt} type="button" onClick={() => send(prompt)} className="rounded-full px-3 py-2 text-[12px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>{prompt}</button>
-                    ))}
-                  </div>
+                  <p className="mt-2 max-w-2xl text-[14px] leading-relaxed" style={{ color: MUTED }}>AGRO-AI can save threads, reload past work, and move from answer to action: reports, email delivery, field tasks, field evidence, and approval-gated controller work.</p>
+                  <div className="mt-5 flex flex-wrap gap-2">{PROMPTS.map((prompt) => <button key={prompt} type="button" onClick={() => send(prompt)} className="rounded-full px-3 py-2 text-[12px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>{prompt}</button>)}</div>
                 </section>
               ) : null}
 
-              {messages.map((message, index) => (
-                <div key={message.id || index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
-                  <article className={message.role === "user" ? "max-w-[72%]" : "w-full max-w-[820px]"}>
-                    <div className="rounded-2xl px-5 py-4 text-[15px] leading-7 whitespace-pre-wrap" style={{ background: message.role === "user" ? "#0D2B1E" : SURFACE, color: message.role === "user" ? "white" : TEXT, border: `1px solid ${message.role === "user" ? "#0D2B1E" : BORDER}` }}>
-                      {safeText(message.content)}
-                      {message.role === "assistant" && message.artifact ? (
-                        <div className="mt-4 flex flex-wrap gap-2 whitespace-normal">
-                          <button type="button" onClick={() => downloadReportFor(message)} disabled={reportBusyId === String(message.id || index)} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-60" style={{ background: "#0D2B1E", color: "white" }}>
-                            {reportBusyId === String(message.id || index) ? <FileText size={15} /> : <Download size={15} />}
-                            {reportBusyId === String(message.id || index) ? "Preparing PDF..." : "Download PDF report"}
-                          </button>
-                          <button type="button" onClick={() => emailReportFor(message)} disabled={reportEmailBusyId === String(message.id || index)} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-60" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
-                            <Mail size={15} />
-                            {reportEmailBusyId === String(message.id || index) ? "Sending..." : "Email report to me"}
-                          </button>
-                        </div>
-                      ) : null}
-                      {message.role === "assistant" && Array.isArray(message.agentic_actions) && message.agentic_actions.length ? (
-                        <div className="mt-4 space-y-2 whitespace-normal">
-                          <div className="text-[11px] font-semibold uppercase" style={{ color: MUTED }}>Agentic actions</div>
-                          {message.agentic_actions.map((action: AnyRecord) => {
-                            const actionId = String(action.id || `${message.id}-${action.action_type}`);
-                            const executed = action.execution_result || ["executed", "approval_recorded"].includes(String(action.status));
-                            return (
-                              <div key={actionId} className="rounded-xl p-3" style={{ background: BG, border: `1px solid ${BORDER}` }}>
-                                <div className="flex items-start justify-between gap-3">
-                                  <div>
-                                    <div className="text-[13px] font-semibold" style={{ color: TEXT }}>{safeText(action.title || action.action_type)}</div>
-                                    <div className="mt-1 text-[12px] leading-relaxed" style={{ color: MUTED }}>{safeText(action.description)}</div>
-                                    <div className="mt-2 text-[11px] font-semibold" style={{ color: action.approval_required ? "#92400E" : "#0D2B1E" }}>{riskLabel(action)}</div>
-                                    {action.approval_reason ? <div className="mt-1 text-[11px] leading-relaxed" style={{ color: MUTED }}>{safeText(action.approval_reason)}</div> : null}
-                                    {action.execution_result ? <div className="mt-1 text-[11px]" style={{ color: "#0D2B1E" }}>Result: {safeText(action.execution_result.status || "completed")}</div> : null}
+              {messages.map((message, index) => {
+                const actions = Array.isArray(message.agentic_actions) ? message.agentic_actions : [];
+                return (
+                  <div key={message.id || index} className={`flex ${message.role === "user" ? "justify-end" : "justify-start"}`}>
+                    <article className={message.role === "user" ? "max-w-[72%]" : "w-full max-w-[820px]"}>
+                      <div className="rounded-2xl px-5 py-4 text-[15px] leading-7 whitespace-pre-wrap" style={{ background: message.role === "user" ? "#0D2B1E" : SURFACE, color: message.role === "user" ? "white" : TEXT, border: `1px solid ${message.role === "user" ? "#0D2B1E" : BORDER}` }}>
+                        {safeText(message.content)}
+                        {message.role === "assistant" && message.artifact ? (
+                          <div className="mt-4 flex flex-wrap gap-2 whitespace-normal">
+                            <button type="button" onClick={() => downloadReportFor(message)} disabled={reportBusyId === String(message.id || index)} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-60" style={{ background: "#0D2B1E", color: "white" }}>{reportBusyId === String(message.id || index) ? <FileText size={15} /> : <Download size={15} />}{reportBusyId === String(message.id || index) ? "Preparing PDF…" : "Download PDF"}</button>
+                            <button type="button" onClick={() => emailReportFor(message)} disabled={reportEmailBusyId === String(message.id || index)} className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-60" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}><Mail size={15} />{reportEmailBusyId === String(message.id || index) ? "Sending…" : "Email to me"}</button>
+                          </div>
+                        ) : null}
+                        {message.role === "assistant" && actions.length ? (
+                          <div className="mt-4 space-y-2 whitespace-normal">
+                            {actions.map((action: AnyRecord) => {
+                              const actionId = String(action.id || `${message.id}-${action.action_type}`);
+                              const executed = action.execution_result || ["executed", "approval_recorded"].includes(String(action.status));
+                              return (
+                                <div key={actionId} className="rounded-xl p-3" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+                                  <div className="flex items-start justify-between gap-3">
+                                    <div>
+                                      <div className="text-[13px] font-semibold" style={{ color: TEXT }}>{safeText(action.title || action.action_type)}</div>
+                                      <div className="mt-1 text-[12px] leading-relaxed" style={{ color: MUTED }}>{safeText(action.description)}</div>
+                                      <div className="mt-2 text-[11px] font-semibold" style={{ color: action.approval_required ? "#92400E" : "#0D2B1E" }}>{actionRiskLabel(action)}</div>
+                                    </div>
+                                    <button type="button" onClick={() => runAction(message, action)} disabled={executed || actionBusyId === actionId} className="shrink-0 rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-50" style={{ background: action.approval_required ? "#92400E" : "#0D2B1E", color: "white" }}>{executed ? "Done" : actionBusyId === actionId ? "Working…" : action.approval_required ? "Create approval" : "Do it"}</button>
                                   </div>
-                                  <button type="button" onClick={() => runAction(message, action)} disabled={executed || actionBusyId === actionId} className="shrink-0 rounded-lg px-3 py-2 text-[12px] font-semibold disabled:opacity-50" style={{ background: action.approval_required ? "#92400E" : "#0D2B1E", color: "white" }}>
-                                    {executed ? "Done" : actionBusyId === actionId ? "Working..." : action.approval_required ? "Create approval task" : "Do it"}
-                                  </button>
                                 </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      ) : null}
-                    </div>
-                  </article>
-                </div>
-              ))}
-              {loading ? <div className="rounded-xl px-4 py-3 text-[13px]" style={{ background: SURFACE, border: `1px solid ${BORDER}`, color: MUTED }}>Reading the evidence and preparing the answer...</div> : null}
+                              );
+                            })}
+                          </div>
+                        ) : null}
+                      </div>
+                    </article>
+                  </div>
+                );
+              })}
+              {loading ? <div className="rounded-xl px-4 py-3 text-[13px]" style={{ background: SURFACE, border: `1px solid ${BORDER}`, color: MUTED }}>Preparing the answer…</div> : null}
             </div>
           </div>
 
           <footer className="px-6 pb-6">
             <div className="mx-auto max-w-[900px] rounded-2xl p-4 shadow-[0_18px_60px_rgba(16,35,27,0.08)]" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-              {fileImports.length ? (
-                <div className="mb-3 flex flex-wrap gap-2">
-                  {fileImports.map((item) => (
-                    <div key={item.id} className="flex items-center gap-2 rounded-full px-3 py-2 text-[12px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}>
-                      <span className="max-w-[180px] truncate font-medium">{item.filename}</span>
-                      <span style={{ color: item.status === "failed" ? "#991B1B" : MUTED }}>{item.status === "queued" ? "Queued" : item.status === "uploading" ? "Uploading..." : item.status === "imported" ? "Imported" : "Failed"}</span>
-                      <button type="button" onClick={() => setFileImports((current) => current.filter((row) => row.id !== item.id))} title="Remove"><X size={13} /></button>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
+              {fileImports.length ? <div className="mb-3 flex flex-wrap gap-2">{fileImports.map((item) => <div key={item.id} className="flex items-center gap-2 rounded-full px-3 py-2 text-[12px]" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }}><span className="max-w-[180px] truncate font-medium">{item.filename}</span><span style={{ color: item.status === "failed" ? "#991B1B" : MUTED }}>{item.status === "queued" ? "Queued" : item.status === "uploading" ? "Uploading…" : item.status === "imported" ? "Imported" : "Failed"}</span><button type="button" onClick={() => setFileImports((current) => current.filter((row) => row.id !== item.id))} title="Remove"><X size={13} /></button></div>)}</div> : null}
               {hasFailed ? <div className="mb-3 text-[12px]" style={{ color: "#991B1B" }}>One file failed to import. Remove it before sending.</div> : null}
               <div className="flex gap-3">
-                <button type="button" onClick={() => fileInputRef.current?.click()} className="inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium" style={{ border: `1px solid ${BORDER}`, color: TEXT }}>
-                  <UploadCloud size={15} /> Import files
-                </button>
+                <button type="button" onClick={() => fileInputRef.current?.click()} className="inline-flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium" style={{ border: `1px solid ${BORDER}`, color: TEXT }}><UploadCloud size={15} /> Import files</button>
                 <input ref={fileInputRef} type="file" multiple className="hidden" accept=".csv,.xlsx,.xls,.pdf,.txt,.md,.json,.geojson,.kml,.zip" onChange={(event) => onFilesSelected(event.target.files)} />
                 <textarea value={question} onChange={(event) => setQuestion(event.target.value)} onKeyDown={onKeyDown} rows={2} placeholder="Ask AGRO-AI or import files" className="min-h-[48px] flex-1 resize-none rounded-lg px-4 py-3 text-[14px] outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />
                 <button type="button" disabled={sendDisabled} onClick={() => send()} className="inline-flex h-[48px] w-[52px] shrink-0 items-center justify-center rounded-lg disabled:opacity-50" style={{ background: "#0D2B1E", color: "white" }} title="Send"><Send size={18} /></button>
