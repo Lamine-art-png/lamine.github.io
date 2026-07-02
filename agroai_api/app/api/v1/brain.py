@@ -9,12 +9,13 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
+from app.core.config import settings
 from app.core.security import require_current_tenant_id
 from app.db.base import get_db
 from app.models.saas import User
 from app.schemas.ai import EvidenceContext
-from app.services.intelligence_context import build_intelligence_context
 from app.services.ai_gateway import AIGateway
+from app.services.intelligence_context import build_intelligence_context
 from app.services.model_router import ModelRouter
 
 router = APIRouter(prefix="/intelligence/brain", tags=["intelligence"])
@@ -46,6 +47,9 @@ class BrainRunRequest(BaseModel):
 MISSING_EVIDENCE_TERMS = ("how much water", "water should", "irrigat", "apply", "compliance", "diagnose", "field diagnosis", "water accounting", "evidence missing", "missing evidence", "what evidence")
 CASUAL_TERMS = ("hi", "hello", "hey", "what can you do", "what are you good at", "do you know john deere", "john deere", "capabilities")
 REPORT_TERMS = ("report", "pdf", "document", "packet", "brief", "analysis", "memo", "customer-ready", "executive")
+
+def is_local_ai() -> bool:
+    return (settings.AI_PROVIDER or "").strip().lower() == "ollama"
 
 def _short(value: Any, limit: int = 300) -> str:
     return str(value or "").replace("\n", " ").strip()[:limit].rstrip()
