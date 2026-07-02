@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { InputHTMLAttributes, ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { Bell, CreditCard, Database, Globe2, PlugZap, ShieldCheck, SlidersHorizontal, Users } from "lucide-react";
@@ -16,7 +16,7 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="block text-[12px] font-medium" style={{ color: MUTED }}>{label}<div className="mt-1">{children}</div></label>;
 }
 
-function TextInput(props: React.InputHTMLAttributes<HTMLInputElement>) {
+function TextInput(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className="h-10 w-full rounded-lg px-3 text-[13px] outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />;
 }
 
