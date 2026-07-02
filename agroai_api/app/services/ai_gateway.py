@@ -272,13 +272,15 @@ class AIGateway:
             },
         ]
 
-    def _candidate_models(self, primary: str | None) -> list[str]:
+    def _candidate_models(self, primary: str | None, max_model_attempts: int | None = None) -> list[str]:
         candidates: list[str] = []
         for model in [primary or self.model, *self.fallback_models]:
             clean = (model or "").strip()
             if clean and not (self.provider == "ollama" and "/" in clean):
                 if clean not in candidates:
                     candidates.append(clean)
+        if max_model_attempts and max_model_attempts > 0:
+            return candidates[:max_model_attempts]
         return candidates
 
     async def chat(
@@ -288,6 +290,9 @@ class AIGateway:
         temperature: float = 0.2,
         response_format: dict[str, Any] | None = None,
         model_override: str | None = None,
+        max_tokens: int | None = None,
+        timeout_seconds: int | None = None,
+        max_model_attempts: int | None = None,
     ) -> AIGatewayResult:
         messages = self._with_agroai_context(messages)
         selected_model = (model_override or self.model or "").strip()
@@ -296,8 +301,16 @@ class AIGateway:
 
         try:
             if self.provider == "ollama":
-                return await self._chat_ollama(messages, temperature, model_override=model_override)
-            return await self._chat_openai_compatible(messages, temperature, response_format, model_override=model_override)
+                return await self._chat_ollama(messages, temperature, model_override=model_override, max_tokens=max_tokens, timeout_seconds=timeout_seconds)
+            return await self._chat_openai_compatible(
+                messages,
+                temperature,
+                response_format,
+                model_override=model_override,
+                max_tokens=max_tokens,
+                timeout_seconds=timeout_seconds,
+                max_model_attempts=max_model_attempts,
+            )
         except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
             return AIGatewayResult(
                 status="unavailable",
@@ -359,16 +372,20 @@ class AIGateway:
         temperature: float,
         response_format: dict[str, Any] | None,
         model_override: str | None = None,
+        max_tokens: int | None = None,
+        timeout_seconds: int | None = None,
+        max_model_attempts: int | None = None,
     ) -> AIGatewayResult:
         headers = self._headers()
         errors: list[str] = []
-        async with httpx.AsyncClient(timeout=self.timeout) as client:
-            for candidate_model in self._candidate_models(model_override):
+        request_timeout = max(4, min(int(timeout_seconds or self.timeout or 18), 60))
+        async with httpx.AsyncClient(timeout=request_timeout) as client:
+            for candidate_model in self._candidate_models(model_override, max_model_attempts=max_model_attempts):
                 payload: dict[str, Any] = {
                     "model": candidate_model,
                     "messages": messages,
                     "temperature": temperature,
-                    "max_tokens": 4500,
+                    "max_tokens": int(max_tokens or 900),
                 }
                 if response_format:
                     payload["response_format"] = response_format
@@ -395,10 +412,18 @@ class AIGateway:
                 return AIGatewayResult(status="ok", content=content, provider=self.raw_provider or self.provider, model=candidate_model, raw=raw)
         raise ValueError("All configured AI models failed: " + " | ".join(errors))
 
-    async def _chat_ollama(self, messages: list[dict[str, str]], temperature: float, model_override: str | None = None) -> AIGatewayResult:
+    async def _chat_ollama(
+        self,
+        messages: list[dict[str, str]],
+        temperature: float,
+        model_override: str | None = None,
+        max_tokens: int | None = None,
+        timeout_seconds: int | None = None,
+    ) -> AIGatewayResult:
         selected_model = model_override or self.model
         question = _extract_question(messages)
         wants_depth = any(term in question.lower() for term in ["report", "analysis", "pdf", "document", "packet", "plan", "diagnose", "detailed", "explain"])
+        predict_budget = int(max_tokens or (850 if wants_depth else 240))
         payload = {
             "model": selected_model,
             "messages": messages,
@@ -407,12 +432,13 @@ class AIGateway:
             "keep_alive": "45m",
             "options": {
                 "temperature": min(float(temperature or 0.18), 0.35),
-                "num_predict": 900 if wants_depth else 520,
-                "num_ctx": 4096,
+                "num_predict": max(80, min(predict_budget, 1800)),
+                "num_ctx": 4096 if wants_depth else 3072,
                 "top_p": 0.9,
             },
         }
-        async with httpx.AsyncClient(timeout=max(min(self.timeout, 120), 75)) as client:
+        request_timeout = max(8, min(int(timeout_seconds or (60 if wants_depth else 18)), 90))
+        async with httpx.AsyncClient(timeout=request_timeout) as client:
             response = await client.post(f"{self.base_url}/api/chat", json=payload)
             response.raise_for_status()
             body = response.json()
