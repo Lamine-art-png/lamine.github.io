@@ -11,12 +11,9 @@ type NavItem = { name: string; path: string; locked?: boolean; upgradeTo?: strin
 export function MainLayout() {
   const { currentOrganization, currentWorkspace, entitlements, logout } = useAuth();
   const { t } = useLocale();
-  const role = currentOrganization?.role;
   const canInviteTeam = Boolean(entitlements.can_invite_team);
   const canAccessAdminRequests = Boolean(entitlements.can_access_admin_requests);
-  const canUseConnectors = Boolean(entitlements.can_use_connectors);
   const canGeneratePdf = Boolean(entitlements.can_generate_pdf);
-  const isAdminUser = role === "owner" || role === "admin";
 
   const operateItems: NavItem[] = [
     { name: t("commandCenter"), path: "/" },
@@ -25,7 +22,7 @@ export function MainLayout() {
     { name: t("decisions"), path: "/operations" },
     { name: t("evidence"), path: "/evidence" },
     { name: t("reports"), path: "/reports", locked: !canGeneratePdf, upgradeTo: "professional" },
-    { name: t("connectors"), path: "/integrations", locked: !canUseConnectors, upgradeTo: "professional" },
+    { name: t("connectors"), path: "/integrations" },
   ];
 
   const intelligenceItems: NavItem[] = [
@@ -47,7 +44,6 @@ export function MainLayout() {
     { name: t("support"), path: "/support", icon: HelpCircle },
     { name: t("requests"), path: "/admin/requests", icon: HelpCircle, locked: !canAccessAdminRequests, upgradeTo: "team" },
     { name: t("admin"), path: "/admin", icon: Settings },
-    ...(isAdminUser ? [{ name: t("systemHealth"), path: "/admin/system", icon: Shield }] : []),
   ];
 
   return (
@@ -124,10 +120,7 @@ function NavSection({ title, items }: { title: string; items: NavItem[] }) {
           const target = item.locked ? `/pricing?upgrade=${item.upgradeTo || "professional"}` : item.path;
           return (
             <NavLink key={item.path} to={target} end={item.path === "/"} className="flex items-center px-3 rounded-md text-[13px] transition-colors" style={({ isActive }) => ({ height: 40, background: isActive && !item.locked ? "#0B2A1F" : "transparent", color: isActive && !item.locked ? "white" : "rgba(255,255,255,0.58)", fontWeight: isActive && !item.locked ? 500 : 400, borderLeft: isActive && !item.locked ? "2px solid #1F7350" : "2px solid transparent" })}>
-              <span className="flex min-w-0 items-center gap-2">
-                <span className="truncate">{item.name}</span>
-                {item.locked ? <Lock className="h-3.5 w-3.5 opacity-70" /> : null}
-              </span>
+              <span className="flex min-w-0 items-center gap-2"><span className="truncate">{item.name}</span>{item.locked ? <Lock className="h-3.5 w-3.5 opacity-70" /> : null}</span>
             </NavLink>
           );
         })}
