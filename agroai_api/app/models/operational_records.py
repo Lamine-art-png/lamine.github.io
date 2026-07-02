@@ -1,4 +1,4 @@
-"""Operational records for connector setup, uploaded evidence, intelligence runs, and reports."""
+"""Operational records for connector setup, uploaded evidence, intelligence runs, reports, and chat memory."""
 from __future__ import annotations
 
 import uuid
@@ -131,3 +131,42 @@ class GeneratedArtifact(Base):
     body_text = Column(Text, nullable=True)
     metadata_json = Column(JSON, default=dict, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+
+class ChatConversation(Base):
+    __tablename__ = "chat_conversations"
+
+    id = Column(String, primary_key=True, default=new_id, index=True)
+    tenant_id = Column(String, ForeignKey("organizations.id"), nullable=False, index=True)
+    workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=True, index=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
+    title = Column(String, default="New chat", nullable=False)
+    summary = Column(Text, nullable=True)
+    pinned = Column(String, default="false", nullable=False, index=True)
+    status = Column(String, default="active", nullable=False, index=True)
+    metadata_json = Column(JSON, default=dict, nullable=False)
+    message_count = Column(Float, default=0, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False, index=True)
+    last_message_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    __table_args__ = (
+        Index("ix_chat_conversation_tenant_workspace", "tenant_id", "workspace_id", "last_message_at"),
+        Index("ix_chat_conversation_user", "tenant_id", "user_id", "last_message_at"),
+    )
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+
+    id = Column(String, primary_key=True, default=new_id, index=True)
+    conversation_id = Column(String, ForeignKey("chat_conversations.id"), nullable=False, index=True)
+    tenant_id = Column(String, ForeignKey("organizations.id"), nullable=False, index=True)
+    workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=True, index=True)
+    user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
+    role = Column(String, nullable=False, index=True)
+    content = Column(Text, nullable=False)
+    metadata_json = Column(JSON, default=dict, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    __table_args__ = (Index("ix_chat_messages_conversation_created", "conversation_id", "created_at"),)
