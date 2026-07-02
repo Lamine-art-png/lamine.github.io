@@ -28,13 +28,14 @@ function PortalRouteError() {
     <div className="min-h-screen bg-[#F6F4EE] px-6 py-12 text-[#10231B]">
       <div className="mx-auto max-w-[720px] rounded-2xl border border-[#D6DDD0] bg-[#FFFDF8] p-8 shadow-[0_20px_60px_rgba(16,35,27,0.08)]">
         <div className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#2D6A4F]">AGRO-AI Enterprise Portal</div>
-        <h1 className="mt-3 text-[30px] font-semibold tracking-tight">This workspace screen is not ready yet.</h1>
+        <h1 className="mt-3 text-[30px] font-semibold tracking-tight">Workspace module recovered safely.</h1>
         <p className="mt-3 text-[14px] leading-7 text-[#65736A]">
-          The portal recovered safely instead of showing a developer error. Continue to the operating room or use Ask AGRO-AI.
+          This route hit a safe recovery boundary instead of crashing the portal. Continue to the operating room, Ask AGRO-AI, or Settings.
         </p>
         <div className="mt-6 flex gap-3">
           <a href="/" className="rounded-lg bg-[#10231B] px-4 py-2 text-[13px] font-medium text-white">Continue to portal</a>
           <a href="/intelligence" className="rounded-lg border border-[#D6DDD0] bg-white px-4 py-2 text-[13px] font-medium text-[#10231B]">Open Ask AGRO-AI</a>
+          <a href="/settings" className="rounded-lg border border-[#D6DDD0] bg-white px-4 py-2 text-[13px] font-medium text-[#10231B]">Settings</a>
         </div>
       </div>
     </div>
@@ -47,11 +48,7 @@ const lazyComponent = (loader: () => Promise<Record<string, unknown>>, exportNam
 };
 
 export const router = createBrowserRouter([
-  {
-    path: "/verify-email",
-    Component: VerifyEmailPage,
-    errorElement: <PortalRouteError />,
-  },
+  { path: "/verify-email", Component: VerifyEmailPage, errorElement: <PortalRouteError /> },
   {
     path: "/",
     Component: MainLayout,
@@ -82,14 +79,11 @@ export const router = createBrowserRouter([
       { path: "billing", lazy: lazyComponent(() => import("./components/ProductShell"), "BillingPage") },
       { path: "security", lazy: lazyComponent(() => import("./components/ProductShell"), "SecurityPage") },
       { path: "support", lazy: lazyComponent(() => import("./components/ProductShell"), "SupportPage") },
-      { path: "settings", lazy: lazyComponent(() => import("./components/ProductShell"), "WorkspaceSettingsPage") },
+      { path: "settings", lazy: lazyComponent(() => import("./components/SettingsPage"), "SettingsPage") },
       { path: "team", lazy: lazyComponent(() => import("./components/ProductShell"), "TeamPage") },
       { path: "onboarding", lazy: lazyComponent(() => import("./components/ProductShell"), "OnboardingPage") },
       { path: "*", Component: RouteRecovery },
     ],
   },
-  {
-    path: "*",
-    element: <PortalRouteError />,
-  },
+  { path: "*", element: <PortalRouteError /> },
 ]);
