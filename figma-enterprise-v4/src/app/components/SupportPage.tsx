@@ -1,3 +1,4 @@
+import type { InputHTMLAttributes, ReactNode, SelectHTMLAttributes } from "react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { CheckCircle2, LifeBuoy, Send } from "lucide-react";
@@ -6,15 +7,15 @@ import { useAuth } from "../auth/AuthProvider";
 import { useLocale } from "../hooks/useLocale";
 import { BG, BORDER, GREEN, MUTED, PortalButton, SURFACE, TEXT } from "./portalUi";
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="block text-[12px] font-medium" style={{ color: MUTED }}>{label}<div className="mt-1">{children}</div></label>;
 }
 
-function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
+function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return <input {...props} className="h-10 w-full rounded-lg px-3 text-[13px] outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />;
 }
 
-function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return <select {...props} className="h-10 w-full rounded-lg px-3 text-[13px] outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} />;
 }
 
