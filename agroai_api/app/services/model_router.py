@@ -14,19 +14,19 @@ DEFAULT_FRONTIER_MODEL = "z-ai/glm-5.2"
 DEFAULT_FAST_MODEL = "qwen/qwen3-next-80b-a3b-instruct"
 DEFAULT_REPORT_MODEL = "qwen/qwen3-max"
 DEFAULT_MODEL_FALLBACKS = [
-    "z-ai/glm-5.2",
-    "z-ai/glm-5-turbo",
-    "qwen/qwen3-max-thinking",
-    "qwen/qwen3-max",
-    "qwen/qwen3-coder-plus",
     "qwen/qwen3-next-80b-a3b-instruct",
-    "z-ai/glm-4.5",
+    "z-ai/glm-5-turbo",
     "z-ai/glm-4.5-air",
+    "qwen/qwen3-max",
+    "z-ai/glm-5.2",
+    "z-ai/glm-4.5",
     "deepseek/deepseek-v3.1-terminus",
 ]
 
 TASK_PROFILES = {
-    "chat": "reasoning",
+    # Normal chat must feel instant. Reserve heavier models for reports,
+    # field diagnosis, decisions, and large evidence analysis.
+    "chat": "fast",
     "readiness_analysis": "reasoning",
     "field_diagnosis": "reasoning",
     "exception_triage": "reasoning",
@@ -117,11 +117,17 @@ class ModelRouter:
         messages: list[dict[str, str]],
         temperature: float = 0.2,
         response_format: dict[str, Any] | None = None,
+        max_tokens: int | None = None,
+        timeout_seconds: int | None = None,
+        max_model_attempts: int | None = None,
     ) -> tuple[AIGatewayResult, ModelSelection]:
         selection = self.select(task)
         chat_kwargs: dict[str, Any] = {
             "temperature": temperature,
             "response_format": response_format,
+            "max_tokens": max_tokens,
+            "timeout_seconds": timeout_seconds,
+            "max_model_attempts": max_model_attempts,
         }
         if selection.model:
             chat_kwargs["model_override"] = selection.model
