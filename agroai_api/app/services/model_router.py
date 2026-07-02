@@ -24,8 +24,6 @@ DEFAULT_MODEL_FALLBACKS = [
 ]
 
 TASK_PROFILES = {
-    # Normal chat must feel instant. Reserve heavier models for reports,
-    # field diagnosis, decisions, and large evidence analysis.
     "chat": "fast",
     "readiness_analysis": "reasoning",
     "field_diagnosis": "reasoning",
@@ -122,12 +120,24 @@ class ModelRouter:
         max_model_attempts: int | None = None,
     ) -> tuple[AIGatewayResult, ModelSelection]:
         selection = self.select(task)
+        if selection.profile == "report":
+            default_tokens = 2600
+            default_timeout = 42
+            default_attempts = 4
+        elif selection.profile == "reasoning":
+            default_tokens = 1600
+            default_timeout = 24
+            default_attempts = 3
+        else:
+            default_tokens = 700
+            default_timeout = 14
+            default_attempts = 2
         chat_kwargs: dict[str, Any] = {
             "temperature": temperature,
             "response_format": response_format,
-            "max_tokens": max_tokens,
-            "timeout_seconds": timeout_seconds,
-            "max_model_attempts": max_model_attempts,
+            "max_tokens": max_tokens or default_tokens,
+            "timeout_seconds": timeout_seconds or default_timeout,
+            "max_model_attempts": max_model_attempts or default_attempts,
         }
         if selection.model:
             chat_kwargs["model_override"] = selection.model
