@@ -104,13 +104,11 @@ def clean_model_text(content: str) -> str:
     text = (content or "").strip()
     if not text:
         return ""
-
     lower = text.lower()
     if "</think>" in lower:
         text = text[lower.rfind("</think>") + len("</think>") :].strip()
     text = re.sub(r"<think>.*?</think>", "", text, flags=re.IGNORECASE | re.DOTALL).strip()
     text = _strip_markdown_fences(text)
-
     try:
         value = json.loads(text)
         if isinstance(value, dict):
@@ -120,7 +118,6 @@ def clean_model_text(content: str) -> str:
                     return item.strip()
     except json.JSONDecodeError:
         pass
-
     for key in ("answer", "summary"):
         match = re.search(rf'"{key}"\s*:\s*"((?:[^"\\]|\\.)*)', text, flags=re.DOTALL)
         if match:
@@ -130,14 +127,11 @@ def clean_model_text(content: str) -> str:
             except json.JSONDecodeError:
                 rescued = rescued.replace('\\n', '\n').replace('\\"', '"')
             return str(rescued).strip()
-
     if text.lstrip().startswith("{"):
         return ""
-
     return text.strip()
 
 
-# Backward-compatible names used by other services.
 def extract_final_answer(content: str) -> str:
     return clean_model_text(content)
 
@@ -149,17 +143,7 @@ def sanitize_model_text(content: str) -> str:
 def parse_model_json(content: str) -> dict[str, Any]:
     text = clean_model_text(content)
     if not text:
-        return {
-            "summary": "",
-            "answer": "",
-            "available_data": [],
-            "missing_data": [],
-            "recommended_next_actions": [],
-            "confidence": "low",
-            "customer_safe": True,
-            "_safe_mode": True,
-        }
-
+        return {"summary": "", "answer": "", "available_data": [], "missing_data": [], "recommended_next_actions": [], "confidence": "low", "customer_safe": True, "_safe_mode": True}
     try:
         value = json.loads((content or "").strip())
         if isinstance(value, dict):
@@ -170,16 +154,7 @@ def parse_model_json(content: str) -> dict[str, Any]:
             return value
     except json.JSONDecodeError:
         pass
-
-    return {
-        "summary": text,
-        "answer": text,
-        "available_data": [],
-        "missing_data": [],
-        "recommended_next_actions": [],
-        "confidence": "low",
-        "customer_safe": True,
-    }
+    return {"summary": text, "answer": text, "available_data": [], "missing_data": [], "recommended_next_actions": [], "confidence": "low", "customer_safe": True}
 
 
 def _extract_question(messages: list[dict[str, str]]) -> str:
@@ -203,10 +178,12 @@ def _extract_question(messages: list[dict[str, str]]) -> str:
 
 def _question_aware_local_fallback(question: str) -> str:
     q = (question or "").lower()
+    if any(term in q for term in ["operator checklist", "checklist", "operator"]):
+        return "Here is a starter operator checklist: 1) confirm the field or block, 2) check the latest irrigation/flow record, 3) confirm controller or valve status, 4) inspect any abnormal pressure/flow signal, 5) record a field note with timestamp and source, 6) escalate anything that affects water use, compliance, crop stress, or equipment safety. If you connect the controller/export data, I can turn this into a field-specific checklist with evidence and assignments."
     if any(term in q for term in ["john deere", "deere", "operations center"]):
         return "Yes. John Deere Operations Center is one of the systems AGRO-AI should connect to because it can carry field boundaries, machine activity, work records, and operational context. In a real customer workflow, I would use that data as one evidence source, then combine it with irrigation, ET/weather, flow, soil moisture, and compliance records before producing field priorities or customer-ready reports."
     if any(term in q for term in ["pdf", "document", "report", "packet"]):
-        return "Yes. I can draft the report content now, and the portal should turn it into a downloadable artifact through the report factory. A serious AGRO-AI report should include an executive summary, evidence used, assumptions, water or field findings, risk flags, recommended actions, and an appendix of missing data. If uploaded files are present, I should use them as the evidence base instead of speaking generally."
+        return "Yes. I can draft the report content now, and the portal can turn it into a downloadable artifact through the report factory. A serious AGRO-AI report should include an executive summary, evidence used, assumptions, water or field findings, risk flags, recommended actions, and an appendix of missing data. If uploaded files are present, I should use them as the evidence base instead of speaking generally."
     if any(term in q for term in ["how much water", "water should", "irrigat", "put here"]):
         return "I can help, but I should not guess an irrigation amount without the field, crop, acreage, soil type, recent irrigation, ET/weather, soil moisture, flow rate, and controller status. The useful next step is to upload or connect those records. Once they are present, I can calculate a defensible recommendation, explain the evidence behind it, and flag whether the recommendation is safe, uncertain, or blocked."
     if any(term in q for term in ["what are you good", "what can you do", "capabilities", "good at"]):
@@ -260,16 +237,7 @@ class AIGateway:
         compact = "\n\n".join(context_parts)[-8000:]
         return [
             {"role": "system", "content": LOCAL_OLLAMA_SYSTEM_PROMPT},
-            {
-                "role": "user",
-                "content": (
-                    f"/no_think\nQUESTION: {question}\n\n"
-                    f"Workspace, uploaded evidence, and recent context:\n{compact}\n\n"
-                    "Answer the QUESTION directly. Cater to the user's wording, depth, and desired output. "
-                    "If they ask for a report, make it report-like. If they ask for a PDF/document, draft the content and indicate it can be exported. "
-                    "No JSON. No backend labels."
-                ),
-            },
+            {"role": "user", "content": f"/no_think\nQUESTION: {question}\n\nWorkspace, uploaded evidence, and recent context:\n{compact}\n\nAnswer the QUESTION directly. Cater to the user's wording, depth, and desired output. No JSON. No backend labels."},
         ]
 
     def _candidate_models(self, primary: str | None, max_model_attempts: int | None = None) -> list[str]:
@@ -283,49 +251,18 @@ class AIGateway:
             return candidates[:max_model_attempts]
         return candidates
 
-    async def chat(
-        self,
-        messages: list[dict[str, str]],
-        *,
-        temperature: float = 0.2,
-        response_format: dict[str, Any] | None = None,
-        model_override: str | None = None,
-        max_tokens: int | None = None,
-        timeout_seconds: int | None = None,
-        max_model_attempts: int | None = None,
-    ) -> AIGatewayResult:
+    async def chat(self, messages: list[dict[str, str]], *, temperature: float = 0.2, response_format: dict[str, Any] | None = None, model_override: str | None = None, max_tokens: int | None = None, timeout_seconds: int | None = None, max_model_attempts: int | None = None) -> AIGatewayResult:
         messages = self._with_agroai_context(messages)
         selected_model = (model_override or self.model or "").strip()
         if not self.is_configured_for(selected_model):
             return self._offline_fallback(messages, selected_model or None)
-
         try:
             if self.provider == "ollama":
                 return await self._chat_ollama(messages, temperature, model_override=model_override, max_tokens=max_tokens, timeout_seconds=timeout_seconds)
-            return await self._chat_openai_compatible(
-                messages,
-                temperature,
-                response_format,
-                model_override=model_override,
-                max_tokens=max_tokens,
-                timeout_seconds=timeout_seconds,
-                max_model_attempts=max_model_attempts,
-            )
+            return await self._chat_openai_compatible(messages, temperature, response_format, model_override=model_override, max_tokens=max_tokens, timeout_seconds=timeout_seconds, max_model_attempts=max_model_attempts)
         except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
-            return AIGatewayResult(
-                status="unavailable",
-                content=json.dumps({
-                    "summary": "I could not reach a live model provider for this request.",
-                    "answer": "I could not reach a live model provider for this request.",
-                    "missing_data": ["live model response"],
-                    "next_actions": ["check_model_provider", "retry_with_workspace_context"],
-                    "customer_safe": True,
-                }),
-                provider=self.raw_provider or self.provider or "unconfigured",
-                model=selected_model or None,
-                demo_fallback=True,
-                error=str(exc),
-            )
+            answer = _question_aware_local_fallback(_extract_question(messages))
+            return AIGatewayResult(status="degraded", content=answer, provider=self.raw_provider or self.provider or "unconfigured", model=selected_model or None, demo_fallback=True, error=str(exc))
 
     def _headers(self) -> dict[str, str]:
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
@@ -366,27 +303,13 @@ class AIGateway:
             return False
         return status_code in {400, 402, 404, 408, 409, 422, 429, 500, 502, 503, 504}
 
-    async def _chat_openai_compatible(
-        self,
-        messages: list[dict[str, str]],
-        temperature: float,
-        response_format: dict[str, Any] | None,
-        model_override: str | None = None,
-        max_tokens: int | None = None,
-        timeout_seconds: int | None = None,
-        max_model_attempts: int | None = None,
-    ) -> AIGatewayResult:
+    async def _chat_openai_compatible(self, messages: list[dict[str, str]], temperature: float, response_format: dict[str, Any] | None, model_override: str | None = None, max_tokens: int | None = None, timeout_seconds: int | None = None, max_model_attempts: int | None = None) -> AIGatewayResult:
         headers = self._headers()
         errors: list[str] = []
         request_timeout = max(4, min(int(timeout_seconds or self.timeout or 18), 60))
         async with httpx.AsyncClient(timeout=request_timeout) as client:
             for candidate_model in self._candidate_models(model_override, max_model_attempts=max_model_attempts):
-                payload: dict[str, Any] = {
-                    "model": candidate_model,
-                    "messages": messages,
-                    "temperature": temperature,
-                    "max_tokens": int(max_tokens or 900),
-                }
+                payload: dict[str, Any] = {"model": candidate_model, "messages": messages, "temperature": temperature, "max_tokens": int(max_tokens or 900)}
                 if response_format:
                     payload["response_format"] = response_format
                 try:
@@ -397,7 +320,6 @@ class AIGateway:
                     if not self._should_try_next_model(exc):
                         raise
                     continue
-
                 raw_content = self._message_content(body)
                 content = clean_model_text(raw_content)
                 if response_format:
@@ -412,31 +334,12 @@ class AIGateway:
                 return AIGatewayResult(status="ok", content=content, provider=self.raw_provider or self.provider, model=candidate_model, raw=raw)
         raise ValueError("All configured AI models failed: " + " | ".join(errors))
 
-    async def _chat_ollama(
-        self,
-        messages: list[dict[str, str]],
-        temperature: float,
-        model_override: str | None = None,
-        max_tokens: int | None = None,
-        timeout_seconds: int | None = None,
-    ) -> AIGatewayResult:
+    async def _chat_ollama(self, messages: list[dict[str, str]], temperature: float, model_override: str | None = None, max_tokens: int | None = None, timeout_seconds: int | None = None) -> AIGatewayResult:
         selected_model = model_override or self.model
         question = _extract_question(messages)
         wants_depth = any(term in question.lower() for term in ["report", "analysis", "pdf", "document", "packet", "plan", "diagnose", "detailed", "explain"])
         predict_budget = int(max_tokens or (850 if wants_depth else 240))
-        payload = {
-            "model": selected_model,
-            "messages": messages,
-            "stream": False,
-            "think": False,
-            "keep_alive": "45m",
-            "options": {
-                "temperature": min(float(temperature or 0.18), 0.35),
-                "num_predict": max(80, min(predict_budget, 1800)),
-                "num_ctx": 4096 if wants_depth else 3072,
-                "top_p": 0.9,
-            },
-        }
+        payload = {"model": selected_model, "messages": messages, "stream": False, "think": False, "keep_alive": "45m", "options": {"temperature": min(float(temperature or 0.18), 0.35), "num_predict": max(80, min(predict_budget, 1800)), "num_ctx": 4096 if wants_depth else 3072, "top_p": 0.9}}
         request_timeout = max(8, min(int(timeout_seconds or (60 if wants_depth else 18)), 90))
         async with httpx.AsyncClient(timeout=request_timeout) as client:
             response = await client.post(f"{self.base_url}/api/chat", json=payload)
@@ -449,22 +352,5 @@ class AIGateway:
         return AIGatewayResult(status="ok", content=content, provider="ollama", model=selected_model, raw=body)
 
     def _offline_fallback(self, messages: list[dict[str, str]], selected_model: str | None = None) -> AIGatewayResult:
-        user_message = next((m["content"] for m in reversed(messages) if m.get("role") == "user"), "")
-        missing = []
-        if not self.provider:
-            missing.append("AI_PROVIDER")
-        if not self.base_url:
-            missing.append("AI_BASE_URL")
-        if self.provider != "ollama" and not self.api_key:
-            missing.append("AI_API_KEY or OPENROUTER_API_KEY")
-        if not selected_model:
-            missing.append("AI_MODEL or model override")
-        content = json.dumps({
-            "summary": "I can see the request, but live inference is not available.",
-            "answer": "I can see the request, but live inference is not available.",
-            "request_received": user_message[:500],
-            "missing_data": missing or ["live model provider"],
-            "next_actions": ["configure_model_provider", "retry_with_workspace_context"],
-            "customer_safe": True,
-        })
-        return AIGatewayResult(status="unavailable", content=content, provider=self.raw_provider or self.provider or "offline", model=selected_model, demo_fallback=True)
+        answer = _question_aware_local_fallback(_extract_question(messages))
+        return AIGatewayResult(status="degraded", content=answer, provider=self.raw_provider or self.provider or "offline", model=selected_model, demo_fallback=True)
