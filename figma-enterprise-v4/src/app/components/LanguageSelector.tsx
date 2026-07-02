@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, Globe2 } from "lucide-react";
-import { applyLocale, getStoredLocale, LOCALES, setStoredLocale, t } from "../i18n";
+import { applyLocale, getStoredLocale, setStoredLocale, t } from "../i18n";
+import { ALL_LOCALES } from "./localeCatalog";
 
 export function LanguageSelector({ compact = false, dark = false }: { compact?: boolean; dark?: boolean }) {
   const [locale, setLocale] = useState(getStoredLocale());
@@ -32,7 +33,7 @@ export function LanguageSelector({ compact = false, dark = false }: { compact?: 
           style={{ background: selectBg, color: selectColor, border: `1px solid ${border}` }}
           title="Language"
         >
-          {LOCALES.map((item) => <option key={item.code} value={item.code}>{item.flag} {item.nativeName} · {item.englishName}</option>)}
+          {ALL_LOCALES.map((item) => <option key={item.code} value={item.code}>{item.flag} {item.nativeName} · {item.englishName}</option>)}
         </select>
         <ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5" style={{ color: labelColor }} />
       </span>
