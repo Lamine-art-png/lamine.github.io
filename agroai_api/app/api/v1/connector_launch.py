@@ -18,7 +18,7 @@ from app.services.oauth_urls import oauth_url
 
 router = APIRouter(tags=["connector-launch"])
 ProviderId = Literal["wiseconn", "talgil", "universal_controller", "weather", "openet", "manual_csv", "gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce", "google_earth_engine", "custom_api"]
-APP_CONNECTOR_RETURN_URL = os.getenv("APP_URL", "https://app.agroai-pilot.com").rstrip("/") + "/connectors"
+APP_CONNECTOR_RETURN_URL = os.getenv("APP_URL", "https://app.agroai-pilot.com").rstrip("/") + "/"
 API_OAUTH_CALLBACK_URL = "https://api.agroai-pilot.com/v1/connectors/oauth/callback"
 
 CONNECTOR_MANIFESTS: dict[str, dict[str, Any]] = {
