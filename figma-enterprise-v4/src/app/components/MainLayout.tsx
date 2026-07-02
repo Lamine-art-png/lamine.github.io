@@ -1,18 +1,28 @@
+import { useEffect, useState } from "react";
 import { Outlet, NavLink } from "react-router";
 import { CreditCard, HelpCircle, Lock, LogOut, Plus, Settings, Shield, UserCircle } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
+import { currentLocale, t } from "../i18n";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import logoImg from "../../imports/agro-ai-logo-1.png";
 import { OperatingStatusBar } from "./OperatingStatusBar";
+import { LanguageSelector } from "./LanguageSelector";
 
 export function MainLayout() {
   const { currentOrganization, currentWorkspace, entitlements, logout } = useAuth();
+  const [locale, setLocale] = useState(currentLocale());
   const role = currentOrganization?.role;
   const canInviteTeam = Boolean(entitlements.can_invite_team);
   const canAccessAdminRequests = Boolean(entitlements.can_access_admin_requests);
   const canUseConnectors = Boolean(entitlements.can_use_connectors);
   const canGeneratePdf = Boolean(entitlements.can_generate_pdf);
   const isAdminUser = role === "owner" || role === "admin";
+
+  useEffect(() => {
+    const listener = (() => setLocale(currentLocale())) as EventListener;
+    window.addEventListener("agroai:locale-change", listener);
+    return () => window.removeEventListener("agroai:locale-change", listener);
+  }, []);
 
   const operateItems = [
     { name: "Command Center", path: "/" },
@@ -38,7 +48,7 @@ export function MainLayout() {
 
   const accountItems = [
     { name: "Profile", path: "/profile", icon: UserCircle },
-    { name: "Billing", path: "/billing", icon: CreditCard },
+    { name: t("billing", locale), path: "/billing", icon: CreditCard },
     { name: "Security", path: "/security", icon: Shield },
     { name: "Support", path: "/support", icon: HelpCircle },
     { name: "Requests", path: "/admin/requests", icon: HelpCircle, locked: !canAccessAdminRequests },
@@ -57,12 +67,12 @@ export function MainLayout() {
             <div>
               <div className="text-white font-semibold text-[13px] tracking-tight leading-tight">AGRO-AI</div>
               <div className="text-[11px] leading-tight" style={{ color: "rgba(255,255,255,0.38)" }}>
-                Field operating room
+                {t("fieldOperatingRoom", locale)}
               </div>
             </div>
           </div>
           <div className="mt-5 rounded-lg px-3 py-3" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
-            <div className="text-[10px] font-semibold uppercase" style={{ color: "rgba(255,255,255,0.34)" }}>Workspace</div>
+            <div className="text-[10px] font-semibold uppercase" style={{ color: "rgba(255,255,255,0.34)" }}>{t("workspace", locale)}</div>
             <div className="mt-1 truncate text-[13px] font-medium" style={{ color: "white" }}>{currentWorkspace?.name || "Evaluation workspace"}</div>
             <div className="mt-1 truncate text-[11px]" style={{ color: "rgba(255,255,255,0.46)" }}>{currentOrganization?.name || "Organization"}</div>
           </div>
@@ -72,17 +82,20 @@ export function MainLayout() {
             style={{ background: "#DDEB8F", color: "#10231B" }}
           >
             <Plus className="h-3.5 w-3.5" />
-            New operation
+            {t("newOperation", locale)}
           </NavLink>
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-5 overflow-y-auto">
-          <NavSection title="Operate" items={operateItems.map((item) => item.name === "Reports" ? { ...item, locked: !canGeneratePdf } : item.name === "Connectors" ? { ...item, locked: !canUseConnectors } : item)} />
-          <NavSection title="Intelligence" items={intelligenceItems} />
-          <NavSection title="Workspace" items={workspaceItems} />
+          <NavSection title={t("operate", locale)} items={operateItems.map((item) => item.name === "Reports" ? { ...item, locked: !canGeneratePdf } : item.name === "Connectors" ? { ...item, locked: !canUseConnectors } : item)} />
+          <NavSection title={t("intelligence", locale)} items={intelligenceItems} />
+          <NavSection title={t("workspace", locale)} items={workspaceItems} />
         </nav>
 
         <div className="space-y-2 px-3 pb-4">
+          <div className="rounded-md px-3 py-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+            <LanguageSelector dark />
+          </div>
           <NavLink
             to="/pricing"
             className="flex h-10 items-center justify-between rounded-md px-3 text-[12px] font-medium"
@@ -92,12 +105,12 @@ export function MainLayout() {
               border: "1px solid rgba(255,255,255,0.07)",
             })}
           >
-            <span>{currentOrganization?.plan === "network" ? "Network" : currentOrganization?.plan === "professional" ? "Professional" : "Free"}</span>
+            <span>{currentOrganization?.plan === "network" ? "Network" : currentOrganization?.plan === "team" ? "Team" : currentOrganization?.plan === "professional" ? "Professional" : "Free"}</span>
             <span style={{ color: "rgba(255,255,255,0.42)" }}>Plan</span>
           </NavLink>
           <div className="rounded-lg p-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
             <div className="px-2 pb-2 text-[11px]" style={{ color: "rgba(255,255,255,0.44)" }}>
-              Account
+              {t("account", locale)}
             </div>
             <div className="space-y-1">
               {accountItems.map((item) => (
