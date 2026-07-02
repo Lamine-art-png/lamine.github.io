@@ -13,13 +13,14 @@ from app.core.config import settings
 from app.db.base import get_db
 from app.models.saas import BillingEvent, Organization, UsageEvent, User
 from app.services.entitlements import require_owner_or_admin, serialize_entitlements
+from app.services.product_plans import public_plans, service_add_ons, upgrade_options
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
 
 class CheckoutRequest(BaseModel):
     organization_id: str
-    # New commercial offer. "plan" kept only for old callers.
+    # Current self-serve offers use `offer`; `plan` is kept for older callers.
     offer: str | None = None
     plan: str | None = None
 
@@ -40,18 +41,67 @@ def _stripe_ready() -> None:
 def _normalize_offer(payload: CheckoutRequest) -> str:
     raw = (payload.offer or payload.plan or "").strip().lower()
     aliases = {
-        "pilot": "waterops_monthly",
-        "pro": "assurance_monthly",
-        "waterops": "waterops_monthly",
-        "assurance": "assurance_monthly",
+        # Current portal card shortcuts.
+        "professional": "professional_monthly",
+        "pro": "professional_monthly",
+        "team": "team_monthly",
+        "network": "network_monthly",
+        # Legacy aliases kept so older portal/test commands do not break.
+        "pilot": "professional_monthly",
+        "waterops": "professional_monthly",
+        "waterops_monthly": "professional_monthly",
+        "assurance": "team_monthly",
+        "assurance_monthly": "team_monthly",
         "farm_audit": "assurance_audit_farm",
         "network_audit": "assurance_audit_network",
     }
     return aliases.get(raw, raw)
 
 
+def _normalize_plan_id(plan: str | None) -> str | None:
+    if not plan:
+        return None
+    return {
+        "pilot": "free",
+        "pro": "professional",
+        "waterops": "professional",
+        "assurance": "team",
+    }.get(plan, plan)
+
+
 def _offer_config(offer: str) -> dict:
     offers = {
+        "professional_monthly": {
+            "price": settings.STRIPE_PRICE_PRO_MONTHLY,
+            "mode": "subscription",
+            "plan": "professional",
+        },
+        "professional_annual": {
+            "price": settings.STRIPE_PRICE_PRO_ANNUAL,
+            "mode": "subscription",
+            "plan": "professional",
+        },
+        "team_monthly": {
+            "price": settings.STRIPE_PRICE_TEAM_MONTHLY,
+            "mode": "subscription",
+            "plan": "team",
+        },
+        "team_annual": {
+            "price": settings.STRIPE_PRICE_TEAM_ANNUAL,
+            "mode": "subscription",
+            "plan": "team",
+        },
+        "network_monthly": {
+            "price": settings.STRIPE_PRICE_NETWORK_MONTHLY,
+            "mode": "subscription",
+            "plan": "network",
+        },
+        "network_annual": {
+            "price": settings.STRIPE_PRICE_NETWORK_ANNUAL,
+            "mode": "subscription",
+            "plan": "network",
+        },
+        # Legacy/commercial service offers still supported for direct checkout.
         "assurance_audit_farm": {
             "price": settings.STRIPE_PRICE_ASSURANCE_AUDIT_FARM,
             "mode": "payment",
@@ -62,16 +112,6 @@ def _offer_config(offer: str) -> dict:
             "mode": "payment",
             "plan": "assurance_audit",
         },
-        "waterops_monthly": {
-            "price": settings.STRIPE_PRICE_WATEROPS_MONTHLY,
-            "mode": "subscription",
-            "plan": "waterops",
-        },
-        "assurance_monthly": {
-            "price": settings.STRIPE_PRICE_ASSURANCE_MONTHLY,
-            "mode": "subscription",
-            "plan": "assurance",
-        },
     }
     config = offers.get(offer)
     if not config:
@@ -79,7 +119,7 @@ def _offer_config(offer: str) -> dict:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
                 "code": "offer_required",
-                "message": "Use assurance_audit_farm, assurance_audit_network, waterops_monthly, or assurance_monthly.",
+                "message": "Use professional_monthly, professional_annual, team_monthly, team_annual, network_monthly, network_annual, assurance_audit_farm, or assurance_audit_network.",
             },
         )
     if not config["price"]:
@@ -102,6 +142,21 @@ def _create_customer(org: Organization) -> str:
     return customer["id"]
 
 
+@router.get("/plans")
+def billing_plans(user: User = Depends(get_current_user)) -> dict:
+    current_plan = _normalize_plan_id(user.memberships[0].organization.plan) if user.memberships else "free"
+    return {
+        "plans": public_plans(),
+        "service_add_ons": service_add_ons(),
+        "upgrade_options": upgrade_options(current_plan),
+        "offers": {
+            "professional": {"monthly": "professional_monthly", "annual": "professional_annual"},
+            "team": {"monthly": "team_monthly", "annual": "team_annual"},
+            "network": {"monthly": "network_monthly", "annual": "network_annual"},
+        },
+    }
+
+
 @router.post("/create-checkout-session")
 def create_checkout_session(payload: CheckoutRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
     offer = _normalize_offer(payload)
@@ -118,20 +173,39 @@ def create_checkout_session(payload: CheckoutRequest, user: User = Depends(get_c
 
     _stripe_ready()
     try:
-        session = stripe.checkout.Session.create(
-            mode=offer_config["mode"],
-            customer=customer_id,
-            line_items=[{"price": offer_config["price"], "quantity": 1}],
-            success_url=f"{settings.APP_URL}/billing?checkout=success&offer={offer}",
-            cancel_url=f"{settings.APP_URL}/billing?checkout=cancelled&offer={offer}",
-            client_reference_id=org.id,
-            metadata={
+        session_kwargs = {
+            "mode": offer_config["mode"],
+            "customer": customer_id,
+            "line_items": [{"price": offer_config["price"], "quantity": 1}],
+            "success_url": f"{settings.APP_URL}/billing?checkout=success&offer={offer}",
+            "cancel_url": f"{settings.APP_URL}/billing?checkout=cancelled&offer={offer}",
+            "client_reference_id": org.id,
+            "metadata": {
                 "organization_id": org.id,
                 "offer": offer,
                 "plan": offer_config["plan"],
                 "checkout_mode": offer_config["mode"],
             },
-        )
+        }
+        if offer_config["mode"] == "subscription":
+            session_kwargs["subscription_data"] = {
+                "metadata": {
+                    "organization_id": org.id,
+                    "offer": offer,
+                    "plan": offer_config["plan"],
+                    "checkout_mode": offer_config["mode"],
+                }
+            }
+        else:
+            session_kwargs["payment_intent_data"] = {
+                "metadata": {
+                    "organization_id": org.id,
+                    "offer": offer,
+                    "plan": offer_config["plan"],
+                    "checkout_mode": offer_config["mode"],
+                }
+            }
+        session = stripe.checkout.Session.create(**session_kwargs)
     except stripe.error.StripeError:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -175,7 +249,7 @@ def billing_status(organization_id: str | None = None, user: User = Depends(get_
     for event_type, quantity in usage:
         totals[event_type] = totals.get(event_type, 0) + int(quantity or 0)
     return {
-        "plan": org.plan,
+        "plan": _normalize_plan_id(org.plan) or "free",
         "subscription_status": org.subscription_status,
         "current_period_end": org.current_period_end.isoformat() if org.current_period_end else None,
         "entitlements": serialize_entitlements(org),
@@ -203,25 +277,28 @@ def _plan_from_price(price_id: str | None) -> str | None:
     if not price_id:
         return None
 
-    # Legacy Stripe price names kept for older tests/frontends.
-    if price_id == getattr(settings, "STRIPE_PRICE_PRO", ""):
-        return "pro"
-    if price_id == getattr(settings, "STRIPE_PRICE_PILOT", ""):
-        return "pilot"
-    if price_id == getattr(settings, "STRIPE_PRICE_ENTERPRISE", ""):
-        return "enterprise"
+    # Current portal pricing tiers.
+    price_to_plan = {
+        settings.STRIPE_PRICE_PRO_MONTHLY: "professional",
+        settings.STRIPE_PRICE_PRO_ANNUAL: "professional",
+        settings.STRIPE_PRICE_TEAM_MONTHLY: "team",
+        settings.STRIPE_PRICE_TEAM_ANNUAL: "team",
+        settings.STRIPE_PRICE_NETWORK_MONTHLY: "network",
+        settings.STRIPE_PRICE_NETWORK_ANNUAL: "network",
+        # Legacy names retained for old test sessions.
+        settings.STRIPE_PRICE_WATEROPS_MONTHLY: "professional",
+        settings.STRIPE_PRICE_ASSURANCE_MONTHLY: "team",
+        getattr(settings, "STRIPE_PRICE_PRO", ""): "professional",
+        getattr(settings, "STRIPE_PRICE_PILOT", ""): "professional",
+        getattr(settings, "STRIPE_PRICE_ENTERPRISE", ""): "enterprise",
+        settings.STRIPE_PRICE_ASSURANCE_AUDIT_FARM: "assurance_audit",
+        settings.STRIPE_PRICE_ASSURANCE_AUDIT_NETWORK: "assurance_audit",
+    }
+    return price_to_plan.get(price_id)
 
-    # Current AGRO-AI commercial offers.
-    if price_id == settings.STRIPE_PRICE_WATEROPS_MONTHLY:
-        return "waterops"
-    if price_id == settings.STRIPE_PRICE_ASSURANCE_MONTHLY:
-        return "assurance"
-    if price_id in {settings.STRIPE_PRICE_ASSURANCE_AUDIT_FARM, settings.STRIPE_PRICE_ASSURANCE_AUDIT_NETWORK}:
-        return "assurance_audit"
-    return None
 
 def _org_for_event(db: Session, obj: dict) -> Organization | None:
-    org_id = (obj.get("metadata") or {}).get("organization_id")
+    org_id = (obj.get("metadata") or {}).get("organization_id") or obj.get("client_reference_id")
     customer_id = obj.get("customer")
     subscription_id = obj.get("subscription") or obj.get("id")
     query = db.query(Organization)
@@ -243,9 +320,9 @@ def _apply_billing_event(db: Session, org: Organization | None, event_type: str,
         org.stripe_customer_id = obj.get("customer") or org.stripe_customer_id
         org.stripe_subscription_id = obj.get("subscription") or org.stripe_subscription_id
         metadata = obj.get("metadata") or {}
-        plan = metadata.get("plan")
+        plan = _normalize_plan_id(metadata.get("plan"))
         checkout_mode = metadata.get("checkout_mode") or obj.get("mode")
-        if plan in {"waterops", "assurance"}:
+        if plan in {"professional", "team", "network", "enterprise"}:
             org.plan = plan
             org.subscription_status = "active"
         elif plan == "assurance_audit" and checkout_mode == "payment":
@@ -255,10 +332,14 @@ def _apply_billing_event(db: Session, org: Organization | None, event_type: str,
         org.stripe_customer_id = obj.get("customer") or org.stripe_customer_id
         org.stripe_subscription_id = obj.get("id") or org.stripe_subscription_id
         org.subscription_status = obj.get("status") or org.subscription_status
-        items = (((obj.get("items") or {}).get("data") or [{}])[0]).get("price") or {}
-        plan = _plan_from_price(items.get("id"))
-        if plan:
-            org.plan = plan
+        metadata_plan = _normalize_plan_id((obj.get("metadata") or {}).get("plan"))
+        if metadata_plan in {"professional", "team", "network", "enterprise"}:
+            org.plan = metadata_plan
+        else:
+            items = (((obj.get("items") or {}).get("data") or [{}])[0]).get("price") or {}
+            plan = _plan_from_price(items.get("id"))
+            if plan:
+                org.plan = plan
         if event_type == "customer.subscription.deleted":
             org.plan = "free"
             org.subscription_status = "canceled"
