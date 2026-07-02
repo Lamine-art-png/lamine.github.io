@@ -1,9 +1,4 @@
-"""Connector Hub action endpoints.
-
-This file intentionally stays thin and delegates core connector/evidence logic to
-`connectors.py`. It exists for frontend compatibility with earlier Connector Hub
-routes while avoiding import-time failures from stale helper names.
-"""
+"""Connector Hub action endpoints."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -17,11 +12,9 @@ from app.api.v1.connectors import (
     _create_evidence_rows,
     _job,
     _job_public,
-    catalog_item,
     create_or_get_connection,
     ensure_schema,
     evidence_public,
-    oauth_url,
     parse_rows,
     public_connection,
     row_to_dict,
@@ -33,31 +26,12 @@ from app.api.v1.connectors import (
 from app.core.security import require_current_tenant_id
 from app.db.base import get_db
 from app.models.operational_records import ConnectorConnection, DataSource, EvidenceRecord, IngestionJob
+from app.services.oauth_urls import oauth_url
 
 router = APIRouter(tags=["connector-hub-actions"])
-
-ProviderId = Literal[
-    "wiseconn",
-    "talgil",
-    "universal_controller",
-    "weather",
-    "openet",
-    "manual_csv",
-    "chat_upload",
-    "gmail",
-    "outlook",
-    "google_drive",
-    "dropbox",
-    "box",
-    "slack",
-    "salesforce",
-    "google_earth_engine",
-    "custom_api",
-]
-
+ProviderId = Literal["wiseconn", "talgil", "universal_controller", "weather", "openet", "manual_csv", "chat_upload", "gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce", "google_earth_engine", "custom_api"]
 ACCOUNT_PROVIDERS = {"gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce"}
 UPLOAD_PROVIDERS = {"wiseconn", "talgil", "universal_controller", "manual_csv", "chat_upload", "weather", "openet"}
-
 
 class ConnectorConnectRequest(BaseModel):
     provider: ProviderId
@@ -69,13 +43,11 @@ class ConnectorConnectRequest(BaseModel):
     send_reports_enabled: bool = False
     read_context_enabled: bool = True
 
-
 class OAuthStartRequest(BaseModel):
     provider: Literal["gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce"]
     workspace_id: str | None = None
     redirect_url: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
-
 
 def connector_mode(provider: str, requested: str | None = None) -> str:
     if requested:
@@ -90,13 +62,11 @@ def connector_mode(provider: str, requested: str | None = None) -> str:
         return "export_upload"
     return "manual_upload"
 
-
 def credential_seed(provider: str, config: dict[str, Any]) -> str:
     for key in ("credential_ref", "api_key", "token", "account_email", "username", "base_url", "provider_name", "environment_name", "account_hint"):
         if config.get(key):
             return str(config[key])
     return f"{provider}:internal-testing-connection"
-
 
 def capabilities(provider: str) -> list[str]:
     if provider in {"wiseconn", "talgil"}:
@@ -123,7 +93,6 @@ def capabilities(provider: str) -> list[str]:
         return ["et_context", "water_use_context", "field_boundary_context"]
     return ["custom_endpoint", "provider_context", "future_sync_job"]
 
-
 def _source_type(filename: str, content_type: str | None, provider: str) -> str:
     lower = filename.lower()
     if lower.endswith((".xlsx", ".xls")):
@@ -136,140 +105,45 @@ def _source_type(filename: str, content_type: str | None, provider: str) -> str:
         return "controller_export"
     return "telemetry_csv"
 
-
 def _get_connection(db: Session, tenant_id: str, connection_id: str) -> ConnectorConnection:
     row = db.get(ConnectorConnection, connection_id)
     if not row or row.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="Connection not found")
     return row
 
-
 def _save_job(db: Session, *, tenant_id: str, connection: ConnectorConnection, job_type: str, output_json: dict[str, Any], status_value: str = "completed") -> IngestionJob:
-    row = IngestionJob(
-        tenant_id=tenant_id,
-        workspace_id=connection.workspace_id,
-        connector_connection_id=connection.id,
-        job_type=job_type,
-        status=status_value,
-        input_json={"provider": connection.provider, "mode": connection.mode},
-        output_json=output_json,
-        completed_at=datetime.utcnow(),
-    )
+    row = IngestionJob(tenant_id=tenant_id, workspace_id=connection.workspace_id, connector_connection_id=connection.id, job_type=job_type, status=status_value, input_json={"provider": connection.provider, "mode": connection.mode}, output_json=output_json, completed_at=datetime.utcnow())
     db.add(row)
     return row
-
 
 def ingest_upload(db: Session, *, tenant_id: str, connection: ConnectorConnection, filename: str, content_type: str | None, data: bytes) -> dict[str, Any]:
     if connection.provider not in UPLOAD_PROVIDERS:
         raise HTTPException(status_code=400, detail="This connector does not accept file uploads. Use account/API connection instead.")
-
     raw_text, rows, columns, warnings = parse_rows(filename, content_type, data)
     storage_path = save_upload_bytes(tenant_id, connection.id, filename, data)
     mapping = suggest_mapping(columns)
-
-    source = DataSource(
-        tenant_id=tenant_id,
-        workspace_id=connection.workspace_id,
-        connector_connection_id=connection.id,
-        source_type=_source_type(filename, content_type, connection.provider),
-        provider=connection.provider,
-        filename=filename,
-        content_type=content_type,
-        storage_path=storage_path,
-        raw_text=raw_text[:200000],
-        metadata_json={
-            "columns": columns,
-            "rows_parsed": len(rows),
-            "parsed_rows": rows[:500],
-            "mapping_suggestions": mapping,
-            "storage_path": storage_path,
-            "normalized_gateway": connection.provider == "universal_controller",
-            "warnings": warnings,
-        },
-        status="parsed_with_warnings" if warnings else "parsed",
-    )
+    source = DataSource(tenant_id=tenant_id, workspace_id=connection.workspace_id, connector_connection_id=connection.id, source_type=_source_type(filename, content_type, connection.provider), provider=connection.provider, filename=filename, content_type=content_type, storage_path=storage_path, raw_text=raw_text[:200000], metadata_json={"columns": columns, "rows_parsed": len(rows), "parsed_rows": rows[:500], "mapping_suggestions": mapping, "storage_path": storage_path, "normalized_gateway": connection.provider == "universal_controller", "warnings": warnings}, status="parsed_with_warnings" if warnings else "parsed")
     db.add(source)
     db.commit()
     db.refresh(source)
-
-    records = _create_evidence_rows(
-        db,
-        tenant_id=tenant_id,
-        workspace_id=connection.workspace_id,
-        connection_id=connection.id,
-        data_source_id=source.id,
-        provider=connection.provider,
-        filename=filename,
-        rows=rows,
-        columns=columns,
-    )
-
+    records = _create_evidence_rows(db, tenant_id=tenant_id, workspace_id=connection.workspace_id, connection_id=connection.id, data_source_id=source.id, provider=connection.provider, filename=filename, rows=rows, columns=columns)
     connection.status = "synced" if records else "mapping_required"
     connection.last_sync_at = datetime.utcnow()
     connection.last_error = None if records else "Uploaded file stored but produced no evidence records."
-
-    job = _job(
-        db,
-        tenant_id=tenant_id,
-        workspace_id=connection.workspace_id,
-        connection_id=connection.id,
-        data_source_id=source.id,
-        job_type="connector_hub_upload_parse",
-        input_json={"provider": connection.provider, "filename": filename},
-        output_json={
-            "rows_parsed": len(rows),
-            "columns": columns,
-            "mapping_suggestions": mapping,
-            "evidence_records_created": len(records),
-            "warnings": warnings,
-            "data_source_id": source.id,
-            "storage_path": storage_path,
-        },
-        status_value="completed_with_warnings" if warnings else "completed",
-    )
+    job = _job(db, tenant_id=tenant_id, workspace_id=connection.workspace_id, connection_id=connection.id, data_source_id=source.id, job_type="connector_hub_upload_parse", input_json={"provider": connection.provider, "filename": filename}, output_json={"rows_parsed": len(rows), "columns": columns, "mapping_suggestions": mapping, "evidence_records_created": len(records), "warnings": warnings, "data_source_id": source.id, "storage_path": storage_path}, status_value="completed_with_warnings" if warnings else "completed")
     db.commit()
     db.refresh(connection)
-
-    return {
-        "status": source.status,
-        "connection": public_connection(connection),
-        "data_source": row_to_dict(source),
-        "job": _job_public(job),
-        "rows_parsed": len(rows),
-        "columns": columns,
-        "mapping_suggestions": mapping,
-        "evidence_records_created": len(records),
-        "warnings": warnings,
-        "evidence_preview": [evidence_public(record) for record in records[:8]],
-    }
-
+    return {"status": source.status, "connection": public_connection(connection), "data_source": row_to_dict(source), "job": _job_public(job), "rows_parsed": len(rows), "columns": columns, "mapping_suggestions": mapping, "evidence_records_created": len(records), "warnings": warnings, "evidence_preview": [evidence_public(record) for record in records[:8]]}
 
 @router.post("/connectors/connect")
 async def connect_provider(payload: ConnectorConnectRequest, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
     ensure_schema(db)
     mode = connector_mode(payload.provider, payload.mode)
-    connection = create_or_get_connection(
-        db,
-        tenant_id=tenant_id,
-        provider=payload.provider,
-        workspace_id=payload.workspace_id,
-        mode=mode,
-        display_name=payload.display_name,
-        config=payload.config,
-    )
-    safe_config = sanitize_config(payload.config)
+    connection = create_or_get_connection(db, tenant_id=tenant_id, provider=payload.provider, workspace_id=payload.workspace_id, mode=mode, display_name=payload.display_name, config=payload.config)
     caps = capabilities(payload.provider)
     merged = dict(connection.config_json or {})
-    merged.update(safe_config)
-    merged.update({
-        "authorization_status": "connected",
-        "connector_hub_version": "working-v2",
-        "connection_pattern": mode,
-        "read_context_enabled": payload.read_context_enabled,
-        "send_reports_enabled": payload.send_reports_enabled,
-        "scopes": payload.scopes,
-        "capabilities": caps,
-    })
+    merged.update(sanitize_config(payload.config))
+    merged.update({"authorization_status": "connected", "connector_hub_version": "working-v2", "connection_pattern": mode, "read_context_enabled": payload.read_context_enabled, "send_reports_enabled": payload.send_reports_enabled, "scopes": payload.scopes, "capabilities": caps})
     connection.mode = mode
     connection.status = "connected"
     connection.credentials_ref = safe_credential_ref(credential_seed(payload.provider, payload.config))
@@ -282,12 +156,11 @@ async def connect_provider(payload: ConnectorConnectRequest, tenant_id: str = De
     db.refresh(connection)
     return {"status": "connected", "message": f"{payload.provider} connected.", "connection": public_connection(connection), "job": row_to_dict(job), "capabilities": caps}
 
-
 @router.post("/connectors/oauth/start")
 async def start_oauth(payload: OAuthStartRequest, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
     ensure_schema(db)
     connection = create_or_get_connection(db, tenant_id=tenant_id, provider=payload.provider, workspace_id=payload.workspace_id, mode="oauth", config=payload.metadata)
-    redirect_url = payload.redirect_url or "https://app.agroai-pilot.com/integrations/oauth/callback"
+    redirect_url = payload.redirect_url or "https://api.agroai-pilot.com/v1/connectors/oauth/callback"
     state = f"{connection.id}:{tenant_id}:{int(datetime.utcnow().timestamp())}"
     auth_url, oauth_error = oauth_url(payload.provider, state, redirect_url)
     caps = capabilities(payload.provider)
@@ -306,7 +179,6 @@ async def start_oauth(payload: OAuthStartRequest, tenant_id: str = Depends(requi
     message = "OAuth authorization URL created." if auth_url else f"{payload.provider} connected for internal testing. Configure provider OAuth client credentials to enable real account authorization."
     return {"status": connection.status, "message": message, "auth_url": auth_url, "oauth_error": oauth_error, "connection": public_connection(connection), "job": row_to_dict(job), "capabilities": caps}
 
-
 @router.post("/evidence/upload")
 async def upload_hub_evidence_file(provider: ProviderId = Query(default="manual_csv"), workspace_id: str | None = Query(default=None), file: UploadFile = File(...), tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
     ensure_schema(db)
@@ -321,7 +193,6 @@ async def upload_hub_evidence_file(provider: ProviderId = Query(default="manual_
         db.rollback()
         raise HTTPException(status_code=500, detail={"error": "upload_ingestion_failed", "message": str(exc), "provider": provider, "filename": file.filename}) from exc
 
-
 @router.get("/connectors/data-sources")
 async def list_data_sources(provider: str | None = None, connection_id: str | None = None, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
     ensure_schema(db)
@@ -333,7 +204,6 @@ async def list_data_sources(provider: str | None = None, connection_id: str | No
     rows = query.order_by(DataSource.created_at.desc()).limit(200).all()
     return {"status": "ok", "data_sources": [row_to_dict(row) for row in rows]}
 
-
 @router.get("/connectors/jobs")
 async def list_connector_jobs(connection_id: str | None = None, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
     ensure_schema(db)
@@ -343,7 +213,6 @@ async def list_connector_jobs(connection_id: str | None = None, tenant_id: str =
     rows = query.order_by(IngestionJob.created_at.desc()).limit(200).all()
     return {"status": "ok", "jobs": [row_to_dict(row) for row in rows]}
 
-
 @router.get("/connectors/connections/{connection_id}/data")
 async def connector_data_status(connection_id: str, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
     ensure_schema(db)
@@ -351,10 +220,4 @@ async def connector_data_status(connection_id: str, tenant_id: str = Depends(req
     sources = db.query(DataSource).filter(DataSource.tenant_id == tenant_id, DataSource.connector_connection_id == connection_id).order_by(DataSource.created_at.desc()).limit(50).all()
     evidence = db.query(EvidenceRecord).filter(EvidenceRecord.tenant_id == tenant_id, EvidenceRecord.connector_connection_id == connection_id).order_by(EvidenceRecord.created_at.desc()).limit(50).all()
     jobs = db.query(IngestionJob).filter(IngestionJob.tenant_id == tenant_id, IngestionJob.connector_connection_id == connection_id).order_by(IngestionJob.created_at.desc()).limit(20).all()
-    return {
-        "status": "ok",
-        "data_sources": [row_to_dict(row) for row in sources],
-        "evidence": [evidence_public(row) for row in evidence],
-        "jobs": [row_to_dict(row) for row in jobs],
-        "counts": {"data_sources": len(sources), "evidence": len(evidence), "jobs": len(jobs)},
-    }
+    return {"status": "ok", "data_sources": [row_to_dict(row) for row in sources], "evidence": [evidence_public(row) for row in evidence], "jobs": [row_to_dict(row) for row in jobs], "counts": {"data_sources": len(sources), "evidence": len(evidence), "jobs": len(jobs)}}
