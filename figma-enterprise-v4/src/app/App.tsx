@@ -2,8 +2,9 @@ import { Component, ReactNode, useEffect, useState } from "react";
 import { RouterProvider } from "react-router";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
 import { AuthScreen } from "./components/AuthScreen";
-import { PricingPage } from "./components/ProductShell";
+import { PricingPage } from "./components/PricingPage";
 import { VerifyEmailPage } from "./components/VerifyEmail";
+import { applyLocale } from "./i18n";
 
 type PortalRuntimeBoundaryState = { error: string };
 
@@ -57,6 +58,10 @@ class PortalRuntimeBoundary extends Component<{ children: ReactNode }, PortalRun
 }
 
 export default function App() {
+  useEffect(() => {
+    applyLocale();
+  }, []);
+
   return (
     <PortalRuntimeBoundary>
       <AuthProvider>
