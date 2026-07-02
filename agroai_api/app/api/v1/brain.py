@@ -38,6 +38,7 @@ class BrainRunRequest(BaseModel):
     history: list[dict[str, Any]] = Field(default_factory=list)
     uploaded_evidence: list[dict[str, Any]] = Field(default_factory=list)
 
+
 MISSING_EVIDENCE_TERMS = (
     "how much water",
     "water should",
@@ -315,3 +316,7 @@ async def model_smoke() -> dict[str, Any]:
         "provider": gateway.provider or "offline",
         "selected_model": selection.model or gateway.model,
     }
+
+
+from app.api.v1.conversations import router as conversation_history_router  # noqa: E402
+router.include_router(conversation_history_router)
