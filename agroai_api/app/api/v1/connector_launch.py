@@ -4,8 +4,9 @@ import os
 from datetime import datetime
 from typing import Any, Literal
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -17,7 +18,7 @@ from app.services.oauth_urls import oauth_url
 
 router = APIRouter(tags=["connector-launch"])
 ProviderId = Literal["wiseconn", "talgil", "universal_controller", "weather", "openet", "manual_csv", "gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce", "google_earth_engine", "custom_api"]
-APP_CONNECTOR_RETURN_URL = "https://app.agroai-pilot.com/connectors"
+APP_CONNECTOR_RETURN_URL = os.getenv("APP_URL", "https://app.agroai-pilot.com").rstrip("/") + "/connectors"
 API_OAUTH_CALLBACK_URL = "https://api.agroai-pilot.com/v1/connectors/oauth/callback"
 
 CONNECTOR_MANIFESTS: dict[str, dict[str, Any]] = {
@@ -56,6 +57,44 @@ class AccessRequest(BaseModel):
     credential_ref: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+def callback_url_for(provider: str) -> str:
+    return os.getenv(f"{provider.upper()}_OAUTH_REDIRECT_URI", API_OAUTH_CALLBACK_URL).strip() or API_OAUTH_CALLBACK_URL
+
+def return_url(provider: str, status: str, connection_id: str | None = None) -> str:
+    extra = f"&connection_id={connection_id}" if connection_id else ""
+    return f"{APP_CONNECTOR_RETURN_URL}?connector={provider}&status={status}{extra}"
+
+def html_status(provider: str, status: str, message: str, connection_id: str | None = None) -> HTMLResponse:
+    href = return_url(provider, status, connection_id)
+    return HTMLResponse(f"<html><body><h2>Connector {status.replace('_', ' ')}</h2><p>{message}</p><p><a href='{href}'>Return to AGRO-AI</a></p><script>setTimeout(function(){{ window.location.href = '{href}'; }}, 900);</script></body></html>")
+
+async def exchange_dropbox_code(code: str) -> dict[str, Any]:
+    client_id = os.getenv("DROPBOX_OAUTH_CLIENT_ID", "").strip()
+    client_secret = os.getenv("DROPBOX_OAUTH_CLIENT_SECRET", "").strip()
+    if not client_id or not client_secret:
+        raise RuntimeError("Dropbox OAuth client ID or secret is missing.")
+    async with httpx.AsyncClient(timeout=20) as client:
+        response = await client.post(
+            "https://api.dropboxapi.com/oauth2/token",
+            data={"code": code, "grant_type": "authorization_code", "client_id": client_id, "client_secret": client_secret, "redirect_uri": callback_url_for("dropbox")},
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+    if response.status_code >= 400:
+        raise RuntimeError(f"Dropbox token exchange failed {response.status_code}: {response.text[:700]}")
+    return response.json()
+
+async def probe_dropbox(access_token: str) -> dict[str, Any]:
+    headers = {"Authorization": f"Bearer {access_token}"}
+    async with httpx.AsyncClient(timeout=20) as client:
+        account_response = await client.post("https://api.dropboxapi.com/2/users/get_current_account", headers=headers)
+        if account_response.status_code >= 400:
+            raise RuntimeError(f"Dropbox account probe failed {account_response.status_code}: {account_response.text[:500]}")
+        files_response = await client.post("https://api.dropboxapi.com/2/files/list_folder", headers={**headers, "Content-Type": "application/json"}, json={"path": "", "limit": 10})
+    account = account_response.json()
+    files = files_response.json() if files_response.status_code < 400 else {"entries": []}
+    entries = files.get("entries", []) if isinstance(files, dict) else []
+    return {"account_id": account.get("account_id"), "email": account.get("email"), "name": (account.get("name") or {}).get("display_name") if isinstance(account.get("name"), dict) else None, "files_preview": [{"name": item.get("name"), "path_lower": item.get("path_lower"), "tag": item.get(".tag")} for item in entries[:10] if isinstance(item, dict)], "file_count_preview": len(entries)}
+
 def manifest_for(provider: str) -> dict[str, Any]:
     item = CONNECTOR_MANIFESTS.get(provider)
     if not item:
@@ -92,14 +131,14 @@ async def start_launch_authorization(payload: LaunchStartRequest, tenant_id: str
     state = None
     if auth_pattern == "oauth":
         state = os.urandom(24).hex()
-        auth_url, auth_error = oauth_url(payload.provider, state, payload.redirect_url or API_OAUTH_CALLBACK_URL)
+        auth_url, auth_error = oauth_url(payload.provider, state, payload.redirect_url or callback_url_for(payload.provider))
         status_value = "oauth_ready" if auth_url else "platform_setup_required"
     elif auth_pattern == "service_account":
         status_value = "service_account_ready" if manifest["configured"] else "service_account_missing"
     else:
         status_value = "provider_access_ready" if manifest["configured"] else "provider_access_requested"
     merged = dict(connection.config_json or {})
-    merged.update(sanitize_config({"surface": "launch_connector_flow", "launch_manifest": manifest, "authorization_status": status_value, "account_hint": payload.account_hint, "field_scope": payload.field_scope, "access_note": payload.access_note, "oauth_error": auth_error, "auth_url_available": bool(auth_url), "oauth_state": state}))
+    merged.update(sanitize_config({"surface": "launch_connector_flow", "launch_manifest": manifest, "authorization_status": status_value, "account_hint": payload.account_hint, "field_scope": payload.field_scope, "access_note": payload.access_note, "oauth_error": auth_error, "auth_url_available": bool(auth_url), "oauth_state": state, "oauth_redirect_uri": payload.redirect_url or callback_url_for(payload.provider)}))
     connection.config_json = merged
     connection.status = status_value
     connection.updated_at = datetime.utcnow()
@@ -128,7 +167,7 @@ async def create_access_request(payload: AccessRequest, tenant_id: str = Depends
     return {"status": "access_requested", "connection": public_connection(connection), "manifest": manifest, "job": row_to_dict(job)}
 
 @router.get("/connectors/oauth/callback")
-async def oauth_callback(code: str | None = Query(default=None), state: str | None = Query(default=None), error: str | None = Query(default=None), db: Session = Depends(get_db)) -> HTMLResponse:
+async def oauth_callback(code: str | None = Query(default=None), state: str | None = Query(default=None), error: str | None = Query(default=None), db: Session = Depends(get_db)):
     ensure_schema(db)
     connection = None
     if state:
@@ -136,14 +175,53 @@ async def oauth_callback(code: str | None = Query(default=None), state: str | No
         connection = next((row for row in rows if (row.config_json or {}).get("oauth_state") == state), None)
         if connection is None and ":" in state:
             connection = db.get(ConnectorConnection, state.split(":", 1)[0])
-    if connection:
+    if not connection:
+        return html_status("unknown", "authorization_failed", "AGRO-AI could not match this OAuth callback to a connector session.")
+    provider = connection.provider
+    if error or not code:
         merged = dict(connection.config_json or {})
-        merged.update(sanitize_config({"oauth_callback_received": True, "oauth_code_present": bool(code), "oauth_error": error, "authorization_status": "authorized_pending_token_exchange" if code and not error else "authorization_failed"}))
+        merged.update(sanitize_config({"oauth_callback_received": True, "oauth_code_present": bool(code), "oauth_error": error, "authorization_status": "authorization_failed"}))
         connection.config_json = merged
-        connection.status = "authorized_pending_token_exchange" if code and not error else "authorization_failed"
-        connection.last_error = error
+        connection.status = "authorization_failed"
+        connection.last_error = error or "missing_oauth_code"
         connection.updated_at = datetime.utcnow()
-        save_launch_job(db, connection.tenant_id, connection, "oauth_callback", {"code_present": bool(code), "error": error, "next_step": "Exchange code server-side and store provider token reference."}, "completed_with_warnings" if error else "completed")
+        save_launch_job(db, connection.tenant_id, connection, "oauth_callback", {"code_present": bool(code), "error": error}, "completed_with_warnings")
         db.commit()
-    status_value = "authorized" if code and not error else "authorization_failed"
-    return HTMLResponse(f"<html><body><h2>Connector {status_value.replace('_', ' ')}</h2><p>You can close this tab and return to AGRO-AI.</p><p><a href='{APP_CONNECTOR_RETURN_URL}'>Return to AGRO-AI</a></p></body></html>")
+        return RedirectResponse(return_url(provider, "authorization_failed", connection.id))
+    if provider == "dropbox":
+        try:
+            token = await exchange_dropbox_code(code)
+            probe = await probe_dropbox(token.get("access_token", "")) if token.get("access_token") else {}
+            merged = dict(connection.config_json or {})
+            merged.update(sanitize_config({"oauth_callback_received": True, "oauth_code_present": True, "authorization_status": "connected", "token_exchange_status": "completed", "token_type": token.get("token_type"), "scope": token.get("scope"), "provider_account_id": token.get("account_id") or token.get("uid") or probe.get("account_id"), "provider_account_email": probe.get("email"), "provider_account_name": probe.get("name"), "files_preview": probe.get("files_preview", []), "file_count_preview": probe.get("file_count_preview", 0), "refresh_token_present": bool(token.get("refresh_token"))}))
+            connection.config_json = merged
+            connection.status = "connected"
+            connection.credentials_ref = safe_credential_ref(token.get("account_id") or token.get("refresh_token") or token.get("access_token"))
+            now = datetime.utcnow()
+            connection.last_test_at = now
+            connection.last_sync_at = now
+            connection.last_error = None
+            connection.updated_at = now
+            save_launch_job(db, connection.tenant_id, connection, "oauth_token_exchange", {"provider": "dropbox", "status": "connected", "refresh_token_present": bool(token.get("refresh_token")), "account_probe": probe, "next_step": "Dropbox authorization, token exchange, and account probe completed."})
+            db.commit()
+            return RedirectResponse(return_url("dropbox", "connected", connection.id))
+        except Exception as exc:
+            db.rollback()
+            merged = dict(connection.config_json or {})
+            merged.update(sanitize_config({"oauth_callback_received": True, "oauth_code_present": True, "authorization_status": "token_exchange_failed", "token_exchange_error": str(exc)[:900]}))
+            connection.config_json = merged
+            connection.status = "token_exchange_failed"
+            connection.last_error = str(exc)[:1200]
+            connection.updated_at = datetime.utcnow()
+            save_launch_job(db, connection.tenant_id, connection, "oauth_token_exchange", {"provider": "dropbox", "status": "token_exchange_failed", "error": str(exc)[:1200]}, "failed")
+            db.commit()
+            return RedirectResponse(return_url("dropbox", "token_exchange_failed", connection.id))
+    merged = dict(connection.config_json or {})
+    merged.update(sanitize_config({"oauth_callback_received": True, "oauth_code_present": True, "oauth_error": None, "authorization_status": "authorized_pending_token_exchange"}))
+    connection.config_json = merged
+    connection.status = "authorized_pending_token_exchange"
+    connection.last_error = None
+    connection.updated_at = datetime.utcnow()
+    save_launch_job(db, connection.tenant_id, connection, "oauth_callback", {"code_present": True, "error": None, "next_step": "Exchange code server-side and store provider token reference."})
+    db.commit()
+    return html_status(provider, "authorized", "Authorization was received. This provider still needs a token-exchange adapter before file sync is enabled.", connection.id)
