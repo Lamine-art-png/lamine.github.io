@@ -1,5 +1,5 @@
-import { KeyboardEvent, useEffect, useRef, useState } from "react";
-import { Download, FileText, Mail, Send, UploadCloud, X } from "lucide-react";
+import { KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
+import { Download, FileText, Mail, MessageSquare, Plus, Search, Send, Trash2, UploadCloud, X } from "lucide-react";
 import { API_BASE_URL, apiClient } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { BG, BORDER, MUTED, SURFACE, TEXT } from "./portalUi";
@@ -17,7 +17,18 @@ type ChatFileImport = {
   uploadResponse?: AnyRecord;
 };
 
-const MEMORY_KEY = "agroai_intelligence_recovery_memory_v1";
+type ConversationSummary = {
+  id: string;
+  title: string;
+  workspace_id?: string;
+  status?: string;
+  preview?: string;
+  message_count?: number;
+  created_at?: string;
+  updated_at?: string;
+};
+
+const LOCAL_THREADS_KEY = "agroai_intelligence_threads_v2";
 
 const PROMPTS = [
   "What have you been checking?",
@@ -53,25 +64,31 @@ function safeText(value: unknown, fallback = ""): string {
   return fallback;
 }
 
-function memoryScope(workspaceId?: string) {
-  return `${MEMORY_KEY}:${workspaceId || "default"}`;
+function localScope(workspaceId?: string) {
+  return `${LOCAL_THREADS_KEY}:${workspaceId || "default"}`;
 }
 
-function readMemory(workspaceId?: string): AnyRecord[] {
+function readLocalThreads(workspaceId?: string): ConversationSummary[] {
   try {
-    const parsed = JSON.parse(window.localStorage.getItem(memoryScope(workspaceId)) || "[]");
+    const parsed = JSON.parse(window.localStorage.getItem(localScope(workspaceId)) || "[]");
     return Array.isArray(parsed) ? parsed : [];
   } catch {
     return [];
   }
 }
 
-function writeMemory(workspaceId: string | undefined, rows: AnyRecord[]) {
+function writeLocalThreads(workspaceId: string | undefined, rows: ConversationSummary[]) {
   try {
-    window.localStorage.setItem(memoryScope(workspaceId), JSON.stringify(rows.slice(-60)));
+    window.localStorage.setItem(localScope(workspaceId), JSON.stringify(rows.slice(0, 80)));
   } catch {
-    // Local memory is best-effort. The page must never crash because storage failed.
+    // Local recovery memory is best-effort only.
   }
+}
+
+function titleFromPrompt(prompt: string) {
+  const clean = prompt.replace(/\s+/g, " ").trim();
+  if (!clean) return "New chat";
+  return clean.slice(0, 64) + (clean.length > 64 ? "…" : "");
 }
 
 function fileTypeLabel(file: File) {
@@ -145,6 +162,20 @@ function riskLabel(action: AnyRecord) {
   return `${safeText(action.risk_level, "medium")} risk`;
 }
 
+function mapServerMessage(row: AnyRecord): AnyRecord {
+  const metadata = row.metadata_json || row.artifacts_json || {};
+  return {
+    id: row.id,
+    role: row.role,
+    content: row.content,
+    created_at: row.created_at,
+    question: row.question || metadata.question,
+    uploaded_evidence: row.uploaded_evidence || metadata.uploaded_evidence || [],
+    artifact: row.artifact || metadata.artifact || null,
+    agentic_actions: row.agentic_actions || metadata.agentic_actions || [],
+  };
+}
+
 async function createReportPdf(payload: AnyRecord): Promise<Blob> {
   const token = window.localStorage.getItem("agroai_access_token");
   const headers = new Headers({ "Content-Type": "application/json" });
@@ -200,6 +231,10 @@ async function executeAgenticAction(payload: AnyRecord): Promise<AnyRecord> {
 export function Intelligence() {
   const { currentWorkspace } = useAuth();
   const [messages, setMessages] = useState<AnyRecord[]>([]);
+  const [conversations, setConversations] = useState<ConversationSummary[]>([]);
+  const [activeConversationId, setActiveConversationId] = useState("");
+  const [conversationSearch, setConversationSearch] = useState("");
+  const [historyStatus, setHistoryStatus] = useState<"loading" | "server" | "local" | "error">("loading");
   const [question, setQuestion] = useState("");
   const [loading, setLoading] = useState(false);
   const [reportBusyId, setReportBusyId] = useState("");
@@ -213,13 +248,130 @@ export function Intelligence() {
   const hasUploading = fileImports.some((item) => item.status === "uploading");
   const hasFailed = fileImports.some((item) => item.status === "failed");
 
+  const filteredConversations = useMemo(() => {
+    const search = conversationSearch.trim().toLowerCase();
+    if (!search) return conversations;
+    return conversations.filter((row) => `${row.title || ""} ${row.preview || ""}`.toLowerCase().includes(search));
+  }, [conversations, conversationSearch]);
+
+  async function refreshConversations() {
+    setHistoryStatus("loading");
+    try {
+      const suffix = currentWorkspace?.id ? `?workspace_id=${encodeURIComponent(currentWorkspace.id)}` : "";
+      const response = await apiClient.get(`/v1/intelligence/brain/conversations${suffix}`) as AnyRecord;
+      setConversations(Array.isArray(response.conversations) ? response.conversations : []);
+      setHistoryStatus("server");
+    } catch {
+      setConversations(readLocalThreads(currentWorkspace?.id));
+      setHistoryStatus("local");
+    }
+  }
+
   useEffect(() => {
-    setMessages(readMemory(currentWorkspace?.id));
+    setMessages([]);
+    setActiveConversationId("");
+    setFileImports([]);
+    refreshConversations().catch(() => null);
   }, [currentWorkspace?.id]);
+
+  function persistLocalThread(threadId: string, rows: AnyRecord[], title?: string) {
+    const now = new Date().toISOString();
+    const current = readLocalThreads(currentWorkspace?.id);
+    const existing = current.find((row) => row.id === threadId);
+    const nextThread: ConversationSummary = {
+      id: threadId,
+      title: title || existing?.title || titleFromPrompt(rows.find((row) => row.role === "user")?.content || "New chat"),
+      workspace_id: currentWorkspace?.id,
+      preview: safeText(rows[rows.length - 1]?.content).slice(0, 180),
+      message_count: rows.length,
+      created_at: existing?.created_at || now,
+      updated_at: now,
+      status: "local",
+      messages: rows,
+    } as ConversationSummary;
+    const next = [nextThread, ...current.filter((row) => row.id !== threadId)].slice(0, 80);
+    writeLocalThreads(currentWorkspace?.id, next);
+    setConversations(next);
+  }
 
   function remember(rows: AnyRecord[]) {
     setMessages(rows);
-    writeMemory(currentWorkspace?.id, rows);
+    if (activeConversationId && (historyStatus !== "server" || activeConversationId.startsWith("local-"))) {
+      persistLocalThread(activeConversationId, rows);
+    }
+  }
+
+  async function createConversationIfNeeded(firstPrompt: string): Promise<string> {
+    if (activeConversationId) return activeConversationId;
+    if (historyStatus === "server") {
+      try {
+        const created = await apiClient.post("/v1/intelligence/brain/conversations", {
+          title: titleFromPrompt(firstPrompt),
+          workspace_id: currentWorkspace?.id,
+          message: firstPrompt,
+        }) as AnyRecord;
+        const conversation = created.conversation || created;
+        const id = String(conversation.id || "");
+        if (id) {
+          setActiveConversationId(id);
+          setConversations((current) => [conversation as ConversationSummary, ...current.filter((row) => row.id !== id)]);
+          return id;
+        }
+      } catch {
+        setHistoryStatus("local");
+      }
+    }
+    const localId = `local-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    setActiveConversationId(localId);
+    persistLocalThread(localId, [], titleFromPrompt(firstPrompt));
+    return localId;
+  }
+
+  async function loadConversation(conversationId: string) {
+    setError("");
+    setNotice("");
+    setActiveConversationId(conversationId);
+    if (conversationId.startsWith("local-") || historyStatus !== "server") {
+      const row = readLocalThreads(currentWorkspace?.id).find((item: AnyRecord) => item.id === conversationId) as AnyRecord | undefined;
+      setMessages(Array.isArray(row?.messages) ? row.messages : []);
+      return;
+    }
+    try {
+      const response = await apiClient.get(`/v1/intelligence/brain/conversations/${encodeURIComponent(conversationId)}`) as AnyRecord;
+      setMessages(Array.isArray(response.messages) ? response.messages.map(mapServerMessage) : []);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not load that chat.");
+    }
+  }
+
+  async function deleteConversation(conversationId: string) {
+    if (!conversationId) return;
+    setError("");
+    try {
+      if (conversationId.startsWith("local-") || historyStatus !== "server") {
+        const next = readLocalThreads(currentWorkspace?.id).filter((row) => row.id !== conversationId);
+        writeLocalThreads(currentWorkspace?.id, next);
+        setConversations(next);
+      } else {
+        await apiClient.remove(`/v1/intelligence/brain/conversations/${encodeURIComponent(conversationId)}`);
+        await refreshConversations();
+      }
+      if (activeConversationId === conversationId) {
+        setActiveConversationId("");
+        setMessages([]);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not delete that chat.");
+    }
+  }
+
+  function newChat() {
+    setActiveConversationId("");
+    setMessages([]);
+    setQuestion("");
+    setFileImports([]);
+    setError("");
+    setNotice("");
   }
 
   function updateMessage(messageId: string, patcher: (message: AnyRecord) => AnyRecord) {
@@ -265,21 +417,26 @@ export function Intelligence() {
     return Promise.all(queued.map((item) => uploadFileImport(item)));
   }
 
-  async function persistExchange(content: string, output: string) {
+  async function persistExchange(conversationId: string, content: string, output: string, metadata: AnyRecord, localRows: AnyRecord[]) {
+    if (!conversationId || conversationId.startsWith("local-") || historyStatus !== "server") {
+      persistLocalThread(conversationId || `local-${Date.now()}`, localRows, titleFromPrompt(content));
+      return;
+    }
     try {
-      const created = await apiClient.conversations.create({
-        title: content.slice(0, 90) || "Ask AGRO-AI",
-        workspace_id: currentWorkspace?.id,
+      const response = await apiClient.post(`/v1/intelligence/brain/conversations/${encodeURIComponent(conversationId)}/messages`, {
+        content,
+        output,
+        metadata,
       }) as AnyRecord;
-      const conversationId = created.conversation?.id || created.id || created.conversation_id;
-      if (conversationId) {
-        await apiClient.post(`/v1/intelligence/chat/conversations/${encodeURIComponent(String(conversationId))}/messages`, {
-          content,
-          output,
-        });
+      if (response.conversation) {
+        const updated = response.conversation as ConversationSummary;
+        setConversations((current) => [updated, ...current.filter((row) => row.id !== updated.id)]);
+      } else {
+        await refreshConversations();
       }
     } catch {
-      // Server memory is best-effort for now. Local recovery memory already keeps the chat from disappearing on reload.
+      setHistoryStatus("local");
+      persistLocalThread(conversationId, localRows, titleFromPrompt(content));
     }
   }
 
@@ -363,9 +520,11 @@ export function Intelligence() {
     setError("");
     setNotice("");
     setLoading(true);
+
+    const conversationId = await createConversationIfNeeded(clean);
     const userMessage = { id: `user-${Date.now()}`, role: "user", content: clean };
     const withUser = [...messages, userMessage];
-    remember(withUser);
+    setMessages(withUser);
 
     try {
       const importedBeforeSend = fileImports.filter((item) => item.status === "imported");
@@ -373,7 +532,7 @@ export function Intelligence() {
       const evidence = [...importedBeforeSend, ...newlyImported].map(uploadMetadata);
       const history = withUser
         .filter((row) => row.role === "user" || row.role === "assistant")
-        .slice(-8)
+        .slice(-10)
         .map((row) => ({ role: row.role, content: safeText(row.content).slice(0, 1800) }));
       const request = {
         task: isReportIntent(clean) ? "report_factory" as const : "chat" as const,
@@ -430,8 +589,9 @@ export function Intelligence() {
         agentic_actions: actions,
       };
       const nextRows = [...withUser, assistantMessage];
-      remember(nextRows);
-      persistExchange(clean, assistantText).catch(() => null);
+      setMessages(nextRows);
+      const metadata = { question: clean, uploaded_evidence: evidence, artifact, agentic_actions: actions };
+      await persistExchange(conversationId, clean, assistantText, metadata, nextRows);
       setFileImports([]);
     } catch (err) {
       setError(err instanceof Error ? err.message : "AGRO-AI could not complete the request.");
@@ -448,24 +608,53 @@ export function Intelligence() {
   }
 
   const sendDisabled = loading || hasUploading || hasFailed || (!question.trim() && !fileImports.length);
+  const memoryLabel = historyStatus === "server" ? "Account memory active" : historyStatus === "loading" ? "Loading memory" : "Local recovery memory";
+  const memoryDetail = historyStatus === "server"
+    ? `${conversations.length} saved chats are available for this workspace.`
+    : "Backend chat history is not reachable yet, so AGRO-AI is using this device as a recovery cache.";
 
   return (
     <div className="min-h-screen" style={{ background: BG }}>
-      <main className="grid min-h-screen" style={{ gridTemplateColumns: sidebarOpen ? "280px minmax(0, 1fr)" : "minmax(0, 1fr)" }}>
+      <main className="grid min-h-screen" style={{ gridTemplateColumns: sidebarOpen ? "300px minmax(0, 1fr)" : "minmax(0, 1fr)" }}>
         {sidebarOpen ? (
-          <aside className="border-r p-4" style={{ background: SURFACE, borderColor: BORDER }}>
+          <aside className="flex min-h-screen flex-col border-r p-4" style={{ background: SURFACE, borderColor: BORDER }}>
             <div className="flex items-center justify-between gap-3">
               <div className="text-[12px] font-semibold" style={{ color: TEXT }}>Ask AGRO-AI</div>
               <button type="button" onClick={() => setSidebarOpen(false)} className="rounded-lg p-2" style={{ border: `1px solid ${BORDER}`, color: MUTED }} title="Close sidebar">
                 <X size={15} />
               </button>
             </div>
-            <button type="button" onClick={() => remember([])} className="mt-4 w-full rounded-lg px-3 py-2 text-[12px] font-medium" style={{ background: "#0D2B1E", color: "white" }}>
-              New chat
+            <button type="button" onClick={newChat} className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg px-3 py-2 text-[12px] font-medium" style={{ background: "#0D2B1E", color: "white" }}>
+              <Plus size={14} /> New chat
             </button>
-            <div className="mt-6 text-[11px] font-semibold uppercase" style={{ color: MUTED }}>Memory</div>
-            <div className="mt-3 rounded-lg p-3 text-[12px] leading-relaxed" style={{ background: BG, border: `1px solid ${BORDER}`, color: MUTED }}>
-              {messages.length ? `${messages.length} messages saved for this workspace on this device.` : "No saved messages yet."}
+            <label className="mt-4 flex items-center gap-2 rounded-lg px-3 py-2" style={{ background: BG, border: `1px solid ${BORDER}`, color: MUTED }}>
+              <Search size={14} />
+              <input value={conversationSearch} onChange={(event) => setConversationSearch(event.target.value)} placeholder="Search chats" className="w-full bg-transparent text-[12px] outline-none" style={{ color: TEXT }} />
+            </label>
+            <div className="mt-5 text-[11px] font-semibold uppercase" style={{ color: MUTED }}>History</div>
+            <div className="mt-3 flex-1 space-y-2 overflow-y-auto pr-1">
+              {filteredConversations.map((row) => {
+                const active = row.id === activeConversationId;
+                return (
+                  <div key={row.id} className="group flex gap-2">
+                    <button type="button" onClick={() => loadConversation(row.id)} className="min-w-0 flex-1 rounded-xl px-3 py-3 text-left" style={{ background: active ? "#EEF8E8" : BG, border: `1px solid ${active ? "rgba(13,43,30,0.32)" : BORDER}` }}>
+                      <div className="flex items-center gap-2">
+                        <MessageSquare size={13} style={{ color: active ? "#0D2B1E" : MUTED }} />
+                        <div className="truncate text-[12px] font-semibold" style={{ color: TEXT }}>{row.title || "New chat"}</div>
+                      </div>
+                      {row.preview ? <div className="mt-1 line-clamp-2 text-[11px] leading-4" style={{ color: MUTED }}>{row.preview}</div> : null}
+                    </button>
+                    <button type="button" onClick={() => deleteConversation(row.id)} className="hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg group-hover:flex" style={{ border: `1px solid ${BORDER}`, color: MUTED }} title="Delete chat">
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                );
+              })}
+              {!filteredConversations.length ? <div className="rounded-lg p-3 text-[12px] leading-relaxed" style={{ background: BG, border: `1px solid ${BORDER}`, color: MUTED }}>No saved chats yet.</div> : null}
+            </div>
+            <div className="mt-4 rounded-lg p-3 text-[12px] leading-relaxed" style={{ background: BG, border: `1px solid ${BORDER}`, color: MUTED }}>
+              <div className="font-semibold" style={{ color: TEXT }}>{memoryLabel}</div>
+              <div className="mt-1">{memoryDetail}</div>
             </div>
             <div className="mt-3 rounded-lg p-3 text-[12px] leading-relaxed" style={{ background: BG, border: `1px solid ${BORDER}`, color: MUTED }}>
               Agentic mode is active: safe digital work can be executed; field/control actions are approval-gated.
@@ -500,7 +689,7 @@ export function Intelligence() {
                   <div className="text-[12px] font-semibold uppercase" style={{ color: MUTED }}>Start a workspace thread</div>
                   <h2 className="mt-3 text-[24px] font-semibold" style={{ color: TEXT }}>Ask a question or import files.</h2>
                   <p className="mt-2 max-w-2xl text-[14px] leading-relaxed" style={{ color: MUTED }}>
-                    AGRO-AI can now move from answer to action: generate reports, email them, create field tasks, record field messages as evidence, and prepare approval-gated controller work.
+                    AGRO-AI can now save threads, reload past work, and move from answer to action: reports, email delivery, field tasks, field evidence, and approval-gated controller work.
                   </p>
                   <div className="mt-5 flex flex-wrap gap-2">
                     {PROMPTS.map((prompt) => (
