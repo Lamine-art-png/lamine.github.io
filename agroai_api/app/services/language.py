@@ -49,6 +49,14 @@ LANGUAGE_NAMES: dict[str, str] = {
     "ml": "Malayalam",
 }
 
+LOCALIZED_SAFE_FALLBACKS: dict[str, str] = {
+    "en": "I can help. I will separate what is already supported by workspace evidence from assumptions, then turn the request into the next safe operating step.",
+    "fr": "Oui, je peux aider. Je vais séparer ce qui est déjà appuyé par les preuves de l’espace de travail des hypothèses, puis transformer la demande en prochaine étape opérationnelle sûre.",
+    "es": "Sí, puedo ayudar. Voy a separar lo que ya está respaldado por la evidencia del espacio de trabajo de las suposiciones, y luego convertir la solicitud en el siguiente paso operativo seguro.",
+    "pt": "Sim, posso ajudar. Vou separar o que já está apoiado pelas evidências do espaço de trabalho das suposições e transformar a solicitação no próximo passo operacional seguro.",
+    "ar": "نعم، يمكنني المساعدة. سأفصل ما تدعمه أدلة مساحة العمل فعلاً عن الافتراضات، ثم أحوّل الطلب إلى الخطوة التشغيلية الآمنة التالية.",
+}
+
 
 @dataclass(frozen=True)
 class LanguageDecision:
@@ -94,12 +102,12 @@ def detect_language_hint(text: str | None) -> tuple[str | None, str | None]:
         return "ko", "Korean script"
     if re.search(r"[\u0900-\u097f]", value):
         return "hi", "Indic script"
-    lower = f" {value.lower()} "
-    if any(token in lower for token in [" bonjour ", " merci ", " s'il ", " ferme ", " irrigation "]):
+    lower = f" {value.lower().replace('’', "'")} "
+    if any(token in lower for token in [" bonjour ", " merci ", " s'il ", " s il ", " est-ce ", " est ce ", " tu peux ", " pouvez ", " avec ", " données ", " ferme ", " aide ", " m'aider ", " peux-tu "]):
         return "fr", "French phrase hint"
-    if any(token in lower for token in [" hola ", " gracias ", " campo ", " agua ", " riego "]):
+    if any(token in lower for token in [" hola ", " gracias ", " puedes ", " puede ", " campo ", " datos ", " agua ", " riego ", " ayudar "]):
         return "es", "Spanish phrase hint"
-    if any(token in lower for token in [" olá ", " obrigado ", " obrigada ", " água ", " irrigação "]):
+    if any(token in lower for token in [" olá ", " ola ", " obrigado ", " obrigada ", " você ", " dados ", " água ", " irrigação ", " ajudar "]):
         return "pt", "Portuguese phrase hint"
     return None, None
 
@@ -114,10 +122,11 @@ def resolve_language(selected: str | None, user_text: str | None) -> LanguageDec
     detected_name = language_name(detected_code) if detected_code else None
     response_name = language_name(response_code)
     instruction = (
+        f"MANDATORY RESPONSE LANGUAGE: {response_name} ({response_code}). "
         f"Selected portal language: {selected_name} ({selected_code}). "
         f"Detected user language hint: {detected_name or 'not detected'}"
         f"{f' - {detected_label}' if detected_label else ''}. "
-        f"Answer in {response_name}. If the user explicitly asks for another language, follow the user's explicit request. "
+        f"You must answer in {response_name}. Do not answer in English unless the mandatory response language is English or the user explicitly asks for English. "
         "Do not explain the language choice. Preserve precise agriculture, irrigation, ET, controller, telemetry, compliance, and water-accounting terms."
     )
     return LanguageDecision(
@@ -130,3 +139,14 @@ def resolve_language(selected: str | None, user_text: str | None) -> LanguageDec
         direction=direction_for(response_code),
         instruction=instruction,
     )
+
+
+def localized_safe_fallback(code: str | None) -> str:
+    root = normalize_locale(code)
+    return LOCALIZED_SAFE_FALLBACKS.get(root) or LOCALIZED_SAFE_FALLBACKS["en"]
+
+
+def looks_english(text: str) -> bool:
+    value = f" {text.lower()} "
+    hits = sum(1 for token in [" the ", " and ", " with ", " workspace ", " evidence ", " next ", " request ", " support ", " field ", " report ", " can help ", " should "] if token in value)
+    return hits >= 2
