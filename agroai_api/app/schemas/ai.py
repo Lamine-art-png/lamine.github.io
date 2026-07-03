@@ -51,6 +51,7 @@ class ChatRequest(BaseModel):
     evidence_ids: list[str] = Field(default_factory=list)
     uploaded_evidence: list[dict[str, Any]] = Field(default_factory=list)
     history: list[dict[str, Any]] = Field(default_factory=list)
+    preferred_language: str | None = None
     temperature: float = Field(default=0.2, ge=0, le=1)
 
 
@@ -77,6 +78,7 @@ class AgentRunRequest(BaseModel):
     workspace_id: str | None = None
     block_id: str | None = None
     inputs: dict[str, Any] = Field(default_factory=dict)
+    preferred_language: str | None = None
 
 
 class AgentRunResponse(BaseModel):
@@ -107,6 +109,7 @@ class IntelligenceRunRequest(BaseModel):
     audience: str | None = None
     history: list[dict[str, Any]] = Field(default_factory=list)
     uploaded_evidence: list[dict[str, Any]] = Field(default_factory=list)
+    preferred_language: str | None = None
 
 
 class IntelligenceRunResponse(BaseModel):
