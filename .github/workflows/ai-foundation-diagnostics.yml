@@ -1,0 +1,23 @@
+name: AI foundation diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install
+        run: |
+          python -m pip install -q -r agroai_api/requirements.txt
+          python -m pip install -q pytest==7.4.4 pytest-asyncio==0.23.3 pytest-mock==3.12.0
+      - name: Run
+        run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging agroai_api/tests/unit/test_ai_foundation.py -q
