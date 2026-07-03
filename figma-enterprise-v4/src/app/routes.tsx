@@ -1,10 +1,17 @@
 import type { ComponentType } from "react";
-import { createBrowserRouter } from "react-router";
+import { createBrowserRouter, Navigate } from "react-router";
 import { MainLayout } from "./components/MainLayout";
 import { RouteRecovery } from "./components/RouteRecovery";
 import { VerifyEmailPage } from "./components/VerifyEmail";
 
 function PortalHome() {
+  const params = new URLSearchParams(window.location.search || "");
+  const connectorReturn = Boolean(params.get("connector") || params.get("provider") || params.get("connection_id"));
+
+  if (connectorReturn) {
+    return <Navigate to={`/integrations${window.location.search}`} replace />;
+  }
+
   return (
     <div className="min-h-full px-7 py-7" style={{ background: "#F6F4EE" }}>
       <section className="rounded-2xl p-7 shadow-[0_18px_60px_rgba(16,35,27,0.08)]" style={{ background: "#FFFDF8", border: "1px solid #D6DDD0" }}>
