@@ -62,25 +62,55 @@
           return Boolean(
             params.get("connector") ||
               params.get("provider") ||
+              params.get("connection_id") ||
               params.get("open") === "connectors" ||
               params.get("view") === "connectors" ||
               params.get("module") === "connectors" ||
-              window.location.hash === "#connectors"
+              (window.location.hash || "").toLowerCase().includes("connectors")
           );
+        };
+
+        const connectorsPageIsVisible = () => {
+          const text = (document.body.textContent || "").replace(/\s+/g, " ").toLowerCase();
+          return (
+            text.includes("wiseconn") &&
+            text.includes("dropbox") &&
+            text.includes("google drive") &&
+            (text.includes("manage connection") || text.includes("ready to authorize") || text.includes("connected"))
+          );
+        };
+
+        const fireClick = (element) => {
+          if (!element) return;
+          ["pointerdown", "mousedown", "pointerup", "mouseup", "click"].forEach((type) => {
+            element.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, view: window }));
+          });
+          if (typeof element.click === "function") element.click();
+        };
+
+        const clickableChain = (node) => {
+          const chain = [];
+          let current = node;
+          for (let depth = 0; current && depth < 6; depth += 1, current = current.parentElement) {
+            if (current instanceof HTMLElement) chain.push(current);
+          }
+          const preferred = node.closest?.('button,a,[role="button"],[data-testid],nav *,aside *');
+          if (preferred instanceof HTMLElement) chain.unshift(preferred);
+          return Array.from(new Set(chain));
         };
 
         const openConnectorsView = () => {
           if (!shouldOpenConnectors()) return true;
-          const candidates = Array.from(
-            document.querySelectorAll('a,button,[role="button"],[tabindex],nav *,aside *,div,span')
-          );
-          const connectorsTarget = candidates.find((node) => {
+          if (connectorsPageIsVisible()) return true;
+
+          const nodes = Array.from(document.querySelectorAll('button,a,[role="button"],nav *,aside *,[tabindex],div,span'));
+          const connectorTextNodes = nodes.filter((node) => {
             const text = (node.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
             return text === "connectors";
           });
-          if (!connectorsTarget) return false;
-          connectorsTarget.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
-          return true;
+
+          connectorTextNodes.forEach((node) => clickableChain(node).forEach(fireClick));
+          return connectorsPageIsVisible();
         };
 
         addCareersLink();
@@ -88,19 +118,14 @@
           addCareersLink();
           openConnectorsView();
         });
-        observer.observe(document.documentElement, {
-          childList: true,
-          subtree: true,
-        });
+        observer.observe(document.documentElement, { childList: true, subtree: true });
 
         if (shouldOpenConnectors()) {
           let attempts = 0;
           const timer = window.setInterval(() => {
             attempts += 1;
-            if (openConnectorsView() || attempts > 80) {
-              window.clearInterval(timer);
-            }
-          }, 125);
+            if (openConnectorsView() || attempts > 160) window.clearInterval(timer);
+          }, 100);
         }
       })();
     </script>
