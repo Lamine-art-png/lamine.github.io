@@ -11,56 +11,28 @@ import httpx
 
 from app.core.config import settings
 
-
 FINAL_ANSWER_PROMPT = """
 Return only the final customer-safe JSON answer.
 Do not include reasoning, scratchpad, <think>, markdown, or code fences.
 Use this exact JSON shape when possible:
-{
-  "summary": "...",
-  "answer": "...",
-  "work_completed": [],
-  "available_data": [],
-  "missing_data": [],
-  "agent_plan": [],
-  "integration_status": [],
-  "recommendations": [],
-  "next_actions": [],
-  "risk_flags": [],
-  "confidence": "low|medium|high",
-  "customer_safe": true
-}
+{"summary":"...","answer":"...","work_completed":[],"available_data":[],"missing_data":[],"agent_plan":[],"integration_status":[],"recommendations":[],"next_actions":[],"risk_flags":[],"confidence":"low|medium|high","customer_safe":true}
 """
 
 AGRO_AI_OPERATING_CONTEXT = """
 You are AGRO-AI's live operating intelligence layer, not a generic chatbot.
 AGRO-AI turns fragmented agriculture data into decisions, evidence records, alerts, and enterprise reporting.
 The first wedge is irrigation, water-use, compliance, and field operations. The broader product direction is Terris: a field intelligence layer and operating evidence graph for agriculture.
-Customers include growers, farm managers, agronomists, irrigation professionals, water agencies, NRDs, districts, lenders, insurers, exporters, and enterprise agriculture teams.
 Always preserve provenance: measured, reported, estimated, inferred, sample, and missing are different.
 Sound natural, calm, direct, and specific. Do not invent live integrations, telemetry, yields, compliance status, savings, or customer facts.
-Return valid JSON only. Put the natural answer in summary and answer.
 """
 
 LOCAL_OLLAMA_SYSTEM_PROMPT = """
 /no_think
 You are AGRO-AI, a serious agriculture operations intelligence operator.
-You are not a generic chatbot and not a status bot.
-
-Behavior:
-- Answer the user's exact request directly, in normal customer-facing text.
-- Adapt to the user's intent. If they ask casually, be brief and useful. If they ask for a report, produce a serious report-style answer. If they ask for a plan, produce steps. If they ask for a decision, separate evidence, assumptions, recommendation, risk, and next action.
-- Use recent chat history, uploaded file summaries, workspace context, and available evidence.
-- When evidence is thin, still produce a useful draft and label assumptions instead of refusing.
-- Be specific about what can be done now and what needs verification.
-- Do not repeat the same answer. Learn from the last messages and move the work forward.
-- Do not output JSON, backend labels, missing-data debug labels, or <think> tags.
-- Never invent live telemetry, acreage, integrations, water use, compliance status, savings, or customer facts.
-
-Depth rule:
-- For normal questions: 2-5 short paragraphs.
-- For reports/analysis/checklists/decisions: use clear headings and bullets, usually 350-900 words if the question deserves it.
-- End with a concrete next action when useful.
+Answer the user's exact request directly in normal customer-facing text.
+Use recent chat history, uploaded file summaries, workspace context, and available evidence when relevant.
+Adapt depth to the request. Do not repeat a prior answer unless asked.
+Do not output backend labels, debug text, <think> tags, or fabricated facts.
 """
 
 
@@ -77,7 +49,9 @@ class AIGatewayResult:
 
 def _normalize_provider(value: str) -> str:
     provider = (value or "").strip().lower()
-    if provider in {"openrouter", "openrouter.ai", "openai", "openai-compatible", "openai_compatible"}:
+    if provider in {"openrouter", "openrouter.ai"}:
+        return "openrouter"
+    if provider in {"openai", "openai-compatible", "openai_compatible"}:
         return "openai_compatible"
     return provider
 
@@ -87,16 +61,15 @@ def _normalize_base_url(value: str, provider: str) -> str:
     for suffix in ("/chat/completions", "/completions"):
         while base_url.lower().endswith(suffix):
             base_url = base_url[: -len(suffix)].rstrip("/")
-    if not base_url and provider == "openai_compatible" and (settings.AI_API_KEY or os.getenv("OPENROUTER_API_KEY")):
-        base_url = "https://openrouter.ai/api/v1"
+    if not base_url and provider == "openrouter":
+        return "https://openrouter.ai/api/v1"
     return base_url
 
 
 def _strip_markdown_fences(value: str) -> str:
     text = value.strip()
     if text.startswith("```"):
-        lines = [line for line in text.splitlines() if not line.strip().startswith("```")]
-        return "\n".join(lines).strip()
+        return "\n".join(line for line in text.splitlines() if not line.strip().startswith("```")).strip()
     return text
 
 
@@ -118,15 +91,6 @@ def clean_model_text(content: str) -> str:
                     return item.strip()
     except json.JSONDecodeError:
         pass
-    for key in ("answer", "summary"):
-        match = re.search(rf'"{key}"\s*:\s*"((?:[^"\\]|\\.)*)', text, flags=re.DOTALL)
-        if match:
-            rescued = match.group(1)
-            try:
-                rescued = json.loads(f'"{rescued}"')
-            except json.JSONDecodeError:
-                rescued = rescued.replace('\\n', '\n').replace('\\"', '"')
-            return str(rescued).strip()
     if text.lstrip().startswith("{"):
         return ""
     return text.strip()
@@ -141,11 +105,11 @@ def sanitize_model_text(content: str) -> str:
 
 
 def parse_model_json(content: str) -> dict[str, Any]:
-    text = clean_model_text(content)
-    if not text:
-        return {"summary": "", "answer": "", "available_data": [], "missing_data": [], "recommended_next_actions": [], "confidence": "low", "customer_safe": True, "_safe_mode": True}
+    raw = (content or "").strip()
+    if not raw:
+        return {"summary":"","answer":"","available_data":[],"missing_data":[],"recommended_next_actions":[],"confidence":"low","customer_safe":True,"_safe_mode":True,"error":"live_model_unavailable"}
     try:
-        value = json.loads((content or "").strip())
+        value = json.loads(raw)
         if isinstance(value, dict):
             if not value.get("summary") and value.get("answer"):
                 value["summary"] = value["answer"]
@@ -154,7 +118,10 @@ def parse_model_json(content: str) -> dict[str, Any]:
             return value
     except json.JSONDecodeError:
         pass
-    return {"summary": text, "answer": text, "available_data": [], "missing_data": [], "recommended_next_actions": [], "confidence": "low", "customer_safe": True}
+    text = clean_model_text(raw)
+    if not text:
+        return {"summary":"","answer":"","available_data":[],"missing_data":[],"recommended_next_actions":[],"confidence":"low","customer_safe":True,"_safe_mode":True,"error":"live_model_unavailable"}
+    return {"summary":text,"answer":text,"available_data":[],"missing_data":[],"recommended_next_actions":[],"confidence":"low","customer_safe":True}
 
 
 def _extract_question(messages: list[dict[str, str]]) -> str:
@@ -162,46 +129,27 @@ def _extract_question(messages: list[dict[str, str]]) -> str:
         if message.get("role") != "user":
             continue
         content = str(message.get("content") or "")
-        for pattern in [r"QUESTION:\s*(.+?)(?:\n|$)", r"Question:\s*(.+?)(?:\n|$)", r'"question"\s*:\s*"((?:[^"\\]|\\.)*)"']:
+        for pattern in (r"Exact current question:\s*(.+?)(?:\n|$)", r"Exact user question:\s*(.+?)(?:\n|$)", r"QUESTION:\s*(.+?)(?:\n|$)", r"Question:\s*(.+?)(?:\n|$)"):
             match = re.search(pattern, content, flags=re.IGNORECASE | re.DOTALL)
             if match:
-                value = match.group(1).strip()
-                try:
-                    value = json.loads(f'"{value}"')
-                except Exception:
-                    value = value.replace('\\n', ' ').replace('\\"', '"')
-                return str(value).strip()[:1200]
+                return match.group(1).strip()[:1600]
         if content.strip():
-            return content.strip()[:1200]
+            return content.strip()[:1600]
     return ""
 
 
-def _question_aware_local_fallback(question: str) -> str:
-    q = (question or "").lower()
-    if any(term in q for term in ["operator checklist", "checklist", "operator"]):
-        return "Here is a starter operator checklist: 1) confirm the field or block, 2) check the latest irrigation/flow record, 3) confirm controller or valve status, 4) inspect any abnormal pressure/flow signal, 5) record a field note with timestamp and source, 6) escalate anything that affects water use, compliance, crop stress, or equipment safety. If you connect the controller/export data, I can turn this into a field-specific checklist with evidence and assignments."
-    if any(term in q for term in ["john deere", "deere", "operations center"]):
-        return "Yes. John Deere Operations Center is one of the systems AGRO-AI should connect to because it can carry field boundaries, machine activity, work records, and operational context. In a real customer workflow, I would use that data as one evidence source, then combine it with irrigation, ET/weather, flow, soil moisture, and compliance records before producing field priorities or customer-ready reports."
-    if any(term in q for term in ["pdf", "document", "report", "packet"]):
-        return "Yes. I can draft the report content now, and the portal can turn it into a downloadable artifact through the report factory. A serious AGRO-AI report should include an executive summary, evidence used, assumptions, water or field findings, risk flags, recommended actions, and an appendix of missing data. If uploaded files are present, I should use them as the evidence base instead of speaking generally."
-    if any(term in q for term in ["how much water", "water should", "irrigat", "put here"]):
-        return "I can help, but I should not guess an irrigation amount without the field, crop, acreage, soil type, recent irrigation, ET/weather, soil moisture, flow rate, and controller status. The useful next step is to upload or connect those records. Once they are present, I can calculate a defensible recommendation, explain the evidence behind it, and flag whether the recommendation is safe, uncertain, or blocked."
-    if any(term in q for term in ["what are you good", "what can you do", "capabilities", "good at"]):
-        return "I am best at turning messy agriculture context into decisions: reading uploaded files, finding evidence gaps, drafting compliance reports, building field-priority lists, preparing operator checklists, reviewing irrigation and water-accounting data, and translating raw records into customer-ready actions. My value should not be vague chat; it should be helping a farm, district, advisor, or lender decide what needs attention, what evidence supports it, and what to do next."
-    if any(term in q for term in ["hi", "hello", "hey"]):
-        return "Yes — I can help. Give me a field, file, report, irrigation question, compliance requirement, or customer account. I will separate what is known, what is missing, what can be done now, and what should become an operator action."
-    return "I can help with that. I would start by separating the available evidence from the assumptions, then turn the request into one of four outputs: an operator action list, an evidence gap review, a field or irrigation decision, or a customer-ready report draft."
-
-
 class AIGateway:
-    """Thin gateway for OpenAI-compatible chat completions and Ollama."""
-
     def __init__(self) -> None:
         raw_provider = (settings.AI_PROVIDER or "").strip().lower()
         self.provider = _normalize_provider(raw_provider)
         self.raw_provider = raw_provider
         self.base_url = _normalize_base_url(settings.AI_BASE_URL or "", self.provider)
-        self.api_key = (settings.AI_API_KEY or os.getenv("OPENROUTER_API_KEY") or "").strip()
+        if self.provider == "openrouter":
+            self.api_key = (settings.AI_API_KEY or os.getenv("OPENROUTER_API_KEY") or "").strip()
+        elif self.provider == "openai_compatible":
+            self.api_key = (settings.AI_API_KEY or "").strip()
+        else:
+            self.api_key = ""
         self.model = (settings.AI_MODEL or "").strip()
         self.fallback_models = [m.strip() for m in (settings.AI_MODEL_FALLBACKS or "").split(",") if m.strip()]
         self.timeout = settings.AI_TIMEOUT_SECONDS or 30
@@ -211,10 +159,12 @@ class AIGateway:
         return self.is_configured_for(self.model)
 
     def is_configured_for(self, model: str | None = None) -> bool:
-        selected_model = (model or self.model or "").strip()
+        selected = (model or self.model or "").strip()
         if self.provider == "ollama":
-            return bool(self.base_url and selected_model)
-        return bool(self.provider and self.base_url and selected_model and self.api_key)
+            return bool(self.base_url and selected and "/" not in selected)
+        if self.provider in {"openrouter", "openai_compatible"}:
+            return bool(self.base_url and selected and self.api_key)
+        return False
 
     def _with_agroai_context(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
         if self.provider == "ollama":
@@ -224,99 +174,84 @@ class AIGateway:
             if message.get("role") == "system":
                 message["content"] = f"{message.get('content', '')}\n\n{AGRO_AI_OPERATING_CONTEXT}".strip()
                 return enriched
-        return [{"role": "system", "content": AGRO_AI_OPERATING_CONTEXT}] + enriched
+        return [{"role":"system","content":AGRO_AI_OPERATING_CONTEXT}] + enriched
 
     def _local_ollama_messages(self, messages: list[dict[str, str]]) -> list[dict[str, str]]:
         question = _extract_question(messages)
-        context_parts: list[str] = []
-        for message in messages[-7:]:
+        parts: list[str] = []
+        for message in messages[-10:]:
             role = message.get("role") or "user"
             content = str(message.get("content") or "").strip()
             if content:
-                context_parts.append(f"{role}: {content[:1800]}")
-        compact = "\n\n".join(context_parts)[-8000:]
-        return [
-            {"role": "system", "content": LOCAL_OLLAMA_SYSTEM_PROMPT},
-            {"role": "user", "content": f"/no_think\nQUESTION: {question}\n\nWorkspace, uploaded evidence, and recent context:\n{compact}\n\nAnswer the QUESTION directly. Cater to the user's wording, depth, and desired output. No JSON. No backend labels."},
-        ]
+                parts.append(f"{role}: {content[:2200]}")
+        compact = "\n\n".join(parts)[-12000:]
+        return [{"role":"system","content":LOCAL_OLLAMA_SYSTEM_PROMPT},{"role":"user","content":f"/no_think\nQUESTION: {question}\n\nWorkspace, uploaded evidence, and recent context:\n{compact}\n\nAnswer the QUESTION directly. Cater to the user's wording, depth, and desired output."}]
 
     def _candidate_models(self, primary: str | None, max_model_attempts: int | None = None) -> list[str]:
-        candidates: list[str] = []
+        out: list[str] = []
         for model in [primary or self.model, *self.fallback_models]:
-            clean = (model or "").strip()
-            if clean and not (self.provider == "ollama" and "/" in clean):
-                if clean not in candidates:
-                    candidates.append(clean)
-        if max_model_attempts and max_model_attempts > 0:
-            return candidates[:max_model_attempts]
-        return candidates
+            value = (model or "").strip()
+            if value and not (self.provider == "ollama" and "/" in value) and value not in out:
+                out.append(value)
+        return out[:max_model_attempts] if max_model_attempts and max_model_attempts > 0 else out
 
     async def chat(self, messages: list[dict[str, str]], *, temperature: float = 0.2, response_format: dict[str, Any] | None = None, model_override: str | None = None, max_tokens: int | None = None, timeout_seconds: int | None = None, max_model_attempts: int | None = None) -> AIGatewayResult:
-        messages = self._with_agroai_context(messages)
-        selected_model = (model_override or self.model or "").strip()
-        if not self.is_configured_for(selected_model):
-            return self._offline_fallback(messages, selected_model or None)
+        selected = (model_override or self.model or "").strip()
+        if not self.is_configured_for(selected):
+            return self._offline_fallback(selected or None)
+        enriched = self._with_agroai_context(messages)
         try:
             if self.provider == "ollama":
-                return await self._chat_ollama(messages, temperature, model_override=model_override, max_tokens=max_tokens, timeout_seconds=timeout_seconds)
-            return await self._chat_openai_compatible(messages, temperature, response_format, model_override=model_override, max_tokens=max_tokens, timeout_seconds=timeout_seconds, max_model_attempts=max_model_attempts)
+                return await self._chat_ollama(enriched, temperature, model_override=model_override, max_tokens=max_tokens, timeout_seconds=timeout_seconds)
+            return await self._chat_openai_compatible(enriched, temperature, response_format, model_override=model_override, max_tokens=max_tokens, timeout_seconds=timeout_seconds, max_model_attempts=max_model_attempts)
         except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
-            answer = _question_aware_local_fallback(_extract_question(messages))
-            return AIGatewayResult(status="degraded", content=answer, provider=self.raw_provider or self.provider or "unconfigured", model=selected_model or None, demo_fallback=True, error=str(exc))
+            return AIGatewayResult(status="unavailable", content="", provider=self.raw_provider or self.provider or "unconfigured", model=selected or None, error=str(exc))
 
     def _headers(self) -> dict[str, str]:
-        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
-        if "openrouter.ai" in self.base_url.lower():
+        headers = {"Authorization":f"Bearer {self.api_key}","Content-Type":"application/json"}
+        if self.provider == "openrouter" or "openrouter.ai" in self.base_url.lower():
             headers["HTTP-Referer"] = settings.APP_URL or "https://app.agroai-pilot.com"
             headers["X-Title"] = "AGRO-AI Enterprise Portal"
         return headers
 
-    def _message_content(self, body: dict[str, Any]) -> str:
+    @staticmethod
+    def _message_content(body: dict[str, Any]) -> str:
         message = body["choices"][0].get("message") or {}
         value = message.get("content")
         if isinstance(value, str):
             return value
         if isinstance(value, list):
-            parts: list[str] = []
-            for item in value:
-                if isinstance(item, str):
-                    parts.append(item)
-                elif isinstance(item, dict) and isinstance(item.get("text") or item.get("content"), str):
-                    parts.append(item.get("text") or item.get("content"))
-            return "\n".join(parts).strip()
-        reasoning = message.get("reasoning") or message.get("reasoning_content")
-        return reasoning if isinstance(reasoning, str) else ""
+            return "\n".join(str(item.get("text") or item.get("content") or item) if isinstance(item, dict) else str(item) for item in value).strip()
+        return ""
 
     async def _post_openai_payload(self, client: httpx.AsyncClient, headers: dict[str, str], payload: dict[str, Any]) -> dict[str, Any]:
-        endpoint = f"{self.base_url}/chat/completions"
-        response = await client.post(endpoint, headers=headers, json=payload)
+        response = await client.post(f"{self.base_url}/chat/completions", headers=headers, json=payload)
         if response.status_code in {400, 422} and "response_format" in payload:
-            retry_payload = dict(payload)
-            retry_payload.pop("response_format", None)
-            response = await client.post(endpoint, headers=headers, json=retry_payload)
+            retry = dict(payload)
+            retry.pop("response_format", None)
+            response = await client.post(f"{self.base_url}/chat/completions", headers=headers, json=retry)
         response.raise_for_status()
         return response.json()
 
-    def _should_try_next_model(self, exc: httpx.HTTPStatusError) -> bool:
-        status_code = exc.response.status_code if exc.response is not None else 0
-        if status_code in {401, 403}:
-            return False
-        return status_code in {400, 402, 404, 408, 409, 422, 429, 500, 502, 503, 504}
+    @staticmethod
+    def _should_try_next_model(exc: httpx.HTTPStatusError) -> bool:
+        code = exc.response.status_code if exc.response is not None else 0
+        return False if code in {401,403} else code in {400,402,404,408,409,422,429,500,502,503,504}
 
     async def _chat_openai_compatible(self, messages: list[dict[str, str]], temperature: float, response_format: dict[str, Any] | None, model_override: str | None = None, max_tokens: int | None = None, timeout_seconds: int | None = None, max_model_attempts: int | None = None) -> AIGatewayResult:
-        headers = self._headers()
         errors: list[str] = []
-        request_timeout = max(4, min(int(timeout_seconds or self.timeout or 18), 60))
-        async with httpx.AsyncClient(timeout=request_timeout) as client:
-            for candidate_model in self._candidate_models(model_override, max_model_attempts=max_model_attempts):
-                payload: dict[str, Any] = {"model": candidate_model, "messages": messages, "temperature": temperature, "max_tokens": int(max_tokens or 900)}
+        candidates = self._candidate_models(model_override, max_model_attempts)
+        if not candidates:
+            return AIGatewayResult(status="unavailable", content="", provider=self.raw_provider or self.provider, model=None, error="No compatible model candidates configured.")
+        async with httpx.AsyncClient(timeout=max(4, min(int(timeout_seconds or self.timeout or 18), 75))) as client:
+            for model in candidates:
+                payload: dict[str, Any] = {"model":model,"messages":messages,"temperature":temperature,"max_tokens":int(max_tokens or 1200)}
                 if response_format:
                     payload["response_format"] = response_format
                 try:
-                    body = await self._post_openai_payload(client, headers, payload)
+                    body = await self._post_openai_payload(client, self._headers(), payload)
                 except httpx.HTTPStatusError as exc:
-                    response_text = exc.response.text[:500] if exc.response is not None else ""
-                    errors.append(f"{candidate_model}: HTTP {exc.response.status_code if exc.response else 'unknown'} {response_text}")
+                    errors.append(f"{model}: HTTP {exc.response.status_code if exc.response else 'unknown'}")
                     if not self._should_try_next_model(exc):
                         raise
                     continue
@@ -327,30 +262,28 @@ class AIGateway:
                         json.loads(raw_content)
                         content = raw_content
                     except json.JSONDecodeError:
-                        content = json.dumps({"summary": content, "answer": content, "customer_safe": True})
-                raw: dict[str, Any] = body if isinstance(body, dict) else {"response": body}
-                if errors:
-                    raw = {"selected_model_response": body, "previous_model_errors": errors}
-                return AIGatewayResult(status="ok", content=content, provider=self.raw_provider or self.provider, model=candidate_model, raw=raw)
-        raise ValueError("All configured AI models failed: " + " | ".join(errors))
+                        content = json.dumps({"summary":content,"answer":content,"customer_safe":True})
+                if not content:
+                    errors.append(f"{model}: empty_content")
+                    continue
+                return AIGatewayResult(status="ok", content=content, provider=self.raw_provider or self.provider, model=model, raw=body)
+        return AIGatewayResult(status="unavailable", content="", provider=self.raw_provider or self.provider, model=None, error="All configured AI models failed: " + " | ".join(errors))
 
     async def _chat_ollama(self, messages: list[dict[str, str]], temperature: float, model_override: str | None = None, max_tokens: int | None = None, timeout_seconds: int | None = None) -> AIGatewayResult:
-        selected_model = model_override or self.model
+        selected = (model_override or self.model or "").strip()
+        if not selected or "/" in selected:
+            return AIGatewayResult(status="unavailable", content="", provider="ollama", model=selected or None, error="No compatible local Ollama model configured.")
         question = _extract_question(messages)
-        wants_depth = any(term in question.lower() for term in ["report", "analysis", "pdf", "document", "packet", "plan", "diagnose", "detailed", "explain"])
-        predict_budget = int(max_tokens or (850 if wants_depth else 240))
-        payload = {"model": selected_model, "messages": messages, "stream": False, "think": False, "keep_alive": "45m", "options": {"temperature": min(float(temperature or 0.18), 0.35), "num_predict": max(80, min(predict_budget, 1800)), "num_ctx": 4096 if wants_depth else 3072, "top_p": 0.9}}
-        request_timeout = max(8, min(int(timeout_seconds or (60 if wants_depth else 18)), 90))
-        async with httpx.AsyncClient(timeout=request_timeout) as client:
+        deep = any(term in question.lower() for term in ("report","analysis","pdf","document","packet","plan","diagnose","detailed","explain"))
+        payload = {"model":selected,"messages":messages,"stream":False,"think":False,"keep_alive":"45m","options":{"temperature":min(float(temperature or 0.18),0.35),"num_predict":max(200,min(int(max_tokens or (1800 if deep else 1200)),2800)),"num_ctx":8192 if deep else 6144,"top_p":0.9}}
+        async with httpx.AsyncClient(timeout=max(12,min(int(timeout_seconds or (75 if deep else 35)),90))) as client:
             response = await client.post(f"{self.base_url}/api/chat", json=payload)
             response.raise_for_status()
             body = response.json()
-        message = body.get("message", {}) if isinstance(body, dict) else {}
-        content = clean_model_text(message.get("content", "") or body.get("response", ""))
+        content = clean_model_text(((body.get("message") or {}).get("content") or body.get("response") or "") if isinstance(body, dict) else "")
         if not content:
-            content = _question_aware_local_fallback(question)
-        return AIGatewayResult(status="ok", content=content, provider="ollama", model=selected_model, raw=body)
+            return AIGatewayResult(status="unavailable", content="", provider="ollama", model=selected, raw=body if isinstance(body, dict) else {"response":body}, error="Ollama returned no usable content.")
+        return AIGatewayResult(status="ok", content=content, provider="ollama", model=selected, raw=body)
 
-    def _offline_fallback(self, messages: list[dict[str, str]], selected_model: str | None = None) -> AIGatewayResult:
-        answer = _question_aware_local_fallback(_extract_question(messages))
-        return AIGatewayResult(status="degraded", content=answer, provider=self.raw_provider or self.provider or "offline", model=selected_model, demo_fallback=True)
+    def _offline_fallback(self, selected_model: str | None = None) -> AIGatewayResult:
+        return AIGatewayResult(status="unavailable", content="", provider=self.raw_provider or self.provider or "offline", model=selected_model, error="Live model provider is not configured for this request.")
