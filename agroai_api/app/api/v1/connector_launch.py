@@ -66,7 +66,7 @@ def return_url(provider: str, status: str, connection_id: str | None = None) -> 
 
 def html_status(provider: str, status: str, message: str, connection_id: str | None = None) -> HTMLResponse:
     href = return_url(provider, status, connection_id)
-    return HTMLResponse(f"<html><body><h2>Connector {status.replace('_', ' ')}</h2><p>{message}</p><p><a href='{href}'>Return to AGRO-AI</a></p><script>setTimeout(function(){{ window.location.href = '{href}'; }}, 900);</script></body></html>")
+    return HTMLResponse(f"<html><body><h2>Connector {status.replace('_', ' ')}</h2><p>{message}</p><p><a href='{href}'>Return to AGRO-AI</a></p></body></html>")
 
 async def exchange_dropbox_code(code: str) -> dict[str, Any]:
     client_id = os.getenv("DROPBOX_OAUTH_CLIENT_ID", "").strip()
@@ -132,7 +132,7 @@ async def start_launch_authorization(payload: LaunchStartRequest, tenant_id: str
     if auth_pattern == "oauth":
         state = os.urandom(24).hex()
         auth_url, auth_error = oauth_url(payload.provider, state, payload.redirect_url or callback_url_for(payload.provider))
-        status_value = "oauth_ready" if auth_url else "platform_setup_required"
+        status_value = "oauth_pending" if auth_url else "platform_setup_required"
     elif auth_pattern == "service_account":
         status_value = "service_account_ready" if manifest["configured"] else "service_account_missing"
     else:
@@ -145,10 +145,10 @@ async def start_launch_authorization(payload: LaunchStartRequest, tenant_id: str
     connection.last_error = auth_error
     if payload.account_hint or payload.field_scope:
         connection.credentials_ref = safe_credential_ref(payload.account_hint or payload.field_scope)
-    job = save_launch_job(db, tenant_id, connection, "launch_authorization_start", {"provider": payload.provider, "auth_pattern": auth_pattern, "status": status_value, "auth_url_available": bool(auth_url), "permissions": manifest["permissions"], "data_objects": manifest["data_objects"], "next_step": manifest["production_next"]}, "completed_with_warnings" if auth_error else "completed")
+    job = save_launch_job(db, tenant_id, connection, "launch_authorization_start", {"provider": payload.provider, "auth_pattern": auth_pattern, "status": status_value, "auth_url_available": bool(auth_url), "authorization_url_available": bool(auth_url), "permissions": manifest["permissions"], "data_objects": manifest["data_objects"], "next_step": manifest["production_next"]}, "completed_with_warnings" if auth_error else "completed")
     db.commit()
     db.refresh(connection)
-    return {"status": status_value, "connection": public_connection(connection), "manifest": manifest, "auth_url": auth_url, "oauth_error": auth_error, "job": row_to_dict(job), "message": "Provider authorization is ready." if auth_url else manifest["production_next"]}
+    return {"status": status_value, "connection": public_connection(connection), "manifest": manifest, "auth_url": auth_url, "authorization_url": auth_url, "url": auth_url, "redirect_url": auth_url, "oauth_error": auth_error, "job": row_to_dict(job), "message": "Provider authorization URL created." if auth_url else manifest["production_next"]}
 
 @router.post("/connectors/launch/access-request")
 async def create_access_request(payload: AccessRequest, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
