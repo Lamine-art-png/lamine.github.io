@@ -16,6 +16,7 @@ from app.models.saas import User
 from app.schemas.ai import EvidenceContext
 from app.services.ai_gateway import AIGateway
 from app.services.intelligence_context import build_intelligence_context
+from app.services.language import localized_safe_fallback, looks_english, resolve_language
 from app.services.model_router import ModelRouter
 
 router = APIRouter(prefix="/intelligence/brain", tags=["intelligence"])
@@ -26,7 +27,7 @@ Adapt to the user: short when casual, detailed when they ask for analysis, repor
 For reports, write like an institutional compliance/reporting consultant: structured, precise, evidence-led, reviewer-safe, and board-ready.
 If evidence is thin, continue with a useful draft and clearly mark assumptions instead of refusing.
 Use only supplied context and uploaded evidence. Do not invent telemetry, acreage, integrations, water use, compliance status, savings, or customer facts.
-Language rule: answer in the selected portal language unless the user clearly writes in a different language; in that case answer in the user's language. Keep technical farm terms precise.
+Language rule is mandatory: answer in the selected or detected response language supplied in the user message. Do not answer in English unless that response language is English or the user explicitly asks for English.
 Do not repeat the same answer. Use recent history to move the work forward."""
 
 LANGUAGE_NAMES = {
@@ -125,16 +126,17 @@ def compact_evidence_items(context: EvidenceContext, *, max_items: int = 5) -> l
     return compact
 
 def compact_local_messages(*, question: str, context: EvidenceContext, history: list[dict[str, Any]] | None = None, audience: str | None = None, uploaded_evidence: list[dict[str, Any]] | None = None, preferred_language: str | None = None) -> list[dict[str, str]]:
+    language = resolve_language(preferred_language, question)
     evidence = compact_evidence_items(context, max_items=5)
     uploads = compact_uploaded_evidence(uploaded_evidence, max_items=5)
     missing = [readable_missing_label(item) for item in actual_missing_data_only(context.missing_data)] if should_surface_missing_evidence(question) else []
     report_instruction = "The user appears to want a report/document. Produce a compliance-grade operating report draft with headings, evidence register, control considerations, risks/assumptions, recommended actions, and a reviewer-safe note. Do not make unsupported claims." if wants_report(question) else "Produce the most useful direct answer for the user's request."
-    language_name = _language_name(preferred_language)
     lines = [
         f"Question: {_short(question, 900)}",
-        f"Preferred portal language: {language_name} ({preferred_language or 'auto'}).",
+        language.instruction,
+        f"Preferred portal language code: {preferred_language or 'auto'}. Mandatory response language code: {language.response_code}. Mandatory response language name: {language.response_name}.",
         f"Detected script hint: {_script_hint(question)}.",
-        "Language instruction: Respond in the preferred portal language unless the user's message is clearly in a different language. If the user writes in another language, answer in that language. Do not explain the language choice.",
+        "Hard rule: the final answer must be written in the mandatory response language, not English, unless English is the mandatory response language.",
         f"Audience: {_short(audience, 80) if audience else 'operator'}",
         f"Workspace: {_short(context.workspace_id or 'current workspace', 120)}",
         f"Crop/region: {_short(context.crop_type or 'unknown', 80)} / {_short(context.region or 'unknown', 80)}",
@@ -155,18 +157,36 @@ def local_plain_body(answer: str, context: EvidenceContext, *, question: str = "
     missing = [readable_missing_label(item) for item in actual_missing_data_only(context.missing_data)] if should_surface_missing_evidence(question) else []
     return {"summary": answer, "answer": answer, "work_completed": [], "evidence_used": [], "missing_evidence": missing, "missing_data": missing, "recommendations": [], "next_actions": [], "risk_flags": [], "confidence": "low" if missing else "medium", "customer_safe": True}
 
+async def _rewrite_if_needed(model_router: ModelRouter, answer: str, response_language: str, response_language_name: str) -> str:
+    if response_language == "en" or not looks_english(answer):
+        return answer
+    rewrite_messages = [
+        {"role": "system", "content": f"Translate/rewrite the user's text into {response_language_name}. Return only the rewritten answer. Keep agriculture, irrigation, telemetry, compliance, and water-accounting terms precise. Do not add new facts."},
+        {"role": "user", "content": answer[:4000]},
+    ]
+    result, _selection = await model_router.run(task="chat", messages=rewrite_messages, temperature=0.05, response_format=None)
+    rewritten = str(result.content or "").strip()
+    if result.status == "ok" and rewritten and not looks_english(rewritten):
+        return rewritten
+    return localized_safe_fallback(response_language)
+
 @router.post("/run")
 async def brain_run(payload: BrainRunRequest, tenant_id: str = Depends(require_current_tenant_id), user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict[str, Any]:
+    language = resolve_language(payload.preferred_language, payload.question)
     context_bundle = build_intelligence_context(db=db, tenant_id=tenant_id, user=user, workspace_id=payload.workspace_id, field_id=payload.field_id, audience=payload.audience)
     context = context_bundle["evidence_context"]
     attach_uploaded_evidence(context, payload.uploaded_evidence)
     model_router = ModelRouter()
-    messages = compact_local_messages(question=payload.question, context=context, history=payload.history[-6:], audience=payload.audience, uploaded_evidence=payload.uploaded_evidence, preferred_language=payload.preferred_language)
+    messages = compact_local_messages(question=payload.question, context=context, history=payload.history[-6:], audience=payload.audience, uploaded_evidence=payload.uploaded_evidence, preferred_language=language.response_code)
     result, selection = await model_router.run(task="chat", messages=messages, temperature=0.18, response_format=None)
-    answer = str(result.content or "").strip() or "I can help once the workspace has enough context for this request."
+    if result.status != "ok" or result.demo_fallback:
+        answer = localized_safe_fallback(language.response_code)
+    else:
+        answer = str(result.content or "").strip() or localized_safe_fallback(language.response_code)
+        answer = await _rewrite_if_needed(model_router, answer, language.response_code, language.response_name)
     body = local_plain_body(answer, context, question=payload.question)
     model_status = "live" if result.status == "ok" and not result.demo_fallback else "fallback"
-    return {"status": "completed" if result.status == "ok" or result.demo_fallback else "unavailable", "task": payload.task, "model_status": model_status, "result": body, "missing_data": body["missing_data"], "confidence": body["confidence"], "citations": [citation.model_dump(mode="python") if hasattr(citation, "model_dump") else citation for citation in context.citations[:8]], "sample_mode": bool(context_bundle.get("sample_mode")), "selected_model": selection.model, "preferred_language": payload.preferred_language}
+    return {"status": "completed" if result.status == "ok" or result.demo_fallback else "unavailable", "task": payload.task, "model_status": model_status, "result": body, "missing_data": body["missing_data"], "confidence": body["confidence"], "citations": [citation.model_dump(mode="python") if hasattr(citation, "model_dump") else citation for citation in context.citations[:8]], "sample_mode": bool(context_bundle.get("sample_mode")), "selected_model": selection.model, "preferred_language": payload.preferred_language, "response_language": language.response_code}
 
 @router.get("/model-smoke")
 async def model_smoke() -> dict[str, Any]:
