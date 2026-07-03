@@ -102,8 +102,8 @@ def detect_language_hint(text: str | None) -> tuple[str | None, str | None]:
         return "ko", "Korean script"
     if re.search(r"[\u0900-\u097f]", value):
         return "hi", "Indic script"
-    lower = f" {value.lower().replace('’', "'")} "
-    if any(token in lower for token in [" bonjour ", " merci ", " s'il ", " s il ", " est-ce ", " est ce ", " tu peux ", " pouvez ", " avec ", " données ", " ferme ", " aide ", " m'aider ", " peux-tu "]):
+    lower = " " + value.lower().replace("’", "'") + " "
+    if any(token in lower for token in [" bonjour ", " merci ", " s'il ", " s il ", " est-ce ", " est ce ", " tu peux ", " pouvez ", " avec ", " données ", " donnee ", " ferme ", " aide ", " m'aider ", " peux-tu "]):
         return "fr", "French phrase hint"
     if any(token in lower for token in [" hola ", " gracias ", " puedes ", " puede ", " campo ", " datos ", " agua ", " riego ", " ayudar "]):
         return "es", "Spanish phrase hint"
@@ -115,9 +115,7 @@ def detect_language_hint(text: str | None) -> tuple[str | None, str | None]:
 def resolve_language(selected: str | None, user_text: str | None) -> LanguageDecision:
     selected_code = normalize_locale(selected)
     detected_code, detected_label = detect_language_hint(user_text)
-    response_code = detected_code if selected_code == "auto" and detected_code else selected_code
-    if response_code == "auto":
-        response_code = "en"
+    response_code = detected_code or (selected_code if selected_code != "auto" else "en")
     selected_name = language_name(selected_code)
     detected_name = language_name(detected_code) if detected_code else None
     response_name = language_name(response_code)
@@ -129,16 +127,7 @@ def resolve_language(selected: str | None, user_text: str | None) -> LanguageDec
         f"You must answer in {response_name}. Do not answer in English unless the mandatory response language is English or the user explicitly asks for English. "
         "Do not explain the language choice. Preserve precise agriculture, irrigation, ET, controller, telemetry, compliance, and water-accounting terms."
     )
-    return LanguageDecision(
-        selected_code=selected_code,
-        selected_name=selected_name,
-        detected_code=detected_code,
-        detected_name=detected_name,
-        response_code=response_code,
-        response_name=response_name,
-        direction=direction_for(response_code),
-        instruction=instruction,
-    )
+    return LanguageDecision(selected_code=selected_code, selected_name=selected_name, detected_code=detected_code, detected_name=detected_name, response_code=response_code, response_name=response_name, direction=direction_for(response_code), instruction=instruction)
 
 
 def localized_safe_fallback(code: str | None) -> str:
