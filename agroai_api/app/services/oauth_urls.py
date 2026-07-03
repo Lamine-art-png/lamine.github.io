@@ -33,7 +33,7 @@ def oauth_url(provider: str, state: str, redirect_url: str) -> tuple[str | None,
         client_id = os.getenv("DROPBOX_OAUTH_CLIENT_ID", "").strip()
         if not client_id:
             return None, "DROPBOX_OAUTH_CLIENT_ID is not configured."
-        return _query("https://www.dropbox.com/oauth2/authorize", {"client_id": client_id, "redirect_uri": redirect_url, "response_type": "code", "token_access_type": "offline", "state": state}), None
+        return _query("https://www.dropbox.com/oauth2/authorize", {"client_id": client_id, "redirect_uri": redirect_url, "response_type": "code", "token_access_type": "offline", "force_reapprove": "true", "state": state}), None
     if provider == "box":
         client_id = os.getenv("BOX_OAUTH_CLIENT_ID", "").strip()
         if not client_id:
