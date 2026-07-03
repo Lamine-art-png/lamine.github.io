@@ -11,13 +11,12 @@ from fastapi import Body, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import inspect, text
-from sqlalchemy.exc import SQLAlchemyError
 
 from app.core.config import settings
 
 logger = logging.getLogger(__name__)
 
-VERSION = "2.0.0"
+VERSION = "2.0.1"
 
 
 def _ensure_column(connection, inspector, table: str, column: str, ddl: str) -> None:
@@ -27,14 +26,7 @@ def _ensure_column(connection, inspector, table: str, column: str, ddl: str) -> 
 
 
 def ensure_saas_portal_runtime_schema() -> None:
-    """Repair small portal schema gaps before request handling.
-
-    Alembic remains the source of truth. This runtime guard prevents support,
-    preferences, team invitations, and email verification from failing when a
-    Render startup migration was partial, skipped, or blocked by existing
-    objects during pilot rollout.
-    """
-
+    """Best-effort pilot schema guard; never prevents the API from booting."""
     try:
         from app.db.base import engine
 
@@ -64,12 +56,9 @@ def ensure_saas_portal_runtime_schema() -> None:
             else:
                 inspector = inspect(connection)
                 for column, ddl in [
-                    ("id", "id VARCHAR"),
-                    ("user_id", "user_id VARCHAR"),
-                    ("token_hash", "token_hash VARCHAR"),
-                    ("expires_at", "expires_at TIMESTAMP"),
-                    ("used_at", "used_at TIMESTAMP"),
-                    ("created_at", "created_at TIMESTAMP"),
+                    ("id", "id VARCHAR"), ("user_id", "user_id VARCHAR"),
+                    ("token_hash", "token_hash VARCHAR"), ("expires_at", "expires_at TIMESTAMP"),
+                    ("used_at", "used_at TIMESTAMP"), ("created_at", "created_at TIMESTAMP"),
                 ]:
                     _ensure_column(connection, inspector, "email_verification_tokens", column, ddl)
                     inspector = inspect(connection)
@@ -93,16 +82,11 @@ def ensure_saas_portal_runtime_schema() -> None:
             else:
                 inspector = inspect(connection)
                 for column, ddl in [
-                    ("id", "id VARCHAR"),
-                    ("organization_id", "organization_id VARCHAR"),
-                    ("email", "email VARCHAR"),
-                    ("role", "role VARCHAR"),
-                    ("status", "status VARCHAR"),
-                    ("invited_by_user_id", "invited_by_user_id VARCHAR"),
-                    ("token_hash", "token_hash VARCHAR"),
-                    ("expires_at", "expires_at TIMESTAMP"),
-                    ("created_at", "created_at TIMESTAMP"),
-                    ("updated_at", "updated_at TIMESTAMP"),
+                    ("id", "id VARCHAR"), ("organization_id", "organization_id VARCHAR"),
+                    ("email", "email VARCHAR"), ("role", "role VARCHAR"),
+                    ("status", "status VARCHAR"), ("invited_by_user_id", "invited_by_user_id VARCHAR"),
+                    ("token_hash", "token_hash VARCHAR"), ("expires_at", "expires_at TIMESTAMP"),
+                    ("created_at", "created_at TIMESTAMP"), ("updated_at", "updated_at TIMESTAMP"),
                 ]:
                     _ensure_column(connection, inspector, "team_invitations", column, ddl)
                     inspector = inspect(connection)
@@ -122,12 +106,9 @@ def ensure_saas_portal_runtime_schema() -> None:
             else:
                 inspector = inspect(connection)
                 for column, ddl in [
-                    ("user_id", "user_id VARCHAR"),
-                    ("locale", "locale VARCHAR"),
-                    ("timezone", "timezone VARCHAR"),
-                    ("notifications_json", "notifications_json TEXT"),
-                    ("ui_json", "ui_json TEXT"),
-                    ("created_at", "created_at TIMESTAMP"),
+                    ("user_id", "user_id VARCHAR"), ("locale", "locale VARCHAR"),
+                    ("timezone", "timezone VARCHAR"), ("notifications_json", "notifications_json TEXT"),
+                    ("ui_json", "ui_json TEXT"), ("created_at", "created_at TIMESTAMP"),
                     ("updated_at", "updated_at TIMESTAMP"),
                 ]:
                     _ensure_column(connection, inspector, "user_preferences", column, ddl)
@@ -143,29 +124,41 @@ def ensure_saas_portal_runtime_schema() -> None:
                 ]:
                     _ensure_column(connection, inspector, "saas_requests", column, ddl)
                     inspector = inspect(connection)
-    except SQLAlchemyError:
-        logger.exception("SaaS Portal runtime schema guard failed")
+    except Exception:
+        logger.exception("SaaS Portal runtime schema guard failed; continuing startup")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup/shutdown lifecycle — starts scheduler after Alembic migrations."""
-
+    """Start optional background services without making them API boot blockers."""
     ensure_saas_portal_runtime_schema()
+    scheduler_started = False
 
     if settings.ENABLE_SCHEDULER and settings.WISECONN_API_KEY:
-        from app.core.scheduler import start_scheduler
+        try:
+            from app.core.scheduler import start_scheduler
 
-        start_scheduler()
-        logger.info("Scheduler started — first sync will run on next interval")
+            start_scheduler()
+            scheduler_started = True
+            logger.info("Scheduler started — first sync will run on next interval")
+        except Exception:
+            logger.exception("Background scheduler failed to start; API will continue without scheduled sync")
     else:
-        logger.info("Background scheduler disabled (ENABLE_SCHEDULER=%s, API key set=%s)", settings.ENABLE_SCHEDULER, bool(settings.WISECONN_API_KEY))
+        logger.info(
+            "Background scheduler disabled (ENABLE_SCHEDULER=%s, API key set=%s)",
+            settings.ENABLE_SCHEDULER,
+            bool(settings.WISECONN_API_KEY),
+        )
 
     yield
 
-    if settings.ENABLE_SCHEDULER:
-        from app.core.scheduler import stop_scheduler
-        stop_scheduler()
+    if scheduler_started:
+        try:
+            from app.core.scheduler import stop_scheduler
+
+            stop_scheduler()
+        except Exception:
+            logger.exception("Background scheduler failed to stop cleanly")
 
 
 app = FastAPI(title="AGRO-AI API", version=VERSION, lifespan=lifespan)
@@ -215,12 +208,10 @@ def _add_runtime_cors_headers(response: JSONResponse, origin: str | None) -> JSO
 
 @app.middleware("http")
 async def runtime_error_boundary(request: Request, call_next):
-    """Keep browser diagnostics truthful even when a route crashes."""
-
     origin = request.headers.get("origin")
     try:
         response = await call_next(request)
-    except Exception as exc:  # pragma: no cover - production safety boundary
+    except Exception as exc:  # pragma: no cover
         logger.exception("Unhandled API error path=%s", request.url.path)
         payload = {
             "status": "error",
@@ -232,7 +223,6 @@ async def runtime_error_boundary(request: Request, call_next):
         response = JSONResponse(payload, status_code=500)
         response.headers["x-agroai-error"] = exc.__class__.__name__
         return _add_runtime_cors_headers(response, origin)
-
     if origin and _origin_allowed(origin):
         response.headers.setdefault("Access-Control-Allow-Origin", origin)
         response.headers.setdefault("Access-Control-Allow-Credentials", "true")
@@ -297,8 +287,6 @@ async def email_delivery_runtime_status() -> Dict[str, Any]:
 
 @app.post("/v1/auth/email-verification/request")
 async def email_verification_request_runtime(payload: Dict[str, Any] = Body(default_factory=dict)) -> Dict[str, Any]:
-    """Operational resend route with truthful provider status."""
-
     stage = "validate_email"
     email = str(payload.get("email") or "").strip().lower()
     if not email or "@" not in email or "." not in email.rsplit("@", 1)[-1]:
@@ -327,7 +315,11 @@ async def email_verification_request_runtime(payload: Dict[str, Any] = Body(defa
         result = send_email(
             to_email=user.email,
             subject="Confirm your AGRO-AI email address",
-            text_body=("Confirm your email address to activate your AGRO-AI Enterprise Portal workspace.\n\n" f"Open this link: {verification_url}\n\n" "This link expires in 24 hours."),
+            text_body=(
+                "Confirm your email address to activate your AGRO-AI Enterprise Portal workspace.\n\n"
+                f"Open this link: {verification_url}\n\n"
+                "This link expires in 24 hours."
+            ),
             html_body=_verification_email_html(verification_url=verification_url),
         )
         if result.get("ok"):
@@ -383,6 +375,7 @@ app.include_router(workbench_router, prefix="/v1")
 
 from app.api.v1.compliance import router as compliance_router  # noqa: E402
 app.include_router(compliance_router, prefix="/v1")
+
 from app.api.v1.controllers import router as controllers_router  # noqa: E402
 app.include_router(controllers_router, prefix="/v1")
 
