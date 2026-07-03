@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, Globe2 } from "lucide-react";
+import { apiClient } from "../api/client";
 import { applyLocale, getStoredLocale, setStoredLocale, t } from "../i18n";
 import { ALL_LOCALES } from "./localeCatalog";
 
@@ -13,6 +14,16 @@ export function LanguageSelector({ compact = false, dark = false }: { compact?: 
     return () => window.removeEventListener("agroai:locale-change", listener);
   }, [locale]);
 
+  async function changeLanguage(nextLocale: string) {
+    setLocale(nextLocale);
+    setStoredLocale(nextLocale);
+    try {
+      await apiClient.patch("/v1/settings/preferences", { locale: nextLocale });
+    } catch {
+      // Local language switching remains active even if preference sync fails.
+    }
+  }
+
   const labelColor = dark ? "rgba(255,255,255,0.58)" : "#65736A";
   const selectBg = dark ? "rgba(255,255,255,0.06)" : "#FFFDF8";
   const selectColor = dark ? "white" : "#10231B";
@@ -25,13 +36,10 @@ export function LanguageSelector({ compact = false, dark = false }: { compact?: 
         {compact ? <Globe2 className="pointer-events-none absolute left-2 h-3.5 w-3.5" style={{ color: labelColor }} /> : null}
         <select
           value={locale}
-          onChange={(event) => {
-            setLocale(event.target.value);
-            setStoredLocale(event.target.value);
-          }}
+          onChange={(event) => changeLanguage(event.target.value)}
           className={`h-9 w-full appearance-none rounded-md py-1 pr-8 text-[12px] outline-none ${compact ? "pl-8" : "pl-3"}`}
           style={{ background: selectBg, color: selectColor, border: `1px solid ${border}` }}
-          title="Language"
+          title={t("language", locale)}
         >
           {ALL_LOCALES.map((item) => <option key={item.code} value={item.code}>{item.flag} {item.nativeName} · {item.englishName}</option>)}
         </select>
