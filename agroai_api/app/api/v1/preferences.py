@@ -50,39 +50,38 @@ def _decode(value: Any, fallback: dict | None = None) -> dict:
 
 
 def _row_to_payload(row: Any | None, ctx: AuthContext) -> dict:
+    defaults = {
+        "locale": "auto",
+        "timezone": "auto",
+        "notifications": {
+            "report_delivery": True,
+            "operational_alerts": True,
+            "support_updates": True,
+            "billing_updates": True,
+        },
+        "ui": {"density": "comfortable", "assistant_speed": "balanced"},
+        "user": {"id": ctx.user.id, "name": ctx.user.name, "email": ctx.user.email},
+    }
     if row is None:
-        return {
-            "locale": "auto",
-            "timezone": "auto",
-            "notifications": {
-                "report_delivery": True,
-                "operational_alerts": True,
-                "support_updates": True,
-                "billing_updates": True,
-            },
-            "ui": {"density": "comfortable", "assistant_speed": "balanced"},
-            "user": {"id": ctx.user.id, "name": ctx.user.name, "email": ctx.user.email},
-        }
+        return defaults
     mapping = row._mapping if hasattr(row, "_mapping") else row
     return {
+        **defaults,
         "locale": mapping.get("locale") or "auto",
         "timezone": mapping.get("timezone") or "auto",
-        "notifications": _decode(mapping.get("notifications_json"), {"report_delivery": True, "operational_alerts": True, "support_updates": True, "billing_updates": True}),
-        "ui": _decode(mapping.get("ui_json"), {"density": "comfortable", "assistant_speed": "balanced"}),
-        "user": {"id": ctx.user.id, "name": ctx.user.name, "email": ctx.user.email},
+        "notifications": _decode(mapping.get("notifications_json"), defaults["notifications"]),
+        "ui": _decode(mapping.get("ui_json"), defaults["ui"]),
         "updated_at": mapping.get("updated_at"),
     }
 
 
-@router.get("/account/preferences")
-def get_preferences(ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
+def _get(ctx: AuthContext, db: Session) -> dict:
     _ensure_table(db)
     row = db.execute(text("SELECT * FROM user_preferences WHERE user_id = :user_id"), {"user_id": ctx.user.id}).first()
     return {"preferences": _row_to_payload(row, ctx)}
 
 
-@router.patch("/account/preferences")
-def update_preferences(payload: PortalPreferencesUpdate, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
+def _patch(payload: PortalPreferencesUpdate, ctx: AuthContext, db: Session) -> dict:
     _ensure_table(db)
     current = db.execute(text("SELECT * FROM user_preferences WHERE user_id = :user_id"), {"user_id": ctx.user.id}).first()
     merged = _row_to_payload(current, ctx)
@@ -116,3 +115,23 @@ def update_preferences(payload: PortalPreferencesUpdate, ctx: AuthContext = Depe
     db.commit()
     row = db.execute(text("SELECT * FROM user_preferences WHERE user_id = :user_id"), {"user_id": ctx.user.id}).first()
     return {"preferences": _row_to_payload(row, ctx), "message": "Preferences saved."}
+
+
+@router.get("/account/preferences")
+def get_account_preferences(ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
+    return _get(ctx, db)
+
+
+@router.patch("/account/preferences")
+def update_account_preferences(payload: PortalPreferencesUpdate, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
+    return _patch(payload, ctx, db)
+
+
+@router.get("/settings/preferences")
+def get_settings_preferences(ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
+    return _get(ctx, db)
+
+
+@router.patch("/settings/preferences")
+def update_settings_preferences(payload: PortalPreferencesUpdate, ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
+    return _patch(payload, ctx, db)
