@@ -6,6 +6,7 @@ export const API_BASE_URL =
 export const API_BASE_URL_SOURCE =
   import.meta.env.VITE_API_BASE_URL ? "VITE_API_BASE_URL" : import.meta.env.VITE_API_URL ? "VITE_API_URL" : "default";
 
+const FORMSPREE_SUPPORT_URL = import.meta.env.VITE_FORMSPREE_SUPPORT_URL || import.meta.env.VITE_FORMSPREE_ENDPOINT || "";
 const tokenKey = "agroai_access_token";
 
 export type ApiError = Error & { status?: number; details?: unknown; code?: string };
@@ -31,7 +32,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   const data = await parseResponse(response);
   if (!response.ok) {
     const detail = data && typeof data === "object" && "detail" in data ? (data as Record<string, unknown>).detail : null;
-    const message = detail && typeof detail === "object" && "message" in detail ? String((detail as Record<string, unknown>).message) : data && typeof data === "object" && "detail" in data ? String(data.detail) : data && typeof data === "object" && "message" in data ? String(data.message) : `Request failed with status ${response.status}`;
+    const message = detail && typeof detail === "object" && "message" in detail ? String((detail as Record<string, unknown>).message) : data && typeof data === "object" && "detail" in data ? String((data as Record<string, unknown>).detail) : data && typeof data === "object" && "message" in data ? String((data as Record<string, unknown>).message) : `Request failed with status ${response.status}`;
     const error = new Error(message) as ApiError;
     error.status = response.status; error.details = data;
     if (detail && typeof detail === "object" && "code" in detail) error.code = String((detail as Record<string, unknown>).code);
@@ -49,24 +50,43 @@ function patch<T>(path: string, payload?: unknown, token?: string | null) { retu
 function remove<T>(path: string, token?: string | null) { return request<T>(path, { method: "DELETE", token }); }
 function upload<T>(path: string, file: File) { const form = new FormData(); form.append("file", file); return request<T>(path, { method: "POST", body: form }); }
 
+async function submitFormspree(payload: SupportTicketPayload) {
+  if (!FORMSPREE_SUPPORT_URL) throw new Error("Support form endpoint is not configured.");
+  const response = await fetch(FORMSPREE_SUPPORT_URL, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ ...payload, product: "AGRO-AI Enterprise Portal", submitted_at: new Date().toISOString() }) });
+  if (!response.ok) throw new Error(`Support form failed with status ${response.status}`);
+  const data = await response.json().catch(() => ({}));
+  return { status: "received", message: "Thanks - your request was received.", request_id: data.id || `formspree-${Date.now()}`, notification_status: "formspree_received" };
+}
+
+async function submitSupportTicket(payload: SupportTicketPayload) {
+  try { return await post("/v1/support/ticket", payload); }
+  catch (primary) {
+    try { return await post("/v1/support/ticket-public", payload); }
+    catch {
+      try { return await submitFormspree(payload); }
+      catch { throw primary; }
+    }
+  }
+}
+
 export type RegisterPayload = { name: string; email: string; password: string; organization_name: string; workspace_name: string; crop?: string; region?: string };
 export type LoginPayload = { email: string; password: string };
 export type CreateWorkspacePayload = { name: string; crop?: string; region?: string };
 export type CreateOrgPayload = { name: string };
-export type AiRequestPayload = { task?: string; message?: string; workspace_id?: string; block_id?: string; inputs?: Record<string, unknown> };
+export type AiRequestPayload = { task?: string; message?: string; workspace_id?: string; block_id?: string; inputs?: Record<string, unknown>; preferred_language?: string };
 export type ConnectorProvider = "wiseconn" | "talgil" | "universal_controller" | "weather" | "openet" | "manual_csv" | "chat_upload" | "gmail" | "outlook" | "google_drive" | "dropbox" | "box" | "slack" | "salesforce" | "google_earth_engine" | "custom_api";
 export type ConnectorStartPayload = { provider: ConnectorProvider; method?: string; workspace_id?: string; metadata?: Record<string, unknown> };
 export type ConnectorConnectPayload = { provider: ConnectorProvider; workspace_id?: string; mode?: string; display_name?: string; config?: Record<string, unknown>; scopes?: string[]; read_context_enabled?: boolean; send_reports_enabled?: boolean };
 export type IntelligenceActionPayload = { action: "field_diagnosis" | "irrigation_plan" | "assurance_packet" | "evidence_gap_analysis" | "integration_diagnosis" | "report_draft"; payload?: Record<string, unknown> };
-export type IntelligenceAskPayload = { question: string; workspace_id?: string; block_id?: string; customer_mode?: string; output_format?: string };
+export type IntelligenceAskPayload = { question: string; workspace_id?: string; block_id?: string; customer_mode?: string; output_format?: string; preferred_language?: string };
 export type IntelligenceRunPayload = { task: "chat" | "field_diagnosis" | "exception_triage" | "decision_workbench" | "report_factory" | "connector_diagnosis" | "readiness_analysis"; question: string; workspace_id?: string; field_id?: string; audience?: string; history?: { role: string; content: string }[]; uploaded_evidence?: Record<string, unknown>[]; preferred_language?: string };
 export type WorkbenchRunPayload = { workspace_id?: string; field_id?: string; mode?: "daily" | "field" | "compliance" | "irrigation" };
-export type ReportFactoryPayload = { report_type: "water_use_summary" | "compliance_packet" | "exception_report" | "executive_brief" | "grower_recommendation"; workspace_id?: string; field_id?: string; audience?: "operator" | "owner" | "agency" | "lender" | "investor" | "grower" };
+export type ReportFactoryPayload = { report_type: "water_use_summary" | "compliance_packet" | "exception_report" | "executive_brief" | "grower_recommendation"; workspace_id?: string; field_id?: string; audience?: "operator" | "owner" | "agency" | "lender" | "investor" | "grower"; preferred_language?: string };
 export type FieldOpsTaskPayload = { title: string; field?: string; block?: string; assigned_to?: string; priority?: "high" | "medium" | "low"; why: string; instructions?: string[]; evidence_required?: string[]; source_exception_id?: string; source_decision_id?: string; created_from?: "exception" | "decision" | "missing_evidence" | "manual" | "field_update"; workspace_id?: string };
 export type FieldOpsTaskStatusPayload = { status: "open" | "in_progress" | "blocked" | "done" | "needs_review"; workspace_id?: string };
 export type FieldUpdatePayload = { field_id?: string; field_name?: string; block?: string; crop?: string; update_text: string; event_type: "observation" | "meter_reading" | "irrigation_event" | "issue" | "photo_note" | "operator_note" | "compliance_note"; occurred_at?: string; water_gallons?: number; flow_gpm?: number; duration_minutes?: number; attachments?: Record<string, unknown>[]; workspace_id?: string };
 export type FieldMessagePayload = { message: string; sender_role: "operator" | "manager" | "agency" | "advisor"; channel: "portal" | "email" | "sms" | "whatsapp" | "slack" | "teams"; field_hint?: string; workspace_id?: string };
-export type AutopilotReportPayload = { audience: "operator" | "manager" | "owner" | "agency" | "lender" | "grower"; scope: "today" | "weekly" | "field" | "compliance" | "exceptions"; field_id?: string; workspace_id?: string };
+export type AutopilotReportPayload = { audience: "operator" | "manager" | "owner" | "agency" | "lender" | "grower"; scope: "today" | "weekly" | "field" | "compliance" | "exceptions"; field_id?: string; workspace_id?: string; preferred_language?: string };
 function providerForUpload(file: File) { const name = file.name.toLowerCase(); if (name.endsWith(".csv")) return "manual_csv"; return "chat_upload"; }
 export type ProductCheckoutPayload = { plan_id: "free" | "professional" | "team" | "network" | "enterprise"; billing_period: "monthly" | "annual" };
 export type EmailVerificationRequestPayload = { email?: string };
@@ -75,7 +95,7 @@ export type TeamInvitationPayload = { email: string; role: "owner" | "admin" | "
 export type SupportTicketPayload = { category: "support" | "integration" | "issue" | "onboarding" | "sales"; subject: string; message: string; priority?: "low" | "medium" | "high" | "urgent"; name?: string; email?: string; company?: string; role?: string; workspace_id?: string; source_page?: string };
 export type OnboardingPayload = { current_step?: string; selected_plan?: string; organization_type?: string; acres_or_sites?: string; primary_goal?: string; completed_steps?: string[]; workspace_id?: string };
 export type ConversationPayload = { title?: string; workspace_id?: string; message?: string };
-export type ConversationMessagePayload = { content: string; audience?: string; output?: string };
+export type ConversationMessagePayload = { content: string; audience?: string; output?: string; preferred_language?: string };
 export type AdminRequestUpdatePayload = { status?: "received" | "triaged" | "in_progress" | "waiting_on_customer" | "closed"; priority?: "low" | "medium" | "high" | "urgent" };
 
 export const apiClient = {
@@ -85,7 +105,7 @@ export const apiClient = {
   product: { plans: () => get("/v1/product/plans"), shell: () => get("/v1/app/shell") },
   account: { me: () => get("/v1/account/me"), profile: () => get("/v1/account/profile"), updateProfile: (payload: unknown) => patch("/v1/account/profile", payload), security: () => get("/v1/account/security"), requestEmailVerification: () => post("/v1/account/email-verification/request"), startTwoFactor: () => post("/v1/account/two-factor/start") },
   onboarding: { state: () => get("/v1/onboarding/state"), start: (payload?: OnboardingPayload) => post("/v1/onboarding/start", payload), update: (payload: OnboardingPayload) => patch("/v1/onboarding/state", payload), complete: () => post("/v1/onboarding/complete"), request: (payload: SupportTicketPayload) => post("/v1/onboarding/request", payload), requestHelp: (payload: unknown) => post("/v1/onboarding/request-help", payload) },
-  support: { options: () => get("/v1/support/options"), ticket: (payload: SupportTicketPayload) => post("/v1/support/ticket", payload) },
+  support: { options: () => get("/v1/support/options"), ticket: submitSupportTicket },
   sales: { contact: (payload: unknown) => post("/v1/sales/contact", payload), networkInquiry: (payload: unknown) => post("/v1/sales/network-inquiry", payload) },
   conversations: { list: () => get("/v1/conversations"), create: (payload: ConversationPayload) => post("/v1/conversations", payload), get: (conversationId: string) => get(`/v1/conversations/${encodeURIComponent(conversationId)}`), message: (conversationId: string, payload: ConversationMessagePayload) => post(`/v1/conversations/${encodeURIComponent(conversationId)}/messages`, payload), delete: (conversationId: string) => remove(`/v1/conversations/${encodeURIComponent(conversationId)}`) },
   adminRequests: { list: (type?: string) => get(`/v1/admin/requests${type ? `?type=${encodeURIComponent(type)}` : ""}`), update: (requestId: string, payload: AdminRequestUpdatePayload) => patch(`/v1/admin/requests/${encodeURIComponent(requestId)}`, payload), system: () => get("/v1/admin/system") },
@@ -98,7 +118,7 @@ export const apiClient = {
   artifacts: { list: () => get("/v1/artifacts"), get: (artifactId: string) => get(`/v1/artifacts/${encodeURIComponent(artifactId)}`), download: (artifactId: string) => download(`/v1/artifacts/${encodeURIComponent(artifactId)}/download`) },
   agents: { list: () => get("/v1/agents/runs"), run: (payload?: unknown) => post("/v1/agents/run", payload), status: (runId: string) => get(`/v1/agents/runs/${encodeURIComponent(runId)}`) },
   ai: { status: () => get("/v1/ai/status"), chat: (payload: AiRequestPayload) => post("/v1/ai/chat", payload), irrigationRecommendation: (payload: AiRequestPayload) => post("/v1/ai/irrigation-recommendation", payload), assuranceReview: (payload: AiRequestPayload) => post("/v1/ai/assurance-review", payload), reportDraft: (payload: AiRequestPayload) => post("/v1/ai/report-draft", payload), integrationDiagnosis: (payload: AiRequestPayload) => post("/v1/ai/integration-diagnosis", payload) },
-  intelligence: { brief: () => get("/v1/intelligence/brief"), brainRun: (payload: IntelligenceRunPayload) => post("/v1/intelligence/brain/run", payload), run: (payload: IntelligenceRunPayload) => post("/v1/intelligence/run", payload), ask: (payload: IntelligenceAskPayload) => post("/v1/intelligence/run", { task: "chat", question: payload.question, workspace_id: payload.workspace_id }), action: (payload: IntelligenceActionPayload) => post("/v1/intelligence/action", payload) },
+  intelligence: { brief: () => get("/v1/intelligence/brief"), brainRun: (payload: IntelligenceRunPayload) => post("/v1/intelligence/brain/run", payload), run: (payload: IntelligenceRunPayload) => post("/v1/intelligence/run", payload), ask: (payload: IntelligenceAskPayload) => post("/v1/intelligence/run", { task: "chat", question: payload.question, workspace_id: payload.workspace_id, preferred_language: payload.preferred_language }), action: (payload: IntelligenceActionPayload) => post("/v1/intelligence/action", payload) },
   readiness: { summary: (workspaceId?: string) => get(`/v1/readiness/summary${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`) },
   fields: { intelligence: (workspaceId?: string) => get(`/v1/fields/intelligence${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`) },
   exceptions: { list: (workspaceId?: string) => get(`/v1/exceptions${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`) },
