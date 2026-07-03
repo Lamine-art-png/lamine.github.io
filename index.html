@@ -57,11 +57,51 @@
           });
         };
 
+        const shouldOpenConnectors = () => {
+          const params = new URLSearchParams(window.location.search || "");
+          return Boolean(
+            params.get("connector") ||
+              params.get("provider") ||
+              params.get("open") === "connectors" ||
+              params.get("view") === "connectors" ||
+              params.get("module") === "connectors" ||
+              window.location.hash === "#connectors"
+          );
+        };
+
+        const openConnectorsView = () => {
+          if (!shouldOpenConnectors()) return true;
+          const candidates = Array.from(
+            document.querySelectorAll('a,button,[role="button"],[tabindex],nav *,aside *,div,span')
+          );
+          const connectorsTarget = candidates.find((node) => {
+            const text = (node.textContent || "").replace(/\s+/g, " ").trim().toLowerCase();
+            return text === "connectors";
+          });
+          if (!connectorsTarget) return false;
+          connectorsTarget.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+          return true;
+        };
+
         addCareersLink();
-        new MutationObserver(addCareersLink).observe(document.documentElement, {
+        const observer = new MutationObserver(() => {
+          addCareersLink();
+          openConnectorsView();
+        });
+        observer.observe(document.documentElement, {
           childList: true,
           subtree: true,
         });
+
+        if (shouldOpenConnectors()) {
+          let attempts = 0;
+          const timer = window.setInterval(() => {
+            attempts += 1;
+            if (openConnectorsView() || attempts > 80) {
+              window.clearInterval(timer);
+            }
+          }, 125);
+        }
       })();
     </script>
   </body>
