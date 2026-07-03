@@ -1,0 +1,2 @@
+OAuth connectors return fix merged through pull request path.
+This marker exists only to trigger the GitHub pull request deployment workflow.
