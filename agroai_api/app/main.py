@@ -27,11 +27,12 @@ def _ensure_column(connection, inspector, table: str, column: str, ddl: str) -> 
 
 
 def ensure_saas_portal_runtime_schema() -> None:
-    """Repair the small v2.1 auth schema before request handling.
+    """Repair small portal schema gaps before request handling.
 
-    Alembic remains the source of truth. This is an emergency runtime guard for
-    production so auth/email verification does not fail when a Render startup
-    migration was partial, skipped, or blocked by existing objects.
+    Alembic remains the source of truth. This runtime guard prevents support,
+    preferences, team invitations, and email verification from failing when a
+    Render startup migration was partial, skipped, or blocked by existing
+    objects during pilot rollout.
     """
 
     try:
@@ -105,8 +106,45 @@ def ensure_saas_portal_runtime_schema() -> None:
                 ]:
                     _ensure_column(connection, inspector, "team_invitations", column, ddl)
                     inspector = inspect(connection)
+
+            if "user_preferences" not in set(inspect(connection).get_table_names()):
+                connection.execute(text("""
+                    CREATE TABLE IF NOT EXISTS user_preferences (
+                        user_id VARCHAR PRIMARY KEY,
+                        locale VARCHAR,
+                        timezone VARCHAR,
+                        notifications_json TEXT,
+                        ui_json TEXT,
+                        created_at TIMESTAMP NOT NULL,
+                        updated_at TIMESTAMP NOT NULL
+                    )
+                """))
+            else:
+                inspector = inspect(connection)
+                for column, ddl in [
+                    ("user_id", "user_id VARCHAR"),
+                    ("locale", "locale VARCHAR"),
+                    ("timezone", "timezone VARCHAR"),
+                    ("notifications_json", "notifications_json TEXT"),
+                    ("ui_json", "ui_json TEXT"),
+                    ("created_at", "created_at TIMESTAMP"),
+                    ("updated_at", "updated_at TIMESTAMP"),
+                ]:
+                    _ensure_column(connection, inspector, "user_preferences", column, ddl)
+                    inspector = inspect(connection)
+
+            if "saas_requests" in set(inspect(connection).get_table_names()):
+                inspector = inspect(connection)
+                for column, ddl in [
+                    ("notification_status", "notification_status VARCHAR DEFAULT 'stored'"),
+                    ("metadata_json", "metadata_json JSON"),
+                    ("priority", "priority VARCHAR DEFAULT 'medium'"),
+                    ("source_page", "source_page VARCHAR"),
+                ]:
+                    _ensure_column(connection, inspector, "saas_requests", column, ddl)
+                    inspector = inspect(connection)
     except SQLAlchemyError:
-        logger.exception("SaaS Portal v2.1 runtime schema guard failed")
+        logger.exception("SaaS Portal runtime schema guard failed")
 
 
 @asynccontextmanager
@@ -121,8 +159,7 @@ async def lifespan(app: FastAPI):
         start_scheduler()
         logger.info("Scheduler started — first sync will run on next interval")
     else:
-        logger.info("Background scheduler disabled (ENABLE_SCHEDULER=%s, API key set=%s)",
-                    settings.ENABLE_SCHEDULER, bool(settings.WISECONN_API_KEY))
+        logger.info("Background scheduler disabled (ENABLE_SCHEDULER=%s, API key set=%s)", settings.ENABLE_SCHEDULER, bool(settings.WISECONN_API_KEY))
 
     yield
 
@@ -131,11 +168,7 @@ async def lifespan(app: FastAPI):
         stop_scheduler()
 
 
-app = FastAPI(
-    title="AGRO-AI API",
-    version=VERSION,
-    lifespan=lifespan,
-)
+app = FastAPI(title="AGRO-AI API", version=VERSION, lifespan=lifespan)
 
 ALLOWED_ORIGINS = [
     "https://app.agroai-pilot.com",
@@ -182,12 +215,7 @@ def _add_runtime_cors_headers(response: JSONResponse, origin: str | None) -> JSO
 
 @app.middleware("http")
 async def runtime_error_boundary(request: Request, call_next):
-    """Keep browser diagnostics truthful even when a route crashes.
-
-    Without this, an internal 500 can appear in Chrome as a CORS failure, which
-    hides the real backend issue. This middleware preserves CORS headers and
-    returns a small JSON error envelope instead of letting the browser lie.
-    """
+    """Keep browser diagnostics truthful even when a route crashes."""
 
     origin = request.headers.get("origin")
     try:
@@ -214,12 +242,7 @@ async def runtime_error_boundary(request: Request, call_next):
 
 
 async def health_payload() -> Dict[str, str]:
-    return {
-        "status": "ok",
-        "service": "agroai-api",
-        "version": VERSION,
-        "checked_at": datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z",
-    }
+    return {"status": "ok", "service": "agroai-api", "version": VERSION, "checked_at": datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z"}
 
 
 @app.get("/health")
@@ -290,68 +313,42 @@ async def email_verification_request_runtime(payload: Dict[str, Any] = Body(defa
     try:
         stage = "schema_guard"
         ensure_saas_portal_runtime_schema()
-
         stage = "find_user"
         user = db.query(User).filter(User.email == email).first()
         if not user:
-            return {
-                "message": "If an account exists, we processed the verification request.",
-                "delivery": {"delivery": "unknown", "provider": "none", "reason": "account_not_found", "stage": stage},
-            }
+            return {"message": "If an account exists, we processed the verification request.", "delivery": {"delivery": "unknown", "provider": "none", "reason": "account_not_found", "stage": stage}}
         if user.email_verification_status == "verified" and user.email_verified_at:
-            return {
-                "message": "This account is already verified.",
-                "delivery": {"delivery": "not_needed", "provider": "none", "reason": "already_verified", "stage": stage},
-            }
-
+            return {"message": "This account is already verified.", "delivery": {"delivery": "not_needed", "provider": "none", "reason": "already_verified", "stage": stage}}
         stage = "create_token"
         token = create_verification_token(db, user)
         db.commit()
-
         stage = "send_email"
         verification_url = f"{verification_base_url()}/verify-email?token={token}"
         result = send_email(
             to_email=user.email,
             subject="Confirm your AGRO-AI email address",
-            text_body=(
-                "Confirm your email address to activate your AGRO-AI Enterprise Portal workspace.\n\n"
-                f"Open this link: {verification_url}\n\n"
-                "This link expires in 24 hours."
-            ),
+            text_body=("Confirm your email address to activate your AGRO-AI Enterprise Portal workspace.\n\n" f"Open this link: {verification_url}\n\n" "This link expires in 24 hours."),
             html_body=_verification_email_html(verification_url=verification_url),
         )
         if result.get("ok"):
-            return {
-                "message": "We sent a verification link to your email.",
-                "delivery": {"delivery": "sent", "provider": result.get("provider"), "status_code": result.get("status_code"), "reason": "accepted", "stage": stage},
-            }
-        return {
-            "message": "Email verification is required, but the email provider did not accept the message.",
-            "delivery": {
-                "delivery": "failed",
-                "provider": result.get("provider") or "none",
-                "status_code": result.get("status_code"),
-                "reason": result.get("reason") or "provider_failed",
-                "stage": stage,
-            },
-        }
+            return {"message": "We sent a verification link to your email.", "delivery": {"delivery": "sent", "provider": result.get("provider"), "status_code": result.get("status_code"), "reason": "accepted", "stage": stage}}
+        return {"message": "Email verification is required, but the email provider did not accept the message.", "delivery": {"delivery": "failed", "provider": result.get("provider") or "none", "status_code": result.get("status_code"), "reason": result.get("reason") or "provider_failed", "stage": stage}}
     except Exception as exc:
         db.rollback()
         logger.exception("Verification email operational route failed stage=%s", stage)
-        return {
-            "message": "Email verification is required, but the verification email could not be sent.",
-            "delivery": {"delivery": "failed", "provider": "none", "reason": exc.__class__.__name__, "stage": stage},
-        }
+        return {"message": "Email verification is required, but the verification email could not be sent.", "delivery": {"delivery": "failed", "provider": "none", "reason": exc.__class__.__name__, "stage": stage}}
     finally:
         db.close()
 
 
 from app.api.v1.auth import router as auth_router  # noqa: E402
 from app.api.v1.billing import router as billing_router  # noqa: E402
+from app.api.v1.preferences import router as preferences_router  # noqa: E402
 from app.api.v1.product_shell import router as product_shell_router  # noqa: E402
 
 app.include_router(auth_router, prefix="/v1")
 app.include_router(billing_router, prefix="/v1")
+app.include_router(preferences_router, prefix="/v1")
 app.include_router(product_shell_router, prefix="/v1")
 
 from app.api.v1.saas import router as saas_router  # noqa: E402
@@ -391,6 +388,9 @@ app.include_router(controllers_router, prefix="/v1")
 
 from app.api.v1.talgil import router as talgil_router  # noqa: E402
 app.include_router(talgil_router, prefix="/v1")
+
+from app.api.v1.ai_stable import router as ai_stable_router  # noqa: E402
+app.include_router(ai_stable_router, prefix="/v1")
 
 from app.api.v1.ai import router as ai_router  # noqa: E402
 app.include_router(ai_router, prefix="/v1")
