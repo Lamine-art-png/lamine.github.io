@@ -1,0 +1,1 @@
+export default {"routes.operatingRoom":"Centre opérationnel AGRO-AI","routes.openAsk":"Ouvrir AGRO-AI","routes.reviewEvidence":"Examiner les éléments de preuve","routes.checkReadiness":"Vérifier l’état de préparation","routes.continuePortal":"Continuer vers le portail"} as const;
