@@ -238,6 +238,28 @@ async def brain_run(
     )
     result = await LiveIntelligence().run(payload.task, payload.question, messages, payload.preferred_language)
 
+    if result.status == "language_generation_failed":
+        return {
+            "status": "language_generation_failed",
+            "task": payload.task,
+            "model_status": "language_generation_failed",
+            "result": {
+                "summary": "",
+                "answer": "",
+                "error": "language_generation_failed",
+                "customer_safe": True,
+            },
+            "missing_data": [],
+            "confidence": "low",
+            "citations": [],
+            "sample_mode": bool(bundle.get("sample_mode")),
+            "selected_model": result.model,
+            "provider": result.provider,
+            "preferred_language": payload.preferred_language,
+            "response_language": result.response_language,
+            "profile": result.profile,
+        }
+
     if result.status != "ok" or not result.content.strip():
         return {
             "status": "unavailable",
