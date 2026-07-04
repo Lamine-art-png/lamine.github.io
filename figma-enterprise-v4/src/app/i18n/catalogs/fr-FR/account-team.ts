@@ -1,0 +1,1 @@
+export default {"team.inviteGate":"Les invitations directes sont incluses dans les forfaits Team, Network et Enterprise. Les espaces Free et Professional peuvent soumettre une demande d\u2019invitation.","team.noMembers":"Aucun membre d\u2019\u00e9quipe charg\u00e9 pour le moment.","team.noInvitations":"Aucune invitation pour le moment."} as const;
