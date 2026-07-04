@@ -1,0 +1,46 @@
+name: Export i18n engineering snapshot
+
+on:
+  push:
+    branches:
+      - tmp/i18n-snapshot-export
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
+      - name: Record commit
+        run: git rev-parse HEAD > snapshot-head.txt
+      - name: Package engineering snapshot
+        run: |
+          tar \
+            --exclude='.git' \
+            --exclude='**/node_modules' \
+            --exclude='**/dist' \
+            --exclude='agroai.db' \
+            --exclude='outputs' \
+            -czf /tmp/agroai-i18n-snapshot.tar.gz \
+            agroai_api \
+            figma-enterprise-v4 \
+            shared \
+            .github \
+            snapshot-head.txt
+      - name: Upload snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: agroai-i18n-snapshot
+          path: /tmp/agroai-i18n-snapshot.tar.gz
+          retention-days: 1
+          if-no-files-found: error
