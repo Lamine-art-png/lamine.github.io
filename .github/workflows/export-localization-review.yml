@@ -1,0 +1,32 @@
+name: Export localization review snapshot
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  export-snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Record commit
+        run: git rev-parse HEAD > localization-review-head.txt
+      - name: Upload exact repository snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: localization-review-snapshot
+          path: |
+            agroai_api
+            figma-enterprise-v4
+            scripts
+            shared
+            localization-review-head.txt
+          if-no-files-found: warn
+          retention-days: 1
