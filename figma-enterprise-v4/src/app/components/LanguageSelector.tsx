@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, Globe2 } from "lucide-react";
+import { apiClient } from "../api/client";
 import { applyLocale, ENABLED_LOCALES, getStoredLocale, setStoredLocale, t } from "../i18n";
 
 export function LanguageSelector({ compact = false, dark = false }: { compact?: boolean; dark?: boolean }) {
@@ -7,14 +8,19 @@ export function LanguageSelector({ compact = false, dark = false }: { compact?: 
 
   useEffect(() => {
     applyLocale(locale);
-    const listener = ((event: CustomEvent) => setLocale(event.detail?.locale || getStoredLocale())) as EventListener;
+    const listener = ((event: CustomEvent) => setLocale(event.detail?.selectedLocale || event.detail?.locale || getStoredLocale())) as EventListener;
     window.addEventListener("agroai:locale-change", listener);
     return () => window.removeEventListener("agroai:locale-change", listener);
   }, [locale]);
 
-  function changeLanguage(nextLocale: string) {
-    setLocale(nextLocale);
-    setStoredLocale(nextLocale);
+  async function changeLanguage(nextLocale: string) {
+    const canonical = setStoredLocale(nextLocale);
+    setLocale(canonical);
+    try {
+      await apiClient.patch("/v1/settings/preferences", { locale: canonical });
+    } catch {
+      // Preference sync is best effort. The local switch remains active.
+    }
   }
 
   const labelColor = dark ? "rgba(255,255,255,0.58)" : "#65736A";
