@@ -1,13 +1,26 @@
 import localeManifest from "../../../../shared/supported-locales.json";
 
-import enCore from "../i18n-resources/en/core.json";
-import enIntelligence from "../i18n-resources/en/intelligence.json";
-import enAccount from "../i18n-resources/en/account.json";
-import enOperations from "../i18n-resources/en/operations.json";
-import frCore from "../i18n-resources/fr-FR/core.json";
-import frIntelligence from "../i18n-resources/fr-FR/intelligence.json";
-import frAccount from "../i18n-resources/fr-FR/account.json";
-import frOperations from "../i18n-resources/fr-FR/operations.json";
+import enCore from "./catalogs/en/core";
+import enIntelligence from "./catalogs/en/intelligence";
+import enAccount from "./catalogs/en/account";
+import enOperations from "./catalogs/en/operations";
+
+import frCore from "./catalogs/fr-FR/core";
+import frIntelligenceCore from "./catalogs/fr-FR/intelligence-core";
+import frIntelligenceStatus from "./catalogs/fr-FR/intelligence-status";
+import frIntelligenceComposer from "./catalogs/fr-FR/intelligence-composer";
+import frIntelligenceWorkspace from "./catalogs/fr-FR/intelligence-workspace";
+import frIntelligenceErrors from "./catalogs/fr-FR/intelligence-errors";
+import frSupport from "./catalogs/fr-FR/account-support";
+import frSettings from "./catalogs/fr-FR/account-settings";
+import frPricing from "./catalogs/fr-FR/account-pricing";
+import frRequests from "./catalogs/fr-FR/account-requests";
+import frTeam from "./catalogs/fr-FR/account-team";
+import frReports from "./catalogs/fr-FR/operations-reports";
+import frOverviewIntegrations from "./catalogs/fr-FR/operations-overview-integrations";
+import frAdmin from "./catalogs/fr-FR/operations-admin";
+import frRoutes from "./catalogs/fr-FR/routes";
+import frRouteMessages from "./catalogs/fr-FR/route-messages";
 
 export type LocaleDirection = "ltr" | "rtl";
 export type LocaleCode = string;
@@ -49,8 +62,26 @@ const mergeCatalog = (...parts: MessageCatalog[]): MessageCatalog => Object.assi
 
 export const CATALOGS: Record<string, MessageCatalog> = {
   en: mergeCatalog(enCore, enIntelligence, enAccount, enOperations),
-  "fr-FR": mergeCatalog(frCore, frIntelligence, frAccount, frOperations),
+  "fr-FR": mergeCatalog(
+    frCore,
+    frIntelligenceCore,
+    frIntelligenceStatus,
+    frIntelligenceComposer,
+    frIntelligenceWorkspace,
+    frIntelligenceErrors,
+    frSupport,
+    frSettings,
+    frPricing,
+    frRequests,
+    frTeam,
+    frReports,
+    frOverviewIntegrations,
+    frAdmin,
+    frRoutes,
+    frRouteMessages,
+  ),
 };
+
 export const LANGUAGE_STORAGE_KEY = String(MANIFEST.storageKey || "agroai_locale_v1");
 export const DEFAULT_LOCALE: LocaleCode = String(MANIFEST.defaultLocale || "en");
 const ENABLED = new Set((MANIFEST.enabledUiLocales || []).map((code) => code.toLowerCase()));
