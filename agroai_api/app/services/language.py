@@ -52,16 +52,16 @@ LANGUAGE_NAMES: dict[str, str] = {
 _LANGUAGE_ALIASES = {
     "english": "en", "anglais": "en", "inglés": "en", "ingles": "en",
     "french": "fr", "français": "fr", "francais": "fr", "francés": "fr",
-    "spanish": "es", "español": "es", "espanol": "es",
-    "portuguese": "pt", "português": "pt", "portugues": "pt",
-    "arabic": "ar", "arabe": "ar", "العربية": "ar",
+    "spanish": "es", "español": "es", "espanol": "es", "espagnol": "es", "espagnole": "es",
+    "portuguese": "pt", "português": "pt", "portugues": "pt", "portugais": "pt",
+    "arabic": "ar", "arabe": "ar",
     "german": "de", "deutsch": "de", "allemand": "de",
     "italian": "it", "italiano": "it", "italien": "it",
     "dutch": "nl", "nederlands": "nl",
     "turkish": "tr", "türkçe": "tr", "turkce": "tr",
-    "chinese": "zh", "中文": "zh",
-    "japanese": "ja", "日本語": "ja",
-    "korean": "ko", "한국어": "ko",
+    "chinese": "zh",
+    "japanese": "ja",
+    "korean": "ko",
     "russian": "ru", "русский": "ru",
     "swahili": "sw", "kiswahili": "sw",
     "wolof": "wo",
@@ -146,12 +146,13 @@ def detect_explicit_language_request(text: str | None) -> str | None:
 
 
 def _script_language(value: str) -> tuple[str | None, str | None]:
+    # Ambiguous writing systems are diagnostic hints, not language decisions.
     if re.search(r"[\u0600-\u06ff]", value):
-        return "ar", "Arabic-family script"
+        return None, "Arabic-family script"
     if re.search(r"[\u0590-\u05ff]", value):
         return "he", "Hebrew script"
     if re.search(r"[\u0400-\u04ff]", value):
-        return "ru", "Cyrillic script"
+        return None, "Cyrillic script"
     if re.search(r"[\u4e00-\u9fff]", value):
         return "zh", "Chinese script"
     if re.search(r"[\u3040-\u30ff]", value):
@@ -161,7 +162,7 @@ def _script_language(value: str) -> tuple[str | None, str | None]:
     if re.search(r"[\u0980-\u09ff]", value):
         return "bn", "Bengali script"
     if re.search(r"[\u0900-\u097f]", value):
-        return "hi", "Devanagari script"
+        return None, "Devanagari script"
     if re.search(r"[\u0b80-\u0bff]", value):
         return "ta", "Tamil script"
     if re.search(r"[\u0c00-\u0c7f]", value):
@@ -185,7 +186,7 @@ def detect_language_hint(text: str | None) -> tuple[str | None, str | None]:
         scores[code] = sum(1 for token in tokens if token in normalized)
 
     if not scores:
-        return None, None
+        return None, script_label
     best_code, best_score = max(scores.items(), key=lambda item: item[1])
     sorted_scores = sorted(scores.values(), reverse=True)
     second = sorted_scores[1] if len(sorted_scores) > 1 else 0
@@ -193,7 +194,7 @@ def detect_language_hint(text: str | None) -> tuple[str | None, str | None]:
         return best_code, f"{language_name(best_code)} lexical hint"
     if best_score >= 3:
         return best_code, f"{language_name(best_code)} lexical hint"
-    return None, None
+    return None, script_label
 
 
 def resolve_language(selected: str | None, user_text: str | None) -> LanguageDecision:
