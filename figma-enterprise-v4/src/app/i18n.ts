@@ -64,6 +64,7 @@ const en: Record<string, string> = {
   "app.reloadPortal": "Reload portal",
   "app.clearSession": "Clear session and sign in again",
   language: "Language", save: "Save", saved: "Saved", saving: "Saving...", send: "Send", sending: "Sending...",
+  retry: "Retry", remove: "Remove", ready: "Ready", done: "Done", working: "Working...",
   newOperation: "New operation", fieldOperatingRoom: "Field operating room", workspace: "Workspace", operate: "Operate",
   intelligence: "Intelligence", account: "Account", commandCenter: "Command Center", fieldQueue: "Field Queue",
   tasks: "Tasks", decisions: "Decisions", evidence: "Evidence", reports: "Reports", connectors: "Connectors",
@@ -74,11 +75,30 @@ const en: Record<string, string> = {
   languageRegion: "Language and region", languageRegionHint: "Choose the portal language. Ask AGRO-AI also receives this preference when answering.",
   supportTitle: "Support", supportSubtitle: "Create a tracked support ticket for onboarding, integration help, operational support, or report review.",
   contactSupport: "Contact support", requestType: "Request type", subject: "Subject", message: "Message", priority: "Priority", sendRequest: "Send request", requestReceived: "Request received",
+  subscriptionBilling: "Subscription and billing", accountProfile: "Account profile", workspacePreferences: "Workspace preferences",
+  notifications: "Notifications", integrationsControllers: "Integrations and controllers", pricingTitle: "Plans for serious field operations",
+  pricingSubtitle: "Start with a focused operating layer, then scale into team, network, and enterprise workflows as your evidence graph grows.", upgrade: "Upgrade",
   "intelligence.title": "Ask AGRO-AI", "intelligence.newChat": "New chat", "intelligence.history": "History", "intelligence.search": "Search chats",
+  "intelligence.closeSidebar": "Close sidebar", "intelligence.deleteChat": "Delete chat", "intelligence.workspaceBadge": "Workspace intelligence",
+  "intelligence.subtitle": "Ask, import files, generate reports, create field tasks, record field updates, and prepare approval-gated operations.",
   "intelligence.placeholder": "Ask AGRO-AI or import files", "intelligence.importFiles": "Import files", "intelligence.loadingChats": "Loading chats...",
   "intelligence.noChats": "No saved chats yet.", "intelligence.enterHint": "Enter to send. Shift + Enter for a new line.",
   "intelligence.emptyTitle": "What should we work through?", "intelligence.emptyBody": "Start with a field, report, compliance requirement, customer account, irrigation decision, evidence gap, or messy dataset.",
   "intelligence.unavailable": "AGRO-AI could not complete the request.", "intelligence.retryState": "AGRO-AI could not complete this response. Retry.",
+  "intelligence.languageGenerationFailed": "AGRO-AI produced the answer in the wrong language and could not safely repair it. Your message is preserved. Retry.",
+  "intelligence.startThread": "Start a workspace thread", "intelligence.askOrImport": "Ask a question or import files.",
+  "intelligence.liveEvidenceBody": "AGRO-AI uses live model inference, conversation history, and available workspace evidence to answer the question you actually asked.",
+  "intelligence.prompt.data": "What should I do with my data?", "intelligence.prompt.checklist": "Create an operator checklist.",
+  "intelligence.prompt.missingEvidence": "What evidence is missing?", "intelligence.prompt.report": "Generate a customer-ready report.",
+  "intelligence.preparingAnswer": "Preparing the answer...", "intelligence.preparingPdf": "Preparing PDF...", "intelligence.downloadPdf": "Download PDF",
+  "intelligence.emailToMe": "Email to me", "intelligence.emailing": "Sending...", "intelligence.summarizeImportedFiles": "Summarize the files I imported.",
+  "intelligence.importFailed": "Import failed", "intelligence.fileQueued": "Queued", "intelligence.fileUploading": "Uploading...", "intelligence.fileImported": "Imported",
+  "intelligence.fileFailed": "Failed", "intelligence.fileFailedBeforeSend": "One file failed to import. Remove it before sending.",
+  "intelligence.reportEmailed": "Report emailed to {recipient}.", "intelligence.accountEmail": "your account email",
+  "intelligence.pdfExportFailed": "AGRO-AI could not export the PDF report.", "intelligence.pdfEmailFailed": "AGRO-AI could not email the PDF report.",
+  "intelligence.actionCompleted": "Action completed: {title}", "intelligence.actionExecuteFailed": "AGRO-AI could not execute this action.",
+  "intelligence.approvalRequired": "Approval required", "intelligence.riskReady": "Ready", "intelligence.riskLabel": "{level} risk",
+  "intelligence.createApproval": "Create approval", "intelligence.doIt": "Do it",
 };
 
 const frFR: Record<string, string> = {
@@ -90,6 +110,7 @@ const frFR: Record<string, string> = {
   "app.reloadPortal": "Recharger le portail",
   "app.clearSession": "Effacer la session et se reconnecter",
   language: "Langue", save: "Enregistrer", saved: "Enregistré", saving: "Enregistrement...", send: "Envoyer", sending: "Envoi...",
+  retry: "Réessayer", remove: "Retirer", ready: "Prêt", done: "Terminé", working: "Traitement...",
   newOperation: "Nouvelle opération", fieldOperatingRoom: "Salle des opérations terrain", workspace: "Espace de travail", operate: "Opérations",
   intelligence: "Intelligence", account: "Compte", commandCenter: "Centre de pilotage", fieldQueue: "File des opérations terrain",
   tasks: "Tâches", decisions: "Décisions", evidence: "Preuves", reports: "Rapports", connectors: "Connecteurs",
@@ -100,14 +121,39 @@ const frFR: Record<string, string> = {
   languageRegion: "Langue et région", languageRegionHint: "Choisissez la langue du portail. AGRO-AI utilisera aussi cette préférence pour ses réponses.",
   supportTitle: "Assistance", supportSubtitle: "Créez une demande suivie pour l’accompagnement au démarrage, l’aide aux intégrations, l’assistance opérationnelle ou la revue de rapports.",
   contactSupport: "Contacter l’assistance", requestType: "Type de demande", subject: "Objet", message: "Message", priority: "Priorité", sendRequest: "Envoyer la demande", requestReceived: "Demande reçue",
+  subscriptionBilling: "Abonnement et facturation", accountProfile: "Profil du compte", workspacePreferences: "Préférences de l’espace de travail",
+  notifications: "Notifications", integrationsControllers: "Intégrations et contrôleurs", pricingTitle: "Forfaits pour des opérations terrain exigeantes",
+  pricingSubtitle: "Commencez par un niveau opérationnel ciblé, puis étendez-vous aux flux d’équipe, de réseau et d’entreprise à mesure que votre graphe de preuves s’enrichit.", upgrade: "Mettre à niveau",
   "intelligence.title": "Interroger AGRO-AI", "intelligence.newChat": "Nouvelle conversation", "intelligence.history": "Historique", "intelligence.search": "Rechercher des conversations",
+  "intelligence.closeSidebar": "Fermer la barre latérale", "intelligence.deleteChat": "Supprimer la conversation", "intelligence.workspaceBadge": "Intelligence de l’espace de travail",
+  "intelligence.subtitle": "Interrogez AGRO-AI, importez des fichiers, générez des rapports, créez des tâches terrain, consignez les mises à jour et préparez les opérations soumises à approbation.",
   "intelligence.placeholder": "Interroger AGRO-AI ou importer des fichiers", "intelligence.importFiles": "Importer des fichiers", "intelligence.loadingChats": "Chargement des conversations...",
   "intelligence.noChats": "Aucune conversation enregistrée.", "intelligence.enterHint": "Entrée pour envoyer. Maj + Entrée pour une nouvelle ligne.",
   "intelligence.emptyTitle": "Sur quel sujet devons-nous travailler ?", "intelligence.emptyBody": "Commencez par un champ, un rapport, une exigence de conformité, un compte client, une décision d’irrigation, une preuve manquante ou un jeu de données difficile à exploiter.",
-  "intelligence.unavailable": "AGRO-AI n’a pas pu compléter la demande.", "intelligence.retryState": "AGRO-AI n’a pas pu générer cette réponse. Réessayer.",
+  "intelligence.unavailable": "AGRO-AI n’a pas pu compléter la demande.", "intelligence.retryState": "AGRO-AI n’a pas pu générer cette réponse. Réessayez.",
+  "intelligence.languageGenerationFailed": "AGRO-AI a produit la réponse dans la mauvaise langue et n’a pas pu la corriger de manière sûre. Votre message est conservé. Réessayez.",
+  "intelligence.startThread": "Démarrer une conversation dans l’espace de travail", "intelligence.askOrImport": "Posez une question ou importez des fichiers.",
+  "intelligence.liveEvidenceBody": "AGRO-AI utilise l’inférence du modèle en direct, l’historique de la conversation et les éléments disponibles dans l’espace de travail pour répondre précisément à la question posée.",
+  "intelligence.prompt.data": "Que dois-je faire avec mes données ?", "intelligence.prompt.checklist": "Créer une liste de contrôle pour l’opérateur.",
+  "intelligence.prompt.missingEvidence": "Quelles preuves manquent ?", "intelligence.prompt.report": "Générer un rapport prêt à être présenté au client.",
+  "intelligence.preparingAnswer": "Préparation de la réponse...", "intelligence.preparingPdf": "Préparation du PDF...", "intelligence.downloadPdf": "Télécharger le PDF",
+  "intelligence.emailToMe": "Me l’envoyer par e-mail", "intelligence.emailing": "Envoi...", "intelligence.summarizeImportedFiles": "Résume les fichiers que j’ai importés.",
+  "intelligence.importFailed": "Échec de l’import", "intelligence.fileQueued": "En attente", "intelligence.fileUploading": "Importation...", "intelligence.fileImported": "Importé",
+  "intelligence.fileFailed": "Échec", "intelligence.fileFailedBeforeSend": "Un fichier n’a pas pu être importé. Retirez-le avant l’envoi.",
+  "intelligence.reportEmailed": "Rapport envoyé à {recipient}.", "intelligence.accountEmail": "l’adresse e-mail de votre compte",
+  "intelligence.pdfExportFailed": "AGRO-AI n’a pas pu exporter le rapport PDF.", "intelligence.pdfEmailFailed": "AGRO-AI n’a pas pu envoyer le rapport PDF par e-mail.",
+  "intelligence.actionCompleted": "Action terminée : {title}", "intelligence.actionExecuteFailed": "AGRO-AI n’a pas pu exécuter cette action.",
+  "intelligence.approvalRequired": "Approbation requise", "intelligence.riskReady": "Prêt", "intelligence.riskLabel": "Risque {level}",
+  "intelligence.createApproval": "Créer une demande d’approbation", "intelligence.doIt": "Exécuter",
 };
 
 export const TRANSLATIONS: Record<string, Record<string, string>> = { en, "fr-FR": frFR };
+
+const EN_KEYS = Object.keys(en).sort();
+const FR_KEYS = Object.keys(frFR).sort();
+if (EN_KEYS.length !== FR_KEYS.length || EN_KEYS.some((key, index) => key !== FR_KEYS[index])) {
+  throw new Error("Enabled French catalog must have exact key parity with English.");
+}
 
 function cleanLocale(value?: string | null): string {
   return String(value || "auto").trim().replace("_", "-") || "auto";
@@ -186,7 +232,14 @@ export function isRtlLocale(locale: string) {
 export function t(key: string, locale = getStoredLocale()): string {
   const normalized = normalizeLocale(locale);
   const catalog = TRANSLATIONS[normalized] || TRANSLATIONS.en;
-  return catalog[key] || TRANSLATIONS.en[key] || key;
+  const value = catalog[key];
+  if (value !== undefined) return value;
+  if (normalized !== "en" && import.meta.env?.DEV) console.error(`[i18n] Missing ${key} for ${normalized}`);
+  return TRANSLATIONS.en[key] || key;
+}
+
+export function formatTranslation(template: string, values: Record<string, string | number | undefined>) {
+  return template.replace(/\{(\w+)\}/g, (_, key) => String(values[key] ?? ""));
 }
 
 export function applyLocale(locale = getStoredLocale()) {
