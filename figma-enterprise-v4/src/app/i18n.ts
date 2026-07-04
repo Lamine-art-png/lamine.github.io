@@ -1,26 +1,68 @@
-import { useEffect, useMemo, useState } from "react";
+import manifestData from "../../../shared/supported-locales.json";
 
-export type LocaleOption = { code: string; nativeName: string; englishName: string; dir?: "ltr" | "rtl" };
-export type LocaleResolution = { requestedLocale: string; resolvedLocale: string; fallbackReason: string; fallbackChain: string[] };
-
-export const LANGUAGE_STORAGE_KEY = "agroai_locale_v1";
-export const DEFAULT_LOCALE = "en";
-
-export const LOCALES: LocaleOption[] = [
-  { code: "auto", nativeName: "Auto", englishName: "Browser default" },
-  { code: "en", nativeName: "English", englishName: "English" },
-  { code: "fr-FR", nativeName: "Français (France)", englishName: "French (France)" },
-];
-export const ENABLED_LOCALES = LOCALES;
-
-const LEGACY_UNSUPPORTED = new Set(["aa", "ase", "ff", "ha", "ig", "wo", "yo"]);
-const FALLBACKS: Record<string, string[]> = {
-  fr: ["fr-FR", "en"],
-  "fr-fr": ["fr-FR", "en"],
-  "fr-ca": ["fr-FR", "en"],
+export type LocaleDirection = "ltr" | "rtl";
+export type LocaleOption = {
+  code: string;
+  languageCode: string;
+  nativeName: string;
+  englishName: string;
+  dir?: LocaleDirection;
+  fallbackChain: string[];
+};
+export type LocaleResolution = {
+  requestedLocale: string;
+  selectedLocale: string;
+  effectiveLocale: string;
+  fallbackReason: "exact" | "auto" | "regional_fallback" | "language_fallback" | "unsupported_fallback" | "legacy_unsupported";
+  fallbackChain: string[];
 };
 
+type RawLocale = { code: string; languageCode: string; direction?: LocaleDirection; fallbackChain?: string[] };
+type LocaleManifest = {
+  defaultLocale: string;
+  storageKey?: string;
+  enabledUiLocales: string[];
+  catalogCompleteLocales?: string[];
+  locales: RawLocale[];
+  unsupportedLegacyLocales?: string[];
+};
+
+const MANIFEST = manifestData as LocaleManifest;
+
+export const LANGUAGE_STORAGE_KEY = MANIFEST.storageKey || "agroai_locale_v1";
+export const DEFAULT_LOCALE = MANIFEST.defaultLocale || "en";
+
+const LABELS: Record<string, { nativeName: string; englishName: string }> = {
+  auto: { nativeName: "Auto", englishName: "Browser default" },
+  en: { nativeName: "English", englishName: "English" },
+  "fr-FR": { nativeName: "Français (France)", englishName: "French (France)" },
+};
+
+const enabledCodes = new Set((MANIFEST.enabledUiLocales || []).map((code) => code.toLowerCase()));
+const unsupportedLegacy = new Set((MANIFEST.unsupportedLegacyLocales || []).map((code) => code.toLowerCase()));
+const rawLocaleByCode = new Map((MANIFEST.locales || []).map((locale) => [locale.code.toLowerCase(), locale]));
+
+export const LOCALES: LocaleOption[] = (MANIFEST.locales || [])
+  .filter((locale) => enabledCodes.has(locale.code.toLowerCase()))
+  .map((locale) => ({
+    code: locale.code,
+    languageCode: locale.languageCode,
+    nativeName: LABELS[locale.code]?.nativeName || locale.code,
+    englishName: LABELS[locale.code]?.englishName || locale.code,
+    dir: locale.direction,
+    fallbackChain: locale.fallbackChain || [],
+  }));
+export const ENABLED_LOCALES = LOCALES;
+const ENABLED_BY_CODE = new Map(ENABLED_LOCALES.map((locale) => [locale.code.toLowerCase(), locale]));
+
 const en: Record<string, string> = {
+  "app.loadingSession": "Loading session",
+  "app.loadingPortal": "Loading portal",
+  "app.recoveryEyebrow": "AGRO-AI Enterprise Portal",
+  "app.recoveryTitle": "Portal recovery mode",
+  "app.recoveryBody": "The portal booted safely, but one workspace route failed to load. This screen prevents a white page while the route is repaired.",
+  "app.reloadPortal": "Reload portal",
+  "app.clearSession": "Clear session and sign in again",
   language: "Language", save: "Save", saved: "Saved", saving: "Saving...", send: "Send", sending: "Sending...",
   newOperation: "New operation", fieldOperatingRoom: "Field operating room", workspace: "Workspace", operate: "Operate",
   intelligence: "Intelligence", account: "Account", commandCenter: "Command Center", fieldQueue: "Field Queue",
@@ -40,6 +82,13 @@ const en: Record<string, string> = {
 };
 
 const frFR: Record<string, string> = {
+  "app.loadingSession": "Chargement de la session",
+  "app.loadingPortal": "Chargement du portail",
+  "app.recoveryEyebrow": "Portail Entreprise AGRO-AI",
+  "app.recoveryTitle": "Mode de récupération du portail",
+  "app.recoveryBody": "Le portail a démarré en sécurité, mais un module de l’espace de travail n’a pas pu se charger. Cet écran évite une page blanche pendant la réparation du module.",
+  "app.reloadPortal": "Recharger le portail",
+  "app.clearSession": "Effacer la session et se reconnecter",
   language: "Langue", save: "Enregistrer", saved: "Enregistré", saving: "Enregistrement...", send: "Envoyer", sending: "Envoi...",
   newOperation: "Nouvelle opération", fieldOperatingRoom: "Salle des opérations terrain", workspace: "Espace de travail", operate: "Opérations",
   intelligence: "Intelligence", account: "Compte", commandCenter: "Centre de pilotage", fieldQueue: "File des opérations terrain",
@@ -68,31 +117,57 @@ function browserLanguage(): string {
   return typeof navigator === "undefined" ? DEFAULT_LOCALE : navigator.language || DEFAULT_LOCALE;
 }
 
+function enabledForLanguage(languageCode: string | undefined): LocaleOption | undefined {
+  if (!languageCode || languageCode.toLowerCase() === "auto") return undefined;
+  return ENABLED_LOCALES.find((locale) => locale.languageCode.toLowerCase() === languageCode.toLowerCase());
+}
+
+export function canonicalizeSelectedLocale(value?: string | null): string {
+  const requested = cleanLocale(value);
+  const lower = requested.toLowerCase();
+  if (lower === "auto") return "auto";
+  const exact = ENABLED_BY_CODE.get(lower);
+  if (exact) return exact.code;
+  if (unsupportedLegacy.has(lower)) return "auto";
+
+  const known = rawLocaleByCode.get(lower);
+  const fallbackChain = known?.fallbackChain || [];
+  for (const fallback of fallbackChain) {
+    const exactFallback = ENABLED_BY_CODE.get(fallback.toLowerCase());
+    if (exactFallback) return exactFallback.code;
+    const fallbackMeta = rawLocaleByCode.get(fallback.toLowerCase());
+    const languageFallback = enabledForLanguage(fallbackMeta?.languageCode || fallback);
+    if (languageFallback) return languageFallback.code;
+  }
+
+  const languageRoot = known?.languageCode || requested.split("-")[0];
+  const languageMatch = enabledForLanguage(languageRoot);
+  return languageMatch?.code || "auto";
+}
+
 export function resolveLocaleDetailed(value?: string | null): LocaleResolution {
   const requestedLocale = cleanLocale(value);
-  const lower = requestedLocale.toLowerCase();
-  if (lower === "auto") return { requestedLocale: "auto", resolvedLocale: "auto", fallbackReason: "auto", fallbackChain: [DEFAULT_LOCALE] };
-  if (LEGACY_UNSUPPORTED.has(lower)) return { requestedLocale, resolvedLocale: "auto", fallbackReason: "legacy_unsupported", fallbackChain: ["auto", DEFAULT_LOCALE] };
-  const exact = LOCALES.find((locale) => locale.code.toLowerCase() === lower);
-  if (exact) return { requestedLocale, resolvedLocale: exact.code, fallbackReason: "exact", fallbackChain: [] };
-  const chain = FALLBACKS[lower] || FALLBACKS[lower.split("-")[0]] || [DEFAULT_LOCALE];
-  const resolved = chain.find((code) => LOCALES.some((locale) => locale.code.toLowerCase() === code.toLowerCase()));
-  return resolved ? { requestedLocale, resolvedLocale: resolved, fallbackReason: "regional_fallback", fallbackChain: chain } : { requestedLocale, resolvedLocale: "auto", fallbackReason: "unsupported_fallback", fallbackChain: ["auto", DEFAULT_LOCALE] };
+  const selectedLocale = canonicalizeSelectedLocale(requestedLocale);
+  if (selectedLocale === "auto") {
+    const browserSelected = canonicalizeSelectedLocale(browserLanguage());
+    const effectiveLocale = browserSelected === "auto" ? DEFAULT_LOCALE : browserSelected;
+    const reason = requestedLocale.toLowerCase() === "auto" ? "auto" : unsupportedLegacy.has(requestedLocale.toLowerCase()) ? "legacy_unsupported" : "unsupported_fallback";
+    return { requestedLocale, selectedLocale, effectiveLocale, fallbackReason: reason, fallbackChain: ["auto", DEFAULT_LOCALE] };
+  }
+  const reason = selectedLocale.toLowerCase() === requestedLocale.toLowerCase() ? "exact" : "regional_fallback";
+  return { requestedLocale, selectedLocale, effectiveLocale: selectedLocale, fallbackReason: reason, fallbackChain: selectedLocale === requestedLocale ? [] : [selectedLocale] };
 }
 
 export function normalizeLocale(value?: string | null): string {
-  const resolved = resolveLocaleDetailed(value).resolvedLocale;
-  if (resolved === "auto") {
-    const browserResolved = resolveLocaleDetailed(browserLanguage()).resolvedLocale;
-    return browserResolved === "auto" ? DEFAULT_LOCALE : browserResolved;
-  }
-  return resolved;
+  return resolveLocaleDetailed(value).effectiveLocale;
 }
 
 export function getStoredLocale(): string {
   try {
-    const stored = localStorage.getItem(LANGUAGE_STORAGE_KEY) || "auto";
-    return resolveLocaleDetailed(stored).fallbackReason === "legacy_unsupported" ? "auto" : stored;
+    const raw = localStorage.getItem(LANGUAGE_STORAGE_KEY) || "auto";
+    const canonical = canonicalizeSelectedLocale(raw);
+    if (canonical !== raw) localStorage.setItem(LANGUAGE_STORAGE_KEY, canonical);
+    return canonical;
   } catch {
     return "auto";
   }
@@ -103,10 +178,12 @@ export function currentLocale() {
 }
 
 export function isRtlLocale(locale: string) {
-  return ["ar", "fa", "ur"].includes(normalizeLocale(locale).split("-")[0]);
+  const normalized = normalizeLocale(locale);
+  const option = ENABLED_BY_CODE.get(normalized.toLowerCase());
+  return option?.dir === "rtl" || ["ar", "fa", "ur"].includes(normalized.split("-")[0]);
 }
 
-export function t(key: string, locale = currentLocale()): string {
+export function t(key: string, locale = getStoredLocale()): string {
   const normalized = normalizeLocale(locale);
   const catalog = TRANSLATIONS[normalized] || TRANSLATIONS.en;
   return catalog[key] || TRANSLATIONS.en[key] || key;
@@ -119,32 +196,17 @@ export function applyLocale(locale = getStoredLocale()) {
   document.documentElement.dir = isRtlLocale(normalized) ? "rtl" : "ltr";
 }
 
-export function setStoredLocale(locale: string) {
-  const requested = locale || "auto";
+export function setStoredLocale(locale: string): string {
+  const selectedLocale = canonicalizeSelectedLocale(locale);
   try {
     localStorage.removeItem("agroai_locale");
-    localStorage.setItem(LANGUAGE_STORAGE_KEY, requested);
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, selectedLocale);
   } catch {
     // Best effort.
   }
-  applyLocale(requested);
-  window.dispatchEvent(new CustomEvent("agroai:locale-change", { detail: { locale: requested } }));
-}
-
-export function useLocale() {
-  const [locale, setLocaleState] = useState(getStoredLocale());
-  useEffect(() => {
-    applyLocale(locale);
-    const listener = ((event: CustomEvent) => setLocaleState(event.detail?.locale || getStoredLocale())) as EventListener;
-    window.addEventListener("agroai:locale-change", listener);
-    return () => window.removeEventListener("agroai:locale-change", listener);
-  }, [locale]);
-  const normalizedLocale = useMemo(() => normalizeLocale(locale), [locale]);
-  const setLocale = (next: string) => {
-    setLocaleState(next);
-    setStoredLocale(next);
-  };
-  return { locale, normalizedLocale, setLocale, t: (key: string) => t(key, locale), resolution: resolveLocaleDetailed(locale) };
+  applyLocale(selectedLocale);
+  window.dispatchEvent(new CustomEvent("agroai:locale-change", { detail: { selectedLocale, locale: selectedLocale, effectiveLocale: normalizeLocale(selectedLocale) } }));
+  return selectedLocale;
 }
 
 applyLocale();
