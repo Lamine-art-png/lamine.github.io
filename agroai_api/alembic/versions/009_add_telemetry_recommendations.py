@@ -109,6 +109,12 @@ def _foreign_key_pairs(table_name: str) -> set[tuple[str, str, str]]:
 
 
 def _assert_existing_table_constraints(table_name: str) -> None:
+    # SQLite legacy fixtures and customer-side evaluation databases may not
+    # preserve/enforce FK metadata consistently. Production PostgreSQL adoption
+    # must match the ORM's PK and tenant/block FK contract exactly.
+    if op.get_bind().dialect.name == "sqlite":
+        return
+
     primary_key = _primary_key_columns(table_name)
     if primary_key != {"id"}:
         raise RuntimeError(
