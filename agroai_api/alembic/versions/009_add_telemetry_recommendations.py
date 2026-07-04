@@ -41,15 +41,22 @@ def _index_exists(table_name: str, index_name: str) -> bool:
 
 
 def _type_family(column_type: sa.types.TypeEngine) -> str:
+    class_name = column_type.__class__.__name__.lower()
+    if class_name in {"json", "jsonb"} or isinstance(column_type, sa.JSON):
+        return "json"
     if isinstance(column_type, (sa.String, sa.Text, sa.Unicode, sa.UnicodeText)):
         return "string"
-    if isinstance(column_type, (sa.Float, sa.Numeric, sa.Integer)):
-        return "number"
-    if isinstance(column_type, (sa.DateTime, sa.Date, sa.Time)):
+    if isinstance(column_type, sa.Integer):
+        return "integer"
+    if isinstance(column_type, (sa.Float, sa.Numeric)):
+        return "real_number"
+    if isinstance(column_type, sa.DateTime):
         return "datetime"
-    if isinstance(column_type, sa.JSON):
-        return "json"
-    return column_type.__class__.__name__.lower()
+    if isinstance(column_type, sa.Date):
+        return "date"
+    if isinstance(column_type, sa.Time):
+        return "time"
+    return class_name
 
 
 def _is_compatible_type(actual: sa.types.TypeEngine, expected: sa.types.TypeEngine) -> bool:
@@ -77,6 +84,48 @@ def _assert_existing_column_compatible(table_name: str, existing: dict, expected
         raise RuntimeError(
             f"Existing {table_name}.{expected.name} column is nullable, but migration 009 "
             "requires a non-null column. Repair the schema before upgrading."
+        )
+
+
+def _primary_key_columns(table_name: str) -> set[str]:
+    if not _table_exists(table_name):
+        return set()
+    return set((_inspector().get_pk_constraint(table_name) or {}).get("constrained_columns") or [])
+
+
+def _foreign_key_pairs(table_name: str) -> set[tuple[str, str, str]]:
+    if not _table_exists(table_name):
+        return set()
+    pairs: set[tuple[str, str, str]] = set()
+    for foreign_key in _inspector().get_foreign_keys(table_name):
+        local_columns = foreign_key.get("constrained_columns") or []
+        remote_columns = foreign_key.get("referred_columns") or []
+        remote_table = foreign_key.get("referred_table")
+        if not remote_table:
+            continue
+        for local, remote in zip(local_columns, remote_columns):
+            pairs.add((str(local), str(remote_table), str(remote)))
+    return pairs
+
+
+def _assert_existing_table_constraints(table_name: str) -> None:
+    primary_key = _primary_key_columns(table_name)
+    if primary_key != {"id"}:
+        raise RuntimeError(
+            f"Existing {table_name} primary key is incompatible with migration 009: "
+            f"found {sorted(primary_key)!r}, expected ['id']."
+        )
+
+    foreign_keys = _foreign_key_pairs(table_name)
+    required_foreign_keys = {
+        ("tenant_id", "tenants", "id"),
+        ("block_id", "blocks", "id"),
+    }
+    missing = required_foreign_keys - foreign_keys
+    if missing:
+        raise RuntimeError(
+            f"Existing {table_name} foreign keys are incompatible with migration 009: "
+            f"missing {sorted(missing)!r}. Repair the schema before upgrading."
         )
 
 
@@ -156,6 +205,7 @@ def upgrade() -> None:
         )
     else:
         _ensure_existing_columns("telemetry", _telemetry_columns())
+        _assert_existing_table_constraints("telemetry")
 
     _create_index_if_missing("ix_telemetry_id", "telemetry", ["id"])
     _create_index_if_missing("ix_telemetry_tenant_id", "telemetry", ["tenant_id"])
@@ -175,6 +225,7 @@ def upgrade() -> None:
         )
     else:
         _ensure_existing_columns("recommendations", _recommendation_columns())
+        _assert_existing_table_constraints("recommendations")
 
     _create_index_if_missing("ix_recommendations_id", "recommendations", ["id"])
     _create_index_if_missing("ix_recommendations_tenant_id", "recommendations", ["tenant_id"])
