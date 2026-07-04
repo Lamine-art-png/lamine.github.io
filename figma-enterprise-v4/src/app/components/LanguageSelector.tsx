@@ -1,26 +1,25 @@
 import { useEffect, useState } from "react";
 import { ChevronDown, Globe2 } from "lucide-react";
 import { apiClient } from "../api/client";
-import { applyLocale, getStoredLocale, setStoredLocale, t } from "../i18n";
-import { ALL_LOCALES } from "./localeCatalog";
+import { applyLocale, ENABLED_LOCALES, getStoredLocale, setStoredLocale, t } from "../i18n";
 
 export function LanguageSelector({ compact = false, dark = false }: { compact?: boolean; dark?: boolean }) {
   const [locale, setLocale] = useState(getStoredLocale());
 
   useEffect(() => {
     applyLocale(locale);
-    const listener = ((event: CustomEvent) => setLocale(event.detail?.locale || getStoredLocale())) as EventListener;
+    const listener = ((event: CustomEvent) => setLocale(event.detail?.selectedLocale || event.detail?.locale || getStoredLocale())) as EventListener;
     window.addEventListener("agroai:locale-change", listener);
     return () => window.removeEventListener("agroai:locale-change", listener);
   }, [locale]);
 
   async function changeLanguage(nextLocale: string) {
-    setLocale(nextLocale);
-    setStoredLocale(nextLocale);
+    const canonical = setStoredLocale(nextLocale);
+    setLocale(canonical);
     try {
-      await apiClient.patch("/v1/settings/preferences", { locale: nextLocale });
+      await apiClient.patch("/v1/settings/preferences", { locale: canonical });
     } catch {
-      // Local language switching remains active even if preference sync fails.
+      // Preference sync is best effort. The local switch remains active.
     }
   }
 
@@ -41,7 +40,7 @@ export function LanguageSelector({ compact = false, dark = false }: { compact?: 
           style={{ background: selectBg, color: selectColor, border: `1px solid ${border}` }}
           title={t("language", locale)}
         >
-          {ALL_LOCALES.map((item) => <option key={item.code} value={item.code}>{item.flag} {item.nativeName} · {item.englishName}</option>)}
+          {ENABLED_LOCALES.map((item) => <option key={item.code} value={item.code}>{item.nativeName} · {item.englishName}</option>)}
         </select>
         <ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5" style={{ color: labelColor }} />
       </span>
