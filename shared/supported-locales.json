@@ -1,0 +1,32 @@
+{
+  "version": "2026-07-03.localization.v6",
+  "defaultLocale": "en",
+  "storageKey": "agroai_locale_v1",
+  "enabledUiLocales": ["auto", "en", "fr-FR"],
+  "catalogCompleteLocales": ["en", "fr-FR"],
+  "qa": {
+    "staticCompleteLocales": [],
+    "linguisticCompleteLocales": ["en"],
+    "browserCompleteLocales": []
+  },
+  "aiResponseLanguagePolicy": "independent",
+  "aiResponseTargetFamiliesFile": "chatgpt-language-targets.json",
+  "locales": [
+    {"code": "auto", "languageCode": "auto"},
+    {"code": "en", "languageCode": "en"},
+    {"code": "fr-FR", "languageCode": "fr", "fallbackChain": ["fr", "en"]},
+    {"code": "fr-CA", "languageCode": "fr", "fallbackChain": ["fr", "fr-FR", "en"]},
+    {"code": "ru", "languageCode": "ru"},
+    {"code": "sw", "languageCode": "sw"},
+    {"code": "ar", "languageCode": "ar", "direction": "rtl"},
+    {"code": "zh-CN", "languageCode": "zh", "fallbackChain": ["zh", "en"]},
+    {"code": "zh-TW", "languageCode": "zh", "fallbackChain": ["zh", "en"]},
+    {"code": "zh-HK", "languageCode": "zh", "fallbackChain": ["zh", "en"]},
+    {"code": "pt-BR", "languageCode": "pt", "fallbackChain": ["pt", "en"]},
+    {"code": "pt-PT", "languageCode": "pt", "fallbackChain": ["pt", "en"]},
+    {"code": "es-ES", "languageCode": "es", "fallbackChain": ["es", "en"]},
+    {"code": "es-MX", "languageCode": "es", "fallbackChain": ["es-419", "es", "en"]},
+    {"code": "es-419", "languageCode": "es", "fallbackChain": ["es", "en"]}
+  ],
+  "unsupportedLegacyLocales": ["aa", "ase", "ff", "ha", "he", "ig", "wo", "yo"]
+}
