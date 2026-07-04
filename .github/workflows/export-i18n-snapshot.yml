@@ -4,6 +4,10 @@ on:
   push:
     branches:
       - tmp/i18n-snapshot-export
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
@@ -12,9 +16,10 @@ jobs:
   export:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout exact branch
+      - name: Checkout exact PR head
         uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - name: Record commit
         run: git rev-parse HEAD > snapshot-head.txt
