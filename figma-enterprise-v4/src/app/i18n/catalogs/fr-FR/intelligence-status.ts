@@ -1,0 +1,1 @@
+export default {"status.operatingIntelligence":"Intelligence opérationnelle","status.fieldDiagnosis":"Diagnostic du champ","status.assurancePacket":"Dossier d'assurance","status.evidenceGaps":"Preuves manquantes","status.reportDraft":"Brouillon de rapport"} as const;
