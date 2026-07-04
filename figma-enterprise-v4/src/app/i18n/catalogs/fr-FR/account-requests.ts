@@ -1,0 +1,1 @@
+export default {"request.integration":"Int\u00e9gration","request.onboarding":"Accompagnement au d\u00e9marrage","requests.noneYet":"Aucune demande pour le moment.","requests.closeRequest":"Clore la demande","requests.selectDetail":"S\u00e9lectionnez une demande pour examiner ses d\u00e9tails.","onboarding.complete":"Terminer la prise en main"} as const;
