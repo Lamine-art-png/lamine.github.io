@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Column, DateTime, Float, ForeignKey, Index, JSON, String, Text
+from sqlalchemy import BigInteger, Column, DateTime, Float, ForeignKey, Index, Integer, JSON, String, Text
 
 from app.db.base import Base
 
@@ -50,7 +50,13 @@ class DataSource(Base):
     raw_text = Column(Text, nullable=True)
     metadata_json = Column(JSON, default=dict, nullable=False)
     status = Column(String, default="uploaded", nullable=False, index=True)
+    content_sha256 = Column(String(64), nullable=True)
+    object_size_bytes = Column(BigInteger, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    __table_args__ = (
+        Index("uq_data_source_content_identity", "tenant_id", "connector_connection_id", "content_sha256", unique=True),
+    )
 
 
 class IngestionJob(Base):
@@ -66,9 +72,22 @@ class IngestionJob(Base):
     input_json = Column(JSON, default=dict, nullable=False)
     output_json = Column(JSON, default=dict, nullable=False)
     error = Column(Text, nullable=True)
+    idempotency_key = Column(String(64), nullable=True)
+    attempt_count = Column(Integer, default=0, nullable=False)
+    max_attempts = Column(Integer, default=5, nullable=False)
+    next_attempt_at = Column(DateTime, nullable=True)
+    lease_expires_at = Column(DateTime, nullable=True)
+    worker_id = Column(String, nullable=True)
+    last_heartbeat_at = Column(DateTime, nullable=True)
+    cancelled_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     completed_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("uq_ingestion_job_idempotency", "tenant_id", "idempotency_key", unique=True),
+        Index("ix_ingestion_job_claim", "status", "next_attempt_at", "lease_expires_at"),
+    )
 
 
 class EvidenceRecord(Base):
@@ -83,6 +102,7 @@ class EvidenceRecord(Base):
     field_id = Column(String, nullable=True, index=True)
     block_id = Column(String, nullable=True, index=True)
     occurred_at = Column(DateTime, nullable=True, index=True)
+    source_updated_at = Column(DateTime, nullable=True)
     title = Column(String, nullable=False)
     summary = Column(Text, nullable=False)
     value_json = Column(JSON, default=dict, nullable=False)
@@ -109,6 +129,8 @@ class IntelligenceRun(Base):
     input_context_json = Column(JSON, default=dict, nullable=False)
     output_json = Column(JSON, default=dict, nullable=False)
     citations_json = Column(JSON, default=list, nullable=False)
+    provenance_json = Column(JSON, nullable=True)
+    freshness_json = Column(JSON, nullable=True)
     model_provider = Column(String, nullable=True)
     model_name = Column(String, nullable=True)
     status = Column(String, default="completed", nullable=False, index=True)
