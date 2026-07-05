@@ -40,7 +40,8 @@ def test_alembic_head_creates_runtime_required_tables(tmp_path, monkeypatch):
     command.upgrade(cfg, "head")
 
     engine = create_engine(f"sqlite:///{db_path}")
-    tables = set(inspect(engine).get_table_names())
+    inspector = inspect(engine)
+    tables = set(inspector.get_table_names())
     assert {
         "user_preferences",
         "connector_connections",
@@ -51,4 +52,10 @@ def test_alembic_head_creates_runtime_required_tables(tmp_path, monkeypatch):
         "generated_artifacts",
         "chat_conversations",
         "chat_messages",
+        "oauth_state_nonces",
+        "connector_credentials",
+        "task_outbox",
     }.issubset(tables)
+    assert {"content_sha256", "object_size_bytes"}.issubset({item["name"] for item in inspector.get_columns("data_sources")})
+    assert {"idempotency_key", "attempt_count", "lease_expires_at", "worker_id"}.issubset({item["name"] for item in inspector.get_columns("ingestion_jobs")})
+    assert {"provenance_json", "freshness_json"}.issubset({item["name"] for item in inspector.get_columns("intelligence_runs")})
