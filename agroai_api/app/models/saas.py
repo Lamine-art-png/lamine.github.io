@@ -29,7 +29,7 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     email_verified_at = Column(DateTime, nullable=True)
     email_verification_status = Column(String, default="unverified", nullable=False, index=True)
-    auth_version = Column(Integer, default=0, nullable=False)
+    credentials_changed_at = Column(DateTime, nullable=True)
 
     owned_organizations = relationship("Organization", back_populates="owner")
     memberships = relationship("OrganizationMembership", back_populates="user", cascade="all, delete-orphan")
