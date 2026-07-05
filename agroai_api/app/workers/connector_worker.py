@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 import signal
@@ -10,6 +11,8 @@ import uuid
 from app.core.config import settings
 from app.db.base import SessionLocal
 from app.services.ingestion_job_runner import process_ingestion_job
+from app.services.provider_sync_jobs import TASK_TYPE as PROVIDER_SYNC_TASK_TYPE
+from app.services.provider_sync_runner import process_provider_sync_job
 from app.services.redis_task_queue import QueueMessage, get_task_queue
 from app.services.task_outbox_service import publish_pending_outbox
 
@@ -30,6 +33,15 @@ def _worker_id() -> str:
 def _handle(message: QueueMessage, *, worker_id: str) -> str:
     db = SessionLocal()
     try:
+        if message.task_type == PROVIDER_SYNC_TASK_TYPE:
+            return asyncio.run(
+                process_provider_sync_job(
+                    db,
+                    job_id=message.job_id,
+                    tenant_id=message.tenant_id,
+                    worker_id=worker_id,
+                )
+            )
         return process_ingestion_job(
             db,
             job_id=message.job_id,
