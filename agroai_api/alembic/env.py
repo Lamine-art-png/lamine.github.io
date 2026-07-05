@@ -141,6 +141,14 @@ def run_migrations_online() -> None:
     with connectable.connect() as connection:
         _adopt_dirty_render_schema(connection)
 
+        # Inspector/SELECT calls above autobegin a transaction under SQLAlchemy
+        # 2.x. Clear that read-only transaction before handing the connection to
+        # Alembic, otherwise context.begin_transaction() can run inside the
+        # pre-existing outer transaction and the connection close rolls all DDL
+        # and version-table updates back despite successful migration logs.
+        if connection.in_transaction():
+            connection.rollback()
+
         context.configure(
             connection=connection, target_metadata=target_metadata
         )
