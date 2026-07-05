@@ -7,14 +7,18 @@ import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.db.base import get_db
 from app.services.redis_task_queue import queue_configured
+from app.services.release_contract import evaluate_release_contract
 from app.services.task_outbox_service import drain_pending_outbox
 
 
 router = APIRouter(tags=["internal-connector-queue"])
 QUEUE_CONTRACT = "cloudflare-queue-v1"
+RELEASE_CONTRACT = "agroai-release-v1"
 _TERMINAL = {"succeeded", "failed", "cancelled"}
 _TRANSIENT = {"retrying", "deferred", "queued", "running"}
 
@@ -58,6 +62,25 @@ async def queue_contract_health() -> dict:
             detail={"error": "durable_connector_queue_not_configured", "contract": QUEUE_CONTRACT},
         )
     return {"status": "ok", "contract": QUEUE_CONTRACT, "queue_configured": True}
+
+
+@router.get("/internal/release/health", dependencies=[Depends(_require_queue_token)])
+async def release_contract_health(db: Session = Depends(get_db)) -> dict:
+    try:
+        report = evaluate_release_contract(db)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "release_contract_evaluation_failed",
+                "contract": RELEASE_CONTRACT,
+                "reason": exc.__class__.__name__,
+            },
+        ) from exc
+    payload = {"contract": RELEASE_CONTRACT, **report}
+    if report["status"] != "ok":
+        raise HTTPException(status_code=503, detail=payload)
+    return payload
 
 
 @router.post("/internal/queue/connector-task", dependencies=[Depends(_require_queue_token)])
