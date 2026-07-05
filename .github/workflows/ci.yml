@@ -1,55 +1,54 @@
-name: CI - Terraform Lint & Plan
+name: CI - Cloudflare Release Contract
 
 on:
   pull_request:
     paths:
-      - 'terraform/**'
+      - 'cloudflare/**'
+      - 'wrangler.toml'
       - '.github/workflows/ci.yml'
+      - '.github/workflows/deploy.yml'
+      - 'figma-enterprise-v4/**'
 
 permissions:
   contents: read
-  pull-requests: write
 
 jobs:
-  tf_check:
+  edge_release_contract:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        shell: bash
-        working-directory: terraform
-
     steps:
       - uses: actions/checkout@v4
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
+      - uses: actions/setup-node@v4
         with:
-          terraform_version: 1.9.5
+          node-version: '22'
 
-      - name: terraform fmt (check)
-        run: terraform fmt -check -recursive
+      - name: Install edge dependencies
+        working-directory: cloudflare/edge-gateway
+        run: npm install --no-audit --no-fund
 
-      - name: terraform init (no backend, faster)
-        run: terraform init -backend=false -upgrade
+      - name: Typecheck and test edge gateway
+        working-directory: cloudflare/edge-gateway
+        run: npm run check
 
-      - name: terraform validate
-        run: terraform validate
+      - name: Validate Wrangler deployment bundle
+        working-directory: cloudflare/edge-gateway
+        run: npx wrangler deploy --dry-run --config ../../wrangler.toml
 
-      # Write the plan to a file that the comment step can read
-      - name: terraform plan (no backend)
-        id: plan
-        continue-on-error: true
-        run: terraform plan -no-color | tee plan.out.txt
-
-      - name: Upload plan as artifact
-        uses: actions/upload-artifact@v4
+  portal_release_contract:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: figma-enterprise-v4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          name: terraform-plan
-          path: terraform/plan.out.txt
-
-      - name: Comment plan on PR
-        if: ${{ github.event_name == 'pull_request' }}
-        uses: marocchino/sticky-pull-request-comment@v2
-        with:
-          recreate: true
-          path: terraform/plan.out.txt
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - run: npm ci
+      - run: npm run test:i18n
+      - name: Build portal against custom API edge domain
+        env:
+          VITE_API_BASE_URL: https://api.agroai-pilot.com
+        run: npm run build
