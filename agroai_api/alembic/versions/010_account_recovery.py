@@ -1,4 +1,4 @@
-"""Account recovery tokens and auth versioning.
+"""Account recovery tokens and credential validity timestamp.
 
 Revision ID: 010_account_recovery
 Revises: 009_telemetry_recommendations
@@ -30,8 +30,8 @@ def _index(name, table, columns, unique=False):
 
 
 def upgrade():
-    if "users" in _tables() and "auth_version" not in _columns("users"):
-        op.add_column("users", sa.Column("auth_version", sa.Integer(), nullable=False, server_default=sa.text("0")))
+    if "users" in _tables() and "credentials_changed_at" not in _columns("users"):
+        op.add_column("users", sa.Column("credentials_changed_at", sa.DateTime(), nullable=True))
 
     if "account_recovery_tokens" not in _tables():
         op.create_table(
@@ -54,5 +54,5 @@ def upgrade():
 def downgrade():
     if "account_recovery_tokens" in _tables():
         op.drop_table("account_recovery_tokens")
-    if "users" in _tables() and "auth_version" in _columns("users"):
-        op.drop_column("users", "auth_version")
+    if "users" in _tables() and "credentials_changed_at" in _columns("users"):
+        op.drop_column("users", "credentials_changed_at")
