@@ -107,9 +107,12 @@ class ModelRouter:
             preferred_language = _extract_preferred_language(messages)
             live = await LiveIntelligence().run(task, question, messages, preferred_language)
             selected = ModelSelection(task=task, profile=live.profile, model=live.model)
+            raw = {"response_language": live.response_language, "profile": live.profile}
             if live.status == "ok" and live.content.strip():
-                return AIGatewayResult(status="ok",content=live.content.strip(),provider=live.provider,model=live.model,demo_fallback=False,raw={"response_language":live.response_language,"profile":live.profile}), selected
-            return AIGatewayResult(status="unavailable",content="",provider=live.provider,model=live.model,demo_fallback=False,raw={"response_language":live.response_language,"profile":live.profile},error=live.error or "Live model unavailable."), selected
+                return AIGatewayResult(status="ok",content=live.content.strip(),provider=live.provider,model=live.model,demo_fallback=False,raw=raw), selected
+            if live.status == "language_generation_failed":
+                return AIGatewayResult(status="language_generation_failed",content="",provider=live.provider,model=live.model,demo_fallback=False,raw=raw,error=live.error or "Language generation failed."), selected
+            return AIGatewayResult(status="unavailable",content="",provider=live.provider,model=live.model,demo_fallback=False,raw=raw,error=live.error or "Live model unavailable."), selected
 
         if selection.profile == "report": default_tokens, default_timeout, default_attempts = 3000, 50, 5
         elif selection.profile == "reasoning": default_tokens, default_timeout, default_attempts = 2200, 36, 4
