@@ -3,9 +3,11 @@ from pathlib import Path
 import pytest
 from alembic import command
 from alembic.config import Config
-from sqlalchemy import Column, Float, JSON, MetaData, String, Table, create_engine, inspect
+from sqlalchemy import Column, Float, JSON, MetaData, String, Table, create_engine, event, inspect
 
 from app.core.config import settings
+from app.db import base as db_base
+from app.models import Block, Tenant
 
 
 def _alembic_config(db_path: Path) -> Config:
@@ -15,20 +17,16 @@ def _alembic_config(db_path: Path) -> Config:
 
 
 def _bootstrap_legacy_baseline(db_path: Path) -> None:
+    """Create only the legitimate pre-Alembic adoption baseline.
+
+    Historical migration 001 is adoption-safe for Tenant/Block. Pre-creating later
+    migration-owned tables (for example users from migration 006) while stamping
+    the database at base manufactures duplicate-table failures and does not model
+    a real previous-head database.
+    """
     engine = create_engine(f"sqlite:///{db_path}")
-    metadata = MetaData()
-    for name in (
-        "tenants", "users", "blocks", "workspaces", "organizations", "jobs",
-        "artifacts", "evidence", "reports", "field_tasks", "field_updates",
-        "compliance_packs", "evidence_items", "compliance_requirements",
-        "compliance_audit_events", "support_requests", "access_requests",
-        "onboarding_states", "ai_usage_events", "rate_limit_events",
-        "account_security_events", "admin_requests", "organization_invitations",
-        "email_verification_tokens", "email_suppression_events", "stripe_webhook_events",
-    ):
-        Table(name, metadata, Column("id", String, primary_key=True))
-    metadata.create_all(engine)
-    command.stamp(_alembic_config(db_path), "base")
+    event.listen(engine, "connect", lambda conn, _record: conn.execute("PRAGMA foreign_keys=ON"))
+    db_base.Base.metadata.create_all(bind=engine, tables=[Tenant.__table__, Block.__table__])
 
 
 def _compatible_telemetry(metadata: MetaData) -> Table:
