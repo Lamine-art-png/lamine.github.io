@@ -3,8 +3,6 @@ main = "cloudflare/edge-gateway/src/index.ts"
 compatibility_date = "2026-07-05"
 workers_dev = false
 
-# The browser only sees api.agroai-pilot.com. The edge gateway proxies to the
-# controlled upstream API origin and rejects recursive/malformed configuration.
 [vars]
 EDGE_ENVIRONMENT = "production"
 UPSTREAM_API_ORIGIN = "https://api-preview.agroai-pilot.com"
@@ -24,6 +22,7 @@ max_batch_size = 5
 max_batch_timeout = 5
 max_retries = 5
 retry_delay = 30
+max_concurrency = 4
 dead_letter_queue = "agroai-connector-tasks-dlq"
 
 [triggers]
@@ -32,7 +31,3 @@ crons = ["*/5 * * * *"]
 [observability]
 enabled = true
 head_sampling_rate = 1.0
-
-# Required Worker secrets are provisioned by the production release workflow:
-#   QUEUE_PUBLISH_TOKEN
-#   QUEUE_CONSUMER_TOKEN
