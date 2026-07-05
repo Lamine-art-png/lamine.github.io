@@ -7,9 +7,19 @@ import {
 
 type AnyRecord = Record<string, any>;
 
+const RESPONSE_LANGUAGE_STORAGE_KEY = "agroai_response_language_v1";
+
 function shouldUseLegacyRoute(error: unknown) {
   const status = Number((error as AnyRecord)?.status || 0);
   return status === 404 || status === 405;
+}
+
+function withIndependentResponseLanguage(request: AnyRecord): AnyRecord {
+  const stored = window.localStorage.getItem(RESPONSE_LANGUAGE_STORAGE_KEY)?.trim();
+  return {
+    ...request,
+    preferred_language: stored || "auto",
+  };
 }
 
 async function createReportPdf(payload: AnyRecord): Promise<Blob> {
@@ -81,11 +91,12 @@ const intelligenceDependencies: IntelligenceDependencies = {
     ) as Promise<AnyRecord>;
   },
   async runIntelligence(request: AnyRecord) {
+    const languageAwareRequest = withIndependentResponseLanguage(request);
     try {
-      return await apiClient.intelligence.brainRun(request) as AnyRecord;
+      return await apiClient.intelligence.brainRun(languageAwareRequest) as AnyRecord;
     } catch (error) {
       if (shouldUseLegacyRoute(error)) {
-        return await apiClient.intelligence.run(request) as AnyRecord;
+        return await apiClient.intelligence.run(languageAwareRequest) as AnyRecord;
       }
       throw error;
     }
