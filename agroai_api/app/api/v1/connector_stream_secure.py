@@ -16,7 +16,6 @@ from app.services.durable_ingestion_staging import stage_durable_object_job
 from app.services.ingestion_stream import stream_upload_to_spool
 from app.services.object_storage import object_storage_configured
 from app.services.redis_task_queue import queue_configured
-from app.services.task_outbox_service import drain_pending_outbox
 
 
 router = APIRouter(tags=["connector-stream-ingestion"])
@@ -28,8 +27,12 @@ _ALLOWED_PROVIDERS = {
 
 def _object_store():
     from app.api.v1.connector_stream_api import get_object_store
-
     return get_object_store()
+
+
+def _publish_pending(*, limit: int):
+    from app.api.v1.connector_stream_api import drain_pending_outbox
+    return drain_pending_outbox(limit=limit)
 
 
 @router.post("/evidence/upload-stream")
@@ -88,7 +91,7 @@ async def upload_stream_secure(
             )
             publication = {"published": 0, "failed": 0}
             if not deduplicated:
-                publication = await asyncio.to_thread(drain_pending_outbox, limit=10)
+                publication = await asyncio.to_thread(_publish_pending, limit=10)
             return {
                 "status": job.status,
                 "job_id": job.id,
