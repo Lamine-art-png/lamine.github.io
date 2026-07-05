@@ -28,6 +28,7 @@ def _connection(db: Session, tenant_id: str, connection_id: str) -> ConnectorCon
     return row
 
 
+@router.post("/connectors/connections/{connection_id}/upload")
 @router.post("/connectors/connections/{connection_id}/upload-stream")
 async def upload_connection_stream(
     connection_id: str,
@@ -41,7 +42,13 @@ async def upload_connection_stream(
     queued = queue_configured()
     if durable != queued:
         Path(receipt.path).unlink(missing_ok=True)
-        raise HTTPException(status_code=503, detail={"error": "distributed_ingestion_misconfigured"})
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "error": "distributed_ingestion_misconfigured",
+                "message": "Durable object storage and the external task queue must be configured together.",
+            },
+        )
 
     if durable and queued:
         store = get_object_store()
@@ -99,5 +106,13 @@ async def upload_connection_stream(
             content_type=receipt.content_type,
             data=data,
         )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail={"error": "connection_upload_ingestion_failed", "reason": exc.__class__.__name__},
+        ) from exc
     finally:
         Path(receipt.path).unlink(missing_ok=True)
