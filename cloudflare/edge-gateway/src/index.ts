@@ -1,8 +1,11 @@
+import { matchesConfiguredToken, retryDelaySeconds, shouldAcknowledgeUpstream } from "./queue-policy";
+
 export interface Env {
   UPSTREAM_API_ORIGIN: string;
   EDGE_ENVIRONMENT?: string;
   ALLOWED_ORIGINS?: string;
   QUEUE_PUBLISH_TOKEN: string;
+  QUEUE_PUBLISH_TOKEN_PREVIOUS?: string;
   QUEUE_CONSUMER_TOKEN: string;
   CONNECTOR_TASKS: Queue<ConnectorTaskEnvelope>;
 }
@@ -67,13 +70,6 @@ function bearerToken(request: Request): string {
   return auth.toLowerCase().startsWith("bearer ") ? auth.slice(7).trim() : "";
 }
 
-function constantTimeEqual(left: string, right: string): boolean {
-  if (!left || !right || left.length !== right.length) return false;
-  let mismatch = 0;
-  for (let index = 0; index < left.length; index += 1) mismatch |= left.charCodeAt(index) ^ right.charCodeAt(index);
-  return mismatch === 0;
-}
-
 function json(payload: unknown, status = 200, headers?: HeadersInit): Response {
   return new Response(JSON.stringify(payload), {
     status,
@@ -113,10 +109,6 @@ function mergeCors(response: Response, origin: string | null, env: Pick<Env, "AL
   corsHeaders(origin, env).forEach((value, key) => headers.set(key, value));
   securityHeaders(headers, id);
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
-}
-
-function retryDelay(attempts: number): number {
-  return Math.min(900, 15 * 2 ** Math.min(Math.max(attempts, 0), 6));
 }
 
 async function fetchWithTimeout(request: Request, timeoutMs: number): Promise<Response> {
@@ -195,7 +187,7 @@ async function proxyToUpstream(request: Request, env: Env): Promise<Response> {
 }
 
 async function enqueueTask(request: Request, env: Env): Promise<Response> {
-  if (!constantTimeEqual(bearerToken(request), env.QUEUE_PUBLISH_TOKEN || "")) {
+  if (!matchesConfiguredToken(bearerToken(request), env.QUEUE_PUBLISH_TOKEN, env.QUEUE_PUBLISH_TOKEN_PREVIOUS)) {
     return json({ error: "unauthorized" }, 401);
   }
   let payload: unknown;
@@ -219,15 +211,15 @@ async function enqueueTask(request: Request, env: Env): Promise<Response> {
 export async function consumeTask(message: Message<ConnectorTaskEnvelope>, env: Env): Promise<void> {
   const task = message.body;
   if (!validTask(task)) {
-    console.error("queue_invalid_task", { message_id: message.id });
-    message.ack();
+    console.error("queue_poison_task_retry", { message_id: message.id, attempts: message.attempts });
+    message.retry({ delaySeconds: retryDelaySeconds(message.attempts) });
     return;
   }
 
   const consumerToken = (env.QUEUE_CONSUMER_TOKEN || "").trim();
   if (!consumerToken) {
-    console.error("queue_consumer_secret_missing", { message_id: message.id });
-    message.retry({ delaySeconds: retryDelay(message.attempts) });
+    console.error("queue_consumer_secret_missing", { message_id: message.id, job_id: task.job_id });
+    message.retry({ delaySeconds: retryDelaySeconds(message.attempts) });
     return;
   }
 
@@ -235,8 +227,8 @@ export async function consumeTask(message: Message<ConnectorTaskEnvelope>, env: 
   try {
     upstream = validatedUpstreamOrigin(env.UPSTREAM_API_ORIGIN);
   } catch (error) {
-    console.error("queue_upstream_misconfigured", { error: String(error) });
-    message.retry({ delaySeconds: retryDelay(message.attempts) });
+    console.error("queue_upstream_misconfigured", { message_id: message.id, job_id: task.job_id, error: String(error) });
+    message.retry({ delaySeconds: retryDelaySeconds(message.attempts) });
     return;
   }
   const target = new URL("/v1/internal/queue/connector-task", upstream);
@@ -252,22 +244,25 @@ export async function consumeTask(message: Message<ConnectorTaskEnvelope>, env: 
       body: JSON.stringify(task),
     }), 120_000);
   } catch (error) {
-    console.error("queue_delivery_network_error", { message_id: message.id, error: String(error) });
-    message.retry({ delaySeconds: retryDelay(message.attempts) });
+    console.error("queue_delivery_network_error", { message_id: message.id, job_id: task.job_id, attempts: message.attempts, error: String(error) });
+    message.retry({ delaySeconds: retryDelaySeconds(message.attempts) });
     return;
   }
 
-  if (response.ok) {
+  if (shouldAcknowledgeUpstream(response.status)) {
+    console.log("queue_delivery_ack", { message_id: message.id, job_id: task.job_id, task_type: task.task_type, attempts: message.attempts, status: response.status });
     message.ack();
     return;
   }
-  if (TRANSIENT_UPSTREAM_STATUS.has(response.status) || response.status >= 500) {
-    console.warn("queue_delivery_retry", { message_id: message.id, status: response.status, attempts: message.attempts });
-    message.retry({ delaySeconds: retryDelay(message.attempts) });
-    return;
-  }
-  console.error("queue_delivery_terminal_rejection", { message_id: message.id, status: response.status });
-  message.ack();
+
+  console.warn("queue_delivery_retry", {
+    message_id: message.id,
+    job_id: task.job_id,
+    task_type: task.task_type,
+    attempts: message.attempts,
+    status: response.status,
+  });
+  message.retry({ delaySeconds: retryDelaySeconds(message.attempts) });
 }
 
 async function drainOutbox(env: Env): Promise<void> {
