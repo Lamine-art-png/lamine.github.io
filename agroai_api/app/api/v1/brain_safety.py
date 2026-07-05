@@ -14,6 +14,7 @@ from app.models.operational_records import IntelligenceRun
 from app.models.saas import User
 from app.services.claim_provenance import build_claim_provenance
 from app.services.decision_safety import evaluate_decision_safety
+from app.services.evidence_context_enrichment import enrich_evidence_context
 from app.services.intelligence_context import build_intelligence_context
 
 
@@ -54,7 +55,11 @@ def _persist_safe_run(
         db.flush()
         state = db.get(IntelligenceRunProvenanceState, run.id)
         if state is not None:
-            state.provenance_json = {"claims": provenance.get("claims", []), "unsupported_consequential_count": provenance.get("unsupported_consequential_count", 0), "stale_operational_count": provenance.get("stale_operational_count", 0)}
+            state.provenance_json = {
+                "claims": provenance.get("claims", []),
+                "unsupported_consequential_count": provenance.get("unsupported_consequential_count", 0),
+                "stale_operational_count": provenance.get("stale_operational_count", 0),
+            }
             state.freshness_json = provenance.get("freshness") or {}
         db.commit()
         return run.id
@@ -84,7 +89,7 @@ async def brain_run_safe(
         field_id=payload.field_id,
         audience=payload.audience,
     )
-    context = bundle["evidence_context"]
+    context = enrich_evidence_context(db, bundle["evidence_context"], tenant_id=tenant_id)
     envelope = evaluate_decision_safety(
         task=payload.task,
         question=payload.question,
