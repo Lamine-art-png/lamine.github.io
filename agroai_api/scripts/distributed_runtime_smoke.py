@@ -2,21 +2,27 @@ from __future__ import annotations
 
 import hashlib
 import os
+import sys
 import tempfile
 import time
 import uuid
 from datetime import datetime
 from pathlib import Path
 
-from app.api.v1.connectors import create_or_get_connection
-from app.core.config import settings
-from app.db.base import SessionLocal
-from app.models.operational_records import DataSource, EvidenceRecord, IngestionJob
-from app.models.saas import Organization, User, Workspace
-from app.models.task_outbox import TaskOutbox
-from app.services.durable_ingestion_staging import stage_durable_object_job
-from app.services.object_storage import get_object_store
-from app.services.redis_task_queue import get_task_queue
+
+API_ROOT = Path(__file__).resolve().parents[1]
+if str(API_ROOT) not in sys.path:
+    sys.path.insert(0, str(API_ROOT))
+
+from app.api.v1.connectors import create_or_get_connection  # noqa: E402
+from app.core.config import settings  # noqa: E402
+from app.db.base import SessionLocal  # noqa: E402
+from app.models.operational_records import DataSource, EvidenceRecord, IngestionJob  # noqa: E402
+from app.models.saas import Organization, User, Workspace  # noqa: E402
+from app.models.task_outbox import TaskOutbox  # noqa: E402
+from app.services.durable_ingestion_staging import stage_durable_object_job  # noqa: E402
+from app.services.object_storage import get_object_store  # noqa: E402
+from app.services.redis_task_queue import get_task_queue  # noqa: E402
 
 
 TIMEOUT_SECONDS = int(os.getenv("RUNTIME_SMOKE_TIMEOUT_SECONDS", "90"))
@@ -127,6 +133,8 @@ def main() -> None:
         raise RuntimeError(f"worker job failed: {terminal.status}: {terminal.error}")
 
     db = SessionLocal()
+    object_uri = ""
+    evidence_count = 0
     try:
         source = db.query(DataSource).filter(
             DataSource.tenant_id == tenant_id,
@@ -134,6 +142,7 @@ def main() -> None:
         ).one_or_none()
         if source is None or not str(source.storage_path or "").startswith("s3://"):
             raise RuntimeError("worker did not persist durable data source identity")
+        object_uri = str(source.storage_path)
         evidence_count = db.query(EvidenceRecord).filter(
             EvidenceRecord.tenant_id == tenant_id,
             EvidenceRecord.data_source_id == source.id,
@@ -157,7 +166,7 @@ def main() -> None:
             "checksum": checksum,
             "evidence_records": evidence_count,
             "queue_pending": pending,
-            "object_uri": source.storage_path,
+            "object_uri": object_uri,
         },
     )
 
