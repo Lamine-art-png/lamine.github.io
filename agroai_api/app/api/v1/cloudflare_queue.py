@@ -13,6 +13,7 @@ from app.core.config import settings
 from app.db.base import get_db
 from app.services.connector_object_gc import run_connector_object_gc
 from app.services.object_storage import object_storage_configured
+from app.services.production_readiness import evaluate_production_readiness
 from app.services.redis_task_queue import queue_configured
 from app.services.release_contract import evaluate_release_contract
 from app.services.task_outbox_service import drain_pending_outbox
@@ -72,6 +73,7 @@ async def release_contract_health(db: Session = Depends(get_db)) -> dict:
     try:
         report = evaluate_release_contract(db)
         storage_ready = object_storage_configured()
+        production = evaluate_production_readiness(settings).to_dict()
     except Exception as exc:
         raise HTTPException(
             status_code=503,
@@ -81,8 +83,14 @@ async def release_contract_health(db: Session = Depends(get_db)) -> dict:
                 "reason": exc.__class__.__name__,
             },
         ) from exc
-    payload = {"contract": RELEASE_CONTRACT, **report, "object_storage_configured": storage_ready}
-    if report["status"] != "ok" or not storage_ready:
+    payload = {
+        "contract": RELEASE_CONTRACT,
+        **report,
+        "object_storage_configured": storage_ready,
+        "production_ready": bool(production.get("ready")),
+        "production_blocker_codes": [item.get("code") for item in production.get("blockers", [])],
+    }
+    if report["status"] != "ok" or not storage_ready or not production.get("ready"):
         payload["status"] = "blocked"
         raise HTTPException(status_code=503, detail=payload)
     return payload
