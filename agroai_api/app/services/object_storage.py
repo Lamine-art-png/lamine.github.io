@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import os
 import re
 import uuid
 from dataclasses import dataclass
@@ -14,6 +13,7 @@ from app.core.config import settings
 
 
 _SAFE = re.compile(r"[^A-Za-z0-9._-]+")
+_SHA256 = re.compile(r"^[a-f0-9]{64}$")
 
 
 @dataclass(frozen=True)
@@ -34,20 +34,20 @@ def _s3_uri(bucket: str, key: str) -> str:
     return f"s3://{bucket}/{key}"
 
 
-def _build_default_s3_client():
-    """Create an S3-compatible client lazily for durable connector objects.
+def _file_sha256(path: Path) -> str:
+    digest = hashlib.sha256()
+    with path.open("rb") as handle:
+        for chunk in iter(lambda: handle.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
 
-    R2 is the production target. Explicit R2 credentials are preferred when
-    configured, while the standard boto credential chain remains available for
-    local MinIO and compatibility tests.
-    """
+
+def _build_default_s3_client():
     try:
         import boto3
         from botocore.config import Config
-    except ModuleNotFoundError as exc:  # pragma: no cover - exercised by minimal runtimes
-        raise RuntimeError(
-            "S3/R2 connector object storage is configured but boto3 is unavailable"
-        ) from exc
+    except ModuleNotFoundError as exc:  # pragma: no cover
+        raise RuntimeError("S3/R2 connector object storage is configured but boto3 is unavailable") from exc
 
     endpoint_url = getattr(settings, "CONNECTOR_OBJECT_ENDPOINT_URL", "").strip() or None
     region_name = getattr(settings, "CONNECTOR_OBJECT_REGION", "auto").strip() or "auto"
@@ -80,22 +80,47 @@ class S3ObjectStore:
         self.prefix = prefix.strip("/") or "agroai"
         self.client = client or _build_default_s3_client()
 
+    def _namespace(self, *, tenant_id: str, connection_id: str) -> str:
+        return "/".join([
+            self.prefix,
+            "tenants",
+            _safe_component(tenant_id, fallback="tenant"),
+            "connectors",
+            _safe_component(connection_id, fallback="connection"),
+        ]) + "/"
+
     def _key(self, *, tenant_id: str, connection_id: str, filename: str) -> str:
         now = datetime.utcnow()
-        return "/".join(
-            [
-                self.prefix,
-                "tenants",
-                _safe_component(tenant_id, fallback="tenant"),
-                "connectors",
-                _safe_component(connection_id, fallback="connection"),
-                "raw",
-                now.strftime("%Y"),
-                now.strftime("%m"),
-                now.strftime("%d"),
-                f"{uuid.uuid4().hex}-{_safe_component(filename, fallback='upload')}",
-            ]
-        )
+        return "/".join([
+            self._namespace(tenant_id=tenant_id, connection_id=connection_id).rstrip("/"),
+            "raw",
+            now.strftime("%Y"),
+            now.strftime("%m"),
+            now.strftime("%d"),
+            f"{uuid.uuid4().hex}-{_safe_component(filename, fallback='upload')}",
+        ])
+
+    def _validated_key(
+        self,
+        uri: str,
+        *,
+        tenant_id: str | None = None,
+        connection_id: str | None = None,
+    ) -> str:
+        parsed = urlparse(uri)
+        if parsed.scheme != "s3" or parsed.netloc != self.bucket:
+            raise ValueError("object URI is outside the configured connector bucket")
+        key = parsed.path.lstrip("/")
+        prefix = self.prefix.rstrip("/") + "/"
+        if not key.startswith(prefix):
+            raise ValueError("object URI is outside the configured connector prefix")
+        if (tenant_id is None) != (connection_id is None):
+            raise ValueError("tenant_id and connection_id must be supplied together")
+        if tenant_id is not None and connection_id is not None:
+            namespace = self._namespace(tenant_id=tenant_id, connection_id=connection_id)
+            if not key.startswith(namespace):
+                raise ValueError("object URI is outside the connector tenant namespace")
+        return key
 
     def put_path(
         self,
@@ -113,10 +138,17 @@ class S3ObjectStore:
             raise RuntimeError("spooled connector object is unavailable")
         if source.stat().st_size != expected_size:
             raise RuntimeError("spooled connector object size changed before durable upload")
+        expected_sha256 = expected_sha256.strip().lower()
+        if not _SHA256.fullmatch(expected_sha256):
+            raise RuntimeError("expected connector checksum is invalid")
+        if _file_sha256(source) != expected_sha256:
+            raise RuntimeError("spooled connector object checksum changed before durable upload")
+
         key = self._key(tenant_id=tenant_id, connection_id=connection_id, filename=filename)
         extra: dict[str, Any] = {
             "Metadata": {
                 "sha256": expected_sha256,
+                "tenant-id": _safe_component(tenant_id, fallback="tenant"),
                 "connection-id": _safe_component(connection_id, fallback="connection"),
             }
         }
@@ -127,7 +159,13 @@ class S3ObjectStore:
         head = self.client.head_object(Bucket=self.bucket, Key=key)
         size = int(head.get("ContentLength") or -1)
         metadata = head.get("Metadata") or {}
-        if size != expected_size or metadata.get("sha256") != expected_sha256:
+        verified = (
+            size == expected_size
+            and metadata.get("sha256") == expected_sha256
+            and metadata.get("tenant-id") == _safe_component(tenant_id, fallback="tenant")
+            and metadata.get("connection-id") == _safe_component(connection_id, fallback="connection")
+        )
+        if not verified:
             try:
                 self.client.delete_object(Bucket=self.bucket, Key=key)
             finally:
@@ -140,11 +178,15 @@ class S3ObjectStore:
             content_type=content_type,
         )
 
-    def read_bytes(self, uri: str, *, max_bytes: int) -> bytes:
-        parsed = urlparse(uri)
-        if parsed.scheme != "s3" or parsed.netloc != self.bucket:
-            raise ValueError("object URI is outside the configured connector bucket")
-        key = parsed.path.lstrip("/")
+    def read_bytes(
+        self,
+        uri: str,
+        *,
+        max_bytes: int,
+        tenant_id: str | None = None,
+        connection_id: str | None = None,
+    ) -> bytes:
+        key = self._validated_key(uri, tenant_id=tenant_id, connection_id=connection_id)
         response = self.client.get_object(Bucket=self.bucket, Key=key)
         length = int(response.get("ContentLength") or 0)
         if length > max_bytes:
@@ -154,16 +196,26 @@ class S3ObjectStore:
         if len(data) > max_bytes:
             raise RuntimeError("connector object exceeded worker read limit while streaming")
         metadata = response.get("Metadata") or {}
-        expected = metadata.get("sha256")
-        if expected and hashlib.sha256(data).hexdigest() != expected:
+        expected = str(metadata.get("sha256") or "").strip().lower()
+        if not _SHA256.fullmatch(expected):
+            raise RuntimeError("connector object checksum metadata is unavailable")
+        if hashlib.sha256(data).hexdigest() != expected:
             raise RuntimeError("connector object checksum mismatch")
+        if tenant_id is not None and metadata.get("tenant-id") not in {None, _safe_component(tenant_id, fallback="tenant")}:
+            raise RuntimeError("connector object tenant metadata mismatch")
+        if connection_id is not None and metadata.get("connection-id") not in {None, _safe_component(connection_id, fallback="connection")}:
+            raise RuntimeError("connector object connection metadata mismatch")
         return data
 
-    def delete(self, uri: str) -> None:
-        parsed = urlparse(uri)
-        if parsed.scheme != "s3" or parsed.netloc != self.bucket:
-            raise ValueError("object URI is outside the configured connector bucket")
-        self.client.delete_object(Bucket=self.bucket, Key=parsed.path.lstrip("/"))
+    def delete(
+        self,
+        uri: str,
+        *,
+        tenant_id: str | None = None,
+        connection_id: str | None = None,
+    ) -> None:
+        key = self._validated_key(uri, tenant_id=tenant_id, connection_id=connection_id)
+        self.client.delete_object(Bucket=self.bucket, Key=key)
 
 
 def object_storage_configured() -> bool:
