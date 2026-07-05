@@ -21,7 +21,7 @@ jobs:
       - name: Enforce revision length and uniqueness
         run: |
           set +e
-          python -m pytest -q tests/unit/test_alembic_revision_contract.py 2>&1 | tee alembic-revision-contract.log
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --confcutdir=tests/unit tests/unit/test_alembic_revision_contract.py 2>&1 | tee alembic-revision-contract.log
           status=${PIPESTATUS[0]}
           tail -n 120 alembic-revision-contract.log > alembic-revision-contract-tail.txt
           exit $status
