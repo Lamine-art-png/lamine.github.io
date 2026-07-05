@@ -152,6 +152,58 @@ jobs:
       - name: Build production portal
         run: npm run build
 
+  portal-browser-acceptance:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: figma-enterprise-v4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - name: Install portal and browser test dependencies
+        run: |
+          npm ci
+          npm install --no-save --no-package-lock @playwright/test@1.55.0
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build production portal
+        run: npm run build
+      - name: Run exact browser localization acceptance
+        env:
+          CI: "1"
+        run: |
+          set -euo pipefail
+          npx vite preview --host 127.0.0.1 --port 4173 > vite-preview.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:4173/intelligence >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat vite-preview.log
+            exit 1
+          fi
+          npx playwright test tests/browser/i18n-acceptance.spec.mjs --browser=chromium --reporter=line
+      - name: Upload browser acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portal-browser-acceptance
+          path: |
+            figma-enterprise-v4/vite-preview.log
+            figma-enterprise-v4/test-results
+          if-no-files-found: ignore
+          retention-days: 2
+
   command-center-v2:
     runs-on: ubuntu-latest
     defaults:
