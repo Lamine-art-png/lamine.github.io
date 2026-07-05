@@ -1,0 +1,58 @@
+name: Production Startup Contract CI
+
+on:
+  pull_request:
+    paths:
+      - 'Dockerfile'
+      - 'agroai_api/start-production.sh'
+      - 'agroai_api/verify-production-migration.sh'
+      - 'agroai_api/app/services/release_migration.py'
+      - 'agroai_api/alembic/**'
+      - '.github/workflows/production-startup-contract-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  locked-migration-startup-contract:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: agroai_startup_ci
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: agroai_api
+    env:
+      DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agroai_startup_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -q -r requirements.txt pytest
+      - name: Validate production launcher shell
+        run: sh -n start-production.sh
+      - name: Execute locked production migration choreography
+        run: sh verify-production-migration.sh
+      - name: Prove exact persisted Alembic head
+        run: |
+          python scripts/deployment_db_preflight.py --output startup-preflight.json
+          grep -q 'C_current_head' startup-preflight.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: production-startup-contract-${{ github.sha }}
+          path: agroai_api/startup-preflight.json
+          retention-days: 14
