@@ -21,6 +21,7 @@ from app.services.connector_ingestion_pipeline import ingest_streamed_receipt
 from app.services.ingestion_stream import stream_upload_to_spool
 from app.services.object_storage import get_object_store, object_storage_configured
 from app.services.redis_task_queue import queue_configured
+from app.services.task_outbox_service import publish_pending_outbox
 
 
 router = APIRouter(tags=["connector-stream-ingestion"])
@@ -114,7 +115,16 @@ async def upload_stream(
                     raise
                 return {"status": existing.status, "job_id": existing.id, "deduplicated": True, "content_sha256": receipt.sha256}
             db.refresh(job)
-            return {"status": "queued", "job_id": job.id, "object_uri": stored.uri, "content_sha256": stored.sha256, "size_bytes": stored.size_bytes, "deduplicated": False}
+            publication = await asyncio.to_thread(publish_pending_outbox, db, limit=10)
+            return {
+                "status": "queued",
+                "job_id": job.id,
+                "object_uri": stored.uri,
+                "content_sha256": stored.sha256,
+                "size_bytes": stored.size_bytes,
+                "deduplicated": False,
+                "queue_publication": publication,
+            }
         except HTTPException:
             raise
         except Exception as exc:
@@ -127,3 +137,10 @@ async def upload_stream(
         return await asyncio.to_thread(ingest_streamed_receipt, tenant_id=tenant_id, connection_id=connection.id, receipt=receipt)
     except Exception as exc:
         raise HTTPException(status_code=500, detail={"error": "stream_ingestion_failed", "provider": provider, "receipt_sha256": receipt.sha256}) from exc
+
+
+# Internal queue callbacks share the same connector task surface and are mounted
+# under the application's existing /v1 connector router prefix.
+from app.api.v1.cloudflare_queue import router as cloudflare_queue_router  # noqa: E402
+
+router.include_router(cloudflare_queue_router)
