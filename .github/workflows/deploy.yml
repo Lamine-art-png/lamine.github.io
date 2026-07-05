@@ -17,6 +17,7 @@ env:
   PORTAL_PROJECT: agroai-portal
   PORTAL_URL: https://app.agroai-pilot.com
   API_URL: https://api.agroai-pilot.com
+  UPSTREAM_HEALTH_URL: https://api-preview.agroai-pilot.com/v1/health
 
 jobs:
   validate:
@@ -96,6 +97,12 @@ jobs:
         working-directory: cloudflare/edge-gateway
         run: npm install --no-audit --no-fund
 
+      - name: Verify current upstream before changing public edge
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 "${UPSTREAM_HEALTH_URL}" | jq -e '.status == "ok"' >/dev/null
+
       - name: Ensure connector queues exist
         working-directory: cloudflare/edge-gateway
         shell: bash
@@ -114,6 +121,10 @@ jobs:
           ensure_queue "agroai-connector-tasks"
           ensure_queue "agroai-connector-tasks-dlq"
 
+      - name: Deploy API edge gateway
+        working-directory: cloudflare/edge-gateway
+        run: npx wrangler deploy --config ../../wrangler.toml
+
       - name: Provision Worker queue secrets
         working-directory: cloudflare/edge-gateway
         shell: bash
@@ -121,10 +132,6 @@ jobs:
           set -euo pipefail
           printf '%s' "$QUEUE_PUBLISH_TOKEN" | npx wrangler secret put QUEUE_PUBLISH_TOKEN --config ../../wrangler.toml
           printf '%s' "$QUEUE_CONSUMER_TOKEN" | npx wrangler secret put QUEUE_CONSUMER_TOKEN --config ../../wrangler.toml
-
-      - name: Deploy API edge gateway
-        working-directory: cloudflare/edge-gateway
-        run: npx wrangler deploy --config ../../wrangler.toml
 
       - name: Smoke edge and upstream health
         shell: bash
