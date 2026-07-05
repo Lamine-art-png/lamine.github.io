@@ -15,7 +15,7 @@ from app.db.base import get_db
 from app.models.saas import User
 from app.schemas.ai import EvidenceContext
 from app.services.intelligence_context import build_intelligence_context
-from app.services.language import resolve_language
+from app.services.language import language_matches_target, resolve_language
 from app.services.live_intelligence import LiveIntelligence
 
 router = APIRouter(prefix="/intelligence/brain", tags=["intelligence"])
@@ -211,6 +211,29 @@ def local_plain_body(answer: str, context: EvidenceContext, *, question: str = "
     }
 
 
+def language_failure_response(payload: BrainRunRequest, bundle: dict[str, Any], result) -> dict[str, Any]:
+    return {
+        "status": "language_generation_failed",
+        "task": payload.task,
+        "model_status": "language_generation_failed",
+        "result": {
+            "summary": "",
+            "answer": "",
+            "error": "language_generation_failed",
+            "customer_safe": True,
+        },
+        "missing_data": [],
+        "confidence": "low",
+        "citations": [],
+        "sample_mode": bool(bundle.get("sample_mode")),
+        "selected_model": result.model,
+        "provider": result.provider,
+        "preferred_language": payload.preferred_language,
+        "response_language": result.response_language,
+        "profile": result.profile,
+    }
+
+
 @router.post("/run")
 async def brain_run(
     payload: BrainRunRequest,
@@ -239,26 +262,10 @@ async def brain_run(
     result = await LiveIntelligence().run(payload.task, payload.question, messages, payload.preferred_language)
 
     if result.status == "language_generation_failed":
-        return {
-            "status": "language_generation_failed",
-            "task": payload.task,
-            "model_status": "language_generation_failed",
-            "result": {
-                "summary": "",
-                "answer": "",
-                "error": "language_generation_failed",
-                "customer_safe": True,
-            },
-            "missing_data": [],
-            "confidence": "low",
-            "citations": [],
-            "sample_mode": bool(bundle.get("sample_mode")),
-            "selected_model": result.model,
-            "provider": result.provider,
-            "preferred_language": payload.preferred_language,
-            "response_language": result.response_language,
-            "profile": result.profile,
-        }
+        return language_failure_response(payload, bundle, result)
+
+    if result.status == "ok" and result.content.strip() and not language_matches_target(result.content, result.response_language):
+        return language_failure_response(payload, bundle, result)
 
     if result.status != "ok" or not result.content.strip():
         return {
