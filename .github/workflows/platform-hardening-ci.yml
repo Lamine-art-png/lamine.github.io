@@ -107,6 +107,25 @@ jobs:
             tests/unit/test_operational_invariants.py \
             tests/unit/test_model_router_language_failure.py
 
+  decision-safety:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend dependencies
+        run: python -m pip install -q -r requirements.txt pytest
+      - name: Compile decision safety boundary
+        run: |
+          python -m py_compile app/services/decision_safety.py
+          python -m py_compile app/api/v1/brain_safety.py
+      - name: Run deterministic decision safety regressions
+        run: python -m pytest -q --tb=short tests/unit/test_decision_safety.py
+
   scale-readiness-contract:
     runs-on: ubuntu-latest
     defaults:
@@ -123,8 +142,12 @@ jobs:
         run: |
           python -m py_compile app/services/production_readiness.py
           python -m py_compile app/services/ingestion_stream.py
+          python -m py_compile app/services/connector_ingestion_pipeline.py
+          python -m py_compile app/api/v1/connector_stream_api.py
       - name: Run million-user readiness contracts
         run: python -m pytest -q --tb=short tests/unit/test_production_readiness.py
+      - name: Run bounded connector streaming contracts
+        run: python -m pytest -q --tb=short tests/unit/test_ingestion_stream.py
 
   inherited-backend-gates:
     runs-on: ubuntu-latest
