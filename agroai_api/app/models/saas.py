@@ -29,11 +29,13 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     email_verified_at = Column(DateTime, nullable=True)
     email_verification_status = Column(String, default="unverified", nullable=False, index=True)
+    auth_version = Column(Integer, default=0, nullable=False)
 
     owned_organizations = relationship("Organization", back_populates="owner")
     memberships = relationship("OrganizationMembership", back_populates="user", cascade="all, delete-orphan")
     usage_events = relationship("UsageEvent", back_populates="user")
     email_verification_tokens = relationship("EmailVerificationToken", back_populates="user", cascade="all, delete-orphan")
+    account_recovery_tokens = relationship("AccountRecoveryToken", back_populates="user", cascade="all, delete-orphan")
     team_invitations_sent = relationship("TeamInvitation", back_populates="invited_by_user", cascade="all, delete-orphan")
 
 
@@ -205,6 +207,19 @@ class EmailVerificationToken(Base):
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     user = relationship("User", back_populates="email_verification_tokens")
+
+
+class AccountRecoveryToken(Base):
+    __tablename__ = "account_recovery_tokens"
+
+    id = Column(String, primary_key=True, default=new_id)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    user = relationship("User", back_populates="account_recovery_tokens")
 
 
 class TeamInvitation(Base):
