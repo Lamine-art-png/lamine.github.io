@@ -182,10 +182,10 @@ resource "aws_elasticache_replication_group" "connector_queue" {
   parameter_group_name = "default.redis7"
 
   automatic_failover_enabled = var.redis_replica_count > 0
-  multi_az_enabled            = var.redis_replica_count > 0
-  at_rest_encryption_enabled  = true
-  transit_encryption_enabled  = true
-  auth_token                  = random_password.redis_auth_token[0].result
+  multi_az_enabled           = var.redis_replica_count > 0
+  at_rest_encryption_enabled = true
+  transit_encryption_enabled = true
+  auth_token                 = random_password.redis_auth_token[0].result
 
   subnet_group_name  = aws_elasticache_subnet_group.connector_queue[0].name
   security_group_ids = [aws_security_group.connector_queue[0].id]

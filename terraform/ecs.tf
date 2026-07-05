@@ -33,21 +33,21 @@ data "aws_region" "current" {}
 
 locals {
   base_runtime_environment = {
-    APP_ENV                                = "production"
-    ENABLE_SCHEDULER                       = "false"
-    ENABLE_METRICS                         = "true"
-    SYNC_INTERVAL_MINUTES                  = tostring(var.sync_interval_minutes)
-    TASK_QUEUE_BACKEND                     = trimspace(local.runtime_redis_url) != "" ? "redis_streams" : "disabled"
-    TASK_QUEUE_STREAM                      = var.task_queue_stream
-    TASK_QUEUE_GROUP                       = var.task_queue_group
-    TASK_QUEUE_STREAM_MAXLEN               = tostring(var.task_queue_stream_maxlen)
-    TASK_QUEUE_LEASE_SECONDS               = tostring(var.task_queue_lease_seconds)
-    TASK_QUEUE_MAX_ATTEMPTS                = tostring(var.task_queue_max_attempts)
-    CONNECTOR_OBJECT_STORAGE_BACKEND       = local.runtime_object_backend
-    CONNECTOR_OBJECT_BUCKET                = local.runtime_object_bucket
-    CONNECTOR_OBJECT_PREFIX                = var.connector_object_prefix
-    CONNECTOR_OBJECT_REGION                = local.runtime_object_region
-    CONNECTOR_OBJECT_ENDPOINT_URL          = local.runtime_object_endpoint
+    APP_ENV                                 = "production"
+    ENABLE_SCHEDULER                        = "false"
+    ENABLE_METRICS                          = "true"
+    SYNC_INTERVAL_MINUTES                   = tostring(var.sync_interval_minutes)
+    TASK_QUEUE_BACKEND                      = trimspace(local.runtime_redis_url) != "" ? "redis_streams" : "disabled"
+    TASK_QUEUE_STREAM                       = var.task_queue_stream
+    TASK_QUEUE_GROUP                        = var.task_queue_group
+    TASK_QUEUE_STREAM_MAXLEN                = tostring(var.task_queue_stream_maxlen)
+    TASK_QUEUE_LEASE_SECONDS                = tostring(var.task_queue_lease_seconds)
+    TASK_QUEUE_MAX_ATTEMPTS                 = tostring(var.task_queue_max_attempts)
+    CONNECTOR_OBJECT_STORAGE_BACKEND        = local.runtime_object_backend
+    CONNECTOR_OBJECT_BUCKET                 = local.runtime_object_bucket
+    CONNECTOR_OBJECT_PREFIX                 = var.connector_object_prefix
+    CONNECTOR_OBJECT_REGION                 = local.runtime_object_region
+    CONNECTOR_OBJECT_ENDPOINT_URL           = local.runtime_object_endpoint
     CONNECTOR_CREDENTIAL_ACTIVE_KEY_VERSION = var.connector_credential_active_key_version
   }
 
@@ -78,9 +78,9 @@ resource "aws_ecs_task_definition" "api" {
 
   container_definitions = jsonencode([
     {
-      name         = "api"
-      image        = "${data.aws_ecr_repository.api.repository_url}:${var.image_tag}"
-      essential    = true
+      name      = "api"
+      image     = "${data.aws_ecr_repository.api.repository_url}:${var.image_tag}"
+      essential = true
       portMappings = [
         {
           containerPort = 8000
@@ -88,11 +88,11 @@ resource "aws_ecs_task_definition" "api" {
           protocol      = "tcp"
         }
       ]
-      environment      = concat(local.runtime_environment_list, [{ name = "PORT", value = "8000" }])
-      secrets          = local.runtime_secret_list
+      environment = concat(local.runtime_environment_list, [{ name = "PORT", value = "8000" }])
+      secrets     = local.runtime_secret_list
       logConfiguration = {
         logDriver = "awslogs"
-        options   = {
+        options = {
           awslogs-group         = aws_cloudwatch_log_group.api.name
           awslogs-region        = data.aws_region.current.name
           awslogs-stream-prefix = "api"
@@ -130,15 +130,15 @@ resource "aws_ecs_task_definition" "connector_worker" {
 
   container_definitions = jsonencode([
     {
-      name             = "connector-worker"
-      image            = "${data.aws_ecr_repository.api.repository_url}:${var.image_tag}"
-      essential        = true
-      command          = ["python", "-m", "app.workers.connector_worker"]
-      environment      = local.runtime_environment_list
-      secrets          = local.runtime_secret_list
+      name        = "connector-worker"
+      image       = "${data.aws_ecr_repository.api.repository_url}:${var.image_tag}"
+      essential   = true
+      command     = ["python", "-m", "app.workers.connector_worker"]
+      environment = local.runtime_environment_list
+      secrets     = local.runtime_secret_list
       logConfiguration = {
         logDriver = "awslogs"
-        options   = {
+        options = {
           awslogs-group         = aws_cloudwatch_log_group.connector_worker.name
           awslogs-region        = data.aws_region.current.name
           awslogs-stream-prefix = "worker"
