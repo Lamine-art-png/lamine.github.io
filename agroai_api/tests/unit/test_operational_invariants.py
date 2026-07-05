@@ -51,6 +51,29 @@ def test_markdown_structure_change_fails_closed():
     assert "markdown_structure_changed" in result.violations
 
 
+def test_negative_instruction_loss_fails_closed():
+    original = "Do not irrigate before 18:00. Confidence: 0.71."
+    unsafe = "Irriguez avant 18:00. Confiance : 0,71."
+    result = check_operational_invariants(original, unsafe)
+    assert not result.ok
+    assert "negation_lost" in result.violations
+
+
+def test_uncertainty_loss_fails_closed():
+    original = "The SGMA result is uncertain. Confidence: 0.71."
+    unsafe = "Le résultat SGMA est confirmé. Confiance : 0,71."
+    result = check_operational_invariants(original, unsafe)
+    assert not result.ok
+    assert "uncertainty_lost" in result.violations
+
+
+def test_safe_negative_instruction_and_uncertainty_translation_passes():
+    original = "Do not irrigate before 18:00. The SGMA result is uncertain. Confidence: 0.71."
+    repaired = "N’irriguez pas avant 18:00. Le résultat SGMA reste incertain. Confiance : 0,71."
+    result = check_operational_invariants(original, repaired)
+    assert result.ok, result.violations
+
+
 def test_live_repair_accepts_safe_translation(monkeypatch):
     async def safe_remote(*_args, **_kwargs):
         return SAFE_FRENCH, "model-a"
