@@ -3,7 +3,15 @@ import { createBrowserRouter, Navigate } from "react-router";
 import { MainLayout } from "./components/MainLayout";
 import { RouteRecovery } from "./components/RouteRecovery";
 import { VerifyEmailPage } from "./components/VerifyEmail";
+import { IntelligenceView as IntelligenceViewCompileGuard } from "./components/intelligence/IntelligenceView";
+import { useIntelligenceController as useIntelligenceControllerCompileGuard } from "./components/intelligence/useIntelligenceController";
 import { useLocale } from "./hooks/useLocale";
+
+// Keep the release-candidate Intelligence modules in the production module graph
+// until the transport boundary is activated. This makes Vite resolve/transpile
+// them instead of allowing dead, uncompiled source to accumulate unnoticed.
+const intelligenceReleaseCompileGuard = [IntelligenceViewCompileGuard, useIntelligenceControllerCompileGuard];
+void intelligenceReleaseCompileGuard;
 
 function PortalHome() {
   const { t } = useLocale();
