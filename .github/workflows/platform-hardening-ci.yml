@@ -1,0 +1,106 @@
+name: Platform Hardening CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  identity-integrity:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: agroai_hardening_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend dependencies
+        run: python -m pip install -q -r requirements.txt pytest
+      - name: Compile identity modules
+        run: |
+          python -m py_compile alembic/versions/010_account_recovery.py
+          python -m py_compile app/services/credential_recovery.py
+          python -m py_compile app/services/password_policy.py
+          python -m py_compile app/api/v1/recovery_v2.py
+          python -m py_compile app/api/deps.py
+      - name: Run identity security regressions
+        run: python -m pytest -q --tb=short tests/unit/test_credential_recovery.py
+      - name: Enforce Alembic revision contract
+        run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --confcutdir=tests/unit tests/unit/test_alembic_revision_contract.py
+      - name: Bootstrap PostgreSQL baseline
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agroai_hardening_ci
+        run: |
+          python - <<'PY'
+          from app.db.base import Base, engine
+          from app.models.tenant import Tenant
+          from app.models.block import Block
+          Base.metadata.create_all(bind=engine, tables=[Tenant.__table__, Block.__table__])
+          PY
+      - name: Migrate and verify persisted identity schema
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agroai_hardening_ci
+        run: |
+          alembic upgrade head
+          python - <<'PY'
+          import os
+          import sqlalchemy as sa
+          engine = sa.create_engine(os.environ["DATABASE_URL"])
+          inspector = sa.inspect(engine)
+          assert "account_recovery_tokens" in set(inspector.get_table_names())
+          assert "credentials_changed_at" in {item["name"] for item in inspector.get_columns("users")}
+          with engine.connect() as connection:
+              revision = connection.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+          assert revision == "010_account_recovery", revision
+          print(f"persisted hardening head verified: {revision}")
+          PY
+
+  inherited-backend-gates:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -q -r requirements.txt pytest
+      - name: Run inherited backend regressions
+        run: |
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short \
+            tests/unit/test_i18n_language_integration.py \
+            tests/unit/test_operational_invariants.py \
+            tests/unit/test_model_router_language_failure.py \
+            tests/unit/test_telemetry_recommendations_migration.py
+
+  portal-build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: figma-enterprise-v4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - run: npm ci
+      - run: npm run test:i18n
+      - run: npm run build
