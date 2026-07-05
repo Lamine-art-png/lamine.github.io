@@ -39,7 +39,19 @@ jobs:
           python -m py_compile app/api/v1/recovery_v2.py
           python -m py_compile app/api/deps.py
       - name: Run identity security regressions
-        run: python -m pytest -q --tb=short tests/unit/test_credential_recovery.py
+        run: |
+          set +e
+          python -m pytest -q --tb=short tests/unit/test_credential_recovery.py 2>&1 | tee identity-regressions.log
+          status=${PIPESTATUS[0]}
+          tail -n 160 identity-regressions.log > identity-regressions-tail.txt
+          exit $status
+      - name: Upload identity regression evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: identity-regressions-tail
+          path: agroai_api/identity-regressions-tail.txt
+          retention-days: 2
       - name: Enforce Alembic revision contract
         run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --confcutdir=tests/unit tests/unit/test_alembic_revision_contract.py
       - name: Bootstrap PostgreSQL baseline
