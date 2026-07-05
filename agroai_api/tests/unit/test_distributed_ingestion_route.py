@@ -31,6 +31,10 @@ class FakeObjectStore:
         self.deleted.append(uri)
 
 
+def fake_outbox_drain(**_kwargs):
+    return {"published": 1, "failed": 0}
+
+
 def test_stream_route_stages_durable_object_and_outbox(tmp_path, monkeypatch):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Session = sessionmaker(bind=engine)
@@ -50,6 +54,7 @@ def test_stream_route_stages_durable_object_and_outbox(tmp_path, monkeypatch):
     monkeypatch.setattr(settings, "TASK_QUEUE_BACKEND", "redis_streams")
     monkeypatch.setattr(settings, "REDIS_URL", "redis://queue.example/0")
     monkeypatch.setattr("app.api.v1.connector_stream_api.get_object_store", lambda: fake)
+    monkeypatch.setattr("app.api.v1.connector_stream_api.drain_pending_outbox", fake_outbox_drain)
 
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[require_current_tenant_id] = lambda: "org-test"
@@ -67,4 +72,5 @@ def test_stream_route_stages_durable_object_and_outbox(tmp_path, monkeypatch):
     assert body["status"] == "queued"
     assert body["object_uri"] == "s3://agroai-test/raw/object.csv"
     assert body["job_id"]
+    assert body["queue_publication"] == {"published": 1, "failed": 0}
     assert fake.uploaded
