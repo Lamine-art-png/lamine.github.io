@@ -13,6 +13,7 @@ from app.services.task_outbox_service import drain_pending_outbox
 
 
 router = APIRouter(tags=["internal-connector-queue"])
+QUEUE_CONTRACT = "cloudflare-queue-v1"
 _TERMINAL = {"succeeded", "failed", "cancelled"}
 _TRANSIENT = {"retrying", "deferred", "queued", "running"}
 
@@ -37,6 +38,17 @@ def _require_queue_token(authorization: str | None = Header(default=None)) -> No
         supplied = authorization[7:].strip()
     if not configured or not supplied or not hmac.compare_digest(configured, supplied):
         raise HTTPException(status_code=401, detail="Unauthorized queue delivery")
+
+
+@router.get("/internal/queue/health", dependencies=[Depends(_require_queue_token)])
+async def queue_contract_health() -> dict:
+    ready = queue_configured()
+    if not ready:
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "durable_connector_queue_not_configured", "contract": QUEUE_CONTRACT},
+        )
+    return {"status": "ok", "contract": QUEUE_CONTRACT, "queue_configured": True}
 
 
 @router.post("/internal/queue/connector-task", dependencies=[Depends(_require_queue_token)])
