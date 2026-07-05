@@ -46,9 +46,9 @@ def test_stream_route_stages_durable_object_and_outbox(tmp_path, monkeypatch):
     fake = FakeObjectStore()
     monkeypatch.setattr(settings, "CONNECTOR_UPLOAD_DIR", str(tmp_path))
     monkeypatch.setattr(settings, "CONNECTOR_OBJECT_STORAGE_BACKEND", "s3")
+    monkeypatch.setattr(settings, "CONNECTOR_OBJECT_BUCKET", "agroai-test")
     monkeypatch.setattr(settings, "TASK_QUEUE_BACKEND", "redis_streams")
     monkeypatch.setattr(settings, "REDIS_URL", "redis://queue.example/0")
-    monkeypatch.setenv("CONNECTOR_OBJECT_BUCKET", "agroai-test")
     monkeypatch.setattr("app.api.v1.connector_stream_api.get_object_store", lambda: fake)
 
     app.dependency_overrides[get_db] = override_db
