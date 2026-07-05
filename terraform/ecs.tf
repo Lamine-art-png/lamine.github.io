@@ -78,9 +78,9 @@ resource "aws_ecs_task_definition" "api" {
 
   container_definitions = jsonencode([
     {
-      name      = "api"
-      image     = "${data.aws_ecr_repository.api.repository_url}:${var.image_tag}"
-      essential = true
+      name         = "api"
+      image        = "${data.aws_ecr_repository.api.repository_url}:${var.image_tag}"
+      essential    = true
       portMappings = [
         {
           containerPort = 8000
@@ -88,11 +88,11 @@ resource "aws_ecs_task_definition" "api" {
           protocol      = "tcp"
         }
       ]
-      environment = concat(local.runtime_environment_list, [{ name = "PORT", value = "8000" }])
-      secrets     = local.runtime_secret_list
+      environment      = concat(local.runtime_environment_list, [{ name = "PORT", value = "8000" }])
+      secrets          = local.runtime_secret_list
       logConfiguration = {
         logDriver = "awslogs"
-        options = {
+        options   = {
           awslogs-group         = aws_cloudwatch_log_group.api.name
           awslogs-region        = data.aws_region.current.name
           awslogs-stream-prefix = "api"
@@ -130,15 +130,15 @@ resource "aws_ecs_task_definition" "connector_worker" {
 
   container_definitions = jsonencode([
     {
-      name        = "connector-worker"
-      image       = "${data.aws_ecr_repository.api.repository_url}:${var.image_tag}"
-      essential   = true
-      command     = ["python", "-m", "app.workers.connector_worker"]
-      environment = local.runtime_environment_list
-      secrets     = local.runtime_secret_list
+      name             = "connector-worker"
+      image            = "${data.aws_ecr_repository.api.repository_url}:${var.image_tag}"
+      essential        = true
+      command          = ["python", "-m", "app.workers.connector_worker"]
+      environment      = local.runtime_environment_list
+      secrets          = local.runtime_secret_list
       logConfiguration = {
         logDriver = "awslogs"
-        options = {
+        options   = {
           awslogs-group         = aws_cloudwatch_log_group.connector_worker.name
           awslogs-region        = data.aws_region.current.name
           awslogs-stream-prefix = "worker"
