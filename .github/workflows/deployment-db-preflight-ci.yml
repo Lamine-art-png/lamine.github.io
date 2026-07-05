@@ -21,41 +21,42 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-
     defaults:
       run:
         working-directory: agroai_api
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-
-      - name: Install backend dependencies
-        run: python -m pip install -q -r requirements.txt pytest
-
+      - run: python -m pip install -q -r requirements.txt pytest
       - name: Classify fresh PostgreSQL database
         env:
           DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agroai_preflight_ci
         run: |
-          python scripts/deployment_db_preflight.py --output fresh-preflight.json
+          set +e
+          python scripts/deployment_db_preflight.py --output fresh-preflight.json > fresh-preflight.log 2>&1
+          status=$?
+          set -e
+          cat fresh-preflight.log
+          test "$status" -eq 0
           grep -q 'A_fresh_clean' fresh-preflight.json
-
       - name: Migrate PostgreSQL to exact Alembic head
         env:
           DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agroai_preflight_ci
         run: alembic upgrade head
-
       - name: Prove persisted current-head contract
         env:
           DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agroai_preflight_ci
         run: |
-          python scripts/deployment_db_preflight.py --output head-preflight.json
+          set +e
+          python scripts/deployment_db_preflight.py --output head-preflight.json > head-preflight.log 2>&1
+          status=$?
+          set -e
+          cat head-preflight.log
+          test "$status" -eq 0
           grep -q 'C_current_head' head-preflight.json
-
-      - name: Upload read-only preflight evidence
+      - name: Upload preflight evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -63,4 +64,6 @@ jobs:
           path: |
             agroai_api/fresh-preflight.json
             agroai_api/head-preflight.json
+            agroai_api/fresh-preflight.log
+            agroai_api/head-preflight.log
           retention-days: 7
