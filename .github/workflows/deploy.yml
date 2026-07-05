@@ -18,6 +18,7 @@ env:
   PORTAL_URL: https://app.agroai-pilot.com
   API_URL: https://api.agroai-pilot.com
   UPSTREAM_HEALTH_URL: https://api-preview.agroai-pilot.com/v1/health
+  UPSTREAM_QUEUE_CONTRACT_URL: https://api-preview.agroai-pilot.com/v1/internal/queue/health
 
 jobs:
   validate:
@@ -97,11 +98,30 @@ jobs:
         working-directory: cloudflare/edge-gateway
         run: npm install --no-audit --no-fund
 
-      - name: Verify current upstream before changing public edge
+      - name: Verify current upstream health
         shell: bash
         run: |
           set -euo pipefail
           curl --fail --silent --show-error --max-time 30 "${UPSTREAM_HEALTH_URL}" | jq -e '.status == "ok"' >/dev/null
+
+      - name: Wait for exact backend Queue contract before changing public edge
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 40); do
+            payload="$(curl --fail --silent --show-error --max-time 20 \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+              "${UPSTREAM_QUEUE_CONTRACT_URL}" 2>/dev/null || true)"
+            if printf '%s' "$payload" | jq -e \
+              '.status == "ok" and .contract == "cloudflare-queue-v1" and .queue_configured == true' \
+              >/dev/null 2>&1; then
+              echo "Backend Queue contract is ready"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Backend Queue contract did not become ready; refusing to change the public edge"
+          exit 1
 
       - name: Ensure connector queues exist
         working-directory: cloudflare/edge-gateway
