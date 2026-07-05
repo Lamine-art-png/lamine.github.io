@@ -216,11 +216,18 @@ async function enqueueTask(request: Request, env: Env): Promise<Response> {
   return json({ status: "queued", job_id: task.job_id }, 202);
 }
 
-async function consumeTask(message: Message<ConnectorTaskEnvelope>, env: Env): Promise<void> {
+export async function consumeTask(message: Message<ConnectorTaskEnvelope>, env: Env): Promise<void> {
   const task = message.body;
   if (!validTask(task)) {
     console.error("queue_invalid_task", { message_id: message.id });
     message.ack();
+    return;
+  }
+
+  const consumerToken = (env.QUEUE_CONSUMER_TOKEN || "").trim();
+  if (!consumerToken) {
+    console.error("queue_consumer_secret_missing", { message_id: message.id });
+    message.retry({ delaySeconds: retryDelay(message.attempts) });
     return;
   }
 
@@ -238,7 +245,7 @@ async function consumeTask(message: Message<ConnectorTaskEnvelope>, env: Env): P
     response = await fetchWithTimeout(new Request(target.toString(), {
       method: "POST",
       headers: {
-        "authorization": `Bearer ${env.QUEUE_CONSUMER_TOKEN}`,
+        "authorization": `Bearer ${consumerToken}`,
         "content-type": "application/json",
         "x-request-id": `queue-${message.id}`,
       },
@@ -264,13 +271,18 @@ async function consumeTask(message: Message<ConnectorTaskEnvelope>, env: Env): P
 }
 
 async function drainOutbox(env: Env): Promise<void> {
+  const consumerToken = (env.QUEUE_CONSUMER_TOKEN || "").trim();
+  if (!consumerToken) {
+    console.error("outbox_drain_secret_missing");
+    return;
+  }
   try {
     const upstream = validatedUpstreamOrigin(env.UPSTREAM_API_ORIGIN);
     const target = new URL("/v1/internal/queue/drain-outbox", upstream);
     const response = await fetchWithTimeout(new Request(target.toString(), {
       method: "POST",
       headers: {
-        "authorization": `Bearer ${env.QUEUE_CONSUMER_TOKEN}`,
+        "authorization": `Bearer ${consumerToken}`,
         "content-type": "application/json",
       },
       body: "{}",
