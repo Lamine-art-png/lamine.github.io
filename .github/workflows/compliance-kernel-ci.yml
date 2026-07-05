@@ -63,7 +63,31 @@ jobs:
           alembic upgrade head 2>&1 | tee postgres-migration.log
           status=${PIPESTATUS[0]}
           tail -n 180 postgres-migration.log > postgres-migration-tail.txt
-          exit $status
+          if [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
+          python - <<'PY'
+          import os
+          import sqlalchemy as sa
+
+          engine = sa.create_engine(os.environ["DATABASE_URL"])
+          inspector = sa.inspect(engine)
+          tables = set(inspector.get_table_names())
+          required = {
+              "compliance_export_metadata",
+              "users",
+              "conversations",
+              "email_verification_tokens",
+              "telemetry",
+              "recommendations",
+          }
+          missing = sorted(required - tables)
+          assert not missing, f"persisted PostgreSQL migration missing tables: {missing}"
+          with engine.connect() as connection:
+              revision = connection.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+          assert revision == "009_telemetry_recommendations", revision
+          print(f"persisted PostgreSQL head verified: {revision}")
+          PY
       - name: Upload PostgreSQL migration tail
         if: always()
         uses: actions/upload-artifact@v4
