@@ -13,10 +13,13 @@ from alembic.config import Config
 from alembic.script import ScriptDirectory
 from sqlalchemy.engine import make_url
 
-from app.db.schema_contract import HEAD_SCHEMA_REQUIREMENTS, schema_contract_gaps
-
 
 API_ROOT = Path(__file__).resolve().parents[1]
+if str(API_ROOT) not in sys.path:
+    sys.path.insert(0, str(API_ROOT))
+
+from app.db.schema_contract import HEAD_SCHEMA_REQUIREMENTS, schema_contract_gaps  # noqa: E402
+
 
 REQUIRED_INDEX_CONTRACTS: dict[str, list[set[str]]] = {
     "data_sources": [{"tenant_id", "connector_connection_id", "content_sha256"}],
