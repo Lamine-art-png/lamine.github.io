@@ -6,13 +6,11 @@ import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
-from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.db.base import get_db
 from app.services.connector_task_processor import process_connector_task
 from app.services.redis_task_queue import queue_configured
-from app.services.task_outbox_service import publish_pending_outbox
+from app.services.task_outbox_service import drain_pending_outbox
 
 
 router = APIRouter(tags=["internal-connector-queue"])
@@ -49,34 +47,20 @@ async def deliver_connector_task(payload: ConnectorTaskDelivery) -> dict:
             worker_id=worker_id,
         )
     except Exception as exc:
-        raise HTTPException(
-            status_code=503,
-            detail={"error": "connector_task_processing_unavailable", "reason": exc.__class__.__name__},
-        ) from exc
-
+        raise HTTPException(status_code=503, detail={"error": "connector_task_processing_unavailable", "reason": exc.__class__.__name__}) from exc
     if status in _TERMINAL:
         return {"status": status, "job_id": payload.job_id, "terminal": True}
     if status in _TRANSIENT:
-        raise HTTPException(
-            status_code=503,
-            detail={"error": "connector_task_retry_required", "status": status, "job_id": payload.job_id},
-        )
-    raise HTTPException(
-        status_code=503,
-        detail={"error": "connector_task_unknown_status", "status": status, "job_id": payload.job_id},
-    )
+        raise HTTPException(status_code=503, detail={"error": "connector_task_retry_required", "status": status, "job_id": payload.job_id})
+    raise HTTPException(status_code=503, detail={"error": "connector_task_unknown_status", "status": status, "job_id": payload.job_id})
 
 
 @router.post("/internal/queue/drain-outbox", dependencies=[Depends(_require_queue_token)])
-async def drain_task_outbox(db: Session = Depends(get_db)) -> dict:
+async def drain_task_outbox() -> dict:
     if not queue_configured():
         raise HTTPException(status_code=503, detail="Durable connector queue is not configured")
     try:
-        result = await asyncio.to_thread(publish_pending_outbox, db, limit=100)
+        result = await asyncio.to_thread(drain_pending_outbox, limit=100)
     except Exception as exc:
-        db.rollback()
-        raise HTTPException(
-            status_code=503,
-            detail={"error": "task_outbox_drain_failed", "reason": exc.__class__.__name__},
-        ) from exc
+        raise HTTPException(status_code=503, detail={"error": "task_outbox_drain_failed", "reason": exc.__class__.__name__}) from exc
     return {"status": "ok", **result}
