@@ -90,12 +90,37 @@ class RedisTaskQueue:
         return bool(self.client.ping())
 
 
-def queue_configured() -> bool:
+def redis_queue_configured() -> bool:
     backend = getattr(settings, "TASK_QUEUE_BACKEND", "disabled").strip().lower()
     return backend in {"redis", "redis_streams", "redis-streams"} and bool(getattr(settings, "REDIS_URL", "").strip())
 
 
+def queue_configured() -> bool:
+    """Return whether the selected durable connector queue transport is complete."""
+    backend = getattr(settings, "TASK_QUEUE_BACKEND", "disabled").strip().lower()
+    if backend in {"redis", "redis_streams", "redis-streams"}:
+        return redis_queue_configured()
+    if backend in {"cloudflare", "cloudflare_queues", "cloudflare-queues"}:
+        from app.services.cloudflare_task_queue import cloudflare_queue_configured
+
+        return cloudflare_queue_configured()
+    return False
+
+
 def get_task_queue(client: Any | None = None) -> RedisTaskQueue:
-    if client is None and not queue_configured():
-        raise RuntimeError("external task queue is not configured")
+    """Return the Redis consumer transport used by the compatibility worker."""
+    if client is None and not redis_queue_configured():
+        raise RuntimeError("Redis task queue is not configured")
     return RedisTaskQueue(client)
+
+
+def get_task_publisher(client: Any | None = None):
+    """Return a publisher for the selected queue transport."""
+    backend = getattr(settings, "TASK_QUEUE_BACKEND", "disabled").strip().lower()
+    if backend in {"redis", "redis_streams", "redis-streams"}:
+        return get_task_queue(client)
+    if backend in {"cloudflare", "cloudflare_queues", "cloudflare-queues"}:
+        from app.services.cloudflare_task_queue import get_cloudflare_task_publisher
+
+        return get_cloudflare_task_publisher(client)
+    raise RuntimeError("external task queue is not configured")
