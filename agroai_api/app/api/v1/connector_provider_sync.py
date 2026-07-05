@@ -16,7 +16,7 @@ from app.services.connector_vault import (
 )
 from app.services.provider_oauth import revoke_provider_credentials
 from app.services.provider_sync_jobs import SUPPORTED_PROVIDERS, queue_provider_sync
-from app.services.task_outbox_service import publish_pending_outbox
+from app.services.task_outbox_service import drain_pending_outbox
 
 
 router = APIRouter(tags=["connector-provider-sync"])
@@ -59,7 +59,7 @@ async def queue_sync(
         tenant_id=tenant_id,
         connection=connection,
     )
-    publication = await asyncio.to_thread(publish_pending_outbox, db, limit=10)
+    publication = await asyncio.to_thread(drain_pending_outbox, limit=10)
     return {
         "status": job.status,
         "deduplicated": deduplicated,
