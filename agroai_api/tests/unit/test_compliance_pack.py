@@ -1,3 +1,5 @@
+from alembic.script import ScriptDirectory
+
 from . import compliance_pack_legacy_suite as _legacy
 
 
@@ -25,7 +27,9 @@ def test_compliance_migration_preflight_classifies_clean_002_and_003(tmp_path, m
 
     _legacy.command.upgrade(cfg, "head")
     report_head = _legacy.collect_report(database_url)
-    assert report_head["current_alembic_revision"] == "013_task_outbox"
+    expected_heads = ScriptDirectory.from_config(cfg).get_heads()
+    assert len(expected_heads) == 1
+    assert report_head["current_alembic_revision"] == expected_heads[0]
     assert report_head["schema_classification"] == "C_migration_003_schema"
     assert report_head["tables"]["compliance_export_metadata"] is True
     assert report_head["parcel_identifier_exists"] is True
