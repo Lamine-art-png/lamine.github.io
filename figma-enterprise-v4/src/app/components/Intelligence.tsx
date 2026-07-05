@@ -93,12 +93,20 @@ const intelligenceDependencies: IntelligenceDependencies = {
   async runIntelligence(request: AnyRecord) {
     const languageAwareRequest = withIndependentResponseLanguage(request);
     try {
-      return await apiClient.intelligence.brainRun(languageAwareRequest) as AnyRecord;
-    } catch (error) {
-      if (shouldUseLegacyRoute(error)) {
-        return await apiClient.intelligence.run(languageAwareRequest) as AnyRecord;
+      return await apiClient.post(
+        "/v1/intelligence/brain/run-safe",
+        languageAwareRequest,
+      ) as AnyRecord;
+    } catch (safeRouteError) {
+      if (!shouldUseLegacyRoute(safeRouteError)) throw safeRouteError;
+      try {
+        return await apiClient.intelligence.brainRun(languageAwareRequest) as AnyRecord;
+      } catch (brainRouteError) {
+        if (shouldUseLegacyRoute(brainRouteError)) {
+          return await apiClient.intelligence.run(languageAwareRequest) as AnyRecord;
+        }
+        throw brainRouteError;
       }
-      throw error;
     }
   },
   async uploadEvidence(file: File, workspaceId?: string) {
