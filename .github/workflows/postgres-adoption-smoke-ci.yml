@@ -1,0 +1,51 @@
+name: PostgreSQL Adoption Smoke CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  postgres-precreated-adoption:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: agroai_compliance_ci
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend dependencies
+        run: python -m pip install -q -r requirements.txt
+      - name: Run pre-created PostgreSQL adoption smoke
+        env:
+          ALLOW_COMPLIANCE_SMOKE_RESET: "1"
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agroai_compliance_precreated_ci
+        run: |
+          set +e
+          python scripts/postgres_precreated_compliance_smoke.py 2>&1 | tee postgres-adoption-smoke.log
+          status=${PIPESTATUS[0]}
+          tail -n 200 postgres-adoption-smoke.log > postgres-adoption-smoke-tail.txt
+          exit $status
+      - name: Upload adoption smoke evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-adoption-smoke-tail
+          path: agroai_api/postgres-adoption-smoke-tail.txt
+          retention-days: 1
