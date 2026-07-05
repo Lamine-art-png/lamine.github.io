@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -15,6 +16,7 @@ from app.services.connector_vault import (
 )
 from app.services.provider_oauth import revoke_provider_credentials
 from app.services.provider_sync_jobs import SUPPORTED_PROVIDERS, queue_provider_sync
+from app.services.task_outbox_service import publish_pending_outbox
 
 
 router = APIRouter(tags=["connector-provider-sync"])
@@ -57,9 +59,11 @@ async def queue_sync(
         tenant_id=tenant_id,
         connection=connection,
     )
+    publication = await asyncio.to_thread(publish_pending_outbox, db, limit=10)
     return {
         "status": job.status,
         "deduplicated": deduplicated,
+        "queue_publication": publication,
         "connection": public_connection(connection),
         "job": row_to_dict(job),
     }
