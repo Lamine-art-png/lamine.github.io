@@ -1,0 +1,33 @@
+name: Terraform Autoformat Once
+
+on:
+  push:
+    branches:
+      - platform-production-hardening
+
+permissions:
+  contents: write
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: platform-production-hardening
+          fetch-depth: 0
+      - uses: hashicorp/setup-terraform@v3
+      - name: Format Terraform exactly
+        run: terraform fmt -recursive terraform
+      - name: Commit formatter output when needed
+        shell: bash
+        run: |
+          if git diff --quiet -- terraform; then
+            echo "Terraform already formatted"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add terraform
+          git commit -m "Apply Terraform formatter"
+          git push origin HEAD:platform-production-hardening
