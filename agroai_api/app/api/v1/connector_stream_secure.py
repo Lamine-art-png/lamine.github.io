@@ -14,7 +14,7 @@ from app.db.base import get_db
 from app.services.connector_ingestion_pipeline import ingest_streamed_receipt
 from app.services.durable_ingestion_staging import stage_durable_object_job
 from app.services.ingestion_stream import stream_upload_to_spool
-from app.services.object_storage import get_object_store, object_storage_configured
+from app.services.object_storage import object_storage_configured
 from app.services.redis_task_queue import queue_configured
 
 
@@ -23,6 +23,12 @@ _ALLOWED_PROVIDERS = {
     "wiseconn", "talgil", "universal_controller", "weather", "openet",
     "manual_csv", "chat_upload",
 }
+
+
+def _object_store():
+    from app.api.v1.connector_stream_api import get_object_store
+
+    return get_object_store()
 
 
 @router.post("/evidence/upload-stream")
@@ -58,7 +64,7 @@ async def upload_stream_secure(
         })
 
     if durable and queued:
-        store = get_object_store()
+        store = _object_store()
         try:
             stored = await asyncio.to_thread(
                 store.put_path,
