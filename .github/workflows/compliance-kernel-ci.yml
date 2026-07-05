@@ -78,7 +78,19 @@ jobs:
       - name: Install dependencies quietly
         run: python -m pip install -q -r requirements.txt
       - name: Run focused compliance suite
-        run: pytest -q --tb=short tests/unit/test_compliance_pack.py
+        run: |
+          set +e
+          pytest -q --tb=short tests/unit/test_compliance_pack.py 2>&1 | tee compliance-pytest.log
+          status=${PIPESTATUS[0]}
+          tail -n 120 compliance-pytest.log > compliance-pytest-tail.txt
+          exit $status
+      - name: Upload focused compliance failure tail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compliance-pytest-tail
+          path: agroai_api/compliance-pytest-tail.txt
+          retention-days: 1
 
   i18n-backend-regressions:
     runs-on: ubuntu-latest
@@ -95,7 +107,19 @@ jobs:
       - name: Compile language and migration modules
         run: python -m py_compile app/services/language.py app/services/live_intelligence.py app/services/adaptive_chat.py app/services/model_router.py app/api/v1/brain.py alembic/versions/009_add_telemetry_recommendations.py
       - name: Run language and migration regressions
-        run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short tests/unit/test_i18n_language_integration.py tests/unit/test_model_router_language_failure.py tests/unit/test_telemetry_recommendations_migration.py
+        run: |
+          set +e
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short tests/unit/test_i18n_language_integration.py tests/unit/test_model_router_language_failure.py tests/unit/test_telemetry_recommendations_migration.py 2>&1 | tee i18n-pytest.log
+          status=${PIPESTATUS[0]}
+          tail -n 140 i18n-pytest.log > i18n-pytest-tail.txt
+          exit $status
+      - name: Upload language regression failure tail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: i18n-pytest-tail
+          path: agroai_api/i18n-pytest-tail.txt
+          retention-days: 1
 
   portal-i18n-release:
     runs-on: ubuntu-latest
