@@ -1,0 +1,36 @@
+name: I18n Inventory CI
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  exact-head-i18n-inventory:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: figma-enterprise-v4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - name: Install portal dependencies
+        run: npm ci
+      - name: Install focused AST parser
+        run: npm install --no-save --no-package-lock @babel/parser@7.28.4
+      - name: Generate and validate exact-head inventory
+        run: node tests/i18n-inventory.mjs | tee i18n-inventory-summary.txt
+      - name: Upload inventory evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: exact-head-i18n-inventory
+          path: |
+            figma-enterprise-v4/outputs/i18n-candidate-inventory.json
+            figma-enterprise-v4/i18n-inventory-summary.txt
+          if-no-files-found: error
+          retention-days: 2
