@@ -32,8 +32,14 @@ UNIT_PATTERNS = (
 )
 
 PROTECTED_TERMS = ("WiseConn", "John Deere", "SGMA", "ETc", "ETo", "NDVI", "VWC", "AGRO-AI")
-NEGATION_MARKERS = ("do not", "don't", "never", "must not", "should not", "avoid", " n’", " n'", " pas ", " jamais ", " no ", " não ", " nao ")
-UNCERTAINTY_MARKERS = ("confidence", "uncertain", "estimate", "approximately", "likely", "might", "confiance", "incertain", "environ", "probable", "confianza", "confiança", "±")
+NEGATION_MARKERS = ("do not", "don't", "never", "must not", "should not", "avoid", " n’", " n'", " pas ", " jamais ", " no ", " nao ")
+UNCERTAINTY_STATE_MARKERS = (
+    "uncertain", "uncertainty", "estimate", "approximately", "likely", "might",
+    "incertain", "incertitude", "estime", "environ", "probable",
+    "incierto", "incertidumbre", "aproximadamente",
+    "incerto", "incerteza", "talvez", "±",
+)
+CONFIDENCE_MARKERS = ("confidence", "confiance", "confianza")
 
 
 def normalize_number(token: str) -> str:
@@ -106,6 +112,8 @@ def check_operational_invariants(original: str, repaired: str) -> OperationalInv
         violations.append("markdown_structure_changed")
     if has_marker(original, NEGATION_MARKERS) and not has_marker(repaired, NEGATION_MARKERS):
         violations.append("negation_lost")
-    if has_marker(original, UNCERTAINTY_MARKERS) and not has_marker(repaired, UNCERTAINTY_MARKERS):
+    if has_marker(original, UNCERTAINTY_STATE_MARKERS) and not has_marker(repaired, UNCERTAINTY_STATE_MARKERS):
         violations.append("uncertainty_lost")
+    if has_marker(original, CONFIDENCE_MARKERS) and not has_marker(repaired, CONFIDENCE_MARKERS):
+        violations.append("confidence_semantics_lost")
     return OperationalInvariantCheck(ok=not violations, violations=tuple(violations))
