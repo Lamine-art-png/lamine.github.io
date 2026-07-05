@@ -19,4 +19,16 @@ jobs:
       - name: Install focused test dependency
         run: python -m pip install -q pytest
       - name: Enforce revision length and uniqueness
-        run: python -m pytest -q tests/unit/test_alembic_revision_contract.py
+        run: |
+          set +e
+          python -m pytest -q tests/unit/test_alembic_revision_contract.py 2>&1 | tee alembic-revision-contract.log
+          status=${PIPESTATUS[0]}
+          tail -n 120 alembic-revision-contract.log > alembic-revision-contract-tail.txt
+          exit $status
+      - name: Upload revision contract evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: alembic-revision-contract-tail
+          path: agroai_api/alembic-revision-contract-tail.txt
+          retention-days: 1
