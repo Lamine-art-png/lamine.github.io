@@ -1,6 +1,7 @@
 import { Component, ReactNode, useEffect, useState } from "react";
 import { RouterProvider } from "react-router";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
+import { AccessRecoveryPage } from "./components/AccessRecovery";
 import { AuthScreen } from "./components/AuthScreen";
 import { PricingPage } from "./components/PricingPage";
 import { VerifyEmailPage } from "./components/VerifyEmail";
@@ -55,9 +56,11 @@ function AuthenticatedApp() {
     return () => { mounted = false; };
   }, [isAuthenticated]);
 
+  const path = window.location.pathname;
   if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-[#F6F4EE] text-[#68776F] text-sm">{t("app.loadingSession", locale)}</div>;
-  if (window.location.pathname === "/verify-email") return <VerifyEmailPage />;
-  if (window.location.pathname === "/pricing" && !isAuthenticated) return <PricingPage />;
+  if (path === "/verify-email") return <VerifyEmailPage />;
+  if (path === "/recover-account" || path === "/reset-password") return <AccessRecoveryPage />;
+  if (path === "/pricing" && !isAuthenticated) return <PricingPage />;
   if (!isAuthenticated) return <AuthScreen />;
   if (routerError) return <PortalBootFallback reason={routerError} />;
   if (!router) return <div className="min-h-screen flex items-center justify-center bg-[#F6F4EE] text-[#68776F] text-sm">{t("app.loadingPortal", locale)}</div>;
