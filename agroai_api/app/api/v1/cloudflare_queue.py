@@ -57,12 +57,7 @@ async def queue_contract_health() -> dict:
             status_code=503,
             detail={"error": "durable_connector_queue_not_configured", "contract": QUEUE_CONTRACT},
         )
-    return {
-        "status": "ok",
-        "contract": QUEUE_CONTRACT,
-        "queue_configured": True,
-        "consumer_rotation_window": len(_configured_queue_tokens()) > 1,
-    }
+    return {"status": "ok", "contract": QUEUE_CONTRACT, "queue_configured": True}
 
 
 @router.post("/internal/queue/connector-task", dependencies=[Depends(_require_queue_token)])
