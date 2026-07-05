@@ -129,14 +129,16 @@ class Settings(BaseSettings):
     CONNECTOR_MAX_UPLOAD_BYTES: int = 25 * 1024 * 1024
     CONNECTOR_STREAM_CHUNK_BYTES: int = 1024 * 1024
 
-    # Durable S3/R2-compatible object storage
+    # Durable R2/S3-compatible object storage
     CONNECTOR_OBJECT_STORAGE_BACKEND: str = "disabled"
     CONNECTOR_OBJECT_BUCKET: str = ""
     CONNECTOR_OBJECT_PREFIX: str = "agroai"
-    CONNECTOR_OBJECT_REGION: str = "us-east-1"
+    CONNECTOR_OBJECT_REGION: str = "auto"
     CONNECTOR_OBJECT_ENDPOINT_URL: str = ""
+    CLOUDFLARE_R2_ACCESS_KEY_ID: str = ""
+    CLOUDFLARE_R2_SECRET_ACCESS_KEY: str = ""
 
-    # External Redis Streams worker plane
+    # Durable external connector task plane
     TASK_QUEUE_BACKEND: str = "disabled"
     REDIS_URL: str = ""
     TASK_QUEUE_STREAM: str = "agroai:tasks"
@@ -146,6 +148,9 @@ class Settings(BaseSettings):
     TASK_QUEUE_LEASE_SECONDS: int = 120
     TASK_QUEUE_MAX_ATTEMPTS: int = 5
     TASK_QUEUE_RETRY_BASE_SECONDS: int = 15
+    CLOUDFLARE_QUEUE_PUBLISH_URL: str = ""
+    CLOUDFLARE_QUEUE_PUBLISH_TOKEN: str = ""
+    CLOUDFLARE_QUEUE_CONSUMER_TOKEN: str = ""
 
     # Connector provider setup
     DROPBOX_OAUTH_CLIENT_ID: str = ""
