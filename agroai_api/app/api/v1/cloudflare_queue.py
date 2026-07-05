@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hmac
+import os
 import uuid
 
 from fastapi import APIRouter, Depends, Header, HTTPException
@@ -31,12 +32,20 @@ def process_connector_task(**kwargs):
     return implementation(**kwargs)
 
 
+def _configured_queue_tokens() -> tuple[str, ...]:
+    values = (
+        getattr(settings, "CLOUDFLARE_QUEUE_CONSUMER_TOKEN", "").strip(),
+        os.getenv("CLOUDFLARE_QUEUE_CONSUMER_TOKEN_PREVIOUS", "").strip(),
+    )
+    return tuple(value for value in values if value)
+
+
 def _require_queue_token(authorization: str | None = Header(default=None)) -> None:
-    configured = getattr(settings, "CLOUDFLARE_QUEUE_CONSUMER_TOKEN", "").strip()
     supplied = ""
     if authorization and authorization.lower().startswith("bearer "):
         supplied = authorization[7:].strip()
-    if not configured or not supplied or not hmac.compare_digest(configured, supplied):
+    configured = _configured_queue_tokens()
+    if not supplied or not configured or not any(hmac.compare_digest(candidate, supplied) for candidate in configured):
         raise HTTPException(status_code=401, detail="Unauthorized queue delivery")
 
 
@@ -48,7 +57,12 @@ async def queue_contract_health() -> dict:
             status_code=503,
             detail={"error": "durable_connector_queue_not_configured", "contract": QUEUE_CONTRACT},
         )
-    return {"status": "ok", "contract": QUEUE_CONTRACT, "queue_configured": True}
+    return {
+        "status": "ok",
+        "contract": QUEUE_CONTRACT,
+        "queue_configured": True,
+        "consumer_rotation_window": len(_configured_queue_tokens()) > 1,
+    }
 
 
 @router.post("/internal/queue/connector-task", dependencies=[Depends(_require_queue_token)])
@@ -63,12 +77,21 @@ async def deliver_connector_task(payload: ConnectorTaskDelivery) -> dict:
             worker_id=worker_id,
         )
     except Exception as exc:
-        raise HTTPException(status_code=503, detail={"error": "connector_task_processing_unavailable", "reason": exc.__class__.__name__}) from exc
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "connector_task_processing_unavailable", "reason": exc.__class__.__name__},
+        ) from exc
     if status in _TERMINAL:
         return {"status": status, "job_id": payload.job_id, "terminal": True}
     if status in _TRANSIENT:
-        raise HTTPException(status_code=503, detail={"error": "connector_task_retry_required", "status": status, "job_id": payload.job_id})
-    raise HTTPException(status_code=503, detail={"error": "connector_task_unknown_status", "status": status, "job_id": payload.job_id})
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "connector_task_retry_required", "status": status, "job_id": payload.job_id},
+        )
+    raise HTTPException(
+        status_code=503,
+        detail={"error": "connector_task_unknown_status", "status": status, "job_id": payload.job_id},
+    )
 
 
 @router.post("/internal/queue/drain-outbox", dependencies=[Depends(_require_queue_token)])
@@ -78,5 +101,8 @@ async def drain_task_outbox() -> dict:
     try:
         result = await asyncio.to_thread(drain_pending_outbox, limit=100)
     except Exception as exc:
-        raise HTTPException(status_code=503, detail={"error": "task_outbox_drain_failed", "reason": exc.__class__.__name__}) from exc
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "task_outbox_drain_failed", "reason": exc.__class__.__name__},
+        ) from exc
     return {"status": "ok", **result}
