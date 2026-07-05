@@ -6,7 +6,7 @@ from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.task_outbox import TaskOutbox
-from app.services.redis_task_queue import get_task_queue
+from app.services.redis_task_queue import get_task_publisher
 
 
 def publish_pending_outbox(db: Session, *, limit: int = 50) -> dict[str, int]:
@@ -23,7 +23,7 @@ def publish_pending_outbox(db: Session, *, limit: int = 50) -> dict[str, int]:
     )
     if not rows:
         return {"published": 0, "failed": 0}
-    queue = get_task_queue()
+    queue = get_task_publisher()
     published = 0
     failed = 0
     for row in rows:
