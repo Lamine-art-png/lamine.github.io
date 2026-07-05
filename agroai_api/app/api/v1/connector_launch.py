@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import os
-from datetime import datetime
+import re
+from datetime import datetime, timedelta
 from typing import Any, Literal
 
 import httpx
@@ -11,16 +12,19 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.api.v1.connectors import create_or_get_connection, public_connection, row_to_dict, safe_credential_ref, sanitize_config, verify_connector_schema
+from app.core.config import settings
 from app.core.security import require_current_tenant_id
 from app.db.base import get_db
 from app.models.operational_records import ConnectorConnection, IngestionJob
-from app.services.oauth_state import sign_oauth_state, verify_oauth_state
+from app.services.connector_vault import credential_reference, store_connector_credentials
+from app.services.oauth_state_store import consume_oauth_state, issue_oauth_state
 from app.services.oauth_urls import oauth_url
 
 router = APIRouter(tags=["connector-launch"])
 ProviderId = Literal["wiseconn", "talgil", "universal_controller", "weather", "openet", "manual_csv", "gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce", "google_earth_engine", "custom_api"]
-APP_CONNECTOR_RETURN_URL = os.getenv("APP_URL", "https://app.agroai-pilot.com").rstrip("/") + "/"
-API_OAUTH_CALLBACK_URL = "https://api.agroai-pilot.com/v1/connectors/oauth/callback"
+APP_CONNECTOR_RETURN_URL = os.getenv("APP_URL", settings.APP_URL).rstrip("/") + "/"
+API_OAUTH_CALLBACK_URL = os.getenv("API_OAUTH_CALLBACK_URL", settings.API_URL.rstrip("/") + "/v1/connectors/oauth/callback")
+OAUTH_PROVIDERS = {"gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce"}
 
 CONNECTOR_MANIFESTS: dict[str, dict[str, Any]] = {
     "gmail": {"provider": "gmail", "auth_pattern": "oauth", "label": "Gmail", "permissions": ["approved email context", "attachments"], "data_objects": ["messages", "attachments"], "required_env": ["GOOGLE_OAUTH_CLIENT_ID"], "production_next": "Configure Google OAuth client id and callback URL."},
@@ -39,6 +43,7 @@ CONNECTOR_MANIFESTS: dict[str, dict[str, Any]] = {
     "custom_api": {"provider": "custom_api", "auth_pattern": "enterprise_api", "label": "Data Provider API", "permissions": ["approved provider endpoints"], "data_objects": ["vendor records", "telemetry"], "required_env": [], "production_next": "Create provider-specific contract and endpoint map."},
 }
 
+
 class LaunchStartRequest(BaseModel):
     provider: ProviderId
     workspace_id: str | None = None
@@ -47,6 +52,7 @@ class LaunchStartRequest(BaseModel):
     field_scope: str | None = None
     access_note: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
 
 class AccessRequest(BaseModel):
     provider: ProviderId
@@ -58,22 +64,31 @@ class AccessRequest(BaseModel):
     credential_ref: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
 
+
 def callback_url_for(provider: str) -> str:
     return os.getenv(f"{provider.upper()}_OAUTH_REDIRECT_URI", API_OAUTH_CALLBACK_URL).strip() or API_OAUTH_CALLBACK_URL
+
 
 def return_url(provider: str, status: str, connection_id: str | None = None) -> str:
     extra = f"&connection_id={connection_id}" if connection_id else ""
     return f"{APP_CONNECTOR_RETURN_URL}?connector={provider}&status={status}{extra}"
 
+
 def html_status(provider: str, status: str, message: str, connection_id: str | None = None) -> HTMLResponse:
     href = return_url(provider, status, connection_id)
     return HTMLResponse(f"<html><body><h2>Connector {status.replace('_', ' ')}</h2><p>{message}</p><p><a href='{href}'>Return to AGRO-AI</a></p></body></html>")
+
+
+def _safe_error(exc: Exception) -> str:
+    text = re.sub(r"(?i)(access_token|refresh_token|client_secret|code)=?[^\s,&]+", r"\1=[redacted]", str(exc))
+    return text[:900]
+
 
 async def exchange_dropbox_code(code: str) -> dict[str, Any]:
     client_id = os.getenv("DROPBOX_OAUTH_CLIENT_ID", "").strip()
     client_secret = os.getenv("DROPBOX_OAUTH_CLIENT_SECRET", "").strip()
     if not client_id or not client_secret:
-        raise RuntimeError("Dropbox OAuth client ID or secret is missing.")
+        raise RuntimeError("Dropbox OAuth client configuration is missing.")
     async with httpx.AsyncClient(timeout=20) as client:
         response = await client.post(
             "https://api.dropboxapi.com/oauth2/token",
@@ -81,20 +96,22 @@ async def exchange_dropbox_code(code: str) -> dict[str, Any]:
             headers={"Content-Type": "application/x-www-form-urlencoded"},
         )
     if response.status_code >= 400:
-        raise RuntimeError(f"Dropbox token exchange failed {response.status_code}: {response.text[:700]}")
+        raise RuntimeError(f"Dropbox token exchange failed with status {response.status_code}")
     return response.json()
+
 
 async def probe_dropbox(access_token: str) -> dict[str, Any]:
     headers = {"Authorization": f"Bearer {access_token}"}
     async with httpx.AsyncClient(timeout=20) as client:
         account_response = await client.post("https://api.dropboxapi.com/2/users/get_current_account", headers=headers)
         if account_response.status_code >= 400:
-            raise RuntimeError(f"Dropbox account probe failed {account_response.status_code}: {account_response.text[:500]}")
+            raise RuntimeError(f"Dropbox account probe failed with status {account_response.status_code}")
         files_response = await client.post("https://api.dropboxapi.com/2/files/list_folder", headers={**headers, "Content-Type": "application/json"}, json={"path": "", "limit": 10})
     account = account_response.json()
     files = files_response.json() if files_response.status_code < 400 else {"entries": []}
     entries = files.get("entries", []) if isinstance(files, dict) else []
     return {"account_id": account.get("account_id"), "email": account.get("email"), "name": (account.get("name") or {}).get("display_name") if isinstance(account.get("name"), dict) else None, "files_preview": [{"name": item.get("name"), "path_lower": item.get("path_lower"), "tag": item.get(".tag")} for item in entries[:10] if isinstance(item, dict)], "file_count_preview": len(entries)}
+
 
 def manifest_for(provider: str) -> dict[str, Any]:
     item = CONNECTOR_MANIFESTS.get(provider)
@@ -108,17 +125,20 @@ def manifest_for(provider: str) -> dict[str, Any]:
         readiness = "service_account_ready" if configured else "needs_service_account"
     else:
         readiness = "ready_to_authorize" if configured else "needs_platform_setup"
-    return {**item, "configured": configured, "readiness": readiness, "callback_url": API_OAUTH_CALLBACK_URL if item["auth_pattern"] == "oauth" else None, "customer_promise": "AGRO-AI only uses approved customer context and stores a cited import trail."}
+    return {**item, "configured": configured, "readiness": readiness, "callback_url": callback_url_for(provider) if item["auth_pattern"] == "oauth" else None, "customer_promise": "AGRO-AI only uses approved customer context and stores a cited import trail."}
+
 
 def save_launch_job(db: Session, tenant_id: str, connection: ConnectorConnection, job_type: str, output_json: dict[str, Any], status: str = "completed") -> IngestionJob:
     job = IngestionJob(tenant_id=tenant_id, workspace_id=connection.workspace_id, connector_connection_id=connection.id, job_type=job_type, status=status, input_json={"provider": connection.provider, "mode": connection.mode}, output_json=output_json, completed_at=datetime.utcnow())
     db.add(job)
     return job
 
+
 @router.get("/connectors/launch/manifest")
 async def launch_manifest(provider: ProviderId | None = None, tenant_id: str = Depends(require_current_tenant_id)) -> dict[str, Any]:
     manifests = [manifest_for(provider)] if provider else [manifest_for(key) for key in CONNECTOR_MANIFESTS]
     return {"status": "ok", "tenant_id": tenant_id, "manifests": manifests}
+
 
 @router.post("/connectors/launch/start")
 async def start_launch_authorization(payload: LaunchStartRequest, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
@@ -129,27 +149,28 @@ async def start_launch_authorization(payload: LaunchStartRequest, tenant_id: str
     connection = create_or_get_connection(db, tenant_id=tenant_id, provider=payload.provider, workspace_id=payload.workspace_id, mode=mode, display_name=manifest["label"], config={"surface": "launch_connector_flow", "account_hint": payload.account_hint, "field_scope": payload.field_scope, "access_note": payload.access_note, "launch_manifest": manifest, **payload.metadata})
     auth_url = None
     auth_error = None
-    state = None
     if auth_pattern == "oauth":
-        state = sign_oauth_state(connection.id)
-        auth_url, auth_error = oauth_url(payload.provider, state, payload.redirect_url or callback_url_for(payload.provider))
+        redirect_uri = callback_url_for(payload.provider)
+        state = issue_oauth_state(db, connection=connection, tenant_id=tenant_id, provider=payload.provider, redirect_url=redirect_uri)
+        auth_url, auth_error = oauth_url(payload.provider, state, redirect_uri)
         status_value = "oauth_pending" if auth_url else "platform_setup_required"
     elif auth_pattern == "service_account":
         status_value = "service_account_ready" if manifest["configured"] else "service_account_missing"
     else:
         status_value = "provider_access_ready" if manifest["configured"] else "provider_access_requested"
     merged = dict(connection.config_json or {})
-    merged.update(sanitize_config({"surface": "launch_connector_flow", "launch_manifest": manifest, "authorization_status": status_value, "account_hint": payload.account_hint, "field_scope": payload.field_scope, "access_note": payload.access_note, "oauth_error": auth_error, "auth_url_available": bool(auth_url), "oauth_state": state, "oauth_redirect_uri": payload.redirect_url or callback_url_for(payload.provider)}))
+    merged.update(sanitize_config({"surface": "launch_connector_flow", "launch_manifest": manifest, "authorization_status": status_value, "account_hint": payload.account_hint, "field_scope": payload.field_scope, "access_note": payload.access_note, "oauth_error": auth_error, "auth_url_available": bool(auth_url)}))
     connection.config_json = merged
     connection.status = status_value
     connection.updated_at = datetime.utcnow()
     connection.last_error = auth_error
     if payload.account_hint or payload.field_scope:
         connection.credentials_ref = safe_credential_ref(payload.account_hint or payload.field_scope)
-    job = save_launch_job(db, tenant_id, connection, "launch_authorization_start", {"provider": payload.provider, "auth_pattern": auth_pattern, "status": status_value, "auth_url_available": bool(auth_url), "authorization_url_available": bool(auth_url), "permissions": manifest["permissions"], "data_objects": manifest["data_objects"], "next_step": manifest["production_next"]}, "completed_with_warnings" if auth_error else "completed")
+    job = save_launch_job(db, tenant_id, connection, "launch_authorization_start", {"provider": payload.provider, "auth_pattern": auth_pattern, "status": status_value, "auth_url_available": bool(auth_url), "permissions": manifest["permissions"], "data_objects": manifest["data_objects"], "next_step": manifest["production_next"]}, "completed_with_warnings" if auth_error else "completed")
     db.commit()
     db.refresh(connection)
     return {"status": status_value, "connection": public_connection(connection), "manifest": manifest, "auth_url": auth_url, "authorization_url": auth_url, "url": auth_url, "redirect_url": auth_url, "oauth_error": auth_error, "job": row_to_dict(job), "message": "Provider authorization URL created." if auth_url else manifest["production_next"]}
+
 
 @router.post("/connectors/launch/access-request")
 async def create_access_request(payload: AccessRequest, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
@@ -162,32 +183,39 @@ async def create_access_request(payload: AccessRequest, tenant_id: str = Depends
     connection.status = "access_requested"
     connection.credentials_ref = safe_credential_ref(payload.credential_ref or payload.account_hint or payload.environment_url)
     connection.updated_at = datetime.utcnow()
-    job = save_launch_job(db, tenant_id, connection, "provider_access_request", {"provider": payload.provider, "status": "access_requested", "permissions": manifest["permissions"], "data_objects": manifest["data_objects"], "next_step": manifest["production_next"]})
+    job = save_launch_job(db, tenant_id, connection, "access_request", {"provider": payload.provider, "status": "access_requested"})
     db.commit()
     db.refresh(connection)
     return {"status": "access_requested", "connection": public_connection(connection), "manifest": manifest, "job": row_to_dict(job)}
 
+
+def _consume_state_for_known_callback(db: Session, state: str | None) -> dict[str, Any] | None:
+    candidates = {API_OAUTH_CALLBACK_URL}
+    for provider in OAUTH_PROVIDERS:
+        candidates.add(callback_url_for(provider))
+    for redirect_uri in candidates:
+        payload = consume_oauth_state(db, state=state, redirect_url=redirect_uri)
+        if payload is not None:
+            return payload
+    return None
+
+
 @router.get("/connectors/oauth/callback")
 async def oauth_callback(code: str | None = Query(default=None), state: str | None = Query(default=None), error: str | None = Query(default=None), db: Session = Depends(get_db)):
     verify_connector_schema(db)
-    connection = None
-    if state:
-        verified = verify_oauth_state(state)
-        if verified:
-            candidate = db.get(ConnectorConnection, str(verified["cid"]))
-            if candidate and (candidate.config_json or {}).get("oauth_state") == state:
-                connection = candidate
-        elif ":" in state:
-            connection = db.get(ConnectorConnection, state.split(":", 1)[0])
-    if not connection:
-        return html_status("unknown", "authorization_failed", "AGRO-AI could not match this OAuth callback to a connector session.")
+    verified = _consume_state_for_known_callback(db, state)
+    if not verified:
+        return html_status("unknown", "authorization_failed", "AGRO-AI could not validate this OAuth callback. The state may be invalid, expired, or already used.")
+    connection = db.get(ConnectorConnection, str(verified["cid"]))
+    if connection is None or connection.tenant_id != str(verified["tid"]) or connection.provider != str(verified["provider"]):
+        return html_status("unknown", "authorization_failed", "AGRO-AI could not validate connector ownership for this callback.")
     provider = connection.provider
     if error or not code:
         merged = dict(connection.config_json or {})
         merged.update(sanitize_config({"oauth_callback_received": True, "oauth_code_present": bool(code), "oauth_error": error, "authorization_status": "authorization_failed"}))
         connection.config_json = merged
         connection.status = "authorization_failed"
-        connection.last_error = error or "missing_oauth_code"
+        connection.last_error = (error or "missing_oauth_code")[:1200]
         connection.updated_at = datetime.utcnow()
         save_launch_job(db, connection.tenant_id, connection, "oauth_callback", {"code_present": bool(code), "error": error}, "completed_with_warnings")
         db.commit()
@@ -195,29 +223,39 @@ async def oauth_callback(code: str | None = Query(default=None), state: str | No
     if provider == "dropbox":
         try:
             token = await exchange_dropbox_code(code)
-            probe = await probe_dropbox(token.get("access_token", "")) if token.get("access_token") else {}
+            access_token = str(token.get("access_token") or "")
+            probe = await probe_dropbox(access_token) if access_token else {}
+            expires_at = None
+            if token.get("expires_in"):
+                expires_at = datetime.utcnow() + timedelta(seconds=int(token["expires_in"]))
+            scopes = str(token.get("scope") or "").split()
+            vault_row = store_connector_credentials(db, tenant_id=connection.tenant_id, connection=connection, provider="dropbox", payload=token, token_expires_at=expires_at, scopes=scopes)
             merged = dict(connection.config_json or {})
             merged.update(sanitize_config({"oauth_callback_received": True, "oauth_code_present": True, "authorization_status": "connected", "token_exchange_status": "completed", "token_type": token.get("token_type"), "scope": token.get("scope"), "provider_account_id": token.get("account_id") or token.get("uid") or probe.get("account_id"), "provider_account_email": probe.get("email"), "provider_account_name": probe.get("name"), "files_preview": probe.get("files_preview", []), "file_count_preview": probe.get("file_count_preview", 0), "refresh_token_present": bool(token.get("refresh_token"))}))
             connection.config_json = merged
             connection.status = "connected"
-            connection.credentials_ref = safe_credential_ref(token.get("account_id") or token.get("refresh_token") or token.get("access_token"))
+            connection.credentials_ref = credential_reference(vault_row)
             now = datetime.utcnow()
             connection.last_test_at = now
             connection.last_sync_at = now
             connection.last_error = None
             connection.updated_at = now
-            save_launch_job(db, connection.tenant_id, connection, "oauth_token_exchange", {"provider": "dropbox", "status": "connected", "refresh_token_present": bool(token.get("refresh_token")), "account_probe": probe, "next_step": "Dropbox authorization, token exchange, and account probe completed."})
+            save_launch_job(db, connection.tenant_id, connection, "oauth_token_exchange", {"provider": "dropbox", "status": "connected", "refresh_token_present": bool(token.get("refresh_token")), "account_probe": probe, "next_step": "Dropbox authorization and encrypted credential custody completed."})
             db.commit()
             return RedirectResponse(return_url("dropbox", "connected", connection.id))
         except Exception as exc:
             db.rollback()
+            safe_error = _safe_error(exc)
+            connection = db.get(ConnectorConnection, str(verified["cid"]))
+            if connection is None:
+                return html_status("dropbox", "token_exchange_failed", "Dropbox authorization failed after callback validation.")
             merged = dict(connection.config_json or {})
-            merged.update(sanitize_config({"oauth_callback_received": True, "oauth_code_present": True, "authorization_status": "token_exchange_failed", "token_exchange_error": str(exc)[:900]}))
+            merged.update(sanitize_config({"oauth_callback_received": True, "oauth_code_present": True, "authorization_status": "token_exchange_failed", "token_exchange_error": safe_error}))
             connection.config_json = merged
             connection.status = "token_exchange_failed"
-            connection.last_error = str(exc)[:1200]
+            connection.last_error = safe_error
             connection.updated_at = datetime.utcnow()
-            save_launch_job(db, connection.tenant_id, connection, "oauth_token_exchange", {"provider": "dropbox", "status": "token_exchange_failed", "error": str(exc)[:1200]}, "failed")
+            save_launch_job(db, connection.tenant_id, connection, "oauth_token_exchange", {"provider": "dropbox", "status": "token_exchange_failed", "error": safe_error}, "failed")
             db.commit()
             return RedirectResponse(return_url("dropbox", "token_exchange_failed", connection.id))
     merged = dict(connection.config_json or {})
@@ -226,6 +264,6 @@ async def oauth_callback(code: str | None = Query(default=None), state: str | No
     connection.status = "authorized_pending_token_exchange"
     connection.last_error = None
     connection.updated_at = datetime.utcnow()
-    save_launch_job(db, connection.tenant_id, connection, "oauth_callback", {"code_present": True, "error": None, "next_step": "Exchange code server-side and store provider token reference."})
+    save_launch_job(db, connection.tenant_id, connection, "oauth_callback", {"code_present": True, "error": None, "next_step": "Exchange code server-side and store encrypted provider credentials."})
     db.commit()
     return html_status(provider, "authorized", "Authorization was received. This provider still needs a token-exchange adapter before file sync is enabled.", connection.id)
