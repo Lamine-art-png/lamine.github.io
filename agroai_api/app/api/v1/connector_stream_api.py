@@ -21,7 +21,7 @@ from app.services.connector_ingestion_pipeline import ingest_streamed_receipt
 from app.services.ingestion_stream import stream_upload_to_spool
 from app.services.object_storage import get_object_store, object_storage_configured
 from app.services.redis_task_queue import queue_configured
-from app.services.task_outbox_service import publish_pending_outbox
+from app.services.task_outbox_service import drain_pending_outbox
 
 
 router = APIRouter(tags=["connector-stream-ingestion"])
@@ -115,7 +115,7 @@ async def upload_stream(
                     raise
                 return {"status": existing.status, "job_id": existing.id, "deduplicated": True, "content_sha256": receipt.sha256}
             db.refresh(job)
-            publication = await asyncio.to_thread(publish_pending_outbox, db, limit=10)
+            publication = await asyncio.to_thread(drain_pending_outbox, limit=10)
             return {
                 "status": "queued",
                 "job_id": job.id,
