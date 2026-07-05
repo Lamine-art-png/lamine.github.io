@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+from app.db.base import SessionLocal
 from app.models.task_outbox import TaskOutbox
 from app.services.redis_task_queue import get_task_publisher
 
@@ -41,3 +42,20 @@ def publish_pending_outbox(db: Session, *, limit: int = 50) -> dict[str, int]:
         row.updated_at = datetime.utcnow()
     db.commit()
     return {"published": published, "failed": failed}
+
+
+def drain_pending_outbox(*, limit: int = 50) -> dict[str, int]:
+    """Drain pending rows in a thread-owned database session.
+
+    Async routes call this through ``asyncio.to_thread``. Opening the session
+    here prevents a request-scoped SQLAlchemy Session from crossing thread
+    boundaries while queue publication performs blocking network I/O.
+    """
+    db = SessionLocal()
+    try:
+        return publish_pending_outbox(db, limit=limit)
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
