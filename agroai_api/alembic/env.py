@@ -22,7 +22,6 @@ from app import models  # noqa
 config = context.config
 
 # Interpret the config file for Python logging.
-# This line sets up loggers basically.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
@@ -36,11 +35,11 @@ if settings.DATABASE_URL:
 
 
 # Tables from later AGRO-AI portal/assurance migrations. If these already
-# exist in Render while alembic_version is behind, the DB is not clean: it was
-# created by earlier startup/schema mutation or partially applied migrations.
-# In that case, trying to replay every historical CREATE TABLE is destructive
-# and causes DuplicateTable/DuplicateObject loops. We adopt the existing schema
-# by stamping Alembic to the current head before running migrations.
+# exist in an unversioned Render database, the DB may have been created by
+# earlier startup/schema mutation rather than Alembic. Only that unversioned
+# legacy case is eligible for automatic adoption. A database with an explicit
+# Alembic revision must always advance through normal migrations; silently
+# stamping a versioned database to head would skip real schema changes.
 _DIRTY_SCHEMA_SENTINELS = {
     "agent_workflow_runs",
     "assurance_passports",
@@ -84,16 +83,17 @@ def _stamp_connection_to_heads(connection, heads: list[str]) -> None:
 
 
 def _adopt_dirty_render_schema(connection) -> None:
-    """Stamp known dirty Render preview schemas instead of replaying DDL.
+    """Adopt only unversioned legacy Render schemas.
 
-    This is intentionally narrow: clean databases with no later-stage AGRO-AI
-    tables still run migrations normally. Dirty preview/prod databases that
-    already contain portal/assurance tables are adopted to Alembic head so
-    deploys stop failing on DuplicateTable/DuplicateObject while preserving data.
+    This escape hatch exists for databases created by historical startup-time
+    schema mutation that contain later-stage tables but no Alembic history.
+    Once a database has any explicit Alembic version, that version is
+    authoritative and normal migrations must run. Never rewrite an explicit
+    older revision to current head merely because a sentinel table exists.
     """
-
     if connection.dialect.name == "sqlite":
         return
+
     heads = set(_alembic_heads())
     if not heads:
         return
@@ -104,12 +104,12 @@ def _adopt_dirty_render_schema(connection) -> None:
         return
 
     current_versions = _current_alembic_versions(connection)
-    if current_versions == heads:
+    if current_versions:
         return
 
     print(
-        "Alembic adopting existing Render schema; "
-        f"current_versions={sorted(current_versions)} heads={sorted(heads)}"
+        "Alembic adopting unversioned legacy Render schema; "
+        f"current_versions=[] heads={sorted(heads)}"
     )
     _stamp_connection_to_heads(connection, sorted(heads))
 
