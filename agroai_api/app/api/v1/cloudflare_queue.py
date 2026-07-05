@@ -8,7 +8,6 @@ from fastapi import APIRouter, Depends, Header, HTTPException
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
-from app.services.connector_task_processor import process_connector_task
 from app.services.redis_task_queue import queue_configured
 from app.services.task_outbox_service import drain_pending_outbox
 
@@ -24,6 +23,11 @@ class ConnectorTaskDelivery(BaseModel):
     task_type: str = Field(min_length=1, max_length=256)
     enqueued_at: str | None = Field(default=None, max_length=128)
     attempt: int | None = Field(default=None, ge=0, le=1000)
+
+
+def process_connector_task(**kwargs):
+    from app.services.connector_task_processor import process_connector_task as implementation
+    return implementation(**kwargs)
 
 
 def _require_queue_token(authorization: str | None = Header(default=None)) -> None:
