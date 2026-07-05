@@ -25,16 +25,24 @@ def _assert_credential_freshness(payload: dict, user: User) -> None:
 
     issued_at = payload.get("iat")
     if isinstance(issued_at, (int, float)):
-        token_issued_at = datetime.utcfromtimestamp(float(issued_at))
-    else:
-        expires_at = payload.get("exp")
-        if not isinstance(expires_at, (int, float)):
+        # JWT iat values are commonly integer seconds. Compare at the same
+        # precision so a fresh token minted later in the credential-change
+        # second is not falsely rejected, while every earlier second is.
+        if int(float(issued_at)) < int(changed_at.timestamp()):
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session is no longer valid")
-        token_issued_at = datetime.utcfromtimestamp(float(expires_at)) - timedelta(
-            minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
-        )
+        return
 
-    if token_issued_at < changed_at - timedelta(seconds=2):
+    expires_at = payload.get("exp")
+    if not isinstance(expires_at, (int, float)):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session is no longer valid")
+
+    # Legacy tokens did not carry iat. Their signer uses a fixed configured
+    # lifetime, so infer issuance from exp and reject any token issued before
+    # the credential change with no grace window.
+    token_issued_at = datetime.utcfromtimestamp(float(expires_at)) - timedelta(
+        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+    )
+    if token_issued_at < changed_at:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session is no longer valid")
 
 
