@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.base import get_db
+from app.services.connector_object_gc import run_connector_object_gc
 from app.services.redis_task_queue import queue_configured
 from app.services.release_contract import evaluate_release_contract
 from app.services.task_outbox_service import drain_pending_outbox
@@ -124,3 +125,18 @@ async def drain_task_outbox() -> dict:
             detail={"error": "task_outbox_drain_failed", "reason": exc.__class__.__name__},
         ) from exc
     return {"status": "ok", **result}
+
+
+@router.post("/internal/queue/maintenance", dependencies=[Depends(_require_queue_token)])
+async def run_queue_maintenance() -> dict:
+    if not queue_configured():
+        raise HTTPException(status_code=503, detail="Durable connector queue is not configured")
+    try:
+        outbox = await asyncio.to_thread(drain_pending_outbox, limit=100)
+        object_gc = await asyncio.to_thread(run_connector_object_gc, limit=50)
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail={"error": "queue_maintenance_failed", "reason": exc.__class__.__name__},
+        ) from exc
+    return {"status": "ok", "outbox": outbox, "object_gc": object_gc}
