@@ -35,12 +35,11 @@ def _s3_uri(bucket: str, key: str) -> str:
 
 
 def _build_default_s3_client():
-    """Create the S3 client only when durable object storage is actually used.
+    """Create an S3-compatible client lazily for durable connector objects.
 
-    This keeps API/test startup independent from boto3 import side effects in
-    environments that intentionally run with durable connector storage disabled.
-    The production requirements still install boto3; the lazy boundary is about
-    truthful runtime coupling, not silently masking a missing production dependency.
+    R2 is the production target. Explicit R2 credentials are preferred when
+    configured, while the standard boto credential chain remains available for
+    local MinIO and compatibility tests.
     """
     try:
         import boto3
@@ -51,24 +50,32 @@ def _build_default_s3_client():
         ) from exc
 
     endpoint_url = getattr(settings, "CONNECTOR_OBJECT_ENDPOINT_URL", "").strip() or None
-    region_name = getattr(settings, "CONNECTOR_OBJECT_REGION", "us-east-1").strip() or "us-east-1"
-    return boto3.client(
-        "s3",
-        endpoint_url=endpoint_url,
-        region_name=region_name,
-        config=Config(
+    region_name = getattr(settings, "CONNECTOR_OBJECT_REGION", "auto").strip() or "auto"
+    r2_access_key = getattr(settings, "CLOUDFLARE_R2_ACCESS_KEY_ID", "").strip()
+    r2_secret_key = getattr(settings, "CLOUDFLARE_R2_SECRET_ACCESS_KEY", "").strip()
+    if bool(r2_access_key) != bool(r2_secret_key):
+        raise RuntimeError("Both Cloudflare R2 access key fields must be configured together")
+
+    client_kwargs: dict[str, Any] = {
+        "endpoint_url": endpoint_url,
+        "region_name": region_name,
+        "config": Config(
             signature_version="s3v4",
             connect_timeout=5,
             read_timeout=30,
             retries={"max_attempts": 4, "mode": "standard"},
         ),
-    )
+    }
+    if r2_access_key and r2_secret_key:
+        client_kwargs["aws_access_key_id"] = r2_access_key
+        client_kwargs["aws_secret_access_key"] = r2_secret_key
+    return boto3.client("s3", **client_kwargs)
 
 
 class S3ObjectStore:
     def __init__(self, *, bucket: str, prefix: str = "agroai", client: Any | None = None):
         if not bucket:
-            raise RuntimeError("CONNECTOR_OBJECT_BUCKET is required for S3 object storage")
+            raise RuntimeError("CONNECTOR_OBJECT_BUCKET is required for S3-compatible object storage")
         self.bucket = bucket
         self.prefix = prefix.strip("/") or "agroai"
         self.client = client or _build_default_s3_client()
