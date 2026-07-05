@@ -194,7 +194,7 @@ resource "aws_ecs_service" "connector_worker" {
   name            = "${var.project}-connector-worker"
   cluster         = aws_ecs_cluster.api.id
   task_definition = aws_ecs_task_definition.connector_worker.arn
-  desired_count   = var.worker_desired_count
+  desired_count   = trimspace(local.runtime_redis_url) != "" ? var.worker_desired_count : 0
   launch_type     = "FARGATE"
 
   deployment_minimum_healthy_percent = 50
