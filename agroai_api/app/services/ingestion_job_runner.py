@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
+from pathlib import Path
 
 from sqlalchemy import and_, or_, update
 from sqlalchemy.orm import Session
@@ -86,6 +87,15 @@ def _fail_or_retry(db: Session, job_id: str, exc: Exception) -> str:
     return job.status
 
 
+def _remove_transient_copy(path_value: str | None, durable_uri: str) -> None:
+    if not path_value or path_value == durable_uri or "://" in path_value:
+        return
+    try:
+        Path(path_value).unlink(missing_ok=True)
+    except OSError:
+        return
+
+
 def process_ingestion_job(db: Session, *, job_id: str, tenant_id: str, worker_id: str) -> str:
     job = _claim(db, job_id=job_id, tenant_id=tenant_id, worker_id=worker_id)
     if job is None:
@@ -108,8 +118,9 @@ def process_ingestion_job(db: Session, *, job_id: str, tenant_id: str, worker_id
         if duplicate is not None:
             return _complete(db, job, {"deduplicated": True, "data_source_id": duplicate.id})
 
+        durable_uri = str(payload["object_uri"])
         data = get_object_store().read_bytes(
-            str(payload["object_uri"]),
+            durable_uri,
             max_bytes=int(settings.CONNECTOR_MAX_UPLOAD_BYTES),
         )
         result = ingest_upload(
@@ -128,13 +139,15 @@ def process_ingestion_job(db: Session, *, job_id: str, tenant_id: str, worker_id
                 identity_row.content_sha256 = content_sha256 or None
                 identity_row.object_size_bytes = int(payload.get("size_bytes") or len(data))
             if source_row is not None:
-                source_row.storage_path = str(payload["object_uri"])
+                transient_path = source_row.storage_path
+                source_row.storage_path = durable_uri
                 metadata = dict(source_row.metadata_json or {})
-                metadata.update({"durable_object_uri": str(payload["object_uri"]), "content_sha256": content_sha256})
+                metadata.update({"durable_object_uri": durable_uri, "content_sha256": content_sha256})
                 source_row.metadata_json = metadata
+                _remove_transient_copy(transient_path, durable_uri)
         job = db.get(IngestionJobState, job_id)
         if job is None:
             raise RuntimeError("ingestion job disappeared during processing")
-        return _complete(db, job, {"result": result, "object_uri": payload["object_uri"], "content_sha256": content_sha256})
+        return _complete(db, job, {"result": result, "object_uri": durable_uri, "content_sha256": content_sha256})
     except Exception as exc:
         return _fail_or_retry(db, job_id, exc)
