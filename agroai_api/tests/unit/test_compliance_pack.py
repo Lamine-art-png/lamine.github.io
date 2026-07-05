@@ -1,9 +1,3 @@
-"""Compliance suite collector with the current Alembic-head expectation.
-
-The preserved legacy suite is re-exported unchanged. Only the migration-head
-preflight test is replaced because migration 009 legitimately advances
-``alembic upgrade head`` beyond revision 008.
-"""
 from . import compliance_pack_legacy_suite as _legacy
 
 
@@ -31,7 +25,7 @@ def test_compliance_migration_preflight_classifies_clean_002_and_003(tmp_path, m
 
     _legacy.command.upgrade(cfg, "head")
     report_head = _legacy.collect_report(database_url)
-    assert report_head["current_alembic_revision"] == "009_add_telemetry_recommendations"
+    assert report_head["current_alembic_revision"] == "009_telemetry_recommendations"
     assert report_head["schema_classification"] == "C_migration_003_schema"
     assert report_head["tables"]["compliance_export_metadata"] is True
     assert report_head["parcel_identifier_exists"] is True
