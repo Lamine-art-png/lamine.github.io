@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import logging
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -11,6 +13,9 @@ from app.core.config import settings
 from app.models.hardened_records import DataSourceIdentity, IngestionJobState
 from app.models.operational_records import ConnectorConnection, DataSource
 from app.services.object_storage import get_object_store
+
+
+logger = logging.getLogger(__name__)
 
 
 def _safe_error(exc: Exception) -> str:
@@ -96,13 +101,20 @@ def _remove_transient_copy(path_value: str | None, durable_uri: str) -> None:
         return
 
 
-def _json_safe_completion(result: dict, *, source_id: str | None, durable_uri: str, checksum: str) -> dict:
-    """Persist only bounded JSON-safe worker completion metadata.
+def _delete_redundant_object(*, uri: str, tenant_id: str, connection_id: str) -> bool:
+    try:
+        get_object_store().delete(uri, tenant_id=tenant_id, connection_id=connection_id)
+        return True
+    except Exception:
+        logger.exception(
+            "redundant connector object cleanup failed tenant_id=%s connection_id=%s",
+            tenant_id,
+            connection_id,
+        )
+        return False
 
-    API response objects contain datetimes from ORM rows. Storing that entire
-    response in a PostgreSQL JSON column makes a successful ingestion fail at
-    the final commit. Keep the durable job record small and serialization-safe.
-    """
+
+def _json_safe_completion(result: dict, *, source_id: str | None, durable_uri: str, checksum: str) -> dict:
     warnings = result.get("warnings") or []
     return {
         "deduplicated": False,
@@ -128,20 +140,51 @@ def process_ingestion_job(db: Session, *, job_id: str, tenant_id: str, worker_id
         if connection is None or connection.tenant_id != tenant_id:
             raise RuntimeError("connector connection is unavailable for queued ingestion")
 
-        content_sha256 = str(payload.get("content_sha256") or "")
+        durable_uri = str(payload.get("object_uri") or "")
+        content_sha256 = str(payload.get("content_sha256") or "").strip().lower()
+        expected_size = int(payload.get("size_bytes") or -1)
+        if not durable_uri:
+            raise RuntimeError("queued ingestion is missing its durable object URI")
+        if len(content_sha256) != 64:
+            raise RuntimeError("queued ingestion is missing its expected content checksum")
+        if expected_size < 0:
+            raise RuntimeError("queued ingestion is missing its expected object size")
+
         duplicate = db.query(DataSourceIdentity).filter(
             DataSourceIdentity.tenant_id == tenant_id,
             DataSourceIdentity.connector_connection_id == connection.id,
             DataSourceIdentity.content_sha256 == content_sha256,
         ).first()
         if duplicate is not None:
-            return _complete(db, job, {"deduplicated": True, "data_source_id": duplicate.id})
+            deleted = _delete_redundant_object(
+                uri=durable_uri,
+                tenant_id=tenant_id,
+                connection_id=connection.id,
+            )
+            return _complete(
+                db,
+                job,
+                {
+                    "deduplicated": True,
+                    "data_source_id": duplicate.id,
+                    "redundant_object_deleted": deleted,
+                    "object_uri": None if deleted else durable_uri,
+                    "content_sha256": content_sha256,
+                },
+            )
 
-        durable_uri = str(payload["object_uri"])
-        data = get_object_store().read_bytes(
+        store = get_object_store()
+        data = store.read_bytes(
             durable_uri,
             max_bytes=int(settings.CONNECTOR_MAX_UPLOAD_BYTES),
+            tenant_id=tenant_id,
+            connection_id=connection.id,
         )
+        if len(data) != expected_size:
+            raise RuntimeError("connector object size differs from the queued job contract")
+        if hashlib.sha256(data).hexdigest() != content_sha256:
+            raise RuntimeError("connector object checksum differs from the queued job contract")
+
         result = ingest_upload(
             db,
             tenant_id=tenant_id,
@@ -155,8 +198,8 @@ def process_ingestion_job(db: Session, *, job_id: str, tenant_id: str, worker_id
             identity_row = db.get(DataSourceIdentity, str(source_id))
             source_row = db.get(DataSource, str(source_id))
             if identity_row is not None:
-                identity_row.content_sha256 = content_sha256 or None
-                identity_row.object_size_bytes = int(payload.get("size_bytes") or len(data))
+                identity_row.content_sha256 = content_sha256
+                identity_row.object_size_bytes = expected_size
             if source_row is not None:
                 transient_path = source_row.storage_path
                 source_row.storage_path = durable_uri
