@@ -1,6 +1,6 @@
 """Add telemetry and recommendation tables for starter field context.
 
-Revision ID: 009_add_telemetry_recommendations
+Revision ID: 009_telemetry_recommendations
 Revises: 008_saas_portal_v2_1_security
 Create Date: 2026-07-04
 """
@@ -8,7 +8,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "009_add_telemetry_recommendations"
+revision = "009_telemetry_recommendations"
 down_revision = "008_saas_portal_v2_1_security"
 branch_labels = None
 depends_on = None
