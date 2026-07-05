@@ -139,6 +139,20 @@ def _add_runtime_cors_headers(response: JSONResponse, origin: str | None) -> JSO
 
 
 @app.middleware("http")
+async def durable_upload_compatibility_boundary(request: Request, call_next):
+    """Route legacy evidence uploads through the hardened ingestion contract.
+
+    Existing portal builds keep their stable public path while one canonical
+    handler owns split-brain checks, R2 staging, transactional outbox creation,
+    Queue publication, and local/dev synchronous compatibility.
+    """
+    if request.method == "POST" and request.scope.get("path") == "/v1/evidence/upload":
+        request.scope["path"] = "/v1/evidence/upload-stream"
+        request.scope["raw_path"] = b"/v1/evidence/upload-stream"
+    return await call_next(request)
+
+
+@app.middleware("http")
 async def runtime_error_boundary(request: Request, call_next):
     origin = request.headers.get("origin")
     try:
