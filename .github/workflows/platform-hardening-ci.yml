@@ -12,8 +12,8 @@ jobs:
         image: postgres:16
         env:
           POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
           POSTGRES_DB: agroai_hardening_ci
+          POSTGRES_HOST_AUTH_METHOD: trust
         ports:
           - 5432:5432
         options: >-
@@ -31,9 +31,10 @@ jobs:
           python-version: "3.11"
       - name: Install backend dependencies
         run: python -m pip install -q -r requirements.txt pytest
-      - name: Compile identity modules
+      - name: Compile identity and migration modules
         run: |
           python -m py_compile alembic/versions/010_account_recovery.py
+          python -m py_compile alembic/versions/011_operational_records_and_preferences.py
           python -m py_compile app/services/credential_recovery.py
           python -m py_compile app/services/password_policy.py
           python -m py_compile app/api/v1/recovery_v2.py
@@ -56,7 +57,7 @@ jobs:
         run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --confcutdir=tests/unit tests/unit/test_alembic_revision_contract.py
       - name: Bootstrap PostgreSQL baseline
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agroai_hardening_ci
+          DATABASE_URL: postgresql://postgres@localhost:5432/agroai_hardening_ci
         run: |
           python - <<'PY'
           from app.db.base import Base, engine
@@ -64,9 +65,9 @@ jobs:
           from app.models.block import Block
           Base.metadata.create_all(bind=engine, tables=[Tenant.__table__, Block.__table__])
           PY
-      - name: Migrate and verify persisted identity schema
+      - name: Migrate and verify persisted hardening schema
         env:
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agroai_hardening_ci
+          DATABASE_URL: postgresql://postgres@localhost:5432/agroai_hardening_ci
         run: |
           alembic upgrade head
           python - <<'PY'
@@ -74,11 +75,25 @@ jobs:
           import sqlalchemy as sa
           engine = sa.create_engine(os.environ["DATABASE_URL"])
           inspector = sa.inspect(engine)
-          assert "account_recovery_tokens" in set(inspector.get_table_names())
+          tables = set(inspector.get_table_names())
+          required = {
+              "account_recovery_tokens",
+              "user_preferences",
+              "connector_connections",
+              "data_sources",
+              "ingestion_jobs",
+              "evidence_records",
+              "intelligence_runs",
+              "generated_artifacts",
+              "chat_conversations",
+              "chat_messages",
+          }
+          missing = sorted(required - tables)
+          assert not missing, f"persisted hardening schema missing tables: {missing}"
           assert "credentials_changed_at" in {item["name"] for item in inspector.get_columns("users")}
           with engine.connect() as connection:
               revision = connection.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
-          assert revision == "010_account_recovery", revision
+          assert revision == "011_operational_records", revision
           print(f"persisted hardening head verified: {revision}")
           PY
 
