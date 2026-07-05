@@ -140,13 +140,23 @@ def _add_runtime_cors_headers(response: JSONResponse, origin: str | None) -> JSO
 
 @app.middleware("http")
 async def durable_upload_compatibility_boundary(request: Request, call_next):
-    """Route legacy evidence uploads through the hardened ingestion contract.
+    """Route legacy uploads through distributed ingestion only when requested.
 
-    Existing portal builds keep their stable public path while one canonical
-    handler owns split-brain checks, R2 staging, transactional outbox creation,
-    Queue publication, and local/dev synchronous compatibility.
+    With both distributed dependencies disabled, local/dev retains the legacy
+    request-scoped synchronous behavior. If either dependency is selected, the
+    hardened handler owns the request and rejects split-brain configuration.
     """
-    if request.method == "POST" and request.scope.get("path") == "/v1/evidence/upload":
+    object_backend = str(getattr(settings, "CONNECTOR_OBJECT_STORAGE_BACKEND", "disabled") or "disabled").strip().lower()
+    queue_backend = str(getattr(settings, "TASK_QUEUE_BACKEND", "disabled") or "disabled").strip().lower()
+    distributed_requested = (
+        object_backend in {"s3", "r2", "s3_compatible"}
+        or queue_backend in {"redis", "redis_streams", "redis-streams", "cloudflare", "cloudflare_queues", "cloudflare-queues"}
+    )
+    if (
+        distributed_requested
+        and request.method == "POST"
+        and request.scope.get("path") == "/v1/evidence/upload"
+    ):
         request.scope["path"] = "/v1/evidence/upload-stream"
         request.scope["raw_path"] = b"/v1/evidence/upload-stream"
     return await call_next(request)
