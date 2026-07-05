@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.db.base import SessionLocal
 from app.models.hardened_records import IngestionJobState
 from app.models.operational_records import DataSource
 from app.services.connector_object_retention import gc_candidate
@@ -62,3 +63,14 @@ def collect_expired_connector_objects(db: Session, limit: int | None = None) -> 
         counts["deleted"] += 1
     db.commit()
     return counts
+
+
+def run_connector_object_gc(limit: int | None = None) -> dict[str, int]:
+    db = SessionLocal()
+    try:
+        return collect_expired_connector_objects(db, limit=limit)
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
