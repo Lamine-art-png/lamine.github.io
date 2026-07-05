@@ -67,19 +67,19 @@ resource "aws_db_instance" "api" {
   db_subnet_group_name   = aws_db_subnet_group.api.name
   vpc_security_group_ids = [aws_security_group.rds.id]
 
-  publicly_accessible    = false
-  multi_az               = var.db_multi_az
-  deletion_protection    = var.db_deletion_protection
-  skip_final_snapshot    = var.db_skip_final_snapshot
+  publicly_accessible       = false
+  multi_az                  = var.db_multi_az
+  deletion_protection       = var.db_deletion_protection
+  skip_final_snapshot       = var.db_skip_final_snapshot
   final_snapshot_identifier = var.db_skip_final_snapshot ? null : "${var.project}-db-final"
 
   backup_retention_period = 7
   backup_window           = "07:00-08:00"
   maintenance_window      = "sun:09:00-sun:10:00"
 
-  auto_minor_version_upgrade      = true
-  copy_tags_to_snapshot           = true
-  performance_insights_enabled    = true
+  auto_minor_version_upgrade            = true
+  copy_tags_to_snapshot                 = true
+  performance_insights_enabled          = true
   performance_insights_retention_period = 7
 
   tags = {
