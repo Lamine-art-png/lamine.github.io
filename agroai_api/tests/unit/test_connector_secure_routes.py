@@ -55,3 +55,13 @@ def test_oauth_start_uses_secure_route_without_fake_connection(monkeypatch):
     assert body["status"] in {"oauth_pending", "platform_setup_required"}
     assert body["connection"]["credentials_ref"] is None
     assert body["status"] != "connected"
+
+
+def test_oauth_callback_rejects_legacy_unsigned_state():
+    client = _client()
+    try:
+        response = client.get("/v1/connectors/oauth/callback", params={"state": "connection-id:tenant-id:123", "code": "example-code"})
+    finally:
+        _cleanup()
+    assert response.status_code == 200
+    assert "could not validate this OAuth callback" in response.text
