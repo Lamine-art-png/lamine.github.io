@@ -58,7 +58,19 @@ jobs:
       - name: PostgreSQL migration smoke test
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agroai_compliance_ci
-        run: alembic upgrade head
+        run: |
+          set +e
+          alembic upgrade head 2>&1 | tee postgres-migration.log
+          status=${PIPESTATUS[0]}
+          tail -n 180 postgres-migration.log > postgres-migration-tail.txt
+          exit $status
+      - name: Upload PostgreSQL migration tail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-migration-tail
+          path: agroai_api/postgres-migration-tail.txt
+          retention-days: 1
       - name: PostgreSQL pre-created compliance schema smoke test
         env:
           ALLOW_COMPLIANCE_SMOKE_RESET: "1"
