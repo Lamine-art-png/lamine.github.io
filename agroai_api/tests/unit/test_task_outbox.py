@@ -31,7 +31,7 @@ def test_pending_outbox_row_is_published_once(monkeypatch):
     db.commit()
 
     queue = FakeQueue()
-    monkeypatch.setattr("app.services.task_outbox_service.get_task_queue", lambda: queue)
+    monkeypatch.setattr("app.services.task_outbox_service.get_task_publisher", lambda: queue)
     result = publish_pending_outbox(db)
     db.refresh(row)
 
