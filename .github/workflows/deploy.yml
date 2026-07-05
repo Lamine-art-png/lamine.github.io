@@ -18,7 +18,7 @@ env:
   PORTAL_URL: https://app.agroai-pilot.com
   API_URL: https://api.agroai-pilot.com
   UPSTREAM_HEALTH_URL: https://api-preview.agroai-pilot.com/v1/health
-  UPSTREAM_QUEUE_CONTRACT_URL: https://api-preview.agroai-pilot.com/v1/internal/queue/health
+  UPSTREAM_RELEASE_CONTRACT_URL: https://api-preview.agroai-pilot.com/v1/internal/release/health
 
 jobs:
   validate:
@@ -55,7 +55,7 @@ jobs:
           cache: pip
           cache-dependency-path: agroai_api/requirements.txt
 
-      - name: Validate backend queue integration
+      - name: Validate backend queue and release contracts
         working-directory: agroai_api
         run: |
           python -m pip install -q -r requirements.txt pytest
@@ -64,6 +64,7 @@ jobs:
             tests/unit/test_cloudflare_task_queue.py \
             tests/unit/test_cloudflare_queue_runtime.py \
             tests/unit/test_cloudflare_queue_routes.py \
+            tests/unit/test_cloudflare_queue_rotation.py \
             tests/unit/test_task_outbox.py \
             tests/unit/test_production_readiness.py
 
@@ -94,7 +95,7 @@ jobs:
             fi
           done
 
-      - name: Install edge tooling
+      - name: Install pinned edge tooling
         working-directory: cloudflare/edge-gateway
         run: npm install --no-audit --no-fund
 
@@ -104,24 +105,32 @@ jobs:
           set -euo pipefail
           curl --fail --silent --show-error --max-time 30 "${UPSTREAM_HEALTH_URL}" | jq -e '.status == "ok"' >/dev/null
 
-      - name: Wait for exact backend Queue contract before changing public edge
+      - name: Wait for exact backend build, schema, and Queue contract
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 40); do
+          for attempt in $(seq 1 90); do
             payload="$(curl --fail --silent --show-error --max-time 20 \
               -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
-              "${UPSTREAM_QUEUE_CONTRACT_URL}" 2>/dev/null || true)"
-            if printf '%s' "$payload" | jq -e \
-              '.status == "ok" and .contract == "cloudflare-queue-v1" and .queue_configured == true' \
+              "${UPSTREAM_RELEASE_CONTRACT_URL}" 2>/dev/null || true)"
+            if printf '%s' "$payload" | jq -e --arg sha "$GITHUB_SHA" \
+              '.status == "ok" and .contract == "agroai-release-v1" and .build_sha == $sha and .schema_current == true and .queue_configured == true' \
               >/dev/null 2>&1; then
-              echo "Backend Queue contract is ready"
+              printf '%s' "$payload" > upstream-release-contract.json
+              echo "Exact backend build, schema, and Queue contract is ready"
               exit 0
             fi
             sleep 10
           done
-          echo "Backend Queue contract did not become ready; refusing to change the public edge"
+          echo "Exact backend release contract did not become ready; refusing to change the public edge"
           exit 1
+
+      - name: Upload upstream release contract evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-release-contract-${{ github.sha }}
+          path: upstream-release-contract.json
+          retention-days: 30
 
       - name: Ensure connector queues exist
         working-directory: cloudflare/edge-gateway
@@ -151,7 +160,7 @@ jobs:
           printf '%s' "$QUEUE_PUBLISH_TOKEN" | npx wrangler secret put QUEUE_PUBLISH_TOKEN --config ../../wrangler.toml
           printf '%s' "$QUEUE_CONSUMER_TOKEN" | npx wrangler secret put QUEUE_CONSUMER_TOKEN --config ../../wrangler.toml
 
-      - name: Smoke edge and upstream health
+      - name: Smoke exact public edge and upstream
         shell: bash
         run: |
           set -euo pipefail
@@ -166,6 +175,10 @@ jobs:
             sleep 3
           done
           curl --fail --silent --show-error --max-time 30 "${API_URL}/v1/health" | jq -e '.status == "ok"' >/dev/null
+          curl --fail --silent --show-error --max-time 30 \
+            -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+            "${API_URL}/v1/internal/release/health" | \
+            jq -e --arg sha "$GITHUB_SHA" '.status == "ok" and .build_sha == $sha and .schema_current == true and .queue_configured == true' >/dev/null
 
   deploy-portal:
     name: Deploy enterprise portal
@@ -193,7 +206,7 @@ jobs:
           npm run build
 
       - name: Deploy portal to Pages
-        run: npx --yes wrangler@4 pages deploy figma-enterprise-v4/dist --project-name "${PORTAL_PROJECT}" --branch main --commit-hash "${GITHUB_SHA}"
+        run: npx --yes wrangler@4.107.0 pages deploy figma-enterprise-v4/dist --project-name "${PORTAL_PROJECT}" --branch main --commit-hash "${GITHUB_SHA}"
 
       - name: Smoke production portal
         shell: bash
