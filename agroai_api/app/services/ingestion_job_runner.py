@@ -96,6 +96,25 @@ def _remove_transient_copy(path_value: str | None, durable_uri: str) -> None:
         return
 
 
+def _json_safe_completion(result: dict, *, source_id: str | None, durable_uri: str, checksum: str) -> dict:
+    """Persist only bounded JSON-safe worker completion metadata.
+
+    API response objects contain datetimes from ORM rows. Storing that entire
+    response in a PostgreSQL JSON column makes a successful ingestion fail at
+    the final commit. Keep the durable job record small and serialization-safe.
+    """
+    warnings = result.get("warnings") or []
+    return {
+        "deduplicated": False,
+        "data_source_id": source_id,
+        "rows_parsed": int(result.get("rows_parsed") or 0),
+        "evidence_records_created": int(result.get("evidence_records_created") or 0),
+        "warning_count": len(warnings) if isinstance(warnings, list) else 0,
+        "object_uri": durable_uri,
+        "content_sha256": checksum,
+    }
+
+
 def process_ingestion_job(db: Session, *, job_id: str, tenant_id: str, worker_id: str) -> str:
     job = _claim(db, job_id=job_id, tenant_id=tenant_id, worker_id=worker_id)
     if job is None:
@@ -148,6 +167,15 @@ def process_ingestion_job(db: Session, *, job_id: str, tenant_id: str, worker_id
         job = db.get(IngestionJobState, job_id)
         if job is None:
             raise RuntimeError("ingestion job disappeared during processing")
-        return _complete(db, job, {"result": result, "object_uri": durable_uri, "content_sha256": content_sha256})
+        return _complete(
+            db,
+            job,
+            _json_safe_completion(
+                result,
+                source_id=str(source_id) if source_id else None,
+                durable_uri=durable_uri,
+                checksum=content_sha256,
+            ),
+        )
     except Exception as exc:
         return _fail_or_retry(db, job_id, exc)
