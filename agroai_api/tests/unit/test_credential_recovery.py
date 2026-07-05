@@ -4,6 +4,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.deps import _assert_credential_freshness
+from app.core.config import settings
 from app.models.saas import AccountRecoveryToken, User
 from app.services.credential_recovery import consume_token, digest_token, issue_token
 
@@ -34,7 +35,7 @@ def test_recovery_token_is_hashed_single_use_and_revokes_old_sessions(db):
     assert row.token_hash != token
     assert row.used_at is None
 
-    old_exp = datetime.utcnow() + timedelta(days=7)
+    old_exp = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     old_payload = {"sub": user.id, "exp": int(old_exp.timestamp())}
 
     recovered = consume_token(db, token, "A-strong-new-credential-2026")
@@ -99,7 +100,7 @@ def test_token_issued_after_credential_change_remains_valid(db):
 
     fresh_payload = {
         "sub": user.id,
-        "exp": int((datetime.utcnow() + timedelta(days=7)).timestamp()),
+        "exp": int((datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)).timestamp()),
         "iat": int(datetime.utcnow().timestamp()),
     }
     _assert_credential_freshness(fresh_payload, user)
