@@ -1,101 +1,210 @@
-name: Legacy Cloudflare Containers deploy — manual only
+name: Cloudflare Production Release
 
-# Render serves the active V2 preview backend at api-preview.agroai-pilot.com,
-# while api.agroai-pilot.com remains a temporary Railway-backed stable fallback.
-# This Cloudflare Containers path is not part of active DNS routing; manual
-# execution requires explicit operator intent.
 on:
+  push:
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write
+
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: false
 
 env:
-  REGISTRY: ghcr.io
+  NODE_VERSION: "22"
+  PORTAL_PROJECT: agroai-portal
+  PORTAL_URL: https://app.agroai-pilot.com
+  API_URL: https://api.agroai-pilot.com
 
 jobs:
-  build-and-push:
-    name: Build Docker image & push to GHCR
+  validate:
+    name: Validate release candidate
     runs-on: ubuntu-latest
-    outputs:
-      image: ${{ steps.img.outputs.image }}
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - uses: actions/setup-node@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
 
-      - name: Compute image name (lowercase)
-        id: img
+      - name: Validate enterprise portal
+        working-directory: figma-enterprise-v4
+        env:
+          VITE_API_BASE_URL: ${{ env.API_URL }}
+        run: |
+          npm ci
+          npm run test:i18n
+          npm run build
+
+      - name: Validate edge gateway
+        working-directory: cloudflare/edge-gateway
+        run: |
+          npm install --no-audit --no-fund
+          npm run check
+          npx wrangler deploy --dry-run --config ../../wrangler.toml
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: agroai_api/requirements.txt
+
+      - name: Validate backend queue integration
+        working-directory: agroai_api
+        run: |
+          python -m pip install -q -r requirements.txt pytest
+          python -m compileall -q app alembic scripts
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --tb=short \
+            tests/unit/test_cloudflare_task_queue.py \
+            tests/unit/test_cloudflare_queue_runtime.py \
+            tests/unit/test_cloudflare_queue_routes.py \
+            tests/unit/test_task_outbox.py \
+            tests/unit/test_production_readiness.py
+
+  deploy-edge:
+    name: Deploy API edge and queues
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      QUEUE_PUBLISH_TOKEN: ${{ secrets.QUEUE_PUBLISH_TOKEN }}
+      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Fail closed on missing deployment secrets
         shell: bash
         run: |
-          echo "image=${{ env.REGISTRY }}/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID QUEUE_PUBLISH_TOKEN QUEUE_CONSUMER_TOKEN; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required production secret: ${name}"
+              exit 1
+            fi
+          done
 
-      - name: Build + Push (sha + latest)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          file: Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: |
-            ${{ steps.img.outputs.image }}:${{ github.sha }}
-            ${{ steps.img.outputs.image }}:latest
-          build-args: |
-            GIT_SHA=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+      - name: Install edge tooling
+        working-directory: cloudflare/edge-gateway
+        run: npm install --no-audit --no-fund
 
-  deploy:
-    name: Deploy to Cloudflare
-    needs: build-and-push
+      - name: Ensure connector queues exist
+        working-directory: cloudflare/edge-gateway
+        shell: bash
+        run: |
+          set -euo pipefail
+          ensure_queue() {
+            local queue_name="$1"
+            local listing
+            listing="$(npx wrangler queues list --json)"
+            if printf '%s' "$listing" | jq -e --arg name "$queue_name" '.. | objects | select((.queue_name? // .name? // "") == $name)' >/dev/null; then
+              echo "Queue already exists: $queue_name"
+            else
+              npx wrangler queues create "$queue_name"
+            fi
+          }
+          ensure_queue "agroai-connector-tasks"
+          ensure_queue "agroai-connector-tasks-dlq"
+
+      - name: Provision Worker queue secrets
+        working-directory: cloudflare/edge-gateway
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s' "$QUEUE_PUBLISH_TOKEN" | npx wrangler secret put QUEUE_PUBLISH_TOKEN --config ../../wrangler.toml
+          printf '%s' "$QUEUE_CONSUMER_TOKEN" | npx wrangler secret put QUEUE_CONSUMER_TOKEN --config ../../wrangler.toml
+
+      - name: Deploy API edge gateway
+        working-directory: cloudflare/edge-gateway
+        run: npx wrangler deploy --config ../../wrangler.toml
+
+      - name: Smoke edge and upstream health
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent --show-error --max-time 15 "${API_URL}/v1/edge-health" | jq -e '.status == "ok"' >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 20 ]; then
+              echo "Edge health check failed"
+              exit 1
+            fi
+            sleep 3
+          done
+          curl --fail --silent --show-error --max-time 30 "${API_URL}/v1/health" | jq -e '.status == "ok"' >/dev/null
+
+  deploy-portal:
+    name: Deploy enterprise portal
+    needs: [validate, deploy-edge]
     runs-on: ubuntu-latest
-
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
 
-      - name: Install Wrangler
-        run: npm install -g wrangler
-
-      - name: Deploy to Cloudflare Containers
+      - name: Build exact enterprise portal
+        working-directory: figma-enterprise-v4
         env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: wrangler deploy
+          VITE_API_BASE_URL: ${{ env.API_URL }}
+        run: |
+          npm ci
+          npm run test:i18n
+          npm run build
 
-  test:
-    name: Run tests
+      - name: Deploy portal to Pages
+        run: npx --yes wrangler@4 pages deploy figma-enterprise-v4/dist --project-name "${PORTAL_PROJECT}" --branch main --commit-hash "${GITHUB_SHA}"
+
+      - name: Smoke production portal
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent --show-error --location --max-time 20 "${PORTAL_URL}" >/dev/null; then
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Portal smoke check failed"
+          exit 1
+
+  release-evidence:
+    name: Record release evidence
+    needs: [deploy-edge, deploy-portal]
+    if: always()
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Emit immutable release summary
+        env:
+          EDGE_RESULT: ${{ needs.deploy-edge.result }}
+          PORTAL_RESULT: ${{ needs.deploy-portal.result }}
+        run: |
+          {
+            echo "release_sha=${GITHUB_SHA}"
+            echo "edge_result=${EDGE_RESULT}"
+            echo "portal_result=${PORTAL_RESULT}"
+            echo "api_url=${API_URL}"
+            echo "portal_url=${PORTAL_URL}"
+          } | tee release-evidence.txt
+          test "$EDGE_RESULT" = "success"
+          test "$PORTAL_RESULT" = "success"
+      - uses: actions/upload-artifact@v4
         with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: pip install -r agroai_api/requirements.txt
-
-      - name: Run tests
-        working-directory: agroai_api
-        run: python -m pytest tests/ -v
+          name: cloudflare-production-release-${{ github.sha }}
+          path: release-evidence.txt
+          retention-days: 30
