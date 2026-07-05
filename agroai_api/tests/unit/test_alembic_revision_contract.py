@@ -10,12 +10,19 @@ MAX_REVISION_LENGTH = 32
 
 def _literal_assignment(module: ast.Module, name: str) -> str | None:
     for node in module.body:
-        if not isinstance(node, ast.Assign):
-            continue
-        if not any(isinstance(target, ast.Name) and target.id == name for target in node.targets):
-            continue
-        if isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
-            return node.value.value
+        value = None
+        if isinstance(node, ast.Assign):
+            matches = any(
+                isinstance(target, ast.Name) and target.id == name
+                for target in node.targets
+            )
+            if matches:
+                value = node.value
+        if isinstance(node, ast.AnnAssign):
+            if isinstance(node.target, ast.Name) and node.target.id == name:
+                value = node.value
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            return value.value
     return None
 
 
