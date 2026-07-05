@@ -16,6 +16,7 @@ from app.services.durable_ingestion_staging import stage_durable_object_job
 from app.services.ingestion_stream import stream_upload_to_spool
 from app.services.object_storage import object_storage_configured
 from app.services.redis_task_queue import queue_configured
+from app.services.task_outbox_service import drain_pending_outbox
 
 
 router = APIRouter(tags=["connector-stream-ingestion"])
@@ -85,6 +86,9 @@ async def upload_stream_secure(
                 filename=receipt.filename,
                 content_type=receipt.content_type,
             )
+            publication = {"published": 0, "failed": 0}
+            if not deduplicated:
+                publication = await asyncio.to_thread(drain_pending_outbox, limit=10)
             return {
                 "status": job.status,
                 "job_id": job.id,
@@ -92,6 +96,7 @@ async def upload_stream_secure(
                 "content_sha256": receipt.sha256,
                 "size_bytes": receipt.size_bytes,
                 "deduplicated": deduplicated,
+                "queue_publication": publication,
             }
         except Exception as exc:
             db.rollback()
