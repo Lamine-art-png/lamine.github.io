@@ -10,6 +10,7 @@ from app.api.v1.connectors import CATALOG, oauth_url
 from app.core.security import require_current_tenant_id
 from app.db.base import Base, get_db
 from app.main import app
+from app.services.oauth_state import sign_oauth_state, verify_oauth_state
 
 
 def make_client():
@@ -81,6 +82,15 @@ def test_launch_start_uses_opaque_state_and_callback_hides_raw_code(monkeypatch)
     config = fetched.json()["connection"]["config_json"]
     assert config["oauth_code_present"] is True
     assert "raw-oauth-code" not in str(config)
+
+
+def test_oauth_state_is_signed_and_tamper_rejected():
+    state = sign_oauth_state("connection-123")
+    assert ":" not in state
+    verified = verify_oauth_state(state)
+    assert verified is not None
+    assert verified["cid"] == "connection-123"
+    assert verify_oauth_state(state[:-1] + ("0" if state[-1] != "0" else "1")) is None
 
 
 def test_google_earth_engine_manifest_ready_without_exposing_service_account(monkeypatch):

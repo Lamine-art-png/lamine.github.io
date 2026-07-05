@@ -328,13 +328,13 @@ def test_openet_estimated_value_labeling():
     assert measurement["measurement_type"] == "estimated_et"
 
 
-def test_startup_init_does_not_create_compliance_tables(monkeypatch):
+def test_startup_init_refuses_runtime_schema_creation(monkeypatch):
     engine = create_engine("sqlite:///:memory:")
     monkeypatch.setattr(db_base, "engine", engine)
-    db_base.init_db()
+    with pytest.raises(RuntimeError, match="alembic upgrade head"):
+        db_base.init_db()
     tables = inspect(engine).get_table_names()
-    assert "tenants" in tables
-    assert not any(table.startswith("compliance_") for table in tables)
+    assert tables == []
 
 
 

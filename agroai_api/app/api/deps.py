@@ -39,7 +39,7 @@ def _assert_credential_freshness(payload: dict, user: User) -> None:
     # Legacy tokens did not carry iat. Their signer uses a fixed configured
     # lifetime, so infer issuance from exp and reject any token issued before
     # the credential change with no grace window.
-    token_issued_at = datetime.utcfromtimestamp(float(expires_at)) - timedelta(
+    token_issued_at = datetime.fromtimestamp(float(expires_at)) - timedelta(
         minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
     if token_issued_at < changed_at:

@@ -114,9 +114,9 @@ class ModelRouter:
                 return AIGatewayResult(status="language_generation_failed",content="",provider=live.provider,model=live.model,demo_fallback=False,raw=raw,error=live.error or "Language generation failed."), selected
             return AIGatewayResult(status="unavailable",content="",provider=live.provider,model=live.model,demo_fallback=False,raw=raw,error=live.error or "Live model unavailable."), selected
 
-        if selection.profile == "report": default_tokens, default_timeout, default_attempts = 3000, 50, 5
-        elif selection.profile == "reasoning": default_tokens, default_timeout, default_attempts = 2200, 36, 4
-        else: default_tokens, default_timeout, default_attempts = 900, 20, 3
-        kwargs: dict[str, Any] = {"temperature":temperature,"response_format":response_format,"max_tokens":max_tokens or default_tokens,"timeout_seconds":timeout_seconds or default_timeout,"max_model_attempts":max_model_attempts or default_attempts}
-        if selection.model: kwargs["model_override"] = selection.model
+        kwargs: dict[str, Any] = {"temperature": temperature, "response_format": response_format}
+        if selection.model and self.mode() != "offline": kwargs["model_override"] = selection.model
+        if max_tokens is not None: kwargs["max_tokens"] = max_tokens
+        if timeout_seconds is not None: kwargs["timeout_seconds"] = timeout_seconds
+        if max_model_attempts is not None: kwargs["max_model_attempts"] = max_model_attempts
         return await self.gateway.chat(messages, **kwargs), selection

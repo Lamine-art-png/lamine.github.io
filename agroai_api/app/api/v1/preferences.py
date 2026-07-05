@@ -4,9 +4,9 @@ import json
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import AuthContext, get_auth_context
@@ -22,19 +22,21 @@ class PortalPreferencesUpdate(BaseModel):
     ui: dict[str, Any] | None = None
 
 
-def _ensure_table(db: Session) -> None:
-    db.execute(text("""
-        CREATE TABLE IF NOT EXISTS user_preferences (
-            user_id VARCHAR PRIMARY KEY,
-            locale VARCHAR,
-            timezone VARCHAR,
-            notifications_json TEXT,
-            ui_json TEXT,
-            created_at TIMESTAMP NOT NULL,
-            updated_at TIMESTAMP NOT NULL
+def _verify_table(db: Session) -> None:
+    inspector = inspect(db.get_bind())
+    if "user_preferences" not in set(inspector.get_table_names()):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "preferences_schema_not_ready", "action": "run_alembic_upgrade_head"},
         )
-    """))
-    db.commit()
+    columns = {column["name"] for column in inspector.get_columns("user_preferences")}
+    required = {"user_id", "locale", "timezone", "notifications_json", "ui_json", "created_at", "updated_at"}
+    missing = required - columns
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "preferences_schema_not_ready", "missing": sorted(missing), "action": "run_alembic_upgrade_head"},
+        )
 
 
 def _decode(value: Any, fallback: dict | None = None) -> dict:
@@ -76,13 +78,13 @@ def _row_to_payload(row: Any | None, ctx: AuthContext) -> dict:
 
 
 def _get(ctx: AuthContext, db: Session) -> dict:
-    _ensure_table(db)
+    _verify_table(db)
     row = db.execute(text("SELECT * FROM user_preferences WHERE user_id = :user_id"), {"user_id": ctx.user.id}).first()
     return {"preferences": _row_to_payload(row, ctx)}
 
 
 def _patch(payload: PortalPreferencesUpdate, ctx: AuthContext, db: Session) -> dict:
-    _ensure_table(db)
+    _verify_table(db)
     current = db.execute(text("SELECT * FROM user_preferences WHERE user_id = :user_id"), {"user_id": ctx.user.id}).first()
     merged = _row_to_payload(current, ctx)
     if payload.locale is not None:

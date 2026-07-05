@@ -11,11 +11,11 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
-from sqlalchemy import inspect, text as sql_text
+from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
 from app.api.deps import AuthContext, get_auth_context, require_workspace_access
-from app.db.base import Base, get_db
+from app.db.base import get_db
 from app.models.saas import Conversation, ConversationMessage
 
 router = APIRouter(tags=["conversations"])
@@ -23,35 +23,25 @@ router = APIRouter(tags=["conversations"])
 TABLES = [Conversation.__table__, ConversationMessage.__table__]
 
 
-def ensure_schema(db: Session) -> None:
+def verify_conversation_schema(db: Session) -> None:
+    """Verify Alembic-owned conversation tables without mutating schema."""
     bind = db.get_bind()
-    Base.metadata.create_all(bind=bind, tables=TABLES)
     inspector = inspect(bind)
-    dialect = bind.dialect.name
-
-    def ddl_type(column) -> str:
-        name = column.type.__class__.__name__.lower()
-        if "json" in name:
-            return "JSONB" if dialect == "postgresql" else "JSON"
-        if "datetime" in name:
-            return "TIMESTAMP"
-        if "integer" in name:
-            return "INTEGER"
-        return "TEXT"
-
+    tables = set(inspector.get_table_names())
+    missing: dict[str, list[str]] = {}
     for table in TABLES:
-        try:
-            existing = {column["name"] for column in inspector.get_columns(table.name)}
-        except Exception:
+        if table.name not in tables:
+            missing[table.name] = sorted(column.name for column in table.columns)
             continue
-        for column in table.columns:
-            if column.name in existing:
-                continue
-            try:
-                db.execute(sql_text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {ddl_type(column)}'))
-                db.commit()
-            except Exception:
-                db.rollback()
+        existing = {column["name"] for column in inspector.get_columns(table.name)}
+        missing_columns = {column.name for column in table.columns} - existing
+        if missing_columns:
+            missing[table.name] = sorted(missing_columns)
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "conversation_schema_not_ready", "missing": missing, "action": "run_alembic_upgrade_head"},
+        )
 
 
 class ConversationCreateRequest(BaseModel):
@@ -148,7 +138,7 @@ def conversation_public(db: Session, row: Conversation, include_preview: bool = 
 
 
 def _get_conversation(db: Session, auth: AuthContext, conversation_id: str) -> Conversation:
-    ensure_schema(db)
+    verify_conversation_schema(db)
     row = db.get(Conversation, conversation_id)
     if not row or row.organization_id != _tenant_id(auth) or row.user_id != auth.user.id or row.status == "deleted":
         raise HTTPException(status_code=404, detail="Conversation not found")
@@ -162,7 +152,7 @@ def list_conversations(
     auth: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_conversation_schema(db)
     workspace_id = _verify_workspace(db, auth, workspace_id)
     query = _conversation_query(db, auth)
     if workspace_id:
@@ -173,7 +163,7 @@ def list_conversations(
 
 @router.post("/conversations", status_code=status.HTTP_201_CREATED)
 def create_conversation(payload: ConversationCreateRequest, auth: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_conversation_schema(db)
     workspace_id = _verify_workspace(db, auth, payload.workspace_id)
     title = payload.title or _title_from_message(payload.message or "")
     row = Conversation(

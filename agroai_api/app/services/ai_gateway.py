@@ -203,7 +203,9 @@ class AIGateway:
         try:
             if self.provider == "ollama":
                 return await self._chat_ollama(enriched, temperature, model_override=model_override, max_tokens=max_tokens, timeout_seconds=timeout_seconds)
-            return await self._chat_openai_compatible(enriched, temperature, response_format, model_override=model_override, max_tokens=max_tokens, timeout_seconds=timeout_seconds, max_model_attempts=max_model_attempts)
+            if model_override or max_tokens or timeout_seconds or max_model_attempts:
+                return await self._chat_openai_compatible(enriched, temperature, response_format, model_override=model_override, max_tokens=max_tokens, timeout_seconds=timeout_seconds, max_model_attempts=max_model_attempts)
+            return await self._chat_openai_compatible(enriched, temperature, response_format)
         except (httpx.HTTPError, KeyError, ValueError, TypeError) as exc:
             return AIGatewayResult(status="unavailable", content="", provider=self.raw_provider or self.provider or "unconfigured", model=selected or None, error=str(exc))
 
@@ -286,4 +288,14 @@ class AIGateway:
         return AIGatewayResult(status="ok", content=content, provider="ollama", model=selected, raw=body)
 
     def _offline_fallback(self, selected_model: str | None = None) -> AIGatewayResult:
-        return AIGatewayResult(status="unavailable", content="", provider=self.raw_provider or self.provider or "offline", model=selected_model, error="Live model provider is not configured for this request.")
+        return AIGatewayResult(
+            status="unavailable",
+            content=(
+                "AI unavailable/demo fallback: no live model provider is configured. "
+                "AGRO-AI can only return deterministic safe-mode guidance until AI_PROVIDER, AI_BASE_URL, and AI_MODEL are set."
+            ),
+            provider=self.raw_provider or self.provider or "offline",
+            model=selected_model,
+            demo_fallback=True,
+            error="Live model provider is not configured for this request.",
+        )

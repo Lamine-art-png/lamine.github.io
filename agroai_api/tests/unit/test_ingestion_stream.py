@@ -5,8 +5,15 @@ from pathlib import Path
 
 import pytest
 from fastapi import HTTPException, UploadFile
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.core.config import settings
+from app.core.security import require_current_tenant_id
+from app.db.base import Base, get_db
+from app.main import app
 from app.services.ingestion_stream import read_spooled_bytes, stream_upload_to_spool
 
 
@@ -67,3 +74,43 @@ def test_checksum_change_fails_closed(tmp_path, monkeypatch):
 
     with pytest.raises(RuntimeError):
         read_spooled_bytes(receipt)
+
+
+def test_stream_upload_route_uses_worker_owned_session(tmp_path, monkeypatch):
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+    Base.metadata.create_all(bind=engine)
+
+    monkeypatch.setattr(settings, "CONNECTOR_UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setattr("app.services.connector_ingestion_pipeline.SessionLocal", TestingSessionLocal)
+
+    def override_db():
+        db = TestingSessionLocal()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_db
+    app.dependency_overrides[require_current_tenant_id] = lambda: "org-test"
+    try:
+        client = TestClient(app)
+        response = client.post(
+            "/v1/evidence/upload-stream?provider=manual_csv",
+            files={
+                "file": (
+                    "sample.csv",
+                    BytesIO(b"timestamp,field,flow_gpm\n2026-07-05 06:00,North,42\n"),
+                    "text/csv",
+                )
+            },
+        )
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(require_current_tenant_id, None)
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["upload_receipt"]["streamed"] is True
+    assert body["rows_parsed"] == 1
+    assert body["evidence_records_created"] == 1

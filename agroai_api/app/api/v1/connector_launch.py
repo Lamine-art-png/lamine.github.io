@@ -10,10 +10,11 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from app.api.v1.connectors import create_or_get_connection, ensure_schema, public_connection, row_to_dict, safe_credential_ref, sanitize_config
+from app.api.v1.connectors import create_or_get_connection, public_connection, row_to_dict, safe_credential_ref, sanitize_config, verify_connector_schema
 from app.core.security import require_current_tenant_id
 from app.db.base import get_db
 from app.models.operational_records import ConnectorConnection, IngestionJob
+from app.services.oauth_state import sign_oauth_state, verify_oauth_state
 from app.services.oauth_urls import oauth_url
 
 router = APIRouter(tags=["connector-launch"])
@@ -121,7 +122,7 @@ async def launch_manifest(provider: ProviderId | None = None, tenant_id: str = D
 
 @router.post("/connectors/launch/start")
 async def start_launch_authorization(payload: LaunchStartRequest, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     manifest = manifest_for(payload.provider)
     auth_pattern = manifest["auth_pattern"]
     mode = "oauth" if auth_pattern == "oauth" else auth_pattern
@@ -130,7 +131,7 @@ async def start_launch_authorization(payload: LaunchStartRequest, tenant_id: str
     auth_error = None
     state = None
     if auth_pattern == "oauth":
-        state = os.urandom(24).hex()
+        state = sign_oauth_state(connection.id)
         auth_url, auth_error = oauth_url(payload.provider, state, payload.redirect_url or callback_url_for(payload.provider))
         status_value = "oauth_pending" if auth_url else "platform_setup_required"
     elif auth_pattern == "service_account":
@@ -152,7 +153,7 @@ async def start_launch_authorization(payload: LaunchStartRequest, tenant_id: str
 
 @router.post("/connectors/launch/access-request")
 async def create_access_request(payload: AccessRequest, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     manifest = manifest_for(payload.provider)
     connection = create_or_get_connection(db, tenant_id=tenant_id, provider=payload.provider, workspace_id=payload.workspace_id, mode=manifest["auth_pattern"], display_name=payload.display_name or manifest["label"], config={"surface": "access_request", "environment_url": payload.environment_url, "field_scope": payload.field_scope, "account_hint": payload.account_hint, "launch_manifest": manifest, **payload.metadata})
     merged = dict(connection.config_json or {})
@@ -168,12 +169,15 @@ async def create_access_request(payload: AccessRequest, tenant_id: str = Depends
 
 @router.get("/connectors/oauth/callback")
 async def oauth_callback(code: str | None = Query(default=None), state: str | None = Query(default=None), error: str | None = Query(default=None), db: Session = Depends(get_db)):
-    ensure_schema(db)
+    verify_connector_schema(db)
     connection = None
     if state:
-        rows = db.query(ConnectorConnection).order_by(ConnectorConnection.updated_at.desc()).limit(500).all()
-        connection = next((row for row in rows if (row.config_json or {}).get("oauth_state") == state), None)
-        if connection is None and ":" in state:
+        verified = verify_oauth_state(state)
+        if verified:
+            candidate = db.get(ConnectorConnection, str(verified["cid"]))
+            if candidate and (candidate.config_json or {}).get("oauth_state") == state:
+                connection = candidate
+        elif ":" in state:
             connection = db.get(ConnectorConnection, state.split(":", 1)[0])
     if not connection:
         return html_status("unknown", "authorization_failed", "AGRO-AI could not match this OAuth callback to a connector session.")

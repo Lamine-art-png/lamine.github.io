@@ -12,7 +12,7 @@ def test_default_settings_fail_closed_for_large_scale():
     codes = _codes(report)
     assert "database.sqlite" in codes
     assert "security.default_secret" in codes
-    assert "scheduler.in_process" in codes
+    assert "scheduler.in_process" not in codes
     assert "connectors.local_upload_storage" in codes
     assert "connectors.object_storage_missing" in codes
     assert "workers.external_queue_missing" in codes

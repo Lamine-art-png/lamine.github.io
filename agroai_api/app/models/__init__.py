@@ -20,7 +20,11 @@ from app.models.forecast import Forecast
 from app.models.saas import (
     AccountRecoveryToken, BillingEvent, Conversation, ConversationMessage,
     EmailVerificationToken, OnboardingState, Organization, OrganizationMembership,
-    SaaSRequest, TeamInvitation, UsageEvent, User, Workspace
+    SaaSRequest, TeamInvitation, UsageEvent, User, UserPreference, Workspace
+)
+from app.models.operational_records import (
+    ChatConversation, ChatMessage, ConnectorConnection, DataSource,
+    EvidenceRecord, GeneratedArtifact, IngestionJob, IntelligenceRun,
 )
 from app.models.compliance import (
     ComplianceJurisdiction, ComplianceOrganizationRole, ComplianceParcel,
@@ -49,7 +53,9 @@ __all__ = [
     "ExecutionVerification", "Forecast", "AccountRecoveryToken", "BillingEvent",
     "Conversation", "ConversationMessage", "EmailVerificationToken", "OnboardingState",
     "Organization", "OrganizationMembership", "SaaSRequest", "TeamInvitation",
-    "UsageEvent", "User", "Workspace", "ComplianceJurisdiction",
+    "UsageEvent", "User", "UserPreference", "Workspace", "ConnectorConnection",
+    "DataSource", "IngestionJob", "EvidenceRecord", "IntelligenceRun",
+    "GeneratedArtifact", "ChatConversation", "ChatMessage", "ComplianceJurisdiction",
     "ComplianceOrganizationRole", "ComplianceParcel", "ComplianceWell",
     "ComplianceMeter", "ComplianceMeasurement", "ComplianceExecutionLedger",
     "ComplianceWaterBudget", "ComplianceEvidence", "ComplianceRulePack",

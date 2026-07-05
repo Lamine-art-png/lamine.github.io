@@ -12,6 +12,7 @@ from app.models import Block, Tenant
 
 def _alembic_config(db_path: Path) -> Config:
     cfg = Config(str(Path(__file__).resolve().parents[2] / "alembic.ini"))
+    cfg.set_main_option("script_location", str(Path(__file__).resolve().parents[2] / "alembic"))
     cfg.set_main_option("sqlalchemy.url", f"sqlite:///{db_path}")
     return cfg
 

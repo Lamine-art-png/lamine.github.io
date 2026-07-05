@@ -7,10 +7,10 @@ import logging
 from contextlib import asynccontextmanager
 from typing import Any, Dict
 
-from fastapi import Body, FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from sqlalchemy import inspect, text
+from sqlalchemy import inspect
 
 from app.core.config import settings
 
@@ -19,119 +19,51 @@ logger = logging.getLogger(__name__)
 VERSION = "2.0.1"
 
 
-def _ensure_column(connection, inspector, table: str, column: str, ddl: str) -> None:
-    columns = {item["name"] for item in inspector.get_columns(table)}
-    if column not in columns:
-        connection.execute(text(f"ALTER TABLE {table} ADD COLUMN {ddl}"))
+_SAAS_REQUIRED_SCHEMA: dict[str, set[str]] = {
+    "users": {"id", "email", "email_verified_at", "email_verification_status", "credentials_changed_at"},
+    "email_verification_tokens": {"id", "user_id", "token_hash", "expires_at", "used_at", "created_at"},
+    "team_invitations": {"id", "organization_id", "email", "role", "status", "invited_by_user_id", "token_hash", "expires_at", "created_at", "updated_at"},
+    "user_preferences": {"user_id", "locale", "timezone", "notifications_json", "ui_json", "created_at", "updated_at"},
+    "saas_requests": {"id", "organization_id", "workspace_id", "user_id", "type", "status", "priority", "subject", "message", "notification_status", "metadata_json", "created_at", "updated_at"},
+}
 
 
-def ensure_saas_portal_runtime_schema() -> None:
-    """Best-effort pilot schema guard; never prevents the API from booting."""
+def saas_portal_schema_status() -> dict[str, Any]:
+    """Read-only schema contract check.
+
+    Schema ownership belongs to Alembic. This verifier deliberately does not
+    create tables, alter columns, or repair request-time drift.
+    """
+    status: dict[str, Any] = {"ready": True, "missing": {}}
     try:
         from app.db.base import engine
 
-        with engine.begin() as connection:
+        with engine.connect() as connection:
             inspector = inspect(connection)
             tables = set(inspector.get_table_names())
-            if "users" not in tables:
-                return
-
-            _ensure_column(connection, inspector, "users", "email_verified_at", "email_verified_at TIMESTAMP")
-            inspector = inspect(connection)
-            _ensure_column(connection, inspector, "users", "email_verification_status", "email_verification_status VARCHAR DEFAULT 'unverified'")
-            connection.execute(text("UPDATE users SET email_verification_status = 'unverified' WHERE email_verification_status IS NULL"))
-
-            tables = set(inspect(connection).get_table_names())
-            if "email_verification_tokens" not in tables:
-                connection.execute(text("""
-                    CREATE TABLE IF NOT EXISTS email_verification_tokens (
-                        id VARCHAR PRIMARY KEY,
-                        user_id VARCHAR NOT NULL,
-                        token_hash VARCHAR NOT NULL UNIQUE,
-                        expires_at TIMESTAMP NOT NULL,
-                        used_at TIMESTAMP,
-                        created_at TIMESTAMP NOT NULL
-                    )
-                """))
-            else:
-                inspector = inspect(connection)
-                for column, ddl in [
-                    ("id", "id VARCHAR"), ("user_id", "user_id VARCHAR"),
-                    ("token_hash", "token_hash VARCHAR"), ("expires_at", "expires_at TIMESTAMP"),
-                    ("used_at", "used_at TIMESTAMP"), ("created_at", "created_at TIMESTAMP"),
-                ]:
-                    _ensure_column(connection, inspector, "email_verification_tokens", column, ddl)
-                    inspector = inspect(connection)
-
-            tables = set(inspect(connection).get_table_names())
-            if "team_invitations" not in tables:
-                connection.execute(text("""
-                    CREATE TABLE IF NOT EXISTS team_invitations (
-                        id VARCHAR PRIMARY KEY,
-                        organization_id VARCHAR NOT NULL,
-                        email VARCHAR NOT NULL,
-                        role VARCHAR NOT NULL,
-                        status VARCHAR NOT NULL,
-                        invited_by_user_id VARCHAR NOT NULL,
-                        token_hash VARCHAR UNIQUE,
-                        expires_at TIMESTAMP,
-                        created_at TIMESTAMP NOT NULL,
-                        updated_at TIMESTAMP NOT NULL
-                    )
-                """))
-            else:
-                inspector = inspect(connection)
-                for column, ddl in [
-                    ("id", "id VARCHAR"), ("organization_id", "organization_id VARCHAR"),
-                    ("email", "email VARCHAR"), ("role", "role VARCHAR"),
-                    ("status", "status VARCHAR"), ("invited_by_user_id", "invited_by_user_id VARCHAR"),
-                    ("token_hash", "token_hash VARCHAR"), ("expires_at", "expires_at TIMESTAMP"),
-                    ("created_at", "created_at TIMESTAMP"), ("updated_at", "updated_at TIMESTAMP"),
-                ]:
-                    _ensure_column(connection, inspector, "team_invitations", column, ddl)
-                    inspector = inspect(connection)
-
-            if "user_preferences" not in set(inspect(connection).get_table_names()):
-                connection.execute(text("""
-                    CREATE TABLE IF NOT EXISTS user_preferences (
-                        user_id VARCHAR PRIMARY KEY,
-                        locale VARCHAR,
-                        timezone VARCHAR,
-                        notifications_json TEXT,
-                        ui_json TEXT,
-                        created_at TIMESTAMP NOT NULL,
-                        updated_at TIMESTAMP NOT NULL
-                    )
-                """))
-            else:
-                inspector = inspect(connection)
-                for column, ddl in [
-                    ("user_id", "user_id VARCHAR"), ("locale", "locale VARCHAR"),
-                    ("timezone", "timezone VARCHAR"), ("notifications_json", "notifications_json TEXT"),
-                    ("ui_json", "ui_json TEXT"), ("created_at", "created_at TIMESTAMP"),
-                    ("updated_at", "updated_at TIMESTAMP"),
-                ]:
-                    _ensure_column(connection, inspector, "user_preferences", column, ddl)
-                    inspector = inspect(connection)
-
-            if "saas_requests" in set(inspect(connection).get_table_names()):
-                inspector = inspect(connection)
-                for column, ddl in [
-                    ("notification_status", "notification_status VARCHAR DEFAULT 'stored'"),
-                    ("metadata_json", "metadata_json JSON"),
-                    ("priority", "priority VARCHAR DEFAULT 'medium'"),
-                    ("source_page", "source_page VARCHAR"),
-                ]:
-                    _ensure_column(connection, inspector, "saas_requests", column, ddl)
-                    inspector = inspect(connection)
+            for table, required_columns in _SAAS_REQUIRED_SCHEMA.items():
+                if table not in tables:
+                    status["missing"][table] = sorted(required_columns)
+                    continue
+                columns = {item["name"] for item in inspector.get_columns(table)}
+                missing_columns = required_columns - columns
+                if missing_columns:
+                    status["missing"][table] = sorted(missing_columns)
     except Exception:
-        logger.exception("SaaS Portal runtime schema guard failed; continuing startup")
+        logger.exception("SaaS Portal schema verification failed")
+        status["ready"] = False
+        status["error"] = "schema_verification_failed"
+        return status
+    status["ready"] = not bool(status["missing"])
+    return status
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Start optional background services without making them API boot blockers."""
-    ensure_saas_portal_runtime_schema()
+    schema_status = saas_portal_schema_status()
+    if not schema_status["ready"]:
+        logger.warning("SaaS Portal schema is not ready; run Alembic migrations before serving production traffic: %s", schema_status)
     scheduler_started = False
 
     if settings.ENABLE_SCHEDULER and settings.WISECONN_API_KEY:
@@ -235,6 +167,22 @@ async def health_payload() -> Dict[str, str]:
     return {"status": "ok", "service": "agroai-api", "version": VERSION, "checked_at": datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z"}
 
 
+@app.get("/v1/readiness")
+async def readiness_v1() -> Dict[str, Any]:
+    from app.services.production_readiness import evaluate_production_readiness
+
+    report = evaluate_production_readiness(settings)
+    schema_status = saas_portal_schema_status()
+    return {
+        "status": "ready" if report.ready and schema_status["ready"] else "not_ready",
+        "service": "agroai-api",
+        "version": VERSION,
+        "schema": schema_status,
+        "production": report.to_dict(),
+        "checked_at": datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z",
+    }
+
+
 @app.get("/health")
 async def health_root() -> Dict[str, str]:
     return await health_payload()
@@ -285,61 +233,17 @@ async def email_delivery_runtime_status() -> Dict[str, Any]:
     }
 
 
-@app.post("/v1/auth/email-verification/request")
-async def email_verification_request_runtime(payload: Dict[str, Any] = Body(default_factory=dict)) -> Dict[str, Any]:
-    stage = "validate_email"
-    email = str(payload.get("email") or "").strip().lower()
-    if not email or "@" not in email or "." not in email.rsplit("@", 1)[-1]:
-        raise HTTPException(status_code=422, detail="valid email required")
-
-    from app.db.base import SessionLocal
-    from app.models.saas import User
-    from app.services.email_delivery import send_email
-    from app.services.email_verification import _verification_email_html, create_verification_token, verification_base_url
-
-    db = SessionLocal()
-    try:
-        stage = "schema_guard"
-        ensure_saas_portal_runtime_schema()
-        stage = "find_user"
-        user = db.query(User).filter(User.email == email).first()
-        if not user:
-            return {"message": "If an account exists, we processed the verification request.", "delivery": {"delivery": "unknown", "provider": "none", "reason": "account_not_found", "stage": stage}}
-        if user.email_verification_status == "verified" and user.email_verified_at:
-            return {"message": "This account is already verified.", "delivery": {"delivery": "not_needed", "provider": "none", "reason": "already_verified", "stage": stage}}
-        stage = "create_token"
-        token = create_verification_token(db, user)
-        db.commit()
-        stage = "send_email"
-        verification_url = f"{verification_base_url()}/verify-email?token={token}"
-        result = send_email(
-            to_email=user.email,
-            subject="Confirm your AGRO-AI email address",
-            text_body=(
-                "Confirm your email address to activate your AGRO-AI Enterprise Portal workspace.\n\n"
-                f"Open this link: {verification_url}\n\n"
-                "This link expires in 24 hours."
-            ),
-            html_body=_verification_email_html(verification_url=verification_url),
-        )
-        if result.get("ok"):
-            return {"message": "We sent a verification link to your email.", "delivery": {"delivery": "sent", "provider": result.get("provider"), "status_code": result.get("status_code"), "reason": "accepted", "stage": stage}}
-        return {"message": "Email verification is required, but the email provider did not accept the message.", "delivery": {"delivery": "failed", "provider": result.get("provider") or "none", "status_code": result.get("status_code"), "reason": result.get("reason") or "provider_failed", "stage": stage}}
-    except Exception as exc:
-        db.rollback()
-        logger.exception("Verification email operational route failed stage=%s", stage)
-        return {"message": "Email verification is required, but the verification email could not be sent.", "delivery": {"delivery": "failed", "provider": "none", "reason": exc.__class__.__name__, "stage": stage}}
-    finally:
-        db.close()
-
-
 from app.api.v1.auth import router as auth_router  # noqa: E402
 from app.api.v1.billing import router as billing_router  # noqa: E402
+from app.api.v1.evaluation import legacy_router as evaluation_legacy_router  # noqa: E402
+from app.api.v1.evaluation import router as evaluation_router  # noqa: E402
 from app.api.v1.preferences import router as preferences_router  # noqa: E402
 from app.api.v1.product_shell import router as product_shell_router  # noqa: E402
 
 app.include_router(auth_router, prefix="/v1")
 app.include_router(billing_router, prefix="/v1")
+app.include_router(evaluation_router)
+app.include_router(evaluation_legacy_router)
 app.include_router(preferences_router, prefix="/v1")
 app.include_router(product_shell_router, prefix="/v1")
 
@@ -402,6 +306,9 @@ app.include_router(connector_launch_router, prefix="/v1")
 
 from app.api.v1.connectors import router as connectors_router  # noqa: E402
 app.include_router(connectors_router, prefix="/v1")
+
+from app.api.v1.connector_stream_api import router as connector_stream_router  # noqa: E402
+app.include_router(connector_stream_router, prefix="/v1")
 
 from app.api.v1.operator_cockpit import router as operator_cockpit_router  # noqa: E402
 app.include_router(operator_cockpit_router, prefix="/v1")

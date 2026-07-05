@@ -52,6 +52,14 @@ _HEAD_SCHEMA_SENTINELS = {
     # 009 starter field context
     "telemetry",
     "recommendations",
+    # 011 operational connector/intelligence records
+    "user_preferences",
+    "connector_connections",
+    "data_sources",
+    "ingestion_jobs",
+    "evidence_records",
+    "intelligence_runs",
+    "generated_artifacts",
 }
 
 

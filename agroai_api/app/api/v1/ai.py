@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime, timedelta
 from typing import Any
 
@@ -425,6 +426,40 @@ def _weak_or_empty(body: dict[str, Any]) -> bool:
     return any(marker in primary for marker in bad)
 
 
+def _looks_like_json_object(content: str | None) -> bool:
+    text = str(content or "").strip()
+    text = re.sub(r"<think>.*?</think>", "", text, flags=re.IGNORECASE | re.DOTALL).strip()
+    if text.startswith("```"):
+        text = "\n".join(line for line in text.splitlines() if not line.strip().startswith("```")).strip()
+    return text.startswith("{") and text.endswith("}")
+
+
+def _normalize_agent_body(body: dict[str, Any], plan_body: dict[str, Any], context: EvidenceContext) -> dict[str, Any]:
+    summary = str(
+        body.get("summary")
+        or body.get("answer")
+        or body.get("recommendation")
+        or body.get("proof_summary")
+        or body.get("readiness_status")
+        or "AGRO-AI reviewed the available tenant-scoped evidence."
+    )
+    normalized = {
+        **body,
+        "summary": summary,
+        "answer": str(body.get("answer") or summary),
+        "work_completed": list(body.get("work_completed") or ["Reviewed tenant-scoped evidence context."]),
+        "available_data": list(body.get("available_data") or [_evidence_label(item) for item in context.evidence]),
+        "missing_data": list(body.get("missing_data") or context.missing_data),
+        "agent_plan": list(body.get("agent_plan") or plan_body.get("answer_strategy") or plan_body.get("operations_to_run") or []),
+        "recommendations": list(body.get("recommendations") or []),
+        "next_actions": list(body.get("next_actions") or []),
+        "risk_flags": list(body.get("risk_flags") or []),
+        "confidence": str(body.get("confidence") or ("low" if context.missing_data else "medium")),
+        "customer_safe": bool(body.get("customer_safe", True)),
+    }
+    return normalized
+
+
 async def _run_ai(
     *,
     task: str,
@@ -457,7 +492,10 @@ async def _run_ai(
             return local_plain_body(fallback_answer, context, question=user_instruction), result
         return local_plain_body(answer, context, question=user_instruction), result
 
-    messages = [
+    model_task = TASK_PROFILE_MAP.get(task, "chat")
+    task_instruction = TASK_PROMPTS.get(task, TASK_PROMPTS["chat"])
+    context_json = json.dumps(context.model_dump(mode="json"), default=str)
+    planner_messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         {
             "role": "user",
@@ -492,10 +530,14 @@ async def _run_ai(
     ]
     answer_result, _selection = await router.run(task=model_task, messages=final_messages, temperature=temperature, response_format={"type": "json_object"})
     body = parse_model_json(answer_result.content)
+    if answer_result.status == "ok" and not _looks_like_json_object(answer_result.content):
+        body["_safe_mode"] = True
 
     if answer_result.status != "ok" or answer_result.demo_fallback or body.get("_safe_mode") or _weak_or_empty(body):
         fallback = _deterministic_body(context, user_instruction=user_instruction, task=task)
         fallback["work_completed"] = list(dict.fromkeys((fallback.get("work_completed") or []) + ["Attempted live model execution, but no customer-safe answer was returned."]))
+        if body.get("_safe_mode"):
+            fallback["_safe_mode"] = True
         return fallback, answer_result
 
     return _normalize_agent_body(body, plan_body, context), answer_result

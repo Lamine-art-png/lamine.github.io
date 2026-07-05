@@ -6,7 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import text
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_org_membership, require_workspace_access
@@ -57,19 +57,21 @@ def _workspace_payload(workspace: Workspace) -> dict:
     return {"id": workspace.id, "organization_id": workspace.organization_id, "name": workspace.name, "crop": workspace.crop, "region": workspace.region, "mode": workspace.mode, "created_at": workspace.created_at.isoformat(), "updated_at": workspace.updated_at.isoformat()}
 
 
-def _ensure_preferences_table(db: Session) -> None:
-    db.execute(text("""
-        CREATE TABLE IF NOT EXISTS user_preferences (
-            user_id VARCHAR PRIMARY KEY,
-            locale VARCHAR,
-            timezone VARCHAR,
-            notifications_json TEXT,
-            ui_json TEXT,
-            created_at TIMESTAMP NOT NULL,
-            updated_at TIMESTAMP NOT NULL
+def _verify_preferences_table(db: Session) -> None:
+    inspector = inspect(db.get_bind())
+    if "user_preferences" not in set(inspector.get_table_names()):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "preferences_schema_not_ready", "action": "run_alembic_upgrade_head"},
         )
-    """))
-    db.commit()
+    columns = {column["name"] for column in inspector.get_columns("user_preferences")}
+    required = {"user_id", "locale", "timezone", "notifications_json", "ui_json", "created_at", "updated_at"}
+    missing = required - columns
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "preferences_schema_not_ready", "missing": sorted(missing), "action": "run_alembic_upgrade_head"},
+        )
 
 
 def _json_dict(value: Any, fallback: dict | None = None) -> dict:
@@ -95,7 +97,7 @@ def _preferences_payload(row: Any | None, user: User) -> dict:
 
 
 def _get_preferences_row(db: Session, user_id: str):
-    _ensure_preferences_table(db)
+    _verify_preferences_table(db)
     return db.execute(text("SELECT * FROM user_preferences WHERE user_id = :user_id"), {"user_id": user_id}).first()
 
 

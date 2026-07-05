@@ -54,7 +54,7 @@ class Settings(BaseSettings):
     # Scheduler
     SYNC_INTERVAL_MINUTES: int = 15  # How often to run WiseConn sync
     SYNC_LOOKBACK_DAYS: int = 14  # How many days of history to sync
-    ENABLE_SCHEDULER: bool = True  # Set False to disable background sync
+    ENABLE_SCHEDULER: bool = False  # External worker/scheduler plane is required for production scale.
 
     # External Providers
     WISECONN_API_URL: str = "https://api.wiseconn.com"
@@ -129,6 +129,11 @@ class Settings(BaseSettings):
     # Render free instances have ephemeral disk; use a Render Disk/R2/S3 later
     # for production retention. This makes uploads functional immediately.
     CONNECTOR_UPLOAD_DIR: str = "/tmp/agroai_uploads"
+    CONNECTOR_OBJECT_STORAGE_BACKEND: str = "disabled"
+    CONNECTOR_MAX_UPLOAD_BYTES: int = 25 * 1024 * 1024
+    CONNECTOR_STREAM_CHUNK_BYTES: int = 1024 * 1024
+    TASK_QUEUE_BACKEND: str = "disabled"
+    REDIS_URL: str = ""
     DROPBOX_OAUTH_CLIENT_ID: str = ""
     BOX_OAUTH_CLIENT_ID: str = ""
     SLACK_OAUTH_CLIENT_ID: str = ""
