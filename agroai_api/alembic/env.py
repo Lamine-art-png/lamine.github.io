@@ -17,36 +17,41 @@ from app.core.config import settings
 # Import all models to ensure they're registered
 from app import models  # noqa
 
-# this is the Alembic Config object, which provides
-# access to the values within the .ini file in use.
 config = context.config
 
-# Interpret the config file for Python logging.
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# add your model's MetaData object here
-# for 'autogenerate' support
 target_metadata = Base.metadata
 
-# Override sqlalchemy.url from settings if DATABASE_URL is set
 if settings.DATABASE_URL:
     config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 
-# Tables from later AGRO-AI portal/assurance migrations. If these already
-# exist in an unversioned Render database, the DB may have been created by
-# earlier startup/schema mutation rather than Alembic. Only that unversioned
-# legacy case is eligible for automatic adoption. A database with an explicit
-# Alembic revision must always advance through normal migrations; silently
-# stamping a versioned database to head would skip real schema changes.
-_DIRTY_SCHEMA_SENTINELS = {
-    "agent_workflow_runs",
+# Automatic adoption is an escape hatch only for unversioned legacy Render
+# databases whose schema already proves current-head shape. Requiring a
+# representative object from every later migration layer prevents an older or
+# partially migrated schema from being silently stamped past required DDL.
+_HEAD_SCHEMA_SENTINELS = {
+    # 003 global compliance kernel
+    "compliance_export_metadata",
+    # 004 assurance audit MVP
     "assurance_passports",
-    "assurance_audit_reports",
-    "compliance_jurisdictions",
-    "compliance_measurements",
-    "ingestion_runs",
+    # 005 deterministic agent workflow layer
+    "agent_workflow_runs",
+    # 006 SaaS auth/billing foundation
+    "users",
+    "organizations",
+    "workspaces",
+    # 007 portal v2
+    "conversations",
+    "conversation_messages",
+    # 008 portal v2.1 security
+    "email_verification_tokens",
+    "team_invitations",
+    # 009 starter field context
+    "telemetry",
+    "recommendations",
 }
 
 
@@ -83,13 +88,11 @@ def _stamp_connection_to_heads(connection, heads: list[str]) -> None:
 
 
 def _adopt_dirty_render_schema(connection) -> None:
-    """Adopt only unversioned legacy Render schemas.
+    """Adopt only unversioned legacy databases that already match head shape.
 
-    This escape hatch exists for databases created by historical startup-time
-    schema mutation that contain later-stage tables but no Alembic history.
-    Once a database has any explicit Alembic version, that version is
-    authoritative and normal migrations must run. Never rewrite an explicit
-    older revision to current head merely because a sentinel table exists.
+    Any explicit Alembic version is authoritative and must advance through
+    normal migrations. Unversioned partial schemas are also migrated normally;
+    they are never promoted merely because one historical table exists.
     """
     if connection.dialect.name == "sqlite":
         return
@@ -98,17 +101,16 @@ def _adopt_dirty_render_schema(connection) -> None:
     if not heads:
         return
 
-    tables = _table_names(connection)
-    has_dirty_schema = bool(tables.intersection(_DIRTY_SCHEMA_SENTINELS))
-    if not has_dirty_schema:
-        return
-
     current_versions = _current_alembic_versions(connection)
     if current_versions:
         return
 
+    tables = _table_names(connection)
+    if not _HEAD_SCHEMA_SENTINELS.issubset(tables):
+        return
+
     print(
-        "Alembic adopting unversioned legacy Render schema; "
+        "Alembic adopting unversioned current-head-shaped Render schema; "
         f"current_versions=[] heads={sorted(heads)}"
     )
     _stamp_connection_to_heads(connection, sorted(heads))
