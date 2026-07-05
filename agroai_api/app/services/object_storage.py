@@ -10,9 +10,6 @@ from pathlib import Path
 from typing import Any, BinaryIO
 from urllib.parse import urlparse
 
-import boto3
-from botocore.config import Config
-
 from app.core.config import settings
 
 
@@ -30,11 +27,42 @@ class StoredObject:
 
 def _safe_component(value: str, *, fallback: str) -> str:
     cleaned = _SAFE.sub("_", value or "").strip("._")
-    return (cleaned[:120] or fallback)
+    return cleaned[:120] or fallback
 
 
 def _s3_uri(bucket: str, key: str) -> str:
     return f"s3://{bucket}/{key}"
+
+
+def _build_default_s3_client():
+    """Create the S3 client only when durable object storage is actually used.
+
+    This keeps API/test startup independent from boto3 import side effects in
+    environments that intentionally run with durable connector storage disabled.
+    The production requirements still install boto3; the lazy boundary is about
+    truthful runtime coupling, not silently masking a missing production dependency.
+    """
+    try:
+        import boto3
+        from botocore.config import Config
+    except ModuleNotFoundError as exc:  # pragma: no cover - exercised by minimal runtimes
+        raise RuntimeError(
+            "S3/R2 connector object storage is configured but boto3 is unavailable"
+        ) from exc
+
+    endpoint_url = getattr(settings, "CONNECTOR_OBJECT_ENDPOINT_URL", "").strip() or None
+    region_name = getattr(settings, "CONNECTOR_OBJECT_REGION", "us-east-1").strip() or "us-east-1"
+    return boto3.client(
+        "s3",
+        endpoint_url=endpoint_url,
+        region_name=region_name,
+        config=Config(
+            signature_version="s3v4",
+            connect_timeout=5,
+            read_timeout=30,
+            retries={"max_attempts": 4, "mode": "standard"},
+        ),
+    )
 
 
 class S3ObjectStore:
@@ -43,12 +71,7 @@ class S3ObjectStore:
             raise RuntimeError("CONNECTOR_OBJECT_BUCKET is required for S3 object storage")
         self.bucket = bucket
         self.prefix = prefix.strip("/") or "agroai"
-        self.client = client or boto3.client(
-            "s3",
-            endpoint_url=os.getenv("CONNECTOR_OBJECT_ENDPOINT_URL", "").strip() or None,
-            region_name=os.getenv("CONNECTOR_OBJECT_REGION", "us-east-1").strip() or "us-east-1",
-            config=Config(signature_version="s3v4", retries={"max_attempts": 4, "mode": "standard"}),
-        )
+        self.client = client or _build_default_s3_client()
 
     def _key(self, *, tenant_id: str, connection_id: str, filename: str) -> str:
         now = datetime.utcnow()
@@ -138,7 +161,9 @@ class S3ObjectStore:
 
 def object_storage_configured() -> bool:
     backend = getattr(settings, "CONNECTOR_OBJECT_STORAGE_BACKEND", "disabled").strip().lower()
-    return backend in {"s3", "r2", "s3_compatible"} and bool(os.getenv("CONNECTOR_OBJECT_BUCKET", "").strip())
+    return backend in {"s3", "r2", "s3_compatible"} and bool(
+        getattr(settings, "CONNECTOR_OBJECT_BUCKET", "").strip()
+    )
 
 
 def get_object_store(*, client: Any | None = None) -> S3ObjectStore:
@@ -146,7 +171,7 @@ def get_object_store(*, client: Any | None = None) -> S3ObjectStore:
     if backend not in {"s3", "r2", "s3_compatible"}:
         raise RuntimeError("durable connector object storage is not configured")
     return S3ObjectStore(
-        bucket=os.getenv("CONNECTOR_OBJECT_BUCKET", "").strip(),
-        prefix=os.getenv("CONNECTOR_OBJECT_PREFIX", "agroai").strip() or "agroai",
+        bucket=getattr(settings, "CONNECTOR_OBJECT_BUCKET", "").strip(),
+        prefix=getattr(settings, "CONNECTOR_OBJECT_PREFIX", "agroai").strip() or "agroai",
         client=client,
     )
