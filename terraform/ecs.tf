@@ -32,12 +32,18 @@ resource "aws_cloudwatch_log_group" "connector_worker" {
 data "aws_region" "current" {}
 
 locals {
+  managed_runtime_secret_refs = local.managed_runtime_enabled ? {
+    for name in local.managed_runtime_secret_names :
+    name => "${aws_secretsmanager_secret.runtime[0].arn}:${name}::"
+  } : {}
+  runtime_secret_refs = merge(local.managed_runtime_secret_refs, var.ecs_runtime_secrets)
+
   base_runtime_environment = {
     APP_ENV                                 = "production"
     ENABLE_SCHEDULER                        = "false"
     ENABLE_METRICS                          = "true"
     SYNC_INTERVAL_MINUTES                   = tostring(var.sync_interval_minutes)
-    TASK_QUEUE_BACKEND                      = trimspace(local.runtime_redis_url) != "" ? "redis_streams" : "disabled"
+    TASK_QUEUE_BACKEND                      = contains(keys(local.runtime_secret_refs), "REDIS_URL") ? "redis_streams" : "disabled"
     TASK_QUEUE_STREAM                       = var.task_queue_stream
     TASK_QUEUE_GROUP                        = var.task_queue_group
     TASK_QUEUE_STREAM_MAXLEN                = tostring(var.task_queue_stream_maxlen)
@@ -59,7 +65,7 @@ locals {
     }
   ]
   runtime_secret_list = [
-    for name, value_from in var.ecs_runtime_secrets : {
+    for name, value_from in local.runtime_secret_refs : {
       name      = name
       valueFrom = value_from
     }
@@ -194,7 +200,7 @@ resource "aws_ecs_service" "connector_worker" {
   name            = "${var.project}-connector-worker"
   cluster         = aws_ecs_cluster.api.id
   task_definition = aws_ecs_task_definition.connector_worker.arn
-  desired_count   = trimspace(local.runtime_redis_url) != "" ? var.worker_desired_count : 0
+  desired_count   = contains(keys(local.runtime_secret_refs), "REDIS_URL") ? var.worker_desired_count : 0
   launch_type     = "FARGATE"
 
   deployment_minimum_healthy_percent = 50
