@@ -24,14 +24,18 @@ class Settings(BaseSettings):
     SECRET_KEY: str = "dev-secret-key-change-in-production-min-32-chars"
     WEBHOOK_SECRET: str = "dev-webhook-secret-change-in-production"
     ALGORITHM: str = "HS256"
-    # Internal pilots need stable sessions while validating connector uploads and sync.
-    # Override in production with a stricter value once refresh-token auth is added.
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 10080
+    OAUTH_STATE_SIGNING_KEY: str = ""
+    OAUTH_STATE_TTL_SECONDS: int = 900
+    CONNECTOR_CREDENTIAL_MASTER_KEY: str = ""
+    CONNECTOR_CREDENTIAL_KEYS_JSON: str = ""
+    CONNECTOR_CREDENTIAL_ACTIVE_KEY_VERSION: str = "v1"
 
     # App
     APP_NAME: str = "AGRO-AI API"
     VERSION: str = "1.1.0"
     API_V1_PREFIX: str = "/v1"
+    APP_ENV: str = "development"
 
     # Observability
     LOG_LEVEL: str = "INFO"
@@ -52,24 +56,24 @@ class Settings(BaseSettings):
     COMPLIANCE_OBJECT_STORAGE_BACKEND: str = "disabled"
 
     # Scheduler
-    SYNC_INTERVAL_MINUTES: int = 15  # How often to run WiseConn sync
-    SYNC_LOOKBACK_DAYS: int = 14  # How many days of history to sync
-    ENABLE_SCHEDULER: bool = False  # External worker/scheduler plane is required for production scale.
+    SYNC_INTERVAL_MINUTES: int = 15
+    SYNC_LOOKBACK_DAYS: int = 14
+    ENABLE_SCHEDULER: bool = False
 
     # External Providers
     WISECONN_API_URL: str = "https://api.wiseconn.com"
-    WISECONN_API_KEY: str = ""  # Set via env var WISECONN_API_KEY
+    WISECONN_API_KEY: str = ""
     WISECONN_TIMEOUT_SECONDS: int = 30
     WISECONN_MAX_RETRIES: int = 3
     RAINBIRD_API_URL: str = "http://mock-rainbird"
     OPENET_API_URL: str = "http://mock-openet"
 
     TALGIL_API_URL: str = "https://external.talgil.com/v1"
-    TALGIL_API_KEY: str = ""  # Set via env var TALGIL_API_KEY
+    TALGIL_API_KEY: str = ""
     TALGIL_TIMEOUT_SECONDS: int = 30
     TALGIL_MAX_RETRIES: int = 3
 
-    DEMO_API_KEY: str = "changeme-demo-key"  # override via env in prod
+    DEMO_API_KEY: str = "changeme-demo-key"
 
     # SaaS app + Stripe billing
     APP_URL: str = "https://app.agroai-pilot.com"
@@ -97,8 +101,6 @@ class Settings(BaseSettings):
     STRIPE_PRICE_ENTERPRISE: str = ""
 
     # Email delivery and verification operations.
-    # RESEND_APP_URL is intentionally separate from APP_URL so verification
-    # links can be routed without disturbing other portal/runtime config.
     RESEND_API_KEY: str = ""
     RESEND_APP_URL: str = ""
     SENDGRID_API_KEY: str = ""
@@ -109,8 +111,7 @@ class Settings(BaseSettings):
     FROM_EMAIL: str = ""
     EMAIL_ADMIN_TOKEN: str = ""
 
-    # AI gateway. Leave unset to keep startup safe and return deterministic
-    # unavailable responses instead of fabricated model output.
+    # AI gateway
     AI_PROVIDER: str = ""
     AI_BASE_URL: str = ""
     AI_API_KEY: str = ""
@@ -119,21 +120,34 @@ class Settings(BaseSettings):
     AI_REASONING_MODEL: str = ""
     AI_REPORT_MODEL: str = ""
     AI_LOCAL_MODEL: str = ""
-    # Comma-separated OpenAI-compatible backup models. Used when the primary
-    # hosted model is rejected/unavailable, so AGRO-AI does not silently fall
-    # into deterministic fallback because of one bad model id.
     AI_MODEL_FALLBACKS: str = "z-ai/glm-5.2,z-ai/glm-4.5,qwen/qwen3-max,deepseek/deepseek-r1-0528"
     AI_TIMEOUT_SECONDS: int = 30
+    INTELLIGENCE_FRESHNESS_POLICY_JSON: str = ""
 
-    # Connector ingestion / uploaded evidence storage.
-    # Render free instances have ephemeral disk; use a Render Disk/R2/S3 later
-    # for production retention. This makes uploads functional immediately.
+    # Connector ingestion / transient spool
     CONNECTOR_UPLOAD_DIR: str = "/tmp/agroai_uploads"
-    CONNECTOR_OBJECT_STORAGE_BACKEND: str = "disabled"
     CONNECTOR_MAX_UPLOAD_BYTES: int = 25 * 1024 * 1024
     CONNECTOR_STREAM_CHUNK_BYTES: int = 1024 * 1024
+
+    # Durable S3/R2-compatible object storage
+    CONNECTOR_OBJECT_STORAGE_BACKEND: str = "disabled"
+    CONNECTOR_OBJECT_BUCKET: str = ""
+    CONNECTOR_OBJECT_PREFIX: str = "agroai"
+    CONNECTOR_OBJECT_REGION: str = "us-east-1"
+    CONNECTOR_OBJECT_ENDPOINT_URL: str = ""
+
+    # External Redis Streams worker plane
     TASK_QUEUE_BACKEND: str = "disabled"
     REDIS_URL: str = ""
+    TASK_QUEUE_STREAM: str = "agroai:tasks"
+    TASK_QUEUE_GROUP: str = "agroai-workers"
+    TASK_QUEUE_STREAM_MAXLEN: int = 100000
+    TASK_QUEUE_BLOCK_MS: int = 5000
+    TASK_QUEUE_LEASE_SECONDS: int = 120
+    TASK_QUEUE_MAX_ATTEMPTS: int = 5
+    TASK_QUEUE_RETRY_BASE_SECONDS: int = 15
+
+    # Connector provider setup
     DROPBOX_OAUTH_CLIENT_ID: str = ""
     BOX_OAUTH_CLIENT_ID: str = ""
     SLACK_OAUTH_CLIENT_ID: str = ""
@@ -141,7 +155,6 @@ class Settings(BaseSettings):
     GOOGLE_EARTH_ENGINE_PROJECT_ID: str = ""
     GOOGLE_EARTH_ENGINE_SERVICE_ACCOUNT_JSON: str = ""
 
-    # Strip whitespace/tabs from env vars that may be copy-pasted with junk
     @field_validator("*", mode="before")
     @classmethod
     def strip_whitespace(cls, v):
@@ -152,5 +165,6 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = True
+
 
 settings = Settings()
