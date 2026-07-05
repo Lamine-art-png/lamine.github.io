@@ -8,6 +8,7 @@ import httpx
 
 from app.core.config import settings
 from app.services.language import language_matches_target, resolve_language
+from app.services.operational_invariants import check_operational_invariants
 
 
 @dataclass
@@ -136,7 +137,9 @@ class LiveIntelligence:
         ]
         result = await self.run_remote(cfg, [model], request, "fast")
         if result and language_matches_target(result[0], code):
-            return result[0]
+            invariant_check = check_operational_invariants(answer, result[0])
+            if invariant_check.ok:
+                return result[0]
         return None
 
     async def run(self, task: str, question: str, messages: list[dict[str, str]], preferred_language: str | None) -> LiveResult:
