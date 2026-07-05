@@ -13,8 +13,8 @@ locals {
     aws_elasticache_replication_group.connector_queue[0].primary_endpoint_address,
   ) : var.redis_url
 
-  runtime_vault_key = local.managed_runtime_enabled ? random_id.connector_vault_key[0].b64_url : var.connector_credential_master_key
-  runtime_oauth_key = local.managed_runtime_enabled ? random_password.oauth_state_signing_key[0].result : var.oauth_state_signing_key
+  runtime_vault_key  = local.managed_runtime_enabled ? random_id.connector_vault_key[0].b64_url : var.connector_credential_master_key
+  runtime_oauth_key  = local.managed_runtime_enabled ? random_password.oauth_state_signing_key[0].result : var.oauth_state_signing_key
   runtime_app_secret = local.managed_runtime_enabled ? random_password.application_secret[0].result : var.secret_key
 }
 
@@ -49,10 +49,10 @@ resource "aws_s3_bucket" "connector_objects" {
   force_destroy = var.connector_object_force_destroy
 
   tags = {
-    Project     = var.project
-    Purpose     = "connector-object-custody"
-    DataClass   = "customer-evidence"
-    ManagedBy   = "terraform"
+    Project   = var.project
+    Purpose   = "connector-object-custody"
+    DataClass = "customer-evidence"
+    ManagedBy = "terraform"
   }
 }
 
@@ -218,11 +218,11 @@ resource "aws_secretsmanager_secret_version" "runtime" {
 
   secret_id = aws_secretsmanager_secret.runtime[0].id
   secret_string = jsonencode({
-    SECRET_KEY                         = local.runtime_app_secret
-    REDIS_URL                          = local.runtime_redis_url
-    CONNECTOR_CREDENTIAL_MASTER_KEY    = local.runtime_vault_key
-    CONNECTOR_CREDENTIAL_KEYS_JSON     = var.connector_credential_keys_json
-    OAUTH_STATE_SIGNING_KEY            = local.runtime_oauth_key
+    SECRET_KEY                      = local.runtime_app_secret
+    REDIS_URL                       = local.runtime_redis_url
+    CONNECTOR_CREDENTIAL_MASTER_KEY = local.runtime_vault_key
+    CONNECTOR_CREDENTIAL_KEYS_JSON  = var.connector_credential_keys_json
+    OAUTH_STATE_SIGNING_KEY         = local.runtime_oauth_key
   })
 }
 
