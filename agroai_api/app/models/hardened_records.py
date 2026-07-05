@@ -1,11 +1,16 @@
 """ORM projections for hardening columns added after the original operational models."""
 from __future__ import annotations
 
+import uuid
 from datetime import datetime
 
 from sqlalchemy import BigInteger, Column, DateTime, Integer, JSON, String
 
 from app.db.base import Base
+
+
+def _new_id() -> str:
+    return str(uuid.uuid4())
 
 
 class DataSourceIdentity(Base):
@@ -23,11 +28,15 @@ class IngestionJobState(Base):
     __tablename__ = "ingestion_jobs"
     __table_args__ = {"extend_existing": True}
 
-    id = Column(String, primary_key=True)
+    id = Column(String, primary_key=True, default=_new_id)
     tenant_id = Column(String, nullable=False)
-    status = Column(String, nullable=False)
-    input_json = Column(JSON, nullable=False)
-    output_json = Column(JSON, nullable=False)
+    workspace_id = Column(String, nullable=True)
+    connector_connection_id = Column(String, nullable=True)
+    data_source_id = Column(String, nullable=True)
+    job_type = Column(String, nullable=False)
+    status = Column(String, nullable=False, default="queued")
+    input_json = Column(JSON, nullable=False, default=dict)
+    output_json = Column(JSON, nullable=False, default=dict)
     error = Column(String, nullable=True)
     idempotency_key = Column(String(64), nullable=True)
     attempt_count = Column(Integer, nullable=False, default=0)
@@ -37,6 +46,7 @@ class IngestionJobState(Base):
     worker_id = Column(String, nullable=True)
     last_heartbeat_at = Column(DateTime, nullable=True)
     cancelled_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     updated_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
 
