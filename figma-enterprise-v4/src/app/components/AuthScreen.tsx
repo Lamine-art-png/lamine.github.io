@@ -198,6 +198,11 @@ export function AuthScreen() {
                   <Field label="Password">
                     <Input type="password" value={loginForm.password} onChange={(event) => setLoginForm({ ...loginForm, password: event.target.value })} autoComplete="current-password" required />
                   </Field>
+                  <div className="flex justify-end">
+                    <a href="/recover-account" className="text-[13px] font-medium text-[#2D6A4F] hover:text-[#1E5B40] hover:underline">
+                      Forgot password?
+                    </a>
+                  </div>
                   <Button type="submit" disabled={isSubmitting} className="w-full bg-[#10231B] hover:bg-[#183528] text-white">
                     {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                     Sign in
@@ -218,7 +223,7 @@ export function AuthScreen() {
                     <Input type="email" value={registerForm.email} onChange={(event) => setRegisterForm({ ...registerForm, email: event.target.value })} autoComplete="email" required />
                   </Field>
                   <Field label="Password">
-                    <Input type="password" value={registerForm.password} onChange={(event) => setRegisterForm({ ...registerForm, password: event.target.value })} autoComplete="new-password" minLength={8} required />
+                    <Input type="password" value={registerForm.password} onChange={(event) => setRegisterForm({ ...registerForm, password: event.target.value })} autoComplete="new-password" minLength={12} required />
                   </Field>
                   <div className="grid gap-3 sm:grid-cols-2">
                     <Field label="Organization name">
