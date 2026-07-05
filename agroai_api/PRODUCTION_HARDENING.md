@@ -1,18 +1,21 @@
 # AGRO-AI production process topology
 
-This document describes the deployable hardening architecture implemented on `platform-production-hardening`.
+This document describes the deployable hardening architecture implemented on
+`platform-production-hardening` and aligned to the Cloudflare release path.
 
 ## Processes
 
 ### Release migration
 
-Run exactly once per release, before new web/worker replicas receive traffic:
+Run exactly once per release, before new application code receives production
+traffic:
 
 ```bash
 alembic upgrade head
 ```
 
-Web replicas and workers must never run schema creation or repair at request time.
+Web processes and task consumers must never create or repair managed schema at
+request time.
 
 ### Web/API
 
@@ -20,51 +23,79 @@ Web replicas and workers must never run schema creation or repair at request tim
 uvicorn app.main:app --host 0.0.0.0 --port "$PORT"
 ```
 
-The web tier is expected to be horizontally replicated. In-process scheduling must remain disabled.
+The API remains the authoritative FastAPI/SQLAlchemy application. In-process
+scheduling must remain disabled. Public browser traffic enters through the
+Cloudflare Worker edge gateway on `api.agroai-pilot.com/v1/*`.
 
-### Connector worker
+### Connector task execution
 
-```bash
-python -m app.workers.connector_worker
-```
+Production connector jobs use Cloudflare Queues. The queue consumer delivers a
+bounded task envelope to the protected API route:
 
-Workers use Redis Streams consumer groups. Delivery is at least once. Database leases and ingestion idempotency prevent duplicate logical processing. A worker publishes pending transactional outbox rows before consuming work and can reclaim abandoned Redis messages after the configured lease interval.
+`POST /v1/internal/queue/connector-task`
 
-Scale worker replicas independently from web replicas.
+The route and the compatibility worker both call
+`app.services.connector_task_processor.process_connector_task`, so transport
+selection cannot fork connector business semantics.
+
+The legacy Redis consumer remains available for isolated compatibility and
+integration testing; it is not required when `TASK_QUEUE_BACKEND` selects
+Cloudflare Queues.
 
 ## Required production dependencies
 
 ### PostgreSQL
 
-Use PostgreSQL as the system of record. Pool budgets must be sized across all web and worker replicas rather than per process in isolation. A release migration is a separate step.
+Use PostgreSQL as the system of record. Pool budgets must be sized across all
+application processes. A release migration is a separate step.
 
-### Redis Streams
+### Cloudflare Queues
 
-Required variables:
+Required backend variables:
 
-- `TASK_QUEUE_BACKEND=redis_streams`
-- `REDIS_URL`
+- `TASK_QUEUE_BACKEND=cloudflare_queues`
+- `CLOUDFLARE_QUEUE_PUBLISH_URL`
+- `CLOUDFLARE_QUEUE_PUBLISH_TOKEN`
+- `CLOUDFLARE_QUEUE_CONSUMER_TOKEN`
 
-Optional tuning:
+Required Worker secrets:
 
-- `TASK_QUEUE_STREAM` (default `agroai:tasks`)
-- `TASK_QUEUE_GROUP` (default `agroai-workers`)
-- `TASK_QUEUE_LEASE_SECONDS`
-- `TASK_QUEUE_MAX_ATTEMPTS`
+- `QUEUE_PUBLISH_TOKEN`
+- `QUEUE_CONSUMER_TOKEN`
 
-### Durable object storage
+The corresponding publish and consumer values must match across Worker and
+backend secret stores. They must never be embedded in portal bundles.
 
-Use an S3 or R2-compatible private bucket:
+Primary queue:
 
-- `CONNECTOR_OBJECT_STORAGE_BACKEND=s3` or `r2`
+`agroai-connector-tasks`
+
+Dead-letter queue:
+
+`agroai-connector-tasks-dlq`
+
+The Worker applies delayed retry to transient failures. Terminal application
+outcomes acknowledge messages. Exhausted deliveries move to the dead-letter
+queue.
+
+### Durable connector object storage
+
+Use a private Cloudflare R2 bucket:
+
+- `CONNECTOR_OBJECT_STORAGE_BACKEND=r2`
 - `CONNECTOR_OBJECT_BUCKET`
 - `CONNECTOR_OBJECT_PREFIX`
-- `CONNECTOR_OBJECT_REGION`
-- `CONNECTOR_OBJECT_ENDPOINT_URL` for R2 or another compatible endpoint
+- `CONNECTOR_OBJECT_REGION=auto`
+- `CONNECTOR_OBJECT_ENDPOINT_URL`
+- `CLOUDFLARE_R2_ACCESS_KEY_ID`
+- `CLOUDFLARE_R2_SECRET_ACCESS_KEY`
 
-AWS-compatible credentials should be supplied through the platform's normal credential chain or secret environment. Raw connector payloads are uploaded under server-generated tenant/connection namespaces and verified by byte length and SHA-256 metadata before a job is created.
+Raw connector payloads are uploaded under server-generated tenant/connection
+namespaces and verified by byte length and SHA-256 metadata before a job is
+accepted as durably staged.
 
-The local upload directory is a transient bounded spool only; it is not the production source of truth.
+The local upload directory is a transient bounded spool only; it is not the
+production source of truth.
 
 ### Connector credential vault
 
@@ -73,9 +104,12 @@ Configure a 32-byte key encoded with URL-safe base64:
 - `CONNECTOR_CREDENTIAL_MASTER_KEY`
 - `CONNECTOR_CREDENTIAL_ACTIVE_KEY_VERSION`
 
-For rotation, configure a JSON keyring through `CONNECTOR_CREDENTIAL_KEYS_JSON`, retain old key versions while rows are re-encrypted, then remove retired versions only after migration is complete.
+For rotation, configure a JSON keyring through
+`CONNECTOR_CREDENTIAL_KEYS_JSON`, retain old key versions while rows are
+re-encrypted, then remove retired versions only after migration is complete.
 
-Connector credential payloads use AES-256-GCM with associated data bound to tenant, connection, provider, and key version.
+Connector credential payloads use AES-256-GCM with associated data bound to
+tenant, connection, provider, and key version.
 
 ### OAuth state custody
 
@@ -84,24 +118,75 @@ Set a dedicated signing secret:
 - `OAUTH_STATE_SIGNING_KEY`
 - optional `OAUTH_STATE_TTL_SECONDS`
 
-OAuth state is bound to tenant, connector, provider, callback digest, purpose, expiry, and a random nonce. Only the nonce hash is persisted. Consumption is atomic and one time.
+OAuth state is bound to tenant, connector, provider, callback digest, purpose,
+expiry, and a random nonce. Only the nonce hash is persisted. Consumption is
+atomic and one time.
+
+### Local intelligence runtime
+
+The current local model path is preserved:
+
+`local-ai.agroai-pilot.com`
+→ named tunnel `agroai-local-ai`
+→ `127.0.0.1:11434`
+→ Ollama
+→ `qwen3:1.7b`
+
+The API can use this endpoint through its AI gateway settings. The tunnel and
+Ollama should be installed as persistent services rather than depending on an
+interactive terminal session.
 
 ## Connector ingestion transaction flow
 
 1. API streams request data to a bounded local spool and computes SHA-256.
-2. API uploads the spool to private durable object storage.
+2. API uploads the spool to private R2 storage.
 3. API verifies object length and checksum metadata.
-4. API creates an idempotent ingestion job and task-outbox row in one database transaction.
-5. Worker publishes pending outbox rows to Redis Streams.
-6. A worker claims the database job with an expiring lease.
-7. Worker reads the durable object under the configured byte limit, parses, normalizes, and persists evidence.
-8. Duplicate delivery resolves through the tenant/connection/content identity and job idempotency key.
-9. Transient failures enter bounded exponential retry; exhausted jobs become terminal failures.
+4. API creates an idempotent ingestion job and task-outbox row in one database
+   transaction.
+5. API immediately attempts to publish pending outbox rows through the edge
+   gateway.
+6. The Worker validates the bounded task envelope and enqueues it.
+7. The Queue consumer calls the protected backend delivery route.
+8. The shared connector task processor claims the database job with an expiring
+   lease.
+9. The processor reads the durable object under the configured byte limit,
+   parses, normalizes, and persists evidence.
+10. Duplicate delivery resolves through tenant/connection/content identity and
+    job idempotency.
+11. Transient failures enter bounded delayed retry; exhausted deliveries move to
+    the dead-letter queue.
+12. A five-minute Worker cron calls the protected outbox drain route so
+    publish-time outages do not strand committed jobs.
+
+## Edge safety
+
+The Worker edge gateway:
+
+- allows only exact production origins plus approved Pages project origins;
+- strips spoofable forwarding/internal headers;
+- rejects an upstream that points back to the edge domain;
+- proxies only `/v1/*`;
+- retries only idempotent reads;
+- uses bounded timeouts;
+- emits request IDs and security headers;
+- fails closed when the upstream is invalid or unavailable.
 
 ## Operational safety
 
-The customer Intelligence surface uses the safe Brain route. Model output is evaluated after generation. Claim-level provenance maps consequential statements to concrete evidence records, and decision-class freshness rules prevent stale or timestamp-unknown operational evidence from authorizing a current action. High-impact execution remains disabled without explicit downstream approval controls.
+The customer Intelligence surface uses the safe Brain route. Model output is
+evaluated after generation. Claim-level provenance maps consequential statements
+to concrete evidence records, and decision-class freshness rules prevent stale
+or timestamp-unknown operational evidence from authorizing a current action.
+High-impact execution remains disabled without explicit downstream approval
+controls.
 
 ## Release checks
 
-A release should not proceed when `/v1/readiness` reports blockers. The hardening CI separately verifies PostgreSQL migrations, connector custody, object storage contracts, Redis queue behavior, partial-schema rejection, multilingual intelligence, decision safety/provenance, portal build, and the browser recovery lifecycle.
+A release should not proceed when `/v1/readiness` reports blockers. The hardening
+CI verifies migrations, connector custody, R2-compatible object storage,
+Cloudflare Queue contracts, transactional outbox behavior, partial-schema
+rejection, multilingual intelligence, decision safety/provenance, enterprise
+portal build, edge bundle validation, and browser recovery lifecycle.
+
+The production workflow additionally smoke-tests the exact deployed edge API and
+portal and stores release evidence keyed by Git SHA.
