@@ -3,6 +3,7 @@ name: CI - Cloudflare Release Contract
 on:
   pull_request:
     paths:
+      - 'agroai_api/**'
       - 'cloudflare/**'
       - 'wrangler.toml'
       - '.github/workflows/ci.yml'
@@ -17,7 +18,7 @@ permissions:
 
 jobs:
   commercial_control_plane:
-    if: github.ref == 'refs/heads/assistant/commercial-intelligence-control-plane-finish'
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/assistant/commercial-intelligence-control-plane-finish'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -36,7 +37,7 @@ jobs:
       - name: Import FastAPI application
         run: python -c "from app.main import app; assert app is not None"
       - name: Run commercial control-plane contracts
-        run: pytest tests/unit/test_commercial_control_plane.py tests/unit/test_commercial_migration_contract.py -q
+        run: pytest tests/unit/test_commercial_control_plane.py tests/unit/test_commercial_migration_contract.py tests/unit/test_connector_commercial_guard.py tests/unit/test_commercial_runtime_guards.py -q
       - name: Run full unit suite
         run: pytest tests/unit -q
       - name: Verify single Alembic head
