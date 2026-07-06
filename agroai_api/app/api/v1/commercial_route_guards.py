@@ -17,6 +17,7 @@ from app.services.quota import commit_reservation, release_reservation, reserve_
 
 REPORT_PDF_PATH = "/v1/intelligence/chat/report-pdf"
 REPORT_EMAIL_PATH = "/v1/intelligence/chat/report-email"
+ROUTER_REPORT_PATHS = {"/intelligence/chat/report-pdf", "/intelligence/chat/report-email"}
 
 
 def enforce_report_commercial_boundary(
@@ -25,12 +26,7 @@ def enforce_report_commercial_boundary(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> Generator[None, None, None]:
-    """Feature-gate and durably account direct report export routes.
-
-    This dependency is attached only to the two report routes before their router is
-    included in the application. The quota reservation commits only after successful
-    endpoint completion and is released on failure.
-    """
+    """Feature-gate and durably account direct report export routes."""
     path = request.url.path
     if path not in {REPORT_PDF_PATH, REPORT_EMAIL_PATH}:
         yield
@@ -67,3 +63,19 @@ def enforce_report_commercial_boundary(
             metadata={"route": path, "delivery": "email" if path == REPORT_EMAIL_PATH else "download"},
         )
         db.commit()
+
+
+def install_report_commercial_guards() -> None:
+    """Attach the guard to exact report routes before FastAPI includes the router."""
+    from app.api.v1.chat_artifacts import router as chat_artifacts_router
+
+    for route in chat_artifacts_router.routes:
+        if getattr(route, "path", None) not in ROUTER_REPORT_PATHS:
+            continue
+        already_installed = any(
+            getattr(getattr(dependency, "dependency", None), "__name__", "")
+            == enforce_report_commercial_boundary.__name__
+            for dependency in getattr(route, "dependencies", [])
+        )
+        if not already_installed:
+            route.dependencies.append(Depends(enforce_report_commercial_boundary))
