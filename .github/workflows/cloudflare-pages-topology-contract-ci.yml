@@ -1,0 +1,58 @@
+name: Cloudflare Pages Topology Contract CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  topology-contract:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PROJECT: agroai-portal
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify single authoritative Pages deployment path
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          base="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT}"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "$base" > project.json
+          jq -e '
+            .success == true
+            and .result.source.config.deployments_enabled == false
+            and .result.source.config.production_deployments_enabled == false
+            and .result.source.config.preview_deployment_setting == "none"
+            and .result.build_config.root_dir == "figma-enterprise-v4"
+            and .result.build_config.destination_dir == "dist"
+          ' project.json >/dev/null
+          grep -F 'wrangler@4.107.0 pages deploy figma-enterprise-v4/dist' .github/workflows/deploy.yml >/dev/null
+          echo "cloudflare_git_auto_deployments=disabled"
+          echo "authoritative_pages_release=github_actions_wrangler"
+
+      - name: Verify stale preview queue remains drained
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT}"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "$base/deployments?per_page=25" > deployments.json
+          jq -e '.success == true' deployments.json >/dev/null
+          active="$(jq '[.result[] | select(.environment == "preview" and .latest_stage.status == "active")] | length' deployments.json)"
+          echo "active_preview_deployments=${active}"
+          test "$active" -eq 0
