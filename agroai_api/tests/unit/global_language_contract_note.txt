@@ -1,1 +1,0 @@
-Backend global language coverage is enforced in test_language_registry_contract.py and test_i18n_catalog_contract.py.
