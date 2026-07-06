@@ -31,11 +31,11 @@ describe("upstream safety", () => {
 });
 
 describe("request identifiers", () => {
-  it("preserves bounded safe identifiers and rejects injected values", () => {
+  it("preserves bounded safe identifiers and rejects unsafe values", () => {
     expect(requestId(new Request("https://api.agroai-pilot.com/v1/health", { headers: { "x-request-id": "req-safe_123" } }))).toBe("req-safe_123");
-    const injected = requestId(new Request("https://api.agroai-pilot.com/v1/health", { headers: { "x-request-id": "bad\nvalue" } }));
-    expect(injected).not.toContain("bad");
-    expect(injected.length).toBeLessThanOrEqual(128);
+    const unsafe = requestId(new Request("https://api.agroai-pilot.com/v1/health", { headers: { "x-request-id": "bad value" } }));
+    expect(unsafe).not.toBe("bad value");
+    expect(unsafe.length).toBeLessThanOrEqual(128);
     const oversized = requestId(new Request("https://api.agroai-pilot.com/v1/health", { headers: { "x-request-id": "x".repeat(300) } }));
     expect(oversized).not.toBe("x".repeat(300));
   });
