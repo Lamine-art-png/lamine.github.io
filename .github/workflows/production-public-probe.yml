@@ -41,15 +41,18 @@ jobs:
           } > probe.txt
 
           {
-            echo "## Production route probe"
+            echo "# Production release operations status"
+            echo
+            echo "Latest automated, redacted production route diagnostics."
             echo
             echo "- SHA: \`${GITHUB_SHA}\`"
+            echo "- run: \`${GITHUB_RUN_ID}\`"
             echo
             echo '| Probe | HTTP | Redacted preview |'
             echo '|---|---:|---|'
             while IFS='|' read -r name code preview; do
               echo "| ${name} | ${code} | \`${preview}\` |"
             done < probe.txt
-          } > comment.md
+          } > status.md
 
-          gh issue comment "${OPS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body-file comment.md
+          gh issue edit "${OPS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body-file status.md
