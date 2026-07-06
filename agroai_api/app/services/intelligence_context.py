@@ -8,9 +8,18 @@ from sqlalchemy.orm import Session
 from app.api.deps import require_workspace_access
 from app.models.saas import Organization, User, Workspace
 from app.schemas.ai import EvidenceContext, ToolCitation
+from app.services.commercial_billing_lifecycle import install_commercial_billing_lifecycle
 from app.services.commercial_control import require_feature
 from app.services.intelligence_policy import PROFILE_BASE
 from app.services.operator_cockpit import build_context, decision_workbench, exceptions, field_intelligence, readiness_summary, report_factory
+
+
+# Main imports billing before Brain/intelligence context and includes chat artifacts
+# afterward. Install these boundaries here so the already-loaded billing module is
+# hardened and the report router is guarded before FastAPI copies its routes.
+install_commercial_billing_lifecycle()
+from app.api.v1.commercial_route_guards import install_report_commercial_guards  # noqa: E402
+install_report_commercial_guards()
 
 
 SECRET_HINTS = ("secret", "token", "password", "api_key", "apikey", "oauth_code", "credential", "private_key")
