@@ -1,4 +1,4 @@
-name: Cloudflare Pages Queue Diagnostic
+name: Cloudflare Pages Topology Repair
 
 on:
   pull_request:
@@ -10,40 +10,109 @@ permissions:
   contents: read
 
 jobs:
-  inspect:
+  repair:
     runs-on: ubuntu-latest
     environment: production
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PROJECT: agroai-portal
     steps:
-      - name: Inspect queued preview deployments
+      - name: Disable duplicate Git auto deployments
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p cf-queue
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          mkdir -p cf-repair
+          base="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT}"
+
           curl --fail --silent --show-error \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
             -H "Content-Type: application/json" \
-            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/agroai-portal" \
-            > cf-queue/project-raw.json
-          jq -e '.success == true' cf-queue/project-raw.json >/dev/null
-          jq '.result | {name, production_branch, build_config, source_type:.source.type, source_config:.source.config}' cf-queue/project-raw.json > cf-queue/project.json
+            "$base" > cf-repair/project-before.json
+          jq -e '.success == true' cf-repair/project-before.json >/dev/null
+
+          jq '.result.source
+            | .config.deployments_enabled = false
+            | .config.production_deployments_enabled = false
+            | .config.preview_deployment_setting = "none"
+            | .config.pr_comments_enabled = false
+            | .config.preview_branch_includes = []
+            | .config.preview_branch_excludes = []' \
+            cf-repair/project-before.json > cf-repair/source.json
+          jq -n --slurpfile source cf-repair/source.json '{source:$source[0]}' > cf-repair/update.json
+
+          curl --fail --silent --show-error \
+            -X PATCH \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data @cf-repair/update.json \
+            "$base" > cf-repair/update-response.json
+          jq -e '.success == true' cf-repair/update-response.json >/dev/null
+
           curl --fail --silent --show-error \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
             -H "Content-Type: application/json" \
-            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/agroai-portal/deployments?per_page=100" \
-            > cf-queue/deployments-raw.json
-          jq -e '.success == true' cf-queue/deployments-raw.json >/dev/null
-          jq '[.result[] | select(.environment == "preview" and .latest_stage.status == "active") | {id,created_on,stage:.latest_stage.name,branch:.deployment_trigger.metadata.branch,commit_hash:.deployment_trigger.metadata.commit_hash}]' cf-queue/deployments-raw.json > cf-queue/active-preview-queue.json
-          jq '{project:.name, production_branch, build_config, source_type, source_config}' cf-queue/project.json
-          jq '{active_preview_count:length, sample:.[0:10]}' cf-queue/active-preview-queue.json
+            "$base" > cf-repair/project-after.json
+          jq -e '
+            .success == true
+            and .result.source.config.deployments_enabled == false
+            and .result.source.config.production_deployments_enabled == false
+            and .result.source.config.preview_deployment_setting == "none"
+          ' cf-repair/project-after.json >/dev/null
+          jq '.result.source.config | {deployments_enabled, production_deployments_enabled, preview_deployment_setting, pr_comments_enabled}' cf-repair/project-after.json
+
+      - name: Cancel stale active preview deployments
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT}"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "$base/deployments?per_page=25" > cf-repair/deployments-before.json
+          jq -e '.success == true' cf-repair/deployments-before.json >/dev/null
+          jq -r '.result[] | select(.environment == "preview" and .latest_stage.status == "active") | .id' cf-repair/deployments-before.json > cf-repair/active-preview-ids.txt
+
+          : > cf-repair/cancel-results.jsonl
+          while IFS= read -r id; do
+            [ -n "$id" ] || continue
+            body="cf-repair/cancel-${id}.json"
+            code="$(curl --silent --show-error \
+              -o "$body" -w '%{http_code}' \
+              -X POST \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H "Content-Type: application/json" \
+              "$base/deployments/${id}/cancel")"
+            success=false
+            if [ "$code" = "200" ] && jq -e '.success == true' "$body" >/dev/null 2>&1; then success=true; fi
+            jq -nc --arg id "$id" --arg code "$code" --argjson success "$success" '{id:$id,http_code:$code,success:$success}' >> cf-repair/cancel-results.jsonl
+          done < cf-repair/active-preview-ids.txt
+          jq -s '.' cf-repair/cancel-results.jsonl | tee cf-repair/cancel-results.json
+          jq -e 'all(.[]; .success == true)' cf-repair/cancel-results.json >/dev/null
+
+      - name: Verify Git queue is disabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          sleep 5
+          base="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT}"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "$base" > cf-repair/final-project.json
+          jq -e '
+            .result.source.config.deployments_enabled == false
+            and .result.source.config.production_deployments_enabled == false
+            and .result.source.config.preview_deployment_setting == "none"
+          ' cf-repair/final-project.json >/dev/null
+          echo "cloudflare_git_auto_deployments=disabled"
+          echo "authoritative_release_path=github_actions_wrangler_pages_deploy"
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: cloudflare-pages-queue-diagnostic
-          path: cf-queue
+          name: cloudflare-pages-topology-repair
+          path: cf-repair
           retention-days: 2
