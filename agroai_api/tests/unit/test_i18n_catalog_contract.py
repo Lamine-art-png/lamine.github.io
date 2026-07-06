@@ -1,3 +1,5 @@
+import pytest
+
 from app.api.v1.i18n import _enabled_locale_payloads, _validate_translated_catalog
 from app.services.language_registry import enabled_ui_locales
 
@@ -14,3 +16,31 @@ def test_generated_catalog_requires_exact_key_parity():
         "language": "Sprache",
         "save": "Speichern",
     }
+
+
+def test_generated_catalog_preserves_placeholder_multiset():
+    source = {
+        "notice": "Report emailed to {recipient}.",
+        "action": "Action completed: {title}",
+        "risk": "{level} risk",
+    }
+    translated = {
+        "notice": "Bericht an {recipient} gesendet.",
+        "action": "Aktion abgeschlossen: {title}",
+        "risk": "Risiko {level}",
+    }
+    assert _validate_translated_catalog(source, translated) == translated
+
+
+@pytest.mark.parametrize(
+    "translated_value",
+    [
+        "Bericht wurde gesendet.",
+        "Bericht an {empfaenger} gesendet.",
+        "Bericht an {recipient} und {recipient} gesendet.",
+    ],
+)
+def test_generated_catalog_rejects_missing_renamed_or_duplicated_placeholders(translated_value):
+    source = {"notice": "Report emailed to {recipient}."}
+    with pytest.raises(ValueError, match="placeholders"):
+        _validate_translated_catalog(source, {"notice": translated_value})
