@@ -1,4 +1,4 @@
-"""Ask AGRO-AI: adaptive, evidence-grounded multilingual conversation."""
+"""Ask AGRO-AI: adaptive, evidence-grounded, commercially controlled conversation."""
 from __future__ import annotations
 
 import re
@@ -12,11 +12,12 @@ from app.api.deps import get_current_user
 from app.core.config import settings
 from app.core.security import require_current_tenant_id
 from app.db.base import get_db
-from app.models.saas import User
+from app.models.saas import Organization, User
 from app.schemas.ai import EvidenceContext
 from app.services.intelligence_context import build_intelligence_context
 from app.services.language import language_matches_target, resolve_language
 from app.services.live_intelligence import LiveIntelligence
+from app.services.quota import commit_reservation, release_reservation, reserve_quota
 
 router = APIRouter(prefix="/intelligence/brain", tags=["intelligence"])
 
@@ -212,6 +213,7 @@ def local_plain_body(answer: str, context: EvidenceContext, *, question: str = "
 
 
 def language_failure_response(payload: BrainRunRequest, bundle: dict[str, Any], result) -> dict[str, Any]:
+    commercial = bundle.get("commercial_intelligence") or {}
     return {
         "status": "language_generation_failed",
         "task": payload.task,
@@ -226,12 +228,18 @@ def language_failure_response(payload: BrainRunRequest, bundle: dict[str, Any], 
         "confidence": "low",
         "citations": [],
         "sample_mode": bool(bundle.get("sample_mode")),
-        "selected_model": result.model,
-        "provider": result.provider,
         "preferred_language": payload.preferred_language,
         "response_language": result.response_language,
-        "profile": result.profile,
+        "task_profile": result.profile,
+        "intelligence_profile": commercial.get("profile", "essential"),
     }
+
+
+def _organization(db: Session, tenant_id: str) -> Organization:
+    org = db.query(Organization).filter(Organization.id == tenant_id).first()
+    if org is None:
+        raise ValueError("Organization not found")
+    return org
 
 
 @router.post("/run")
@@ -241,6 +249,7 @@ async def brain_run(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
+    org = _organization(db, tenant_id)
     bundle = build_intelligence_context(
         db=db,
         tenant_id=tenant_id,
@@ -259,7 +268,35 @@ async def brain_run(
         uploaded_evidence=payload.uploaded_evidence,
         preferred_language=payload.preferred_language,
     )
-    result = await LiveIntelligence().run(payload.task, payload.question, messages, payload.preferred_language)
+    commercial = bundle.get("commercial_intelligence") or {}
+    reservation = reserve_quota(
+        db,
+        org,
+        "ai_action",
+        workspace_id=payload.workspace_id,
+        user_id=user.id,
+        metadata={"task": payload.task, "commercial_profile": commercial.get("profile", "essential")},
+    )
+    try:
+        result = await LiveIntelligence().run(payload.task, payload.question, messages, payload.preferred_language)
+        commit_reservation(
+            db,
+            reservation,
+            event_type="ai_run",
+            metadata={
+                "status": result.status,
+                "task_profile": result.profile,
+                "commercial_profile": commercial.get("profile", "essential"),
+                "provider_internal": result.provider,
+                "model_internal": result.model,
+                "response_language": result.response_language,
+            },
+        )
+        db.commit()
+    except Exception:
+        release_reservation(db, reservation, reason="brain_runtime_exception")
+        db.commit()
+        raise
 
     if result.status == "language_generation_failed":
         return language_failure_response(payload, bundle, result)
@@ -277,11 +314,10 @@ async def brain_run(
             "confidence": "low",
             "citations": [],
             "sample_mode": bool(bundle.get("sample_mode")),
-            "selected_model": result.model,
-            "provider": result.provider,
             "preferred_language": payload.preferred_language,
             "response_language": result.response_language,
-            "profile": result.profile,
+            "task_profile": result.profile,
+            "intelligence_profile": commercial.get("profile", "essential"),
         }
 
     body = local_plain_body(result.content.strip(), context, question=payload.question)
@@ -294,24 +330,34 @@ async def brain_run(
         "confidence": body["confidence"],
         "citations": [citation.model_dump(mode="python") if hasattr(citation, "model_dump") else citation for citation in context.citations[:8]],
         "sample_mode": bool(bundle.get("sample_mode")),
-        "selected_model": result.model,
-        "provider": result.provider,
         "preferred_language": payload.preferred_language,
         "response_language": result.response_language,
-        "profile": result.profile,
+        "task_profile": result.profile,
+        "intelligence_profile": commercial.get("profile", "essential"),
     }
 
 
 @router.get("/model-smoke")
-async def model_smoke() -> dict[str, Any]:
-    result = await LiveIntelligence().run(
-        "chat", "Reply with exactly OK.", [{"role": "user", "content": "Reply with exactly OK."}], "en"
-    )
+async def model_smoke(
+    tenant_id: str = Depends(require_current_tenant_id),
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    org = _organization(db, tenant_id)
+    reservation = reserve_quota(db, org, "ai_action", user_id=user.id, metadata={"task": "model_smoke"})
+    try:
+        result = await LiveIntelligence().run(
+            "chat", "Reply with exactly OK.", [{"role": "user", "content": "Reply with exactly OK."}], "en"
+        )
+        commit_reservation(db, reservation, event_type="ai_run", metadata={"status": result.status, "task": "model_smoke"})
+        db.commit()
+    except Exception:
+        release_reservation(db, reservation, reason="model_smoke_exception")
+        db.commit()
+        raise
     return {
         "live_model_response": result.status == "ok" and bool(result.content.strip()),
-        "provider": result.provider,
-        "selected_model": result.model,
-        "profile": result.profile,
+        "task_profile": result.profile,
         "response_language": result.response_language,
     }
 
