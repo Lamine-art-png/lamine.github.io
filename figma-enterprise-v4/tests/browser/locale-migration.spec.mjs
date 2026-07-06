@@ -9,7 +9,7 @@ function qaToken() {
 }
 
 async function prepare(page, storedLocale) {
-  const state = { patches: 0 };
+  const state = { patches: 0, catalogs: 0 };
   await page.addInitScript(({ token, locale }) => {
     localStorage.setItem("agroai_access_token", token);
     localStorage.setItem("agroai_locale_v1", locale);
@@ -30,8 +30,10 @@ async function prepare(page, storedLocale) {
     if (req.method() === "GET" && url.pathname === "/v1/orgs") return reply({ organizations: [{ id: "org", name: "QA Org", role: "owner" }] });
     if (req.method() === "GET" && url.pathname === "/v1/workspaces") return reply({ workspaces: [{ id: "ws", name: "QA Workspace", status: "active" }] });
     if (req.method() === "POST" && url.pathname === "/v1/i18n/catalog") {
+      state.catalogs += 1;
       const payload = req.postDataJSON();
-      return reply({ status: "ok", locale: payload.locale, catalog: payload.source, source: "browser-test" });
+      const translatedLanguage = payload.locale === "de" ? "Sprache" : payload.locale === "ar" ? "اللغة" : payload.source.language;
+      return reply({ status: "ok", locale: payload.locale, catalog: { ...payload.source, language: translatedLanguage }, source: "browser-test" });
     }
     if (req.method() === "PATCH" && url.pathname === "/v1/settings/preferences") {
       state.patches += 1;
@@ -47,14 +49,14 @@ function languageSelector(page) {
 }
 
 const cases = [
-  ["legacy fr", "fr", "fr-FR", "fr-FR", "fr-FR"],
-  ["regional fr-CA", "fr-CA", "fr-FR", "fr-FR", "fr-FR"],
-  ["global de", "de", "de", "de", "de"],
-  ["global ar", "ar", "ar", "ar", "ar"],
-  ["unknown locale", "nonsense-value", "auto", "en", "auto"],
+  ["legacy fr", "fr", "fr-FR", "fr-FR", "fr-FR", "Langue", 0],
+  ["regional fr-CA", "fr-CA", "fr-FR", "fr-FR", "fr-FR", "Langue", 0],
+  ["global de", "de", "de", "de", "de", "Sprache", 1],
+  ["global ar", "ar", "ar", "ar", "ar", "اللغة", 1],
+  ["unknown locale", "nonsense-value", "auto", "en", "auto", "Language", 0],
 ];
 
-for (const [name, stored, selected, effective, rewritten] of cases) {
+for (const [name, stored, selected, effective, rewritten, translatedLabel, expectedCatalogCalls] of cases) {
   test(`${name} canonicalization`, async ({ browser }) => {
     const context = await browser.newContext({ locale: "en-US" });
     const page = await context.newPage();
@@ -64,6 +66,8 @@ for (const [name, stored, selected, effective, rewritten] of cases) {
     await expect(languageSelector(page)).toHaveValue(selected);
     await expect(page.locator("html")).toHaveAttribute("lang", effective);
     await expect.poll(() => page.evaluate(() => localStorage.getItem("agroai_locale_v1"))).toBe(rewritten);
+    await expect(page.getByText(translatedLabel, { exact: true }).first()).toBeVisible();
+    await expect.poll(() => state.catalogs).toBe(expectedCatalogCalls);
     expect(state.patches).toBe(0);
     await context.close();
   });
