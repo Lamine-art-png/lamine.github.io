@@ -1,10 +1,10 @@
 import { ChevronDown, Globe2 } from "lucide-react";
 import { apiClient } from "../api/client";
-import { ENABLED_LOCALES } from "../i18n";
+import { GLOBAL_UI_LOCALES } from "../globalLocaleOptions";
 import { useLocale } from "../hooks/useLocale";
 
 export function LanguageSelector({ compact = false, dark = false }: { compact?: boolean; dark?: boolean }) {
-  const { selectedLocale, setLocale, t } = useLocale();
+  const { selectedLocale, setLocale, t, catalogLoading, catalogError } = useLocale();
 
   async function changeLanguage(nextLocale: string) {
     const canonical = setLocale(nextLocale);
@@ -22,11 +22,27 @@ export function LanguageSelector({ compact = false, dark = false }: { compact?: 
 
   return (
     <label className={`flex ${compact ? "items-center gap-2" : "flex-col gap-1"}`} style={{ color: labelColor }}>
-      {!compact ? <span className="inline-flex items-center gap-1 text-[11px] font-medium"><Globe2 className="h-3.5 w-3.5" /> {t("language")}</span> : null}
+      {!compact ? (
+        <span className="inline-flex items-center gap-1 text-[11px] font-medium">
+          <Globe2 className="h-3.5 w-3.5" /> {t("language")}
+          {catalogLoading ? <span aria-live="polite"> · Translating…</span> : null}
+        </span>
+      ) : null}
       <span className="relative inline-flex w-full items-center">
         {compact ? <Globe2 className="pointer-events-none absolute left-2 h-3.5 w-3.5" style={{ color: labelColor }} /> : null}
-        <select value={selectedLocale} onChange={(event) => changeLanguage(event.target.value)} className={`h-9 w-full appearance-none rounded-md py-1 pr-8 text-[12px] outline-none ${compact ? "pl-8" : "pl-3"}`} style={{ background: selectBg, color: selectColor, border: `1px solid ${border}` }} title={t("language")}>
-          {ENABLED_LOCALES.map((item) => <option key={item.code} value={item.code}>{item.nativeName} · {item.englishName}</option>)}
+        <select
+          value={selectedLocale}
+          onChange={(event) => changeLanguage(event.target.value)}
+          className={`h-9 w-full appearance-none rounded-md py-1 pr-8 text-[12px] outline-none ${compact ? "pl-8" : "pl-3"}`}
+          style={{ background: selectBg, color: selectColor, border: `1px solid ${catalogError ? "#B42318" : border}` }}
+          title={catalogError || t("language")}
+          aria-label={t("language")}
+        >
+          {GLOBAL_UI_LOCALES.map((item) => (
+            <option key={item.code} value={item.code} dir={item.dir}>
+              {item.nativeName} · {item.englishName}
+            </option>
+          ))}
         </select>
         <ChevronDown className="pointer-events-none absolute right-2 h-3.5 w-3.5" style={{ color: labelColor }} />
       </span>
