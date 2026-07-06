@@ -1,0 +1,1 @@
+Validation is performed by existing i18n and backend language registry test suites.
