@@ -63,6 +63,7 @@ jobs:
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
       WORKER_VERSION_ID: ${{ inputs.worker_version_id }}
       ROLLBACK_REASON: ${{ inputs.reason }}
     steps:
@@ -70,16 +71,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Fail closed on missing Cloudflare credentials
+      - name: Fail closed on missing rollback credentials
         shell: bash
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -n "${QUEUE_CONSUMER_TOKEN:-}"
           test -n "${WORKER_VERSION_ID:-}"
-      - name: Install pinned edge tooling
+      - name: Install locked edge tooling
         working-directory: cloudflare/edge-gateway
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Roll back Worker to explicit version
         working-directory: cloudflare/edge-gateway
         run: >-
@@ -88,17 +90,33 @@ jobs:
           --config ../../wrangler.toml
           --message "${ROLLBACK_REASON} (GitHub run ${GITHUB_RUN_ID})"
           --yes
-      - name: Smoke rolled-back API edge
+      - name: Smoke rolled-back edge, proxy, and backend contract
         shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 20); do
-            if curl --fail --silent --show-error --max-time 15 "${API_URL}/v1/edge-health" | jq -e '.status == "ok"' >/dev/null; then
+            edge_ok=false
+            proxy_ok=false
+            contract_ok=false
+            if curl --fail --silent --show-error --max-time 15 "${API_URL}/v1/edge-health" | jq -e '.status == "ok"' >/dev/null 2>&1; then
+              edge_ok=true
+            fi
+            if curl --fail --silent --show-error --max-time 20 "${API_URL}/v1/health" | jq -e '.status == "ok"' >/dev/null 2>&1; then
+              proxy_ok=true
+            fi
+            if curl --fail --silent --show-error --max-time 20 \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+              "${API_URL}/v1/internal/release/health" | \
+              jq -e '.status == "ok" and .contract == "agroai-release-v1" and .schema_current == true and .queue_configured == true and .object_storage_reachable == true and .production_ready == true' \
+              >/dev/null 2>&1; then
+              contract_ok=true
+            fi
+            if [ "$edge_ok" = true ] && [ "$proxy_ok" = true ] && [ "$contract_ok" = true ]; then
               exit 0
             fi
             sleep 3
           done
-          echo "Worker rollback smoke check failed"
+          echo "Worker rollback smoke contract failed"
           exit 1
 
   rollback-pages:
