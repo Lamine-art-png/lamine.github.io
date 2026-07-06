@@ -47,6 +47,41 @@ def _setting(settings: Settings, name: str, default: str = "") -> str:
     return os.getenv(name, default).strip()
 
 
+def _require_r2_contract(settings: Settings, blockers: list[ReadinessFinding]) -> None:
+    endpoint = _setting(settings, "CONNECTOR_OBJECT_ENDPOINT_URL")
+    access_key = _setting(settings, "CLOUDFLARE_R2_ACCESS_KEY_ID")
+    secret_key = _setting(settings, "CLOUDFLARE_R2_SECRET_ACCESS_KEY")
+
+    if not endpoint:
+        blockers.append(
+            ReadinessFinding(
+                "connectors.r2_endpoint_missing",
+                "blocker",
+                "connectors",
+                "R2 connector object storage requires the account-scoped endpoint URL.",
+            )
+        )
+    elif urlparse(endpoint).scheme != "https":
+        blockers.append(
+            ReadinessFinding(
+                "connectors.r2_endpoint_not_https",
+                "blocker",
+                "connectors",
+                "R2 connector object storage endpoint must use HTTPS.",
+            )
+        )
+
+    if not access_key or not secret_key:
+        blockers.append(
+            ReadinessFinding(
+                "connectors.r2_credentials_missing",
+                "blocker",
+                "connectors",
+                "R2 connector object storage requires both access key fields before production release.",
+            )
+        )
+
+
 def evaluate_production_readiness(settings: Settings, *, target_scale: str = "production") -> ReadinessReport:
     blockers: list[ReadinessFinding] = []
     warnings: list[ReadinessFinding] = []
@@ -69,8 +104,11 @@ def evaluate_production_readiness(settings: Settings, *, target_scale: str = "pr
 
     object_backend = _setting(settings, "CONNECTOR_OBJECT_STORAGE_BACKEND", "disabled").lower()
     object_bucket = _setting(settings, "CONNECTOR_OBJECT_BUCKET")
-    if object_backend not in {"s3", "r2", "s3_compatible"} or not object_bucket:
+    object_backend_ready = object_backend in {"s3", "r2", "s3_compatible"} and bool(object_bucket)
+    if not object_backend_ready:
         blockers.append(ReadinessFinding("connectors.object_storage_missing", "blocker", "connectors", "A verified durable R2/S3-compatible connector object store and bucket are required."))
+    if object_backend == "r2":
+        _require_r2_contract(settings, blockers)
     if _is_local_path(settings.CONNECTOR_UPLOAD_DIR) and object_backend not in {"s3", "r2", "s3_compatible"}:
         blockers.append(ReadinessFinding("connectors.local_upload_storage", "blocker", "connectors", "Connector payloads are configured for local or ephemeral disk without durable object storage."))
 
