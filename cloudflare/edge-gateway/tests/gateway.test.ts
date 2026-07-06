@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { configuredOrigins, originAllowed, validTask, validatedUpstreamOrigin } from "../src/index";
+import { configuredOrigins, originAllowed, requestId, validTask, validatedUpstreamOrigin } from "../src/index";
 
 describe("edge origin policy", () => {
   it("allows exact production origins and approved Pages projects", () => {
@@ -30,11 +30,24 @@ describe("upstream safety", () => {
   });
 });
 
+describe("request identifiers", () => {
+  it("preserves bounded safe identifiers and rejects injected values", () => {
+    expect(requestId(new Request("https://api.agroai-pilot.com/v1/health", { headers: { "x-request-id": "req-safe_123" } }))).toBe("req-safe_123");
+    const injected = requestId(new Request("https://api.agroai-pilot.com/v1/health", { headers: { "x-request-id": "bad\nvalue" } }));
+    expect(injected).not.toContain("bad");
+    expect(injected.length).toBeLessThanOrEqual(128);
+    const oversized = requestId(new Request("https://api.agroai-pilot.com/v1/health", { headers: { "x-request-id": "x".repeat(300) } }));
+    expect(oversized).not.toBe("x".repeat(300));
+  });
+});
+
 describe("connector task envelope", () => {
-  it("accepts only bounded non-empty identifiers", () => {
+  it("accepts only bounded known connector task contracts", () => {
     expect(validTask({ job_id: "job-1", tenant_id: "tenant-1", task_type: "connector_provider_sync" })).toBe(true);
-    expect(validTask({ job_id: "", tenant_id: "tenant-1", task_type: "sync" })).toBe(false);
-    expect(validTask({ job_id: "x".repeat(257), tenant_id: "tenant-1", task_type: "sync" })).toBe(false);
+    expect(validTask({ job_id: "job-2", tenant_id: "tenant-1", task_type: "connector_ingest_object" })).toBe(true);
+    expect(validTask({ job_id: "", tenant_id: "tenant-1", task_type: "connector_provider_sync" })).toBe(false);
+    expect(validTask({ job_id: "x".repeat(257), tenant_id: "tenant-1", task_type: "connector_provider_sync" })).toBe(false);
+    expect(validTask({ job_id: "job-3", tenant_id: "tenant-1", task_type: "unknown_task" })).toBe(false);
     expect(validTask(null)).toBe(false);
   });
 });
