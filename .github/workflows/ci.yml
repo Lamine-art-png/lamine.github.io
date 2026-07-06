@@ -8,11 +8,47 @@ on:
       - '.github/workflows/ci.yml'
       - '.github/workflows/deploy.yml'
       - 'figma-enterprise-v4/**'
+  push:
+    branches:
+      - 'assistant/commercial-intelligence-control-plane-finish'
 
 permissions:
   contents: read
 
 jobs:
+  commercial_control_plane:
+    if: github.ref == 'refs/heads/assistant/commercial-intelligence-control-plane-finish'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: agroai_api/requirements.txt
+      - name: Install backend dependencies
+        run: pip install -r requirements.txt
+      - name: Compile backend
+        run: python -m compileall app
+      - name: Import FastAPI application
+        run: python -c "from app.main import app; assert app is not None"
+      - name: Run commercial control-plane contracts
+        run: pytest tests/unit/test_commercial_control_plane.py tests/unit/test_commercial_migration_contract.py -q
+      - name: Run full unit suite
+        run: pytest tests/unit -q
+      - name: Verify single Alembic head
+        run: test "$(alembic heads | wc -l)" -eq 1
+      - name: Upgrade clean temporary database through head
+        env:
+          DATABASE_URL: sqlite:////tmp/agroai-commercial-control-plane.db
+        run: |
+          rm -f /tmp/agroai-commercial-control-plane.db
+          alembic upgrade head
+          alembic current
+
   edge_release_contract:
     runs-on: ubuntu-latest
     steps:
