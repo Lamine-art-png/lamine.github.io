@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 import time
+from collections import Counter
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -18,6 +20,7 @@ router = APIRouter(tags=["i18n"])
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _CANONICAL_CATALOG_PATH = _REPO_ROOT / "shared" / "ui-catalog.en.json"
+_PLACEHOLDER_RE = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
 _MAX_KEYS = 250
 _MAX_VALUE_CHARS = 2_000
 _MAX_SOURCE_CHARS = 60_000
@@ -73,17 +76,24 @@ def _cache_key(locale: str, source: dict[str, str]) -> str:
     return f"{locale}:{digest}"
 
 
+def _placeholders(value: str) -> Counter[str]:
+    return Counter(_PLACEHOLDER_RE.findall(value))
+
+
 def _validate_translated_catalog(source: dict[str, str], translated: Any) -> dict[str, str]:
     if not isinstance(translated, dict):
         raise ValueError("translated catalog is not an object")
     if set(translated) != set(source):
         raise ValueError("translated catalog keys do not match source keys")
     output: dict[str, str] = {}
-    for key in source:
+    for key, source_value in source.items():
         value = translated.get(key)
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"invalid translated value for {key}")
-        output[key] = value.strip()
+        normalized = value.strip()
+        if _placeholders(normalized) != _placeholders(source_value):
+            raise ValueError(f"translated placeholders do not match source for {key}")
+        output[key] = normalized
     return output
 
 
