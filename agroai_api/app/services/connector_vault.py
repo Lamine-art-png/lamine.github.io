@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.models.connector_security import ConnectorCredential
 from app.models.operational_records import ConnectorConnection
+from app.services.runtime_key_material import DERIVED_CONNECTOR_KEY_VERSION, derived_connector_vault_key
 
 
 ALGORITHM = "AES-256-GCM"
@@ -46,9 +47,27 @@ def _keyring() -> tuple[str, dict[str, bytes]]:
         if not isinstance(parsed, dict):
             raise RuntimeError("CONNECTOR_CREDENTIAL_KEYS_JSON must be an object")
         ring = {str(version): _decode_key(str(value)) for version, value in parsed.items()}
+
     single = os.getenv("CONNECTOR_CREDENTIAL_MASTER_KEY", "").strip()
     if single and active not in ring:
         ring[active] = _decode_key(single)
+
+    # The production runtime already requires strong non-default SECRET_KEY and
+    # WEBHOOK_SECRET values. When no explicit vault key is supplied, derive a
+    # stable, domain-separated AES-256 key from those persistent root secrets.
+    # If derivation is available, retain that version in explicit keyrings too so
+    # credentials written before a later explicit-key rollout remain readable.
+    try:
+        derived = derived_connector_vault_key()
+    except RuntimeError:
+        derived = None
+    if derived is not None:
+        ring.setdefault(DERIVED_CONNECTOR_KEY_VERSION, derived)
+    if not raw_ring and not single:
+        if derived is None:
+            raise RuntimeError("active connector vault key is not configured")
+        active = DERIVED_CONNECTOR_KEY_VERSION
+
     if active not in ring:
         raise RuntimeError("active connector vault key is not configured")
     return active, ring

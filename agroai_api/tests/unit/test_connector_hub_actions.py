@@ -63,9 +63,10 @@ def test_direct_evidence_upload_creates_records():
     assert body["connection"]["status"] == "synced"
 
 
-def test_custom_api_secret_is_rejected_without_encrypted_vault(monkeypatch):
+def test_custom_api_secret_uses_encrypted_runtime_vault_fallback(monkeypatch):
     monkeypatch.delenv("CONNECTOR_CREDENTIAL_MASTER_KEY", raising=False)
     monkeypatch.delenv("CONNECTOR_CREDENTIAL_KEYS_JSON", raising=False)
+    monkeypatch.delenv("CONNECTOR_CREDENTIAL_ACTIVE_KEY_VERSION", raising=False)
     client = make_client()
     response = client.post(
         "/v1/connectors/connect",
@@ -78,8 +79,10 @@ def test_custom_api_secret_is_rejected_without_encrypted_vault(monkeypatch):
             },
         },
     )
-    assert response.status_code == 503
-    assert response.json()["detail"]["error"] == "connector_vault_not_configured"
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["status"] == "connected"
+    assert str(body["connection"]["credentials_ref"]).startswith("vault://connector-credentials/")
 
 
 def test_custom_api_secret_is_vaulted_before_connected(monkeypatch):

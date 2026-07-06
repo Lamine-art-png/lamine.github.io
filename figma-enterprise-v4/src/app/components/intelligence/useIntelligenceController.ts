@@ -346,7 +346,10 @@ export function useIntelligenceController(deps: IntelligenceDependencies) {
   }
 
   function onKeyDown(event: KeyboardEvent<HTMLTextAreaElement>) {
-    if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); send().catch(() => null); }
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      send(event.currentTarget.value).catch(() => null);
+    }
   }
 
   return {

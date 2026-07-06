@@ -42,7 +42,10 @@ jobs:
             fi
             sleep 1
           done
-          npx playwright test tests/browser/locale-migration.spec.mjs tests/browser/locale-preference-sync.spec.mjs --browser=chromium --reporter=line
+          set +e
+          npx playwright test tests/browser/locale-migration.spec.mjs tests/browser/locale-preference-sync.spec.mjs --config=playwright.contract.config.ts --browser=chromium --reporter=line 2>&1 | tee locale-playwright.log
+          status=${PIPESTATUS[0]}
+          exit $status
       - name: Upload locale browser evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -50,6 +53,7 @@ jobs:
           name: locale-browser-contract
           path: |
             figma-enterprise-v4/locale-vite-preview.log
+            figma-enterprise-v4/locale-playwright.log
             figma-enterprise-v4/test-results
           if-no-files-found: ignore
           retention-days: 2
