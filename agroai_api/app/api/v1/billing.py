@@ -13,6 +13,8 @@ from app.core.config import settings
 from app.db.base import get_db
 from app.models.saas import BillingEvent, Organization, UsageEvent, User
 from app.services.entitlements import require_owner_or_admin, serialize_entitlements
+from app.services.product_plans import PLAN_CATALOG, normalize_plan_code, public_plan_catalog
+from app.services.quota import QuotaService
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
@@ -20,6 +22,7 @@ router = APIRouter(prefix="/billing", tags=["billing"])
 class CheckoutRequest(BaseModel):
     organization_id: str
     plan: str
+    billing_period: str = "monthly"
 
 
 class PortalRequest(BaseModel):
@@ -35,15 +38,27 @@ def _stripe_ready() -> None:
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
-def _price_for_plan(plan: str) -> str:
-    price = {
-        "pilot": settings.STRIPE_PRICE_PILOT,
-        "pro": settings.STRIPE_PRICE_PRO,
-    }.get(plan)
+def _price_map() -> dict[tuple[str, str], str]:
+    return {
+        ("professional", "monthly"): settings.STRIPE_PRICE_PROFESSIONAL_MONTHLY or settings.STRIPE_PRICE_PRO,
+        ("professional", "yearly"): settings.STRIPE_PRICE_PROFESSIONAL_YEARLY,
+        ("team", "monthly"): settings.STRIPE_PRICE_TEAM_MONTHLY,
+        ("team", "yearly"): settings.STRIPE_PRICE_TEAM_YEARLY,
+        ("network", "monthly"): settings.STRIPE_PRICE_NETWORK_MONTHLY,
+        ("network", "yearly"): settings.STRIPE_PRICE_NETWORK_YEARLY,
+        ("enterprise", "monthly"): settings.STRIPE_PRICE_ENTERPRISE,
+        ("enterprise", "yearly"): settings.STRIPE_PRICE_ENTERPRISE,
+    }
+
+
+def _price_for_offer(plan: str, billing_period: str) -> str:
+    code = normalize_plan_code(plan)
+    period = billing_period.lower()
+    price = _price_map().get((code, period))
     if not price:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail={"code": "plan_required", "message": "A configured pilot or pro plan is required."},
+            detail={"code": "price_not_configured", "message": "That plan and billing period are not configured for self-serve checkout."},
         )
     return price
 
@@ -62,8 +77,11 @@ def _create_customer(org: Organization) -> str:
 
 @router.post("/create-checkout-session")
 def create_checkout_session(payload: CheckoutRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
-    if payload.plan not in {"pilot", "pro"}:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="plan must be pilot or pro")
+    plan = normalize_plan_code(payload.plan)
+    if plan == "free":
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="free plan does not require checkout")
+    if payload.billing_period not in {"monthly", "yearly"}:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="billing_period must be monthly or yearly")
     org, membership = require_org_membership(payload.organization_id, user, db)
     require_owner_or_admin(membership.role)
     customer_id = org.stripe_customer_id or _create_customer(org)
@@ -75,10 +93,11 @@ def create_checkout_session(payload: CheckoutRequest, user: User = Depends(get_c
         session = stripe.checkout.Session.create(
             mode="subscription",
             customer=customer_id,
-            line_items=[{"price": _price_for_plan(payload.plan), "quantity": 1}],
-            success_url=f"{settings.APP_URL}/billing?checkout=success",
+            line_items=[{"price": _price_for_offer(plan, payload.billing_period), "quantity": 1}],
+            success_url=f"{settings.APP_URL}/billing?checkout=success&organization_id={org.id}",
             cancel_url=f"{settings.APP_URL}/billing?checkout=cancelled",
-            metadata={"organization_id": org.id, "plan": payload.plan},
+            metadata={"organization_id": org.id, "plan": plan, "billing_period": payload.billing_period},
+            subscription_data={"metadata": {"organization_id": org.id, "plan": plan, "billing_period": payload.billing_period}},
         )
     except stripe.error.StripeError:
         raise HTTPException(
@@ -86,6 +105,16 @@ def create_checkout_session(payload: CheckoutRequest, user: User = Depends(get_c
             detail={"code": "stripe_error", "message": "Stripe checkout session creation failed."},
         )
     return {"checkout_url": session["url"]}
+
+
+@router.post("/checkout")
+def checkout(payload: CheckoutRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+    return create_checkout_session(payload, user=user, db=db)
+
+
+@router.get("/plans")
+def billing_plans() -> dict:
+    return {"version": "2026-07", "plans": public_plan_catalog()}
 
 
 @router.post("/create-portal-session")
@@ -122,12 +151,20 @@ def billing_status(organization_id: str | None = None, user: User = Depends(get_
     totals: dict[str, int] = {}
     for event_type, quantity in usage:
         totals[event_type] = totals.get(event_type, 0) + int(quantity or 0)
+    quota = QuotaService(db)
+    entitlements = serialize_entitlements(org, db)
     return {
-        "plan": org.plan,
+        "plan": entitlements["plan"],
         "subscription_status": org.subscription_status,
+        "billing_period": org.billing_period,
         "current_period_end": org.current_period_end.isoformat() if org.current_period_end else None,
-        "entitlements": serialize_entitlements(org),
+        "entitlements": entitlements,
         "usage": totals,
+        "quota": {
+            metric: quota.snapshot(org, metric).__dict__
+            for metric in ("evidence_upload", "ai_action", "agent_run", "report_export")
+        },
+        "plans": public_plan_catalog(),
     }
 
 
@@ -148,10 +185,9 @@ def _verify_stripe_signature(raw_body: bytes, signature: str | None) -> None:
 
 
 def _plan_from_price(price_id: str | None) -> str | None:
-    if price_id == settings.STRIPE_PRICE_PILOT:
-        return "pilot"
-    if price_id == settings.STRIPE_PRICE_PRO:
-        return "pro"
+    for (plan, _period), configured_price in _price_map().items():
+        if configured_price and price_id == configured_price:
+            return plan
     return None
 
 
@@ -177,21 +213,29 @@ def _apply_billing_event(db: Session, org: Organization | None, event_type: str,
     if event_type == "checkout.session.completed":
         org.stripe_customer_id = obj.get("customer") or org.stripe_customer_id
         org.stripe_subscription_id = obj.get("subscription") or org.stripe_subscription_id
-        plan = (obj.get("metadata") or {}).get("plan")
-        if plan in {"pilot", "pro"}:
+        metadata = obj.get("metadata") or {}
+        plan = normalize_plan_code(metadata.get("plan"))
+        if plan in PLAN_CATALOG and plan != "free":
             org.plan = plan
-            org.subscription_status = "active"
+            org.billing_period = metadata.get("billing_period") or org.billing_period
+            org.subscription_status = obj.get("subscription_status") or "incomplete"
     elif event_type.startswith("customer.subscription."):
         org.stripe_customer_id = obj.get("customer") or org.stripe_customer_id
         org.stripe_subscription_id = obj.get("id") or org.stripe_subscription_id
         org.subscription_status = obj.get("status") or org.subscription_status
+        org.cancel_at_period_end = bool(obj.get("cancel_at_period_end") or False)
         items = (((obj.get("items") or {}).get("data") or [{}])[0]).get("price") or {}
         plan = _plan_from_price(items.get("id"))
         if plan:
             org.plan = plan
+            org.stripe_price_id = items.get("id") or org.stripe_price_id
+            org.stripe_product_id = items.get("product") or org.stripe_product_id
         if event_type == "customer.subscription.deleted":
             org.plan = "free"
             org.subscription_status = "canceled"
+        period_start = obj.get("current_period_start")
+        if period_start:
+            org.current_period_start = datetime.utcfromtimestamp(int(period_start))
         period_end = obj.get("current_period_end")
         if period_end:
             org.current_period_end = datetime.utcfromtimestamp(int(period_end))

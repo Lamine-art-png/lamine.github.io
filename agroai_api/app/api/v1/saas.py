@@ -11,13 +11,12 @@ from app.models.saas import Organization, OrganizationMembership, UsageEvent, Us
 from app.services.entitlements import (
     assert_can_create_workspace,
     assert_can_export_reports,
-    assert_can_run_agent,
-    assert_can_upload_evidence,
-    get_plan_limits,
     require_owner_or_admin,
+    require_feature,
     require_workspace_mode,
     serialize_entitlements,
 )
+from app.services.quota import QuotaService
 
 router = APIRouter(tags=["saas"])
 
@@ -57,7 +56,7 @@ def create_org(payload: OrganizationCreate, user: User = Depends(get_current_use
     db.add_all([membership, workspace])
     db.commit()
     db.refresh(org)
-    return {"organization": {"id": org.id, "name": org.name, "slug": org.slug, "plan": org.plan, "subscription_status": org.subscription_status}}
+    return {"organization": {"id": org.id, "name": org.name, "slug": org.slug, "plan": serialize_entitlements(org, db)["plan"], "subscription_status": org.subscription_status}}
 
 
 @router.get("/orgs")
@@ -74,7 +73,7 @@ def list_orgs(user: User = Depends(get_current_user), db: Session = Depends(get_
                 "id": m.organization.id,
                 "name": m.organization.name,
                 "slug": m.organization.slug,
-                "plan": m.organization.plan,
+                "plan": serialize_entitlements(m.organization, db)["plan"],
                 "subscription_status": m.organization.subscription_status,
                 "role": m.role,
             }
@@ -91,11 +90,11 @@ def switch_org(org_id: str, user: User = Depends(get_current_user), db: Session 
             "id": org.id,
             "name": org.name,
             "slug": org.slug,
-            "plan": org.plan,
+            "plan": serialize_entitlements(org, db)["plan"],
             "subscription_status": org.subscription_status,
             "role": membership.role,
         },
-        "entitlements": serialize_entitlements(org),
+        "entitlements": serialize_entitlements(org, db),
     }
 
 
@@ -132,7 +131,7 @@ def create_workspace(payload: WorkspaceCreate, user: User = Depends(get_current_
     db.add(workspace)
     db.commit()
     db.refresh(workspace)
-    return {"workspace": _workspace_payload(workspace), "entitlements": serialize_entitlements(org)}
+    return {"workspace": _workspace_payload(workspace), "entitlements": serialize_entitlements(org, db)}
 
 
 @router.get("/workspaces/{workspace_id}/assurance/overview")
@@ -151,7 +150,7 @@ def assurance_overview(workspace_id: str, user: User = Depends(get_current_user)
         "top_priority_work": "Complete proof coverage for irrigation event chain.",
         "ai_insight_summary": "Evaluation insight only. Not certified, not regulator-approved, and requires human review.",
         "connected_systems": ["Evaluation data package"] if workspace.mode == "evaluation" else ["Configured integrations"],
-        "entitlements": serialize_entitlements(org),
+        "entitlements": serialize_entitlements(org, db),
     }
 
 
@@ -170,16 +169,14 @@ def list_evidence(workspace_id: str, user: User = Depends(get_current_user), db:
 @router.post("/workspaces/{workspace_id}/evidence")
 def upload_evidence_stub(workspace_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
     workspace, _ = require_workspace_access(workspace_id, user, db)
-    assert_can_upload_evidence(db, workspace.organization)
-    event = UsageEvent(
-        organization_id=workspace.organization_id,
+    require_feature(workspace.organization, "evidence.upload", db=db)
+    QuotaService(db).record(
+        workspace.organization,
+        "evidence_upload",
         workspace_id=workspace.id,
         user_id=user.id,
-        event_type="evidence_upload",
-        quantity=1,
-        metadata_json={"source": "api_stub"},
+        metadata={"source": "api_stub"},
     )
-    db.add(event)
     db.commit()
     return {
         "status": "accepted_for_review",
@@ -192,16 +189,14 @@ def upload_evidence_stub(workspace_id: str, user: User = Depends(get_current_use
 @router.post("/workspaces/{workspace_id}/agents/run")
 def run_agent(workspace_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
     workspace, _ = require_workspace_access(workspace_id, user, db)
-    assert_can_run_agent(db, workspace.organization)
-    event = UsageEvent(
-        organization_id=workspace.organization_id,
+    require_feature(workspace.organization, "agents.plan", db=db)
+    event = QuotaService(db).record(
+        workspace.organization,
+        "agent_run",
         workspace_id=workspace.id,
         user_id=user.id,
-        event_type="agent_run",
-        quantity=1,
-        metadata_json={"agent": "readiness"},
+        metadata={"agent": "readiness"},
     )
-    db.add(event)
     db.commit()
     return {
         "run_id": event.id,
@@ -237,7 +232,7 @@ def agent_runs(workspace_id: str, user: User = Depends(get_current_user), db: Se
 @router.get("/workspaces/{workspace_id}/reports")
 def reports(workspace_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
     workspace, _ = require_workspace_access(workspace_id, user, db)
-    can_export = get_plan_limits(workspace.organization.plan).can_export_reports
+    can_export = serialize_entitlements(workspace.organization, db)["can_export_reports"]
     return {
         "reports": [
             {
@@ -254,7 +249,15 @@ def reports(workspace_id: str, user: User = Depends(get_current_user), db: Sessi
 @router.post("/workspaces/{workspace_id}/reports/export")
 def export_report(workspace_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
     workspace, _ = require_workspace_access(workspace_id, user, db)
-    assert_can_export_reports(workspace.organization)
+    assert_can_export_reports(workspace.organization, db=db)
+    QuotaService(db).record(
+        workspace.organization,
+        "report_export",
+        workspace_id=workspace.id,
+        user_id=user.id,
+        metadata={"report": "readiness-summary"},
+    )
+    db.commit()
     return {"status": "queued", "truthful_status": "Draft report queued for reviewer-safe generation."}
 
 
@@ -263,9 +266,5 @@ def create_assurance_passport(workspace_id: str, user: User = Depends(get_curren
     workspace, membership = require_workspace_access(workspace_id, user, db)
     require_owner_or_admin(membership.role)
     require_workspace_mode(workspace, "live")
-    if not get_plan_limits(workspace.organization.plan).can_create_live_assurance_passports:
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail={"code": "plan_required", "message": "Live assurance passports require Pro or Enterprise."},
-        )
+    require_feature(workspace.organization, "agents.execute_approval_gated", db=db)
     return {"status": "draft", "truthful_status": "Reviewer required. Not certified or regulator-approved."}

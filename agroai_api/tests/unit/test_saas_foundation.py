@@ -5,7 +5,7 @@ import time
 
 from app.core.config import settings
 from app.core.security import verify_token
-from app.models.saas import BillingEvent, Organization, OrganizationMembership, UsageEvent
+from app.models.saas import BillingEvent, EntitlementOverride, Organization, OrganizationMembership, UsageEvent
 
 
 def _register(client, email="owner@example.com", org="Owner Farms"):
@@ -108,14 +108,14 @@ def test_free_plan_workspace_live_and_export_gates(client):
     workspace_id = client.get("/v1/workspaces", headers=headers).json()["workspaces"][0]["id"]
     export = client.post(f"/v1/workspaces/{workspace_id}/reports/export", headers=headers)
     assert export.status_code == 402
-    assert export.json()["detail"]["code"] == "plan_required"
+    assert export.json()["detail"]["code"] == "upgrade_required"
 
 
 def test_paid_entitlements_unlock_live_workspace_and_agent_usage(client, db):
     body, headers = _register(client)
     org_id = body["current_organization"]["id"]
     org = db.get(Organization, org_id)
-    org.plan = "pro"
+    org.plan = "professional"
     org.subscription_status = "active"
     db.commit()
 
@@ -140,12 +140,11 @@ def test_evidence_and_agent_run_gated_by_free_plan(client):
     workspace_id = client.get("/v1/workspaces", headers=headers).json()["workspaces"][0]["id"]
 
     upload = client.post(f"/v1/workspaces/{workspace_id}/evidence", headers=headers)
-    assert upload.status_code == 402
-    assert upload.json()["detail"]["code"] == "plan_required"
+    assert upload.status_code == 200
 
     agent = client.post(f"/v1/workspaces/{workspace_id}/agents/run", headers=headers)
     assert agent.status_code == 402
-    assert agent.json()["detail"]["code"] == "plan_required"
+    assert agent.json()["detail"]["code"] == "upgrade_required"
 
 
 def test_checkout_and_portal_require_owner_or_admin_and_safe_missing_stripe(client, db):
@@ -153,17 +152,17 @@ def test_checkout_and_portal_require_owner_or_admin_and_safe_missing_stripe(clie
     other, other_headers = _register(client, "other-billing@example.com", "Other Billing Farms")
     org_id = owner["current_organization"]["id"]
 
-    hidden = client.post("/v1/billing/create-checkout-session", headers=other_headers, json={"organization_id": org_id, "plan": "pilot"})
+    hidden = client.post("/v1/billing/create-checkout-session", headers=other_headers, json={"organization_id": org_id, "plan": "professional"})
     assert hidden.status_code == 404
 
     db.add(OrganizationMembership(organization_id=org_id, user_id=other["user"]["id"], role="operator"))
     db.commit()
 
-    forbidden = client.post("/v1/billing/create-checkout-session", headers=other_headers, json={"organization_id": org_id, "plan": "pilot"})
+    forbidden = client.post("/v1/billing/create-checkout-session", headers=other_headers, json={"organization_id": org_id, "plan": "professional"})
     assert forbidden.status_code == 403
     assert forbidden.json()["detail"]["code"] == "owner_or_admin_required"
 
-    missing = client.post("/v1/billing/create-checkout-session", headers=owner_headers, json={"organization_id": org_id, "plan": "pilot"})
+    missing = client.post("/v1/billing/create-checkout-session", headers=owner_headers, json={"organization_id": org_id, "plan": "professional"})
     assert missing.status_code in {422, 503}
 
     org = db.get(Organization, org_id)
@@ -180,6 +179,7 @@ def test_billing_status_returns_entitlements(client):
     status = client.get(f"/v1/billing/status?organization_id={org_id}", headers=headers)
     assert status.status_code == 200
     assert status.json()["entitlements"]["plan"] == "free"
+    assert status.json()["plans"][1]["code"] == "professional"
 
 
 def test_stripe_webhook_idempotency_updates_subscription(client, db, monkeypatch):
@@ -213,9 +213,94 @@ def test_stripe_webhook_idempotency_updates_subscription(client, db, monkeypatch
     assert second.json()["idempotent"] is True
     assert db.query(BillingEvent).filter(BillingEvent.stripe_event_id == "evt_123").count() == 1
     org = db.get(Organization, org_id)
-    assert org.plan == "pro"
+    assert org.plan == "professional"
     assert org.subscription_status == "active"
     assert org.stripe_subscription_id == "sub_123"
+
+
+def test_checkout_completed_does_not_grant_active_access(client, db, monkeypatch):
+    body, _headers = _register(client, "checkout-safe@example.com", "Checkout Safe Farms")
+    org_id = body["current_organization"]["id"]
+    monkeypatch.setattr(settings, "STRIPE_WEBHOOK_SECRET", "whsec_test")
+    event = {
+        "id": "evt_checkout_incomplete",
+        "object": "event",
+        "type": "checkout.session.completed",
+        "data": {
+            "object": {
+                "customer": "cus_123",
+                "subscription": "sub_123",
+                "metadata": {"organization_id": org_id, "plan": "professional", "billing_period": "monthly"},
+            }
+        },
+    }
+    raw = json.dumps(event).encode()
+    response = client.post("/v1/billing/webhook", content=raw, headers={"Stripe-Signature": _stripe_signature(raw, settings.STRIPE_WEBHOOK_SECRET)})
+
+    assert response.status_code == 200, response.text
+    org = db.get(Organization, org_id)
+    assert org.plan == "professional"
+    assert org.subscription_status == "incomplete"
+    workspace_id = client.get("/v1/workspaces", headers={"Authorization": f"Bearer {body['access_token']}"}).json()["workspaces"][0]["id"]
+    agent = client.post(f"/v1/workspaces/{workspace_id}/agents/run", headers={"Authorization": f"Bearer {body['access_token']}"})
+    assert agent.status_code == 402
+
+
+def test_entitlement_override_unlocks_specific_feature_without_changing_plan(client, db):
+    body, headers = _register(client, "override@example.com", "Override Farms")
+    org_id = body["current_organization"]["id"]
+    org = db.get(Organization, org_id)
+    db.add(
+        EntitlementOverride(
+            organization_id=org_id,
+            feature_key="reports.pdf_export",
+            value_json={"state": "enabled"},
+            reason="support-approved temporary export",
+            source="test",
+        )
+    )
+    db.add(
+        EntitlementOverride(
+            organization_id=org_id,
+            feature_key="quota.report_export.monthly",
+            value_json=1,
+            reason="support-approved temporary export",
+            source="test",
+        )
+    )
+    db.commit()
+    workspace_id = client.get("/v1/workspaces", headers=headers).json()["workspaces"][0]["id"]
+
+    export = client.post(f"/v1/workspaces/{workspace_id}/reports/export", headers=headers)
+
+    assert export.status_code == 200, export.text
+    assert db.get(Organization, org_id).plan == org.plan == "free"
+
+
+def test_free_evidence_quota_blocks_after_monthly_limit(client, db):
+    body, headers = _register(client, "quota@example.com", "Quota Farms")
+    org_id = body["current_organization"]["id"]
+    workspace_id = client.get("/v1/workspaces", headers=headers).json()["workspaces"][0]["id"]
+    for i in range(10):
+        db.add(
+            UsageEvent(
+                organization_id=org_id,
+                workspace_id=workspace_id,
+                event_type="evidence_upload",
+                metric="evidence_upload",
+                quantity=1,
+                unit="count",
+                period_key=time.strftime("%Y-%m"),
+                state="committed",
+                metadata_json={"i": i},
+            )
+        )
+    db.commit()
+
+    blocked = client.post(f"/v1/workspaces/{workspace_id}/evidence", headers=headers)
+
+    assert blocked.status_code == 403
+    assert blocked.json()["detail"]["code"] == "quota_exceeded"
 
 
 def test_stripe_webhook_rejects_invalid_signature(client, monkeypatch):

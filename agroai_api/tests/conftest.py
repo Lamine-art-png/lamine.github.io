@@ -1,4 +1,6 @@
 """Test configuration and fixtures."""
+import asyncio
+import inspect
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
@@ -9,6 +11,18 @@ import uuid
 from app.main import app
 from app.db.base import Base, get_db
 from app.models import Tenant, Client, Block, Telemetry
+
+
+def pytest_pyfunc_call(pyfuncitem):
+    """Run coroutine tests marked asyncio without requiring pytest-asyncio."""
+    if "asyncio" not in pyfuncitem.keywords:
+        return None
+    test_func = pyfuncitem.obj
+    if not inspect.iscoroutinefunction(test_func):
+        return None
+    kwargs = {name: pyfuncitem.funcargs[name] for name in pyfuncitem._fixtureinfo.argnames}
+    asyncio.run(test_func(**kwargs))
+    return True
 
 
 # Test database

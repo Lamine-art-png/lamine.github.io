@@ -76,6 +76,12 @@ class Settings(BaseSettings):
     STRIPE_WEBHOOK_SECRET: str = ""
     STRIPE_PRICE_PILOT: str = ""
     STRIPE_PRICE_PRO: str = ""
+    STRIPE_PRICE_PROFESSIONAL_MONTHLY: str = ""
+    STRIPE_PRICE_PROFESSIONAL_YEARLY: str = ""
+    STRIPE_PRICE_TEAM_MONTHLY: str = ""
+    STRIPE_PRICE_TEAM_YEARLY: str = ""
+    STRIPE_PRICE_NETWORK_MONTHLY: str = ""
+    STRIPE_PRICE_NETWORK_YEARLY: str = ""
     STRIPE_PRICE_ENTERPRISE: str = ""
 
     # Strip whitespace/tabs from env vars that may be copy-pasted with junk
