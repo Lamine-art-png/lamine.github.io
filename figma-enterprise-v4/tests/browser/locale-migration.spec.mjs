@@ -59,8 +59,8 @@ function languageSelector(page) {
 const cases = [
   ["legacy fr", "fr", "fr-FR", "fr-FR", "fr-FR", "Langue", 1],
   ["regional fr-CA", "fr-CA", "fr-FR", "fr-FR", "fr-FR", "Langue", 1],
-  ["global de", "de", "de", "de", "de", "Sprache", 1],
-  ["global ar", "ar", "ar", "ar", "ar", "اللغة", 1],
+  ["global de", "de", "de", "de", "de", "Sprache", 2],
+  ["global ar", "ar", "ar", "ar", "ar", "اللغة", 2],
   ["unknown locale", "nonsense-value", "auto", "en", "auto", "Language", 0],
 ];
 
@@ -91,7 +91,7 @@ test("malformed dynamic placeholder catalog is rejected and not cached", async (
   await expect(page.locator("html")).toHaveAttribute("lang", "sw");
   await expect.poll(() => state.catalogs).toBe(1);
   await expect(page.getByText("Language", { exact: true }).first()).toBeVisible();
-  const cached = await page.evaluate(() => Object.keys(localStorage).some((key) => key.startsWith("agroai_ui_catalog_v3:sw:")));
+  const cached = await page.evaluate(() => Object.keys(localStorage).some((key) => key.startsWith("agroai_ui_catalog_v4:sw:")));
   expect(cached).toBe(false);
   await context.close();
 });
