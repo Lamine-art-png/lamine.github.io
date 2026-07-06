@@ -19,6 +19,20 @@ def idempotency_key(tenant_id: str, connection_id: str, checksum: str) -> str:
     return hashlib.sha256(f"{tenant_id}|{connection_id}|{checksum}".encode("utf-8")).hexdigest()
 
 
+def _delete_staged_object(
+    store: S3ObjectStore,
+    stored: StoredObject,
+    *,
+    tenant_id: str,
+    connection_id: str,
+) -> None:
+    store.delete(
+        stored.uri,
+        tenant_id=tenant_id,
+        connection_id=connection_id,
+    )
+
+
 def stage_durable_object_job(
     db: Session,
     *,
@@ -35,7 +49,7 @@ def stage_durable_object_job(
     that newly-created object until the job/outbox transaction commits.
     """
     if connection.tenant_id != tenant_id:
-        store.delete(stored.uri)
+        _delete_staged_object(store, stored, tenant_id=tenant_id, connection_id=connection.id)
         raise ValueError("connector ingestion ownership mismatch")
 
     key = idempotency_key(tenant_id, connection.id, stored.sha256)
@@ -44,7 +58,7 @@ def stage_durable_object_job(
         IngestionJob.idempotency_key == key,
     ).first()
     if existing is not None:
-        store.delete(stored.uri)
+        _delete_staged_object(store, stored, tenant_id=tenant_id, connection_id=connection.id)
         return existing, True
 
     now = datetime.utcnow()
@@ -93,13 +107,13 @@ def stage_durable_object_job(
             IngestionJob.tenant_id == tenant_id,
             IngestionJob.idempotency_key == key,
         ).first()
-        store.delete(stored.uri)
+        _delete_staged_object(store, stored, tenant_id=tenant_id, connection_id=connection.id)
         if existing is not None:
             return existing, True
         raise
     except Exception:
         db.rollback()
         try:
-            store.delete(stored.uri)
+            _delete_staged_object(store, stored, tenant_id=tenant_id, connection_id=connection.id)
         finally:
             raise
