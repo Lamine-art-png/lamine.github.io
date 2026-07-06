@@ -15,6 +15,7 @@ RUN pip install --upgrade pip \
 
 COPY agroai/ /app/agroai/
 COPY agroai_api/ /app/agroai_api/
+COPY shared/ /app/shared/
 
 ENV PYTHONPATH=/app:/app/agroai_api
 
