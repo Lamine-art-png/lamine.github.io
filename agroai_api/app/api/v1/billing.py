@@ -288,8 +288,8 @@ def _plan_from_price(price_id: str | None) -> str | None:
         # Legacy names retained for old test sessions.
         settings.STRIPE_PRICE_WATEROPS_MONTHLY: "professional",
         settings.STRIPE_PRICE_ASSURANCE_MONTHLY: "team",
-        getattr(settings, "STRIPE_PRICE_PRO", ""): "professional",
-        getattr(settings, "STRIPE_PRICE_PILOT", ""): "professional",
+        getattr(settings, "STRIPE_PRICE_PRO", ""): "pro",
+        getattr(settings, "STRIPE_PRICE_PILOT", ""): "pilot",
         getattr(settings, "STRIPE_PRICE_ENTERPRISE", ""): "enterprise",
         settings.STRIPE_PRICE_ASSURANCE_AUDIT_FARM: "assurance_audit",
         settings.STRIPE_PRICE_ASSURANCE_AUDIT_NETWORK: "assurance_audit",

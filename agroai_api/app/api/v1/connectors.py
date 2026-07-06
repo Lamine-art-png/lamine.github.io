@@ -14,20 +14,22 @@ import io
 import json
 import os
 import re
-import urllib.parse
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile, status
 from pydantic import BaseModel, Field
-from sqlalchemy import inspect, text as sql_text
+from sqlalchemy import inspect
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.security import require_current_tenant_id
-from app.db.base import Base, get_db
+from app.db.base import get_db
 from app.models.operational_records import ConnectorConnection, DataSource, EvidenceRecord, GeneratedArtifact, IngestionJob, IntelligenceRun
+from app.services.ingestion_stream import read_spooled_bytes, stream_upload_to_spool
+from app.services.oauth_state import sign_oauth_state
+from app.services.oauth_urls import oauth_url
 
 router = APIRouter(tags=["operational-intelligence"])
 
@@ -214,35 +216,25 @@ class EvidenceCreateRequest(BaseModel):
     metadata_json: dict[str, Any] = Field(default_factory=dict)
 
 
-def ensure_schema(db: Session) -> None:
+def verify_connector_schema(db: Session) -> None:
+    """Verify Alembic-owned connector schema without mutating it."""
     bind = db.get_bind()
-    Base.metadata.create_all(bind=bind, tables=TABLES)
     inspector = inspect(bind)
-    dialect = bind.dialect.name
-
-    def ddl_type(column) -> str:
-        name = column.type.__class__.__name__.lower()
-        if "json" in name:
-            return "JSONB" if dialect == "postgresql" else "JSON"
-        if "datetime" in name:
-            return "TIMESTAMP"
-        if "float" in name:
-            return "DOUBLE PRECISION" if dialect == "postgresql" else "FLOAT"
-        return "TEXT"
-
+    tables = set(inspector.get_table_names())
+    missing: dict[str, list[str]] = {}
     for table in TABLES:
-        try:
-            existing = {column["name"] for column in inspector.get_columns(table.name)}
-        except Exception:
+        if table.name not in tables:
+            missing[table.name] = sorted(column.name for column in table.columns)
             continue
-        for column in table.columns:
-            if column.name in existing:
-                continue
-            try:
-                db.execute(sql_text(f'ALTER TABLE "{table.name}" ADD COLUMN "{column.name}" {ddl_type(column)}'))
-                db.commit()
-            except Exception:
-                db.rollback()
+        existing = {column["name"] for column in inspector.get_columns(table.name)}
+        missing_columns = {column.name for column in table.columns} - existing
+        if missing_columns:
+            missing[table.name] = sorted(missing_columns)
+    if missing:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"error": "connector_schema_not_ready", "missing": missing, "action": "run_alembic_upgrade_head"},
+        )
 
 
 def sanitize_config(config: dict[str, Any] | None) -> dict[str, Any]:
@@ -309,7 +301,7 @@ def evidence_public(row: EvidenceRecord) -> dict[str, Any]:
 
 
 def create_or_get_connection(db: Session, *, tenant_id: str, provider: str, workspace_id: str | None = None, mode: str | None = None, display_name: str | None = None, config: dict[str, Any] | None = None) -> ConnectorConnection:
-    ensure_schema(db)
+    verify_connector_schema(db)
     item = catalog_item(provider)
     if item is None:
         raise HTTPException(status_code=400, detail="Unsupported connector provider")
@@ -438,6 +430,14 @@ def save_upload_bytes(tenant_id: str, connection_id: str, filename: str | None, 
         return f"inline://sha256/{digest}/{safe_filename(filename)}"
 
 
+async def _bounded_upload_bytes(tenant_id: str, connection_id: str, file: UploadFile) -> bytes:
+    receipt = await stream_upload_to_spool(file, tenant_id=tenant_id, connection_id=connection_id)
+    try:
+        return read_spooled_bytes(receipt)
+    finally:
+        Path(receipt.path).unlink(missing_ok=True)
+
+
 def _job(db: Session, *, tenant_id: str, workspace_id: str | None, connection_id: str | None, data_source_id: str | None, job_type: str, input_json: dict[str, Any], output_json: dict[str, Any], status_value: str = "completed") -> IngestionJob:
     row = IngestionJob(tenant_id=tenant_id, workspace_id=workspace_id, connector_connection_id=connection_id, data_source_id=data_source_id, job_type=job_type, status=status_value, input_json=input_json, output_json=output_json, completed_at=datetime.utcnow())
     db.add(row)
@@ -478,7 +478,8 @@ def _create_evidence_rows(db: Session, *, tenant_id: str, workspace_id: str | No
 
 @router.get("/connectors/catalog")
 def get_catalog() -> dict[str, Any]:
-    return {"status": "ok", "catalog": [connector_readiness(item) for item in CATALOG]}
+    connectors = [connector_readiness(item) for item in CATALOG]
+    return {"status": "ok", "catalog": connectors, "connectors": connectors}
 
 
 @router.post("/connectors/start")
@@ -495,7 +496,7 @@ def connect_connector(payload: ConnectorCreateRequest, tenant_id: str = Depends(
 
 @router.get("/connectors/connections")
 def list_connections(tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     rows = db.query(ConnectorConnection).filter(ConnectorConnection.tenant_id == tenant_id).order_by(ConnectorConnection.created_at.desc()).all()
     return {"status": "ok", "connections": [public_connection(row) for row in rows]}
 
@@ -561,7 +562,7 @@ def test_connection(connection_id: str, tenant_id: str = Depends(require_current
 @router.post("/connectors/connections/{connection_id}/upload")
 async def upload_connection_file(connection_id: str, file: UploadFile = File(...), tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
     row = _get_connection(db, tenant_id, connection_id)
-    data = await file.read()
+    data = await _bounded_upload_bytes(tenant_id, connection_id, file)
     text, rows, columns, warnings = parse_rows(file.filename or "upload", file.content_type, data)
     storage_path = save_upload_bytes(tenant_id, connection_id, file.filename, data)
     source = DataSource(tenant_id=tenant_id, workspace_id=row.workspace_id, connector_connection_id=row.id, source_type=row.provider, provider=row.provider, filename=file.filename, content_type=file.content_type, storage_path=storage_path, raw_text=text[:50000], metadata_json={"columns": columns, "rows_parsed": len(rows), "warnings": warnings, "mapping": suggest_mapping(columns), "normalized_gateway": row.provider == "universal_controller"}, status="parsed")
@@ -614,47 +615,44 @@ def sync_connection(connection_id: str, tenant_id: str = Depends(require_current
 
 @router.get("/connectors/data-sources")
 def list_data_sources(tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     rows = db.query(DataSource).filter(DataSource.tenant_id == tenant_id).order_by(DataSource.created_at.desc()).limit(100).all()
     return {"status": "ok", "data_sources": [row_to_dict(row) for row in rows]}
 
 
 @router.get("/connectors/jobs")
 def list_jobs(tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     rows = db.query(IngestionJob).filter(IngestionJob.tenant_id == tenant_id).order_by(IngestionJob.created_at.desc()).limit(100).all()
     return {"status": "ok", "jobs": [_job_public(row) for row in rows]}
-
-
-def oauth_url(provider: str, state: str, redirect_url: str) -> tuple[str | None, str | None]:
-    if provider in {"gmail", "google_drive"}:
-        client_id = os.getenv("GOOGLE_OAUTH_CLIENT_ID", "").strip()
-        if not client_id:
-            return None, "Missing GOOGLE_OAUTH_CLIENT_ID. OAuth cannot start yet."
-        scope = "openid email profile https://www.googleapis.com/auth/gmail.readonly" if provider == "gmail" else "openid email profile https://www.googleapis.com/auth/drive.readonly"
-        params = {"client_id": client_id, "redirect_uri": redirect_url, "response_type": "code", "scope": scope, "access_type": "offline", "prompt": "consent", "state": state}
-        return "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params), None
-    return None, "OAuth provider is not configured yet."
 
 
 @router.post("/connectors/oauth/start")
 def start_oauth(payload: OAuthStartRequest, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
     connection = create_or_get_connection(db, tenant_id=tenant_id, provider=payload.provider, workspace_id=payload.workspace_id, mode="oauth", config=payload.metadata)
     redirect_url = payload.redirect_url or f"{getattr(settings, 'APP_URL', 'https://app.agroai-pilot.com').rstrip('/')}/connectors/oauth/callback"
-    url, error = oauth_url(payload.provider, connection.id, redirect_url)
+    state = sign_oauth_state(connection.id)
+    merged = dict(connection.config_json or {})
+    merged["oauth_state"] = state
+    merged["oauth_redirect_url"] = redirect_url
+    connection.config_json = sanitize_config(merged)
+    connection.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(connection)
+    url, error = oauth_url(payload.provider, state, redirect_url)
     return {"status": "oauth_ready" if url else "not_configured", "connection": public_connection(connection), "authorization_url": url, "error": error}
 
 
 @router.get("/evidence")
 def list_evidence(tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     rows = db.query(EvidenceRecord).filter(EvidenceRecord.tenant_id == tenant_id).order_by(EvidenceRecord.created_at.desc()).limit(150).all()
     return {"status": "ok", "evidence": [evidence_public(row) for row in rows]}
 
 
 @router.post("/evidence")
 def create_evidence(payload: EvidenceCreateRequest, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     row = EvidenceRecord(tenant_id=tenant_id, workspace_id=payload.workspace_id, evidence_type=payload.evidence_type, title=payload.title, summary=payload.summary, value_json=payload.value_json, confidence=0.72, quality_status="usable", citation_label=f"manual:{datetime.utcnow().isoformat(timespec='seconds')}", metadata_json=payload.metadata_json)
     db.add(row)
     db.commit()
@@ -664,7 +662,7 @@ def create_evidence(payload: EvidenceCreateRequest, tenant_id: str = Depends(req
 
 @router.get("/evidence/summary")
 def evidence_summary(tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     rows = db.query(EvidenceRecord).filter(EvidenceRecord.tenant_id == tenant_id).all()
     by_type: dict[str, int] = {}
     for row in rows:
@@ -674,11 +672,11 @@ def evidence_summary(tenant_id: str = Depends(require_current_tenant_id), db: Se
 
 @router.post("/evidence/upload")
 async def upload_evidence(provider: str = Query(default="manual_csv"), workspace_id: str | None = Query(default=None), file: UploadFile = File(...), tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     if not catalog_item(provider):
         provider = "manual_csv"
     connection = create_or_get_connection(db, tenant_id=tenant_id, provider=provider, workspace_id=workspace_id, mode="manual_upload" if provider == "chat_upload" else "export_upload")
-    data = await file.read()
+    data = await _bounded_upload_bytes(tenant_id, connection.id, file)
     text, rows, columns, warnings = parse_rows(file.filename or "upload", file.content_type, data)
     storage_path = save_upload_bytes(tenant_id, connection.id, file.filename, data)
     source = DataSource(tenant_id=tenant_id, workspace_id=workspace_id, connector_connection_id=connection.id, source_type=provider, provider=provider, filename=file.filename, content_type=file.content_type, storage_path=storage_path, raw_text=text[:50000], metadata_json={"columns": columns, "rows_parsed": len(rows), "warnings": warnings, "mapping": suggest_mapping(columns), "normalized_gateway": provider == "universal_controller"}, status="parsed")
@@ -692,7 +690,7 @@ async def upload_evidence(provider: str = Query(default="manual_csv"), workspace
 
 @router.post("/reports/generate")
 def generate_report(payload: dict[str, Any] | None = None, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     payload = payload or {}
     run = IntelligenceRun(tenant_id=tenant_id, workspace_id=payload.get("workspace_id"), run_type="report_generate", question=str(payload), input_context_json=payload, output_json={"message": "Report generated from available evidence metadata."}, citations_json=[], status="completed")
     db.add(run)
@@ -708,13 +706,13 @@ def export_report(payload: dict[str, Any] | None = None, tenant_id: str = Depend
 
 @router.get("/reports")
 def list_reports(tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     rows = db.query(IntelligenceRun).filter(IntelligenceRun.tenant_id == tenant_id, IntelligenceRun.run_type.like("%report%")).order_by(IntelligenceRun.created_at.desc()).limit(50).all()
     return {"status": "ok", "reports": [row_to_dict(row) for row in rows]}
 
 
 @router.get("/artifacts")
 def list_artifacts(tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     rows = db.query(GeneratedArtifact).filter(GeneratedArtifact.tenant_id == tenant_id).order_by(GeneratedArtifact.created_at.desc()).limit(50).all()
     return {"status": "ok", "artifacts": [row_to_dict(row) for row in rows]}

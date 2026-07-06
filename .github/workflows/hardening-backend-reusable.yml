@@ -1,0 +1,58 @@
+name: Hardening Backend Reusable
+
+on:
+  workflow_call:
+
+jobs:
+  backend-postgres-and-unit:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: agroai_hardening_ci
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -q -r requirements.txt pytest
+      - name: Compile backend and migration tree
+        run: python -m compileall -q app alembic scripts
+      - name: Enforce revision graph contract
+        run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --confcutdir=tests/unit tests/unit/test_alembic_revision_contract.py
+      - name: Migrate real PostgreSQL to repository head
+        env:
+          DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
+        run: alembic upgrade head
+      - name: Prove persisted revision equals repository head
+        env:
+          DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
+        run: |
+          python - <<'PY'
+          import os
+          import sqlalchemy as sa
+          from alembic.config import Config
+          from alembic.script import ScriptDirectory
+          cfg = Config("alembic.ini")
+          heads = sorted(ScriptDirectory.from_config(cfg).get_heads())
+          engine = sa.create_engine(os.environ["DATABASE_URL"])
+          with engine.connect() as connection:
+              versions = sorted(row[0] for row in connection.execute(sa.text("SELECT version_num FROM alembic_version")))
+          assert versions == heads, {"persisted": versions, "repository": heads}
+          print({"persisted_heads": versions})
+          PY
+      - name: Run complete backend unit suite
+        run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short tests/unit

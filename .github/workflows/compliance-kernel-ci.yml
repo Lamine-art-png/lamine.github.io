@@ -31,13 +31,14 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install backend dependencies
-        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt pytest
       - name: Compile backend modules
         run: python -m compileall app tests scripts
       - name: Check migration syntax
         run: |
           python -m py_compile alembic/versions/002_california_compliance_pack.py
           python -m py_compile alembic/versions/003_global_compliance_kernel.py
+          python -m py_compile alembic/versions/009_add_telemetry_recommendations.py
           python -m py_compile scripts/compliance_migration_preflight.py
           python -m py_compile scripts/postgres_precreated_compliance_smoke.py
       - name: Run compliance tests and SQLite migration smoke tests
@@ -57,12 +58,175 @@ jobs:
       - name: PostgreSQL migration smoke test
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agroai_compliance_ci
-        run: alembic upgrade head
+        run: |
+          set +e
+          alembic upgrade head 2>&1 | tee postgres-migration.log
+          status=${PIPESTATUS[0]}
+          tail -n 180 postgres-migration.log > postgres-migration-tail.txt
+          if [ "$status" -ne 0 ]; then
+            exit "$status"
+          fi
+          python - <<'PY'
+          import os
+          import sqlalchemy as sa
+
+          engine = sa.create_engine(os.environ["DATABASE_URL"])
+          inspector = sa.inspect(engine)
+          tables = set(inspector.get_table_names())
+          required = {
+              "compliance_export_metadata",
+              "users",
+              "conversations",
+              "email_verification_tokens",
+              "telemetry",
+              "recommendations",
+          }
+          missing = sorted(required - tables)
+          assert not missing, f"persisted PostgreSQL migration missing tables: {missing}"
+          with engine.connect() as connection:
+              revision = connection.execute(sa.text("SELECT version_num FROM alembic_version")).scalar_one()
+          assert revision == "009_telemetry_recommendations", revision
+          print(f"persisted PostgreSQL head verified: {revision}")
+          PY
+      - name: Upload PostgreSQL migration tail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-migration-tail
+          path: agroai_api/postgres-migration-tail.txt
+          retention-days: 1
       - name: PostgreSQL pre-created compliance schema smoke test
         env:
           ALLOW_COMPLIANCE_SMOKE_RESET: "1"
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/agroai_compliance_precreated_ci
         run: python scripts/postgres_precreated_compliance_smoke.py
+
+  compliance-sqlite-fast:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies quietly
+        run: python -m pip install -q -r requirements.txt pytest
+      - name: Run focused compliance suite
+        run: |
+          set +e
+          pytest -q --tb=short tests/unit/test_compliance_pack.py 2>&1 | tee compliance-pytest.log
+          status=${PIPESTATUS[0]}
+          tail -n 120 compliance-pytest.log > compliance-pytest-tail.txt
+          exit $status
+      - name: Upload focused compliance failure tail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: compliance-pytest-tail
+          path: agroai_api/compliance-pytest-tail.txt
+          retention-days: 1
+
+  i18n-backend-regressions:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies quietly
+        run: python -m pip install -q -r requirements.txt pytest
+      - name: Compile language and migration modules
+        run: python -m py_compile app/services/language.py app/services/operational_invariants.py app/services/live_intelligence.py app/services/adaptive_chat.py app/services/model_router.py app/api/v1/brain.py alembic/versions/009_add_telemetry_recommendations.py
+      - name: Run language and migration regressions
+        run: |
+          set +e
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short tests/unit/test_i18n_language_integration.py tests/unit/test_operational_invariants.py tests/unit/test_model_router_language_failure.py tests/unit/test_telemetry_recommendations_migration.py 2>&1 | tee i18n-pytest.log
+          status=${PIPESTATUS[0]}
+          tail -n 140 i18n-pytest.log > i18n-pytest-tail.txt
+          exit $status
+      - name: Upload language regression failure tail
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: i18n-pytest-tail
+          path: agroai_api/i18n-pytest-tail.txt
+          retention-days: 1
+
+  portal-i18n-release:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: figma-enterprise-v4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - name: Install portal dependencies
+        run: npm ci
+      - name: Run i18n contract
+        run: npm run test:i18n
+      - name: Build production portal
+        run: npm run build
+
+  portal-browser-acceptance:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: figma-enterprise-v4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - name: Install portal and browser test dependencies
+        run: |
+          npm ci
+          npm install --no-save --no-package-lock @playwright/test@1.55.0
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+      - name: Build production portal
+        run: npm run build
+      - name: Run exact browser localization acceptance
+        env:
+          CI: "1"
+        run: |
+          set -euo pipefail
+          npx vite preview --host 127.0.0.1 --port 4173 > vite-preview.log 2>&1 &
+          server_pid=$!
+          trap 'kill "$server_pid" 2>/dev/null || true' EXIT
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error http://127.0.0.1:4173/intelligence >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 1
+          done
+          if [ "$ready" -ne 1 ]; then
+            cat vite-preview.log
+            exit 1
+          fi
+          npx playwright test tests/browser/i18n-acceptance.spec.mjs --browser=chromium --reporter=line
+      - name: Upload browser acceptance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portal-browser-acceptance
+          path: |
+            figma-enterprise-v4/vite-preview.log
+            figma-enterprise-v4/test-results
+          if-no-files-found: ignore
+          retention-days: 2
 
   command-center-v2:
     runs-on: ubuntu-latest

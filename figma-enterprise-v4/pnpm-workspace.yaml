@@ -9,3 +9,6 @@ supportedArchitectures:
     - arm64
   libc:
     - glibc
+onlyBuiltDependencies:
+  - esbuild
+  - '@tailwindcss/oxide'

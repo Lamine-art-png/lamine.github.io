@@ -15,6 +15,7 @@ from app.services.workbench_engine import EvidenceOrderViolation
 
 router = APIRouter(prefix="/workbench", tags=["workbench"])
 MAX_FILE = 10 * 1024 * 1024
+UPLOAD_CHUNK = 512 * 1024
 
 class SessionCreate(BaseModel):
     mode: str = "uploaded"
@@ -51,6 +52,23 @@ def _save_store(db: Session, session_id: str, tenant_id: str | None = None, assu
         assurance_passport_id=assurance_passport_id,
     )
 
+
+async def _read_limited_upload(file: UploadFile, *, limit: int = MAX_FILE) -> bytes:
+    chunks: list[bytes] = []
+    total = 0
+    try:
+        while True:
+            chunk = await file.read(UPLOAD_CHUNK)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > limit:
+                raise HTTPException(413, "File exceeds 10 MB")
+            chunks.append(chunk)
+        return b"".join(chunks)
+    finally:
+        await file.close()
+
 @router.post("/sessions")
 def create_session(
     payload: SessionCreate,
@@ -85,9 +103,7 @@ async def upload_file(
     ext = file.filename.rsplit('.',1)[-1].lower() if '.' in file.filename else ''
     if ext not in engine.ALLOWED_EXT:
         raise HTTPException(400, "Unsupported file type")
-    content = await file.read()
-    if len(content) > MAX_FILE:
-        raise HTTPException(413, "File exceeds 10 MB")
+    content = await _read_limited_upload(file)
     rows, cols, warnings = engine.parse_uploaded_file(file.filename, content)
     src = engine.detect_source_kind(file.filename, cols)
     art = {"artifact_id": str(uuid.uuid4()), "session_id": session_id, "filename": file.filename, "content_type": file.content_type or "application/octet-stream", "source_kind": src, "rows_detected": len(rows), "columns_detected": cols, "parse_status": "parsed", "warnings": warnings, "parsed_rows": rows}

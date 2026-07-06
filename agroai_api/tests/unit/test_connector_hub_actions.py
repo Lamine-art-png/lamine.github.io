@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from io import BytesIO
 
 from fastapi.testclient import TestClient
@@ -29,7 +30,9 @@ def make_client():
     return TestClient(app)
 
 
-def test_gmail_connects_in_internal_mode_without_oauth_env():
+def test_gmail_without_oauth_platform_config_never_fake_connects(monkeypatch):
+    monkeypatch.setenv("OAUTH_STATE_SIGNING_KEY", "dedicated-test-state-key")
+    monkeypatch.delenv("GOOGLE_OAUTH_CLIENT_ID", raising=False)
     client = make_client()
     response = client.post(
         "/v1/connectors/oauth/start",
@@ -38,7 +41,8 @@ def test_gmail_connects_in_internal_mode_without_oauth_env():
     assert response.status_code == 200
     body = response.json()
     assert body["connection"]["provider"] == "gmail"
-    assert body["connection"]["status"] == "connected"
+    assert body["connection"]["status"] == "platform_setup_required"
+    assert body["connection"]["credentials_ref"] is None
     assert body["auth_url"] is None
 
 
@@ -59,7 +63,9 @@ def test_direct_evidence_upload_creates_records():
     assert body["connection"]["status"] == "synced"
 
 
-def test_custom_api_connect_marks_provider_connected():
+def test_custom_api_secret_is_rejected_without_encrypted_vault(monkeypatch):
+    monkeypatch.delenv("CONNECTOR_CREDENTIAL_MASTER_KEY", raising=False)
+    monkeypatch.delenv("CONNECTOR_CREDENTIAL_KEYS_JSON", raising=False)
     client = make_client()
     response = client.post(
         "/v1/connectors/connect",
@@ -68,12 +74,33 @@ def test_custom_api_connect_marks_provider_connected():
             "config": {
                 "provider_name": "Ranch Systems",
                 "base_url": "https://api.example.com",
-                "credential_ref": "secret-token",
+                "credential_ref": "example-provider-value",
             },
         },
     )
-    assert response.status_code == 200
+    assert response.status_code == 503
+    assert response.json()["detail"]["error"] == "connector_vault_not_configured"
+
+
+def test_custom_api_secret_is_vaulted_before_connected(monkeypatch):
+    key = base64.urlsafe_b64encode(b"q" * 32).decode("ascii").rstrip("=")
+    monkeypatch.setenv("CONNECTOR_CREDENTIAL_MASTER_KEY", key)
+    monkeypatch.setenv("CONNECTOR_CREDENTIAL_ACTIVE_KEY_VERSION", "v1")
+    monkeypatch.delenv("CONNECTOR_CREDENTIAL_KEYS_JSON", raising=False)
+    client = make_client()
+    response = client.post(
+        "/v1/connectors/connect",
+        json={
+            "provider": "custom_api",
+            "config": {
+                "provider_name": "Ranch Systems",
+                "base_url": "https://api.example.com",
+                "credential_ref": "example-provider-value",
+            },
+        },
+    )
+    assert response.status_code == 200, response.text
     body = response.json()
     assert body["status"] == "connected"
     assert body["connection"]["provider"] == "custom_api"
-    assert body["connection"]["status"] == "connected"
+    assert str(body["connection"]["credentials_ref"]).startswith("vault://connector-credentials/")

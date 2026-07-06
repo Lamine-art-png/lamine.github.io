@@ -38,12 +38,9 @@ def get_db():
 
 
 def init_db() -> None:
-    """Initialize only legacy/core base tables.
+    """Refuse runtime schema creation.
 
-    Compliance, assurance, SaaS, billing, and agent tables are created by Alembic,
-    not by startup metadata creation.
+    Database schema is owned by Alembic migrations. This function remains only
+    as a compatibility tripwire for old local scripts.
     """
-    from app.models.tenant import Tenant
-    from app.models.block import Block
-
-    Base.metadata.create_all(bind=engine, tables=[Tenant.__table__, Block.__table__])
+    raise RuntimeError("Runtime schema creation is disabled. Run `alembic upgrade head` instead.")

@@ -7,7 +7,8 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
-from app.services.language import language_matches_target, looks_english, resolve_language
+from app.services.language import language_matches_target, resolve_language
+from app.services.operational_invariants import check_operational_invariants
 
 
 @dataclass
@@ -120,14 +121,26 @@ class LiveIntelligence:
         except (httpx.HTTPError, ValueError, KeyError):
             return None
 
-    async def repair(self, cfg: tuple[str, str, str], model: str, answer: str, code: str, name: str) -> str:
-        if code == "en" or not looks_english(answer):
+    async def repair(self, cfg: tuple[str, str, str], model: str, answer: str, code: str, name: str) -> str | None:
+        if language_matches_target(answer, code):
             return answer
-        request = [{"role": "system", "content": f"Rewrite the supplied answer in {name}. Preserve all facts, numbers and uncertainty. Add nothing. Return only the rewritten answer."}, {"role": "user", "content": answer[:8000]}]
+        request = [
+            {
+                "role": "system",
+                "content": (
+                    f"Rewrite this exact answer in {name}. Preserve facts, uncertainty, "
+                    "numbers, units, citations, and meaning. Add nothing. Remove nothing. "
+                    "Return only the rewritten answer."
+                ),
+            },
+            {"role": "user", "content": answer[:8000]},
+        ]
         result = await self.run_remote(cfg, [model], request, "fast")
         if result and language_matches_target(result[0], code):
-            return result[0]
-        return answer
+            invariant_check = check_operational_invariants(answer, result[0])
+            if invariant_check.ok:
+                return result[0]
+        return None
 
     async def run(self, task: str, question: str, messages: list[dict[str, str]], preferred_language: str | None) -> LiveResult:
         language = resolve_language(preferred_language, question)
@@ -142,14 +155,20 @@ class LiveIntelligence:
             if local:
                 answer, model = local
                 if remote:
-                    answer = await self.repair(remote, self.models(profile, remote[2])[0], answer, language.response_code, language.response_name)
+                    repaired = await self.repair(remote, self.models(profile, remote[2])[0], answer, language.response_code, language.response_name)
+                    if repaired is None:
+                        return LiveResult("language_generation_failed", "", "ollama", model, language.response_code, profile, "Model output did not match the requested response language and repair failed.")
+                    answer = repaired
                 return LiveResult("ok", answer, "ollama", model, language.response_code, profile)
 
         if remote:
             result = await self.run_remote(remote, self.models(profile, remote[2]), prepared, profile)
             if result:
                 answer, model = result
-                answer = await self.repair(remote, model, answer, language.response_code, language.response_name)
+                repaired = await self.repair(remote, model, answer, language.response_code, language.response_name)
+                if repaired is None:
+                    return LiveResult("language_generation_failed", "", remote[2], model, language.response_code, profile, "Model output did not match the requested response language and repair failed.")
+                answer = repaired
                 return LiveResult("ok", answer, remote[2], model, language.response_code, profile)
 
         return LiveResult("unavailable", "", remote[2] if remote else self.provider or "unconfigured", None, language.response_code, profile, "No live model provider completed the request.")

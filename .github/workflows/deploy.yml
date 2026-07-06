@@ -1,101 +1,263 @@
-name: Legacy Cloudflare Containers deploy — manual only
+name: Cloudflare Production Release
 
-# Render serves the active V2 preview backend at api-preview.agroai-pilot.com,
-# while api.agroai-pilot.com remains a temporary Railway-backed stable fallback.
-# This Cloudflare Containers path is not part of active DNS routing; manual
-# execution requires explicit operator intent.
 on:
+  push:
+    branches: ["main"]
   workflow_dispatch:
 
 permissions:
   contents: read
-  packages: write
+
+concurrency:
+  group: cloudflare-production
+  cancel-in-progress: false
 
 env:
-  REGISTRY: ghcr.io
+  NODE_VERSION: "22"
+  PORTAL_PROJECT: agroai-portal
+  PORTAL_URL: https://app.agroai-pilot.com
+  API_URL: https://api.agroai-pilot.com
+  UPSTREAM_HEALTH_URL: https://api-preview.agroai-pilot.com/v1/health
+  UPSTREAM_RELEASE_CONTRACT_URL: https://api-preview.agroai-pilot.com/v1/internal/release/health
 
 jobs:
-  build-and-push:
-    name: Build Docker image & push to GHCR
+  validate:
+    name: Validate release candidate
     runs-on: ubuntu-latest
-    outputs:
-      image: ${{ steps.img.outputs.image }}
-
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Log in to GHCR
-        uses: docker/login-action@v3
+      - uses: actions/setup-node@v4
         with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
 
-      - name: Compute image name (lowercase)
-        id: img
+      - name: Validate enterprise portal
+        working-directory: figma-enterprise-v4
+        env:
+          VITE_API_BASE_URL: ${{ env.API_URL }}
+        run: |
+          npm ci
+          npm run test:i18n
+          npm run build
+
+      - name: Validate edge gateway
+        working-directory: cloudflare/edge-gateway
         shell: bash
         run: |
-          echo "image=${{ env.REGISTRY }}/${GITHUB_REPOSITORY,,}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run check
+          secrets_file="$(mktemp)"
+          trap 'rm -f "$secrets_file"' EXIT
+          printf '%s' '{"QUEUE_PUBLISH_TOKEN":"ci-dry-run-only","QUEUE_CONSUMER_TOKEN":"ci-dry-run-only"}' > "$secrets_file"
+          npx wrangler deploy --dry-run --config ../../wrangler.toml --secrets-file "$secrets_file"
 
-      - name: Build + Push (sha + latest)
-        uses: docker/build-push-action@v6
+      - uses: actions/setup-python@v5
         with:
-          context: .
-          file: Dockerfile
-          platforms: linux/amd64
-          push: true
-          tags: |
-            ${{ steps.img.outputs.image }}:${{ github.sha }}
-            ${{ steps.img.outputs.image }}:latest
-          build-args: |
-            GIT_SHA=${{ github.sha }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: agroai_api/requirements.txt
 
-  deploy:
-    name: Deploy to Cloudflare
-    needs: build-and-push
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      - name: Install Wrangler
-        run: npm install -g wrangler
-
-      - name: Deploy to Cloudflare Containers
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: wrangler deploy
-
-  test:
-    name: Run tests
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Install dependencies
-        run: pip install -r agroai_api/requirements.txt
-
-      - name: Run tests
+      - name: Validate backend queue and release contracts
         working-directory: agroai_api
-        run: python -m pytest tests/ -v
+        run: |
+          python -m pip install -q -r requirements.txt pytest
+          python -m compileall -q app alembic scripts
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --tb=short \
+            tests/unit/test_cloudflare_task_queue.py \
+            tests/unit/test_cloudflare_queue_runtime.py \
+            tests/unit/test_cloudflare_queue_routes.py \
+            tests/unit/test_cloudflare_queue_rotation.py \
+            tests/unit/test_connector_task_processor_contract.py \
+            tests/unit/test_task_outbox.py \
+            tests/unit/test_ingestion_job_leases.py \
+            tests/unit/test_object_storage.py \
+            tests/unit/test_runtime_origin_and_route_contract.py \
+            tests/unit/test_production_readiness.py
+
+  deploy-edge:
+    name: Deploy API edge and queues
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      QUEUE_PUBLISH_TOKEN: ${{ secrets.QUEUE_PUBLISH_TOKEN }}
+      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: cloudflare/edge-gateway/package-lock.json
+
+      - name: Fail closed on missing deployment secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID QUEUE_PUBLISH_TOKEN QUEUE_CONSUMER_TOKEN; do
+            if [ -z "${!name:-}" ]; then
+              echo "Missing required production secret: ${name}"
+              exit 1
+            fi
+          done
+
+      - name: Install locked edge tooling
+        working-directory: cloudflare/edge-gateway
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify current upstream health
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 "${UPSTREAM_HEALTH_URL}" | jq -e '.status == "ok"' >/dev/null
+
+      - name: Wait for exact backend build, schema, storage, and Queue contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 90); do
+            payload="$(curl --fail --silent --show-error --max-time 20 \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+              "${UPSTREAM_RELEASE_CONTRACT_URL}" 2>/dev/null || true)"
+            if printf '%s' "$payload" | jq -e --arg sha "$GITHUB_SHA" \
+              '.status == "ok" and .contract == "agroai-release-v1" and .build_sha == $sha and .schema_current == true and .queue_configured == true and .object_storage_configured == true and .object_storage_reachable == true and .production_ready == true' \
+              >/dev/null 2>&1; then
+              printf '%s' "$payload" > upstream-release-contract.json
+              echo "Exact backend build, schema, storage, and Queue contract is ready"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Exact backend release contract did not become ready; refusing to change the public edge"
+          exit 1
+
+      - name: Upload upstream release contract evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-release-contract-${{ github.sha }}
+          path: upstream-release-contract.json
+          retention-days: 30
+
+      - name: Ensure connector queues exist
+        working-directory: cloudflare/edge-gateway
+        shell: bash
+        run: |
+          set -euo pipefail
+          ensure_queue() {
+            local queue_name="$1"
+            if npx wrangler queues info "$queue_name" >/dev/null 2>&1; then
+              echo "Queue already exists: $queue_name"
+            else
+              npx wrangler queues create "$queue_name"
+            fi
+          }
+          ensure_queue "agroai-connector-tasks"
+          ensure_queue "agroai-connector-tasks-dlq"
+
+      - name: Deploy API edge gateway with exact Queue secrets
+        working-directory: cloudflare/edge-gateway
+        shell: bash
+        run: |
+          set -euo pipefail
+          secrets_file="${RUNNER_TEMP}/agroai-edge-secrets-${GITHUB_RUN_ID}.json"
+          umask 077
+          trap 'rm -f "$secrets_file"' EXIT
+          jq -n \
+            --arg publish "$QUEUE_PUBLISH_TOKEN" \
+            --arg consumer "$QUEUE_CONSUMER_TOKEN" \
+            '{QUEUE_PUBLISH_TOKEN: $publish, QUEUE_CONSUMER_TOKEN: $consumer}' > "$secrets_file"
+          npx wrangler deploy --config ../../wrangler.toml --secrets-file "$secrets_file"
+          rm -f "$secrets_file"
+          trap - EXIT
+
+      - name: Smoke exact public edge and upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent --show-error --max-time 15 "${API_URL}/v1/edge-health" | jq -e '.status == "ok"' >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 20 ]; then
+              echo "Edge health check failed"
+              exit 1
+            fi
+            sleep 3
+          done
+          curl --fail --silent --show-error --max-time 30 "${API_URL}/v1/health" | jq -e '.status == "ok"' >/dev/null
+          curl --fail --silent --show-error --max-time 30 \
+            -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+            "${API_URL}/v1/internal/release/health" | \
+            jq -e --arg sha "$GITHUB_SHA" '.status == "ok" and .contract == "agroai-release-v1" and .build_sha == $sha and .schema_current == true and .queue_configured == true and .object_storage_configured == true and .object_storage_reachable == true and .production_ready == true' >/dev/null
+
+  deploy-portal:
+    name: Deploy enterprise portal
+    needs: [validate, deploy-edge]
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+
+      - name: Build exact enterprise portal
+        working-directory: figma-enterprise-v4
+        env:
+          VITE_API_BASE_URL: ${{ env.API_URL }}
+        run: |
+          npm ci
+          npm run test:i18n
+          npm run build
+
+      - name: Deploy portal to Pages
+        run: npx --yes wrangler@4.107.0 pages deploy figma-enterprise-v4/dist --project-name "${PORTAL_PROJECT}" --branch main --commit-hash "${GITHUB_SHA}"
+
+      - name: Smoke production portal
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent --show-error --location --max-time 20 "${PORTAL_URL}" >/dev/null; then
+              exit 0
+            fi
+            sleep 3
+          done
+          echo "Portal smoke check failed"
+          exit 1
+
+  release-evidence:
+    name: Record release evidence
+    needs: [deploy-edge, deploy-portal]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Emit immutable release summary
+        env:
+          EDGE_RESULT: ${{ needs.deploy-edge.result }}
+          PORTAL_RESULT: ${{ needs.deploy-portal.result }}
+        run: |
+          {
+            echo "release_sha=${GITHUB_SHA}"
+            echo "edge_result=${EDGE_RESULT}"
+            echo "portal_result=${PORTAL_RESULT}"
+            echo "api_url=${API_URL}"
+            echo "portal_url=${PORTAL_URL}"
+          } | tee release-evidence.txt
+          test "$EDGE_RESULT" = "success"
+          test "$PORTAL_RESULT" = "success"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: cloudflare-production-release-${{ github.sha }}
+          path: release-evidence.txt
+          retention-days: 30

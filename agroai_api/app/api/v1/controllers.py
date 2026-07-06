@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.adapters.registry import AdapterRegistry
-from app.api.v1.connectors import create_or_get_connection, ensure_schema, public_connection, safe_credential_ref, sanitize_config
+from app.api.v1.connectors import create_or_get_connection, public_connection, safe_credential_ref, sanitize_config, verify_connector_schema
 from app.core.security import require_current_tenant_id
 from app.db.base import get_db
 from app.models.operational_records import ConnectorConnection, IngestionJob
@@ -197,19 +197,12 @@ async def _talgil_snapshot() -> dict[str, Any]:
     notes = "TALGIL_API_KEY is not configured in this runtime."
     diagnostic = {}
     try:
-        status_payload = await adapter.get_runtime_status(use_cache=False)
+        status_payload = await adapter.get_runtime_status(use_cache=True)
         configured = bool(status_payload.configured)
         live = bool(status_payload.live)
         targets = int(status_payload.targets)
         notes = status_payload.notes
         diagnostic = getattr(adapter, "last_diagnostic", None).__dict__ if getattr(adapter, "last_diagnostic", None) else {}
-        if live:
-            rows = await adapter.list_targets()
-            for target in rows[:25]:
-                try:
-                    zones += len(await adapter.list_zones(str(target.get("id"))))
-                except Exception:
-                    continue
     except Exception as exc:
         notes = f"Talgil runtime status failed: {exc.__class__.__name__}"
 
@@ -230,7 +223,7 @@ async def _talgil_snapshot() -> dict[str, Any]:
 
 
 def _universal_snapshots(db: Session, tenant_id: str, workspace_id: str | None = None) -> list[dict[str, Any]]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     query = db.query(ConnectorConnection).filter(
         ConnectorConnection.tenant_id == tenant_id,
         ConnectorConnection.provider == "universal_controller",
@@ -422,7 +415,7 @@ async def get_execution_readiness(workspace_id: str | None = Query(default=None)
 
 @router.post("/customer-connect")
 async def customer_connect_controller(payload: ControllerCustomerConnectRequest, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     mode = "api_credentials" if payload.connection_method == "api_key" else payload.connection_method
     config = sanitize_config({
         "account_hint": payload.account_hint,

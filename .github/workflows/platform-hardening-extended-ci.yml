@@ -1,0 +1,100 @@
+name: Platform Hardening Extended CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  connector-worker-contracts:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -q -r requirements.txt pytest
+      - name: Compile worker and connector security modules
+        run: |
+          python -m py_compile app/services/oauth_state_store.py
+          python -m py_compile app/services/connector_vault.py
+          python -m py_compile app/services/object_storage.py
+          python -m py_compile app/services/redis_task_queue.py
+          python -m py_compile app/services/task_outbox_service.py
+          python -m py_compile app/services/ingestion_job_runner.py
+          python -m py_compile app/workers/connector_worker.py
+          python -m py_compile app/api/v1/connector_stream_api.py
+      - name: Run worker and connector contracts
+        run: |
+          set +e
+          python -m pytest -q --tb=short \
+            tests/unit/test_connector_secure_routes.py \
+            tests/unit/test_distributed_ingestion_route.py \
+            tests/unit/test_task_outbox.py \
+            tests/unit/test_ingestion_job_leases.py 2>&1 | tee connector-worker.log
+          status=${PIPESTATUS[0]}
+          tail -n 240 connector-worker.log > connector-worker-tail.txt
+          exit $status
+      - name: Upload connector worker failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: connector-worker-tail
+          path: agroai_api/connector-worker-tail.txt
+          retention-days: 2
+
+  scale-contract-split:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -q -r requirements.txt pytest
+      - name: Run readiness contracts
+        run: python -m pytest -q --tb=short tests/unit/test_production_readiness.py
+      - name: Run stream contracts
+        run: |
+          set +e
+          python -m pytest -q --tb=short tests/unit/test_ingestion_stream.py 2>&1 | tee stream.log
+          status=${PIPESTATUS[0]}
+          tail -n 240 stream.log > stream-tail.txt
+          exit $status
+      - name: Upload stream failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stream-contract-tail
+          path: agroai_api/stream-tail.txt
+          retention-days: 2
+
+  backend-unit-suite:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -q -r requirements.txt pytest
+      - name: Run complete backend unit suite
+        run: |
+          set +e
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short tests/unit 2>&1 | tee backend-unit.log
+          status=${PIPESTATUS[0]}
+          tail -n 300 backend-unit.log > backend-unit-tail.txt
+          exit $status
+      - name: Upload backend unit failure evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-unit-tail
+          path: agroai_api/backend-unit-tail.txt
+          retention-days: 2

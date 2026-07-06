@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from urllib.parse import parse_qs, urlparse
+
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -10,6 +12,7 @@ from app.api.v1.connectors import CATALOG, oauth_url
 from app.core.security import require_current_tenant_id
 from app.db.base import Base, get_db
 from app.main import app
+from app.services.oauth_state import sign_oauth_state, verify_oauth_state
 
 
 def make_client():
@@ -57,30 +60,42 @@ def test_dropbox_oauth_url_uses_configured_client_id(monkeypatch):
     assert "state=opaque-state" in url
 
 
-def test_launch_start_uses_opaque_state_and_callback_hides_raw_code(monkeypatch):
+def test_launch_start_uses_one_time_state_and_callback_hides_raw_code(monkeypatch):
     monkeypatch.setenv("SLACK_OAUTH_CLIENT_ID", "slack-client")
+    monkeypatch.setenv("OAUTH_STATE_SIGNING_KEY", "dedicated-launch-state-signing-key")
     client = make_client()
     started = client.post("/v1/connectors/launch/start", json={"provider": "slack"})
     assert started.status_code == 200, started.text
     body = started.json()
     assert body["auth_url"]
     assert "org-test" not in body["auth_url"]
+    state = parse_qs(urlparse(body["auth_url"]).query)["state"][0]
+    assert ":" not in state
+    assert "oauth_state" not in str(body["connection"]["config_json"])
 
     connection_id = body["connection"]["id"]
-    state = body["connection"]["config_json"]["oauth_state"]
-    assert ":" not in state
     callback = client.get("/v1/connectors/oauth/callback", params={"state": state, "code": "raw-oauth-code"})
     assert callback.status_code == 200
     assert "raw-oauth-code" not in callback.text
 
-    connection = next(row for row in body["job"].values() if False) if False else None
-    assert connection is None
-    # Re-open through the API to prove only presence, not the code value, was stored.
     fetched = client.get(f"/v1/connectors/connections/{connection_id}")
     assert fetched.status_code == 200
     config = fetched.json()["connection"]["config_json"]
     assert config["oauth_code_present"] is True
     assert "raw-oauth-code" not in str(config)
+
+    replay = client.get("/v1/connectors/oauth/callback", params={"state": state, "code": "another-code"})
+    assert replay.status_code == 200
+    assert "invalid, expired, or already used" in replay.text
+
+
+def test_legacy_signer_still_rejects_tampering_for_non_custody_compatibility():
+    state = sign_oauth_state("connection-123")
+    assert ":" not in state
+    verified = verify_oauth_state(state)
+    assert verified is not None
+    assert verified["cid"] == "connection-123"
+    assert verify_oauth_state(state[:-1] + ("0" if state[-1] != "0" else "1")) is None
 
 
 def test_google_earth_engine_manifest_ready_without_exposing_service_account(monkeypatch):

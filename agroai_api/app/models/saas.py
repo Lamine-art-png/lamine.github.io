@@ -4,7 +4,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String, UniqueConstraint
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, JSON, String, Text, UniqueConstraint
 from sqlalchemy.orm import relationship
 
 from app.db.base import Base
@@ -29,11 +29,13 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     email_verified_at = Column(DateTime, nullable=True)
     email_verification_status = Column(String, default="unverified", nullable=False, index=True)
+    credentials_changed_at = Column(DateTime, nullable=True)
 
     owned_organizations = relationship("Organization", back_populates="owner")
     memberships = relationship("OrganizationMembership", back_populates="user", cascade="all, delete-orphan")
     usage_events = relationship("UsageEvent", back_populates="user")
     email_verification_tokens = relationship("EmailVerificationToken", back_populates="user", cascade="all, delete-orphan")
+    account_recovery_tokens = relationship("AccountRecoveryToken", back_populates="user", cascade="all, delete-orphan")
     team_invitations_sent = relationship("TeamInvitation", back_populates="invited_by_user", cascade="all, delete-orphan")
 
 
@@ -207,6 +209,19 @@ class EmailVerificationToken(Base):
     user = relationship("User", back_populates="email_verification_tokens")
 
 
+class AccountRecoveryToken(Base):
+    __tablename__ = "account_recovery_tokens"
+
+    id = Column(String, primary_key=True, default=new_id)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    used_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    user = relationship("User", back_populates="account_recovery_tokens")
+
+
 class TeamInvitation(Base):
     __tablename__ = "team_invitations"
 
@@ -222,3 +237,15 @@ class TeamInvitation(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
     invited_by_user = relationship("User", back_populates="team_invitations_sent")
+
+
+class UserPreference(Base):
+    __tablename__ = "user_preferences"
+
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    locale = Column(String, nullable=True)
+    timezone = Column(String, nullable=True)
+    notifications_json = Column(Text, nullable=True)
+    ui_json = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)

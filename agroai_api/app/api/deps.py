@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
@@ -15,6 +16,34 @@ class AuthContext:
     user: User
     organization: Organization | None = None
     membership: OrganizationMembership | None = None
+
+
+def _assert_credential_freshness(payload: dict, user: User) -> None:
+    changed_at = getattr(user, "credentials_changed_at", None)
+    if not changed_at:
+        return
+
+    issued_at = payload.get("iat")
+    if isinstance(issued_at, (int, float)):
+        # JWT iat values are commonly integer seconds. Compare at the same
+        # precision so a fresh token minted later in the credential-change
+        # second is not falsely rejected, while every earlier second is.
+        if int(float(issued_at)) < int(changed_at.timestamp()):
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session is no longer valid")
+        return
+
+    expires_at = payload.get("exp")
+    if not isinstance(expires_at, (int, float)):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session is no longer valid")
+
+    # Legacy tokens did not carry iat. Their signer uses a fixed configured
+    # lifetime, so infer issuance from exp and reject any token issued before
+    # the credential change with no grace window.
+    token_issued_at = datetime.fromtimestamp(float(expires_at)) - timedelta(
+        minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
+    )
+    if token_issued_at < changed_at:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session is no longer valid")
 
 
 def get_current_user(
@@ -34,6 +63,7 @@ def get_current_user(
     user = db.get(User, user_id)
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
+    _assert_credential_freshness(payload, user)
     return user
 
 
@@ -50,6 +80,7 @@ def get_current_user_optional(
     user = db.get(User, user_id)
     if not user or not user.is_active:
         return None
+    _assert_credential_freshness(payload, user)
     return user
 
 
@@ -107,28 +138,17 @@ def require_workspace_access(workspace_id: str, user: User, db: Session) -> tupl
 async def verify_demo_api_key(
     x_api_key: str | None = Header(None, alias="X-API-Key"),
 ) -> None:
-    """
-    Simple API-key guard for evaluation endpoints.
-
-    - If key is missing  -> 401
-    - If key is wrong    -> 401
-    """
-
     expected = settings.DEMO_API_KEY
-
-    # You *want* this set in ECS env; if it's empty, treat as misconfigured.
     if not expected:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Evaluation API key not configured",
         )
-
     if x_api_key is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing API key",
         )
-
     if x_api_key != expected:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

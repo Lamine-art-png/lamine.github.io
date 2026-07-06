@@ -1,0 +1,157 @@
+name: Distributed Runtime Integration CI
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  postgres-redis-object-worker-e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: agroai_runtime_ci
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: agroai_api
+
+    env:
+      DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agroai_runtime_ci
+      SECRET_KEY: runtime-integration-signing-key-not-for-production
+      WEBHOOK_SECRET: runtime-integration-webhook-key-not-for-production
+      APP_ENV: test
+      ENABLE_SCHEDULER: "false"
+      TASK_QUEUE_BACKEND: redis_streams
+      REDIS_URL: redis://127.0.0.1:6379/0
+      TASK_QUEUE_STREAM: agroai:runtime-ci
+      TASK_QUEUE_GROUP: agroai-runtime-workers
+      TASK_QUEUE_BLOCK_MS: "200"
+      TASK_QUEUE_LEASE_SECONDS: "3"
+      TASK_QUEUE_MAX_ATTEMPTS: "3"
+      CONNECTOR_OBJECT_STORAGE_BACKEND: s3_compatible
+      CONNECTOR_OBJECT_BUCKET: agroai-runtime-ci
+      CONNECTOR_OBJECT_PREFIX: runtime-ci
+      CONNECTOR_OBJECT_ENDPOINT_URL: http://127.0.0.1:9000
+      CONNECTOR_OBJECT_REGION: us-east-1
+      AWS_ACCESS_KEY_ID: minio-ci
+      AWS_SECRET_ACCESS_KEY: minio-ci-password
+      AWS_DEFAULT_REGION: us-east-1
+      OAUTH_STATE_SIGNING_KEY: runtime-ci-oauth-state-signing-key
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install backend dependencies
+        run: python -m pip install -q -r requirements.txt pytest
+
+      - name: Start real S3-compatible object service
+        run: |
+          docker run -d --name agroai-minio \
+            -p 9000:9000 \
+            -e MINIO_ROOT_USER=minio-ci \
+            -e MINIO_ROOT_PASSWORD=minio-ci-password \
+            minio/minio:latest server /data --address :9000
+          for attempt in $(seq 1 45); do
+            if curl -fsS http://127.0.0.1:9000/minio/health/live >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          docker logs agroai-minio
+          exit 1
+
+      - name: Create private integration bucket
+        run: |
+          python - <<'PY'
+          import boto3
+          from botocore.config import Config
+          client = boto3.client(
+              "s3",
+              endpoint_url="http://127.0.0.1:9000",
+              region_name="us-east-1",
+              config=Config(signature_version="s3v4"),
+          )
+          client.create_bucket(Bucket="agroai-runtime-ci")
+          print("created private runtime integration bucket")
+          PY
+
+      - name: Migrate real PostgreSQL database to head
+        run: alembic upgrade head
+
+      - name: Prove real Redis Streams command surface
+        run: |
+          python - <<'PY'
+          from app.services.redis_task_queue import get_task_queue
+          queue = get_task_queue()
+          assert queue.ping()
+          queue.ensure_group()
+          marker = queue.enqueue("transport-smoke-job", "transport-smoke-tenant", "transport-smoke")
+          messages = queue.read("transport-smoke-consumer", block_ms=200)
+          assert any(item.message_id == marker for item in messages), messages
+          assert queue.pending_count() >= 1
+          assert queue.ack(marker) == 1
+          print("redis streams transport smoke passed")
+          PY
+
+      - name: Start independent connector worker
+        run: |
+          nohup python -m app.workers.connector_worker > /tmp/agroai-connector-worker.log 2>&1 &
+          echo $! > /tmp/agroai-connector-worker.pid
+          sleep 2
+          kill -0 "$(cat /tmp/agroai-connector-worker.pid)"
+
+      - name: Run distributed object-outbox-redis-worker-database E2E
+        run: python scripts/distributed_runtime_smoke.py
+
+      - name: Stop connector worker
+        if: always()
+        run: |
+          if [ -f /tmp/agroai-connector-worker.pid ]; then
+            kill -TERM "$(cat /tmp/agroai-connector-worker.pid)" 2>/dev/null || true
+            for attempt in $(seq 1 20); do
+              if ! kill -0 "$(cat /tmp/agroai-connector-worker.pid)" 2>/dev/null; then
+                break
+              fi
+              sleep 1
+            done
+          fi
+
+      - name: Capture runtime evidence
+        if: always()
+        run: |
+          cp /tmp/agroai-connector-worker.log ./connector-worker-runtime.log 2>/dev/null || true
+          docker logs agroai-minio > ./minio-runtime.log 2>&1 || true
+
+      - name: Upload runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: distributed-runtime-evidence
+          path: |
+            agroai_api/connector-worker-runtime.log
+            agroai_api/minio-runtime.log
+          retention-days: 5

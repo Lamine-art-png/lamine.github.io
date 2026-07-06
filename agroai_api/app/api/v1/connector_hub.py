@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Literal
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
@@ -13,7 +14,6 @@ from app.api.v1.connectors import (
     _job,
     _job_public,
     create_or_get_connection,
-    ensure_schema,
     evidence_public,
     parse_rows,
     public_connection,
@@ -22,10 +22,13 @@ from app.api.v1.connectors import (
     sanitize_config,
     save_upload_bytes,
     suggest_mapping,
+    verify_connector_schema,
 )
 from app.core.security import require_current_tenant_id
 from app.db.base import get_db
 from app.models.operational_records import ConnectorConnection, DataSource, EvidenceRecord, IngestionJob
+from app.services.ingestion_stream import read_spooled_bytes, stream_upload_to_spool
+from app.services.oauth_state import sign_oauth_state
 from app.services.oauth_urls import oauth_url
 
 router = APIRouter(tags=["connector-hub-actions"])
@@ -137,7 +140,7 @@ def ingest_upload(db: Session, *, tenant_id: str, connection: ConnectorConnectio
 
 @router.post("/connectors/connect")
 async def connect_provider(payload: ConnectorConnectRequest, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     mode = connector_mode(payload.provider, payload.mode)
     connection = create_or_get_connection(db, tenant_id=tenant_id, provider=payload.provider, workspace_id=payload.workspace_id, mode=mode, display_name=payload.display_name, config=payload.config)
     caps = capabilities(payload.provider)
@@ -158,10 +161,10 @@ async def connect_provider(payload: ConnectorConnectRequest, tenant_id: str = De
 
 @router.post("/connectors/oauth/start")
 async def start_oauth(payload: OAuthStartRequest, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     connection = create_or_get_connection(db, tenant_id=tenant_id, provider=payload.provider, workspace_id=payload.workspace_id, mode="oauth", config=payload.metadata)
     redirect_url = payload.redirect_url or "https://api.agroai-pilot.com/v1/connectors/oauth/callback"
-    state = f"{connection.id}:{tenant_id}:{int(datetime.utcnow().timestamp())}"
+    state = sign_oauth_state(connection.id)
     auth_url, oauth_error = oauth_url(payload.provider, state, redirect_url)
     caps = capabilities(payload.provider)
     merged = dict(connection.config_json or {})
@@ -181,21 +184,24 @@ async def start_oauth(payload: OAuthStartRequest, tenant_id: str = Depends(requi
 
 @router.post("/evidence/upload")
 async def upload_hub_evidence_file(provider: ProviderId = Query(default="manual_csv"), workspace_id: str | None = Query(default=None), file: UploadFile = File(...), tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     mode = "manual_upload" if provider in {"manual_csv", "chat_upload"} else "export_upload"
     connection = create_or_get_connection(db, tenant_id=tenant_id, provider=provider, workspace_id=workspace_id, mode=mode, config={"created_by": "direct_evidence_upload"})
-    data = await file.read()
+    receipt = await stream_upload_to_spool(file, tenant_id=tenant_id, connection_id=connection.id)
     try:
+        data = read_spooled_bytes(receipt)
         return ingest_upload(db, tenant_id=tenant_id, connection=connection, filename=file.filename or "upload", content_type=file.content_type, data=data)
     except HTTPException:
         raise
     except Exception as exc:
         db.rollback()
         raise HTTPException(status_code=500, detail={"error": "upload_ingestion_failed", "message": str(exc), "provider": provider, "filename": file.filename}) from exc
+    finally:
+        Path(receipt.path).unlink(missing_ok=True)
 
 @router.get("/connectors/data-sources")
 async def list_data_sources(provider: str | None = None, connection_id: str | None = None, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     query = db.query(DataSource).filter(DataSource.tenant_id == tenant_id)
     if provider:
         query = query.filter(DataSource.provider == provider)
@@ -206,7 +212,7 @@ async def list_data_sources(provider: str | None = None, connection_id: str | No
 
 @router.get("/connectors/jobs")
 async def list_connector_jobs(connection_id: str | None = None, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     query = db.query(IngestionJob).filter(IngestionJob.tenant_id == tenant_id)
     if connection_id:
         query = query.filter(IngestionJob.connector_connection_id == connection_id)
@@ -215,7 +221,7 @@ async def list_connector_jobs(connection_id: str | None = None, tenant_id: str =
 
 @router.get("/connectors/connections/{connection_id}/data")
 async def connector_data_status(connection_id: str, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
-    ensure_schema(db)
+    verify_connector_schema(db)
     _get_connection(db, tenant_id, connection_id)
     sources = db.query(DataSource).filter(DataSource.tenant_id == tenant_id, DataSource.connector_connection_id == connection_id).order_by(DataSource.created_at.desc()).limit(50).all()
     evidence = db.query(EvidenceRecord).filter(EvidenceRecord.tenant_id == tenant_id, EvidenceRecord.connector_connection_id == connection_id).order_by(EvidenceRecord.created_at.desc()).limit(50).all()

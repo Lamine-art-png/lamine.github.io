@@ -7,7 +7,7 @@ from typing import Any
 import httpx
 
 from app.core.config import settings
-from app.services.language import looks_english, resolve_language
+from app.services.language import language_matches_target, resolve_language
 
 
 DEFAULT_REASONING_MODEL = "z-ai/glm-5.2"
@@ -58,8 +58,6 @@ class AdaptiveChatEngine:
             return "report"
         if any(term in text for term in complex_terms) or len(question.split()) > 18:
             return "reasoning"
-        # Ask AGRO-AI should default to the serious reasoning profile. Only very
-        # small greetings use the faster model.
         if len(question.split()) <= 5 and any(term in text for term in ("hi", "hello", "hey", "bonjour", "hola", "salut")):
             return "fast"
         return "reasoning"
@@ -88,8 +86,6 @@ class AdaptiveChatEngine:
             return base
         if base and not configured_looks_local and self.raw_provider != "ollama":
             return base
-        # Important production repair: a stale AI_PROVIDER=ollama must not force
-        # OpenRouter-style model ids such as z-ai/glm-5.2 through /api/chat.
         if os.getenv("OPENROUTER_API_KEY") or remote_model_ids:
             return "https://openrouter.ai/api/v1"
         return None
@@ -184,8 +180,6 @@ class AdaptiveChatEngine:
         models = self._model_candidates(profile)
         attempts: list[str] = []
 
-        # Keep the exact conversation and make language/anti-canned behavior a
-        # hard system constraint without imposing a response template.
         system = {
             "role": "system",
             "content": (
@@ -204,8 +198,19 @@ class AdaptiveChatEngine:
         remote = await self._run_remote(endpoint, models, prepared, profile, attempts) if endpoint else None
         if remote:
             content, model = remote
-            content = await self._repair_language_if_needed(endpoint, model, content, language.response_code, language.response_name, attempts)
-            return AdaptiveChatResult("ok", content, "openrouter" if "openrouter.ai" in endpoint else "openai_compatible", model, language.response_code, profile, attempts)
+            repaired = await self._repair_language_if_needed(endpoint, model, content, language.response_code, language.response_name, attempts)
+            if repaired is None:
+                return AdaptiveChatResult(
+                    "language_generation_failed",
+                    "",
+                    "openrouter" if "openrouter.ai" in endpoint else "openai_compatible",
+                    model,
+                    language.response_code,
+                    profile,
+                    attempts,
+                    error="Model output did not match the requested response language and repair failed.",
+                )
+            return AdaptiveChatResult("ok", repaired, "openrouter" if "openrouter.ai" in endpoint else "openai_compatible", model, language.response_code, profile, attempts)
 
         local = await self._run_local(prepared, profile, attempts)
         if local:
@@ -214,14 +219,14 @@ class AdaptiveChatEngine:
 
         return AdaptiveChatResult("unavailable", "", self.raw_provider or "unconfigured", None, language.response_code, profile, attempts, error="No live model provider completed the request.")
 
-    async def _repair_language_if_needed(self, endpoint: str, model: str, content: str, response_code: str, response_name: str, attempts: list[str]) -> str:
-        if response_code == "en" or not looks_english(content):
+    async def _repair_language_if_needed(self, endpoint: str, model: str, content: str, response_code: str, response_name: str, attempts: list[str]) -> str | None:
+        if language_matches_target(content, response_code):
             return content
         repair_messages = [
-            {"role": "system", "content": f"Rewrite the supplied answer in {response_name}. Preserve meaning and facts exactly. Do not add information. Return only the rewritten answer."},
+            {"role": "system", "content": f"Rewrite this exact answer in {response_name}. Preserve facts, uncertainty, numbers, units, citations, and meaning. Add nothing. Remove nothing. Return only the rewritten answer."},
             {"role": "user", "content": content[:7000]},
         ]
         repaired = await self._run_remote(endpoint, [model, *DEFAULT_REMOTE_FALLBACKS], repair_messages, "fast", attempts)
-        if repaired and repaired[0].strip():
+        if repaired and language_matches_target(repaired[0], response_code):
             return repaired[0].strip()
-        return content
+        return None
