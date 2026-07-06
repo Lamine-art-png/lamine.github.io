@@ -19,7 +19,13 @@ def _setup():
     user = User(email="owner@example.com", password_hash="x")
     db.add(user)
     db.flush()
-    org = Organization(name="Test Org", slug="test-org", owner_user_id=user.id)
+    org = Organization(
+        name="Test Org",
+        slug="test-org",
+        owner_user_id=user.id,
+        plan="professional",
+        subscription_status="active",
+    )
     db.add(org)
     db.flush()
     workspace = Workspace(organization_id=org.id, name="North Farm")
