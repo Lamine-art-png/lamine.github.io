@@ -12,8 +12,14 @@ from app.agents.orchestrator import AgentOrchestrator
 from app.api.deps import AuthContext, get_auth_context
 from app.db.base import get_db
 from app.services.api_key_service import APIKeyService
+from app.services.brain_commercial_runtime import install_brain_commercial_runtime
 from app.services.commercial_control import require_feature
 from app.services.quota import commit_reservation, release_reservation, reserve_quota
+
+
+# Main loads the Brain router before this module. Bind the fully initialized Brain
+# globals to the policy-aware runtime before the application starts serving requests.
+install_brain_commercial_runtime()
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
