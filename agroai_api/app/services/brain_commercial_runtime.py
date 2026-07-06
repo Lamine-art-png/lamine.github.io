@@ -1,4 +1,4 @@
-"""Bind the live Brain route to commercial intelligence policy at runtime."""
+"""Bind the live Brain route and runtime hardening hooks at application startup."""
 from __future__ import annotations
 
 from contextvars import ContextVar
@@ -59,8 +59,12 @@ class ContextualCommercialLiveIntelligence:
 
 
 def install_brain_commercial_runtime() -> None:
-    """Install after the Brain module is fully loaded and before requests are served."""
+    """Install policy-aware Brain execution and deterministic OAuth callback resolution."""
     from app.api.v1 import brain as brain_api
+    from app.services.oauth_callback_resolution import install_exact_oauth_callback_resolution
 
     brain_api.build_intelligence_context = build_commercial_intelligence_context
     brain_api.LiveIntelligence = ContextualCommercialLiveIntelligence
+    # connector_launch is loaded by the installer and patched before the ASGI app
+    # starts serving requests. Existing route function identities remain unchanged.
+    install_exact_oauth_callback_resolution()
