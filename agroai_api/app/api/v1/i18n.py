@@ -28,7 +28,7 @@ _MAX_VALUE_CHARS = 2_000
 _MAX_SOURCE_CHARS = 200_000
 _CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
 _TRANSLATION_CHUNK_SIZE = 48
-_MAX_CHUNK_ATTEMPTS = 1
+_MAX_CHUNK_ATTEMPTS = 2
 _MAX_PARALLEL_MODEL_CALLS = 6
 _CACHE: dict[str, tuple[float, dict[str, str]]] = {}
 _CACHE_LOCKS: dict[str, asyncio.Lock] = {}
@@ -75,6 +75,22 @@ def canonical_source_catalog() -> dict[str, str]:
     if not all(isinstance(key, str) and isinstance(value, str) for key, value in merged.items()):
         raise RuntimeError("canonical_ui_catalog_invalid")
     return merged
+
+
+def requested_source_catalog(requested: dict[str, str] | None) -> dict[str, str]:
+    """Accept the exact canonical catalog or an exact canonical subset.
+
+    The frontend uses a small core subset first so a selected non-English locale
+    becomes visibly translated quickly, then hydrates the full literal catalog in
+    the background. Unknown keys and value drift remain fail-closed.
+    """
+    canonical = canonical_source_catalog()
+    if requested is None:
+        return canonical
+    for key, value in requested.items():
+        if key not in canonical or canonical[key] != value:
+            raise ValueError("ui_source_catalog_mismatch")
+    return dict(requested)
 
 
 def _enabled_locale_payloads() -> list[dict[str, Any]]:
@@ -171,9 +187,9 @@ async def _translate_chunk_once(router: ModelRouter, semaphore: asyncio.Semaphor
         {"role": "user", "content": source_json},
     ]
     async with semaphore:
-        result, selection = await router.run(task="ui_translation", messages=messages, temperature=0.0, response_format={"type": "json_object"}, max_tokens=8_000, timeout_seconds=30, max_model_attempts=2)
+        result, selection = await router.run(task="ui_translation", messages=messages, temperature=0.0, response_format={"type": "json_object"}, max_tokens=8_000, timeout_seconds=30, max_model_attempts=4)
     if result.status != "ok" or not result.content.strip():
-        raise ValueError(f"translation model unavailable: {result.provider}/{result.model}")
+        raise ValueError(f"translation model unavailable: {result.provider}/{result.model}: {result.error or 'no content'}")
     translated = _validate_translated_catalog(chunk, _decode_json_object(result.content))
     return translated, result.provider, result.model or selection.model
 
@@ -231,9 +247,10 @@ async def translate_ui_catalog(payload: CatalogRequest, _ctx: AuthContext = Depe
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"code": "unsupported_ui_locale", "locale": requested})
     if canonical == "auto":
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"code": "auto_locale_requires_browser_resolution"})
-    source = canonical_source_catalog()
-    if payload.source is not None and payload.source != source:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": "ui_source_catalog_mismatch", "action": "refresh_portal_release"})
+    try:
+        source = requested_source_catalog(payload.source)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": "ui_source_catalog_mismatch", "action": "refresh_portal_release"}) from exc
     if canonical == "en":
         return {"status": "ok", "locale": canonical, "catalog": source, "source": "identity"}
     key = _cache_key(canonical, source)
@@ -253,4 +270,4 @@ async def translate_ui_catalog(payload: CatalogRequest, _ctx: AuthContext = Depe
         except Exception as exc:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"code": "ui_catalog_generation_unavailable", "locale": canonical, "reason": str(exc)}) from exc
         _CACHE[key] = (time.time() + _CACHE_TTL_SECONDS, translated)
-        return {"status": "ok", "locale": canonical, "catalog": translated, "source": "generated_chunked", "chunks": chunk_count, "providers": sorted(providers), "models": sorted(models)}
+        return {"status": "ok", "locale": canonical, "catalog": translated, "source": "generated_chunked", "chunks": chunk_count, "key_count": len(source), "providers": sorted(providers), "models": sorted(models)}
