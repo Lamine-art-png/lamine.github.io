@@ -1,1 +1,0 @@
-Global UI language release candidate.
