@@ -79,6 +79,10 @@ def test_dropbox_oauth_url_uses_configured_client_id(monkeypatch):
 def test_launch_start_uses_one_time_state_and_callback_hides_raw_code(monkeypatch):
     monkeypatch.setenv("SLACK_OAUTH_CLIENT_ID", "slack-client")
     monkeypatch.setenv("OAUTH_STATE_SIGNING_KEY", "dedicated-launch-state-signing-key")
+    # Isolate the callback contract from any runner-level OAuth environment. The
+    # state remains bound to this exact redirect and the callback code must never
+    # be persisted in cleartext.
+    monkeypatch.setenv("SLACK_OAUTH_REDIRECT_URI", "https://api.example.test/v1/connectors/oauth/callback")
     client = make_client()
     started = client.post("/v1/connectors/launch/start", json={"provider": "slack"})
     assert started.status_code == 200, started.text
@@ -92,12 +96,14 @@ def test_launch_start_uses_one_time_state_and_callback_hides_raw_code(monkeypatc
     connection_id = body["connection"]["id"]
     callback = client.get("/v1/connectors/oauth/callback", params={"state": state, "code": "raw-oauth-code"})
     assert callback.status_code == 200
+    assert "Authorization was received" in callback.text
     assert "raw-oauth-code" not in callback.text
 
     fetched = client.get(f"/v1/connectors/connections/{connection_id}")
     assert fetched.status_code == 200
     config = fetched.json()["connection"]["config_json"]
     assert config["oauth_code_present"] is True
+    assert config["authorization_status"] == "authorized_pending_token_exchange"
     assert "raw-oauth-code" not in str(config)
 
     replay = client.get("/v1/connectors/oauth/callback", params={"state": state, "code": "another-code"})
