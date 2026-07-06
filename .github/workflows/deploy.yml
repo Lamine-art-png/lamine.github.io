@@ -44,10 +44,15 @@ jobs:
 
       - name: Validate edge gateway
         working-directory: cloudflare/edge-gateway
+        shell: bash
         run: |
+          set -euo pipefail
           npm install --no-audit --no-fund
           npm run check
-          npx wrangler deploy --dry-run --config ../../wrangler.toml
+          secrets_file="$(mktemp)"
+          trap 'rm -f "$secrets_file"' EXIT
+          printf '%s' '{"QUEUE_PUBLISH_TOKEN":"ci-dry-run-only","QUEUE_CONSUMER_TOKEN":"ci-dry-run-only"}' > "$secrets_file"
+          npx wrangler deploy --dry-run --config ../../wrangler.toml --secrets-file "$secrets_file"
 
       - uses: actions/setup-python@v5
         with:
@@ -66,6 +71,8 @@ jobs:
             tests/unit/test_cloudflare_queue_routes.py \
             tests/unit/test_cloudflare_queue_rotation.py \
             tests/unit/test_task_outbox.py \
+            tests/unit/test_ingestion_job_leases.py \
+            tests/unit/test_object_storage.py \
             tests/unit/test_production_readiness.py
 
   deploy-edge:
@@ -105,7 +112,7 @@ jobs:
           set -euo pipefail
           curl --fail --silent --show-error --max-time 30 "${UPSTREAM_HEALTH_URL}" | jq -e '.status == "ok"' >/dev/null
 
-      - name: Wait for exact backend build, schema, and Queue contract
+      - name: Wait for exact backend build, schema, storage, and Queue contract
         shell: bash
         run: |
           set -euo pipefail
@@ -114,10 +121,10 @@ jobs:
               -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
               "${UPSTREAM_RELEASE_CONTRACT_URL}" 2>/dev/null || true)"
             if printf '%s' "$payload" | jq -e --arg sha "$GITHUB_SHA" \
-              '.status == "ok" and .contract == "agroai-release-v1" and .build_sha == $sha and .schema_current == true and .queue_configured == true' \
+              '.status == "ok" and .contract == "agroai-release-v1" and .build_sha == $sha and .schema_current == true and .queue_configured == true and .object_storage_configured == true and .object_storage_reachable == true and .production_ready == true' \
               >/dev/null 2>&1; then
               printf '%s' "$payload" > upstream-release-contract.json
-              echo "Exact backend build, schema, and Queue contract is ready"
+              echo "Exact backend build, schema, storage, and Queue contract is ready"
               exit 0
             fi
             sleep 10
@@ -148,17 +155,21 @@ jobs:
           ensure_queue "agroai-connector-tasks"
           ensure_queue "agroai-connector-tasks-dlq"
 
-      - name: Deploy API edge gateway
-        working-directory: cloudflare/edge-gateway
-        run: npx wrangler deploy --config ../../wrangler.toml
-
-      - name: Provision Worker queue secrets
+      - name: Deploy API edge gateway with exact Queue secrets
         working-directory: cloudflare/edge-gateway
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s' "$QUEUE_PUBLISH_TOKEN" | npx wrangler secret put QUEUE_PUBLISH_TOKEN --config ../../wrangler.toml
-          printf '%s' "$QUEUE_CONSUMER_TOKEN" | npx wrangler secret put QUEUE_CONSUMER_TOKEN --config ../../wrangler.toml
+          secrets_file="${RUNNER_TEMP}/agroai-edge-secrets-${GITHUB_RUN_ID}.json"
+          umask 077
+          trap 'rm -f "$secrets_file"' EXIT
+          jq -n \
+            --arg publish "$QUEUE_PUBLISH_TOKEN" \
+            --arg consumer "$QUEUE_CONSUMER_TOKEN" \
+            '{QUEUE_PUBLISH_TOKEN: $publish, QUEUE_CONSUMER_TOKEN: $consumer}' > "$secrets_file"
+          npx wrangler deploy --config ../../wrangler.toml --secrets-file "$secrets_file"
+          rm -f "$secrets_file"
+          trap - EXIT
 
       - name: Smoke exact public edge and upstream
         shell: bash
@@ -178,7 +189,7 @@ jobs:
           curl --fail --silent --show-error --max-time 30 \
             -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
             "${API_URL}/v1/internal/release/health" | \
-            jq -e --arg sha "$GITHUB_SHA" '.status == "ok" and .build_sha == $sha and .schema_current == true and .queue_configured == true' >/dev/null
+            jq -e --arg sha "$GITHUB_SHA" '.status == "ok" and .contract == "agroai-release-v1" and .build_sha == $sha and .schema_current == true and .queue_configured == true and .object_storage_configured == true and .object_storage_reachable == true and .production_ready == true' >/dev/null
 
   deploy-portal:
     name: Deploy enterprise portal
