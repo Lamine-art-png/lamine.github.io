@@ -14,7 +14,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  OPS_ISSUE: "124"
+  OPS_ISSUE: "128"
   CUSTOM_UPSTREAM: "https://api-preview.agroai-pilot.com"
   DIRECT_RENDER_UPSTREAM: "https://agroai-api-preview.onrender.com"
   PUBLIC_API: "https://api.agroai-pilot.com"
