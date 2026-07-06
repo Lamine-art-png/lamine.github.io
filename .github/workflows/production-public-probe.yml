@@ -1,0 +1,55 @@
+name: Production Public Route Probe
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe production routes
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPS_ISSUE: "124"
+        run: |
+          set -u
+          probe() {
+            local name="$1" url="$2"
+            local body code preview
+            body="$(mktemp)"
+            code="$(curl -L -sS -o "$body" -w '%{http_code}' --connect-timeout 10 --max-time 60 "$url" 2>/dev/null || printf '000')"
+            preview="$(tr '\n' ' ' < "$body" | head -c 240 | sed 's/`/\\`/g')"
+            rm -f "$body"
+            printf '%s|%s|%s\n' "$name" "$code" "$preview"
+          }
+
+          {
+            probe custom_health "https://api-preview.agroai-pilot.com/v1/health"
+            probe custom_release_noauth "https://api-preview.agroai-pilot.com/v1/internal/release/health"
+            probe direct_health "https://agroai-api-preview.onrender.com/v1/health"
+            probe direct_release_noauth "https://agroai-api-preview.onrender.com/v1/internal/release/health"
+            probe public_edge "https://api.agroai-pilot.com/v1/edge-health"
+            probe public_health "https://api.agroai-pilot.com/v1/health"
+            probe portal "https://app.agroai-pilot.com"
+          } > probe.txt
+
+          {
+            echo "## Production route probe"
+            echo
+            echo "- SHA: \`${GITHUB_SHA}\`"
+            echo
+            echo '| Probe | HTTP | Redacted preview |'
+            echo '|---|---:|---|'
+            while IFS='|' read -r name code preview; do
+              echo "| ${name} | ${code} | \`${preview}\` |"
+            done < probe.txt
+          } > comment.md
+
+          gh issue comment "${OPS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body-file comment.md
