@@ -5,7 +5,6 @@ from dataclasses import asdict, dataclass
 from urllib.parse import urlparse
 
 from app.core.config import Settings
-from app.services.connector_vault import vault_configured
 
 
 @dataclass(frozen=True)
@@ -93,9 +92,11 @@ def evaluate_production_readiness(settings: Settings, *, target_scale: str = "pr
     if not database_scheme.startswith("postgres"):
         warnings.append(ReadinessFinding("database.non_postgres", "warning", "database", "The application is validated primarily against PostgreSQL; verify pooling, transactions, and migration behavior for this database."))
 
-    if settings.SECRET_KEY.startswith("dev-") or "change-in-production" in settings.SECRET_KEY:
+    default_secret = settings.SECRET_KEY.startswith("dev-") or "change-in-production" in settings.SECRET_KEY
+    default_webhook_secret = settings.WEBHOOK_SECRET.startswith("dev-") or "change-in-production" in settings.WEBHOOK_SECRET
+    if default_secret:
         blockers.append(ReadinessFinding("security.default_secret", "blocker", "identity", "A development signing secret is configured."))
-    if settings.WEBHOOK_SECRET.startswith("dev-") or "change-in-production" in settings.WEBHOOK_SECRET:
+    if default_webhook_secret:
         blockers.append(ReadinessFinding("security.default_webhook_secret", "blocker", "webhooks", "A development webhook secret is configured."))
     if settings.DEMO_API_KEY.startswith("changeme"):
         blockers.append(ReadinessFinding("security.default_demo_key", "blocker", "api", "The default demonstration API key is configured."))
@@ -129,15 +130,21 @@ def evaluate_production_readiness(settings: Settings, *, target_scale: str = "pr
     if queue_backend in {"redis", "redis_streams", "redis-streams"} and not redis_url:
         warnings.append(ReadinessFinding("coordination.redis_missing", "warning", "coordination", "Redis queue mode is selected without a distributed coordination endpoint."))
 
-    if not vault_configured():
+    vault_key = _setting(settings, "CONNECTOR_CREDENTIAL_MASTER_KEY")
+    vault_ring = _setting(settings, "CONNECTOR_CREDENTIAL_KEYS_JSON")
+    derivable_runtime_root = bool(settings.SECRET_KEY and settings.WEBHOOK_SECRET) and not default_secret and not default_webhook_secret
+    if not vault_key and not vault_ring and not derivable_runtime_root:
         blockers.append(ReadinessFinding("connectors.credential_vault_missing", "blocker", "connectors", "Encrypted retrievable connector credential custody is not configured."))
-    elif not _setting(settings, "CONNECTOR_CREDENTIAL_MASTER_KEY") and not _setting(settings, "CONNECTOR_CREDENTIAL_KEYS_JSON"):
+    elif not vault_key and not vault_ring:
         warnings.append(ReadinessFinding("connectors.credential_vault_derived", "warning", "connectors", "Connector credential custody uses the stable domain-separated runtime key fallback; configure an explicit versioned keyring for independent rotation."))
 
-    # oauth_state_store already falls back to the strong application signing root.
+    # oauth_state_store already falls back to a strong application signing root.
     # Missing dedicated material is a rotation/isolation warning, not a runtime blocker.
     if not _setting(settings, "OAUTH_STATE_SIGNING_KEY"):
-        warnings.append(ReadinessFinding("connectors.oauth_state_key_derived", "warning", "connectors", "OAuth state signing uses the application signing root fallback; configure a dedicated key for independent rotation."))
+        if default_secret:
+            blockers.append(ReadinessFinding("connectors.oauth_state_key_missing", "blocker", "connectors", "A secure OAuth state signing root is not configured."))
+        else:
+            warnings.append(ReadinessFinding("connectors.oauth_state_key_derived", "warning", "connectors", "OAuth state signing uses the application signing root fallback; configure a dedicated key for independent rotation."))
 
     if settings.ACCESS_TOKEN_EXPIRE_MINUTES > 1440:
         warnings.append(ReadinessFinding("identity.long_lived_access_token", "warning", "identity", "Access tokens live longer than one day; production should use shorter access tokens plus refresh/session rotation."))
