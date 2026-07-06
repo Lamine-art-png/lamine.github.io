@@ -40,11 +40,23 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npx vite preview --host 127.0.0.1 --port 4173 > /tmp/agroai-language-preview.log 2>&1 &
+          npx vite preview --host 127.0.0.1 --port 4173 > language-vite-preview.log 2>&1 &
           preview_pid=$!
           trap 'kill $preview_pid 2>/dev/null || true' EXIT
           for attempt in $(seq 1 30); do
             if curl --fail --silent http://127.0.0.1:4173/settings >/dev/null; then break; fi
             sleep 1
           done
-          npx playwright test tests/browser/global-language-switching.spec.mjs --config=playwright.contract.config.ts --browser=chromium --reporter=line
+          set +e
+          npx playwright test tests/browser/global-language-switching.spec.mjs --config=playwright.contract.config.ts --browser=chromium --reporter=line 2>&1 | tee language-playwright.log
+          status=${PIPESTATUS[0]}
+          exit $status
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: language-interaction-evidence
+          path: |
+            figma-enterprise-v4/language-playwright.log
+            figma-enterprise-v4/language-vite-preview.log
+            figma-enterprise-v4/test-results
+          retention-days: 3
