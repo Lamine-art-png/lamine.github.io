@@ -1,0 +1,32 @@
+name: Cloudflare Edge Route Audit
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/cloudflare-edge-route-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CF_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+    steps:
+      - name: Audit route DNS and edge health
+        shell: bash
+        run: |
+          set -euo pipefail
+          H="Authorization: Bearer ${CF_TOKEN}"
+          Z="$(curl -sS -H "$H" 'https://api.cloudflare.com/client/v4/zones?name=agroai-pilot.com&status=active')"
+          ZID="$(echo "$Z" | jq -r '.result[0].id // empty')"
+          echo "zone_success=$(echo "$Z" | jq -r '.success') zone_found=$([ -n "$ZID" ] && echo true || echo false)"
+          R="$(curl -sS -H "$H" "https://api.cloudflare.com/client/v4/zones/${ZID}/workers/routes")"
+          echo "$R" | jq -c '{success,errors:[.errors[]?|{code,message}],edge:[.result[]?|select(.pattern=="api.agroai-pilot.com/v1/*")|{pattern,script}]}'
+          D="$(curl -sS -H "$H" "https://api.cloudflare.com/client/v4/zones/${ZID}/dns_records?name=api.agroai-pilot.com")"
+          echo "$D" | jq -c '{success,errors:[.errors[]?|{code,message}],dns:[.result[]?|{type,name,proxied,proxiable,ttl}]}'
+          echo '--- edge health ---'
+          curl -sS -i --max-time 20 'https://api.agroai-pilot.com/v1/edge-health' | head -30
