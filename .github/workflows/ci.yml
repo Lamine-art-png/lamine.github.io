@@ -21,10 +21,12 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+          cache: npm
+          cache-dependency-path: cloudflare/edge-gateway/package-lock.json
 
-      - name: Install edge dependencies
+      - name: Install locked edge dependencies
         working-directory: cloudflare/edge-gateway
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Typecheck and test edge gateway
         working-directory: cloudflare/edge-gateway
