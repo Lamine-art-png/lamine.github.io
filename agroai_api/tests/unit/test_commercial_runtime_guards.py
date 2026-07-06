@@ -3,13 +3,23 @@ from types import SimpleNamespace
 
 from app.api.v1 import billing
 from app.main import app
+from app.services import commercial_control
 from app.services.commercial_billing_lifecycle import apply_authoritative_billing_event
 from app.services.quota import reserve_quota
 
 
+class _NoSchemaDB:
+    def get_bind(self):
+        raise RuntimeError("schema inspection intentionally unavailable")
+
+
 def _org(**overrides):
     values = {
+        "id": "org_test",
         "plan": "free",
+        "plan_version": "2026-07",
+        "customer_class": "individual_operator",
+        "organization_type": None,
         "subscription_status": "inactive",
         "subscription_source": "local",
         "stripe_customer_id": None,
@@ -71,6 +81,17 @@ def test_one_time_offer_metadata_has_no_saas_plan(monkeypatch):
     config = billing._offer_config("assurance_audit_farm")
     assert config["mode"] == "payment"
     assert config["plan"] is None
+
+
+def test_inactive_paid_plan_is_free_equivalent_at_runtime():
+    org = _org(plan="team", subscription_status="past_due")
+    effective = commercial_control.resolve_effective_entitlements(_NoSchemaDB(), org)
+    assert effective.plan == "team"
+    assert effective.value("intelligence.profile") == "essential"
+    assert effective.state("team.invite") == "locked"
+    assert effective.state("agents.execute_approval_gated") == "locked"
+    assert effective.value("quota.seat") == 1
+    assert effective.state("intelligence.ask") == "enabled"
 
 
 def test_direct_report_routes_have_commercial_dependency_installed():
