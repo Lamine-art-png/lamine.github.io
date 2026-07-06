@@ -21,15 +21,14 @@ router = APIRouter(tags=["i18n"])
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _CANONICAL_CATALOG_PATH = _REPO_ROOT / "shared" / "ui-catalog.en.json"
-_LITERAL_CATALOG_GLOB = "ui-literals.en.*.json"
 _PLACEHOLDER_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-_MAX_KEYS = 2_000
+_MAX_KEYS = 250
 _MAX_VALUE_CHARS = 2_000
-_MAX_SOURCE_CHARS = 200_000
-_CACHE_TTL_SECONDS = 24 * 60 * 60
-_TRANSLATION_CHUNK_SIZE = 90
+_MAX_SOURCE_CHARS = 60_000
+_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
+_TRANSLATION_CHUNK_SIZE = 18
 _MAX_CHUNK_ATTEMPTS = 2
-_MAX_PARALLEL_MODEL_CALLS = 4
+_MAX_PARALLEL_MODEL_CALLS = 3
 _CACHE: dict[str, tuple[float, dict[str, str]]] = {}
 _CACHE_LOCKS: dict[str, asyncio.Lock] = {}
 
@@ -59,24 +58,10 @@ class CatalogRequest(BaseModel):
 
 @lru_cache(maxsize=1)
 def canonical_source_catalog() -> dict[str, str]:
-    base = json.loads(_CANONICAL_CATALOG_PATH.read_text(encoding="utf-8"))
-    if not isinstance(base, dict) or not base:
+    raw = json.loads(_CANONICAL_CATALOG_PATH.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict) or not raw or not all(isinstance(key, str) and isinstance(value, str) for key, value in raw.items()):
         raise RuntimeError("canonical_ui_catalog_invalid")
-    literals: dict[str, str] = {}
-    for path in sorted((_REPO_ROOT / "shared").glob(_LITERAL_CATALOG_GLOB)):
-        part = json.loads(path.read_text(encoding="utf-8"))
-        if not isinstance(part, dict):
-            raise RuntimeError("canonical_ui_literal_catalog_invalid")
-        overlap = set(literals).intersection(part)
-        if overlap:
-            raise RuntimeError(f"duplicate_ui_literal_catalog_keys:{sorted(overlap)[:3]}")
-        literals.update(part)
-    if not literals:
-        raise RuntimeError("canonical_ui_literal_catalog_missing")
-    merged = {**base, **literals}
-    if not all(isinstance(key, str) and isinstance(value, str) for key, value in merged.items()):
-        raise RuntimeError("canonical_ui_catalog_invalid")
-    return merged
+    return raw
 
 
 def _enabled_locale_payloads() -> list[dict[str, Any]]:
@@ -173,7 +158,7 @@ async def _translate_chunk_once(router: ModelRouter, semaphore: asyncio.Semaphor
         {"role": "user", "content": source_json},
     ]
     async with semaphore:
-        result, selection = await router.run(task="ui_translation", messages=messages, temperature=0.0, response_format={"type": "json_object"}, max_tokens=12_000, timeout_seconds=45, max_model_attempts=3)
+        result, selection = await router.run(task="ui_translation", messages=messages, temperature=0.0, response_format={"type": "json_object"}, max_tokens=4_000, timeout_seconds=35, max_model_attempts=3)
     if result.status != "ok" or not result.content.strip():
         raise ValueError(f"translation model unavailable: {result.provider}/{result.model}")
     translated = _validate_translated_catalog(chunk, _decode_json_object(result.content))
@@ -188,8 +173,8 @@ async def _translate_chunk_resilient(router: ModelRouter, semaphore: asyncio.Sem
             return translated, {provider}, {model} if model else set()
         except Exception as exc:
             last_error = exc
-    if len(chunk) <= 12:
-        raise ValueError(f"translation chunk failed after retries: {last_error}") from last_error
+    if len(chunk) == 1:
+        raise ValueError(f"translation key failed after retries: {next(iter(chunk))}: {last_error}") from last_error
     items = list(chunk.items())
     midpoint = len(items) // 2
     left = dict(items[:midpoint])
@@ -203,10 +188,11 @@ async def _translate_chunk_resilient(router: ModelRouter, semaphore: asyncio.Sem
     return {**left_catalog, **right_catalog}, left_providers | right_providers, left_models | right_models
 
 
-async def _translate_catalog(canonical: str, language: str, source: dict[str, str]) -> tuple[dict[str, str], set[str], set[str]]:
+async def _translate_catalog(canonical: str, language: str, source: dict[str, str]) -> tuple[dict[str, str], set[str], set[str], int]:
     model_router = ModelRouter()
     semaphore = asyncio.Semaphore(_MAX_PARALLEL_MODEL_CALLS)
-    results = await asyncio.gather(*[_translate_chunk_resilient(model_router, semaphore, canonical=canonical, language=language, chunk=chunk) for chunk in _chunks(source)])
+    chunks = _chunks(source)
+    results = await asyncio.gather(*[_translate_chunk_resilient(model_router, semaphore, canonical=canonical, language=language, chunk=chunk) for chunk in chunks])
     catalog: dict[str, str] = {}
     providers: set[str] = set()
     models: set[str] = set()
@@ -214,7 +200,7 @@ async def _translate_catalog(canonical: str, language: str, source: dict[str, st
         catalog.update(translated)
         providers.update(chunk_providers)
         models.update(chunk_models)
-    return _validate_translated_catalog(source, catalog), providers, models
+    return _validate_translated_catalog(source, catalog), providers, models, len(chunks)
 
 
 @router.get("/i18n/languages")
@@ -250,8 +236,8 @@ async def translate_ui_catalog(payload: CatalogRequest, _ctx: AuthContext = Depe
         language_code = spec.language_code if spec else canonical.split("-", 1)[0].lower()
         language = family_name(language_code)
         try:
-            translated, providers, models = await _translate_catalog(canonical, language, source)
+            translated, providers, models, chunk_count = await _translate_catalog(canonical, language, source)
         except Exception as exc:
             raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"code": "ui_catalog_generation_unavailable", "locale": canonical, "reason": str(exc)}) from exc
         _CACHE[key] = (time.time() + _CACHE_TTL_SECONDS, translated)
-        return {"status": "ok", "locale": canonical, "catalog": translated, "source": "generated_chunked", "providers": sorted(providers), "models": sorted(models)}
+        return {"status": "ok", "locale": canonical, "catalog": translated, "source": "generated_chunked", "chunks": chunk_count, "providers": sorted(providers), "models": sorted(models)}
