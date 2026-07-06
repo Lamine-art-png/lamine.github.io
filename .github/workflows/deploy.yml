@@ -10,7 +10,7 @@ permissions:
 
 concurrency:
   group: cloudflare-production
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 env:
   NODE_VERSION: "22"
