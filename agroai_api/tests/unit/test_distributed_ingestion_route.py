@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.core.security import require_current_tenant_id
 from app.db.base import Base, get_db
 from app.main import app
+from app.models.saas import Organization
 from app.services.object_storage import StoredObject
 
 
@@ -39,6 +40,9 @@ def test_stream_route_stages_durable_object_and_outbox(tmp_path, monkeypatch):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Session = sessionmaker(bind=engine)
     Base.metadata.create_all(bind=engine)
+    with Session() as db:
+        db.add(Organization(id="org-test", name="Manual Ingestion Test Org", slug="manual-ingestion-test-org", plan="free"))
+        db.commit()
 
     def override_db():
         db = Session()
