@@ -45,13 +45,72 @@ def _stored(tmp_path, *, tenant="org-one", connection="conn-one", prefix="raw"):
 
 def test_durable_store_verifies_and_namespaces(tmp_path):
     payload, store, stored, _client = _stored(tmp_path)
-    assert stored.uri.startswith("s3://agroai-test/raw/tenants/org-one/connectors/conn-one/raw/")
+    assert stored.uri.startswith("s3://agroai-test/raw/tenants/org-one-")
+    assert "/connectors/conn-one-" in stored.uri
     assert store.read_bytes(
         stored.uri,
         max_bytes=1024,
         tenant_id="org-one",
         connection_id="conn-one",
     ) == payload
+
+
+def test_durable_store_scope_hash_prevents_sanitized_namespace_collisions(tmp_path):
+    payload = b"collision-proof"
+    path = tmp_path / "payload.bin"
+    path.write_bytes(payload)
+    client = FakeStoreClient()
+    store = S3ObjectStore(bucket="agroai-test", client=client)
+    digest = hashlib.sha256(payload).hexdigest()
+
+    first = store.put_path(
+        path,
+        tenant_id="org/a",
+        connection_id="conn/a",
+        filename="payload.bin",
+        content_type=None,
+        expected_sha256=digest,
+        expected_size=len(payload),
+    )
+    second = store.put_path(
+        path,
+        tenant_id="org_a",
+        connection_id="conn_a",
+        filename="payload.bin",
+        content_type=None,
+        expected_sha256=digest,
+        expected_size=len(payload),
+    )
+
+    assert first.key != second.key
+    with pytest.raises(ValueError, match="tenant namespace"):
+        store.read_bytes(
+            first.uri,
+            max_bytes=1024,
+            tenant_id="org_a",
+            connection_id="conn_a",
+        )
+    assert store.read_bytes(
+        first.uri,
+        max_bytes=1024,
+        tenant_id="org/a",
+        connection_id="conn/a",
+    ) == payload
+
+
+def test_durable_store_requires_exact_scope_metadata_for_scoped_reads(tmp_path):
+    payload, store, stored, client = _stored(tmp_path)
+    body, metadata = client.items[(store.bucket, stored.key)]
+    metadata.pop("tenant-scope", None)
+    client.items[(store.bucket, stored.key)] = (body, metadata)
+
+    with pytest.raises(RuntimeError, match="tenant metadata mismatch"):
+        store.read_bytes(
+            stored.uri,
+            max_bytes=1024,
+            tenant_id="org-one",
+            connection_id="conn-one",
+        )
 
 
 def test_durable_store_enforces_read_limit(tmp_path):
