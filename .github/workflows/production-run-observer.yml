@@ -29,8 +29,8 @@ jobs:
           done
 
           if [ -z "$run_id" ]; then
-            printf '## Production workflow observer\n\n- SHA: `%s`\n- result: no Cloudflare Production Release run found for this SHA\n' "$GITHUB_SHA" > status.md
-            gh issue comment "$OPS_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file status.md
+            printf '# Production workflow status\n\n- SHA: `%s`\n- result: no Cloudflare Production Release run found for this SHA\n' "$GITHUB_SHA" > status.md
+            gh issue edit "$OPS_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file status.md
             exit 0
           fi
 
@@ -42,7 +42,7 @@ jobs:
 
           gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json databaseId,status,conclusion,url,jobs > run.json
           {
-            echo "## Production workflow observer"
+            echo "# Production workflow status"
             echo
             echo "- SHA: \`${GITHUB_SHA}\`"
             echo "- run ID: \`$(jq -r '.databaseId' run.json)\`"
@@ -56,4 +56,4 @@ jobs:
             done
           } > status.md
 
-          gh issue comment "$OPS_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file status.md
+          gh issue edit "$OPS_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file status.md
