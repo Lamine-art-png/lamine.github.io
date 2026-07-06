@@ -32,7 +32,13 @@ async function prepare(page, storedLocale) {
     if (req.method() === "POST" && url.pathname === "/v1/i18n/catalog") {
       state.catalogs += 1;
       const payload = req.postDataJSON();
-      const translatedLanguage = payload.locale === "de" ? "Sprache" : payload.locale === "ar" ? "اللغة" : payload.source.language;
+      const translatedLanguage = payload.locale === "de"
+        ? "Sprache"
+        : payload.locale === "ar"
+          ? "اللغة"
+          : payload.locale === "fr-FR"
+            ? "Langue"
+            : payload.source.language;
       const catalog = { ...payload.source, language: translatedLanguage };
       if (payload.locale === "sw") catalog["intelligence.reportEmailed"] = "Imetumwa kwa " + "{" + "{recipient}" + "}";
       return reply({ status: "ok", locale: payload.locale, catalog, source: "browser-test" });
@@ -51,8 +57,8 @@ function languageSelector(page) {
 }
 
 const cases = [
-  ["legacy fr", "fr", "fr-FR", "fr-FR", "fr-FR", "Langue", 0],
-  ["regional fr-CA", "fr-CA", "fr-FR", "fr-FR", "fr-FR", "Langue", 0],
+  ["legacy fr", "fr", "fr-FR", "fr-FR", "fr-FR", "Langue", 1],
+  ["regional fr-CA", "fr-CA", "fr-FR", "fr-FR", "fr-FR", "Langue", 1],
   ["global de", "de", "de", "de", "de", "Sprache", 1],
   ["global ar", "ar", "ar", "ar", "ar", "اللغة", 1],
   ["unknown locale", "nonsense-value", "auto", "en", "auto", "Language", 0],

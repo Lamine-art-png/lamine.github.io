@@ -29,6 +29,16 @@ async function prepare(page, patchStatus = 200) {
     }
     if (req.method() === "GET" && url.pathname === "/v1/orgs") return reply({ organizations: [{ id: "org", name: "QA Org", role: "owner" }] });
     if (req.method() === "GET" && url.pathname === "/v1/workspaces") return reply({ workspaces: [{ id: "ws", name: "QA Workspace", status: "active" }] });
+    if (req.method() === "POST" && url.pathname === "/v1/i18n/catalog") {
+      const payload = req.postDataJSON();
+      const catalog = Object.fromEntries(
+        Object.entries(payload.source).map(([key, value]) => [
+          key,
+          payload.locale === "fr-FR" && key === "language" ? "Langue" : value,
+        ]),
+      );
+      return reply({ status: "ok", locale: payload.locale, catalog, source: "browser-test" });
+    }
     if (req.method() === "PATCH" && url.pathname === "/v1/settings/preferences") {
       state.patches += 1;
       try { state.payloads.push(req.postDataJSON()); } catch { state.payloads.push({}); }

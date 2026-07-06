@@ -1,5 +1,7 @@
 import { apiClient } from "./api/client";
 import { normalizeLocale, TRANSLATIONS } from "./i18n";
+import { notifyLocaleRuntime } from "./localeRuntimeStore";
+import { fullEnglishUiSource } from "./portalLiteralCatalog";
 
 const CACHE_PREFIX = "agroai_ui_catalog_v3:";
 const RETRY_COOLDOWN_MS = 30_000;
@@ -17,6 +19,19 @@ function exactKeyParity(candidate: Record<string, string>, source: Record<string
   const sourceKeys = Object.keys(source).sort();
   const candidateKeys = Object.keys(candidate).sort();
   return sourceKeys.length === candidateKeys.length && sourceKeys.every((key, index) => key === candidateKeys[index]);
+}
+
+export function hasCompleteLocaleCatalog(locale: string): boolean {
+  const effectiveLocale = normalizeLocale(locale);
+  const catalog = TRANSLATIONS[effectiveLocale];
+  const source = fullEnglishUiSource(TRANSLATIONS.en);
+  return Boolean(catalog && exactKeyParity(catalog, source));
+}
+
+function installLocaleCatalog(locale: string, source: Record<string, string>, catalog: Record<string, string>, persist: boolean) {
+  TRANSLATIONS[locale] = catalog;
+  if (persist) writeCached(locale, source, catalog);
+  notifyLocaleRuntime();
 }
 
 function placeholderSignature(value: string): string[] | null {
@@ -98,7 +113,7 @@ function writeCached(locale: string, source: Record<string, string>, catalog: Re
 async function loadLocaleCatalog(effectiveLocale: string, source: Record<string, string>): Promise<boolean> {
   const cached = readCached(effectiveLocale, source);
   if (cached) {
-    TRANSLATIONS[effectiveLocale] = cached;
+    installLocaleCatalog(effectiveLocale, source, cached, false);
     return true;
   }
 
@@ -110,16 +125,20 @@ async function loadLocaleCatalog(effectiveLocale: string, source: Record<string,
     throw new Error(`Invalid UI translation catalog for ${effectiveLocale}`);
   }
 
-  TRANSLATIONS[effectiveLocale] = response.catalog;
-  writeCached(effectiveLocale, source, response.catalog);
+  installLocaleCatalog(effectiveLocale, source, response.catalog, true);
   return true;
 }
 
 export async function ensureLocaleCatalog(locale: string): Promise<boolean> {
   const effectiveLocale = normalizeLocale(locale);
-  if (TRANSLATIONS[effectiveLocale]) return false;
+  const source = fullEnglishUiSource(TRANSLATIONS.en);
+  if (effectiveLocale === "en") {
+    if (exactKeyParity(TRANSLATIONS.en, source)) return false;
+    installLocaleCatalog("en", source, source, false);
+    return true;
+  }
+  if (hasCompleteLocaleCatalog(effectiveLocale)) return false;
 
-  const source = TRANSLATIONS.en;
   const requestKey = `${effectiveLocale}:${sourceFingerprint(source)}`;
   const retryAfter = RETRY_AFTER.get(requestKey) || 0;
   if (retryAfter > Date.now()) throw new Error(`UI translation retry cooldown for ${effectiveLocale}`);

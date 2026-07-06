@@ -44,6 +44,17 @@ function futureJwt() {
   return `qa.${payload}.signature`;
 }
 
+function translatedMockCatalog(source, locale) {
+  if (locale === "en") return { ...source };
+  const label = locale === "fr-FR" ? "Texte français" : locale === "ar" ? "نص عربي" : `Texte ${locale}`;
+  return Object.fromEntries(
+    Object.entries(source).map(([key, value]) => {
+      const placeholders = typeof value === "string" ? value.match(/\{[A-Za-z_][A-Za-z0-9_]*\}/g) || [] : [];
+      return [key, `${label}${placeholders.length ? ` ${placeholders.join(" ")}` : ""}`];
+    }),
+  );
+}
+
 async function installPortalMocks(page, { initialLocale = "en" } = {}) {
   const counters = {
     conversationPost: 0,
@@ -91,6 +102,17 @@ async function installPortalMocks(page, { initialLocale = "en" } = {}) {
     }
     if (method === "GET" && path === "/v1/workspaces") {
       return json({ workspaces: [{ id: "ws-qa", name: "QA Workspace", status: "active" }] });
+    }
+    if (method === "POST" && path === "/v1/i18n/catalog") {
+      const payload = postData();
+      const source = payload && typeof payload.source === "object" && payload.source ? payload.source : {};
+      const locale = typeof payload.locale === "string" ? payload.locale : "en";
+      return json({
+        status: "ok",
+        locale,
+        catalog: translatedMockCatalog(source, locale),
+        source: "browser-acceptance-mock",
+      });
     }
     if (method === "PATCH" && path === "/v1/settings/preferences") {
       counters.preferencePatch += 1;

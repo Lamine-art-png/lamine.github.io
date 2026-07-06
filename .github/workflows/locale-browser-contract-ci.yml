@@ -25,8 +25,10 @@ jobs:
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
       - name: Build production portal
-        run: npm run build
-      - name: Run locale migration and preference contracts
+        run: |
+          npm run test:i18n
+          npm run build
+      - name: Run global locale switching contracts
         run: |
           set -euo pipefail
           npx vite preview --host 127.0.0.1 --port 4173 > locale-vite-preview.log 2>&1 &
@@ -43,7 +45,11 @@ jobs:
             sleep 1
           done
           set +e
-          npx playwright test tests/browser/locale-migration.spec.mjs tests/browser/locale-preference-sync.spec.mjs --config=playwright.contract.config.ts --browser=chromium --reporter=line 2>&1 | tee locale-playwright.log
+          npx playwright test \
+            tests/browser/locale-migration.spec.mjs \
+            tests/browser/locale-preference-sync.spec.mjs \
+            tests/browser/global-language-switching.spec.mjs \
+            --config=playwright.contract.config.ts --browser=chromium --reporter=line 2>&1 | tee locale-playwright.log
           status=${PIPESTATUS[0]}
           exit $status
       - name: Upload locale browser evidence
