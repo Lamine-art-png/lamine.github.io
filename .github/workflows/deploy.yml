@@ -16,7 +16,7 @@ env:
   NODE_VERSION: "22"
   PORTAL_PROJECT: agroai-portal
   PORTAL_URL: https://app.agroai-pilot.com
-  API_URL: https://api.agroai-pilot.com
+  API_URL: https://app.agroai-pilot.com
   UPSTREAM_HEALTH_URL: https://api-preview.agroai-pilot.com/v1/health
   UPSTREAM_RELEASE_CONTRACT_URL: https://api-preview.agroai-pilot.com/v1/internal/release/health
 
