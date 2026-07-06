@@ -39,6 +39,11 @@ def test_billing_module_uses_authoritative_subscription_lifecycle():
     assert billing._apply_billing_event is apply_authoritative_billing_event
 
 
+def test_billing_endpoints_are_hardened_in_place():
+    assert getattr(billing.create_checkout_session, "__agroai_commercial_hardened__", False) is True
+    assert getattr(billing.billing_status, "__agroai_period_aware__", False) is True
+
+
 def test_brain_module_uses_commercial_runtime_binding():
     assert brain.LiveIntelligence is ContextualCommercialLiveIntelligence
     assert brain.build_intelligence_context is build_commercial_intelligence_context
@@ -87,6 +92,19 @@ def test_one_time_offer_metadata_has_no_saas_plan(monkeypatch):
     config = billing._offer_config("assurance_audit_farm")
     assert config["mode"] == "payment"
     assert config["plan"] is None
+    metadata = billing._commercial_checkout_metadata(_org(), "assurance_audit_farm", config)
+    assert metadata["checkout_mode"] == "payment"
+    assert metadata["billing_period"] == "one_time"
+    assert "plan" not in metadata
+
+
+def test_subscription_checkout_metadata_carries_plan_version_and_period(monkeypatch):
+    monkeypatch.setattr(billing.settings, "STRIPE_PRICE_TEAM_ANNUAL", "price_team_annual")
+    config = billing._offer_config("team_annual")
+    metadata = billing._commercial_checkout_metadata(_org(plan_version="2026-07"), "team_annual", config)
+    assert metadata["plan"] == "team"
+    assert metadata["billing_period"] == "annual"
+    assert metadata["plan_version"] == "2026-07"
 
 
 def test_inactive_paid_plan_is_free_equivalent_at_runtime():
