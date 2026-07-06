@@ -27,9 +27,9 @@ _MAX_KEYS = 2_000
 _MAX_VALUE_CHARS = 2_000
 _MAX_SOURCE_CHARS = 200_000
 _CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
-_TRANSLATION_CHUNK_SIZE = 18
-_MAX_CHUNK_ATTEMPTS = 2
-_MAX_PARALLEL_MODEL_CALLS = 3
+_TRANSLATION_CHUNK_SIZE = 48
+_MAX_CHUNK_ATTEMPTS = 1
+_MAX_PARALLEL_MODEL_CALLS = 6
 _CACHE: dict[str, tuple[float, dict[str, str]]] = {}
 _CACHE_LOCKS: dict[str, asyncio.Lock] = {}
 
@@ -171,7 +171,7 @@ async def _translate_chunk_once(router: ModelRouter, semaphore: asyncio.Semaphor
         {"role": "user", "content": source_json},
     ]
     async with semaphore:
-        result, selection = await router.run(task="ui_translation", messages=messages, temperature=0.0, response_format={"type": "json_object"}, max_tokens=4_000, timeout_seconds=35, max_model_attempts=3)
+        result, selection = await router.run(task="ui_translation", messages=messages, temperature=0.0, response_format={"type": "json_object"}, max_tokens=8_000, timeout_seconds=30, max_model_attempts=2)
     if result.status != "ok" or not result.content.strip():
         raise ValueError(f"translation model unavailable: {result.provider}/{result.model}")
     translated = _validate_translated_catalog(chunk, _decode_json_object(result.content))

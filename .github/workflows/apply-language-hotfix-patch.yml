@@ -1,0 +1,46 @@
+name: Language Selector Contract CI
+
+on:
+  pull_request:
+    paths:
+      - 'figma-enterprise-v4/src/app/components/LanguageSelector.tsx'
+      - 'figma-enterprise-v4/src/app/hooks/useLocale.ts'
+      - 'figma-enterprise-v4/tests/i18n-contract.mjs'
+      - '.github/workflows/apply-language-hotfix-patch.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'figma-enterprise-v4/src/app/components/LanguageSelector.tsx'
+      - 'figma-enterprise-v4/src/app/hooks/useLocale.ts'
+      - 'figma-enterprise-v4/tests/i18n-contract.mjs'
+      - '.github/workflows/apply-language-hotfix-patch.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  selector-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - working-directory: figma-enterprise-v4
+        run: npm ci
+      - working-directory: figma-enterprise-v4
+        run: npm run test:i18n
+      - name: Prove selector is not disabled by catalog loading
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          selector = Path('figma-enterprise-v4/src/app/components/LanguageSelector.tsx').read_text()
+          hook = Path('figma-enterprise-v4/src/app/hooks/useLocale.ts').read_text()
+          assert 'disabled={Boolean(pendingLocale)}' not in selector
+          assert 'value={selectedLocale}' in selector
+          assert 'const activated = setStoredLocale(canonical)' in hook
+          assert 'await ensureLocaleCatalog(selectedLocale, "full")' in hook
+          print('language_selector_nonblocking=ok')
+          PY

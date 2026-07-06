@@ -48,7 +48,8 @@ assert(i18n.includes("MANIFEST.enabledUiLocales"), "enabled locale canonicalizat
 assert(!/export\s+function\s+useLocale/.test(i18n), "i18n.ts must not export a competing React locale hook");
 assert(/export\s+function\s+useLocale/.test(hook), "hooks/useLocale.ts must be the authoritative React locale hook");
 assert(hook.includes("useSyncExternalStore"), "locale hook must subscribe to the shared runtime revision");
-assert(hook.includes("activateLocale"), "locale switching must hydrate a catalog before activation");
+assert(hook.includes("activateLocale"), "locale switching must expose one authoritative activation path");
+assert(hook.includes("hasCoreLocaleCatalog"), "bundled core copy must remain usable before full hydration");
 assert(hook.includes("notifyLocaleRuntime"), "locale activation must notify all mounted consumers");
 assert(dynamicCatalog.includes('"/v1/i18n/catalog"'), "dynamic UI catalogs must use the backend localization contract");
 assert(dynamicCatalog.includes("exactKeyParity"), "dynamic catalogs must fail closed on key drift");
@@ -58,7 +59,8 @@ assert(dynamicCatalog.includes("notifyLocaleRuntime"), "catalog installation mus
 assert(dynamicCatalog.includes("hasCompleteLocaleCatalog"), "partial bundled catalogs must hydrate to full portal coverage");
 assert(dynamicCatalog.includes("fullEnglishUiSource"), "dynamic translation source must include static portal literals");
 assert(selector.includes("GLOBAL_UI_LOCALES"), "language selector must render the full global registry");
-assert(selector.includes("activateLocale"), "language selector must activate only a ready catalog");
+assert(selector.includes("activateLocale"), "language selector must activate the selected locale immediately");
+assert(!selector.includes("disabled={Boolean(pendingLocale)}"), "catalog loading must never disable the language selector");
 assert(globalOptions.includes("manifest.enabledUiLocales"), "global selector options must derive from shared manifest");
 assert(literalRuntime.includes("PORTAL_LITERAL_CATALOG"), "portal literal source map missing");
 assert(literalRuntime.includes("ui-literals.en.6.json"), "all portal literal catalog parts must be consumed");

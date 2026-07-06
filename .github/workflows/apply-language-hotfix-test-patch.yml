@@ -1,0 +1,42 @@
+name: Language Catalog Backend Contract CI
+
+on:
+  pull_request:
+    paths:
+      - 'agroai_api/app/api/v1/i18n.py'
+      - 'agroai_api/tests/unit/test_i18n_catalog_contract.py'
+      - '.github/workflows/apply-language-hotfix-test-patch.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'agroai_api/app/api/v1/i18n.py'
+      - 'agroai_api/tests/unit/test_i18n_catalog_contract.py'
+      - '.github/workflows/apply-language-hotfix-test-patch.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  catalog-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: agroai_api/requirements.txt
+      - run: python -m pip install -q -r requirements.txt pytest
+      - run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --tb=short tests/unit/test_i18n_catalog_contract.py
+      - name: Enforce bounded first-load translation fanout
+        run: |
+          python - <<'PY'
+          from app.api.v1.i18n import _MAX_PARALLEL_MODEL_CALLS, _TRANSLATION_CHUNK_SIZE
+          assert _TRANSLATION_CHUNK_SIZE >= 32
+          assert _MAX_PARALLEL_MODEL_CALLS >= 4
+          print(f'chunk_size={_TRANSLATION_CHUNK_SIZE} parallel_calls={_MAX_PARALLEL_MODEL_CALLS}')
+          PY

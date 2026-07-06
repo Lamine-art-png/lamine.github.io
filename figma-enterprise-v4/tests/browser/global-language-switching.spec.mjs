@@ -22,7 +22,7 @@ async function prepare(page) {
   await page.route(`${API_ORIGIN}/**`, async (route) => {
     const req = route.request();
     const url = new URL(req.url());
-    const reply = (body) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+    const reply = (body, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
 
     if (req.method() === "GET" && url.pathname === "/v1/auth/me") {
       return reply({
@@ -39,7 +39,7 @@ async function prepare(page) {
     }
     if (req.method() === "POST" && url.pathname === "/v1/i18n/catalog") {
       const payload = req.postDataJSON();
-      state.catalogs.push(payload.locale);
+      state.catalogs.push({ locale: payload.locale, keyCount: Object.keys(payload.source || {}).length });
       const catalog = Object.fromEntries(Object.entries(payload.source).map(([key, value]) => [key, `⟦${payload.locale}⟧ ${value}`]));
       return reply({ status: "ok", locale: payload.locale, catalog, source: "browser-test" });
     }
@@ -71,6 +71,7 @@ test("every visible non-English UI locale hydrates catalog keys and static porta
   for (const locale of locales) {
     await selector.selectOption(locale);
     await expect(selector).toHaveValue(locale);
+    await expect(selector).toBeEnabled();
     await expect(page.getByText(`⟦${locale}⟧ Settings`, { exact: true }).first()).toBeVisible();
     await expect(page.getByText(`⟦${locale}⟧ Timezone`, { exact: true }).first()).toBeVisible();
     await expect(page.getByRole("combobox", { name: `⟦${locale}⟧ Assistant speed` })).toBeVisible();
@@ -78,12 +79,13 @@ test("every visible non-English UI locale hydrates catalog keys and static porta
     await expect(page.locator("html")).toHaveAttribute("dir", expectedDir);
   }
 
-  expect(new Set(state.catalogs)).toEqual(new Set(locales));
+  expect(new Set(state.catalogs.map((item) => item.locale))).toEqual(new Set(locales));
   expect(state.catalogs).toHaveLength(locales.length);
+  expect(state.catalogs.every((item) => item.keyCount > 400)).toBeTruthy();
   await context.close();
 });
 
-test("locale activation is atomic and never exposes English as the pending target", async ({ browser }) => {
+test("selection is immediate and dropdown remains usable while full catalog hydration is slow", async ({ browser }) => {
   const context = await browser.newContext({ locale: "en-US" });
   const page = await context.newPage();
   await page.addInitScript((token) => {
@@ -96,7 +98,7 @@ test("locale activation is atomic and never exposes English as the pending targe
   await page.route(`${API_ORIGIN}/**`, async (route) => {
     const req = route.request();
     const url = new URL(req.url());
-    const reply = (body) => route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify(body) });
+    const reply = (body, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
     if (req.method() === "GET" && url.pathname === "/v1/auth/me") return reply({ user: { id: "qa", name: "QA", email: "qa@example.com" }, current_organization: { id: "org", name: "QA Org", role: "owner" }, organizations: [{ id: "org", name: "QA Org", role: "owner" }], entitlements: {} });
     if (req.method() === "GET" && url.pathname === "/v1/orgs") return reply({ organizations: [{ id: "org", name: "QA Org", role: "owner" }] });
     if (req.method() === "GET" && url.pathname === "/v1/workspaces") return reply({ workspaces: [{ id: "ws", name: "QA Workspace", status: "active" }] });
@@ -107,16 +109,55 @@ test("locale activation is atomic and never exposes English as the pending targe
       const catalog = Object.fromEntries(Object.entries(payload.source).map(([key, value]) => [key, `⟦${payload.locale}⟧ ${value}`]));
       return reply({ status: "ok", locale: payload.locale, catalog });
     }
+    if (req.method() === "PATCH" && url.pathname === "/v1/settings/preferences") return reply({ status: "saved" });
+    return reply({});
+  });
+
+  await page.goto(APP_URL);
+  const selector = languageSelector(page);
+
+  await selector.selectOption("de");
+  await expect(selector).toHaveValue("de");
+  await expect(selector).toBeEnabled();
+  await expect(page.locator("html")).toHaveAttribute("lang", "de");
+
+  await selector.selectOption("fr-FR");
+  await expect(selector).toHaveValue("fr-FR");
+  await expect(selector).toBeEnabled();
+  await expect(page.locator("html")).toHaveAttribute("lang", "fr-FR");
+  await expect(page.getByText("Paramètres", { exact: true }).first()).toBeVisible();
+
+  releaseCatalog();
+  await expect(page.getByText("⟦fr-FR⟧ Settings", { exact: true }).first()).toBeVisible();
+  await expect(selector).toHaveValue("fr-FR");
+  await expect(selector).toBeEnabled();
+  await context.close();
+});
+
+test("catalog failure never traps the language selector", async ({ page }) => {
+  await page.addInitScript((token) => {
+    localStorage.setItem("agroai_access_token", token);
+    localStorage.setItem("agroai_locale_v1", "en");
+  }, qaToken());
+  await page.route(`${API_ORIGIN}/**`, async (route) => {
+    const req = route.request();
+    const url = new URL(req.url());
+    const reply = (body, status = 200) => route.fulfill({ status, contentType: "application/json", body: JSON.stringify(body) });
+    if (req.method() === "GET" && url.pathname === "/v1/auth/me") return reply({ user: { id: "qa", name: "QA", email: "qa@example.com" }, current_organization: { id: "org", name: "QA Org", role: "owner" }, organizations: [{ id: "org", name: "QA Org", role: "owner" }], entitlements: {} });
+    if (req.method() === "GET" && url.pathname === "/v1/orgs") return reply({ organizations: [{ id: "org", name: "QA Org", role: "owner" }] });
+    if (req.method() === "GET" && url.pathname === "/v1/workspaces") return reply({ workspaces: [{ id: "ws", name: "QA Workspace", status: "active" }] });
+    if (req.method() === "GET" && url.pathname === "/v1/settings/preferences") return reply({ preferences: { locale: "en", notifications: {}, ui: {} } });
+    if (req.method() === "POST" && url.pathname === "/v1/i18n/catalog") return reply({ detail: { code: "ui_catalog_generation_unavailable" } }, 503);
+    if (req.method() === "PATCH" && url.pathname === "/v1/settings/preferences") return reply({ status: "saved" });
     return reply({});
   });
 
   await page.goto(APP_URL);
   const selector = languageSelector(page);
   await selector.selectOption("de");
-  await expect(page.getByText("Settings", { exact: true }).first()).toBeVisible();
-  await expect(page.getByText("⟦de⟧ Settings", { exact: true })).toHaveCount(0);
-  releaseCatalog();
   await expect(selector).toHaveValue("de");
-  await expect(page.getByText("⟦de⟧ Settings", { exact: true }).first()).toBeVisible();
-  await context.close();
+  await expect(selector).toBeEnabled();
+  await selector.selectOption("en");
+  await expect(selector).toHaveValue("en");
+  await expect(selector).toBeEnabled();
 });
