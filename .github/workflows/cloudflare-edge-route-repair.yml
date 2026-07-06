@@ -24,56 +24,44 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Repair Worker route and proxied DNS safely
+      - name: Diagnose and repair Worker route and DNS
         shell: bash
         run: |
           set -euo pipefail
-          api() {
+          cf() {
             local method="$1" url="$2" body="${3:-}"
             if [ -n "$body" ]; then
-              curl --fail --silent --show-error -X "$method" \
+              curl --silent --show-error -X "$method" \
                 -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
                 -H "Content-Type: application/json" \
-                --data "$body" \
-                "$url"
+                --data "$body" "$url"
             else
-              curl --fail --silent --show-error -X "$method" \
+              curl --silent --show-error -X "$method" \
                 -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-                -H "Content-Type: application/json" \
-                "$url"
+                -H "Content-Type: application/json" "$url"
             fi
           }
+          summarize() {
+            local label="$1" json="$2"
+            echo "${label}_success=$(printf '%s' "$json" | jq -r '.success // false')"
+            errors="$(printf '%s' "$json" | jq -c '[.errors[]? | {code,message}]')"
+            echo "${label}_errors=${errors}"
+          }
 
-          zone_json="$(api GET 'https://api.cloudflare.com/client/v4/zones?name=agroai-pilot.com&status=active')"
+          verify_json="$(cf GET 'https://api.cloudflare.com/client/v4/user/tokens/verify')"
+          summarize token_verify "$verify_json"
+
+          zone_json="$(cf GET 'https://api.cloudflare.com/client/v4/zones?name=agroai-pilot.com&status=active')"
+          summarize zone_lookup "$zone_json"
           zone_id="$(printf '%s' "$zone_json" | jq -r '.result[0].id // empty')"
           if [ -z "$zone_id" ]; then
-            echo 'Active Cloudflare zone agroai-pilot.com not found'
+            echo 'zone_found=false'
             exit 1
           fi
-          echo "zone_found=true"
+          echo 'zone_found=true'
 
-          dns_json="$(api GET "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records?name=${EDGE_HOST}")"
-          dns_count="$(printf '%s' "$dns_json" | jq -r '.result | length')"
-          echo "dns_record_count=${dns_count}"
-          if [ "$dns_count" -lt 1 ]; then
-            echo "No DNS record exists for ${EDGE_HOST}"
-            exit 1
-          fi
-
-          dns_id="$(printf '%s' "$dns_json" | jq -r '.result[0].id')"
-          dns_proxied="$(printf '%s' "$dns_json" | jq -r '.result[0].proxied // false')"
-          dns_type="$(printf '%s' "$dns_json" | jq -r '.result[0].type')"
-          echo "dns_type=${dns_type}"
-          echo "dns_proxied_before=${dns_proxied}"
-          if [ "$dns_proxied" != 'true' ]; then
-            patch_result="$(api PATCH "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records/${dns_id}" '{"proxied":true}')"
-            printf '%s' "$patch_result" | jq -e '.success == true' >/dev/null
-            echo 'dns_proxy_enabled=true'
-          else
-            echo 'dns_proxy_enabled=already'
-          fi
-
-          routes_json="$(api GET "https://api.cloudflare.com/client/v4/zones/${zone_id}/workers/routes")"
+          routes_json="$(cf GET "https://api.cloudflare.com/client/v4/zones/${zone_id}/workers/routes")"
+          summarize route_list "$routes_json"
           route_id="$(printf '%s' "$routes_json" | jq -r --arg pattern "$EDGE_PATTERN" '.result[]? | select(.pattern == $pattern) | .id' | head -n1)"
           route_script="$(printf '%s' "$routes_json" | jq -r --arg pattern "$EDGE_PATTERN" '.result[]? | select(.pattern == $pattern) | .script // ""' | head -n1)"
           echo "route_exists=$([ -n "$route_id" ] && echo true || echo false)"
@@ -81,18 +69,42 @@ jobs:
 
           route_body="$(jq -nc --arg pattern "$EDGE_PATTERN" --arg script "$EDGE_SCRIPT" '{pattern:$pattern,script:$script}')"
           if [ -z "$route_id" ]; then
-            create_result="$(api POST "https://api.cloudflare.com/client/v4/zones/${zone_id}/workers/routes" "$route_body")"
-            printf '%s' "$create_result" | jq -e '.success == true' >/dev/null
+            route_write="$(cf POST "https://api.cloudflare.com/client/v4/zones/${zone_id}/workers/routes" "$route_body")"
+            summarize route_create "$route_write"
+            printf '%s' "$route_write" | jq -e '.success == true' >/dev/null
             echo 'route_created=true'
           elif [ "$route_script" != "$EDGE_SCRIPT" ]; then
-            update_result="$(api PUT "https://api.cloudflare.com/client/v4/zones/${zone_id}/workers/routes/${route_id}" "$route_body")"
-            printf '%s' "$update_result" | jq -e '.success == true' >/dev/null
+            route_write="$(cf PUT "https://api.cloudflare.com/client/v4/zones/${zone_id}/workers/routes/${route_id}" "$route_body")"
+            summarize route_update "$route_write"
+            printf '%s' "$route_write" | jq -e '.success == true' >/dev/null
             echo 'route_updated=true'
           else
             echo 'route_binding=already_correct'
           fi
 
-          verify_routes="$(api GET "https://api.cloudflare.com/client/v4/zones/${zone_id}/workers/routes")"
+          dns_json="$(cf GET "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records?name=${EDGE_HOST}")"
+          summarize dns_lookup "$dns_json"
+          dns_count="$(printf '%s' "$dns_json" | jq -r 'if (.result|type)=="array" then (.result|length) else 0 end')"
+          echo "dns_record_count=${dns_count}"
+          if [ "$dns_count" -gt 0 ]; then
+            dns_id="$(printf '%s' "$dns_json" | jq -r '.result[0].id')"
+            dns_proxied="$(printf '%s' "$dns_json" | jq -r '.result[0].proxied // false')"
+            dns_type="$(printf '%s' "$dns_json" | jq -r '.result[0].type')"
+            echo "dns_type=${dns_type}"
+            echo "dns_proxied_before=${dns_proxied}"
+            if [ "$dns_proxied" != 'true' ]; then
+              dns_write="$(cf PATCH "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records/${dns_id}" '{"proxied":true}')"
+              summarize dns_proxy_update "$dns_write"
+              printf '%s' "$dns_write" | jq -e '.success == true' >/dev/null
+              echo 'dns_proxy_enabled=true'
+            else
+              echo 'dns_proxy_enabled=already'
+            fi
+          else
+            echo 'dns_record_visible=false'
+          fi
+
+          verify_routes="$(cf GET "https://api.cloudflare.com/client/v4/zones/${zone_id}/workers/routes")"
           printf '%s' "$verify_routes" | jq -e --arg pattern "$EDGE_PATTERN" --arg script "$EDGE_SCRIPT" \
             '.result[]? | select(.pattern == $pattern and .script == $script)' >/dev/null
           echo 'route_binding_verified=true'
