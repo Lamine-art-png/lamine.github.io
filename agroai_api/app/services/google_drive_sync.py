@@ -155,7 +155,8 @@ async def sync_google_drive(db: Session, *, connection: ConnectorConnection, acc
     cursor.status = "ready"
     cursor.last_success_at = datetime.utcnow()
     cursor.updated_at = datetime.utcnow()
-    db.commit()
+    # Deliberately do not commit here. The provider runner commits these staged
+    # records and cursor changes only through its worker-owned fenced completion.
     return {
         "provider": "google_drive",
         "seen": seen,
