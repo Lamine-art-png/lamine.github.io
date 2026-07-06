@@ -14,10 +14,10 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect failed production release output
+      - name: Show final production deploy error lines
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh run view 28776717405 --repo "${GITHUB_REPOSITORY}" --log-failed | tail -n 90
+          gh run view 28776717405 --repo "${GITHUB_REPOSITORY}" --log-failed | tail -n 25
