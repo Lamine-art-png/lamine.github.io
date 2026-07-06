@@ -280,15 +280,15 @@ test("failed language generation persists no fake answer and retry does not dupl
   await textarea.fill(prompt);
   await textarea.press("Enter");
 
+  await expect.poll(() => counters.intelligenceRequest).toBe(1);
   await expect(page.getByRole("button", { name: "Retry" })).toBeVisible();
-  expect(counters.intelligenceRequest).toBe(1);
   expect(counters.messagePost).toBe(0);
   await expect(page.getByText(prompt, { exact: true })).toHaveCount(1);
   await expect(page.getByText("Validated retry response without duplicating the user turn.", { exact: true })).toHaveCount(0);
 
   await page.getByRole("button", { name: "Retry" }).click();
+  await expect.poll(() => counters.intelligenceRequest).toBe(2);
+  await expect.poll(() => counters.messagePost).toBe(1);
   await expect(page.getByText("Validated retry response without duplicating the user turn.", { exact: true })).toBeVisible();
-  expect(counters.intelligenceRequest).toBe(2);
-  expect(counters.messagePost).toBe(1);
   await expect(page.getByText(prompt, { exact: true })).toHaveCount(1);
 });
