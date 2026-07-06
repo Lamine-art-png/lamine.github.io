@@ -43,7 +43,7 @@ jobs:
             sleep 1
           done
           set +e
-          npx playwright test tests/browser/locale-migration.spec.mjs tests/browser/locale-preference-sync.spec.mjs --browser=chromium --reporter=line 2>&1 | tee locale-playwright.log
+          npx playwright test tests/browser/locale-migration.spec.mjs tests/browser/locale-preference-sync.spec.mjs --config=playwright.contract.config.ts --browser=chromium --reporter=line 2>&1 | tee locale-playwright.log
           status=${PIPESTATUS[0]}
           exit $status
       - name: Upload locale browser evidence
