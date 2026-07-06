@@ -25,6 +25,15 @@ def _ready_settings():
     return settings
 
 
+def _ready_r2_settings():
+    settings = _ready_settings()
+    settings.__dict__["CONNECTOR_OBJECT_STORAGE_BACKEND"] = "r2"
+    settings.__dict__["CONNECTOR_OBJECT_ENDPOINT_URL"] = "https://account-id.r2.cloudflarestorage.com"
+    settings.__dict__["CLOUDFLARE_R2_ACCESS_KEY_ID"] = "r2-access-key"
+    settings.__dict__["CLOUDFLARE_R2_SECRET_ACCESS_KEY"] = "r2-secret-key"
+    return settings
+
+
 def test_default_settings_fail_closed_for_large_scale():
     report = evaluate_production_readiness(Settings())
     assert report.ready is False
@@ -42,6 +51,24 @@ def test_externalized_reference_configuration_can_be_ready():
     report = evaluate_production_readiness(_ready_settings())
     assert report.ready is True, report.to_dict()
     assert not report.blockers
+
+
+def test_r2_reference_configuration_can_be_ready():
+    report = evaluate_production_readiness(_ready_r2_settings())
+    assert report.ready is True, report.to_dict()
+    assert not report.blockers
+
+
+def test_r2_requires_https_endpoint_and_paired_credentials():
+    settings = _ready_r2_settings()
+    settings.__dict__["CONNECTOR_OBJECT_ENDPOINT_URL"] = "http://account-id.r2.cloudflarestorage.com"
+    settings.__dict__["CLOUDFLARE_R2_SECRET_ACCESS_KEY"] = ""
+
+    report = evaluate_production_readiness(settings)
+
+    codes = _codes(report)
+    assert "connectors.r2_endpoint_not_https" in codes
+    assert "connectors.r2_credentials_missing" in codes
 
 
 def test_missing_external_queue_is_always_a_scale_blocker():
