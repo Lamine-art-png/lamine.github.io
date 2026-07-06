@@ -75,7 +75,8 @@ jobs:
             tests/unit/test_ingestion_job_leases.py \
             tests/unit/test_object_storage.py \
             tests/unit/test_runtime_origin_and_route_contract.py \
-            tests/unit/test_production_readiness.py
+            tests/unit/test_production_readiness.py \
+            tests/unit/test_i18n_catalog_contract.py
 
   deploy-edge:
     name: Deploy API edge and queues
@@ -223,18 +224,43 @@ jobs:
       - name: Deploy portal to Pages
         run: npx --yes wrangler@4.107.0 pages deploy figma-enterprise-v4/dist --project-name "${PORTAL_PROJECT}" --branch main --commit-hash "${GITHUB_SHA}"
 
-      - name: Smoke production portal
+      - name: Smoke production portal and global language bundle
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 20); do
-            if curl --fail --silent --show-error --location --max-time 20 "${PORTAL_URL}" >/dev/null; then
-              exit 0
+          mkdir -p portal-smoke/assets
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error --location --max-time 20 "${PORTAL_URL}/" -o portal-smoke/index.html; then
+              title="$(sed -n 's:.*<title>\(.*\)</title>.*:\1:p' portal-smoke/index.html | head -1)"
+              if [ "$title" = "AGRO-AI Enterprise Portal" ]; then
+                ready=1
+                break
+              fi
             fi
-            sleep 3
+            sleep 5
           done
-          echo "Portal smoke check failed"
-          exit 1
+          test "$ready" -eq 1
+          grep -oE '/assets/[A-Za-z0-9._/-]+\.js' portal-smoke/index.html | sed 's#^/##' > portal-smoke/queue.txt
+          : > portal-smoke/seen.txt
+          for pass in 1 2 3 4; do
+            sort -u portal-smoke/queue.txt -o portal-smoke/queue.txt
+            while IFS= read -r asset; do
+              [ -n "$asset" ] || continue
+              grep -Fx "$asset" portal-smoke/seen.txt >/dev/null 2>&1 && continue
+              echo "$asset" >> portal-smoke/seen.txt
+              target="portal-smoke/assets/$(basename "$asset")"
+              curl --fail --silent --show-error --max-time 20 "${PORTAL_URL}/${asset}" -o "$target"
+              grep -oE 'assets/[A-Za-z0-9._/-]+\.js' "$target" >> portal-smoke/queue.txt || true
+              grep -oE '\./[A-Za-z0-9._/-]+\.js' "$target" | sed 's#^\./#assets/#' >> portal-smoke/queue.txt || true
+            done < portal-smoke/queue.txt
+          done
+          cat portal-smoke/assets/*.js > portal-smoke/all-js.txt
+          grep -F 'Kiswahili' portal-smoke/all-js.txt >/dev/null
+          grep -F 'Українська' portal-smoke/all-js.txt >/dev/null
+          grep -F '日本語' portal-smoke/all-js.txt >/dev/null
+          grep -F 'agroai_ui_catalog_v3:' portal-smoke/all-js.txt >/dev/null
+          printf 'portal_global_language_bundle=ok\n'
 
   release-evidence:
     name: Record release evidence
