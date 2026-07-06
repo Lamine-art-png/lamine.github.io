@@ -21,13 +21,14 @@ export default defineConfig({
     figmaAssetResolver(),
     // The React and Tailwind plugins are both required for Make, even if
     // Tailwind is not being actively used – do not remove them
-    react(),
+    react({ jsxImportSource: "@agroai/i18n-jsx" }),
     tailwindcss(),
   ],
   resolve: {
     alias: {
       // Alias @ to the src directory
       '@': path.resolve(__dirname, './src'),
+      '@agroai/i18n-jsx': path.resolve(__dirname, './src/app/i18n-jsx'),
     },
   },
 
