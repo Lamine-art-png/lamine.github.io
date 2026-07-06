@@ -1,0 +1,59 @@
+name: Production Workflow Observer
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  observe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Wait for production release run and publish status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          OPS_ISSUE: "124"
+        run: |
+          set -euo pipefail
+          run_id=""
+          for attempt in $(seq 1 30); do
+            run_id="$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow deploy.yml --commit "${GITHUB_SHA}" --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
+            if [ -n "$run_id" ]; then break; fi
+            sleep 5
+          done
+
+          if [ -z "$run_id" ]; then
+            printf '## Production workflow observer\n\n- SHA: `%s`\n- result: no Cloudflare Production Release run found for this SHA\n' "$GITHUB_SHA" > status.md
+            gh issue comment "$OPS_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file status.md
+            exit 0
+          fi
+
+          for attempt in $(seq 1 150); do
+            status="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')"
+            if [ "$status" = "completed" ]; then break; fi
+            sleep 10
+          done
+
+          gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json databaseId,status,conclusion,url,jobs > run.json
+          {
+            echo "## Production workflow observer"
+            echo
+            echo "- SHA: \`${GITHUB_SHA}\`"
+            echo "- run ID: \`$(jq -r '.databaseId' run.json)\`"
+            echo "- status: \`$(jq -r '.status' run.json)\`"
+            echo "- conclusion: \`$(jq -r '.conclusion // "")\`"
+            echo
+            echo '| Job | Status | Conclusion | First failed step |'
+            echo '|---|---|---|---|'
+            jq -r '.jobs[] | [.name,.status,(.conclusion // ""),([.steps[]? | select(.conclusion == "failure") | .name][0] // "")] | @tsv' run.json | while IFS=$'\t' read -r name jstatus conclusion failed; do
+              echo "| ${name} | ${jstatus} | ${conclusion} | ${failed} |"
+            done
+          } > status.md
+
+          gh issue comment "$OPS_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file status.md
