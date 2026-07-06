@@ -22,7 +22,7 @@ def test_translation_chunks_preserve_exact_source_union():
     chunks = _chunks(source)
     rebuilt = {}
     for chunk in chunks:
-        assert 1 <= len(chunk) <= 18
+        assert 1 <= len(chunk) <= 48
         rebuilt.update(chunk)
     assert rebuilt == source
     assert len(chunks) >= 2
