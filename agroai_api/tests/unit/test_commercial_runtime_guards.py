@@ -1,9 +1,10 @@
 from inspect import getsource
 from types import SimpleNamespace
 
-from app.api.v1 import billing
+from app.api.v1 import billing, brain
 from app.main import app
 from app.services import commercial_control
+from app.services.brain_commercial_runtime import ContextualCommercialLiveIntelligence, build_commercial_intelligence_context
 from app.services.commercial_billing_lifecycle import apply_authoritative_billing_event
 from app.services.quota import reserve_quota
 
@@ -36,6 +37,11 @@ def _org(**overrides):
 
 def test_billing_module_uses_authoritative_subscription_lifecycle():
     assert billing._apply_billing_event is apply_authoritative_billing_event
+
+
+def test_brain_module_uses_commercial_runtime_binding():
+    assert brain.LiveIntelligence is ContextualCommercialLiveIntelligence
+    assert brain.build_intelligence_context is build_commercial_intelligence_context
 
 
 def test_checkout_completion_does_not_activate_or_upgrade_subscription():
