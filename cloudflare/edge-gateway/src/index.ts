@@ -10,10 +10,12 @@ export interface Env {
   CONNECTOR_TASKS: Queue<ConnectorTaskEnvelope>;
 }
 
+export type ConnectorTaskType = "connector_ingest_object" | "connector_provider_sync";
+
 export interface ConnectorTaskEnvelope {
   job_id: string;
   tenant_id: string;
-  task_type: string;
+  task_type: ConnectorTaskType;
   enqueued_at?: string;
   attempt?: number;
 }
@@ -25,6 +27,8 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 const PAGES_ORIGIN = /^https:\/\/(?:[a-z0-9-]+\.)?(?:agroai-portal|lamine-github-io|agroai-command-center-v2-preview)\.pages\.dev$/i;
 const TRANSIENT_UPSTREAM_STATUS = new Set([408, 429, 502, 503, 504]);
+const ALLOWED_TASK_TYPES = new Set<ConnectorTaskType>(["connector_ingest_object", "connector_provider_sync"]);
+const SAFE_REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const EDGE_VERSION = "cloudflare-edge-v1";
 const MAX_TASK_FIELD_LENGTH = 256;
 
@@ -62,7 +66,7 @@ export function validTask(value: unknown): value is ConnectorTaskEnvelope {
     const item = task[field];
     if (typeof item !== "string" || !item.trim() || item.length > MAX_TASK_FIELD_LENGTH) return false;
   }
-  return true;
+  return ALLOWED_TASK_TYPES.has((task.task_type as string).trim() as ConnectorTaskType);
 }
 
 function bearerToken(request: Request): string {
@@ -77,8 +81,12 @@ function json(payload: unknown, status = 200, headers?: HeadersInit): Response {
   });
 }
 
-function requestId(request: Request): string {
-  return request.headers.get("cf-ray") || request.headers.get("x-request-id") || crypto.randomUUID();
+export function requestId(request: Request): string {
+  for (const candidate of [request.headers.get("cf-ray"), request.headers.get("x-request-id")]) {
+    const value = (candidate || "").trim();
+    if (SAFE_REQUEST_ID.test(value)) return value;
+  }
+  return crypto.randomUUID();
 }
 
 function securityHeaders(headers: Headers, id: string): void {
@@ -169,7 +177,10 @@ async function proxyToUpstream(request: Request, env: Env): Promise<Response> {
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
       const response = await fetchWithTimeout(upstreamRequest(request, upstream, id), timeoutMs);
-      if (attempt + 1 < attempts && TRANSIENT_UPSTREAM_STATUS.has(response.status)) continue;
+      if (attempt + 1 < attempts && TRANSIENT_UPSTREAM_STATUS.has(response.status)) {
+        await response.body?.cancel();
+        continue;
+      }
       return mergeCors(response, origin, env, id);
     } catch (error) {
       lastError = error;
@@ -200,7 +211,7 @@ async function enqueueTask(request: Request, env: Env): Promise<Response> {
   const task: ConnectorTaskEnvelope = {
     job_id: payload.job_id.trim(),
     tenant_id: payload.tenant_id.trim(),
-    task_type: payload.task_type.trim(),
+    task_type: payload.task_type.trim() as ConnectorTaskType,
     enqueued_at: new Date().toISOString(),
     attempt: 0,
   };
