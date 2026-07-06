@@ -2,6 +2,7 @@ from datetime import datetime
 from types import SimpleNamespace
 
 from app.services.commercial_control import BASE_ENTITLEMENTS, canonical_plan
+from app.services.entitlements import serialize_entitlements
 from app.services.intelligence_policy import PROFILE_BASE, TASK_ADJUSTMENTS
 from app.services.product_plans import ALIASES, plan_by_id
 from app.services.quota import current_period
@@ -58,6 +59,38 @@ def test_higher_plans_expand_scope_without_gating_truth_or_security():
     assert BASE_ENTITLEMENTS["team"]["intelligence.shared_memory"] == "enabled"
     assert BASE_ENTITLEMENTS["network"]["intelligence.cross_workspace"] == "enabled"
     assert BASE_ENTITLEMENTS["enterprise"]["intelligence.portfolio_synthesis"] == "enabled"
+
+
+def test_serialized_entitlements_expose_customer_safe_capabilities_and_quotas():
+    free_org = SimpleNamespace(
+        plan="free",
+        subscription_status="inactive",
+        plan_version="2026-07",
+        customer_class="individual_operator",
+        organization_type="grower",
+    )
+    payload = serialize_entitlements(free_org)
+    assert payload["plan"] == "free"
+    assert payload["customer_class"] == "individual_operator"
+    assert payload["intelligence_profile"] == "essential"
+    assert payload["capabilities"]["intelligence.ask"] == "enabled"
+    assert payload["capabilities"]["reports.pdf_export"] == "locked"
+    assert payload["quotas"]["workspace"] == 1
+
+
+def test_serialized_enterprise_plan_stays_enterprise_and_contract_configured():
+    org = SimpleNamespace(
+        plan="enterprise",
+        subscription_status="contracted",
+        plan_version="2026-07",
+        customer_class="institutional_enterprise",
+        organization_type="water_agency",
+    )
+    payload = serialize_entitlements(org)
+    assert payload["plan"] == "enterprise"
+    assert payload["plan_name"] == "Enterprise"
+    assert payload["intelligence_profile"] == "institutional"
+    assert payload["quotas"]["workspace"] is None
 
 
 def test_quota_period_prefers_active_subscription_window():
