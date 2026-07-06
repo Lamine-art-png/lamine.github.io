@@ -34,7 +34,6 @@ export function MainLayout() {
   const canInviteTeam = capabilityEnabled(entitlements, "team.invite", Boolean(entitlements.can_invite_team));
   const canAccessAdminRequests = capabilityEnabled(entitlements, "admin.requests", Boolean(entitlements.can_access_admin_requests));
   const canGeneratePdf = capabilityEnabled(entitlements, "reports.pdf_export", Boolean(entitlements.can_generate_pdf));
-  const canUseConnectors = capabilityEnabled(entitlements, "connectors.live", Boolean(entitlements.can_use_connectors));
   const currentPlanLabel = PLAN_LABELS[String(currentOrganization?.plan || "free").toLowerCase()] || "Free";
 
   const operateItems: NavItem[] = [
@@ -44,7 +43,7 @@ export function MainLayout() {
     { name: t("decisions"), path: "/operations" },
     { name: t("evidence"), path: "/evidence" },
     { name: t("reports"), path: "/reports", locked: !canGeneratePdf, upgradeTo: "professional" },
-    { name: t("connectors"), path: "/integrations", locked: !canUseConnectors, upgradeTo: "professional" },
+    { name: t("connectors"), path: "/integrations" },
   ];
 
   const intelligenceItems: NavItem[] = [
