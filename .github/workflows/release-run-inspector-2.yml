@@ -14,14 +14,11 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Inspect latest production workflow and failed deploy tail
+      - name: Extract Cloudflare deploy failure
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh run list --repo "${GITHUB_REPOSITORY}" --workflow deploy.yml --limit 4 \
-            --json databaseId,headSha,status,conclusion,event,createdAt,updatedAt,url
-          echo '--- failed deploy log tail ---'
           gh api "repos/${GITHUB_REPOSITORY}/actions/jobs/85322662374/logs" > deploy.log
-          tail -n 140 deploy.log
+          grep -i -E -C 4 'error|failed|custom.domain|route|wrangler|10000|authentication|conflict|already exists' deploy.log | tail -n 180 || true
