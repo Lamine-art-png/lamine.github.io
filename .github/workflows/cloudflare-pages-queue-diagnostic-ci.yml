@@ -1,0 +1,49 @@
+name: Cloudflare Pages Queue Diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/cloudflare-pages-queue-diagnostic-ci.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Inspect queued preview deployments
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p cf-queue
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/agroai-portal" \
+            > cf-queue/project-raw.json
+          jq -e '.success == true' cf-queue/project-raw.json >/dev/null
+          jq '.result | {name, production_branch, build_config, source_type:.source.type, source_config:.source.config}' cf-queue/project-raw.json > cf-queue/project.json
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/agroai-portal/deployments?per_page=100" \
+            > cf-queue/deployments-raw.json
+          jq -e '.success == true' cf-queue/deployments-raw.json >/dev/null
+          jq '[.result[] | select(.environment == "preview" and .latest_stage.status == "active") | {id,created_on,stage:.latest_stage.name,branch:.deployment_trigger.metadata.branch,commit_hash:.deployment_trigger.metadata.commit_hash}]' cf-queue/deployments-raw.json > cf-queue/active-preview-queue.json
+          jq '{project:.name, production_branch, build_config, source_type, source_config}' cf-queue/project.json
+          jq '{active_preview_count:length, sample:.[0:10]}' cf-queue/active-preview-queue.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cloudflare-pages-queue-diagnostic
+          path: cf-queue
+          retention-days: 2
