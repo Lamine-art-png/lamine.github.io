@@ -55,10 +55,17 @@ def _keyring() -> tuple[str, dict[str, bytes]]:
     # The production runtime already requires strong non-default SECRET_KEY and
     # WEBHOOK_SECRET values. When no explicit vault key is supplied, derive a
     # stable, domain-separated AES-256 key from those persistent root secrets.
-    # Keep the derived version in every ring so credentials written before a
-    # later explicit-key rollout remain decryptable during key rotation.
-    ring.setdefault(DERIVED_CONNECTOR_KEY_VERSION, derived_connector_vault_key())
+    # If derivation is available, retain that version in explicit keyrings too so
+    # credentials written before a later explicit-key rollout remain readable.
+    try:
+        derived = derived_connector_vault_key()
+    except RuntimeError:
+        derived = None
+    if derived is not None:
+        ring.setdefault(DERIVED_CONNECTOR_KEY_VERSION, derived)
     if not raw_ring and not single:
+        if derived is None:
+            raise RuntimeError("active connector vault key is not configured")
         active = DERIVED_CONNECTOR_KEY_VERSION
 
     if active not in ring:
