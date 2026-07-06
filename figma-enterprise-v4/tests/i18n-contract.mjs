@@ -50,6 +50,9 @@ assert(/export\s+function\s+useLocale/.test(hook), "hooks/useLocale.ts must be t
 assert(hook.includes("useSyncExternalStore"), "locale hook must subscribe to the shared runtime revision");
 assert(hook.includes("activateLocale"), "locale switching must expose one authoritative activation path");
 assert(hook.includes("hasCoreLocaleCatalog"), "bundled core copy must remain usable before full hydration");
+assert(hook.includes('ensureLocaleCatalog(selectedLocale, "core")'), "non-English locales must hydrate the small core catalog first");
+assert(hook.includes('ensureLocaleCatalog(selectedLocale, "full")'), "full portal literal hydration must follow core hydration");
+assert(hook.indexOf('ensureLocaleCatalog(selectedLocale, "core")') < hook.indexOf('ensureLocaleCatalog(selectedLocale, "full")'), "core hydration must occur before full hydration");
 assert(hook.includes("notifyLocaleRuntime"), "locale activation must notify all mounted consumers");
 assert(dynamicCatalog.includes('"/v1/i18n/catalog"'), "dynamic UI catalogs must use the backend localization contract");
 assert(dynamicCatalog.includes("exactKeyParity"), "dynamic catalogs must fail closed on key drift");
