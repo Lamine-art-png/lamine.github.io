@@ -12,6 +12,7 @@ from app.api.v1.connectors import CATALOG, oauth_url
 from app.core.security import require_current_tenant_id
 from app.db.base import Base, get_db
 from app.main import app
+from app.models.saas import Organization
 from app.services.oauth_state import sign_oauth_state, verify_oauth_state
 
 
@@ -19,6 +20,17 @@ def make_client():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
+    with TestingSessionLocal() as db:
+        db.add(
+            Organization(
+                id="org-test",
+                name="Connector Runtime Test Org",
+                slug="connector-runtime-test-org",
+                plan="professional",
+                subscription_status="active",
+            )
+        )
+        db.commit()
 
     def override_db():
         db = TestingSessionLocal()
