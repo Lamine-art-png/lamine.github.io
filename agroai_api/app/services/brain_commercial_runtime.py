@@ -40,8 +40,6 @@ class ContextualCommercialLiveIntelligence:
     ):
         context = _RUNTIME_CONTEXT.get()
         if not context:
-            # Health/smoke callers that do not build Brain context retain the hardened
-            # base runtime instead of receiving a fake policy or fabricated tenant.
             return await LiveIntelligence().run(task, question, messages, preferred_language)
 
         try:
@@ -61,10 +59,8 @@ class ContextualCommercialLiveIntelligence:
 def install_brain_commercial_runtime() -> None:
     """Install policy-aware Brain execution and deterministic OAuth callback resolution."""
     from app.api.v1 import brain as brain_api
-    from app.services.oauth_callback_resolution import install_exact_oauth_callback_resolution
+    from app.services.oauth_callback_resolution_v2 import install_exact_oauth_callback_resolution
 
     brain_api.build_intelligence_context = build_commercial_intelligence_context
     brain_api.LiveIntelligence = ContextualCommercialLiveIntelligence
-    # connector_launch is loaded by the installer and patched before the ASGI app
-    # starts serving requests. Existing route function identities remain unchanged.
     install_exact_oauth_callback_resolution()
