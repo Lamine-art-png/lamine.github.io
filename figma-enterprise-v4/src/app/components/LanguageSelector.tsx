@@ -25,7 +25,7 @@ export function LanguageSelector({ compact = false, dark = false }: { compact?: 
       {!compact ? (
         <span className="inline-flex items-center gap-1 text-[11px] font-medium">
           <Globe2 className="h-3.5 w-3.5" /> {t("language")}
-          {catalogLoading ? <span aria-live="polite"> · Translating…</span> : null}
+          {catalogLoading ? <span aria-hidden="true"> · …</span> : null}
         </span>
       ) : null}
       <span className="relative inline-flex w-full items-center">
@@ -35,8 +35,9 @@ export function LanguageSelector({ compact = false, dark = false }: { compact?: 
           onChange={(event) => changeLanguage(event.target.value)}
           className={`h-9 w-full appearance-none rounded-md py-1 pr-8 text-[12px] outline-none ${compact ? "pl-8" : "pl-3"}`}
           style={{ background: selectBg, color: selectColor, border: `1px solid ${catalogError ? "#B42318" : border}` }}
-          title={catalogError || t("language")}
+          title={t("language")}
           aria-label={t("language")}
+          aria-busy={catalogLoading}
         >
           {GLOBAL_UI_LOCALES.map((item) => (
             <option key={item.code} value={item.code} dir={item.dir}>
