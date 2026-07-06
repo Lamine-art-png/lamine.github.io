@@ -122,7 +122,7 @@ async def translate_ui_catalog(payload: CatalogRequest, _ctx: AuthContext = Depe
         {"role": "system", "content": "You are AGRO-AI's deterministic enterprise UI localization engine. " + f"Translate every JSON string value into {language} ({canonical}). " + "Return one JSON object only. Preserve every key exactly. Preserve placeholders such as {recipient}, {title}, and {level} exactly. Preserve AGRO-AI, product names, URLs, units, numbers, and Markdown syntax. Do not add explanations."},
         {"role": "user", "content": source_json},
     ]
-    result, selection = await ModelRouter().run(task="chat", messages=messages, temperature=0.0, response_format={"type": "json_object"}, max_tokens=8_000, timeout_seconds=45, max_model_attempts=3)
+    result, selection = await ModelRouter().run(task="ui_translation", messages=messages, temperature=0.0, response_format={"type": "json_object"}, max_tokens=8_000, timeout_seconds=45, max_model_attempts=3)
     if result.status != "ok" or not result.content.strip():
         raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"code": "ui_catalog_generation_unavailable", "locale": canonical, "provider": result.provider, "model": result.model})
     try:
