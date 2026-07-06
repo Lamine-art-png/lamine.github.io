@@ -1,4 +1,4 @@
-"""Tenant-safe intelligence context builder for model-powered AGRO-AI routes."""
+"""Tenant-safe, commercially scoped intelligence context builder for AGRO-AI routes."""
 from __future__ import annotations
 
 from typing import Any
@@ -6,9 +6,10 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.api.deps import require_workspace_access
-from app.models.operational_records import DataSource, EvidenceRecord
-from app.models.saas import User, Workspace
+from app.models.saas import Organization, User, Workspace
 from app.schemas.ai import EvidenceContext, ToolCitation
+from app.services.commercial_control import require_feature
+from app.services.intelligence_policy import PROFILE_BASE
 from app.services.operator_cockpit import build_context, decision_workbench, exceptions, field_intelligence, readiness_summary, report_factory
 
 
@@ -28,9 +29,9 @@ def _redact(value: Any) -> Any:
     return value
 
 
-def _tool_citations(ctx: Any, workspace_id: str | None) -> list[ToolCitation]:
+def _tool_citations(ctx: Any, workspace_id: str | None, max_items: int) -> list[ToolCitation]:
     citations: list[ToolCitation] = []
-    for record in ctx.evidence[:60]:
+    for record in ctx.evidence[:max_items]:
         citations.append(
             ToolCitation(
                 source_type=record.evidence_type,
@@ -54,6 +55,14 @@ def build_intelligence_context(
     field_id: str | None = None,
     audience: str | None = None,
 ) -> dict[str, Any]:
+    org = db.query(Organization).filter(Organization.id == tenant_id).first()
+    if org is None:
+        raise ValueError("Organization not found")
+    effective = require_feature(db, org, "intelligence.ask")
+    commercial_profile = str(effective.value("intelligence.profile", "essential"))
+    profile_policy = PROFILE_BASE.get(commercial_profile, PROFILE_BASE["essential"])
+    source_limit = max(1, int(profile_policy["max_sources"]))
+
     workspace: Workspace | None = None
     if workspace_id and user is not None:
         workspace, _membership = require_workspace_access(workspace_id, user, db)
@@ -90,7 +99,7 @@ def build_intelligence_context(
             "status": row.status,
             "metadata_json": _redact(row.metadata_json or {}),
         }
-        for row in cockpit.sources[:30]
+        for row in cockpit.sources[:source_limit]
     ]
     evidence_rows = [
         {
@@ -103,10 +112,10 @@ def build_intelligence_context(
             "occurred_at": row.occurred_at.isoformat() if row.occurred_at else None,
             "metadata_json": _redact(row.metadata_json or {}),
         }
-        for row in cockpit.evidence[:60]
+        for row in cockpit.evidence[:source_limit]
     ]
 
-    citations = _tool_citations(cockpit, workspace.id if workspace else workspace_id)
+    citations = _tool_citations(cockpit, workspace.id if workspace else workspace_id, source_limit)
     evidence_context = EvidenceContext(
         organization_id=tenant_id,
         workspace_id=workspace.id if workspace else workspace_id,
@@ -150,4 +159,10 @@ def build_intelligence_context(
         "evidence_summary": evidence_summary,
         "evidence_context": evidence_context,
         "citations": citations,
+        "commercial_intelligence": {
+            "profile": commercial_profile,
+            "max_sources": source_limit,
+            "cross_workspace_scope": bool(profile_policy["cross_workspace_scope"]),
+            "portfolio_scope": bool(profile_policy["portfolio_scope"]),
+        },
     }
