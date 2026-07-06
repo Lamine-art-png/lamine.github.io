@@ -30,6 +30,13 @@ def _safe_component(value: str, *, fallback: str) -> str:
     return cleaned[:120] or fallback
 
 
+def _scope_component(value: str, *, fallback: str) -> str:
+    raw = (value or "").strip() or fallback
+    readable = _safe_component(raw, fallback=fallback)[:48]
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+    return f"{readable}-{digest}"
+
+
 def _s3_uri(bucket: str, key: str) -> str:
     return f"s3://{bucket}/{key}"
 
@@ -84,9 +91,9 @@ class S3ObjectStore:
         return "/".join([
             self.prefix,
             "tenants",
-            _safe_component(tenant_id, fallback="tenant"),
+            _scope_component(tenant_id, fallback="tenant"),
             "connectors",
-            _safe_component(connection_id, fallback="connection"),
+            _scope_component(connection_id, fallback="connection"),
         ]) + "/"
 
     def _key(self, *, tenant_id: str, connection_id: str, filename: str) -> str:
@@ -144,12 +151,14 @@ class S3ObjectStore:
         if _file_sha256(source) != expected_sha256:
             raise RuntimeError("spooled connector object checksum changed before durable upload")
 
+        tenant_scope = _scope_component(tenant_id, fallback="tenant")
+        connection_scope = _scope_component(connection_id, fallback="connection")
         key = self._key(tenant_id=tenant_id, connection_id=connection_id, filename=filename)
         extra: dict[str, Any] = {
             "Metadata": {
                 "sha256": expected_sha256,
-                "tenant-id": _safe_component(tenant_id, fallback="tenant"),
-                "connection-id": _safe_component(connection_id, fallback="connection"),
+                "tenant-scope": tenant_scope,
+                "connection-scope": connection_scope,
             }
         }
         if content_type:
@@ -162,8 +171,8 @@ class S3ObjectStore:
         verified = (
             size == expected_size
             and metadata.get("sha256") == expected_sha256
-            and metadata.get("tenant-id") == _safe_component(tenant_id, fallback="tenant")
-            and metadata.get("connection-id") == _safe_component(connection_id, fallback="connection")
+            and metadata.get("tenant-scope") == tenant_scope
+            and metadata.get("connection-scope") == connection_scope
         )
         if not verified:
             try:
@@ -201,10 +210,14 @@ class S3ObjectStore:
             raise RuntimeError("connector object checksum metadata is unavailable")
         if hashlib.sha256(data).hexdigest() != expected:
             raise RuntimeError("connector object checksum mismatch")
-        if tenant_id is not None and metadata.get("tenant-id") not in {None, _safe_component(tenant_id, fallback="tenant")}:
-            raise RuntimeError("connector object tenant metadata mismatch")
-        if connection_id is not None and metadata.get("connection-id") not in {None, _safe_component(connection_id, fallback="connection")}:
-            raise RuntimeError("connector object connection metadata mismatch")
+        if tenant_id is not None:
+            expected_tenant_scope = _scope_component(tenant_id, fallback="tenant")
+            if metadata.get("tenant-scope") != expected_tenant_scope:
+                raise RuntimeError("connector object tenant metadata mismatch")
+        if connection_id is not None:
+            expected_connection_scope = _scope_component(connection_id, fallback="connection")
+            if metadata.get("connection-scope") != expected_connection_scope:
+                raise RuntimeError("connector object connection metadata mismatch")
         return data
 
     def delete(
