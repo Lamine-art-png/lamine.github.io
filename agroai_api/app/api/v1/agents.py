@@ -1,6 +1,7 @@
 """Agent workflow API routes."""
 from __future__ import annotations
 
+import uuid
 from typing import Any
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
@@ -11,6 +12,8 @@ from app.agents.orchestrator import AgentOrchestrator
 from app.api.deps import AuthContext, get_auth_context
 from app.db.base import get_db
 from app.services.api_key_service import APIKeyService
+from app.services.commercial_control import require_feature
+from app.services.quota import commit_reservation, release_reservation, reserve_quota
 
 router = APIRouter(prefix="/agents", tags=["agents"])
 
@@ -111,12 +114,56 @@ def user_action_plan(payload: dict[str, Any], ctx: AuthContext = Depends(get_aut
     """Plan concrete work from a user request inside the authenticated portal."""
     from app.api.v1.agentic_actions import ActionPlanRequest, post_action_plan
 
+    if not ctx.organization:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required")
+    require_feature(db, ctx.organization, "agents.plan", recommended_plan="professional", allow_preview=True)
     return post_action_plan(ActionPlanRequest(**payload), ctx=ctx, db=db)
 
 
 @router.post("/actions/execute")
 def user_action_execute(payload: dict[str, Any], ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict[str, Any]:
-    """Execute safe work or return an approval-required response."""
-    from app.api.v1.agentic_actions import ActionExecuteRequest, post_action_execute
+    """Execute commercially authorized work while preserving operational safety gates."""
+    from app.api.v1.agentic_actions import APPROVAL_REQUIRED, ActionExecuteRequest, post_action_execute
 
-    return post_action_execute(ActionExecuteRequest(**payload), ctx=ctx, db=db)
+    if not ctx.organization:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required")
+
+    request = ActionExecuteRequest(**payload)
+    approval_gated = request.action_type in APPROVAL_REQUIRED
+    require_feature(
+        db,
+        ctx.organization,
+        "agents.execute_approval_gated" if approval_gated else "agents.execute_safe",
+        recommended_plan="team" if approval_gated else "professional",
+    )
+
+    # Planning an approval-required action does not consume execution capacity.
+    # Capacity is reserved only when safe work executes or explicit approval is present.
+    if approval_gated and not request.approval_confirmed:
+        return post_action_execute(request, ctx=ctx, db=db)
+
+    reservation = reserve_quota(
+        db,
+        ctx.organization,
+        "agent_run",
+        workspace_id=request.workspace_id,
+        user_id=ctx.user.id,
+        request_id=str((request.payload or {}).get("request_id") or uuid.uuid4()),
+        metadata={"action_type": request.action_type, "approval_gated": approval_gated},
+    )
+    try:
+        result = post_action_execute(request, ctx=ctx, db=db)
+        if result.get("status") in {"executed", "approval_recorded"}:
+            commit_reservation(
+                db,
+                reservation,
+                event_type="agent_run",
+                metadata={"result_status": result.get("status"), "action_type": request.action_type},
+            )
+        else:
+            release_reservation(db, reservation, reason=f"result:{result.get('status') or 'unknown'}")
+        db.commit()
+        return result
+    except Exception:
+        db.rollback()
+        raise
