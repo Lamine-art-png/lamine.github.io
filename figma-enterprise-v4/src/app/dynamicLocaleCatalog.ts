@@ -2,7 +2,9 @@ import { apiClient } from "./api/client";
 import { normalizeLocale, TRANSLATIONS } from "./i18n";
 
 const CACHE_PREFIX = "agroai_ui_catalog_v3:";
+const RETRY_COOLDOWN_MS = 30_000;
 const INFLIGHT = new Map<string, Promise<boolean>>();
+const RETRY_AFTER = new Map<string, number>();
 
 type CatalogResponse = {
   status: string;
@@ -119,12 +121,25 @@ export async function ensureLocaleCatalog(locale: string): Promise<boolean> {
 
   const source = TRANSLATIONS.en;
   const requestKey = `${effectiveLocale}:${sourceFingerprint(source)}`;
+  const retryAfter = RETRY_AFTER.get(requestKey) || 0;
+  if (retryAfter > Date.now()) throw new Error(`UI translation retry cooldown for ${effectiveLocale}`);
+  if (retryAfter) RETRY_AFTER.delete(requestKey);
+
   const existing = INFLIGHT.get(requestKey);
   if (existing) return existing;
 
-  const pending = loadLocaleCatalog(effectiveLocale, source).finally(() => {
-    INFLIGHT.delete(requestKey);
-  });
+  const pending = loadLocaleCatalog(effectiveLocale, source)
+    .then((changed) => {
+      RETRY_AFTER.delete(requestKey);
+      return changed;
+    })
+    .catch((error) => {
+      RETRY_AFTER.set(requestKey, Date.now() + RETRY_COOLDOWN_MS);
+      throw error;
+    })
+    .finally(() => {
+      INFLIGHT.delete(requestKey);
+    });
   INFLIGHT.set(requestKey, pending);
   return pending;
 }
