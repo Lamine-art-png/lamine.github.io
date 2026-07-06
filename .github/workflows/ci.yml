@@ -47,7 +47,15 @@ jobs:
           if-no-files-found: error
           retention-days: 3
       - name: Run full unit suite
-        run: python -m pytest tests/unit -q
+        run: python -m pytest tests/unit -q --tb=short 2>&1 | tee full-unit-output.log
+      - name: Upload full unit test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commercial-full-unit-output
+          path: agroai_api/full-unit-output.log
+          if-no-files-found: error
+          retention-days: 3
       - name: Verify single Alembic head
         run: test "$(alembic heads | wc -l)" -eq 1
       - name: Upgrade clean temporary database through head
