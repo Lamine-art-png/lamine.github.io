@@ -44,15 +44,25 @@ export function useLocale() {
 
       setCatalogLoading(true);
       try {
-        if (hasCoreLocaleCatalog(selectedLocale) && !cancelled) notifyLocaleRuntime();
-        await ensureLocaleCatalog(selectedLocale, "full");
-        if (!cancelled) notifyLocaleRuntime();
+        if (!hasCoreLocaleCatalog(selectedLocale)) {
+          await ensureLocaleCatalog(selectedLocale, "core");
+        }
+        if (cancelled) return;
+        notifyLocaleRuntime();
+        setCatalogLoading(false);
+
+        void ensureLocaleCatalog(selectedLocale, "full")
+          .then(() => {
+            if (!cancelled) notifyLocaleRuntime();
+          })
+          .catch((cause) => {
+            if (!cancelled) setCatalogError(cause instanceof Error ? cause.message : "Full UI translation unavailable");
+          });
       } catch (cause) {
         if (!cancelled) {
           setCatalogError(cause instanceof Error ? cause.message : "UI translation unavailable");
+          setCatalogLoading(false);
         }
-      } finally {
-        if (!cancelled) setCatalogLoading(false);
       }
     }
 
@@ -70,7 +80,6 @@ export function useLocale() {
   };
 
   const activateLocale = (nextLocale: string) => {
-    // Selection is immediate. Catalog hydration is progressive and must never lock the selector.
     const canonical = canonicalizeSelectedLocale(nextLocale);
     const activated = setStoredLocale(canonical);
     setSelectedLocaleState(activated);

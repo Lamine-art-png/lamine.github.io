@@ -56,7 +56,7 @@ function languageSelector(page) {
   return page.locator("select").filter({ has: page.locator('option[value="fr-FR"]') }).first();
 }
 
-test("every visible non-English UI locale hydrates catalog keys and static portal literals", async ({ browser }) => {
+test("every visible non-English UI locale hydrates core first and full literals second", async ({ browser }) => {
   test.setTimeout(180_000);
   const context = await browser.newContext({ locale: "en-US" });
   const page = await context.newPage();
@@ -80,12 +80,16 @@ test("every visible non-English UI locale hydrates catalog keys and static porta
   }
 
   expect(new Set(state.catalogs.map((item) => item.locale))).toEqual(new Set(locales));
-  expect(state.catalogs).toHaveLength(locales.length);
-  expect(state.catalogs.every((item) => item.keyCount > 400)).toBeTruthy();
+  for (const locale of locales.filter((code) => code !== "fr-FR")) {
+    const requests = state.catalogs.filter((item) => item.locale === locale);
+    expect(requests.some((item) => item.keyCount > 0 && item.keyCount < 400)).toBeTruthy();
+    expect(requests.some((item) => item.keyCount > 400)).toBeTruthy();
+  }
+  expect(state.catalogs.filter((item) => item.locale === "fr-FR").some((item) => item.keyCount > 400)).toBeTruthy();
   await context.close();
 });
 
-test("selection is immediate and dropdown remains usable while full catalog hydration is slow", async ({ browser }) => {
+test("non-French locale visibly translates from core while full catalog is still pending", async ({ browser }) => {
   const context = await browser.newContext({ locale: "en-US" });
   const page = await context.newPage();
   await page.addInitScript((token) => {
@@ -93,8 +97,9 @@ test("selection is immediate and dropdown remains usable while full catalog hydr
     localStorage.setItem("agroai_locale_v1", "en");
   }, qaToken());
 
-  let releaseCatalog;
-  const catalogGate = new Promise((resolve) => { releaseCatalog = resolve; });
+  let releaseFull;
+  const fullGate = new Promise((resolve) => { releaseFull = resolve; });
+  const requestSizes = [];
   await page.route(`${API_ORIGIN}/**`, async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -105,7 +110,9 @@ test("selection is immediate and dropdown remains usable while full catalog hydr
     if (req.method() === "GET" && url.pathname === "/v1/settings/preferences") return reply({ preferences: { locale: "en", notifications: {}, ui: {} } });
     if (req.method() === "POST" && url.pathname === "/v1/i18n/catalog") {
       const payload = req.postDataJSON();
-      await catalogGate;
+      const keyCount = Object.keys(payload.source || {}).length;
+      requestSizes.push(keyCount);
+      if (keyCount > 400) await fullGate;
       const catalog = Object.fromEntries(Object.entries(payload.source).map(([key, value]) => [key, `⟦${payload.locale}⟧ ${value}`]));
       return reply({ status: "ok", locale: payload.locale, catalog });
     }
@@ -115,21 +122,16 @@ test("selection is immediate and dropdown remains usable while full catalog hydr
 
   await page.goto(APP_URL);
   const selector = languageSelector(page);
-
   await selector.selectOption("de");
   await expect(selector).toHaveValue("de");
   await expect(selector).toBeEnabled();
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
+  await expect(page.getByText("⟦de⟧ Settings", { exact: true }).first()).toBeVisible();
+  expect(requestSizes.some((size) => size > 0 && size < 400)).toBeTruthy();
 
-  await selector.selectOption("fr-FR");
-  await expect(selector).toHaveValue("fr-FR");
-  await expect(selector).toBeEnabled();
-  await expect(page.locator("html")).toHaveAttribute("lang", "fr-FR");
-  await expect(page.getByText("Paramètres", { exact: true }).first()).toBeVisible();
-
-  releaseCatalog();
-  await expect(page.getByText("⟦fr-FR⟧ Settings", { exact: true }).first()).toBeVisible();
-  await expect(selector).toHaveValue("fr-FR");
+  releaseFull();
+  await expect(page.getByText("⟦de⟧ Timezone", { exact: true }).first()).toBeVisible();
+  await expect(selector).toHaveValue("de");
   await expect(selector).toBeEnabled();
   await context.close();
 });
