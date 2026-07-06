@@ -14,11 +14,10 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Extract Cloudflare deploy failure
+      - name: Inspect failed production release output
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh api "repos/${GITHUB_REPOSITORY}/actions/jobs/85322662374/logs" > deploy.log
-          grep -i -E -C 4 'error|failed|custom.domain|route|wrangler|10000|authentication|conflict|already exists' deploy.log | tail -n 180 || true
+          gh run view 28776717405 --repo "${GITHUB_REPOSITORY}" --log-failed | tail -n 90
