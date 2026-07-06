@@ -131,9 +131,14 @@ async function loadLocaleCatalog(effectiveLocale: string, source: Record<string,
 
 export async function ensureLocaleCatalog(locale: string): Promise<boolean> {
   const effectiveLocale = normalizeLocale(locale);
+  const source = fullEnglishUiSource(TRANSLATIONS.en);
+  if (effectiveLocale === "en") {
+    if (exactKeyParity(TRANSLATIONS.en, source)) return false;
+    installLocaleCatalog("en", source, source, false);
+    return true;
+  }
   if (hasCompleteLocaleCatalog(effectiveLocale)) return false;
 
-  const source = fullEnglishUiSource(TRANSLATIONS.en);
   const requestKey = `${effectiveLocale}:${sourceFingerprint(source)}`;
   const retryAfter = RETRY_AFTER.get(requestKey) || 0;
   if (retryAfter > Date.now()) throw new Error(`UI translation retry cooldown for ${effectiveLocale}`);
