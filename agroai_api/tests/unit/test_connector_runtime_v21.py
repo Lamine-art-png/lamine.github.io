@@ -12,7 +12,7 @@ from app.api.v1.connectors import CATALOG, oauth_url
 from app.core.security import require_current_tenant_id
 from app.db.base import Base, get_db
 from app.main import app
-from app.models.saas import Organization
+from app.models.saas import Organization, User
 from app.services.oauth_state import sign_oauth_state, verify_oauth_state
 
 
@@ -21,11 +21,15 @@ def make_client():
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
     with TestingSessionLocal() as db:
+        owner = User(id="owner-test", email="owner@example.com", password_hash="x")
+        db.add(owner)
+        db.flush()
         db.add(
             Organization(
                 id="org-test",
                 name="Connector Runtime Test Org",
                 slug="connector-runtime-test-org",
+                owner_user_id=owner.id,
                 plan="professional",
                 subscription_status="active",
             )
