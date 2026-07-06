@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.core.security import require_current_tenant_id
 from app.db.base import Base, get_db
 from app.main import app
+from app.models.saas import Organization
 from app.services.ingestion_stream import read_spooled_bytes, stream_upload_to_spool
 
 
@@ -80,6 +81,9 @@ def test_stream_upload_route_uses_worker_owned_session(tmp_path, monkeypatch):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
+    with TestingSessionLocal() as db:
+        db.add(Organization(id="org-test", name="Stream Test Org", slug="stream-test-org", plan="free"))
+        db.commit()
 
     monkeypatch.setattr(settings, "CONNECTOR_UPLOAD_DIR", str(tmp_path))
     monkeypatch.setattr("app.services.connector_ingestion_pipeline.SessionLocal", TestingSessionLocal)
