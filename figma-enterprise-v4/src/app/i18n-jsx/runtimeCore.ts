@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react";
 import { jsx as reactJsx } from "react/jsx-runtime";
-import { getStoredLocale, hasLiteralTranslationSource, translateLiteral } from "../i18n";
+import { getStoredLocale } from "../i18n";
+import { hasLiteralTranslationSource, translatePortalLiteral } from "../portalLiteralCatalog";
 import { getLocaleRuntimeSnapshot, subscribeLocaleRuntime } from "../localeRuntimeStore";
 
 type JsxFactory = (type: any, props: any, key?: any) => any;
@@ -26,7 +27,7 @@ function useLocaleRuntimeRevision() {
 }
 
 function localizeStaticString(value: string): string {
-  return hasLiteralTranslationSource(value) ? translateLiteral(value, getStoredLocale()) : value;
+  return hasLiteralTranslationSource(value) ? translatePortalLiteral(value, getStoredLocale()) : value;
 }
 
 function LocalizedText({ source }: { source: string }) {
