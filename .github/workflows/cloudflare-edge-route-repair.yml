@@ -1,0 +1,114 @@
+name: Cloudflare Edge Route Repair
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/cloudflare-edge-route-repair.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  EDGE_HOST: api.agroai-pilot.com
+  EDGE_PATTERN: api.agroai-pilot.com/v1/*
+  EDGE_SCRIPT: agroai-api-edge
+  EDGE_HEALTH_URL: https://api.agroai-pilot.com/v1/edge-health
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Repair Worker route and proxied DNS safely
+        shell: bash
+        run: |
+          set -euo pipefail
+          api() {
+            local method="$1" url="$2" body="${3:-}"
+            if [ -n "$body" ]; then
+              curl --fail --silent --show-error -X "$method" \
+                -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+                -H "Content-Type: application/json" \
+                --data "$body" \
+                "$url"
+            else
+              curl --fail --silent --show-error -X "$method" \
+                -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+                -H "Content-Type: application/json" \
+                "$url"
+            fi
+          }
+
+          zone_json="$(api GET 'https://api.cloudflare.com/client/v4/zones?name=agroai-pilot.com&status=active')"
+          zone_id="$(printf '%s' "$zone_json" | jq -r '.result[0].id // empty')"
+          if [ -z "$zone_id" ]; then
+            echo 'Active Cloudflare zone agroai-pilot.com not found'
+            exit 1
+          fi
+          echo "zone_found=true"
+
+          dns_json="$(api GET "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records?name=${EDGE_HOST}")"
+          dns_count="$(printf '%s' "$dns_json" | jq -r '.result | length')"
+          echo "dns_record_count=${dns_count}"
+          if [ "$dns_count" -lt 1 ]; then
+            echo "No DNS record exists for ${EDGE_HOST}"
+            exit 1
+          fi
+
+          dns_id="$(printf '%s' "$dns_json" | jq -r '.result[0].id')"
+          dns_proxied="$(printf '%s' "$dns_json" | jq -r '.result[0].proxied // false')"
+          dns_type="$(printf '%s' "$dns_json" | jq -r '.result[0].type')"
+          echo "dns_type=${dns_type}"
+          echo "dns_proxied_before=${dns_proxied}"
+          if [ "$dns_proxied" != 'true' ]; then
+            patch_result="$(api PATCH "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records/${dns_id}" '{"proxied":true}')"
+            printf '%s' "$patch_result" | jq -e '.success == true' >/dev/null
+            echo 'dns_proxy_enabled=true'
+          else
+            echo 'dns_proxy_enabled=already'
+          fi
+
+          routes_json="$(api GET "https://api.cloudflare.com/client/v4/zones/${zone_id}/workers/routes")"
+          route_id="$(printf '%s' "$routes_json" | jq -r --arg pattern "$EDGE_PATTERN" '.result[]? | select(.pattern == $pattern) | .id' | head -n1)"
+          route_script="$(printf '%s' "$routes_json" | jq -r --arg pattern "$EDGE_PATTERN" '.result[]? | select(.pattern == $pattern) | .script // ""' | head -n1)"
+          echo "route_exists=$([ -n "$route_id" ] && echo true || echo false)"
+          echo "route_script_before=${route_script:-none}"
+
+          route_body="$(jq -nc --arg pattern "$EDGE_PATTERN" --arg script "$EDGE_SCRIPT" '{pattern:$pattern,script:$script}')"
+          if [ -z "$route_id" ]; then
+            create_result="$(api POST "https://api.cloudflare.com/client/v4/zones/${zone_id}/workers/routes" "$route_body")"
+            printf '%s' "$create_result" | jq -e '.success == true' >/dev/null
+            echo 'route_created=true'
+          elif [ "$route_script" != "$EDGE_SCRIPT" ]; then
+            update_result="$(api PUT "https://api.cloudflare.com/client/v4/zones/${zone_id}/workers/routes/${route_id}" "$route_body")"
+            printf '%s' "$update_result" | jq -e '.success == true' >/dev/null
+            echo 'route_updated=true'
+          else
+            echo 'route_binding=already_correct'
+          fi
+
+          verify_routes="$(api GET "https://api.cloudflare.com/client/v4/zones/${zone_id}/workers/routes")"
+          printf '%s' "$verify_routes" | jq -e --arg pattern "$EDGE_PATTERN" --arg script "$EDGE_SCRIPT" \
+            '.result[]? | select(.pattern == $pattern and .script == $script)' >/dev/null
+          echo 'route_binding_verified=true'
+
+      - name: Smoke public edge route
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            payload="$(curl --silent --show-error --max-time 20 "${EDGE_HEALTH_URL}" 2>/dev/null || true)"
+            if printf '%s' "$payload" | jq -e '.status == "ok" and .service == "agroai-api-edge"' >/dev/null 2>&1; then
+              echo "$payload" | jq '{status,service,version,environment}'
+              exit 0
+            fi
+            sleep 2
+          done
+          echo 'Public edge health did not become ready'
+          curl --silent --show-error --max-time 20 -i "${EDGE_HEALTH_URL}" || true
+          exit 1
