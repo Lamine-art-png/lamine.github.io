@@ -5,6 +5,7 @@ from dataclasses import asdict, dataclass
 from urllib.parse import urlparse
 
 from app.core.config import Settings
+from app.services.connector_vault import vault_configured
 
 
 @dataclass(frozen=True)
@@ -128,12 +129,15 @@ def evaluate_production_readiness(settings: Settings, *, target_scale: str = "pr
     if queue_backend in {"redis", "redis_streams", "redis-streams"} and not redis_url:
         warnings.append(ReadinessFinding("coordination.redis_missing", "warning", "coordination", "Redis queue mode is selected without a distributed coordination endpoint."))
 
-    vault_key = _setting(settings, "CONNECTOR_CREDENTIAL_MASTER_KEY")
-    vault_ring = _setting(settings, "CONNECTOR_CREDENTIAL_KEYS_JSON")
-    if not vault_key and not vault_ring:
+    if not vault_configured():
         blockers.append(ReadinessFinding("connectors.credential_vault_missing", "blocker", "connectors", "Encrypted retrievable connector credential custody is not configured."))
+    elif not _setting(settings, "CONNECTOR_CREDENTIAL_MASTER_KEY") and not _setting(settings, "CONNECTOR_CREDENTIAL_KEYS_JSON"):
+        warnings.append(ReadinessFinding("connectors.credential_vault_derived", "warning", "connectors", "Connector credential custody uses the stable domain-separated runtime key fallback; configure an explicit versioned keyring for independent rotation."))
+
+    # oauth_state_store already falls back to the strong application signing root.
+    # Missing dedicated material is a rotation/isolation warning, not a runtime blocker.
     if not _setting(settings, "OAUTH_STATE_SIGNING_KEY"):
-        blockers.append(ReadinessFinding("connectors.oauth_state_key_missing", "blocker", "connectors", "A dedicated OAuth state signing key is not configured."))
+        warnings.append(ReadinessFinding("connectors.oauth_state_key_derived", "warning", "connectors", "OAuth state signing uses the application signing root fallback; configure a dedicated key for independent rotation."))
 
     if settings.ACCESS_TOKEN_EXPIRE_MINUTES > 1440:
         warnings.append(ReadinessFinding("identity.long_lived_access_token", "warning", "identity", "Access tokens live longer than one day; production should use shorter access tokens plus refresh/session rotation."))
