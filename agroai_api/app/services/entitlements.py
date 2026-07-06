@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.models.saas import Organization, OrganizationMembership, UsageEvent, Workspace
 from app.services.commercial_control import (
+    BASE_ENTITLEMENTS,
     canonical_plan,
     customer_safe_entitlement_payload,
     get_limit,
@@ -38,8 +39,6 @@ class PlanLimits:
     can_access_billing_portal: bool
 
 
-# Compatibility surface for older route/tests. Runtime quota and feature decisions use
-# commercial_control.resolve_effective_entitlements instead of these fixed values.
 PLAN_LIMITS: dict[str, PlanLimits] = {
     "free": PlanLimits(1, 1, 10, 25, False, False, False, False, False, False, False, "basic", False, False, False, True),
     "professional": PlanLimits(5, 3, 500, 500, True, True, True, False, False, False, False, "standard", True, True, True, True),
@@ -58,11 +57,21 @@ def get_plan_limits(plan: str | None) -> PlanLimits:
 def serialize_entitlements(org: Organization, db: Session | None = None) -> dict:
     limits = asdict(get_plan_limits(org.plan))
     plan = plan_by_id(org.plan)
+    canonical = canonical_plan(org.plan)
+    base = BASE_ENTITLEMENTS[canonical]
+    base_capabilities = {key: value for key, value in base.items() if not key.startswith("quota.")}
+    base_quotas = {key.removeprefix("quota."): value for key, value in base.items() if key.startswith("quota.")}
     limits.update(
         {
             "plan": plan["id"],
             "plan_name": plan["name"],
             "subscription_status": org.subscription_status,
+            "plan_version": getattr(org, "plan_version", None) or "2026-07",
+            "customer_class": getattr(org, "customer_class", None) or "individual_operator",
+            "organization_type": getattr(org, "organization_type", None),
+            "intelligence_profile": base.get("intelligence.profile", "essential"),
+            "capabilities": base_capabilities,
+            "quotas": base_quotas,
             "max_agent_runs_per_month": limits["max_agro_ai_messages_monthly"],
             "max_evidence_uploads_per_month": limits["max_uploads_monthly"],
             "can_run_agro_ai": limits["max_agro_ai_messages_monthly"] > 0,
