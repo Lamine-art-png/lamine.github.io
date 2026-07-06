@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import json
 import re
@@ -20,30 +21,37 @@ router = APIRouter(tags=["i18n"])
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _CANONICAL_CATALOG_PATH = _REPO_ROOT / "shared" / "ui-catalog.en.json"
+_LITERAL_CATALOG_GLOB = "ui-literals.en.*.json"
 _PLACEHOLDER_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-_MAX_KEYS = 250
+_MAX_KEYS = 2_000
 _MAX_VALUE_CHARS = 2_000
-_MAX_SOURCE_CHARS = 60_000
+_MAX_SOURCE_CHARS = 200_000
 _CACHE_TTL_SECONDS = 24 * 60 * 60
+_TRANSLATION_CHUNK_SIZE = 90
+_MAX_CHUNK_ATTEMPTS = 2
+_MAX_PARALLEL_MODEL_CALLS = 4
 _CACHE: dict[str, tuple[float, dict[str, str]]] = {}
+_CACHE_LOCKS: dict[str, asyncio.Lock] = {}
 
 
 class CatalogRequest(BaseModel):
     locale: str = Field(min_length=2, max_length=40)
-    source: dict[str, str]
+    source: dict[str, str] | None = None
 
     @field_validator("source")
     @classmethod
-    def validate_source(cls, value: dict[str, str]) -> dict[str, str]:
+    def validate_source(cls, value: dict[str, str] | None) -> dict[str, str] | None:
+        if value is None:
+            return None
         if not value or len(value) > _MAX_KEYS:
             raise ValueError(f"source must contain 1..{_MAX_KEYS} entries")
         total = 0
-        for key, text in value.items():
+        for key, text_value in value.items():
             if not key or len(key) > 160:
                 raise ValueError("invalid translation key")
-            if not isinstance(text, str) or len(text) > _MAX_VALUE_CHARS:
+            if not isinstance(text_value, str) or len(text_value) > _MAX_VALUE_CHARS:
                 raise ValueError("invalid translation value")
-            total += len(key) + len(text)
+            total += len(key) + len(text_value)
         if total > _MAX_SOURCE_CHARS:
             raise ValueError("translation source is too large")
         return value
@@ -51,10 +59,24 @@ class CatalogRequest(BaseModel):
 
 @lru_cache(maxsize=1)
 def canonical_source_catalog() -> dict[str, str]:
-    raw = json.loads(_CANONICAL_CATALOG_PATH.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict) or not raw or not all(isinstance(key, str) and isinstance(value, str) for key, value in raw.items()):
+    base = json.loads(_CANONICAL_CATALOG_PATH.read_text(encoding="utf-8"))
+    if not isinstance(base, dict) or not base:
         raise RuntimeError("canonical_ui_catalog_invalid")
-    return raw
+    literals: dict[str, str] = {}
+    for path in sorted((_REPO_ROOT / "shared").glob(_LITERAL_CATALOG_GLOB)):
+        part = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(part, dict):
+            raise RuntimeError("canonical_ui_literal_catalog_invalid")
+        overlap = set(literals).intersection(part)
+        if overlap:
+            raise RuntimeError(f"duplicate_ui_literal_catalog_keys:{sorted(overlap)[:3]}")
+        literals.update(part)
+    if not literals:
+        raise RuntimeError("canonical_ui_literal_catalog_missing")
+    merged = {**base, **literals}
+    if not all(isinstance(key, str) and isinstance(value, str) for key, value in merged.items()):
+        raise RuntimeError("canonical_ui_catalog_invalid")
+    return merged
 
 
 def _enabled_locale_payloads() -> list[dict[str, Any]]:
@@ -119,6 +141,82 @@ def _validate_translated_catalog(source: dict[str, str], translated: Any) -> dic
     return output
 
 
+def _decode_json_object(content: str) -> dict[str, Any]:
+    text_value = content.strip()
+    if text_value.startswith("```"):
+        text_value = re.sub(r"^```(?:json)?\s*", "", text_value, flags=re.IGNORECASE)
+        text_value = re.sub(r"\s*```$", "", text_value)
+    try:
+        parsed = json.loads(text_value)
+        if isinstance(parsed, dict):
+            return parsed
+    except json.JSONDecodeError:
+        pass
+    start = text_value.find("{")
+    end = text_value.rfind("}")
+    if start >= 0 and end > start:
+        parsed = json.loads(text_value[start : end + 1])
+        if isinstance(parsed, dict):
+            return parsed
+    raise ValueError("translation model did not return a JSON object")
+
+
+def _chunks(source: dict[str, str], size: int = _TRANSLATION_CHUNK_SIZE) -> list[dict[str, str]]:
+    items = list(source.items())
+    return [dict(items[index : index + size]) for index in range(0, len(items), size)]
+
+
+async def _translate_chunk_once(router: ModelRouter, semaphore: asyncio.Semaphore, *, canonical: str, language: str, chunk: dict[str, str]) -> tuple[dict[str, str], str, str | None]:
+    source_json = json.dumps(chunk, ensure_ascii=False, separators=(",", ":"))
+    messages = [
+        {"role": "system", "content": "You are AGRO-AI's deterministic enterprise UI localization engine. " + f"Translate every JSON string value into {language} ({canonical}). " + "Return one JSON object only. Preserve every key exactly. Preserve every placeholder token exactly, including braces and multiplicity. Preserve AGRO-AI, product names, URLs, units, numbers, and Markdown syntax. Translate interface copy naturally and concisely. Do not add explanations."},
+        {"role": "user", "content": source_json},
+    ]
+    async with semaphore:
+        result, selection = await router.run(task="ui_translation", messages=messages, temperature=0.0, response_format={"type": "json_object"}, max_tokens=12_000, timeout_seconds=45, max_model_attempts=3)
+    if result.status != "ok" or not result.content.strip():
+        raise ValueError(f"translation model unavailable: {result.provider}/{result.model}")
+    translated = _validate_translated_catalog(chunk, _decode_json_object(result.content))
+    return translated, result.provider, result.model or selection.model
+
+
+async def _translate_chunk_resilient(router: ModelRouter, semaphore: asyncio.Semaphore, *, canonical: str, language: str, chunk: dict[str, str]) -> tuple[dict[str, str], set[str], set[str]]:
+    last_error: Exception | None = None
+    for _attempt in range(_MAX_CHUNK_ATTEMPTS):
+        try:
+            translated, provider, model = await _translate_chunk_once(router, semaphore, canonical=canonical, language=language, chunk=chunk)
+            return translated, {provider}, {model} if model else set()
+        except Exception as exc:
+            last_error = exc
+    if len(chunk) <= 12:
+        raise ValueError(f"translation chunk failed after retries: {last_error}") from last_error
+    items = list(chunk.items())
+    midpoint = len(items) // 2
+    left = dict(items[:midpoint])
+    right = dict(items[midpoint:])
+    left_result, right_result = await asyncio.gather(
+        _translate_chunk_resilient(router, semaphore, canonical=canonical, language=language, chunk=left),
+        _translate_chunk_resilient(router, semaphore, canonical=canonical, language=language, chunk=right),
+    )
+    left_catalog, left_providers, left_models = left_result
+    right_catalog, right_providers, right_models = right_result
+    return {**left_catalog, **right_catalog}, left_providers | right_providers, left_models | right_models
+
+
+async def _translate_catalog(canonical: str, language: str, source: dict[str, str]) -> tuple[dict[str, str], set[str], set[str]]:
+    model_router = ModelRouter()
+    semaphore = asyncio.Semaphore(_MAX_PARALLEL_MODEL_CALLS)
+    results = await asyncio.gather(*[_translate_chunk_resilient(model_router, semaphore, canonical=canonical, language=language, chunk=chunk) for chunk in _chunks(source)])
+    catalog: dict[str, str] = {}
+    providers: set[str] = set()
+    models: set[str] = set()
+    for translated, chunk_providers, chunk_models in results:
+        catalog.update(translated)
+        providers.update(chunk_providers)
+        models.update(chunk_models)
+    return _validate_translated_catalog(source, catalog), providers, models
+
+
 @router.get("/i18n/languages")
 def get_ui_languages() -> dict[str, Any]:
     languages = _enabled_locale_payloads()
@@ -134,33 +232,26 @@ async def translate_ui_catalog(payload: CatalogRequest, _ctx: AuthContext = Depe
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"code": "unsupported_ui_locale", "locale": requested})
     if canonical == "auto":
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"code": "auto_locale_requires_browser_resolution"})
-
     source = canonical_source_catalog()
-    if payload.source != source:
+    if payload.source is not None and payload.source != source:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": "ui_source_catalog_mismatch", "action": "refresh_portal_release"})
     if canonical == "en":
         return {"status": "ok", "locale": canonical, "catalog": source, "source": "identity"}
-
     key = _cache_key(canonical, source)
     cached = _CACHE.get(key)
     if cached and cached[0] > time.time():
         return {"status": "ok", "locale": canonical, "catalog": cached[1], "source": "memory_cache"}
-
-    spec = locale_specs().get(canonical.lower())
-    language_code = spec.language_code if spec else canonical.split("-", 1)[0].lower()
-    language = family_name(language_code)
-    source_json = json.dumps(source, ensure_ascii=False, separators=(",", ":"))
-    messages = [
-        {"role": "system", "content": "You are AGRO-AI's deterministic enterprise UI localization engine. " + f"Translate every JSON string value into {language} ({canonical}). " + "Return one JSON object only. Preserve every key exactly. Preserve placeholders such as {recipient}, {title}, and {level} exactly. Preserve AGRO-AI, product names, URLs, units, numbers, and Markdown syntax. Do not add explanations."},
-        {"role": "user", "content": source_json},
-    ]
-    result, selection = await ModelRouter().run(task="ui_translation", messages=messages, temperature=0.0, response_format={"type": "json_object"}, max_tokens=8_000, timeout_seconds=45, max_model_attempts=3)
-    if result.status != "ok" or not result.content.strip():
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"code": "ui_catalog_generation_unavailable", "locale": canonical, "provider": result.provider, "model": result.model})
-    try:
-        translated = _validate_translated_catalog(source, json.loads(result.content))
-    except (json.JSONDecodeError, ValueError) as exc:
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail={"code": "invalid_ui_catalog_generation", "locale": canonical, "reason": str(exc)}) from exc
-
-    _CACHE[key] = (time.time() + _CACHE_TTL_SECONDS, translated)
-    return {"status": "ok", "locale": canonical, "catalog": translated, "source": "generated", "provider": result.provider, "model": result.model or selection.model}
+    lock = _CACHE_LOCKS.setdefault(key, asyncio.Lock())
+    async with lock:
+        cached = _CACHE.get(key)
+        if cached and cached[0] > time.time():
+            return {"status": "ok", "locale": canonical, "catalog": cached[1], "source": "memory_cache"}
+        spec = locale_specs().get(canonical.lower())
+        language_code = spec.language_code if spec else canonical.split("-", 1)[0].lower()
+        language = family_name(language_code)
+        try:
+            translated, providers, models = await _translate_catalog(canonical, language, source)
+        except Exception as exc:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"code": "ui_catalog_generation_unavailable", "locale": canonical, "reason": str(exc)}) from exc
+        _CACHE[key] = (time.time() + _CACHE_TTL_SECONDS, translated)
+        return {"status": "ok", "locale": canonical, "catalog": translated, "source": "generated_chunked", "providers": sorted(providers), "models": sorted(models)}
