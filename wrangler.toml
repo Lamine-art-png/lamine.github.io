@@ -8,6 +8,9 @@ EDGE_ENVIRONMENT = "production"
 UPSTREAM_API_ORIGIN = "https://api-preview.agroai-pilot.com"
 ALLOWED_ORIGINS = "https://app.agroai-pilot.com,https://agroai-pilot.com,https://www.agroai-pilot.com"
 
+[secrets]
+required = [ "QUEUE_PUBLISH_TOKEN", "QUEUE_CONSUMER_TOKEN" ]
+
 [[routes]]
 pattern = "api.agroai-pilot.com/v1/*"
 zone_name = "agroai-pilot.com"
