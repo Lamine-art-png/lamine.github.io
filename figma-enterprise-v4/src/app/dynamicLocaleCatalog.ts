@@ -3,10 +3,13 @@ import { normalizeLocale, TRANSLATIONS } from "./i18n";
 import { notifyLocaleRuntime } from "./localeRuntimeStore";
 import { fullEnglishUiSource } from "./portalLiteralCatalog";
 
-const CACHE_PREFIX = "agroai_ui_catalog_v3:";
-const RETRY_COOLDOWN_MS = 30_000;
+const CACHE_PREFIX = "agroai_ui_catalog_v4:";
+const RETRY_COOLDOWN_MS = 15_000;
 const INFLIGHT = new Map<string, Promise<boolean>>();
 const RETRY_AFTER = new Map<string, number>();
+const CORE_ENGLISH_SOURCE: Record<string, string> = { ...TRANSLATIONS.en };
+
+export type CatalogScope = "core" | "full";
 
 type CatalogResponse = {
   status: string;
@@ -21,15 +24,32 @@ function exactKeyParity(candidate: Record<string, string>, source: Record<string
   return sourceKeys.length === candidateKeys.length && sourceKeys.every((key, index) => key === candidateKeys[index]);
 }
 
+function sourceForScope(scope: CatalogScope) {
+  return scope === "core" ? CORE_ENGLISH_SOURCE : fullEnglishUiSource(CORE_ENGLISH_SOURCE);
+}
+
+function catalogCoversSource(candidate: Record<string, string> | undefined, source: Record<string, string>) {
+  if (!candidate) return false;
+  return Object.entries(source).every(([key, sourceValue]) => {
+    const value = candidate[key];
+    return typeof value === "string" && value.trim().length > 0 && placeholderParity(value.trim(), sourceValue);
+  });
+}
+
 export function hasCompleteLocaleCatalog(locale: string): boolean {
   const effectiveLocale = normalizeLocale(locale);
   const catalog = TRANSLATIONS[effectiveLocale];
-  const source = fullEnglishUiSource(TRANSLATIONS.en);
+  const source = sourceForScope("full");
   return Boolean(catalog && exactKeyParity(catalog, source));
 }
 
+export function hasCoreLocaleCatalog(locale: string): boolean {
+  const effectiveLocale = normalizeLocale(locale);
+  return catalogCoversSource(TRANSLATIONS[effectiveLocale], sourceForScope("core"));
+}
+
 function installLocaleCatalog(locale: string, source: Record<string, string>, catalog: Record<string, string>, persist: boolean) {
-  TRANSLATIONS[locale] = catalog;
+  TRANSLATIONS[locale] = { ...(TRANSLATIONS[locale] || {}), ...catalog };
   if (persist) writeCached(locale, source, catalog);
   notifyLocaleRuntime();
 }
@@ -94,7 +114,7 @@ function readCached(locale: string, source: Record<string, string>) {
     const raw = localStorage.getItem(cacheKey(locale, fingerprint));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { version?: number; sourceFingerprint?: string; catalog?: unknown };
-    if (parsed.version !== 3 || parsed.sourceFingerprint !== fingerprint || !validCatalog(parsed.catalog, source)) return null;
+    if (parsed.version !== 4 || parsed.sourceFingerprint !== fingerprint || !validCatalog(parsed.catalog, source)) return null;
     return parsed.catalog;
   } catch {
     return null;
@@ -104,7 +124,7 @@ function readCached(locale: string, source: Record<string, string>) {
 function writeCached(locale: string, source: Record<string, string>, catalog: Record<string, string>) {
   try {
     const fingerprint = sourceFingerprint(source);
-    localStorage.setItem(cacheKey(locale, fingerprint), JSON.stringify({ version: 3, sourceFingerprint: fingerprint, catalog }));
+    localStorage.setItem(cacheKey(locale, fingerprint), JSON.stringify({ version: 4, sourceFingerprint: fingerprint, catalog }));
   } catch {
     // Local cache is an optimization only.
   }
@@ -129,15 +149,17 @@ async function loadLocaleCatalog(effectiveLocale: string, source: Record<string,
   return true;
 }
 
-export async function ensureLocaleCatalog(locale: string): Promise<boolean> {
+export async function ensureLocaleCatalog(locale: string, scope: CatalogScope = "full"): Promise<boolean> {
   const effectiveLocale = normalizeLocale(locale);
-  const source = fullEnglishUiSource(TRANSLATIONS.en);
+  const source = sourceForScope(scope);
+  const current = TRANSLATIONS[effectiveLocale];
+
   if (effectiveLocale === "en") {
-    if (exactKeyParity(TRANSLATIONS.en, source)) return false;
+    if (catalogCoversSource(current, source)) return false;
     installLocaleCatalog("en", source, source, false);
     return true;
   }
-  if (hasCompleteLocaleCatalog(effectiveLocale)) return false;
+  if (catalogCoversSource(current, source)) return false;
 
   const requestKey = `${effectiveLocale}:${sourceFingerprint(source)}`;
   const retryAfter = RETRY_AFTER.get(requestKey) || 0;
