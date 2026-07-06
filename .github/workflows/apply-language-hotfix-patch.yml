@@ -1,71 +1,50 @@
-name: Apply Language Hotfix Patch
+name: Language Interaction Contract CI
 
 on:
-  push:
-    branches: [language-hotfix-141]
+  pull_request:
     paths:
+      - 'figma-enterprise-v4/src/app/**'
+      - 'figma-enterprise-v4/tests/browser/global-language-switching.spec.mjs'
+      - 'figma-enterprise-v4/tests/i18n-contract.mjs'
+      - '.github/workflows/apply-language-hotfix-patch.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'figma-enterprise-v4/src/app/**'
+      - 'figma-enterprise-v4/tests/browser/global-language-switching.spec.mjs'
+      - 'figma-enterprise-v4/tests/i18n-contract.mjs'
       - '.github/workflows/apply-language-hotfix-patch.yml'
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  patch:
+  language-interaction:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: figma-enterprise-v4
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
-          ref: language-hotfix-141
-      - name: Patch nonblocking locale hydration and faster catalog generation
-        shell: bash
-        run: |
-          python - <<'PY'
-          from pathlib import Path
-
-          hook = Path('figma-enterprise-v4/src/app/hooks/useLocale.ts')
-          text = hook.read_text()
-          text = text.replace(
-              'import { ensureLocaleCatalog } from "../dynamicLocaleCatalog";',
-              'import { ensureLocaleCatalog, hasCoreLocaleCatalog } from "../dynamicLocaleCatalog";',
-          )
-          old = '''        // Phase 1 is intentionally small so the visible shell can translate quickly.\n        await ensureLocaleCatalog(selectedLocale, "core");\n        if (!cancelled) notifyLocaleRuntime();\n\n        // Phase 2 completes every inventoried portal literal in the background.\n        await ensureLocaleCatalog(selectedLocale, "full");\n        if (!cancelled) notifyLocaleRuntime();'''
-          new = '''        if (hasCoreLocaleCatalog(selectedLocale) && !cancelled) notifyLocaleRuntime();\n        await ensureLocaleCatalog(selectedLocale, "full");\n        if (!cancelled) notifyLocaleRuntime();'''
-          if old not in text:
-              raise SystemExit('useLocale hydration block not found')
-          hook.write_text(text.replace(old, new))
-
-          backend = Path('agroai_api/app/api/v1/i18n.py')
-          text = backend.read_text()
-          replacements = {
-              '_TRANSLATION_CHUNK_SIZE = 18': '_TRANSLATION_CHUNK_SIZE = 48',
-              '_MAX_CHUNK_ATTEMPTS = 2': '_MAX_CHUNK_ATTEMPTS = 1',
-              '_MAX_PARALLEL_MODEL_CALLS = 3': '_MAX_PARALLEL_MODEL_CALLS = 6',
-              'max_tokens=4_000, timeout_seconds=35, max_model_attempts=3': 'max_tokens=8_000, timeout_seconds=30, max_model_attempts=2',
-          }
-          for old_value, new_value in replacements.items():
-              if old_value not in text:
-                  raise SystemExit(f'backend patch target missing: {old_value}')
-              text = text.replace(old_value, new_value, 1)
-          backend.write_text(text)
-
-          contract = Path('figma-enterprise-v4/tests/i18n-contract.mjs')
-          text = contract.read_text()
-          text = text.replace(
-              'assert(hook.includes("activateLocale"), "locale switching must hydrate a catalog before activation");',
-              'assert(hook.includes("activateLocale"), "locale switching must expose one authoritative activation path");\nassert(hook.includes("hasCoreLocaleCatalog"), "bundled core copy must remain usable before full hydration");',
-          )
-          text = text.replace(
-              'assert(selector.includes("activateLocale"), "language selector must activate only a ready catalog");',
-              'assert(selector.includes("activateLocale"), "language selector must activate the selected locale immediately");\nassert(!selector.includes("disabled={Boolean(pendingLocale)}"), "catalog loading must never disable the language selector");',
-          )
-          contract.write_text(text)
-          PY
-      - name: Commit patch
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - run: npm ci
+      - run: npm run test:i18n
+      - run: npx playwright install --with-deps chromium
+      - run: npm run build
+      - name: Run language interaction browser contract
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name 'agroai-release-bot'
-          git config user.email 'actions@users.noreply.github.com'
-          git add figma-enterprise-v4/src/app/hooks/useLocale.ts agroai_api/app/api/v1/i18n.py figma-enterprise-v4/tests/i18n-contract.mjs
-          git commit -m 'fix(i18n): remove blocking catalog dependency from locale selection'
-          git push origin HEAD:language-hotfix-141
+          npx vite preview --host 127.0.0.1 --port 4173 > /tmp/agroai-language-preview.log 2>&1 &
+          preview_pid=$!
+          trap 'kill $preview_pid 2>/dev/null || true' EXIT
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent http://127.0.0.1:4173/settings >/dev/null; then break; fi
+            sleep 1
+          done
+          npx playwright test tests/browser/global-language-switching.spec.mjs --config=playwright.contract.config.ts --browser=chromium --reporter=line
