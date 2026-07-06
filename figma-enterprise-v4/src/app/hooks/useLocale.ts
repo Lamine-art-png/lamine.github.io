@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { ensureLocaleCatalog } from "../dynamicLocaleCatalog";
+import { ensureLocaleCatalog, hasCoreLocaleCatalog } from "../dynamicLocaleCatalog";
 import {
   applyLocale,
   canonicalizeSelectedLocale,
@@ -44,11 +44,7 @@ export function useLocale() {
 
       setCatalogLoading(true);
       try {
-        // Phase 1 is intentionally small so the visible shell can translate quickly.
-        await ensureLocaleCatalog(selectedLocale, "core");
-        if (!cancelled) notifyLocaleRuntime();
-
-        // Phase 2 completes every inventoried portal literal in the background.
+        if (hasCoreLocaleCatalog(selectedLocale) && !cancelled) notifyLocaleRuntime();
         await ensureLocaleCatalog(selectedLocale, "full");
         if (!cancelled) notifyLocaleRuntime();
       } catch (cause) {
