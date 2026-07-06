@@ -32,7 +32,7 @@ jobs:
         run: npm ci
       - working-directory: figma-enterprise-v4
         run: npm run test:i18n
-      - name: Prove selector is not disabled by catalog loading
+      - name: Prove selector is nonblocking and core hydrates before full catalog
         run: |
           python - <<'PY'
           from pathlib import Path
@@ -41,6 +41,10 @@ jobs:
           assert 'disabled={Boolean(pendingLocale)}' not in selector
           assert 'value={selectedLocale}' in selector
           assert 'const activated = setStoredLocale(canonical)' in hook
-          assert 'await ensureLocaleCatalog(selectedLocale, "full")' in hook
-          print('language_selector_nonblocking=ok')
+          core = 'ensureLocaleCatalog(selectedLocale, "core")'
+          full = 'ensureLocaleCatalog(selectedLocale, "full")'
+          assert core in hook
+          assert full in hook
+          assert hook.index(core) < hook.index(full)
+          print('language_selector_core_first_nonblocking=ok')
           PY
