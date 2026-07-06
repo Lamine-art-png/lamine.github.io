@@ -15,7 +15,7 @@ DEFAULT_FAST_MODEL = "qwen/qwen3-next-80b-a3b-instruct"
 DEFAULT_REPORT_MODEL = "qwen/qwen3-max"
 DEFAULT_MODEL_FALLBACKS = ["qwen/qwen3-next-80b-a3b-instruct","z-ai/glm-5-turbo","z-ai/glm-4.5-air","qwen/qwen3-max","z-ai/glm-5.2","z-ai/glm-4.5","deepseek/deepseek-v3.1-terminus"]
 
-TASK_PROFILES = {"chat":"reasoning","readiness_analysis":"reasoning","field_diagnosis":"reasoning","exception_triage":"reasoning","decision_workbench":"reasoning","report_factory":"report","connector_diagnosis":"reasoning"}
+TASK_PROFILES = {"chat":"reasoning","ui_translation":"fast","readiness_analysis":"reasoning","field_diagnosis":"reasoning","exception_triage":"reasoning","decision_workbench":"reasoning","report_factory":"report","connector_diagnosis":"reasoning"}
 
 
 @dataclass
