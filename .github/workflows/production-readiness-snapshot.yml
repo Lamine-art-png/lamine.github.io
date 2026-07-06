@@ -1,0 +1,34 @@
+name: Production Readiness Snapshot
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Capture public readiness report
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          curl -sS --connect-timeout 10 --max-time 60 \
+            "https://api-preview.agroai-pilot.com/v1/readiness" > readiness.json || printf '{}' > readiness.json
+          {
+            echo "# Production readiness snapshot"
+            echo
+            echo "- SHA: \`${GITHUB_SHA}\`"
+            echo "- run: \`${GITHUB_RUN_ID}\`"
+            echo
+            echo '```json'
+            jq '{status,version,schema,production}' readiness.json 2>/dev/null || cat readiness.json
+            echo '```'
+          } > status.md
+          gh issue edit 124 --repo "${GITHUB_REPOSITORY}" --body-file status.md
