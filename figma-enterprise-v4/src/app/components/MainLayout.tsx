@@ -8,12 +8,34 @@ import { OperatingStatusBar } from "./OperatingStatusBar";
 
 type NavItem = { name: string; path: string; locked?: boolean; upgradeTo?: string; icon?: any };
 
+const PLAN_LABELS: Record<string, string> = {
+  free: "Free",
+  professional: "Professional",
+  team: "Team",
+  network: "Network",
+  enterprise: "Enterprise",
+  pilot: "Free",
+  pro: "Professional",
+  waterops: "Professional",
+  assurance_audit: "Professional",
+  assurance: "Team",
+};
+
+function capabilityEnabled(entitlements: Record<string, unknown>, key: string, fallback: boolean) {
+  const capabilities = entitlements.capabilities;
+  if (!capabilities || typeof capabilities !== "object" || Array.isArray(capabilities)) return fallback;
+  const value = (capabilities as Record<string, unknown>)[key];
+  return value === true || value === "enabled" || value === "preview";
+}
+
 export function MainLayout() {
   const { currentOrganization, currentWorkspace, entitlements, logout } = useAuth();
   const { t } = useLocale();
-  const canInviteTeam = Boolean(entitlements.can_invite_team);
-  const canAccessAdminRequests = Boolean(entitlements.can_access_admin_requests);
-  const canGeneratePdf = Boolean(entitlements.can_generate_pdf);
+  const canInviteTeam = capabilityEnabled(entitlements, "team.invite", Boolean(entitlements.can_invite_team));
+  const canAccessAdminRequests = capabilityEnabled(entitlements, "admin.requests", Boolean(entitlements.can_access_admin_requests));
+  const canGeneratePdf = capabilityEnabled(entitlements, "reports.pdf_export", Boolean(entitlements.can_generate_pdf));
+  const canUseConnectors = capabilityEnabled(entitlements, "connectors.live", Boolean(entitlements.can_use_connectors));
+  const currentPlanLabel = PLAN_LABELS[String(currentOrganization?.plan || "free").toLowerCase()] || "Free";
 
   const operateItems: NavItem[] = [
     { name: t("commandCenter"), path: "/" },
@@ -22,7 +44,7 @@ export function MainLayout() {
     { name: t("decisions"), path: "/operations" },
     { name: t("evidence"), path: "/evidence" },
     { name: t("reports"), path: "/reports", locked: !canGeneratePdf, upgradeTo: "professional" },
-    { name: t("connectors"), path: "/integrations" },
+    { name: t("connectors"), path: "/integrations", locked: !canUseConnectors, upgradeTo: "professional" },
   ];
 
   const intelligenceItems: NavItem[] = [
@@ -77,7 +99,7 @@ export function MainLayout() {
 
         <div className="space-y-2 px-3 pb-4">
           <NavLink to="/pricing" className="flex h-10 items-center justify-between rounded-md px-3 text-[12px] font-medium" style={({ isActive }) => ({ background: isActive ? "#0B2A1F" : "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.78)", border: "1px solid rgba(255,255,255,0.07)" })}>
-            <span>{currentOrganization?.plan === "network" ? "Network" : currentOrganization?.plan === "team" ? "Team" : currentOrganization?.plan === "professional" ? "Professional" : "Free"}</span>
+            <span>{currentPlanLabel}</span>
             <span style={{ color: "rgba(255,255,255,0.42)" }}>{t("plan")}</span>
           </NavLink>
           <div className="rounded-lg p-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
