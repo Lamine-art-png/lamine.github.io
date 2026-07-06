@@ -3,6 +3,8 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+from functools import lru_cache
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -14,6 +16,8 @@ from app.services.model_router import ModelRouter
 
 router = APIRouter(tags=["i18n"])
 
+_REPO_ROOT = Path(__file__).resolve().parents[4]
+_CANONICAL_CATALOG_PATH = _REPO_ROOT / "shared" / "ui-catalog.en.json"
 _MAX_KEYS = 250
 _MAX_VALUE_CHARS = 2_000
 _MAX_SOURCE_CHARS = 60_000
@@ -42,6 +46,14 @@ class CatalogRequest(BaseModel):
         return value
 
 
+@lru_cache(maxsize=1)
+def canonical_source_catalog() -> dict[str, str]:
+    raw = json.loads(_CANONICAL_CATALOG_PATH.read_text(encoding="utf-8"))
+    if not isinstance(raw, dict) or not raw or not all(isinstance(key, str) and isinstance(value, str) for key, value in raw.items()):
+        raise RuntimeError("canonical_ui_catalog_invalid")
+    return raw
+
+
 def _enabled_locale_payloads() -> list[dict[str, Any]]:
     specs = locale_specs()
     payloads: list[dict[str, Any]] = []
@@ -51,14 +63,7 @@ def _enabled_locale_payloads() -> list[dict[str, Any]]:
             continue
         spec = specs.get(code.lower())
         language_code = spec.language_code if spec else code.split("-", 1)[0].lower()
-        payloads.append(
-            {
-                "code": code,
-                "language_code": language_code,
-                "name": family_name(language_code),
-                "direction": spec.direction if spec else family_direction(language_code),
-            }
-        )
+        payloads.append({"code": code, "language_code": language_code, "name": family_name(language_code), "direction": spec.direction if spec else family_direction(language_code)})
     return payloads
 
 
@@ -71,8 +76,7 @@ def _cache_key(locale: str, source: dict[str, str]) -> str:
 def _validate_translated_catalog(source: dict[str, str], translated: Any) -> dict[str, str]:
     if not isinstance(translated, dict):
         raise ValueError("translated catalog is not an object")
-    expected = set(source)
-    if set(translated) != expected:
+    if set(translated) != set(source):
         raise ValueError("translated catalog keys do not match source keys")
     output: dict[str, str] = {}
     for key in source:
@@ -90,10 +94,7 @@ def get_ui_languages() -> dict[str, Any]:
 
 
 @router.post("/i18n/catalog")
-async def translate_ui_catalog(
-    payload: CatalogRequest,
-    _ctx: AuthContext = Depends(get_auth_context),
-) -> dict[str, Any]:
+async def translate_ui_catalog(payload: CatalogRequest, _ctx: AuthContext = Depends(get_auth_context)) -> dict[str, Any]:
     enabled = {code.lower(): code for code in enabled_ui_locales()}
     requested = payload.locale.strip().replace("_", "-")
     canonical = enabled.get(requested.lower())
@@ -101,10 +102,14 @@ async def translate_ui_catalog(
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"code": "unsupported_ui_locale", "locale": requested})
     if canonical == "auto":
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"code": "auto_locale_requires_browser_resolution"})
-    if canonical == "en":
-        return {"status": "ok", "locale": canonical, "catalog": payload.source, "source": "identity"}
 
-    key = _cache_key(canonical, payload.source)
+    source = canonical_source_catalog()
+    if payload.source != source:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"code": "ui_source_catalog_mismatch", "action": "refresh_portal_release"})
+    if canonical == "en":
+        return {"status": "ok", "locale": canonical, "catalog": source, "source": "identity"}
+
+    key = _cache_key(canonical, source)
     cached = _CACHE.get(key)
     if cached and cached[0] > time.time():
         return {"status": "ok", "locale": canonical, "catalog": cached[1], "source": "memory_cache"}
@@ -112,47 +117,18 @@ async def translate_ui_catalog(
     spec = locale_specs().get(canonical.lower())
     language_code = spec.language_code if spec else canonical.split("-", 1)[0].lower()
     language = family_name(language_code)
-    source_json = json.dumps(payload.source, ensure_ascii=False, separators=(",", ":"))
+    source_json = json.dumps(source, ensure_ascii=False, separators=(",", ":"))
     messages = [
-        {
-            "role": "system",
-            "content": (
-                "You are AGRO-AI's deterministic enterprise UI localization engine. "
-                f"Translate every JSON string value into {language} ({canonical}). "
-                "Return one JSON object only. Preserve every key exactly. Preserve placeholders such as {recipient}, {title}, and {level} exactly. "
-                "Preserve AGRO-AI, product names, URLs, units, numbers, and Markdown syntax. Do not add explanations."
-            ),
-        },
+        {"role": "system", "content": "You are AGRO-AI's deterministic enterprise UI localization engine. " + f"Translate every JSON string value into {language} ({canonical}). " + "Return one JSON object only. Preserve every key exactly. Preserve placeholders such as {recipient}, {title}, and {level} exactly. Preserve AGRO-AI, product names, URLs, units, numbers, and Markdown syntax. Do not add explanations."},
         {"role": "user", "content": source_json},
     ]
-    result, selection = await ModelRouter().run(
-        task="chat",
-        messages=messages,
-        temperature=0.0,
-        response_format={"type": "json_object"},
-        max_tokens=8_000,
-        timeout_seconds=45,
-        max_model_attempts=3,
-    )
+    result, selection = await ModelRouter().run(task="chat", messages=messages, temperature=0.0, response_format={"type": "json_object"}, max_tokens=8_000, timeout_seconds=45, max_model_attempts=3)
     if result.status != "ok" or not result.content.strip():
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"code": "ui_catalog_generation_unavailable", "locale": canonical, "provider": result.provider, "model": result.model},
-        )
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"code": "ui_catalog_generation_unavailable", "locale": canonical, "provider": result.provider, "model": result.model})
     try:
-        translated = _validate_translated_catalog(payload.source, json.loads(result.content))
+        translated = _validate_translated_catalog(source, json.loads(result.content))
     except (json.JSONDecodeError, ValueError) as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={"code": "invalid_ui_catalog_generation", "locale": canonical, "reason": str(exc)},
-        ) from exc
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail={"code": "invalid_ui_catalog_generation", "locale": canonical, "reason": str(exc)}) from exc
 
     _CACHE[key] = (time.time() + _CACHE_TTL_SECONDS, translated)
-    return {
-        "status": "ok",
-        "locale": canonical,
-        "catalog": translated,
-        "source": "generated",
-        "provider": result.provider,
-        "model": result.model or selection.model,
-    }
+    return {"status": "ok", "locale": canonical, "catalog": translated, "source": "generated", "provider": result.provider, "model": result.model or selection.model}
