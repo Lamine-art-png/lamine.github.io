@@ -32,7 +32,13 @@ jobs:
 
       - name: Validate Wrangler deployment bundle
         working-directory: cloudflare/edge-gateway
-        run: npx wrangler deploy --dry-run --config ../../wrangler.toml
+        shell: bash
+        run: |
+          set -euo pipefail
+          secrets_file="$(mktemp)"
+          trap 'rm -f "$secrets_file"' EXIT
+          printf '%s' '{"QUEUE_PUBLISH_TOKEN":"ci-dry-run-only","QUEUE_CONSUMER_TOKEN":"ci-dry-run-only"}' > "$secrets_file"
+          npx wrangler deploy --dry-run --config ../../wrangler.toml --secrets-file "$secrets_file"
 
   portal_release_contract:
     runs-on: ubuntu-latest
