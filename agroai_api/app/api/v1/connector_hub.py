@@ -30,6 +30,7 @@ from app.models.operational_records import ConnectorConnection, DataSource, Evid
 from app.services.ingestion_stream import read_spooled_bytes, stream_upload_to_spool
 from app.services.oauth_state import sign_oauth_state
 from app.services.oauth_urls import oauth_url
+import app.services.connector_commercial_guard as _connector_commercial_guard  # noqa: F401,E402
 
 router = APIRouter(tags=["connector-hub-actions"])
 ProviderId = Literal["wiseconn", "talgil", "universal_controller", "weather", "openet", "manual_csv", "chat_upload", "gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce", "google_earth_engine", "custom_api"]
