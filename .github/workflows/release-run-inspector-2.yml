@@ -14,10 +14,10 @@ jobs:
   inspect:
     runs-on: ubuntu-latest
     steps:
-      - name: Show edge deploy job error lines
+      - name: Inspect current production release
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh run view 28776717405 --repo "${GITHUB_REPOSITORY}" --job 85322662374 --log | tail -n 35
+          gh run list --repo "${GITHUB_REPOSITORY}" --workflow deploy.yml --limit 5 --json databaseId,headSha,status,conclusion,event,createdAt,updatedAt,url
