@@ -95,5 +95,6 @@ async def sync_outlook(db: Session, connection: ConnectorConnection, access_valu
     cursor.status = "ready"
     cursor.last_success_at = datetime.utcnow()
     cursor.updated_at = datetime.utcnow()
-    db.commit()
+    # Deliberately do not commit here. The provider runner commits these staged
+    # records and cursor changes only through its worker-owned fenced completion.
     return {"provider": "outlook", "seen": seen, "inserted": inserted, "cursor_advanced": bool(cursor.cursor)}
