@@ -1,6 +1,14 @@
 import pytest
 
-from app.api.v1.i18n import CatalogRequest, _chunks, _decode_json_object, _enabled_locale_payloads, _validate_translated_catalog, canonical_source_catalog
+from app.api.v1.i18n import (
+    CatalogRequest,
+    _chunks,
+    _decode_json_object,
+    _enabled_locale_payloads,
+    _validate_translated_catalog,
+    canonical_source_catalog,
+    requested_source_catalog,
+)
 from app.services.language_registry import enabled_ui_locales
 
 
@@ -15,6 +23,22 @@ def test_canonical_catalog_is_accepted_by_request_contract():
     payload = CatalogRequest(locale="de", source=source)
     assert payload.source == source
     assert source["language"] == "Language"
+
+
+def test_exact_canonical_subset_is_accepted_for_fast_core_hydration():
+    source = canonical_source_catalog()
+    core = {key: source[key] for key in ("language", "settings", "save", "support")}
+    assert requested_source_catalog(core) == core
+
+
+def test_subset_with_value_drift_is_rejected():
+    with pytest.raises(ValueError, match="ui_source_catalog_mismatch"):
+        requested_source_catalog({"language": "Wrong value"})
+
+
+def test_subset_with_unknown_key_is_rejected():
+    with pytest.raises(ValueError, match="ui_source_catalog_mismatch"):
+        requested_source_catalog({"not.a.real.key": "Nope"})
 
 
 def test_translation_chunks_preserve_exact_source_union():
