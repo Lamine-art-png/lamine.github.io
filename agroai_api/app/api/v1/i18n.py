@@ -21,10 +21,11 @@ router = APIRouter(tags=["i18n"])
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _CANONICAL_CATALOG_PATH = _REPO_ROOT / "shared" / "ui-catalog.en.json"
+_LITERAL_CATALOG_GLOB = "ui-literals.en.*.json"
 _PLACEHOLDER_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-_MAX_KEYS = 250
+_MAX_KEYS = 2_000
 _MAX_VALUE_CHARS = 2_000
-_MAX_SOURCE_CHARS = 60_000
+_MAX_SOURCE_CHARS = 200_000
 _CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
 _TRANSLATION_CHUNK_SIZE = 18
 _MAX_CHUNK_ATTEMPTS = 2
@@ -58,10 +59,22 @@ class CatalogRequest(BaseModel):
 
 @lru_cache(maxsize=1)
 def canonical_source_catalog() -> dict[str, str]:
-    raw = json.loads(_CANONICAL_CATALOG_PATH.read_text(encoding="utf-8"))
-    if not isinstance(raw, dict) or not raw or not all(isinstance(key, str) and isinstance(value, str) for key, value in raw.items()):
+    base = json.loads(_CANONICAL_CATALOG_PATH.read_text(encoding="utf-8"))
+    if not isinstance(base, dict) or not base:
         raise RuntimeError("canonical_ui_catalog_invalid")
-    return raw
+    merged: dict[str, str] = {}
+    merged.update(base)
+    for path in sorted((_REPO_ROOT / "shared").glob(_LITERAL_CATALOG_GLOB)):
+        part = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(part, dict):
+            raise RuntimeError("canonical_ui_literal_catalog_invalid")
+        overlap = set(merged).intersection(part)
+        if overlap:
+            raise RuntimeError(f"duplicate_ui_literal_catalog_keys:{sorted(overlap)[:3]}")
+        merged.update(part)
+    if not all(isinstance(key, str) and isinstance(value, str) for key, value in merged.items()):
+        raise RuntimeError("canonical_ui_catalog_invalid")
+    return merged
 
 
 def _enabled_locale_payloads() -> list[dict[str, Any]]:
