@@ -1,0 +1,23 @@
+name: Public DNS Audit
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/public-dns-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve API hostname
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo 'A records:'
+          getent ahostsv4 api.agroai-pilot.com || true
+          echo 'HTTPS response:'
+          curl -sS -i --max-time 20 https://api.agroai-pilot.com/v1/edge-health | head -25
