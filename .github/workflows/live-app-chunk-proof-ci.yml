@@ -1,0 +1,60 @@
+name: Live App Chunk Proof
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/live-app-chunk-proof-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      PORTAL_URL: https://app.agroai-pilot.com
+    steps:
+      - name: Crawl live Vite chunks and verify global language markers
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p app-proof/assets
+          curl --fail --silent --show-error --max-time 20 "${PORTAL_URL}/" -o app-proof/index.html
+          title="$(sed -n 's:.*<title>\(.*\)</title>.*:\1:p' app-proof/index.html | head -1)"
+          grep -oE '/assets/[A-Za-z0-9._/-]+\.js' app-proof/index.html | sed 's#^/##' > app-proof/queue.txt
+          : > app-proof/seen.txt
+          for pass in 1 2 3 4; do
+            sort -u app-proof/queue.txt -o app-proof/queue.txt
+            while IFS= read -r asset; do
+              [ -n "$asset" ] || continue
+              grep -Fx "$asset" app-proof/seen.txt >/dev/null 2>&1 && continue
+              echo "$asset" >> app-proof/seen.txt
+              target="app-proof/assets/$(basename "$asset")"
+              curl --fail --silent --show-error --max-time 20 "${PORTAL_URL}/${asset}" -o "$target"
+              grep -oE 'assets/[A-Za-z0-9._/-]+\.js' "$target" >> app-proof/queue.txt || true
+              grep -oE '\./[A-Za-z0-9._/-]+\.js' "$target" | sed 's#^\./#assets/#' >> app-proof/queue.txt || true
+            done < app-proof/queue.txt
+          done
+          cat app-proof/assets/*.js > app-proof/all-js.txt
+          kiswahili=false
+          ukrainian=false
+          japanese=false
+          safe_cache=false
+          global_options=false
+          grep -F 'Kiswahili' app-proof/all-js.txt >/dev/null && kiswahili=true || true
+          grep -F 'Українська' app-proof/all-js.txt >/dev/null && ukrainian=true || true
+          grep -F '日本語' app-proof/all-js.txt >/dev/null && japanese=true || true
+          grep -F 'agroai_ui_catalog_v3:' app-proof/all-js.txt >/dev/null && safe_cache=true || true
+          grep -F 'Browser default' app-proof/all-js.txt >/dev/null && global_options=true || true
+          jq -n --arg title "$title" --argjson kiswahili "$kiswahili" --argjson ukrainian "$ukrainian" --argjson japanese "$japanese" --argjson safe_cache "$safe_cache" --argjson global_options "$global_options" \
+            '{title:$title,kiswahili:$kiswahili,ukrainian:$ukrainian,japanese:$japanese,safe_cache_v3:$safe_cache,global_options:$global_options}' \
+            | tee app-proof/result.json
+          jq -e '.kiswahili and .ukrainian and .japanese and .safe_cache_v3 and .global_options' app-proof/result.json >/dev/null
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-app-chunk-proof
+          path: app-proof
+          retention-days: 2
