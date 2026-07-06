@@ -18,11 +18,11 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          OPS_ISSUE: "124"
+          OPS_ISSUE: "129"
         run: |
           set -euo pipefail
           run_id=""
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 36); do
             run_id="$(gh run list --repo "${GITHUB_REPOSITORY}" --workflow deploy.yml --commit "${GITHUB_SHA}" --limit 1 --json databaseId --jq '.[0].databaseId // empty')"
             if [ -n "$run_id" ]; then break; fi
             sleep 5
@@ -34,7 +34,7 @@ jobs:
             exit 0
           fi
 
-          for attempt in $(seq 1 150); do
+          for attempt in $(seq 1 72); do
             status="$(gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json status --jq '.status')"
             if [ "$status" = "completed" ]; then break; fi
             sleep 10
