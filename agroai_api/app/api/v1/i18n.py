@@ -20,7 +20,7 @@ router = APIRouter(tags=["i18n"])
 
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _CANONICAL_CATALOG_PATH = _REPO_ROOT / "shared" / "ui-catalog.en.json"
-_PLACEHOLDER_RE = re.compile(r"\{[A-Za-z_][A-Za-z0-9_]*\}")
+_PLACEHOLDER_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _MAX_KEYS = 250
 _MAX_VALUE_CHARS = 2_000
 _MAX_SOURCE_CHARS = 60_000
@@ -76,8 +76,25 @@ def _cache_key(locale: str, source: dict[str, str]) -> str:
     return f"{locale}:{digest}"
 
 
-def _placeholders(value: str) -> Counter[str]:
-    return Counter(_PLACEHOLDER_RE.findall(value))
+def _placeholder_signature(value: str) -> Counter[str]:
+    tokens: list[str] = []
+    index = 0
+    while index < len(value):
+        char = value[index]
+        if char == "}":
+            raise ValueError("malformed placeholder braces")
+        if char != "{":
+            index += 1
+            continue
+        end = value.find("}", index + 1)
+        if end < 0:
+            raise ValueError("malformed placeholder braces")
+        name = value[index + 1 : end]
+        if _PLACEHOLDER_NAME_RE.fullmatch(name) is None:
+            raise ValueError("malformed placeholder braces")
+        tokens.append("{" + name + "}")
+        index = end + 1
+    return Counter(tokens)
 
 
 def _validate_translated_catalog(source: dict[str, str], translated: Any) -> dict[str, str]:
@@ -91,7 +108,12 @@ def _validate_translated_catalog(source: dict[str, str], translated: Any) -> dic
         if not isinstance(value, str) or not value.strip():
             raise ValueError(f"invalid translated value for {key}")
         normalized = value.strip()
-        if _placeholders(normalized) != _placeholders(source_value):
+        try:
+            source_signature = _placeholder_signature(source_value)
+            translated_signature = _placeholder_signature(normalized)
+        except ValueError as exc:
+            raise ValueError(f"malformed placeholders for {key}") from exc
+        if translated_signature != source_signature:
             raise ValueError(f"translated placeholders do not match source for {key}")
         output[key] = normalized
     return output

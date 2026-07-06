@@ -1,8 +1,10 @@
 import { apiClient } from "./api/client";
 import { normalizeLocale, TRANSLATIONS } from "./i18n";
 
-const CACHE_PREFIX = "agroai_ui_catalog_v2:";
+const CACHE_PREFIX = "agroai_ui_catalog_v3:";
+const RETRY_COOLDOWN_MS = 30_000;
 const INFLIGHT = new Map<string, Promise<boolean>>();
+const RETRY_AFTER = new Map<string, number>();
 
 type CatalogResponse = {
   status: string;
@@ -17,11 +19,41 @@ function exactKeyParity(candidate: Record<string, string>, source: Record<string
   return sourceKeys.length === candidateKeys.length && sourceKeys.every((key, index) => key === candidateKeys[index]);
 }
 
+function placeholderSignature(value: string): string[] | null {
+  const tokens: string[] = [];
+  let index = 0;
+  while (index < value.length) {
+    const char = value[index];
+    if (char === "}") return null;
+    if (char !== "{") {
+      index += 1;
+      continue;
+    }
+    const end = value.indexOf("}", index + 1);
+    if (end < 0) return null;
+    const name = value.slice(index + 1, end);
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(name)) return null;
+    tokens.push(`{${name}}`);
+    index = end + 1;
+  }
+  return tokens.sort();
+}
+
+function placeholderParity(candidate: string, source: string) {
+  const candidateSignature = placeholderSignature(candidate);
+  const sourceSignature = placeholderSignature(source);
+  if (!candidateSignature || !sourceSignature || candidateSignature.length !== sourceSignature.length) return false;
+  return sourceSignature.every((token, index) => token === candidateSignature[index]);
+}
+
 function validCatalog(candidate: unknown, source: Record<string, string>): candidate is Record<string, string> {
   if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return false;
   const catalog = candidate as Record<string, unknown>;
   if (!exactKeyParity(catalog as Record<string, string>, source)) return false;
-  return Object.values(catalog).every((value) => typeof value === "string" && value.trim().length > 0);
+  return Object.entries(catalog).every(([key, value]) => {
+    if (typeof value !== "string" || value.trim().length === 0) return false;
+    return placeholderParity(value.trim(), source[key]);
+  });
 }
 
 function sourceFingerprint(source: Record<string, string>) {
@@ -47,7 +79,7 @@ function readCached(locale: string, source: Record<string, string>) {
     const raw = localStorage.getItem(cacheKey(locale, fingerprint));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { version?: number; sourceFingerprint?: string; catalog?: unknown };
-    if (parsed.version !== 2 || parsed.sourceFingerprint !== fingerprint || !validCatalog(parsed.catalog, source)) return null;
+    if (parsed.version !== 3 || parsed.sourceFingerprint !== fingerprint || !validCatalog(parsed.catalog, source)) return null;
     return parsed.catalog;
   } catch {
     return null;
@@ -57,7 +89,7 @@ function readCached(locale: string, source: Record<string, string>) {
 function writeCached(locale: string, source: Record<string, string>, catalog: Record<string, string>) {
   try {
     const fingerprint = sourceFingerprint(source);
-    localStorage.setItem(cacheKey(locale, fingerprint), JSON.stringify({ version: 2, sourceFingerprint: fingerprint, catalog }));
+    localStorage.setItem(cacheKey(locale, fingerprint), JSON.stringify({ version: 3, sourceFingerprint: fingerprint, catalog }));
   } catch {
     // Local cache is an optimization only.
   }
@@ -89,12 +121,25 @@ export async function ensureLocaleCatalog(locale: string): Promise<boolean> {
 
   const source = TRANSLATIONS.en;
   const requestKey = `${effectiveLocale}:${sourceFingerprint(source)}`;
+  const retryAfter = RETRY_AFTER.get(requestKey) || 0;
+  if (retryAfter > Date.now()) throw new Error(`UI translation retry cooldown for ${effectiveLocale}`);
+  if (retryAfter) RETRY_AFTER.delete(requestKey);
+
   const existing = INFLIGHT.get(requestKey);
   if (existing) return existing;
 
-  const pending = loadLocaleCatalog(effectiveLocale, source).finally(() => {
-    INFLIGHT.delete(requestKey);
-  });
+  const pending = loadLocaleCatalog(effectiveLocale, source)
+    .then((changed) => {
+      RETRY_AFTER.delete(requestKey);
+      return changed;
+    })
+    .catch((error) => {
+      RETRY_AFTER.set(requestKey, Date.now() + RETRY_COOLDOWN_MS);
+      throw error;
+    })
+    .finally(() => {
+      INFLIGHT.delete(requestKey);
+    });
   INFLIGHT.set(requestKey, pending);
   return pending;
 }

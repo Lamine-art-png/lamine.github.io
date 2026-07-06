@@ -35,12 +35,17 @@ def test_generated_catalog_preserves_placeholder_multiset():
 @pytest.mark.parametrize(
     "translated_value",
     [
-        "Bericht wurde gesendet.",
-        "Bericht an {empfaenger} gesendet.",
-        "Bericht an {recipient} und {recipient} gesendet.",
+        "Sent.",
+        "Sent to {target}.",
+        "Sent to {recipient} and {recipient}.",
+        "Sent to " + "{" + "{recipient}" + "}" + ".",
+        "Sent to " + "{recipient}" + "}" + ".",
+        "Sent to " + "{" + "{recipient}" + ".",
+        "Sent to " + "{recipient" + ".",
+        "Sent to " + "recipient}" + ".",
     ],
 )
-def test_generated_catalog_rejects_missing_renamed_or_duplicated_placeholders(translated_value):
+def test_generated_catalog_rejects_changed_or_malformed_placeholders(translated_value):
     source = {"notice": "Report emailed to {recipient}."}
     with pytest.raises(ValueError, match="placeholders"):
         _validate_translated_catalog(source, {"notice": translated_value})

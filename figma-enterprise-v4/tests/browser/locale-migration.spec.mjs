@@ -33,7 +33,9 @@ async function prepare(page, storedLocale) {
       state.catalogs += 1;
       const payload = req.postDataJSON();
       const translatedLanguage = payload.locale === "de" ? "Sprache" : payload.locale === "ar" ? "اللغة" : payload.source.language;
-      return reply({ status: "ok", locale: payload.locale, catalog: { ...payload.source, language: translatedLanguage }, source: "browser-test" });
+      const catalog = { ...payload.source, language: translatedLanguage };
+      if (payload.locale === "sw") catalog["intelligence.reportEmailed"] = "Imetumwa kwa " + "{" + "{recipient}" + "}";
+      return reply({ status: "ok", locale: payload.locale, catalog, source: "browser-test" });
     }
     if (req.method() === "PATCH" && url.pathname === "/v1/settings/preferences") {
       state.patches += 1;
@@ -72,3 +74,18 @@ for (const [name, stored, selected, effective, rewritten, translatedLabel, expec
     await context.close();
   });
 }
+
+test("malformed dynamic placeholder catalog is rejected and not cached", async ({ browser }) => {
+  const context = await browser.newContext({ locale: "en-US" });
+  const page = await context.newPage();
+  const state = await prepare(page, "sw");
+  await page.goto(APP_URL);
+
+  await expect(languageSelector(page)).toHaveValue("sw");
+  await expect(page.locator("html")).toHaveAttribute("lang", "sw");
+  await expect.poll(() => state.catalogs).toBe(1);
+  await expect(page.getByText("Language", { exact: true }).first()).toBeVisible();
+  const cached = await page.evaluate(() => Object.keys(localStorage).some((key) => key.startsWith("agroai_ui_catalog_v3:sw:")));
+  expect(cached).toBe(false);
+  await context.close();
+});
