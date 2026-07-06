@@ -99,6 +99,23 @@ def quota_snapshot(db: Session, org: Organization, metrics: list[str] | None = N
     }
 
 
+def _reservation_for_request(
+    db: Session,
+    organization_id: str,
+    metric: str,
+    request_id: str,
+) -> QuotaReservation | None:
+    return (
+        db.query(QuotaReservation)
+        .filter(
+            QuotaReservation.organization_id == organization_id,
+            QuotaReservation.metric == metric,
+            QuotaReservation.request_id == request_id,
+        )
+        .first()
+    )
+
+
 def reserve_quota(
     db: Session,
     org: Organization,
@@ -113,22 +130,22 @@ def reserve_quota(
 ) -> QuotaReservation:
     if quantity <= 0:
         raise ValueError("quota reservation quantity must be positive")
+
     request_key = request_id or str(uuid.uuid4())
-    existing = (
-        db.query(QuotaReservation)
-        .filter(
-            QuotaReservation.organization_id == org.id,
-            QuotaReservation.metric == metric,
-            QuotaReservation.request_id == request_key,
-        )
-        .first()
-    )
-    if existing:
+    existing = _reservation_for_request(db, org.id, metric, request_key)
+    if existing and existing.state != "released":
         return existing
 
+    # Capacity decisions are serialized per organization. The second idempotency
+    # lookup after the row lock closes the race where two concurrent requests with
+    # the same request_id both miss the optimistic pre-lock lookup.
     locked_org = db.query(Organization).filter(Organization.id == org.id).with_for_update().first()
     if not locked_org:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+
+    existing = _reservation_for_request(db, locked_org.id, metric, request_key)
+    if existing and existing.state != "released":
+        return existing
 
     limit = quota_limit(db, locked_org, metric)
     used = committed_usage(db, locked_org, metric)
@@ -147,6 +164,21 @@ def reserve_quota(
         )
 
     period_key, _period_start, _period_end = current_period(locked_org)
+    if existing:
+        # A failed/released attempt may be retried with the same idempotency key.
+        # Re-arm the durable row only after the serialized capacity check.
+        existing.workspace_id = workspace_id
+        existing.user_id = user_id
+        existing.quantity = quantity
+        existing.unit = unit
+        existing.period_key = period_key
+        existing.state = "reserved"
+        existing.metadata_json = metadata or {}
+        existing.committed_at = None
+        existing.released_at = None
+        db.flush()
+        return existing
+
     row = QuotaReservation(
         organization_id=locked_org.id,
         workspace_id=workspace_id,
