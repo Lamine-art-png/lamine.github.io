@@ -73,7 +73,7 @@ test("every visible non-English UI locale hydrates catalog keys and static porta
     await expect(selector).toHaveValue(locale);
     await expect(page.getByText(`⟦${locale}⟧ Settings`, { exact: true }).first()).toBeVisible();
     await expect(page.getByText(`⟦${locale}⟧ Timezone`, { exact: true }).first()).toBeVisible();
-    await expect(page.getByText(`⟦${locale}⟧ Assistant speed`, { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("combobox", { name: `⟦${locale}⟧ Assistant speed` })).toBeVisible();
     const expectedDir = ["ar", "fa", "ur"].includes(locale.split("-")[0]) ? "rtl" : "ltr";
     await expect(page.locator("html")).toHaveAttribute("dir", expectedDir);
   }
