@@ -1,0 +1,116 @@
+name: Production Deployment Diagnostics
+
+on:
+  push:
+    branches: ["main"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: production-diagnostics
+  cancel-in-progress: true
+
+env:
+  OPS_ISSUE: "124"
+  CUSTOM_UPSTREAM: "https://api-preview.agroai-pilot.com"
+  DIRECT_RENDER_UPSTREAM: "https://agroai-api-preview.onrender.com"
+  PUBLIC_API: "https://api.agroai-pilot.com"
+  PORTAL_URL: "https://app.agroai-pilot.com"
+
+jobs:
+  public-probes:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe public surfaces and post redacted status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          probe() {
+            local name="$1" url="$2"
+            local body code
+            body="$(mktemp)"
+            code="$(curl -L -sS -o "$body" -w '%{http_code}' --connect-timeout 10 --max-time 60 "$url" 2>/dev/null || printf '000')"
+            local status="fail"
+            if [[ "$code" =~ ^2 ]]; then status="ok"; fi
+            local summary
+            summary="$(tr '\n' ' ' < "$body" | head -c 220 | sed 's/`/\\`/g')"
+            rm -f "$body"
+            printf '%s|%s|%s|%s\n' "$name" "$status" "$code" "$summary"
+          }
+
+          {
+            probe custom_upstream_health "${CUSTOM_UPSTREAM}/v1/health"
+            probe direct_render_health "${DIRECT_RENDER_UPSTREAM}/v1/health"
+            probe public_edge_health "${PUBLIC_API}/v1/edge-health"
+            probe public_api_health "${PUBLIC_API}/v1/health"
+            probe production_portal "${PORTAL_URL}"
+          } > probes.txt
+
+          {
+            echo "## Production public diagnostics"
+            echo
+            echo "- workflow SHA: \`${GITHUB_SHA}\`"
+            echo "- run: \`${GITHUB_RUN_ID}\`"
+            echo
+            echo '| Probe | Result | HTTP | Redacted body preview |'
+            echo '|---|---:|---:|---|'
+            while IFS='|' read -r name result code summary; do
+              echo "| ${name} | ${result} | ${code} | \`${summary}\` |"
+            done < probes.txt
+          } > comment.md
+
+          gh issue comment "${OPS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body-file comment.md
+
+  authenticated-contract:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
+    steps:
+      - name: Probe authenticated release contract and post redacted fields
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          report_contract() {
+            local name="$1" url="$2"
+            local payload code
+            payload="$(mktemp)"
+            code="$(curl -sS -o "$payload" -w '%{http_code}' --connect-timeout 10 --max-time 60 \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN:-}" \
+              "$url" 2>/dev/null || printf '000')"
+            if jq -e . "$payload" >/dev/null 2>&1; then
+              jq -c '{status,contract,build_sha,schema_current,queue_configured,object_storage_configured,object_storage_reachable,production_ready,production_blocker_codes}' "$payload"
+            else
+              printf '{"status":"unavailable","http":"%s"}' "$code"
+            fi
+            rm -f "$payload"
+          }
+
+          custom="$(report_contract custom "${CUSTOM_UPSTREAM}/v1/internal/release/health")"
+          direct="$(report_contract direct "${DIRECT_RENDER_UPSTREAM}/v1/internal/release/health")"
+
+          {
+            echo "## Production authenticated contract diagnostics"
+            echo
+            echo "- workflow SHA: \`${GITHUB_SHA}\`"
+            echo "- required exact SHA: \`${GITHUB_SHA}\`"
+            echo
+            echo "### Custom upstream"
+            echo '```json'
+            echo "$custom" | jq . 2>/dev/null || echo "$custom"
+            echo '```'
+            echo
+            echo "### Direct Render upstream"
+            echo '```json'
+            echo "$direct" | jq . 2>/dev/null || echo "$direct"
+            echo '```'
+          } > comment.md
+
+          gh issue comment "${OPS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body-file comment.md
