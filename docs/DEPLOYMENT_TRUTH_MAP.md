@@ -43,14 +43,16 @@ Authoritative source:
 Responsibilities:
 
 - exact browser-origin policy;
-- request IDs and security response headers;
+- bounded trusted request IDs and security response headers;
 - removal of spoofable internal forwarding headers;
 - fail-closed upstream configuration;
 - recursion protection;
-- bounded retry for idempotent reads only;
+- bounded retry for idempotent reads only, with discarded retry bodies cancelled;
 - separate longer timeout for intelligence routes;
+- exact connector task-type validation;
 - authenticated internal connector-task publication;
 - Cloudflare Queue consumption and delayed retries;
+- no acknowledgement when consumer custody is absent;
 - scheduled recovery of pending transactional outbox rows.
 
 The upstream application origin is configured as `UPSTREAM_API_ORIGIN` in
@@ -71,7 +73,11 @@ Required backend configuration:
 - `CLOUDFLARE_R2_SECRET_ACCESS_KEY`
 
 The application verifies uploaded object size and SHA-256 metadata before a
-connector job is accepted as durably staged.
+connector job is accepted as durably staged. Tenant and connection namespaces
+use readable identifiers plus collision-resistant SHA-256 scope suffixes, so
+lossy filename sanitization cannot collapse distinct tenant identities into the
+same object prefix. Scoped reads verify checksum and exact tenant/connection
+metadata. Cleanup deletes are issued through the same tenant/connection scope.
 
 ## E. Durable Connector Tasks
 
@@ -87,16 +93,19 @@ Dead-letter queue:
 
 Flow:
 
-1. The API commits the job and transactional outbox row.
-2. The API publishes the pending row to the Worker internal enqueue endpoint.
-3. The Worker validates the bounded task envelope and sends it to the Queue.
-4. The Queue consumer delivers the task to the protected backend processing
-   endpoint.
-5. The backend runs the shared connector task processor.
-6. Terminal outcomes acknowledge the message.
-7. Transient outcomes retry with bounded delayed backoff.
-8. Exhausted messages move to the dead-letter queue.
-9. A five-minute Worker cron drains recoverable pending outbox rows.
+1. The API commits the job and transactional outbox row in one database transaction.
+2. An outbox drainer atomically claims a publishable row as `publishing` before network I/O.
+3. The API publishes the claimed row to the Worker internal enqueue endpoint.
+4. The Worker validates the exact bounded task envelope and sends it to the Queue.
+5. The Queue consumer delivers the task to the protected backend processing endpoint.
+6. The backend runs the shared fail-closed connector task processor.
+7. Long-running jobs renew leases; completion and failure updates are fenced by worker ownership.
+8. Provider records and cursor advancement commit only through the worker-owned fenced completion.
+9. Terminal outcomes acknowledge the Queue message.
+10. Transient outcomes retry with bounded delayed backoff.
+11. Exhausted messages move to the dead-letter queue.
+12. A five-minute Worker cron drains recoverable pending outbox rows and object GC.
+13. Stale `publishing` claims recover after a bounded timeout; workers remain idempotent because a crash after remote acceptance but before local publication commit can still duplicate delivery.
 
 Required shared secrets:
 
@@ -141,19 +150,41 @@ Authoritative workflow:
 On `main` release it:
 
 1. validates the enterprise portal;
-2. typechecks and tests the edge gateway;
-3. validates the Wrangler deployment bundle;
-4. runs focused backend queue integration tests;
-5. ensures the primary and dead-letter queues exist idempotently;
-6. provisions Worker queue secrets;
-7. deploys the API edge Worker;
-8. smoke-tests edge and upstream API health;
-9. builds the exact enterprise portal against the custom API domain;
-10. deploys the portal to Pages;
-11. smoke-tests the production portal;
-12. stores immutable release evidence keyed by Git SHA.
+2. installs the edge from the committed npm lockfile;
+3. typechecks and tests the edge gateway;
+4. validates the Wrangler deployment bundle against required-secret declarations;
+5. compiles the backend and runs focused Queue, outbox, lease, object-storage, route, and readiness tests;
+6. fails closed if required production release values are absent;
+7. verifies current upstream health;
+8. waits for the exact backend Git SHA, exact Alembic schema, Queue configuration, reachable durable object storage, and full production-readiness contract;
+9. stores the upstream release-contract evidence artifact;
+10. ensures the primary and dead-letter queues exist idempotently;
+11. deploys Worker code and exact Queue secrets together from a mode-0600 temporary secrets file;
+12. smoke-tests edge health, upstream-through-edge health, and the authenticated exact release contract;
+13. builds the exact enterprise portal against the custom API domain;
+14. deploys the portal to Pages;
+15. smoke-tests the production portal;
+16. stores immutable release evidence keyed by Git SHA.
 
-## H. Safety Rules
+The edge dependency graph is committed in
+`cloudflare/edge-gateway/package-lock.json`; CI and release paths must use
+`npm ci`, not resolve a fresh transitive graph.
+
+## H. Emergency Rollback
+
+Authoritative workflow:
+
+`.github/workflows/cloudflare-rollback.yml`
+
+Rollback is manual and requires the literal confirmation `ROLLBACK`, an incident
+reason, and at least one explicit Worker version ID or Pages deployment ID.
+A Worker rollback is not considered successful merely because `/v1/edge-health`
+responds: it must also proxy `/v1/health` successfully and pass the authenticated
+backend release contract including schema, Queue, object-storage reachability,
+and production readiness. Rollback evidence is retained separately from release
+evidence.
+
+## I. Safety Rules
 
 - Do not route the Worker upstream back to `api.agroai-pilot.com`; recursion is
   rejected in code.
@@ -161,6 +192,10 @@ On `main` release it:
 - Do not enable the in-process API scheduler in production.
 - Do not configure durable object storage without a durable task queue, or vice
   versa; upload routes fail closed on a split-brain configuration.
+- Do not register a second customer `/v1/evidence/upload-stream` implementation;
+  the hardened secure route is authoritative.
 - Do not bypass Alembic schema ownership.
+- Do not acknowledge Queue messages when consumer custody or upstream processing
+  cannot be proven.
 - Do not claim a deployment succeeded until the release workflow and production
   smoke checks succeed for the exact Git SHA.
