@@ -29,6 +29,10 @@ async function prepare(page, storedLocale) {
     }
     if (req.method() === "GET" && url.pathname === "/v1/orgs") return reply({ organizations: [{ id: "org", name: "QA Org", role: "owner" }] });
     if (req.method() === "GET" && url.pathname === "/v1/workspaces") return reply({ workspaces: [{ id: "ws", name: "QA Workspace", status: "active" }] });
+    if (req.method() === "POST" && url.pathname === "/v1/i18n/catalog") {
+      const payload = req.postDataJSON();
+      return reply({ status: "ok", locale: payload.locale, catalog: payload.source, source: "browser-test" });
+    }
     if (req.method() === "PATCH" && url.pathname === "/v1/settings/preferences") {
       state.patches += 1;
       return reply({ status: "saved" });
@@ -45,7 +49,8 @@ function languageSelector(page) {
 const cases = [
   ["legacy fr", "fr", "fr-FR", "fr-FR", "fr-FR"],
   ["regional fr-CA", "fr-CA", "fr-FR", "fr-FR", "fr-FR"],
-  ["disabled de", "de", "auto", "en", "auto"],
+  ["global de", "de", "de", "de", "de"],
+  ["global ar", "ar", "ar", "ar", "ar"],
   ["unknown locale", "nonsense-value", "auto", "en", "auto"],
 ];
 
