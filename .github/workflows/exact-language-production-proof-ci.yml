@@ -1,0 +1,185 @@
+name: Exact Language Production Proof
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/exact-language-production-proof-ci.yml'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  prove-production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    env:
+      EXPECTED_MAIN_SHA: 3338fd2b9dd2483f6213cd8518a292895a5aaef0
+      PORTAL_URL: https://app.agroai-pilot.com
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PROJECT: agroai-portal
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Wait for exact main production release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p production-proof
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yml/runs?event=push&branch=main&per_page=50"
+          release_id=""
+          for attempt in $(seq 1 120); do
+            curl --fail --silent --show-error \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "$api" > production-proof/runs.json
+            jq --arg sha "$EXPECTED_MAIN_SHA" '
+              [.workflow_runs[] | select(.head_sha == $sha)]
+              | sort_by(.created_at) | reverse | .[0] // null
+              | if . == null then null else {id,name,event,status,conclusion,head_sha,created_at,updated_at,html_url} end
+            ' production-proof/runs.json > production-proof/exact-release.json
+            release_id="$(jq -r '.id // empty' production-proof/exact-release.json)"
+            status="$(jq -r '.status // "missing"' production-proof/exact-release.json)"
+            conclusion="$(jq -r '.conclusion // "pending"' production-proof/exact-release.json)"
+            echo "attempt=${attempt} release_id=${release_id:-missing} status=${status} conclusion=${conclusion}"
+            if [ "$status" = "completed" ] && [ "$conclusion" = "success" ]; then
+              break
+            fi
+            if [ "$status" = "completed" ] && [ "$conclusion" != "success" ]; then
+              cat production-proof/exact-release.json
+              exit 1
+            fi
+            sleep 15
+          done
+          test -n "$release_id"
+          jq -e '.status == "completed" and .conclusion == "success" and .head_sha == env.EXPECTED_MAIN_SHA' production-proof/exact-release.json >/dev/null
+          echo "$release_id" > production-proof/release-id.txt
+          cat production-proof/exact-release.json
+
+      - name: Prove every production release job succeeded
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_id="$(cat production-proof/release-id.txt)"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/runs/${release_id}/jobs?per_page=100" \
+            > production-proof/release-jobs.json
+          for job in \
+            "Validate release candidate" \
+            "Deploy API edge and queues" \
+            "Deploy enterprise portal" \
+            "Record release evidence"; do
+            jq -e --arg name "$job" '[.jobs[] | select(.name == $name and .status == "completed" and .conclusion == "success")] | length == 1' production-proof/release-jobs.json >/dev/null
+          done
+          jq '[.jobs[] | {name,status,conclusion}]' production-proof/release-jobs.json
+
+      - name: Prove live edge backend readiness and 61-language contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 20 "${PORTAL_URL}/v1/edge-health" > production-proof/edge-health.json
+          curl --fail --silent --show-error --max-time 30 "${PORTAL_URL}/v1/health" > production-proof/health.json
+          curl --fail --silent --show-error --max-time 30 "${PORTAL_URL}/v1/readiness" > production-proof/readiness.json
+          curl --fail --silent --show-error --max-time 30 "${PORTAL_URL}/v1/i18n/languages" > production-proof/languages.json
+          jq -e '.status == "ok"' production-proof/edge-health.json >/dev/null
+          jq -e '.status == "ok"' production-proof/health.json >/dev/null
+          jq -e '.status == "ready" and .schema.ready == true and .production.ready == true and (.production.blockers | length == 0)' production-proof/readiness.json >/dev/null
+          jq -e '
+            .status == "ok"
+            and .count >= 61
+            and ([.languages[].code] | index("de") != null)
+            and ([.languages[].code] | index("ar") != null)
+            and ([.languages[].code] | index("sw") != null)
+            and ([.languages[].code] | index("ja") != null)
+            and ([.languages[].code] | index("uk") != null)
+            and ([.languages[].code] | index("hi") != null)
+          ' production-proof/languages.json >/dev/null
+          jq '{status,count,sample:[.languages[] | select(.code == "de" or .code == "ar" or .code == "sw" or .code == "ja" or .code == "uk" or .code == "hi")]}' production-proof/languages.json
+
+      - name: Prove live portal is exact global-language build
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p production-proof/assets
+          curl --fail --silent --show-error --location --max-time 30 "${PORTAL_URL}/" > production-proof/index.html
+          title="$(sed -n 's:.*<title>\(.*\)</title>.*:\1:p' production-proof/index.html | head -1)"
+          test "$title" = "AGRO-AI Enterprise Portal"
+          grep -oE '/assets/[A-Za-z0-9._/-]+\.js' production-proof/index.html | sed 's#^/##' > production-proof/queue.txt
+          : > production-proof/seen.txt
+          for pass in 1 2 3 4; do
+            sort -u production-proof/queue.txt -o production-proof/queue.txt
+            while IFS= read -r asset; do
+              [ -n "$asset" ] || continue
+              grep -Fx "$asset" production-proof/seen.txt >/dev/null 2>&1 && continue
+              echo "$asset" >> production-proof/seen.txt
+              target="production-proof/assets/$(basename "$asset")"
+              curl --fail --silent --show-error --max-time 30 "${PORTAL_URL}/${asset}" > "$target"
+              grep -oE 'assets/[A-Za-z0-9._/-]+\.js' "$target" >> production-proof/queue.txt || true
+              grep -oE '\./[A-Za-z0-9._/-]+\.js' "$target" | sed 's#^\./#assets/#' >> production-proof/queue.txt || true
+            done < production-proof/queue.txt
+          done
+          cat production-proof/assets/*.js > production-proof/all-js.txt
+          for marker in 'Kiswahili' 'Українська' '日本語' 'Deutsch' 'العربية' 'Browser default' 'agroai_ui_catalog_v3:'; do
+            grep -F "$marker" production-proof/all-js.txt >/dev/null
+          done
+          grep -F '/v1/i18n/catalog' production-proof/all-js.txt >/dev/null
+          echo "live_portal_global_language_runtime=ok"
+
+      - name: Prove exact Cloudflare production deployment and drained queue
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          base="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT}"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "$base" > production-proof/cf-project.json
+          jq -e '
+            .success == true
+            and .result.source.config.deployments_enabled == false
+            and .result.source.config.production_deployments_enabled == false
+            and .result.source.config.preview_deployment_setting == "none"
+          ' production-proof/cf-project.json >/dev/null
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "$base/deployments?per_page=25" > production-proof/cf-deployments.json
+          jq -e '.success == true' production-proof/cf-deployments.json >/dev/null
+          jq -e --arg sha "$EXPECTED_MAIN_SHA" '[.result[] | select(.environment == "production" and .latest_stage.status == "success" and .deployment_trigger.metadata.commit_hash == $sha)] | length >= 1' production-proof/cf-deployments.json >/dev/null
+          jq -e '[.result[] | select(.environment == "preview" and .latest_stage.status == "active")] | length == 0' production-proof/cf-deployments.json >/dev/null
+          jq --arg sha "$EXPECTED_MAIN_SHA" '[.result[] | select(.environment == "production" and .deployment_trigger.metadata.commit_hash == $sha) | {id,url,environment,created_on,latest_stage,commit_hash:.deployment_trigger.metadata.commit_hash}] | .[0]' production-proof/cf-deployments.json
+
+      - name: Record exact production proof
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          language_count="$(jq -r '.count // 0' production-proof/languages.json 2>/dev/null || echo 0)"
+          jq -n \
+            --arg checked_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg expected_main_sha "$EXPECTED_MAIN_SHA" \
+            --argjson language_count "$language_count" \
+            --slurpfile release production-proof/exact-release.json \
+            '{checked_at:$checked_at,expected_main_sha:$expected_main_sha,language_count:$language_count,release:($release[0] // null)}' \
+            | tee production-proof/summary.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: exact-language-production-proof
+          path: production-proof
+          if-no-files-found: error
+          retention-days: 7
