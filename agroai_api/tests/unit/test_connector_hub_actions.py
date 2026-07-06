@@ -11,12 +11,24 @@ from sqlalchemy.pool import StaticPool
 from app.core.security import require_current_tenant_id
 from app.db.base import Base, get_db
 from app.main import app
+from app.models.saas import Organization
 
 
 def make_client():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
+    with TestingSessionLocal() as db:
+        db.add(
+            Organization(
+                id="org-test",
+                name="Connector Test Org",
+                slug="connector-test-org",
+                plan="enterprise",
+                subscription_status="active",
+            )
+        )
+        db.commit()
 
     def override_db():
         db = TestingSessionLocal()
