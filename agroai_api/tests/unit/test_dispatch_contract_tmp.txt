@@ -1,0 +1,2 @@
+connector_ingest_object
+connector_provider_sync
