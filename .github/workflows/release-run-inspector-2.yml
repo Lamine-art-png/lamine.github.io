@@ -7,6 +7,7 @@ on:
       - '.github/workflows/release-run-inspector-2.yml'
 
 permissions:
+  actions: read
   contents: read
 
 jobs:
@@ -15,8 +16,10 @@ jobs:
     steps:
       - name: List latest production workflow runs
         shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          echo "inspection_refresh=3"
-          curl -fsSL "https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yml/runs?per_page=8" \
-            | jq '{runs: [.workflow_runs[] | {id,head_sha,status,conclusion,event,created_at,updated_at,html_url}]}'
+          echo "inspection_refresh=4"
+          gh run list --repo "${GITHUB_REPOSITORY}" --workflow deploy.yml --limit 8 \
+            --json databaseId,headSha,status,conclusion,event,createdAt,updatedAt,url
