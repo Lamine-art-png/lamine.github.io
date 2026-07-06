@@ -47,7 +47,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm install --no-audit --no-fund
+          npm ci --no-audit --no-fund
           npm run check
           secrets_file="$(mktemp)"
           trap 'rm -f "$secrets_file"' EXIT
@@ -70,9 +70,11 @@ jobs:
             tests/unit/test_cloudflare_queue_runtime.py \
             tests/unit/test_cloudflare_queue_routes.py \
             tests/unit/test_cloudflare_queue_rotation.py \
+            tests/unit/test_connector_task_processor_contract.py \
             tests/unit/test_task_outbox.py \
             tests/unit/test_ingestion_job_leases.py \
             tests/unit/test_object_storage.py \
+            tests/unit/test_runtime_origin_and_route_contract.py \
             tests/unit/test_production_readiness.py
 
   deploy-edge:
@@ -90,6 +92,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: cloudflare/edge-gateway/package-lock.json
 
       - name: Fail closed on missing deployment secrets
         shell: bash
@@ -102,9 +106,9 @@ jobs:
             fi
           done
 
-      - name: Install pinned edge tooling
+      - name: Install locked edge tooling
         working-directory: cloudflare/edge-gateway
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
 
       - name: Verify current upstream health
         shell: bash

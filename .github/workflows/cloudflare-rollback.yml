@@ -71,6 +71,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: npm
+          cache-dependency-path: cloudflare/edge-gateway/package-lock.json
       - name: Fail closed on missing rollback credentials
         shell: bash
         run: |
@@ -79,9 +81,9 @@ jobs:
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           test -n "${QUEUE_CONSUMER_TOKEN:-}"
           test -n "${WORKER_VERSION_ID:-}"
-      - name: Install pinned edge tooling
+      - name: Install locked edge tooling
         working-directory: cloudflare/edge-gateway
-        run: npm install --no-audit --no-fund
+        run: npm ci --no-audit --no-fund
       - name: Roll back Worker to explicit version
         working-directory: cloudflare/edge-gateway
         run: >-
