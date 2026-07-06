@@ -95,9 +95,13 @@ def apply_authoritative_billing_event(
 
 
 def install_commercial_billing_lifecycle() -> None:
-    """Install the hardened lifecycle into the already-loaded billing route module."""
+    """Install the complete commercial subscription boundary at application startup."""
     from app.api.v1 import billing as billing_api
+    from app.services.commercial_subscription_restrictions import install_inactive_subscription_restrictions
 
+    # Subscription state restrictions are part of the same runtime boundary: a
+    # selected paid plan with inactive billing must behave like Free for access.
+    install_inactive_subscription_restrictions()
     billing_api._apply_billing_event = apply_authoritative_billing_event
 
     original_offer_config = billing_api._offer_config
