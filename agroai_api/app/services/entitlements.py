@@ -1,4 +1,4 @@
-"""Plan limits and entitlement checks for SaaS organizations."""
+"""Compatibility entitlements plus canonical commercial runtime enforcement."""
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
@@ -9,6 +9,12 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.models.saas import Organization, OrganizationMembership, UsageEvent, Workspace
+from app.services.commercial_control import (
+    canonical_plan,
+    customer_safe_entitlement_payload,
+    get_limit,
+    require_feature,
+)
 from app.services.product_plans import plan_by_id
 
 
@@ -32,25 +38,24 @@ class PlanLimits:
     can_access_billing_portal: bool
 
 
+# Compatibility surface for older route/tests. Runtime quota and feature decisions use
+# commercial_control.resolve_effective_entitlements instead of these fixed values.
 PLAN_LIMITS: dict[str, PlanLimits] = {
     "free": PlanLimits(1, 1, 10, 25, False, False, False, False, False, False, False, "basic", False, False, False, True),
     "professional": PlanLimits(5, 3, 500, 500, True, True, True, False, False, False, False, "standard", True, True, True, True),
     "team": PlanLimits(25, 10, 2500, 2500, True, True, True, True, True, False, False, "priority", True, True, True, True),
     "network": PlanLimits(50, 25, 10000, 10000, True, True, True, True, True, True, False, "priority", True, True, True, True),
     "enterprise": PlanLimits(10000, 10000, 100000, 100000, True, True, True, True, True, True, True, "enterprise", True, True, True, True),
-    "pilot": PlanLimits(1, 1, 10, 25, False, False, False, False, False, False, False, "basic", False, False, False, True),
-    "assurance_audit": PlanLimits(5, 3, 500, 500, True, True, True, False, False, False, False, "standard", True, True, True, True),
-    "waterops": PlanLimits(5, 3, 500, 500, True, True, True, False, False, False, False, "standard", True, True, True, True),
-    "assurance": PlanLimits(25, 10, 2500, 2500, True, True, True, True, True, False, False, "priority", True, True, True, True),
-    "pro": PlanLimits(5, 3, 500, 500, True, True, True, False, False, False, False, "standard", True, True, True, True),
 }
+for alias in ("pilot", "assurance_audit", "waterops", "assurance", "pro"):
+    PLAN_LIMITS[alias] = PLAN_LIMITS[canonical_plan(alias)]
 
 
 def get_plan_limits(plan: str | None) -> PlanLimits:
-    return PLAN_LIMITS.get((plan or "free").lower(), PLAN_LIMITS["free"])
+    return PLAN_LIMITS[canonical_plan(plan)]
 
 
-def serialize_entitlements(org: Organization) -> dict:
+def serialize_entitlements(org: Organization, db: Session | None = None) -> dict:
     limits = asdict(get_plan_limits(org.plan))
     plan = plan_by_id(org.plan)
     limits.update(
@@ -72,6 +77,18 @@ def serialize_entitlements(org: Organization) -> dict:
             },
         }
     )
+    if db is not None:
+        control = customer_safe_entitlement_payload(db, org)
+        limits.update(
+            {
+                "plan_version": control["plan_version"],
+                "customer_class": control["customer_class"],
+                "organization_type": control["organization_type"],
+                "intelligence_profile": control["intelligence_profile"],
+                "capabilities": control["capabilities"],
+                "quotas": control["quotas"],
+            }
+        )
     return limits
 
 
@@ -84,10 +101,10 @@ def require_owner_or_admin(role: str) -> None:
 
 
 def require_subscription_active(org: Organization) -> None:
-    if get_plan_limits(org.plan).support_level != "basic" and org.subscription_status not in {"active", "trialing"}:
+    if canonical_plan(org.plan) != "free" and org.subscription_status not in {"active", "trialing", "contracted"}:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail={"code": "subscription_inactive", "message": "An active subscription is required."},
+            detail={"code": "subscription_inactive", "message": "An active commercial subscription or contract is required."},
         )
 
 
@@ -123,46 +140,45 @@ def organization_user_count(db: Session, org: Organization) -> int:
 
 
 def assert_can_create_workspace(db: Session, org: Organization, mode: str) -> None:
-    limits = get_plan_limits(org.plan)
     current = db.query(Workspace).filter(Workspace.organization_id == org.id).count()
-    if current >= limits.max_workspaces:
+    limit = get_limit(db, org, "quota.workspace")
+    if limit is not None and current >= limit:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "limit_reached", "message": "Workspace limit reached for this plan."},
+            detail={"code": "limit_reached", "metric": "workspace", "limit": limit, "message": "Workspace limit reached for this plan."},
         )
-    if mode == "live" and not limits.can_use_live_integrations:
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail={"code": "plan_required", "message": "Live workspaces require a paid plan."},
-        )
-    if limits.support_level != "basic":
-        require_subscription_active(org)
+    if mode == "live":
+        require_feature(db, org, "connectors.live", recommended_plan="professional")
 
 
 def assert_can_upload_evidence(db: Session, org: Organization) -> None:
-    limits = get_plan_limits(org.plan)
-    if count_monthly_usage(db, org.id, "evidence_upload") >= limits.max_uploads_monthly:
+    from app.services.quota import committed_usage, quota_limit
+
+    require_feature(db, org, "evidence.upload")
+    limit = quota_limit(db, org, "evidence_upload")
+    if limit is not None and committed_usage(db, org, "evidence_upload") >= limit:
         raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "limit_reached", "message": "Evidence upload limit reached for this plan."},
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={"code": "quota_exceeded", "metric": "evidence_upload", "limit": limit, "message": "Evidence upload quota reached."},
         )
 
 
 def assert_can_run_agent(db: Session, org: Organization) -> None:
-    limits = get_plan_limits(org.plan)
-    if limits.max_agro_ai_messages_monthly <= 0:
+    from app.services.quota import committed_usage, quota_limit
+
+    require_feature(db, org, "intelligence.ask")
+    limit = quota_limit(db, org, "ai_action")
+    if limit is not None and committed_usage(db, org, "ai_action") >= limit:
         raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail={"code": "plan_required", "message": "AGRO-AI messages require a paid plan."},
-        )
-    if count_monthly_usage(db, org.id, "agent_run") >= limits.max_agro_ai_messages_monthly:
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "limit_reached", "message": "AGRO-AI message limit reached for this plan."},
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={"code": "quota_exceeded", "metric": "ai_action", "limit": limit, "message": "AGRO-AI intelligence quota reached."},
         )
 
 
-def assert_can_export_reports(org: Organization) -> None:
+def assert_can_export_reports(org: Organization, db: Session | None = None) -> None:
+    if db is not None:
+        require_feature(db, org, "reports.pdf_export", recommended_plan="professional")
+        return
     if not get_plan_limits(org.plan).can_generate_pdf:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -170,7 +186,10 @@ def assert_can_export_reports(org: Organization) -> None:
         )
 
 
-def assert_can_invite_team(org: Organization) -> None:
+def assert_can_invite_team(org: Organization, db: Session | None = None) -> None:
+    if db is not None:
+        require_feature(db, org, "team.invite", recommended_plan="team")
+        return
     if not get_plan_limits(org.plan).can_invite_team:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -178,7 +197,10 @@ def assert_can_invite_team(org: Organization) -> None:
         )
 
 
-def assert_can_access_admin_requests(org: Organization) -> None:
+def assert_can_access_admin_requests(org: Organization, db: Session | None = None) -> None:
+    if db is not None:
+        require_feature(db, org, "admin.requests", recommended_plan="team")
+        return
     if not get_plan_limits(org.plan).can_access_admin_requests:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -186,9 +208,12 @@ def assert_can_access_admin_requests(org: Organization) -> None:
         )
 
 
-def assert_can_use_connectors(org: Organization) -> None:
+def assert_can_use_connectors(org: Organization, db: Session | None = None) -> None:
+    if db is not None:
+        require_feature(db, org, "connectors.live", recommended_plan="professional")
+        return
     if not get_plan_limits(org.plan).can_use_connectors:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail={"code": "upgrade_required", "message": "Connectors are included in Professional.", "recommended_plan": "professional"},
+            detail={"code": "upgrade_required", "message": "Live connectors are included in Professional.", "recommended_plan": "professional"},
         )
