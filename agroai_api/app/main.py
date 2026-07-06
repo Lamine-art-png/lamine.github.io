@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import datetime
 import logging
+import re
 from contextlib import asynccontextmanager
 from typing import Any, Dict
 
@@ -109,6 +110,7 @@ if getattr(settings, "APP_URL", "") and settings.APP_URL not in ALLOWED_ORIGINS:
     ALLOWED_ORIGINS.append(settings.APP_URL)
 
 ALLOWED_ORIGIN_REGEX = r"^https://([a-z0-9-]+\.)?(agroai-portal|lamine-github-io|agroai-command-center-v2-preview)\.pages\.dev$"
+_ALLOWED_ORIGIN_PATTERN = re.compile(ALLOWED_ORIGIN_REGEX)
 
 app.add_middleware(
     CORSMiddleware,
@@ -122,9 +124,7 @@ app.add_middleware(
 
 
 def _origin_allowed(origin: str) -> bool:
-    if origin in ALLOWED_ORIGINS:
-        return True
-    return bool(origin.endswith(".pages.dev") and ("agroai-portal" in origin or "lamine-github-io" in origin or "agroai-command-center-v2-preview" in origin))
+    return origin in ALLOWED_ORIGINS or _ALLOWED_ORIGIN_PATTERN.fullmatch(origin) is not None
 
 
 def _add_runtime_cors_headers(response: JSONResponse, origin: str | None) -> JSONResponse:
