@@ -34,15 +34,33 @@ export function useLocale() {
 
   useEffect(() => {
     let cancelled = false;
-    setCatalogError(null);
-    setCatalogLoading(true);
-    ensureLocaleCatalog(selectedLocale)
-      .catch((cause) => {
-        if (!cancelled) setCatalogError(cause instanceof Error ? cause.message : "UI translation unavailable");
-      })
-      .finally(() => {
+
+    async function hydrateSelectedLocale() {
+      setCatalogError(null);
+      if (effectiveLocale === "en") {
+        setCatalogLoading(false);
+        return;
+      }
+
+      setCatalogLoading(true);
+      try {
+        // Phase 1 is intentionally small so the visible shell can translate quickly.
+        await ensureLocaleCatalog(selectedLocale, "core");
+        if (!cancelled) notifyLocaleRuntime();
+
+        // Phase 2 completes every inventoried portal literal in the background.
+        await ensureLocaleCatalog(selectedLocale, "full");
+        if (!cancelled) notifyLocaleRuntime();
+      } catch (cause) {
+        if (!cancelled) {
+          setCatalogError(cause instanceof Error ? cause.message : "UI translation unavailable");
+        }
+      } finally {
         if (!cancelled) setCatalogLoading(false);
-      });
+      }
+    }
+
+    void hydrateSelectedLocale();
     return () => {
       cancelled = true;
     };
@@ -55,23 +73,14 @@ export function useLocale() {
     return canonical;
   };
 
-  const activateLocale = async (nextLocale: string) => {
+  const activateLocale = (nextLocale: string) => {
+    // Selection is immediate. Catalog hydration is progressive and must never lock the selector.
     const canonical = canonicalizeSelectedLocale(nextLocale);
+    const activated = setStoredLocale(canonical);
+    setSelectedLocaleState(activated);
     setCatalogError(null);
-    setCatalogLoading(true);
-    try {
-      await ensureLocaleCatalog(canonical);
-      const activated = setStoredLocale(canonical);
-      setSelectedLocaleState(activated);
-      notifyLocaleRuntime();
-      return activated;
-    } catch (cause) {
-      const message = cause instanceof Error ? cause.message : "UI translation unavailable";
-      setCatalogError(message);
-      throw cause;
-    } finally {
-      setCatalogLoading(false);
-    }
+    notifyLocaleRuntime();
+    return activated;
   };
 
   return {
