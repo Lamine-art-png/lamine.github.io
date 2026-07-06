@@ -36,7 +36,14 @@ jobs:
           node-version: "22"
       - run: npm install --no-audit --no-fund
       - run: npm run check
-      - run: npx wrangler deploy --dry-run --config ../../wrangler.toml
+      - name: Validate required-secret deployment bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          secrets_file="$(mktemp)"
+          trap 'rm -f "$secrets_file"' EXIT
+          printf '%s' '{"QUEUE_PUBLISH_TOKEN":"ci-dry-run-only","QUEUE_CONSUMER_TOKEN":"ci-dry-run-only"}' > "$secrets_file"
+          npx wrangler deploy --dry-run --config ../../wrangler.toml --secrets-file "$secrets_file"
 
   cloudflare-queue-backend-contract:
     runs-on: ubuntu-latest
@@ -55,4 +62,6 @@ jobs:
           tests/unit/test_cloudflare_queue_runtime.py
           tests/unit/test_cloudflare_queue_routes.py
           tests/unit/test_task_outbox.py
+          tests/unit/test_ingestion_job_leases.py
+          tests/unit/test_object_storage.py
           tests/unit/test_production_readiness.py
