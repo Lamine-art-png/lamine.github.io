@@ -6,8 +6,10 @@ const src = path.join(root, "src", "app");
 const repoRoot = path.resolve(root, "..");
 const manifestPath = path.join(repoRoot, "shared", "supported-locales.json");
 const targetsPath = path.join(repoRoot, "shared", "chatgpt-language-targets.json");
+const canonicalCatalogPath = path.join(repoRoot, "shared", "ui-catalog.en.json");
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 const targets = JSON.parse(fs.readFileSync(targetsPath, "utf8"));
+const canonicalCatalog = JSON.parse(fs.readFileSync(canonicalCatalogPath, "utf8"));
 const i18n = fs.readFileSync(path.join(src, "i18n.ts"), "utf8");
 const app = fs.readFileSync(path.join(src, "App.tsx"), "utf8");
 const hook = fs.readFileSync(path.join(src, "hooks", "useLocale.ts"), "utf8");
@@ -33,6 +35,11 @@ const enabledLanguageCodes = new Set(
 );
 for (const code of targetCodes) assert(enabledLanguageCodes.has(code), `AI language family ${code} must be visible in the UI registry`);
 
+const englishMatch = i18n.match(/const en: Record<string, string> = (\{[\s\S]*?\n\});\n\nconst frFR/);
+assert(englishMatch, "English frontend catalog could not be extracted for parity validation");
+const frontendEnglishCatalog = Function(`"use strict"; return (${englishMatch[1]});`)();
+assert(JSON.stringify(frontendEnglishCatalog) === JSON.stringify(canonicalCatalog), "frontend English catalog must exactly match the server-owned canonical catalog");
+
 assert(i18n.includes('../../../shared/supported-locales.json'), "frontend runtime must consume the shared manifest");
 assert(i18n.includes("MANIFEST.enabledUiLocales"), "enabled locale canonicalization must derive from manifest data");
 assert(!/export\s+function\s+useLocale/.test(i18n), "i18n.ts must not export a competing React locale hook");
@@ -40,6 +47,8 @@ assert(/export\s+function\s+useLocale/.test(hook), "hooks/useLocale.ts must be t
 assert(hook.includes("ensureLocaleCatalog"), "locale hook must hydrate non-static UI catalogs");
 assert(dynamicCatalog.includes('"/v1/i18n/catalog"'), "dynamic UI catalogs must use the backend localization contract");
 assert(dynamicCatalog.includes("exactKeyParity"), "dynamic catalogs must fail closed on key drift");
+assert(dynamicCatalog.includes("sourceFingerprint"), "dynamic catalogs must invalidate stale source copy");
+assert(dynamicCatalog.includes("INFLIGHT"), "dynamic catalogs must deduplicate concurrent hydration");
 assert(selector.includes("GLOBAL_UI_LOCALES"), "language selector must render the full global registry");
 assert(globalOptions.includes("manifest.enabledUiLocales"), "global selector options must derive from shared manifest");
 assert(!/key=\{\s*(locale|selectedLocale|effectiveLocale)\s*\}/.test(app), "locale must not be used as an app/router React key");
