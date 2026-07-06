@@ -79,9 +79,9 @@ jobs:
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
           test -n "${QUEUE_CONSUMER_TOKEN:-}"
           test -n "${WORKER_VERSION_ID:-}"
-      - name: Install locked edge tooling
+      - name: Install pinned edge tooling
         working-directory: cloudflare/edge-gateway
-        run: npm ci --no-audit --no-fund
+        run: npm install --no-audit --no-fund
       - name: Roll back Worker to explicit version
         working-directory: cloudflare/edge-gateway
         run: >-
