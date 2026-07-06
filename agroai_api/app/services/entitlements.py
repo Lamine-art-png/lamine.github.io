@@ -11,12 +11,16 @@ from sqlalchemy.orm import Session
 from app.models.saas import Organization, OrganizationMembership, UsageEvent, Workspace
 from app.services.commercial_control import (
     BASE_ENTITLEMENTS,
+    PAID_VARIABLE_COST_FEATURES,
     canonical_plan,
     customer_safe_entitlement_payload,
     get_limit,
     require_feature,
 )
 from app.services.product_plans import plan_by_id
+
+
+ACTIVE_PAID_STATES = {"active", "trialing", "contracted"}
 
 
 @dataclass(frozen=True)
@@ -54,11 +58,21 @@ def get_plan_limits(plan: str | None) -> PlanLimits:
     return PLAN_LIMITS[canonical_plan(plan)]
 
 
+def _base_commercial_values(org: Organization) -> dict:
+    canonical = canonical_plan(org.plan)
+    values = dict(BASE_ENTITLEMENTS[canonical])
+    if canonical != "free" and org.subscription_status not in ACTIVE_PAID_STATES:
+        for key in PAID_VARIABLE_COST_FEATURES:
+            if key in values and values[key] not in {"unavailable", "locked"}:
+                values[key] = "locked"
+        values["intelligence.profile"] = "essential"
+    return values
+
+
 def serialize_entitlements(org: Organization, db: Session | None = None) -> dict:
     limits = asdict(get_plan_limits(org.plan))
     plan = plan_by_id(org.plan)
-    canonical = canonical_plan(org.plan)
-    base = BASE_ENTITLEMENTS[canonical]
+    base = _base_commercial_values(org)
     base_capabilities = {key: value for key, value in base.items() if not key.startswith("quota.")}
     base_quotas = {key.removeprefix("quota."): value for key, value in base.items() if key.startswith("quota.")}
     limits.update(
@@ -110,7 +124,7 @@ def require_owner_or_admin(role: str) -> None:
 
 
 def require_subscription_active(org: Organization) -> None:
-    if canonical_plan(org.plan) != "free" and org.subscription_status not in {"active", "trialing", "contracted"}:
+    if canonical_plan(org.plan) != "free" and org.subscription_status not in ACTIVE_PAID_STATES:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
             detail={"code": "subscription_inactive", "message": "An active commercial subscription or contract is required."},
@@ -188,6 +202,7 @@ def assert_can_export_reports(org: Organization, db: Session | None = None) -> N
     if db is not None:
         require_feature(db, org, "reports.pdf_export", recommended_plan="professional")
         return
+    require_subscription_active(org)
     if not get_plan_limits(org.plan).can_generate_pdf:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -199,6 +214,7 @@ def assert_can_invite_team(org: Organization, db: Session | None = None) -> None
     if db is not None:
         require_feature(db, org, "team.invite", recommended_plan="team")
         return
+    require_subscription_active(org)
     if not get_plan_limits(org.plan).can_invite_team:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -210,6 +226,7 @@ def assert_can_access_admin_requests(org: Organization, db: Session | None = Non
     if db is not None:
         require_feature(db, org, "admin.requests", recommended_plan="team")
         return
+    require_subscription_active(org)
     if not get_plan_limits(org.plan).can_access_admin_requests:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -221,6 +238,7 @@ def assert_can_use_connectors(org: Organization, db: Session | None = None) -> N
     if db is not None:
         require_feature(db, org, "connectors.live", recommended_plan="professional")
         return
+    require_subscription_active(org)
     if not get_plan_limits(org.plan).can_use_connectors:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
