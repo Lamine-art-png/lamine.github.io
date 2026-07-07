@@ -6,7 +6,7 @@ const APP_URL = "http://127.0.0.1:4173/settings";
 const API_ORIGIN = "https://api.agroai-pilot.com";
 const repoRoot = path.resolve(process.cwd(), "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "shared", "supported-locales.json"), "utf8"));
-const REQUEST_CHUNK_SIZE = 36;
+const REQUEST_CHUNK_SIZE = 48;
 
 function qaToken() {
   const body = Buffer.from(JSON.stringify({ sub: "qa", exp: 4102444800 })).toString("base64url");

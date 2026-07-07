@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const APP_URL = "http://127.0.0.1:4173/settings";
 const API_ORIGIN = "https://api.agroai-pilot.com";
-const REQUEST_CHUNK_SIZE = 36;
+const REQUEST_CHUNK_SIZE = 48;
 
 function qaToken() {
   const body = Buffer.from(JSON.stringify({ sub: "qa", exp: 4102444800 })).toString("base64url");
@@ -102,7 +102,7 @@ test("malformed dynamic placeholder catalog is rejected and not cached", async (
   await expect.poll(() => state.catalogs.length).toBeGreaterThanOrEqual(1);
   expect(state.catalogs.every((item) => item.keyCount > 0 && item.keyCount <= REQUEST_CHUNK_SIZE)).toBeTruthy();
   await expect(page.getByText("Language", { exact: true }).first()).toBeVisible();
-  const cached = await page.evaluate(() => Object.keys(localStorage).some((key) => key.startsWith("agroai_ui_catalog_v4:sw:")));
+  const cached = await page.evaluate(() => Object.keys(localStorage).some((key) => key.startsWith("agroai_ui_catalog_v5:sw:")));
   expect(cached).toBe(false);
   await context.close();
 });

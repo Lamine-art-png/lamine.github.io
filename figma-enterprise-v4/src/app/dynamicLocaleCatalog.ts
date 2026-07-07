@@ -4,10 +4,10 @@ import { normalizeLocale, TRANSLATIONS } from "./i18n";
 import { notifyLocaleRuntime } from "./localeRuntimeStore";
 import { fullEnglishUiSource } from "./portalLiteralCatalog";
 
-const CACHE_PREFIX = "agroai_ui_catalog_v4:";
-const RETRY_COOLDOWN_MS = 3_000;
-const REQUEST_CHUNK_SIZE = 12;
-const REQUEST_PARALLELISM = 2;
+const CACHE_PREFIX = "agroai_ui_catalog_v5:";
+const RETRY_COOLDOWN_MS = 2_000;
+const REQUEST_CHUNK_SIZE = 48;
+const REQUEST_PARALLELISM = 1;
 const INFLIGHT = new Map<string, Promise<boolean>>();
 const RETRY_AFTER = new Map<string, number>();
 
@@ -119,7 +119,7 @@ function readCached(locale: string, source: Record<string, string>) {
     const raw = localStorage.getItem(cacheKey(locale, fingerprint));
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { version?: number; sourceFingerprint?: string; catalog?: unknown };
-    if (parsed.version !== 4 || parsed.sourceFingerprint !== fingerprint || !validCatalog(parsed.catalog, source)) return null;
+    if (parsed.version !== 5 || parsed.sourceFingerprint !== fingerprint || !validCatalog(parsed.catalog, source)) return null;
     return parsed.catalog;
   } catch {
     return null;
@@ -129,7 +129,7 @@ function readCached(locale: string, source: Record<string, string>) {
 function writeCached(locale: string, source: Record<string, string>, catalog: Record<string, string>) {
   try {
     const fingerprint = sourceFingerprint(source);
-    localStorage.setItem(cacheKey(locale, fingerprint), JSON.stringify({ version: 4, sourceFingerprint: fingerprint, catalog }));
+    localStorage.setItem(cacheKey(locale, fingerprint), JSON.stringify({ version: 5, sourceFingerprint: fingerprint, catalog }));
   } catch {
     // Local cache is an optimization only.
   }
@@ -169,7 +169,7 @@ async function loadLocaleCatalog(effectiveLocale: string, source: Record<string,
 
   for (let index = 0; index < chunks.length; index += REQUEST_PARALLELISM) {
     const wave = chunks.slice(index, index + REQUEST_PARALLELISM);
-    const translatedWave = await Promise.all(wave.map(async (chunk) => {
+    const settled = await Promise.allSettled(wave.map(async (chunk) => {
       const response = await apiClient.post<CatalogResponse>("/v1/i18n/catalog", {
         locale: effectiveLocale,
         source: chunk,
@@ -180,10 +180,17 @@ async function loadLocaleCatalog(effectiveLocale: string, source: Record<string,
       return { chunk, catalog: response.catalog };
     }));
 
-    for (const { chunk, catalog } of translatedWave) {
-      Object.assign(merged, catalog);
-      installLocaleCatalog(effectiveLocale, chunk, catalog, false);
+    let waveFailure: unknown = null;
+    for (const result of settled) {
+      if (result.status === "fulfilled") {
+        const { chunk, catalog } = result.value;
+        Object.assign(merged, catalog);
+        installLocaleCatalog(effectiveLocale, chunk, catalog, false);
+      } else if (!waveFailure) {
+        waveFailure = result.reason;
+      }
     }
+    if (waveFailure) throw waveFailure;
   }
 
   if (!validCatalog(merged, source)) {
