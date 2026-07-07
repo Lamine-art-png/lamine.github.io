@@ -25,7 +25,7 @@ concurrency:
 env:
   API_URL: https://app.agroai-pilot.com
   PORTAL_ORIGIN: https://app.agroai-pilot.com
-  I18N_EDGE_RELEASE: public-fallback-v1
+  I18N_EDGE_RELEASE: provider-chain-v2
 
 jobs:
   deploy:
