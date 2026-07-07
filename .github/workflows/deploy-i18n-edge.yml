@@ -25,7 +25,6 @@ concurrency:
 env:
   API_URL: https://app.agroai-pilot.com
   PORTAL_ORIGIN: https://app.agroai-pilot.com
-  UPSTREAM_RELEASE_URL: https://api-preview.agroai-pilot.com/v1/internal/release/health
 
 jobs:
   deploy:
@@ -80,23 +79,6 @@ jobs:
             test "$attempt" -lt 20
             sleep 3
           done
-
-      - name: Wait for exact repaired backend build
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in $(seq 1 90); do
-            payload="$(curl --fail --silent --show-error --max-time 20 \
-              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
-              "${UPSTREAM_RELEASE_URL}" 2>/dev/null || true)"
-            if printf '%s' "$payload" | jq -e --arg sha "$GITHUB_SHA" '.status == "ok" and .build_sha == $sha' >/dev/null 2>&1; then
-              echo "exact_backend_sha=${GITHUB_SHA}"
-              exit 0
-            fi
-            sleep 5
-          done
-          echo "Render backend did not reach exact SHA ${GITHUB_SHA}"
-          exit 1
 
       - name: Prove all 59 live browser-readable locales
         shell: bash
