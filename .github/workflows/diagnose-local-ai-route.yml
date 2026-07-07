@@ -19,25 +19,35 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Inspect local-ai routing
+      - name: Inspect local-ai routing and DNS
         run: |
           set -euo pipefail
           auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
           zone_id="$(curl --fail --silent --show-error -H "$auth" 'https://api.cloudflare.com/client/v4/zones?name=agroai-pilot.com' | jq -r '.result[0].id')"
           test -n "$zone_id"
+
           curl --fail --silent --show-error -H "$auth" "https://api.cloudflare.com/client/v4/zones/${zone_id}/workers/routes" \
             | jq '{routes:[.result[] | select((.pattern // "") | contains("local-ai")) | {id,pattern,script}]}' > local-ai-routes.json
+
           curl --fail --silent --show-error -H "$auth" "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/domains" \
             | jq '{domains:[.result[] | select((.hostname // "") == "local-ai.agroai-pilot.com") | {id,hostname,service,zone_id}]}' > local-ai-domains.json
+
+          curl --fail --silent --show-error -H "$auth" "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records?name=local-ai.agroai-pilot.com" \
+            | jq '{dns:[.result[] | {id,type,name,content,proxied}]}' > local-ai-dns.json
+
           cat local-ai-routes.json
           cat local-ai-domains.json
+          cat local-ai-dns.json
+
       - uses: actions/upload-artifact@v4
         with:
           name: local-ai-route-diagnostics-${{ github.sha }}
           path: |
             local-ai-routes.json
             local-ai-domains.json
+            local-ai-dns.json
           retention-days: 7
+
       - name: Publish diagnostic status
         if: always()
         uses: actions/github-script@v7
@@ -48,10 +58,11 @@ jobs:
             let statusContext = 'diagnostic/local-ai-route/failed';
             if (state === 'success') {
               const routes = JSON.parse(fs.readFileSync('local-ai-routes.json', 'utf8')).routes || [];
-              const domains = JSON.parse(fs.readFileSync('local-ai-domains.json', 'utf8')).domains || [];
+              const dns = JSON.parse(fs.readFileSync('local-ai-dns.json', 'utf8')).dns || [];
               const routeScript = routes[0]?.script || (routes.length ? 'route-no-script' : 'no-route');
-              const domainService = domains[0]?.service || (domains.length ? 'domain-unknown' : 'no-domain');
-              statusContext = `diagnostic/local-ai/${routeScript}/${domainService}`.slice(0, 100);
+              const record = dns[0];
+              const dnsKind = !record ? 'no-dns' : (String(record.content || '').endsWith('.cfargotunnel.com') ? 'tunnel' : String(record.type || 'dns').toLowerCase());
+              statusContext = `diagnostic/local-ai/${routeScript}/${dnsKind}`.slice(0, 100);
             }
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
@@ -59,5 +70,5 @@ jobs:
               sha: context.sha,
               state,
               context: statusContext,
-              description: 'local-ai Cloudflare binding inspection'
+              description: 'local-ai Worker and DNS inspection'
             });
