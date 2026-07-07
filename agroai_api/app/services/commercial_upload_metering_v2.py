@@ -89,6 +89,11 @@ def _wrap_route(route: APIRoute) -> None:
             _release(db, reservation_id, "upload_failed")
             raise
 
+    # FastAPI copies mounted routes and re-analyzes their endpoint signatures.
+    # Resolve postponed annotations in the original endpoint's own globals now,
+    # so ForwardRef names such as UploadFile and Session remain valid after the
+    # commercial wrapper is moved through another router.
+    metered.__signature__ = inspect.signature(original, eval_str=True)
     route.dependant.call = metered
     route.endpoint = metered
     route._agroai_commercial_metered = True
