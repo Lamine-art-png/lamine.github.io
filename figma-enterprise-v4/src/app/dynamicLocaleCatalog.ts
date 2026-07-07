@@ -1,4 +1,5 @@
 import { apiClient } from "./api/client";
+import { installCommercialBoundaryBaseCatalogs } from "./commercialBoundaryI18n";
 import { normalizeLocale, TRANSLATIONS } from "./i18n";
 import { notifyLocaleRuntime } from "./localeRuntimeStore";
 import { fullEnglishUiSource } from "./portalLiteralCatalog";
@@ -7,6 +8,8 @@ const CACHE_PREFIX = "agroai_ui_catalog_v4:";
 const RETRY_COOLDOWN_MS = 15_000;
 const INFLIGHT = new Map<string, Promise<boolean>>();
 const RETRY_AFTER = new Map<string, number>();
+
+installCommercialBoundaryBaseCatalogs();
 const CORE_ENGLISH_SOURCE: Record<string, string> = { ...TRANSLATIONS.en };
 
 export type CatalogScope = "core" | "full";
