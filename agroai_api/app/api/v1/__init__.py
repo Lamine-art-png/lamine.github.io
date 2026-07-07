@@ -21,7 +21,6 @@ from . import brain_safety as brain_safety_module  # noqa: E402
 brain_module.router.include_router(brain_safety_module.router)
 
 from . import ai as ai_module  # noqa: E402
-from . import connector_unified_v3 as connector_unified_v3_module  # noqa: E402
 from . import connector_hub as connector_module  # noqa: E402
 from . import connector_connection_upload_secure as connection_upload_module  # noqa: E402
 from . import connector_oauth_secure as oauth_module  # noqa: E402
@@ -70,8 +69,7 @@ def _remove_duplicate_product_checkout() -> None:
 
 
 connector_module.router.routes[0:0] = (
-    list(connector_unified_v3_module.router.routes)
-    + list(oauth_module.router.routes)
+    list(oauth_module.router.routes)
     + list(provider_sync_module.router.routes)
     + list(secure_stream_module.router.routes)
     + list(connection_upload_module.router.routes)
