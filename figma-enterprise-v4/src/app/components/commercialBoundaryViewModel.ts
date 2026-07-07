@@ -15,15 +15,22 @@ export type CommercialBoundaryDetail = {
   source?: string;
 };
 
+export type CommercialPlan = {
+  nameKey: string;
+  priceAmount?: string;
+  customPrice?: boolean;
+  bullets: [string, string, string];
+};
+
 export const ORDER: PlanId[] = ["free", "professional", "team", "network", "enterprise"];
 
-export const PLAN = {
+export const PLAN: Record<PlanId, CommercialPlan> = {
   free: { nameKey: "commercialBoundary.plan.free", priceAmount: "$0", bullets: ["commercialBoundary.plan.free.bullet1", "commercialBoundary.plan.free.bullet2", "commercialBoundary.plan.free.bullet3"] },
   professional: { nameKey: "commercialBoundary.plan.professional", priceAmount: "$299", bullets: ["commercialBoundary.plan.professional.bullet1", "commercialBoundary.plan.professional.bullet2", "commercialBoundary.plan.professional.bullet3"] },
   team: { nameKey: "commercialBoundary.plan.team", priceAmount: "$799", bullets: ["commercialBoundary.plan.team.bullet1", "commercialBoundary.plan.team.bullet2", "commercialBoundary.plan.team.bullet3"] },
   network: { nameKey: "commercialBoundary.plan.network", priceAmount: "$1,500", bullets: ["commercialBoundary.plan.network.bullet1", "commercialBoundary.plan.network.bullet2", "commercialBoundary.plan.network.bullet3"] },
   enterprise: { nameKey: "commercialBoundary.plan.enterprise", customPrice: true, bullets: ["commercialBoundary.plan.enterprise.bullet1", "commercialBoundary.plan.enterprise.bullet2", "commercialBoundary.plan.enterprise.bullet3"] },
-} as const;
+};
 
 export const FEATURE_TITLE_KEY: Record<string, string> = {
   "reports.generate": "commercialBoundary.feature.reportsGenerate",
