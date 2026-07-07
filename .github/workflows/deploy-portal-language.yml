@@ -1,0 +1,102 @@
+name: Portal Language Release
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "figma-enterprise-v4/**"
+      - "shared/ui-*.json"
+      - ".github/workflows/deploy-portal-language.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agroai-portal-language-production
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+  PORTAL_PROJECT: agroai-portal
+  PORTAL_URL: https://app.agroai-pilot.com
+  API_URL: https://app.agroai-pilot.com
+
+jobs:
+  deploy:
+    name: Build, deploy, and smoke portal languages
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+
+      - name: Build exact 59-language portal
+        working-directory: figma-enterprise-v4
+        env:
+          VITE_API_BASE_URL: ${{ env.API_URL }}
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run test:i18n
+          npm run build
+
+      - name: Deploy exact portal bundle
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 pages deploy figma-enterprise-v4/dist \
+            --project-name "${PORTAL_PROJECT}" \
+            --branch main \
+            --commit-hash "${GITHUB_SHA}"
+
+      - name: Smoke production language bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf portal-smoke
+          mkdir -p portal-smoke/assets
+
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error --location --max-time 20 "${PORTAL_URL}/" -o portal-smoke/index.html; then
+              title="$(sed -n 's:.*<title>\(.*\)</title>.*:\1:p' portal-smoke/index.html | head -1)"
+              if [ "$title" = "AGRO-AI Enterprise Portal" ]; then
+                ready=1
+                break
+              fi
+            fi
+            sleep 5
+          done
+          test "$ready" -eq 1
+
+          grep -oE '/assets/[A-Za-z0-9._/-]+\.js' portal-smoke/index.html | sed 's#^/##' > portal-smoke/queue.txt
+          : > portal-smoke/seen.txt
+          for pass in 1 2 3 4; do
+            sort -u portal-smoke/queue.txt -o portal-smoke/queue.txt
+            while IFS= read -r asset; do
+              [ -n "$asset" ] || continue
+              grep -Fx "$asset" portal-smoke/seen.txt >/dev/null 2>&1 && continue
+              echo "$asset" >> portal-smoke/seen.txt
+              target="portal-smoke/assets/$(basename "$asset")"
+              curl --fail --silent --show-error --max-time 20 "${PORTAL_URL}/${asset}" -o "$target"
+              grep -oE 'assets/[A-Za-z0-9._/-]+\.js' "$target" >> portal-smoke/queue.txt || true
+              grep -oE '\./[A-Za-z0-9._/-]+\.js' "$target" | sed 's#^\./#assets/#' >> portal-smoke/queue.txt || true
+            done < portal-smoke/queue.txt
+          done
+
+          cat portal-smoke/assets/*.js > portal-smoke/all-js.txt
+          grep -F 'agroai_ui_catalog_v4:' portal-smoke/all-js.txt >/dev/null
+          grep -F 'commercialBoundary.title.upgrade' portal-smoke/all-js.txt >/dev/null
+          grep -F 'Kiswahili' portal-smoke/all-js.txt >/dev/null
+          grep -F 'Українська' portal-smoke/all-js.txt >/dev/null
+          grep -F '日本語' portal-smoke/all-js.txt >/dev/null
+          grep -F 'Ελληνικά' portal-smoke/all-js.txt >/dev/null
+          printf 'production_portal_language_bundle=ok\n'
