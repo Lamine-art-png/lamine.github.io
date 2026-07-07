@@ -1,0 +1,44 @@
+name: I18n Fastpath Contract CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'cloudflare/edge-gateway/**'
+      - 'wrangler.toml'
+      - '.github/workflows/i18n-fastpath-diagnostic.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verify-fastpath:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install edge dependencies
+        working-directory: cloudflare/edge-gateway
+        run: npm ci --no-audit --no-fund
+      - name: Run exact edge typecheck and runtime contracts
+        working-directory: cloudflare/edge-gateway
+        shell: bash
+        run: |
+          set +e
+          npm run check > edge-check.log 2>&1
+          status=$?
+          cat edge-check.log
+          echo "$status" > edge-check.exit
+          exit "$status"
+      - name: Upload immutable edge evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: i18n-fastpath-edge-contract-${{ github.sha }}
+          path: |
+            cloudflare/edge-gateway/edge-check.log
+            cloudflare/edge-gateway/edge-check.exit
+          if-no-files-found: error
+          retention-days: 30
