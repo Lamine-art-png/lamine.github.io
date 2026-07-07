@@ -33,6 +33,16 @@ TRANSIENT = (
 )
 
 
+def describe_error(exc: Exception) -> str:
+    if isinstance(exc, urllib.error.HTTPError):
+        try:
+            body = exc.read().decode("utf-8", errors="replace")[:1600]
+        except Exception:  # noqa: BLE001
+            body = ""
+        return f"HTTPError:{exc.code}:{body or exc.reason}"
+    return f"{type(exc).__name__}:{exc}"
+
+
 def request_json(path: str, payload: dict[str, Any] | None = None, auth: bool = False) -> dict[str, Any]:
     body = None if payload is None else json.dumps(payload, separators=(",", ":")).encode()
     headers = {"Accept": "application/json", "User-Agent": UA, "Cache-Control": "no-cache"}
@@ -60,9 +70,9 @@ def retry_get(path: str) -> dict[str, Any]:
             return request_json(path)
         except TRANSIENT as exc:
             error = exc
-            print(f"RETRY GET {path} attempt={attempt} {type(exc).__name__}:{exc}", flush=True)
+            print(f"RETRY GET {path} attempt={attempt} {describe_error(exc)}", flush=True)
             time.sleep(attempt * 2)
-    raise RuntimeError(f"GET failed {path}: {error}") from error
+    raise RuntimeError(f"GET failed {path}: {describe_error(error) if error else 'unknown'}") from error
 
 
 def valid(locale: str, result: dict[str, Any]) -> bool:
@@ -89,7 +99,7 @@ def verify(locale: str) -> dict[str, Any]:
                 return result
             error = f"invalid_payload:{json.dumps(result, ensure_ascii=False, sort_keys=True)}"
         except TRANSIENT as exc:
-            error = f"{type(exc).__name__}:{exc}"
+            error = describe_error(exc)
         print(f"RETRY {locale} attempt={attempt} {error}", flush=True)
         time.sleep(attempt * 3)
     raise RuntimeError(f"{locale}:{error}")

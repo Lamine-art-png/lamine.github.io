@@ -63,6 +63,9 @@ class ModelRouter:
         for model in [*configured,*DEFAULT_MODEL_FALLBACKS]:
             if model and model not in self.fallback_models:
                 self.fallback_models.append(model)
+        # AIGateway owns the actual retry loop. Keep its candidate set aligned
+        # with the task router's configured + safe default fallbacks.
+        self.gateway.fallback_models = list(self.fallback_models)
 
     def mode(self) -> str:
         provider = (settings.AI_PROVIDER or "").strip().lower()
