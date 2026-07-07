@@ -81,5 +81,6 @@ jobs:
               sha: context.sha,
               state,
               context: statusContext,
-              description: 'local-ai Worker and Tunnel inspection'
+              description: 'local-ai Worker and Tunnel inspection',
+              target_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
             });
