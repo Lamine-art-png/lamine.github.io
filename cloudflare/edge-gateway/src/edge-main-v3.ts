@@ -2,7 +2,7 @@ import baseHandler, { originAllowed, requestId, type ConnectorTaskEnvelope } fro
 import { handleI18nFastpath, type I18nFastpathEnv } from "./i18n-fastpath-handler";
 
 const translationPaths = new Set(["/v1/i18n/catalog", "/v1/i18n/internal/canary"]);
-const I18N_EDGE_RELEASE = "provider-chain-v2";
+const I18N_EDGE_RELEASE = "public-fallback-v1";
 
 async function baseFetch<Host, Cf>(request: Request<Host, Cf>, env: I18nFastpathEnv): Promise<Response> {
   const fetcher = baseHandler.fetch as unknown as (request: Request<Host, Cf>, env: I18nFastpathEnv) => Promise<Response>;
