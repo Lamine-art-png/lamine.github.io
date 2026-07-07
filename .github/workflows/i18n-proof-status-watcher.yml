@@ -1,0 +1,34 @@
+name: I18n Proof Status Watcher
+
+on:
+  workflow_run:
+    workflows: ["I18n Exact Backend Proof"]
+    types: [completed]
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish exact backend proof status
+        env:
+          GH_TOKEN: ${{ github.token }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          TARGET_URL: ${{ github.event.workflow_run.html_url }}
+        run: |
+          set -euo pipefail
+          state="$CONCLUSION"
+          case "$state" in
+            success|failure|error|pending) ;;
+            cancelled|timed_out|action_required|stale) state=error ;;
+            *) state=error ;;
+          esac
+          gh api --method POST "repos/${GITHUB_REPOSITORY}/statuses/${HEAD_SHA}" \
+            -f state="$state" \
+            -f context="production/i18n-exact-backend-proof" \
+            -f description="Exact backend SHA plus live 59-locale proof: ${CONCLUSION}" \
+            -f target_url="$TARGET_URL" >/dev/null
