@@ -19,8 +19,12 @@ import { getLocaleRuntimeSnapshot, notifyLocaleRuntime, subscribeLocaleRuntime }
 
 let explicitLocaleActivated = false;
 
-function primeKnownLocale(locale: string) {
+function primeCriticalLocale(locale: string) {
   primeLocaleCatalogFromCache(locale, "critical");
+}
+
+function primeKnownLocale(locale: string) {
+  primeCriticalLocale(locale);
   primeLocaleCatalogFromCache(locale, "core");
   primeLocaleCatalogFromCache(locale, "full");
 }
@@ -40,7 +44,6 @@ export function useLocale() {
   useEffect(() => {
     const listener = ((event: CustomEvent) => {
       const nextLocale = event.detail?.selectedLocale || event.detail?.locale || getStoredLocale();
-      primeKnownLocale(nextLocale);
       setSelectedLocaleState(nextLocale);
     }) as EventListener;
     window.addEventListener("agroai:locale-change", listener);
@@ -104,12 +107,12 @@ export function useLocale() {
     const canonical = canonicalizeSelectedLocale(nextLocale);
     const current = getStoredLocale();
     if (explicitLocaleActivated && canonical !== current) {
-      primeKnownLocale(current);
+      primeCriticalLocale(current);
       setSelectedLocaleState(current);
       notifyLocaleRuntime();
       return current;
     }
-    primeKnownLocale(canonical);
+    primeCriticalLocale(canonical);
     const activated = setStoredLocale(canonical);
     setSelectedLocaleState(activated);
     notifyLocaleRuntime();
@@ -119,7 +122,7 @@ export function useLocale() {
   const activateLocale = (nextLocale: string) => {
     explicitLocaleActivated = true;
     const canonical = canonicalizeSelectedLocale(nextLocale);
-    primeKnownLocale(canonical);
+    primeCriticalLocale(canonical);
     const activated = setStoredLocale(canonical);
     setSelectedLocaleState(activated);
     setCatalogError(null);
