@@ -9,6 +9,7 @@ import {
   setStoredLocale,
   t,
 } from "../i18n";
+import { FULL_UI_TRANSLATION_DIAGNOSTIC, purgeLegacyDynamicCatalogCache } from "../i18nReleaseCompatibility";
 import { getLocaleRuntimeSnapshot, notifyLocaleRuntime, subscribeLocaleRuntime } from "../localeRuntimeStore";
 
 export function useLocale() {
@@ -45,6 +46,7 @@ export function useLocale() {
         return;
       }
 
+      purgeLegacyDynamicCatalogCache(effectiveLocale);
       setCatalogLoading(true);
       try {
         if (!hasCoreLocaleCatalog(selectedLocale)) {
@@ -59,7 +61,7 @@ export function useLocale() {
             if (!cancelled) notifyLocaleRuntime();
           })
           .catch((cause) => {
-            console.warn("background_ui_locale_hydration_failed", {
+            console.warn(FULL_UI_TRANSLATION_DIAGNOSTIC, {
               locale: selectedLocale,
               error: cause instanceof Error ? cause.message : String(cause),
             });
