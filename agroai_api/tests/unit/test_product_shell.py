@@ -80,7 +80,7 @@ def test_professional_checkout_fails_closed_if_stripe_missing(client, db, monkey
         json={"plan_id": "professional", "billing_period": "monthly"},
     )
     assert response.status_code == 503
-    assert response.json()["detail"]["code"] == "stripe_not_configured"
+    assert response.json()["detail"]["code"] == "billing_unavailable"
 
 
 def test_professional_checkout_returns_checkout_url_if_stripe_configured(client, db, monkeypatch):
