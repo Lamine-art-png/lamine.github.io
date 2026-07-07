@@ -8,6 +8,8 @@ on:
       - "cloudflare/edge-gateway/src/i18n-*.ts"
       - "cloudflare/edge-gateway/src/edge-main-v3.ts"
       - "cloudflare/edge-gateway/src/edge-main-v3.test.ts"
+      - "agroai_api/app/services/local_ui_translation.py"
+      - "agroai_api/app/services/model_router.py"
       - "shared/ui-*.json"
       - "shared/supported-locales.json"
       - ".github/workflows/deploy-i18n-edge.yml"
@@ -23,6 +25,7 @@ concurrency:
 env:
   API_URL: https://app.agroai-pilot.com
   PORTAL_ORIGIN: https://app.agroai-pilot.com
+  UPSTREAM_RELEASE_URL: https://api-preview.agroai-pilot.com/v1/internal/release/health
 
 jobs:
   deploy:
@@ -49,6 +52,13 @@ jobs:
           npm ci --no-audit --no-fund
           npm run check
 
+      - name: Validate local translation backend syntax
+        run: |
+          set -euo pipefail
+          python -m py_compile \
+            agroai_api/app/services/local_ui_translation.py \
+            agroai_api/app/services/model_router.py
+
       - name: Fail closed on missing canary credential
         run: |
           set -euo pipefail
@@ -65,10 +75,27 @@ jobs:
           set -euo pipefail
           for attempt in $(seq 1 20); do
             if curl --fail --silent --show-error --max-time 15 "${API_URL}/v1/edge-health" | jq -e '.status == "ok"' >/dev/null; then
-              exit 0
+              break
             fi
+            test "$attempt" -lt 20
             sleep 3
           done
+
+      - name: Wait for exact repaired backend build
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 90); do
+            payload="$(curl --fail --silent --show-error --max-time 20 \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+              "${UPSTREAM_RELEASE_URL}" 2>/dev/null || true)"
+            if printf '%s' "$payload" | jq -e --arg sha "$GITHUB_SHA" '.status == "ok" and .build_sha == $sha' >/dev/null 2>&1; then
+              echo "exact_backend_sha=${GITHUB_SHA}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Render backend did not reach exact SHA ${GITHUB_SHA}"
           exit 1
 
       - name: Prove all 59 live browser-readable locales
