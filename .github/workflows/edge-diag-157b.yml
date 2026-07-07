@@ -1,0 +1,50 @@
+name: Edge Diagnostic 157b
+
+on:
+  push:
+    branches: [edge-diag-157b]
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/edge-diag-157b.yml'
+      - 'cloudflare/edge-gateway/**'
+      - 'wrangler.toml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: cloudflare/edge-gateway/package-lock.json
+      - name: Run exact edge check with captured output
+        working-directory: cloudflare/edge-gateway
+        shell: bash
+        run: |
+          set +e
+          npm ci --no-audit --no-fund 2>&1 | tee ../../edge-install.log
+          install_status=${PIPESTATUS[0]}
+          if [ "$install_status" -ne 0 ]; then
+            echo "$install_status" > ../../edge-exit-code.txt
+            exit "$install_status"
+          fi
+          npm run check 2>&1 | tee ../../edge-check.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > ../../edge-exit-code.txt
+          exit "$status"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: edge-diag-157b
+          path: |
+            edge-install.log
+            edge-check.log
+            edge-exit-code.txt
+          if-no-files-found: warn
+          retention-days: 3
