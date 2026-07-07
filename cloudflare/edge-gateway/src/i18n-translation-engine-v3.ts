@@ -1,6 +1,7 @@
 const MODEL = "@cf/meta/m2m100-1.2b";
-const MAX_PARALLEL = 16;
-const CALL_TIMEOUT_MS = 12_000;
+const MAX_PARALLEL = 2;
+const CALL_TIMEOUT_MS = 10_000;
+const MAX_ATTEMPTS = 3;
 const PLACEHOLDER_RE = /\{[A-Za-z_][A-Za-z0-9_]*\}/g;
 const PROTECTED_SPLIT_RE = /(\{[A-Za-z_][A-Za-z0-9_]*\}|https?:\/\/[^\s]+|AGRO-AI)/g;
 
@@ -50,25 +51,40 @@ async function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T
   }
 }
 
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 function shouldTranslate(segment: string): boolean {
   return /[A-Za-z]/.test(segment) && segment.trim().length > 0;
 }
 
 async function translateSegment(ai: AiRunner, targetLocale: string, segment: string): Promise<string> {
   if (!shouldTranslate(segment)) return segment;
-  const result = await withTimeout(
-    ai.run(MODEL, {
-      text: segment,
-      source_lang: "en",
-      target_lang: targetLocale,
-    }),
-    CALL_TIMEOUT_MS,
-  );
-  const value = translatedText(result);
-  if (!value) throw new Error("workers_ai_empty_translation");
-  const leading = segment.match(/^\s*/)?.[0] || "";
-  const trailing = segment.match(/\s*$/)?.[0] || "";
-  return `${leading}${value}${trailing}`;
+  let lastError: unknown = new Error("workers_ai_translation_unavailable");
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    try {
+      const result = await withTimeout(
+        ai.run(MODEL, {
+          text: segment,
+          source_lang: "en",
+          target_lang: targetLocale,
+        }),
+        CALL_TIMEOUT_MS,
+      );
+      const value = translatedText(result);
+      if (!value) throw new Error("workers_ai_empty_translation");
+      const leading = segment.match(/^\s*/)?.[0] || "";
+      const trailing = segment.match(/\s*$/)?.[0] || "";
+      return `${leading}${value}${trailing}`;
+    } catch (error) {
+      lastError = error;
+      if (attempt < MAX_ATTEMPTS) await delay(200 * attempt);
+    }
+  }
+
+  throw lastError;
 }
 
 async function translateValue(ai: AiRunner, targetLocale: string, value: string): Promise<string> {
