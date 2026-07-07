@@ -50,7 +50,6 @@ export function MonetizedIntegrationsV2() {
   useEffect(() => {
     const root = rootRef.current;
     if (!root) return;
-    let observer: MutationObserver;
 
     const annotate = () => {
       root.querySelectorAll<HTMLElement>("article").forEach((article) => {
@@ -64,6 +63,8 @@ export function MonetizedIntegrationsV2() {
 
         if (!locked) {
           delete article.dataset.agroaiCommercialLocked;
+          delete article.dataset.agroaiProvider;
+          delete article.dataset.agroaiRequiredPlan;
           badge?.remove();
           if (button?.dataset.agroaiOriginalLabel) {
             if (button.textContent !== button.dataset.agroaiOriginalLabel) button.textContent = button.dataset.agroaiOriginalLabel;
@@ -75,33 +76,31 @@ export function MonetizedIntegrationsV2() {
         article.dataset.agroaiCommercialLocked = "true";
         article.dataset.agroaiProvider = provider;
         article.dataset.agroaiRequiredPlan = needed;
-        if (button) {
-          if (!button.dataset.agroaiOriginalLabel) button.dataset.agroaiOriginalLabel = button.textContent || "Connect";
-          const label = `Upgrade to ${needed === "enterprise" ? "Enterprise" : "Professional"}`;
-          if (button.textContent !== label) button.textContent = label;
-          if (!badge) {
-            const lock = document.createElement("div");
-            lock.dataset.agroaiLockBadge = "true";
-            lock.textContent = `🔒 ${needed === "enterprise" ? "Enterprise" : "Professional"} required`;
-            lock.style.cssText = "margin:0 0 10px;padding:8px 10px;border-radius:9px;background:#F0F7EE;border:1px solid #CFE1CB;color:#1F5A43;font-size:11px;font-weight:600;text-align:center;";
-            button.parentElement?.insertBefore(lock, button);
-          }
+        if (!button) return;
+        if (!button.dataset.agroaiOriginalLabel) button.dataset.agroaiOriginalLabel = button.textContent || "Connect";
+        const label = `Upgrade to ${needed === "enterprise" ? "Enterprise" : "Professional"}`;
+        if (button.textContent !== label) button.textContent = label;
+        if (!badge) {
+          const lock = document.createElement("div");
+          lock.dataset.agroaiLockBadge = "true";
+          lock.textContent = `🔒 ${needed === "enterprise" ? "Enterprise" : "Professional"} required`;
+          lock.style.cssText = "margin:0 0 10px;padding:8px 10px;border-radius:9px;background:#F0F7EE;border:1px solid #CFE1CB;color:#1F5A43;font-size:11px;font-weight:600;text-align:center;";
+          button.parentElement?.insertBefore(lock, button);
         }
       });
     };
 
-    const observe = () => observer.observe(root, { childList: true, subtree: true });
-    observer = new MutationObserver(() => { observer.disconnect(); annotate(); observe(); });
     annotate();
-    observe();
-    return () => observer.disconnect();
+    const timers = [0, 120, 350, 800, 1600].map((delay) => window.setTimeout(annotate, delay));
+    return () => timers.forEach((timer) => window.clearTimeout(timer));
   }, [byTitle, current]);
 
   function capture(event: ReactMouseEvent<HTMLDivElement>) {
     const button = (event.target as HTMLElement).closest("button");
     const article = button?.closest<HTMLElement>("article[data-agroai-commercial-locked='true']");
     if (!article) return;
-    event.preventDefault(); event.stopPropagation();
+    event.preventDefault();
+    event.stopPropagation();
     const provider = article.dataset.agroaiProvider || "connector";
     const target = article.dataset.agroaiRequiredPlan || "professional";
     openCommercialBoundary({ status: 402, code: "upgrade_required", feature: feature(provider), recommended_plan: target, message: `${target === "enterprise" ? "Enterprise" : "Professional"} is required to connect ${article.querySelector("h3")?.textContent || "this source"}.`, source: "connectors" });
