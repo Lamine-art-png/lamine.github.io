@@ -2,6 +2,7 @@
 
 This module keeps the portal on one commercial source of truth:
 - period-aware durable quota snapshots
+- live cardinality for capacity quotas
 - effective entitlements resolved from the canonical control plane
 - one checkout bridge that delegates to the authoritative Stripe checkout endpoint
 """
@@ -11,11 +12,15 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import AuthContext, get_auth_context
 from app.api.v1 import billing as billing_api
 from app.db.base import get_db
+from app.models.operational_records import ConnectorConnection
+from app.models.saas import ManagedEntity, OrganizationMembership, Workspace
+from app.services.connector_commercial_guard import MANUAL_PROVIDERS
 from app.services.entitlements import require_owner_or_admin, serialize_entitlements
 from app.services.product_plans import plan_by_id, service_add_ons, upgrade_options
 from app.services.quota import quota_snapshot
@@ -36,6 +41,56 @@ def _require_org(ctx: AuthContext):
 
 def _offer(plan_id: str, billing_period: str) -> str:
     return f"{plan_id}_{billing_period}"
+
+
+def _set_cardinality(snapshot: dict, metric: str, used: int) -> None:
+    row = (snapshot.get("metrics") or {}).get(metric)
+    if not isinstance(row, dict):
+        return
+    limit = row.get("limit")
+    row["used"] = int(used)
+    row["reserved"] = 0
+    row["remaining"] = None if limit is None else max(0, int(limit) - int(used))
+    row["percent_used"] = None if not limit else round((int(used) / int(limit)) * 100, 1)
+
+
+def _reconcile_capacity_usage(db: Session, org_id: str, snapshot: dict) -> dict:
+    """Replace event-derived capacity metrics with live database cardinality.
+
+    Workspaces, seats, active connectors, and managed entities are durable rows,
+    not period consumption events. Showing event totals for them can under-report
+    capacity, so the customer summary reconciles those metrics against live state.
+    """
+    workspace_count = int(
+        db.query(func.count(Workspace.id)).filter(Workspace.organization_id == org_id).scalar() or 0
+    )
+    seat_count = int(
+        db.query(func.count(OrganizationMembership.id))
+        .filter(OrganizationMembership.organization_id == org_id)
+        .scalar()
+        or 0
+    )
+    connector_count = int(
+        db.query(func.count(ConnectorConnection.id))
+        .filter(
+            ConnectorConnection.tenant_id == org_id,
+            ConnectorConnection.provider.notin_(MANUAL_PROVIDERS),
+        )
+        .scalar()
+        or 0
+    )
+    managed_entity_count = int(
+        db.query(func.count(ManagedEntity.id))
+        .filter(ManagedEntity.organization_id == org_id, ManagedEntity.status == "active")
+        .scalar()
+        or 0
+    )
+
+    _set_cardinality(snapshot, "workspace", workspace_count)
+    _set_cardinality(snapshot, "seat", seat_count)
+    _set_cardinality(snapshot, "active_connector", connector_count)
+    _set_cardinality(snapshot, "managed_entity", managed_entity_count)
+    return snapshot
 
 
 def _quota_rows(snapshot: dict) -> list[dict]:
@@ -80,7 +135,7 @@ def _quota_rows(snapshot: dict) -> list[dict]:
 @router.get("/billing/commercial-summary")
 def commercial_summary(ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
     org, membership = _require_org(ctx)
-    snapshot = quota_snapshot(db, org)
+    snapshot = _reconcile_capacity_usage(db, org.id, quota_snapshot(db, org))
     current_plan = plan_by_id(org.plan)
     return {
         "current_plan": current_plan,
