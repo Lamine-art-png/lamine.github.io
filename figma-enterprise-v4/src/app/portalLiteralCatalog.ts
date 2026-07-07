@@ -4,6 +4,7 @@ import literalCatalogPart3 from "../../../shared/ui-literals.en.3.json";
 import literalCatalogPart4 from "../../../shared/ui-literals.en.4.json";
 import literalCatalogPart5 from "../../../shared/ui-literals.en.5.json";
 import literalCatalogPart6 from "../../../shared/ui-literals.en.6.json";
+import literalCatalogPart7 from "../../../shared/ui-literals.en.7.json";
 import { getStoredLocale, t } from "./i18n";
 
 export const PORTAL_LITERAL_CATALOG: Record<string, string> = Object.assign(
@@ -14,6 +15,7 @@ export const PORTAL_LITERAL_CATALOG: Record<string, string> = Object.assign(
   literalCatalogPart4,
   literalCatalogPart5,
   literalCatalogPart6,
+  literalCatalogPart7,
 );
 
 const LITERAL_KEY_BY_TEXT = new Map<string, string>(
