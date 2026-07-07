@@ -10,3 +10,4 @@ AGRO-AI production i18n fallback contract
 6. Provider evidence must identify cloudflare_workers_ai and the exact model.
 7. The wrapper must preserve incoming Cloudflare request metadata while delegating to the existing edge handler.
 8. The production fallback exists specifically so a dead local Ollama origin cannot strand every enabled UI locale.
+9. Request metadata typing must never block the edge build or change the backend-first execution order.
