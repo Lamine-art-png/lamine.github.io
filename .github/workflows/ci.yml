@@ -71,21 +71,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           cache: npm
           cache-dependency-path: cloudflare/edge-gateway/package-lock.json
-
       - name: Install locked edge dependencies
         working-directory: cloudflare/edge-gateway
         run: npm ci --no-audit --no-fund
-
       - name: Typecheck and test edge gateway
         working-directory: cloudflare/edge-gateway
         run: npm run check
-
       - name: Validate Wrangler deployment bundle
         working-directory: cloudflare/edge-gateway
         shell: bash
@@ -109,8 +105,31 @@ jobs:
           cache: npm
           cache-dependency-path: figma-enterprise-v4/package-lock.json
       - run: npm ci
-      - run: npm run test:i18n
+      - name: Validate localization runtime contract
+        run: node tests/i18n-contract.mjs 2>&1 | tee i18n-contract.log
+      - name: Validate exact UI literal inventory
+        run: python3 scripts/check_ui_literal_inventory.py --check 2>&1 | tee i18n-inventory.log
+      - name: Upload portal localization diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portal-localization-diagnostics
+          path: |
+            figma-enterprise-v4/i18n-contract.log
+            figma-enterprise-v4/i18n-inventory.log
+          if-no-files-found: warn
+          retention-days: 3
       - name: Build portal against custom API edge domain
         env:
           VITE_API_BASE_URL: https://api.agroai-pilot.com
-        run: npm run build
+        run: |
+          set -o pipefail
+          npm run build 2>&1 | tee portal-build.log
+      - name: Upload portal build diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: portal-build-diagnostics
+          path: figma-enterprise-v4/portal-build.log
+          if-no-files-found: warn
+          retention-days: 3
