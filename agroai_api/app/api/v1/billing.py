@@ -33,12 +33,19 @@ class PortalRequest(BaseModel):
     organization_id: str
 
 
+def _billing_unavailable() -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        detail={
+            "code": "billing_unavailable",
+            "message": "Checkout is temporarily unavailable. Please retry or contact AGRO-AI support.",
+        },
+    )
+
+
 def _stripe_ready() -> None:
     if not settings.STRIPE_SECRET_KEY:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"code": "stripe_not_configured", "message": "Stripe secret key is not configured."},
-        )
+        raise _billing_unavailable()
     stripe.api_key = settings.STRIPE_SECRET_KEY
 
 
@@ -120,14 +127,11 @@ def _offer_config(offer: str) -> dict:
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail={
                 "code": "offer_required",
-                "message": "Use professional_monthly, professional_annual, team_monthly, team_annual, network_monthly, network_annual, assurance_audit_farm, or assurance_audit_network.",
+                "message": "Choose a supported AGRO-AI commercial offer.",
             },
         )
     if not config["price"]:
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail={"code": "stripe_price_missing", "message": f"Stripe price ID is not configured for {offer}."},
-        )
+        raise _billing_unavailable()
     return config
 
 
@@ -136,10 +140,7 @@ def _create_customer(org: Organization) -> str:
     try:
         customer = stripe.Customer.create(name=org.name, metadata={"organization_id": org.id})
     except stripe.error.StripeError:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={"code": "stripe_error", "message": "Stripe customer creation failed."},
-        )
+        raise _billing_unavailable()
     return customer["id"]
 
 
@@ -192,10 +193,7 @@ def create_checkout_session(
             session_kwargs["payment_intent_data"] = {"metadata": metadata}
         session = stripe.checkout.Session.create(**session_kwargs)
     except stripe.error.StripeError:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={"code": "stripe_error", "message": "Stripe checkout session creation failed."},
-        )
+        raise _billing_unavailable()
     return {"checkout_url": session["url"], "offer": offer, "mode": offer_config["mode"]}
 
 
@@ -213,7 +211,10 @@ def create_portal_session(
     if not org.stripe_customer_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail={"code": "billing_customer_missing", "message": "No Stripe customer exists for this organization."},
+            detail={
+                "code": "billing_portal_unavailable",
+                "message": "Billing management is not available for this organization yet.",
+            },
         )
     _stripe_ready()
     try:
@@ -222,10 +223,7 @@ def create_portal_session(
             return_url=f"{settings.APP_URL}/billing",
         )
     except stripe.error.StripeError:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail={"code": "stripe_error", "message": "Stripe billing portal session creation failed."},
-        )
+        raise _billing_unavailable()
     return {"portal_url": session["url"]}
 
 
