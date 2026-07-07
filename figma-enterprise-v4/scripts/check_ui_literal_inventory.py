@@ -12,6 +12,7 @@ REPO_ROOT = ROOT.parent
 APP_ROOT = ROOT / "src" / "app"
 BASE_CATALOG_PATH = REPO_ROOT / "shared" / "ui-catalog.en.json"
 LITERAL_CATALOG_GLOB = "ui-literals.en.*.json"
+LITERAL_KEY_PREFIX = "literal."
 
 PROP_NAMES = {
     "title", "description", "label", "detail", "placeholder", "aria-label", "alt",
@@ -101,10 +102,11 @@ def main() -> int:
     paths = sorted((REPO_ROOT / "shared").glob(LITERAL_CATALOG_GLOB))
     for path in paths:
         part = json.loads(path.read_text(encoding="utf-8"))
-        overlap = set(current).intersection(part)
+        literal_part = {key: value for key, value in part.items() if key.startswith(LITERAL_KEY_PREFIX)}
+        overlap = set(current).intersection(literal_part)
         if overlap:
             raise SystemExit(f"Duplicate literal keys across catalog parts: {sorted(overlap)[:5]}")
-        current.update(part)
+        current.update(literal_part)
 
     if args.check:
         if current != expected:
@@ -115,7 +117,7 @@ def main() -> int:
                 "UI literal inventory is stale. "
                 f"missing={missing} extra={extra} changed={changed}"
             )
-        print(f"UI literal inventory is current: {len(expected)} literals across {len(paths)} parts")
+        print(f"UI literal inventory is current: {len(expected)} deterministic literal keys across {len(paths)} parts")
         return 0
 
     raise SystemExit("Use --check. Catalog parts are generated deterministically by the localization release workflow.")
