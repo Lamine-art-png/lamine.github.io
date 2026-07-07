@@ -70,30 +70,36 @@ def test_billing_summary_returns_current_plan_without_customer_debug(client, db)
     assert not any(term in _body_text(body) for term in forbidden)
 
 
-def test_professional_checkout_creates_upgrade_request_if_stripe_missing(client, db, monkeypatch):
+def test_professional_checkout_fails_closed_if_stripe_missing(client, db, monkeypatch):
     headers = _register_and_login(client, db, "checkout-v21@example.com")
-    monkeypatch.setattr("app.api.v1.product_shell.settings.STRIPE_SECRET_KEY", "", raising=False)
+    monkeypatch.setattr("app.api.v1.billing.settings.STRIPE_SECRET_KEY", "", raising=False)
+    monkeypatch.setattr("app.api.v1.billing.settings.STRIPE_PRICE_PRO_MONTHLY", "price_fake", raising=False)
     response = client.post(
         "/v1/billing/checkout",
         headers=headers,
         json={"plan_id": "professional", "billing_period": "monthly"},
     )
-    assert response.status_code == 200
-    body = response.json()
-    assert body["message"] == "Upgrade request received."
+    assert response.status_code == 503
+    assert response.json()["detail"]["code"] == "billing_unavailable"
 
 
 def test_professional_checkout_returns_checkout_url_if_stripe_configured(client, db, monkeypatch):
     headers = _register_and_login(client, db, "checkout-live@example.com")
+
+    class _Customer:
+        @staticmethod
+        def create(**_kwargs):
+            return {"id": "cus_fake"}
 
     class _Session:
         @staticmethod
         def create(**_kwargs):
             return {"url": "https://checkout.example/session"}
 
-    monkeypatch.setattr("app.api.v1.product_shell.settings.STRIPE_SECRET_KEY", "sk_test_fake", raising=False)
-    monkeypatch.setattr("app.api.v1.product_shell.settings.STRIPE_PRICE_PRO_MONTHLY", "price_fake", raising=False)
-    monkeypatch.setattr("app.api.v1.product_shell.stripe.checkout.Session", _Session)
+    monkeypatch.setattr("app.api.v1.billing.settings.STRIPE_SECRET_KEY", "sk_test_fake", raising=False)
+    monkeypatch.setattr("app.api.v1.billing.settings.STRIPE_PRICE_PRO_MONTHLY", "price_fake", raising=False)
+    monkeypatch.setattr("app.api.v1.billing.stripe.Customer", _Customer)
+    monkeypatch.setattr("app.api.v1.billing.stripe.checkout.Session", _Session)
     response = client.post(
         "/v1/billing/checkout",
         headers=headers,
