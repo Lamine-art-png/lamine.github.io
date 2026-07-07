@@ -38,7 +38,7 @@ export default {
       temperature: translated ? 0 : Number(body.options?.temperature ?? 0.2),
       max_tokens: Number(body.options?.num_predict ?? 1600),
     });
-    const raw = String(result?.response ?? result?.result?.response ?? "").trim();
+    const raw = String(result?.response ?? result?.result?.response ?? result?.choices?.[0]?.message?.content ?? "").trim();
     if (!raw) return Response.json({ error: "empty_ai_response" }, { status: 503 });
     const content = JSON.stringify({ answer: raw });
     return Response.json({
