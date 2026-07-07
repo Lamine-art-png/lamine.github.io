@@ -1,4 +1,5 @@
 import { createRoot } from "react-dom/client";
+import { CommercialBoundaryHost } from "./app/components/CommercialBoundaryHost";
 import "./styles/index.css";
 
 function bootFailure(error: unknown) {
@@ -28,7 +29,7 @@ if (!rootEl) {
 } else {
   import("./app/App.tsx")
     .then(({ default: App }) => {
-      createRoot(rootEl).render(<App />);
+      createRoot(rootEl).render(<CommercialBoundaryHost><App /></CommercialBoundaryHost>);
     })
     .catch(bootFailure);
 }
