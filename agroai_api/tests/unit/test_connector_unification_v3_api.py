@@ -61,6 +61,17 @@ def make_client(monkeypatch):
     return TestClient(app), TestingSessionLocal
 
 
+def install_success_probe(monkeypatch, provider="wiseconn", resources=None):
+    async def fake_probe(actual_provider, api_key):
+        assert actual_provider == provider
+        assert api_key
+        return {
+            "identity": {"provider": actual_provider, "resource_count": len(resources or [])},
+            "resources": resources or [],
+        }
+    monkeypatch.setattr(connector_unified_v3, "_probe_candidate", fake_probe)
+
+
 def test_connect_vaults_secret_and_ignores_browser_destination_override(monkeypatch):
     async def fake_probe(provider, api_key):
         assert provider == "wiseconn"
@@ -152,3 +163,56 @@ def test_failed_reauthorization_preserves_existing_valid_vault_record(monkeypatc
         assert connection.status == "connected"
         stored = load_connector_credentials(db, tenant_id="org-unified-v3", connection_id=connection_id)
         assert stored == {"api_key": "known-good-value"}
+
+
+def test_controller_sync_requires_explicit_resource_scope(monkeypatch):
+    install_success_probe(monkeypatch, resources=[{"id": "farm-1", "name": "Farm One", "type": "farm"}])
+    client, _SessionLocal = make_client(monkeypatch)
+    connected = client.post("/v1/connectors/unified/connect", json={"provider": "wiseconn", "api_key": "good-value"})
+    assert connected.status_code == 200, connected.text
+    connection_id = connected.json()["connection"]["id"]
+
+    no_scope = client.post(f"/v1/connectors/unified/{connection_id}/sync")
+    assert no_scope.status_code == 409
+    assert no_scope.json()["detail"]["code"] == "connector_scope_required"
+
+    empty_scope = client.post(
+        f"/v1/connectors/unified/{connection_id}/selection",
+        json={"scope_mode": "provider_resources", "resource_ids": []},
+    )
+    assert empty_scope.status_code == 422
+    assert empty_scope.json()["detail"]["code"] == "provider_resource_selection_required"
+
+
+def test_controller_selection_is_bounded_to_fifty_top_level_resources(monkeypatch):
+    install_success_probe(monkeypatch)
+    client, _SessionLocal = make_client(monkeypatch)
+    connected = client.post("/v1/connectors/unified/connect", json={"provider": "wiseconn", "api_key": "good-value"})
+    assert connected.status_code == 200, connected.text
+    connection_id = connected.json()["connection"]["id"]
+
+    scope = client.post(
+        f"/v1/connectors/unified/{connection_id}/selection",
+        json={"scope_mode": "provider_resources", "resource_ids": [f"farm-{index}" for index in range(75)]},
+    )
+    assert scope.status_code == 200, scope.text
+    assert len(scope.json()["selection"]["resource_ids"]) == 50
+
+
+def test_openet_sync_requires_confirmed_field_scope(monkeypatch):
+    install_success_probe(monkeypatch, provider="openet")
+    client, _SessionLocal = make_client(monkeypatch)
+    connected = client.post("/v1/connectors/unified/connect", json={"provider": "openet", "api_key": "openet-value"})
+    assert connected.status_code == 200, connected.text
+    connection_id = connected.json()["connection"]["id"]
+
+    no_scope = client.post(f"/v1/connectors/unified/{connection_id}/sync")
+    assert no_scope.status_code == 409
+    assert no_scope.json()["detail"]["code"] == "connector_scope_required"
+
+    explicit = client.post(
+        f"/v1/connectors/unified/{connection_id}/selection",
+        json={"scope_mode": "openet_field_ids", "field_ids": ["oe-1", "oe-2"]},
+    )
+    assert explicit.status_code == 200, explicit.text
+    assert explicit.json()["selection"]["field_ids"] == ["oe-1", "oe-2"]
