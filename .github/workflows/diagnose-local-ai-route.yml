@@ -19,7 +19,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Inspect Worker, route, Tunnel, and public DNS
+      - name: Inspect Worker metadata and all active Tunnels
         run: |
           set -euo pipefail
           auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
@@ -29,34 +29,34 @@ jobs:
           curl --fail --silent --show-error -H "$auth" "https://api.cloudflare.com/client/v4/zones/${zone_id}/workers/routes" \
             | jq '{routes:[.result[] | select((.pattern // "") | contains("local-ai")) | {id,pattern,script}]}' > local-ai-routes.json
 
-          curl --fail --silent --show-error -H "$auth" "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/domains" \
-            | jq '{domains:[.result[] | select((.hostname // "") == "local-ai.agroai-pilot.com") | {id,hostname,service,zone_id}]}' > local-ai-domains.json
+          curl --silent --show-error -H "$auth" "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel?is_deleted=false&per_page=100" \
+            | jq '{success,errors,tunnels:[(.result // [])[] | {id,name,status,connections}]}' > all-active-tunnels.json || true
+
+          curl --silent --show-error -H "$auth" "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/agroai-local-ai-origin/settings" \
+            | jq '{success,errors,result}' > local-ai-worker-settings.json || true
+
+          curl --silent --show-error -H "$auth" "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/agroai-local-ai-origin/deployments" \
+            | jq '{success,errors,deployments:(.result.deployments // .result // [])}' > local-ai-worker-deployments.json || true
 
           cname="$(dig +short CNAME local-ai.agroai-pilot.com | head -1 | sed 's/\.$//' || true)"
           a_records="$(dig +short A local-ai.agroai-pilot.com | paste -sd, - || true)"
           jq -n --arg cname "$cname" --arg a "$a_records" '{cname:$cname,a_records:($a|split(",")|map(select(length>0)))}' > local-ai-dns.json
 
-          curl --silent --show-error -H "$auth" "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/cfd_tunnel?name=agroai-local-ai&is_deleted=false" \
-            | jq '{success,errors,tunnels:[(.result // [])[] | {id,name,status,connections}]}' > local-ai-tunnel.json || true
-
-          curl --silent --show-error -H "$auth" "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/agroai-local-ai-origin/content" \
-            -o local-ai-worker-content.txt || true
-
           cat local-ai-routes.json
-          cat local-ai-domains.json
+          cat all-active-tunnels.json
+          cat local-ai-worker-settings.json
+          cat local-ai-worker-deployments.json
           cat local-ai-dns.json
-          cat local-ai-tunnel.json
-          echo "worker_bytes=$(wc -c < local-ai-worker-content.txt 2>/dev/null || echo 0)"
 
       - uses: actions/upload-artifact@v4
         with:
           name: local-ai-route-diagnostics-${{ github.sha }}
           path: |
             local-ai-routes.json
-            local-ai-domains.json
+            all-active-tunnels.json
+            local-ai-worker-settings.json
+            local-ai-worker-deployments.json
             local-ai-dns.json
-            local-ai-tunnel.json
-            local-ai-worker-content.txt
           retention-days: 7
 
       - name: Publish diagnostic status
@@ -66,14 +66,15 @@ jobs:
           script: |
             const fs = require('fs');
             const state = '${{ job.status }}' === 'success' ? 'success' : 'failure';
-            let statusContext = 'diagnostic/local-ai-route/failed';
+            let statusContext = 'diagnostic/local-ai-metadata/failed';
             if (state === 'success') {
               const routes = JSON.parse(fs.readFileSync('local-ai-routes.json', 'utf8')).routes || [];
-              const tunnelsDoc = JSON.parse(fs.readFileSync('local-ai-tunnel.json', 'utf8'));
-              const routeScript = routes[0]?.script || (routes.length ? 'route-no-script' : 'no-route');
-              const tunnel = (tunnelsDoc.tunnels || [])[0];
-              const tunnelState = tunnel ? String(tunnel.status || 'found') : 'no-tunnel';
-              statusContext = `diagnostic/local-ai/${routeScript}/tunnel-${tunnelState}`.slice(0, 100);
+              const tunnelsDoc = JSON.parse(fs.readFileSync('all-active-tunnels.json', 'utf8'));
+              const settingsDoc = JSON.parse(fs.readFileSync('local-ai-worker-settings.json', 'utf8'));
+              const routeScript = routes[0]?.script || 'no-route';
+              const tunnelCount = (tunnelsDoc.tunnels || []).length;
+              const settingsState = settingsDoc.success ? 'settings-ok' : 'settings-blocked';
+              statusContext = `diagnostic/local-ai/${routeScript}/tunnels-${tunnelCount}/${settingsState}`.slice(0, 100);
             }
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
@@ -81,6 +82,6 @@ jobs:
               sha: context.sha,
               state,
               context: statusContext,
-              description: 'local-ai Worker and Tunnel inspection',
+              description: 'local-ai Worker metadata and Tunnel inventory',
               target_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
             });
