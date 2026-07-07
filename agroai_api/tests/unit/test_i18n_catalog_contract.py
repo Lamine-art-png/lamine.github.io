@@ -1,14 +1,19 @@
 import pytest
+from fastapi import HTTPException
 
 from app.api.v1.i18n import (
     CatalogRequest,
+    _canonical_enabled_locale,
     _chunks,
     _decode_json_object,
     _enabled_locale_payloads,
+    _require_internal_canary_token,
     _validate_translated_catalog,
+    canary_source_catalog,
     canonical_source_catalog,
     requested_source_catalog,
 )
+from app.core.config import settings
 from app.services.language_registry import enabled_ui_locales
 
 
@@ -39,6 +44,34 @@ def test_subset_with_value_drift_is_rejected():
 def test_subset_with_unknown_key_is_rejected():
     with pytest.raises(ValueError, match="ui_source_catalog_mismatch"):
         requested_source_catalog({"not.a.real.key": "Nope"})
+
+
+def test_canary_source_is_small_canonical_ui_subset():
+    source = canary_source_catalog()
+    assert source == {
+        "language": "Language",
+        "settings": "Settings",
+        "save": "Save",
+        "support": "Support",
+    }
+    assert requested_source_catalog(source) == source
+
+
+def test_canary_locale_canonicalization_uses_enabled_registry():
+    assert _canonical_enabled_locale("de") == "de"
+    assert _canonical_enabled_locale("fr_fr") == "fr-FR"
+    with pytest.raises(HTTPException) as exc:
+        _canonical_enabled_locale("made-up-locale")
+    assert exc.value.status_code == 422
+
+
+def test_internal_canary_token_is_fail_closed(monkeypatch):
+    monkeypatch.setattr(settings, "CLOUDFLARE_QUEUE_CONSUMER_TOKEN", "matrix-secret")
+    _require_internal_canary_token("Bearer matrix-secret")
+    for supplied in (None, "", "Bearer wrong", "Basic matrix-secret"):
+        with pytest.raises(HTTPException) as exc:
+            _require_internal_canary_token(supplied)
+        assert exc.value.status_code == 401
 
 
 def test_translation_chunks_preserve_exact_source_union():
