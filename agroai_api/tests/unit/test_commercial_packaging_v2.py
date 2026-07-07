@@ -44,7 +44,7 @@ def test_custom_api_and_bespoke_integrations_are_distinct_capabilities():
     assert BASE_ENTITLEMENTS["professional"]["connectors.custom_api"] == "locked"
     assert BASE_ENTITLEMENTS["team"]["connectors.custom_api"] == "locked"
     assert BASE_ENTITLEMENTS["network"]["connectors.custom_api"] == "enabled"
-    assert BASE_ENTITLEMENTS["enterprise"]["connectors.custom_api"] == "enabled"
+    assert BASE_ENTITLEMENTS["enterprise"]["connectors.custom_api"] == "contract_only"
 
 
 def test_customer_visible_catalog_uses_packaging_v2_required_plans():
