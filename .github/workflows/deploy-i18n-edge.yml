@@ -110,26 +110,50 @@ jobs:
           while IFS= read -r locale; do
             headers="headers.txt"
             body="body.json"
-            status="$(curl --silent --show-error --max-time 75 -D "$headers" -o "$body" -w '%{http_code}' \
-              -H "Origin: ${PORTAL_ORIGIN}" \
-              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
-              -H 'Content-Type: application/json' \
-              -d "{\"locale\":\"${locale}\"}" \
-              "${API_URL}/v1/i18n/internal/canary")"
-
+            locale_ok=no
+            status="000"
             cors_ok=no
-            if tr -d '\r' < "$headers" | grep -Fi "access-control-allow-origin: ${PORTAL_ORIGIN}" >/dev/null; then cors_ok=yes; fi
             release_ok=no
-            if tr -d '\r' < "$headers" | grep -Fi "x-agroai-i18n-release: ${I18N_EDGE_RELEASE}" >/dev/null; then release_ok=yes; fi
             body_ok=no
-            if jq -e --arg locale "$locale" '.status == "ok" and .locale == $locale and .changed_count >= 2 and .key_count == 4' "$body" >/dev/null 2>&1; then body_ok=yes; fi
+            release_marker=""
 
-            if [ "$status" != "200" ] || [ "$cors_ok" != "yes" ] || [ "$release_ok" != "yes" ] || [ "$body_ok" != "yes" ]; then
+            for attempt in $(seq 1 12); do
+              status="$(curl --silent --show-error --max-time 75 -D "$headers" -o "$body" -w '%{http_code}' \
+                -H "Origin: ${PORTAL_ORIGIN}" \
+                -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+                -H 'Content-Type: application/json' \
+                -d "{\"locale\":\"${locale}\"}" \
+                "${API_URL}/v1/i18n/internal/canary?release_probe=${GITHUB_SHA}-${locale}-${attempt}" || true)"
+
+              cors_ok=no
+              if tr -d '\r' < "$headers" | grep -Fi "access-control-allow-origin: ${PORTAL_ORIGIN}" >/dev/null; then cors_ok=yes; fi
+              release_marker="$(tr -d '\r' < "$headers" | sed -n 's/^x-agroai-i18n-release:[[:space:]]*//Ip' | head -1)"
+              release_ok=no
+              if [ "$release_marker" = "$I18N_EDGE_RELEASE" ]; then release_ok=yes; fi
+              body_ok=no
+              if jq -e --arg locale "$locale" '.status == "ok" and .locale == $locale and .changed_count >= 2 and .key_count == 4' "$body" >/dev/null 2>&1; then body_ok=yes; fi
+
+              if [ "$status" = "200" ] && [ "$cors_ok" = "yes" ] && [ "$release_ok" = "yes" ] && [ "$body_ok" = "yes" ]; then
+                locale_ok=yes
+                break
+              fi
+
+              if [ "$release_ok" != "yes" ]; then
+                echo "WAIT ${locale} attempt=${attempt} release_marker=${release_marker:-missing}"
+                sleep 2
+                continue
+              fi
+
+              break
+            done
+
+            if [ "$locale_ok" != "yes" ]; then
               {
                 echo "locale=${locale}"
                 echo "http_status=${status}"
                 echo "cors_ok=${cors_ok}"
                 echo "release_ok=${release_ok}"
+                echo "release_marker=${release_marker:-missing}"
                 echo "body_ok=${body_ok}"
                 echo "body="
                 cat "$body"
