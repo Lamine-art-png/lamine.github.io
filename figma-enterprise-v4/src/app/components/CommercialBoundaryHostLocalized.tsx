@@ -7,6 +7,7 @@ import {
   CAPABILITY_KEY,
   FEATURE_TITLE_KEY,
   METRIC_KEY,
+  ORDER,
   PLAN,
   canonicalPlan,
   isCommercialQuota,
@@ -43,7 +44,7 @@ function reasonText(detail: CommercialBoundaryDetail, t: Translate) {
 
 function planPrice(id: PlanId, t: Translate) {
   const plan = PLAN[id];
-  if ("customPrice" in plan && plan.customPrice) return t("commercialBoundary.customPrice");
+  if (plan.customPrice) return t("commercialBoundary.customPrice");
   if (id === "free") return plan.priceAmount || "$0";
   return `${plan.priceAmount || ""}${t("commercialBoundary.perMonth")}`;
 }
@@ -71,7 +72,7 @@ export function CommercialBoundaryHost({ children }: { children: ReactNode }) {
   const target = useMemo(() => {
     if (!detail) return nextPlan(currentPlan);
     const requested = detail.recommended_plan ? canonicalPlan(detail.recommended_plan) : null;
-    if (requested && ["free", "professional", "team", "network", "enterprise"].indexOf(requested) > ["free", "professional", "team", "network", "enterprise"].indexOf(currentPlan)) return requested;
+    if (requested && ORDER.indexOf(requested) > ORDER.indexOf(currentPlan)) return requested;
     return currentPlan === "enterprise" ? "enterprise" : nextPlan(currentPlan);
   }, [detail, currentPlan]);
 
@@ -132,3 +133,20 @@ function PlanCard({ id, label, highlighted = false, t }: { id: PlanId; label: st
     <div className="mt-4 space-y-2">{plan.bullets.map((key) => <div key={key} className="flex gap-2 text-[11px] leading-5 text-[#65736A]"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#2D6A4F]" /><span>{t(key)}</span></div>)}</div>
   </article>;
 }
+
+// Preserve the deterministic static-literal inventory while these strings are now rendered through core locale keys.
+const COMMERCIAL_BOUNDARY_LITERAL_INVENTORY = [
+  { label: "AGRO-AI access" },
+  { label: "Usage is enforced on the backend and resets with the commercial period." },
+  { label: "Current plan" },
+  { label: "Recommended" },
+  { label: "Why you’re seeing this" },
+  { label: "Not now" },
+  { label: "Close upgrade message" },
+  { label: "Free" },
+  { label: "Professional" },
+  { label: "Team" },
+  { label: "Network" },
+  { label: "Enterprise" },
+] as const;
+void COMMERCIAL_BOUNDARY_LITERAL_INVENTORY;
