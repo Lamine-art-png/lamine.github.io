@@ -32,6 +32,7 @@ from . import connector_launch_secure as launch_secure_module  # noqa: E402
 from . import connector_oauth_completion as oauth_completion_module  # noqa: E402
 from . import connectors as connector_compat_module  # noqa: E402
 from . import connector_upload_commercial as commercial_upload_module  # noqa: E402
+from . import evidence as evidence_module  # noqa: E402
 from . import product_shell as product_shell_module  # noqa: E402
 from . import monetization_convergence as monetization_module  # noqa: E402
 from app.services.commercial_packaging_v2 import apply_catalog_packaging, install_commercial_packaging_v2  # noqa: E402
@@ -82,7 +83,19 @@ def _remove_unmetered_evidence_upload() -> None:
     ]
 
 
+def _remove_legacy_evidence_upload() -> None:
+    evidence_module.router.routes[:] = [
+        route
+        for route in evidence_module.router.routes
+        if not (
+            getattr(route, "path", "") == "/evidence/upload"
+            and "POST" in set(getattr(route, "methods", None) or ())
+        )
+    ]
+
+
 _remove_unmetered_evidence_upload()
+_remove_legacy_evidence_upload()
 connector_module.router.routes[0:0] = (
     list(commercial_upload_module.router.routes)
     + list(oauth_module.router.routes)
