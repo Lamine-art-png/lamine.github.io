@@ -20,12 +20,39 @@ jobs:
           cache-dependency-path: figma-enterprise-v4/package-lock.json
       - name: Install portal dependencies
         run: npm ci
-      - name: Capture exact i18n failure
+      - name: Capture exact i18n failure and full delta
         run: |
           set +e
           npm run test:i18n 2>&1 | tee connector-v3-i18n.log
           status=${PIPESTATUS[0]}
           tail -n 120 connector-v3-i18n.log > connector-v3-i18n-tail.txt
+          python3 - <<'PY' > connector-v3-i18n-delta.json
+          import importlib.util
+          import json
+          from pathlib import Path
+
+          module_path = Path("scripts/check_ui_literal_inventory.py")
+          spec = importlib.util.spec_from_file_location("ui_inventory", module_path)
+          module = importlib.util.module_from_spec(spec)
+          assert spec.loader is not None
+          spec.loader.exec_module(module)
+
+          expected = module.build_catalog()
+          current = {}
+          for path in sorted((module.REPO_ROOT / "shared").glob(module.LITERAL_CATALOG_GLOB)):
+              current.update(json.loads(path.read_text(encoding="utf-8")))
+
+          payload = {
+              "missing": {key: expected[key] for key in sorted(set(expected) - set(current))},
+              "extra": {key: current[key] for key in sorted(set(current) - set(expected))},
+              "changed": {
+                  key: {"current": current[key], "expected": expected[key]}
+                  for key in sorted(set(current).intersection(expected))
+                  if current[key] != expected[key]
+              },
+          }
+          print(json.dumps(payload, indent=2, ensure_ascii=False))
+          PY
           exit $status
       - name: Upload i18n diagnostic
         if: always()
@@ -35,6 +62,7 @@ jobs:
           path: |
             figma-enterprise-v4/connector-v3-i18n.log
             figma-enterprise-v4/connector-v3-i18n-tail.txt
+            figma-enterprise-v4/connector-v3-i18n-delta.json
           retention-days: 1
 
   command-center-v2-diagnostic:
