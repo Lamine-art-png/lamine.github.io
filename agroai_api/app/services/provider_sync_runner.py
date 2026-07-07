@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.models.connector_security import ConnectorCredential
 from app.models.operational_records import ConnectorConnection, IngestionJob
+from app.services.ag_connector_runtime import AG_PROVIDERS, AUTH_ERRORS, RATE_LIMIT_ERRORS, sync_ag_provider
 from app.services.connector_vault import load_connector_credentials, store_connector_credentials
 from app.services.google_drive_sync import sync_google_drive
 from app.services.ingestion_job_runner import _claim, _complete, _fail_or_retry, job_lease_heartbeat
@@ -123,21 +124,25 @@ async def process_provider_sync_job(
                 raise RuntimeError("provider sync connection is unavailable")
             if connection.provider not in SUPPORTED_PROVIDERS:
                 raise RuntimeError("provider sync adapter is unavailable")
-            if connection.status not in {"connected", "synced", "syncing"} or not connection.credentials_ref:
+            if connection.status not in {"connected", "synced", "syncing", "rate_limited", "degraded"} or not connection.credentials_ref:
                 raise ProviderOAuthError("provider authorization is not active", reconnect_required=True)
 
             connection.status = "syncing"
             connection.updated_at = datetime.utcnow()
             db.commit()
-            access_value = await _access_value(db, connection)
-            if heartbeat.lost:
-                db.rollback()
-                return "deferred"
 
-            if connection.provider == "google_drive":
-                output = await sync_google_drive(db, connection=connection, access_value=access_value)
+            if connection.provider in AG_PROVIDERS:
+                output = await sync_ag_provider(db, connection=connection)
             else:
-                output = await sync_outlook(db, connection, access_value)
+                access_value = await _access_value(db, connection)
+                if heartbeat.lost:
+                    db.rollback()
+                    return "deferred"
+                if connection.provider == "google_drive":
+                    output = await sync_google_drive(db, connection=connection, access_value=access_value)
+                else:
+                    output = await sync_outlook(db, connection, access_value)
+
             if heartbeat.lost:
                 db.rollback()
                 return "deferred"
@@ -151,6 +156,22 @@ async def process_provider_sync_job(
             connection.last_error = None
             connection.updated_at = datetime.utcnow()
             return _complete(db, job, output, worker_id=worker_id)
+        except AUTH_ERRORS as exc:
+            return _reconnect_failure(
+                db,
+                job_id=job_id,
+                exc=ProviderOAuthError(str(exc), reconnect_required=True),
+                worker_id=worker_id,
+            )
+        except RATE_LIMIT_ERRORS as exc:
+            db.rollback()
+            connection = db.get(ConnectorConnection, job.connector_connection_id)
+            if connection is not None and connection.tenant_id == tenant_id:
+                connection.status = "rate_limited"
+                connection.last_error = str(exc)[:700]
+                connection.updated_at = datetime.utcnow()
+                db.commit()
+            return _fail_or_retry(db, job_id, exc, worker_id=worker_id)
         except ProviderOAuthError as exc:
             if exc.reconnect_required:
                 return _reconnect_failure(db, job_id=job_id, exc=exc, worker_id=worker_id)
