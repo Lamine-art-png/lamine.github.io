@@ -1,0 +1,33 @@
+name: Public API Host Probe
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/public-api-host-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe public health and webhook routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          for url in \
+            "https://app.agroai-pilot.com/v1/health" \
+            "https://app.agroai-pilot.com/v1/edge-health" \
+            "https://api.agroai-pilot.com/v1/health" \
+            "https://api.agroai-pilot.com/v1/billing/webhook"
+          do
+            code="$(curl --silent --show-error --max-time 30 --output /dev/null --write-out '%{http_code}' "${url}" || true)"
+            printf '%s %s\n' "${code}" "${url}"
+          done | tee public-api-probe.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: public-api-probe
+          path: public-api-probe.txt
+          retention-days: 1
