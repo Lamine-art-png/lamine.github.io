@@ -20,11 +20,13 @@ import {
   workersAiModel as dedicatedTranslationModel,
 } from "./i18n-translation-engine-v3";
 import { fallbackModel, translateFallback } from "./i18n-locale-fallback";
+import { publicTranslationProvider, translateWithPublicFallback } from "./i18n-public-translate-fallback";
 
 export interface I18nFastpathEnv extends BaseEnv { AI: AiRunner }
 
 type BaseFetch = <Host, Cf>(request: Request<Host, Cf>, env: I18nFastpathEnv) => Promise<Response>;
 type LocaleManifest = { locales?: Array<{ code?: string; englishName?: string; nativeName?: string }> };
+type TranslationResult = { catalog: Record<string, string>; models: string[]; provider: string };
 
 const LOCAL_LOCALES: LocaleEntry[] = ((localeManifest as LocaleManifest).locales || []).map((locale) => ({
   code: locale.code,
@@ -35,7 +37,6 @@ function jsonResponse(payload: unknown, reference?: Response, status = 200): Res
   const headers = new Headers(reference?.headers);
   headers.set("content-type", "application/json; charset=utf-8");
   headers.set("cache-control", "no-store");
-  headers.set("x-agroai-i18n-fallback", "cloudflare-workers-ai");
   headers.delete("content-length");
   return new Response(JSON.stringify(payload), { status, headers });
 }
@@ -57,26 +58,34 @@ async function translateValidatedCatalog(
   locale: string,
   language: string,
   source: Record<string, string>,
-): Promise<{ catalog: Record<string, string>; models: string[] }> {
+): Promise<TranslationResult> {
   try {
     const catalog = await translateChunkedCatalog(ai, locale, source, language);
-    return { catalog, models: [workersAiModel] };
+    return { catalog, models: [workersAiModel], provider: "cloudflare_workers_ai" };
   } catch (chunkedError) {
     console.warn("workers_ai_chunked_i18n_failed", { locale, error: String(chunkedError) });
     try {
       if (locale.split("-", 1)[0].toLowerCase() === "te") {
         const catalog = await translateFallback(ai, source);
-        return { catalog, models: [fallbackModel] };
+        return { catalog, models: [fallbackModel], provider: "cloudflare_workers_ai" };
       }
       const catalog = await translateDedicatedCatalog(ai, locale, source, language);
-      return { catalog, models: [dedicatedTranslationModel] };
+      return { catalog, models: [dedicatedTranslationModel], provider: "cloudflare_workers_ai" };
     } catch (dedicatedError) {
       console.error("workers_ai_dedicated_i18n_failed", {
         locale,
         chunkedError: String(chunkedError),
         dedicatedError: String(dedicatedError),
       });
-      throw new Error(`chunked=${diagnosticText(chunkedError)}; dedicated=${diagnosticText(dedicatedError)}`);
+      try {
+        const catalog = await translateWithPublicFallback(locale, source);
+        return { catalog, models: [], provider: publicTranslationProvider };
+      } catch (publicError) {
+        console.error("public_i18n_fallback_failed", { locale, error: String(publicError) });
+        throw new Error(
+          `chunked=${diagnosticText(chunkedError)}; dedicated=${diagnosticText(dedicatedError)}; public=${diagnosticText(publicError)}`,
+        );
+      }
     }
   }
 }
@@ -108,7 +117,7 @@ export async function handleI18nFastpath<Host, Cf>(request: Request<Host, Cf>, e
     const catalog = translated.catalog;
     if (isCanary) {
       const changed = Object.keys(source).filter((key) => catalog[key] !== source[key]);
-      if (changed.length < 2) throw new Error("workers_ai_canary_stayed_english");
+      if (changed.length < 2) throw new Error("ui_canary_stayed_english");
       return jsonResponse({
         status: "ok",
         locale: locale.code,
@@ -117,7 +126,7 @@ export async function handleI18nFastpath<Host, Cf>(request: Request<Host, Cf>, e
         key_count: Object.keys(source).length,
         changed_keys: changed,
         catalog_sha256: await catalogSha256(catalog),
-        providers: ["cloudflare_workers_ai"],
+        providers: [translated.provider],
         models: translated.models,
         chunks: Math.ceil(Object.keys(source).length / workersAiChunkSize),
       });
@@ -126,14 +135,14 @@ export async function handleI18nFastpath<Host, Cf>(request: Request<Host, Cf>, e
       status: "ok",
       locale: locale.code,
       catalog,
-      source: "cloudflare_workers_ai",
+      source: translated.provider,
       chunks: Math.ceil(Object.keys(source).length / workersAiChunkSize),
       key_count: Object.keys(source).length,
-      providers: ["cloudflare_workers_ai"],
+      providers: [translated.provider],
       models: translated.models,
     });
   } catch (error) {
-    console.error("workers_ai_i18n_generation_failed", { locale: locale.code, error: String(error) });
+    console.error("edge_i18n_generation_failed", { locale: locale.code, error: String(error) });
     try {
       const upstream = await baseFetch(fallback, env);
       if (isCanary && !upstream.ok) {
@@ -142,7 +151,7 @@ export async function handleI18nFastpath<Host, Cf>(request: Request<Host, Cf>, e
           status: "error",
           error: "ui_canary_generation_unavailable",
           locale: locale.code,
-          workers_ai_error: diagnosticText(error),
+          edge_error: diagnosticText(error),
           upstream_status: upstream.status,
           upstream_body: upstreamBody.slice(0, 2000),
         }, upstream, upstream.status);
@@ -151,7 +160,7 @@ export async function handleI18nFastpath<Host, Cf>(request: Request<Host, Cf>, e
     } catch (upstreamError) {
       console.error("upstream_i18n_fallback_failed", {
         locale: locale.code,
-        workersAiError: String(error),
+        edgeError: String(error),
         upstreamError: String(upstreamError),
       });
       return jsonResponse({ status: "error", error: "ui_catalog_generation_unavailable", locale: locale.code }, undefined, 503);
