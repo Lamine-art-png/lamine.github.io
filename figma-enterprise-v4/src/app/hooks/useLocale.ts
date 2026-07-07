@@ -24,12 +24,15 @@ export function useLocale() {
   const resolution = useMemo(() => resolveLocaleDetailed(selectedLocale), [selectedLocale]);
 
   useEffect(() => {
-    applyLocale(selectedLocale);
     const listener = ((event: CustomEvent) => {
       setSelectedLocaleState(event.detail?.selectedLocale || event.detail?.locale || getStoredLocale());
     }) as EventListener;
     window.addEventListener("agroai:locale-change", listener);
     return () => window.removeEventListener("agroai:locale-change", listener);
+  }, []);
+
+  useEffect(() => {
+    applyLocale(selectedLocale);
   }, [selectedLocale]);
 
   useEffect(() => {
