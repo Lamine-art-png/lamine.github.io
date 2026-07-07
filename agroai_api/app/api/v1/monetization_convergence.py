@@ -4,7 +4,7 @@ This module keeps the portal on one commercial source of truth:
 - period-aware durable quota snapshots
 - live cardinality for capacity quotas
 - effective entitlements resolved from the canonical control plane
-- one checkout bridge that delegates to the authoritative Stripe checkout endpoint
+- one checkout implementation behind both current and compatibility paths
 """
 from __future__ import annotations
 
@@ -55,12 +55,7 @@ def _set_cardinality(snapshot: dict, metric: str, used: int) -> None:
 
 
 def _reconcile_capacity_usage(db: Session, org_id: str, snapshot: dict) -> dict:
-    """Replace event-derived capacity metrics with live database cardinality.
-
-    Workspaces, seats, active connectors, and managed entities are durable rows,
-    not period consumption events. Showing event totals for them can under-report
-    capacity, so the customer summary reconciles those metrics against live state.
-    """
+    """Replace event-derived capacity metrics with live database cardinality."""
     workspace_count = int(
         db.query(func.count(Workspace.id)).filter(Workspace.organization_id == org_id).scalar() or 0
     )
@@ -154,12 +149,14 @@ def commercial_summary(ctx: AuthContext = Depends(get_auth_context), db: Session
     }
 
 
+@router.post("/billing/checkout")
 @router.post("/billing/checkout-authoritative")
 def checkout_authoritative(
     payload: AuthoritativeCheckoutRequest,
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict:
+    """Single self-serve checkout implementation for current and legacy clients."""
     org, membership = _require_org(ctx)
     require_owner_or_admin(membership.role)
 
