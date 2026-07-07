@@ -13,8 +13,18 @@ const RETRY_AFTER = new Map<string, number>();
 
 installCommercialBoundaryBaseCatalogs();
 const CORE_ENGLISH_SOURCE: Record<string, string> = { ...TRANSLATIONS.en };
+const CRITICAL_CORE_KEYS = [
+  "language", "save", "saving", "newOperation", "workspace", "operate", "intelligence", "account",
+  "tasks", "decisions", "evidence", "reports", "connectors", "askAgroAi", "readiness", "sources",
+  "team", "settings", "profile", "billing", "security", "support", "logout", "plan", "settingsTitle",
+  "settingsSubtitle", "languageRegion", "languageRegionHint", "subscriptionBilling", "accountProfile",
+  "workspacePreferences", "notifications",
+] as const;
+const CRITICAL_ENGLISH_SOURCE: Record<string, string> = Object.fromEntries(
+  CRITICAL_CORE_KEYS.map((key) => [key, CORE_ENGLISH_SOURCE[key]]).filter((entry): entry is [string, string] => typeof entry[1] === "string"),
+);
 
-export type CatalogScope = "core" | "full";
+export type CatalogScope = "critical" | "core" | "full";
 
 type CatalogResponse = {
   status: string;
@@ -30,7 +40,9 @@ function exactKeyParity(candidate: Record<string, string>, source: Record<string
 }
 
 function sourceForScope(scope: CatalogScope) {
-  return scope === "core" ? CORE_ENGLISH_SOURCE : fullEnglishUiSource(CORE_ENGLISH_SOURCE);
+  if (scope === "critical") return CRITICAL_ENGLISH_SOURCE;
+  if (scope === "core") return CORE_ENGLISH_SOURCE;
+  return fullEnglishUiSource(CORE_ENGLISH_SOURCE);
 }
 
 function catalogCoversSource(candidate: Record<string, string> | undefined, source: Record<string, string>) {
@@ -51,6 +63,11 @@ export function hasCompleteLocaleCatalog(locale: string): boolean {
 export function hasCoreLocaleCatalog(locale: string): boolean {
   const effectiveLocale = normalizeLocale(locale);
   return catalogCoversSource(TRANSLATIONS[effectiveLocale], sourceForScope("core"));
+}
+
+export function hasCriticalLocaleCatalog(locale: string): boolean {
+  const effectiveLocale = normalizeLocale(locale);
+  return catalogCoversSource(TRANSLATIONS[effectiveLocale], sourceForScope("critical"));
 }
 
 function installLocaleCatalog(locale: string, source: Record<string, string>, catalog: Record<string, string>, persist: boolean) {
@@ -126,6 +143,28 @@ function readCached(locale: string, source: Record<string, string>) {
   }
 }
 
+function cachedCoverage(locale: string, source: Record<string, string>): Record<string, string> | null {
+  const exact = readCached(locale, source);
+  if (exact) return exact;
+  try {
+    const prefix = `${CACHE_PREFIX}${locale}:`;
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (!key?.startsWith(prefix)) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      const parsed = JSON.parse(raw) as { version?: number; catalog?: unknown };
+      if (parsed.version !== 5 || !parsed.catalog || typeof parsed.catalog !== "object" || Array.isArray(parsed.catalog)) continue;
+      const catalog = parsed.catalog as Record<string, string>;
+      if (!catalogCoversSource(catalog, source)) continue;
+      return Object.fromEntries(Object.keys(source).map((sourceKey) => [sourceKey, catalog[sourceKey].trim()]));
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
 function writeCached(locale: string, source: Record<string, string>, catalog: Record<string, string>) {
   try {
     const fingerprint = sourceFingerprint(source);
@@ -133,6 +172,20 @@ function writeCached(locale: string, source: Record<string, string>, catalog: Re
   } catch {
     // Local cache is an optimization only.
   }
+}
+
+export function primeLocaleCatalogFromCache(locale: string, scope: CatalogScope = "critical"): boolean {
+  const effectiveLocale = normalizeLocale(locale);
+  const source = sourceForScope(scope);
+  if (effectiveLocale === "en") {
+    installLocaleCatalog("en", source, source, false);
+    return true;
+  }
+  if (catalogCoversSource(TRANSLATIONS[effectiveLocale], source)) return true;
+  const cached = cachedCoverage(effectiveLocale, source);
+  if (!cached) return false;
+  installLocaleCatalog(effectiveLocale, source, cached, false);
+  return true;
 }
 
 function sourceChunks(source: Record<string, string>): Record<string, string>[] {
@@ -157,7 +210,7 @@ function reusableCatalog(locale: string, source: Record<string, string>): Record
 }
 
 async function loadLocaleCatalog(effectiveLocale: string, source: Record<string, string>): Promise<boolean> {
-  const cached = readCached(effectiveLocale, source);
+  const cached = cachedCoverage(effectiveLocale, source);
   if (cached) {
     installLocaleCatalog(effectiveLocale, source, cached, false);
     return true;
@@ -185,7 +238,7 @@ async function loadLocaleCatalog(effectiveLocale: string, source: Record<string,
       if (result.status === "fulfilled") {
         const { chunk, catalog } = result.value;
         Object.assign(merged, catalog);
-        installLocaleCatalog(effectiveLocale, chunk, catalog, false);
+        installLocaleCatalog(effectiveLocale, chunk, catalog, true);
       } else if (!waveFailure) {
         waveFailure = result.reason;
       }
