@@ -3,8 +3,8 @@ import { handleI18nFastpath, type I18nFastpathEnv } from "./i18n-fastpath-handle
 
 const translationPaths = new Set(["/v1/i18n/catalog", "/v1/i18n/internal/canary"]);
 
-async function baseFetch(request: Request, env: I18nFastpathEnv): Promise<Response> {
-  const fetcher = baseHandler.fetch as unknown as (request: Request, env: I18nFastpathEnv) => Promise<Response>;
+async function baseFetch<Host, Cf>(request: Request<Host, Cf>, env: I18nFastpathEnv): Promise<Response> {
+  const fetcher = baseHandler.fetch as unknown as (request: Request<Host, Cf>, env: I18nFastpathEnv) => Promise<Response>;
   return fetcher(request, env);
 }
 
@@ -22,4 +22,4 @@ export default {
   async scheduled(controller: ScheduledController, env: I18nFastpathEnv, ctx: ExecutionContext): Promise<void> {
     await baseHandler.scheduled(controller, env, ctx);
   },
-};
+} satisfies ExportedHandler<I18nFastpathEnv, ConnectorTaskEnvelope>;
