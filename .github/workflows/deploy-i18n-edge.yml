@@ -1,0 +1,60 @@
+name: I18n Edge Release
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "cloudflare/edge-gateway/src/i18n-*.ts"
+      - "cloudflare/edge-gateway/src/edge-main-v3.ts"
+      - "shared/ui-*.json"
+      - "shared/supported-locales.json"
+      - ".github/workflows/deploy-i18n-edge.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agroai-i18n-edge-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Validate and deploy i18n edge
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: cloudflare/edge-gateway/package-lock.json
+
+      - name: Validate exact edge bundle
+        working-directory: cloudflare/edge-gateway
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run check
+
+      - name: Deploy exact edge bundle
+        working-directory: cloudflare/edge-gateway
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config ../../wrangler.toml
+
+      - name: Smoke production edge
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent --show-error --max-time 15 https://app.agroai-pilot.com/v1/edge-health | jq -e '.status == "ok"' >/dev/null; then
+              exit 0
+            fi
+            sleep 3
+          done
+          exit 1
