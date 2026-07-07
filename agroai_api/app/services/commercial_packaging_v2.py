@@ -75,6 +75,7 @@ def apply_catalog_packaging(catalog: list[dict[str, Any]]) -> None:
 
 
 def install_commercial_packaging_v2() -> None:
+    from app.services import connector_commercial_guard as guard
     from app.services.commercial_control import BASE_ENTITLEMENTS
     from app.services.entitlements import PLAN_LIMITS
     from app.services.product_plans import PLANS
@@ -120,3 +121,13 @@ def install_commercial_packaging_v2() -> None:
         for feature in ("Weather context", "OpenET / ET context"):
             if feature not in features:
                 features.append(feature)
+
+    guard.MANUAL_PROVIDERS = set(MANUAL_EVIDENCE_PROVIDERS)
+    guard.DOCUMENT_OAUTH_PROVIDERS = set(DOCUMENT_OAUTH_PROVIDERS)
+    guard.CONTRACT_PROVIDERS = set(ENTERPRISE_INTEGRATION_PROVIDERS)
+
+    def _connector_feature(provider: str) -> tuple[str, str | None]:
+        required_plan = required_plan_for_provider(provider)
+        return feature_for_provider(provider), None if required_plan == "free" else required_plan
+
+    guard.connector_feature = _connector_feature
