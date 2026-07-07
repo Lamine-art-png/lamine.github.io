@@ -62,14 +62,15 @@ def make_client(monkeypatch):
 
 
 def test_connect_vaults_secret_and_ignores_browser_destination_override(monkeypatch):
-    async def fake_probe(_db, *, connection):
+    async def fake_probe(provider, api_key):
+        assert provider == "wiseconn"
+        assert api_key == "customer-authorized-value"
         return {
-            "authorized": True,
-            "identity": {"provider": connection.provider, "resource_count": 1},
+            "identity": {"provider": provider, "resource_count": 1},
             "resources": [{"id": "farm-1", "name": "Farm One", "type": "farm"}],
         }
 
-    monkeypatch.setattr(connector_unified_v3, "probe_ag_connection", fake_probe)
+    monkeypatch.setattr(connector_unified_v3, "_probe_candidate", fake_probe)
     client, SessionLocal = make_client(monkeypatch)
     response = client.post(
         "/v1/connectors/unified/connect",
@@ -93,12 +94,12 @@ def test_connect_vaults_secret_and_ignores_browser_destination_override(monkeypa
         assert stored == {"api_key": "customer-authorized-value"}
 
 
-def test_failed_authorization_revokes_vault_credential(monkeypatch):
-    async def fail_probe(_db, *, connection):
+def test_failed_authorization_never_persists_candidate(monkeypatch):
+    async def fail_probe(_provider, _api_key):
         from app.adapters.wiseconn import WiseConnAuthError
         raise WiseConnAuthError("denied")
 
-    monkeypatch.setattr(connector_unified_v3, "probe_ag_connection", fail_probe)
+    monkeypatch.setattr(connector_unified_v3, "_probe_candidate", fail_probe)
     client, SessionLocal = make_client(monkeypatch)
     response = client.post(
         "/v1/connectors/unified/connect",
@@ -106,9 +107,8 @@ def test_failed_authorization_revokes_vault_credential(monkeypatch):
     )
     assert response.status_code == 401
     assert "bad-customer-value" not in response.text
+    assert response.json()["detail"]["code"] == "provider_authorization_failed"
 
-    body = response.json()
-    assert body["detail"]["code"] == "provider_authorization_failed"
     with SessionLocal() as db:
         from app.models.operational_records import ConnectorConnection
         connection = db.query(ConnectorConnection).filter(ConnectorConnection.provider == "wiseconn").one()
@@ -119,4 +119,36 @@ def test_failed_authorization_revokes_vault_credential(monkeypatch):
         except LookupError:
             pass
         else:
-            raise AssertionError("failed authorization credential must be revoked")
+            raise AssertionError("failed authorization candidate must never be persisted")
+
+
+def test_failed_reauthorization_preserves_existing_valid_vault_record(monkeypatch):
+    attempts = 0
+
+    async def probe(provider, api_key):
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            return {"identity": {"provider": provider}, "resources": []}
+        from app.adapters.wiseconn import WiseConnAuthError
+        raise WiseConnAuthError("denied")
+
+    monkeypatch.setattr(connector_unified_v3, "_probe_candidate", probe)
+    client, SessionLocal = make_client(monkeypatch)
+
+    first = client.post("/v1/connectors/unified/connect", json={"provider": "wiseconn", "api_key": "known-good-value"})
+    assert first.status_code == 200, first.text
+    connection_id = first.json()["connection"]["id"]
+
+    replacement = client.post("/v1/connectors/unified/connect", json={"provider": "wiseconn", "api_key": "bad-replacement-value"})
+    assert replacement.status_code == 401
+    assert "bad-replacement-value" not in replacement.text
+
+    with SessionLocal() as db:
+        from app.models.operational_records import ConnectorConnection
+        connection = db.get(ConnectorConnection, connection_id)
+        assert connection is not None
+        assert connection.credentials_ref
+        assert connection.status == "connected"
+        stored = load_connector_credentials(db, tenant_id="org-unified-v3", connection_id=connection_id)
+        assert stored == {"api_key": "known-good-value"}
