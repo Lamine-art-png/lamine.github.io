@@ -46,10 +46,10 @@ function localizeChild(value: any, keyPrefix = "i18n"): any {
   return value;
 }
 
-function hasLocalizableProp(props: any): boolean {
+function hasStringLocalizableProp(props: any): boolean {
   if (!props || typeof props !== "object") return false;
   for (const prop of LOCALIZABLE_PROPS) {
-    if (typeof props[prop] === "string" && hasLiteralTranslationSource(props[prop])) return true;
+    if (typeof props[prop] === "string") return true;
   }
   return false;
 }
@@ -76,7 +76,9 @@ export function createLocalizedJsx(factory: JsxFactory, type: any, props: any, k
     ? { ...props, children: localizeChild(props.children) }
     : props;
 
-  if (hasLocalizableProp(childrenLocalized) && !childrenLocalized?.ref) {
+  // Wrapper identity must depend only on prop shape, never on the active language
+  // or whether the current value still matches the English source catalog.
+  if (hasStringLocalizableProp(childrenLocalized) && !childrenLocalized?.ref) {
     return reactJsx(LocalizedElement, { type, props: childrenLocalized, factory, elementKey: key }, key);
   }
   return factory(type, childrenLocalized, key);
