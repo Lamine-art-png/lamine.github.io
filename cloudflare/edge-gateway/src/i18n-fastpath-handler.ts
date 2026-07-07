@@ -1,4 +1,5 @@
 import type { Env as BaseEnv } from "./index";
+import { canonicalRequestedSource } from "./i18n-canonical-source";
 import {
   canaryAuthorized,
   canarySource,
@@ -55,12 +56,20 @@ export async function handleI18nFastpath<Host, Cf>(request: Request<Host, Cf>, e
     source = canarySource;
   } else {
     const hasSource = Object.prototype.hasOwnProperty.call(payload, "source");
-    const checked = await baseFetch(englishValidationRequest(request, payload.source, hasSource), env);
+    if (hasSource) {
+      source = canonicalRequestedSource(payload.source);
+      if (!source) return jsonResponse({ status: "error", error: "ui_source_catalog_mismatch" }, currentRegistry.response, 409);
+    }
+
+    // Keep authentication fail-closed, but do not make a new portal catalog wait for
+    // the backend to deploy the exact same catalog SHA. The committed edge bundle is
+    // already the canonical source authority for the portal bundle it ships with.
+    const checked = await baseFetch(englishValidationRequest(request, undefined, false), env);
     if (!checked.ok) return checked;
     try {
       const body = await checked.clone().json() as { status?: unknown; locale?: unknown; catalog?: unknown };
       if (body.status !== "ok" || body.locale !== "en") return jsonResponse({ status: "error", error: "invalid_i18n_validation_response" }, checked, 502);
-      source = sourceObject(body.catalog);
+      if (!source) source = sourceObject(body.catalog);
     } catch { return jsonResponse({ status: "error", error: "invalid_i18n_validation_response" }, checked, 502); }
     if (!source) return jsonResponse({ status: "error", error: "invalid_i18n_validation_response" }, checked, 502);
     reference = checked;
