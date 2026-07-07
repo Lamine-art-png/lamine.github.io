@@ -128,7 +128,7 @@ async function upstreamGenerationFailure(response: Response): Promise<boolean> {
   }
 }
 
-async function workersAiFallback(request: Request, env: WrapperEnv, upstream: Response): Promise<Response> {
+async function workersAiFallback(request: any, env: WrapperEnv, upstream: Response): Promise<Response> {
   if (!(await upstreamGenerationFailure(upstream))) return upstream;
   let payload: { locale?: unknown; source?: unknown };
   try { payload = await request.clone().json(); } catch { return upstream; }
