@@ -40,6 +40,14 @@ function jsonResponse(payload: unknown, reference?: Response, status = 200): Res
   return new Response(JSON.stringify(payload), { status, headers });
 }
 
+function markUpstreamFallback(response: Response): Response {
+  const headers = new Headers(response.headers);
+  headers.set("cache-control", "no-store");
+  headers.set("x-agroai-i18n-fallback", "upstream-backend");
+  headers.delete("content-length");
+  return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
+}
+
 async function translateValidatedCatalog(
   ai: AiRunner,
   locale: string,
@@ -122,6 +130,16 @@ export async function handleI18nFastpath<Host, Cf>(request: Request<Host, Cf>, e
     });
   } catch (error) {
     console.error("workers_ai_i18n_generation_failed", { locale: locale.code, error: String(error) });
-    return jsonResponse({ status: "error", error: "ui_catalog_generation_unavailable", locale: locale.code }, undefined, 503);
+    try {
+      const upstream = await baseFetch(fallback, env);
+      return markUpstreamFallback(upstream);
+    } catch (upstreamError) {
+      console.error("upstream_i18n_fallback_failed", {
+        locale: locale.code,
+        workersAiError: String(error),
+        upstreamError: String(upstreamError),
+      });
+      return jsonResponse({ status: "error", error: "ui_catalog_generation_unavailable", locale: locale.code }, undefined, 503);
+    }
   }
 }
