@@ -40,7 +40,7 @@ describe("validation-first i18n fastpath", () => {
   it("validates catalog source through authenticated English identity before Workers AI", async () => {
     const ai = new FakeAi();
     const calls: Array<{ method: string; path: string; auth: string; body: unknown }> = [];
-    const baseFetch = async (request: Request): Promise<Response> => {
+    const baseFetch = async <Host, Cf>(request: Request<Host, Cf>): Promise<Response> => {
       const url = new URL(request.url);
       const body = request.method === "POST" ? await request.clone().json() : null;
       calls.push({
@@ -81,7 +81,7 @@ describe("validation-first i18n fastpath", () => {
   it("runs authorized internal canary directly after registry validation without backend generation", async () => {
     const ai = new FakeAi();
     const calls: string[] = [];
-    const baseFetch = async (request: Request): Promise<Response> => {
+    const baseFetch = async <Host, Cf>(request: Request<Host, Cf>): Promise<Response> => {
       calls.push(`${request.method} ${new URL(request.url).pathname}`);
       if (request.method === "GET") {
         return json({ status: "ok", languages: [{ code: "ja", name: "Japanese" }] });
@@ -109,7 +109,7 @@ describe("validation-first i18n fastpath", () => {
   it("never bypasses backend authorization for an unauthorized internal canary", async () => {
     const ai = new FakeAi();
     let postCalls = 0;
-    const baseFetch = async (request: Request): Promise<Response> => {
+    const baseFetch = async <Host, Cf>(request: Request<Host, Cf>): Promise<Response> => {
       const url = new URL(request.url);
       if (request.method === "GET") {
         return json({ status: "ok", languages: [{ code: "ja", name: "Japanese" }] });
