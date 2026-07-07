@@ -40,7 +40,6 @@ class UnifiedConnectRequest(BaseModel):
     provider: AgProvider
     workspace_id: str | None = None
     api_key: SecretStr
-    api_url: str | None = None
     display_name: str | None = None
 
 
@@ -111,15 +110,15 @@ async def unified_connect(
     )
     connection.status = "authorizing"
     connection.updated_at = datetime.utcnow()
-    credentials = {"api_key": payload.api_key.get_secret_value()}
-    if payload.api_url:
-        credentials["api_url"] = payload.api_url.strip()
+
+    # Provider base URLs are fixed server-side. Never let a browser/customer
+    # redirect a secret-bearing server request to an arbitrary host.
     vault_row = store_connector_credentials(
         db,
         tenant_id=tenant_id,
         connection=connection,
         provider=payload.provider,
-        payload=credentials,
+        payload={"api_key": payload.api_key.get_secret_value()},
         scopes=["read", "discover", "sync"],
     )
     connection.credentials_ref = credential_reference(vault_row)
@@ -130,6 +129,7 @@ async def unified_connect(
     except AUTH_ERRORS as exc:
         db.rollback()
         connection = _connection(db, tenant_id, connection.id)
+        revoke_connector_credentials(db, tenant_id=tenant_id, connection_id=connection.id)
         connection.status = "action_required"
         connection.credentials_ref = None
         connection.last_error = "Provider authorization failed. Check the access credential and try again."
@@ -172,7 +172,13 @@ async def unified_connect(
     connection.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(connection)
-    return {"status": "connected", "state": "connected", "connection": public_connection(connection), "identity": probe.get("identity", {}), "resources": probe.get("resources", [])}
+    return {
+        "status": "connected",
+        "state": "connected",
+        "connection": public_connection(connection),
+        "identity": probe.get("identity", {}),
+        "resources": probe.get("resources", []),
+    }
 
 
 @router.get("/connectors/unified/{connection_id}/discovery")
@@ -234,6 +240,13 @@ async def unified_selection(
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     connection = _connection(db, tenant_id, connection_id)
+    if connection.provider != "openet" and payload.scope_mode != "provider_resources":
+        raise HTTPException(status_code=409, detail={"code": "invalid_scope_mode_for_provider"})
+    if connection.provider == "openet" and payload.scope_mode == "openet_field_ids" and not payload.field_ids:
+        raise HTTPException(status_code=422, detail={"code": "openet_field_ids_required"})
+    if connection.provider == "openet" and payload.scope_mode == "geometry" and len(payload.geometry) < 6:
+        raise HTTPException(status_code=422, detail={"code": "openet_geometry_required"})
+
     config = dict(connection.config_json or {})
     resource_ids = payload.resource_ids or payload.field_ids
     config.update(
@@ -263,13 +276,16 @@ async def upload_openet_boundary(
     connection = _connection(db, tenant_id, connection_id)
     if connection.provider != "openet":
         raise HTTPException(status_code=409, detail="Boundary upload is only available for OpenET")
+    filename = file.filename or "fields.geojson"
+    if not filename.lower().endswith((".geojson", ".json")):
+        raise HTTPException(status_code=415, detail={"code": "openet_geojson_required"})
     data = await file.read(int(getattr(settings, "CONNECTOR_MAX_UPLOAD_BYTES", 25 * 1024 * 1024)) + 1)
     max_bytes = min(int(getattr(settings, "CONNECTOR_MAX_UPLOAD_BYTES", 25 * 1024 * 1024)), 25 * 1024 * 1024)
     if len(data) > max_bytes:
         raise HTTPException(status_code=413, detail="OpenET GeoJSON boundary file exceeds 25 MB")
     adapter = load_ag_adapter(db, connection=connection)
     try:
-        result = await adapter.upload_geojson(file.filename or "fields.geojson", data)
+        result = await adapter.upload_geojson(filename, data)
     except AUTH_ERRORS as exc:
         raise HTTPException(status_code=401, detail={"code": "reconnect_required"}) from exc
     finally:
@@ -278,7 +294,7 @@ async def upload_openet_boundary(
     if not asset_id:
         raise HTTPException(status_code=502, detail={"code": "openet_asset_id_missing"})
     config = dict(connection.config_json or {})
-    config.update({"scope_mode": "agroai_fields", "openet_asset_id": str(asset_id), "boundary_filename": file.filename, "selection_confirmed": True})
+    config.update({"scope_mode": "agroai_fields", "openet_asset_id": str(asset_id), "boundary_filename": filename, "selection_confirmed": True})
     connection.config_json = sanitize_config(config)
     connection.updated_at = datetime.utcnow()
     db.commit()
@@ -295,6 +311,9 @@ async def unified_sync(
     connection = _connection(db, tenant_id, connection_id)
     if connection.status not in {"connected", "synced", "syncing", "rate_limited", "degraded"} or not connection.credentials_ref:
         raise HTTPException(status_code=409, detail={"code": "authorization_required", "state": connection.status})
+    config = dict(connection.config_json or {})
+    if connection.provider == "openet" and not config.get("selection_confirmed"):
+        raise HTTPException(status_code=409, detail={"code": "openet_field_scope_required"})
     connection.status = "syncing"
     connection.updated_at = datetime.utcnow()
     db.commit()
