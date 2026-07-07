@@ -1,0 +1,144 @@
+name: I18n Exact Backend Proof
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "agroai_api/app/services/hosted_ui_translation.py"
+      - "agroai_api/app/services/local_ui_translation.py"
+      - "agroai_api/app/services/model_router.py"
+      - ".github/workflows/i18n-exact-backend-proof.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: agroai-i18n-exact-backend-proof
+  cancel-in-progress: true
+
+env:
+  API_URL: https://app.agroai-pilot.com
+  PORTAL_ORIGIN: https://app.agroai-pilot.com
+  UPSTREAM_RELEASE_CONTRACT_URL: https://api-preview.agroai-pilot.com/v1/internal/release/health
+  I18N_EDGE_RELEASE: provider-chain-v2
+
+jobs:
+  prove:
+    name: Wait exact backend and prove 59 locales
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail closed on missing proof credential
+        run: |
+          set -euo pipefail
+          test -n "${QUEUE_CONSUMER_TOKEN:-}"
+
+      - name: Wait for exact backend SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 90); do
+            payload="$(curl --fail --silent --show-error --max-time 20 \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+              "${UPSTREAM_RELEASE_CONTRACT_URL}" 2>/dev/null || true)"
+            if printf '%s' "$payload" | jq -e --arg sha "$GITHUB_SHA" \
+              '.status == "ok" and .contract == "agroai-release-v1" and .build_sha == $sha' \
+              >/dev/null 2>&1; then
+              printf '%s' "$payload" > exact-backend-release.json
+              echo "exact_backend_sha=${GITHUB_SHA}"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Render never exposed exact backend SHA ${GITHUB_SHA}"
+          exit 1
+
+      - name: Require exact production Worker marker
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            status="$(curl --silent --show-error --max-time 20 -D worker-headers.txt -o worker-body.json -w '%{http_code}' \
+              -H "Origin: ${PORTAL_ORIGIN}" \
+              -H 'Content-Type: application/json' \
+              -d '{"locale":"sq","source":{"__release_probe__":"probe"}}' \
+              "${API_URL}/v1/i18n/catalog" || true)"
+            marker="$(tr -d '\r' < worker-headers.txt | sed -n 's/^x-agroai-i18n-release:[[:space:]]*//Ip' | head -1)"
+            if [ "$status" = "409" ] && [ "$marker" = "$I18N_EDGE_RELEASE" ]; then
+              echo "exact_worker_release=${marker}"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Exact Worker marker unavailable"
+          exit 1
+
+      - name: Prove all 59 non-English locales live
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -r '.enabledUiLocales[] | select(. != "auto" and . != "en" and . != "fr-FR")' shared/supported-locales.json > dynamic-locales.txt
+          test "$(wc -l < dynamic-locales.txt | tr -d ' ')" -eq 58
+          : > locale-matrix.jsonl
+          : > first-failure.txt
+          passed=0
+
+          while IFS= read -r locale; do
+            status="$(curl --silent --show-error --max-time 90 -D locale-headers.txt -o locale-body.json -w '%{http_code}' \
+              -H "Origin: ${PORTAL_ORIGIN}" \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+              -H 'Content-Type: application/json' \
+              -d "{\"locale\":\"${locale}\"}" \
+              "${API_URL}/v1/i18n/internal/canary?exact_backend_sha=${GITHUB_SHA}&locale=${locale}" || true)"
+
+            cors_ok=no
+            if tr -d '\r' < locale-headers.txt | grep -Fi "access-control-allow-origin: ${PORTAL_ORIGIN}" >/dev/null; then cors_ok=yes; fi
+            marker="$(tr -d '\r' < locale-headers.txt | sed -n 's/^x-agroai-i18n-release:[[:space:]]*//Ip' | head -1)"
+            body_ok=no
+            if jq -e --arg locale "$locale" '.status == "ok" and .locale == $locale and .changed_count >= 2 and .key_count == 4' locale-body.json >/dev/null 2>&1; then body_ok=yes; fi
+
+            if [ "$status" != "200" ] || [ "$cors_ok" != "yes" ] || [ "$marker" != "$I18N_EDGE_RELEASE" ] || [ "$body_ok" != "yes" ]; then
+              {
+                echo "locale=${locale}"
+                echo "http_status=${status}"
+                echo "cors_ok=${cors_ok}"
+                echo "worker_marker=${marker:-missing}"
+                echo "body_ok=${body_ok}"
+                echo "body="
+                cat locale-body.json
+              } > first-failure.txt
+              cat first-failure.txt
+              exit 1
+            fi
+
+            jq -c . locale-body.json >> locale-matrix.jsonl
+            passed=$((passed + 1))
+            echo "PASS ${locale}"
+          done < dynamic-locales.txt
+
+          test "$passed" -eq 58
+          echo '{"status":"ok","locale":"fr-FR","source":"bundled_static_catalog"}' >> locale-matrix.jsonl
+          test "$((passed + 1))" -eq 59
+          echo "live_non_english_locale_matrix=59/59"
+
+      - name: Upload exact production evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: i18n-exact-backend-proof-${{ github.sha }}
+          path: |
+            exact-backend-release.json
+            dynamic-locales.txt
+            locale-matrix.jsonl
+            first-failure.txt
+            worker-headers.txt
+            worker-body.json
+            locale-headers.txt
+            locale-body.json
+          if-no-files-found: ignore
+          retention-days: 30
