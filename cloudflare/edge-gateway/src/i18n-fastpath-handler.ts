@@ -42,6 +42,7 @@ const LOCAL_LOCALES: LocaleEntry[] = ((localeManifest as LocaleManifest).locales
   name: locale.englishName || locale.nativeName || locale.code,
 }));
 const EDGE_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60;
+const I18N_UPSTREAM_TIMEOUT_MS = 120_000;
 const TRANSLATION_INFLIGHT = new Map<string, Promise<TranslationResult>>();
 
 function jsonResponse(payload: unknown, reference?: Response, status = 200): Response {
@@ -117,6 +118,56 @@ async function writeEdgeCachedTranslation(
     await cache.put(key, response);
   } catch (error) {
     console.warn("edge_i18n_cache_write_failed", { locale, error: String(error) });
+  }
+}
+
+function validatedI18nUpstreamOrigin(raw: string, incoming: URL): URL {
+  if (!raw?.trim()) throw new Error("UPSTREAM_API_ORIGIN is not configured");
+  const upstream = new URL(raw.trim());
+  if (upstream.protocol !== "https:" || upstream.username || upstream.password || upstream.search || upstream.hash) {
+    throw new Error("UPSTREAM_API_ORIGIN is invalid");
+  }
+  if (upstream.host.toLowerCase() === incoming.host.toLowerCase()) {
+    throw new Error("UPSTREAM_API_ORIGIN cannot point back to the edge gateway");
+  }
+  upstream.pathname = upstream.pathname.replace(/\/$/, "");
+  return upstream;
+}
+
+async function directI18nUpstreamFetch(request: Request, env: I18nFastpathEnv): Promise<Response> {
+  const incoming = new URL(request.url);
+  const upstream = validatedI18nUpstreamOrigin(env.UPSTREAM_API_ORIGIN, incoming);
+  const target = new URL(upstream.toString());
+  target.pathname = `${upstream.pathname}${incoming.pathname}`.replace(/\/+/g, "/");
+  target.search = incoming.search;
+
+  const headers = new Headers(request.headers);
+  for (const header of [
+    "host",
+    "cf-connecting-ip",
+    "cf-ray",
+    "cf-visitor",
+    "x-forwarded-for",
+    "x-forwarded-host",
+    "x-real-ip",
+    "x-agroai-internal-token",
+    "x-agroai-edge",
+  ]) headers.delete(header);
+  headers.set("x-agroai-edge", "cloudflare-edge-v1");
+  headers.set("x-forwarded-host", incoming.host);
+  headers.set("x-forwarded-proto", "https");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort("i18n_upstream_timeout"), I18N_UPSTREAM_TIMEOUT_MS);
+  try {
+    return await fetch(new Request(target.toString(), {
+      method: request.method,
+      headers,
+      body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
+      redirect: "manual",
+    }), { signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -236,7 +287,13 @@ export async function handleI18nFastpath<Host, Cf>(request: Request<Host, Cf>, e
   } catch (error) {
     console.error("edge_i18n_generation_failed", { locale: locale.code, error: String(error) });
     try {
-      const upstream = await baseFetch(fallback, env);
+      let upstream: Response;
+      try {
+        upstream = await directI18nUpstreamFetch(fallback.clone(), env);
+      } catch (directError) {
+        console.warn("direct_i18n_upstream_failed", { locale: locale.code, error: String(directError) });
+        upstream = await baseFetch(fallback, env);
+      }
       if (isCanary && !upstream.ok) {
         const upstreamBody = await upstream.clone().text().catch(() => "");
         return jsonResponse({
