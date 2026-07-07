@@ -1,9 +1,4 @@
-"""AGRO-AI commercial packaging v2.
-
-This module is the product-packaging source of truth for connector minimum tiers
-and evidence-import capacity. It intentionally distinguishes standard Custom API
-access (Network+) from bespoke custom integration work (Enterprise/contract).
-"""
+"""Commercial packaging v2 for quotas and connector minimum tiers."""
 from __future__ import annotations
 
 from dataclasses import replace
@@ -61,7 +56,6 @@ def feature_for_provider(provider: str) -> str:
 
 
 def evidence_limit_for_plan(plan: str | None) -> int | None:
-    normalized = str(plan or "free").lower()
     aliases = {
         "pilot": "free",
         "pro": "professional",
@@ -69,11 +63,11 @@ def evidence_limit_for_plan(plan: str | None) -> int | None:
         "assurance_audit": "professional",
         "assurance": "team",
     }
+    normalized = str(plan or "free").lower()
     return EVIDENCE_UPLOAD_LIMITS.get(aliases.get(normalized, normalized), EVIDENCE_UPLOAD_LIMITS["free"])
 
 
 def apply_catalog_packaging(catalog: list[dict[str, Any]]) -> None:
-    """Apply exact provider minimum tiers to the customer-visible connector catalog."""
     for item in catalog:
         provider = str(item.get("id") or "")
         if provider:
@@ -81,11 +75,6 @@ def apply_catalog_packaging(catalog: list[dict[str, Any]]) -> None:
 
 
 def install_commercial_packaging_v2() -> None:
-    """Synchronize legacy plan structures with the v2 packaging contract.
-
-    The application still exposes a few compatibility plan structures. This
-    installer updates data mappings only; it never replaces endpoint code.
-    """
     from app.services.commercial_control import BASE_ENTITLEMENTS
     from app.services.entitlements import PLAN_LIMITS
     from app.services.product_plans import PLANS
@@ -93,22 +82,22 @@ def install_commercial_packaging_v2() -> None:
     for plan_id, limit in EVIDENCE_UPLOAD_LIMITS.items():
         BASE_ENTITLEMENTS[plan_id]["quota.evidence_upload.monthly"] = limit
 
+    # Network includes standard Custom API access. Enterprise retains the
+    # canonical contract_only state and is unlocked by executed contract scope.
     BASE_ENTITLEMENTS["network"]["connectors.custom_api"] = "enabled"
-    BASE_ENTITLEMENTS["enterprise"]["connectors.custom_api"] = "enabled"
 
     for plan_id, limit in EVIDENCE_UPLOAD_LIMITS.items():
-        if limit is None or plan_id not in PLAN_LIMITS:
-            continue
-        PLAN_LIMITS[plan_id] = replace(PLAN_LIMITS[plan_id], max_uploads_monthly=limit)
+        if limit is not None and plan_id in PLAN_LIMITS:
+            PLAN_LIMITS[plan_id] = replace(PLAN_LIMITS[plan_id], max_uploads_monthly=limit)
 
-    for alias in ("pilot", "assurance_audit", "waterops", "assurance", "pro"):
-        canonical = {
-            "pilot": "free",
-            "assurance_audit": "professional",
-            "waterops": "professional",
-            "assurance": "team",
-            "pro": "professional",
-        }[alias]
+    alias_targets = {
+        "pilot": "free",
+        "assurance_audit": "professional",
+        "waterops": "professional",
+        "assurance": "team",
+        "pro": "professional",
+    }
+    for alias, canonical in alias_targets.items():
         PLAN_LIMITS[alias] = PLAN_LIMITS[canonical]
 
     upload_copy = {
