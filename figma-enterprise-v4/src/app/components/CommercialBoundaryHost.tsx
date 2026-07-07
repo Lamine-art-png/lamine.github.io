@@ -22,19 +22,21 @@ export type CommercialBoundaryDetail = {
 type PlanId = "free" | "professional" | "team" | "network" | "enterprise";
 const ORDER: PlanId[] = ["free", "professional", "team", "network", "enterprise"];
 const PLAN: Record<PlanId, { name: string; price: string; bullets: string[] }> = {
-  free: { name: "Free", price: "$0", bullets: ["1 workspace", "25 AGRO-AI actions/month", "10 evidence uploads/month"] },
-  professional: { name: "Professional", price: "$299/mo", bullets: ["5 workspaces and 3 seats", "500 AGRO-AI actions/month", "Reports, PDFs and live connectors"] },
-  team: { name: "Team", price: "$799/mo", bullets: ["25 workspaces and 10 seats", "2,500 AGRO-AI actions/month", "Shared evidence, roles and approvals"] },
-  network: { name: "Network", price: "$1,500/mo", bullets: ["50 workspaces and 25 seats", "10,000 AGRO-AI actions/month", "Cross-workspace rollups and network reporting"] },
-  enterprise: { name: "Enterprise", price: "Custom", bullets: ["Contract-configured capacity", "Custom integrations and governance", "Dedicated rollout and security review"] },
+  free: { name: "Free", price: "$0", bullets: ["1 workspace", "25 AGRO-AI actions/month", "15 evidence/file imports/month"] },
+  professional: { name: "Professional", price: "$299/mo", bullets: ["5 workspaces and 3 seats", "500 evidence/file imports/month", "Reports, Weather, OpenET and live connectors"] },
+  team: { name: "Team", price: "$799/mo", bullets: ["25 workspaces and 10 seats", "2,500 evidence/file imports/month", "Shared evidence, roles and approvals"] },
+  network: { name: "Network", price: "$1,500/mo", bullets: ["50 workspaces and 25 seats", "10,000 evidence/file imports/month", "Network rollups and standard Custom API access"] },
+  enterprise: { name: "Enterprise", price: "Custom", bullets: ["Contract-configured capacity", "Bespoke integrations and governance", "Dedicated rollout and security review"] },
 };
 
 const FEATURE_TITLE: Record<string, string> = {
   "reports.generate": "Unlock commercial reports",
   "reports.pdf_export": "Unlock PDF exports",
   "reports.email_delivery": "Unlock report delivery",
+  "connectors.manual_upload": "Increase file import capacity",
   "connectors.live": "Connect live operating systems",
   "connectors.oauth_documents": "Connect approved document sources",
+  "connectors.custom_api": "Connect a Custom API",
   "connectors.custom_integration": "Scope an enterprise integration",
   "team.invite": "Add your operating team",
   "admin.requests": "Unlock the request inbox",
