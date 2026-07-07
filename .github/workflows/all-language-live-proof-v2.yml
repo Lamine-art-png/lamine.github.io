@@ -1,0 +1,119 @@
+name: All Language Live Proof V2
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/all-language-live-proof-v2.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  prove-all:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
+    steps:
+      - name: Execute 59-locale production matrix
+        shell: bash
+        run: |
+          python - <<'PY'
+          import concurrent.futures
+          import hashlib
+          import json
+          import os
+          import time
+          import urllib.request
+          from pathlib import Path
+
+          base = "https://app.agroai-pilot.com"
+          token = os.environ["QUEUE_CONSUMER_TOKEN"]
+          results = []
+          registry_error = None
+
+          try:
+              with urllib.request.urlopen(f"{base}/v1/i18n/languages", timeout=20) as response:
+                  registry = json.load(response)
+              languages = registry.get("languages") or []
+              locales = [item["code"] for item in languages if item.get("code") not in {"auto", "en"}]
+          except Exception as exc:
+              locales = []
+              registry_error = f"{type(exc).__name__}: {exc}"
+
+          def prove(locale: str) -> dict:
+              started = time.monotonic()
+              request = urllib.request.Request(
+                  f"{base}/v1/i18n/internal/canary",
+                  data=json.dumps({"locale": locale}).encode(),
+                  method="POST",
+                  headers={
+                      "Authorization": f"Bearer {token}",
+                      "Content-Type": "application/json",
+                      "Accept": "application/json",
+                      "User-Agent": "AGRO-AI-59-Language-Proof-V2/1.0",
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=35) as response:
+                      body = json.load(response)
+                  ok = (
+                      body.get("status") == "ok"
+                      and body.get("locale") == locale
+                      and body.get("key_count") == 4
+                      and int(body.get("changed_count") or 0) >= 2
+                      and bool(body.get("providers"))
+                      and bool(body.get("models"))
+                      and isinstance(body.get("catalog_sha256"), str)
+                      and len(body.get("catalog_sha256")) == 64
+                  )
+                  return {
+                      "locale": locale,
+                      "ok": ok,
+                      "elapsed_ms": round((time.monotonic() - started) * 1000),
+                      "changed_count": body.get("changed_count"),
+                      "providers": body.get("providers"),
+                      "models": body.get("models"),
+                      "catalog_sha256": body.get("catalog_sha256"),
+                      "error": None if ok else "invalid_contract",
+                  }
+              except Exception as exc:
+                  return {
+                      "locale": locale,
+                      "ok": False,
+                      "elapsed_ms": round((time.monotonic() - started) * 1000),
+                      "error": f"{type(exc).__name__}: {exc}",
+                  }
+
+          if locales:
+              with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+                  results = list(pool.map(prove, locales))
+          results.sort(key=lambda item: item["locale"])
+          failures = [item for item in results if not item.get("ok")]
+          matrix_json = json.dumps(results, sort_keys=True, separators=(",", ":")).encode()
+          summary = {
+              "status": "ok" if registry_error is None and len(locales) == 59 and not failures else "failed",
+              "registry_error": registry_error,
+              "expected_locale_count": 59,
+              "locale_count": len(locales),
+              "passed": len(results) - len(failures),
+              "failed": len(failures),
+              "matrix_sha256": hashlib.sha256(matrix_json).hexdigest(),
+              "failures": failures,
+              "results": results,
+          }
+          Path("all-language-proof-v2.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False))
+          print(json.dumps({k: v for k, v in summary.items() if k != "results"}, indent=2, ensure_ascii=False))
+          PY
+      - name: Upload immutable 59-language evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-language-live-proof-v2-${{ github.sha }}
+          path: all-language-proof-v2.json
+          if-no-files-found: error
+          retention-days: 30
+      - name: Fail closed unless 59 of 59 passed
+        shell: bash
+        run: jq -e '.status == "ok" and .locale_count == 59 and .passed == 59 and .failed == 0 and (.results | length) == 59' all-language-proof-v2.json
