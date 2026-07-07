@@ -5,7 +5,9 @@ import { notifyLocaleRuntime } from "./localeRuntimeStore";
 import { fullEnglishUiSource } from "./portalLiteralCatalog";
 
 const CACHE_PREFIX = "agroai_ui_catalog_v4:";
-const RETRY_COOLDOWN_MS = 15_000;
+const RETRY_COOLDOWN_MS = 3_000;
+const REQUEST_CHUNK_SIZE = 36;
+const REQUEST_PARALLELISM = 4;
 const INFLIGHT = new Map<string, Promise<boolean>>();
 const RETRY_AFTER = new Map<string, number>();
 
@@ -133,6 +135,27 @@ function writeCached(locale: string, source: Record<string, string>, catalog: Re
   }
 }
 
+function sourceChunks(source: Record<string, string>): Record<string, string>[] {
+  const entries = Object.entries(source);
+  const chunks: Record<string, string>[] = [];
+  for (let index = 0; index < entries.length; index += REQUEST_CHUNK_SIZE) {
+    chunks.push(Object.fromEntries(entries.slice(index, index + REQUEST_CHUNK_SIZE)));
+  }
+  return chunks;
+}
+
+function reusableCatalog(locale: string, source: Record<string, string>): Record<string, string> {
+  const current = TRANSLATIONS[locale] || {};
+  const reusable: Record<string, string> = {};
+  for (const [key, sourceValue] of Object.entries(source)) {
+    const value = current[key];
+    if (typeof value === "string" && value.trim().length > 0 && placeholderParity(value.trim(), sourceValue)) {
+      reusable[key] = value.trim();
+    }
+  }
+  return reusable;
+}
+
 async function loadLocaleCatalog(effectiveLocale: string, source: Record<string, string>): Promise<boolean> {
   const cached = readCached(effectiveLocale, source);
   if (cached) {
@@ -140,15 +163,34 @@ async function loadLocaleCatalog(effectiveLocale: string, source: Record<string,
     return true;
   }
 
-  const response = await apiClient.post<CatalogResponse>("/v1/i18n/catalog", {
-    locale: effectiveLocale,
-    source,
-  });
-  if (!response || response.status !== "ok" || response.locale !== effectiveLocale || !validCatalog(response.catalog, source)) {
-    throw new Error(`Invalid UI translation catalog for ${effectiveLocale}`);
+  const merged = reusableCatalog(effectiveLocale, source);
+  const missingSource = Object.fromEntries(Object.entries(source).filter(([key]) => !(key in merged)));
+  const chunks = sourceChunks(missingSource);
+
+  for (let index = 0; index < chunks.length; index += REQUEST_PARALLELISM) {
+    const wave = chunks.slice(index, index + REQUEST_PARALLELISM);
+    const translatedWave = await Promise.all(wave.map(async (chunk) => {
+      const response = await apiClient.post<CatalogResponse>("/v1/i18n/catalog", {
+        locale: effectiveLocale,
+        source: chunk,
+      });
+      if (!response || response.status !== "ok" || response.locale !== effectiveLocale || !validCatalog(response.catalog, chunk)) {
+        throw new Error(`Invalid UI translation catalog for ${effectiveLocale}`);
+      }
+      return { chunk, catalog: response.catalog };
+    }));
+
+    for (const { chunk, catalog } of translatedWave) {
+      Object.assign(merged, catalog);
+      installLocaleCatalog(effectiveLocale, chunk, catalog, false);
+    }
   }
 
-  installLocaleCatalog(effectiveLocale, source, response.catalog, true);
+  if (!validCatalog(merged, source)) {
+    throw new Error(`Incomplete UI translation catalog for ${effectiveLocale}`);
+  }
+
+  installLocaleCatalog(effectiveLocale, source, merged, true);
   return true;
 }
 

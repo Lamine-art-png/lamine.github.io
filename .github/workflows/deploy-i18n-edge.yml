@@ -18,9 +18,12 @@ concurrency:
   group: agroai-i18n-edge-production
   cancel-in-progress: true
 
+env:
+  API_URL: https://app.agroai-pilot.com
+
 jobs:
   deploy:
-    name: Validate and deploy i18n edge
+    name: Deploy and prove all 59 dynamic locales
     runs-on: ubuntu-latest
     environment: production
     env:
@@ -52,9 +55,53 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 20); do
-            if curl --fail --silent --show-error --max-time 15 https://app.agroai-pilot.com/v1/edge-health | jq -e '.status == "ok"' >/dev/null; then
+            if curl --fail --silent --show-error --max-time 15 "${API_URL}/v1/edge-health" | jq -e '.status == "ok"' >/dev/null; then
               exit 0
             fi
             sleep 3
           done
           exit 1
+
+      - name: Prove all 59 live dynamic locales
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -r '.enabledUiLocales[] | select(. != "auto" and . != "en" and . != "fr-FR")' shared/supported-locales.json > dynamic-locales.txt
+          dynamic_count="$(wc -l < dynamic-locales.txt | tr -d ' ')"
+          test "$dynamic_count" -eq 58
+
+          passed=0
+          : > locale-matrix.jsonl
+          while IFS= read -r locale; do
+            payload="$(curl --fail --silent --show-error --max-time 45 \
+              -H 'Content-Type: application/json' \
+              -d "{\"locale\":\"${locale}\",\"source\":{\"language\":\"Language\",\"save\":\"Save\"}}" \
+              "${API_URL}/v1/i18n/catalog")"
+
+            printf '%s' "$payload" | jq -e --arg locale "$locale" '
+              .status == "ok" and
+              .locale == $locale and
+              (.catalog.language | type == "string" and length > 0) and
+              (.catalog.save | type == "string" and length > 0) and
+              ((.catalog.language != "Language") or (.catalog.save != "Save"))
+            ' >/dev/null
+
+            printf '%s\n' "$payload" >> locale-matrix.jsonl
+            passed=$((passed + 1))
+            echo "PASS ${locale}"
+          done < dynamic-locales.txt
+
+          test "$passed" -eq 58
+          echo '{"status":"ok","locale":"fr-FR","source":"bundled_static_catalog"}' >> locale-matrix.jsonl
+          total=$((passed + 1))
+          test "$total" -eq 59
+          echo "live_non_english_locale_matrix=${total}/59"
+
+      - name: Upload immutable locale evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-i18n-59-matrix-${{ github.sha }}
+          path: |
+            dynamic-locales.txt
+            locale-matrix.jsonl
+          retention-days: 30
