@@ -1,0 +1,72 @@
+name: Diagnose I18n Edge Route
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/diagnose-i18n-edge-route.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Inspect app and api Worker routes
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+          zone_id="$(curl --fail --silent --show-error -H "$auth" 'https://api.cloudflare.com/client/v4/zones?name=agroai-pilot.com' | jq -r '.result[0].id')"
+          test -n "$zone_id"
+
+          curl --fail --silent --show-error -H "$auth" "https://api.cloudflare.com/client/v4/zones/${zone_id}/workers/routes" \
+            | jq '{routes:[.result[] | select((.pattern // "") | contains("agroai-pilot.com/v1/")) | {id,pattern,script}]}' > i18n-edge-routes.json
+
+          scripts="$(jq -r '.routes[].script // empty' i18n-edge-routes.json | sort -u)"
+          : > i18n-edge-deployments.jsonl
+          for script in $scripts; do
+            curl --silent --show-error -H "$auth" "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/${script}/deployments" \
+              | jq -c --arg script "$script" '{script:$script,success,errors,deployments:(.result.deployments // .result // [])}' >> i18n-edge-deployments.jsonl || true
+          done
+
+          cat i18n-edge-routes.json
+          cat i18n-edge-deployments.jsonl
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: i18n-edge-route-diagnostics-${{ github.sha }}
+          path: |
+            i18n-edge-routes.json
+            i18n-edge-deployments.jsonl
+          retention-days: 7
+
+      - name: Publish diagnostic status
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const state = '${{ job.status }}' === 'success' ? 'success' : 'failure';
+            let statusContext = 'diagnostic/i18n-edge-route/failed';
+            if (state === 'success') {
+              const routes = JSON.parse(fs.readFileSync('i18n-edge-routes.json', 'utf8')).routes || [];
+              const app = routes.find((route) => String(route.pattern || '').startsWith('app.agroai-pilot.com/'));
+              const api = routes.find((route) => String(route.pattern || '').startsWith('api.agroai-pilot.com/'));
+              statusContext = `diagnostic/i18n/app-${app?.script || 'none'}/api-${api?.script || 'none'}`.slice(0, 100);
+            }
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state,
+              context: statusContext,
+              description: 'inspect live i18n Worker route ownership',
+              target_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
+            });
