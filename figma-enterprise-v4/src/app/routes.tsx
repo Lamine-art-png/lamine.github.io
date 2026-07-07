@@ -54,7 +54,7 @@ export const router = createBrowserRouter([
     { path: "security", lazy: lazyComponent(() => import("./components/ProductShell"), "SecurityPage") },
     { path: "support", lazy: lazyComponent(() => import("./components/SupportPage"), "SupportPage") },
     { path: "settings", lazy: lazyComponent(() => import("./components/SettingsPage"), "SettingsPage") },
-    { path: "team", lazy: lazyComponent(() => import("./components/ProductShell"), "TeamPage") },
+    { path: "team", lazy: lazyComponent(() => import("./components/TeamPageV2"), "TeamPageV2") },
     { path: "onboarding", lazy: lazyComponent(() => import("./components/ProductShell"), "OnboardingPage") },
     { path: "*", Component: RouteRecovery },
   ]},
