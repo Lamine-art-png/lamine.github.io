@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import hmac
 import json
 import re
 import time
@@ -10,10 +11,11 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 
 from app.api.deps import AuthContext, get_auth_context
+from app.core.config import settings
 from app.services.language_registry import enabled_ui_locales, family_direction, family_name, locale_specs
 from app.services.model_router import ModelRouter
 
@@ -30,6 +32,8 @@ _CACHE_TTL_SECONDS = 7 * 24 * 60 * 60
 _TRANSLATION_CHUNK_SIZE = 48
 _MAX_CHUNK_ATTEMPTS = 2
 _MAX_PARALLEL_MODEL_CALLS = 6
+_CANARY_KEYS = ("language", "settings", "save", "support")
+_CANARY_MIN_CHANGED_VALUES = 2
 _CACHE: dict[str, tuple[float, dict[str, str]]] = {}
 _CACHE_LOCKS: dict[str, asyncio.Lock] = {}
 
@@ -55,6 +59,10 @@ class CatalogRequest(BaseModel):
         if total > _MAX_SOURCE_CHARS:
             raise ValueError("translation source is too large")
         return value
+
+
+class CanaryRequest(BaseModel):
+    locale: str = Field(min_length=2, max_length=40)
 
 
 @lru_cache(maxsize=1)
@@ -91,6 +99,11 @@ def requested_source_catalog(requested: dict[str, str] | None) -> dict[str, str]
         if key not in canonical or canonical[key] != value:
             raise ValueError("ui_source_catalog_mismatch")
     return dict(requested)
+
+
+def canary_source_catalog() -> dict[str, str]:
+    canonical = canonical_source_catalog()
+    return {key: canonical[key] for key in _CANARY_KEYS}
 
 
 def _enabled_locale_payloads() -> list[dict[str, Any]]:
@@ -232,19 +245,68 @@ async def _translate_catalog(canonical: str, language: str, source: dict[str, st
     return _validate_translated_catalog(source, catalog), providers, models, len(chunks)
 
 
+def _require_internal_canary_token(authorization: str | None) -> None:
+    expected = str(getattr(settings, "CLOUDFLARE_QUEUE_CONSUMER_TOKEN", "") or "").strip()
+    supplied = ""
+    if authorization and authorization.lower().startswith("bearer "):
+        supplied = authorization[7:].strip()
+    if not expected or not supplied or not hmac.compare_digest(supplied, expected):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "invalid_internal_canary_token"})
+
+
+def _canonical_enabled_locale(requested: str) -> str:
+    enabled = {code.lower(): code for code in enabled_ui_locales()}
+    normalized = requested.strip().replace("_", "-")
+    canonical = enabled.get(normalized.lower())
+    if canonical is None:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"code": "unsupported_ui_locale", "locale": normalized})
+    return canonical
+
+
 @router.get("/i18n/languages")
 def get_ui_languages() -> dict[str, Any]:
     languages = _enabled_locale_payloads()
     return {"status": "ok", "count": len(languages), "languages": languages}
 
 
+@router.post("/i18n/internal/canary")
+async def translate_ui_canary(payload: CanaryRequest, authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    _require_internal_canary_token(authorization)
+    canonical = _canonical_enabled_locale(payload.locale)
+    if canonical in {"auto", "en"}:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"code": "canary_requires_non_english_locale", "locale": canonical})
+
+    source = canary_source_catalog()
+    spec = locale_specs().get(canonical.lower())
+    language_code = spec.language_code if spec else canonical.split("-", 1)[0].lower()
+    language = family_name(language_code)
+    try:
+        translated, providers, models, chunk_count = await _translate_catalog(canonical, language, source)
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail={"code": "ui_canary_generation_unavailable", "locale": canonical, "reason": str(exc)}) from exc
+
+    changed_keys = [key for key, source_value in source.items() if translated.get(key) != source_value]
+    if len(changed_keys) < _CANARY_MIN_CHANGED_VALUES:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail={"code": "ui_canary_stayed_english", "locale": canonical, "changed_count": len(changed_keys)})
+
+    digest_payload = json.dumps(translated, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return {
+        "status": "ok",
+        "locale": canonical,
+        "language": language,
+        "changed_count": len(changed_keys),
+        "key_count": len(source),
+        "changed_keys": changed_keys,
+        "catalog_sha256": hashlib.sha256(digest_payload.encode("utf-8")).hexdigest(),
+        "providers": sorted(providers),
+        "models": sorted(models),
+        "chunks": chunk_count,
+    }
+
+
 @router.post("/i18n/catalog")
 async def translate_ui_catalog(payload: CatalogRequest, _ctx: AuthContext = Depends(get_auth_context)) -> dict[str, Any]:
-    enabled = {code.lower(): code for code in enabled_ui_locales()}
-    requested = payload.locale.strip().replace("_", "-")
-    canonical = enabled.get(requested.lower())
-    if canonical is None:
-        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"code": "unsupported_ui_locale", "locale": requested})
+    canonical = _canonical_enabled_locale(payload.locale)
     if canonical == "auto":
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail={"code": "auto_locale_requires_browser_resolution"})
     try:
