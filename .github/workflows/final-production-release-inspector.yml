@@ -1,0 +1,34 @@
+name: Final Production Release Inspector
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/final-production-release-inspector.yml'
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Inspect current production releases
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh run list \
+            --repo "${GITHUB_REPOSITORY}" \
+            --workflow deploy.yml \
+            --limit 10 \
+            --json databaseId,headSha,status,conclusion,event,createdAt,updatedAt,url \
+            | tee current-production-runs.json
+      - name: Upload inspection evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-production-release-inspection
+          path: current-production-runs.json
+          retention-days: 1
