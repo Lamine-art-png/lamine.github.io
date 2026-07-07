@@ -13,6 +13,7 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
+    environment: production
     env:
       UPSTREAM_RELEASE_CONTRACT_URL: https://api-preview.agroai-pilot.com/v1/internal/release/health
       QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
