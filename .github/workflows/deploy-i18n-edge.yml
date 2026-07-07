@@ -25,6 +25,7 @@ concurrency:
 env:
   API_URL: https://app.agroai-pilot.com
   PORTAL_ORIGIN: https://app.agroai-pilot.com
+  I18N_EDGE_RELEASE: public-fallback-v1
 
 jobs:
   deploy:
@@ -69,16 +70,32 @@ jobs:
           set -euo pipefail
           npx wrangler deploy --config ../../wrangler.toml
 
+      - name: Wait for exact i18n edge release on custom domain
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 40); do
+            status="$(curl --silent --show-error --max-time 20 -D release-headers.txt -o release-body.json -w '%{http_code}' \
+              -H "Origin: ${PORTAL_ORIGIN}" \
+              -H 'Content-Type: application/json' \
+              -d '{"locale":"sq","source":{"__release_probe__":"probe"}}' \
+              "${API_URL}/v1/i18n/catalog" || true)"
+            marker="$(tr -d '\r' < release-headers.txt | sed -n 's/^x-agroai-i18n-release:[[:space:]]*//Ip' | head -1)"
+            if [ "$status" = "409" ] && [ "$marker" = "$I18N_EDGE_RELEASE" ]; then
+              echo "exact_i18n_edge_release=${marker}"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Exact i18n edge release marker not visible on custom domain"
+          cat release-headers.txt || true
+          cat release-body.json || true
+          exit 1
+
       - name: Smoke production edge
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 20); do
-            if curl --fail --silent --show-error --max-time 15 "${API_URL}/v1/edge-health" | jq -e '.status == "ok"' >/dev/null; then
-              break
-            fi
-            test "$attempt" -lt 20
-            sleep 3
-          done
+          curl --fail --silent --show-error --max-time 15 "${API_URL}/v1/edge-health" | jq -e '.status == "ok"' >/dev/null
 
       - name: Prove all 59 live browser-readable locales
         shell: bash
@@ -102,14 +119,17 @@ jobs:
 
             cors_ok=no
             if tr -d '\r' < "$headers" | grep -Fi "access-control-allow-origin: ${PORTAL_ORIGIN}" >/dev/null; then cors_ok=yes; fi
+            release_ok=no
+            if tr -d '\r' < "$headers" | grep -Fi "x-agroai-i18n-release: ${I18N_EDGE_RELEASE}" >/dev/null; then release_ok=yes; fi
             body_ok=no
             if jq -e --arg locale "$locale" '.status == "ok" and .locale == $locale and .changed_count >= 2 and .key_count == 4' "$body" >/dev/null 2>&1; then body_ok=yes; fi
 
-            if [ "$status" != "200" ] || [ "$cors_ok" != "yes" ] || [ "$body_ok" != "yes" ]; then
+            if [ "$status" != "200" ] || [ "$cors_ok" != "yes" ] || [ "$release_ok" != "yes" ] || [ "$body_ok" != "yes" ]; then
               {
                 echo "locale=${locale}"
                 echo "http_status=${status}"
                 echo "cors_ok=${cors_ok}"
+                echo "release_ok=${release_ok}"
                 echo "body_ok=${body_ok}"
                 echo "body="
                 cat "$body"
@@ -137,5 +157,7 @@ jobs:
             dynamic-locales.txt
             locale-matrix.jsonl
             first-failure.txt
+            release-headers.txt
+            release-body.json
           if-no-files-found: ignore
           retention-days: 30
