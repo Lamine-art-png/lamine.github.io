@@ -36,8 +36,8 @@ function json(payload: unknown, status = 200): Response {
   });
 }
 
-describe("validation-first i18n fastpath", () => {
-  it("validates catalog source through authenticated English identity before Workers AI", async () => {
+describe("local-validation i18n fastpath", () => {
+  it("validates canonical catalog source locally before Workers AI without backend round trips", async () => {
     const ai = new FakeAi();
     const calls: Array<{ method: string; path: string; auth: string; body: unknown }> = [];
     const baseFetch = async <Host, Cf>(request: Request<Host, Cf>): Promise<Response> => {
@@ -49,14 +49,6 @@ describe("validation-first i18n fastpath", () => {
         auth: request.headers.get("authorization") || "",
         body,
       });
-      if (request.method === "GET" && url.pathname === "/v1/i18n/languages") {
-        return json({ status: "ok", languages: [{ code: "en", name: "English" }, { code: "de", name: "German" }] });
-      }
-      if (request.method === "POST" && url.pathname === "/v1/i18n/catalog") {
-        const value = body as { locale?: string; source?: Record<string, string> };
-        expect(value.locale).toBe("en");
-        return json({ status: "ok", locale: "en", catalog: value.source });
-      }
       throw new Error(`unexpected backend call ${request.method} ${url.pathname}`);
     };
 
@@ -73,19 +65,14 @@ describe("validation-first i18n fastpath", () => {
     expect(body.source).toBe("cloudflare_workers_ai");
     expect(body.catalog?.settings).toBe("TR Settings");
     expect(ai.calls).toBe(1);
-    expect(calls).toHaveLength(2);
-    expect(calls[1].auth).toBe("Bearer user-token");
-    expect((calls[1].body as { locale?: string }).locale).toBe("en");
+    expect(calls).toHaveLength(0);
   });
 
-  it("runs authorized internal canary directly after registry validation without backend generation", async () => {
+  it("runs authorized internal canary directly after local registry validation without backend generation", async () => {
     const ai = new FakeAi();
     const calls: string[] = [];
     const baseFetch = async <Host, Cf>(request: Request<Host, Cf>): Promise<Response> => {
       calls.push(`${request.method} ${new URL(request.url).pathname}`);
-      if (request.method === "GET") {
-        return json({ status: "ok", languages: [{ code: "ja", name: "Japanese" }] });
-      }
       throw new Error("backend generation must not run for authorized canary");
     };
 
@@ -102,7 +89,7 @@ describe("validation-first i18n fastpath", () => {
     expect(body.locale).toBe("ja");
     expect(body.changed_count).toBeGreaterThanOrEqual(2);
     expect(body.providers).toEqual(["cloudflare_workers_ai"]);
-    expect(calls).toEqual(["GET /v1/i18n/languages"]);
+    expect(calls).toEqual([]);
     expect(ai.calls).toBe(1);
   });
 
