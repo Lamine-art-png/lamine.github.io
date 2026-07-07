@@ -1,0 +1,35 @@
+name: Queue Readiness Diagnostic
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/queue-readiness-diagnostic.yml'
+      - 'agroai_api/app/services/production_readiness.py'
+      - 'agroai_api/tests/unit/test_production_readiness.py'
+
+permissions:
+  contents: read
+
+jobs:
+  reproduce:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -q -r requirements.txt pytest
+      - name: Reproduce exact Queue readiness contract
+        run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --tb=short tests/unit/test_cloudflare_task_queue.py tests/unit/test_cloudflare_queue_runtime.py tests/unit/test_cloudflare_queue_routes.py tests/unit/test_connector_task_processor_contract.py tests/unit/test_task_outbox.py tests/unit/test_ingestion_job_leases.py tests/unit/test_object_storage.py tests/unit/test_runtime_origin_and_route_contract.py tests/unit/test_production_readiness.py 2>&1 | tee queue-readiness-output.log
+      - name: Upload diagnostic output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: queue-readiness-diagnostic
+          path: agroai_api/queue-readiness-output.log
+          if-no-files-found: error
+          retention-days: 1
