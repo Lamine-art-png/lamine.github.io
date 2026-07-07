@@ -1,0 +1,39 @@
+name: Diagnose Local AI Route
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/diagnose-local-ai-route.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Inspect local-ai routing
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+          zone_id="$(curl --fail --silent --show-error -H "$auth" 'https://api.cloudflare.com/client/v4/zones?name=agroai-pilot.com' | jq -r '.result[0].id')"
+          test -n "$zone_id"
+          curl --fail --silent --show-error -H "$auth" "https://api.cloudflare.com/client/v4/zones/${zone_id}/workers/routes" \
+            | jq '{routes:[.result[] | select((.pattern // "") | contains("local-ai")) | {id,pattern,script}]}' > local-ai-routes.json
+          curl --fail --silent --show-error -H "$auth" "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/domains" \
+            | jq '{domains:[.result[] | select((.hostname // "") == "local-ai.agroai-pilot.com") | {id,hostname,service,zone_id}]}' > local-ai-domains.json
+          cat local-ai-routes.json
+          cat local-ai-domains.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: local-ai-route-diagnostics-${{ github.sha }}
+          path: |
+            local-ai-routes.json
+            local-ai-domains.json
+          retention-days: 7
