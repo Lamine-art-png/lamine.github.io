@@ -26,6 +26,25 @@ function env(ai: FakeAi) {
   } as never;
 }
 
+function postRequest(url: string, payload: unknown, headers: Record<string, string> = {}): Request {
+  const stub: {
+    url: string;
+    method: string;
+    headers: Headers;
+    body: null;
+    clone?: () => Request;
+    json?: () => Promise<unknown>;
+  } = {
+    url,
+    method: "POST",
+    headers: new Headers({ "content-type": "application/json", ...headers }),
+    body: null,
+  };
+  stub.clone = () => stub as unknown as Request;
+  stub.json = async () => payload;
+  return stub as unknown as Request;
+}
+
 describe("production i18n wrapper", () => {
   it("falls back to Workers AI only after canonical backend generation failure", async () => {
     const ai = new FakeAi();
@@ -35,11 +54,11 @@ describe("production i18n wrapper", () => {
     }), { status: 503, headers: { "content-type": "application/json" } });
 
     try {
-      const request = new Request("https://app.agroai-pilot.com/v1/i18n/catalog", {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: "Bearer user" },
-        body: JSON.stringify({ locale: "de", source: { settings: "Settings", save: "Save" } }),
-      });
+      const request = postRequest(
+        "https://app.agroai-pilot.com/v1/i18n/catalog",
+        { locale: "de", source: { settings: "Settings", save: "Save" } },
+        { authorization: "Bearer user" },
+      );
       const response = await wrapper.fetch(request, env(ai), {} as ExecutionContext);
       const body = await response.json() as Record<string, unknown>;
       expect(response.status).toBe(200);
@@ -60,11 +79,10 @@ describe("production i18n wrapper", () => {
     });
 
     try {
-      const request = new Request("https://app.agroai-pilot.com/v1/i18n/catalog", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({ locale: "de", source: { settings: "Settings" } }),
-      });
+      const request = postRequest(
+        "https://app.agroai-pilot.com/v1/i18n/catalog",
+        { locale: "de", source: { settings: "Settings" } },
+      );
       const response = await wrapper.fetch(request, env(ai), {} as ExecutionContext);
       expect(response.status).toBe(401);
       expect(ai.calls).toBe(0);
