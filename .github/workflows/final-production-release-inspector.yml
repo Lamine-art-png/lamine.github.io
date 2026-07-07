@@ -13,6 +13,9 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
+    env:
+      UPSTREAM_RELEASE_CONTRACT_URL: https://api-preview.agroai-pilot.com/v1/internal/release/health
+      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
     steps:
       - name: Inspect current production releases
         shell: bash
@@ -26,9 +29,34 @@ jobs:
             --limit 10 \
             --json databaseId,headSha,status,conclusion,event,createdAt,updatedAt,url \
             | tee current-production-runs.json
+      - name: Inspect sanitized upstream release contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QUEUE_CONSUMER_TOKEN:-}"
+          status_code="$(curl --silent --show-error --max-time 30 \
+            -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+            -o upstream-release-raw.json \
+            -w '%{http_code}' \
+            "${UPSTREAM_RELEASE_CONTRACT_URL}")"
+          jq '{
+            http_status: $status,
+            status: (.status // .detail.status // null),
+            contract: (.contract // .detail.contract // null),
+            build_sha: (.build_sha // .detail.build_sha // null),
+            schema_current: (.schema_current // .detail.schema_current // null),
+            queue_configured: (.queue_configured // .detail.queue_configured // null),
+            object_storage_configured: (.object_storage_configured // .detail.object_storage_configured // null),
+            object_storage_reachable: (.object_storage_reachable // .detail.object_storage_reachable // null),
+            production_ready: (.production_ready // .detail.production_ready // null),
+            production_blocker_codes: (.production_blocker_codes // .detail.production_blocker_codes // [])
+          }' --arg status "${status_code}" upstream-release-raw.json | tee upstream-release-sanitized.json
+          rm -f upstream-release-raw.json
       - name: Upload inspection evidence
         uses: actions/upload-artifact@v4
         with:
           name: final-production-release-inspection
-          path: current-production-runs.json
+          path: |
+            current-production-runs.json
+            upstream-release-sanitized.json
           retention-days: 1
