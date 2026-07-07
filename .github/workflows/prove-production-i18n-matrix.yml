@@ -1,0 +1,52 @@
+name: Prove Production I18n Matrix
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/prove-production-i18n-matrix.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  prove-exact-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      EXPECTED_SHA: 8f6bfb483ee38e78f1ca7babc00dbb2fc8946474
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for exact all-locale production matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p proof
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/production-i18n-matrix.yml/runs?event=push&branch=main&per_page=50"
+          for attempt in $(seq 1 120); do
+            curl --fail --silent --show-error "$api" > proof/runs.json
+            jq --arg sha "$EXPECTED_SHA" '
+              [.workflow_runs[] | select(.head_sha == $sha)]
+              | sort_by(.created_at) | reverse | .[0] // null
+              | if . == null then null else {id,name,status,conclusion,head_sha,created_at,updated_at,html_url} end
+            ' proof/runs.json > proof/exact-run.json
+            status="$(jq -r '.status // "missing"' proof/exact-run.json)"
+            conclusion="$(jq -r '.conclusion // "pending"' proof/exact-run.json)"
+            echo "attempt=${attempt} status=${status} conclusion=${conclusion}"
+            if [ "$status" = "completed" ] && [ "$conclusion" = "success" ]; then
+              break
+            fi
+            if [ "$status" = "completed" ] && [ "$conclusion" != "success" ]; then
+              cat proof/exact-run.json
+              exit 1
+            fi
+            sleep 15
+          done
+          jq -e '.status == "completed" and .conclusion == "success" and .head_sha == env.EXPECTED_SHA' proof/exact-run.json >/dev/null
+          cat proof/exact-run.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: exact-production-i18n-matrix-proof
+          path: proof
+          retention-days: 7
