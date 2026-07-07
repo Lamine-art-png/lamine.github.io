@@ -18,8 +18,9 @@ from app.models.decision_run import DecisionRun
 from app.models.execution_verification import ExecutionVerification
 from app.models.forecast import Forecast
 from app.models.saas import (
-    AccountRecoveryToken, BillingEvent, Conversation, ConversationMessage,
-    EmailVerificationToken, OnboardingState, Organization, OrganizationMembership,
+    AccountRecoveryToken, BillingEvent, CommercialContract, Conversation,
+    ConversationMessage, EmailVerificationToken, EntitlementOverride, ManagedEntity,
+    OnboardingState, Organization, OrganizationMembership, QuotaReservation,
     SaaSRequest, TeamInvitation, UsageEvent, User, UserPreference, Workspace
 )
 from app.models.operational_records import (
@@ -51,8 +52,9 @@ __all__ = [
     "Schedule", "Webhook", "UsageMetering", "AuditLog", "IngestionRun",
     "APIKey", "ModelRun", "InvitationToken", "WaterState", "DecisionRun",
     "ExecutionVerification", "Forecast", "AccountRecoveryToken", "BillingEvent",
-    "Conversation", "ConversationMessage", "EmailVerificationToken", "OnboardingState",
-    "Organization", "OrganizationMembership", "SaaSRequest", "TeamInvitation",
+    "CommercialContract", "Conversation", "ConversationMessage", "EmailVerificationToken",
+    "EntitlementOverride", "ManagedEntity", "OnboardingState", "Organization",
+    "OrganizationMembership", "QuotaReservation", "SaaSRequest", "TeamInvitation",
     "UsageEvent", "User", "UserPreference", "Workspace", "ConnectorConnection",
     "DataSource", "IngestionJob", "EvidenceRecord", "IntelligenceRun",
     "GeneratedArtifact", "ChatConversation", "ChatMessage", "ComplianceJurisdiction",

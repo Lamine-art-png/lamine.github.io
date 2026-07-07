@@ -3,16 +3,69 @@ name: CI - Cloudflare Release Contract
 on:
   pull_request:
     paths:
+      - 'agroai_api/**'
       - 'cloudflare/**'
       - 'wrangler.toml'
       - '.github/workflows/ci.yml'
       - '.github/workflows/deploy.yml'
       - 'figma-enterprise-v4/**'
+  push:
+    branches:
+      - 'assistant/commercial-intelligence-control-plane-finish'
 
 permissions:
   contents: read
 
 jobs:
+  commercial_control_plane:
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/assistant/commercial-intelligence-control-plane-finish'
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: agroai_api/requirements.txt
+      - name: Install backend and test dependencies
+        run: pip install -r requirements.txt pytest==8.3.5
+      - name: Compile backend
+        run: python -m compileall app
+      - name: Import FastAPI application
+        run: python -c "from app.main import app; assert app is not None"
+      - name: Run commercial control-plane contracts
+        run: python -m pytest tests/unit/test_commercial_control_plane.py tests/unit/test_commercial_migration_contract.py tests/unit/test_connector_commercial_guard.py tests/unit/test_commercial_runtime_guards.py tests/unit/test_connector_runtime_v21.py -vv --tb=short 2>&1 | tee commercial-test-output.log
+      - name: Upload focused commercial test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commercial-test-output
+          path: agroai_api/commercial-test-output.log
+          if-no-files-found: error
+          retention-days: 3
+      - name: Run full unit suite
+        run: python -m pytest tests/unit -q --tb=short 2>&1 | tee full-unit-output.log
+      - name: Upload full unit test output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: commercial-full-unit-output
+          path: agroai_api/full-unit-output.log
+          if-no-files-found: error
+          retention-days: 3
+      - name: Verify single Alembic head
+        run: test "$(alembic heads | wc -l)" -eq 1
+      - name: Upgrade clean temporary database through head
+        env:
+          DATABASE_URL: sqlite:////tmp/agroai-commercial-control-plane.db
+        run: |
+          rm -f /tmp/agroai-commercial-control-plane.db
+          alembic upgrade head
+          alembic current
+
   edge_release_contract:
     runs-on: ubuntu-latest
     steps:

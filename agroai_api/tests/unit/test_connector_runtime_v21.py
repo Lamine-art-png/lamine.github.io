@@ -7,18 +7,37 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.api.v1 import connector_launch as connector_launch_api
 from app.api.v1.connector_launch import manifest_for
 from app.api.v1.connectors import CATALOG, oauth_url
 from app.core.security import require_current_tenant_id
 from app.db.base import Base, get_db
 from app.main import app
+from app.models.connector_security import OAuthStateNonce
+from app.models.saas import Organization, User
 from app.services.oauth_state import sign_oauth_state, verify_oauth_state
+from app.services.oauth_state_store import _decode, _digest
 
 
 def make_client():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
+    with TestingSessionLocal() as db:
+        owner = User(id="owner-test", email="owner@example.com", password_hash="x")
+        db.add(owner)
+        db.flush()
+        db.add(
+            Organization(
+                id="org-test",
+                name="Connector Runtime Test Org",
+                slug="connector-runtime-test-org",
+                owner_user_id=owner.id,
+                plan="professional",
+                subscription_status="active",
+            )
+        )
+        db.commit()
 
     def override_db():
         db = TestingSessionLocal()
@@ -29,7 +48,9 @@ def make_client():
 
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[require_current_tenant_id] = lambda: "org-test"
-    return TestClient(app)
+    client = TestClient(app)
+    client.testing_session_local = TestingSessionLocal
+    return client
 
 
 def test_catalog_includes_connector_runtime_v21_providers():
@@ -63,6 +84,7 @@ def test_dropbox_oauth_url_uses_configured_client_id(monkeypatch):
 def test_launch_start_uses_one_time_state_and_callback_hides_raw_code(monkeypatch):
     monkeypatch.setenv("SLACK_OAUTH_CLIENT_ID", "slack-client")
     monkeypatch.setenv("OAUTH_STATE_SIGNING_KEY", "dedicated-launch-state-signing-key")
+    monkeypatch.setenv("SLACK_OAUTH_REDIRECT_URI", "https://api.example.test/v1/connectors/oauth/callback")
     client = make_client()
     started = client.post("/v1/connectors/launch/start", json={"provider": "slack"})
     assert started.status_code == 200, started.text
@@ -73,15 +95,34 @@ def test_launch_start_uses_one_time_state_and_callback_hides_raw_code(monkeypatc
     assert ":" not in state
     assert "oauth_state" not in str(body["connection"]["config_json"])
 
+    # Pin the exact security invariants before the callback crosses sessions.
+    assert connector_launch_api._consume_state_for_known_callback.__name__ == "exact_callback_consumer"
+    decoded = _decode(state)
+    assert decoded is not None
+    assert decoded["provider"] == "slack"
+    exact_redirect = connector_launch_api.callback_url_for("slack")
+    assert decoded["redirect_sha256"] == _digest(exact_redirect.strip())
+    with client.testing_session_local() as db:
+        nonce = (
+            db.query(OAuthStateNonce)
+            .filter(OAuthStateNonce.nonce_hash == _digest(str(decoded["nonce"])))
+            .first()
+        )
+        assert nonce is not None
+        assert nonce.consumed_at is None
+        assert nonce.redirect_sha256 == decoded["redirect_sha256"]
+
     connection_id = body["connection"]["id"]
     callback = client.get("/v1/connectors/oauth/callback", params={"state": state, "code": "raw-oauth-code"})
     assert callback.status_code == 200
+    assert "Authorization was received" in callback.text
     assert "raw-oauth-code" not in callback.text
 
     fetched = client.get(f"/v1/connectors/connections/{connection_id}")
     assert fetched.status_code == 200
     config = fetched.json()["connection"]["config_json"]
     assert config["oauth_code_present"] is True
+    assert config["authorization_status"] == "authorized_pending_token_exchange"
     assert "raw-oauth-code" not in str(config)
 
     replay = client.get("/v1/connectors/oauth/callback", params={"state": state, "code": "another-code"})

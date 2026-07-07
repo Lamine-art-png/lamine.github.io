@@ -47,10 +47,19 @@ class Organization(Base):
     slug = Column(String, nullable=False, unique=True, index=True)
     owner_user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
     plan = Column(String, default="free", nullable=False)
+    plan_version = Column(String, default="2026-07", nullable=False, index=True)
+    customer_class = Column(String, default="individual_operator", nullable=False, index=True)
+    organization_type = Column(String, nullable=True, index=True)
+    commercial_metadata_json = Column(JSON, nullable=True)
     subscription_status = Column(String, default="inactive", nullable=False)
+    subscription_source = Column(String, default="local", nullable=False, index=True)
     stripe_customer_id = Column(String, nullable=True, index=True)
     stripe_subscription_id = Column(String, nullable=True, index=True)
+    stripe_product_id = Column(String, nullable=True, index=True)
+    stripe_price_id = Column(String, nullable=True, index=True)
+    current_period_start = Column(DateTime, nullable=True)
     current_period_end = Column(DateTime, nullable=True)
+    cancel_at_period_end = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
@@ -113,13 +122,87 @@ class UsageEvent(Base):
     workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=True, index=True)
     user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
     event_type = Column(String, nullable=False, index=True)
+    metric = Column(String, nullable=True, index=True)
     quantity = Column(Integer, default=1, nullable=False)
+    unit = Column(String, default="count", nullable=False)
+    period_key = Column(String, nullable=True, index=True)
+    request_id = Column(String, nullable=True, index=True)
+    reservation_id = Column(String, nullable=True, index=True)
+    state = Column(String, default="committed", nullable=False, index=True)
     metadata_json = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     organization = relationship("Organization", back_populates="usage_events")
     workspace = relationship("Workspace", back_populates="usage_events")
     user = relationship("User", back_populates="usage_events")
+
+
+class EntitlementOverride(Base):
+    __tablename__ = "entitlement_overrides"
+    __table_args__ = (UniqueConstraint("organization_id", "feature_key", "valid_from", name="uq_entitlement_override_window"),)
+
+    id = Column(String, primary_key=True, default=new_id, index=True)
+    organization_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    feature_key = Column(String, nullable=False, index=True)
+    value_json = Column(JSON, nullable=False)
+    reason = Column(String, nullable=True)
+    source = Column(String, default="manual", nullable=False, index=True)
+    valid_from = Column(DateTime, nullable=True, index=True)
+    valid_until = Column(DateTime, nullable=True, index=True)
+    created_by_user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class CommercialContract(Base):
+    __tablename__ = "commercial_contracts"
+    __table_args__ = (UniqueConstraint("organization_id", "contract_code", name="uq_contract_org_code"),)
+
+    id = Column(String, primary_key=True, default=new_id, index=True)
+    organization_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    contract_code = Column(String, nullable=False, index=True)
+    status = Column(String, default="draft", nullable=False, index=True)
+    effective_from = Column(DateTime, nullable=True, index=True)
+    effective_to = Column(DateTime, nullable=True, index=True)
+    metadata_json = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class ManagedEntity(Base):
+    __tablename__ = "managed_entities"
+    __table_args__ = (UniqueConstraint("organization_id", "entity_type", "external_id", name="uq_managed_entity_external"),)
+
+    id = Column(String, primary_key=True, default=new_id, index=True)
+    organization_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    workspace_id = Column(String, ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True)
+    entity_type = Column(String, nullable=False, index=True)
+    external_id = Column(String, nullable=True, index=True)
+    display_name = Column(String, nullable=False)
+    status = Column(String, default="active", nullable=False, index=True)
+    metadata_json = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class QuotaReservation(Base):
+    __tablename__ = "quota_reservations"
+    __table_args__ = (UniqueConstraint("organization_id", "metric", "request_id", name="uq_quota_reservation_request"),)
+
+    id = Column(String, primary_key=True, default=new_id, index=True)
+    organization_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    workspace_id = Column(String, ForeignKey("workspaces.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    metric = Column(String, nullable=False, index=True)
+    quantity = Column(Integer, default=1, nullable=False)
+    unit = Column(String, default="count", nullable=False)
+    period_key = Column(String, nullable=False, index=True)
+    request_id = Column(String, nullable=False, index=True)
+    state = Column(String, default="reserved", nullable=False, index=True)
+    metadata_json = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    committed_at = Column(DateTime, nullable=True)
+    released_at = Column(DateTime, nullable=True)
 
 
 class SaaSRequest(Base):

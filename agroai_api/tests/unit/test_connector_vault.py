@@ -4,6 +4,7 @@ import json
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 from app.models.connector_security import ConnectorCredential
@@ -13,13 +14,22 @@ from app.services.connector_vault import load_connector_credentials, revoke_conn
 
 
 def _setup():
-    engine = create_engine("sqlite:///:memory:")
+    # Keep one durable in-memory database connection and retain committed scalar
+    # identity. This avoids Python/SQLAlchemy-version-dependent expiration behavior
+    # in low-level vault tests while preserving the real commercial flush hooks.
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(bind=engine, tables=[User.__table__, Organization.__table__, Workspace.__table__, ConnectorConnection.__table__, ConnectorCredential.__table__])
-    db = sessionmaker(bind=engine)()
+    db = sessionmaker(bind=engine, expire_on_commit=False)()
     user = User(email="owner@example.com", password_hash="x")
     db.add(user)
     db.flush()
-    org = Organization(name="Test Org", slug="test-org", owner_user_id=user.id)
+    org = Organization(
+        name="Test Org",
+        slug="test-org",
+        owner_user_id=user.id,
+        plan="professional",
+        subscription_status="active",
+    )
     db.add(org)
     db.flush()
     workspace = Workspace(organization_id=org.id, name="North Farm")

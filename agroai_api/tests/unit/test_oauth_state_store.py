@@ -1,5 +1,6 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 
 from app.db.base import Base
 from app.models.connector_security import OAuthStateNonce
@@ -9,13 +10,22 @@ from app.services.oauth_state_store import consume_oauth_state, issue_oauth_stat
 
 
 def _setup():
-    engine = create_engine("sqlite:///:memory:")
+    # OAuth state is a multi-commit protocol. Keep the in-memory database and ORM
+    # identities stable across those commits under every supported SQLAlchemy/Python
+    # runner combination.
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(bind=engine, tables=[User.__table__, Organization.__table__, Workspace.__table__, ConnectorConnection.__table__, OAuthStateNonce.__table__])
-    db = sessionmaker(bind=engine)()
+    db = sessionmaker(bind=engine, expire_on_commit=False)()
     user = User(email="owner@example.com", password_hash="x")
     db.add(user)
     db.flush()
-    org = Organization(name="Test Org", slug="test-org", owner_user_id=user.id)
+    org = Organization(
+        name="Test Org",
+        slug="test-org",
+        owner_user_id=user.id,
+        plan="professional",
+        subscription_status="active",
+    )
     db.add(org)
     db.flush()
     workspace = Workspace(organization_id=org.id, name="North Farm")

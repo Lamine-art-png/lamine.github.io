@@ -11,12 +11,40 @@ from sqlalchemy.pool import StaticPool
 from app.core.security import require_current_tenant_id
 from app.db.base import Base, get_db
 from app.main import app
+from app.models.saas import EntitlementOverride, Organization, User
 
 
 def make_client():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
+    with TestingSessionLocal() as db:
+        owner = User(id="owner-test", email="owner@example.com", password_hash="x")
+        db.add(owner)
+        db.flush()
+        org = Organization(
+            id="org-test",
+            name="Connector Test Org",
+            slug="connector-test-org",
+            owner_user_id=owner.id,
+            plan="enterprise",
+            subscription_status="active",
+        )
+        db.add(org)
+        db.flush()
+        # Enterprise custom integrations are intentionally contract-only. These
+        # vault-route tests model an executed enterprise deployment explicitly
+        # instead of weakening the production paywall.
+        db.add(
+            EntitlementOverride(
+                organization_id=org.id,
+                feature_key="connectors.custom_integration",
+                value_json={"value": "enabled"},
+                source="test_contract_fixture",
+                reason="Exercise custom API credential custody after commercial enablement.",
+            )
+        )
+        db.commit()
 
     def override_db():
         db = TestingSessionLocal()

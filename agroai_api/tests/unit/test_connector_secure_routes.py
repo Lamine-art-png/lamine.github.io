@@ -6,12 +6,28 @@ from sqlalchemy.pool import StaticPool
 from app.core.security import require_current_tenant_id
 from app.db.base import Base, get_db
 from app.main import app
+from app.models.saas import Organization, User
 
 
 def _client():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Base.metadata.create_all(bind=engine)
     Session = sessionmaker(bind=engine)
+    with Session() as db:
+        owner = User(id="owner-test", email="owner@example.com", password_hash="x")
+        db.add(owner)
+        db.flush()
+        db.add(
+            Organization(
+                id="org-test",
+                name="Secure Connector Test Org",
+                slug="secure-connector-test-org",
+                owner_user_id=owner.id,
+                plan="professional",
+                subscription_status="active",
+            )
+        )
+        db.commit()
 
     def override_db():
         db = Session()

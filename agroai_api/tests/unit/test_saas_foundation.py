@@ -197,7 +197,7 @@ def test_stripe_webhook_idempotency_updates_subscription(client, db, monkeypatch
     assert second.json()["idempotent"] is True
     assert db.query(BillingEvent).filter(BillingEvent.stripe_event_id == "evt_123").count() == 1
     org = db.get(Organization, org_id)
-    assert org.plan == "pro"
+    assert org.plan == "professional"
     assert org.subscription_status == "active"
 
 
