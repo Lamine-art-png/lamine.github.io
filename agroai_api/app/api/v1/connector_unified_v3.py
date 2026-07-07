@@ -14,6 +14,9 @@ from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 from pydantic import BaseModel, Field, SecretStr
 from sqlalchemy.orm import Session
 
+from app.adapters.openet import OpenETAuthError
+from app.adapters.talgil import TalgilAuthError
+from app.adapters.wiseconn import WiseConnAuthError
 from app.api.v1.connectors import create_or_get_connection, public_connection, sanitize_config, verify_connector_schema
 from app.core.config import settings
 from app.core.security import require_current_tenant_id
@@ -23,9 +26,11 @@ from app.services.ag_connector_runtime import (
     AG_PROVIDERS,
     AUTH_ERRORS,
     RATE_LIMIT_ERRORS,
+    _redact_mapping,
+    _resource_preview,
+    build_ag_adapter,
     discover_ag_resources,
     load_ag_adapter,
-    probe_ag_connection,
 )
 from app.services.connector_vault import credential_reference, revoke_connector_credentials, store_connector_credentials
 from app.services.provider_sync_jobs import queue_provider_sync
@@ -51,17 +56,8 @@ class UnifiedSelectionRequest(BaseModel):
 
 
 LIFECYCLE_STATES = {
-    "available",
-    "authorizing",
-    "connected",
-    "discovering",
-    "syncing",
-    "synced",
-    "action_required",
-    "reconnect_required",
-    "rate_limited",
-    "degraded",
-    "failed",
+    "available", "authorizing", "connected", "discovering", "syncing", "synced",
+    "action_required", "reconnect_required", "rate_limited", "degraded", "failed",
 }
 
 
@@ -92,6 +88,54 @@ def _status_payload(connection: ConnectorConnection) -> dict[str, Any]:
     }
 
 
+async def _probe_candidate(provider: str, api_key: str) -> dict[str, Any]:
+    adapter = build_ag_adapter(provider, {"api_key": api_key})
+    try:
+        if provider == "wiseconn":
+            if not await adapter.check_auth():
+                raise WiseConnAuthError("WiseConn authorization failed")
+            farms = await adapter.list_farms()
+            return {"identity": {"provider": "wiseconn", "resource_count": len(farms)}, "resources": _resource_preview(farms, "farm")}
+        if provider == "talgil":
+            if not await adapter.check_auth():
+                raise TalgilAuthError("Talgil authorization failed")
+            targets = await adapter.list_targets()
+            return {"identity": {"provider": "talgil", "resource_count": len(targets)}, "resources": _resource_preview(targets, "controller")}
+        if provider == "openet":
+            if not await adapter.check_auth():
+                raise OpenETAuthError("OpenET authorization failed")
+            account = await adapter.account_status()
+            return {"identity": {"provider": "openet", "account": _redact_mapping(account)}, "resources": []}
+        raise ValueError("unsupported agricultural provider")
+    finally:
+        await adapter.close()
+
+
+def _preserve_or_fail_connection(
+    db: Session,
+    *,
+    tenant_id: str,
+    connection_id: str,
+    prior_status: str,
+    prior_ref: str | None,
+    failure_status: str,
+    message: str,
+) -> ConnectorConnection:
+    db.rollback()
+    connection = _connection(db, tenant_id, connection_id)
+    if prior_ref:
+        connection.status = prior_status if prior_status in LIFECYCLE_STATES else "connected"
+        connection.credentials_ref = prior_ref
+        connection.last_error = message + " Existing connection preserved."
+    else:
+        connection.status = failure_status
+        connection.credentials_ref = None
+        connection.last_error = message
+    connection.updated_at = datetime.utcnow()
+    db.commit()
+    return connection
+
+
 @router.post("/connectors/unified/connect")
 async def unified_connect(
     payload: UnifiedConnectRequest,
@@ -106,65 +150,67 @@ async def unified_connect(
         workspace_id=payload.workspace_id,
         mode="api_key",
         display_name=payload.display_name,
-        config={"connector_unification_version": "v3", "lifecycle_state": "authorizing"},
     )
+    prior_status = str(connection.status or "available")
+    prior_ref = connection.credentials_ref
     connection.status = "authorizing"
     connection.updated_at = datetime.utcnow()
 
-    # Provider base URLs are fixed server-side. Never let a browser/customer
-    # redirect a secret-bearing server request to an arbitrary host.
+    candidate = payload.api_key.get_secret_value()
+    try:
+        probe = await _probe_candidate(payload.provider, candidate)
+    except AUTH_ERRORS as exc:
+        _preserve_or_fail_connection(
+            db,
+            tenant_id=tenant_id,
+            connection_id=connection.id,
+            prior_status=prior_status,
+            prior_ref=prior_ref,
+            failure_status="action_required",
+            message="Provider authorization failed. Check the access credential and try again.",
+        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "provider_authorization_failed", "provider": payload.provider}) from exc
+    except RATE_LIMIT_ERRORS as exc:
+        _preserve_or_fail_connection(
+            db,
+            tenant_id=tenant_id,
+            connection_id=connection.id,
+            prior_status=prior_status,
+            prior_ref=prior_ref,
+            failure_status="rate_limited",
+            message="Provider rate limit reached during authorization probe.",
+        )
+        raise HTTPException(status_code=429, detail={"code": "provider_rate_limited", "provider": payload.provider}) from exc
+    except Exception as exc:
+        _preserve_or_fail_connection(
+            db,
+            tenant_id=tenant_id,
+            connection_id=connection.id,
+            prior_status=prior_status,
+            prior_ref=prior_ref,
+            failure_status="degraded",
+            message=f"Provider probe failed: {exc.__class__.__name__}",
+        )
+        raise HTTPException(status_code=502, detail={"code": "provider_probe_failed", "provider": payload.provider}) from exc
+
+    connection = _connection(db, tenant_id, connection.id)
     vault_row = store_connector_credentials(
         db,
         tenant_id=tenant_id,
         connection=connection,
         provider=payload.provider,
-        payload={"api_key": payload.api_key.get_secret_value()},
+        payload={"api_key": candidate},
         scopes=["read", "discover", "sync"],
     )
     connection.credentials_ref = credential_reference(vault_row)
-    db.flush()
-
-    try:
-        probe = await probe_ag_connection(db, connection=connection)
-    except AUTH_ERRORS as exc:
-        db.rollback()
-        connection = _connection(db, tenant_id, connection.id)
-        revoke_connector_credentials(db, tenant_id=tenant_id, connection_id=connection.id)
-        connection.status = "action_required"
-        connection.credentials_ref = None
-        connection.last_error = "Provider authorization failed. Check the access credential and try again."
-        connection.updated_at = datetime.utcnow()
-        db.commit()
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"code": "provider_authorization_failed", "provider": payload.provider}) from exc
-    except RATE_LIMIT_ERRORS as exc:
-        db.rollback()
-        connection = _connection(db, tenant_id, connection.id)
-        connection.status = "rate_limited"
-        connection.last_error = "Provider rate limit reached during authorization probe."
-        connection.updated_at = datetime.utcnow()
-        db.commit()
-        raise HTTPException(status_code=429, detail={"code": "provider_rate_limited", "provider": payload.provider}) from exc
-    except Exception as exc:
-        db.rollback()
-        connection = _connection(db, tenant_id, connection.id)
-        connection.status = "degraded"
-        connection.last_error = f"Provider probe failed: {exc.__class__.__name__}"
-        connection.updated_at = datetime.utcnow()
-        db.commit()
-        raise HTTPException(status_code=502, detail={"code": "provider_probe_failed", "provider": payload.provider}) from exc
-
     config = dict(connection.config_json or {})
-    config.update(
-        sanitize_config(
-            {
-                "connector_unification_version": "v3",
-                "lifecycle_state": "connected",
-                "authorization_status": "connected",
-                "provider_identity": probe.get("identity", {}),
-                "discovered_resource_count": len(probe.get("resources", [])),
-            }
-        )
-    )
+    config.update(sanitize_config({
+        "connector_unification_version": "v3",
+        "lifecycle_state": "connected",
+        "authorization_status": "connected",
+        "provider_identity": probe.get("identity", {}),
+        "discovered_resource_count": len(probe.get("resources", [])),
+    }))
     connection.config_json = config
     connection.status = "connected"
     connection.last_error = None
@@ -172,13 +218,7 @@ async def unified_connect(
     connection.updated_at = datetime.utcnow()
     db.commit()
     db.refresh(connection)
-    return {
-        "status": "connected",
-        "state": "connected",
-        "connection": public_connection(connection),
-        "identity": probe.get("identity", {}),
-        "resources": probe.get("resources", []),
-    }
+    return {"status": "connected", "state": "connected", "connection": public_connection(connection), "identity": probe.get("identity", {}), "resources": probe.get("resources", [])}
 
 
 @router.get("/connectors/unified/{connection_id}/discovery")
@@ -249,16 +289,14 @@ async def unified_selection(
 
     config = dict(connection.config_json or {})
     resource_ids = payload.resource_ids or payload.field_ids
-    config.update(
-        {
-            "scope_mode": payload.scope_mode,
-            "selected_resource_ids": [str(value) for value in resource_ids],
-            "field_ids": [str(value) for value in payload.field_ids] if payload.field_ids else config.get("field_ids", []),
-            "geometry": [float(value) for value in payload.geometry] if payload.geometry else config.get("geometry", []),
-            "selection_confirmed": True,
-            "selection_updated_at": datetime.utcnow().isoformat() + "Z",
-        }
-    )
+    config.update({
+        "scope_mode": payload.scope_mode,
+        "selected_resource_ids": [str(value) for value in resource_ids],
+        "field_ids": [str(value) for value in payload.field_ids] if payload.field_ids else config.get("field_ids", []),
+        "geometry": [float(value) for value in payload.geometry] if payload.geometry else config.get("geometry", []),
+        "selection_confirmed": True,
+        "selection_updated_at": datetime.utcnow().isoformat() + "Z",
+    })
     connection.config_json = sanitize_config(config)
     connection.updated_at = datetime.utcnow()
     db.commit()
@@ -324,20 +362,12 @@ async def unified_sync(
 
 
 @router.get("/connectors/unified/{connection_id}/status")
-def unified_status(
-    connection_id: str,
-    tenant_id: str = Depends(require_current_tenant_id),
-    db: Session = Depends(get_db),
-) -> dict[str, Any]:
+def unified_status(connection_id: str, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
     return _status_payload(_connection(db, tenant_id, connection_id))
 
 
 @router.post("/connectors/unified/{connection_id}/disconnect")
-def unified_disconnect(
-    connection_id: str,
-    tenant_id: str = Depends(require_current_tenant_id),
-    db: Session = Depends(get_db),
-) -> dict[str, Any]:
+def unified_disconnect(connection_id: str, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
     connection = _connection(db, tenant_id, connection_id)
     revoked = revoke_connector_credentials(db, tenant_id=tenant_id, connection_id=connection.id)
     connection.status = "available"
