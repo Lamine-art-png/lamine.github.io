@@ -180,7 +180,7 @@ export default {
   async fetch(request: Request, env: WrapperEnv, _ctx: ExecutionContext): Promise<Response> {
     const pathname = new URL(request.url).pathname;
     const clone = TRANSLATION_PATHS.has(pathname) && request.method === "POST" ? request.clone() : null;
-    const invokeBaseFetch = baseHandler.fetch as unknown as (input: Request, runtimeEnv: BaseEnv) => Promise<Response>;
+    const invokeBaseFetch = baseHandler.fetch as unknown as (input: unknown, runtimeEnv: BaseEnv) => Promise<Response>;
     const response = await invokeBaseFetch(request, env);
     if (!clone) return response;
     return workersAiFallback(clone, env, response);
