@@ -86,5 +86,12 @@
   "literal.8e955237343c9c19": "Commercially controlled agent runs for the active workspace.",
   "literal.8fe77e89aaf95b8e": "Usage is enforced on the backend and resets with the commercial period.",
   "literal.a0e63d7c7125d29a": "Not now",
-  "literal.a54b64a43edf6559": "Close upgrade message"
+  "literal.a54b64a43edf6559": "Close upgrade message",
+  "literal.051e9b7ffd176eb4": "Commercial reporting starts on Professional",
+  "literal.36a3cf354e4637c0": "Compare Professional access",
+  "literal.64a9ce9b47803173": "Direct collaboration starts on Team",
+  "literal.7b3f4f4f454dd93b": "Manual and chat file imports share one evidence quota: 15/month on Free, 500 on Professional, 2,500 on Team, and 10,000 on Network. Weather and OpenET start at Professional; standard Custom API access starts at Network; bespoke integrations require Enterprise.",
+  "literal.8feaa5850ed27927": "Unlock direct invitations, role controls, shared evidence, approvals, and 10 included seats.",
+  "literal.cbc80a4ed996c2e3": "Explore the workflow, then unlock generation, PDF export, compliance drafts, and delivery.",
+  "literal.e953697ed6dcc8df": "Compare Team access"
 }

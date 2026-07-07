@@ -7,22 +7,21 @@ from sqlalchemy.orm import Session
 
 from app.models.operational_records import ConnectorConnection
 from app.models.saas import Organization
-from app.services.commercial_control import get_limit, require_feature
+from app.services.commercial_control import get_limit, has_feature, require_feature
+from app.services.commercial_packaging_v2 import (
+    ENTERPRISE_INTEGRATION_PROVIDERS,
+    MANUAL_EVIDENCE_PROVIDERS,
+    feature_for_provider,
+    required_plan_for_provider,
+)
 
-
-MANUAL_PROVIDERS = {"manual_csv", "chat_upload"}
-DOCUMENT_OAUTH_PROVIDERS = {"gmail", "outlook", "google_drive", "dropbox", "box", "slack"}
-CONTRACT_PROVIDERS = {"universal_controller", "salesforce", "google_earth_engine", "custom_api"}
+MANUAL_PROVIDERS = set(MANUAL_EVIDENCE_PROVIDERS)
+CONTRACT_PROVIDERS = set(ENTERPRISE_INTEGRATION_PROVIDERS)
 
 
 def connector_feature(provider: str) -> tuple[str, str | None]:
-    if provider in MANUAL_PROVIDERS:
-        return "connectors.manual_upload", None
-    if provider in DOCUMENT_OAUTH_PROVIDERS:
-        return "connectors.oauth_documents", "professional"
-    if provider in CONTRACT_PROVIDERS:
-        return "connectors.custom_integration", "enterprise"
-    return "connectors.live", "professional"
+    required_plan = required_plan_for_provider(provider)
+    return feature_for_provider(provider), None if required_plan == "free" else required_plan
 
 
 def _active_connection_count(session: Session, organization_id: str) -> int:
@@ -53,7 +52,18 @@ def enforce_connector_write(session: Session, connection: ConnectorConnection, *
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
 
     feature_key, recommended_plan = connector_feature(connection.provider)
-    require_feature(session, org, feature_key, recommended_plan=recommended_plan)
+    bespoke_contract_includes_custom_api = (
+        connection.provider == "custom_api"
+        and has_feature(session, org, "connectors.custom_integration")
+    )
+    if not bespoke_contract_includes_custom_api:
+        require_feature(
+            session,
+            org,
+            feature_key,
+            recommended_plan=recommended_plan,
+            allow_preview=connection.provider == "custom_api",
+        )
 
     if not check_capacity or connection.provider in MANUAL_PROVIDERS:
         return
