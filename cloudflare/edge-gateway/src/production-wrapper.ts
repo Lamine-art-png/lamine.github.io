@@ -12,8 +12,12 @@ const PLACEHOLDER_RE = /\{[A-Za-z_][A-Za-z0-9_]*\}/g;
 const CHUNK_SIZE = 36;
 const MAX_PARALLEL = 4;
 
+type AiRunner = {
+  run(model: string, input: unknown): Promise<unknown>;
+};
+
 interface WrapperEnv extends BaseEnv {
-  AI: Ai;
+  AI: AiRunner;
 }
 
 function jsonFromUpstream(payload: unknown, upstream: Response, status = 200): Response {
