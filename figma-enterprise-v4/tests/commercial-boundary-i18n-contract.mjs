@@ -6,11 +6,13 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../src/
 const catalog = fs.readFileSync(path.join(root, "commercialBoundaryI18n.ts"), "utf8");
 const host = fs.readFileSync(path.join(root, "components/CommercialBoundaryHostLocalized.tsx"), "utf8");
 const dynamic = fs.readFileSync(path.join(root, "dynamicLocaleCatalog.ts"), "utf8");
+const literalRuntime = fs.readFileSync(path.join(root, "portalLiteralCatalog.ts"), "utf8");
 
 for (const required of [
   "COMMERCIAL_BOUNDARY_EN",
   "COMMERCIAL_BOUNDARY_FR",
   "installCommercialBoundaryBaseCatalogs",
+  "ui-commercial-boundary.en.json",
 ]) {
   if (!catalog.includes(required)) throw new Error(`Missing ${required}`);
 }
@@ -27,6 +29,10 @@ for (const required of [
 
 if (host.includes("detail?.message") || host.includes("detail.message")) {
   throw new Error("Raw backend message copy must not be rendered as portal UI");
+}
+
+if (!literalRuntime.includes("ui-literals.en.7.json")) {
+  throw new Error("Portal runtime must consume monetization literal catalog part 7");
 }
 
 const install = dynamic.indexOf("installCommercialBoundaryBaseCatalogs();");
