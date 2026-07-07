@@ -6,6 +6,7 @@ const APP_URL = "http://127.0.0.1:4173/settings";
 const API_ORIGIN = "https://api.agroai-pilot.com";
 const repoRoot = path.resolve(process.cwd(), "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "shared", "supported-locales.json"), "utf8"));
+const REQUEST_CHUNK_SIZE = 36;
 
 function qaToken() {
   const body = Buffer.from(JSON.stringify({ sub: "qa", exp: 4102444800 })).toString("base64url");
@@ -56,7 +57,7 @@ function languageSelector(page) {
   return page.locator("select").filter({ has: page.locator('option[value="fr-FR"]') }).first();
 }
 
-test("every visible non-English UI locale hydrates core first and full literals second", async ({ browser }) => {
+test("every visible non-English UI locale hydrates core first and full literals progressively", async ({ browser }) => {
   test.setTimeout(180_000);
   const context = await browser.newContext({ locale: "en-US" });
   const page = await context.newPage();
@@ -72,7 +73,8 @@ test("every visible non-English UI locale hydrates core first and full literals 
     await selector.selectOption(locale);
     await expect(selector).toHaveValue(locale);
     await expect(selector).toBeEnabled();
-    await expect(page.getByText(`⟦${locale}⟧ Settings`, { exact: true }).first()).toBeVisible();
+    const expectedSettings = locale === "fr-FR" ? "Paramètres" : `⟦${locale}⟧ Settings`;
+    await expect(page.getByText(expectedSettings, { exact: true }).first()).toBeVisible();
     await expect(page.getByText(`⟦${locale}⟧ Timezone`, { exact: true }).first()).toBeVisible();
     await expect(page.getByRole("combobox", { name: `⟦${locale}⟧ Assistant speed` })).toBeVisible();
     const expectedDir = ["ar", "fa", "ur"].includes(locale.split("-")[0]) ? "rtl" : "ltr";
@@ -80,16 +82,15 @@ test("every visible non-English UI locale hydrates core first and full literals 
   }
 
   expect(new Set(state.catalogs.map((item) => item.locale))).toEqual(new Set(locales));
-  for (const locale of locales.filter((code) => code !== "fr-FR")) {
+  for (const locale of locales) {
     const requests = state.catalogs.filter((item) => item.locale === locale);
-    expect(requests.some((item) => item.keyCount > 0 && item.keyCount < 400)).toBeTruthy();
-    expect(requests.some((item) => item.keyCount > 400)).toBeTruthy();
+    expect(requests.length).toBeGreaterThanOrEqual(4);
+    expect(requests.every((item) => item.keyCount > 0 && item.keyCount <= REQUEST_CHUNK_SIZE)).toBeTruthy();
   }
-  expect(state.catalogs.filter((item) => item.locale === "fr-FR").some((item) => item.keyCount > 400)).toBeTruthy();
   await context.close();
 });
 
-test("non-French locale visibly translates from core while full catalog is still pending", async ({ browser }) => {
+test("non-French locale visibly translates from core while full literal chunks are still pending", async ({ browser }) => {
   const context = await browser.newContext({ locale: "en-US" });
   const page = await context.newPage();
   await page.addInitScript((token) => {
@@ -99,7 +100,7 @@ test("non-French locale visibly translates from core while full catalog is still
 
   let releaseFull;
   const fullGate = new Promise((resolve) => { releaseFull = resolve; });
-  const requestSizes = [];
+  const requestScopes = [];
   await page.route(`${API_ORIGIN}/**`, async (route) => {
     const req = route.request();
     const url = new URL(req.url());
@@ -110,9 +111,10 @@ test("non-French locale visibly translates from core while full catalog is still
     if (req.method() === "GET" && url.pathname === "/v1/settings/preferences") return reply({ preferences: { locale: "en", notifications: {}, ui: {} } });
     if (req.method() === "POST" && url.pathname === "/v1/i18n/catalog") {
       const payload = req.postDataJSON();
-      const keyCount = Object.keys(payload.source || {}).length;
-      requestSizes.push(keyCount);
-      if (keyCount > 400) await fullGate;
+      const keys = Object.keys(payload.source || {});
+      const isFullLiteralChunk = keys.some((key) => key.startsWith("literal."));
+      requestScopes.push(isFullLiteralChunk ? "full" : "core");
+      if (isFullLiteralChunk) await fullGate;
       const catalog = Object.fromEntries(Object.entries(payload.source).map(([key, value]) => [key, `⟦${payload.locale}⟧ ${value}`]));
       return reply({ status: "ok", locale: payload.locale, catalog });
     }
@@ -127,10 +129,11 @@ test("non-French locale visibly translates from core while full catalog is still
   await expect(selector).toBeEnabled();
   await expect(page.locator("html")).toHaveAttribute("lang", "de");
   await expect(page.getByText("⟦de⟧ Settings", { exact: true }).first()).toBeVisible();
-  expect(requestSizes.some((size) => size > 0 && size < 400)).toBeTruthy();
+  expect(requestScopes.includes("core")).toBeTruthy();
 
   releaseFull();
   await expect(page.getByText("⟦de⟧ Timezone", { exact: true }).first()).toBeVisible();
+  expect(requestScopes.includes("full")).toBeTruthy();
   await expect(selector).toHaveValue("de");
   await expect(selector).toBeEnabled();
   await context.close();

@@ -2,6 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const APP_URL = "http://127.0.0.1:4173/settings";
 const API_ORIGIN = "https://api.agroai-pilot.com";
+const REQUEST_CHUNK_SIZE = 36;
 
 function qaToken() {
   const body = Buffer.from(JSON.stringify({ sub: "qa", exp: 4102444800 })).toString("base64url");
@@ -9,7 +10,7 @@ function qaToken() {
 }
 
 async function prepare(page, storedLocale) {
-  const state = { patches: 0, catalogs: 0 };
+  const state = { patches: 0, catalogs: [] };
   await page.addInitScript(({ token, locale }) => {
     localStorage.setItem("agroai_access_token", token);
     localStorage.setItem("agroai_locale_v1", locale);
@@ -30,17 +31,21 @@ async function prepare(page, storedLocale) {
     if (req.method() === "GET" && url.pathname === "/v1/orgs") return reply({ organizations: [{ id: "org", name: "QA Org", role: "owner" }] });
     if (req.method() === "GET" && url.pathname === "/v1/workspaces") return reply({ workspaces: [{ id: "ws", name: "QA Workspace", status: "active" }] });
     if (req.method() === "POST" && url.pathname === "/v1/i18n/catalog") {
-      state.catalogs += 1;
       const payload = req.postDataJSON();
-      const translatedLanguage = payload.locale === "de"
-        ? "Sprache"
-        : payload.locale === "ar"
-          ? "اللغة"
-          : payload.locale === "fr-FR"
-            ? "Langue"
-            : payload.source.language;
-      const catalog = { ...payload.source, language: translatedLanguage };
-      if (payload.locale === "sw") catalog["intelligence.reportEmailed"] = "Imetumwa kwa " + "{" + "{recipient}" + "}";
+      state.catalogs.push({ locale: payload.locale, keyCount: Object.keys(payload.source || {}).length });
+      const catalog = { ...payload.source };
+      if (Object.prototype.hasOwnProperty.call(catalog, "language")) {
+        catalog.language = payload.locale === "de"
+          ? "Sprache"
+          : payload.locale === "ar"
+            ? "اللغة"
+            : payload.locale === "fr-FR"
+              ? "Langue"
+              : catalog.language;
+      }
+      if (payload.locale === "sw" && Object.prototype.hasOwnProperty.call(catalog, "intelligence.reportEmailed")) {
+        catalog["intelligence.reportEmailed"] = "Imetumwa kwa " + "{" + "{recipient}" + "}";
+      }
       return reply({ status: "ok", locale: payload.locale, catalog, source: "browser-test" });
     }
     if (req.method() === "PATCH" && url.pathname === "/v1/settings/preferences") {
@@ -57,14 +62,14 @@ function languageSelector(page) {
 }
 
 const cases = [
-  ["legacy fr", "fr", "fr-FR", "fr-FR", "fr-FR", "Langue", 1],
-  ["regional fr-CA", "fr-CA", "fr-FR", "fr-FR", "fr-FR", "Langue", 1],
-  ["global de", "de", "de", "de", "de", "Sprache", 2],
-  ["global ar", "ar", "ar", "ar", "ar", "اللغة", 2],
-  ["unknown locale", "nonsense-value", "auto", "en", "auto", "Language", 0],
+  ["legacy fr", "fr", "fr-FR", "fr-FR", "fr-FR", "Langue", true],
+  ["regional fr-CA", "fr-CA", "fr-FR", "fr-FR", "fr-FR", "Langue", true],
+  ["global de", "de", "de", "de", "de", "Sprache", true],
+  ["global ar", "ar", "ar", "ar", "ar", "اللغة", true],
+  ["unknown locale", "nonsense-value", "auto", "en", "auto", "Language", false],
 ];
 
-for (const [name, stored, selected, effective, rewritten, translatedLabel, expectedCatalogCalls] of cases) {
+for (const [name, stored, selected, effective, rewritten, translatedLabel, expectsCatalogActivity] of cases) {
   test(`${name} canonicalization`, async ({ browser }) => {
     const context = await browser.newContext({ locale: "en-US" });
     const page = await context.newPage();
@@ -75,7 +80,12 @@ for (const [name, stored, selected, effective, rewritten, translatedLabel, expec
     await expect(page.locator("html")).toHaveAttribute("lang", effective);
     await expect.poll(() => page.evaluate(() => localStorage.getItem("agroai_locale_v1"))).toBe(rewritten);
     await expect(page.getByText(translatedLabel, { exact: true }).first()).toBeVisible();
-    await expect.poll(() => state.catalogs).toBe(expectedCatalogCalls);
+    if (expectsCatalogActivity) {
+      await expect.poll(() => state.catalogs.length).toBeGreaterThanOrEqual(1);
+      expect(state.catalogs.every((item) => item.keyCount > 0 && item.keyCount <= REQUEST_CHUNK_SIZE)).toBeTruthy();
+    } else {
+      expect(state.catalogs).toHaveLength(0);
+    }
     expect(state.patches).toBe(0);
     await context.close();
   });
@@ -89,7 +99,8 @@ test("malformed dynamic placeholder catalog is rejected and not cached", async (
 
   await expect(languageSelector(page)).toHaveValue("sw");
   await expect(page.locator("html")).toHaveAttribute("lang", "sw");
-  await expect.poll(() => state.catalogs).toBe(1);
+  await expect.poll(() => state.catalogs.length).toBeGreaterThanOrEqual(1);
+  expect(state.catalogs.every((item) => item.keyCount > 0 && item.keyCount <= REQUEST_CHUNK_SIZE)).toBeTruthy();
   await expect(page.getByText("Language", { exact: true }).first()).toBeVisible();
   const cached = await page.evaluate(() => Object.keys(localStorage).some((key) => key.startsWith("agroai_ui_catalog_v4:sw:")));
   expect(cached).toBe(false);
