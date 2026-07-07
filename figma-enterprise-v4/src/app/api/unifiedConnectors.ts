@@ -22,7 +22,7 @@ export type UnifiedResource = {
 };
 
 export const unifiedConnectors = {
-  connect: (payload: { provider: UnifiedAgProvider; workspace_id?: string; api_key: string; api_url?: string }) =>
+  connect: (payload: { provider: UnifiedAgProvider; workspace_id?: string; api_key: string }) =>
     apiClient.post("/v1/connectors/unified/connect", payload),
   discovery: (connectionId: string) =>
     apiClient.get(`/v1/connectors/unified/${encodeURIComponent(connectionId)}/discovery`),
