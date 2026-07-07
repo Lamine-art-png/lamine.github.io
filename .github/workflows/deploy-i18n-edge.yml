@@ -6,6 +6,7 @@ on:
     paths:
       - "cloudflare/edge-gateway/src/i18n-*.ts"
       - "cloudflare/edge-gateway/src/edge-main-v3.ts"
+      - "cloudflare/edge-gateway/src/edge-main-v3.test.ts"
       - "shared/ui-*.json"
       - "shared/supported-locales.json"
       - ".github/workflows/deploy-i18n-edge.yml"
