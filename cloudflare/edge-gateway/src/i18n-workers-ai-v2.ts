@@ -1,7 +1,8 @@
-const MODEL = "@cf/zai-org/glm-4.7-flash";
+const MODEL = "@cf/meta/llama-3.2-1b-instruct";
 const PLACEHOLDER_RE = /\{[A-Za-z_][A-Za-z0-9_]*\}/g;
-const CHUNK_SIZE = 36;
-const MAX_PARALLEL = 4;
+const CHUNK_SIZE = 24;
+const MAX_PARALLEL = 2;
+const AI_TIMEOUT_MS = 18000;
 
 export type AiRunner = {
   run(model: string, input: unknown): Promise<unknown>;
@@ -32,6 +33,20 @@ function placeholderSignature(value: string): string[] {
   return (value.match(PLACEHOLDER_RE) || []).sort();
 }
 
+async function withTimeout<T>(promise: Promise<T>, label: string): Promise<T> {
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_resolve, reject) => {
+        timeout = setTimeout(() => reject(new Error(label)), AI_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
 export function validCatalog(source: Record<string, string>, candidate: unknown): candidate is Record<string, string> {
   if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) return false;
   const translated = candidate as Record<string, unknown>;
@@ -58,20 +73,21 @@ async function translateChunk(
     },
     { role: "user", content: JSON.stringify(source) },
   ];
-  let result = await ai.run(MODEL, { messages, temperature: 0, max_completion_tokens: 4096 });
+  let result = await withTimeout(ai.run(MODEL, { messages, temperature: 0, max_tokens: 1536, max_completion_tokens: 1536 }), "workers_ai_translation_timeout");
   let raw = stripFences(aiText(result));
   let parsed: unknown;
   try { parsed = JSON.parse(raw); } catch { parsed = null; }
   if (!validCatalog(source, parsed)) {
-    result = await ai.run(MODEL, {
+    result = await withTimeout(ai.run(MODEL, {
       messages: [
         ...messages,
         { role: "assistant", content: raw },
         { role: "user", content: "Repair the answer. Return JSON only with exactly the original keys, non-empty translated values, and unchanged placeholders." },
       ],
       temperature: 0,
-      max_completion_tokens: 4096,
-    });
+      max_tokens: 1536,
+      max_completion_tokens: 1536,
+    }), "workers_ai_translation_repair_timeout");
     raw = stripFences(aiText(result));
     try { parsed = JSON.parse(raw); } catch { parsed = null; }
   }
