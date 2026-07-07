@@ -26,6 +26,7 @@ from . import connector_connection_upload_secure as connection_upload_module  # 
 from . import connector_oauth_secure as oauth_module  # noqa: E402
 from . import connector_provider_sync as provider_sync_module  # noqa: E402
 from . import connector_stream_secure as secure_stream_module  # noqa: E402
+from . import connector_unified_v3_mount as unified_v3_module  # noqa: E402
 from . import runtime_diagnostics_api as runtime_diagnostics_module  # noqa: E402
 from . import connector_launch as launch_module  # noqa: E402
 from . import connector_launch_secure as launch_secure_module  # noqa: E402
@@ -71,6 +72,7 @@ def _remove_duplicate_product_checkout() -> None:
 connector_module.router.routes[0:0] = (
     list(oauth_module.router.routes)
     + list(provider_sync_module.router.routes)
+    + list(unified_v3_module.router.routes)
     + list(secure_stream_module.router.routes)
     + list(connection_upload_module.router.routes)
     + list(runtime_diagnostics_module.router.routes)
