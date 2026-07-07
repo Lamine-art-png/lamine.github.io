@@ -1,6 +1,6 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import edgeMain from "./edge-main-v3";
-import type { I18nFastpathEnv } from "./i18n-fastpath-handler";
+import { handleI18nFastpath, type I18nFastpathEnv } from "./i18n-fastpath-handler";
 
 class FakeAi {
   async run(_model: string, input: { messages?: Array<{ role: string; content: string }> }) {
@@ -34,8 +34,6 @@ function requestFor(locale = "so") {
   });
 }
 
-afterEach(() => vi.unstubAllGlobals());
-
 describe("edge-main-v3 i18n entrypoint", () => {
   it("preserves browser-readable headers on fastpath success", async () => {
     const response = await edgeMain.fetch(requestFor(), env());
@@ -56,13 +54,13 @@ describe("edge-main-v3 i18n entrypoint", () => {
   });
 
   it("uses the backend translator when Workers AI fails instead of returning a dead-end 503", async () => {
-    vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify({
+    const upstream = async () => new Response(JSON.stringify({
       status: "ok",
       locale: "so",
       catalog: { settings: "Dejinta", save: "Kaydi" },
-    }), { status: 200, headers: { "content-type": "application/json" } })));
+    }), { status: 200, headers: { "content-type": "application/json" } });
 
-    const response = await edgeMain.fetch(requestFor(), env(new FailingAi()));
+    const response = await handleI18nFastpath(requestFor(), env(new FailingAi()), upstream);
     const body = (await response.json()) as { status?: string; catalog?: Record<string, string> };
     expect(response.status).toBe(200);
     expect(response.headers.get("x-agroai-i18n-fallback")).toBe("upstream-backend");
