@@ -5,9 +5,11 @@ from app.api.v1 import billing, product_shell
 from app.api.v1.monetization_convergence import (
     AuthoritativeCheckoutRequest,
     _quota_rows,
+    _set_cardinality,
     checkout_authoritative,
 )
 from app.main import app
+from app.services.commercial_billing_lifecycle import install_commercial_billing_lifecycle
 
 
 def test_customer_monetization_routes_are_attached_to_live_app():
@@ -33,6 +35,23 @@ def test_quota_rows_expose_exact_limits_and_contextual_upgrade_targets():
     assert by_metric["active_connector"]["recommended_plan"] == "professional"
 
 
+def test_cardinality_reconciliation_replaces_event_totals_with_live_capacity():
+    snapshot = {
+        "metrics": {
+            "seat": {"used": 0, "reserved": 4, "limit": 10, "remaining": 6, "percent_used": 0.0},
+            "managed_entity": {"used": 0, "reserved": 0, "limit": None, "remaining": None, "percent_used": None},
+        }
+    }
+    _set_cardinality(snapshot, "seat", 8)
+    _set_cardinality(snapshot, "managed_entity", 42)
+    assert snapshot["metrics"]["seat"]["used"] == 8
+    assert snapshot["metrics"]["seat"]["reserved"] == 0
+    assert snapshot["metrics"]["seat"]["remaining"] == 2
+    assert snapshot["metrics"]["seat"]["percent_used"] == 80.0
+    assert snapshot["metrics"]["managed_entity"]["used"] == 42
+    assert snapshot["metrics"]["managed_entity"]["remaining"] is None
+
+
 def test_authoritative_checkout_bridge_delegates_to_canonical_billing_endpoint(monkeypatch):
     org = SimpleNamespace(id="org_1", plan="free")
     membership = SimpleNamespace(role="owner")
@@ -54,7 +73,6 @@ def test_authoritative_checkout_bridge_delegates_to_canonical_billing_endpoint(m
         ctx=ctx,
         db=db,
     )
-
     assert captured == {
         "organization_id": "org_1",
         "offer": "professional_annual",
@@ -72,8 +90,13 @@ def test_api_assembly_installs_authoritative_billing_lifecycle_explicitly():
     assert billing._apply_billing_event.__name__ == "apply_authoritative_billing_event"
 
 
+def test_billing_installer_preserves_endpoint_implementations():
+    checkout_impl = billing.create_checkout_session.__code__
+    status_impl = billing.billing_status.__code__
+    install_commercial_billing_lifecycle()
+    assert billing.create_checkout_session.__code__ is checkout_impl
+    assert billing.billing_status.__code__ is status_impl
+
+
 def test_legacy_product_shell_checkout_is_not_the_portal_authority():
-    # The route remains for compatibility, but the new portal calls the dedicated
-    # authoritative bridge. Keeping this assertion makes future accidental reuse
-    # visible in review.
     assert callable(product_shell.billing_checkout)
