@@ -2,7 +2,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.models.operational_records import ConnectorConnection
-from app.models.saas import Organization, User
+from app.models.saas import EntitlementOverride, Organization, User
 from app.services import connector_commercial_guard  # noqa: F401
 
 
@@ -72,3 +72,22 @@ def test_professional_live_connector_capacity_is_enforced(db):
     assert exc.value.detail["metric"] == "active_connector"
     assert exc.value.detail["limit"] == 3
     db.rollback()
+
+
+def test_bespoke_enterprise_integration_entitlement_subsumes_custom_api(db):
+    org = _org(db, suffix="enterprise-custom-api", plan="enterprise", subscription_status="active")
+    db.add(
+        EntitlementOverride(
+            organization_id=org.id,
+            feature_key="connectors.custom_integration",
+            value_json={"value": "enabled"},
+            source="test_contract_fixture",
+            reason="Bespoke integration scope includes standard Custom API access.",
+        )
+    )
+    db.commit()
+
+    row = _connection(org, "custom_api")
+    db.add(row)
+    db.commit()
+    assert row.id is not None
