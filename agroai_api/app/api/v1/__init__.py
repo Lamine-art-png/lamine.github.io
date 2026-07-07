@@ -10,6 +10,11 @@ from . import recovery_v2 as recovery_module  # noqa: E402
 
 auth_module.router.include_router(recovery_module.router)
 
+from . import billing as billing_module  # noqa: E402,F401
+from app.services.commercial_billing_lifecycle import install_commercial_billing_lifecycle  # noqa: E402
+
+install_commercial_billing_lifecycle()
+
 from . import brain as brain_module  # noqa: E402
 from . import brain_safety as brain_safety_module  # noqa: E402
 
@@ -27,6 +32,8 @@ from . import connector_launch as launch_module  # noqa: E402
 from . import connector_launch_secure as launch_secure_module  # noqa: E402
 from . import connector_oauth_completion as oauth_completion_module  # noqa: E402
 from . import connectors as connector_compat_module  # noqa: E402
+from . import product_shell as product_shell_module  # noqa: E402
+from . import monetization_convergence as monetization_module  # noqa: E402
 
 
 _HIDDEN_COMPAT_OPERATIONS = {
@@ -50,6 +57,18 @@ def _hide_compat_schema_shadows() -> None:
             route.include_in_schema = False
 
 
+def _remove_duplicate_product_checkout() -> None:
+    """Remove the old direct-Stripe compatibility route before canonical aliasing."""
+    product_shell_module.router.routes[:] = [
+        route
+        for route in product_shell_module.router.routes
+        if not (
+            getattr(route, "path", "") == "/billing/checkout"
+            and "POST" in set(getattr(route, "methods", None) or ())
+        )
+    ]
+
+
 connector_module.router.routes[0:0] = (
     list(connector_unified_v3_module.router.routes)
     + list(oauth_module.router.routes)
@@ -62,4 +81,8 @@ launch_module.router.routes[0:0] = (
     list(launch_secure_module.router.routes)
     + list(oauth_completion_module.router.routes)
 )
+
+_remove_duplicate_product_checkout()
+product_shell_module.router.include_router(monetization_module.router)
+
 _hide_compat_schema_shadows()

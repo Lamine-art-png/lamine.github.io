@@ -10,20 +10,9 @@ function PortalHome() {
   const params = new URLSearchParams(window.location.search || "");
   const connectorReturn = Boolean(params.get("connector") || params.get("provider") || params.get("connection_id"));
 
-  if (connectorReturn) {
-    return <Navigate to={`/integrations${window.location.search}`} replace />;
-  }
+  if (connectorReturn) return <Navigate to={`/integrations${window.location.search}`} replace />;
 
-  return (
-    <div className="min-h-full px-7 py-7" style={{ background: "#F6F4EE" }}>
-      <section className="rounded-2xl p-7 shadow-[0_18px_60px_rgba(16,35,27,0.08)]" style={{ background: "#FFFDF8", border: "1px solid #D6DDD0" }}>
-        <div className="text-[12px] font-semibold uppercase tracking-[0.18em]" style={{ color: "#2D6A4F" }}>{t("home.eyebrow")}</div>
-        <h1 className="mt-3 text-[32px] font-semibold tracking-tight" style={{ color: "#10231B" }}>{t("home.title")}</h1>
-        <p className="mt-3 max-w-3xl text-[14px] leading-7" style={{ color: "#65736A" }}>{t("home.body")}</p>
-        <div className="mt-6 flex flex-wrap gap-3"><a href="/intelligence" className="rounded-lg px-4 py-2 text-[13px] font-semibold text-white" style={{ background: "#0D2B1E" }}>{t("home.openAsk")}</a><a href="/evidence" className="rounded-lg px-4 py-2 text-[13px] font-semibold" style={{ background: "#F6F4EE", color: "#10231B", border: "1px solid #D6DDD0" }}>{t("home.reviewEvidence")}</a><a href="/readiness" className="rounded-lg px-4 py-2 text-[13px] font-semibold" style={{ background: "#F6F4EE", color: "#10231B", border: "1px solid #D6DDD0" }}>{t("home.checkReadiness")}</a></div>
-      </section>
-    </div>
-  );
+  return <div className="min-h-full px-7 py-7" style={{ background: "#F6F4EE" }}><section className="rounded-2xl p-7 shadow-[0_18px_60px_rgba(16,35,27,0.08)]" style={{ background: "#FFFDF8", border: "1px solid #D6DDD0" }}><div className="text-[12px] font-semibold uppercase tracking-[0.18em]" style={{ color: "#2D6A4F" }}>{t("home.eyebrow")}</div><h1 className="mt-3 text-[32px] font-semibold tracking-tight" style={{ color: "#10231B" }}>{t("home.title")}</h1><p className="mt-3 max-w-3xl text-[14px] leading-7" style={{ color: "#65736A" }}>{t("home.body")}</p><div className="mt-6 flex flex-wrap gap-3"><a href="/intelligence" className="rounded-lg px-4 py-2 text-[13px] font-semibold text-white" style={{ background: "#0D2B1E" }}>{t("home.openAsk")}</a><a href="/evidence" className="rounded-lg px-4 py-2 text-[13px] font-semibold" style={{ background: "#F6F4EE", color: "#10231B", border: "1px solid #D6DDD0" }}>{t("home.reviewEvidence")}</a><a href="/readiness" className="rounded-lg px-4 py-2 text-[13px] font-semibold" style={{ background: "#F6F4EE", color: "#10231B", border: "1px solid #D6DDD0" }}>{t("home.checkReadiness")}</a></div></section></div>;
 }
 
 function PortalRouteError() {
