@@ -5,6 +5,9 @@ import socket
 import uuid
 
 from app.db.base import SessionLocal
+from app.models.operational_records import IngestionJob
+from app.services.ag_connector_runtime import AG_PROVIDERS
+from app.services.ag_provider_worker import process_ag_provider_job
 from app.services.durable_ingestion_staging import TASK_TYPE as INGESTION_TASK_TYPE
 from app.services.ingestion_job_runner import process_ingestion_job
 from app.services.provider_sync_jobs import TASK_TYPE as PROVIDER_SYNC_TASK_TYPE
@@ -32,8 +35,11 @@ def process_connector_task(
     db = SessionLocal()
     try:
         if task_type == PROVIDER_SYNC_TASK_TYPE:
+            job = db.get(IngestionJob, job_id)
+            provider = str((job.input_json or {}).get("provider") or "") if job is not None else ""
+            processor = process_ag_provider_job if provider in AG_PROVIDERS else process_provider_sync_job
             return asyncio.run(
-                process_provider_sync_job(
+                processor(
                     db,
                     job_id=job_id,
                     tenant_id=tenant_id,
