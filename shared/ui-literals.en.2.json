@@ -80,5 +80,11 @@
   "literal.545c02357695a6ff": "Audience",
   "literal.54985bdc23ed2c9f": "Custom integrations",
   "literal.55b2214825b19125": "Choose a decision card to run the current workspace.",
-  "literal.55ef57019140a1af": "Latest signal"
+  "literal.55ef57019140a1af": "Latest signal",
+  "literal.6db7d696d4e5ffa5": "Upgrade capacity",
+  "literal.7ea27c63aff1a3a8": "Manage billing",
+  "literal.8e955237343c9c19": "Commercially controlled agent runs for the active workspace.",
+  "literal.8fe77e89aaf95b8e": "Usage is enforced on the backend and resets with the commercial period.",
+  "literal.a0e63d7c7125d29a": "Not now",
+  "literal.a54b64a43edf6559": "Close upgrade message"
 }
