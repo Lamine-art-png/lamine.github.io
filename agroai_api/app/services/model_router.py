@@ -8,6 +8,7 @@ from typing import Any
 
 from app.core.config import settings
 from app.services.ai_gateway import AIGateway, AIGatewayResult
+from app.services.hosted_ui_translation import run_hosted_ui_translation
 from app.services.live_intelligence import LiveIntelligence
 from app.services.local_ui_translation import run_local_ui_translation
 
@@ -107,7 +108,7 @@ class ModelRouter:
     async def run(self, *, task: str, messages: list[dict[str, str]], temperature: float = 0.2, response_format: dict[str, Any] | None = None, max_tokens: int | None = None, timeout_seconds: int | None = None, max_model_attempts: int | None = None) -> tuple[AIGatewayResult, ModelSelection]:
         selection = self.select(task)
         if task == "ui_translation" and response_format is not None and self.mode() == "ollama":
-            result = await run_local_ui_translation(
+            local_result = await run_local_ui_translation(
                 base_url=self.gateway.base_url,
                 model=selection.model or "",
                 messages=messages,
@@ -115,7 +116,28 @@ class ModelRouter:
                 max_tokens=max_tokens,
                 timeout_seconds=timeout_seconds,
             )
-            return result, selection
+            if local_result.status == "ok":
+                return local_result, selection
+
+            hosted_result = await run_hosted_ui_translation(
+                messages=messages,
+                temperature=temperature,
+                max_tokens=max_tokens,
+                timeout_seconds=timeout_seconds,
+            )
+            if hosted_result.status == "ok":
+                hosted_selection = ModelSelection(task=task, profile="fast", model=hosted_result.model)
+                return hosted_result, hosted_selection
+
+            local_error = local_result.error or "local UI translation unavailable"
+            hosted_error = hosted_result.error or "hosted UI translation unavailable"
+            return AIGatewayResult(
+                status="unavailable",
+                content="",
+                provider="ollama+openrouter",
+                model=selection.model,
+                error=f"Local translation failed: {local_error} | Hosted fallback failed: {hosted_error}",
+            ), selection
         if response_format is None:
             question = _extract_question(messages)
             preferred_language = _extract_preferred_language(messages)
