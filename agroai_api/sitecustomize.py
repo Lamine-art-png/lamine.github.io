@@ -1,0 +1,3 @@
+from app.services.ui_translation_patch import install_ui_translation_patch
+
+install_ui_translation_patch()
