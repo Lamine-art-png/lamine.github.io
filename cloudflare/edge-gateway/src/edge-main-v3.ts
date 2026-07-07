@@ -2,6 +2,7 @@ import baseHandler, { originAllowed, requestId, type ConnectorTaskEnvelope } fro
 import { handleI18nFastpath, type I18nFastpathEnv } from "./i18n-fastpath-handler";
 
 const translationPaths = new Set(["/v1/i18n/catalog", "/v1/i18n/internal/canary"]);
+const I18N_EDGE_RELEASE = "public-fallback-v1";
 
 async function baseFetch<Host, Cf>(request: Request<Host, Cf>, env: I18nFastpathEnv): Promise<Response> {
   const fetcher = baseHandler.fetch as unknown as (request: Request<Host, Cf>, env: I18nFastpathEnv) => Promise<Response>;
@@ -20,6 +21,7 @@ function mergeFastpathHeaders(response: Response, request: Request, env: I18nFas
     headers.set("vary", "Origin");
   }
   headers.set("x-agroai-edge", "cloudflare-edge-v1");
+  headers.set("x-agroai-i18n-release", I18N_EDGE_RELEASE);
   headers.set("x-request-id", requestId(request));
   headers.set("x-content-type-options", "nosniff");
   headers.set("referrer-policy", "strict-origin-when-cross-origin");
