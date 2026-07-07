@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { ensureLocaleCatalog, hasCoreLocaleCatalog } from "../dynamicLocaleCatalog";
+import {
+  ensureLocaleCatalog,
+  hasCoreLocaleCatalog,
+  hasCriticalLocaleCatalog,
+  primeLocaleCatalogFromCache,
+} from "../dynamicLocaleCatalog";
 import {
   applyLocale,
   canonicalizeSelectedLocale,
@@ -11,6 +16,12 @@ import {
 } from "../i18n";
 import { FULL_UI_TRANSLATION_DIAGNOSTIC, purgeLegacyDynamicCatalogCache } from "../i18nReleaseCompatibility";
 import { getLocaleRuntimeSnapshot, notifyLocaleRuntime, subscribeLocaleRuntime } from "../localeRuntimeStore";
+
+function primeKnownLocale(locale: string) {
+  primeLocaleCatalogFromCache(locale, "critical");
+  primeLocaleCatalogFromCache(locale, "core");
+  primeLocaleCatalogFromCache(locale, "full");
+}
 
 export function useLocale() {
   const [selectedLocale, setSelectedLocaleState] = useState(getStoredLocale());
@@ -26,7 +37,9 @@ export function useLocale() {
 
   useEffect(() => {
     const listener = ((event: CustomEvent) => {
-      setSelectedLocaleState(event.detail?.selectedLocale || event.detail?.locale || getStoredLocale());
+      const nextLocale = event.detail?.selectedLocale || event.detail?.locale || getStoredLocale();
+      primeKnownLocale(nextLocale);
+      setSelectedLocaleState(nextLocale);
     }) as EventListener;
     window.addEventListener("agroai:locale-change", listener);
     return () => window.removeEventListener("agroai:locale-change", listener);
@@ -47,25 +60,30 @@ export function useLocale() {
       }
 
       purgeLegacyDynamicCatalogCache(effectiveLocale);
-      setCatalogLoading(true);
+      primeKnownLocale(selectedLocale);
+      setCatalogLoading(!hasCriticalLocaleCatalog(selectedLocale));
       try {
-        if (!hasCoreLocaleCatalog(selectedLocale)) {
-          await ensureLocaleCatalog(selectedLocale, "core");
+        if (!hasCriticalLocaleCatalog(selectedLocale)) {
+          await ensureLocaleCatalog(selectedLocale, "critical");
         }
         if (cancelled) return;
         notifyLocaleRuntime();
         setCatalogLoading(false);
 
-        void ensureLocaleCatalog(selectedLocale, "full")
-          .then(() => {
-            if (!cancelled) notifyLocaleRuntime();
-          })
-          .catch((cause) => {
-            console.warn(FULL_UI_TRANSLATION_DIAGNOSTIC, {
-              locale: selectedLocale,
-              error: cause instanceof Error ? cause.message : String(cause),
-            });
+        void (async () => {
+          if (!hasCoreLocaleCatalog(selectedLocale)) {
+            await ensureLocaleCatalog(selectedLocale, "core");
+          }
+          if (cancelled) return;
+          notifyLocaleRuntime();
+          await ensureLocaleCatalog(selectedLocale, "full");
+          if (!cancelled) notifyLocaleRuntime();
+        })().catch((cause) => {
+          console.warn(FULL_UI_TRANSLATION_DIAGNOSTIC, {
+            locale: selectedLocale,
+            error: cause instanceof Error ? cause.message : String(cause),
           });
+        });
       } catch (cause) {
         if (!cancelled) {
           setCatalogError(cause instanceof Error ? cause.message : "UI translation unavailable");
@@ -81,14 +99,17 @@ export function useLocale() {
   }, [selectedLocale, effectiveLocale]);
 
   const setLocale = (nextLocale: string) => {
-    const canonical = setStoredLocale(nextLocale);
-    setSelectedLocaleState(canonical);
+    const canonical = canonicalizeSelectedLocale(nextLocale);
+    primeKnownLocale(canonical);
+    const activated = setStoredLocale(canonical);
+    setSelectedLocaleState(activated);
     notifyLocaleRuntime();
-    return canonical;
+    return activated;
   };
 
   const activateLocale = (nextLocale: string) => {
     const canonical = canonicalizeSelectedLocale(nextLocale);
+    primeKnownLocale(canonical);
     const activated = setStoredLocale(canonical);
     setSelectedLocaleState(activated);
     setCatalogError(null);
