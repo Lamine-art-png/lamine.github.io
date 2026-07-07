@@ -16,6 +16,7 @@ from . import brain_safety as brain_safety_module  # noqa: E402
 brain_module.router.include_router(brain_safety_module.router)
 
 from . import ai as ai_module  # noqa: E402
+from . import ag_connector_lifecycle as ag_connector_lifecycle_module  # noqa: E402
 from . import connector_hub as connector_module  # noqa: E402
 from . import connector_connection_upload_secure as connection_upload_module  # noqa: E402
 from . import connector_oauth_secure as oauth_module  # noqa: E402
@@ -50,7 +51,8 @@ def _hide_compat_schema_shadows() -> None:
 
 
 connector_module.router.routes[0:0] = (
-    list(oauth_module.router.routes)
+    list(ag_connector_lifecycle_module.router.routes)
+    + list(oauth_module.router.routes)
     + list(provider_sync_module.router.routes)
     + list(secure_stream_module.router.routes)
     + list(connection_upload_module.router.routes)
