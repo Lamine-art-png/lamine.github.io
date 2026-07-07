@@ -1,5 +1,5 @@
 name = "agroai-api-edge"
-main = "cloudflare/edge-gateway/src/edge-main-v2.ts"
+main = "cloudflare/edge-gateway/src/edge-main-v3.ts"
 compatibility_date = "2026-07-05"
 workers_dev = false
 
