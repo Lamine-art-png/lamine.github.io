@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import edgeMain from "./edge-main-v3";
 import { handleI18nFastpath, type I18nFastpathEnv } from "./i18n-fastpath-handler";
 
@@ -34,6 +34,8 @@ function requestFor(locale = "so") {
   });
 }
 
+afterEach(() => vi.unstubAllGlobals());
+
 describe("edge-main-v3 i18n entrypoint", () => {
   it("preserves browser-readable headers on fastpath success", async () => {
     const response = await edgeMain.fetch(requestFor(), env());
@@ -53,7 +55,8 @@ describe("edge-main-v3 i18n entrypoint", () => {
     expect(response.headers.get("access-control-allow-origin")).toBe("https://app.agroai-pilot.com");
   });
 
-  it("uses the backend translator when Workers AI fails instead of returning a dead-end 503", async () => {
+  it("uses the backend translator only after both edge translation paths fail", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("simulated_public_translation_failure"); }));
     const upstream = async () => new Response(JSON.stringify({
       status: "ok",
       locale: "so",
