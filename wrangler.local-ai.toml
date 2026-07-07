@@ -1,0 +1,14 @@
+name = "agroai-local-ai-origin"
+main = "cloudflare/ollama-compat/src/index.js"
+compatibility_date = "2026-07-07"
+workers_dev = false
+
+[ai]
+binding = "AI"
+
+[vars]
+MODEL = "@cf/meta/llama-3.1-8b-instruct-fast"
+
+[[routes]]
+pattern = "local-ai.agroai-pilot.com/*"
+zone_name = "agroai-pilot.com"
