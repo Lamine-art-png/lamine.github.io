@@ -65,8 +65,6 @@ class ModelRouter:
         for model in [*configured,*DEFAULT_MODEL_FALLBACKS]:
             if model and model not in self.fallback_models:
                 self.fallback_models.append(model)
-        # AIGateway owns the actual retry loop. Keep its candidate set aligned
-        # with the task router's configured + safe default fallbacks.
         self.gateway.fallback_models = list(self.fallback_models)
 
     def mode(self) -> str:
@@ -108,6 +106,20 @@ class ModelRouter:
     async def run(self, *, task: str, messages: list[dict[str, str]], temperature: float = 0.2, response_format: dict[str, Any] | None = None, max_tokens: int | None = None, timeout_seconds: int | None = None, max_model_attempts: int | None = None) -> tuple[AIGatewayResult, ModelSelection]:
         selection = self.select(task)
         if task == "ui_translation" and response_format is not None and self.mode() == "ollama":
+            hosted_configured = bool((os.getenv("OPENROUTER_API_KEY") or settings.AI_API_KEY or "").strip())
+            hosted_result: AIGatewayResult | None = None
+
+            if hosted_configured:
+                hosted_result = await run_hosted_ui_translation(
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout_seconds=timeout_seconds,
+                )
+                if hosted_result.status == "ok":
+                    hosted_selection = ModelSelection(task=task, profile="fast", model=hosted_result.model)
+                    return hosted_result, hosted_selection
+
             local_result = await run_local_ui_translation(
                 base_url=self.gateway.base_url,
                 model=selection.model or "",
@@ -119,24 +131,25 @@ class ModelRouter:
             if local_result.status == "ok":
                 return local_result, selection
 
-            hosted_result = await run_hosted_ui_translation(
-                messages=messages,
-                temperature=temperature,
-                max_tokens=max_tokens,
-                timeout_seconds=timeout_seconds,
-            )
-            if hosted_result.status == "ok":
-                hosted_selection = ModelSelection(task=task, profile="fast", model=hosted_result.model)
-                return hosted_result, hosted_selection
+            if hosted_result is None:
+                hosted_result = await run_hosted_ui_translation(
+                    messages=messages,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
+                    timeout_seconds=timeout_seconds,
+                )
+                if hosted_result.status == "ok":
+                    hosted_selection = ModelSelection(task=task, profile="fast", model=hosted_result.model)
+                    return hosted_result, hosted_selection
 
             local_error = local_result.error or "local UI translation unavailable"
             hosted_error = hosted_result.error or "hosted UI translation unavailable"
             return AIGatewayResult(
                 status="unavailable",
                 content="",
-                provider="ollama+openrouter",
+                provider="openrouter+ollama" if hosted_configured else "ollama+openrouter",
                 model=selection.model,
-                error=f"Local translation failed: {local_error} | Hosted fallback failed: {hosted_error}",
+                error=f"Hosted translation failed: {hosted_error} | Local fallback failed: {local_error}",
             ), selection
         if response_format is None:
             question = _extract_question(messages)
