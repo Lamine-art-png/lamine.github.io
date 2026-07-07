@@ -163,3 +163,69 @@ test("catalog failure never traps the language selector", async ({ page }) => {
   await expect(selector).toHaveValue("en");
   await expect(selector).toBeEnabled();
 });
+
+test("live production exposes ready non-French core-first runtime", async ({ request }) => {
+  test.setTimeout(120_000);
+  const liveOrigin = "https://app.agroai-pilot.com";
+
+  const [edgeResponse, healthResponse, readinessResponse, languagesResponse, aiResponse] = await Promise.all([
+    request.get(`${liveOrigin}/v1/edge-health`),
+    request.get(`${liveOrigin}/v1/health`),
+    request.get(`${liveOrigin}/v1/readiness`),
+    request.get(`${liveOrigin}/v1/i18n/languages`),
+    request.get(`${liveOrigin}/v1/runtime/ai-status`),
+  ]);
+  for (const response of [edgeResponse, healthResponse, readinessResponse, languagesResponse, aiResponse]) {
+    expect(response.ok()).toBeTruthy();
+  }
+
+  const edge = await edgeResponse.json();
+  const health = await healthResponse.json();
+  const readiness = await readinessResponse.json();
+  const languages = await languagesResponse.json();
+  const ai = await aiResponse.json();
+  expect(edge.status).toBe("ok");
+  expect(health.status).toBe("ok");
+  expect(readiness.status).toBe("ready");
+  expect(readiness.production?.ready).toBe(true);
+  expect(readiness.production?.blockers || []).toHaveLength(0);
+  expect(languages.status).toBe("ok");
+  expect(languages.count).toBeGreaterThanOrEqual(61);
+  const codes = new Set(languages.languages.map((item) => item.code));
+  for (const code of ["de", "es", "ar", "ja", "sw"]) expect(codes.has(code)).toBeTruthy();
+  expect(ai.status).toBe("ok");
+  expect(ai.configured).toBe(true);
+  expect(ai.mode).not.toBe("offline");
+  expect(ai.missing_env || []).toHaveLength(0);
+
+  const indexResponse = await request.get(`${liveOrigin}/`);
+  expect(indexResponse.ok()).toBeTruthy();
+  const indexHtml = await indexResponse.text();
+  const queue = [...indexHtml.matchAll(/\/assets\/[A-Za-z0-9._/-]+\.js/g)].map((match) => match[0].slice(1));
+  const seen = new Set();
+  const chunks = [];
+  for (let pass = 0; pass < 4; pass += 1) {
+    const batch = [...new Set(queue)].filter((asset) => !seen.has(asset));
+    if (!batch.length) break;
+    for (const asset of batch) {
+      seen.add(asset);
+      const response = await request.get(`${liveOrigin}/${asset}`);
+      expect(response.ok()).toBeTruthy();
+      const text = await response.text();
+      chunks.push(text);
+      for (const match of text.matchAll(/assets\/[A-Za-z0-9._/-]+\.js/g)) queue.push(match[0]);
+      for (const match of text.matchAll(/\.\/[A-Za-z0-9._/-]+\.js/g)) queue.push(`assets/${match[0].slice(2)}`);
+    }
+  }
+  const allJs = chunks.join("\n");
+  for (const marker of [
+    "agroai_ui_catalog_v4:",
+    "/v1/i18n/catalog",
+    "Full UI translation unavailable",
+    "Deutsch",
+    "Español",
+    "العربية",
+  ]) {
+    expect(allJs).toContain(marker);
+  }
+});
