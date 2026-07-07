@@ -1,0 +1,42 @@
+name: Production I18n Matrix Verifier Contract CI
+
+on:
+  pull_request:
+    paths:
+      - 'agroai_api/scripts/verify_production_i18n_matrix.py'
+      - 'agroai_api/scripts/verify_production_i18n_matrix_v2.py'
+      - '.github/workflows/prove-production-i18n-matrix.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'agroai_api/scripts/verify_production_i18n_matrix.py'
+      - 'agroai_api/scripts/verify_production_i18n_matrix_v2.py'
+      - '.github/workflows/prove-production-i18n-matrix.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  verifier-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Compile verifier
+        run: python -m py_compile agroai_api/scripts/verify_production_i18n_matrix.py agroai_api/scripts/verify_production_i18n_matrix_v2.py
+      - name: Enforce resilient transport contract
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          old = Path('agroai_api/scripts/verify_production_i18n_matrix.py').read_text()
+          new = Path('agroai_api/scripts/verify_production_i18n_matrix_v2.py').read_text()
+          assert 'from verify_production_i18n_matrix_v2 import run' in old
+          assert 'AGRO-AI-Production-I18n-Matrix/2.0' in new
+          assert 'WORKERS = int(os.environ.get("I18N_MATRIX_WORKERS", "3"))' in new
+          assert 'ATTEMPTS = int(os.environ.get("I18N_MATRIX_ATTEMPTS", "4"))' in new
+          assert 'fatal-error.txt' in new
+          assert 'retry_get' in new
+          print('production_i18n_matrix_verifier_contract=ok')
+          PY
