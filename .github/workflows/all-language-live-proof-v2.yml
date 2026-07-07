@@ -34,7 +34,14 @@ jobs:
           registry_error = None
 
           try:
-              with urllib.request.urlopen(f"{base}/v1/i18n/languages", timeout=20) as response:
+              registry_request = urllib.request.Request(
+                  f"{base}/v1/i18n/languages",
+                  headers={
+                      "Accept": "application/json",
+                      "User-Agent": "AGRO-AI-59-Language-Proof-V2/1.0",
+                  },
+              )
+              with urllib.request.urlopen(registry_request, timeout=20) as response:
                   registry = json.load(response)
               languages = registry.get("languages") or []
               locales = [item["code"] for item in languages if item.get("code") not in {"auto", "en"}]
