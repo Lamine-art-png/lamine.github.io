@@ -33,7 +33,8 @@ from . import connector_oauth_completion as oauth_completion_module  # noqa: E40
 from . import connectors as connector_compat_module  # noqa: E402
 from . import product_shell as product_shell_module  # noqa: E402
 from . import monetization_convergence as monetization_module  # noqa: E402
-
+from app.services.commercial_packaging_v2 import apply_catalog_packaging, install_commercial_packaging_v2  # noqa: E402
+from app.services.commercial_upload_metering_v2 import install_commercial_upload_metering  # noqa: E402
 
 _HIDDEN_COMPAT_OPERATIONS = {
     ("POST", "/connectors/oauth/start"),
@@ -57,7 +58,6 @@ def _hide_compat_schema_shadows() -> None:
 
 
 def _remove_duplicate_product_checkout() -> None:
-    """Remove the old direct-Stripe compatibility route before canonical aliasing."""
     product_shell_module.router.routes[:] = [
         route
         for route in product_shell_module.router.routes
@@ -79,6 +79,10 @@ launch_module.router.routes[0:0] = (
     list(launch_secure_module.router.routes)
     + list(oauth_completion_module.router.routes)
 )
+
+install_commercial_packaging_v2()
+apply_catalog_packaging(connector_compat_module.CATALOG)
+install_commercial_upload_metering((connector_module.router, connector_compat_module.router))
 
 _remove_duplicate_product_checkout()
 product_shell_module.router.include_router(monetization_module.router)

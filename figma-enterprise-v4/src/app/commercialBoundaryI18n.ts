@@ -1,7 +1,17 @@
 import sharedCommercialBoundaryEn from "../../../shared/ui-commercial-boundary.en.json";
 import { TRANSLATIONS } from "./i18n";
 
-export const COMMERCIAL_BOUNDARY_EN: Record<string, string> = { ...sharedCommercialBoundaryEn };
+export const COMMERCIAL_BOUNDARY_EN: Record<string, string> = {
+  ...sharedCommercialBoundaryEn,
+  "commercialBoundary.metric.evidenceUploads": "Evidence/file imports",
+  "commercialBoundary.plan.free.bullet3": "15 evidence/file imports/month",
+  "commercialBoundary.plan.professional.bullet2": "500 evidence/file imports/month",
+  "commercialBoundary.plan.professional.bullet3": "Reports, Weather, OpenET and live connectors",
+  "commercialBoundary.plan.team.bullet2": "2,500 evidence/file imports/month",
+  "commercialBoundary.plan.network.bullet2": "10,000 evidence/file imports/month",
+  "commercialBoundary.plan.network.bullet3": "Network rollups and standard Custom API access",
+  "commercialBoundary.plan.enterprise.bullet2": "Bespoke integrations and governance",
+};
 
 export const COMMERCIAL_BOUNDARY_FR: Record<string, string> = {
   "commercialBoundary.accessEyebrow": "Accès AGRO-AI",
@@ -52,7 +62,7 @@ export const COMMERCIAL_BOUNDARY_FR: Record<string, string> = {
   "commercialBoundary.metric.workspaces": "Espaces de travail",
   "commercialBoundary.metric.seats": "Postes utilisateurs",
   "commercialBoundary.metric.intelligenceActions": "Actions AGRO-AI",
-  "commercialBoundary.metric.evidenceUploads": "Imports de preuves",
+  "commercialBoundary.metric.evidenceUploads": "Imports de preuves/fichiers",
   "commercialBoundary.metric.activeConnectors": "Connecteurs actifs",
   "commercialBoundary.metric.reportGenerations": "Générations de rapports",
   "commercialBoundary.metric.pdfExports": "Exports PDF",
@@ -66,18 +76,18 @@ export const COMMERCIAL_BOUNDARY_FR: Record<string, string> = {
   "commercialBoundary.plan.enterprise": "Entreprise",
   "commercialBoundary.plan.free.bullet1": "1 espace de travail",
   "commercialBoundary.plan.free.bullet2": "25 actions AGRO-AI/mois",
-  "commercialBoundary.plan.free.bullet3": "10 imports de preuves/mois",
+  "commercialBoundary.plan.free.bullet3": "15 imports de preuves/fichiers par mois",
   "commercialBoundary.plan.professional.bullet1": "5 espaces de travail et 3 postes",
-  "commercialBoundary.plan.professional.bullet2": "500 actions AGRO-AI/mois",
-  "commercialBoundary.plan.professional.bullet3": "Rapports, PDF et connecteurs en direct",
+  "commercialBoundary.plan.professional.bullet2": "500 imports de preuves/fichiers par mois",
+  "commercialBoundary.plan.professional.bullet3": "Rapports, météo, OpenET et connecteurs en direct",
   "commercialBoundary.plan.team.bullet1": "25 espaces de travail et 10 postes",
-  "commercialBoundary.plan.team.bullet2": "2 500 actions AGRO-AI/mois",
+  "commercialBoundary.plan.team.bullet2": "2 500 imports de preuves/fichiers par mois",
   "commercialBoundary.plan.team.bullet3": "Preuves partagées, rôles et approbations",
   "commercialBoundary.plan.network.bullet1": "50 espaces de travail et 25 postes",
-  "commercialBoundary.plan.network.bullet2": "10 000 actions AGRO-AI/mois",
-  "commercialBoundary.plan.network.bullet3": "Consolidation multi-espaces et rapports réseau",
+  "commercialBoundary.plan.network.bullet2": "10 000 imports de preuves/fichiers par mois",
+  "commercialBoundary.plan.network.bullet3": "Consolidations réseau et accès API personnalisé standard",
   "commercialBoundary.plan.enterprise.bullet1": "Capacité configurée par contrat",
-  "commercialBoundary.plan.enterprise.bullet2": "Intégrations personnalisées et gouvernance",
+  "commercialBoundary.plan.enterprise.bullet2": "Intégrations sur mesure et gouvernance",
   "commercialBoundary.plan.enterprise.bullet3": "Déploiement dédié et revue de sécurité",
 };
 
