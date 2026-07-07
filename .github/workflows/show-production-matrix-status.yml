@@ -11,4 +11,4 @@ jobs:
     steps:
       - run: |
           curl -fsS 'https://api.github.com/repos/Lamine-art-png/lamine.github.io/actions/workflows/production-i18n-matrix.yml/runs?event=push&branch=main&per_page=50' -o runs.json
-          jq '[.workflow_runs[] | select(.head_sha == "dad858b0a1abd447f7644ccadd6451a1c9e4e172") | {id,status,conclusion,head_sha,created_at,updated_at,html_url}] | .[0] // null' runs.json
+          jq '[.workflow_runs[] | select(.head_sha == "31855d20eb9e1fb100bf83298f68256dc454eae4") | {id,status,conclusion,head_sha,created_at,updated_at,html_url}] | .[0] // null' runs.json
