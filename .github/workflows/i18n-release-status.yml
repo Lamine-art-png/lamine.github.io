@@ -1,0 +1,29 @@
+name: I18n Release Status
+
+on:
+  workflow_run:
+    workflows: ["I18n Edge Release"]
+    types: [completed]
+
+permissions:
+  contents: read
+  statuses: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish production locale status
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const run = context.payload.workflow_run;
+            const ok = run.conclusion === 'success';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: run.head_sha,
+              state: ok ? 'success' : 'failure',
+              context: 'production/i18n-59-live',
+              description: ok ? '59/59 live locale proof passed' : 'Live locale proof failed'
+            });
