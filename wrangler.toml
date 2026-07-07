@@ -15,6 +15,12 @@ required = [ "QUEUE_PUBLISH_TOKEN", "QUEUE_CONSUMER_TOKEN" ]
 pattern = "app.agroai-pilot.com/v1/*"
 zone_name = "agroai-pilot.com"
 
+# Preserve the established API hostname used by Stripe live webhooks and older
+# API clients while routing it through the same validated production edge.
+[[routes]]
+pattern = "api.agroai-pilot.com/v1/*"
+zone_name = "agroai-pilot.com"
+
 [[queues.producers]]
 binding = "CONNECTOR_TASKS"
 queue = "agroai-connector-tasks"

@@ -1,4 +1,5 @@
 from collections import Counter
+from pathlib import Path
 
 from app.main import _origin_allowed, app
 
@@ -18,3 +19,10 @@ def test_streamed_upload_path_is_registered_once():
         if getattr(route, "path", None) == "/v1/evidence/upload-stream"
     )
     assert counts["/v1/evidence/upload-stream"] == 1
+
+
+def test_production_edge_owns_app_and_legacy_api_hostnames():
+    wrangler = Path(__file__).resolve().parents[3] / "wrangler.toml"
+    text = wrangler.read_text(encoding="utf-8")
+    assert 'pattern = "app.agroai-pilot.com/v1/*"' in text
+    assert 'pattern = "api.agroai-pilot.com/v1/*"' in text
