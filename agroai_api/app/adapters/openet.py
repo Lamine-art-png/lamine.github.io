@@ -9,7 +9,7 @@ from __future__ import annotations
 import ast
 import gzip
 import json
-from typing import Any, Dict, Iterable, List, Optional
+from typing import Any, Iterable, Optional
 
 import httpx
 
@@ -86,8 +86,6 @@ class OpenETAdapter:
         try:
             return json.loads(text)
         except json.JSONDecodeError:
-            # Some OpenET geodatabase examples return a compressed Python-literal
-            # shaped payload. literal_eval is safe for literals and avoids eval.
             try:
                 return ast.literal_eval(text)
             except (SyntaxError, ValueError) as exc:
@@ -130,6 +128,13 @@ class OpenETAdapter:
         payload = await self._post(
             "/geodatabase/metadata/ids",
             {"geometry": [float(value) for value in geometry], "version": version},
+        )
+        return self._extract_ids(payload)
+
+    async def field_ids_for_asset(self, asset_id: str, version: float = 2.1) -> list[str]:
+        payload = await self._post(
+            "/geodatabase/metadata/ids",
+            {"asset_id": str(asset_id), "version": version},
         )
         return self._extract_ids(payload)
 
