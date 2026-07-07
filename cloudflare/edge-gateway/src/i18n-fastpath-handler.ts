@@ -8,7 +8,7 @@ import {
   sourceObject,
   type LocaleEntry,
   type TranslationPayload,
-} from "./i18n-edge-validation";
+} from "./i18n-edge-validation-v2";
 import { catalogSha256, translateCatalog, workersAiChunkSize, workersAiModel, type AiRunner } from "./i18n-workers-ai";
 
 export interface I18nFastpathEnv extends BaseEnv { AI: AiRunner }
