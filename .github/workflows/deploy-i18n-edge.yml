@@ -70,44 +70,47 @@ jobs:
         run: |
           set -euo pipefail
           jq -r '.enabledUiLocales[] | select(. != "auto" and . != "en" and . != "fr-FR")' shared/supported-locales.json > dynamic-locales.txt
-          dynamic_count="$(wc -l < dynamic-locales.txt | tr -d ' ')"
-          test "$dynamic_count" -eq 58
-
-          passed=0
+          test "$(wc -l < dynamic-locales.txt | tr -d ' ')" -eq 58
           : > locale-matrix.jsonl
+          : > first-failure.txt
+          passed=0
+
           while IFS= read -r locale; do
-            headers="headers-${locale}.txt"
-            body="body-${locale}.json"
-            status="$(curl --silent --show-error --max-time 60 \
-              -D "$headers" \
-              -o "$body" \
-              -w '%{http_code}' \
+            headers="headers.txt"
+            body="body.json"
+            status="$(curl --silent --show-error --max-time 60 -D "$headers" -o "$body" -w '%{http_code}' \
               -H "Origin: ${PORTAL_ORIGIN}" \
               -H 'Content-Type: application/json' \
               -d "{\"locale\":\"${locale}\",\"source\":{\"language\":\"Language\",\"save\":\"Save\"}}" \
               "${API_URL}/v1/i18n/catalog")"
 
-            test "$status" = "200"
-            tr -d '\r' < "$headers" | grep -Fi "access-control-allow-origin: ${PORTAL_ORIGIN}" >/dev/null
-            jq -e --arg locale "$locale" '
-              .status == "ok" and
-              .locale == $locale and
-              (.catalog.language | type == "string" and length > 0) and
-              (.catalog.save | type == "string" and length > 0) and
-              ((.catalog.language != "Language") or (.catalog.save != "Save"))
-            ' "$body" >/dev/null
+            cors_ok=no
+            if tr -d '\r' < "$headers" | grep -Fi "access-control-allow-origin: ${PORTAL_ORIGIN}" >/dev/null; then cors_ok=yes; fi
+            body_ok=no
+            if jq -e --arg locale "$locale" '.status == "ok" and .locale == $locale and (.catalog.language|type=="string" and length>0) and (.catalog.save|type=="string" and length>0) and ((.catalog.language != "Language") or (.catalog.save != "Save"))' "$body" >/dev/null 2>&1; then body_ok=yes; fi
+
+            if [ "$status" != "200" ] || [ "$cors_ok" != "yes" ] || [ "$body_ok" != "yes" ]; then
+              {
+                echo "locale=${locale}"
+                echo "http_status=${status}"
+                echo "cors_ok=${cors_ok}"
+                echo "body_ok=${body_ok}"
+                echo "body="
+                cat "$body"
+              } > first-failure.txt
+              cat first-failure.txt
+              exit 1
+            fi
 
             jq -c . "$body" >> locale-matrix.jsonl
-            rm -f "$headers" "$body"
             passed=$((passed + 1))
             echo "PASS ${locale}"
           done < dynamic-locales.txt
 
           test "$passed" -eq 58
           echo '{"status":"ok","locale":"fr-FR","source":"bundled_static_catalog"}' >> locale-matrix.jsonl
-          total=$((passed + 1))
-          test "$total" -eq 59
-          echo "live_non_english_locale_matrix=${total}/59"
+          test "$((passed + 1))" -eq 59
+          echo "live_non_english_locale_matrix=59/59"
 
       - name: Upload immutable locale evidence
         if: always()
@@ -117,5 +120,6 @@ jobs:
           path: |
             dynamic-locales.txt
             locale-matrix.jsonl
+            first-failure.txt
           if-no-files-found: ignore
           retention-days: 30
