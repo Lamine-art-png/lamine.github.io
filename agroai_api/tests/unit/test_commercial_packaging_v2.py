@@ -1,4 +1,5 @@
 from app.api.v1.connectors import CATALOG
+from app.services import connector_commercial_guard
 from app.services.commercial_control import BASE_ENTITLEMENTS
 from app.services.commercial_packaging_v2 import EVIDENCE_UPLOAD_LIMITS, required_plan_for_provider
 
@@ -29,6 +30,14 @@ def test_connector_packaging_matches_customer_segments():
     assert required_plan_for_provider("universal_controller") == "enterprise"
     assert required_plan_for_provider("salesforce") == "enterprise"
     assert required_plan_for_provider("google_earth_engine") == "enterprise"
+
+
+def test_runtime_connector_guard_uses_packaging_v2_tiers():
+    assert connector_commercial_guard.connector_feature("manual_csv") == ("connectors.manual_upload", None)
+    assert connector_commercial_guard.connector_feature("weather") == ("connectors.live", "professional")
+    assert connector_commercial_guard.connector_feature("openet") == ("connectors.live", "professional")
+    assert connector_commercial_guard.connector_feature("custom_api") == ("connectors.custom_api", "network")
+    assert connector_commercial_guard.connector_feature("salesforce") == ("connectors.custom_integration", "enterprise")
 
 
 def test_catalog_uses_packaging_v2_required_plans():
