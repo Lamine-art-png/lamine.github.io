@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-def test_active_validation_fastpath_is_language_aware_and_nonblocking():
+def test_active_local_validation_fastpath_is_language_aware_and_nonblocking():
     repo_root = Path(__file__).resolve().parents[3]
     wrangler = (repo_root / "wrangler.toml").read_text(encoding="utf-8")
     entrypoint = (repo_root / "cloudflare" / "edge-gateway" / "src" / "edge-main-v3.ts").read_text(encoding="utf-8")
@@ -11,9 +11,11 @@ def test_active_validation_fastpath_is_language_aware_and_nonblocking():
 
     assert "edge-main-v3.ts" in wrangler
     assert "handleI18nFastpath" in entrypoint
-    assert "i18n-translation-engine-v3" in entrypoint
-    assert "translationRequest" in entrypoint
-    assert "englishValidationRequest" in handler
+    assert "i18n-translation-engine-v3" in handler
+    assert "translateChunkedCatalog" in handler
+    assert "translateDedicatedCatalog" in handler
+    assert "canonicalRequestedSource" in handler
+    assert "ui_source_catalog_mismatch" in handler
     assert "canaryAuthorized" in handler
     assert "source_lang" in engine
     assert "target_lang" in engine
