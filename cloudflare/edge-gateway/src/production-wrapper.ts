@@ -1,4 +1,4 @@
-import baseHandler from "./index";
+import baseHandler, { type ConnectorTaskEnvelope, type Env as BaseEnv } from "./index";
 
 const MODEL = "@cf/zai-org/glm-4.7-flash";
 const TRANSLATION_PATHS = new Set(["/v1/i18n/catalog", "/v1/i18n/internal/canary"]);
@@ -12,16 +12,17 @@ const PLACEHOLDER_RE = /\{[A-Za-z_][A-Za-z0-9_]*\}/g;
 const CHUNK_SIZE = 36;
 const MAX_PARALLEL = 4;
 
-interface WrapperEnv {
+interface WrapperEnv extends BaseEnv {
   AI: Ai;
-  [key: string]: unknown;
 }
 
-function json(payload: unknown, status = 200): Response {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
-  });
+function jsonFromUpstream(payload: unknown, upstream: Response, status = 200): Response {
+  const headers = new Headers(upstream.headers);
+  headers.set("content-type", "application/json; charset=utf-8");
+  headers.set("cache-control", "no-store");
+  headers.set("x-agroai-i18n-fallback", "cloudflare-workers-ai");
+  headers.delete("content-length");
+  return new Response(JSON.stringify(payload), { status, headers });
 }
 
 function stripFences(value: string): string {
@@ -142,7 +143,7 @@ async function workersAiFallback(request: Request, env: WrapperEnv, upstream: Re
     if (pathname.endsWith("/internal/canary")) {
       const changedKeys = Object.keys(source).filter((key) => catalog[key] !== source[key]);
       if (changedKeys.length < 2) return upstream;
-      return json({
+      return jsonFromUpstream({
         status: "ok",
         locale,
         language: locale,
@@ -153,9 +154,9 @@ async function workersAiFallback(request: Request, env: WrapperEnv, upstream: Re
         providers: ["cloudflare_workers_ai"],
         models: [MODEL],
         chunks: Math.ceil(Object.keys(source).length / CHUNK_SIZE),
-      });
+      }, upstream);
     }
-    return json({
+    return jsonFromUpstream({
       status: "ok",
       locale,
       catalog,
@@ -164,7 +165,7 @@ async function workersAiFallback(request: Request, env: WrapperEnv, upstream: Re
       key_count: Object.keys(source).length,
       providers: ["cloudflare_workers_ai"],
       models: [MODEL],
-    });
+    }, upstream);
   } catch (error) {
     console.error("workers_ai_i18n_fallback_failed", { locale, error: String(error) });
     return upstream;
@@ -175,16 +176,14 @@ export default {
   async fetch(request: Request, env: WrapperEnv, ctx: ExecutionContext): Promise<Response> {
     const pathname = new URL(request.url).pathname;
     const clone = TRANSLATION_PATHS.has(pathname) && request.method === "POST" ? request.clone() : null;
-    const response = await (baseHandler as ExportedHandler<WrapperEnv>).fetch!(request, env, ctx);
+    const response = await baseHandler.fetch(request, env, ctx);
     if (!clone) return response;
     return workersAiFallback(clone, env, response);
   },
-  async queue(batch: MessageBatch<unknown>, env: WrapperEnv, ctx: ExecutionContext): Promise<void> {
-    const handler = baseHandler as ExportedHandler<WrapperEnv>;
-    if (handler.queue) await handler.queue(batch, env, ctx);
+  async queue(batch: MessageBatch<ConnectorTaskEnvelope>, env: WrapperEnv, ctx: ExecutionContext): Promise<void> {
+    await baseHandler.queue(batch, env, ctx);
   },
   async scheduled(controller: ScheduledController, env: WrapperEnv, ctx: ExecutionContext): Promise<void> {
-    const handler = baseHandler as ExportedHandler<WrapperEnv>;
-    if (handler.scheduled) await handler.scheduled(controller, env, ctx);
+    await baseHandler.scheduled(controller, env, ctx);
   },
-} satisfies ExportedHandler<WrapperEnv>;
+} satisfies ExportedHandler<WrapperEnv, ConnectorTaskEnvelope>;
