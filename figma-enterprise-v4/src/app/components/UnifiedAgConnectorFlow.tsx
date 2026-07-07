@@ -40,7 +40,6 @@ function lifecycleTone(status: string): "neutral" | "good" | "warn" | "locked" {
 export function UnifiedAgConnectorFlow({ provider, workspaceId, connection, onConnection, onMessage, onRefresh }: Props) {
   const copy = PROVIDER_COPY[provider];
   const [apiKey, setApiKey] = useState("");
-  const [apiUrl, setApiUrl] = useState("");
   const [busy, setBusy] = useState("");
   const [resources, setResources] = useState<UnifiedResource[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -48,10 +47,8 @@ export function UnifiedAgConnectorFlow({ provider, workspaceId, connection, onCo
   const [fieldIdsText, setFieldIdsText] = useState("");
   const [geometryText, setGeometryText] = useState("");
   const status = String(connection?.status || "available");
-
   const connectionId = String(connection?.id || "");
-  const resourceCount = resources.length;
-  const allSelected = resourceCount > 0 && selectedIds.length === resourceCount;
+  const allSelected = resources.length > 0 && selectedIds.length === resources.length;
   const parsedFieldIds = useMemo(() => fieldIdsText.split(/[\s,]+/).map((value) => value.trim()).filter(Boolean), [fieldIdsText]);
 
   async function connect() {
@@ -62,12 +59,7 @@ export function UnifiedAgConnectorFlow({ provider, workspaceId, connection, onCo
     setBusy("connect");
     onMessage("");
     try {
-      const result = (await unifiedConnectors.connect({
-        provider,
-        workspace_id: workspaceId,
-        api_key: apiKey.trim(),
-        api_url: apiUrl.trim() || undefined,
-      })) as AnyRecord;
+      const result = await unifiedConnectors.connect({ provider, workspace_id: workspaceId, api_key: apiKey.trim() }) as AnyRecord;
       onConnection(result.connection || null);
       setResources(Array.isArray(result.resources) ? result.resources : []);
       setApiKey("");
@@ -85,7 +77,7 @@ export function UnifiedAgConnectorFlow({ provider, workspaceId, connection, onCo
     setBusy("discover");
     onMessage("");
     try {
-      const result = (await unifiedConnectors.discovery(connectionId)) as AnyRecord;
+      const result = await unifiedConnectors.discovery(connectionId) as AnyRecord;
       setResources(Array.isArray(result.resources) ? result.resources : []);
       onConnection(result.connection || connection);
       onMessage(`Discovered ${Number(result.count || 0)} ${provider === "talgil" ? "controllers" : provider === "wiseconn" ? "farms" : "OpenET fields"}.`);
@@ -131,9 +123,12 @@ export function UnifiedAgConnectorFlow({ provider, workspaceId, connection, onCo
     setBusy("boundary");
     onMessage("");
     try {
-      const result = (await unifiedConnectors.uploadOpenETBoundary(connectionId, file)) as AnyRecord;
-      onConnection(result.connection || connection);
-      onMessage("Boundary uploaded securely to OpenET. The temporary asset is attached to this connection.");
+      const uploaded = await unifiedConnectors.uploadOpenETBoundary(connectionId, file) as AnyRecord;
+      onConnection(uploaded.connection || connection);
+      const discovered = await unifiedConnectors.discovery(connectionId) as AnyRecord;
+      setResources(Array.isArray(discovered.resources) ? discovered.resources : []);
+      onConnection(discovered.connection || uploaded.connection || connection);
+      onMessage(`Boundary uploaded. ${Number(discovered.count || 0)} matching OpenET fields discovered.`);
       await onRefresh();
     } catch (error) {
       onMessage(error instanceof Error ? error.message : "Boundary upload failed.");
@@ -147,7 +142,7 @@ export function UnifiedAgConnectorFlow({ provider, workspaceId, connection, onCo
     setBusy("sync");
     onMessage("");
     try {
-      const result = (await unifiedConnectors.sync(connectionId)) as AnyRecord;
+      const result = await unifiedConnectors.sync(connectionId) as AnyRecord;
       onConnection(result.connection || connection);
       onMessage(result.deduplicated ? "A sync is already running for this connection." : "Sync queued on the durable connector worker plane.");
       await onRefresh();
@@ -162,7 +157,7 @@ export function UnifiedAgConnectorFlow({ provider, workspaceId, connection, onCo
     if (!connectionId) return;
     setBusy("status");
     try {
-      const result = (await unifiedConnectors.status(connectionId)) as AnyRecord;
+      const result = await unifiedConnectors.status(connectionId) as AnyRecord;
       onConnection(result.connection || connection);
       onMessage(`Connection state: ${String(result.state || result.connection?.status || "unknown").replaceAll("_", " ")}.`);
       await onRefresh();
@@ -177,7 +172,7 @@ export function UnifiedAgConnectorFlow({ provider, workspaceId, connection, onCo
     if (!connectionId) return;
     setBusy("disconnect");
     try {
-      const result = (await unifiedConnectors.disconnect(connectionId)) as AnyRecord;
+      const result = await unifiedConnectors.disconnect(connectionId) as AnyRecord;
       onConnection(result.connection || null);
       setResources([]);
       setSelectedIds([]);
@@ -191,54 +186,41 @@ export function UnifiedAgConnectorFlow({ provider, workspaceId, connection, onCo
   }
 
   if (!connectionId || ["available", "action_required", "reconnect_required", "failed"].includes(status)) {
-    return (
-      <div className="space-y-4">
-        <div className="rounded-xl p-4" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-          <div className="flex items-center justify-between gap-3 mb-3"><div className="text-[14px] font-semibold" style={{ color: TEXT }}>{copy.action}</div><StatusBadge label={status.replaceAll("_", " ")} tone={lifecycleTone(status)} /></div>
-          <p className="text-[12px] leading-relaxed mb-4" style={{ color: MUTED }}>{copy.helper}</p>
-          <label className="block text-[12px]" style={{ color: MUTED }}>{copy.credential}<input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" autoComplete="off" placeholder="••••••••••••••••" className="mt-1 h-11 w-full rounded-lg px-3 text-[13px] outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} /></label>
-          <details className="mt-3"><summary className="cursor-pointer text-[11px]" style={{ color: MUTED }}>Advanced: custom provider API URL</summary><input value={apiUrl} onChange={(event) => setApiUrl(event.target.value)} placeholder="Leave blank for provider default" className="mt-2 h-10 w-full rounded-lg px-3 text-[12px] outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} /></details>
-          <div className="mt-4"><PortalButton onClick={connect} disabled={busy === "connect"}>{busy === "connect" ? "Verifying..." : copy.action}</PortalButton></div>
-          <p className="mt-3 text-[11px] leading-relaxed" style={{ color: MUTED }}>The credential is sent only to AGRO-AI's authenticated backend, encrypted into the tenant-scoped connector vault, and never returned to the browser.</p>
-        </div>
-      </div>
-    );
+    return <div className="space-y-4"><div className="rounded-xl p-4" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+      <div className="flex items-center justify-between gap-3 mb-3"><div className="text-[14px] font-semibold" style={{ color: TEXT }}>{copy.action}</div><StatusBadge label={status.replaceAll("_", " ")} tone={lifecycleTone(status)} /></div>
+      <p className="text-[12px] leading-relaxed mb-4" style={{ color: MUTED }}>{copy.helper}</p>
+      <label className="block text-[12px]" style={{ color: MUTED }}>{copy.credential}<input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" autoComplete="off" placeholder="••••••••••••••••" className="mt-1 h-11 w-full rounded-lg px-3 text-[13px] outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} /></label>
+      <div className="mt-4"><PortalButton onClick={connect} disabled={busy === "connect"}>{busy === "connect" ? "Verifying..." : copy.action}</PortalButton></div>
+      <p className="mt-3 text-[11px] leading-relaxed" style={{ color: MUTED }}>The credential is sent only to AGRO-AI's authenticated backend, encrypted into the tenant-scoped connector vault, and never returned to the browser. Provider destinations are fixed server-side.</p>
+    </div></div>;
   }
 
-  return (
-    <div className="space-y-4">
-      <div className="rounded-xl p-4" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-        <div className="flex items-center justify-between gap-3"><div><div className="text-[13px] font-semibold" style={{ color: TEXT }}>Account verified</div><div className="text-[11px] mt-1" style={{ color: MUTED }}>Connection {connectionId.slice(0, 8)}…</div></div><StatusBadge label={status.replaceAll("_", " ")} tone={lifecycleTone(status)} /></div>
-      </div>
+  return <div className="space-y-4">
+    <div className="rounded-xl p-4" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}><div className="flex items-center justify-between gap-3"><div><div className="text-[13px] font-semibold" style={{ color: TEXT }}>Account verified</div><div className="text-[11px] mt-1" style={{ color: MUTED }}>Connection {connectionId.slice(0, 8)}…</div></div><StatusBadge label={status.replaceAll("_", " ")} tone={lifecycleTone(status)} /></div></div>
 
-      {provider !== "openet" ? (
-        <div className="rounded-xl p-4" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-          <div className="flex items-center justify-between gap-3 mb-3"><div className="text-[13px] font-semibold" style={{ color: TEXT }}>{provider === "wiseconn" ? "Choose farms" : "Choose controllers"}</div><PortalButton variant="secondary" onClick={discover} disabled={busy === "discover"}>{busy === "discover" ? "Discovering..." : "Refresh discovery"}</PortalButton></div>
-          {!resources.length ? <p className="text-[12px]" style={{ color: MUTED }}>No resources loaded yet. Run discovery.</p> : <div className="space-y-2 max-h-72 overflow-y-auto">{resources.map((resource) => <label key={resource.id} className="flex items-center gap-3 rounded-lg px-3 py-2 cursor-pointer" style={{ background: BG, border: `1px solid ${BORDER}` }}><input type="checkbox" checked={selectedIds.includes(resource.id)} onChange={(event) => setSelectedIds(event.target.checked ? [...selectedIds, resource.id] : selectedIds.filter((id) => id !== resource.id))} /><span className="text-[12px] font-medium" style={{ color: TEXT }}>{resource.name}</span><span className="ml-auto text-[10px]" style={{ color: MUTED }}>{resource.id}</span></label>)}</div>}
-          {resources.length ? <div className="mt-3 flex items-center gap-2"><PortalButton variant="secondary" onClick={() => setSelectedIds(allSelected ? [] : resources.map((resource) => resource.id))}>{allSelected ? "Clear all" : "Select all"}</PortalButton><PortalButton onClick={saveSelection} disabled={busy === "select"}>{busy === "select" ? "Saving..." : "Save scope"}</PortalButton></div> : null}
-        </div>
-      ) : (
-        <div className="rounded-xl p-4" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-          <div className="text-[13px] font-semibold mb-3" style={{ color: TEXT }}>Choose fields</div>
-          <div className="space-y-2">
-            <Choice active={openETMode === "agroai_fields"} title="Use my AGRO-AI fields" detail="Resolve OpenET scope from field context already attached to this workspace." onClick={() => setOpenETMode("agroai_fields")} />
-            <Choice active={openETMode === "upload_boundaries"} title="Upload boundaries" detail="Upload GeoJSON directly into OpenET's temporary boundary asset flow." onClick={() => setOpenETMode("upload_boundaries")} />
-            <Choice active={openETMode === "openet_field_ids"} title="Select OpenET field IDs" detail="Use one or more OpenET geodatabase field identifiers." onClick={() => setOpenETMode("openet_field_ids")} />
-          </div>
-          {openETMode === "upload_boundaries" ? <div className="mt-4 space-y-3"><label className="block rounded-xl p-4 cursor-pointer" style={{ background: BG, border: `1px dashed ${BORDER}` }}><div className="text-[12px] font-medium" style={{ color: TEXT }}>Upload GeoJSON boundaries</div><input type="file" accept=".geojson,.json,application/geo+json" className="mt-3 text-[12px]" onChange={(event) => uploadBoundary(event.target.files?.[0])} /></label><div className="text-[11px]" style={{ color: MUTED }}>Or paste a longitude/latitude polygon:</div><textarea value={geometryText} onChange={(event) => setGeometryText(event.target.value)} placeholder="-121.67, 38.61, -121.67, 38.65, ..." className="min-h-24 w-full rounded-lg p-3 text-[12px] outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} /></div> : null}
-          {openETMode === "openet_field_ids" ? <textarea value={fieldIdsText} onChange={(event) => setFieldIdsText(event.target.value)} placeholder="Enter field IDs separated by commas or spaces" className="mt-4 min-h-24 w-full rounded-lg p-3 text-[12px] outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} /> : null}
-          <div className="mt-4 flex gap-2"><PortalButton onClick={saveSelection} disabled={busy === "select" || busy === "boundary"}>{busy === "select" ? "Saving..." : busy === "boundary" ? "Uploading..." : "Continue"}</PortalButton>{openETMode !== "agroai_fields" ? <PortalButton variant="secondary" onClick={discover} disabled={busy === "discover"}>{busy === "discover" ? "Finding fields..." : "Discover matching fields"}</PortalButton> : null}</div>
-          {resources.length ? <div className="mt-4 rounded-lg p-3" style={{ background: BG, border: `1px solid ${BORDER}` }}><div className="text-[11px] font-semibold mb-2" style={{ color: TEXT }}>{resources.length} OpenET fields found</div><div className="flex flex-wrap gap-1.5">{resources.slice(0, 40).map((resource) => <span key={resource.id} className="rounded-full px-2 py-1 text-[10px]" style={{ background: SURFACE, border: `1px solid ${BORDER}`, color: MUTED }}>{resource.name}</span>)}</div></div> : null}
-        </div>
-      )}
-
-      <div className="rounded-xl p-4" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-        <div className="text-[13px] font-semibold mb-2" style={{ color: TEXT }}>Sync</div>
-        <p className="text-[12px] leading-relaxed mb-4" style={{ color: MUTED }}>Runs on AGRO-AI's durable connector queue with retries, tenant-scoped credentials, idempotent evidence persistence, and sync cursors.</p>
-        <div className="flex flex-wrap gap-2"><PortalButton onClick={sync} disabled={busy === "sync"}>{busy === "sync" ? "Queueing..." : "Start sync"}</PortalButton><PortalButton variant="secondary" onClick={refreshStatus} disabled={busy === "status"}>{busy === "status" ? "Refreshing..." : "Refresh status"}</PortalButton><PortalButton variant="secondary" onClick={disconnect} disabled={busy === "disconnect"}>{busy === "disconnect" ? "Disconnecting..." : "Disconnect"}</PortalButton></div>
+    {provider !== "openet" ? <div className="rounded-xl p-4" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+      <div className="flex items-center justify-between gap-3 mb-3"><div className="text-[13px] font-semibold" style={{ color: TEXT }}>{provider === "wiseconn" ? "Choose farms" : "Choose controllers"}</div><PortalButton variant="secondary" onClick={discover} disabled={busy === "discover"}>{busy === "discover" ? "Discovering..." : "Refresh discovery"}</PortalButton></div>
+      {!resources.length ? <p className="text-[12px]" style={{ color: MUTED }}>No resources loaded yet. Run discovery.</p> : <div className="space-y-2 max-h-72 overflow-y-auto">{resources.map((resource) => <label key={resource.id} className="flex items-center gap-3 rounded-lg px-3 py-2 cursor-pointer" style={{ background: BG, border: `1px solid ${BORDER}` }}><input type="checkbox" checked={selectedIds.includes(resource.id)} onChange={(event) => setSelectedIds(event.target.checked ? [...selectedIds, resource.id] : selectedIds.filter((id) => id !== resource.id))} /><span className="text-[12px] font-medium" style={{ color: TEXT }}>{resource.name}</span><span className="ml-auto text-[10px]" style={{ color: MUTED }}>{resource.id}</span></label>)}</div>}
+      {resources.length ? <div className="mt-3 flex items-center gap-2"><PortalButton variant="secondary" onClick={() => setSelectedIds(allSelected ? [] : resources.map((resource) => resource.id))}>{allSelected ? "Clear all" : "Select all"}</PortalButton><PortalButton onClick={saveSelection} disabled={busy === "select"}>{busy === "select" ? "Saving..." : "Save scope"}</PortalButton></div> : null}
+    </div> : <div className="rounded-xl p-4" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+      <div className="text-[13px] font-semibold mb-3" style={{ color: TEXT }}>Choose fields</div>
+      <div className="space-y-2">
+        <Choice active={openETMode === "agroai_fields"} title="Use my AGRO-AI fields" detail="Resolve OpenET scope from explicit OpenET IDs or usable field geometry already attached to this workspace." onClick={() => setOpenETMode("agroai_fields")} />
+        <Choice active={openETMode === "upload_boundaries"} title="Upload boundaries" detail="Upload GeoJSON into OpenET's temporary boundary asset flow, then discover matching fields." onClick={() => setOpenETMode("upload_boundaries")} />
+        <Choice active={openETMode === "openet_field_ids"} title="Select OpenET field IDs" detail="Use one or more OpenET geodatabase field identifiers." onClick={() => setOpenETMode("openet_field_ids")} />
       </div>
+      {openETMode === "upload_boundaries" ? <div className="mt-4 space-y-3"><label className="block rounded-xl p-4 cursor-pointer" style={{ background: BG, border: `1px dashed ${BORDER}` }}><div className="text-[12px] font-medium" style={{ color: TEXT }}>Upload GeoJSON boundaries</div><input type="file" accept=".geojson,.json,application/geo+json" className="mt-3 text-[12px]" onChange={(event) => uploadBoundary(event.target.files?.[0])} /></label><div className="text-[11px]" style={{ color: MUTED }}>Or paste a longitude/latitude polygon:</div><textarea value={geometryText} onChange={(event) => setGeometryText(event.target.value)} placeholder="-121.67, 38.61, -121.67, 38.65, ..." className="min-h-24 w-full rounded-lg p-3 text-[12px] outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} /></div> : null}
+      {openETMode === "openet_field_ids" ? <textarea value={fieldIdsText} onChange={(event) => setFieldIdsText(event.target.value)} placeholder="Enter field IDs separated by commas or spaces" className="mt-4 min-h-24 w-full rounded-lg p-3 text-[12px] outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} /> : null}
+      <div className="mt-4 flex gap-2"><PortalButton onClick={saveSelection} disabled={busy === "select" || busy === "boundary"}>{busy === "select" ? "Saving..." : busy === "boundary" ? "Uploading..." : "Continue"}</PortalButton><PortalButton variant="secondary" onClick={discover} disabled={busy === "discover"}>{busy === "discover" ? "Finding fields..." : "Discover matching fields"}</PortalButton></div>
+      {resources.length ? <div className="mt-4 rounded-lg p-3" style={{ background: BG, border: `1px solid ${BORDER}` }}><div className="text-[11px] font-semibold mb-2" style={{ color: TEXT }}>{resources.length} OpenET fields found</div><div className="flex flex-wrap gap-1.5">{resources.slice(0, 40).map((resource) => <span key={resource.id} className="rounded-full px-2 py-1 text-[10px]" style={{ background: SURFACE, border: `1px solid ${BORDER}`, color: MUTED }}>{resource.name}</span>)}</div></div> : null}
+    </div>}
+
+    <div className="rounded-xl p-4" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+      <div className="text-[13px] font-semibold mb-2" style={{ color: TEXT }}>Sync</div>
+      <p className="text-[12px] leading-relaxed mb-4" style={{ color: MUTED }}>Runs on AGRO-AI's durable connector queue with retries, tenant-scoped credentials, idempotent evidence persistence, and sync cursors.</p>
+      <div className="flex flex-wrap gap-2"><PortalButton onClick={sync} disabled={busy === "sync"}>{busy === "sync" ? "Queueing..." : "Start sync"}</PortalButton><PortalButton variant="secondary" onClick={refreshStatus} disabled={busy === "status"}>{busy === "status" ? "Refreshing..." : "Refresh status"}</PortalButton><PortalButton variant="secondary" onClick={disconnect} disabled={busy === "disconnect"}>{busy === "disconnect" ? "Disconnecting..." : "Disconnect"}</PortalButton></div>
     </div>
-  );
+  </div>;
 }
 
 function Choice({ active, title, detail, onClick }: { active: boolean; title: string; detail: string; onClick: () => void }) {
