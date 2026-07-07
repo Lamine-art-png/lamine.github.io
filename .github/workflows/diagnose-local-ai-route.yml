@@ -44,20 +44,20 @@ jobs:
         with:
           script: |
             const fs = require('fs');
-            let description = 'Cloudflare route inspection failed';
-            let state = '${{ job.status }}' === 'success' ? 'success' : 'failure';
+            const state = '${{ job.status }}' === 'success' ? 'success' : 'failure';
+            let statusContext = 'diagnostic/local-ai-route/failed';
             if (state === 'success') {
               const routes = JSON.parse(fs.readFileSync('local-ai-routes.json', 'utf8')).routes || [];
               const domains = JSON.parse(fs.readFileSync('local-ai-domains.json', 'utf8')).domains || [];
-              const route = routes[0] ? `${routes[0].pattern}->${routes[0].script || 'none'}` : 'route:none';
-              const domain = domains[0] ? `domain->${domains[0].service || 'unknown'}` : 'domain:none';
-              description = `${route};${domain}`.slice(0, 140);
+              const routeScript = routes[0]?.script || (routes.length ? 'route-no-script' : 'no-route');
+              const domainService = domains[0]?.service || (domains.length ? 'domain-unknown' : 'no-domain');
+              statusContext = `diagnostic/local-ai/${routeScript}/${domainService}`.slice(0, 100);
             }
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
               repo: context.repo.repo,
               sha: context.sha,
               state,
-              context: 'diagnostic/local-ai-route',
-              description
+              context: statusContext,
+              description: 'local-ai Cloudflare binding inspection'
             });
