@@ -11,16 +11,20 @@ from sqlalchemy.orm import Session
 from app.api.deps import get_current_user, require_org_membership
 from app.core.config import settings
 from app.db.base import get_db
-from app.models.saas import BillingEvent, Organization, UsageEvent, User
+from app.models.saas import BillingEvent, Organization, User
+from app.services.commercial_billing_lifecycle import (
+    apply_authoritative_billing_event,
+    _commercial_checkout_metadata,
+)
 from app.services.entitlements import require_owner_or_admin, serialize_entitlements
 from app.services.product_plans import public_plans, service_add_ons, upgrade_options
+from app.services.quota import quota_snapshot
 
 router = APIRouter(prefix="/billing", tags=["billing"])
 
 
 class CheckoutRequest(BaseModel):
     organization_id: str
-    # Current self-serve offers use `offer`; `plan` is kept for older callers.
     offer: str | None = None
     plan: str | None = None
 
@@ -41,12 +45,10 @@ def _stripe_ready() -> None:
 def _normalize_offer(payload: CheckoutRequest) -> str:
     raw = (payload.offer or payload.plan or "").strip().lower()
     aliases = {
-        # Current portal card shortcuts.
         "professional": "professional_monthly",
         "pro": "professional_monthly",
         "team": "team_monthly",
         "network": "network_monthly",
-        # Legacy aliases kept so older portal/test commands do not break.
         "pilot": "professional_monthly",
         "waterops": "professional_monthly",
         "waterops_monthly": "professional_monthly",
@@ -101,16 +103,15 @@ def _offer_config(offer: str) -> dict:
             "mode": "subscription",
             "plan": "network",
         },
-        # Legacy/commercial service offers still supported for direct checkout.
         "assurance_audit_farm": {
             "price": settings.STRIPE_PRICE_ASSURANCE_AUDIT_FARM,
             "mode": "payment",
-            "plan": "assurance_audit",
+            "plan": None,
         },
         "assurance_audit_network": {
             "price": settings.STRIPE_PRICE_ASSURANCE_AUDIT_NETWORK,
             "mode": "payment",
-            "plan": "assurance_audit",
+            "plan": None,
         },
     }
     config = offers.get(offer)
@@ -158,12 +159,14 @@ def billing_plans(user: User = Depends(get_current_user)) -> dict:
 
 
 @router.post("/create-checkout-session")
-def create_checkout_session(payload: CheckoutRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+def create_checkout_session(
+    payload: CheckoutRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
     offer = _normalize_offer(payload)
-
     org, membership = require_org_membership(payload.organization_id, user, db)
     require_owner_or_admin(membership.role)
-
     offer_config = _offer_config(offer)
 
     customer_id = org.stripe_customer_id or _create_customer(org)
@@ -171,6 +174,7 @@ def create_checkout_session(payload: CheckoutRequest, user: User = Depends(get_c
         org.stripe_customer_id = customer_id
         db.commit()
 
+    metadata = _commercial_checkout_metadata(org, offer, offer_config)
     _stripe_ready()
     try:
         session_kwargs = {
@@ -180,31 +184,12 @@ def create_checkout_session(payload: CheckoutRequest, user: User = Depends(get_c
             "success_url": f"{settings.APP_URL}/billing?checkout=success&offer={offer}",
             "cancel_url": f"{settings.APP_URL}/billing?checkout=cancelled&offer={offer}",
             "client_reference_id": org.id,
-            "metadata": {
-                "organization_id": org.id,
-                "offer": offer,
-                "plan": offer_config["plan"],
-                "checkout_mode": offer_config["mode"],
-            },
+            "metadata": metadata,
         }
         if offer_config["mode"] == "subscription":
-            session_kwargs["subscription_data"] = {
-                "metadata": {
-                    "organization_id": org.id,
-                    "offer": offer,
-                    "plan": offer_config["plan"],
-                    "checkout_mode": offer_config["mode"],
-                }
-            }
+            session_kwargs["subscription_data"] = {"metadata": metadata}
         else:
-            session_kwargs["payment_intent_data"] = {
-                "metadata": {
-                    "organization_id": org.id,
-                    "offer": offer,
-                    "plan": offer_config["plan"],
-                    "checkout_mode": offer_config["mode"],
-                }
-            }
+            session_kwargs["payment_intent_data"] = {"metadata": metadata}
         session = stripe.checkout.Session.create(**session_kwargs)
     except stripe.error.StripeError:
         raise HTTPException(
@@ -214,8 +199,15 @@ def create_checkout_session(payload: CheckoutRequest, user: User = Depends(get_c
     return {"checkout_url": session["url"], "offer": offer, "mode": offer_config["mode"]}
 
 
+setattr(create_checkout_session, "__agroai_commercial_hardened__", True)
+
+
 @router.post("/create-portal-session")
-def create_portal_session(payload: PortalRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+def create_portal_session(
+    payload: PortalRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
     org, membership = require_org_membership(payload.organization_id, user, db)
     require_owner_or_admin(membership.role)
     if not org.stripe_customer_id:
@@ -225,7 +217,10 @@ def create_portal_session(payload: PortalRequest, user: User = Depends(get_curre
         )
     _stripe_ready()
     try:
-        session = stripe.billing_portal.Session.create(customer=org.stripe_customer_id, return_url=f"{settings.APP_URL}/billing")
+        session = stripe.billing_portal.Session.create(
+            customer=org.stripe_customer_id,
+            return_url=f"{settings.APP_URL}/billing",
+        )
     except stripe.error.StripeError:
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
@@ -235,26 +230,28 @@ def create_portal_session(payload: PortalRequest, user: User = Depends(get_curre
 
 
 @router.get("/status")
-def billing_status(organization_id: str | None = None, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+def billing_status(
+    organization_id: str | None = None,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+) -> dict:
     org_id = organization_id or (user.memberships[0].organization_id if user.memberships else None)
     if not org_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="organization_id is required")
     org, _ = require_org_membership(org_id, user, db)
-    usage = (
-        db.query(UsageEvent.event_type, UsageEvent.quantity)
-        .filter(UsageEvent.organization_id == org.id)
-        .all()
-    )
-    totals: dict[str, int] = {}
-    for event_type, quantity in usage:
-        totals[event_type] = totals.get(event_type, 0) + int(quantity or 0)
+    usage = quota_snapshot(db, org)
     return {
         "plan": _normalize_plan_id(org.plan) or "free",
         "subscription_status": org.subscription_status,
+        "current_period_start": org.current_period_start.isoformat() if org.current_period_start else None,
         "current_period_end": org.current_period_end.isoformat() if org.current_period_end else None,
-        "entitlements": serialize_entitlements(org),
-        "usage": totals,
+        "cancel_at_period_end": bool(org.cancel_at_period_end),
+        "entitlements": serialize_entitlements(org, db),
+        "usage": usage,
     }
+
+
+setattr(billing_status, "__agroai_period_aware__", True)
 
 
 def _verify_stripe_signature(raw_body: bytes, signature: str | None) -> None:
@@ -276,8 +273,6 @@ def _verify_stripe_signature(raw_body: bytes, signature: str | None) -> None:
 def _plan_from_price(price_id: str | None) -> str | None:
     if not price_id:
         return None
-
-    # Current portal pricing tiers.
     price_to_plan = {
         settings.STRIPE_PRICE_PRO_MONTHLY: "professional",
         settings.STRIPE_PRICE_PRO_ANNUAL: "professional",
@@ -285,7 +280,6 @@ def _plan_from_price(price_id: str | None) -> str | None:
         settings.STRIPE_PRICE_TEAM_ANNUAL: "team",
         settings.STRIPE_PRICE_NETWORK_MONTHLY: "network",
         settings.STRIPE_PRICE_NETWORK_ANNUAL: "network",
-        # Legacy names retained for old test sessions.
         settings.STRIPE_PRICE_WATEROPS_MONTHLY: "professional",
         settings.STRIPE_PRICE_ASSURANCE_MONTHLY: "team",
         getattr(settings, "STRIPE_PRICE_PRO", ""): "pro",
@@ -314,42 +308,7 @@ def _org_for_event(db: Session, obj: dict) -> Organization | None:
 
 
 def _apply_billing_event(db: Session, org: Organization | None, event_type: str, obj: dict) -> None:
-    if not org:
-        return
-    if event_type == "checkout.session.completed":
-        org.stripe_customer_id = obj.get("customer") or org.stripe_customer_id
-        org.stripe_subscription_id = obj.get("subscription") or org.stripe_subscription_id
-        metadata = obj.get("metadata") or {}
-        plan = _normalize_plan_id(metadata.get("plan"))
-        checkout_mode = metadata.get("checkout_mode") or obj.get("mode")
-        if plan in {"professional", "team", "network", "enterprise"}:
-            org.plan = plan
-            org.subscription_status = "active"
-        elif plan == "assurance_audit" and checkout_mode == "payment":
-            org.plan = plan
-            org.subscription_status = "paid"
-    elif event_type.startswith("customer.subscription."):
-        org.stripe_customer_id = obj.get("customer") or org.stripe_customer_id
-        org.stripe_subscription_id = obj.get("id") or org.stripe_subscription_id
-        org.subscription_status = obj.get("status") or org.subscription_status
-        metadata_plan = _normalize_plan_id((obj.get("metadata") or {}).get("plan"))
-        if metadata_plan in {"professional", "team", "network", "enterprise"}:
-            org.plan = metadata_plan
-        else:
-            items = (((obj.get("items") or {}).get("data") or [{}])[0]).get("price") or {}
-            plan = _plan_from_price(items.get("id"))
-            if plan:
-                org.plan = plan
-        if event_type == "customer.subscription.deleted":
-            org.plan = "free"
-            org.subscription_status = "canceled"
-        period_end = obj.get("current_period_end")
-        if period_end:
-            org.current_period_end = datetime.utcfromtimestamp(int(period_end))
-    elif event_type == "invoice.payment_failed":
-        org.subscription_status = "past_due"
-    elif event_type == "invoice.payment_succeeded" and org.subscription_status in {"past_due", "incomplete"}:
-        org.subscription_status = "active"
+    apply_authoritative_billing_event(db, org, event_type, obj)
 
 
 @router.post("/webhook")
@@ -365,9 +324,11 @@ async def stripe_webhook(
     event_type = event.get("type")
     if not event_id or not event_type:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid Stripe event")
+
     existing = db.query(BillingEvent).filter(BillingEvent.stripe_event_id == event_id).first()
     if existing:
         return {"received": True, "idempotent": True}
+
     obj = ((event.get("data") or {}).get("object") or {})
     org = _org_for_event(db, obj)
     billing_event = BillingEvent(

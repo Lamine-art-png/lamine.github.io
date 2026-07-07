@@ -10,6 +10,13 @@ from . import recovery_v2 as recovery_module  # noqa: E402
 
 auth_module.router.include_router(recovery_module.router)
 
+# Install the authoritative Stripe lifecycle explicitly during API package assembly.
+# This removes the previous hidden dependency on unrelated route-import order.
+from . import billing as billing_module  # noqa: E402,F401
+from app.services.commercial_billing_lifecycle import install_commercial_billing_lifecycle  # noqa: E402
+
+install_commercial_billing_lifecycle()
+
 from . import brain as brain_module  # noqa: E402
 from . import brain_safety as brain_safety_module  # noqa: E402
 
@@ -26,6 +33,8 @@ from . import connector_launch as launch_module  # noqa: E402
 from . import connector_launch_secure as launch_secure_module  # noqa: E402
 from . import connector_oauth_completion as oauth_completion_module  # noqa: E402
 from . import connectors as connector_compat_module  # noqa: E402
+from . import product_shell as product_shell_module  # noqa: E402
+from . import monetization_convergence as monetization_module  # noqa: E402
 
 
 _HIDDEN_COMPAT_OPERATIONS = {
@@ -60,4 +69,10 @@ launch_module.router.routes[0:0] = (
     list(launch_secure_module.router.routes)
     + list(oauth_completion_module.router.routes)
 )
+
+# The portal's customer-facing billing summary and checkout bridge are attached to
+# the already-included product-shell router. Both delegate to canonical commercial
+# services rather than creating a second Stripe implementation.
+product_shell_module.router.include_router(monetization_module.router)
+
 _hide_compat_schema_shadows()

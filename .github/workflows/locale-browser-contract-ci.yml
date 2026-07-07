@@ -24,10 +24,14 @@ jobs:
           npm install --no-save --no-package-lock @playwright/test@1.55.0
       - name: Install Chromium
         run: npx playwright install --with-deps chromium
+      - name: Validate localization contract
+        run: |
+          set -o pipefail
+          npm run test:i18n 2>&1 | tee locale-i18n-contract.log
       - name: Build production portal
         run: |
-          npm run test:i18n
-          npm run build
+          set -o pipefail
+          npm run build 2>&1 | tee locale-production-build.log
       - name: Run global locale switching contracts
         run: |
           set -euo pipefail
@@ -58,6 +62,8 @@ jobs:
         with:
           name: locale-browser-contract
           path: |
+            figma-enterprise-v4/locale-i18n-contract.log
+            figma-enterprise-v4/locale-production-build.log
             figma-enterprise-v4/locale-vite-preview.log
             figma-enterprise-v4/locale-playwright.log
             figma-enterprise-v4/test-results
