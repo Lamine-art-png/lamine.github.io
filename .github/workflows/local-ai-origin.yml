@@ -1,0 +1,52 @@
+name: Local AI Origin
+
+on:
+  pull_request:
+    paths:
+      - 'cloudflare/ollama-compat/**'
+      - 'wrangler.local-ai.toml'
+      - '.github/workflows/local-ai-origin.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'cloudflare/ollama-compat/**'
+      - 'wrangler.local-ai.toml'
+      - '.github/workflows/local-ai-origin.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npx --yes wrangler@4.107.0 deploy --dry-run --config wrangler.local-ai.toml
+
+  deploy:
+    if: github.event_name == 'push'
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npx --yes wrangler@4.107.0 deploy --config wrangler.local-ai.toml
+      - name: Smoke Ollama compatibility origin
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            if curl -fsS https://local-ai.agroai-pilot.com/health | jq -e '.status == "ok"' >/dev/null; then
+              exit 0
+            fi
+            sleep 5
+          done
+          exit 1
