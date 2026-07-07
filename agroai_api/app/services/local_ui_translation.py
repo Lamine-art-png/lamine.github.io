@@ -9,6 +9,8 @@ import httpx
 
 from app.services.ai_gateway import AIGatewayResult
 
+LOCAL_TRANSLATION_REVISION = "json-fallback-v2"
+
 
 def _strip_json_fences(value: str) -> str:
     text = (value or "").strip()
