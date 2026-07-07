@@ -1,0 +1,22 @@
+name: Apply Edge Any Fix
+on:
+  push:
+    branches: [i18n-network-fallback-157]
+    paths: ['.github/workflows/apply-edge-any-fix.yml']
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: i18n-network-fallback-157
+      - run: |
+          sed -i 's/async function workersAiFallback(request: Request,/async function workersAiFallback(request: any,/' cloudflare/edge-gateway/src/production-wrapper.ts
+          rm .github/workflows/apply-edge-any-fix.yml
+          git config user.name agroai-release-bot
+          git config user.email actions@users.noreply.github.com
+          git add -A
+          git commit -m 'fix(edge): accept Cloudflare request metadata in fallback'
+          git push origin HEAD:i18n-network-fallback-157
