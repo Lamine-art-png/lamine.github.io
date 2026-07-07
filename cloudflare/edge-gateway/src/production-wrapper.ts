@@ -173,15 +173,15 @@ async function workersAiFallback(request: Request, env: WrapperEnv, upstream: Re
 }
 
 export default {
-  async fetch(request: Request, env: WrapperEnv, ctx: ExecutionContext): Promise<Response> {
+  async fetch(request: Request, env: WrapperEnv, _ctx: ExecutionContext): Promise<Response> {
     const pathname = new URL(request.url).pathname;
     const clone = TRANSLATION_PATHS.has(pathname) && request.method === "POST" ? request.clone() : null;
-    const response = await baseHandler.fetch(request, env, ctx);
+    const response = await baseHandler.fetch(request, env);
     if (!clone) return response;
     return workersAiFallback(clone, env, response);
   },
-  async queue(batch: MessageBatch<ConnectorTaskEnvelope>, env: WrapperEnv, ctx: ExecutionContext): Promise<void> {
-    await baseHandler.queue(batch, env, ctx);
+  async queue(batch: MessageBatch<ConnectorTaskEnvelope>, env: WrapperEnv, _ctx: ExecutionContext): Promise<void> {
+    await baseHandler.queue(batch, env);
   },
   async scheduled(controller: ScheduledController, env: WrapperEnv, ctx: ExecutionContext): Promise<void> {
     await baseHandler.scheduled(controller, env, ctx);
