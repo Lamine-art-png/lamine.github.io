@@ -3,6 +3,12 @@ name: Edge Diagnostic 157
 on:
   push:
     branches: [edge-diag-157]
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/edge-diag-157.yml'
+      - 'cloudflare/edge-gateway/**'
+      - 'wrangler.toml'
 
 permissions:
   contents: read
