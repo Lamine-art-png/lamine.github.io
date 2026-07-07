@@ -20,7 +20,7 @@ from app.adapters.openet import OpenETAdapter, OpenETAuthError, OpenETRateLimitE
 from app.adapters.talgil import TalgilAdapter, TalgilAuthError, TalgilRateLimitError
 from app.adapters.wiseconn import WiseConnAdapter, WiseConnAuthError, WiseConnRateLimitError
 from app.core.config import settings
-from app.models.operational_records import ConnectorConnection
+from app.models.operational_records import ConnectorConnection, EvidenceRecord
 from app.services.connector_vault import load_connector_credentials
 from app.services.provider_record_store import parse_observed_at, store_provider_record
 from app.services.provider_sync_state import get_sync_cursor
@@ -29,6 +29,8 @@ from app.services.provider_sync_state import get_sync_cursor
 AG_PROVIDERS = {"wiseconn", "talgil", "openet"}
 AUTH_ERRORS = (WiseConnAuthError, TalgilAuthError, OpenETAuthError)
 RATE_LIMIT_ERRORS = (WiseConnRateLimitError, TalgilRateLimitError, OpenETRateLimitError)
+_OPENET_ID_KEYS = {"openet_field_id", "openet_field_ids", "openetfieldid", "openetfieldids"}
+_GEOMETRY_KEYS = {"geometry", "coordinates", "boundary", "polygon", "field_boundary"}
 
 
 def _stable_version(payload: Any) -> str:
@@ -54,58 +56,120 @@ def _id_from(record: dict[str, Any], *keys: str, fallback: str) -> str:
 
 def _observed_at(record: dict[str, Any]) -> datetime | None:
     for key in ("timestamp", "time", "date", "datetime", "observed_at", "updated_at", "source_timestamp"):
-        value = record.get(key)
-        parsed = parse_observed_at(value)
+        parsed = parse_observed_at(record.get(key))
         if parsed is not None:
             return parsed
     return None
 
 
+def _config(connection: ConnectorConnection) -> dict[str, Any]:
+    return dict(connection.config_json or {})
+
+
 def _selected_ids(connection: ConnectorConnection) -> list[str]:
-    config = dict(connection.config_json or {})
+    config = _config(connection)
     values = config.get("selected_resource_ids") or config.get("field_ids") or []
     if isinstance(values, str):
         values = [item.strip() for item in values.split(",") if item.strip()]
     return [str(value) for value in values if str(value).strip()]
 
 
+def _flatten_numbers(value: Any) -> list[float]:
+    result: list[float] = []
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        return [float(value)]
+    if isinstance(value, list):
+        for item in value:
+            result.extend(_flatten_numbers(item))
+    return result
+
+
 def _geometry(connection: ConnectorConnection) -> list[float]:
-    value = dict(connection.config_json or {}).get("geometry") or []
+    value = _config(connection).get("geometry") or []
     if isinstance(value, str):
         try:
             value = json.loads(value)
         except json.JSONDecodeError:
             value = [item.strip() for item in value.split(",") if item.strip()]
-    if not isinstance(value, list):
-        return []
-    result: list[float] = []
-    for item in value:
-        try:
-            result.append(float(item))
-        except (TypeError, ValueError):
-            continue
+    return _flatten_numbers(value)
+
+
+def _extract_openet_ids(value: Any) -> list[str]:
+    result: list[str] = []
+    if isinstance(value, dict):
+        for key, item in value.items():
+            normalized = str(key).lower().replace("-", "_").replace(" ", "_")
+            if normalized in _OPENET_ID_KEYS:
+                if isinstance(item, list):
+                    result.extend(str(entry) for entry in item if str(entry).strip())
+                elif item not in (None, ""):
+                    result.append(str(item))
+            else:
+                result.extend(_extract_openet_ids(item))
+    elif isinstance(value, list):
+        for item in value:
+            result.extend(_extract_openet_ids(item))
     return result
+
+
+def _extract_geometry(value: Any) -> list[float]:
+    if isinstance(value, dict):
+        for key, item in value.items():
+            normalized = str(key).lower().replace("-", "_").replace(" ", "_")
+            if normalized in _GEOMETRY_KEYS:
+                numbers = _flatten_numbers(item)
+                if len(numbers) >= 6:
+                    return numbers
+        for item in value.values():
+            found = _extract_geometry(item)
+            if found:
+                return found
+    elif isinstance(value, list):
+        for item in value:
+            found = _extract_geometry(item)
+            if found:
+                return found
+    return []
+
+
+def _workspace_field_context(db: Session, connection: ConnectorConnection) -> tuple[list[str], list[list[float]]]:
+    query = db.query(EvidenceRecord).filter(EvidenceRecord.tenant_id == connection.tenant_id)
+    if connection.workspace_id:
+        query = query.filter(EvidenceRecord.workspace_id == connection.workspace_id)
+    rows = query.order_by(EvidenceRecord.created_at.desc()).limit(500).all()
+    ids: list[str] = []
+    geometries: list[list[float]] = []
+    for row in rows:
+        for payload in (row.value_json or {}, row.metadata_json or {}):
+            ids.extend(_extract_openet_ids(payload))
+            geometry = _extract_geometry(payload)
+            if geometry:
+                geometries.append(geometry)
+    deduped_ids = list(dict.fromkeys(value for value in ids if value))[:100]
+    return deduped_ids, geometries[:50]
 
 
 def build_ag_adapter(provider: str, credentials: dict[str, Any]):
     api_key = str(credentials.get("api_key") or credentials.get("token") or "").strip()
+    # Provider destinations are server-owned. Legacy vault payloads cannot
+    # redirect a secret-bearing request by supplying an api_url override.
     if provider == "wiseconn":
         return WiseConnAdapter(
-            api_url=str(credentials.get("api_url") or settings.WISECONN_API_URL),
+            api_url=settings.WISECONN_API_URL,
             api_key=api_key,
             timeout=int(getattr(settings, "WISECONN_TIMEOUT_SECONDS", 30)),
             max_retries=int(getattr(settings, "WISECONN_MAX_RETRIES", 3)),
         )
     if provider == "talgil":
         return TalgilAdapter(
-            api_url=str(credentials.get("api_url") or settings.TALGIL_API_URL),
+            api_url=settings.TALGIL_API_URL,
             api_key=api_key,
             timeout=int(getattr(settings, "TALGIL_TIMEOUT_SECONDS", 30)),
             max_retries=int(getattr(settings, "TALGIL_MAX_RETRIES", 3)),
         )
     if provider == "openet":
         return OpenETAdapter(
-            api_url=str(credentials.get("api_url") or settings.OPENET_API_URL),
+            api_url=settings.OPENET_API_URL,
             api_key=api_key,
             timeout=int(getattr(settings, "OPENET_TIMEOUT_SECONDS", 45)),
         )
@@ -115,11 +179,7 @@ def build_ag_adapter(provider: str, credentials: dict[str, Any]):
 def load_ag_adapter(db: Session, *, connection: ConnectorConnection):
     if connection.provider not in AG_PROVIDERS:
         raise ValueError("unsupported agricultural provider")
-    credentials = load_connector_credentials(
-        db,
-        tenant_id=connection.tenant_id,
-        connection_id=connection.id,
-    )
+    credentials = load_connector_credentials(db, tenant_id=connection.tenant_id, connection_id=connection.id)
     return build_ag_adapter(connection.provider, credentials)
 
 
@@ -127,36 +187,42 @@ async def probe_ag_connection(db: Session, *, connection: ConnectorConnection) -
     adapter = load_ag_adapter(db, connection=connection)
     try:
         if connection.provider == "wiseconn":
-            authorized = await adapter.check_auth()
-            if not authorized:
+            if not await adapter.check_auth():
                 raise WiseConnAuthError("WiseConn authorization failed")
             farms = await adapter.list_farms()
-            return {
-                "authorized": True,
-                "identity": {"provider": "wiseconn", "resource_count": len(farms)},
-                "resources": _resource_preview(farms, "farm"),
-            }
+            return {"authorized": True, "identity": {"provider": "wiseconn", "resource_count": len(farms)}, "resources": _resource_preview(farms, "farm")}
         if connection.provider == "talgil":
-            authorized = await adapter.check_auth()
-            if not authorized:
+            if not await adapter.check_auth():
                 raise TalgilAuthError("Talgil authorization failed")
             targets = await adapter.list_targets()
-            return {
-                "authorized": True,
-                "identity": {"provider": "talgil", "resource_count": len(targets)},
-                "resources": _resource_preview(targets, "controller"),
-            }
-        authorized = await adapter.check_auth()
-        if not authorized:
+            return {"authorized": True, "identity": {"provider": "talgil", "resource_count": len(targets)}, "resources": _resource_preview(targets, "controller")}
+        if not await adapter.check_auth():
             raise OpenETAuthError("OpenET authorization failed")
         account = await adapter.account_status()
-        return {
-            "authorized": True,
-            "identity": {"provider": "openet", "account": _redact_mapping(account)},
-            "resources": [],
-        }
+        return {"authorized": True, "identity": {"provider": "openet", "account": _redact_mapping(account)}, "resources": []}
     finally:
         await adapter.close()
+
+
+async def _resolve_openet_ids(db: Session, connection: ConnectorConnection, adapter: OpenETAdapter) -> tuple[list[str], list[float]]:
+    config = _config(connection)
+    ids = _selected_ids(connection)
+    geometry = _geometry(connection)
+    asset_id = str(config.get("openet_asset_id") or "").strip()
+    scope_mode = str(config.get("scope_mode") or "")
+
+    if not ids and asset_id:
+        ids = await adapter.field_ids_for_asset(asset_id)
+    if not ids and geometry:
+        ids = await adapter.field_ids_for_geometry(geometry)
+    if not ids and scope_mode == "agroai_fields":
+        context_ids, geometries = _workspace_field_context(db, connection)
+        ids.extend(context_ids)
+        for candidate in geometries:
+            if len(ids) >= 100:
+                break
+            ids.extend(await adapter.field_ids_for_geometry(candidate))
+    return list(dict.fromkeys(str(value) for value in ids if str(value).strip()))[:100], geometry
 
 
 async def discover_ag_resources(db: Session, *, connection: ConnectorConnection) -> dict[str, Any]:
@@ -169,10 +235,7 @@ async def discover_ag_resources(db: Session, *, connection: ConnectorConnection)
             targets = await adapter.list_targets()
             return {"provider": "talgil", "resources": _resource_preview(targets, "controller"), "count": len(targets)}
 
-        ids = _selected_ids(connection)
-        geometry = _geometry(connection)
-        if not ids and geometry:
-            ids = await adapter.field_ids_for_geometry(geometry)
+        ids, _geometry_value = await _resolve_openet_ids(db, connection, adapter)
         properties = await adapter.field_properties(ids) if ids else []
         return {
             "provider": "openet",
@@ -250,12 +313,7 @@ async def sync_ag_provider(db: Session, *, connection: ConnectorConnection) -> d
         else:
             created, counts = await _sync_openet(db, connection=connection, adapter=adapter, start=start, end=now)
 
-        cursor.cursor_json = {
-            **cursor_state,
-            "last_synced_at": now.isoformat() + "Z",
-            "created_records": created,
-            "counts": counts,
-        }
+        cursor.cursor_json = {**cursor_state, "last_synced_at": now.isoformat() + "Z", "created_records": created, "counts": counts}
         cursor.status = "synced"
         cursor.updated_at = now
         db.flush()
@@ -323,40 +381,30 @@ async def _sync_talgil(db: Session, *, connection: ConnectorConnection, adapter:
 
 
 async def _sync_openet(db: Session, *, connection: ConnectorConnection, adapter: OpenETAdapter, start: datetime, end: datetime) -> tuple[int, dict[str, int]]:
-    ids = _selected_ids(connection)
-    geometry = _geometry(connection)
-    if not ids and geometry:
-        ids = await adapter.field_ids_for_geometry(geometry)
-        config = dict(connection.config_json or {})
+    ids, geometry = await _resolve_openet_ids(db, connection, adapter)
+    if not ids and not geometry:
+        raise RuntimeError("OpenET field scope could not be resolved from the selected source")
+    if ids:
+        config = _config(connection)
         config["field_ids"] = ids[:100]
         config["selected_resource_ids"] = ids[:100]
         connection.config_json = config
+
     created = 0
     counts = {"fields": 0, "timeseries": 0}
     if ids:
-        ids = ids[:100]
         properties = await adapter.field_properties(ids)
         for index, record in enumerate(properties):
             field_id = _id_from(record, "field_id", "fieldId", "id", fallback=ids[index] if index < len(ids) else str(index + 1))
             counts["fields"] += 1
             created += int(_store(db, connection=connection, object_id=f"field:{field_id}", record_type="openet_field", name=f"OpenET field {field_id}", payload=record))
-        series = await adapter.timeseries_by_field_ids(
-            field_ids=ids,
-            start_date=start.date().isoformat(),
-            end_date=end.date().isoformat(),
-            interval="monthly",
-        )
-    elif geometry:
-        series = await adapter.timeseries_for_polygon(
-            geometry=geometry,
-            start_date=start.date().isoformat(),
-            end_date=end.date().isoformat(),
-            interval="monthly",
-        )
+        series = await adapter.timeseries_by_field_ids(field_ids=ids, start_date=start.date().isoformat(), end_date=end.date().isoformat(), interval="monthly")
     else:
-        series = []
+        series = await adapter.timeseries_for_polygon(geometry=geometry, start_date=start.date().isoformat(), end_date=end.date().isoformat(), interval="monthly")
+
     for index, record in enumerate(series):
         object_hint = _id_from(record, "field_id", "fieldId", "id", "date", "time", "timestamp", fallback=f"{index}:{_stable_version(record)[:16]}")
         counts["timeseries"] += 1
-        created += int(_store(db, connection=connection, object_id=f"timeseries:{object_hint}:{_stable_version(record)[:16]}", record_type="openet_estimated_et", name=f"OpenET ET estimate {object_hint}", payload={**record, "truth_label": "estimated", "source_provider": "OpenET", "source_model": record.get("model") or "Ensemble"}))
+        payload = {**record, "truth_label": "estimated", "source_provider": "OpenET", "source_model": record.get("model") or "Ensemble"}
+        created += int(_store(db, connection=connection, object_id=f"timeseries:{object_hint}:{_stable_version(record)[:16]}", record_type="openet_estimated_et", name=f"OpenET ET estimate {object_hint}", payload=payload))
     return created, counts
