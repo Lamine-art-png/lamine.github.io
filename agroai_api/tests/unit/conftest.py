@@ -4,25 +4,22 @@ import pytest
 
 
 @pytest.fixture(autouse=True)
-def _stable_connector_runtime_database(request, monkeypatch, tmp_path):
-    """Make the multi-request connector runtime contract runner-independent.
+def _stable_connector_runtime_database(request):
+    """Make only the multi-request connector runtime contract runner-independent.
 
-    ``test_connector_runtime_v21`` intentionally crosses several TestClient
-    requests and SQLAlchemy sessions. Python 3.11 / pytest 9 exposed that its
-    anonymous in-memory SQLite + StaticPool fixture could route follow-up
-    sessions to state that did not contain the issued OAuth nonce during the
-    complete suite, even though the same contract passed in isolation.
-
-    Preserve the test's production behavior and assertions, but transparently
-    replace only that module's anonymous ``sqlite://`` engine with a unique
-    file-backed SQLite database for each test. This models real durable
-    multi-request persistence and avoids cross-runner pool/thread artifacts.
+    The target contract crosses several TestClient requests and SQLAlchemy
+    sessions. Python 3.11 / pytest 9 exposed a runner-specific anonymous
+    in-memory SQLite + StaticPool artifact where follow-up sessions could not see
+    the issued OAuth nonce during the complete suite. Resolve helper fixtures
+    lazily so unrelated unit tests pay no filesystem or monkeypatch overhead.
     """
     module = getattr(request, "module", None)
     if module is None or not module.__name__.endswith("test_connector_runtime_v21"):
         yield
         return
 
+    monkeypatch = request.getfixturevalue("monkeypatch")
+    tmp_path = request.getfixturevalue("tmp_path")
     original_create_engine = module.create_engine
     database_path = tmp_path / "connector-runtime.db"
 
