@@ -1,9 +1,7 @@
-import sharedUiSourcePart7 from "../../../shared/ui-literals.en.7.json";
+import sharedCommercialBoundaryEn from "../../../shared/ui-commercial-boundary.en.json";
 import { TRANSLATIONS } from "./i18n";
 
-export const COMMERCIAL_BOUNDARY_EN: Record<string, string> = Object.fromEntries(
-  Object.entries(sharedUiSourcePart7).filter(([key]) => key.startsWith("commercialBoundary.")),
-);
+export const COMMERCIAL_BOUNDARY_EN: Record<string, string> = { ...sharedCommercialBoundaryEn };
 
 export const COMMERCIAL_BOUNDARY_FR: Record<string, string> = {
   "commercialBoundary.accessEyebrow": "Accès AGRO-AI",
