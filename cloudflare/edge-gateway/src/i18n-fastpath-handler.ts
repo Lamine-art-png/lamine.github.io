@@ -9,7 +9,7 @@ import {
   type LocaleEntry,
   type TranslationPayload,
 } from "./i18n-edge-validation-v2";
-import { catalogSha256, translateCatalog, workersAiChunkSize, workersAiModel, type AiRunner } from "./i18n-workers-ai";
+import { catalogSha256, translateCatalog, workersAiChunkSize, workersAiModel, type AiRunner } from "./i18n-workers-ai-v2";
 
 export interface I18nFastpathEnv extends BaseEnv { AI: AiRunner }
 
@@ -67,7 +67,7 @@ export async function handleI18nFastpath<Host, Cf>(request: Request<Host, Cf>, e
   }
 
   try {
-    const catalog = await translateCatalog(env.AI, locale.code, source);
+    const catalog = await translateCatalog(env.AI, locale.code, source, locale.name);
     if (isCanary) {
       const changed = Object.keys(source).filter((key) => catalog[key] !== source[key]);
       if (changed.length < 2) throw new Error("workers_ai_canary_stayed_english");
