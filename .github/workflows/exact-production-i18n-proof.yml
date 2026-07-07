@@ -34,3 +34,28 @@ jobs:
           curl -fsS https://app.agroai-pilot.com/v1/health | jq .
           curl -fsS https://app.agroai-pilot.com/v1/readiness | jq .
           curl -fsS https://app.agroai-pilot.com/v1/i18n/languages | jq '{status,count}'
+
+  live-canary-sample:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
+    steps:
+      - name: Prove representative real production generations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for locale in de ar ja; do
+            started="$(date +%s)"
+            curl --fail --silent --show-error --max-time 150 \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+              -H 'Content-Type: application/json' \
+              -H 'Accept: application/json' \
+              -H 'User-Agent: AGRO-AI-Exact-Live-Canary/1.0' \
+              --data "{\"locale\":\"${locale}\"}" \
+              https://app.agroai-pilot.com/v1/i18n/internal/canary \
+              -o "${locale}.json"
+            jq -e --arg locale "$locale" '.status == "ok" and .locale == $locale and .key_count == 4 and .changed_count >= 2 and (.catalog_sha256 | length == 64) and (.providers | length > 0) and (.models | length > 0)' "${locale}.json"
+            jq '{status,locale,changed_count,key_count,providers,models,catalog_sha256}' "${locale}.json"
+            echo "locale=${locale} elapsed=$(( $(date +%s) - started ))s"
+          done
