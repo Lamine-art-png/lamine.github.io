@@ -1,5 +1,5 @@
 name = "agroai-api-edge"
-main = "cloudflare/edge-gateway/src/index.ts"
+main = "cloudflare/edge-gateway/src/production-wrapper.ts"
 compatibility_date = "2026-07-05"
 workers_dev = false
 
@@ -7,6 +7,9 @@ workers_dev = false
 EDGE_ENVIRONMENT = "production"
 UPSTREAM_API_ORIGIN = "https://api-preview.agroai-pilot.com"
 ALLOWED_ORIGINS = "https://app.agroai-pilot.com,https://agroai-pilot.com,https://www.agroai-pilot.com"
+
+[ai]
+binding = "AI"
 
 [secrets]
 required = [ "QUEUE_PUBLISH_TOKEN", "QUEUE_CONSUMER_TOKEN" ]

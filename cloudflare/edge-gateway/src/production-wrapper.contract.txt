@@ -1,0 +1,12 @@
+AGRO-AI production i18n fallback contract
+
+1. Backend remains authoritative for authentication, locale validation, and source-catalog validation.
+2. Workers AI fallback runs only after a backend 503 with one of:
+   - ui_catalog_generation_unavailable
+   - ui_canary_generation_unavailable
+3. Non-generation failures are returned unchanged.
+4. Catalog key parity, non-empty values, and placeholder parity are mandatory.
+5. Canary fallback must change at least two of four canonical English values.
+6. Provider evidence must identify cloudflare_workers_ai and the exact model.
+7. The wrapper must preserve incoming Cloudflare request metadata while delegating to the existing edge handler.
+8. The production fallback exists specifically so a dead local Ollama origin cannot strand every enabled UI locale.
