@@ -8,9 +8,42 @@ export const API_BASE_URL_SOURCE =
 
 const FORMSPREE_SUPPORT_URL = import.meta.env.VITE_FORMSPREE_SUPPORT_URL || import.meta.env.VITE_FORMSPREE_ENDPOINT || "";
 const tokenKey = "agroai_access_token";
+const commercialBoundaryEvent = "agroai:commercial-boundary";
 
 export type ApiError = Error & { status?: number; details?: unknown; code?: string };
 type RequestOptions = RequestInit & { token?: string | null };
+
+function objectValue(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+function commercialDetail(data: unknown, status: number, path: string) {
+  const payload = objectValue(data);
+  const nested = objectValue(payload.detail);
+  const source = Object.keys(nested).length ? nested : payload;
+  return {
+    status,
+    code: typeof source.code === "string" ? source.code : undefined,
+    feature: typeof source.feature === "string" ? source.feature : undefined,
+    feature_state: typeof source.feature_state === "string" ? source.feature_state : undefined,
+    metric: typeof source.metric === "string" ? source.metric : undefined,
+    used: typeof source.used === "number" ? source.used : undefined,
+    reserved: typeof source.reserved === "number" ? source.reserved : undefined,
+    limit: typeof source.limit === "number" ? source.limit : undefined,
+    remaining: typeof source.remaining === "number" ? source.remaining : undefined,
+    recommended_plan: typeof source.recommended_plan === "string" ? source.recommended_plan : undefined,
+    message: typeof source.message === "string" ? source.message : undefined,
+    source: path,
+  };
+}
+
+function dispatchCommercialBoundary(data: unknown, status: number, path: string) {
+  const detail = commercialDetail(data, status, path);
+  const commercialCode = ["upgrade_required", "subscription_inactive", "quota_exceeded"].includes(String(detail.code || ""));
+  if (status === 402 || status === 429 || commercialCode) {
+    window.dispatchEvent(new CustomEvent(commercialBoundaryEvent, { detail }));
+  }
+}
 
 async function parseResponse(response: Response) {
   const contentType = response.headers.get("content-type") || "";
@@ -20,6 +53,25 @@ async function parseResponse(response: Response) {
   return text ? { message: text } : null;
 }
 
+function apiErrorFromResponse(data: unknown, response: Response, path: string): ApiError {
+  const payload = objectValue(data);
+  const detail = objectValue(payload.detail);
+  const message = Object.keys(detail).length && "message" in detail
+    ? String(detail.message)
+    : "detail" in payload
+      ? String(payload.detail)
+      : "message" in payload
+        ? String(payload.message)
+        : `Request failed with status ${response.status}`;
+  const error = new Error(message) as ApiError;
+  error.status = response.status;
+  error.details = data;
+  if (typeof detail.code === "string") error.code = detail.code;
+  else if (typeof payload.code === "string") error.code = payload.code;
+  dispatchCommercialBoundary(data, response.status, path);
+  return error;
+}
+
 async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
   const token = options.token ?? localStorage.getItem(tokenKey);
   const headers = new Headers(options.headers);
@@ -27,23 +79,47 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   if (!headers.has("Content-Type") && options.body && !isFormData) headers.set("Content-Type", "application/json");
   if (token) headers.set("Authorization", `Bearer ${token}`);
   let response: Response;
-  try { response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers }); }
-  catch (cause) { const error = new Error("Backend unavailable. Retry.") as ApiError; error.code = "network_unavailable"; error.details = cause; throw error; }
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  } catch (cause) {
+    const error = new Error("Backend unavailable. Retry.") as ApiError;
+    error.code = "network_unavailable";
+    error.details = cause;
+    throw error;
+  }
   const data = await parseResponse(response);
   if (!response.ok) {
-    const detail = data && typeof data === "object" && "detail" in data ? (data as Record<string, unknown>).detail : null;
-    const message = detail && typeof detail === "object" && "message" in detail ? String((detail as Record<string, unknown>).message) : data && typeof data === "object" && "detail" in data ? String((data as Record<string, unknown>).detail) : data && typeof data === "object" && "message" in data ? String((data as Record<string, unknown>).message) : `Request failed with status ${response.status}`;
-    const error = new Error(message) as ApiError;
-    error.status = response.status; error.details = data;
-    if (detail && typeof detail === "object" && "code" in detail) error.code = String((detail as Record<string, unknown>).code);
     if (response.status === 401) window.dispatchEvent(new Event("agroai:unauthorized"));
-    throw error;
+    throw apiErrorFromResponse(data, response, path);
   }
   return data as T;
 }
 
-async function download(path: string): Promise<Blob> { const token = localStorage.getItem(tokenKey); const headers = new Headers(); if (token) headers.set("Authorization", `Bearer ${token}`); const response = await fetch(`${API_BASE_URL}${path}`, { headers }); if (!response.ok) throw new Error(`Download failed with status ${response.status}`); return response.blob(); }
-async function downloadPost(path: string, payload?: unknown): Promise<Blob> { const token = localStorage.getItem(tokenKey); const headers = new Headers(); headers.set("Content-Type", "application/json"); if (token) headers.set("Authorization", `Bearer ${token}`); const response = await fetch(`${API_BASE_URL}${path}`, { method: "POST", headers, body: payload ? JSON.stringify(payload) : undefined }); if (!response.ok) throw new Error(`Download failed with status ${response.status}`); return response.blob(); }
+async function download(path: string): Promise<Blob> {
+  const token = localStorage.getItem(tokenKey);
+  const headers = new Headers();
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const response = await fetch(`${API_BASE_URL}${path}`, { headers });
+  if (!response.ok) {
+    const data = await parseResponse(response);
+    throw apiErrorFromResponse(data, response, path);
+  }
+  return response.blob();
+}
+
+async function downloadPost(path: string, payload?: unknown): Promise<Blob> {
+  const token = localStorage.getItem(tokenKey);
+  const headers = new Headers();
+  headers.set("Content-Type", "application/json");
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const response = await fetch(`${API_BASE_URL}${path}`, { method: "POST", headers, body: payload ? JSON.stringify(payload) : undefined });
+  if (!response.ok) {
+    const data = await parseResponse(response);
+    throw apiErrorFromResponse(data, response, path);
+  }
+  return response.blob();
+}
+
 function get<T>(path: string, token?: string | null) { return request<T>(path, { token }); }
 function post<T>(path: string, payload?: unknown, token?: string | null) { return request<T>(path, { method: "POST", body: payload ? JSON.stringify(payload) : undefined, token }); }
 function patch<T>(path: string, payload?: unknown, token?: string | null) { return request<T>(path, { method: "PATCH", body: payload ? JSON.stringify(payload) : undefined, token }); }
@@ -89,6 +165,8 @@ export type FieldMessagePayload = { message: string; sender_role: "operator" | "
 export type AutopilotReportPayload = { audience: "operator" | "manager" | "owner" | "agency" | "lender" | "grower"; scope: "today" | "weekly" | "field" | "compliance" | "exceptions"; field_id?: string; workspace_id?: string; preferred_language?: string };
 function providerForUpload(file: File) { const name = file.name.toLowerCase(); if (name.endsWith(".csv")) return "manual_csv"; return "chat_upload"; }
 export type ProductCheckoutPayload = { plan_id: "free" | "professional" | "team" | "network" | "enterprise"; billing_period: "monthly" | "annual" };
+export type BillingCheckoutSessionPayload = { organization_id: string; offer?: string; plan?: string };
+export type BillingPortalPayload = { organization_id: string };
 export type EmailVerificationRequestPayload = { email?: string };
 export type EmailVerificationConfirmPayload = { token: string };
 export type TeamInvitationPayload = { email: string; role: "owner" | "admin" | "manager" | "operator" | "viewer" };
@@ -100,8 +178,15 @@ export type AdminRequestUpdatePayload = { status?: "received" | "triaged" | "in_
 
 export const apiClient = {
   get, post, patch, remove, request, download,
-  auth: { register: (payload: RegisterPayload) => post("/v1/auth/register", payload), login: (payload: LoginPayload) => post("/v1/auth/login", payload), logout: () => post("/v1/auth/logout"), me: () => get("/v1/auth/me"), confirmEmailVerification: (payload: EmailVerificationConfirmPayload) => post("/v1/account/email-verification/confirm", payload) },
-  billing: { status: () => get("/v1/billing/status"), createCheckoutSession: () => post("/v1/billing/create-checkout-session"), createPortalSession: () => post("/v1/billing/create-portal-session"), summary: () => get("/v1/billing/summary"), checkout: (payload: ProductCheckoutPayload) => post("/v1/billing/checkout", payload) },
+  auth: { register: (payload: RegisterPayload) => post("/v1/auth/register", payload), login: (payload: LoginPayload) => post("/v1/auth/login", payload), logout: () => post("/v1/auth/logout"), me: () => get("/v1/auth/me"), requestEmailVerification: (payload?: EmailVerificationRequestPayload) => post("/v1/auth/email-verification/request", payload), confirmEmailVerification: (payload: EmailVerificationConfirmPayload) => post("/v1/auth/email-verification/confirm", payload) },
+  billing: {
+    status: () => get("/v1/billing/status"),
+    commercialSummary: () => get("/v1/billing/commercial-summary"),
+    createCheckoutSession: (payload: BillingCheckoutSessionPayload) => post("/v1/billing/create-checkout-session", payload),
+    createPortalSession: (payload: BillingPortalPayload) => post("/v1/billing/create-portal-session", payload),
+    summary: () => get("/v1/billing/summary"),
+    checkout: (payload: ProductCheckoutPayload) => post("/v1/billing/checkout-authoritative", payload),
+  },
   product: { plans: () => get("/v1/product/plans"), shell: () => get("/v1/app/shell") },
   account: { me: () => get("/v1/account/me"), profile: () => get("/v1/account/profile"), updateProfile: (payload: unknown) => patch("/v1/account/profile", payload), security: () => get("/v1/account/security"), requestEmailVerification: () => post("/v1/account/email-verification/request"), startTwoFactor: () => post("/v1/account/two-factor/start") },
   onboarding: { state: () => get("/v1/onboarding/state"), start: (payload?: OnboardingPayload) => post("/v1/onboarding/start", payload), update: (payload: OnboardingPayload) => patch("/v1/onboarding/state", payload), complete: () => post("/v1/onboarding/complete"), request: (payload: SupportTicketPayload) => post("/v1/onboarding/request", payload), requestHelp: (payload: unknown) => post("/v1/onboarding/request-help", payload) },
