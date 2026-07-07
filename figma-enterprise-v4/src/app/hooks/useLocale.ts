@@ -59,7 +59,10 @@ export function useLocale() {
             if (!cancelled) notifyLocaleRuntime();
           })
           .catch((cause) => {
-            if (!cancelled) setCatalogError(cause instanceof Error ? cause.message : "Full UI translation unavailable");
+            console.warn("background_ui_locale_hydration_failed", {
+              locale: selectedLocale,
+              error: cause instanceof Error ? cause.message : String(cause),
+            });
           });
       } catch (cause) {
         if (!cancelled) {
