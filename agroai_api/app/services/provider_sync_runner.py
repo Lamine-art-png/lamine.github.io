@@ -89,11 +89,18 @@ def _reconnect_failure(db: Session, *, job_id: str, exc: ProviderOAuthError, wor
         return "deferred"
 
     if connection_id:
-        connection = db.get(ConnectorConnection, connection_id)
-        if connection is not None and connection.tenant_id == job.tenant_id:
-            connection.status = "reconnect_required"
-            connection.last_error = str(exc)[:700]
-            connection.updated_at = now
+        db.execute(
+            update(ConnectorConnection)
+            .where(
+                ConnectorConnection.id == connection_id,
+                ConnectorConnection.tenant_id == job.tenant_id,
+            )
+            .values(
+                status="reconnect_required",
+                last_error=str(exc)[:700],
+                updated_at=now,
+            )
+        )
     db.commit()
     return "failed"
 
@@ -108,12 +115,18 @@ def _persist_connection_failure_state(
 ) -> None:
     if not connection_id:
         return
-    connection = db.get(ConnectorConnection, connection_id)
-    if connection is None or connection.tenant_id != tenant_id:
-        return
-    connection.status = state
-    connection.last_error = str(exc)[:700]
-    connection.updated_at = datetime.utcnow()
+    db.execute(
+        update(ConnectorConnection)
+        .where(
+            ConnectorConnection.id == connection_id,
+            ConnectorConnection.tenant_id == tenant_id,
+        )
+        .values(
+            status=state,
+            last_error=str(exc)[:700],
+            updated_at=datetime.utcnow(),
+        )
+    )
     db.commit()
 
 
