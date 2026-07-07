@@ -54,6 +54,15 @@ function nextPlan(value: PlanId) {
   return ORDER[Math.min(ORDER.indexOf(value) + 1, ORDER.length - 1)];
 }
 
+function isCommercialQuota(detail: CommercialBoundaryDetail) {
+  return detail.code === "quota_exceeded" || (detail.status === 429 && Boolean(detail.metric) && detail.limit !== undefined);
+}
+
+function shouldShow(detail: CommercialBoundaryDetail) {
+  if (detail.status === 429) return isCommercialQuota(detail);
+  return detail.status === 402 || ["upgrade_required", "subscription_inactive", "quota_exceeded"].includes(String(detail.code || ""));
+}
+
 function usagePercent(detail: CommercialBoundaryDetail) {
   const used = Number(detail.used || 0) + Number(detail.reserved || 0);
   const limit = Number(detail.limit || 0);
@@ -70,7 +79,9 @@ export function CommercialBoundaryHost({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     const handler = (event: Event) => {
-      setDetail((event as CustomEvent<CommercialBoundaryDetail>).detail || {});
+      const next = (event as CustomEvent<CommercialBoundaryDetail>).detail || {};
+      if (!shouldShow(next)) return;
+      setDetail(next);
       apiClient.account.me().then((response: any) => setCurrentPlan(canonicalPlan(response?.plan?.id || response?.organization?.plan))).catch(() => null);
     };
     window.addEventListener(COMMERCIAL_BOUNDARY_EVENT, handler);
@@ -84,7 +95,7 @@ export function CommercialBoundaryHost({ children }: { children: ReactNode }) {
     return currentPlan === "enterprise" ? "enterprise" : nextPlan(currentPlan);
   }, [detail, currentPlan]);
 
-  const isQuota = detail?.status === 429 || detail?.code === "quota_exceeded";
+  const isQuota = detail ? isCommercialQuota(detail) : false;
   const title = isQuota ? "You’ve reached this plan limit" : detail?.feature && FEATURE_TITLE[detail.feature] ? FEATURE_TITLE[detail.feature] : detail?.code === "subscription_inactive" ? "Restore commercial access" : "Upgrade to continue";
   const body = detail?.message || (isQuota ? "Your current commercial quota is exhausted for this period. Upgrade to keep operating without waiting for the reset." : "This capability is not included in the organization’s current commercial state.");
   const href = `/pricing?upgrade=${target}${detail?.feature ? `&feature=${encodeURIComponent(detail.feature)}` : ""}${detail?.metric ? `&metric=${encodeURIComponent(detail.metric)}` : ""}`;
