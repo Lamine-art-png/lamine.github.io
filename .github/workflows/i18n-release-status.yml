@@ -25,5 +25,6 @@ jobs:
               sha: run.head_sha,
               state: ok ? 'success' : 'failure',
               context: 'production/i18n-59-live',
-              description: ok ? '59/59 live locale proof passed' : 'Live locale proof failed'
+              description: ok ? '59/59 live locale proof passed' : 'Live locale proof failed',
+              target_url: run.html_url
             });
