@@ -42,7 +42,10 @@ const LOCAL_LOCALES: LocaleEntry[] = ((localeManifest as LocaleManifest).locales
   name: locale.englishName || locale.nativeName || locale.code,
 }));
 const EDGE_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60;
+const PUBLIC_FASTPATH_MAX_KEYS = 36;
+const WORKERS_AI_CIRCUIT_MS = 10 * 60 * 1_000;
 const TRANSLATION_INFLIGHT = new Map<string, Promise<TranslationResult>>();
+let workersAiBlockedUntil = 0;
 
 function jsonResponse(payload: unknown, reference?: Response, status = 200): Response {
   const headers = new Headers(reference?.headers);
@@ -62,6 +65,18 @@ function markUpstreamFallback(response: Response): Response {
 
 function diagnosticText(value: unknown): string {
   return String(value || "unknown_error").replace(/\s+/g, " ").slice(0, 1200);
+}
+
+function workersAiQuotaFailure(value: unknown): boolean {
+  return /(4006|daily free allocation|used up.*allocation|quota.*exhaust|quota.*exceed|rate.?limit)/i.test(String(value || ""));
+}
+
+function blockWorkersAiIfNeeded(error: unknown) {
+  if (workersAiQuotaFailure(error)) workersAiBlockedUntil = Date.now() + WORKERS_AI_CIRCUIT_MS;
+}
+
+function workersAiCircuitOpen(): boolean {
+  return workersAiBlockedUntil > Date.now();
 }
 
 function edgeCache(): EdgeCacheLike | null {
@@ -120,17 +135,41 @@ async function writeEdgeCachedTranslation(
   }
 }
 
+async function publicTranslation(locale: string, source: Record<string, string>): Promise<TranslationResult> {
+  const catalog = await translateWithPublicFallback(locale, source);
+  return { catalog, models: [], provider: publicTranslationProvider };
+}
+
 async function translateValidatedCatalog(
   ai: AiRunner,
   locale: string,
   language: string,
   source: Record<string, string>,
 ): Promise<TranslationResult> {
-  try {
-    const catalog = await translateChunkedCatalog(ai, locale, source, language);
-    return { catalog, models: [workersAiModel], provider: "cloudflare_workers_ai" };
-  } catch (chunkedError) {
-    console.warn("workers_ai_chunked_i18n_failed", { locale, error: String(chunkedError) });
+  let publicFastError: unknown = null;
+  if (Object.keys(source).length <= PUBLIC_FASTPATH_MAX_KEYS) {
+    try {
+      return await publicTranslation(locale, source);
+    } catch (error) {
+      publicFastError = error;
+      console.warn("public_i18n_critical_fastpath_failed", { locale, error: String(error) });
+    }
+  }
+
+  let chunkedError: unknown = new Error("workers_ai_circuit_open");
+  if (!workersAiCircuitOpen()) {
+    try {
+      const catalog = await translateChunkedCatalog(ai, locale, source, language);
+      return { catalog, models: [workersAiModel], provider: "cloudflare_workers_ai" };
+    } catch (error) {
+      chunkedError = error;
+      blockWorkersAiIfNeeded(error);
+      console.warn("workers_ai_chunked_i18n_failed", { locale, error: String(error) });
+    }
+  }
+
+  let dedicatedError: unknown = new Error("workers_ai_circuit_open");
+  if (!workersAiCircuitOpen()) {
     try {
       if (locale.split("-", 1)[0].toLowerCase() === "te") {
         const catalog = await translateFallback(ai, source);
@@ -138,22 +177,30 @@ async function translateValidatedCatalog(
       }
       const catalog = await translateDedicatedCatalog(ai, locale, source, language);
       return { catalog, models: [dedicatedTranslationModel], provider: "cloudflare_workers_ai" };
-    } catch (dedicatedError) {
+    } catch (error) {
+      dedicatedError = error;
+      blockWorkersAiIfNeeded(error);
       console.error("workers_ai_dedicated_i18n_failed", {
         locale,
         chunkedError: String(chunkedError),
-        dedicatedError: String(dedicatedError),
+        dedicatedError: String(error),
       });
-      try {
-        const catalog = await translateWithPublicFallback(locale, source);
-        return { catalog, models: [], provider: publicTranslationProvider };
-      } catch (publicError) {
-        console.error("public_i18n_fallback_failed", { locale, error: String(publicError) });
-        throw new Error(
-          `chunked=${diagnosticText(chunkedError)}; dedicated=${diagnosticText(dedicatedError)}; public=${diagnosticText(publicError)}`,
-        );
-      }
     }
+  }
+
+  if (publicFastError) {
+    throw new Error(
+      `public=${diagnosticText(publicFastError)}; chunked=${diagnosticText(chunkedError)}; dedicated=${diagnosticText(dedicatedError)}`,
+    );
+  }
+
+  try {
+    return await publicTranslation(locale, source);
+  } catch (publicError) {
+    console.error("public_i18n_fallback_failed", { locale, error: String(publicError) });
+    throw new Error(
+      `chunked=${diagnosticText(chunkedError)}; dedicated=${diagnosticText(dedicatedError)}; public=${diagnosticText(publicError)}`,
+    );
   }
 }
 
