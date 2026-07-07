@@ -13,7 +13,7 @@ import { catalogSha256, translateCatalog, workersAiChunkSize, workersAiModel, ty
 
 export interface I18nFastpathEnv extends BaseEnv { AI: AiRunner }
 
-type BaseFetch = (request: Request, env: I18nFastpathEnv) => Promise<Response>;
+type BaseFetch = <Host, Cf>(request: Request<Host, Cf>, env: I18nFastpathEnv) => Promise<Response>;
 
 function jsonResponse(payload: unknown, reference: Response, status = 200): Response {
   const headers = new Headers(reference.headers);
@@ -24,7 +24,7 @@ function jsonResponse(payload: unknown, reference: Response, status = 200): Resp
   return new Response(JSON.stringify(payload), { status, headers });
 }
 
-async function registry(request: Request, env: I18nFastpathEnv, baseFetch: BaseFetch) {
+async function registry<Host, Cf>(request: Request<Host, Cf>, env: I18nFastpathEnv, baseFetch: BaseFetch) {
   const response = await baseFetch(registryRequest(request), env);
   if (!response.ok) return { response, entries: [] as LocaleEntry[] };
   try {
@@ -34,7 +34,7 @@ async function registry(request: Request, env: I18nFastpathEnv, baseFetch: BaseF
   return null;
 }
 
-export async function handleI18nFastpath(request: Request, env: I18nFastpathEnv, baseFetch: BaseFetch): Promise<Response> {
+export async function handleI18nFastpath<Host, Cf>(request: Request<Host, Cf>, env: I18nFastpathEnv, baseFetch: BaseFetch): Promise<Response> {
   const fallback = request.clone();
   const pathname = new URL(request.url).pathname;
   let payload: TranslationPayload;
