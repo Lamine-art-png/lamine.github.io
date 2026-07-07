@@ -32,6 +32,13 @@ def test_connector_packaging_matches_customer_segments():
     assert required_plan_for_provider("google_earth_engine") == "enterprise"
 
 
+def test_custom_api_starts_on_network_but_enterprise_remains_contract_scoped():
+    assert BASE_ENTITLEMENTS["professional"]["connectors.custom_api"] == "locked"
+    assert BASE_ENTITLEMENTS["team"]["connectors.custom_api"] == "locked"
+    assert BASE_ENTITLEMENTS["network"]["connectors.custom_api"] == "enabled"
+    assert BASE_ENTITLEMENTS["enterprise"]["connectors.custom_api"] == "contract_only"
+
+
 def test_runtime_connector_guard_uses_packaging_v2_tiers():
     assert connector_commercial_guard.connector_feature("manual_csv") == ("connectors.manual_upload", None)
     assert connector_commercial_guard.connector_feature("weather") == ("connectors.live", "professional")
