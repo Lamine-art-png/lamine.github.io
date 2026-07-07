@@ -22,11 +22,7 @@ from app.services.provider_sync_jobs import TASK_TYPE, SUPPORTED_PROVIDERS
 
 
 async def _access_value(db: Session, connection: ConnectorConnection) -> str:
-    payload = load_connector_credentials(
-        db,
-        tenant_id=connection.tenant_id,
-        connection_id=connection.id,
-    )
+    payload = load_connector_credentials(db, tenant_id=connection.tenant_id, connection_id=connection.id)
     vault_row = db.query(ConnectorCredential).filter(
         ConnectorCredential.tenant_id == connection.tenant_id,
         ConnectorCredential.connection_id == connection.id,
@@ -102,6 +98,55 @@ def _reconnect_failure(db: Session, *, job_id: str, exc: ProviderOAuthError, wor
     return "failed"
 
 
+def _persist_connection_failure_state(
+    db: Session,
+    *,
+    connection_id: str | None,
+    tenant_id: str,
+    state: str,
+    exc: Exception,
+) -> None:
+    if not connection_id:
+        return
+    connection = db.get(ConnectorConnection, connection_id)
+    if connection is None or connection.tenant_id != tenant_id:
+        return
+    connection.status = state
+    connection.last_error = str(exc)[:700]
+    connection.updated_at = datetime.utcnow()
+    db.commit()
+
+
+def _retry_with_connection_state(
+    db: Session,
+    *,
+    job_id: str,
+    connection_id: str | None,
+    tenant_id: str,
+    worker_id: str,
+    exc: Exception,
+    retry_state: str,
+) -> str:
+    result = _fail_or_retry(db, job_id, exc, worker_id=worker_id)
+    if result == "failed":
+        _persist_connection_failure_state(
+            db,
+            connection_id=connection_id,
+            tenant_id=tenant_id,
+            state="failed",
+            exc=exc,
+        )
+    elif result == "retrying":
+        _persist_connection_failure_state(
+            db,
+            connection_id=connection_id,
+            tenant_id=tenant_id,
+            state=retry_state,
+            exc=exc,
+        )
+    return result
+
+
 async def process_provider_sync_job(
     db: Session,
     *,
@@ -117,9 +162,10 @@ async def process_provider_sync_job(
     if job.job_type != TASK_TYPE:
         return _fail_or_retry(db, job_id, RuntimeError("worker task type mismatch"), worker_id=worker_id)
 
+    connection_id = job.connector_connection_id
     with job_lease_heartbeat(job_id=job_id, tenant_id=tenant_id, worker_id=worker_id) as heartbeat:
         try:
-            connection = db.get(ConnectorConnection, job.connector_connection_id)
+            connection = db.get(ConnectorConnection, connection_id)
             if connection is None or connection.tenant_id != tenant_id:
                 raise RuntimeError("provider sync connection is unavailable")
             if connection.provider not in SUPPORTED_PROVIDERS:
@@ -164,17 +210,34 @@ async def process_provider_sync_job(
                 worker_id=worker_id,
             )
         except RATE_LIMIT_ERRORS as exc:
-            db.rollback()
-            connection = db.get(ConnectorConnection, job.connector_connection_id)
-            if connection is not None and connection.tenant_id == tenant_id:
-                connection.status = "rate_limited"
-                connection.last_error = str(exc)[:700]
-                connection.updated_at = datetime.utcnow()
-                db.commit()
-            return _fail_or_retry(db, job_id, exc, worker_id=worker_id)
+            return _retry_with_connection_state(
+                db,
+                job_id=job_id,
+                connection_id=connection_id,
+                tenant_id=tenant_id,
+                worker_id=worker_id,
+                exc=exc,
+                retry_state="rate_limited",
+            )
         except ProviderOAuthError as exc:
             if exc.reconnect_required:
                 return _reconnect_failure(db, job_id=job_id, exc=exc, worker_id=worker_id)
-            return _fail_or_retry(db, job_id, exc, worker_id=worker_id)
+            return _retry_with_connection_state(
+                db,
+                job_id=job_id,
+                connection_id=connection_id,
+                tenant_id=tenant_id,
+                worker_id=worker_id,
+                exc=exc,
+                retry_state="degraded",
+            )
         except Exception as exc:
-            return _fail_or_retry(db, job_id, exc, worker_id=worker_id)
+            return _retry_with_connection_state(
+                db,
+                job_id=job_id,
+                connection_id=connection_id,
+                tenant_id=tenant_id,
+                worker_id=worker_id,
+                exc=exc,
+                retry_state="degraded",
+            )
