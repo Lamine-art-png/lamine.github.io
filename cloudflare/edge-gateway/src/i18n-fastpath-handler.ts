@@ -17,6 +17,7 @@ import {
 } from "./i18n-workers-ai-v2";
 import {
   translateCatalog as translateDedicatedCatalog,
+  validCatalog,
   workersAiModel as dedicatedTranslationModel,
 } from "./i18n-translation-engine-v3";
 import { fallbackModel, translateFallback } from "./i18n-locale-fallback";
@@ -27,11 +28,21 @@ export interface I18nFastpathEnv extends BaseEnv { AI: AiRunner }
 type BaseFetch = <Host, Cf>(request: Request<Host, Cf>, env: I18nFastpathEnv) => Promise<Response>;
 type LocaleManifest = { locales?: Array<{ code?: string; englishName?: string; nativeName?: string }> };
 type TranslationResult = { catalog: Record<string, string>; models: string[]; provider: string };
+type CachedTranslationPayload = { catalog?: unknown; models?: unknown; provider?: unknown };
+
+type EdgeCacheLike = {
+  match(request: Request): Promise<Response | undefined>;
+  put(request: Request, response: Response): Promise<void>;
+};
+
+type EdgeCacheStorageLike = { default?: EdgeCacheLike };
 
 const LOCAL_LOCALES: LocaleEntry[] = ((localeManifest as LocaleManifest).locales || []).map((locale) => ({
   code: locale.code,
   name: locale.englishName || locale.nativeName || locale.code,
 }));
+const EDGE_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60;
+const TRANSLATION_INFLIGHT = new Map<string, Promise<TranslationResult>>();
 
 function jsonResponse(payload: unknown, reference?: Response, status = 200): Response {
   const headers = new Headers(reference?.headers);
@@ -51,6 +62,62 @@ function markUpstreamFallback(response: Response): Response {
 
 function diagnosticText(value: unknown): string {
   return String(value || "unknown_error").replace(/\s+/g, " ").slice(0, 1200);
+}
+
+function edgeCache(): EdgeCacheLike | null {
+  const storage = (globalThis as unknown as { caches?: EdgeCacheStorageLike }).caches;
+  return storage?.default || null;
+}
+
+async function edgeCacheRequest(locale: string, source: Record<string, string>): Promise<Request> {
+  const digest = await catalogSha256(source);
+  return new Request(`https://agroai-i18n-cache.invalid/catalog/${encodeURIComponent(locale)}/${digest}`, { method: "GET" });
+}
+
+async function readEdgeCachedTranslation(
+  locale: string,
+  source: Record<string, string>,
+): Promise<TranslationResult | null> {
+  const cache = edgeCache();
+  if (!cache) return null;
+  try {
+    const key = await edgeCacheRequest(locale, source);
+    const response = await cache.match(key);
+    if (!response?.ok) return null;
+    const payload = await response.json() as CachedTranslationPayload;
+    if (!validCatalog(source, payload.catalog)) return null;
+    const models = Array.isArray(payload.models) ? payload.models.filter((value): value is string => typeof value === "string") : [];
+    return {
+      catalog: payload.catalog,
+      models,
+      provider: typeof payload.provider === "string" && payload.provider ? payload.provider : "edge_catalog_cache",
+    };
+  } catch (error) {
+    console.warn("edge_i18n_cache_read_failed", { locale, error: String(error) });
+    return null;
+  }
+}
+
+async function writeEdgeCachedTranslation(
+  locale: string,
+  source: Record<string, string>,
+  translated: TranslationResult,
+): Promise<void> {
+  const cache = edgeCache();
+  if (!cache) return;
+  try {
+    const key = await edgeCacheRequest(locale, source);
+    const response = new Response(JSON.stringify(translated), {
+      status: 200,
+      headers: {
+        "content-type": "application/json; charset=utf-8",
+        "cache-control": `public, max-age=${EDGE_CACHE_TTL_SECONDS}`,
+      },
+    });
+    await cache.put(key, response);
+  } catch (error) {
+    console.warn("edge_i18n_cache_write_failed", { locale, error: String(error) });
+  }
 }
 
 async function translateValidatedCatalog(
@@ -90,6 +157,31 @@ async function translateValidatedCatalog(
   }
 }
 
+async function translateWithDurableEdgeCache(
+  ai: AiRunner,
+  locale: string,
+  language: string,
+  source: Record<string, string>,
+): Promise<TranslationResult> {
+  const cached = await readEdgeCachedTranslation(locale, source);
+  if (cached) return { ...cached, provider: "edge_catalog_cache" };
+
+  const cacheKey = `${locale}:${await catalogSha256(source)}`;
+  const existing = TRANSLATION_INFLIGHT.get(cacheKey);
+  if (existing) return existing;
+
+  const pending = translateValidatedCatalog(ai, locale, language, source)
+    .then(async (translated) => {
+      await writeEdgeCachedTranslation(locale, source, translated);
+      return translated;
+    })
+    .finally(() => {
+      TRANSLATION_INFLIGHT.delete(cacheKey);
+    });
+  TRANSLATION_INFLIGHT.set(cacheKey, pending);
+  return pending;
+}
+
 export async function handleI18nFastpath<Host, Cf>(request: Request<Host, Cf>, env: I18nFastpathEnv, baseFetch: BaseFetch): Promise<Response> {
   const fallback = request.clone();
   const pathname = new URL(request.url).pathname;
@@ -113,7 +205,7 @@ export async function handleI18nFastpath<Host, Cf>(request: Request<Host, Cf>, e
   }
 
   try {
-    const translated = await translateValidatedCatalog(env.AI, locale.code, locale.name, source);
+    const translated = await translateWithDurableEdgeCache(env.AI, locale.code, locale.name, source);
     const catalog = translated.catalog;
     if (isCanary) {
       const changed = Object.keys(source).filter((key) => catalog[key] !== source[key]);
