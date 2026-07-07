@@ -19,7 +19,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Inspect Worker metadata and all active Tunnels
+      - name: Inspect Worker metadata, Tunnels, and prior Quick Tunnels
         run: |
           set -euo pipefail
           auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
@@ -38,15 +38,25 @@ jobs:
           curl --silent --show-error -H "$auth" "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/scripts/agroai-local-ai-origin/deployments" \
             | jq '{success,errors,deployments:(.result.deployments // .result // [])}' > local-ai-worker-deployments.json || true
 
-          cname="$(dig +short CNAME local-ai.agroai-pilot.com | head -1 | sed 's/\.$//' || true)"
-          a_records="$(dig +short A local-ai.agroai-pilot.com | paste -sd, - || true)"
-          jq -n --arg cname "$cname" --arg a "$a_records" '{cname:$cname,a_records:($a|split(",")|map(select(length>0)))}' > local-ai-dns.json
+          probe() {
+            name="$1"
+            url="$2"
+            status="$(curl --silent --show-error --location --max-time 20 -o "${name}.body" -w '%{http_code}' "${url}/api/tags" || true)"
+            body_ok=no
+            if jq -e '.models | type == "array"' "${name}.body" >/dev/null 2>&1; then body_ok=yes; fi
+            jq -n --arg name "$name" --arg url "$url" --arg status "$status" --arg body_ok "$body_ok" '{name:$name,url:$url,http_status:$status,ollama_tags_ok:($body_ok=="yes")}'
+          }
+
+          {
+            probe seeing-barbara https://seeing-barbara-equity-dual.trycloudflare.com
+            probe shoes-operator https://shoes-operator-thing-focusing.trycloudflare.com
+          } | jq -s '{probes:.}' > quick-tunnel-probes.json
 
           cat local-ai-routes.json
           cat all-active-tunnels.json
           cat local-ai-worker-settings.json
           cat local-ai-worker-deployments.json
-          cat local-ai-dns.json
+          cat quick-tunnel-probes.json
 
       - uses: actions/upload-artifact@v4
         with:
@@ -56,7 +66,7 @@ jobs:
             all-active-tunnels.json
             local-ai-worker-settings.json
             local-ai-worker-deployments.json
-            local-ai-dns.json
+            quick-tunnel-probes.json
           retention-days: 7
 
       - name: Publish diagnostic status
@@ -66,15 +76,11 @@ jobs:
           script: |
             const fs = require('fs');
             const state = '${{ job.status }}' === 'success' ? 'success' : 'failure';
-            let statusContext = 'diagnostic/local-ai-metadata/failed';
+            let statusContext = 'diagnostic/local-ai-probe/failed';
             if (state === 'success') {
-              const routes = JSON.parse(fs.readFileSync('local-ai-routes.json', 'utf8')).routes || [];
-              const tunnelsDoc = JSON.parse(fs.readFileSync('all-active-tunnels.json', 'utf8'));
-              const settingsDoc = JSON.parse(fs.readFileSync('local-ai-worker-settings.json', 'utf8'));
-              const routeScript = routes[0]?.script || 'no-route';
-              const tunnelCount = (tunnelsDoc.tunnels || []).length;
-              const settingsState = settingsDoc.success ? 'settings-ok' : 'settings-blocked';
-              statusContext = `diagnostic/local-ai/${routeScript}/tunnels-${tunnelCount}/${settingsState}`.slice(0, 100);
+              const probes = JSON.parse(fs.readFileSync('quick-tunnel-probes.json', 'utf8')).probes || [];
+              const active = probes.find((probe) => probe.ollama_tags_ok);
+              statusContext = active ? `diagnostic/local-ai/quick-${active.name}-active` : 'diagnostic/local-ai/no-quick-tunnel';
             }
             await github.rest.repos.createCommitStatus({
               owner: context.repo.owner,
@@ -82,6 +88,6 @@ jobs:
               sha: context.sha,
               state,
               context: statusContext,
-              description: 'local-ai Worker metadata and Tunnel inventory',
+              description: 'probe prior AGRO-AI Quick Tunnel URLs',
               target_url: `https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`
             });
