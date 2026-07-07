@@ -12,13 +12,14 @@ on:
   push:
     branches:
       - 'assistant/commercial-intelligence-control-plane-finish'
+      - 'assistant/monetization-convergence-launch-complete'
 
 permissions:
   contents: read
 
 jobs:
   commercial_control_plane:
-    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/assistant/commercial-intelligence-control-plane-finish'
+    if: github.event_name == 'pull_request' || github.ref == 'refs/heads/assistant/commercial-intelligence-control-plane-finish' || github.ref == 'refs/heads/assistant/monetization-convergence-launch-complete'
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -37,7 +38,7 @@ jobs:
       - name: Import FastAPI application
         run: python -c "from app.main import app; assert app is not None"
       - name: Run commercial control-plane contracts
-        run: python -m pytest tests/unit/test_commercial_control_plane.py tests/unit/test_commercial_migration_contract.py tests/unit/test_connector_commercial_guard.py tests/unit/test_commercial_runtime_guards.py tests/unit/test_connector_runtime_v21.py tests/unit/test_production_readiness.py tests/unit/test_billing_production_readiness.py -vv --tb=short 2>&1 | tee commercial-test-output.log
+        run: python -m pytest tests/unit/test_commercial_control_plane.py tests/unit/test_commercial_migration_contract.py tests/unit/test_connector_commercial_guard.py tests/unit/test_commercial_runtime_guards.py tests/unit/test_monetization_convergence.py tests/unit/test_connector_runtime_v21.py tests/unit/test_production_readiness.py tests/unit/test_billing_production_readiness.py -vv --tb=short 2>&1 | tee commercial-test-output.log
       - name: Upload focused commercial test output
         if: always()
         uses: actions/upload-artifact@v4
