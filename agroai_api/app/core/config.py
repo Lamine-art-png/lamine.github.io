@@ -66,7 +66,8 @@ class Settings(BaseSettings):
     WISECONN_TIMEOUT_SECONDS: int = 30
     WISECONN_MAX_RETRIES: int = 3
     RAINBIRD_API_URL: str = "http://mock-rainbird"
-    OPENET_API_URL: str = "http://mock-openet"
+    OPENET_API_URL: str = "https://openet-api.org"
+    OPENET_TIMEOUT_SECONDS: int = 45
 
     TALGIL_API_URL: str = "https://external.talgil.com/v1"
     TALGIL_API_KEY: str = ""
