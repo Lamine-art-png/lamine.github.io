@@ -6,8 +6,8 @@ import { fullEnglishUiSource } from "./portalLiteralCatalog";
 
 const CACHE_PREFIX = "agroai_ui_catalog_v4:";
 const RETRY_COOLDOWN_MS = 3_000;
-const REQUEST_CHUNK_SIZE = 36;
-const REQUEST_PARALLELISM = 4;
+const REQUEST_CHUNK_SIZE = 12;
+const REQUEST_PARALLELISM = 2;
 const INFLIGHT = new Map<string, Promise<boolean>>();
 const RETRY_AFTER = new Map<string, number>();
 
