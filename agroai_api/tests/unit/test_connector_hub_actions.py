@@ -32,16 +32,16 @@ def make_client():
         )
         db.add(org)
         db.flush()
-        # Enterprise custom integrations are intentionally contract-only. These
-        # vault-route tests model an executed enterprise deployment explicitly
-        # instead of weakening the production paywall.
+        # Enterprise Custom API access is contract-scoped. These vault-route
+        # tests model an executed deployment explicitly instead of weakening
+        # the production paywall.
         db.add(
             EntitlementOverride(
                 organization_id=org.id,
-                feature_key="connectors.custom_integration",
+                feature_key="connectors.custom_api",
                 value_json={"value": "enabled"},
                 source="test_contract_fixture",
-                reason="Exercise custom API credential custody after commercial enablement.",
+                reason="Exercise Custom API credential custody after commercial enablement.",
             )
         )
         db.commit()
