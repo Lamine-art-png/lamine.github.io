@@ -20,8 +20,16 @@ def _ready_settings():
     settings.__dict__["CONNECTOR_OBJECT_BUCKET"] = "agroai-ingestion"
     settings.__dict__["TASK_QUEUE_BACKEND"] = "redis_streams"
     settings.__dict__["REDIS_URL"] = "redis://redis.example/0"
-    settings.__dict__["CONNECTOR_CREDENTIAL_MASTER_KEY"] = "configured-material"
-    settings.__dict__["OAUTH_STATE_SIGNING_KEY"] = "dedicated-signing-material"
+    settings.__dict__["CONNECTOR_CREDENTIAL_MASTER_KEY"] = "configured"
+    settings.__dict__["OAUTH_STATE_SIGNING_KEY"] = "configured"
+    settings.__dict__["STRIPE_SECRET_KEY"] = "configured"
+    settings.__dict__["STRIPE_WEBHOOK_SECRET"] = "configured"
+    settings.__dict__["STRIPE_PRICE_PRO_MONTHLY"] = "price_pro_monthly"
+    settings.__dict__["STRIPE_PRICE_PRO_ANNUAL"] = "price_pro_annual"
+    settings.__dict__["STRIPE_PRICE_TEAM_MONTHLY"] = "price_team_monthly"
+    settings.__dict__["STRIPE_PRICE_TEAM_ANNUAL"] = "price_team_annual"
+    settings.__dict__["STRIPE_PRICE_NETWORK_MONTHLY"] = "price_network_monthly"
+    settings.__dict__["STRIPE_PRICE_NETWORK_ANNUAL"] = "price_network_annual"
     return settings
 
 
@@ -29,8 +37,8 @@ def _ready_r2_settings():
     settings = _ready_settings()
     settings.__dict__["CONNECTOR_OBJECT_STORAGE_BACKEND"] = "r2"
     settings.__dict__["CONNECTOR_OBJECT_ENDPOINT_URL"] = "https://account-id.r2.cloudflarestorage.com"
-    settings.__dict__["CLOUDFLARE_R2_ACCESS_KEY_ID"] = "r2-access-key"
-    settings.__dict__["CLOUDFLARE_R2_SECRET_ACCESS_KEY"] = "r2-secret-key"
+    settings.__dict__["CLOUDFLARE_R2_ACCESS_KEY_ID"] = "configured"
+    settings.__dict__["CLOUDFLARE_R2_SECRET_ACCESS_KEY"] = "configured"
     return settings
 
 
@@ -44,6 +52,9 @@ def test_default_settings_fail_closed_for_large_scale():
     assert "connectors.local_upload_storage" in codes
     assert "connectors.object_storage_missing" in codes
     assert "workers.external_queue_missing" in codes
+    assert "billing.stripe_secret_missing" in codes
+    assert "billing.stripe_webhook_secret_missing" in codes
+    assert "billing.stripe_prices_missing" in codes
     assert "intelligence.provider_missing" in codes
 
 
