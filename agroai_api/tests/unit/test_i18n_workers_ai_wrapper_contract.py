@@ -1,14 +1,18 @@
 from pathlib import Path
 
 
-def test_workers_ai_wrapper_keeps_backend_authority_and_fails_over_only_generation_503():
+def test_workers_ai_fastpath_preserves_backend_validation_and_internal_canary_auth():
     repo_root = Path(__file__).resolve().parents[3]
-    source = (repo_root / "cloudflare" / "edge-gateway" / "src" / "production-wrapper.ts").read_text(encoding="utf-8")
+    entrypoint = (repo_root / "cloudflare" / "edge-gateway" / "src" / "edge-main-v2.ts").read_text(encoding="utf-8")
+    handler = (repo_root / "cloudflare" / "edge-gateway" / "src" / "i18n-fastpath-handler.ts").read_text(encoding="utf-8")
+    validation = (repo_root / "cloudflare" / "edge-gateway" / "src" / "i18n-edge-validation.ts").read_text(encoding="utf-8")
+    engine = (repo_root / "cloudflare" / "edge-gateway" / "src" / "i18n-workers-ai.ts").read_text(encoding="utf-8")
 
-    assert 'response.status !== 503' in source
-    assert 'ui_catalog_generation_unavailable' in source
-    assert 'ui_canary_generation_unavailable' in source
-    assert 'request.clone()' in source
-    assert 'validCatalog(source, output)' in source
-    assert 'changedKeys.length < 2' in source
-    assert 'providers: ["cloudflare_workers_ai"]' in source
+    assert 'handleI18nFastpath' in entrypoint
+    assert 'englishValidationRequest' in handler
+    assert 'if (!checked.ok) return checked' in handler
+    assert 'canaryAuthorized(request, env.QUEUE_CONSUMER_TOKEN)' in handler
+    assert 'matchesConfiguredToken' in validation
+    assert 'validCatalog(source, output)' in engine
+    assert 'changed.length < 2' in handler
+    assert 'providers: ["cloudflare_workers_ai"]' in handler
