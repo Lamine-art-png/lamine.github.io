@@ -259,7 +259,8 @@ jobs:
           grep -F 'Kiswahili' portal-smoke/all-js.txt >/dev/null
           grep -F 'Українська' portal-smoke/all-js.txt >/dev/null
           grep -F '日本語' portal-smoke/all-js.txt >/dev/null
-          grep -F 'agroai_ui_catalog_v3:' portal-smoke/all-js.txt >/dev/null
+          grep -F 'agroai_ui_catalog_v4:' portal-smoke/all-js.txt >/dev/null
+          grep -F 'Full UI translation unavailable' portal-smoke/all-js.txt >/dev/null
           printf 'portal_global_language_bundle=ok\n'
 
   release-evidence:
