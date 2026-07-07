@@ -74,6 +74,26 @@ def apply_catalog_packaging(catalog: list[dict[str, Any]]) -> None:
             item["required_plan"] = required_plan_for_provider(provider)
 
 
+def _remove_legacy_upload_routes() -> None:
+    # connectors.py is already loaded before the installer runs from api.v1.
+    # Remove request-scoped compatibility uploads so only metered authorities
+    # remain live when main.py later mounts the compatibility router.
+    from app.api.v1 import connectors as connector_compat_module
+
+    legacy_paths = {
+        "/evidence/upload",
+        "/connectors/connections/{connection_id}/upload",
+    }
+    connector_compat_module.router.routes[:] = [
+        route
+        for route in connector_compat_module.router.routes
+        if not (
+            getattr(route, "path", "") in legacy_paths
+            and "POST" in set(getattr(route, "methods", None) or ())
+        )
+    ]
+
+
 def install_commercial_packaging_v2() -> None:
     from app.services.commercial_control import BASE_ENTITLEMENTS
     from app.services.entitlements import PLAN_LIMITS
@@ -122,3 +142,5 @@ def install_commercial_packaging_v2() -> None:
         for feature in ("Weather context", "OpenET / ET context"):
             if feature not in features:
                 features.append(feature)
+
+    _remove_legacy_upload_routes()
