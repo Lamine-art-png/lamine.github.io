@@ -17,6 +17,8 @@ import {
 import { FULL_UI_TRANSLATION_DIAGNOSTIC, purgeLegacyDynamicCatalogCache } from "../i18nReleaseCompatibility";
 import { getLocaleRuntimeSnapshot, notifyLocaleRuntime, subscribeLocaleRuntime } from "../localeRuntimeStore";
 
+let explicitLocaleActivated = false;
+
 function primeKnownLocale(locale: string) {
   primeLocaleCatalogFromCache(locale, "critical");
   primeLocaleCatalogFromCache(locale, "core");
@@ -100,6 +102,13 @@ export function useLocale() {
 
   const setLocale = (nextLocale: string) => {
     const canonical = canonicalizeSelectedLocale(nextLocale);
+    const current = getStoredLocale();
+    if (explicitLocaleActivated && canonical !== current) {
+      primeKnownLocale(current);
+      setSelectedLocaleState(current);
+      notifyLocaleRuntime();
+      return current;
+    }
     primeKnownLocale(canonical);
     const activated = setStoredLocale(canonical);
     setSelectedLocaleState(activated);
@@ -108,6 +117,7 @@ export function useLocale() {
   };
 
   const activateLocale = (nextLocale: string) => {
+    explicitLocaleActivated = true;
     const canonical = canonicalizeSelectedLocale(nextLocale);
     primeKnownLocale(canonical);
     const activated = setStoredLocale(canonical);
