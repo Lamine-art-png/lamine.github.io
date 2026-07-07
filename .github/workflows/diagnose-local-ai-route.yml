@@ -19,7 +19,7 @@ jobs:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
-      - name: Inspect local-ai routing and DNS
+      - name: Inspect local-ai routing and public DNS
         run: |
           set -euo pipefail
           auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
@@ -32,8 +32,9 @@ jobs:
           curl --fail --silent --show-error -H "$auth" "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/domains" \
             | jq '{domains:[.result[] | select((.hostname // "") == "local-ai.agroai-pilot.com") | {id,hostname,service,zone_id}]}' > local-ai-domains.json
 
-          curl --fail --silent --show-error -H "$auth" "https://api.cloudflare.com/client/v4/zones/${zone_id}/dns_records?name=local-ai.agroai-pilot.com" \
-            | jq '{dns:[.result[] | {id,type,name,content,proxied}]}' > local-ai-dns.json
+          cname="$(dig +short CNAME local-ai.agroai-pilot.com | head -1 | sed 's/\.$//' || true)"
+          a_records="$(dig +short A local-ai.agroai-pilot.com | paste -sd, - || true)"
+          jq -n --arg cname "$cname" --arg a "$a_records" '{cname:$cname,a_records:($a|split(",")|map(select(length>0)))}' > local-ai-dns.json
 
           cat local-ai-routes.json
           cat local-ai-domains.json
@@ -58,10 +59,9 @@ jobs:
             let statusContext = 'diagnostic/local-ai-route/failed';
             if (state === 'success') {
               const routes = JSON.parse(fs.readFileSync('local-ai-routes.json', 'utf8')).routes || [];
-              const dns = JSON.parse(fs.readFileSync('local-ai-dns.json', 'utf8')).dns || [];
+              const dns = JSON.parse(fs.readFileSync('local-ai-dns.json', 'utf8'));
               const routeScript = routes[0]?.script || (routes.length ? 'route-no-script' : 'no-route');
-              const record = dns[0];
-              const dnsKind = !record ? 'no-dns' : (String(record.content || '').endsWith('.cfargotunnel.com') ? 'tunnel' : String(record.type || 'dns').toLowerCase());
+              const dnsKind = String(dns.cname || '').endsWith('.cfargotunnel.com') ? 'tunnel' : (dns.cname ? 'cname' : (dns.a_records?.length ? 'a-record' : 'no-dns'));
               statusContext = `diagnostic/local-ai/${routeScript}/${dnsKind}`.slice(0, 100);
             }
             await github.rest.repos.createCommitStatus({
@@ -70,5 +70,5 @@ jobs:
               sha: context.sha,
               state,
               context: statusContext,
-              description: 'local-ai Worker and DNS inspection'
+              description: 'local-ai Worker and public DNS inspection'
             });
