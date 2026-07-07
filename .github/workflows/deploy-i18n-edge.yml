@@ -20,6 +20,7 @@ concurrency:
 
 env:
   API_URL: https://app.agroai-pilot.com
+  PORTAL_ORIGIN: https://app.agroai-pilot.com
 
 jobs:
   deploy:
@@ -62,7 +63,7 @@ jobs:
           done
           exit 1
 
-      - name: Prove all 59 live dynamic locales
+      - name: Prove all 59 live browser-readable locales
         shell: bash
         run: |
           set -euo pipefail
@@ -73,20 +74,29 @@ jobs:
           passed=0
           : > locale-matrix.jsonl
           while IFS= read -r locale; do
-            payload="$(curl --fail --silent --show-error --max-time 45 \
+            headers="headers-${locale}.txt"
+            body="body-${locale}.json"
+            status="$(curl --silent --show-error --max-time 60 \
+              -D "$headers" \
+              -o "$body" \
+              -w '%{http_code}' \
+              -H "Origin: ${PORTAL_ORIGIN}" \
               -H 'Content-Type: application/json' \
               -d "{\"locale\":\"${locale}\",\"source\":{\"language\":\"Language\",\"save\":\"Save\"}}" \
               "${API_URL}/v1/i18n/catalog")"
 
-            printf '%s' "$payload" | jq -e --arg locale "$locale" '
+            test "$status" = "200"
+            tr -d '\r' < "$headers" | grep -Fi "access-control-allow-origin: ${PORTAL_ORIGIN}" >/dev/null
+            jq -e --arg locale "$locale" '
               .status == "ok" and
               .locale == $locale and
               (.catalog.language | type == "string" and length > 0) and
               (.catalog.save | type == "string" and length > 0) and
               ((.catalog.language != "Language") or (.catalog.save != "Save"))
-            ' >/dev/null
+            ' "$body" >/dev/null
 
-            printf '%s\n' "$payload" >> locale-matrix.jsonl
+            jq -c . "$body" >> locale-matrix.jsonl
+            rm -f "$headers" "$body"
             passed=$((passed + 1))
             echo "PASS ${locale}"
           done < dynamic-locales.txt
@@ -98,10 +108,12 @@ jobs:
           echo "live_non_english_locale_matrix=${total}/59"
 
       - name: Upload immutable locale evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: live-i18n-59-matrix-${{ github.sha }}
           path: |
             dynamic-locales.txt
             locale-matrix.jsonl
+          if-no-files-found: ignore
           retention-days: 30
