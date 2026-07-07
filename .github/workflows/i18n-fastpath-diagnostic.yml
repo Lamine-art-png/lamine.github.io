@@ -1,4 +1,4 @@
-name: I18n Fastpath Diagnostic
+name: I18n Fastpath Contract CI
 
 on:
   pull_request:
@@ -12,7 +12,7 @@ permissions:
   contents: read
 
 jobs:
-  diagnose:
+  verify-fastpath:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -22,7 +22,7 @@ jobs:
       - name: Install edge dependencies
         working-directory: cloudflare/edge-gateway
         run: npm ci --no-audit --no-fund
-      - name: Capture exact edge check
+      - name: Run exact edge typecheck and runtime contracts
         working-directory: cloudflare/edge-gateway
         shell: bash
         run: |
@@ -31,13 +31,14 @@ jobs:
           status=$?
           cat edge-check.log
           echo "$status" > edge-check.exit
-          exit 0
-      - name: Upload diagnostic
+          exit "$status"
+      - name: Upload immutable edge evidence
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: i18n-fastpath-edge-diagnostic
+          name: i18n-fastpath-edge-contract-${{ github.sha }}
           path: |
             cloudflare/edge-gateway/edge-check.log
             cloudflare/edge-gateway/edge-check.exit
           if-no-files-found: error
-          retention-days: 1
+          retention-days: 30
