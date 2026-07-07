@@ -8,7 +8,8 @@ import { Integrations } from "./Integrations";
 
 const ORDER = ["free", "professional", "team", "network", "enterprise"] as const;
 type PlanId = typeof ORDER[number];
-type Catalog = { connectors?: { id: string; name: string }[] };
+type Catalog = { connectors?: { id: string; name: string; required_plan?: string }[] };
+type ConnectorAccess = { provider: string; requiredPlan: PlanId };
 
 const FALLBACK: Record<string, string> = {
   WiseConn: "wiseconn", Talgil: "talgil", Files: "manual_csv", Gmail: "gmail", Outlook: "outlook",
@@ -23,7 +24,7 @@ function plan(value: unknown): PlanId {
   return ORDER.includes(next as PlanId) ? next as PlanId : "free";
 }
 
-function required(provider: string): PlanId {
+function fallbackRequired(provider: string): PlanId {
   if (["manual_csv", "chat_upload"].includes(provider)) return "free";
   if (["universal_controller", "salesforce", "google_earth_engine", "custom_api"].includes(provider)) return "enterprise";
   return "professional";
@@ -41,9 +42,17 @@ export function MonetizedIntegrationsV2() {
   const catalog = usePortalResource<Catalog>(useCallback(() => apiClient.connectorHub.catalog(), []));
   const rootRef = useRef<HTMLDivElement | null>(null);
 
-  const byTitle = useMemo(() => {
-    const map = new Map(Object.entries(FALLBACK));
-    for (const item of catalog.data?.connectors || []) map.set(item.name, item.id);
+  const accessByTitle = useMemo(() => {
+    const map = new Map<string, ConnectorAccess>();
+    for (const [title, provider] of Object.entries(FALLBACK)) {
+      map.set(title, { provider, requiredPlan: fallbackRequired(provider) });
+    }
+    for (const item of catalog.data?.connectors || []) {
+      map.set(item.name, {
+        provider: item.id,
+        requiredPlan: item.required_plan ? plan(item.required_plan) : fallbackRequired(item.id),
+      });
+    }
     return map;
   }, [catalog.data]);
 
@@ -54,9 +63,9 @@ export function MonetizedIntegrationsV2() {
     const annotate = () => {
       root.querySelectorAll<HTMLElement>("article").forEach((article) => {
         const title = article.querySelector("h3")?.textContent?.trim();
-        const provider = title ? byTitle.get(title) : undefined;
-        if (!provider) return;
-        const needed = required(provider);
+        const access = title ? accessByTitle.get(title) : undefined;
+        if (!access) return;
+        const { provider, requiredPlan: needed } = access;
         const locked = ORDER.indexOf(current) < ORDER.indexOf(needed);
         const button = article.querySelector<HTMLButtonElement>("button");
         const badge = article.querySelector<HTMLElement>("[data-agroai-lock-badge]");
@@ -78,12 +87,13 @@ export function MonetizedIntegrationsV2() {
         article.dataset.agroaiRequiredPlan = needed;
         if (!button) return;
         if (!button.dataset.agroaiOriginalLabel) button.dataset.agroaiOriginalLabel = button.textContent || "Connect";
-        const label = `Upgrade to ${needed === "enterprise" ? "Enterprise" : "Professional"}`;
+        const label = `Upgrade to ${needed === "enterprise" ? "Enterprise" : needed === "network" ? "Network" : needed === "team" ? "Team" : "Professional"}`;
         if (button.textContent !== label) button.textContent = label;
         if (!badge) {
           const lock = document.createElement("div");
           lock.dataset.agroaiLockBadge = "true";
-          lock.textContent = `🔒 ${needed === "enterprise" ? "Enterprise" : "Professional"} required`;
+          const planName = needed === "enterprise" ? "Enterprise" : needed === "network" ? "Network" : needed === "team" ? "Team" : "Professional";
+          lock.textContent = `🔒 ${planName} required`;
           lock.style.cssText = "margin:0 0 10px;padding:8px 10px;border-radius:9px;background:#F0F7EE;border:1px solid #CFE1CB;color:#1F5A43;font-size:11px;font-weight:600;text-align:center;";
           button.parentElement?.insertBefore(lock, button);
         }
@@ -93,7 +103,7 @@ export function MonetizedIntegrationsV2() {
     annotate();
     const timers = [0, 120, 350, 800, 1600].map((delay) => window.setTimeout(annotate, delay));
     return () => timers.forEach((timer) => window.clearTimeout(timer));
-  }, [byTitle, current]);
+  }, [accessByTitle, current]);
 
   function capture(event: ReactMouseEvent<HTMLDivElement>) {
     const button = (event.target as HTMLElement).closest("button");
@@ -103,7 +113,8 @@ export function MonetizedIntegrationsV2() {
     event.stopPropagation();
     const provider = article.dataset.agroaiProvider || "connector";
     const target = article.dataset.agroaiRequiredPlan || "professional";
-    openCommercialBoundary({ status: 402, code: "upgrade_required", feature: feature(provider), recommended_plan: target, message: `${target === "enterprise" ? "Enterprise" : "Professional"} is required to connect ${article.querySelector("h3")?.textContent || "this source"}.`, source: "connectors" });
+    const targetName = target === "enterprise" ? "Enterprise" : target === "network" ? "Network" : target === "team" ? "Team" : "Professional";
+    openCommercialBoundary({ status: 402, code: "upgrade_required", feature: feature(provider), recommended_plan: target, message: `${targetName} is required to connect ${article.querySelector("h3")?.textContent || "this source"}.`, source: "connectors" });
   }
 
   return <div ref={rootRef} onClickCapture={capture}>
