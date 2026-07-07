@@ -48,6 +48,10 @@ function markUpstreamFallback(response: Response): Response {
   return new Response(response.body, { status: response.status, statusText: response.statusText, headers });
 }
 
+function diagnosticText(value: unknown): string {
+  return String(value || "unknown_error").replace(/\s+/g, " ").slice(0, 1200);
+}
+
 async function translateValidatedCatalog(
   ai: AiRunner,
   locale: string,
@@ -72,7 +76,7 @@ async function translateValidatedCatalog(
         chunkedError: String(chunkedError),
         dedicatedError: String(dedicatedError),
       });
-      throw dedicatedError;
+      throw new Error(`chunked=${diagnosticText(chunkedError)}; dedicated=${diagnosticText(dedicatedError)}`);
     }
   }
 }
@@ -132,6 +136,17 @@ export async function handleI18nFastpath<Host, Cf>(request: Request<Host, Cf>, e
     console.error("workers_ai_i18n_generation_failed", { locale: locale.code, error: String(error) });
     try {
       const upstream = await baseFetch(fallback, env);
+      if (isCanary && !upstream.ok) {
+        const upstreamBody = await upstream.clone().text().catch(() => "");
+        return jsonResponse({
+          status: "error",
+          error: "ui_canary_generation_unavailable",
+          locale: locale.code,
+          workers_ai_error: diagnosticText(error),
+          upstream_status: upstream.status,
+          upstream_body: upstreamBody.slice(0, 2000),
+        }, upstream, upstream.status);
+      }
       return markUpstreamFallback(upstream);
     } catch (upstreamError) {
       console.error("upstream_i18n_fallback_failed", {
