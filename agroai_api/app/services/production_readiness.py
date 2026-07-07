@@ -31,6 +31,16 @@ class ReadinessReport:
         }
 
 
+SELF_SERVE_STRIPE_PRICE_SETTINGS = (
+    "STRIPE_PRICE_PRO_MONTHLY",
+    "STRIPE_PRICE_PRO_ANNUAL",
+    "STRIPE_PRICE_TEAM_MONTHLY",
+    "STRIPE_PRICE_TEAM_ANNUAL",
+    "STRIPE_PRICE_NETWORK_MONTHLY",
+    "STRIPE_PRICE_NETWORK_ANNUAL",
+)
+
+
 def _is_local_path(value: str) -> bool:
     raw = (value or "").strip().lower()
     return raw.startswith("/tmp/") or raw.startswith("./") or raw.startswith("/var/tmp/")
@@ -78,6 +88,64 @@ def _require_r2_contract(settings: Settings, blockers: list[ReadinessFinding]) -
                 "blocker",
                 "connectors",
                 "R2 connector object storage requires both access key fields before production release.",
+            )
+        )
+
+
+def _require_billing_contract(settings: Settings, blockers: list[ReadinessFinding]) -> None:
+    if not _setting(settings, "STRIPE_SECRET_KEY"):
+        blockers.append(
+            ReadinessFinding(
+                "billing.stripe_secret_missing",
+                "blocker",
+                "billing",
+                "Stripe API credentials are required before the self-serve commercial surface can enter production.",
+            )
+        )
+
+    if not _setting(settings, "STRIPE_WEBHOOK_SECRET"):
+        blockers.append(
+            ReadinessFinding(
+                "billing.stripe_webhook_secret_missing",
+                "blocker",
+                "billing",
+                "Stripe webhook signature verification must be configured before production release.",
+            )
+        )
+
+    price_values = {name: _setting(settings, name) for name in SELF_SERVE_STRIPE_PRICE_SETTINGS}
+    missing = [name for name, value in price_values.items() if not value]
+    if missing:
+        blockers.append(
+            ReadinessFinding(
+                "billing.stripe_prices_missing",
+                "blocker",
+                "billing",
+                "All Professional, Team, and Network monthly/annual Stripe Price IDs are required; missing: "
+                + ", ".join(missing),
+            )
+        )
+        return
+
+    invalid = [name for name, value in price_values.items() if not value.startswith("price_")]
+    if invalid:
+        blockers.append(
+            ReadinessFinding(
+                "billing.stripe_price_ids_invalid",
+                "blocker",
+                "billing",
+                "Configured self-serve Stripe prices must use Stripe Price IDs; invalid: " + ", ".join(invalid),
+            )
+        )
+
+    values = list(price_values.values())
+    if len(values) != len(set(values)):
+        blockers.append(
+            ReadinessFinding(
+                "billing.stripe_price_ids_duplicate",
+                "blocker",
+                "billing",
+                "Each self-serve monthly/annual commercial offer must map to a distinct Stripe Price ID.",
             )
         )
 
@@ -145,6 +213,8 @@ def evaluate_production_readiness(settings: Settings, *, target_scale: str = "pr
             blockers.append(ReadinessFinding("connectors.oauth_state_key_missing", "blocker", "connectors", "A secure OAuth state signing root is not configured."))
         else:
             warnings.append(ReadinessFinding("connectors.oauth_state_key_derived", "warning", "connectors", "OAuth state signing uses the application signing root fallback; configure a dedicated key for independent rotation."))
+
+    _require_billing_contract(settings, blockers)
 
     if settings.ACCESS_TOKEN_EXPIRE_MINUTES > 1440:
         warnings.append(ReadinessFinding("identity.long_lived_access_token", "warning", "identity", "Access tokens live longer than one day; production should use shorter access tokens plus refresh/session rotation."))
