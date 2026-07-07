@@ -46,6 +46,15 @@ def _connection(db: Session, tenant_id: str, connection_id: str) -> ConnectorCon
     return row
 
 
+def _state(row: ConnectorConnection) -> str:
+    value = str(row.status or "available")
+    if value in {"ready", "test_passed"}:
+        return "connected"
+    if value in {"connected", "discovering", "syncing", "synced", "action_required", "reconnect_required", "rate_limited", "degraded", "failed", "disconnected"}:
+        return value
+    return "available" if not row.credentials_ref else value
+
+
 def _job(db: Session, *, tenant_id: str, connection: ConnectorConnection, job_type: str, output_json: dict[str, Any], status_value: str = "completed") -> IngestionJob:
     row = IngestionJob(tenant_id=tenant_id, workspace_id=connection.workspace_id, connector_connection_id=connection.id, job_type=job_type, status=status_value, input_json={"provider": connection.provider, "connection_id": connection.id}, output_json=output_json, completed_at=datetime.utcnow())
     db.add(row)
@@ -100,3 +109,125 @@ async def connect_unified_ag_provider(payload: UnifiedConnectRequest, tenant_id:
     db.commit()
     db.refresh(connection)
     return {"status": "connected", "state": "connected", "connection": public_connection(connection), "identity": probe.get("identity"), "resources": resources, "count": len(resources), "job": {"id": job.id, "status": job.status}}
+
+
+@router.get("/connectors/unified/{connection_id}/status")
+async def unified_status(connection_id: str, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
+    verify_connector_schema(db)
+    connection = _connection(db, tenant_id, connection_id)
+    return {"status": "ok", "state": _state(connection), "connection": public_connection(connection)}
+
+
+@router.get("/connectors/unified/{connection_id}/discovery")
+async def discover_unified_resources(connection_id: str, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
+    verify_connector_schema(db)
+    connection = _connection(db, tenant_id, connection_id)
+    if not connection.credentials_ref:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error": "provider_reauthorization_required", "provider": connection.provider})
+    connection.status = "discovering"
+    connection.updated_at = datetime.utcnow()
+    db.commit()
+    try:
+        discovery = await discover_ag_resources(db, connection=connection)
+    except AUTH_ERRORS as exc:
+        connection.status = "reconnect_required"
+        connection.last_error = str(exc)[:700]
+        connection.updated_at = datetime.utcnow()
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail={"error": "provider_reauthorization_required", "provider": connection.provider}) from exc
+    except RATE_LIMIT_ERRORS as exc:
+        connection.status = "rate_limited"
+        connection.last_error = str(exc)[:700]
+        connection.updated_at = datetime.utcnow()
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_429_TOO_MANY_REQUESTS, detail={"error": "provider_rate_limited", "provider": connection.provider}) from exc
+    connection.status = "connected"
+    config = dict(connection.config_json or {})
+    config.update({"last_discovery_count": discovery.get("count", 0), "last_discovery_at": datetime.utcnow().isoformat() + "Z"})
+    connection.config_json = sanitize_config(config)
+    connection.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(connection)
+    return {"status": "ok", "state": "connected", "connection": public_connection(connection), **discovery}
+
+
+@router.post("/connectors/unified/{connection_id}/selection")
+async def save_unified_selection(payload: UnifiedSelectionRequest, connection_id: str, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
+    verify_connector_schema(db)
+    connection = _connection(db, tenant_id, connection_id)
+    selected = list(dict.fromkeys([str(value) for value in (payload.resource_ids or payload.field_ids) if str(value).strip()]))
+    config = dict(connection.config_json or {})
+    config.update({"scope_mode": payload.scope_mode, "selected_resource_ids": selected, "selection_saved_at": datetime.utcnow().isoformat() + "Z"})
+    if payload.field_ids:
+        config["field_ids"] = list(dict.fromkeys([str(value) for value in payload.field_ids if str(value).strip()]))[:100]
+    if payload.geometry:
+        config["geometry"] = [float(value) for value in payload.geometry]
+    connection.config_json = sanitize_config(config)
+    connection.status = "connected"
+    connection.updated_at = datetime.utcnow()
+    _job(db, tenant_id=tenant_id, connection=connection, job_type="unified_ag_selection", output_json={"scope_mode": payload.scope_mode, "selected_count": len(selected), "has_geometry": bool(payload.geometry)})
+    db.commit()
+    db.refresh(connection)
+    return {"status": "ok", "state": "connected", "connection": public_connection(connection), "selected_resource_ids": selected}
+
+
+@router.post("/connectors/unified/{connection_id}/sync")
+async def sync_unified_connection(connection_id: str, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
+    verify_connector_schema(db)
+    connection = _connection(db, tenant_id, connection_id)
+    if connection.status not in {"connected", "synced", "syncing", "rate_limited", "degraded"} or not connection.credentials_ref:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error": "provider_reauthorization_required", "provider": connection.provider, "status": connection.status})
+    queued, deduplicated = queue_provider_sync(db, tenant_id=tenant_id, connection=connection)
+    connection.status = "syncing"
+    connection.updated_at = datetime.utcnow()
+    db.commit()
+    publication = await drain_pending_outbox(limit=10)
+    db.refresh(connection)
+    return {"status": queued.status, "state": "syncing", "deduplicated": deduplicated, "queue_publication": publication, "connection": public_connection(connection), "job": {"id": queued.id, "status": queued.status}}
+
+
+@router.post("/connectors/unified/{connection_id}/openet-boundary")
+async def upload_openet_boundary(connection_id: str, file: UploadFile = File(...), tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
+    verify_connector_schema(db)
+    connection = _connection(db, tenant_id, connection_id)
+    if connection.provider != "openet":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Boundary upload is only supported for OpenET")
+    if not connection.credentials_ref:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail={"error": "provider_reauthorization_required", "provider": "openet"})
+    receipt = await stream_upload_to_spool(file, tenant_id=tenant_id, connection_id=connection.id)
+    try:
+        data = read_spooled_bytes(receipt)
+        adapter = load_ag_adapter(db, connection=connection)
+        try:
+            uploaded = await adapter.upload_geojson(file.filename or "openet-boundary.geojson", data)
+        finally:
+            await adapter.close()
+        config = dict(connection.config_json or {})
+        config.update({"scope_mode": "geometry_asset", "openet_asset_id": uploaded.get("asset_id") or uploaded.get("id") or uploaded.get("asset"), "boundary_upload": sanitize_config(uploaded), "boundary_uploaded_at": datetime.utcnow().isoformat() + "Z"})
+        connection.config_json = sanitize_config(config)
+        connection.status = "connected"
+        connection.updated_at = datetime.utcnow()
+        _job(db, tenant_id=tenant_id, connection=connection, job_type="openet_boundary_upload", output_json={"uploaded": sanitize_config(uploaded)})
+        db.commit()
+        db.refresh(connection)
+        return {"status": "ok", "state": "connected", "connection": public_connection(connection), "upload": sanitize_config(uploaded)}
+    finally:
+        Path(receipt.path).unlink(missing_ok=True)
+
+
+@router.post("/connectors/unified/{connection_id}/disconnect")
+async def disconnect_unified_connection(connection_id: str, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> dict[str, Any]:
+    verify_connector_schema(db)
+    connection = _connection(db, tenant_id, connection_id)
+    revoked = revoke_connector_credentials(db, tenant_id=tenant_id, connection_id=connection.id)
+    config = dict(connection.config_json or {})
+    config.update({"authorization_status": "disconnected", "disconnected_at": datetime.utcnow().isoformat() + "Z"})
+    connection.config_json = sanitize_config(config)
+    connection.status = "disconnected"
+    connection.credentials_ref = None
+    connection.last_error = None
+    connection.updated_at = datetime.utcnow()
+    _job(db, tenant_id=tenant_id, connection=connection, job_type="unified_ag_disconnect", output_json={"local_credential_revoked": revoked})
+    db.commit()
+    db.refresh(connection)
+    return {"status": "disconnected", "state": "available", "local_credential_revoked": revoked, "connection": public_connection(connection)}
