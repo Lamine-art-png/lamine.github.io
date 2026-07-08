@@ -15,6 +15,7 @@ const routeHook = read(appRoot, "hooks", "usePortalCopy.ts");
 const layout = read(appRoot, "components", "MainLayout.tsx");
 const pricing = read(appRoot, "components", "PricingPage.tsx");
 const evidence = read(appRoot, "components", "Evidence.tsx");
+const sources = read(appRoot, "components", "Sources.tsx");
 const integrations = read(appRoot, "components", "IntegrationsV3.tsx");
 const statusBar = read(appRoot, "components", "OperatingStatusBar.tsx");
 const boundary = read(appRoot, "components", "CommercialBoundaryHostLocalized.tsx");
@@ -41,6 +42,10 @@ for (const key of [
   "dynamic.integrations.setupStateTemplate",
   "dynamic.cockpit.connectionsTemplate",
   "dynamic.paywall.team",
+  "dynamic.tour.quickTitle",
+  "dynamic.tour.sourcesBody",
+  "dynamic.sources.organizedBody",
+  "dynamic.sources.viewInSources",
 ]) assert(typeof dynamicEntries[key] === "string" && dynamicEntries[key].length > 0, `missing ${key}`);
 
 assert(portalCatalog.includes("ui-dynamic-copy.en.json"), "portal catalog must import primary dynamic copy");
@@ -62,7 +67,7 @@ assert(routeHook.includes("ensureLocaleSourceCatalog"), "visible route copy must
 assert(routeHook.includes("useSyncExternalStore"), "route copy must react to installed catalog chunks");
 
 for (const route of ["/operations", "/field-queue", "/tasks", "/readiness", "/fields", "/exceptions"]) {
-  assert(layout.includes(`\"${route}\"`), `shell route-priority map missing ${route}`);
+  assert(layout.includes(`"${route}"`), `shell route-priority map missing ${route}`);
 }
 assert(layout.includes("PLAN_COPY_VALUES"), "shell must prioritize only exact plan labels on non-dynamic routes");
 assert(layout.includes("usePortalCopy(copyNamespacesForPath(location.pathname), PLAN_COPY_VALUES)"), "shell route hydration must stay narrow");
@@ -75,9 +80,10 @@ for (const expression of ["tx(plan.name)", "tx(plan.recommended_buyer)", "tx(lim
 }
 assert(pricing.includes('tf("Create an account first, then Stripe checkout will open for {plan}."'), "pricing generated checkout sentence must use a translated template");
 
-assert(evidence.includes('usePortalCopy(["evidence", "shared"])'), "evidence page must hydrate evidence copy first");
+assert(evidence.includes('usePortalCopy(["evidence", "sources", "shared"])'), "evidence page must hydrate evidence and source-library copy first");
 assert(evidence.includes('tf("{score}% readiness"'), "evidence readiness label must use a translated template");
 assert(evidence.includes('tf("Uploaded {files} file(s). Created {evidence} evidence records from {rows} parsed rows."'), "evidence upload result must use a translated template");
+assert(sources.includes('usePortalCopy(["sources", "shared"])'), "sources page must hydrate source-library copy first");
 
 assert(integrations.includes("INTEGRATION_LITERAL_VALUES"), "connector profile literals must be prioritized");
 assert(integrations.includes('usePortalCopy(["integrations", "shared"], INTEGRATION_LITERAL_VALUES)'), "integrations route copy hook missing");
