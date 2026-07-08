@@ -17,8 +17,10 @@ install_commercial_billing_lifecycle()
 
 from . import brain as brain_module  # noqa: E402
 from . import brain_safety as brain_safety_module  # noqa: E402
+from . import brain_commercial as brain_commercial_module  # noqa: E402
 
 brain_module.router.include_router(brain_safety_module.router)
+brain_module.router.include_router(brain_commercial_module.router)
 
 from . import ai as ai_module  # noqa: E402
 from . import connector_hub as connector_module  # noqa: E402

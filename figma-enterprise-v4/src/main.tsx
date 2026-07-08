@@ -1,4 +1,5 @@
 import { createRoot } from "react-dom/client";
+import "./app/commercialBoundaryConversionLabels";
 import { CommercialBoundaryHost } from "./app/components/CommercialBoundaryHost";
 import "./styles/index.css";
 
