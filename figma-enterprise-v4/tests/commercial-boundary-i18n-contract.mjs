@@ -19,10 +19,12 @@ for (const required of [
 
 for (const required of [
   "useLocale()",
+  'usePortalCopy(["paywall", "shared"])',
   "commercialBoundary.title.quota",
   "commercialBoundary.body.unavailable",
   "commercialBoundary.close",
-  "reasonText(detail, t)",
+  "reasonText(detail, t, tx)",
+  "return tx(detail.conversion_context.trim());",
 ]) {
   if (!host.includes(required)) throw new Error(`Missing localized boundary contract: ${required}`);
 }
@@ -30,9 +32,15 @@ for (const required of [
 if (host.includes("detail?.message") || host.includes("detail.message")) {
   throw new Error("Raw backend message copy must not be rendered as portal UI");
 }
+if (host.includes("return detail.conversion_context.trim();")) {
+  throw new Error("Contextual paywall conversion copy must not bypass localization");
+}
 
 if (!literalRuntime.includes("ui-literals.en.7.json")) {
   throw new Error("Portal runtime must consume monetization literal catalog part 7");
+}
+if (!literalRuntime.includes("ui-dynamic-copy.en.json")) {
+  throw new Error("Portal runtime must consume canonical dynamic monetization copy");
 }
 
 const install = dynamic.indexOf("installCommercialBoundaryBaseCatalogs();");

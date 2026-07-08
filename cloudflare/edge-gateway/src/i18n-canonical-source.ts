@@ -6,6 +6,8 @@ import literalCatalog4 from "../../../shared/ui-literals.en.4.json";
 import literalCatalog5 from "../../../shared/ui-literals.en.5.json";
 import literalCatalog6 from "../../../shared/ui-literals.en.6.json";
 import literalCatalog7 from "../../../shared/ui-literals.en.7.json";
+import dynamicCopyCatalog from "../../../shared/ui-dynamic-copy.en.json";
+import dynamicCopyExtraCatalog from "../../../shared/ui-dynamic-copy-extra.en.json";
 import commercialBoundaryCatalog from "../../../shared/ui-commercial-boundary.en.json";
 
 const MAX_KEYS = 2_000;
@@ -23,6 +25,8 @@ const CANONICAL_SOURCE: Record<string, string> = Object.assign(
   literalCatalog5,
   literalCatalog6,
   literalCatalog7,
+  dynamicCopyCatalog,
+  dynamicCopyExtraCatalog,
   commercialBoundaryCatalog,
 );
 

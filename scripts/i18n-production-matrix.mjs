@@ -4,13 +4,26 @@ import process from "node:process";
 
 const repoRoot = path.resolve(path.dirname(new URL(import.meta.url).pathname), "..");
 const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "shared", "supported-locales.json"), "utf8"));
+const dynamicCopy = JSON.parse(fs.readFileSync(path.join(repoRoot, "shared", "ui-dynamic-copy.en.json"), "utf8"));
+const dynamicExtra = JSON.parse(fs.readFileSync(path.join(repoRoot, "shared", "ui-dynamic-copy-extra.en.json"), "utf8"));
 const endpoint = String(process.env.I18N_SMOKE_ENDPOINT || "https://api.agroai-pilot.com/v1/i18n/catalog").trim();
 const locales = Array.isArray(manifest.dynamicCatalogLocales) ? manifest.dynamicCatalogLocales : [];
-const source = { settings: "Settings", language: "Language", workspace: "Workspace" };
+const source = {
+  settings: "Settings",
+  language: "Language",
+  workspace: "Workspace",
+  "dynamic.pricing.comparePlans": dynamicCopy["dynamic.pricing.comparePlans"],
+  "dynamic.evidence.store": dynamicCopy["dynamic.evidence.store"],
+  "dynamic.cockpit.providerNeedsAttentionTemplate": dynamicExtra["dynamic.cockpit.providerNeedsAttentionTemplate"],
+  "dynamic.statusbar.summaryTemplate": dynamicExtra["dynamic.statusbar.summaryTemplate"],
+};
 const concurrency = Math.max(1, Math.min(Number(process.env.I18N_SMOKE_CONCURRENCY || 3), 6));
 const maxAttempts = Math.max(1, Math.min(Number(process.env.I18N_SMOKE_ATTEMPTS || 3), 6));
 
 if (!locales.length) throw new Error("No dynamicCatalogLocales found in shared manifest");
+if (Object.values(source).some((value) => typeof value !== "string" || !value.trim())) {
+  throw new Error("Production matrix source contains a missing canonical UI string");
+}
 
 const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 

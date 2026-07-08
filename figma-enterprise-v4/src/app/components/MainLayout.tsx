@@ -1,7 +1,8 @@
-import { Outlet, NavLink } from "react-router";
+import { Outlet, NavLink, useLocation } from "react-router";
 import { CreditCard, HelpCircle, Lock, LogOut, Plus, Settings, Shield, UserCircle } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 import { useLocale } from "../hooks/useLocale";
+import { usePortalCopy } from "../hooks/usePortalCopy";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import logoImg from "../../imports/agro-ai-logo-1.png";
 import { OperatingStatusBar } from "./OperatingStatusBar";
@@ -22,6 +23,16 @@ const PLAN_LABELS: Record<string, string> = {
   assurance_audit: "Professional",
   assurance: "Team",
 };
+const PLAN_COPY_VALUES = Array.from(new Set(Object.values(PLAN_LABELS)));
+
+function copyNamespacesForPath(pathname: string): string[] {
+  if (pathname === "/operations") return ["operations", "shared"];
+  if (["/", "/field-queue", "/tasks"].includes(pathname)) return ["overview", "shared"];
+  if (["/readiness", "/fields", "/exceptions", "/decision-workbench", "/report-factory"].includes(pathname)) return ["cockpit", "shared"];
+  // Pricing, Evidence, and Integrations own their route copy sources inside the
+  // mounted component. Other routes rely on the static progressive catalog.
+  return [];
+}
 
 const TOUR_TARGETS: Record<string, string> = {
   "/": "command-center",
@@ -40,6 +51,8 @@ function capabilityEnabled(entitlements: Record<string, unknown>, key: string, f
 export function MainLayout() {
   const { currentOrganization, currentWorkspace, entitlements, logout } = useAuth();
   const { t } = useLocale();
+  const location = useLocation();
+  const { tx } = usePortalCopy(copyNamespacesForPath(location.pathname), PLAN_COPY_VALUES);
   const canInviteTeam = capabilityEnabled(entitlements, "team.invite", Boolean(entitlements.can_invite_team));
   const canAccessAdminRequests = capabilityEnabled(entitlements, "admin.requests", Boolean(entitlements.can_access_admin_requests));
   const canGeneratePdf = capabilityEnabled(entitlements, "reports.pdf_export", Boolean(entitlements.can_generate_pdf));
@@ -107,7 +120,7 @@ export function MainLayout() {
 
         <div className="space-y-2 px-3 pb-4">
           <NavLink to="/pricing" className="flex h-10 items-center justify-between rounded-md px-3 text-[12px] font-medium" style={({ isActive }) => ({ background: isActive ? "#0B2A1F" : "rgba(255,255,255,0.04)", color: "rgba(255,255,255,0.78)", border: "1px solid rgba(255,255,255,0.07)" })}>
-            <span>{currentPlanLabel}</span>
+            <span>{tx(currentPlanLabel)}</span>
             <span style={{ color: "rgba(255,255,255,0.42)" }}>{t("plan")}</span>
           </NavLink>
           <div className="rounded-lg p-2" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>

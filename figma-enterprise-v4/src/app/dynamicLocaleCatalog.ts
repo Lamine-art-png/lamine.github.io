@@ -209,6 +209,12 @@ export function hasCriticalLocaleCatalog(locale: string): boolean {
   return catalogCoversSource(TRANSLATIONS[effectiveLocale], sourceForScope("critical"));
 }
 
+export function hasLocaleSourceCatalog(locale: string, source: Record<string, string>): boolean {
+  const effectiveLocale = normalizeLocale(locale);
+  if (!Object.keys(source).length) return true;
+  return catalogCoversSource(TRANSLATIONS[effectiveLocale], source);
+}
+
 export function primeLocaleCatalogFromCache(locale: string, scope: CatalogScope = "critical"): boolean {
   const effectiveLocale = normalizeLocale(locale);
   const source = sourceForScope(scope);
@@ -220,6 +226,19 @@ export function primeLocaleCatalogFromCache(locale: string, scope: CatalogScope 
   const reusable = cachedReusable(effectiveLocale, source);
   if (Object.keys(reusable).length) installLocaleCatalog(effectiveLocale, source, reusable, false);
   return catalogCoversSource(reusable, source);
+}
+
+export function primeLocaleSourceCatalogFromCache(locale: string, source: Record<string, string>): boolean {
+  const effectiveLocale = normalizeLocale(locale);
+  if (!Object.keys(source).length) return true;
+  if (effectiveLocale === "en") {
+    installLocaleCatalog("en", source, source, false);
+    return true;
+  }
+  if (catalogCoversSource(TRANSLATIONS[effectiveLocale], source)) return true;
+  const reusable = cachedReusable(effectiveLocale, source);
+  if (Object.keys(reusable).length) installLocaleCatalog(effectiveLocale, source, reusable, false);
+  return catalogCoversSource(TRANSLATIONS[effectiveLocale], source);
 }
 
 function sourceChunks(source: Record<string, string>): Record<string, string>[] {
@@ -322,9 +341,9 @@ async function loadLocaleCatalog(effectiveLocale: string, source: Record<string,
   return true;
 }
 
-export async function ensureLocaleCatalog(locale: string, scope: CatalogScope = "full"): Promise<boolean> {
+async function ensureSourceCatalog(locale: string, source: Record<string, string>, persistFinal: boolean): Promise<boolean> {
   const effectiveLocale = normalizeLocale(locale);
-  const source = sourceForScope(scope);
+  if (!Object.keys(source).length) return false;
   const current = TRANSLATIONS[effectiveLocale];
 
   if (effectiveLocale === "en") {
@@ -342,7 +361,7 @@ export async function ensureLocaleCatalog(locale: string, scope: CatalogScope = 
   const existing = INFLIGHT.get(requestKey);
   if (existing) return existing;
 
-  const pending = loadLocaleCatalog(effectiveLocale, source, scope === "full")
+  const pending = loadLocaleCatalog(effectiveLocale, source, persistFinal)
     .then((changed) => {
       RETRY_AFTER.delete(requestKey);
       return changed;
@@ -356,4 +375,12 @@ export async function ensureLocaleCatalog(locale: string, scope: CatalogScope = 
     });
   INFLIGHT.set(requestKey, pending);
   return pending;
+}
+
+export async function ensureLocaleSourceCatalog(locale: string, source: Record<string, string>): Promise<boolean> {
+  return ensureSourceCatalog(locale, source, true);
+}
+
+export async function ensureLocaleCatalog(locale: string, scope: CatalogScope = "full"): Promise<boolean> {
+  return ensureSourceCatalog(locale, sourceForScope(scope), scope === "full");
 }
