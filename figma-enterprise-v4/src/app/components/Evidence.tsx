@@ -1,6 +1,7 @@
 import { useCallback, useState } from "react";
 import { apiClient } from "../api/client";
 import { arrayFromUnknown, usePortalResource } from "../hooks/usePortalResource";
+import { usePortalCopy } from "../hooks/usePortalCopy";
 import { BG, BORDER, InlineState, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
 
 type EvidenceItem = {
@@ -36,6 +37,7 @@ type UploadResult = {
 };
 
 export function Evidence() {
+  const { tf } = usePortalCopy(["evidence", "shared"]);
   const [uploading, setUploading] = useState(false);
   const [uploadMessage, setUploadMessage] = useState("");
   const [uploadResult, setUploadResult] = useState<UploadResult | null>(null);
@@ -73,7 +75,7 @@ export function Evidence() {
         evidence_records_created: totalEvidence,
         warnings,
       });
-      setUploadMessage(`Uploaded ${files.length} file(s). Created ${totalEvidence} evidence records from ${totalRows} parsed rows.`);
+      setUploadMessage(tf("Uploaded {files} file(s). Created {evidence} evidence records from {rows} parsed rows.", { files: files.length, evidence: totalEvidence, rows: totalRows }));
       await refresh();
     } catch (error) {
       setUploadMessage(error instanceof Error ? error.message : "Upload failed.");
@@ -89,7 +91,7 @@ export function Evidence() {
           <div>
             <div className="flex items-center gap-2 mb-3">
               <StatusBadge label="Evidence Store" tone="good" />
-              <StatusBadge label={`${summary.readiness_score ?? 0}% readiness`} tone={(summary.readiness_score || 0) > 50 ? "good" : "warn"} />
+              <StatusBadge label={tf("{score}% readiness", { score: summary.readiness_score ?? 0 })} tone={(summary.readiness_score || 0) > 50 ? "good" : "warn"} />
             </div>
             <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: TEXT }}>Evidence</h1>
             <p className="mt-2 max-w-3xl text-[14px] leading-relaxed" style={{ color: MUTED }}>
