@@ -111,7 +111,7 @@ export function IntegrationsV3() {
     const needed = requiredPlan(connector);
     if (PLAN_ORDER.indexOf(plan) < PLAN_ORDER.indexOf(needed)) {
       const profile = profileFor(connector.id, connector);
-      openCommercialBoundary({ status: 402, code: "upgrade_required", feature: featureFor(connector.id), recommended_plan: needed, message: connectorUpgradeMessage(profile, needed), source: "connectors_v3" });
+      openCommercialBoundary({ status: 402, code: "upgrade_required", feature: featureFor(connector.id), recommended_plan: needed, conversion_context: connectorUpgradeMessage(profile, needed), source: "connectors_v3" });
       return;
     }
     const existing = connections.find((row) => row.provider === connector.id) || connector.connection || null;
