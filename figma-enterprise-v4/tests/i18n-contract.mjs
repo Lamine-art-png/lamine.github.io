@@ -12,6 +12,7 @@ const literalPaths = fs.readdirSync(sharedRoot)
   .sort()
   .map((name) => path.join(sharedRoot, name));
 const literalCatalog = Object.assign({}, ...literalPaths.map((file) => JSON.parse(fs.readFileSync(file, "utf8"))));
+const indexHtml = fs.readFileSync(path.join(root, "index.html"), "utf8");
 const app = fs.readFileSync(path.join(src, "App.tsx"), "utf8");
 const i18n = fs.readFileSync(path.join(src, "i18n.ts"), "utf8");
 const hook = fs.readFileSync(path.join(src, "hooks", "useLocale.ts"), "utf8");
@@ -59,6 +60,10 @@ const fullHydrationIndex = hook.indexOf('ensureLocaleCatalog(selectedLocale, "fu
 const interactiveReadyIndex = hook.indexOf("setCatalogLoading(false);", coreHydrationIndex);
 assert(interactiveReadyIndex > coreHydrationIndex && interactiveReadyIndex < fullHydrationIndex, "portal interactivity must resume before full literal hydration");
 assert(!hook.includes("catalogLoading: catalogLoading || !fullCatalogReady"), "incomplete full catalogs must never force a permanent startup cover");
+assert(indexHtml.includes('<title>AGRO-AI Enterprise Portal</title>'), "portal browser title must remain branded");
+assert(indexHtml.includes('rel="icon"'), "portal must declare a browser favicon");
+assert(indexHtml.includes('type="image/png"'), "portal favicon must use the official raster mark");
+assert(indexHtml.includes('data:image/png;base64,'), "portal favicon must be bootstrap-safe and self-contained");
 assert(app.includes("MAX_LOCALE_TRANSITION_COVER_MS"), "locale transition cover must have a hard availability bound");
 assert(app.includes("localeCoverVisible"), "locale transition cover visibility must be independently fail-open");
 assert(app.includes("OFFICIAL_AGRO_AI_LOADER_LOGO"), "portal loader must use the official AGRO-AI brand mark");
