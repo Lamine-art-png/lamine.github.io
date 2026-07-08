@@ -135,7 +135,8 @@ export function useLocale() {
   const setLocale = (nextLocale: string) => {
     const canonical = canonicalizeSelectedLocale(nextLocale);
     const current = getStoredLocale();
-    if (explicitLocaleActivated && canonical !== current) {
+    const localChoiceIsExplicit = current !== "auto";
+    if ((explicitLocaleActivated || localChoiceIsExplicit) && canonical !== current) {
       primeCriticalLocale(current);
       setSelectedLocaleState(current);
       notifyLocaleRuntime();
