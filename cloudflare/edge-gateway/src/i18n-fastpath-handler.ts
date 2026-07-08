@@ -42,7 +42,11 @@ const LOCAL_LOCALES: LocaleEntry[] = ((localeManifest as LocaleManifest).locales
   name: locale.englishName || locale.nativeName || locale.code,
 }));
 const EDGE_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60;
+const PUBLIC_FASTPATH_MAX_KEYS = 40;
+const WORKERS_AI_CIRCUIT_MS = 10 * 60 * 1_000;
+const I18N_UPSTREAM_TIMEOUT_MS = 120_000;
 const TRANSLATION_INFLIGHT = new Map<string, Promise<TranslationResult>>();
+let workersAiBlockedUntil = 0;
 
 function jsonResponse(payload: unknown, reference?: Response, status = 200): Response {
   const headers = new Headers(reference?.headers);
@@ -62,6 +66,18 @@ function markUpstreamFallback(response: Response): Response {
 
 function diagnosticText(value: unknown): string {
   return String(value || "unknown_error").replace(/\s+/g, " ").slice(0, 1200);
+}
+
+function workersAiQuotaFailure(value: unknown): boolean {
+  return /(4006|daily free allocation|used up.*allocation|quota.*exhaust|quota.*exceed|rate.?limit)/i.test(String(value || ""));
+}
+
+function blockWorkersAiIfNeeded(error: unknown) {
+  if (workersAiQuotaFailure(error)) workersAiBlockedUntil = Date.now() + WORKERS_AI_CIRCUIT_MS;
+}
+
+function workersAiCircuitOpen(): boolean {
+  return workersAiBlockedUntil > Date.now();
 }
 
 function edgeCache(): EdgeCacheLike | null {
@@ -120,17 +136,86 @@ async function writeEdgeCachedTranslation(
   }
 }
 
+function validatedI18nUpstreamOrigin(raw: string, incoming: URL): URL {
+  if (!raw?.trim()) throw new Error("UPSTREAM_API_ORIGIN is not configured");
+  const upstream = new URL(raw.trim());
+  if (upstream.protocol !== "https:" || upstream.username || upstream.password || upstream.search || upstream.hash) {
+    throw new Error("UPSTREAM_API_ORIGIN is invalid");
+  }
+  if (upstream.host.toLowerCase() === incoming.host.toLowerCase()) {
+    throw new Error("UPSTREAM_API_ORIGIN cannot point back to the edge gateway");
+  }
+  upstream.pathname = upstream.pathname.replace(/\/$/, "");
+  return upstream;
+}
+
+async function directI18nUpstreamFetch(request: Request, env: I18nFastpathEnv): Promise<Response> {
+  const incoming = new URL(request.url);
+  const upstream = validatedI18nUpstreamOrigin(env.UPSTREAM_API_ORIGIN, incoming);
+  const target = new URL(upstream.toString());
+  target.pathname = `${upstream.pathname}${incoming.pathname}`.replace(/\/+/g, "/");
+  target.search = incoming.search;
+
+  const headers = new Headers(request.headers);
+  for (const header of [
+    "host", "cf-connecting-ip", "cf-ray", "cf-visitor", "x-forwarded-for", "x-forwarded-host", "x-real-ip",
+    "x-agroai-internal-token", "x-agroai-edge",
+  ]) headers.delete(header);
+  headers.set("x-agroai-edge", "cloudflare-edge-v1");
+  headers.set("x-forwarded-host", incoming.host);
+  headers.set("x-forwarded-proto", "https");
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort("i18n_upstream_timeout"), I18N_UPSTREAM_TIMEOUT_MS);
+  try {
+    const upstreamRequest = new Request(target.toString(), {
+      method: request.method,
+      headers,
+      body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
+      redirect: "manual",
+      signal: controller.signal,
+    });
+    return await fetch(upstreamRequest);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function publicTranslation(locale: string, source: Record<string, string>): Promise<TranslationResult> {
+  const catalog = await translateWithPublicFallback(locale, source);
+  return { catalog, models: [], provider: publicTranslationProvider };
+}
+
 async function translateValidatedCatalog(
   ai: AiRunner,
   locale: string,
   language: string,
   source: Record<string, string>,
 ): Promise<TranslationResult> {
-  try {
-    const catalog = await translateChunkedCatalog(ai, locale, source, language);
-    return { catalog, models: [workersAiModel], provider: "cloudflare_workers_ai" };
-  } catch (chunkedError) {
-    console.warn("workers_ai_chunked_i18n_failed", { locale, error: String(chunkedError) });
+  let publicFastError: unknown = null;
+  if (Object.keys(source).length <= PUBLIC_FASTPATH_MAX_KEYS) {
+    try {
+      return await publicTranslation(locale, source);
+    } catch (error) {
+      publicFastError = error;
+      console.warn("public_i18n_critical_fastpath_failed", { locale, error: String(error) });
+    }
+  }
+
+  let chunkedError: unknown = new Error("workers_ai_circuit_open");
+  if (!workersAiCircuitOpen()) {
+    try {
+      const catalog = await translateChunkedCatalog(ai, locale, source, language);
+      return { catalog, models: [workersAiModel], provider: "cloudflare_workers_ai" };
+    } catch (error) {
+      chunkedError = error;
+      blockWorkersAiIfNeeded(error);
+      console.warn("workers_ai_chunked_i18n_failed", { locale, error: String(error) });
+    }
+  }
+
+  let dedicatedError: unknown = new Error("workers_ai_circuit_open");
+  if (!workersAiCircuitOpen()) {
     try {
       if (locale.split("-", 1)[0].toLowerCase() === "te") {
         const catalog = await translateFallback(ai, source);
@@ -138,23 +223,28 @@ async function translateValidatedCatalog(
       }
       const catalog = await translateDedicatedCatalog(ai, locale, source, language);
       return { catalog, models: [dedicatedTranslationModel], provider: "cloudflare_workers_ai" };
-    } catch (dedicatedError) {
+    } catch (error) {
+      dedicatedError = error;
+      blockWorkersAiIfNeeded(error);
       console.error("workers_ai_dedicated_i18n_failed", {
         locale,
         chunkedError: String(chunkedError),
-        dedicatedError: String(dedicatedError),
+        dedicatedError: String(error),
       });
-      try {
-        const catalog = await translateWithPublicFallback(locale, source);
-        return { catalog, models: [], provider: publicTranslationProvider };
-      } catch (publicError) {
-        console.error("public_i18n_fallback_failed", { locale, error: String(publicError) });
-        throw new Error(
-          `chunked=${diagnosticText(chunkedError)}; dedicated=${diagnosticText(dedicatedError)}; public=${diagnosticText(publicError)}`,
-        );
-      }
     }
   }
+
+  if (!publicFastError) {
+    try {
+      return await publicTranslation(locale, source);
+    } catch (error) {
+      publicFastError = error;
+    }
+  }
+
+  throw new Error(
+    `chunked=${diagnosticText(chunkedError)}; dedicated=${diagnosticText(dedicatedError)}; public=${diagnosticText(publicFastError)}`,
+  );
 }
 
 async function translateWithDurableEdgeCache(
@@ -236,7 +326,13 @@ export async function handleI18nFastpath<Host, Cf>(request: Request<Host, Cf>, e
   } catch (error) {
     console.error("edge_i18n_generation_failed", { locale: locale.code, error: String(error) });
     try {
-      const upstream = await baseFetch(fallback, env);
+      let upstream: Response;
+      try {
+        upstream = await directI18nUpstreamFetch(fallback.clone(), env);
+      } catch (directError) {
+        console.warn("direct_i18n_upstream_failed", { locale: locale.code, error: String(directError) });
+        upstream = await baseFetch(fallback, env);
+      }
       if (isCanary && !upstream.ok) {
         const upstreamBody = await upstream.clone().text().catch(() => "");
         return jsonResponse({
