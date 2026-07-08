@@ -28,11 +28,71 @@ function authorized(request, env) {
   return supplied === `Bearer ${expected}`;
 }
 
+function timeoutAfter(milliseconds, label) {
+  return new Promise((_, reject) => {
+    setTimeout(() => reject(new Error(`${label}_timeout`)), milliseconds);
+  });
+}
+
+async function runModel(env, model, input, timeoutMs) {
+  const startedAt = Date.now();
+  const result = await Promise.race([
+    env.AI.run(model, input),
+    timeoutAfter(timeoutMs, model),
+  ]);
+  const raw = String(
+    result?.response ??
+      result?.result?.response ??
+      result?.choices?.[0]?.message?.content ??
+      "",
+  ).trim();
+  return {
+    raw,
+    model,
+    latency_ms: Date.now() - startedAt,
+  };
+}
+
+async function runWithFallback(env, input) {
+  const primary = String(env.MODEL || "@cf/meta/llama-3.1-8b-instruct-fast").trim();
+  const fallback = String(env.FALLBACK_MODEL || "@cf/qwen/qwen3-30b-a3b-fp8").trim();
+  const primaryTimeout = Math.max(3000, Number(env.MODEL_TIMEOUT_MS || 12000));
+  const fallbackTimeout = Math.max(5000, Number(env.FALLBACK_TIMEOUT_MS || 22000));
+  const failures = [];
+
+  try {
+    const result = await runModel(env, primary, input, primaryTimeout);
+    if (result.raw) return { ...result, fallback_used: false };
+    failures.push(`${primary}:empty`);
+  } catch (error) {
+    failures.push(`${primary}:${String(error?.message || error)}`);
+  }
+
+  if (!fallback || fallback === primary) {
+    throw new Error(`edge_models_failed:${failures.join("|")}`);
+  }
+
+  try {
+    const result = await runModel(env, fallback, input, fallbackTimeout);
+    if (result.raw) return { ...result, fallback_used: true, failures };
+    failures.push(`${fallback}:empty`);
+  } catch (error) {
+    failures.push(`${fallback}:${String(error?.message || error)}`);
+  }
+
+  throw new Error(`edge_models_failed:${failures.join("|")}`);
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
     if (request.method === "GET" && url.pathname === "/health") {
-      return Response.json({ status: "ok", provider: "cloudflare-workers-ai", model: env.MODEL });
+      return Response.json({
+        status: "ok",
+        provider: "cloudflare-workers-ai",
+        model: env.MODEL,
+        fallback_model: env.FALLBACK_MODEL || null,
+      });
     }
     if (request.method !== "POST" || url.pathname !== "/api/chat") {
       return Response.json({ error: "not_found" }, { status: 404 });
@@ -41,24 +101,49 @@ export default {
       return Response.json({ error: "unauthorized" }, { status: 401 });
     }
 
-    const body = await request.json();
+    let body;
+    try {
+      body = await request.json();
+    } catch {
+      return Response.json({ error: "invalid_json" }, { status: 400 });
+    }
+
     const incoming = Array.isArray(body.messages) ? body.messages : [];
+    if (!incoming.length) {
+      return Response.json({ error: "messages_required" }, { status: 422 });
+    }
+
     const translated = translationMessages(incoming);
-    const result = await env.AI.run(env.MODEL, {
+    const input = {
       messages: translated || incoming,
       temperature: translated ? 0 : Number(body.options?.temperature ?? 0.2),
-      max_tokens: Number(body.options?.num_predict ?? 1600),
-    });
-    const raw = String(result?.response ?? result?.result?.response ?? result?.choices?.[0]?.message?.content ?? "").trim();
-    if (!raw) return Response.json({ error: "empty_ai_response" }, { status: 503 });
+      max_tokens: Math.max(16, Math.min(Number(body.options?.num_predict ?? 1200), 2200)),
+    };
 
-    // UI translation callers need the translated JSON object itself. Normal
-    // chat callers keep the stable {answer: ...} wrapper expected by AGRO-AI.
-    const content = translated ? raw : JSON.stringify({ answer: raw });
+    let inference;
+    try {
+      inference = await runWithFallback(env, input);
+    } catch (error) {
+      console.error("edge_inference_failed", String(error?.message || error));
+      return Response.json(
+        {
+          error: "edge_inference_unavailable",
+          provider: "cloudflare-workers-ai",
+        },
+        { status: 503 },
+      );
+    }
+
+    const content = translated
+      ? inference.raw
+      : JSON.stringify({ answer: inference.raw });
+
     return Response.json({
       provider: "cloudflare-workers-ai",
-      model: env.MODEL,
+      model: inference.model,
       requested_model: body.model ?? null,
+      fallback_used: Boolean(inference.fallback_used),
+      latency_ms: inference.latency_ms,
       translation_mode: Boolean(translated),
       message: { role: "assistant", content },
       response: content,
