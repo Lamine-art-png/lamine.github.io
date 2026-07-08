@@ -7,6 +7,8 @@ import { BG, BORDER, InlineState, MUTED, PortalButton, StatusBadge, SURFACE, TEX
 
 type SourceItem = {
   id: string;
+  job_id?: string;
+  pending?: boolean;
   filename?: string;
   provider?: string;
   source_type?: string;
@@ -152,7 +154,11 @@ export function Sources() {
               <StatusBadge label={source.processing_status || source.status || "stored"} tone={statusTone(source)} />
               <span className="text-[12px]" style={{ color: MUTED }}>{source.evidence_count || 0}</span>
               <StatusBadge label={source.intelligence_ready ? "Ready" : "Pending"} tone={source.intelligence_ready ? "good" : "neutral"} />
-              <button type="button" onClick={() => window.location.assign(`/sources?source=${encodeURIComponent(source.id)}`)} className="text-[12px] font-semibold" style={{ color: "#16533C" }}>View</button>
+              {source.pending ? (
+                <span className="text-[12px] font-semibold" style={{ color: MUTED }}>Processing</span>
+              ) : (
+                <button type="button" onClick={() => window.location.assign(`/sources?source=${encodeURIComponent(source.id)}`)} className="text-[12px] font-semibold" style={{ color: "#16533C" }}>View</button>
+              )}
             </article>
           )) : <div className="p-6"><InlineState title="No sources yet." detail="Upload a file from Evidence or connect a system from Connectors. Stored sources will appear here." /></div>}
         </section>
