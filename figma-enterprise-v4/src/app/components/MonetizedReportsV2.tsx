@@ -21,9 +21,9 @@ export function MonetizedReportsV2() {
       code: "upgrade_required",
       feature: exportAction ? "reports.pdf_export" : "reports.generate",
       recommended_plan: "professional",
-      message: exportAction
-        ? "Professional turns AGRO-AI output into exportable, document-ready work your team can actually deliver."
-        : "Professional turns live evidence into reusable reports, decision briefs, compliance drafts, and PDF-ready output.",
+      conversion_context: exportAction
+        ? "Professional turns your AGRO-AI work into polished, exportable PDFs your team can deliver to growers, partners, auditors, and decision-makers. Stay on Free and the final packaging, delivery, and repeatable reporting work remains manual."
+        : "Professional turns live evidence into reusable decision briefs, compliance drafts, operating reports, and PDF-ready output. Stay on Free and your team keeps rebuilding summaries by hand, formatting documents outside AGRO-AI, and losing time between evidence and action.",
       source: "reports",
     });
   }

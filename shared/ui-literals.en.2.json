@@ -1,4 +1,5 @@
 {
+  "literal.25b977b5bbb43e71": "Professional, Team, and Network save 17% on annual billing.",
   "literal.2da51e65bca067ca": "Manage connected data sources and telemetry feeds.",
   "literal.2dafe3f883dd81aa": "Sample mode",
   "literal.2f343666aaa88c44": "Format",
@@ -91,7 +92,6 @@
   "literal.a0e63d7c7125d29a": "Not now",
   "literal.a54b64a43edf6559": "Close upgrade message",
   "literal.c54e3625467b4fde": "Deep",
-  "literal.ec1ae908b8f49783": "Professional and Network save 17% on annual billing.",
   "literal.ef6691545d2c5523": "Standard",
   "literal.ff0d546d98153ceb": "File imports share one monthly quota: 15 on Free, 500 on Professional, 2,500 on Team, 10,000 on Network. Weather and OpenET start on Professional; standard Custom API starts on Network; bespoke integrations require Enterprise."
 }

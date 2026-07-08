@@ -49,11 +49,11 @@ function isPlanId(value: string | null): value is PlanId { return ["free", "prof
 function PriceDisplay({ value, highlighted }: { value: string; highlighted: boolean }) {
   const match = value.match(/^(\$[\d,]+)(\/(?:month|year))$/);
   if (!match) return <div className="mt-4 break-words text-[28px] font-semibold leading-tight" style={{ color: highlighted ? "white" : TEXT }}>{value}</div>;
-  return <div className="mt-4 flex min-w-0 items-baseline gap-1" style={{ color: highlighted ? "white" : TEXT }}><span className="min-w-0 text-[30px] font-semibold tracking-tight">{match[1]}</span><span className="shrink-0 text-[12px] font-semibold opacity-70">{match[2]}</span></div>;
+  return <div className="mt-4 flex min-w-0 flex-wrap items-baseline gap-x-1" style={{ color: highlighted ? "white" : TEXT }}><span className="min-w-0 text-[30px] font-semibold tracking-tight">{match[1]}</span><span className="whitespace-nowrap text-[11px] font-semibold opacity-70">{match[2]}</span></div>;
 }
 
 function CardBadge({ plan, requestedUpgrade, billingPeriod, highlighted }: { plan: Plan; requestedUpgrade?: PlanId; billingPeriod: BillingPeriod; highlighted: boolean }) {
-  const annualSaver = plan.id === "professional" || plan.id === "network";
+  const annualSaver = ["professional", "team", "network"].includes(plan.id);
   const labels: string[] = [];
   if (annualSaver) labels.push(billingPeriod === "annual" ? "Save 17% annually" : "Annual saves 17%");
   if (plan.id === "team" && !requestedUpgrade) labels.push("Most popular");
@@ -95,7 +95,7 @@ export function PricingPage() {
           <div><div className="text-[12px] font-semibold uppercase tracking-[0.22em]" style={{ color: "rgba(255,255,255,0.64)" }}>AGRO-AI Pricing</div><h1 className="mt-5 max-w-3xl text-[40px] font-semibold leading-[1.04] tracking-tight md:text-[54px]">{t("pricingTitle")}</h1><p className="mt-5 max-w-2xl text-[15px] leading-7" style={{ color: "rgba(255,255,255,0.72)" }}>{t("pricingSubtitle")}</p></div>
           <div className="rounded-2xl p-4 text-[12px] leading-5" style={{ background: "rgba(255,255,255,0.10)", color: "rgba(255,255,255,0.78)", border: "1px solid rgba(255,255,255,0.14)" }}><div className="font-semibold text-white">Current plan</div><div className="mt-1 capitalize">{currentOrganization?.plan || "free"}</div></div>
         </div>
-        <div className="mt-8 flex flex-wrap items-center justify-between gap-4"><div className="inline-flex rounded-full bg-white/10 p-1">{(["monthly", "annual"] as const).map((period) => <button key={period} type="button" onClick={() => { setBillingPeriod(period); localStorage.setItem("agroai_selected_billing_period", period); }} className="rounded-full px-4 py-2 text-[13px] font-medium capitalize" style={{ background: billingPeriod === period ? "white" : "transparent", color: billingPeriod === period ? "#0D2B1E" : "white" }}>{period}</button>)}</div><div className="text-[12px]" style={{ color: "rgba(255,255,255,0.62)" }}>Professional and Network save 17% on annual billing.</div></div>
+        <div className="mt-8 flex flex-wrap items-center justify-between gap-4"><div className="inline-flex rounded-full bg-white/10 p-1">{(["monthly", "annual"] as const).map((period) => <button key={period} type="button" onClick={() => { setBillingPeriod(period); localStorage.setItem("agroai_selected_billing_period", period); }} className="rounded-full px-4 py-2 text-[13px] font-medium capitalize" style={{ background: billingPeriod === period ? "white" : "transparent", color: billingPeriod === period ? "#0D2B1E" : "white" }}>{period}</button>)}</div><div className="text-[12px]" style={{ color: "rgba(255,255,255,0.62)" }}>Professional, Team, and Network save 17% on annual billing.</div></div>
       </section>
 
       {requestedUpgrade ? <div className="mt-6 rounded-xl px-4 py-3 text-[13px]" style={{ background: "#F0F7EE", color: "#1F5A43", border: "1px solid #CFE1CB" }}><strong>Recommended upgrade:</strong> {REQUIRED_PLAN_COPY[requestedUpgrade] || REQUIRED_PLAN_COPY.professional}</div> : null}

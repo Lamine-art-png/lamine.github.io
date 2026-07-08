@@ -13,6 +13,7 @@ export type CommercialBoundaryDetail = {
   recommended_plan?: string;
   message?: string;
   source?: string;
+  conversion_context?: string;
 };
 
 export type CommercialPlan = {

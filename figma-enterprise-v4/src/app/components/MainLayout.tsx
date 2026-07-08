@@ -122,9 +122,8 @@ export function MainLayout() {
 
 function AccountNavItem({ item }: { item: NavItem }) {
   const Icon = item.icon;
-  const target = item.locked ? `/pricing?upgrade=${item.upgradeTo || "professional"}` : item.path;
   return (
-    <NavLink key={item.path} to={target} className="flex h-8 items-center gap-2 rounded-md px-2 text-[12px]" style={({ isActive }) => ({ background: isActive && !item.locked ? "rgba(255,255,255,0.08)" : "transparent", color: isActive && !item.locked ? "white" : "rgba(255,255,255,0.56)" })}>
+    <NavLink key={item.path} to={item.path} className="flex h-8 items-center gap-2 rounded-md px-2 text-[12px]" style={({ isActive }) => ({ background: isActive ? "rgba(255,255,255,0.08)" : "transparent", color: isActive ? "white" : "rgba(255,255,255,0.56)" })}>
       {Icon ? <Icon className="h-3.5 w-3.5" /> : null}
       <span className="min-w-0 flex-1 truncate">{item.name}</span>
       {item.locked ? <Lock className="h-3.5 w-3.5 opacity-70" /> : null}
@@ -137,14 +136,11 @@ function NavSection({ title, items }: { title: string; items: NavItem[] }) {
     <div>
       <div className="text-[10px] font-semibold uppercase tracking-widest px-3 mb-1" style={{ color: "rgba(255,255,255,0.25)" }}>{title}</div>
       <div>
-        {items.map((item) => {
-          const target = item.locked ? `/pricing?upgrade=${item.upgradeTo || "professional"}` : item.path;
-          return (
-            <NavLink key={item.path} to={target} end={item.path === "/"} className="flex items-center px-3 rounded-md text-[13px] transition-colors" style={({ isActive }) => ({ height: 40, background: isActive && !item.locked ? "#0B2A1F" : "transparent", color: isActive && !item.locked ? "white" : "rgba(255,255,255,0.58)", fontWeight: isActive && !item.locked ? 500 : 400, borderLeft: isActive && !item.locked ? "2px solid #1F7350" : "2px solid transparent" })}>
-              <span className="flex min-w-0 items-center gap-2"><span className="truncate">{item.name}</span>{item.locked ? <Lock className="h-3.5 w-3.5 opacity-70" /> : null}</span>
-            </NavLink>
-          );
-        })}
+        {items.map((item) => (
+          <NavLink key={item.path} to={item.path} end={item.path === "/"} className="flex items-center px-3 rounded-md text-[13px] transition-colors" style={({ isActive }) => ({ height: 40, background: isActive ? "#0B2A1F" : "transparent", color: isActive ? "white" : "rgba(255,255,255,0.58)", fontWeight: isActive ? 500 : 400, borderLeft: isActive ? "2px solid #1F7350" : "2px solid transparent" })}>
+            <span className="flex min-w-0 items-center gap-2"><span className="truncate">{item.name}</span>{item.locked ? <Lock className="h-3.5 w-3.5 opacity-70" /> : null}</span>
+          </NavLink>
+        ))}
       </div>
     </div>
   );
