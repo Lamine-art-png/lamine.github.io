@@ -69,6 +69,15 @@ export function dynamicCopySourceForNamespaces(namespaces: readonly string[]): R
   );
 }
 
+export function portalCopySourceForValues(values: readonly string[]): Record<string, string> {
+  const source: Record<string, string> = {};
+  for (const value of values) {
+    const key = literalTranslationKey(value);
+    if (key && PORTAL_LITERAL_CATALOG[key] === value) source[key] = value;
+  }
+  return source;
+}
+
 export function fullEnglishUiSource(base: Record<string, string>): Record<string, string> {
   return { ...base, ...PORTAL_LITERAL_CATALOG };
 }
