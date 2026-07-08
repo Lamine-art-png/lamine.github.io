@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 
 from app.core.config import settings
-from app.services.live_intelligence import LiveIntelligence
+from app.services.live_intelligence import LiveIntelligence, _ollama_compatible_answer
 
 
 def _configure(monkeypatch, **values):
@@ -15,7 +15,10 @@ def _configure(monkeypatch, **values):
         "AI_FAST_MODEL": "qwen/qwen3.5-flash-02-23",
         "AI_REASONING_MODEL": "z-ai/glm-5.2",
         "AI_REPORT_MODEL": "z-ai/glm-5.2",
+        "AI_LOCAL_BASE_URL": "https://ollama.agroai-pilot.com",
         "AI_LOCAL_MODEL": "qwen3.5:4b",
+        "AI_EDGE_BASE_URL": "https://local-ai.agroai-pilot.com",
+        "AI_EDGE_MODEL": "@cf/zai-org/glm-4.7-flash",
         "AI_CHALLENGER_MODEL": "deepseek/deepseek-v4-pro",
         "AI_FREE_MODEL": "tencent/hy3:free",
         "AI_MODEL_FALLBACKS": "z-ai/glm-5.2,deepseek/deepseek-v4-pro,tencent/hy3:free",
@@ -25,6 +28,7 @@ def _configure(monkeypatch, **values):
         "AI_LOCAL_MAX_TOKENS": 1200,
         "AI_LOCAL_TIMEOUT_SECONDS": 90,
         "AI_LOCAL_THINKING": False,
+        "AI_EDGE_TIMEOUT_SECONDS": 45,
         "AI_TIMEOUT_SECONDS": 60,
     }
     defaults.update(values)
@@ -32,14 +36,14 @@ def _configure(monkeypatch, **values):
         monkeypatch.setattr(settings, key, value)
 
 
-def test_hybrid_routes_fast_local_first_and_reasoning_remote_first(monkeypatch):
+def test_hybrid_routes_edge_first_for_fast_and_remote_first_for_reasoning(monkeypatch):
     _configure(monkeypatch)
     runtime = LiveIntelligence()
 
-    assert runtime.auto_order("fast") == ["local", "remote"]
-    assert runtime.auto_order("reasoning") == ["remote", "local"]
-    assert runtime.auto_order("report") == ["remote", "local"]
-    assert runtime.auto_order("deep") == ["remote", "local"]
+    assert runtime.auto_order("fast") == ["edge", "local", "remote"]
+    assert runtime.auto_order("reasoning") == ["remote", "edge", "local"]
+    assert runtime.auto_order("report") == ["remote", "edge", "local"]
+    assert runtime.auto_order("deep") == ["remote", "edge", "local"]
 
 
 def test_explicit_test_commands_select_exact_lanes(monkeypatch):
@@ -47,6 +51,7 @@ def test_explicit_test_commands_select_exact_lanes(monkeypatch):
     runtime = LiveIntelligence()
 
     assert runtime.parse_test_route("/local diagnose this field") == ("local", "diagnose this field")
+    assert runtime.parse_test_route("/edge diagnose this field") == ("edge", "diagnose this field")
     assert runtime.parse_test_route("/glm diagnose this field") == ("glm", "diagnose this field")
     assert runtime.parse_test_route("/deepseek diagnose this field") == ("challenger", "diagnose this field")
     assert runtime.parse_test_route("/free diagnose this field") == ("free", "diagnose this field")
@@ -106,6 +111,46 @@ def test_ollama_mode_can_use_openrouter_as_remote_frontier_lane(monkeypatch):
 
     assert runtime.remote() == ("https://openrouter.ai/api/v1", "test-key", "openrouter")
     assert runtime.ollama_model() == "qwen3.5:4b"
+    assert runtime.local_base == "https://ollama.agroai-pilot.com"
+    assert runtime.edge() == ("https://local-ai.agroai-pilot.com", "@cf/zai-org/glm-4.7-flash")
+
+
+def test_known_production_local_ai_hostname_is_edge_not_mac(monkeypatch):
+    _configure(
+        monkeypatch,
+        AI_LOCAL_BASE_URL="",
+        AI_EDGE_BASE_URL="",
+        AI_BASE_URL="https://local-ai.agroai-pilot.com",
+    )
+    runtime = LiveIntelligence()
+
+    assert runtime.local_base == ""
+    assert runtime.ollama_model() is None
+    assert runtime.edge() == ("https://local-ai.agroai-pilot.com", "@cf/zai-org/glm-4.7-flash")
+
+
+def test_non_edge_legacy_ollama_base_remains_local_compatible(monkeypatch):
+    _configure(
+        monkeypatch,
+        AI_LOCAL_BASE_URL="",
+        AI_EDGE_BASE_URL="",
+        AI_BASE_URL="https://legacy-ollama.example.test",
+    )
+    runtime = LiveIntelligence()
+
+    assert runtime.local_base == "https://legacy-ollama.example.test"
+    assert runtime.ollama_model() == "qwen3.5:4b"
+    assert runtime.edge() is None
+
+
+def test_edge_wrapper_json_is_unwrapped_before_customer_response():
+    body = {
+        "provider": "cloudflare-workers-ai",
+        "model": "@cf/zai-org/glm-4.7-flash",
+        "message": {"role": "assistant", "content": '{"answer":"Irrigate only after checking ET and soil moisture."}'},
+    }
+
+    assert _ollama_compatible_answer(body) == "Irrigate only after checking ET and soil moisture."
 
 
 def test_remote_account_credit_failure_stops_after_one_model(monkeypatch):
@@ -169,5 +214,5 @@ def test_invalid_routing_mode_falls_back_to_hybrid(monkeypatch):
     runtime = LiveIntelligence()
 
     assert runtime.routing_mode == "hybrid"
-    assert runtime.auto_order("fast") == ["local", "remote"]
-    assert runtime.auto_order("reasoning") == ["remote", "local"]
+    assert runtime.auto_order("fast") == ["edge", "local", "remote"]
+    assert runtime.auto_order("reasoning") == ["remote", "edge", "local"]
