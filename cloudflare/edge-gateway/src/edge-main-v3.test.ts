@@ -38,7 +38,17 @@ afterEach(() => vi.unstubAllGlobals());
 
 describe("edge-main-v3 i18n entrypoint", () => {
   it("preserves browser-readable headers on fastpath success", async () => {
-    const response = await edgeMain.fetch(requestFor(), env());
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url);
+      const sourceText = url.searchParams.get("q") || "";
+      const translated = sourceText.replace(/Settings/g, "TR Settings").replace(/Save/g, "TR Save");
+      return new Response(JSON.stringify([[[translated, sourceText, null, null]]]), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      });
+    }));
+
+    const response = await edgeMain.fetch(requestFor("so"), env());
     expect(response.status).toBe(200);
     expect(response.headers.get("access-control-allow-origin")).toBe("https://app.agroai-pilot.com");
     expect(response.headers.get("vary")).toBe("Origin");
@@ -59,15 +69,15 @@ describe("edge-main-v3 i18n entrypoint", () => {
     vi.stubGlobal("fetch", vi.fn(async () => { throw new Error("simulated_public_translation_failure"); }));
     const upstream = async () => new Response(JSON.stringify({
       status: "ok",
-      locale: "so",
-      catalog: { settings: "Dejinta", save: "Kaydi" },
+      locale: "am",
+      catalog: { settings: "ቅንብሮች", save: "አስቀምጥ" },
     }), { status: 200, headers: { "content-type": "application/json" } });
 
-    const response = await handleI18nFastpath(requestFor(), env(new FailingAi()), upstream);
+    const response = await handleI18nFastpath(requestFor("am"), env(new FailingAi()), upstream);
     const body = (await response.json()) as { status?: string; catalog?: Record<string, string> };
     expect(response.status).toBe(200);
     expect(response.headers.get("x-agroai-i18n-fallback")).toBe("upstream-backend");
     expect(body.status).toBe("ok");
-    expect(body.catalog?.settings).toBe("Dejinta");
+    expect(body.catalog?.settings).toBe("ቅንብሮች");
   });
 });

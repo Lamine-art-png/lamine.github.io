@@ -27,6 +27,27 @@ function PortalBootFallback({ reason }: { reason?: string }) {
   );
 }
 
+function LocaleTransitionCover() {
+  return (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
+      style={{ background: "#F6F4EE" }}
+      role="status"
+      aria-live="polite"
+      aria-label="AGRO-AI"
+    >
+      <div className="flex flex-col items-center gap-4">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl" style={{ background: "#10231B", color: "#E4F57A" }}>
+          <span className="text-[13px] font-bold tracking-[0.08em]">{"AGRO"}</span>
+        </div>
+        <div className="h-1.5 w-28 overflow-hidden rounded-full" style={{ background: "#D6DDD0" }}>
+          <div className="h-full w-1/2 animate-pulse rounded-full" style={{ background: "#2D6A4F" }} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
 class PortalRuntimeBoundary extends Component<{ children: ReactNode }, PortalRuntimeBoundaryState> {
   state: PortalRuntimeBoundaryState = { error: "" };
   static getDerivedStateFromError(error: unknown): PortalRuntimeBoundaryState { return { error: error instanceof Error ? `${error.name}: ${error.message}` : String(error) }; }
@@ -41,7 +62,7 @@ export default function App() {
 
 function AuthenticatedApp() {
   const { isAuthenticated, isLoading } = useAuth();
-  const { locale } = useLocale();
+  const { locale, catalogLoading } = useLocale();
   const [router, setRouter] = useState<any>(null);
   const [routerError, setRouterError] = useState("");
 
@@ -64,5 +85,10 @@ function AuthenticatedApp() {
   if (!isAuthenticated) return <AuthScreen />;
   if (routerError) return <PortalBootFallback reason={routerError} />;
   if (!router) return <div className="min-h-screen flex items-center justify-center bg-[#F6F4EE] text-[#68776F] text-sm">{t("app.loadingPortal", locale)}</div>;
-  return <RouterProvider router={router} />;
+  return (
+    <div className="relative min-h-screen">
+      <RouterProvider router={router} />
+      {catalogLoading ? <LocaleTransitionCover /> : null}
+    </div>
+  );
 }
