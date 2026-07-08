@@ -77,8 +77,10 @@ def test_serialized_entitlements_expose_customer_safe_capabilities_and_quotas():
     assert payload["capabilities"]["intelligence.ask"] == "locked"
     assert payload["capabilities"]["reports.pdf_export"] == "locked"
     assert payload["quotas"]["workspace"] == 1
-    assert payload["quotas"]["ai_action"] == 0
-    assert payload["quotas"]["deep_investigation"] == 0
+    assert payload["quotas"]["ai_action.monthly"] == 0
+    assert payload["quotas"]["deep_investigation.monthly"] == 0
+    assert payload["max_agro_ai_messages_monthly"] == 0
+    assert payload["can_run_agro_ai"] is False
 
 
 def test_serialized_enterprise_plan_stays_enterprise_and_contract_configured():
