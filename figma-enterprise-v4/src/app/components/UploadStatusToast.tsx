@@ -15,6 +15,7 @@ const COPY = {
   stored: { label: "Securely stored" },
   uploading: { label: "Uploading file" },
   working: { label: "Working..." },
+  viewSources: { label: "View in Sources" },
 };
 
 export function UploadStatusToast() {
@@ -28,7 +29,7 @@ export function UploadStatusToast() {
       setState(detail);
       if (timer.current) window.clearTimeout(timer.current);
       if (detail.phase === "complete" || detail.phase === "failed") {
-        timer.current = window.setTimeout(() => setState(null), detail.phase === "failed" ? 10_000 : 6_000);
+        timer.current = window.setTimeout(() => setState(null), detail.phase === "failed" ? 10_000 : 10_000);
       }
     };
     window.addEventListener(EVENT, onState);
@@ -56,6 +57,7 @@ export function UploadStatusToast() {
           <div className="text-[13px] font-semibold" style={{ color: "#10231B" }}>{title}</div>
           <div className="mt-1 text-[12px] leading-5" style={{ color: failed ? "#991B1B" : "#607168" }}>{state.message || state.filename || COPY.working.label}</div>
           {state.job_id && !failed ? <div className="mt-2 text-[10px] font-medium uppercase tracking-wider" style={{ color: "#839087" }}>Processing receipt active</div> : null}
+          {complete ? <a href="/sources" className="mt-3 inline-flex text-[12px] font-semibold" style={{ color: "#16533C" }}>{COPY.viewSources.label}</a> : null}
         </div>
         <button type="button" onClick={() => setState(null)} className="rounded-lg p-1" style={{ color: "#718078" }} aria-label="Dismiss upload status"><X size={15} /></button>
       </div>
