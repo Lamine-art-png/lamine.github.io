@@ -1,0 +1,58 @@
+name: Post-merge AI Live Probe
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/postmerge-ai-live-probe.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  live-probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify API, deployed route, and real edge inference
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          echo '=== API health ==='
+          curl -fsS --max-time 20 https://api.agroai-pilot.com/health | tee /tmp/api-health.json
+          jq -e '.status == "ok"' /tmp/api-health.json >/dev/null
+
+          echo '=== Router status ==='
+          curl -fsS --max-time 20 https://api.agroai-pilot.com/v1/runtime/ai-router-status | tee /tmp/router.json
+          jq -e '.status == "ok" and .configured == true' /tmp/router.json >/dev/null
+
+          echo '=== New resilient route presence ==='
+          route_status="$(curl -sS -o /tmp/route-body.txt -w '%{http_code}' --max-time 20 \
+            -H 'Content-Type: application/json' \
+            -d '{"task":"chat","question":"Reply exactly ROUTE_OK"}' \
+            https://api.agroai-pilot.com/v1/runtime/intelligence-run)"
+          cat /tmp/route-body.txt
+          echo
+          echo "HTTP ${route_status}"
+          # 401/403 means the authenticated production route exists. 404 means the
+          # Render deployment has not picked up the merged backend yet.
+          test "$route_status" = "401" -o "$route_status" = "403" -o "$route_status" = "422" -o "$route_status" = "200"
+
+          echo '=== Edge health ==='
+          curl -fsS --max-time 20 https://local-ai.agroai-pilot.com/health | tee /tmp/edge-health.json
+          jq -e '.status == "ok"' /tmp/edge-health.json >/dev/null
+
+          echo '=== Real edge inference ==='
+          curl -fsS --max-time 40 \
+            -H 'Content-Type: application/json' \
+            -d '{"model":"postmerge-probe","messages":[{"role":"user","content":"Reply exactly: EDGE_OK"}],"stream":false,"options":{"num_predict":30}}' \
+            https://local-ai.agroai-pilot.com/api/chat | tee /tmp/edge-chat.json
+          jq -e '
+            .done == true and
+            .provider == "cloudflare-workers-ai" and
+            (.model | type == "string") and
+            ((.message.content // .response // "") | length > 0)
+          ' /tmp/edge-chat.json >/dev/null
+
+          echo '=== LIVE PROBE PASS ==='
+          jq '{provider, model, fallback_used, latency_ms, done}' /tmp/edge-chat.json
