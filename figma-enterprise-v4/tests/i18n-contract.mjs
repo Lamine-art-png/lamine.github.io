@@ -61,6 +61,10 @@ assert(interactiveReadyIndex > coreHydrationIndex && interactiveReadyIndex < ful
 assert(!hook.includes("catalogLoading: catalogLoading || !fullCatalogReady"), "incomplete full catalogs must never force a permanent startup cover");
 assert(app.includes("MAX_LOCALE_TRANSITION_COVER_MS"), "locale transition cover must have a hard availability bound");
 assert(app.includes("localeCoverVisible"), "locale transition cover visibility must be independently fail-open");
+assert(app.includes("OFFICIAL_AGRO_AI_LOADER_LOGO"), "portal loader must use the official AGRO-AI brand mark");
+assert(!app.includes('>{"AGRO"}</span>'), "stale text-only AGRO loader badge must not return");
+assert(app.includes("agroai-loader-sweep"), "official portal loader must keep a branded loading motion");
+assert(app.includes("prefers-reduced-motion"), "official portal loader animation must respect reduced-motion preferences");
 assert(hook.includes("notifyLocaleRuntime"), "locale activation must notify all mounted consumers");
 assert(dynamicCatalog.includes('"/v1/i18n/catalog"'), "dynamic UI catalogs must use the backend localization contract");
 assert(dynamicCatalog.includes("exactKeyParity"), "dynamic catalogs must fail closed on key drift");
