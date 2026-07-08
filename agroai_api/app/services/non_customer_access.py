@@ -200,13 +200,16 @@ def provision_non_customer_access(
             row.created_by_user_id = user.id
             changed = True
 
-    workspace = (
-        db.query(Workspace)
-        .filter(Workspace.organization_id == org.id)
-        .order_by(Workspace.created_at.asc())
-        .first()
-    )
-    ensure_evaluation_context(db, org, workspace)
+    # Demo profiles may carry clearly labelled evaluation/sample context. Internal
+    # founder access must never inject demo records into a real organization.
+    if normalized_profile == DEMO_PROFILE:
+        workspace = (
+            db.query(Workspace)
+            .filter(Workspace.organization_id == org.id)
+            .order_by(Workspace.created_at.asc())
+            .first()
+        )
+        ensure_evaluation_context(db, org, workspace)
 
     return ProvisioningResult(
         profile=normalized_profile,
