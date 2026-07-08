@@ -18,6 +18,38 @@ jobs:
       - name: Install portal dependencies
         working-directory: figma-enterprise-v4
         run: npm ci
+      - name: Capture full committed inventory diff
+        working-directory: figma-enterprise-v4
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import importlib.util
+          import json
+          from pathlib import Path
+
+          script_path = Path('scripts/check_ui_literal_inventory.py').resolve()
+          spec = importlib.util.spec_from_file_location('inventory', script_path)
+          module = importlib.util.module_from_spec(spec)
+          assert spec and spec.loader
+          spec.loader.exec_module(module)
+          expected = module.build_catalog()
+          current = {}
+          for path in sorted((module.REPO_ROOT / 'shared').glob(module.LITERAL_CATALOG_GLOB)):
+              current.update(json.loads(path.read_text(encoding='utf-8')))
+          payload = {
+              'missing': {key: expected[key] for key in sorted(set(expected) - set(current))},
+              'extra': {key: current[key] for key in sorted(set(current) - set(expected))},
+              'changed': {
+                  key: {'current': current[key], 'expected': expected[key]}
+                  for key in sorted(set(current).intersection(expected))
+                  if current[key] != expected[key]
+              },
+              'expected_count': len(expected),
+              'current_count': len(current),
+          }
+          Path('/tmp/source-library-inventory-diff.json').write_text(json.dumps(payload, indent=2, ensure_ascii=False), encoding='utf-8')
+          print(json.dumps(payload, indent=2, ensure_ascii=False))
+          PY
       - name: Run portal contracts with captured output
         working-directory: figma-enterprise-v4
         shell: bash
@@ -35,4 +67,5 @@ jobs:
           path: |
             /tmp/source-library-test-i18n.log
             /tmp/source-library-test-i18n.status
+            /tmp/source-library-inventory-diff.json
           if-no-files-found: warn
