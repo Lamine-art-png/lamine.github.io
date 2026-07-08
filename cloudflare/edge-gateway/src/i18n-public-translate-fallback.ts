@@ -3,7 +3,7 @@ import { validCatalog } from "./i18n-translation-engine-v3";
 const GOOGLE_TRANSLATE_ENDPOINT = "https://translate.googleapis.com/translate_a/single";
 const MYMEMORY_TRANSLATE_ENDPOINT = "https://api.mymemory.translated.net/get";
 const LINGVA_TRANSLATE_ENDPOINT = "https://lingva.ml/api/v1";
-const TIMEOUT_MS = 3_500;
+const TIMEOUT_MS = 2_750;
 const MAX_CONCURRENT_PROVIDER_REQUESTS = 6;
 const GOOGLE_BATCH_MAX_CHARS = 1_900;
 const MYMEMORY_BATCH_MAX_CHARS = 360;
@@ -242,17 +242,22 @@ export async function translateWithPublicFallback(
       : []),
   ];
 
-  for (const attempt of attempts) {
+  const pending = attempts.map(async (attempt) => {
     try {
       const output = await translateThroughProvider(targetLocale, entries, attempt.maxChars, attempt.provider);
       if (!validCatalog(source, output)) throw new Error(`${attempt.name}_translation_catalog_reconciliation_failed`);
       return output;
     } catch (error) {
       failures.push(`${attempt.name}=${String(error).replace(/\s+/g, " ").slice(0, 500)}`);
+      throw error;
     }
-  }
+  });
 
-  throw new Error(`public_translation_provider_chain_exhausted: ${failures.join("; ")}`);
+  try {
+    return await Promise.any(pending);
+  } catch {
+    throw new Error(`public_translation_provider_race_exhausted: ${failures.join("; ")}`);
+  }
 }
 
-export const publicTranslationProvider = "public_translation_provider_chain_v4";
+export const publicTranslationProvider = "public_translation_provider_race_v5";
