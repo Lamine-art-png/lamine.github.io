@@ -10,7 +10,7 @@ from sqlalchemy.pool import StaticPool
 
 from app.api.v1.source_library import list_source_library, source_public
 from app.db.base import Base
-from app.models.operational_records import DataSource, EvidenceRecord
+from app.models.operational_records import DataSource, EvidenceRecord, IngestionJob
 from app.models.saas import Organization, User
 from app.services.intelligence_context import _source_rows
 from app.services.source_content import source_content_excerpt
@@ -102,6 +102,41 @@ def test_source_library_lists_original_upload_and_linked_evidence():
         assert item["filename"] == "meter-readings.csv"
         assert item["evidence_count"] == 1
         assert item["intelligence_ready"] is True
+        assert "storage_path" not in item
+    finally:
+        db.close()
+
+
+def test_source_library_shows_durable_pending_upload_without_object_uri():
+    db = _session()
+    try:
+        job = IngestionJob(
+            id="job-pending-source",
+            tenant_id="org-source-test",
+            job_type="connector_ingest_object",
+            status="queued",
+            input_json={
+                "object_uri": "s3://private-bucket/org-source-test/pending.pdf",
+                "filename": "pending-allocation.pdf",
+                "content_type": "application/pdf",
+                "content_sha256": "b" * 64,
+                "size_bytes": 1_024,
+                "connection_id": "connection-pending",
+            },
+            output_json={},
+        )
+        db.add(job)
+        db.commit()
+
+        response = list_source_library(workspace_id=None, tenant_id="org-source-test", db=db)
+        item = response["sources"][0]
+        assert item["id"] == "job:job-pending-source"
+        assert item["filename"] == "pending-allocation.pdf"
+        assert item["durable_stored"] is True
+        assert item["processing_status"] == "queued"
+        assert item["pending"] is True
+        assert item["intelligence_ready"] is False
+        assert "object_uri" not in item
         assert "storage_path" not in item
     finally:
         db.close()
