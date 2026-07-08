@@ -6,7 +6,7 @@ Run Ask AGRO-AI behind one stable customer-facing API while keeping four inferen
 
 - **Hosted frontier**: OpenRouter primary / challenger / fast models
 - **Always-on edge**: Cloudflare Workers AI Ollama-compatible origin
-- **Actual local**: Mac-hosted Ollama through a distinct Cloudflare Tunnel hostname
+- **Actual local**: Mac-hosted Ollama through a distinct, Access-protected Cloudflare Tunnel hostname
 - **Optional zero-price hosted test**: a time-bounded free OpenRouter route
 
 ## Production topology truth
@@ -19,12 +19,15 @@ https://local-ai.agroai-pilot.com
     -> Workers AI model `@cf/zai-org/glm-4.7-flash`
 
 https://ollama.agroai-pilot.com
+    -> Cloudflare Access Service Auth
     -> named Cloudflare Tunnel `agroai-local-ai`
     -> Mac localhost:11434
     -> actual Ollama model `qwen3.5:4b`
 ```
 
 Do not point `AI_LOCAL_BASE_URL` at `local-ai.agroai-pilot.com`. That hostname is the edge Worker, not the Mac.
+
+Do not expose raw Ollama publicly without Access. The backend intentionally fails closed for a public local hostname unless both Cloudflare Access service-token credentials are configured.
 
 ## Recommended Render environment
 
@@ -39,9 +42,11 @@ AI_EDGE_BASE_URL=https://local-ai.agroai-pilot.com
 AI_EDGE_MODEL=@cf/zai-org/glm-4.7-flash
 AI_EDGE_TIMEOUT_SECONDS=45
 
-# Explicit real Mac Ollama lane. Add this only after the tunnel hostname is live.
+# Explicit real Mac Ollama lane. Add only after tunnel + Access are live.
 AI_LOCAL_BASE_URL=https://ollama.agroai-pilot.com
 AI_LOCAL_MODEL=qwen3.5:4b
+AI_LOCAL_CF_ACCESS_CLIENT_ID=<cloudflare-service-token-client-id>
+AI_LOCAL_CF_ACCESS_CLIENT_SECRET=<cloudflare-service-token-client-secret>
 AI_LOCAL_NUM_CTX=6144
 AI_LOCAL_MAX_TOKENS=1200
 AI_LOCAL_TIMEOUT_SECONDS=90
@@ -62,13 +67,13 @@ AI_MODEL_TEST_COMMANDS_ENABLED=true
 AI_TIMEOUT_SECONDS=60
 ```
 
-Also configure a valid secret:
+Also configure a valid hosted-provider secret:
 
 ```text
 OPENROUTER_API_KEY=<secret>
 ```
 
-Do not commit the key.
+Do not commit any key, Access client secret, or provider credential.
 
 `AI_FREE_MODEL` is intentionally environment-controlled because zero-price hosted routes can expire or disappear.
 
@@ -95,7 +100,7 @@ curl -s http://127.0.0.1:11434/api/chat \
   }'
 ```
 
-## Cloudflare: preserve edge, add a distinct real-Ollama hostname
+## Cloudflare: preserve edge, add a distinct secured real-Ollama hostname
 
 Do **not** delete or repoint the existing Worker route for `local-ai.agroai-pilot.com`.
 
@@ -116,11 +121,45 @@ ingress:
 
 Then run the tunnel from its existing config. When installing it as a system service, remember: the service removes the need to keep a Terminal window open, but the Mac itself must still be powered on and connected.
 
-Public real-Ollama smoke after the hostname is active:
+### Protect the hostname with Cloudflare Access
+
+Create a self-hosted Access application for:
+
+```text
+ollama.agroai-pilot.com
+```
+
+Create a dedicated service token for the Render backend, then create an Access policy with action:
+
+```text
+Service Auth
+```
+
+Allow only that service token. Store its generated Client ID and Client Secret in Render as:
+
+```text
+AI_LOCAL_CF_ACCESS_CLIENT_ID
+AI_LOCAL_CF_ACCESS_CLIENT_SECRET
+```
+
+The backend sends them on every real-Ollama request using:
+
+```text
+CF-Access-Client-Id
+CF-Access-Client-Secret
+```
+
+Do not add a broad public Allow policy to the Ollama hostname.
+
+Access-protected real-Ollama smoke:
 
 ```bash
-curl -s https://ollama.agroai-pilot.com/api/tags
+curl -s https://ollama.agroai-pilot.com/api/tags \
+  -H "CF-Access-Client-Id: $AI_LOCAL_CF_ACCESS_CLIENT_ID" \
+  -H "CF-Access-Client-Secret: $AI_LOCAL_CF_ACCESS_CLIENT_SECRET"
 ```
+
+A request without those headers should be denied after Access is configured.
 
 Edge health smoke remains separate:
 
@@ -166,7 +205,9 @@ Check:
 GET /v1/runtime/ai-status
 ```
 
-The runtime must show distinct hosted, edge, and local lane configuration. Never accept a status payload that calls `local-ai.agroai-pilot.com` a Mac Ollama model.
+The model-router status must distinguish hosted, edge, and local lane configuration. Never accept a status payload or trace that calls `local-ai.agroai-pilot.com` a Mac Ollama model.
+
+For a public local hostname, the local lane is considered configured only when the Access service-token credentials are present.
 
 ## Rollback
 
