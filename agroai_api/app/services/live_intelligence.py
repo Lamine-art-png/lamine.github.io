@@ -33,6 +33,10 @@ class LiveIntelligence:
 
     def profile(self, task: str, question: str) -> str:
         text = (question or "").lower()
+        if task == "deep_analysis":
+            return "deep"
+        if task in {"chat_fast", "quick_chat"}:
+            return "fast"
         if task == "report_factory" or any(x in text for x in ("report", "pdf", "memo", "brief", "packet", "audit", "document")):
             return "report"
         clean = text.strip(" ?!.,")
@@ -92,12 +96,12 @@ class LiveIntelligence:
         if provider == "openrouter":
             headers["HTTP-Referer"] = settings.APP_URL or "https://app.agroai-pilot.com"
             headers["X-Title"] = "AGRO-AI Enterprise Portal"
-        tokens = 3200 if profile == "report" else 2200 if profile == "reasoning" else 900
-        timeout = 55 if profile == "report" else 38 if profile == "reasoning" else 20
-        async with httpx.AsyncClient(timeout=max(8, min(timeout, self.timeout + 25))) as client:
+        tokens = 4200 if profile == "deep" else 3200 if profile == "report" else 2200 if profile == "reasoning" else 900
+        timeout = 58 if profile == "deep" else 55 if profile == "report" else 38 if profile == "reasoning" else 20
+        async with httpx.AsyncClient(timeout=max(8, min(timeout, self.timeout + 30))) as client:
             for model in models[:7]:
                 try:
-                    response = await client.post(f"{endpoint}/chat/completions", headers=headers, json={"model": model, "messages": messages, "temperature": 0.2, "max_tokens": tokens})
+                    response = await client.post(f"{endpoint}/chat/completions", headers=headers, json={"model": model, "messages": messages, "temperature": 0.15 if profile == "deep" else 0.2, "max_tokens": tokens})
                     if response.status_code in {401, 403}:
                         return None
                     if response.status_code >= 400:
@@ -110,9 +114,11 @@ class LiveIntelligence:
         return None
 
     async def run_local(self, model: str, messages: list[dict[str, str]], profile: str) -> tuple[str, str] | None:
-        payload = {"model": model, "messages": messages, "stream": False, "think": False, "keep_alive": "45m", "options": {"temperature": 0.2, "num_predict": 2800 if profile == "report" else 1900 if profile == "reasoning" else 700, "num_ctx": 8192 if profile != "fast" else 4096}}
+        num_predict = 3600 if profile == "deep" else 2800 if profile == "report" else 1900 if profile == "reasoning" else 700
+        num_ctx = 16384 if profile == "deep" else 8192 if profile != "fast" else 4096
+        payload = {"model": model, "messages": messages, "stream": False, "think": profile == "deep", "keep_alive": "45m", "options": {"temperature": 0.15 if profile == "deep" else 0.2, "num_predict": num_predict, "num_ctx": num_ctx}}
         try:
-            async with httpx.AsyncClient(timeout=max(20, min(self.timeout + 35, 90))) as client:
+            async with httpx.AsyncClient(timeout=max(20, min(self.timeout + 45 if profile == "deep" else self.timeout + 35, 90))) as client:
                 response = await client.post(f"{self.base}/api/chat", json=payload)
                 response.raise_for_status()
                 body = response.json()
@@ -145,7 +151,8 @@ class LiveIntelligence:
     async def run(self, task: str, question: str, messages: list[dict[str, str]], preferred_language: str | None) -> LiveResult:
         language = resolve_language(preferred_language, question)
         profile = self.profile(task, question)
-        system = {"role": "system", "content": "You are AGRO-AI, a high-capability agriculture operations intelligence assistant. Answer the exact current question. Do not use a fixed response template. Use prior turns as context, not as text to repeat. Use workspace evidence only when relevant. Adapt depth and structure to the request. Never invent telemetry, acreage, water use, integrations, compliance status, savings, or customer facts. If a numeric recommendation lacks evidence, explain exactly what is missing and why it matters. " + language.instruction}
+        deep_instruction = " For Deep analysis, inspect assumptions, conflicting evidence, missing evidence, second-order effects, operational tradeoffs, and plausible failure modes before concluding." if profile == "deep" else ""
+        system = {"role": "system", "content": "You are AGRO-AI, a high-capability agriculture operations intelligence assistant. Answer the exact current question. Do not use a fixed response template. Use prior turns as context, not as text to repeat. Use workspace evidence only when relevant. Adapt depth and structure to the request. Never invent telemetry, acreage, water use, integrations, compliance status, savings, or customer facts. If a numeric recommendation lacks evidence, explain exactly what is missing and why it matters." + deep_instruction + " " + language.instruction}
         prepared = [system, *[dict(x) for x in messages if x.get("role") != "system"]]
         remote = self.remote()
         local_model = self.ollama_model()
