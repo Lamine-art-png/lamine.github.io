@@ -17,7 +17,7 @@ from app.services.commercial_billing_lifecycle import (
     _commercial_checkout_metadata,
 )
 from app.services.entitlements import require_owner_or_admin, serialize_entitlements
-from app.services.non_customer_access import access_profile_metadata
+from app.services.non_customer_access import access_profile_metadata, activate_configured_profile
 from app.services.product_plans import public_plans, service_add_ons, upgrade_options
 from app.services.quota import quota_snapshot
 
@@ -42,6 +42,22 @@ def _billing_unavailable() -> HTTPException:
             "message": "Checkout is temporarily unavailable. Please retry or contact AGRO-AI support.",
         },
     )
+
+
+def _activate_authorized_non_customer_before_billing(db: Session, user: User, org: Organization) -> None:
+    """Resolve a verified server-allowlisted identity before any Stripe action.
+
+    This closes the edge case where a founder reaches billing before `/auth/me`
+    has performed the normal authenticated-context auto-activation.
+    """
+
+    if user.email_verification_status != "verified" or not user.email_verified_at:
+        return
+    result = activate_configured_profile(db, user=user, org=org)
+    if result is None:
+        return
+    db.commit()
+    db.refresh(org)
 
 
 def _billing_not_required(org: Organization) -> HTTPException | None:
@@ -183,6 +199,7 @@ def create_checkout_session(
     offer = _normalize_offer(payload)
     org, membership = require_org_membership(payload.organization_id, user, db)
     require_owner_or_admin(membership.role)
+    _activate_authorized_non_customer_before_billing(db, user, org)
     billing_guard = _billing_not_required(org)
     if billing_guard is not None:
         raise billing_guard
@@ -226,6 +243,7 @@ def create_portal_session(
 ) -> dict:
     org, membership = require_org_membership(payload.organization_id, user, db)
     require_owner_or_admin(membership.role)
+    _activate_authorized_non_customer_before_billing(db, user, org)
     billing_guard = _billing_not_required(org)
     if billing_guard is not None:
         raise billing_guard
@@ -258,6 +276,7 @@ def billing_status(
     if not org_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="organization_id is required")
     org, _ = require_org_membership(org_id, user, db)
+    _activate_authorized_non_customer_before_billing(db, user, org)
     usage = quota_snapshot(db, org)
     access_profile = access_profile_metadata(org)
     return {
