@@ -6,6 +6,14 @@ import { useAuth } from "../auth/AuthProvider";
 const TOUR_VERSION = "product_tour_v1";
 const TOUR_EVENT = "agroai:replay-product-tour";
 
+const TOUR_ACTIONS = {
+  skip: { label: "Skip tour" },
+  back: { label: "Back" },
+  next: { label: "Next" },
+  saving: { label: "Saving..." },
+  start: { label: "Start operating" },
+};
+
 type AnyRecord = Record<string, any>;
 type TourStep = {
   eyebrow: string;
@@ -213,10 +221,10 @@ export function ProductTour() {
         </div>
 
         <div className="mt-6 flex items-center justify-between gap-3">
-          <button type="button" onClick={() => void finish()} className="text-[12px] font-medium" style={{ color: "#687B71" }}>Skip tour</button>
+          <button type="button" onClick={() => void finish()} className="text-[12px] font-medium" style={{ color: "#687B71" }}>{TOUR_ACTIONS.skip.label}</button>
           <div className="flex gap-2">
-            {stepIndex > 0 ? <button type="button" onClick={back} className="h-10 rounded-lg px-4 text-[12px] font-semibold" style={{ border: "1px solid #D9DED8", color: "#31483D" }}>Back</button> : null}
-            <button type="button" onClick={next} disabled={saving} className="h-10 rounded-lg px-5 text-[12px] font-semibold disabled:opacity-60" style={{ background: "#0D2B1E", color: "white" }}>{stepIndex === STEPS.length - 1 ? (saving ? "Saving..." : "Start operating") : "Next"}</button>
+            {stepIndex > 0 ? <button type="button" onClick={back} className="h-10 rounded-lg px-4 text-[12px] font-semibold" style={{ border: "1px solid #D9DED8", color: "#31483D" }}>{TOUR_ACTIONS.back.label}</button> : null}
+            <button type="button" onClick={next} disabled={saving} className="h-10 rounded-lg px-5 text-[12px] font-semibold disabled:opacity-60" style={{ background: "#0D2B1E", color: "white" }}>{stepIndex === STEPS.length - 1 ? (saving ? TOUR_ACTIONS.saving.label : TOUR_ACTIONS.start.label) : TOUR_ACTIONS.next.label}</button>
           </div>
         </div>
       </section>
