@@ -29,7 +29,7 @@ def _connection(db: Session, tenant_id: str, connection_id: str) -> ConnectorCon
     return row
 
 
-@router.post("/connectors/connections/{connection_id}/sync")
+@router.post("/connectors/provider-sync/{connection_id}/sync")
 async def queue_sync(
     connection_id: str,
     tenant_id: str = Depends(require_current_tenant_id),
@@ -45,7 +45,7 @@ async def queue_sync(
                 "provider": connection.provider,
             },
         )
-    if connection.status not in {"connected", "synced", "syncing"} or not connection.credentials_ref:
+    if connection.status not in {"connected", "synced", "syncing", "rate_limited", "degraded"} or not connection.credentials_ref:
         raise HTTPException(
             status_code=409,
             detail={
@@ -60,6 +60,7 @@ async def queue_sync(
         connection=connection,
     )
     publication = await asyncio.to_thread(drain_pending_outbox, limit=10)
+    db.refresh(connection)
     return {
         "status": job.status,
         "deduplicated": deduplicated,
@@ -69,7 +70,7 @@ async def queue_sync(
     }
 
 
-@router.post("/connectors/connections/{connection_id}/disconnect")
+@router.post("/connectors/provider-sync/{connection_id}/disconnect")
 async def disconnect_provider(
     connection_id: str,
     tenant_id: str = Depends(require_current_tenant_id),

@@ -17,7 +17,7 @@ from app.services.provider_sync_jobs import SUPPORTED_PROVIDERS
 
 
 def test_agtech_providers_are_first_class_durable_sync_providers():
-    assert SUPPORTED_PROVIDERS == {"google_drive", "outlook", "wiseconn", "talgil", "openet"}
+    assert SUPPORTED_PROVIDERS == {"google_drive", "outlook", "john_deere", "wiseconn", "talgil", "openet"}
 
 
 def test_unified_routes_are_mounted_on_connector_hub_router():

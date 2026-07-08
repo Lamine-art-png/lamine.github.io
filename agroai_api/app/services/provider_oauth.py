@@ -19,6 +19,8 @@ GOOGLE_REVOKE_URL = "https://oauth2.googleapis.com/revoke"
 MICROSOFT_TOKEN_URL = "https://login.microsoftonline.com/common/oauth2/v2.0/token"
 GRAPH_BASE_URL = "https://graph.microsoft.com/v1.0"
 DRIVE_BASE_URL = "https://www.googleapis.com/drive/v3"
+JOHN_DEERE_TOKEN_URL = "https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7/v1/token"
+JOHN_DEERE_API_BASE_URL = "https://api.deere.com/platform"
 
 
 def _required_env(name: str) -> str:
@@ -54,6 +56,11 @@ def required_scopes(provider: str) -> set[str]:
         return {"https://www.googleapis.com/auth/drive.readonly"}
     if provider == "outlook":
         return {"offline_access", "User.Read", "Mail.Read", "Files.Read"}
+    # Deere route entitlements are governed by the registered application and
+    # customer authorization. Do not hard-fail callback completion when the
+    # token response omits an echo of the granted scope string.
+    if provider == "john_deere":
+        return set()
     return set()
 
 
@@ -70,6 +77,31 @@ def validate_scopes(provider: str, payload: dict[str, Any]) -> tuple[bool, list[
     granted = set(scopes_from_payload(payload))
     missing = sorted(required_scopes(provider) - granted)
     return not missing, missing
+
+
+def _deere_token_url() -> str:
+    return os.getenv("JOHN_DEERE_OAUTH_TOKEN_URL", JOHN_DEERE_TOKEN_URL).strip() or JOHN_DEERE_TOKEN_URL
+
+
+def _deere_api_base() -> str:
+    return os.getenv("JOHN_DEERE_API_BASE_URL", JOHN_DEERE_API_BASE_URL).rstrip("/")
+
+
+def _collection_items(payload: Any) -> list[dict[str, Any]]:
+    if isinstance(payload, list):
+        return [item for item in payload if isinstance(item, dict)]
+    if not isinstance(payload, dict):
+        return []
+    for key in ("values", "items", "results", "organizations"):
+        value = payload.get(key)
+        if isinstance(value, list):
+            return [item for item in value if isinstance(item, dict)]
+    embedded = payload.get("_embedded")
+    if isinstance(embedded, dict):
+        for value in embedded.values():
+            if isinstance(value, list):
+                return [item for item in value if isinstance(item, dict)]
+    return []
 
 
 async def exchange_authorization_code(provider: str, *, code: str, redirect_uri: str) -> dict[str, Any]:
@@ -92,6 +124,15 @@ async def exchange_authorization_code(provider: str, *, code: str, redirect_uri:
             "scope": "offline_access User.Read Mail.Read Files.Read",
         }
         url = MICROSOFT_TOKEN_URL
+    elif provider == "john_deere":
+        data = {
+            "code": code,
+            "client_id": _required_env("JOHN_DEERE_OAUTH_CLIENT_ID"),
+            "client_secret": _required_env("JOHN_DEERE_OAUTH_CLIENT_SECRET"),
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+        }
+        url = _deere_token_url()
     else:
         raise ProviderOAuthError(f"No production token-exchange adapter exists for provider '{provider}'")
 
@@ -127,6 +168,14 @@ async def refresh_provider_credentials(provider: str, payload: dict[str, Any]) -
             "scope": "offline_access User.Read Mail.Read Files.Read",
         }
         url = MICROSOFT_TOKEN_URL
+    elif provider == "john_deere":
+        data = {
+            "refresh_token": refresh_value,
+            "client_id": _required_env("JOHN_DEERE_OAUTH_CLIENT_ID"),
+            "client_secret": _required_env("JOHN_DEERE_OAUTH_CLIENT_SECRET"),
+            "grant_type": "refresh_token",
+        }
+        url = _deere_token_url()
     else:
         raise ProviderOAuthError(f"No production refresh adapter exists for provider '{provider}'")
 
@@ -156,6 +205,10 @@ async def probe_provider_identity(provider: str, access_value: str) -> dict[str,
     elif provider == "outlook":
         url = f"{GRAPH_BASE_URL}/me"
         params = {"$select": "id,displayName,mail,userPrincipalName"}
+    elif provider == "john_deere":
+        url = f"{_deere_api_base()}/organizations"
+        params = {}
+        headers["Accept"] = "application/json"
     else:
         raise ProviderOAuthError(f"No production identity probe exists for provider '{provider}'")
 
@@ -173,6 +226,21 @@ async def probe_provider_identity(provider: str, access_value: str) -> dict[str,
             "provider_account_name": user.get("displayName"),
             "quota_usage": quota.get("usage"),
             "quota_limit": quota.get("limit"),
+        }
+    if provider == "john_deere":
+        organizations = _collection_items(data)
+        preview = []
+        for item in organizations[:10]:
+            preview.append({
+                "id": item.get("id") or item.get("organizationId") or item.get("uid"),
+                "name": item.get("name") or item.get("displayName"),
+            })
+        first = preview[0] if preview else {}
+        return {
+            "provider_account_id": first.get("id"),
+            "provider_account_name": first.get("name") or "John Deere Operations Center",
+            "authorized_organization_count": len(organizations),
+            "organizations_preview": preview,
         }
     return {
         "provider_account_id": data.get("id"),

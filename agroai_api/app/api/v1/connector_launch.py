@@ -19,12 +19,21 @@ from app.models.operational_records import ConnectorConnection, IngestionJob
 from app.services.connector_vault import credential_reference, store_connector_credentials
 from app.services.oauth_state_store import consume_oauth_state, issue_oauth_state
 from app.services.oauth_urls import oauth_url
+from app.services.provider_oauth import (
+    ProviderOAuthError,
+    exchange_authorization_code,
+    probe_provider_identity,
+    scopes_from_payload,
+    token_expiry,
+    validate_scopes,
+)
+from app.services.provider_sync_jobs import queue_provider_sync
 
 router = APIRouter(tags=["connector-launch"])
-ProviderId = Literal["wiseconn", "talgil", "universal_controller", "weather", "openet", "manual_csv", "gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce", "google_earth_engine", "custom_api"]
+ProviderId = Literal["wiseconn", "talgil", "universal_controller", "weather", "openet", "manual_csv", "gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce", "john_deere", "google_earth_engine", "custom_api"]
 APP_CONNECTOR_RETURN_URL = os.getenv("APP_URL", settings.APP_URL).rstrip("/") + "/"
 API_OAUTH_CALLBACK_URL = os.getenv("API_OAUTH_CALLBACK_URL", settings.API_URL.rstrip("/") + "/v1/connectors/oauth/callback")
-OAUTH_PROVIDERS = {"gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce"}
+OAUTH_PROVIDERS = {"gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce", "john_deere"}
 
 CONNECTOR_MANIFESTS: dict[str, dict[str, Any]] = {
     "gmail": {"provider": "gmail", "auth_pattern": "oauth", "label": "Gmail", "permissions": ["approved email context", "attachments"], "data_objects": ["messages", "attachments"], "required_env": ["GOOGLE_OAUTH_CLIENT_ID"], "production_next": "Configure Google OAuth client id and callback URL."},
@@ -34,6 +43,15 @@ CONNECTOR_MANIFESTS: dict[str, dict[str, Any]] = {
     "slack": {"provider": "slack", "auth_pattern": "oauth", "label": "Slack", "permissions": ["approved channel metadata", "files"], "data_objects": ["channels", "messages", "files"], "required_env": ["SLACK_OAUTH_CLIENT_ID"], "production_next": "Configure Slack OAuth client id and callback URL."},
     "salesforce": {"provider": "salesforce", "auth_pattern": "oauth", "label": "Salesforce", "permissions": ["approved account context", "cases"], "data_objects": ["accounts", "cases"], "required_env": ["SALESFORCE_OAUTH_CLIENT_ID"], "production_next": "Configure Salesforce OAuth client id and callback URL."},
     "outlook": {"provider": "outlook", "auth_pattern": "oauth", "label": "Outlook", "permissions": ["approved email context", "attachments"], "data_objects": ["messages", "attachments"], "required_env": ["MICROSOFT_OAUTH_CLIENT_ID"], "production_next": "Configure Microsoft OAuth client id and callback URL."},
+    "john_deere": {
+        "provider": "john_deere",
+        "auth_pattern": "oauth",
+        "label": "John Deere Operations Center",
+        "permissions": ["customer-authorized read access", "approved operational context"],
+        "data_objects": ["organizations", "clients", "farms", "fields", "boundaries", "field operations", "equipment reference", "crop types", "guidance lines", "users", "organization settings"],
+        "required_env": ["JOHN_DEERE_OAUTH_CLIENT_ID", "JOHN_DEERE_OAUTH_CLIENT_SECRET"],
+        "production_next": "Authorize a customer Operations Center account. Work Plans are intentionally excluded from phase-one sync.",
+    },
     "wiseconn": {"provider": "wiseconn", "auth_pattern": "provider_api", "label": "WiseConn", "permissions": ["controller read access"], "data_objects": ["zones", "events", "flow"], "required_env": ["WISECONN_API_KEY"], "production_next": "Store customer WiseConn credential reference before live sync."},
     "talgil": {"provider": "talgil", "auth_pattern": "provider_api", "label": "Talgil", "permissions": ["controller read access"], "data_objects": ["programs", "zones", "flow"], "required_env": ["TALGIL_API_KEY"], "production_next": "Store customer Talgil credential reference before live sync."},
     "universal_controller": {"provider": "universal_controller", "auth_pattern": "enterprise_api", "label": "Universal Controller Gateway", "permissions": ["approved exports or API payloads"], "data_objects": ["farms", "fields", "zones", "valves", "pumps"], "required_env": [], "production_next": "Map the customer controller data contract."},
@@ -196,6 +214,7 @@ def _consume_state_for_known_callback(db: Session, state: str | None) -> dict[st
     for redirect_uri in candidates:
         payload = consume_oauth_state(db, state=state, redirect_url=redirect_uri)
         if payload is not None:
+            payload["validated_redirect_uri"] = redirect_uri
             return payload
     return None
 
@@ -220,6 +239,7 @@ async def oauth_callback(code: str | None = Query(default=None), state: str | No
         save_launch_job(db, connection.tenant_id, connection, "oauth_callback", {"code_present": bool(code), "error": error}, "completed_with_warnings")
         db.commit()
         return RedirectResponse(return_url(provider, "authorization_failed", connection.id))
+
     if provider == "dropbox":
         try:
             token = await exchange_dropbox_code(code)
@@ -258,6 +278,89 @@ async def oauth_callback(code: str | None = Query(default=None), state: str | No
             save_launch_job(db, connection.tenant_id, connection, "oauth_token_exchange", {"provider": "dropbox", "status": "token_exchange_failed", "error": safe_error}, "failed")
             db.commit()
             return RedirectResponse(return_url("dropbox", "token_exchange_failed", connection.id))
+
+    if provider == "john_deere":
+        try:
+            redirect_uri = str(verified.get("validated_redirect_uri") or callback_url_for("john_deere"))
+            token = await exchange_authorization_code("john_deere", code=code, redirect_uri=redirect_uri)
+            scopes_ok, missing_scopes = validate_scopes("john_deere", token)
+            if not scopes_ok:
+                raise ProviderOAuthError(f"john_deere authorization missing required scope count={len(missing_scopes)}", reconnect_required=True)
+            access_value = str(token.get("access_token") or "")
+            identity = await probe_provider_identity("john_deere", access_value)
+            scopes = scopes_from_payload(token)
+            expires_at = token_expiry(token)
+            vault_row = store_connector_credentials(db, tenant_id=connection.tenant_id, connection=connection, provider="john_deere", payload=token, token_expires_at=expires_at, scopes=scopes)
+            merged = dict(connection.config_json or {})
+            merged.update(sanitize_config({
+                "oauth_callback_received": True,
+                "oauth_code_present": True,
+                "authorization_status": "connected",
+                "token_exchange_status": "completed",
+                "provider_account_id": identity.get("provider_account_id"),
+                "provider_account_name": identity.get("provider_account_name"),
+                "authorized_organization_count": identity.get("authorized_organization_count", 0),
+                "organizations_preview": identity.get("organizations_preview", []),
+                "scope": " ".join(scopes),
+                "refresh_token_present": bool(token.get("refresh_token")),
+                "token_expires_at": expires_at.isoformat() if expires_at else None,
+                "read_only": True,
+                "work_plans_included": False,
+                "initial_sync_status": "pending_queue",
+            }))
+            connection.config_json = merged
+            connection.status = "connected"
+            connection.credentials_ref = credential_reference(vault_row)
+            connection.last_test_at = datetime.utcnow()
+            connection.last_error = None
+            connection.updated_at = datetime.utcnow()
+            save_launch_job(db, connection.tenant_id, connection, "oauth_token_exchange", {"provider": "john_deere", "status": "connected", "refresh_token_present": bool(token.get("refresh_token")), "authorized_organization_count": identity.get("authorized_organization_count", 0), "read_only": True, "work_plans_included": False})
+            db.commit()
+        except Exception as exc:
+            db.rollback()
+            safe_error = _safe_error(exc)
+            connection = db.get(ConnectorConnection, str(verified["cid"]))
+            if connection is None:
+                return html_status("john_deere", "token_exchange_failed", "John Deere authorization failed after callback validation.")
+            reconnect_required = bool(isinstance(exc, ProviderOAuthError) and exc.reconnect_required)
+            status_value = "reconnect_required" if reconnect_required else "token_exchange_failed"
+            merged = dict(connection.config_json or {})
+            merged.update(sanitize_config({"oauth_callback_received": True, "oauth_code_present": True, "authorization_status": status_value, "token_exchange_error": safe_error}))
+            connection.config_json = merged
+            connection.status = status_value
+            connection.credentials_ref = None
+            connection.last_error = safe_error
+            connection.updated_at = datetime.utcnow()
+            save_launch_job(db, connection.tenant_id, connection, "oauth_token_exchange", {"provider": "john_deere", "status": status_value, "error": safe_error}, "failed")
+            db.commit()
+            return RedirectResponse(return_url("john_deere", status_value, connection.id))
+
+        # Authorization and encrypted custody are already committed. Initial sync
+        # queueing is intentionally best-effort so a transient queue/outbox failure
+        # cannot destroy a valid customer-authorized connection.
+        try:
+            queue_provider_sync(db, tenant_id=connection.tenant_id, connection=connection)
+            connection = db.get(ConnectorConnection, connection.id) or connection
+            config = dict(connection.config_json or {})
+            config.update({"initial_sync_status": "queued", "initial_sync_queued_at": datetime.utcnow().isoformat()})
+            connection.config_json = config
+            connection.updated_at = datetime.utcnow()
+            db.commit()
+        except Exception as queue_exc:
+            db.rollback()
+            safe_queue_error = _safe_error(queue_exc)
+            connection = db.get(ConnectorConnection, str(verified["cid"]))
+            if connection is not None:
+                config = dict(connection.config_json or {})
+                config.update(sanitize_config({"initial_sync_status": "queue_failed", "initial_sync_error": safe_queue_error}))
+                connection.config_json = config
+                connection.status = "connected"
+                connection.last_error = None
+                connection.updated_at = datetime.utcnow()
+                save_launch_job(db, connection.tenant_id, connection, "initial_sync_queue", {"provider": "john_deere", "status": "completed_with_warnings", "error": safe_queue_error}, "completed_with_warnings")
+                db.commit()
+        return RedirectResponse(return_url("john_deere", "connected", str(verified["cid"])))
+
     merged = dict(connection.config_json or {})
     merged.update(sanitize_config({"oauth_callback_received": True, "oauth_code_present": True, "oauth_error": None, "authorization_status": "authorized_pending_token_exchange"}))
     connection.config_json = merged
