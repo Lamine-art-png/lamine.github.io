@@ -140,7 +140,7 @@ export function IntegrationsV3() {
     if (!connection?.id) return;
     setBusy("sync"); setMessage("");
     try {
-      const result = await apiClient.post(`/v1/connectors/connections/${connection.id}/sync`, {}) as AnyRecord;
+      const result = await apiClient.post(`/v1/connectors/provider-sync/${connection.id}/sync`, {}) as AnyRecord;
       setConnection(result.connection || connection);
       setMessage(result.deduplicated ? "A sync is already queued or running." : "Sync queued. AGRO-AI will ingest the authorized Operations Center context through the durable worker path.");
       await refresh();
@@ -152,7 +152,7 @@ export function IntegrationsV3() {
     if (!connection?.id) return;
     setBusy("disconnect"); setMessage("");
     try {
-      const result = await apiClient.post(`/v1/connectors/connections/${connection.id}/disconnect`, {}) as AnyRecord;
+      const result = await apiClient.post(`/v1/connectors/provider-sync/${connection.id}/disconnect`, {}) as AnyRecord;
       setConnection(result.connection || null);
       setMessage("Operations Center disconnected and locally stored connector credentials revoked.");
       await refresh();
