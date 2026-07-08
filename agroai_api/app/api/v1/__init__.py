@@ -35,6 +35,7 @@ from . import connector_oauth_completion as oauth_completion_module  # noqa: E40
 from . import connectors as connector_compat_module  # noqa: E402
 from . import product_shell as product_shell_module  # noqa: E402
 from . import monetization_convergence as monetization_module  # noqa: E402
+from . import non_customer_access as non_customer_access_module  # noqa: E402
 from app.services.commercial_packaging_v2 import apply_catalog_packaging, install_commercial_packaging_v2  # noqa: E402
 from app.services.commercial_upload_metering_v2 import install_commercial_upload_metering  # noqa: E402
 
@@ -88,5 +89,6 @@ install_commercial_upload_metering((connector_module.router, connector_compat_mo
 
 _remove_duplicate_product_checkout()
 product_shell_module.router.include_router(monetization_module.router)
+product_shell_module.router.include_router(non_customer_access_module.router)
 
 _hide_compat_schema_shadows()

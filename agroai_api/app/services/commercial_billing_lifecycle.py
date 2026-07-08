@@ -34,9 +34,20 @@ def apply_authoritative_billing_event(
     event_type: str,
     obj: dict[str, Any],
 ) -> None:
-    """Apply only commercially authoritative state transitions."""
+    """Apply only commercially authoritative state transitions.
+
+    Internal/demo profiles are outside the customer billing lifecycle. Even a
+    stale Stripe event tied to an old customer/subscription identifier must not
+    downgrade, cancel, or otherwise rewrite their server-authorized access state.
+    """
+
     del db
     if org is None:
+        return
+
+    from app.services.non_customer_access import access_profile_metadata
+
+    if not access_profile_metadata(org)["billing_required"]:
         return
 
     if event_type == "checkout.session.completed":
