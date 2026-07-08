@@ -33,6 +33,8 @@ for (const key of [
   "dynamic.overview.commandCenter",
   "dynamic.cockpit.exceptionQueue",
   "dynamic.integrations.upgradeMessageTemplate",
+  "dynamic.integrations.setupStateTemplate",
+  "dynamic.cockpit.connectionsTemplate",
   "dynamic.paywall.team",
 ]) assert(typeof dynamicEntries[key] === "string" && dynamicEntries[key].length > 0, `missing ${key}`);
 
@@ -40,6 +42,9 @@ assert(portalCatalog.includes("ui-dynamic-copy.en.json"), "portal catalog must i
 assert(portalCatalog.includes("ui-dynamic-copy-extra.en.json"), "portal catalog must import compact dynamic copy");
 assert(portalCatalog.includes("dynamicCopySourceForNamespaces"), "namespace source selector missing");
 assert(portalCatalog.includes("portalCopySourceForValues"), "existing literal prioritization missing");
+assert(portalCatalog.includes("TEMPLATE_MATCHERS"), "generated UI template matcher registry missing");
+assert(portalCatalog.includes("templateMatch"), "generated UI template matching missing");
+assert(portalCatalog.includes("formatTranslation(translated, localizedValues)"), "matched templates must substitute localized captured values");
 
 assert(canonical.includes("ui-dynamic-copy.en.json"), "edge canonical source must authorize primary dynamic copy");
 assert(canonical.includes("ui-dynamic-copy-extra.en.json"), "edge canonical source must authorize compact dynamic copy");
