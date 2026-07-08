@@ -5,6 +5,8 @@ import { useLocale } from "../hooks/useLocale";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
 import logoImg from "../../imports/agro-ai-logo-1.png";
 import { OperatingStatusBar } from "./OperatingStatusBar";
+import { ProductTour, replayProductTour } from "./ProductTour";
+import { UploadStatusToast } from "./UploadStatusToast";
 
 type NavItem = { name: string; path: string; locked?: boolean; upgradeTo?: string; icon?: any };
 
@@ -19,6 +21,13 @@ const PLAN_LABELS: Record<string, string> = {
   waterops: "Professional",
   assurance_audit: "Professional",
   assurance: "Team",
+};
+
+const TOUR_TARGETS: Record<string, string> = {
+  "/": "command-center",
+  "/integrations": "connectors",
+  "/evidence": "evidence",
+  "/intelligence": "ask-agro-ai",
 };
 
 function capabilityEnabled(entitlements: Record<string, unknown>, key: string, fallback: boolean) {
@@ -105,6 +114,9 @@ export function MainLayout() {
             <div className="px-2 pb-2 text-[11px]" style={{ color: "rgba(255,255,255,0.44)" }}>{t("account")}</div>
             <div className="space-y-1">
               {accountItems.map((item) => <AccountNavItem key={item.path} item={item} />)}
+              <button type="button" onClick={replayProductTour} className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[12px] transition-colors hover:bg-white/10" style={{ color: "rgba(255,255,255,0.56)" }}>
+                <HelpCircle className="h-3.5 w-3.5" /> Product tour
+              </button>
               <button type="button" onClick={logout} className="flex h-8 w-full items-center gap-2 rounded-md px-2 text-left text-[12px] transition-colors hover:bg-white/10" style={{ color: "rgba(255,255,255,0.56)" }}>
                 <LogOut className="h-3.5 w-3.5" /> {t("logout")}
               </button>
@@ -116,6 +128,8 @@ export function MainLayout() {
         <OperatingStatusBar />
         <Outlet />
       </main>
+      <UploadStatusToast />
+      <ProductTour />
     </div>
   );
 }
@@ -137,7 +151,7 @@ function NavSection({ title, items }: { title: string; items: NavItem[] }) {
       <div className="text-[10px] font-semibold uppercase tracking-widest px-3 mb-1" style={{ color: "rgba(255,255,255,0.25)" }}>{title}</div>
       <div>
         {items.map((item) => (
-          <NavLink key={item.path} to={item.path} end={item.path === "/"} className="flex items-center px-3 rounded-md text-[13px] transition-colors" style={({ isActive }) => ({ height: 40, background: isActive ? "#0B2A1F" : "transparent", color: isActive ? "white" : "rgba(255,255,255,0.58)", fontWeight: isActive ? 500 : 400, borderLeft: isActive ? "2px solid #1F7350" : "2px solid transparent" })}>
+          <NavLink key={item.path} to={item.path} end={item.path === "/"} data-tour={TOUR_TARGETS[item.path]} className="flex items-center px-3 rounded-md text-[13px] transition-colors" style={({ isActive }) => ({ height: 40, background: isActive ? "#0B2A1F" : "transparent", color: isActive ? "white" : "rgba(255,255,255,0.58)", fontWeight: isActive ? 500 : 400, borderLeft: isActive ? "2px solid #1F7350" : "2px solid transparent" })}>
             <span className="flex min-w-0 items-center gap-2"><span className="truncate">{item.name}</span>{item.locked ? <Lock className="h-3.5 w-3.5 opacity-70" /> : null}</span>
           </NavLink>
         ))}

@@ -94,17 +94,21 @@ async def upload_stream_secure(
                 publication = await asyncio.to_thread(_publish_pending, limit=10)
             return {
                 "status": job.status,
+                "phase": "stored" if job.status in {"queued", "retrying", "running"} else job.status,
+                "durable_stored": True,
+                "processing_pending": job.status in {"queued", "retrying", "running"},
                 "job_id": job.id,
-                "object_uri": None if deduplicated else stored.uri,
                 "content_sha256": receipt.sha256,
                 "size_bytes": receipt.size_bytes,
                 "deduplicated": deduplicated,
                 "queue_publication": publication,
+                "message": "File securely stored and queued for AGRO-AI processing.",
             }
         except Exception as exc:
             db.rollback()
             raise HTTPException(status_code=500, detail={
                 "error": "durable_ingestion_stage_failed",
+                "message": "AGRO-AI could not securely store and stage this file. Retry the upload.",
                 "provider": provider,
                 "receipt_sha256": receipt.sha256,
             }) from exc
@@ -121,6 +125,7 @@ async def upload_stream_secure(
     except Exception as exc:
         raise HTTPException(status_code=500, detail={
             "error": "stream_ingestion_failed",
+            "message": "AGRO-AI received the file but could not finish processing it. Retry the upload.",
             "provider": provider,
             "receipt_sha256": receipt.sha256,
         }) from exc
