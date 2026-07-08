@@ -11,6 +11,7 @@ from app.services.ag_connector_runtime import AG_PROVIDERS, AUTH_ERRORS, RATE_LI
 from app.services.connector_vault import load_connector_credentials, store_connector_credentials
 from app.services.google_drive_sync import sync_google_drive
 from app.services.ingestion_job_runner import _claim, _complete, _fail_or_retry, job_lease_heartbeat
+from app.services.john_deere_sync import sync_john_deere
 from app.services.outlook_sync import sync_outlook
 from app.services.provider_oauth import (
     ProviderOAuthError,
@@ -199,6 +200,8 @@ async def process_provider_sync_job(
                     return "deferred"
                 if connection.provider == "google_drive":
                     output = await sync_google_drive(db, connection=connection, access_value=access_value)
+                elif connection.provider == "john_deere":
+                    output = await sync_john_deere(db, connection=connection, access_value=access_value)
                 else:
                     output = await sync_outlook(db, connection, access_value)
 
