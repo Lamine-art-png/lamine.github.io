@@ -66,6 +66,22 @@ def _normalize_base_url(value: str, provider: str) -> str:
     return base_url
 
 
+def _is_edge_ollama_compat_base(value: str) -> bool:
+    """Return true only for the Workers AI Ollama-compatible edge lane.
+
+    The production `local-ai` hostname is a Worker and can legitimately expose
+    a Cloudflare model id containing `/`. Real local Ollama model ids remain
+    protected from accidentally receiving hosted provider ids.
+    """
+    base = (value or "").strip().rstrip("/")
+    if not base:
+        return False
+    explicit = (getattr(settings, "AI_EDGE_BASE_URL", "") or "").strip().rstrip("/")
+    if explicit and base == explicit:
+        return True
+    return "local-ai.agroai-pilot.com" in base.lower()
+
+
 def _strip_markdown_fences(value: str) -> str:
     text = value.strip()
     if text.startswith("```"):
@@ -161,7 +177,11 @@ class AIGateway:
     def is_configured_for(self, model: str | None = None) -> bool:
         selected = (model or self.model or "").strip()
         if self.provider == "ollama":
-            return bool(self.base_url and selected and "/" not in selected)
+            return bool(
+                self.base_url
+                and selected
+                and ("/" not in selected or _is_edge_ollama_compat_base(self.base_url))
+            )
         if self.provider in {"openrouter", "openai_compatible"}:
             return bool(self.base_url and selected and self.api_key)
         return False
@@ -189,9 +209,10 @@ class AIGateway:
 
     def _candidate_models(self, primary: str | None, max_model_attempts: int | None = None) -> list[str]:
         out: list[str] = []
+        edge_compat = self.provider == "ollama" and _is_edge_ollama_compat_base(self.base_url)
         for model in [primary or self.model, *self.fallback_models]:
             value = (model or "").strip()
-            if value and not (self.provider == "ollama" and "/" in value) and value not in out:
+            if value and not (self.provider == "ollama" and "/" in value and not edge_compat) and value not in out:
                 out.append(value)
         return out[:max_model_attempts] if max_model_attempts and max_model_attempts > 0 else out
 
@@ -238,7 +259,7 @@ class AIGateway:
     @staticmethod
     def _should_try_next_model(exc: httpx.HTTPStatusError) -> bool:
         code = exc.response.status_code if exc.response is not None else 0
-        return False if code in {401,403} else code in {400,402,404,408,409,422,429,500,502,503,504}
+        return False if code in {401,402,403} else code in {400,404,408,409,422,429,500,502,503,504}
 
     async def _chat_openai_compatible(self, messages: list[dict[str, str]], temperature: float, response_format: dict[str, Any] | None, model_override: str | None = None, max_tokens: int | None = None, timeout_seconds: int | None = None, max_model_attempts: int | None = None) -> AIGatewayResult:
         errors: list[str] = []
@@ -273,7 +294,8 @@ class AIGateway:
 
     async def _chat_ollama(self, messages: list[dict[str, str]], temperature: float, model_override: str | None = None, max_tokens: int | None = None, timeout_seconds: int | None = None) -> AIGatewayResult:
         selected = (model_override or self.model or "").strip()
-        if not selected or "/" in selected:
+        edge_compat = _is_edge_ollama_compat_base(self.base_url)
+        if not selected or ("/" in selected and not edge_compat):
             return AIGatewayResult(status="unavailable", content="", provider="ollama", model=selected or None, error="No compatible local Ollama model configured.")
         question = _extract_question(messages)
         deep = any(term in question.lower() for term in ("report","analysis","pdf","document","packet","plan","diagnose","detailed","explain"))
@@ -283,9 +305,11 @@ class AIGateway:
             response.raise_for_status()
             body = response.json()
         content = clean_model_text(((body.get("message") or {}).get("content") or body.get("response") or "") if isinstance(body, dict) else "")
+        actual_model = str(body.get("model") or selected).strip() if isinstance(body, dict) else selected
+        actual_provider = str(body.get("provider") or ("cloudflare-workers-ai" if edge_compat else "ollama")).strip() if isinstance(body, dict) else ("cloudflare-workers-ai" if edge_compat else "ollama")
         if not content:
-            return AIGatewayResult(status="unavailable", content="", provider="ollama", model=selected, raw=body if isinstance(body, dict) else {"response":body}, error="Ollama returned no usable content.")
-        return AIGatewayResult(status="ok", content=content, provider="ollama", model=selected, raw=body)
+            return AIGatewayResult(status="unavailable", content="", provider=actual_provider, model=actual_model, raw=body if isinstance(body, dict) else {"response":body}, error="Ollama-compatible origin returned no usable content.")
+        return AIGatewayResult(status="ok", content=content, provider=actual_provider, model=actual_model, raw=body)
 
     def _offline_fallback(self, selected_model: str | None = None) -> AIGatewayResult:
         return AIGatewayResult(
