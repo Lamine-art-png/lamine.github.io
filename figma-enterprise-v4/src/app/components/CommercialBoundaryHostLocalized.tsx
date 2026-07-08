@@ -45,7 +45,7 @@ function unlockCopyKey(detail: CommercialBoundaryDetail) {
   return "";
 }
 
-function conversionText(detail: CommercialBoundaryDetail, t: Translate) {
+function reasonText(detail: CommercialBoundaryDetail, t: Translate) {
   const key = unlockCopyKey(detail);
   if (key) return t(key);
   const feature = capabilityLabel(detail.feature, t);
@@ -144,7 +144,7 @@ function CommercialBoundaryDialog({
           <div className="grid gap-4 sm:grid-cols-2"><PlanCard id={currentPlan} label={t("commercialBoundary.currentPlan")} t={t} /><PlanCard id={target} label={t("commercialBoundary.recommended")} highlighted t={t} /></div>
           <div className="mt-6 rounded-2xl border border-[#CFE1CB] bg-[#F0F7EE] p-4">
             <div className="text-[12px] font-semibold text-[#10231B]">{t("commercialBoundary.why")}</div>
-            <p className="mt-2 text-[12px] leading-6 text-[#4F675B]">{conversionText(detail, t)}</p>
+            <p className="mt-2 text-[12px] leading-6 text-[#4F675B]">{reasonText(detail, t)}</p>
           </div>
           <div className="mt-6 flex flex-wrap gap-3"><a href={href} className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#0D2B1E] px-5 text-[13px] font-semibold text-white">{primaryAction}<ArrowRight className="h-4 w-4" /></a><button type="button" onClick={onClose} className="h-11 rounded-xl border border-[#D6DDD0] bg-white px-5 text-[13px] font-semibold text-[#10231B]">{t("commercialBoundary.notNow")}</button></div>
         </section>
