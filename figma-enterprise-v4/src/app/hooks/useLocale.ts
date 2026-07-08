@@ -122,9 +122,10 @@ export function useLocale() {
           console.warn(FULL_UI_TRANSLATION_DIAGNOSTIC, { locale: selectedLocale, round: round + 1, error: message });
           setCatalogError(message);
           // Never roll an explicit customer choice back to English because one
-          // provider attempt failed. Validated chunks are durable and the next
-          // round asks only for missing source keys.
-          setCatalogLoading(false);
+          // provider attempt failed. Keep the bounded transition active only
+          // until the critical shell exists; App.tsx still enforces a hard
+          // fail-open timeout so this can never become an infinite cover.
+          setCatalogLoading(!hasCriticalLocaleCatalog(selectedLocale));
           notifyLocaleRuntime();
         }
       }
