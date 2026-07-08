@@ -21,6 +21,7 @@ assert(layout.includes('to={item.path}'), "Locked navigation must preserve the s
 
 assert(host.includes("CompactPlanPrice"), "Commercial modal must split compact plan pricing to prevent suffix overflow.");
 assert(host.includes("flex-wrap items-baseline"), "Commercial plan price must be wrap-safe.");
+assert(host.includes("whitespace-nowrap text-[15px]"), "Commercial plan names must stay on one line across every shared paywall.");
 assert(host.includes('detail.source || ""'), "Commercial wall must honor contextual section/provider sources.");
 
 assert(reports.includes('source: "reports"') && reports.includes('recommended_plan: "professional"'), "Reports must open the rich Professional comparison wall.");
