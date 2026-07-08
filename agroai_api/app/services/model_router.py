@@ -12,10 +12,18 @@ from app.services.hosted_ui_translation import run_hosted_ui_translation
 from app.services.live_intelligence import LiveIntelligence
 from app.services.local_ui_translation import run_local_ui_translation
 
+
 DEFAULT_FRONTIER_MODEL = "z-ai/glm-5.2"
-DEFAULT_FAST_MODEL = "qwen/qwen3-next-80b-a3b-instruct"
-DEFAULT_REPORT_MODEL = "qwen/qwen3-max"
-DEFAULT_MODEL_FALLBACKS = ["qwen/qwen3-next-80b-a3b-instruct","z-ai/glm-5-turbo","z-ai/glm-4.5-air","qwen/qwen3-max","z-ai/glm-5.2","z-ai/glm-4.5","deepseek/deepseek-v3.1-terminus"]
+DEFAULT_FAST_MODEL = "qwen/qwen3.5-flash-02-23"
+DEFAULT_REPORT_MODEL = "z-ai/glm-5.2"
+DEFAULT_CHALLENGER_MODEL = "deepseek/deepseek-v4-pro"
+DEFAULT_MODEL_FALLBACKS = [
+    "z-ai/glm-5.2",
+    "deepseek/deepseek-v4-pro",
+    "qwen/qwen3.5-flash-02-23",
+    "z-ai/glm-5-turbo",
+    "z-ai/glm-4.5-air",
+]
 
 TASK_PROFILES = {"chat":"reasoning","ui_translation":"fast","readiness_analysis":"reasoning","field_diagnosis":"reasoning","exception_triage":"reasoning","decision_workbench":"reasoning","report_factory":"report","connector_diagnosis":"reasoning"}
 
@@ -60,6 +68,8 @@ class ModelRouter:
         self.reasoning_model = (settings.AI_REASONING_MODEL or "").strip() or self.default_model
         self.report_model = (settings.AI_REPORT_MODEL or "").strip() or DEFAULT_REPORT_MODEL
         self.local_model = (settings.AI_LOCAL_MODEL or "").strip()
+        self.challenger_model = (settings.AI_CHALLENGER_MODEL or "").strip() or DEFAULT_CHALLENGER_MODEL
+        self.free_model = (settings.AI_FREE_MODEL or "").strip()
         configured = [x.strip() for x in (settings.AI_MODEL_FALLBACKS or "").split(",") if x.strip()]
         self.fallback_models: list[str] = []
         for model in [*configured,*DEFAULT_MODEL_FALLBACKS]:
@@ -91,7 +101,26 @@ class ModelRouter:
 
     def status(self) -> dict[str, Any]:
         selected = self.select("chat")
-        return {"configured":not bool(self.missing_env()),"provider":self.gateway.raw_provider or self.gateway.provider or "offline","base_url_present":bool(self.gateway.base_url),"model":selected.model,"mode":self.mode(),"missing_env":self.missing_env(),"fallback_active":bool(self.missing_env()),"profiles":{"fast":self.fast_model,"reasoning":self.reasoning_model,"report":self.report_model,"fallbacks":self.fallback_models}}
+        return {
+            "configured":not bool(self.missing_env()),
+            "provider":self.gateway.raw_provider or self.gateway.provider or "offline",
+            "base_url_present":bool(self.gateway.base_url),
+            "model":selected.model,
+            "mode":self.mode(),
+            "missing_env":self.missing_env(),
+            "fallback_active":bool(self.missing_env()),
+            "routing_mode":(settings.AI_ROUTING_MODE or "hybrid").strip().lower(),
+            "test_commands_enabled":bool(settings.AI_MODEL_TEST_COMMANDS_ENABLED),
+            "profiles":{
+                "fast":self.fast_model,
+                "reasoning":self.reasoning_model,
+                "report":self.report_model,
+                "local":self.local_model,
+                "challenger":self.challenger_model,
+                "free":self.free_model or None,
+                "fallbacks":self.fallback_models,
+            },
+        }
 
     def select(self, task: str) -> ModelSelection:
         profile = TASK_PROFILES.get(task, "reasoning")
