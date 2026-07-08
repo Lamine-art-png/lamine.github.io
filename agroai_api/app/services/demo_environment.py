@@ -13,6 +13,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 
+from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -22,6 +23,9 @@ from app.services.evaluation_seed import ensure_evaluation_context
 from app.services.non_customer_access import DEMO_PROFILE, provision_non_customer_access
 
 DEMO_SEED_SOURCE = "demo_environment"
+# Stable signed 64-bit namespace key used only for PostgreSQL transaction-level
+# advisory locking. This serializes concurrent web-worker startup seeds.
+DEMO_SEED_LOCK_KEY = 4703822369589253189
 
 
 @dataclass(frozen=True)
@@ -36,6 +40,18 @@ class DemoIdentityResult:
 
 def _normalize_email(value: str | None) -> str:
     return str(value or "").strip().lower()
+
+
+def _acquire_demo_seed_lock(db: Session) -> None:
+    """Serialize demo seed transactions across PostgreSQL processes/workers."""
+
+    bind = db.get_bind()
+    if getattr(getattr(bind, "dialect", None), "name", None) != "postgresql":
+        return
+    db.execute(
+        text("SELECT pg_advisory_xact_lock(:lock_key)"),
+        {"lock_key": DEMO_SEED_LOCK_KEY},
+    )
 
 
 def _slug_base(value: str) -> str:
@@ -261,6 +277,9 @@ def provision_demo_environment(db: Session) -> list[DemoIdentityResult]:
     if full_email == free_email:
         raise ValueError("Full-access and Free demo identities must use different emails")
 
+    # A demo backend can start several workers concurrently. Serialize the whole
+    # identity/org seed transaction so unique emails/slugs cannot race.
+    _acquire_demo_seed_lock(db)
     results: list[DemoIdentityResult] = []
 
     full_user, full_user_created = _get_or_create_user(
