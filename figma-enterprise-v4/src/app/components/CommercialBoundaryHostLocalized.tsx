@@ -2,6 +2,7 @@ import { ReactNode, useEffect, useMemo, useState } from "react";
 import { ArrowRight, Check, Lock, X } from "lucide-react";
 import { apiClient } from "../api/client";
 import { useLocale } from "../hooks/useLocale";
+import { usePortalCopy } from "../hooks/usePortalCopy";
 import { formatTranslation } from "../i18n";
 import {
   CAPABILITY_KEY,
@@ -22,6 +23,7 @@ export const COMMERCIAL_BOUNDARY_EVENT = "agroai:commercial-boundary";
 export type { CommercialBoundaryDetail } from "./commercialBoundaryViewModel";
 
 type Translate = (key: string) => string;
+type Copy = (value: string) => string;
 
 function metricLabel(metric: string | undefined, t: Translate) {
   if (!metric) return t("commercialBoundary.planUsage");
@@ -45,9 +47,9 @@ function unlockCopyKey(detail: CommercialBoundaryDetail) {
   return "";
 }
 
-function reasonText(detail: CommercialBoundaryDetail, t: Translate) {
+function reasonText(detail: CommercialBoundaryDetail, t: Translate, tx: Copy) {
   if (["connectors_v3", "reports", "team", "requests"].includes(String(detail.source || "")) && detail.conversion_context?.trim()) {
-    return detail.conversion_context.trim();
+    return tx(detail.conversion_context.trim());
   }
   const key = unlockCopyKey(detail);
   if (key) return t(key);
@@ -120,6 +122,7 @@ function CommercialBoundaryDialog({
   onClose: () => void;
 }) {
   const { t } = useLocale();
+  const { tx } = usePortalCopy(["paywall", "shared"]);
   const isQuota = isCommercialQuota(detail);
   const featureTitleKey = detail.feature ? FEATURE_TITLE_KEY[detail.feature] : undefined;
   const title = isQuota
@@ -157,7 +160,7 @@ function CommercialBoundaryDialog({
           <div className="grid min-w-0 gap-4 sm:grid-cols-2"><PlanCard id={currentPlan} label={t("commercialBoundary.currentPlan")} t={t} /><PlanCard id={target} label={t("commercialBoundary.recommended")} highlighted t={t} /></div>
           <div className="mt-6 rounded-2xl border border-[#CFE1CB] bg-[#F0F7EE] p-4">
             <div className="text-[12px] font-semibold text-[#10231B]">{t("commercialBoundary.why")}</div>
-            <p className="mt-2 text-[12px] leading-6 text-[#4F675B]">{reasonText(detail, t)}</p>
+            <p className="mt-2 text-[12px] leading-6 text-[#4F675B]">{reasonText(detail, t, tx)}</p>
           </div>
           <div className="mt-6 flex flex-wrap gap-3"><a href={href} className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#0D2B1E] px-5 text-[13px] font-semibold text-white">{primaryAction}<ArrowRight className="h-4 w-4" /></a><button type="button" onClick={onClose} className="h-11 rounded-xl border border-[#D6DDD0] bg-white px-5 text-[13px] font-semibold text-[#10231B]">{t("commercialBoundary.notNow")}</button></div>
         </section>
