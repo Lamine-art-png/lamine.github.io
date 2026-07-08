@@ -22,6 +22,10 @@
   "dynamic.shared.completed": "completed",
   "dynamic.shared.recent": "recent",
 
+  "dynamic.cockpit.connectionsTemplate": "{count} connections",
+  "dynamic.cockpit.sourcesTemplate": "{count} sources",
+  "dynamic.cockpit.recordsTemplate": "{count} records",
+
   "dynamic.integrations.connectWiseconn": "Connect WiseConn",
   "dynamic.integrations.connectTalgil": "Connect Talgil",
   "dynamic.integrations.uploadFiles": "Upload files",
@@ -40,5 +44,8 @@
   "dynamic.integrations.providerApi": "provider api",
   "dynamic.integrations.serviceAccount": "service account",
   "dynamic.integrations.enterpriseApi": "enterprise api",
-  "dynamic.integrations.manualUpload": "manual upload"
+  "dynamic.integrations.manualUpload": "manual upload",
+  "dynamic.integrations.setupStateTemplate": "{provider} setup state recorded.",
+  "dynamic.integrations.setupRequestTemplate": "{provider} setup request recorded.",
+  "dynamic.integrations.importedTemplate": "Imported {count} evidence records from {file}."
 }
