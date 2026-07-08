@@ -306,6 +306,7 @@ async def oauth_callback(code: str | None = Query(default=None), state: str | No
                 "token_expires_at": expires_at.isoformat() if expires_at else None,
                 "read_only": True,
                 "work_plans_included": False,
+                "initial_sync_status": "pending_queue",
             }))
             connection.config_json = merged
             connection.status = "connected"
@@ -315,10 +316,6 @@ async def oauth_callback(code: str | None = Query(default=None), state: str | No
             connection.updated_at = datetime.utcnow()
             save_launch_job(db, connection.tenant_id, connection, "oauth_token_exchange", {"provider": "john_deere", "status": "connected", "refresh_token_present": bool(token.get("refresh_token")), "authorized_organization_count": identity.get("authorized_organization_count", 0), "read_only": True, "work_plans_included": False})
             db.commit()
-            # Queue the first bounded read sync immediately. The durable outbox owns
-            # publication/retry and the provider worker performs the actual reads.
-            queue_provider_sync(db, tenant_id=connection.tenant_id, connection=connection)
-            return RedirectResponse(return_url("john_deere", "connected", connection.id))
         except Exception as exc:
             db.rollback()
             safe_error = _safe_error(exc)
@@ -337,6 +334,32 @@ async def oauth_callback(code: str | None = Query(default=None), state: str | No
             save_launch_job(db, connection.tenant_id, connection, "oauth_token_exchange", {"provider": "john_deere", "status": status_value, "error": safe_error}, "failed")
             db.commit()
             return RedirectResponse(return_url("john_deere", status_value, connection.id))
+
+        # Authorization and encrypted custody are already committed. Initial sync
+        # queueing is intentionally best-effort so a transient queue/outbox failure
+        # cannot destroy a valid customer-authorized connection.
+        try:
+            queue_provider_sync(db, tenant_id=connection.tenant_id, connection=connection)
+            connection = db.get(ConnectorConnection, connection.id) or connection
+            config = dict(connection.config_json or {})
+            config.update({"initial_sync_status": "queued", "initial_sync_queued_at": datetime.utcnow().isoformat()})
+            connection.config_json = config
+            connection.updated_at = datetime.utcnow()
+            db.commit()
+        except Exception as queue_exc:
+            db.rollback()
+            safe_queue_error = _safe_error(queue_exc)
+            connection = db.get(ConnectorConnection, str(verified["cid"]))
+            if connection is not None:
+                config = dict(connection.config_json or {})
+                config.update(sanitize_config({"initial_sync_status": "queue_failed", "initial_sync_error": safe_queue_error}))
+                connection.config_json = config
+                connection.status = "connected"
+                connection.last_error = None
+                connection.updated_at = datetime.utcnow()
+                save_launch_job(db, connection.tenant_id, connection, "initial_sync_queue", {"provider": "john_deere", "status": "completed_with_warnings", "error": safe_queue_error}, "completed_with_warnings")
+                db.commit()
+        return RedirectResponse(return_url("john_deere", "connected", str(verified["cid"])))
 
     merged = dict(connection.config_json or {})
     merged.update(sanitize_config({"oauth_callback_received": True, "oauth_code_present": True, "oauth_error": None, "authorization_status": "authorized_pending_token_exchange"}))
