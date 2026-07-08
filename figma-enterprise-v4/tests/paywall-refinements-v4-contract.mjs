@@ -23,6 +23,7 @@ assert(host.includes("CompactPlanPrice"), "Commercial modal must split compact p
 assert(host.includes("flex-wrap items-baseline"), "Commercial plan price must be wrap-safe.");
 assert(host.includes("whitespace-nowrap text-[15px]"), "Commercial plan names must stay on one line across every shared paywall.");
 assert(host.includes('detail.source || ""'), "Commercial wall must honor contextual section/provider sources.");
+assert(host.includes('target === "enterprise"') && host.includes("https://agroai-pilot.com/book-a-demo"), "Enterprise paywall CTAs must route to the public demo-booking page.");
 
 assert(reports.includes('source: "reports"') && reports.includes('recommended_plan: "professional"'), "Reports must open the rich Professional comparison wall.");
 assert(team.includes('source: "team"') && team.includes('recommended_plan: "team"'), "Team must open the rich Team comparison wall.");
@@ -30,6 +31,9 @@ assert(requests.includes('source: "requests"') && requests.includes('recommended
 
 assert(pricing.includes('["professional", "team", "network"].includes(plan.id)'), "Professional, Team, and Network must all carry annual savings treatment.");
 assert(pricing.includes("Professional, Team, and Network save 17% on annual billing."), "Pricing header must explain the 17% annual saving across self-serve paid tiers.");
+assert(pricing.includes('if (plan.id === "enterprise") { window.location.assign(DEMO_BOOKING_URL); return; }'), "Enterprise pricing must bypass Stripe and route directly to demo booking.");
+assert(pricing.includes("https://agroai-pilot.com/book-a-demo"), "Enterprise pricing must use the canonical public demo-booking URL.");
+assert(!pricing.includes('if (plan.id === "enterprise") { await apiClient.sales.contact'), "Enterprise pricing must not stop at a dead-end contact request state.");
 
 assert(integrations.includes("connectorUpgradeMessage"), "Connector paywalls must use provider-specific conversion copy.");
 assert(integrations.includes("profile.title") && integrations.includes("profile.description"), "Connector paywall copy must name and explain the exact connector.");
