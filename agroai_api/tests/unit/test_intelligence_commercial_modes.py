@@ -21,5 +21,5 @@ def test_commercial_reasoning_route_is_mounted_once():
 
 
 def test_ai_and_deep_capacity_ladder_is_exact():
-    assert [BASE_ENTITLEMENTS[p]["quota.ai_action.monthly"] for p in ("free", "professional", "team", "network", "enterprise")] == [25, 500, 2500, 10000, None]
-    assert [BASE_ENTITLEMENTS[p]["quota.deep_investigation.monthly"] for p in ("free", "professional", "team", "network", "enterprise")] == [2, 25, 150, 750, None]
+    assert [BASE_ENTITLEMENTS[p]["quota.ai_action.monthly"] for p in ("free", "professional", "team", "network", "enterprise")] == [0, 500, 2500, 10000, None]
+    assert [BASE_ENTITLEMENTS[p]["quota.deep_investigation.monthly"] for p in ("free", "professional", "team", "network", "enterprise")] == [0, 25, 150, 750, None]

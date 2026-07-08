@@ -53,8 +53,9 @@ def test_enterprise_capacity_is_contract_configured_not_fake_unlimited():
     assert enterprise["connectors.custom_api"] == "contract_only"
 
 
-def test_higher_plans_expand_scope_without_gating_truth_or_security():
-    assert BASE_ENTITLEMENTS["free"]["intelligence.ask"] == "enabled"
+def test_higher_plans_expand_scope_and_ask_agro_ai_starts_at_professional():
+    assert BASE_ENTITLEMENTS["free"]["intelligence.ask"] == "locked"
+    assert BASE_ENTITLEMENTS["professional"]["intelligence.ask"] == "enabled"
     assert BASE_ENTITLEMENTS["professional"]["intelligence.deep_analysis"] == "enabled"
     assert BASE_ENTITLEMENTS["team"]["intelligence.shared_memory"] == "enabled"
     assert BASE_ENTITLEMENTS["network"]["intelligence.cross_workspace"] == "enabled"
@@ -73,9 +74,13 @@ def test_serialized_entitlements_expose_customer_safe_capabilities_and_quotas():
     assert payload["plan"] == "free"
     assert payload["customer_class"] == "individual_operator"
     assert payload["intelligence_profile"] == "essential"
-    assert payload["capabilities"]["intelligence.ask"] == "enabled"
+    assert payload["capabilities"]["intelligence.ask"] == "locked"
     assert payload["capabilities"]["reports.pdf_export"] == "locked"
     assert payload["quotas"]["workspace"] == 1
+    assert payload["quotas"]["ai_action.monthly"] == 0
+    assert payload["quotas"]["deep_investigation.monthly"] == 0
+    assert payload["max_agro_ai_messages_monthly"] == 0
+    assert payload["can_run_agro_ai"] is False
 
 
 def test_serialized_enterprise_plan_stays_enterprise_and_contract_configured():

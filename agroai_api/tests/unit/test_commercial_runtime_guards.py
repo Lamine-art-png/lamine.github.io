@@ -115,7 +115,7 @@ def test_inactive_paid_plan_is_free_equivalent_at_runtime():
     assert effective.state("team.invite") == "locked"
     assert effective.state("agents.execute_approval_gated") == "locked"
     assert effective.value("quota.seat") == 1
-    assert effective.state("intelligence.ask") == "enabled"
+    assert effective.state("intelligence.ask") == "locked"
 
 
 def test_direct_report_routes_have_commercial_dependency_installed():

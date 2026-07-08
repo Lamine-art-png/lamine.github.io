@@ -26,7 +26,7 @@ export type CommercialPlan = {
 export const ORDER: PlanId[] = ["free", "professional", "team", "network", "enterprise"];
 
 export const PLAN: Record<PlanId, CommercialPlan> = {
-  free: { nameKey: "commercialBoundary.plan.free", priceAmount: "$0", bullets: ["commercialBoundary.plan.free.bullet1", "commercialBoundary.plan.free.bullet2", "commercialBoundary.plan.free.bullet3"] },
+  free: { nameKey: "commercialBoundary.plan.free", priceAmount: "$0", bullets: ["commercialBoundary.plan.free.bullet1", "home.checkReadiness", "commercialBoundary.plan.free.bullet3"] },
   professional: { nameKey: "commercialBoundary.plan.professional", priceAmount: "$299", bullets: ["commercialBoundary.plan.professional.bullet1", "commercialBoundary.plan.professional.bullet2", "commercialBoundary.plan.professional.bullet3"] },
   team: { nameKey: "commercialBoundary.plan.team", priceAmount: "$799", bullets: ["commercialBoundary.plan.team.bullet1", "commercialBoundary.plan.team.bullet2", "commercialBoundary.plan.team.bullet3"] },
   network: { nameKey: "commercialBoundary.plan.network", priceAmount: "$1,500", bullets: ["commercialBoundary.plan.network.bullet1", "commercialBoundary.plan.network.bullet2", "commercialBoundary.plan.network.bullet3"] },
@@ -46,6 +46,7 @@ export const FEATURE_TITLE_KEY: Record<string, string> = {
   "admin.requests": "commercialBoundary.feature.adminRequests",
   "agents.execute_safe": "commercialBoundary.feature.agentsExecuteSafe",
   "agents.execute_approval_gated": "commercialBoundary.feature.agentsExecuteApproval",
+  "intelligence.ask": "intelligence.title",
   "intelligence.deep_analysis": "commercialBoundary.feature.intelligenceDeepAnalysis",
 };
 
@@ -62,6 +63,7 @@ export const CAPABILITY_KEY: Record<string, string> = {
   "admin.requests": "commercialBoundary.capability.adminRequests",
   "agents.execute_safe": "commercialBoundary.capability.agentsExecuteSafe",
   "agents.execute_approval_gated": "commercialBoundary.capability.agentsExecuteApproval",
+  "intelligence.ask": "intelligence.title",
   "intelligence.deep_analysis": "commercialBoundary.capability.intelligenceDeepAnalysis",
 };
 

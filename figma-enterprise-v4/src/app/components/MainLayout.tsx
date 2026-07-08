@@ -53,10 +53,12 @@ export function MainLayout() {
   const location = useLocation();
   const { tx } = usePortalCopy(copyNamespacesForPath(location.pathname), PLAN_COPY_VALUES);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const currentPlan = String(currentOrganization?.plan || "free").toLowerCase();
   const canInviteTeam = capabilityEnabled(entitlements, "team.invite", Boolean(entitlements.can_invite_team));
   const canAccessAdminRequests = capabilityEnabled(entitlements, "admin.requests", Boolean(entitlements.can_access_admin_requests));
   const canGeneratePdf = capabilityEnabled(entitlements, "reports.pdf_export", Boolean(entitlements.can_generate_pdf));
-  const currentPlanLabel = PLAN_LABELS[String(currentOrganization?.plan || "free").toLowerCase()] || "Free";
+  const canAskAgroAi = capabilityEnabled(entitlements, "intelligence.ask", !["free", "pilot"].includes(currentPlan));
+  const currentPlanLabel = PLAN_LABELS[currentPlan] || "Free";
 
   const operateItems: NavItem[] = [
     { name: t("commandCenter"), path: "/" },
@@ -69,7 +71,7 @@ export function MainLayout() {
   ];
 
   const intelligenceItems: NavItem[] = [
-    { name: t("askAgroAi"), path: "/intelligence" },
+    { name: t("askAgroAi"), path: "/intelligence", locked: !canAskAgroAi, upgradeTo: "professional" },
     { name: t("readiness"), path: "/readiness" },
     { name: t("exceptions"), path: "/exceptions" },
   ];

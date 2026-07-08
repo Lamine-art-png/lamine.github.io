@@ -15,8 +15,8 @@ type Copy = (value: string) => string;
 const DEMO_BOOKING_URL = "https://agroai-pilot.com/book-a-demo";
 
 const FALLBACK_PLANS: Plan[] = [
-  { id: "free", name: "Free", public_price_monthly: "$0/month", public_price_annual: "$0/year", recommended_buyer: "For pilots and small teams testing AGRO-AI.", included_limits: { users: "1 user", workspaces: "1 workspace", uploads: "15 evidence/file imports per month" }, features: ["25 AGRO-AI actions/month", "2 Deep analysis previews/month", "Basic field updates", "Basic readiness view", "Manual and chat file imports within quota"] },
-  { id: "professional", name: "Professional", public_price_monthly: "$299/month", public_price_annual: "$2,990/year", recommended_buyer: "For commercial farms, advisors, and operators running field operations.", included_limits: { users: "3 seats included", workspaces: "5 workspaces", uploads: "500 evidence/file imports per month" }, features: ["500 AGRO-AI actions/month", "25 Deep analyses/month", "Report and PDF generation", "Weather and OpenET context", "Standard live connectors"] },
+  { id: "free", name: "Free", public_price_monthly: "$0/month", public_price_annual: "$0/year", recommended_buyer: "For pilots and small teams testing AGRO-AI.", included_limits: { users: "1 user", workspaces: "1 workspace", uploads: "15 evidence/file imports per month" }, features: ["Basic field updates", "Basic readiness view"] },
+  { id: "professional", name: "Professional", public_price_monthly: "$299/month", public_price_annual: "$2,990/year", recommended_buyer: "For commercial farms, advisors, and operators running field operations.", included_limits: { users: "3 seats included", workspaces: "5 workspaces", uploads: "500 evidence/file imports per month" }, features: ["Ask AGRO-AI", "500 AGRO-AI actions/month", "25 Deep analyses/month", "Report and PDF generation", "Weather and OpenET context", "Standard live connectors"] },
   { id: "team", name: "Team", public_price_monthly: "$799/month", public_price_annual: "$7,990/year", recommended_buyer: "For advisory teams, farm management teams, and multi-site operators.", included_limits: { users: "10 seats included", workspaces: "25 workspaces", uploads: "2,500 evidence/file imports per month" }, features: ["2,500 AGRO-AI actions/month", "150 Deep analyses/month", "Team member invites", "Role controls", "Shared evidence and approvals"] },
   { id: "network", name: "Network", public_price_monthly: "$1,500/month", public_price_annual: "$15,000/year", recommended_buyer: "For grower networks, water districts, exporters, lenders, insurers, and multi-farm programs.", included_limits: { users: "25 seats included", workspaces: "50 workspaces or sites", uploads: "10,000 evidence/file imports per month" }, features: ["10,000 AGRO-AI actions/month", "750 Deep analyses/month", "Network dashboards and rollups", "Standard Custom API access", "Priority onboarding"] },
   { id: "enterprise", name: "Enterprise", public_price_monthly: "Contact sales", public_price_annual: "Contact sales", recommended_buyer: "For agencies, lenders, insurers, food companies, and national-scale networks.", included_limits: { users: "Custom seats", workspaces: "Custom workspaces", uploads: "Contract-configured import volume" }, features: ["Contract-configured AI capacity", "SSO/SAML planning", "Audit logs", "Bespoke custom integrations", "Dedicated onboarding"], is_custom_pricing: true },
@@ -25,9 +25,10 @@ const FALLBACK_PLANS: Plan[] = [
 const COMPARISON = [
   ["Users", "1", "3", "10", "25", "Custom"],
   ["Workspaces", "1", "5", "25", "50", "Custom"],
-  ["AGRO-AI actions", "25/mo", "500/mo", "2,500/mo", "10,000/mo", "Contract"],
-  ["Deep analysis", "2 previews/mo", "25/mo", "150/mo", "750/mo", "Contract"],
-  ["Evidence + chat file imports", "15/mo shared", "500/mo shared", "2,500/mo shared", "10,000/mo shared", "Contract volume"],
+  ["Ask AGRO-AI", "Locked", "Included", "Included", "Included", "Included"],
+  ["AGRO-AI actions", "Locked", "500/mo", "2,500/mo", "10,000/mo", "Contract"],
+  ["Deep analysis", "Locked", "25/mo", "150/mo", "750/mo", "Contract"],
+  ["Evidence file imports", "15/mo shared", "500/mo shared", "2,500/mo shared", "10,000/mo shared", "Contract volume"],
   ["PDF reports", "Locked", "Yes", "Advanced", "Rollups", "Custom"],
   ["Weather / Forecast", "Locked", "Included", "Included", "Included", "Included"],
   ["OpenET / ET context", "Locked", "Included", "Included", "Included", "Included"],
@@ -40,7 +41,7 @@ const COMPARISON = [
 ];
 
 const REQUIRED_PLAN_COPY: Record<string, string> = {
-  professional: "Professional unlocks reports, Weather, OpenET, live connectors, 500 AGRO-AI actions, and 25 Deep analyses each month.",
+  professional: "Professional unlocks Ask AGRO-AI, reports, Weather, OpenET, live connectors, 500 AGRO-AI actions, and 25 Deep analyses each month.",
   team: "Team unlocks direct invitations, role controls, shared evidence, approvals, 2,500 AGRO-AI actions, and 150 Deep analyses each month.",
   network: "Network unlocks standard Custom API access, multi-workspace rollups, 10,000 AGRO-AI actions, and 750 Deep analyses each month.",
   enterprise: "Enterprise adds bespoke integrations, custom security, SSO, governance review, and contract-configured AI capacity.",

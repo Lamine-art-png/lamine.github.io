@@ -11,8 +11,10 @@ from . import recovery_v2 as recovery_module  # noqa: E402
 auth_module.router.include_router(recovery_module.router)
 
 from . import billing as billing_module  # noqa: E402,F401
+from app.services.ask_agro_ai_commercial_policy import install_ask_agro_ai_commercial_policy  # noqa: E402
 from app.services.commercial_billing_lifecycle import install_commercial_billing_lifecycle  # noqa: E402
 
+install_ask_agro_ai_commercial_policy()
 install_commercial_billing_lifecycle()
 
 from . import brain as brain_module  # noqa: E402
@@ -23,6 +25,8 @@ brain_module.router.include_router(brain_safety_module.router)
 brain_module.router.include_router(brain_commercial_module.router)
 
 from . import ai as ai_module  # noqa: E402
+from . import ai_stable as ai_stable_module  # noqa: E402
+from . import platform_intelligence as platform_intelligence_module  # noqa: E402
 from . import connector_hub as connector_module  # noqa: E402
 from . import connector_connection_upload_secure as connection_upload_module  # noqa: E402
 from . import connector_oauth_secure as oauth_module  # noqa: E402
@@ -36,6 +40,7 @@ from . import connectors as connector_compat_module  # noqa: E402
 from . import product_shell as product_shell_module  # noqa: E402
 from . import monetization_convergence as monetization_module  # noqa: E402
 from . import non_customer_access as non_customer_access_module  # noqa: E402
+from . import ask_agro_ai_paywall as ask_agro_ai_paywall_module  # noqa: E402
 from app.services.commercial_packaging_v2 import apply_catalog_packaging, install_commercial_packaging_v2  # noqa: E402
 from app.services.commercial_upload_metering_v2 import install_commercial_upload_metering  # noqa: E402
 
@@ -46,6 +51,15 @@ _HIDDEN_COMPAT_OPERATIONS = {
     ("GET", "/connectors/jobs"),
     ("GET", "/connectors/connections/{connection_id}/data"),
     ("POST", "/connectors/connections/{connection_id}/upload"),
+}
+
+_ASK_EXECUTION_ROUTES = {
+    "/runtime/intelligence-run",
+    "/intelligence/brain/run",
+    "/intelligence/brain/run-safe",
+    "/intelligence/brain/run-commercial",
+    "/intelligence/run",
+    "/ai/chat",
 }
 
 
@@ -71,6 +85,29 @@ def _remove_duplicate_product_checkout() -> None:
     ]
 
 
+def _remove_shadow_ask_execution_routes() -> None:
+    """Keep one mounted route per paid inference path.
+
+    The paid boundary delegates directly to the proven implementation functions,
+    so the original execution routes are removed from later-mounted routers.
+    This prevents both bypasses and duplicate route registrations.
+    """
+    for router in (
+        brain_module.router,
+        ai_stable_module.router,
+        platform_intelligence_module.router,
+        ai_module.router,
+    ):
+        router.routes[:] = [
+            route
+            for route in router.routes
+            if not (
+                getattr(route, "path", "") in _ASK_EXECUTION_ROUTES
+                and "POST" in set(getattr(route, "methods", None) or ())
+            )
+        ]
+
+
 connector_module.router.routes[0:0] = (
     list(oauth_module.router.routes)
     + list(provider_sync_module.router.routes)
@@ -88,7 +125,9 @@ apply_catalog_packaging(connector_compat_module.CATALOG)
 install_commercial_upload_metering((connector_module.router, connector_compat_module.router))
 
 _remove_duplicate_product_checkout()
+_remove_shadow_ask_execution_routes()
 product_shell_module.router.include_router(monetization_module.router)
 product_shell_module.router.include_router(non_customer_access_module.router)
+product_shell_module.router.include_router(ask_agro_ai_paywall_module.router)
 
 _hide_compat_schema_shadows()

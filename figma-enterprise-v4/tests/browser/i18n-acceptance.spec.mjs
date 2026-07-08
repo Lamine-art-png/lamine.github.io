@@ -70,7 +70,7 @@ async function installPortalMocks(page, { initialLocale = "en" } = {}) {
     ({ token, locale }) => {
       localStorage.setItem("agroai_access_token", token);
       localStorage.setItem("agroai_locale_v1", locale);
-      localStorage.setItem("agroai_product_tour_product_tour_v1_qa-user", "done");
+      localStorage.setItem("agroai_product_tour_product_tour_v2_qa-user", "done");
     },
     { token: futureJwt(), locale: initialLocale },
   );
@@ -93,13 +93,13 @@ async function installPortalMocks(page, { initialLocale = "en" } = {}) {
     if (method === "GET" && path === "/v1/auth/me") {
       return json({
         user: { id: "qa-user", name: "QA Operator", email: "qa@example.com" },
-        current_organization: { id: "org-qa", name: "QA Farm", role: "owner" },
-        organizations: [{ id: "org-qa", name: "QA Farm", role: "owner" }],
-        entitlements: {},
+        current_organization: { id: "org-qa", name: "QA Farm", role: "owner", plan: "professional", subscription_status: "active" },
+        organizations: [{ id: "org-qa", name: "QA Farm", role: "owner", plan: "professional", subscription_status: "active" }],
+        entitlements: { capabilities: { "intelligence.ask": "enabled" } },
       });
     }
     if (method === "GET" && path === "/v1/orgs") {
-      return json({ organizations: [{ id: "org-qa", name: "QA Farm", role: "owner" }] });
+      return json({ organizations: [{ id: "org-qa", name: "QA Farm", role: "owner", plan: "professional", subscription_status: "active" }] });
     }
     if (method === "GET" && path === "/v1/workspaces") {
       return json({ workspaces: [{ id: "ws-qa", name: "QA Workspace", status: "active" }] });
