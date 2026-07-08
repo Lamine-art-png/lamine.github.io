@@ -98,6 +98,7 @@ class LiveIntelligence:
         self.local_access_client_id = (settings.AI_LOCAL_CF_ACCESS_CLIENT_ID or "").strip()
         self.local_access_client_secret = (settings.AI_LOCAL_CF_ACCESS_CLIENT_SECRET or "").strip()
         self.edge_model = (settings.AI_EDGE_MODEL or "").strip() or "@cf/zai-org/glm-4.7-flash"
+        self.edge_auth_token = (settings.AI_EDGE_AUTH_TOKEN or "").strip()
         self.challenger_model = (settings.AI_CHALLENGER_MODEL or "").strip() or "deepseek/deepseek-v4-pro"
         self.free_model = (settings.AI_FREE_MODEL or "").strip()
 
@@ -195,6 +196,9 @@ class LiveIntelligence:
             "CF-Access-Client-Id": self.local_access_client_id,
             "CF-Access-Client-Secret": self.local_access_client_secret,
         }
+
+    def edge_auth_headers(self) -> dict[str, str]:
+        return {"Authorization": f"Bearer {self.edge_auth_token}"} if self.edge_auth_token else {}
 
     def ollama_model(self) -> str | None:
         model = self.local_model or (
@@ -321,7 +325,11 @@ class LiveIntelligence:
         }
         try:
             async with httpx.AsyncClient(timeout=self.edge_timeout) as client:
-                response = await client.post(f"{base_url}/api/chat", json=payload)
+                response = await client.post(
+                    f"{base_url}/api/chat",
+                    headers=self.edge_auth_headers(),
+                    json=payload,
+                )
                 response.raise_for_status()
                 body = response.json()
             answer = _ollama_compatible_answer(body)
