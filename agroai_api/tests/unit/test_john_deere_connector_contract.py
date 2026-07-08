@@ -3,6 +3,7 @@ from __future__ import annotations
 import urllib.parse
 
 from app.api.v1.connector_launch import CONNECTOR_MANIFESTS, OAUTH_PROVIDERS
+from app.api.v1.connectors import catalog_item
 from app.services.john_deere_sync import GLOBAL_ROUTE_SPECS, ORG_ROUTE_SPECS
 from app.services.oauth_urls import oauth_url
 from app.services.provider_sync_jobs import SUPPORTED_PROVIDERS
@@ -34,9 +35,13 @@ def test_john_deere_oauth_url_is_customer_authorized_and_excludes_work_plans(mon
     assert not any("work" in scope.lower() for scope in query["scope"][0].split())
 
 
-def test_john_deere_is_first_class_oauth_and_sync_provider():
+def test_john_deere_is_first_class_oauth_catalog_and_sync_provider():
     assert "john_deere" in OAUTH_PROVIDERS
     assert "john_deere" in SUPPORTED_PROVIDERS
+    catalog = catalog_item("john_deere")
+    assert catalog is not None
+    assert catalog["connection_methods"] == ["oauth"]
+    assert catalog["required_plan"] == "pro"
     manifest = CONNECTOR_MANIFESTS["john_deere"]
     assert manifest["auth_pattern"] == "oauth"
     assert manifest["required_env"] == [
