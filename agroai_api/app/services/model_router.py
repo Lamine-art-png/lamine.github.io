@@ -111,7 +111,7 @@ class ModelRouter:
         return bool(self.edge_base and self.edge_model)
 
     def _local_configured(self) -> bool:
-        return bool(self.local_base and self.local_model and "/" not in self.local_model)
+        return bool(LiveIntelligence().ollama_model())
 
     def missing_env(self) -> list[str]:
         provider = (settings.AI_PROVIDER or "").strip().lower()
@@ -120,7 +120,7 @@ class ModelRouter:
         if provider == "ollama":
             if self._hosted_configured() or self._edge_configured() or self._local_configured():
                 return []
-            return ["AI_EDGE_BASE_URL_OR_AI_LOCAL_BASE_URL_OR_OPENROUTER_API_KEY"]
+            return ["AI_EDGE_BASE_URL_OR_SECURED_AI_LOCAL_BASE_URL_OR_OPENROUTER_API_KEY"]
         if provider in {"openrouter","openrouter.ai"}:
             return [] if (settings.AI_API_KEY or os.getenv("OPENROUTER_API_KEY")) else ["AI_API_KEY_OR_OPENROUTER_API_KEY"]
         missing = []
@@ -132,7 +132,8 @@ class ModelRouter:
         selected = self.select("chat")
         hosted_configured = self._hosted_configured()
         edge_configured = self._edge_configured()
-        local_configured = self._local_configured()
+        local_runtime = LiveIntelligence()
+        local_configured = bool(local_runtime.ollama_model())
         return {
             "configured":not bool(self.missing_env()),
             "provider":self.gateway.raw_provider or self.gateway.provider or "offline",
@@ -163,6 +164,8 @@ class ModelRouter:
                     "configured":local_configured,
                     "provider":"ollama" if local_configured else None,
                     "base_url_present":bool(self.local_base),
+                    "access_required":local_runtime.local_requires_access(),
+                    "access_configured":local_runtime.local_access_configured(),
                     "model":self.local_model if local_configured else None,
                 },
             },
@@ -184,8 +187,6 @@ class ModelRouter:
         if profile == "fast": model = self.fast_model
         elif profile == "report": model = self.report_model
         if self.mode() == "ollama":
-            # Structured gateway calls use AI_BASE_URL. Select the edge model when
-            # that URL is the Workers AI wrapper; never send the Mac model name to it.
             if self.edge_base and self.gateway.base_url == self.edge_base:
                 model = self.edge_model
             else:
