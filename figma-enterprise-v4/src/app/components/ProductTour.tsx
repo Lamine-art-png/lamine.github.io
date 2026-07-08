@@ -10,7 +10,7 @@ type AnyRecord = Record<string, any>;
 type TourStep = {
   eyebrow: string;
   title: string;
-  body: string;
+  description: string;
   target?: string;
 };
 
@@ -20,30 +20,30 @@ const STEPS: TourStep[] = [
   {
     eyebrow: "Welcome to AGRO-AI",
     title: "Your agricultural operating system",
-    body: "AGRO-AI brings operations, field evidence, connected systems, decisions, reports, and intelligence into one workspace. Here is the 60-second tour.",
+    description: "AGRO-AI brings operations, field evidence, connected systems, decisions, reports, and intelligence into one workspace. Here is the 60-second tour.",
   },
   {
     eyebrow: "Operate",
     title: "Start with Command Center",
-    body: "See what needs attention, move from signal to action, and keep the team focused on the highest-priority work.",
+    description: "See what needs attention, move from signal to action, and keep the team focused on the highest-priority work.",
     target: "command-center",
   },
   {
     eyebrow: "Connect your reality",
     title: "Bring your systems and files in",
-    body: "Connect controllers, email, cloud drives, weather, ET data, enterprise systems, or upload source files. AGRO-AI turns approved inputs into operational context.",
+    description: "Connect controllers, email, cloud drives, weather, ET data, enterprise systems, or upload source files. AGRO-AI turns approved inputs into operational context.",
     target: "connectors",
   },
   {
     eyebrow: "Trust the answer",
     title: "Evidence keeps work traceable",
-    body: "Use Evidence to see the records behind decisions and reports. Sources, timestamps, provenance, and gaps stay visible instead of disappearing inside a black box.",
+    description: "Use Evidence to see the records behind decisions and reports. Sources, timestamps, provenance, and gaps stay visible instead of disappearing inside a black box.",
     target: "evidence",
   },
   {
     eyebrow: "Intelligence",
     title: "Ask AGRO-AI to investigate and act",
-    body: "Ask questions, import files, diagnose risk, review missing evidence, prepare reports, and turn findings into the next operating action.",
+    description: "Ask questions, import files, diagnose risk, review missing evidence, prepare reports, and turn findings into the next operating action.",
     target: "ask-agro-ai",
   },
 ];
@@ -147,7 +147,7 @@ export function ProductTour() {
       setServerSteps(completedStepsFrom(response));
     } catch {
       // Local suppression prevents a broken onboarding endpoint from trapping the
-      // customer in a repeated tour; the next authenticated session retries state.
+      // customer in a repeated tour on this device.
     } finally {
       setSaving(false);
     }
@@ -200,13 +200,13 @@ export function ProductTour() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: "#567064" }}>{step.eyebrow}</div>
-            <div className="mt-2 text-[12px] font-medium" style={{ color: "#6B7F75" }}>Step {stepIndex + 1} of {STEPS.length}</div>
+            <div className="mt-2 text-[12px] font-medium" style={{ color: "#6B7F75" }}>{stepIndex + 1} / {STEPS.length}</div>
           </div>
           <button type="button" onClick={() => void finish()} className="rounded-lg p-1.5 hover:bg-black/5" aria-label="Skip product tour"><X size={17} /></button>
         </div>
 
         <h2 className="mt-5 text-[23px] font-semibold tracking-tight">{step.title}</h2>
-        <p className="mt-3 text-[14px] leading-6" style={{ color: "#5D7067" }}>{step.body}</p>
+        <p className="mt-3 text-[14px] leading-6" style={{ color: "#5D7067" }}>{step.description}</p>
 
         <div className="mt-6 flex gap-1.5" aria-hidden="true">
           {STEPS.map((_, index) => <span key={index} className="h-1.5 flex-1 rounded-full" style={{ background: index <= stepIndex ? "#1F7350" : "#E4E8E2" }} />)}
