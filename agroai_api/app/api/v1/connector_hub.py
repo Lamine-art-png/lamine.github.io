@@ -249,9 +249,3 @@ async def connector_data_status(connection_id: str, tenant_id: str = Depends(req
 # Connector Hub router so there is one production route owner at runtime.
 from app.api.v1.connector_unified_v3 import router as unified_v3_router  # noqa: E402
 router.include_router(unified_v3_router)
-
-# Mount the generic provider sync lifecycle (queue/sync/disconnect) on the same
-# already-mounted Connector Hub router. Deere authorization remains owned only by
-# connector_launch's one-time-state callback; no legacy parallel OAuth path.
-from app.api.v1.connector_provider_sync import router as provider_sync_router  # noqa: E402
-router.include_router(provider_sync_router)
