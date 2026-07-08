@@ -6,6 +6,7 @@ import pytest
 from fastapi import HTTPException
 
 from app.api.v1.billing import _billing_not_required
+from app.api.v1.non_customer_access import _demo_autoprovision_enabled
 from app.core.config import settings
 from app.models.saas import EntitlementOverride, ManagedEntity, Organization, OrganizationMembership, User, Workspace
 from app.services.commercial_billing_lifecycle import apply_authoritative_billing_event
@@ -57,6 +58,19 @@ def test_profile_selection_is_server_allowlist_only(monkeypatch):
     assert configured_profile_for_email(" FOUNDER@example.test ") == INTERNAL_PROFILE
     assert configured_profile_for_email("demo@example.test") == DEMO_PROFILE
     assert configured_profile_for_email("customer@example.test") == "customer"
+
+
+def test_demo_autoprovision_requires_demo_environment_and_explicit_flag(monkeypatch):
+    monkeypatch.setattr(settings, "APP_ENV", "production")
+    monkeypatch.setattr(settings, "DEMO_AUTO_PROVISION", True)
+    assert _demo_autoprovision_enabled() is False
+
+    monkeypatch.setattr(settings, "APP_ENV", "demo")
+    monkeypatch.setattr(settings, "DEMO_AUTO_PROVISION", False)
+    assert _demo_autoprovision_enabled() is False
+
+    monkeypatch.setattr(settings, "DEMO_AUTO_PROVISION", True)
+    assert _demo_autoprovision_enabled() is True
 
 
 def test_internal_access_is_full_unmetered_idempotent_and_reversible(db):
@@ -145,6 +159,27 @@ def test_non_customer_profile_cannot_enter_stripe_checkout_and_ignores_webhook_m
     assert org.plan == "enterprise"
     assert org.subscription_status == "contracted"
     assert org.subscription_source == "access_profile:internal"
+
+
+def test_normal_customer_still_obeys_authoritative_stripe_lifecycle(db):
+    _user, org = _identity(db, email="customer@example.test")
+    org.plan = "professional"
+    org.subscription_status = "active"
+    org.subscription_source = "stripe"
+    org.stripe_customer_id = "cus_customer"
+    org.stripe_subscription_id = "sub_customer"
+    db.commit()
+
+    assert _billing_not_required(org) is None
+    apply_authoritative_billing_event(
+        db,
+        org,
+        "customer.subscription.deleted",
+        {"id": "sub_customer", "customer": "cus_customer"},
+    )
+    assert org.plan == "free"
+    assert org.subscription_status == "canceled"
+    assert org.subscription_source == "stripe"
 
 
 def test_demo_environment_provisions_full_and_real_free_identities_idempotently(db, monkeypatch):
