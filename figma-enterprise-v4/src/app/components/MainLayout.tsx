@@ -21,16 +21,15 @@ const PLAN_LABELS: Record<string, string> = {
   assurance_audit: "Professional",
   assurance: "Team",
 };
+const PLAN_COPY_VALUES = Array.from(new Set(Object.values(PLAN_LABELS)));
 
 function copyNamespacesForPath(pathname: string): string[] {
-  const namespaces = ["shared"];
-  if (pathname === "/pricing") namespaces.push("pricing");
-  if (pathname === "/evidence") namespaces.push("evidence");
-  if (pathname === "/operations") namespaces.push("operations");
-  if (["/", "/field-queue", "/tasks"].includes(pathname)) namespaces.push("overview");
-  if (["/readiness", "/fields", "/exceptions", "/decision-workbench", "/report-factory"].includes(pathname)) namespaces.push("cockpit");
-  if (pathname === "/integrations") namespaces.push("integrations");
-  return namespaces;
+  if (pathname === "/operations") return ["operations", "shared"];
+  if (["/", "/field-queue", "/tasks"].includes(pathname)) return ["overview", "shared"];
+  if (["/readiness", "/fields", "/exceptions", "/decision-workbench", "/report-factory"].includes(pathname)) return ["cockpit", "shared"];
+  // Pricing, Evidence, and Integrations own their route copy sources inside the
+  // mounted component. Other routes rely on the static progressive catalog.
+  return [];
 }
 
 function capabilityEnabled(entitlements: Record<string, unknown>, key: string, fallback: boolean) {
@@ -44,7 +43,7 @@ export function MainLayout() {
   const { currentOrganization, currentWorkspace, entitlements, logout } = useAuth();
   const { t } = useLocale();
   const location = useLocation();
-  const { tx } = usePortalCopy(copyNamespacesForPath(location.pathname));
+  const { tx } = usePortalCopy(copyNamespacesForPath(location.pathname), PLAN_COPY_VALUES);
   const canInviteTeam = capabilityEnabled(entitlements, "team.invite", Boolean(entitlements.can_invite_team));
   const canAccessAdminRequests = capabilityEnabled(entitlements, "admin.requests", Boolean(entitlements.can_access_admin_requests));
   const canGeneratePdf = capabilityEnabled(entitlements, "reports.pdf_export", Boolean(entitlements.can_generate_pdf));
