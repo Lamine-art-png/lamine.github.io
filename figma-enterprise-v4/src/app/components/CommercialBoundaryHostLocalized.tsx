@@ -170,7 +170,7 @@ function PlanCard({ id, label, highlighted = false, t }: { id: PlanId; label: st
   const plan = PLAN[id];
   return <article className="min-w-0 overflow-hidden rounded-2xl p-4" style={{ background: highlighted ? "#EEF8E8" : "#F6F4EE", border: `1px solid ${highlighted ? "#A7CFAF" : "#D6DDD0"}` }}>
     <div className="text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: highlighted ? "#1F7350" : "#7A877F" }}>{label}</div>
-    <div className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2"><h3 className="min-w-0 break-words text-[18px] font-semibold leading-6 text-[#10231B]">{t(plan.nameKey)}</h3><CompactPlanPrice id={id} t={t} /></div>
+    <div className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2"><h3 className="min-w-0 whitespace-nowrap text-[15px] font-semibold leading-6 tracking-[-0.015em] text-[#10231B]">{t(plan.nameKey)}</h3><CompactPlanPrice id={id} t={t} /></div>
     <div className="mt-4 space-y-2">{plan.bullets.map((key) => <div key={key} className="flex min-w-0 gap-2 text-[11px] leading-5 text-[#65736A]"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#2D6A4F]" /><span className="min-w-0 break-words">{t(key)}</span></div>)}</div>
   </article>;
 }
