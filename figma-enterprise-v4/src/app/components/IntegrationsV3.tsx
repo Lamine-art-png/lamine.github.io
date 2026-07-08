@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState, type ReactNode } from "react";
 import { apiClient } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
 import { usePortalResource } from "../hooks/usePortalResource";
+import { usePortalCopy, type PortalCopyValues } from "../hooks/usePortalCopy";
 import { openCommercialBoundary } from "./CommercialBoundaryHost";
 import { BG, BORDER, InlineState, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
 import { UnifiedAgConnectorFlow } from "./UnifiedAgConnectorFlow";
@@ -11,6 +12,8 @@ import wiseconnLogo from "../../imports/wiseconn-logo-hq.png";
 type AnyRecord = Record<string, any>;
 type ConnectorType = "controller" | "files" | "account" | "data_provider" | "custom_api";
 type AuthPattern = "oauth" | "service_account" | "manual_upload" | "provider_api" | "enterprise_api";
+type Copy = (value: string) => string;
+type FormatCopy = (template: string, values: PortalCopyValues) => string;
 
 const PLAN_ORDER = ["free", "professional", "team", "network", "enterprise"] as const;
 type PlanId = typeof PLAN_ORDER[number];
@@ -67,6 +70,8 @@ const PROFILES: Record<string, Profile> = {
   custom_api: { title: "Data Provider API", subtitle: "Existing systems", type: "custom_api", description: "Connect farm, agency, ERP, telemetry, or water-accounting systems.", authPattern: "enterprise_api", action: "Create access request", logoFallback: "API", logoBg: "#FDF2F8", logoColor: "#BE185D" },
 };
 
+const INTEGRATION_LITERAL_VALUES = Object.values(PROFILES).flatMap((profile) => [profile.title, profile.subtitle, profile.description, profile.action]);
+
 function profileFor(id: string, connector?: Connector): Profile {
   return PROFILES[id] || { title: connector?.name || id, subtitle: connector?.category || "Connector", type: "custom_api", description: connector?.promise || "Connect this source to AGRO-AI.", authPattern: "enterprise_api", action: "Connect", logoFallback: id.slice(0, 2).toUpperCase(), logoBg: "#F8FAFC", logoColor: "#334155", supportsUpload: Boolean(connector?.upload_supported) };
 }
@@ -78,12 +83,18 @@ function fallbackRequired(provider: string): PlanId { if (["manual_csv", "chat_u
 function requiredPlan(connector: Connector): PlanId { const raw = connector.required_plan && connector.required_plan !== "internal" ? connector.required_plan : fallbackRequired(connector.id); return canonicalPlan(raw); }
 function planName(value: PlanId) { return value === "enterprise" ? "Enterprise" : value === "network" ? "Network" : value === "team" ? "Team" : value === "professional" ? "Professional" : "Free"; }
 function featureFor(provider: string) { if (["manual_csv", "chat_upload"].includes(provider)) return "connectors.manual_upload"; if (["gmail", "outlook", "google_drive", "dropbox", "box", "slack", "john_deere"].includes(provider)) return "connectors.oauth_documents"; if (provider === "custom_api") return "connectors.custom_api"; if (["universal_controller", "salesforce", "google_earth_engine"].includes(provider)) return "connectors.custom_integration"; return "connectors.live"; }
-function connectorUpgradeMessage(profile: Profile, needed: PlanId) {
-  return `Unlock ${profile.title}: ${profile.description} Without ${profile.title} connected, this source stays outside AGRO-AI and your team relies more on manual imports, stale snapshots, and disconnected handoffs. Upgrade to ${planName(needed)} to connect ${profile.title} and bring ${profile.subtitle.toLowerCase()} into the operating workflow.`;
+function connectorUpgradeMessage(profile: Profile, needed: PlanId, tx: Copy, tf: FormatCopy) {
+  return tf("Unlock {provider}: {description} Without {provider} connected, this source stays outside AGRO-AI and your team relies more on manual imports, stale snapshots, and disconnected handoffs. Upgrade to {plan} to connect {provider} and bring {subtitle} into the operating workflow.", {
+    provider: profile.title,
+    description: tx(profile.description),
+    plan: tx(planName(needed)),
+    subtitle: tx(profile.subtitle),
+  });
 }
 
 export function IntegrationsV3() {
   const { currentOrganization, currentWorkspace } = useAuth();
+  const { tx, tf } = usePortalCopy(["integrations", "shared"], INTEGRATION_LITERAL_VALUES);
   const catalogState = usePortalResource<AnyRecord>(useCallback(() => apiClient.connectorHub.catalog(), []));
   const connectionsState = usePortalResource<AnyRecord>(useCallback(() => apiClient.connectorHub.connections(), []));
   const [selected, setSelected] = useState<Connector | null>(null);
@@ -111,7 +122,7 @@ export function IntegrationsV3() {
     const needed = requiredPlan(connector);
     if (PLAN_ORDER.indexOf(plan) < PLAN_ORDER.indexOf(needed)) {
       const profile = profileFor(connector.id, connector);
-      openCommercialBoundary({ status: 402, code: "upgrade_required", feature: featureFor(connector.id), recommended_plan: needed, conversion_context: connectorUpgradeMessage(profile, needed), source: "connectors_v3" });
+      openCommercialBoundary({ status: 402, code: "upgrade_required", feature: featureFor(connector.id), recommended_plan: needed, conversion_context: connectorUpgradeMessage(profile, needed, tx, tf), source: "connectors_v3" });
       return;
     }
     const existing = connections.find((row) => row.provider === connector.id) || connector.connection || null;
@@ -121,7 +132,7 @@ export function IntegrationsV3() {
   async function launchGeneric() {
     if (!selected) return;
     const profile = profileFor(selected.id, selected);
-    if (profile.authPattern === "manual_upload") { setMessage("Choose a file below to import evidence."); return; }
+    if (profile.authPattern === "manual_upload") { setMessage(tx("Choose a file below to import evidence.")); return; }
     setBusy("launch"); setMessage("");
     try {
       if (profile.authPattern === "oauth" || profile.authPattern === "service_account") {
@@ -135,7 +146,7 @@ export function IntegrationsV3() {
         setMessage(`${profile.title} setup request recorded.`);
       }
       await refresh();
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Connection failed."); }
+    } catch (error) { setMessage(error instanceof Error ? error.message : tx("Connection failed.")); }
     finally { setBusy(""); }
   }
 
@@ -145,9 +156,9 @@ export function IntegrationsV3() {
     try {
       const result = await apiClient.post(`/v1/connectors/provider-sync/${connection.id}/sync`, {}) as AnyRecord;
       setConnection(result.connection || connection);
-      setMessage(result.deduplicated ? "A sync is already queued or running." : "Sync queued. AGRO-AI will ingest the authorized Operations Center context through the durable worker path.");
+      setMessage(tx(result.deduplicated ? "A sync is already queued or running." : "Sync queued. AGRO-AI will ingest the authorized Operations Center context through the durable worker path."));
       await refresh();
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Sync could not be queued."); }
+    } catch (error) { setMessage(error instanceof Error ? error.message : tx("Sync could not be queued.")); }
     finally { setBusy(""); }
   }
 
@@ -157,9 +168,9 @@ export function IntegrationsV3() {
     try {
       const result = await apiClient.post(`/v1/connectors/provider-sync/${connection.id}/disconnect`, {}) as AnyRecord;
       setConnection(result.connection || null);
-      setMessage("Operations Center disconnected and locally stored connector credentials revoked.");
+      setMessage(tx("Operations Center disconnected and locally stored connector credentials revoked."));
       await refresh();
-    } catch (error) { setMessage(error instanceof Error ? error.message : "Disconnect failed."); }
+    } catch (error) { setMessage(error instanceof Error ? error.message : tx("Disconnect failed.")); }
     finally { setBusy(""); }
   }
 
@@ -167,7 +178,7 @@ export function IntegrationsV3() {
     if (!file || !selected) return;
     setBusy("upload"); setMessage("");
     try { const result = await apiClient.evidence.upload(file, selected.id, currentWorkspace?.id) as AnyRecord; setConnection(result.connection || connection); setMessage(`Imported ${String(result.evidence_records_created ?? 0)} evidence records from ${file.name}.`); await refresh(); }
-    catch (error) { setMessage(error instanceof Error ? error.message : "Upload failed."); }
+    catch (error) { setMessage(error instanceof Error ? error.message : tx("Upload failed.")); }
     finally { setBusy(""); }
   }
 
@@ -176,14 +187,14 @@ export function IntegrationsV3() {
   const deereManaged = selected?.id === "john_deere" && Boolean(connection?.id) && ACTIVE_STATUSES.has(selectedRawStatus);
 
   return <div className="min-h-screen" style={{ background: BG }}>
-    <header className="px-8 py-7" style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}><div className="flex items-start justify-between gap-6"><div><div className="flex items-center gap-2 mb-3"><StatusBadge label="Integration Hub" tone="good" /><StatusBadge label={`${planName(plan)} plan`} /></div><h1 className="text-[30px] font-semibold tracking-tight" style={{ color: TEXT }}>Connectors</h1><p className="mt-2 max-w-3xl text-[14px] leading-relaxed" style={{ color: MUTED }}>Authorize, choose scope, sync, done. Provider complexity stays behind AGRO-AI.</p><p className="mt-2 max-w-4xl text-[11px] leading-relaxed" style={{ color: MUTED }}>File imports share one monthly quota: 15 on Free, 500 on Professional, 2,500 on Team, 10,000 on Network. Weather and OpenET start on Professional; standard Custom API starts on Network; bespoke integrations require Enterprise.</p></div><PortalButton variant="secondary" onClick={refresh}>Refresh</PortalButton></div></header>
+    <header className="px-8 py-7" style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}><div className="flex items-start justify-between gap-6"><div><div className="flex items-center gap-2 mb-3"><StatusBadge label={tx("Integration Hub")} tone="good" /><StatusBadge label={tf("{plan} plan", { plan: tx(planName(plan)) })} /></div><h1 className="text-[30px] font-semibold tracking-tight" style={{ color: TEXT }}>{tx("Connectors")}</h1><p className="mt-2 max-w-3xl text-[14px] leading-relaxed" style={{ color: MUTED }}>{tx("Authorize, choose scope, sync, done. Provider complexity stays behind AGRO-AI.")}</p><p className="mt-2 max-w-4xl text-[11px] leading-relaxed" style={{ color: MUTED }}>{tx("File imports share one monthly quota: 15 on Free, 500 on Professional, 2,500 on Team, 10,000 on Network. Weather and OpenET start on Professional; standard Custom API starts on Network; bespoke integrations require Enterprise.")}</p></div><PortalButton variant="secondary" onClick={refresh}>{tx("Refresh")}</PortalButton></div></header>
     <main className="px-8 py-6 space-y-6" style={{ maxWidth: 1320 }}>
       {catalogState.error ? <InlineState title={catalogState.error} /> : null}{message ? <InlineState title={message} /> : null}
-      <section className="grid grid-cols-4 gap-4"><Metric label="Connectors" value={String(cards.length)} /><Metric label="Active sources" value={String(connections.filter((row) => ["connected", "synced", "syncing"].includes(String(row.status))).length)} /><Metric label="Self-serve AgTech" value="3" /><Metric label="Lifecycle" value="Unified v3" /></section>
-      <section className="rounded-2xl p-4" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}><div className="flex flex-wrap items-center gap-2 mb-4"><button onClick={() => setActiveType("all")} className="rounded-full px-3 py-2 text-[12px]" style={pillStyle(activeType === "all")}>All</button>{TYPE_ORDER.map((type) => <button key={type} onClick={() => setActiveType(type)} className="rounded-full px-3 py-2 text-[12px]" style={pillStyle(activeType === type)}>{TYPE_LABEL[type]}</button>)}</div><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search John Deere, WiseConn, Talgil, OpenET, Google, Microsoft..." className="h-11 w-full rounded-xl px-4 text-[13px] outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} /></section>
-      <section className="grid grid-cols-3 gap-4">{visibleCards.map((connector) => { const profile = profileFor(connector.id, connector); const live = connections.find((row) => row.provider === connector.id) || connector.connection; const rawStatus = String(live?.status || connector.status || "available"); const needed = requiredPlan(connector); const locked = PLAN_ORDER.indexOf(plan) < PLAN_ORDER.indexOf(needed); return <article key={connector.id} data-provider-id={connector.id} className="rounded-2xl p-5 flex flex-col min-h-[250px]" style={{ background: SURFACE, border: `1px solid ${locked ? "#A7CFAF" : BORDER}` }}><div className="flex items-start justify-between gap-3 mb-4"><div className="flex items-center gap-3"><ConnectorLogo profile={profile} /><div><div className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: MUTED }}>{TYPE_LABEL[profile.type]}</div><h3 className="text-[16px] font-semibold" style={{ color: TEXT }}>{profile.title}</h3></div></div><StatusBadge label={locked ? `${planName(needed)} unlocks` : cleanStatus(rawStatus)} tone={locked ? "locked" : statusTone(rawStatus)} /></div><p className="text-[12px] leading-relaxed mb-2" style={{ color: MUTED }}>{profile.subtitle}</p><p className="text-[12px] leading-relaxed mb-4 flex-1" style={{ color: MUTED }}>{profile.description}</p><div className="flex flex-wrap gap-1.5 mb-4"><Chip>{TYPE_LABEL[profile.type]}</Chip>{locked ? <Chip>🔒 {planName(needed)}</Chip> : UNIFIED_AG.has(connector.id) ? <Chip>self-serve v3</Chip> : <Chip>{profile.authPattern === "oauth" ? "OAuth consent" : profile.authPattern.replaceAll("_", " ")}</Chip>}</div><button type="button" onClick={() => openConnector({ ...connector, connection: live })} className="h-10 rounded-lg text-[12px] font-semibold" style={{ background: "#16533C", color: "white" }}>{locked ? `Upgrade to ${planName(needed)}` : live ? "Manage connection" : profile.action}</button></article>; })}</section>
+      <section className="grid grid-cols-4 gap-4"><Metric label={tx("Connectors")} value={String(cards.length)} /><Metric label={tx("Active sources")} value={String(connections.filter((row) => ["connected", "synced", "syncing"].includes(String(row.status))).length)} /><Metric label={tx("Self-serve AgTech")} value="3" /><Metric label={tx("Lifecycle")} value={tx("Unified v3")} /></section>
+      <section className="rounded-2xl p-4" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}><div className="flex flex-wrap items-center gap-2 mb-4"><button onClick={() => setActiveType("all")} className="rounded-full px-3 py-2 text-[12px]" style={pillStyle(activeType === "all")}>{tx("All")}</button>{TYPE_ORDER.map((type) => <button key={type} onClick={() => setActiveType(type)} className="rounded-full px-3 py-2 text-[12px]" style={pillStyle(activeType === type)}>{tx(TYPE_LABEL[type])}</button>)}</div><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder={tx("Search John Deere, WiseConn, Talgil, OpenET, Google, Microsoft...")} className="h-11 w-full rounded-xl px-4 text-[13px] outline-none" style={{ background: BG, border: `1px solid ${BORDER}`, color: TEXT }} /></section>
+      <section className="grid grid-cols-3 gap-4">{visibleCards.map((connector) => { const profile = profileFor(connector.id, connector); const live = connections.find((row) => row.provider === connector.id) || connector.connection; const rawStatus = String(live?.status || connector.status || "available"); const needed = requiredPlan(connector); const locked = PLAN_ORDER.indexOf(plan) < PLAN_ORDER.indexOf(needed); return <article key={connector.id} data-provider-id={connector.id} className="rounded-2xl p-5 flex flex-col min-h-[250px]" style={{ background: SURFACE, border: `1px solid ${locked ? "#A7CFAF" : BORDER}` }}><div className="flex items-start justify-between gap-3 mb-4"><div className="flex items-center gap-3"><ConnectorLogo profile={profile} /><div><div className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: MUTED }}>{tx(TYPE_LABEL[profile.type])}</div><h3 className="text-[16px] font-semibold" style={{ color: TEXT }}>{profile.title}</h3></div></div><StatusBadge label={locked ? tf("{plan} unlocks", { plan: tx(planName(needed)) }) : tx(cleanStatus(rawStatus))} tone={locked ? "locked" : statusTone(rawStatus)} /></div><p className="text-[12px] leading-relaxed mb-2" style={{ color: MUTED }}>{tx(profile.subtitle)}</p><p className="text-[12px] leading-relaxed mb-4 flex-1" style={{ color: MUTED }}>{tx(profile.description)}</p><div className="flex flex-wrap gap-1.5 mb-4"><Chip>{tx(TYPE_LABEL[profile.type])}</Chip>{locked ? <Chip>🔒 {tx(planName(needed))}</Chip> : UNIFIED_AG.has(connector.id) ? <Chip>{tx("self-serve v3")}</Chip> : <Chip>{profile.authPattern === "oauth" ? tx("OAuth consent") : tx(profile.authPattern.replaceAll("_", " "))}</Chip>}</div><button type="button" onClick={() => openConnector({ ...connector, connection: live })} className="h-10 rounded-lg text-[12px] font-semibold" style={{ background: "#16533C", color: "white" }}>{locked ? tf("Upgrade to {plan}", { plan: tx(planName(needed)) }) : live ? tx("Manage connection") : tx(profile.action)}</button></article>; })}</section>
     </main>
-    {selected && selectedProfile ? <div className="fixed inset-0 z-50"><button className="absolute inset-0 bg-black/30" onClick={() => setSelected(null)} aria-label="Close connector setup" /><aside className="absolute right-0 top-0 h-full w-[740px] max-w-[96vw] overflow-y-auto shadow-2xl" style={{ background: SURFACE }}><div className="px-6 py-5" style={{ borderBottom: `1px solid ${BORDER}` }}><div className="flex items-start justify-between gap-4"><div className="flex items-center gap-4"><ConnectorLogo profile={selectedProfile} large /><div><div className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: MUTED }}>{TYPE_LABEL[selectedProfile.type]}</div><h2 className="text-[22px] font-semibold" style={{ color: TEXT }}>{selectedProfile.action}</h2><p className="mt-2 text-[13px] leading-relaxed max-w-[520px]" style={{ color: MUTED }}>{selectedProfile.description}</p></div></div><StatusBadge label={cleanStatus(selectedRawStatus)} tone={statusTone(selectedRawStatus)} /></div></div><div className="p-6 space-y-5">{UNIFIED_AG.has(selected.id) ? <UnifiedAgConnectorFlow provider={selected.id as "wiseconn" | "talgil" | "openet"} workspaceId={currentWorkspace?.id} connection={connection} onConnection={setConnection} onMessage={setMessage} onRefresh={refresh} /> : <><Panel title="Connection"><p className="text-[12px] leading-relaxed mb-4" style={{ color: MUTED }}>{selectedProfile.description}</p>{deereManaged ? <div className="grid grid-cols-3 gap-2"><PortalButton onClick={syncSelected} disabled={busy === "sync"}>{busy === "sync" ? "Queueing..." : "Sync now"}</PortalButton><PortalButton variant="secondary" onClick={launchGeneric} disabled={busy === "launch"}>{busy === "launch" ? "Working..." : "Reauthorize"}</PortalButton><PortalButton variant="secondary" onClick={disconnectSelected} disabled={busy === "disconnect"}>{busy === "disconnect" ? "Disconnecting..." : "Disconnect"}</PortalButton></div> : <PortalButton onClick={launchGeneric} disabled={busy === "launch"}>{busy === "launch" ? "Working..." : selectedProfile.action}</PortalButton>}</Panel>{selectedProfile.supportsUpload ? <Panel title="Import instead"><UploadArea onUpload={uploadFile} busy={busy} /></Panel> : null}<Panel title="Connection state"><Info label="Provider" value={selectedProfile.title} /><Info label="Connection ID" value={String(connection?.id || "—")} /><Info label="Status" value={cleanStatus(selectedRawStatus)} /><Info label="Last sync" value={String(connection?.last_sync_at || "—")} /></Panel></>}<Panel title="Next"><div className="grid grid-cols-3 gap-2"><PortalButton variant="secondary" onClick={() => window.location.assign("/sources")}>Sources</PortalButton><PortalButton variant="secondary" onClick={() => window.location.assign("/evidence")}>Evidence</PortalButton><PortalButton variant="secondary" onClick={() => window.location.assign("/intelligence")}>Ask AGRO-AI</PortalButton></div></Panel></div></aside></div> : null}
+    {selected && selectedProfile ? <div className="fixed inset-0 z-50"><button className="absolute inset-0 bg-black/30" onClick={() => setSelected(null)} aria-label={tx("Close connector setup")} /><aside className="absolute right-0 top-0 h-full w-[740px] max-w-[96vw] overflow-y-auto shadow-2xl" style={{ background: SURFACE }}><div className="px-6 py-5" style={{ borderBottom: `1px solid ${BORDER}` }}><div className="flex items-start justify-between gap-4"><div className="flex items-center gap-4"><ConnectorLogo profile={selectedProfile} large /><div><div className="text-[10px] font-semibold uppercase tracking-widest mb-1" style={{ color: MUTED }}>{tx(TYPE_LABEL[selectedProfile.type])}</div><h2 className="text-[22px] font-semibold" style={{ color: TEXT }}>{tx(selectedProfile.action)}</h2><p className="mt-2 text-[13px] leading-relaxed max-w-[520px]" style={{ color: MUTED }}>{tx(selectedProfile.description)}</p></div></div><StatusBadge label={tx(cleanStatus(selectedRawStatus))} tone={statusTone(selectedRawStatus)} /></div></div><div className="p-6 space-y-5">{UNIFIED_AG.has(selected.id) ? <UnifiedAgConnectorFlow provider={selected.id as "wiseconn" | "talgil" | "openet"} workspaceId={currentWorkspace?.id} connection={connection} onConnection={setConnection} onMessage={setMessage} onRefresh={refresh} /> : <><Panel title={tx("Connection")}><p className="text-[12px] leading-relaxed mb-4" style={{ color: MUTED }}>{tx(selectedProfile.description)}</p>{deereManaged ? <div className="grid grid-cols-3 gap-2"><PortalButton onClick={syncSelected} disabled={busy === "sync"}>{busy === "sync" ? tx("Queueing...") : tx("Sync now")}</PortalButton><PortalButton variant="secondary" onClick={launchGeneric} disabled={busy === "launch"}>{busy === "launch" ? tx("Working...") : tx("Reauthorize")}</PortalButton><PortalButton variant="secondary" onClick={disconnectSelected} disabled={busy === "disconnect"}>{busy === "disconnect" ? tx("Disconnecting...") : tx("Disconnect")}</PortalButton></div> : <PortalButton onClick={launchGeneric} disabled={busy === "launch"}>{busy === "launch" ? tx("Working...") : tx(selectedProfile.action)}</PortalButton>}</Panel>{selectedProfile.supportsUpload ? <Panel title={tx("Import instead")}><UploadArea onUpload={uploadFile} busy={busy} /></Panel> : null}<Panel title={tx("Connection state")}><Info label={tx("Provider")} value={selectedProfile.title} /><Info label={tx("Connection ID")} value={String(connection?.id || "—")} /><Info label={tx("Status")} value={tx(cleanStatus(selectedRawStatus))} /><Info label={tx("Last sync")} value={String(connection?.last_sync_at || "—")} /></Panel></>}<Panel title={tx("Next")}><div className="grid grid-cols-3 gap-2"><PortalButton variant="secondary" onClick={() => window.location.assign("/sources")}>{tx("Sources")}</PortalButton><PortalButton variant="secondary" onClick={() => window.location.assign("/evidence")}>{tx("Evidence")}</PortalButton><PortalButton variant="secondary" onClick={() => window.location.assign("/intelligence")}>Ask AGRO-AI</PortalButton></div></Panel></div></aside></div> : null}
   </div>;
 }
 
