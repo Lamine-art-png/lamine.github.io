@@ -22,7 +22,7 @@ export function MonetizedRequestsV2() {
       code: "upgrade_required",
       feature: "admin.requests",
       recommended_plan: "team",
-      message: "Team gives operators one tracked request inbox for support, onboarding, integrations, upgrades, and follow-through.",
+      message: "Team gives operators one tracked request inbox for support, onboarding, integrations, upgrades, ownership, and follow-through. Stay below Team and important requests remain scattered across email and ad hoc follow-ups, making delays, duplicate work, and missed handoffs much more likely.",
       source: "requests",
     });
   }
