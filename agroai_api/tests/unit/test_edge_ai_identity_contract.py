@@ -6,9 +6,23 @@ def test_workers_ai_wrapper_reports_actual_model_identity():
     source = (repo_root / "cloudflare" / "ollama-compat" / "src" / "index.js").read_text(encoding="utf-8")
 
     assert 'provider: "cloudflare-workers-ai"' in source
-    assert "model: env.MODEL" in source
+    assert "model: inference.model" in source
     assert "requested_model: body.model ?? null" in source
     assert "model: body.model ?? env.MODEL" not in source
+
+
+def test_workers_ai_wrapper_has_bounded_primary_and_fallback_inference():
+    repo_root = Path(__file__).resolve().parents[3]
+    source = (repo_root / "cloudflare" / "ollama-compat" / "src" / "index.js").read_text(encoding="utf-8")
+    wrangler = (repo_root / "wrangler.local-ai.toml").read_text(encoding="utf-8")
+
+    assert "Promise.race" in source
+    assert "MODEL_TIMEOUT_MS" in source
+    assert "FALLBACK_TIMEOUT_MS" in source
+    assert "runWithFallback" in source
+    assert "fallback_used: Boolean(inference.fallback_used)" in source
+    assert 'MODEL = "@cf/meta/llama-3.1-8b-instruct-fast"' in wrangler
+    assert 'FALLBACK_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"' in wrangler
 
 
 def test_workers_ai_wrapper_supports_origin_auth_and_translation_json_shape():
@@ -18,7 +32,8 @@ def test_workers_ai_wrapper_supports_origin_auth_and_translation_json_shape():
     assert "env.ORIGIN_TOKEN" in source
     assert "Bearer ${expected}" in source
     assert 'Response.json({ error: "unauthorized" }, { status: 401 })' in source
-    assert "const content = translated ? raw : JSON.stringify({ answer: raw });" in source
+    assert "translated" in source
+    assert "JSON.stringify({ answer: inference.raw })" in source
     assert "translation_mode: Boolean(translated)" in source
 
 
