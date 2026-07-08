@@ -5,6 +5,7 @@ import json
 import os
 from datetime import datetime
 from typing import Any
+from urllib.parse import urljoin, urlparse
 
 import httpx
 from sqlalchemy.orm import Session
@@ -42,6 +43,21 @@ GLOBAL_ROUTE_SPECS: tuple[tuple[str, str], ...] = (
 
 def _api_base() -> str:
     return os.getenv("JOHN_DEERE_API_BASE_URL", DEFAULT_API_BASE).rstrip("/")
+
+
+def _trusted_api_url(candidate: str | None) -> str | None:
+    if not candidate:
+        return None
+    base = _api_base()
+    resolved = urljoin(base + "/", str(candidate).strip())
+    parsed_base = urlparse(base)
+    parsed = urlparse(resolved)
+    base_path = parsed_base.path.rstrip("/")
+    if parsed.scheme != "https" or parsed.netloc != parsed_base.netloc:
+        return None
+    if base_path and not (parsed.path == base_path or parsed.path.startswith(base_path + "/")):
+        return None
+    return resolved
 
 
 def _items(payload: Any) -> list[dict[str, Any]]:
@@ -139,7 +155,7 @@ async def _fetch_collection(
 ) -> tuple[list[dict[str, Any]], list[str]]:
     records: list[dict[str, Any]] = []
     warnings: list[str] = []
-    next_url: str | None = url
+    next_url: str | None = _trusted_api_url(url)
     pages = 0
     while next_url and pages < MAX_PAGES_PER_ROUTE and len(records) < MAX_RECORDS_PER_ROUTE:
         response = await client.get(next_url)
@@ -164,9 +180,10 @@ async def _fetch_collection(
             warnings.append(f"route_invalid_json:{url}")
             break
         records.extend(_items(payload))
-        next_url = _next_url(payload)
-        if next_url and next_url.startswith("/"):
-            next_url = _api_base() + next_url
+        raw_next = _next_url(payload)
+        next_url = _trusted_api_url(raw_next)
+        if raw_next and not next_url:
+            warnings.append(f"untrusted_pagination_link_blocked:{url}")
         pages += 1
     return records[:MAX_RECORDS_PER_ROUTE], warnings
 
@@ -206,7 +223,7 @@ async def sync_john_deere(
 ) -> dict[str, Any]:
     headers = {
         "Authorization": f"Bearer {access_value}",
-        "Accept": "application/json",
+        "Accept": "application/vnd.deere.axiom.v3+json, application/json",
         "User-Agent": "AGRO-AI-Operations-Center-Connector/1.0",
     }
     created = 0
@@ -214,7 +231,7 @@ async def sync_john_deere(
     warnings: list[str] = []
     base = _api_base()
 
-    async with httpx.AsyncClient(timeout=30, headers=headers, follow_redirects=True) as client:
+    async with httpx.AsyncClient(timeout=30, headers=headers, follow_redirects=False) as client:
         organizations, org_warnings = await _fetch_collection(client, url=f"{base}/organizations")
         warnings.extend(org_warnings)
         organizations = organizations[:MAX_ORGANIZATIONS]
