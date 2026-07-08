@@ -17,6 +17,8 @@ def _configure(monkeypatch, **values):
         "AI_REPORT_MODEL": "z-ai/glm-5.2",
         "AI_LOCAL_BASE_URL": "https://ollama.agroai-pilot.com",
         "AI_LOCAL_MODEL": "qwen3.5:4b",
+        "AI_LOCAL_CF_ACCESS_CLIENT_ID": "test-client-id",
+        "AI_LOCAL_CF_ACCESS_CLIENT_SECRET": "test-client-secret",
         "AI_EDGE_BASE_URL": "https://local-ai.agroai-pilot.com",
         "AI_EDGE_MODEL": "@cf/zai-org/glm-4.7-flash",
         "AI_CHALLENGER_MODEL": "deepseek/deepseek-v4-pro",
@@ -141,6 +143,78 @@ def test_non_edge_legacy_ollama_base_remains_local_compatible(monkeypatch):
     assert runtime.local_base == "https://legacy-ollama.example.test"
     assert runtime.ollama_model() == "qwen3.5:4b"
     assert runtime.edge() is None
+
+
+def test_public_local_origin_fails_closed_without_cloudflare_access_token(monkeypatch):
+    _configure(
+        monkeypatch,
+        AI_LOCAL_CF_ACCESS_CLIENT_ID="",
+        AI_LOCAL_CF_ACCESS_CLIENT_SECRET="",
+    )
+    runtime = LiveIntelligence()
+
+    assert runtime.local_requires_access() is True
+    assert runtime.local_access_configured() is False
+    assert runtime.ollama_model() is None
+
+
+def test_loopback_local_origin_does_not_require_cloudflare_access(monkeypatch):
+    _configure(
+        monkeypatch,
+        AI_LOCAL_BASE_URL="http://127.0.0.1:11434",
+        AI_LOCAL_CF_ACCESS_CLIENT_ID="",
+        AI_LOCAL_CF_ACCESS_CLIENT_SECRET="",
+    )
+    runtime = LiveIntelligence()
+
+    assert runtime.local_requires_access() is False
+    assert runtime.ollama_model() == "qwen3.5:4b"
+
+
+def test_cloudflare_access_headers_are_attached_to_public_local_requests(monkeypatch):
+    _configure(monkeypatch)
+    runtime = LiveIntelligence()
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"message": {"content": "secured local answer"}}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            self.headers = None
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, *args, **kwargs):
+            self.headers = kwargs.get("headers")
+            return FakeResponse()
+
+    fake_client = FakeClient()
+    monkeypatch.setattr(
+        "app.services.live_intelligence.httpx.AsyncClient",
+        lambda *args, **kwargs: fake_client,
+    )
+
+    result = asyncio.run(
+        runtime.run_local(
+            "qwen3.5:4b",
+            [{"role": "user", "content": "test"}],
+            "fast",
+        )
+    )
+
+    assert result == ("secured local answer", "qwen3.5:4b")
+    assert fake_client.headers == {
+        "CF-Access-Client-Id": "test-client-id",
+        "CF-Access-Client-Secret": "test-client-secret",
+    }
 
 
 def test_edge_wrapper_json_is_unwrapped_before_customer_response():
