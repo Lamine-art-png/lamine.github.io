@@ -99,6 +99,11 @@ def parsed_rows_preview(source: DataSource, *, limit: int = 12) -> list[dict[str
 
 
 def content_available(source: DataSource) -> bool:
-    if source_content_excerpt(source, max_chars=200):
+    """Cheap readiness signal; never downloads an object during library listing."""
+    current = str(source.raw_text or "")
+    if current.strip() and not _looks_binary(current):
         return True
-    return bool(parsed_rows_preview(source, limit=1))
+    if parsed_rows_preview(source, limit=1):
+        return True
+    # A stored PDF is extractable on demand by source_text() for intelligence.
+    return _is_pdf(source) and bool(source.storage_path)
