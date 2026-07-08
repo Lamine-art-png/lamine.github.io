@@ -9,6 +9,7 @@ export const API_BASE_URL_SOURCE =
 const FORMSPREE_SUPPORT_URL = import.meta.env.VITE_FORMSPREE_SUPPORT_URL || import.meta.env.VITE_FORMSPREE_ENDPOINT || "";
 const tokenKey = "agroai_access_token";
 const commercialBoundaryEvent = "agroai:commercial-boundary";
+const uploadStateEvent = "agroai:upload-state";
 
 export type ApiError = Error & { status?: number; details?: unknown; code?: string };
 type RequestOptions = RequestInit & { token?: string | null };
@@ -43,6 +44,10 @@ function dispatchCommercialBoundary(data: unknown, status: number, path: string)
   if (status === 402 || status === 429 || commercialCode) {
     window.dispatchEvent(new CustomEvent(commercialBoundaryEvent, { detail }));
   }
+}
+
+function dispatchUploadState(detail: Record<string, unknown>) {
+  window.dispatchEvent(new CustomEvent(uploadStateEvent, { detail }));
 }
 
 async function parseResponse(response: Response) {
@@ -126,6 +131,73 @@ function patch<T>(path: string, payload?: unknown, token?: string | null) { retu
 function remove<T>(path: string, token?: string | null) { return request<T>(path, { method: "DELETE", token }); }
 function upload<T>(path: string, file: File) { const form = new FormData(); form.append("file", file); return request<T>(path, { method: "POST", body: form }); }
 
+function wait(milliseconds: number) {
+  return new Promise<void>((resolve) => window.setTimeout(resolve, milliseconds));
+}
+
+async function uploadEvidence(file: File, provider?: string, workspaceId?: string) {
+  const resolvedProvider = provider || providerForUpload(file);
+  const query = new URLSearchParams({ provider: resolvedProvider });
+  if (workspaceId) query.set("workspace_id", workspaceId);
+  dispatchUploadState({ phase: "uploading", filename: file.name, provider: resolvedProvider, message: `Uploading ${file.name}...` });
+
+  try {
+    const initial = await upload<Record<string, unknown>>(`/v1/evidence/upload?${query.toString()}`, file);
+    const jobId = typeof initial.job_id === "string" ? initial.job_id : "";
+    if (!jobId) {
+      dispatchUploadState({ phase: "complete", filename: file.name, provider: resolvedProvider, message: `${file.name} is imported and available to AGRO-AI.` });
+      return initial;
+    }
+
+    dispatchUploadState({
+      phase: "stored",
+      filename: file.name,
+      provider: resolvedProvider,
+      job_id: jobId,
+      message: `${file.name} is securely stored. AGRO-AI is processing it now.`,
+    });
+
+    for (let attempt = 0; attempt < 16; attempt += 1) {
+      await wait(attempt < 4 ? 500 : 1000);
+      const receipt = await get<Record<string, unknown>>(`/v1/connectors/jobs/${encodeURIComponent(jobId)}`);
+      const job = objectValue(receipt.job);
+      const status = String(job.status || "");
+      if (status === "succeeded") {
+        const normalized = {
+          ...initial,
+          ...job,
+          status,
+          durable_stored: true,
+          processing_complete: true,
+          job_id: jobId,
+          warnings: Number(job.warning_count || 0) > 0 ? [`${job.warning_count} ingestion warning(s). Review the imported source.`] : [],
+        };
+        dispatchUploadState({ phase: "complete", filename: file.name, provider: resolvedProvider, job_id: jobId, message: `${file.name} is stored, processed, and ready.` });
+        return normalized;
+      }
+      if (["failed", "cancelled"].includes(status)) {
+        throw new Error(String(job.error || `File processing ${status}.`));
+      }
+    }
+
+    const pending = {
+      ...initial,
+      durable_stored: true,
+      processing_pending: true,
+      job_id: jobId,
+      rows_parsed: 0,
+      evidence_records_created: 0,
+      warnings: ["The file is securely stored and still processing. It will appear in Sources when ingestion completes."],
+    };
+    dispatchUploadState({ phase: "stored", filename: file.name, provider: resolvedProvider, job_id: jobId, message: `${file.name} is securely stored and still processing.` });
+    return pending;
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Upload failed.";
+    dispatchUploadState({ phase: "failed", filename: file.name, provider: resolvedProvider, message });
+    throw error;
+  }
+}
+
 async function submitFormspree(payload: SupportTicketPayload) {
   if (!FORMSPREE_SUPPORT_URL) throw new Error("Support form endpoint is not configured.");
   const response = await fetch(FORMSPREE_SUPPORT_URL, { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json" }, body: JSON.stringify({ ...payload, product: "AGRO-AI Enterprise Portal", submitted_at: new Date().toISOString() }) });
@@ -198,7 +270,7 @@ export const apiClient = {
   orgs: { list: () => get("/v1/orgs"), create: (payload: CreateOrgPayload) => post("/v1/orgs", payload) },
   workspaces: { list: () => get("/v1/workspaces"), create: (payload: CreateWorkspacePayload) => post("/v1/workspaces", payload) },
   assurance: { readiness: () => get("/v1/assurance/readiness"), passport: () => get("/v1/assurance/passport") },
-  evidence: { list: () => get("/v1/evidence"), summary: () => get("/v1/evidence/summary"), upload: (file: File, provider?: string, workspaceId?: string) => { const query = new URLSearchParams({ provider: provider || providerForUpload(file) }); if (workspaceId) query.set("workspace_id", workspaceId); return upload(`/v1/evidence/upload?${query.toString()}`, file); }, uploadMetadata: (payload: unknown) => post("/v1/evidence", payload) },
+  evidence: { list: () => get("/v1/evidence"), summary: () => get("/v1/evidence/summary"), upload: uploadEvidence, uploadMetadata: (payload: unknown) => post("/v1/evidence", payload) },
   reports: { list: () => get("/v1/reports"), generate: (payload?: unknown) => post("/v1/reports/generate", payload), export: (payload?: unknown) => post("/v1/reports/export", payload) },
   artifacts: { list: () => get("/v1/artifacts"), get: (artifactId: string) => get(`/v1/artifacts/${encodeURIComponent(artifactId)}`), download: (artifactId: string) => download(`/v1/artifacts/${encodeURIComponent(artifactId)}/download`) },
   agents: { list: () => get("/v1/agents/runs"), run: (payload?: unknown) => post("/v1/agents/run", payload), status: (runId: string) => get(`/v1/agents/runs/${encodeURIComponent(runId)}`) },
@@ -210,7 +282,7 @@ export const apiClient = {
   decisions: { workbench: (workspaceId?: string, fieldId?: string) => { const query = new URLSearchParams(); if (workspaceId) query.set("workspace_id", workspaceId); if (fieldId) query.set("field_id", fieldId); const suffix = query.toString() ? `?${query.toString()}` : ""; return get(`/v1/decisions/workbench${suffix}`); }, runWorkbench: (payload: WorkbenchRunPayload) => post("/v1/decisions/workbench/run", payload) },
   reportFactory: { generate: (payload: ReportFactoryPayload) => post("/v1/reports/factory", payload), pdf: (payload: ReportFactoryPayload) => downloadPost("/v1/reports/factory/pdf", payload) },
   fieldOps: { commandCenter: (workspaceId?: string) => get(`/v1/field-ops/command-center${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`), tasks: (workspaceId?: string) => get(`/v1/field-ops/tasks${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`), createTask: (payload: FieldOpsTaskPayload) => post("/v1/field-ops/tasks/create", payload), updateTaskStatus: (taskId: string, payload: FieldOpsTaskStatusPayload) => post(`/v1/field-ops/tasks/${encodeURIComponent(taskId)}/status`, payload), fieldUpdate: (payload: FieldUpdatePayload) => post("/v1/field-ops/field-update", payload), fieldMessage: (payload: FieldMessagePayload) => post("/v1/field-ops/field-message", payload), autopilotReport: (payload: AutopilotReportPayload) => post("/v1/field-ops/autopilot-report", payload), auditTrail: (workspaceId?: string) => get(`/v1/field-ops/audit-trail${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`) },
-  connectorHub: { catalog: () => get("/v1/connectors/catalog"), connections: () => get("/v1/connectors/connections"), create: (payload: unknown) => post("/v1/connectors/connections", payload), connect: (payload: ConnectorConnectPayload) => post("/v1/connectors/connect", payload), start: (payload: ConnectorStartPayload) => post("/v1/connectors/start", payload), oauthStart: (payload: unknown) => post("/v1/connectors/oauth/start", payload), get: (connectionId: string) => get(`/v1/connectors/connections/${encodeURIComponent(connectionId)}`), update: (connectionId: string, payload: unknown) => patch(`/v1/connectors/connections/${encodeURIComponent(connectionId)}`, payload), test: (connectionId: string) => post(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/test`), upload: (connectionId: string, file: File) => upload(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/upload`, file), data: (connectionId: string) => get(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/data`), dataSources: () => get("/v1/connectors/data-sources"), jobs: () => get("/v1/connectors/jobs"), mappingSuggestions: (connectionId: string) => get(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/mapping/suggestions`), saveMapping: (connectionId: string, mapping: Record<string, string>) => post(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/mapping`, { mapping }), sync: (connectionId: string) => post(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/sync`), delete: (connectionId: string) => remove(`/v1/connectors/connections/${encodeURIComponent(connectionId)}`) },
+  connectorHub: { catalog: () => get("/v1/connectors/catalog"), connections: () => get("/v1/connectors/connections"), create: (payload: unknown) => post("/v1/connectors/connections", payload), connect: (payload: ConnectorConnectPayload) => post("/v1/connectors/connect", payload), start: (payload: ConnectorStartPayload) => post("/v1/connectors/start", payload), oauthStart: (payload: unknown) => post("/v1/connectors/oauth/start", payload), get: (connectionId: string) => get(`/v1/connectors/connections/${encodeURIComponent(connectionId)}`), update: (connectionId: string, payload: unknown) => patch(`/v1/connectors/connections/${encodeURIComponent(connectionId)}`, payload), test: (connectionId: string) => post(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/test`), upload: (connectionId: string, file: File) => upload(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/upload`, file), data: (connectionId: string) => get(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/data`), dataSources: () => get("/v1/connectors/data-sources"), jobs: () => get("/v1/connectors/jobs"), jobStatus: (jobId: string) => get(`/v1/connectors/jobs/${encodeURIComponent(jobId)}`), mappingSuggestions: (connectionId: string) => get(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/mapping/suggestions`), saveMapping: (connectionId: string, mapping: Record<string, string>) => post(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/mapping`, { mapping }), sync: (connectionId: string) => post(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/sync`), delete: (connectionId: string) => remove(`/v1/connectors/connections/${encodeURIComponent(connectionId)}`) },
   controllers: { environments: () => get("/v1/controllers/environments"), dataContract: () => get("/v1/controllers/universal/data-contract"), executionReadiness: (workspaceId?: string) => get(`/v1/controllers/execution-readiness${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`), customerConnect: (payload: unknown) => post("/v1/controllers/customer-connect", payload), prepareExecution: (payload: unknown) => post("/v1/controllers/execution/prepare", payload) },
   integrations: { list: () => get("/v1/integrations"), status: () => get("/v1/integrations/status"), wiseconn: () => get("/v1/wiseconn/status"), talgil: () => get("/v1/talgil/status") },
   decisioning: { status: () => get("/v1/decisioning/status") },
