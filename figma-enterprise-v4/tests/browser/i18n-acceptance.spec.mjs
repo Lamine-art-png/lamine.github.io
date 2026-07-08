@@ -70,6 +70,7 @@ async function installPortalMocks(page, { initialLocale = "en" } = {}) {
     ({ token, locale }) => {
       localStorage.setItem("agroai_access_token", token);
       localStorage.setItem("agroai_locale_v1", locale);
+      localStorage.setItem("agroai_product_tour_product_tour_v1_qa-user", "done");
     },
     { token: futureJwt(), locale: initialLocale },
   );
