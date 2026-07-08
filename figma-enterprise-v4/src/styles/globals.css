@@ -65,13 +65,12 @@ body {
     max-width: 100%;
   }
 
-  /* Desktop-authored operating surfaces should stack rather than crush content
-     into unreadable slivers on phones. Explicit mobile card views can override
-     this with their own responsive classes. */
+  /* Legacy desktop-authored 3+ column surfaces and inline fixed grids stack
+     rather than crush content into unreadable slivers. Intentional two-column
+     mobile metric/card layouts remain intact. */
   [data-portal-content] .grid-cols-5,
   [data-portal-content] .grid-cols-4,
   [data-portal-content] .grid-cols-3,
-  [data-portal-content] .grid-cols-2,
   [data-portal-content] [style*="grid-template-columns"] {
     grid-template-columns: minmax(0, 1fr) !important;
   }
