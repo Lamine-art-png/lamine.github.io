@@ -20,7 +20,7 @@ JOHN_DEERE_CATALOG_ITEM = {
     "name": "John Deere Operations Center",
     "category": "Farm operations platforms",
     "status": "not_configured",
-    "required_plan": "pro",
+    "required_plan": "professional",
     "connection_methods": ["oauth"],
     "upload_supported": False,
     "imports": [
