@@ -1,6 +1,7 @@
 import { Component, ReactNode, useEffect, useState } from "react";
 import { RouterProvider } from "react-router";
 import { AuthProvider, useAuth } from "./auth/AuthProvider";
+import { OFFICIAL_AGRO_AI_LOADER_LOGO } from "./brand/officialAgroAiLoaderLogo";
 import { AccessRecoveryPage } from "./components/AccessRecovery";
 import { AuthScreen } from "./components/AuthScreen";
 import { PricingPage } from "./components/PricingPage";
@@ -29,25 +30,65 @@ function PortalBootFallback({ reason }: { reason?: string }) {
   );
 }
 
-function LocaleTransitionCover() {
+function BrandedPortalLoader({ overlay = false }: { overlay?: boolean }) {
   return (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center"
+      className={`${overlay ? "fixed inset-0 z-[9999]" : "min-h-screen w-full"} flex items-center justify-center`}
       style={{ background: "#F6F4EE" }}
       role="status"
       aria-live="polite"
       aria-label="AGRO-AI"
     >
+      <style>{`
+        @keyframes agroai-loader-breathe {
+          0%, 100% { transform: translateY(0) scale(0.985); opacity: 0.94; }
+          50% { transform: translateY(-2px) scale(1.015); opacity: 1; }
+        }
+        @keyframes agroai-loader-halo {
+          0%, 100% { transform: scale(0.94); opacity: 0.22; }
+          50% { transform: scale(1.06); opacity: 0.52; }
+        }
+        @keyframes agroai-loader-sweep {
+          0% { transform: translateX(-135%); width: 34%; }
+          52% { width: 58%; }
+          100% { transform: translateX(320%); width: 34%; }
+        }
+        .agroai-loader-logo { animation: agroai-loader-breathe 2.2s ease-in-out infinite; }
+        .agroai-loader-halo { animation: agroai-loader-halo 2.2s ease-in-out infinite; }
+        .agroai-loader-sweep { animation: agroai-loader-sweep 1.45s cubic-bezier(0.4, 0, 0.2, 1) infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          .agroai-loader-logo, .agroai-loader-halo, .agroai-loader-sweep { animation: none !important; }
+          .agroai-loader-sweep { width: 50%; transform: translateX(50%); }
+        }
+      `}</style>
+
       <div className="flex flex-col items-center gap-4">
-        <div className="flex h-14 w-14 items-center justify-center rounded-2xl" style={{ background: "#10231B", color: "#E4F57A" }}>
-          <span className="text-[13px] font-bold tracking-[0.08em]">{"AGRO"}</span>
+        <div className="relative flex h-[104px] w-[120px] items-center justify-center">
+          <div
+            className="agroai-loader-halo absolute h-[86px] w-[86px] rounded-full"
+            style={{ background: "radial-gradient(circle, rgba(164, 222, 78, 0.30) 0%, rgba(45, 106, 79, 0.10) 48%, rgba(45, 106, 79, 0) 74%)" }}
+          />
+          <img
+            src={OFFICIAL_AGRO_AI_LOADER_LOGO}
+            alt="AGRO-AI"
+            className="agroai-loader-logo relative z-10 h-auto w-[112px] select-none object-contain drop-shadow-[0_10px_22px_rgba(16,35,27,0.10)]"
+            draggable={false}
+          />
         </div>
-        <div className="h-1.5 w-28 overflow-hidden rounded-full" style={{ background: "#D6DDD0" }}>
-          <div className="h-full w-1/2 animate-pulse rounded-full" style={{ background: "#2D6A4F" }} />
+
+        <div className="h-1.5 w-28 overflow-hidden rounded-full" style={{ background: "#D6DDD0" }} aria-hidden="true">
+          <div
+            className="agroai-loader-sweep h-full rounded-full"
+            style={{ background: "linear-gradient(90deg, #2D6A4F 0%, #74A94B 56%, #B6E85B 100%)" }}
+          />
         </div>
       </div>
     </div>
   );
+}
+
+function LocaleTransitionCover() {
+  return <BrandedPortalLoader overlay />;
 }
 
 class PortalRuntimeBoundary extends Component<{ children: ReactNode }, PortalRuntimeBoundaryState> {
@@ -95,13 +136,13 @@ function AuthenticatedApp() {
   }, [isAuthenticated]);
 
   const path = window.location.pathname;
-  if (isLoading) return <div className="min-h-screen flex items-center justify-center bg-[#F6F4EE] text-[#68776F] text-sm">{t("app.loadingSession", locale)}</div>;
+  if (isLoading) return <BrandedPortalLoader />;
   if (path === "/verify-email") return <VerifyEmailPage />;
   if (path === "/recover-account" || path === "/reset-password") return <AccessRecoveryPage />;
   if (path === "/pricing" && !isAuthenticated) return <PricingPage />;
   if (!isAuthenticated) return <AuthScreen />;
   if (routerError) return <PortalBootFallback reason={routerError} />;
-  if (!router) return <div className="min-h-screen flex items-center justify-center bg-[#F6F4EE] text-[#68776F] text-sm">{t("app.loadingPortal", locale)}</div>;
+  if (!router) return <BrandedPortalLoader />;
   return (
     <div className="relative min-h-screen">
       <RouterProvider router={router} />
