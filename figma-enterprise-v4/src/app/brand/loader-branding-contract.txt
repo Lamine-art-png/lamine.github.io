@@ -1,6 +1,0 @@
-Official AGRO-AI loader branding contract:
-- use OFFICIAL_AGRO_AI_LOADER_LOGO
-- do not render the stale text-only AGRO badge
-- retain animated loading sweep
-- respect prefers-reduced-motion
-- preserve locale fail-open timing and router behavior
