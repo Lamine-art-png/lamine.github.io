@@ -108,27 +108,41 @@ const intelligenceDependencies: IntelligenceDependencies = {
   },
   async runIntelligence(request: AnyRecord) {
     const languageAwareRequest = withIndependentResponseLanguage(request);
+
+    // Canonical live intelligence route. This is the route wired directly to
+    // the hybrid hosted + edge + actual Ollama router in the backend.
     try {
       return await apiClient.post(
-        "/v1/intelligence/brain/run-commercial",
+        "/v1/intelligence/brain/run",
         languageAwareRequest,
       ) as AnyRecord;
-    } catch (commercialRouteError) {
-      if (!shouldUseLegacyRoute(commercialRouteError)) throw commercialRouteError;
+    } catch (canonicalRouteError) {
+      if (!shouldUseLegacyRoute(canonicalRouteError)) throw canonicalRouteError;
+
+      // Rolling-deploy compatibility only. Older API revisions may still expose
+      // one of these routes while the portal and backend are converging.
       try {
         return await apiClient.post(
-          "/v1/intelligence/brain/run-safe",
+          "/v1/intelligence/brain/run-commercial",
           languageAwareRequest,
         ) as AnyRecord;
-      } catch (safeRouteError) {
-        if (!shouldUseLegacyRoute(safeRouteError)) throw safeRouteError;
+      } catch (commercialRouteError) {
+        if (!shouldUseLegacyRoute(commercialRouteError)) throw commercialRouteError;
         try {
-          return await apiClient.intelligence.brainRun(languageAwareRequest) as AnyRecord;
-        } catch (brainRouteError) {
-          if (shouldUseLegacyRoute(brainRouteError)) {
-            return await apiClient.intelligence.run(languageAwareRequest) as AnyRecord;
+          return await apiClient.post(
+            "/v1/intelligence/brain/run-safe",
+            languageAwareRequest,
+          ) as AnyRecord;
+        } catch (safeRouteError) {
+          if (!shouldUseLegacyRoute(safeRouteError)) throw safeRouteError;
+          try {
+            return await apiClient.intelligence.brainRun(languageAwareRequest) as AnyRecord;
+          } catch (brainRouteError) {
+            if (shouldUseLegacyRoute(brainRouteError)) {
+              return await apiClient.intelligence.run(languageAwareRequest) as AnyRecord;
+            }
+            throw brainRouteError;
           }
-          throw brainRouteError;
         }
       }
     }

@@ -135,8 +135,31 @@ class Settings(BaseSettings):
     AI_FAST_MODEL: str = ""
     AI_REASONING_MODEL: str = ""
     AI_REPORT_MODEL: str = ""
+
+    # Distinct inference lanes. Keep actual Mac Ollama and always-on edge AI
+    # separate so an Ollama-compatible Worker can never be mislabeled as local.
+    AI_LOCAL_BASE_URL: str = ""
     AI_LOCAL_MODEL: str = ""
-    AI_MODEL_FALLBACKS: str = "z-ai/glm-5.2,z-ai/glm-4.5,qwen/qwen3-max,deepseek/deepseek-r1-0528"
+    # Cloudflare Access service-token credentials for a public tunnel hostname.
+    # Leave blank for loopback/private local development only.
+    AI_LOCAL_CF_ACCESS_CLIENT_ID: str = ""
+    AI_LOCAL_CF_ACCESS_CLIENT_SECRET: str = ""
+    AI_EDGE_BASE_URL: str = ""
+    AI_EDGE_MODEL: str = "@cf/zai-org/glm-4.7-flash"
+    # Optional shared bearer secret for the Workers AI origin. Set the matching
+    # Worker secret ORIGIN_TOKEN before enforcing it in production.
+    AI_EDGE_AUTH_TOKEN: str = ""
+
+    AI_CHALLENGER_MODEL: str = "deepseek/deepseek-v4-pro"
+    AI_FREE_MODEL: str = ""
+    AI_MODEL_FALLBACKS: str = "z-ai/glm-5.2,deepseek/deepseek-v4-pro,qwen/qwen3.5-flash-02-23,z-ai/glm-5-turbo,z-ai/glm-4.5-air"
+    AI_ROUTING_MODE: str = "hybrid"
+    AI_MODEL_TEST_COMMANDS_ENABLED: bool = False
+    AI_LOCAL_NUM_CTX: int = 6144
+    AI_LOCAL_MAX_TOKENS: int = 1200
+    AI_LOCAL_TIMEOUT_SECONDS: int = 90
+    AI_LOCAL_THINKING: bool = False
+    AI_EDGE_TIMEOUT_SECONDS: int = 45
     AI_TIMEOUT_SECONDS: int = 30
     INTELLIGENCE_FRESHNESS_POLICY_JSON: str = ""
 

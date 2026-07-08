@@ -12,10 +12,19 @@ from app.services.hosted_ui_translation import run_hosted_ui_translation
 from app.services.live_intelligence import LiveIntelligence
 from app.services.local_ui_translation import run_local_ui_translation
 
+
 DEFAULT_FRONTIER_MODEL = "z-ai/glm-5.2"
-DEFAULT_FAST_MODEL = "qwen/qwen3-next-80b-a3b-instruct"
-DEFAULT_REPORT_MODEL = "qwen/qwen3-max"
-DEFAULT_MODEL_FALLBACKS = ["qwen/qwen3-next-80b-a3b-instruct","z-ai/glm-5-turbo","z-ai/glm-4.5-air","qwen/qwen3-max","z-ai/glm-5.2","z-ai/glm-4.5","deepseek/deepseek-v3.1-terminus"]
+DEFAULT_FAST_MODEL = "qwen/qwen3.5-flash-02-23"
+DEFAULT_REPORT_MODEL = "z-ai/glm-5.2"
+DEFAULT_CHALLENGER_MODEL = "deepseek/deepseek-v4-pro"
+DEFAULT_EDGE_MODEL = "@cf/zai-org/glm-4.7-flash"
+DEFAULT_MODEL_FALLBACKS = [
+    "z-ai/glm-5.2",
+    "deepseek/deepseek-v4-pro",
+    "qwen/qwen3.5-flash-02-23",
+    "z-ai/glm-5-turbo",
+    "z-ai/glm-4.5-air",
+]
 
 TASK_PROFILES = {"chat":"reasoning","ui_translation":"fast","readiness_analysis":"reasoning","field_diagnosis":"reasoning","exception_triage":"reasoning","decision_workbench":"reasoning","report_factory":"report","connector_diagnosis":"reasoning"}
 
@@ -60,6 +69,20 @@ class ModelRouter:
         self.reasoning_model = (settings.AI_REASONING_MODEL or "").strip() or self.default_model
         self.report_model = (settings.AI_REPORT_MODEL or "").strip() or DEFAULT_REPORT_MODEL
         self.local_model = (settings.AI_LOCAL_MODEL or "").strip()
+        self.edge_model = (settings.AI_EDGE_MODEL or "").strip() or DEFAULT_EDGE_MODEL
+        self.challenger_model = (settings.AI_CHALLENGER_MODEL or "").strip() or DEFAULT_CHALLENGER_MODEL
+        self.free_model = (settings.AI_FREE_MODEL or "").strip()
+
+        explicit_edge = (settings.AI_EDGE_BASE_URL or "").strip().rstrip("/")
+        known_edge = self.gateway.base_url if "local-ai.agroai-pilot.com" in self.gateway.base_url.lower() else ""
+        self.edge_base = explicit_edge or known_edge
+        explicit_local = (settings.AI_LOCAL_BASE_URL or "").strip().rstrip("/")
+        self.local_base = explicit_local or (
+            self.gateway.base_url
+            if self.mode() == "ollama" and self.gateway.base_url and not self.edge_base
+            else ""
+        )
+
         configured = [x.strip() for x in (settings.AI_MODEL_FALLBACKS or "").split(",") if x.strip()]
         self.fallback_models: list[str] = []
         for model in [*configured,*DEFAULT_MODEL_FALLBACKS]:
@@ -73,15 +96,31 @@ class ModelRouter:
         if provider: return "openai_compatible"
         return "offline"
 
+    def _hosted_configured(self) -> bool:
+        provider = (settings.AI_PROVIDER or "").strip().lower()
+        key = bool((settings.AI_API_KEY or os.getenv("OPENROUTER_API_KEY") or "").strip())
+        if provider in {"openrouter", "openrouter.ai"}:
+            return key
+        if "openrouter.ai" in self.gateway.base_url.lower():
+            return key
+        if provider == "ollama":
+            return key
+        return bool(provider in {"openai", "openai-compatible", "openai_compatible"} and self.gateway.base_url and settings.AI_API_KEY)
+
+    def _edge_configured(self) -> bool:
+        return bool(self.edge_base and self.edge_model)
+
+    def _local_configured(self) -> bool:
+        return bool(LiveIntelligence().ollama_model())
+
     def missing_env(self) -> list[str]:
         provider = (settings.AI_PROVIDER or "").strip().lower()
         if not provider:
             return ["AI_PROVIDER"]
         if provider == "ollama":
-            missing = []
-            if not settings.AI_BASE_URL: missing.append("AI_BASE_URL")
-            if not settings.AI_LOCAL_MODEL and (not settings.AI_MODEL or "/" in settings.AI_MODEL): missing.append("AI_LOCAL_MODEL")
-            return missing
+            if self._hosted_configured() or self._edge_configured() or self._local_configured():
+                return []
+            return ["AI_EDGE_BASE_URL_OR_SECURED_AI_LOCAL_BASE_URL_OR_OPENROUTER_API_KEY"]
         if provider in {"openrouter","openrouter.ai"}:
             return [] if (settings.AI_API_KEY or os.getenv("OPENROUTER_API_KEY")) else ["AI_API_KEY_OR_OPENROUTER_API_KEY"]
         missing = []
@@ -91,7 +130,56 @@ class ModelRouter:
 
     def status(self) -> dict[str, Any]:
         selected = self.select("chat")
-        return {"configured":not bool(self.missing_env()),"provider":self.gateway.raw_provider or self.gateway.provider or "offline","base_url_present":bool(self.gateway.base_url),"model":selected.model,"mode":self.mode(),"missing_env":self.missing_env(),"fallback_active":bool(self.missing_env()),"profiles":{"fast":self.fast_model,"reasoning":self.reasoning_model,"report":self.report_model,"fallbacks":self.fallback_models}}
+        hosted_configured = self._hosted_configured()
+        edge_configured = self._edge_configured()
+        local_runtime = LiveIntelligence()
+        local_configured = bool(local_runtime.ollama_model())
+        return {
+            "configured":not bool(self.missing_env()),
+            "provider":self.gateway.raw_provider or self.gateway.provider or "offline",
+            "base_url_present":bool(self.gateway.base_url),
+            "model":selected.model,
+            "mode":self.mode(),
+            "missing_env":self.missing_env(),
+            "fallback_active":bool(self.missing_env()),
+            "routing_mode":(settings.AI_ROUTING_MODE or "hybrid").strip().lower(),
+            "test_commands_enabled":bool(settings.AI_MODEL_TEST_COMMANDS_ENABLED),
+            "lanes":{
+                "hosted":{
+                    "configured":hosted_configured,
+                    "provider":"openrouter" if hosted_configured else None,
+                    "primary":self.reasoning_model,
+                    "fast":self.fast_model,
+                    "report":self.report_model,
+                    "challenger":self.challenger_model,
+                    "free":self.free_model or None,
+                },
+                "edge":{
+                    "configured":edge_configured,
+                    "provider":"cloudflare-workers-ai" if edge_configured else None,
+                    "base_url_present":bool(self.edge_base),
+                    "model":self.edge_model if edge_configured else None,
+                },
+                "local":{
+                    "configured":local_configured,
+                    "provider":"ollama" if local_configured else None,
+                    "base_url_present":bool(self.local_base),
+                    "access_required":local_runtime.local_requires_access(),
+                    "access_configured":local_runtime.local_access_configured(),
+                    "model":self.local_model if local_configured else None,
+                },
+            },
+            "profiles":{
+                "fast":self.fast_model,
+                "reasoning":self.reasoning_model,
+                "report":self.report_model,
+                "edge":self.edge_model,
+                "local":self.local_model or None,
+                "challenger":self.challenger_model,
+                "free":self.free_model or None,
+                "fallbacks":self.fallback_models,
+            },
+        }
 
     def select(self, task: str) -> ModelSelection:
         profile = TASK_PROFILES.get(task, "reasoning")
@@ -99,8 +187,11 @@ class ModelRouter:
         if profile == "fast": model = self.fast_model
         elif profile == "report": model = self.report_model
         if self.mode() == "ollama":
-            local = self.local_model or ((settings.AI_MODEL or "").strip() if "/" not in (settings.AI_MODEL or "") else "")
-            model = local or None
+            if self.edge_base and self.gateway.base_url == self.edge_base:
+                model = self.edge_model
+            else:
+                local = self.local_model or ((settings.AI_MODEL or "").strip() if "/" not in (settings.AI_MODEL or "") else "")
+                model = local or None
         return ModelSelection(task=task, profile=profile, model=model or None)
 
     async def run(self, *, task: str, messages: list[dict[str, str]], temperature: float = 0.2, response_format: dict[str, Any] | None = None, max_tokens: int | None = None, timeout_seconds: int | None = None, max_model_attempts: int | None = None) -> tuple[AIGatewayResult, ModelSelection]:
@@ -142,14 +233,14 @@ class ModelRouter:
                     hosted_selection = ModelSelection(task=task, profile="fast", model=hosted_result.model)
                     return hosted_result, hosted_selection
 
-            local_error = local_result.error or "local UI translation unavailable"
+            local_error = local_result.error or "Ollama-compatible UI translation unavailable"
             hosted_error = hosted_result.error or "hosted UI translation unavailable"
             return AIGatewayResult(
                 status="unavailable",
                 content="",
-                provider="openrouter+ollama" if hosted_configured else "ollama+openrouter",
+                provider="openrouter+ollama-compatible" if hosted_configured else "ollama-compatible+openrouter",
                 model=selection.model,
-                error=f"Hosted translation failed: {hosted_error} | Local fallback failed: {local_error}",
+                error=f"Hosted translation failed: {hosted_error} | Ollama-compatible fallback failed: {local_error}",
             ), selection
         if response_format is None:
             question = _extract_question(messages)

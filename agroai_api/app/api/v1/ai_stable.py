@@ -36,6 +36,24 @@ def _normalize(body: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]
     return merged
 
 
+@router.get("/runtime/ai-router-status")
+async def ai_router_status() -> dict[str, Any]:
+    """Public, secret-free inference-lane diagnostics for production verification."""
+    status = ModelRouter().status()
+    return {
+        "status": "ok",
+        "configured": status.get("configured"),
+        "provider": status.get("provider"),
+        "mode": status.get("mode"),
+        "routing_mode": status.get("routing_mode"),
+        "fallback_active": status.get("fallback_active"),
+        "missing_env": status.get("missing_env", []),
+        "test_commands_enabled": status.get("test_commands_enabled"),
+        "lanes": status.get("lanes", {}),
+        "profiles": status.get("profiles", {}),
+    }
+
+
 @router.post("/ai/chat", response_model=ChatResponse)
 async def chat(payload: ChatRequest, tenant_id: str = Depends(require_current_tenant_id), db: Session = Depends(get_db)) -> ChatResponse:
     context = _get_evidence_context(db=db, tenant_id=tenant_id, block_id=payload.block_id, workspace_id=payload.workspace_id)
