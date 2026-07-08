@@ -12,7 +12,6 @@ from sqlalchemy.orm import Session
 from app.api.v1.connectors import (
     _create_evidence_rows,
     _job,
-    _job_public,
     create_or_get_connection,
     evidence_public,
     parse_rows,
@@ -168,11 +167,10 @@ def _job_customer_safe(job: IngestionJob) -> dict[str, Any]:
         "input_json": _safe_public_value(job.input_json or {}),
         "output_json": _safe_public_value(job.output_json or {}),
         "error": job.error,
-        "retry_count": job.retry_count,
+        "attempt_count": job.attempt_count,
         "max_attempts": job.max_attempts,
         "created_at": job.created_at,
         "updated_at": job.updated_at,
-        "started_at": job.started_at,
         "completed_at": job.completed_at,
     }
 
