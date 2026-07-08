@@ -1,0 +1,36 @@
+name: Diagnose Paywall V4
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  literal-inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - working-directory: figma-enterprise-v4
+        run: python3 scripts/check_ui_literal_inventory.py --check
+
+  core-i18n:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - working-directory: figma-enterprise-v4
+        run: node tests/i18n-contract.mjs
+
+  commercial-boundary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - working-directory: figma-enterprise-v4
+        run: node tests/commercial-boundary-i18n-contract.mjs
+
+  paywall-v4:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - working-directory: figma-enterprise-v4
+        run: node tests/paywall-refinements-v4-contract.mjs
