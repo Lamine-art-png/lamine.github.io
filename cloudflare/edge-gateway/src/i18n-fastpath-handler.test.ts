@@ -1,4 +1,11 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+
+vi.mock("./i18n-public-translate-fallback", () => ({
+  publicTranslationProvider: "public_translation_provider_chain_v2",
+  translateWithPublicFallback: async (_locale: string, source: Record<string, string>) => Object.fromEntries(
+    Object.entries(source).map(([key, value]) => [key, `TR ${value}`]),
+  ),
+}));
 
 import { handleI18nFastpath, type I18nFastpathEnv } from "./i18n-fastpath-handler";
 
@@ -37,7 +44,7 @@ function json(payload: unknown, status = 200): Response {
 }
 
 describe("local-validation i18n fastpath", () => {
-  it("validates canonical catalog source locally before Workers AI without backend round trips", async () => {
+  it("validates canonical compact source locally and uses the public fastpath without backend round trips", async () => {
     const ai = new FakeAi();
     const calls: Array<{ method: string; path: string; auth: string; body: unknown }> = [];
     const baseFetch = async <Host, Cf>(request: Request<Host, Cf>): Promise<Response> => {
@@ -62,13 +69,13 @@ describe("local-validation i18n fastpath", () => {
 
     expect(response.status).toBe(200);
     expect(body.locale).toBe("de");
-    expect(body.source).toBe("cloudflare_workers_ai");
+    expect(body.source).toBe("public_translation_provider_chain_v2");
     expect(body.catalog?.settings).toBe("TR Settings");
-    expect(ai.calls).toBe(1);
+    expect(ai.calls).toBe(0);
     expect(calls).toHaveLength(0);
   });
 
-  it("runs authorized internal canary directly after local registry validation without backend generation", async () => {
+  it("runs authorized internal canary through the compact public fastpath without backend generation", async () => {
     const ai = new FakeAi();
     const calls: string[] = [];
     const baseFetch = async <Host, Cf>(request: Request<Host, Cf>): Promise<Response> => {
@@ -88,9 +95,9 @@ describe("local-validation i18n fastpath", () => {
     expect(body.status).toBe("ok");
     expect(body.locale).toBe("ja");
     expect(body.changed_count).toBeGreaterThanOrEqual(2);
-    expect(body.providers).toEqual(["cloudflare_workers_ai"]);
+    expect(body.providers).toEqual(["public_translation_provider_chain_v2"]);
     expect(calls).toEqual([]);
-    expect(ai.calls).toBe(1);
+    expect(ai.calls).toBe(0);
   });
 
   it("never bypasses backend authorization for an unauthorized internal canary", async () => {
