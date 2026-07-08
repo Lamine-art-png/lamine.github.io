@@ -3,12 +3,11 @@ import { validCatalog } from "./i18n-translation-engine-v3";
 const GOOGLE_TRANSLATE_ENDPOINT = "https://translate.googleapis.com/translate_a/single";
 const MYMEMORY_TRANSLATE_ENDPOINT = "https://api.mymemory.translated.net/get";
 const LINGVA_TRANSLATE_ENDPOINT = "https://lingva.ml/api/v1";
-const TIMEOUT_MS = 7_000;
-const MAX_ATTEMPTS = 2;
+const TIMEOUT_MS = 3_500;
 const MAX_CONCURRENT_PROVIDER_REQUESTS = 6;
 const GOOGLE_BATCH_MAX_CHARS = 1_900;
 const MYMEMORY_BATCH_MAX_CHARS = 360;
-const LINGVA_BATCH_MAX_CHARS = 1_400;
+const LINGVA_BATCH_MAX_CHARS = 1_900;
 const PROTECTED_SPLIT_RE = /(\{[A-Za-z_][A-Za-z0-9_]*\}|https?:\/\/[^\s]+|AGRO-AI)/g;
 
 type SourceEntry = [string, string];
@@ -20,21 +19,15 @@ type EncodedBatch = {
 
 class ProviderHttpError extends Error {
   readonly status: number;
-  readonly retryAfterMs: number;
 
-  constructor(provider: string, status: number, retryAfterMs = 0) {
+  constructor(provider: string, status: number) {
     super(`${provider}_http_${status}`);
     this.status = status;
-    this.retryAfterMs = retryAfterMs;
   }
 }
 
 let activeProviderRequests = 0;
 const providerWaiters: Array<() => void> = [];
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
 
 async function acquireProviderSlot(): Promise<() => void> {
   if (activeProviderRequests >= MAX_CONCURRENT_PROVIDER_REQUESTS) {
@@ -50,44 +43,22 @@ async function acquireProviderSlot(): Promise<() => void> {
   };
 }
 
-function retryAfterMs(response: Response): number {
-  const raw = response.headers.get("retry-after");
-  if (!raw) return 0;
-  const seconds = Number(raw);
-  if (Number.isFinite(seconds) && seconds >= 0) return Math.min(8_000, seconds * 1_000);
-  const at = Date.parse(raw);
-  return Number.isFinite(at) ? Math.max(0, Math.min(8_000, at - Date.now())) : 0;
-}
-
-async function fetchJsonWithRetry(provider: string, input: string): Promise<unknown> {
-  let lastError: unknown = new Error(`${provider}_unavailable`);
-
-  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
-    const release = await acquireProviderSlot();
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(`${provider}_timeout`), TIMEOUT_MS);
-    try {
-      const response = await fetch(input, {
-        method: "GET",
-        headers: { accept: "application/json" },
-        signal: controller.signal,
-      });
-      if (!response.ok) throw new ProviderHttpError(provider, response.status, retryAfterMs(response));
-      return await response.json();
-    } catch (error) {
-      lastError = error;
-      if (attempt >= MAX_ATTEMPTS) break;
-      const retryMs = error instanceof ProviderHttpError && error.retryAfterMs > 0
-        ? error.retryAfterMs
-        : (error instanceof ProviderHttpError && error.status === 429 ? 500 * attempt : 150 * attempt);
-      await delay(Math.min(2_000, retryMs));
-    } finally {
-      clearTimeout(timer);
-      release();
-    }
+async function fetchJsonOnce(provider: string, input: string): Promise<unknown> {
+  const release = await acquireProviderSlot();
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(`${provider}_timeout`), TIMEOUT_MS);
+  try {
+    const response = await fetch(input, {
+      method: "GET",
+      headers: { accept: "application/json" },
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new ProviderHttpError(provider, response.status);
+    return await response.json();
+  } finally {
+    clearTimeout(timer);
+    release();
   }
-
-  throw lastError;
 }
 
 function googleTranslatedText(payload: unknown): string {
@@ -206,7 +177,7 @@ async function googleTranslateText(targetLocale: string, text: string): Promise<
   url.searchParams.set("tl", googleTargetLocale(targetLocale));
   url.searchParams.set("dt", "t");
   url.searchParams.set("q", text);
-  const value = googleTranslatedText(await fetchJsonWithRetry("google_public_translation", url.toString()));
+  const value = googleTranslatedText(await fetchJsonOnce("google_public_translation", url.toString()));
   if (!value) throw new Error("google_public_translation_empty");
   return value;
 }
@@ -215,7 +186,7 @@ async function myMemoryTranslateText(targetLocale: string, text: string): Promis
   const url = new URL(MYMEMORY_TRANSLATE_ENDPOINT);
   url.searchParams.set("q", text);
   url.searchParams.set("langpair", `en|${targetLocale.split("-", 1)[0].toLowerCase()}`);
-  const value = myMemoryTranslatedText(await fetchJsonWithRetry("mymemory_public_translation", url.toString()));
+  const value = myMemoryTranslatedText(await fetchJsonOnce("mymemory_public_translation", url.toString()));
   if (!value) throw new Error("mymemory_public_translation_empty");
   return value;
 }
@@ -223,7 +194,7 @@ async function myMemoryTranslateText(targetLocale: string, text: string): Promis
 async function lingvaTranslateText(targetLocale: string, text: string): Promise<string> {
   const target = targetLocale.split("-", 1)[0].toLowerCase();
   const url = `${LINGVA_TRANSLATE_ENDPOINT}/en/${encodeURIComponent(target)}/${encodeURIComponent(text)}`;
-  const value = lingvaTranslatedText(await fetchJsonWithRetry("lingva_public_translation", url));
+  const value = lingvaTranslatedText(await fetchJsonOnce("lingva_public_translation", url));
   if (!value) throw new Error("lingva_public_translation_empty");
   return value;
 }
@@ -257,6 +228,7 @@ export async function translateWithPublicFallback(
   const targetLocale = locale.split("-", 1)[0].toLowerCase();
   const entries = Object.entries(source);
   const failures: string[] = [];
+  const myMemoryFitsOneRequest = packEntries(entries, MYMEMORY_BATCH_MAX_CHARS).length === 1;
 
   const attempts: Array<{
     name: string;
@@ -264,8 +236,10 @@ export async function translateWithPublicFallback(
     provider: (targetLocale: string, text: string) => Promise<string>;
   }> = [
     { name: "google", maxChars: GOOGLE_BATCH_MAX_CHARS, provider: googleTranslateText },
-    { name: "mymemory", maxChars: MYMEMORY_BATCH_MAX_CHARS, provider: myMemoryTranslateText },
     { name: "lingva", maxChars: LINGVA_BATCH_MAX_CHARS, provider: lingvaTranslateText },
+    ...(myMemoryFitsOneRequest
+      ? [{ name: "mymemory", maxChars: MYMEMORY_BATCH_MAX_CHARS, provider: myMemoryTranslateText }]
+      : []),
   ];
 
   for (const attempt of attempts) {
@@ -281,4 +255,4 @@ export async function translateWithPublicFallback(
   throw new Error(`public_translation_provider_chain_exhausted: ${failures.join("; ")}`);
 }
 
-export const publicTranslationProvider = "public_translation_provider_chain_v3";
+export const publicTranslationProvider = "public_translation_provider_chain_v4";
