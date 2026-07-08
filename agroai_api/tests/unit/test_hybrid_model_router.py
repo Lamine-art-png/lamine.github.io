@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import asyncio
+
 from app.core.config import settings
 from app.services.live_intelligence import LiveIntelligence
 
@@ -104,6 +106,48 @@ def test_ollama_mode_can_use_openrouter_as_remote_frontier_lane(monkeypatch):
 
     assert runtime.remote() == ("https://openrouter.ai/api/v1", "test-key", "openrouter")
     assert runtime.ollama_model() == "qwen3.5:4b"
+
+
+def test_remote_account_credit_failure_stops_after_one_model(monkeypatch):
+    _configure(monkeypatch)
+    runtime = LiveIntelligence()
+
+    class FakeResponse:
+        status_code = 402
+
+    class FakeClient:
+        calls = 0
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, *args, **kwargs):
+            self.calls += 1
+            return FakeResponse()
+
+    fake_client = FakeClient()
+    monkeypatch.setattr(
+        "app.services.live_intelligence.httpx.AsyncClient",
+        lambda *args, **kwargs: fake_client,
+    )
+
+    result = asyncio.run(
+        runtime.run_remote(
+            ("https://openrouter.ai/api/v1", "test-key", "openrouter"),
+            ["z-ai/glm-5.2", "deepseek/deepseek-v4-pro"],
+            [{"role": "user", "content": "test"}],
+            "reasoning",
+        )
+    )
+
+    assert result is None
+    assert fake_client.calls == 1
 
 
 def test_local_resource_budget_is_clamped_for_eight_gb_class_machine(monkeypatch):
