@@ -99,7 +99,8 @@ def _activate_server_authorized_access_profile(db: Session, user: User, organiza
     """Provision explicit internal/demo identities once, entirely server-side.
 
     Normal customer requests take the fast no-op path. No header, query string,
-    JWT claim, or browser value can select an access profile.
+    JWT claim, or browser value can select an access profile. Organization
+    ownership is enforced by the canonical activation service.
     """
 
     if organization is None:
@@ -107,8 +108,8 @@ def _activate_server_authorized_access_profile(db: Session, user: User, organiza
     from app.services.non_customer_access import (
         FULL_ACCESS_PROFILES,
         access_profile_metadata,
+        activate_configured_profile,
         configured_profile_for_user,
-        provision_non_customer_access,
     )
 
     configured = configured_profile_for_user(user)
@@ -117,7 +118,9 @@ def _activate_server_authorized_access_profile(db: Session, user: User, organiza
     current = access_profile_metadata(organization)["profile"]
     if current == configured:
         return
-    provision_non_customer_access(db, user=user, org=organization, profile=configured)
+    result = activate_configured_profile(db, user=user, org=organization)
+    if result is None:
+        return
     db.commit()
     db.refresh(organization)
 
