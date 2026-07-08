@@ -6,6 +6,7 @@ import { ImageWithFallback } from "./figma/ImageWithFallback";
 import logoImg from "../../imports/agro-ai-logo-1.png";
 import { OperatingStatusBar } from "./OperatingStatusBar";
 import { ProductTour, replayProductTour } from "./ProductTour";
+import { UploadStatusToast } from "./UploadStatusToast";
 
 type NavItem = { name: string; path: string; locked?: boolean; upgradeTo?: string; icon?: any };
 
@@ -127,6 +128,7 @@ export function MainLayout() {
         <OperatingStatusBar />
         <Outlet />
       </main>
+      <UploadStatusToast />
       <ProductTour />
     </div>
   );
