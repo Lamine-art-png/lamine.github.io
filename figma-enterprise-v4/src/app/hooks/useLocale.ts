@@ -48,6 +48,7 @@ export function useLocale() {
   );
   const effectiveLocale = useMemo(() => normalizeLocale(selectedLocale), [selectedLocale]);
   const resolution = useMemo(() => resolveLocaleDetailed(selectedLocale), [selectedLocale]);
+  const fullCatalogReady = effectiveLocale === "en" || hasCompleteLocaleCatalog(selectedLocale);
 
   useEffect(() => {
     const listener = ((event: CustomEvent) => {
@@ -172,7 +173,7 @@ export function useLocale() {
     resolution,
     setLocale,
     activateLocale,
-    catalogLoading,
+    catalogLoading: catalogLoading || !fullCatalogReady,
     catalogError,
     t: (key: string) => {
       void runtimeRevision;
