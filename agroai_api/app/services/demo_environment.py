@@ -13,15 +13,15 @@ import re
 from dataclasses import dataclass
 from datetime import datetime
 
-from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.security import pwd_context
 from app.models.saas import ManagedEntity, Organization, OrganizationMembership, User, Workspace
 from app.services.evaluation_seed import ensure_evaluation_context
 from app.services.non_customer_access import DEMO_PROFILE, provision_non_customer_access
 
-_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+DEMO_SEED_SOURCE = "demo_environment"
 
 
 @dataclass(frozen=True)
@@ -52,6 +52,34 @@ def _unique_slug(db: Session, value: str) -> str:
     return candidate
 
 
+def _assert_existing_identity_is_demo_owned(db: Session, user: User) -> None:
+    """Refuse to reset/reuse any identity not already owned by this demo seed.
+
+    A typo or bad environment variable must never convert a real customer/founder
+    account into a demo identity or rotate its password.
+    """
+
+    memberships = (
+        db.query(OrganizationMembership)
+        .filter(OrganizationMembership.user_id == user.id)
+        .all()
+    )
+    if not memberships:
+        raise ValueError(
+            f"Refusing to repurpose pre-existing non-demo identity: {user.email}"
+        )
+    for membership in memberships:
+        metadata = (
+            membership.organization.commercial_metadata_json
+            if isinstance(membership.organization.commercial_metadata_json, dict)
+            else {}
+        )
+        if metadata.get("seed_source") != DEMO_SEED_SOURCE:
+            raise ValueError(
+                f"Refusing to repurpose pre-existing non-demo identity: {user.email}"
+            )
+
+
 def _get_or_create_user(db: Session, *, email: str, password: str, name: str) -> tuple[User, bool]:
     normalized = _normalize_email(email)
     if not normalized or "@" not in normalized:
@@ -65,7 +93,7 @@ def _get_or_create_user(db: Session, *, email: str, password: str, name: str) ->
         user = User(
             email=normalized,
             name=name,
-            password_hash=_pwd_context.hash(password),
+            password_hash=pwd_context.hash(password),
             is_active=True,
             email_verified_at=datetime.utcnow(),
             email_verification_status="verified",
@@ -73,10 +101,11 @@ def _get_or_create_user(db: Session, *, email: str, password: str, name: str) ->
         db.add(user)
         db.flush()
     else:
-        # Demo deployment credentials are environment-owned and intentionally
-        # converge on each seed run. This never runs for ordinary customer users.
+        _assert_existing_identity_is_demo_owned(db, user)
+        # Only identities already proven to belong to the demo seed converge on
+        # environment-owned credentials during idempotent reprovisioning.
         user.name = user.name or name
-        user.password_hash = _pwd_context.hash(password)
+        user.password_hash = pwd_context.hash(password)
         user.is_active = True
         user.email_verified_at = user.email_verified_at or datetime.utcnow()
         user.email_verification_status = "verified"
@@ -111,7 +140,7 @@ def _get_or_create_org(
         subscription_status="inactive",
         subscription_source="demo_seed",
         commercial_metadata_json={
-            "seed_source": "demo_environment",
+            "seed_source": DEMO_SEED_SOURCE,
             "operational_use": False,
             "requested_access_profile": profile,
         },
@@ -283,7 +312,7 @@ def provision_demo_environment(db: Session) -> list[DemoIdentityResult]:
     free_metadata = dict(free_org.commercial_metadata_json or {})
     free_metadata.update(
         {
-            "seed_source": "demo_environment",
+            "seed_source": DEMO_SEED_SOURCE,
             "access_profile": "customer",
             "billing_required": True,
             "operational_use": False,
