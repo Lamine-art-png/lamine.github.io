@@ -45,23 +45,27 @@ export function IntelligencePlanControls() {
     { id: "deep" as const, name: "Deep", text: cap.deep, icon: Sparkles },
   ];
 
-  return <section className="border-b px-6 py-4" style={{ background: SURFACE, borderColor: BORDER }}>
-    <div className="mx-auto flex max-w-[900px] flex-wrap items-center justify-between gap-4">
-      <div>
-        <div className="text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: MUTED }}>{plan} intelligence</div>
-        <div className="mt-1 text-[12px] font-medium" style={{ color: TEXT }}>{cap.ai}</div>
-        {plan === "free" ? <div className="mt-1 max-w-[430px] text-[11px] leading-5" style={{ color: MUTED }}>Professional increases capacity to 500 actions and 25 Deep analyses each month.</div> : null}
+  return (
+    <section className="border-b px-4 py-3 sm:px-6 sm:py-4" style={{ background: SURFACE, borderColor: BORDER }}>
+      <div className="mx-auto flex max-w-[900px] flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between sm:gap-4">
+        <div className="min-w-0">
+          <div className="text-[9px] font-semibold uppercase tracking-[0.16em] sm:text-[10px]" style={{ color: MUTED }}>{plan} intelligence</div>
+          <div className="mt-1 text-[11px] font-medium sm:text-[12px]" style={{ color: TEXT }}>{cap.ai}</div>
+          {plan === "free" ? <div className="mt-1 hidden max-w-[430px] text-[11px] leading-5 sm:block" style={{ color: MUTED }}>Professional increases capacity to 500 actions and 25 Deep analyses each month.</div> : null}
+        </div>
+        <div className="grid w-full grid-cols-3 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+          {options.map((item) => {
+            const Icon = item.icon;
+            const active = item.id === mode;
+            return (
+              <button key={item.id} type="button" onClick={() => selectMode(item.id)} className="min-w-0 rounded-xl px-2.5 py-2 text-left sm:min-w-[112px] sm:px-3" style={{ background: active ? "#0D2B1E" : "#F6F4EE", color: active ? "white" : TEXT, border: `1px solid ${active ? "#0D2B1E" : BORDER}` }}>
+                <div className="flex items-center gap-1.5 text-[11px] font-semibold sm:gap-2 sm:text-[12px]"><Icon size={14} />{item.name}</div>
+                <div className="mt-1 hidden text-[10px] sm:block" style={{ color: active ? "rgba(255,255,255,0.68)" : MUTED }}>{item.text}</div>
+              </button>
+            );
+          })}
+        </div>
       </div>
-      <div className="flex flex-wrap gap-2">
-        {options.map((item) => {
-          const Icon = item.icon;
-          const active = item.id === mode;
-          return <button key={item.id} type="button" onClick={() => selectMode(item.id)} className="min-w-[112px] rounded-xl px-3 py-2 text-left" style={{ background: active ? "#0D2B1E" : "#F6F4EE", color: active ? "white" : TEXT, border: `1px solid ${active ? "#0D2B1E" : BORDER}` }}>
-            <div className="flex items-center gap-2 text-[12px] font-semibold"><Icon size={14} />{item.name}</div>
-            <div className="mt-1 text-[10px]" style={{ color: active ? "rgba(255,255,255,0.68)" : MUTED }}>{item.text}</div>
-          </button>;
-        })}
-      </div>
-    </div>
-  </section>;
+    </section>
+  );
 }
