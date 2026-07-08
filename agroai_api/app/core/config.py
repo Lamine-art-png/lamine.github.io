@@ -140,6 +140,10 @@ class Settings(BaseSettings):
     # separate so an Ollama-compatible Worker can never be mislabeled as local.
     AI_LOCAL_BASE_URL: str = ""
     AI_LOCAL_MODEL: str = ""
+    # Cloudflare Access service-token credentials for a public tunnel hostname.
+    # Leave blank for loopback/private local development only.
+    AI_LOCAL_CF_ACCESS_CLIENT_ID: str = ""
+    AI_LOCAL_CF_ACCESS_CLIENT_SECRET: str = ""
     AI_EDGE_BASE_URL: str = ""
     AI_EDGE_MODEL: str = "@cf/zai-org/glm-4.7-flash"
 
