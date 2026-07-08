@@ -222,8 +222,10 @@ def activate_configured_profile(
     user: User,
     org: Organization,
 ) -> ProvisioningResult | None:
-    """Activate only when the authenticated email is on a server-side allowlist."""
+    """Activate only a server-allowlisted identity on an organization it owns."""
 
+    if str(getattr(org, "owner_user_id", "") or "") != str(getattr(user, "id", "") or ""):
+        return None
     profile = configured_profile_for_user(user)
     if profile not in FULL_ACCESS_PROFILES:
         return None
