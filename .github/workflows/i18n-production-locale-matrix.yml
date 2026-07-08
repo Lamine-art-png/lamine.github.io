@@ -1,0 +1,46 @@
+name: I18n Production Locale Matrix
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "cloudflare/edge-gateway/src/i18n-*.ts"
+      - "figma-enterprise-v4/src/app/dynamicLocaleCatalog.ts"
+      - "figma-enterprise-v4/src/app/hooks/useLocale.ts"
+      - "shared/supported-locales.json"
+      - "scripts/i18n-production-matrix.mjs"
+      - ".github/workflows/i18n-production-locale-matrix.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: i18n-production-locale-matrix
+  cancel-in-progress: true
+
+jobs:
+  production-locale-matrix:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Allow production rollout to settle
+        run: sleep 60
+      - name: Prove every runtime locale on the live production endpoint
+        env:
+          I18N_SMOKE_ENDPOINT: https://api.agroai-pilot.com/v1/i18n/catalog
+          I18N_SMOKE_CONCURRENCY: "3"
+          I18N_SMOKE_ATTEMPTS: "5"
+        run: node scripts/i18n-production-matrix.mjs | tee i18n-production-matrix.jsonl
+      - name: Upload production matrix evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: i18n-production-locale-matrix-${{ github.sha }}
+          path: i18n-production-matrix.jsonl
+          if-no-files-found: warn
+          retention-days: 30
