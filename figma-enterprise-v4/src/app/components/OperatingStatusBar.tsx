@@ -5,6 +5,7 @@ import { usePortalResource } from "../hooks/usePortalResource";
 import { BG, BORDER, InlineState, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
 
 type AnyRecord = Record<string, any>;
+const STATUSBAR_SHARED_COPY = ["Connector", "unknown", "available", "connected"] as const;
 
 function asArray(value: unknown): AnyRecord[] {
   return Array.isArray(value) ? (value as AnyRecord[]) : [];
@@ -28,7 +29,7 @@ function value(value: unknown, fallback = "—") {
 }
 
 export function OperatingStatusBar() {
-  const { tx, tf } = usePortalCopy(["statusbar", "shared"]);
+  const { tx, tf } = usePortalCopy(["statusbar"], STATUSBAR_SHARED_COPY);
   const [open, setOpen] = useState(false);
   const [running, setRunning] = useState("");
   const [result, setResult] = useState<AnyRecord | null>(null);
