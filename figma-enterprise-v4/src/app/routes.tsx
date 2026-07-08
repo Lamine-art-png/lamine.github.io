@@ -32,7 +32,7 @@ export const router = createBrowserRouter([
     Component: MainLayout,
     errorElement: <RouteRecovery />,
     children: [
-      { index: true, Component: PortalHome },
+      { index: true, lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
       { path: "field-queue", lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
       { path: "tasks", lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
       { path: "readiness", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "Readiness") },
