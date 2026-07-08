@@ -29,6 +29,21 @@ def oauth_url(provider: str, state: str, redirect_url: str) -> tuple[str | None,
         if not client_id:
             return None, "MICROSOFT_OAUTH_CLIENT_ID is not configured."
         return _query("https://login.microsoftonline.com/common/oauth2/v2.0/authorize", {"client_id": client_id, "redirect_uri": redirect_url, "response_type": "code", "scope": "offline_access User.Read Mail.Read Files.Read", "state": state}), None
+    if provider == "john_deere":
+        client_id = os.getenv("JOHN_DEERE_OAUTH_CLIENT_ID", "").strip()
+        if not client_id:
+            return None, "JOHN_DEERE_OAUTH_CLIENT_ID is not configured."
+        authorize_url = os.getenv(
+            "JOHN_DEERE_OAUTH_AUTHORIZE_URL",
+            "https://signin.johndeere.com/oauth2/aus78tnlaysMraFhC1t7/v1/authorize",
+        ).strip()
+        # Keep Work Plans out of phase-one authorization. Route access remains
+        # controlled by Deere app approval and the customer-authorized account.
+        scopes = os.getenv(
+            "JOHN_DEERE_OAUTH_SCOPES",
+            "ag1 ag2 ag3 eq1 eq2 org1 org2 offline_access",
+        ).strip()
+        return _query(authorize_url, {"client_id": client_id, "redirect_uri": redirect_url, "response_type": "code", "scope": scopes, "state": state}), None
     if provider == "dropbox":
         client_id = os.getenv("DROPBOX_OAUTH_CLIENT_ID", "").strip()
         if not client_id:
