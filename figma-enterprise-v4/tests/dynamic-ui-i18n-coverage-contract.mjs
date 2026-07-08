@@ -45,11 +45,14 @@ for (const key of [
 
 assert(portalCatalog.includes("ui-dynamic-copy.en.json"), "portal catalog must import primary dynamic copy");
 assert(portalCatalog.includes("ui-dynamic-copy-extra.en.json"), "portal catalog must import compact dynamic copy");
+assert(portalCatalog.includes("STATIC_PORTAL_LITERAL_CATALOG"), "static portal catalog boundary missing");
 assert(portalCatalog.includes("dynamicCopySourceForNamespaces"), "namespace source selector missing");
 assert(portalCatalog.includes("portalCopySourceForValues"), "existing literal prioritization missing");
 assert(portalCatalog.includes("TEMPLATE_MATCHERS"), "generated UI template matcher registry missing");
 assert(portalCatalog.includes("templateMatch"), "generated UI template matching missing");
 assert(portalCatalog.includes("formatTranslation(translated, localizedValues)"), "matched templates must substitute localized captured values");
+assert(portalCatalog.includes("return { ...base, ...STATIC_PORTAL_LITERAL_CATALOG };"), "dynamic copy must never re-enter global full-catalog hydration");
+assert(!portalCatalog.includes("return { ...base, ...PORTAL_LITERAL_CATALOG };"), "global full hydration must not include route-scoped dynamic copy");
 
 assert(canonical.includes("ui-dynamic-copy.en.json"), "edge canonical source must authorize primary dynamic copy");
 assert(canonical.includes("ui-dynamic-copy-extra.en.json"), "edge canonical source must authorize compact dynamic copy");
@@ -58,10 +61,13 @@ assert(dynamicRuntime.includes("primeLocaleSourceCatalogFromCache"), "route-scop
 assert(routeHook.includes("ensureLocaleSourceCatalog"), "visible route copy must hydrate independently of full portal completion");
 assert(routeHook.includes("useSyncExternalStore"), "route copy must react to installed catalog chunks");
 
-for (const route of ["/pricing", "/evidence", "/operations", "/field-queue", "/tasks", "/readiness", "/fields", "/exceptions", "/integrations"]) {
-  assert(layout.includes(`\"${route}\"`), `route-priority map missing ${route}`);
+for (const route of ["/operations", "/field-queue", "/tasks", "/readiness", "/fields", "/exceptions"]) {
+  assert(layout.includes(`\"${route}\"`), `shell route-priority map missing ${route}`);
 }
+assert(layout.includes("PLAN_COPY_VALUES"), "shell must prioritize only exact plan labels on non-dynamic routes");
+assert(layout.includes("usePortalCopy(copyNamespacesForPath(location.pathname), PLAN_COPY_VALUES)"), "shell route hydration must stay narrow");
 assert(layout.includes("tx(currentPlanLabel)"), "sidebar plan name must not render raw English");
+assert(!layout.includes('const namespaces = ["shared"]'), "shell must not hydrate the full shared namespace on every route");
 
 assert(pricing.includes('usePortalCopy(["pricing", "shared"])'), "pricing page must hydrate pricing copy first");
 for (const expression of ["tx(plan.name)", "tx(plan.recommended_buyer)", "tx(limit)", "tx(feature)", "tx(cell)"]) {
@@ -79,7 +85,8 @@ assert(integrations.includes('tf("Unlock {provider}: {description}'), "connector
 assert(integrations.includes("tx(profile.description)"), "connector descriptions must not render raw");
 assert(integrations.includes('tf("Upgrade to {plan}"'), "connector upgrade CTA must use translated template");
 
-assert(statusBar.includes('usePortalCopy(["statusbar", "shared"])'), "operating status bar must hydrate its dynamic copy");
+assert(statusBar.includes("STATUSBAR_SHARED_COPY"), "status bar must use an exact shared-copy allowlist");
+assert(statusBar.includes('usePortalCopy(["statusbar"], STATUSBAR_SHARED_COPY)'), "status bar must not hydrate the entire shared namespace");
 assert(statusBar.includes('tf("{workspace} · {field} · {telemetry} telemetry records · {connectors} connectors need setup"'), "status summary must use a translated template");
 assert(statusBar.includes('tf("Water {water}% · Assurance {assurance}%"'), "water/assurance summary must use a translated template");
 
