@@ -45,7 +45,7 @@ def test_explicit_test_commands_select_exact_lanes(monkeypatch):
     runtime = LiveIntelligence()
 
     assert runtime.parse_test_route("/local diagnose this field") == ("local", "diagnose this field")
-    assert runtime.parse_test_route("/glm diagnose this field") == ("primary", "diagnose this field")
+    assert runtime.parse_test_route("/glm diagnose this field") == ("glm", "diagnose this field")
     assert runtime.parse_test_route("/deepseek diagnose this field") == ("challenger", "diagnose this field")
     assert runtime.parse_test_route("/free diagnose this field") == ("free", "diagnose this field")
     assert runtime.parse_test_route("/auto diagnose this field") == ("auto", "diagnose this field")
@@ -56,6 +56,14 @@ def test_test_commands_are_literal_user_text_when_disabled(monkeypatch):
     runtime = LiveIntelligence()
 
     assert runtime.parse_test_route("/glm diagnose this field") == ("auto", "/glm diagnose this field")
+
+
+def test_forced_glm_is_exact_even_from_fast_profile(monkeypatch):
+    _configure(monkeypatch)
+    runtime = LiveIntelligence()
+
+    assert runtime.models("fast", "openrouter", "glm") == ["z-ai/glm-5.2"]
+    assert runtime.models("fast", "openrouter", "primary") == ["qwen/qwen3.5-flash-02-23"]
 
 
 def test_primary_challenger_and_free_routes_do_not_silently_fallback(monkeypatch):
@@ -78,6 +86,15 @@ def test_auto_remote_chain_preserves_primary_then_challenger_then_free(monkeypat
         "tencent/hy3:free",
     ]
     assert len(candidates) == len(set(candidates))
+
+
+def test_frontier_models_use_vendor_recommended_high_temperature(monkeypatch):
+    _configure(monkeypatch)
+    runtime = LiveIntelligence()
+
+    assert runtime.remote_temperature("z-ai/glm-5.2", "reasoning") == 1.0
+    assert runtime.remote_temperature("deepseek/deepseek-v4-pro", "reasoning") == 1.0
+    assert runtime.remote_temperature("qwen/qwen3.5-flash-02-23", "fast") == 0.2
 
 
 def test_ollama_mode_can_use_openrouter_as_remote_frontier_lane(monkeypatch):
