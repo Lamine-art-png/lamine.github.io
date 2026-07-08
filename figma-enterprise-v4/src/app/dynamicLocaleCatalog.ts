@@ -4,8 +4,8 @@ import { normalizeLocale, TRANSLATIONS } from "./i18n";
 import { notifyLocaleRuntime } from "./localeRuntimeStore";
 import { fullEnglishUiSource } from "./portalLiteralCatalog";
 
-const CACHE_PREFIX = "agroai_ui_catalog_v6:";
-const LEGACY_CACHE_PREFIX = "agroai_ui_catalog_v5:";
+const CACHE_PREFIX = "agroai_ui_catalog_v7:";
+const CACHE_VERSION = 7;
 const RETRY_COOLDOWN_MS = 800;
 const REQUEST_CHUNK_MAX_KEYS = 12;
 const REQUEST_CHUNK_MAX_CHARS = 1_600;
@@ -104,6 +104,12 @@ function validCatalog(candidate: unknown, source: Record<string, string>): candi
   });
 }
 
+function catalogShowsTranslationProgress(candidate: Record<string, string>, source: Record<string, string>) {
+  const entries = Object.entries(source);
+  if (entries.length < 2) return true;
+  return entries.some(([key, sourceValue]) => candidate[key]?.trim() !== sourceValue.trim());
+}
+
 function sourceFingerprint(source: Record<string, string>) {
   const stable = Object.keys(source)
     .sort()
@@ -117,8 +123,8 @@ function sourceFingerprint(source: Record<string, string>) {
   return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
-function cacheKey(prefix: string, locale: string, fingerprint: string) {
-  return `${prefix}${locale}:${fingerprint}`;
+function cacheKey(locale: string, fingerprint: string) {
+  return `${CACHE_PREFIX}${locale}:${fingerprint}`;
 }
 
 function installLocaleCatalog(locale: string, source: Record<string, string>, catalog: Record<string, string>, persist: boolean) {
@@ -129,19 +135,17 @@ function installLocaleCatalog(locale: string, source: Record<string, string>, ca
 
 function readExactCached(locale: string, source: Record<string, string>): Record<string, string> | null {
   const fingerprint = sourceFingerprint(source);
-  for (const prefix of [CACHE_PREFIX, LEGACY_CACHE_PREFIX]) {
-    try {
-      const raw = localStorage.getItem(cacheKey(prefix, locale, fingerprint));
-      if (!raw) continue;
-      const parsed = JSON.parse(raw) as CacheEnvelope;
-      const expectedVersion = prefix === CACHE_PREFIX ? 6 : 5;
-      if (parsed.version !== expectedVersion || parsed.sourceFingerprint !== fingerprint || !validCatalog(parsed.catalog, source)) continue;
-      return parsed.catalog;
-    } catch {
-      // Ignore corrupt optimization entries.
-    }
+  try {
+    const raw = localStorage.getItem(cacheKey(locale, fingerprint));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as CacheEnvelope;
+    if (parsed.version !== CACHE_VERSION || parsed.sourceFingerprint !== fingerprint || !validCatalog(parsed.catalog, source)) return null;
+    const catalog = parsed.catalog as Record<string, string>;
+    if (!catalogShowsTranslationProgress(catalog, source)) return null;
+    return catalog;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 function cachedReusable(locale: string, source: Record<string, string>): Record<string, string> {
@@ -157,7 +161,7 @@ function cachedReusable(locale: string, source: Record<string, string>): Record<
       const raw = localStorage.getItem(key);
       if (!raw) continue;
       const parsed = JSON.parse(raw) as CacheEnvelope;
-      if (parsed.version !== 6 || !parsed.source || typeof parsed.source !== "object" || Array.isArray(parsed.source)) continue;
+      if (parsed.version !== CACHE_VERSION || !parsed.source || typeof parsed.source !== "object" || Array.isArray(parsed.source)) continue;
       if (!parsed.catalog || typeof parsed.catalog !== "object" || Array.isArray(parsed.catalog)) continue;
       const cachedSource = parsed.source as Record<string, unknown>;
       const cachedCatalog = parsed.catalog as Record<string, unknown>;
@@ -178,8 +182,8 @@ function cachedReusable(locale: string, source: Record<string, string>): Record<
 function writeCached(locale: string, source: Record<string, string>, catalog: Record<string, string>) {
   try {
     const fingerprint = sourceFingerprint(source);
-    localStorage.setItem(cacheKey(CACHE_PREFIX, locale, fingerprint), JSON.stringify({
-      version: 6,
+    localStorage.setItem(cacheKey(locale, fingerprint), JSON.stringify({
+      version: CACHE_VERSION,
       sourceFingerprint: fingerprint,
       source,
       catalog,
@@ -262,6 +266,9 @@ async function requestChunk(effectiveLocale: string, chunk: Record<string, strin
       });
       if (!response || response.status !== "ok" || response.locale !== effectiveLocale || !validCatalog(response.catalog, chunk)) {
         throw new Error(`Invalid UI translation catalog for ${effectiveLocale}`);
+      }
+      if (!catalogShowsTranslationProgress(response.catalog, chunk)) {
+        throw new Error(`UI translation catalog made no progress for ${effectiveLocale}`);
       }
       return response.catalog;
     } catch (error) {
