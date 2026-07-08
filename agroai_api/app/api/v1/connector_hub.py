@@ -33,8 +33,8 @@ from app.services.oauth_urls import oauth_url
 import app.services.connector_commercial_guard as _connector_commercial_guard  # noqa: F401,E402
 
 router = APIRouter(tags=["connector-hub-actions"])
-ProviderId = Literal["wiseconn", "talgil", "universal_controller", "weather", "openet", "manual_csv", "chat_upload", "gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce", "john_deere", "google_earth_engine", "custom_api"]
-ACCOUNT_PROVIDERS = {"gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce", "john_deere"}
+ProviderId = Literal["wiseconn", "talgil", "universal_controller", "weather", "openet", "manual_csv", "chat_upload", "gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce", "google_earth_engine", "custom_api"]
+ACCOUNT_PROVIDERS = {"gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce"}
 UPLOAD_PROVIDERS = {"wiseconn", "talgil", "universal_controller", "manual_csv", "chat_upload", "weather", "openet"}
 
 
@@ -50,7 +50,7 @@ class ConnectorConnectRequest(BaseModel):
 
 
 class OAuthStartRequest(BaseModel):
-    provider: Literal["gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce", "john_deere"]
+    provider: Literal["gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce"]
     workspace_id: str | None = None
     redirect_url: str | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
@@ -94,8 +94,6 @@ def capabilities(provider: str) -> list[str]:
         return ["channel_context", "message_context", "file_context", "handoff_context"]
     if provider == "salesforce":
         return ["account_context", "case_context", "contact_context", "customer_success_context"]
-    if provider == "john_deere":
-        return ["organizations", "clients", "farms", "fields", "boundaries", "field_operations", "equipment_reference", "crop_types", "guidance_lines", "organization_settings", "read_only_sync"]
     if provider == "google_earth_engine":
         return ["project_readiness", "remote_sensing_context", "geospatial_asset_context"]
     if provider == "weather":
@@ -253,7 +251,7 @@ from app.api.v1.connector_unified_v3 import router as unified_v3_router  # noqa:
 router.include_router(unified_v3_router)
 
 # Mount the generic provider sync lifecycle (queue/sync/disconnect) on the same
-# already-mounted Connector Hub router. This closes the runtime gap where the
-# module existed but its endpoints were unreachable from the production app.
+# already-mounted Connector Hub router. Deere authorization remains owned only by
+# connector_launch's one-time-state callback; no legacy parallel OAuth path.
 from app.api.v1.connector_provider_sync import router as provider_sync_router  # noqa: E402
 router.include_router(provider_sync_router)
