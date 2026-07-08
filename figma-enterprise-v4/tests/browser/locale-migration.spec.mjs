@@ -2,11 +2,37 @@ import { expect, test } from "@playwright/test";
 
 const APP_URL = "http://127.0.0.1:4173/settings";
 const API_ORIGIN = "https://api.agroai-pilot.com";
-const REQUEST_CHUNK_SIZE = 48;
+const REQUEST_CHUNK_SIZE = 12;
 
 function qaToken() {
   const body = Buffer.from(JSON.stringify({ sub: "qa", exp: 4102444800 })).toString("base64url");
   return `qa.${body}.sig`;
+}
+
+function translatedCatalog(locale, source) {
+  const prefixes = { de: "DE ", ar: "AR ", "fr-FR": "FR ", sw: "SW " };
+  const prefix = prefixes[locale] || `${locale.toUpperCase()} `;
+  const catalog = Object.fromEntries(Object.entries(source || {}).map(([key, value]) => [key, `${prefix}${value}`]));
+
+  if (Object.prototype.hasOwnProperty.call(catalog, "language")) {
+    catalog.language = locale === "de"
+      ? "Sprache"
+      : locale === "ar"
+        ? "اللغة"
+        : locale === "fr-FR"
+          ? "Langue"
+          : locale === "sw"
+            ? "Language"
+            : catalog.language;
+  }
+
+  // Deliberately corrupt one late full-catalog placeholder for the malformed
+  // catalog test. Other chunks still behave like a real translating provider,
+  // so the critical shell can become interactive before the bad chunk is rejected.
+  if (locale === "sw" && Object.prototype.hasOwnProperty.call(catalog, "intelligence.reportEmailed")) {
+    catalog["intelligence.reportEmailed"] = "Imetumwa kwa " + "{" + "{recipient}" + "}";
+  }
+  return catalog;
 }
 
 async function prepare(page, storedLocale) {
@@ -33,20 +59,7 @@ async function prepare(page, storedLocale) {
     if (req.method() === "POST" && url.pathname === "/v1/i18n/catalog") {
       const payload = req.postDataJSON();
       state.catalogs.push({ locale: payload.locale, keyCount: Object.keys(payload.source || {}).length });
-      const catalog = { ...payload.source };
-      if (Object.prototype.hasOwnProperty.call(catalog, "language")) {
-        catalog.language = payload.locale === "de"
-          ? "Sprache"
-          : payload.locale === "ar"
-            ? "اللغة"
-            : payload.locale === "fr-FR"
-              ? "Langue"
-              : catalog.language;
-      }
-      if (payload.locale === "sw" && Object.prototype.hasOwnProperty.call(catalog, "intelligence.reportEmailed")) {
-        catalog["intelligence.reportEmailed"] = "Imetumwa kwa " + "{" + "{recipient}" + "}";
-      }
-      return reply({ status: "ok", locale: payload.locale, catalog, source: "browser-test" });
+      return reply({ status: "ok", locale: payload.locale, catalog: translatedCatalog(payload.locale, payload.source), source: "browser-test" });
     }
     if (req.method() === "PATCH" && url.pathname === "/v1/settings/preferences") {
       state.patches += 1;
@@ -102,7 +115,20 @@ test("malformed dynamic placeholder catalog is rejected and not cached", async (
   await expect.poll(() => state.catalogs.length).toBeGreaterThanOrEqual(1);
   expect(state.catalogs.every((item) => item.keyCount > 0 && item.keyCount <= REQUEST_CHUNK_SIZE)).toBeTruthy();
   await expect(page.getByText("Language", { exact: true }).first()).toBeVisible();
-  const cached = await page.evaluate(() => Object.keys(localStorage).some((key) => key.startsWith("agroai_ui_catalog_v5:sw:")));
-  expect(cached).toBe(false);
+  const malformedCached = await page.evaluate(() => {
+    for (const key of Object.keys(localStorage)) {
+      if (!key.startsWith("agroai_ui_catalog_v7:sw:")) continue;
+      const raw = localStorage.getItem(key);
+      if (!raw) continue;
+      try {
+        const parsed = JSON.parse(raw);
+        if (parsed?.source?.["intelligence.reportEmailed"] || parsed?.catalog?.["intelligence.reportEmailed"]) return true;
+      } catch {
+        // Ignore unrelated/corrupt entries; they are not a valid malformed cache hit.
+      }
+    }
+    return false;
+  });
+  expect(malformedCached).toBe(false);
   await context.close();
 });
