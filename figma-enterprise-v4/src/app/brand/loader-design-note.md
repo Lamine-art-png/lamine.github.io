@@ -1,1 +1,0 @@
-The production loading surface uses the official AGRO-AI mark, a restrained breathing/halo motion, and the existing progress line with a branded sweep. No auth, router, or locale timing behavior is changed by this presentation layer.
