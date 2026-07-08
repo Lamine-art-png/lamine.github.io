@@ -9,6 +9,7 @@ on:
       - "figma-enterprise-v4/src/app/hooks/useLocale.ts"
       - "shared/supported-locales.json"
       - "scripts/i18n-production-matrix.mjs"
+      - "wrangler.toml"
       - ".github/workflows/i18n-production-locale-matrix.yml"
   workflow_dispatch:
 
@@ -20,7 +21,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  deploy-production-edge:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: e2fe627bff2d8e7b2b10bf078956acfe
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Install locked edge dependencies
+        working-directory: cloudflare/edge-gateway
+        run: npm ci --no-audit --no-fund
+      - name: Deploy authoritative production API edge
+        working-directory: cloudflare/edge-gateway
+        run: npx wrangler deploy --config ../../wrangler.toml
+
   production-locale-matrix:
+    needs: deploy-production-edge
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -28,8 +48,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "24"
-      - name: Allow production rollout to settle
-        run: sleep 60
+      - name: Allow edge propagation to settle
+        run: sleep 15
       - name: Prove every runtime locale on the live production endpoint
         env:
           I18N_SMOKE_ENDPOINT: https://api.agroai-pilot.com/v1/i18n/catalog
