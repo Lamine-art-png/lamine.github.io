@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.core.security import require_current_tenant_id
 from app.db.base import Base, get_db
 from app.main import app
+from app.models.operational_records import IngestionJob
 from app.models.saas import Organization, User
 from app.services.ingestion_stream import read_spooled_bytes, stream_upload_to_spool
 
@@ -77,7 +78,7 @@ def test_checksum_change_fails_closed(tmp_path, monkeypatch):
         read_spooled_bytes(receipt)
 
 
-def test_stream_upload_route_uses_worker_owned_session(tmp_path, monkeypatch):
+def _testing_db():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     Base.metadata.create_all(bind=engine)
@@ -95,18 +96,26 @@ def test_stream_upload_route_uses_worker_owned_session(tmp_path, monkeypatch):
             )
         )
         db.commit()
+    return TestingSessionLocal
 
-    monkeypatch.setattr(settings, "CONNECTOR_UPLOAD_DIR", str(tmp_path))
-    monkeypatch.setattr("app.services.connector_ingestion_pipeline.SessionLocal", TestingSessionLocal)
 
+def _override_db_factory(TestingSessionLocal):
     def override_db():
         db = TestingSessionLocal()
         try:
             yield db
         finally:
             db.close()
+    return override_db
 
-    app.dependency_overrides[get_db] = override_db
+
+def test_stream_upload_route_uses_worker_owned_session(tmp_path, monkeypatch):
+    TestingSessionLocal = _testing_db()
+
+    monkeypatch.setattr(settings, "CONNECTOR_UPLOAD_DIR", str(tmp_path))
+    monkeypatch.setattr("app.services.connector_ingestion_pipeline.SessionLocal", TestingSessionLocal)
+
+    app.dependency_overrides[get_db] = _override_db_factory(TestingSessionLocal)
     app.dependency_overrides[require_current_tenant_id] = lambda: "org-test"
     try:
         client = TestClient(app)
@@ -129,3 +138,44 @@ def test_stream_upload_route_uses_worker_owned_session(tmp_path, monkeypatch):
     assert body["upload_receipt"]["streamed"] is True
     assert body["rows_parsed"] == 1
     assert body["evidence_records_created"] == 1
+
+
+def test_ingestion_job_status_receipt_is_tenant_scoped():
+    TestingSessionLocal = _testing_db()
+    with TestingSessionLocal() as db:
+        job = IngestionJob(
+            id="job-visible",
+            tenant_id="org-test",
+            job_type="connector_ingest_object",
+            status="succeeded",
+            output_json={
+                "data_source_id": "source-123",
+                "rows_parsed": 7,
+                "evidence_records_created": 4,
+                "content_sha256": "a" * 64,
+                "object_uri": "s3://must-not-leak/private-object",
+            },
+        )
+        db.add(job)
+        db.commit()
+
+    app.dependency_overrides[get_db] = _override_db_factory(TestingSessionLocal)
+    app.dependency_overrides[require_current_tenant_id] = lambda: "org-test"
+    try:
+        client = TestClient(app)
+        response = client.get("/v1/connectors/jobs/job-visible")
+        assert response.status_code == 200, response.text
+        body = response.json()["job"]
+        assert body["status"] == "succeeded"
+        assert body["data_source_id"] == "source-123"
+        assert body["rows_parsed"] == 7
+        assert body["evidence_records_created"] == 4
+        assert "object_uri" not in body
+        assert "content_sha256" not in body
+
+        app.dependency_overrides[require_current_tenant_id] = lambda: "other-org"
+        hidden = client.get("/v1/connectors/jobs/job-visible")
+        assert hidden.status_code == 404
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+        app.dependency_overrides.pop(require_current_tenant_id, None)
