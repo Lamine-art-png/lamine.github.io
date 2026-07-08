@@ -20,6 +20,7 @@ def test_ai_router_status_exposes_distinct_secret_free_lanes(monkeypatch):
     monkeypatch.setattr(settings, "AI_LOCAL_CF_ACCESS_CLIENT_SECRET", "super-secret")
     monkeypatch.setattr(settings, "AI_EDGE_BASE_URL", "https://local-ai.agroai-pilot.com")
     monkeypatch.setattr(settings, "AI_EDGE_MODEL", "@cf/zai-org/glm-4.7-flash")
+    monkeypatch.setattr(settings, "AI_EDGE_AUTH_TOKEN", "edge-super-secret")
     monkeypatch.setattr(settings, "AI_CHALLENGER_MODEL", "deepseek/deepseek-v4-pro")
     monkeypatch.setattr(settings, "AI_FREE_MODEL", "")
     monkeypatch.setattr(settings, "AI_MODEL_FALLBACKS", "z-ai/glm-5.2")
@@ -38,3 +39,4 @@ def test_ai_router_status_exposes_distinct_secret_free_lanes(monkeypatch):
     assert payload["lanes"]["hosted"]["primary"] == "z-ai/glm-5.2"
     assert "super-secret" not in str(payload)
     assert "client-id" not in str(payload)
+    assert "edge-super-secret" not in str(payload)
