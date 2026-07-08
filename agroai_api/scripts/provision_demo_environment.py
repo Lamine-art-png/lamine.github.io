@@ -10,9 +10,15 @@ Credentials are read only from environment-backed Settings and are never printed
 from __future__ import annotations
 
 import json
+import sys
+from pathlib import Path
 
-from app.db.base import SessionLocal
-from app.services.demo_environment import provision_demo_environment
+# Direct script execution sets sys.path[0] to ``agroai_api/scripts``. Add the
+# service root explicitly so ``from app...`` imports work without PYTHONPATH hacks.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from app.db.base import SessionLocal  # noqa: E402
+from app.services.demo_environment import provision_demo_environment  # noqa: E402
 
 
 def main() -> int:
