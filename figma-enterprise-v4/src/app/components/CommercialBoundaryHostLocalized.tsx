@@ -46,6 +46,9 @@ function unlockCopyKey(detail: CommercialBoundaryDetail) {
 }
 
 function reasonText(detail: CommercialBoundaryDetail, t: Translate) {
+  if (["connectors_v3", "reports", "team", "requests"].includes(String(detail.source || "")) && detail.message?.trim()) {
+    return detail.message.trim();
+  }
   const key = unlockCopyKey(detail);
   if (key) return t(key);
   const feature = capabilityLabel(detail.feature, t);
@@ -61,6 +64,16 @@ function planPrice(id: PlanId, t: Translate) {
   if (plan.customPrice) return t("commercialBoundary.customPrice");
   if (id === "free") return plan.priceAmount || "$0";
   return `${plan.priceAmount || ""}${t("commercialBoundary.perMonth")}`;
+}
+
+function CompactPlanPrice({ id, t }: { id: PlanId; t: Translate }) {
+  const value = planPrice(id, t);
+  const match = value.match(/^(\$[\d,]+)(\/(?:month|mois))$/i);
+  if (!match) return <span className="max-w-full break-words text-right text-[11px] font-semibold leading-4 text-[#2D6A4F]">{value}</span>;
+  return <span className="flex min-w-0 max-w-full flex-wrap items-baseline justify-end gap-x-1 text-[#2D6A4F]">
+    <span className="text-[12px] font-semibold leading-4">{match[1]}</span>
+    <span className="whitespace-nowrap text-[9px] font-semibold leading-4 opacity-80">{match[2]}</span>
+  </span>;
 }
 
 export function openCommercialBoundary(detail: CommercialBoundaryDetail) {
@@ -140,8 +153,8 @@ function CommercialBoundaryDialog({
             <div className="mt-2 text-[11px] text-white/45">{t("commercialBoundary.quotaReset")}</div>
           </div> : null}
         </section>
-        <section className="p-6 md:p-8">
-          <div className="grid gap-4 sm:grid-cols-2"><PlanCard id={currentPlan} label={t("commercialBoundary.currentPlan")} t={t} /><PlanCard id={target} label={t("commercialBoundary.recommended")} highlighted t={t} /></div>
+        <section className="min-w-0 p-6 md:p-8">
+          <div className="grid min-w-0 gap-4 sm:grid-cols-2"><PlanCard id={currentPlan} label={t("commercialBoundary.currentPlan")} t={t} /><PlanCard id={target} label={t("commercialBoundary.recommended")} highlighted t={t} /></div>
           <div className="mt-6 rounded-2xl border border-[#CFE1CB] bg-[#F0F7EE] p-4">
             <div className="text-[12px] font-semibold text-[#10231B]">{t("commercialBoundary.why")}</div>
             <p className="mt-2 text-[12px] leading-6 text-[#4F675B]">{reasonText(detail, t)}</p>
@@ -155,10 +168,10 @@ function CommercialBoundaryDialog({
 
 function PlanCard({ id, label, highlighted = false, t }: { id: PlanId; label: string; highlighted?: boolean; t: Translate }) {
   const plan = PLAN[id];
-  return <article className="rounded-2xl p-4" style={{ background: highlighted ? "#EEF8E8" : "#F6F4EE", border: `1px solid ${highlighted ? "#A7CFAF" : "#D6DDD0"}` }}>
+  return <article className="min-w-0 overflow-hidden rounded-2xl p-4" style={{ background: highlighted ? "#EEF8E8" : "#F6F4EE", border: `1px solid ${highlighted ? "#A7CFAF" : "#D6DDD0"}` }}>
     <div className="text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: highlighted ? "#1F7350" : "#7A877F" }}>{label}</div>
-    <div className="mt-2 flex items-baseline justify-between gap-3"><h3 className="text-[18px] font-semibold text-[#10231B]">{t(plan.nameKey)}</h3><span className="text-right text-[12px] font-semibold text-[#2D6A4F]">{planPrice(id, t)}</span></div>
-    <div className="mt-4 space-y-2">{plan.bullets.map((key) => <div key={key} className="flex gap-2 text-[11px] leading-5 text-[#65736A]"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#2D6A4F]" /><span>{t(key)}</span></div>)}</div>
+    <div className="mt-2 grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-start gap-2"><h3 className="min-w-0 break-words text-[18px] font-semibold leading-6 text-[#10231B]">{t(plan.nameKey)}</h3><CompactPlanPrice id={id} t={t} /></div>
+    <div className="mt-4 space-y-2">{plan.bullets.map((key) => <div key={key} className="flex min-w-0 gap-2 text-[11px] leading-5 text-[#65736A]"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#2D6A4F]" /><span className="min-w-0 break-words">{t(key)}</span></div>)}</div>
   </article>;
 }
 
