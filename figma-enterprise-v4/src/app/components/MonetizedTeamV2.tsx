@@ -23,7 +23,7 @@ export function MonetizedTeamV2() {
       code: "upgrade_required",
       feature: "team.invite",
       recommended_plan: "team",
-      message: "Team turns individual AGRO-AI work into coordinated operations with invitations, roles, shared evidence, and approvals.",
+      message: "Team turns individual AGRO-AI work into coordinated operations with direct invitations, role controls, shared evidence, and approvals. Stay below Team and collaboration keeps spilling into inboxes, side chats, duplicate files, and manual follow-up—exactly where decisions get delayed or lost.",
       source: "team",
     });
   }
