@@ -12,6 +12,7 @@ const operations = read("../src/app/components/Operations.tsx");
 const intelligence = read("../src/app/components/intelligence/IntelligenceView.tsx");
 const globals = read("../src/styles/globals.css");
 const styleEntry = read("../src/styles/index.css");
+const htmlEntry = read("../index.html");
 
 assert.match(shell, /h-\[100dvh\]/, "portal shell must use dynamic viewport height");
 assert.match(shell, /hidden w-\[280px\].*md:flex/s, "desktop sidebar must be hidden on phones");
@@ -45,5 +46,7 @@ assert.match(globals, /@media \(max-width: 767px\)/, "mobile layout baseline mis
 assert.match(globals, /\[data-portal-content\] \[style\*="grid-template-columns"\]/, "legacy fixed grids need a mobile fallback");
 assert.match(globals, /overflow-x: hidden/, "global horizontal overflow guard missing");
 assert.match(styleEntry, /@import '\.\/globals\.css';/, "production stylesheet must load the mobile baseline");
+assert.match(htmlEntry, /viewport-fit=cover/, "iPhone safe-area viewport support missing");
+assert.match(htmlEntry, /interactive-widget=resizes-content/, "mobile keyboard must resize the content viewport");
 
 console.log("Mobile portal responsive contract passed.");
