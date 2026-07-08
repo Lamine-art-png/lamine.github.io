@@ -237,6 +237,12 @@ class AIGateway:
             headers["X-Title"] = "AGRO-AI Enterprise Portal"
         return headers
 
+    def _ollama_headers(self) -> dict[str, str]:
+        if not _is_edge_ollama_compat_base(self.base_url):
+            return {}
+        token = (getattr(settings, "AI_EDGE_AUTH_TOKEN", "") or "").strip()
+        return {"Authorization": f"Bearer {token}"} if token else {}
+
     @staticmethod
     def _message_content(body: dict[str, Any]) -> str:
         message = body["choices"][0].get("message") or {}
@@ -301,7 +307,11 @@ class AIGateway:
         deep = any(term in question.lower() for term in ("report","analysis","pdf","document","packet","plan","diagnose","detailed","explain"))
         payload = {"model":selected,"messages":messages,"stream":False,"think":False,"keep_alive":"45m","options":{"temperature":min(float(temperature or 0.18),0.35),"num_predict":max(200,min(int(max_tokens or (1800 if deep else 1200)),2800)),"num_ctx":8192 if deep else 6144,"top_p":0.9}}
         async with httpx.AsyncClient(timeout=max(12,min(int(timeout_seconds or (75 if deep else 35)),90))) as client:
-            response = await client.post(f"{self.base_url}/api/chat", json=payload)
+            response = await client.post(
+                f"{self.base_url}/api/chat",
+                headers=self._ollama_headers(),
+                json=payload,
+            )
             response.raise_for_status()
             body = response.json()
         content = clean_model_text(((body.get("message") or {}).get("content") or body.get("response") or "") if isinstance(body, dict) else "")
