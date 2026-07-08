@@ -2,35 +2,63 @@
 
 ## Purpose
 
-Run Ask AGRO-AI with one stable customer-facing API while routing work across:
+Run Ask AGRO-AI behind one stable customer-facing API while keeping four inference lanes explicit and truthful:
 
-- local Ollama fallback/fast lane
-- primary hosted frontier lane
-- hosted challenger lane
-- optional zero-price hosted test lane
+- **Hosted frontier**: OpenRouter primary / challenger / fast models
+- **Always-on edge**: Cloudflare Workers AI Ollama-compatible origin
+- **Actual local**: Mac-hosted Ollama through a distinct Cloudflare Tunnel hostname
+- **Optional zero-price hosted test**: a time-bounded free OpenRouter route
 
-The working public local origin remains `https://local-ai.agroai-pilot.com`.
+## Production topology truth
+
+These origins are **not the same thing**:
+
+```text
+https://local-ai.agroai-pilot.com
+    -> Cloudflare Worker `agroai-local-ai-origin`
+    -> Workers AI model `@cf/zai-org/glm-4.7-flash`
+
+https://ollama.agroai-pilot.com
+    -> named Cloudflare Tunnel `agroai-local-ai`
+    -> Mac localhost:11434
+    -> actual Ollama model `qwen3.5:4b`
+```
+
+Do not point `AI_LOCAL_BASE_URL` at `local-ai.agroai-pilot.com`. That hostname is the edge Worker, not the Mac.
 
 ## Recommended Render environment
 
 ```text
 AI_PROVIDER=ollama
+
+# Backwards-compatible structured / translation gateway. This is EDGE, not Mac Ollama.
 AI_BASE_URL=https://local-ai.agroai-pilot.com
+
+# Explicit always-on edge lane.
+AI_EDGE_BASE_URL=https://local-ai.agroai-pilot.com
+AI_EDGE_MODEL=@cf/zai-org/glm-4.7-flash
+AI_EDGE_TIMEOUT_SECONDS=45
+
+# Explicit real Mac Ollama lane. Add this only after the tunnel hostname is live.
+AI_LOCAL_BASE_URL=https://ollama.agroai-pilot.com
 AI_LOCAL_MODEL=qwen3.5:4b
-AI_ROUTING_MODE=hybrid
-AI_MODEL_TEST_COMMANDS_ENABLED=true
-
-AI_REASONING_MODEL=z-ai/glm-5.2
-AI_REPORT_MODEL=z-ai/glm-5.2
-AI_FAST_MODEL=qwen/qwen3.5-flash-02-23
-AI_CHALLENGER_MODEL=deepseek/deepseek-v4-pro
-AI_FREE_MODEL=tencent/hy3:free
-AI_MODEL_FALLBACKS=z-ai/glm-5.2,deepseek/deepseek-v4-pro,tencent/hy3:free,qwen/qwen3.5-flash-02-23,z-ai/glm-5-turbo,z-ai/glm-4.5-air
-
 AI_LOCAL_NUM_CTX=6144
 AI_LOCAL_MAX_TOKENS=1200
 AI_LOCAL_TIMEOUT_SECONDS=90
 AI_LOCAL_THINKING=false
+
+# Hosted frontier / challenger lanes.
+AI_REASONING_MODEL=z-ai/glm-5.2
+AI_REPORT_MODEL=z-ai/glm-5.2
+AI_FAST_MODEL=qwen/qwen3.5-flash-02-23
+AI_CHALLENGER_MODEL=deepseek/deepseek-v4-pro
+
+# Optional, volatile free test lane. Revalidate before each rollout.
+AI_FREE_MODEL=tencent/hy3:free
+AI_MODEL_FALLBACKS=z-ai/glm-5.2,deepseek/deepseek-v4-pro,tencent/hy3:free,qwen/qwen3.5-flash-02-23,z-ai/glm-5-turbo,z-ai/glm-4.5-air
+
+AI_ROUTING_MODE=hybrid
+AI_MODEL_TEST_COMMANDS_ENABLED=true
 AI_TIMEOUT_SECONDS=60
 ```
 
@@ -42,11 +70,11 @@ OPENROUTER_API_KEY=<secret>
 
 Do not commit the key.
 
-`AI_FREE_MODEL` is intentionally environment-controlled because zero-price hosted routes can disappear or expire. Revalidate the provider catalog before relying on it.
+`AI_FREE_MODEL` is intentionally environment-controlled because zero-price hosted routes can expire or disappear.
 
 ## Local Mac preparation
 
-Keep the current model installed during the rollout. Pull the new local candidate alongside it:
+Keep the current model installed during rollout. Pull the new candidate alongside it:
 
 ```bash
 ollama pull qwen3.5:4b
@@ -67,13 +95,44 @@ curl -s http://127.0.0.1:11434/api/chat \
   }'
 ```
 
-Public-origin smoke:
+## Cloudflare: preserve edge, add a distinct real-Ollama hostname
+
+Do **not** delete or repoint the existing Worker route for `local-ai.agroai-pilot.com`.
+
+Reuse the existing named tunnel `agroai-local-ai` for the Mac and create a separate hostname:
 
 ```bash
-curl -s https://local-ai.agroai-pilot.com/api/tags
+cloudflared tunnel route dns agroai-local-ai ollama.agroai-pilot.com
 ```
 
-Do not change Cloudflare DNS or the named tunnel for this rollout while the existing origin is healthy.
+The tunnel ingress must send that hostname to Ollama:
+
+```yaml
+ingress:
+  - hostname: ollama.agroai-pilot.com
+    service: http://127.0.0.1:11434
+  - service: http_status:404
+```
+
+Then run the tunnel from its existing config. When installing it as a system service, remember: the service removes the need to keep a Terminal window open, but the Mac itself must still be powered on and connected.
+
+Public real-Ollama smoke after the hostname is active:
+
+```bash
+curl -s https://ollama.agroai-pilot.com/api/tags
+```
+
+Edge health smoke remains separate:
+
+```bash
+curl -s https://local-ai.agroai-pilot.com/health
+```
+
+Expected edge identity:
+
+```json
+{"status":"ok","provider":"cloudflare-workers-ai","model":"@cf/zai-org/glm-4.7-flash"}
+```
 
 ## Portal tests
 
@@ -81,29 +140,49 @@ With `AI_MODEL_TEST_COMMANDS_ENABLED=true`, ask the same question with each pref
 
 ```text
 /local What should I do with my data?
+/edge What should I do with my data?
 /glm What should I do with my data?
 /deepseek What should I do with my data?
 /free What should I do with my data?
 /auto What should I do with my data?
 ```
 
-Forced routes are isolated: they do not silently switch to a different model.
+Forced routes are isolated. They do not silently switch to a different model.
 
 ## Normal hybrid behavior
 
-- quick/fast profile: local first, remote fallback
-- standard reasoning: remote first, local fallback
-- reports: remote first, local fallback
-- deep analysis: remote first, local fallback
+- quick/fast profile: edge -> actual local -> hosted remote
+- standard reasoning: hosted remote -> edge -> actual local
+- reports: hosted remote -> edge -> actual local
+- deep analysis: hosted remote -> edge -> actual local
+
+A 401/402/403 from the hosted account fails fast instead of wasting latency retrying every hosted model; the router then proceeds to edge/local fallbacks.
+
+## Runtime verification
+
+Check:
+
+```text
+GET /v1/runtime/ai-status
+```
+
+The runtime must show distinct hosted, edge, and local lane configuration. Never accept a status payload that calls `local-ai.agroai-pilot.com` a Mac Ollama model.
 
 ## Rollback
 
-The code rollout is environment-driven. Immediate safe rollback:
+Fast rollback that keeps the always-on edge lane:
 
 ```text
-AI_LOCAL_MODEL=qwen3:1.7b
-AI_ROUTING_MODE=local_only
+AI_ROUTING_MODE=edge_only
 AI_MODEL_TEST_COMMANDS_ENABLED=false
 ```
 
-No model deletion, DNS change, or tunnel replacement is required.
+To return to the old Mac model without deleting `qwen3.5:4b`:
+
+```text
+AI_LOCAL_MODEL=qwen3:1.7b
+AI_ROUTING_MODE=local_first
+AI_MODEL_TEST_COMMANDS_ENABLED=false
+```
+
+No model deletion, Worker-route deletion, or tunnel replacement is required.
