@@ -97,7 +97,7 @@ def test_source_library_lists_original_upload_and_linked_evidence():
         )
         db.commit()
 
-        response = list_source_library(tenant_id="org-source-test", db=db)
+        response = list_source_library(workspace_id=None, tenant_id="org-source-test", db=db)
         item = response["sources"][0]
         assert item["filename"] == "meter-readings.csv"
         assert item["evidence_count"] == 1
