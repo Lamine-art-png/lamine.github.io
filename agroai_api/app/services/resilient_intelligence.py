@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from typing import Iterable
@@ -49,9 +50,9 @@ def _openrouter_models(profile: str) -> list[str]:
     ]
     primary = report if profile == "report" else fast if profile == "fast" else reasoning
 
-    # A zero-price route must be tried before paid routes after the primary runtime
-    # has already failed. The previous implementation stopped the whole hosted lane
-    # on HTTP 402 and therefore never reached AI_FREE_MODEL.
+    # A zero-price route must be tried before paid routes during recovery. The
+    # previous implementation stopped the whole hosted lane on HTTP 402 and
+    # therefore never reached AI_FREE_MODEL.
     return _dedupe([
         free,
         primary,
@@ -206,40 +207,64 @@ async def run_resilient_intelligence(
     messages: list[dict[str, str]],
     preferred_language: str | None,
 ) -> LiveResult:
-    """Run the normal router, then recover through independent provider paths.
+    """Race independent edge and hosted recovery paths, then use real local Ollama.
 
-    This is intentionally provider-independent. It protects production from a
-    wrong AI_BASE_URL/AI_PROVIDER pairing, an OpenRouter 402 that previously
-    skipped free routes, and a missing AI_EDGE_BASE_URL on a Render service.
+    This deliberately does not call the normal router first. The normal router is
+    exactly the path that returned `model_status=unavailable` in production, and
+    repeating it would double provider timeouts before recovery even starts.
     """
     runtime = LiveIntelligence()
-    first = await runtime.run(task, question, messages, preferred_language)
-    if first.status == "ok" and first.content.strip():
-        return first
-
     language = resolve_language(preferred_language, question)
     profile = runtime.profile(task, question)
 
-    # First independent recovery lane: always-on AGRO-AI edge origin. This path
-    # uses the known production hostname even when Render missed AI_EDGE_BASE_URL.
-    edge = await _run_edge(messages=messages, profile=profile)
-    if edge:
-        answer, model = edge
-        if language_matches_target(answer, language.response_code):
-            return LiveResult("ok", answer, "cloudflare_workers_ai", model, language.response_code, profile)
+    async def edge_lane() -> tuple[str, str, str] | None:
+        result = await _run_edge(messages=messages, profile=profile)
+        return (result[0], result[1], "cloudflare_workers_ai") if result else None
 
-    # Second independent recovery lane: OpenRouter with a free route attempted
-    # first, so an unfunded account can still use AI_FREE_MODEL when available.
-    hosted = await _run_openrouter(messages=messages, profile=profile)
-    if hosted:
-        answer, model = hosted
-        if language_matches_target(answer, language.response_code):
-            return LiveResult("ok", answer, "openrouter", model, language.response_code, profile)
+    async def hosted_lane() -> tuple[str, str, str] | None:
+        result = await _run_openrouter(messages=messages, profile=profile)
+        return (result[0], result[1], "openrouter") if result else None
+
+    tasks = [asyncio.create_task(edge_lane()), asyncio.create_task(hosted_lane())]
+    try:
+        for completed in asyncio.as_completed(tasks):
+            lane = await completed
+            if not lane:
+                continue
+            answer, model, provider = lane
+            if language_matches_target(answer, language.response_code):
+                for pending in tasks:
+                    if not pending.done():
+                        pending.cancel()
+                return LiveResult("ok", answer, provider, model, language.response_code, profile)
+    finally:
+        for pending in tasks:
+            if not pending.done():
+                pending.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Third lane: actual local Ollama, only when a real local origin is configured
+    # and, for a public hostname, Cloudflare Access credentials are present.
+    local_model = runtime.ollama_model()
+    if local_model:
+        local = await runtime.run_local(local_model, messages, profile)
+        if local:
+            answer, model = local
+            if language_matches_target(answer, language.response_code):
+                return LiveResult("ok", answer, "ollama", model, language.response_code, profile)
 
     logger.error(
-        "ai_resilience exhausted first_status=%s first_provider=%s first_model=%s",
-        first.status,
-        first.provider,
-        first.model,
+        "ai_resilience exhausted edge_configured=%s hosted_key_present=%s local_configured=%s",
+        True,
+        bool(_openrouter_key()),
+        bool(local_model),
     )
-    return first
+    return LiveResult(
+        "unavailable",
+        "",
+        "resilient_runtime",
+        None,
+        language.response_code,
+        profile,
+        "Independent edge, hosted, and local recovery lanes did not complete the request.",
+    )
