@@ -33,7 +33,21 @@ function capabilityLabel(feature: string | undefined, t: Translate) {
   return t(CAPABILITY_KEY[feature] || "commercialBoundary.restrictedCapability");
 }
 
-function reasonText(detail: CommercialBoundaryDetail, t: Translate) {
+function unlockCopyKey(detail: CommercialBoundaryDetail) {
+  if (isCommercialQuota(detail)) return "commercialBoundary.unlock.quota";
+  if (["reports.generate", "reports.pdf_export", "reports.email_delivery"].includes(String(detail.feature || ""))) return "commercialBoundary.unlock.reports";
+  if (detail.feature === "connectors.custom_api") return "commercialBoundary.unlock.connectorsCustomApi";
+  if (detail.feature === "connectors.custom_integration") return "commercialBoundary.unlock.connectorsCustomIntegration";
+  if (["connectors.live", "connectors.oauth_documents"].includes(String(detail.feature || ""))) return "commercialBoundary.unlock.connectorsLive";
+  if (detail.feature === "team.invite") return "commercialBoundary.unlock.team";
+  if (detail.feature === "admin.requests") return "commercialBoundary.unlock.requests";
+  if (detail.feature === "intelligence.deep_analysis") return "commercialBoundary.unlock.deepAnalysis";
+  return "";
+}
+
+function conversionText(detail: CommercialBoundaryDetail, t: Translate) {
+  const key = unlockCopyKey(detail);
+  if (key) return t(key);
   const feature = capabilityLabel(detail.feature, t);
   const metric = detail.metric ? metricLabel(detail.metric, t) : "";
   if (feature && metric) return formatTranslation(t("commercialBoundary.reasonFeatureMetric"), { feature, metric });
@@ -128,9 +142,9 @@ function CommercialBoundaryDialog({
         </section>
         <section className="p-6 md:p-8">
           <div className="grid gap-4 sm:grid-cols-2"><PlanCard id={currentPlan} label={t("commercialBoundary.currentPlan")} t={t} /><PlanCard id={target} label={t("commercialBoundary.recommended")} highlighted t={t} /></div>
-          <div className="mt-6 rounded-2xl border border-[#D6DDD0] bg-[#F6F4EE] p-4">
+          <div className="mt-6 rounded-2xl border border-[#CFE1CB] bg-[#F0F7EE] p-4">
             <div className="text-[12px] font-semibold text-[#10231B]">{t("commercialBoundary.why")}</div>
-            <p className="mt-2 text-[12px] leading-6 text-[#65736A]">{reasonText(detail, t)}</p>
+            <p className="mt-2 text-[12px] leading-6 text-[#4F675B]">{conversionText(detail, t)}</p>
           </div>
           <div className="mt-6 flex flex-wrap gap-3"><a href={href} className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#0D2B1E] px-5 text-[13px] font-semibold text-white">{primaryAction}<ArrowRight className="h-4 w-4" /></a><button type="button" onClick={onClose} className="h-11 rounded-xl border border-[#D6DDD0] bg-white px-5 text-[13px] font-semibold text-[#10231B]">{t("commercialBoundary.notNow")}</button></div>
         </section>
@@ -143,18 +157,17 @@ function PlanCard({ id, label, highlighted = false, t }: { id: PlanId; label: st
   const plan = PLAN[id];
   return <article className="rounded-2xl p-4" style={{ background: highlighted ? "#EEF8E8" : "#F6F4EE", border: `1px solid ${highlighted ? "#A7CFAF" : "#D6DDD0"}` }}>
     <div className="text-[10px] font-semibold uppercase tracking-[0.16em]" style={{ color: highlighted ? "#1F7350" : "#7A877F" }}>{label}</div>
-    <div className="mt-2 flex items-baseline justify-between gap-3"><h3 className="text-[18px] font-semibold text-[#10231B]">{t(plan.nameKey)}</h3><span className="text-[12px] font-semibold text-[#2D6A4F]">{planPrice(id, t)}</span></div>
+    <div className="mt-2 flex items-baseline justify-between gap-3"><h3 className="text-[18px] font-semibold text-[#10231B]">{t(plan.nameKey)}</h3><span className="text-right text-[12px] font-semibold text-[#2D6A4F]">{planPrice(id, t)}</span></div>
     <div className="mt-4 space-y-2">{plan.bullets.map((key) => <div key={key} className="flex gap-2 text-[11px] leading-5 text-[#65736A]"><Check className="mt-0.5 h-3.5 w-3.5 shrink-0 text-[#2D6A4F]" /><span>{t(key)}</span></div>)}</div>
   </article>;
 }
 
-// Preserve the deterministic static-literal inventory while these strings are now rendered through core locale keys.
 const COMMERCIAL_BOUNDARY_LITERAL_INVENTORY = [
   { label: "AGRO-AI access" },
   { label: "Usage is enforced on the backend and resets with the commercial period." },
   { label: "Current plan" },
   { label: "Recommended" },
-  { label: "Why you’re seeing this" },
+  { label: "What you unlock" },
   { label: "Not now" },
   { label: "Close upgrade message" },
   { label: "Free" },
