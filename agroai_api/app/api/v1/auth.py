@@ -253,14 +253,39 @@ def request_email_verification(payload: EmailVerificationRequest, db: Session = 
 
 @router.post("/email-verification/confirm")
 def email_verification_confirm(payload: EmailVerificationConfirmRequest, db: Session = Depends(get_db)) -> dict:
+    """Verify the one-time email token and immediately establish a user session.
+
+    Possession of the single-use verification token proves control of the email
+    address. Returning the session in the same request removes the fragile
+    verify-then-login gap and makes activation atomic from the customer's point
+    of view.
+    """
     user = confirm_verification(db, payload.token)
     if not user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification link is invalid or expired")
-    return {
-        "status": "verified",
-        "message": "Your AGRO-AI workspace email has been verified.",
-        "verification": _verification_payload(user),
-    }
+
+    membership = (
+        db.query(OrganizationMembership)
+        .filter(OrganizationMembership.user_id == user.id)
+        .order_by(OrganizationMembership.created_at.asc())
+        .first()
+    )
+    if not membership:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User has no organization membership")
+
+    ensure_evaluation_context(db, membership.organization, _first_workspace(db, membership.organization_id))
+    user.last_login_at = datetime.utcnow()
+    db.commit()
+
+    response = _session_response(user, membership.organization, membership)
+    response.update(
+        {
+            "status": "verified",
+            "message": "Your AGRO-AI workspace email has been verified. You are signed in.",
+            "verification": _verification_payload(user),
+        }
+    )
+    return response
 
 
 @router.get("/me")

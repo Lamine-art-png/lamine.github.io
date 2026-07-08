@@ -99,13 +99,14 @@ function normalizeMe(response: unknown) {
   const data = response && typeof response === "object" ? (response as Record<string, unknown>) : {};
   const currentOrganization = (data.current_organization || null) as Organization | null;
   const organizations = Array.isArray(data.organizations) ? (data.organizations as Organization[]) : currentOrganization ? [currentOrganization] : [];
+  const rawVerification = (data.verification || null) as VerificationState | null;
   return {
     user: (data.user || null) as User | null,
     organizations,
     currentOrganization: currentOrganization || organizations[0] || null,
     currentWorkspace: null as Workspace | null,
     entitlements: ((data.entitlements || {}) as Record<string, unknown>) || {},
-    verification: (data.verification || null) as VerificationState | null,
+    verification: rawVerification?.status === "verified" ? null : rawVerification,
   };
 }
 
@@ -207,10 +208,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return message;
   }, []);
 
-  const confirmVerification = useCallback(async (token: string) => {
-    await apiClient.auth.confirmEmailVerification({ token });
-    setVerification((current) => current ? { ...current, status: "verified", message: "Email verified. Sign in to continue." } : null);
-  }, []);
+  const confirmVerification = useCallback(async (verificationToken: string) => {
+    const response = await apiClient.auth.confirmEmailVerification({ token: verificationToken }) as Record<string, unknown>;
+    const nextToken = getAccessToken(response);
+    const responseVerification = (response.verification || null) as VerificationState | null;
+
+    // Backward-compatible fallback while frontend/backend deployments roll out.
+    // The new backend returns a session token; an older backend still yields a
+    // clear verified state instead of silently dropping the customer.
+    if (!nextToken) {
+      setVerification({
+        email: responseVerification?.email,
+        status: "verified",
+        message: String(response.message || "Email verified. Sign in to continue."),
+      });
+      return;
+    }
+
+    // Establish authenticated state immediately from the atomic verify response.
+    // A secondary /me refresh enriches workspace state but cannot undo successful
+    // verification if another service is briefly unavailable during launch.
+    const normalized = normalizeMe(response);
+    applyToken(nextToken);
+    setUser(normalized.user);
+    setOrganizations(normalized.organizations);
+    setCurrentOrganization(normalized.currentOrganization);
+    setCurrentWorkspace(normalized.currentWorkspace);
+    setEntitlements(normalized.entitlements);
+    setVerification(null);
+
+    await refreshMe().catch(() => null);
+    setVerification(null);
+  }, [applyToken, refreshMe]);
 
   useEffect(() => {
     window.addEventListener("agroai:unauthorized", clearSession);
