@@ -4,6 +4,12 @@ on:
   push:
     branches:
       - feat/hybrid-model-router-v1
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'agroai_api/**'
+      - '.github/workflows/hybrid-router-debug.yml'
 
 permissions:
   contents: read
