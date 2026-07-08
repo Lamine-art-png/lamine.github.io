@@ -12,6 +12,8 @@ type PlanId = "free" | "professional" | "team" | "network" | "enterprise";
 type Plan = { id: PlanId; name: string; public_price_monthly: string; public_price_annual: string; recommended_buyer: string; included_limits?: Record<string, string>; features: string[]; annual_savings_badge?: string | null; is_custom_pricing?: boolean };
 type Copy = (value: string) => string;
 
+const DEMO_BOOKING_URL = "https://agroai-pilot.com/book-a-demo";
+
 const FALLBACK_PLANS: Plan[] = [
   { id: "free", name: "Free", public_price_monthly: "$0/month", public_price_annual: "$0/year", recommended_buyer: "For pilots and small teams testing AGRO-AI.", included_limits: { users: "1 user", workspaces: "1 workspace", uploads: "15 evidence/file imports per month" }, features: ["25 AGRO-AI actions/month", "2 Deep analysis previews/month", "Basic field updates", "Basic readiness view", "Manual and chat file imports within quota"] },
   { id: "professional", name: "Professional", public_price_monthly: "$299/month", public_price_annual: "$2,990/year", recommended_buyer: "For commercial farms, advisors, and operators running field operations.", included_limits: { users: "3 seats included", workspaces: "5 workspaces", uploads: "500 evidence/file imports per month" }, features: ["500 AGRO-AI actions/month", "25 Deep analyses/month", "Report and PDF generation", "Weather and OpenET context", "Standard live connectors"] },
@@ -84,7 +86,7 @@ export function PricingPage() {
     setMessage(""); setBusyPlan(plan.id);
     try {
       if (plan.id === "free") { if (!isAuthenticated) { localStorage.setItem("agroai_selected_plan", "free"); window.location.href = "/?mode=register"; return; } setMessage(tx("Free workspace is already available on your account.")); return; }
-      if (plan.id === "enterprise") { await apiClient.sales.contact({ category: "sales", type: "upgrade", subject: "Enterprise pricing request", message: "Customer requested Enterprise pricing from the pricing page.", source_page: "pricing" }); setMessage(tx("Enterprise request received. Sales follow-up was created.")); return; }
+      if (plan.id === "enterprise") { window.location.assign(DEMO_BOOKING_URL); return; }
       if (!isAuthenticated) { localStorage.setItem("agroai_selected_plan", plan.id); localStorage.setItem("agroai_selected_billing_period", billingPeriod); setMessage(tf("Create an account first, then Stripe checkout will open for {plan}.", { plan: tx(plan.name) })); window.location.href = "/?mode=register"; return; }
       const response = await apiClient.billing.checkout({ plan_id: plan.id, billing_period: billingPeriod } as ProductCheckoutPayload) as Record<string, unknown>;
       if (typeof response.checkout_url === "string" && response.checkout_url) { window.location.assign(response.checkout_url); return; }
