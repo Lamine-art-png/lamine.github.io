@@ -136,7 +136,15 @@ class Settings(BaseSettings):
     AI_REASONING_MODEL: str = ""
     AI_REPORT_MODEL: str = ""
     AI_LOCAL_MODEL: str = ""
-    AI_MODEL_FALLBACKS: str = "z-ai/glm-5.2,z-ai/glm-4.5,qwen/qwen3-max,deepseek/deepseek-r1-0528"
+    AI_CHALLENGER_MODEL: str = "deepseek/deepseek-v4-pro"
+    AI_FREE_MODEL: str = ""
+    AI_MODEL_FALLBACKS: str = "z-ai/glm-5.2,deepseek/deepseek-v4-pro,qwen/qwen3.5-flash-02-23,z-ai/glm-5-turbo,z-ai/glm-4.5-air"
+    AI_ROUTING_MODE: str = "hybrid"
+    AI_MODEL_TEST_COMMANDS_ENABLED: bool = False
+    AI_LOCAL_NUM_CTX: int = 6144
+    AI_LOCAL_MAX_TOKENS: int = 1200
+    AI_LOCAL_TIMEOUT_SECONDS: int = 90
+    AI_LOCAL_THINKING: bool = False
     AI_TIMEOUT_SECONDS: int = 30
     INTELLIGENCE_FRESHNESS_POLICY_JSON: str = ""
 
