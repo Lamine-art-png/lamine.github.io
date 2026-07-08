@@ -24,6 +24,8 @@ type EvidenceItem = {
 
 type SourceItem = {
   id: string;
+  job_id?: string;
+  pending?: boolean;
   filename?: string;
   provider?: string;
   source_type?: string;
@@ -41,6 +43,7 @@ type Summary = {
   evidence_count?: number;
   source_count?: number;
   uploaded_files?: number;
+  processing_count?: number;
   readiness_score?: number;
   readiness_level?: string;
   missing_data?: string[];
@@ -83,7 +86,7 @@ export function Evidence() {
   const rows = arrayFromUnknown<EvidenceItem>(evidence.data, ["records", "evidence", "items", "data"]);
   const sources = arrayFromUnknown<SourceItem>(sourcesState.data, ["sources", "data_sources", "items", "data"]);
   const summary = summaryState.data || {};
-  const sourceById = useMemo(() => new Map(sources.map((source) => [source.id, source])), [sources]);
+  const sourceById = useMemo(() => new Map(sources.filter((source) => !source.pending).map((source) => [source.id, source])), [sources]);
 
   async function refresh() {
     await Promise.all([evidence.refresh(), sourcesState.refresh(), summaryState.refresh()]);
@@ -103,7 +106,7 @@ export function Evidence() {
       let processingPending = false;
 
       for (const file of Array.from(files)) {
-        const result = await apiClient.evidence.upload(file, "manual_csv", workspaceId) as UploadResult;
+        const result = await apiClient.evidence.upload(file, undefined, workspaceId) as UploadResult;
         totalRows += Number(result.rows_parsed || 0);
         totalEvidence += Number(result.evidence_records_created || 0);
         warnings.push(...(result.warnings || []));
@@ -218,9 +221,13 @@ export function Evidence() {
                 <span className="text-[12px]" style={{ color: MUTED }}>{source.rows_parsed || 0} rows</span>
                 <span className="text-[12px]" style={{ color: MUTED }}>{source.evidence_count || 0} evidence</span>
                 <StatusBadge label={source.intelligence_ready ? "Intelligence ready" : (source.processing_status || source.status || "stored")} tone={sourceTone(source)} />
-                <button type="button" onClick={() => window.location.assign(`/sources?source=${encodeURIComponent(source.id)}`)} className="text-[12px] font-semibold" style={{ color: "#16533C" }}>View</button>
+                {source.pending ? (
+                  <span className="text-[12px] font-semibold" style={{ color: MUTED }}>Processing</span>
+                ) : (
+                  <button type="button" onClick={() => window.location.assign(`/sources?source=${encodeURIComponent(source.id)}`)} className="text-[12px] font-semibold" style={{ color: "#16533C" }}>View</button>
+                )}
               </article>
-            )) : <InlineState title="No uploaded source files yet." detail="Upload a file above or use Connectors. The original source will appear here after storage and ingestion." />}
+            )) : <InlineState title="No uploaded source files yet." detail="Upload a file above or use Connectors. The original source will appear here after secure storage." />}
           </div>
         </section>
 
