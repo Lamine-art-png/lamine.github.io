@@ -46,8 +46,8 @@ function unlockCopyKey(detail: CommercialBoundaryDetail) {
 }
 
 function reasonText(detail: CommercialBoundaryDetail, t: Translate) {
-  if (["connectors_v3", "reports", "team", "requests"].includes(String(detail.source || "")) && detail.message?.trim()) {
-    return detail.message.trim();
+  if (["connectors_v3", "reports", "team", "requests"].includes(String(detail.source || "")) && detail.conversion_context?.trim()) {
+    return detail.conversion_context.trim();
   }
   const key = unlockCopyKey(detail);
   if (key) return t(key);
