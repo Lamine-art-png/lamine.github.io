@@ -16,6 +16,7 @@ const layout = read(appRoot, "components", "MainLayout.tsx");
 const pricing = read(appRoot, "components", "PricingPage.tsx");
 const evidence = read(appRoot, "components", "Evidence.tsx");
 const integrations = read(appRoot, "components", "IntegrationsV3.tsx");
+const statusBar = read(appRoot, "components", "OperatingStatusBar.tsx");
 const boundary = read(appRoot, "components", "CommercialBoundaryHostLocalized.tsx");
 const canonical = read(repoRoot, "cloudflare", "edge-gateway", "src", "i18n-canonical-source.ts");
 
@@ -31,6 +32,8 @@ for (const key of [
   "dynamic.operations.operatingStatus",
   "dynamic.evidence.store",
   "dynamic.overview.commandCenter",
+  "dynamic.statusbar.summaryTemplate",
+  "dynamic.statusbar.waterAssuranceTemplate",
   "dynamic.cockpit.exceptionQueue",
   "dynamic.cockpit.providerNeedsAttentionTemplate",
   "dynamic.cockpit.connectorStale",
@@ -75,6 +78,10 @@ assert(integrations.includes('usePortalCopy(["integrations", "shared"], INTEGRAT
 assert(integrations.includes('tf("Unlock {provider}: {description}'), "connector paywall must use translated template");
 assert(integrations.includes("tx(profile.description)"), "connector descriptions must not render raw");
 assert(integrations.includes('tf("Upgrade to {plan}"'), "connector upgrade CTA must use translated template");
+
+assert(statusBar.includes('usePortalCopy(["statusbar", "shared"])'), "operating status bar must hydrate its dynamic copy");
+assert(statusBar.includes('tf("{workspace} · {field} · {telemetry} telemetry records · {connectors} connectors need setup"'), "status summary must use a translated template");
+assert(statusBar.includes('tf("Water {water}% · Assurance {assurance}%"'), "water/assurance summary must use a translated template");
 
 assert(!boundary.includes("return detail.conversion_context.trim();"), "paywall conversion context must never return raw English");
 assert(boundary.includes("return tx(detail.conversion_context.trim());"), "paywall conversion context must pass through locale copy");
