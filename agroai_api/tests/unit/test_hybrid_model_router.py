@@ -21,6 +21,7 @@ def _configure(monkeypatch, **values):
         "AI_LOCAL_CF_ACCESS_CLIENT_SECRET": "test-client-secret",
         "AI_EDGE_BASE_URL": "https://local-ai.agroai-pilot.com",
         "AI_EDGE_MODEL": "@cf/zai-org/glm-4.7-flash",
+        "AI_EDGE_AUTH_TOKEN": "test-edge-token",
         "AI_CHALLENGER_MODEL": "deepseek/deepseek-v4-pro",
         "AI_FREE_MODEL": "tencent/hy3:free",
         "AI_MODEL_FALLBACKS": "z-ai/glm-5.2,deepseek/deepseek-v4-pro,tencent/hy3:free",
@@ -215,6 +216,53 @@ def test_cloudflare_access_headers_are_attached_to_public_local_requests(monkeyp
         "CF-Access-Client-Id": "test-client-id",
         "CF-Access-Client-Secret": "test-client-secret",
     }
+
+
+def test_edge_bearer_header_is_attached_to_workers_ai_requests(monkeypatch):
+    _configure(monkeypatch)
+    runtime = LiveIntelligence()
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {
+                "provider": "cloudflare-workers-ai",
+                "model": "@cf/zai-org/glm-4.7-flash",
+                "message": {"content": '{"answer":"secured edge answer"}'},
+            }
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            self.headers = None
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def post(self, *args, **kwargs):
+            self.headers = kwargs.get("headers")
+            return FakeResponse()
+
+    fake_client = FakeClient()
+    monkeypatch.setattr(
+        "app.services.live_intelligence.httpx.AsyncClient",
+        lambda *args, **kwargs: fake_client,
+    )
+
+    result = asyncio.run(
+        runtime.run_edge(
+            ("https://local-ai.agroai-pilot.com", "@cf/zai-org/glm-4.7-flash"),
+            [{"role": "user", "content": "test"}],
+            "fast",
+        )
+    )
+
+    assert result == ("secured edge answer", "@cf/zai-org/glm-4.7-flash")
+    assert fake_client.headers == {"Authorization": "Bearer test-edge-token"}
 
 
 def test_edge_wrapper_json_is_unwrapped_before_customer_response():
