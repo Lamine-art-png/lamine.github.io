@@ -40,13 +40,31 @@ jobs:
         with:
           node-version: '22'
       - run: npx --yes wrangler@4.107.0 deploy --config wrangler.local-ai.toml
-      - name: Smoke Ollama compatibility origin
+      - name: Smoke edge health
         run: |
           set -euo pipefail
           for attempt in $(seq 1 30); do
-            if curl -fsS https://local-ai.agroai-pilot.com/health | jq -e '.status == "ok"' >/dev/null; then
-              exit 0
+            if curl -fsS --max-time 10 https://local-ai.agroai-pilot.com/health \
+              | jq -e '.status == "ok" and .provider == "cloudflare-workers-ai"' >/dev/null; then
+              break
+            fi
+            if [ "$attempt" -eq 30 ]; then
+              echo "Edge health never became ready"
+              exit 1
             fi
             sleep 5
           done
-          exit 1
+      - name: Smoke real edge inference
+        run: |
+          set -euo pipefail
+          response="$(curl -fsS --max-time 40 \
+            -H 'Content-Type: application/json' \
+            -d '{"model":"edge-smoke","messages":[{"role":"user","content":"Reply exactly: EDGE_OK"}],"stream":false,"options":{"num_predict":30}}' \
+            https://local-ai.agroai-pilot.com/api/chat)"
+          echo "$response" | jq -e '
+            .done == true and
+            .provider == "cloudflare-workers-ai" and
+            (.model | type == "string") and
+            ((.message.content // .response // "") | length > 0)
+          ' >/dev/null
+          echo "$response" | jq '{provider, model, fallback_used, latency_ms, done}'
