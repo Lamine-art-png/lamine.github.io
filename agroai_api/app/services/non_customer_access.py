@@ -109,6 +109,26 @@ def _profile_override_rows(db: Session, org_id: str) -> dict[str, EntitlementOve
     return {row.feature_key: row for row in rows}
 
 
+def _lock_organization_for_provisioning(db: Session, org: Organization) -> Organization:
+    """Serialize profile grants for one organization inside the caller transaction.
+
+    PostgreSQL turns this into ``SELECT ... FOR UPDATE``. SQLite ignores the lock
+    clause, which is acceptable for the single-process unit-test database. The
+    caller owns transaction completion, so the lock is held through the override
+    upsert and released on commit/rollback.
+    """
+
+    locked = (
+        db.query(Organization)
+        .filter(Organization.id == org.id)
+        .with_for_update()
+        .one_or_none()
+    )
+    if locked is None:
+        raise ValueError("Organization not found during access provisioning")
+    return locked
+
+
 def _snapshot_original_state(org: Organization, metadata: dict[str, Any]) -> None:
     if isinstance(metadata.get("pre_access_profile_state"), dict):
         return
@@ -134,6 +154,7 @@ def provision_non_customer_access(
     if normalized_profile not in FULL_ACCESS_PROFILES:
         raise ValueError(f"Unsupported non-customer access profile: {profile!r}")
 
+    org = _lock_organization_for_provisioning(db, org)
     metadata = dict(org.commercial_metadata_json or {})
     before = (
         org.plan,
