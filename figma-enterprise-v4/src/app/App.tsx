@@ -10,6 +10,8 @@ import { applyLocale, t } from "./i18n";
 
 type PortalRuntimeBoundaryState = { error: string };
 
+const MAX_LOCALE_TRANSITION_COVER_MS = 12_000;
+
 function PortalBootFallback({ reason }: { reason?: string }) {
   return (
     <div className="min-h-screen bg-[#F6F4EE] px-6 py-12 text-[#10231B]">
@@ -65,10 +67,25 @@ function AuthenticatedApp() {
   const { locale, catalogLoading } = useLocale();
   const [router, setRouter] = useState<any>(null);
   const [routerError, setRouterError] = useState("");
+  const [localeCoverVisible, setLocaleCoverVisible] = useState(false);
 
   useEffect(() => {
     applyLocale(locale);
   }, [locale]);
+
+  useEffect(() => {
+    if (!catalogLoading) {
+      setLocaleCoverVisible(false);
+      return;
+    }
+    setLocaleCoverVisible(true);
+    const timer = window.setTimeout(() => {
+      // Translation is never allowed to make the authenticated product look gone.
+      // Hydration may continue in the background and can still roll back safely.
+      setLocaleCoverVisible(false);
+    }, MAX_LOCALE_TRANSITION_COVER_MS);
+    return () => window.clearTimeout(timer);
+  }, [catalogLoading, locale]);
 
   useEffect(() => {
     if (!isAuthenticated) { setRouter(null); setRouterError(""); return; }
@@ -88,7 +105,7 @@ function AuthenticatedApp() {
   return (
     <div className="relative min-h-screen">
       <RouterProvider router={router} />
-      {catalogLoading ? <LocaleTransitionCover /> : null}
+      {localeCoverVisible ? <LocaleTransitionCover /> : null}
     </div>
   );
 }
