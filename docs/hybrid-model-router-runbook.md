@@ -16,6 +16,7 @@ These origins are **not the same thing**:
 ```text
 https://local-ai.agroai-pilot.com
     -> Cloudflare Worker `agroai-local-ai-origin`
+    -> optional ORIGIN_TOKEN bearer gate
     -> Workers AI model `@cf/zai-org/glm-4.7-flash`
 
 https://ollama.agroai-pilot.com
@@ -40,6 +41,7 @@ AI_BASE_URL=https://local-ai.agroai-pilot.com
 # Explicit always-on edge lane.
 AI_EDGE_BASE_URL=https://local-ai.agroai-pilot.com
 AI_EDGE_MODEL=@cf/zai-org/glm-4.7-flash
+AI_EDGE_AUTH_TOKEN=<same-random-secret-as-worker-ORIGIN_TOKEN>
 AI_EDGE_TIMEOUT_SECONDS=45
 
 # Explicit real Mac Ollama lane. Add only after tunnel + Access are live.
@@ -73,7 +75,7 @@ Also configure a valid hosted-provider secret:
 OPENROUTER_API_KEY=<secret>
 ```
 
-Do not commit any key, Access client secret, or provider credential.
+Do not commit any key, Access client secret, edge token, or provider credential.
 
 `AI_FREE_MODEL` is intentionally environment-controlled because zero-price hosted routes can expire or disappear.
 
@@ -100,9 +102,58 @@ curl -s http://127.0.0.1:11434/api/chat \
   }'
 ```
 
-## Cloudflare: preserve edge, add a distinct secured real-Ollama hostname
+## Cloudflare edge origin: add bearer auth without cutting traffic
 
 Do **not** delete or repoint the existing Worker route for `local-ai.agroai-pilot.com`.
+
+The Worker accepts an optional secret named:
+
+```text
+ORIGIN_TOKEN
+```
+
+When that secret is absent, the route remains backward-compatible. When it is present, POST `/api/chat` requires:
+
+```text
+Authorization: Bearer <ORIGIN_TOKEN>
+```
+
+The health route remains public.
+
+### Safe rollout order
+
+1. Deploy backend code that knows how to send `AI_EDGE_AUTH_TOKEN`.
+2. Generate one high-entropy random secret.
+3. Put that value in Render as `AI_EDGE_AUTH_TOKEN` and redeploy the API.
+4. Put the identical value in the Worker as `ORIGIN_TOKEN`.
+5. Verify `/edge`, structured AI calls, and UI translation.
+
+Do not set the Worker secret first; old backend instances would receive 401 until they know the token.
+
+Wrangler example:
+
+```bash
+npx wrangler secret put ORIGIN_TOKEN --config wrangler.local-ai.toml
+```
+
+Then paste the same value already stored in Render as `AI_EDGE_AUTH_TOKEN`.
+
+Authenticated edge smoke:
+
+```bash
+curl -s https://local-ai.agroai-pilot.com/api/chat \
+  -H "Authorization: Bearer $AI_EDGE_AUTH_TOKEN" \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model":"@cf/zai-org/glm-4.7-flash",
+    "messages":[{"role":"user","content":"Reply exactly: EDGE ONLINE"}],
+    "stream":false
+  }'
+```
+
+A POST without the bearer header should return 401 after `ORIGIN_TOKEN` is configured.
+
+## Cloudflare: add a distinct secured real-Ollama hostname
 
 Reuse the existing named tunnel `agroai-local-ai` for the Mac and create a separate hostname:
 
@@ -199,15 +250,15 @@ A 401/402/403 from the hosted account fails fast instead of wasting latency retr
 
 ## Runtime verification
 
-Check:
+Check the secret-free lane endpoint:
 
 ```text
-GET /v1/runtime/ai-status
+GET /v1/runtime/ai-router-status
 ```
 
 The model-router status must distinguish hosted, edge, and local lane configuration. Never accept a status payload or trace that calls `local-ai.agroai-pilot.com` a Mac Ollama model.
 
-For a public local hostname, the local lane is considered configured only when the Access service-token credentials are present.
+For a public local hostname, the local lane is considered configured only when the Access service-token credentials are present. The endpoint reports booleans only; it never returns the service-token values or edge bearer secret.
 
 ## Rollback
 
@@ -225,5 +276,7 @@ AI_LOCAL_MODEL=qwen3:1.7b
 AI_ROUTING_MODE=local_first
 AI_MODEL_TEST_COMMANDS_ENABLED=false
 ```
+
+If edge bearer auth causes a rollout issue, remove `ORIGIN_TOKEN` from the Worker first so older API instances can talk to it again, then clear `AI_EDGE_AUTH_TOKEN` from Render.
 
 No model deletion, Worker-route deletion, or tunnel replacement is required.
