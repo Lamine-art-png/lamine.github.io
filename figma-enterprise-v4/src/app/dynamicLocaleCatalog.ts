@@ -6,11 +6,12 @@ import { fullEnglishUiSource } from "./portalLiteralCatalog";
 
 const CACHE_PREFIX = "agroai_ui_catalog_v6:";
 const LEGACY_CACHE_PREFIX = "agroai_ui_catalog_v5:";
-const RETRY_COOLDOWN_MS = 1_500;
-const REQUEST_CHUNK_SIZE = 32;
-const REQUEST_PARALLELISM = 3;
-const MAX_HYDRATION_PASSES = 3;
-const MAX_CHUNK_ATTEMPTS = 3;
+const RETRY_COOLDOWN_MS = 800;
+const REQUEST_CHUNK_MAX_KEYS = 12;
+const REQUEST_CHUNK_MAX_CHARS = 1_600;
+const REQUEST_PARALLELISM = 2;
+const MAX_HYDRATION_PASSES = 4;
+const MAX_CHUNK_ATTEMPTS = 2;
 const INFLIGHT = new Map<string, Promise<boolean>>();
 const RETRY_AFTER = new Map<string, number>();
 
@@ -188,20 +189,6 @@ function writeCached(locale: string, source: Record<string, string>, catalog: Re
   }
 }
 
-function clearCachedLocale(locale: string) {
-  try {
-    const prefixes = [`${CACHE_PREFIX}${locale}:`, `${LEGACY_CACHE_PREFIX}${locale}:`];
-    const keys: string[] = [];
-    for (let index = 0; index < localStorage.length; index += 1) {
-      const key = localStorage.key(index);
-      if (key && prefixes.some((prefix) => key.startsWith(prefix))) keys.push(key);
-    }
-    keys.forEach((key) => localStorage.removeItem(key));
-  } catch {
-    // Cache invalidation is best-effort only.
-  }
-}
-
 export function hasCompleteLocaleCatalog(locale: string): boolean {
   const effectiveLocale = normalizeLocale(locale);
   const catalog = TRANSLATIONS[effectiveLocale];
@@ -227,17 +214,29 @@ export function primeLocaleCatalogFromCache(locale: string, scope: CatalogScope 
   }
   if (catalogCoversSource(TRANSLATIONS[effectiveLocale], source)) return true;
   const reusable = cachedReusable(effectiveLocale, source);
-  if (!catalogCoversSource(reusable, source)) return false;
-  installLocaleCatalog(effectiveLocale, source, reusable, false);
-  return true;
+  if (Object.keys(reusable).length) installLocaleCatalog(effectiveLocale, source, reusable, false);
+  return catalogCoversSource(reusable, source);
 }
 
 function sourceChunks(source: Record<string, string>): Record<string, string>[] {
-  const entries = Object.entries(source);
   const chunks: Record<string, string>[] = [];
-  for (let index = 0; index < entries.length; index += REQUEST_CHUNK_SIZE) {
-    chunks.push(Object.fromEntries(entries.slice(index, index + REQUEST_CHUNK_SIZE)));
+  let current: Array<[string, string]> = [];
+  let currentChars = 0;
+
+  for (const entry of Object.entries(source)) {
+    const estimatedChars = entry[1].length + 40;
+    const keyLimitReached = current.length >= REQUEST_CHUNK_MAX_KEYS;
+    const charLimitReached = current.length > 0 && currentChars + estimatedChars > REQUEST_CHUNK_MAX_CHARS;
+    if (keyLimitReached || charLimitReached) {
+      chunks.push(Object.fromEntries(current));
+      current = [];
+      currentChars = 0;
+    }
+    current.push(entry);
+    currentChars += estimatedChars;
   }
+
+  if (current.length) chunks.push(Object.fromEntries(current));
   return chunks;
 }
 
@@ -267,7 +266,7 @@ async function requestChunk(effectiveLocale: string, chunk: Record<string, strin
       return response.catalog;
     } catch (error) {
       lastError = error;
-      if (attempt < MAX_CHUNK_ATTEMPTS) await delay(250 * (2 ** (attempt - 1)));
+      if (attempt < MAX_CHUNK_ATTEMPTS) await delay(200 * attempt);
     }
   }
   throw lastError;
@@ -275,6 +274,7 @@ async function requestChunk(effectiveLocale: string, chunk: Record<string, strin
 
 async function loadLocaleCatalog(effectiveLocale: string, source: Record<string, string>, persistFinal: boolean): Promise<boolean> {
   const merged = reusableCatalog(effectiveLocale, source);
+  if (Object.keys(merged).length) installLocaleCatalog(effectiveLocale, source, merged, false);
   if (catalogCoversSource(merged, source)) {
     installLocaleCatalog(effectiveLocale, source, merged, persistFinal);
     return true;
@@ -293,9 +293,9 @@ async function loadLocaleCatalog(effectiveLocale: string, source: Record<string,
         if (result.status === "fulfilled") {
           const { chunk, catalog } = result.value;
           Object.assign(merged, catalog);
-          // Keep progressive translations visible in memory, but persist only
-          // after a complete full-scope catalog passes validation.
-          installLocaleCatalog(effectiveLocale, chunk, catalog, false);
+          // Every validated chunk is source-fingerprinted and durable. A later
+          // provider failure must never erase already completed translation work.
+          installLocaleCatalog(effectiveLocale, chunk, catalog, true);
         } else {
           lastError = result.reason;
         }
@@ -303,7 +303,7 @@ async function loadLocaleCatalog(effectiveLocale: string, source: Record<string,
     }
 
     if (catalogCoversSource(merged, source)) break;
-    if (pass < MAX_HYDRATION_PASSES) await delay(400 * pass);
+    if (pass < MAX_HYDRATION_PASSES) await delay(300 * pass);
   }
 
   if (!catalogCoversSource(merged, source)) {
@@ -341,7 +341,6 @@ export async function ensureLocaleCatalog(locale: string, scope: CatalogScope = 
       return changed;
     })
     .catch((error) => {
-      if (scope === "full") clearCachedLocale(effectiveLocale);
       RETRY_AFTER.set(requestKey, Date.now() + RETRY_COOLDOWN_MS);
       throw error;
     })
