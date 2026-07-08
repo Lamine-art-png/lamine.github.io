@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import AuthContext, get_auth_context
 from app.core.config import settings
-from app.db.base import get_db
+from app.db.base import SessionLocal, get_db
 from app.models.saas import Organization
 from app.services.demo_environment import provision_demo_environment
 from app.services.non_customer_access import (
@@ -46,6 +46,33 @@ def _require_provisioning_token(value: str | None) -> None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     if not value or not secrets.compare_digest(value, expected):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid provisioning token")
+
+
+def _demo_autoprovision_enabled() -> bool:
+    return (
+        str(getattr(settings, "APP_ENV", "") or "").strip().lower() == "demo"
+        and bool(getattr(settings, "DEMO_AUTO_PROVISION", False))
+    )
+
+
+@router.on_event("startup")
+def auto_provision_dedicated_demo_environment() -> None:
+    """Fail closed when an explicitly enabled demo runtime cannot seed itself.
+
+    This path can run only in ``APP_ENV=demo`` and is idempotent. Production and
+    customer runtimes are therefore unaffected even if demo credentials exist.
+    """
+
+    if not _demo_autoprovision_enabled():
+        return
+    db = SessionLocal()
+    try:
+        provision_demo_environment(db)
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 @router.get("/status")
