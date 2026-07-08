@@ -15,7 +15,7 @@ from app.services.operational_invariants import check_operational_invariants
 _TEST_ROUTE_ALIASES = {
     "auto": "auto",
     "local": "local",
-    "glm": "primary",
+    "glm": "glm",
     "primary": "primary",
     "deepseek": "challenger",
     "challenger": "challenger",
@@ -104,6 +104,8 @@ class LiveIntelligence:
             "z-ai/glm-4.5-air",
         ] if remote_provider == "openrouter" else []
 
+        if route == "glm":
+            return _dedupe([reasoning])
         if route == "primary":
             return _dedupe([primary])
         if route == "challenger":
@@ -138,6 +140,13 @@ class LiveIntelligence:
             return "\n".join(str(item.get("text") or item.get("content") or item) if isinstance(item, dict) else str(item) for item in value).strip()
         return ""
 
+    @staticmethod
+    def remote_temperature(model: str, profile: str) -> float:
+        normalized = (model or "").lower()
+        if normalized.startswith("z-ai/glm-5.2") or normalized.startswith("deepseek/deepseek-v4"):
+            return 1.0
+        return 0.15 if profile == "deep" else 0.2
+
     async def run_remote(self, cfg: tuple[str, str, str], models: list[str], messages: list[dict[str, str]], profile: str) -> tuple[str, str] | None:
         endpoint, key, provider = cfg
         headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
@@ -152,9 +161,16 @@ class LiveIntelligence:
                     response = await client.post(
                         f"{endpoint}/chat/completions",
                         headers=headers,
-                        json={"model": model, "messages": messages, "temperature": 0.15 if profile == "deep" else 0.2, "max_tokens": tokens},
+                        json={
+                            "model": model,
+                            "messages": messages,
+                            "temperature": self.remote_temperature(model, profile),
+                            "max_tokens": tokens,
+                        },
                     )
-                    if response.status_code in {401, 403}:
+                    # Authentication and account-credit failures are account-wide.
+                    # Do not burn latency retrying the same broken account across eight models.
+                    if response.status_code in {401, 402, 403}:
                         return None
                     if response.status_code >= 400:
                         continue
@@ -329,7 +345,7 @@ class LiveIntelligence:
                 return LiveResult("unavailable", "", "ollama", local_model, language.response_code, profile, "The forced local model did not complete the request.")
             return await self.finish_local(local[0], local[1], language.response_code, language.response_name, profile, remote, allow_remote_repair=False)
 
-        if route in {"primary", "challenger", "free"}:
+        if route in {"glm", "primary", "challenger", "free"}:
             if not remote:
                 return LiveResult("unavailable", "", "openrouter", None, language.response_code, profile, f"The forced {route} route requires a configured remote provider.")
             candidates = self.models(profile, remote[2], route)
