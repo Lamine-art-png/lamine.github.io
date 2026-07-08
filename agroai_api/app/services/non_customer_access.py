@@ -63,7 +63,8 @@ def configured_profile_for_user(user: User | None) -> str:
 
 
 def access_profile_metadata(org: Organization) -> dict[str, Any]:
-    metadata = org.commercial_metadata_json if isinstance(org.commercial_metadata_json, dict) else {}
+    raw_metadata = getattr(org, "commercial_metadata_json", None)
+    metadata = raw_metadata if isinstance(raw_metadata, dict) else {}
     profile = str(metadata.get("access_profile") or CUSTOMER_PROFILE).strip().lower()
     if profile not in FULL_ACCESS_PROFILES:
         profile = CUSTOMER_PROFILE
