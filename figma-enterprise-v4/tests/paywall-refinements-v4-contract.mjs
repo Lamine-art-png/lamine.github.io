@@ -33,6 +33,7 @@ assert(pricing.includes("Professional, Team, and Network save 17% on annual bill
 
 assert(integrations.includes("connectorUpgradeMessage"), "Connector paywalls must use provider-specific conversion copy.");
 assert(integrations.includes("profile.title") && integrations.includes("profile.description"), "Connector paywall copy must name and explain the exact connector.");
-assert(integrations.includes('`${planName(needed)} unlocks`'), "Locked connector badges must use unlock language, not danger-style required language.");
+assert(integrations.includes('tf("{plan} unlocks"'), "Locked connector badges must use localized unlock language, not danger-style required language.");
+assert(!integrations.includes('`${planName(needed)} required`'), "Locked connector badges must never return raw required-plan danger language.");
 
 console.log("paywall refinements v4 contract passed");
