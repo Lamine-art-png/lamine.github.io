@@ -19,7 +19,7 @@ export function StatusBadge({ label, tone = "neutral" }: { label: string; tone?:
     neutral: { background: BG, color: MUTED, border: `1px solid ${BORDER}` },
     good: { background: "#F0FDF4", color: "#15803D", border: "1px solid #BBF7D0" },
     warn: { background: "#FFFBEB", color: "#92400E", border: "1px solid #FCD34D" },
-    locked: { background: "#FEF2F2", color: "#991B1B", border: "1px solid #FECACA" },
+    locked: { background: "#F0F7EE", color: "#1F5A43", border: "1px solid #CFE1CB" },
   };
   return (
     <span className="inline-flex items-center px-2.5 py-1 rounded text-[11px] font-medium" style={styles[tone]}>

@@ -1,4 +1,5 @@
 import { API_BASE_URL, apiClient } from "../api/client";
+import { IntelligencePlanControls, REASONING_MODE_STORAGE_KEY } from "./intelligence/IntelligencePlanControls";
 import { IntelligenceView } from "./intelligence/IntelligenceView";
 import {
   useIntelligenceController,
@@ -14,10 +15,25 @@ function shouldUseLegacyRoute(error: unknown) {
   return status === 404 || status === 405;
 }
 
+function selectedReasoningMode() {
+  const value = window.localStorage.getItem(REASONING_MODE_STORAGE_KEY);
+  return value === "quick" || value === "deep" ? value : "standard";
+}
+
 function withIndependentResponseLanguage(request: AnyRecord): AnyRecord {
   const stored = window.localStorage.getItem(RESPONSE_LANGUAGE_STORAGE_KEY)?.trim();
+  const reasoningMode = selectedReasoningMode();
+  const task = request.task === "chat"
+    ? reasoningMode === "quick"
+      ? "chat_fast"
+      : reasoningMode === "deep"
+        ? "deep_analysis"
+        : "chat"
+    : request.task;
   return {
     ...request,
+    task,
+    reasoning_mode: reasoningMode,
     preferred_language: stored || "auto",
   };
 }
@@ -94,18 +110,26 @@ const intelligenceDependencies: IntelligenceDependencies = {
     const languageAwareRequest = withIndependentResponseLanguage(request);
     try {
       return await apiClient.post(
-        "/v1/intelligence/brain/run-safe",
+        "/v1/intelligence/brain/run-commercial",
         languageAwareRequest,
       ) as AnyRecord;
-    } catch (safeRouteError) {
-      if (!shouldUseLegacyRoute(safeRouteError)) throw safeRouteError;
+    } catch (commercialRouteError) {
+      if (!shouldUseLegacyRoute(commercialRouteError)) throw commercialRouteError;
       try {
-        return await apiClient.intelligence.brainRun(languageAwareRequest) as AnyRecord;
-      } catch (brainRouteError) {
-        if (shouldUseLegacyRoute(brainRouteError)) {
-          return await apiClient.intelligence.run(languageAwareRequest) as AnyRecord;
+        return await apiClient.post(
+          "/v1/intelligence/brain/run-safe",
+          languageAwareRequest,
+        ) as AnyRecord;
+      } catch (safeRouteError) {
+        if (!shouldUseLegacyRoute(safeRouteError)) throw safeRouteError;
+        try {
+          return await apiClient.intelligence.brainRun(languageAwareRequest) as AnyRecord;
+        } catch (brainRouteError) {
+          if (shouldUseLegacyRoute(brainRouteError)) {
+            return await apiClient.intelligence.run(languageAwareRequest) as AnyRecord;
+          }
+          throw brainRouteError;
         }
-        throw brainRouteError;
       }
     }
   },
@@ -127,5 +151,8 @@ const intelligenceDependencies: IntelligenceDependencies = {
 
 export function Intelligence() {
   const controller = useIntelligenceController(intelligenceDependencies);
-  return <IntelligenceView controller={controller} />;
+  return <>
+    <IntelligencePlanControls />
+    <IntelligenceView controller={controller} />
+  </>;
 }

@@ -4,7 +4,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Any
 
-PACKAGING_VERSION = "2026-07.2"
+PACKAGING_VERSION = "2026-07.3"
 PLAN_ORDER = ("free", "professional", "team", "network", "enterprise")
 
 EVIDENCE_UPLOAD_LIMITS: dict[str, int | None] = {
@@ -112,11 +112,15 @@ def install_commercial_packaging_v2() -> None:
             plan.setdefault("included_limits", {})["uploads"] = upload_copy[plan_id]
 
     network = next((plan for plan in PLANS if plan.get("id") == "network"), None)
-    if network is not None and "Standard Custom API access" not in network.get("features", []):
-        network.setdefault("features", []).append("Standard Custom API access")
+    if network is not None:
+        network["annual_savings_badge"] = "Save 17% annually"
+        features = network.setdefault("features", [])
+        if "Standard Custom API access" not in features:
+            features.append("Standard Custom API access")
 
     professional = next((plan for plan in PLANS if plan.get("id") == "professional"), None)
     if professional is not None:
+        professional["annual_savings_badge"] = "Save 17% annually"
         features = professional.setdefault("features", [])
         for feature in ("Weather context", "OpenET / ET context"):
             if feature not in features:

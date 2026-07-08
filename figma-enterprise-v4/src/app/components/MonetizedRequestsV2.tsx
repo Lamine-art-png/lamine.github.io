@@ -1,7 +1,7 @@
 import { MouseEvent as ReactMouseEvent, useEffect, useRef } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { openCommercialBoundary } from "./CommercialBoundaryHost";
-import { TeamPage } from "./ProductShell";
+import { AdminRequestsPage } from "./ProductShell";
 
 const ORDER = ["free", "professional", "team", "network", "enterprise"];
 
@@ -11,20 +11,19 @@ function plan(value: unknown) {
   return aliases[raw] || raw;
 }
 
-export function MonetizedTeamV2() {
+export function MonetizedRequestsV2() {
   const { currentOrganization } = useAuth();
-  const current = plan(currentOrganization?.plan);
-  const locked = ORDER.indexOf(current) < ORDER.indexOf("team");
+  const locked = ORDER.indexOf(plan(currentOrganization?.plan)) < ORDER.indexOf("team");
   const opened = useRef(false);
 
   function openWall() {
     openCommercialBoundary({
       status: 402,
       code: "upgrade_required",
-      feature: "team.invite",
+      feature: "admin.requests",
       recommended_plan: "team",
-      message: "Team turns individual AGRO-AI work into coordinated operations with invitations, roles, shared evidence, and approvals.",
-      source: "team",
+      message: "Team gives operators one tracked request inbox for support, onboarding, integrations, upgrades, and follow-through.",
+      source: "requests",
     });
   }
 
@@ -37,12 +36,12 @@ export function MonetizedTeamV2() {
 
   function capture(event: ReactMouseEvent<HTMLDivElement>) {
     if (!locked) return;
-    const interactive = (event.target as HTMLElement).closest("button, a, input, select");
+    const interactive = (event.target as HTMLElement).closest("button, a, input, select, textarea");
     if (!interactive) return;
     event.preventDefault();
     event.stopPropagation();
     openWall();
   }
 
-  return <div onClickCapture={capture}><TeamPage /></div>;
+  return <div onClickCapture={capture}><AdminRequestsPage /></div>;
 }

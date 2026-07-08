@@ -188,6 +188,20 @@ function writeCached(locale: string, source: Record<string, string>, catalog: Re
   }
 }
 
+function clearCachedLocale(locale: string) {
+  try {
+    const prefixes = [`${CACHE_PREFIX}${locale}:`, `${LEGACY_CACHE_PREFIX}${locale}:`];
+    const keys: string[] = [];
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (key && prefixes.some((prefix) => key.startsWith(prefix))) keys.push(key);
+    }
+    keys.forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // Cache invalidation is best-effort only.
+  }
+}
+
 export function hasCompleteLocaleCatalog(locale: string): boolean {
   const effectiveLocale = normalizeLocale(locale);
   const catalog = TRANSLATIONS[effectiveLocale];
@@ -259,10 +273,10 @@ async function requestChunk(effectiveLocale: string, chunk: Record<string, strin
   throw lastError;
 }
 
-async function loadLocaleCatalog(effectiveLocale: string, source: Record<string, string>): Promise<boolean> {
+async function loadLocaleCatalog(effectiveLocale: string, source: Record<string, string>, persistFinal: boolean): Promise<boolean> {
   const merged = reusableCatalog(effectiveLocale, source);
   if (catalogCoversSource(merged, source)) {
-    installLocaleCatalog(effectiveLocale, source, merged, true);
+    installLocaleCatalog(effectiveLocale, source, merged, persistFinal);
     return true;
   }
 
@@ -279,7 +293,9 @@ async function loadLocaleCatalog(effectiveLocale: string, source: Record<string,
         if (result.status === "fulfilled") {
           const { chunk, catalog } = result.value;
           Object.assign(merged, catalog);
-          installLocaleCatalog(effectiveLocale, chunk, catalog, true);
+          // Keep progressive translations visible in memory, but persist only
+          // after a complete full-scope catalog passes validation.
+          installLocaleCatalog(effectiveLocale, chunk, catalog, false);
         } else {
           lastError = result.reason;
         }
@@ -295,7 +311,7 @@ async function loadLocaleCatalog(effectiveLocale: string, source: Record<string,
     throw new Error(`Incomplete UI translation catalog for ${effectiveLocale}; missing=${missingCount}; cause=${String(lastError || "unknown")}`);
   }
 
-  installLocaleCatalog(effectiveLocale, source, merged, true);
+  installLocaleCatalog(effectiveLocale, source, merged, persistFinal);
   return true;
 }
 
@@ -319,12 +335,13 @@ export async function ensureLocaleCatalog(locale: string, scope: CatalogScope = 
   const existing = INFLIGHT.get(requestKey);
   if (existing) return existing;
 
-  const pending = loadLocaleCatalog(effectiveLocale, source)
+  const pending = loadLocaleCatalog(effectiveLocale, source, scope === "full")
     .then((changed) => {
       RETRY_AFTER.delete(requestKey);
       return changed;
     })
     .catch((error) => {
+      if (scope === "full") clearCachedLocale(effectiveLocale);
       RETRY_AFTER.set(requestKey, Date.now() + RETRY_COOLDOWN_MS);
       throw error;
     })
