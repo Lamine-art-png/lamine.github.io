@@ -84,6 +84,21 @@ class Settings(BaseSettings):
     STRIPE_SUCCESS_URL: str = ""
     STRIPE_CANCEL_URL: str = ""
 
+    # Server-authoritative non-customer access profiles.
+    # Comma-separated verified account emails. Never expose these values to the browser.
+    INTERNAL_FULL_ACCESS_EMAILS: str = ""
+    DEMO_FULL_ACCESS_EMAILS: str = ""
+    NON_CUSTOMER_ACCESS_PROVISIONING_TOKEN: str = ""
+
+    # Optional idempotent demo-environment seed identities. Passwords are secrets.
+    DEMO_AUTO_PROVISION: bool = False
+    DEMO_FULL_EMAIL: str = ""
+    DEMO_FULL_PASSWORD: str = ""
+    DEMO_FREE_EMAIL: str = ""
+    DEMO_FREE_PASSWORD: str = ""
+    DEMO_FULL_ORGANIZATION_NAME: str = "AGRO-AI Demo Organization"
+    DEMO_FREE_ORGANIZATION_NAME: str = "AGRO-AI Free Demo"
+
     # Current AGRO-AI commercial offers
     STRIPE_PRICE_ASSURANCE_AUDIT_FARM: str = ""
     STRIPE_PRICE_ASSURANCE_AUDIT_NETWORK: str = ""

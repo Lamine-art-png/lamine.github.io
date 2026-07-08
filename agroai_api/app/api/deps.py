@@ -95,6 +95,36 @@ def require_verified_user(user: User) -> None:
         )
 
 
+def _activate_server_authorized_access_profile(db: Session, user: User, organization: Organization | None) -> None:
+    """Provision explicit internal/demo identities once, entirely server-side.
+
+    Normal customer requests take the fast no-op path. No header, query string,
+    JWT claim, or browser value can select an access profile. Organization
+    ownership is enforced by the canonical activation service.
+    """
+
+    if organization is None:
+        return
+    from app.services.non_customer_access import (
+        FULL_ACCESS_PROFILES,
+        access_profile_metadata,
+        activate_configured_profile,
+        configured_profile_for_user,
+    )
+
+    configured = configured_profile_for_user(user)
+    if configured not in FULL_ACCESS_PROFILES:
+        return
+    current = access_profile_metadata(organization)["profile"]
+    if current == configured:
+        return
+    result = activate_configured_profile(db, user=user, org=organization)
+    if result is None:
+        return
+    db.commit()
+    db.refresh(organization)
+
+
 def get_auth_context(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> AuthContext:
     require_verified_user(user)
     membership = (
@@ -104,6 +134,7 @@ def get_auth_context(user: User = Depends(get_current_user), db: Session = Depen
         .first()
     )
     organization = membership.organization if membership else None
+    _activate_server_authorized_access_profile(db, user, organization)
     return AuthContext(user=user, organization=organization, membership=membership)
 
 

@@ -66,6 +66,15 @@ def _base_commercial_values(org: Organization) -> dict:
             if key in values and values[key] not in {"unavailable", "locked"}:
                 values[key] = "locked"
         values["intelligence.profile"] = "essential"
+
+    # Compatibility callers sometimes serialize without a DB session. The
+    # access profile itself is server-authored organization metadata, so it is
+    # safe to project the same full-access values here rather than leak stale
+    # Enterprise contract_only/finite-quota states into the browser.
+    from app.services.non_customer_access import FULL_ACCESS_PROFILES, access_profile_metadata, full_access_overrides
+
+    if access_profile_metadata(org)["profile"] in FULL_ACCESS_PROFILES:
+        values.update(full_access_overrides())
     return values
 
 
@@ -75,6 +84,10 @@ def serialize_entitlements(org: Organization, db: Session | None = None) -> dict
     base = _base_commercial_values(org)
     base_capabilities = {key: value for key, value in base.items() if not key.startswith("quota.")}
     base_quotas = {key.removeprefix("quota."): value for key, value in base.items() if key.startswith("quota.")}
+
+    from app.services.non_customer_access import access_profile_metadata
+
+    access = access_profile_metadata(org)
     limits.update(
         {
             "plan": plan["id"],
@@ -83,6 +96,9 @@ def serialize_entitlements(org: Organization, db: Session | None = None) -> dict
             "plan_version": getattr(org, "plan_version", None) or "2026-07",
             "customer_class": getattr(org, "customer_class", None) or "individual_operator",
             "organization_type": getattr(org, "organization_type", None),
+            "access_profile": access["profile"],
+            "billing_required": access["billing_required"],
+            "demo_data_policy": access.get("demo_data_policy"),
             "intelligence_profile": base.get("intelligence.profile", "essential"),
             "capabilities": base_capabilities,
             "quotas": base_quotas,

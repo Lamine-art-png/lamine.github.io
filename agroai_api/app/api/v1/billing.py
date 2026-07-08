@@ -17,6 +17,7 @@ from app.services.commercial_billing_lifecycle import (
     _commercial_checkout_metadata,
 )
 from app.services.entitlements import require_owner_or_admin, serialize_entitlements
+from app.services.non_customer_access import access_profile_metadata, activate_configured_profile
 from app.services.product_plans import public_plans, service_add_ons, upgrade_options
 from app.services.quota import quota_snapshot
 
@@ -39,6 +40,36 @@ def _billing_unavailable() -> HTTPException:
         detail={
             "code": "billing_unavailable",
             "message": "Checkout is temporarily unavailable. Please retry or contact AGRO-AI support.",
+        },
+    )
+
+
+def _activate_authorized_non_customer_before_billing(db: Session, user: User, org: Organization) -> None:
+    """Resolve a verified server-allowlisted identity before any Stripe action.
+
+    This closes the edge case where a founder reaches billing before `/auth/me`
+    has performed the normal authenticated-context auto-activation.
+    """
+
+    if user.email_verification_status != "verified" or not user.email_verified_at:
+        return
+    result = activate_configured_profile(db, user=user, org=org)
+    if result is None:
+        return
+    db.commit()
+    db.refresh(org)
+
+
+def _billing_not_required(org: Organization) -> HTTPException | None:
+    profile = access_profile_metadata(org)
+    if profile["billing_required"]:
+        return None
+    return HTTPException(
+        status_code=status.HTTP_409_CONFLICT,
+        detail={
+            "code": "billing_not_required",
+            "message": "Billing is disabled for this authorized AGRO-AI access profile.",
+            "access_profile": profile["profile"],
         },
     )
 
@@ -168,6 +199,10 @@ def create_checkout_session(
     offer = _normalize_offer(payload)
     org, membership = require_org_membership(payload.organization_id, user, db)
     require_owner_or_admin(membership.role)
+    _activate_authorized_non_customer_before_billing(db, user, org)
+    billing_guard = _billing_not_required(org)
+    if billing_guard is not None:
+        raise billing_guard
     offer_config = _offer_config(offer)
 
     customer_id = org.stripe_customer_id or _create_customer(org)
@@ -208,6 +243,10 @@ def create_portal_session(
 ) -> dict:
     org, membership = require_org_membership(payload.organization_id, user, db)
     require_owner_or_admin(membership.role)
+    _activate_authorized_non_customer_before_billing(db, user, org)
+    billing_guard = _billing_not_required(org)
+    if billing_guard is not None:
+        raise billing_guard
     if not org.stripe_customer_id:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -237,13 +276,17 @@ def billing_status(
     if not org_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="organization_id is required")
     org, _ = require_org_membership(org_id, user, db)
+    _activate_authorized_non_customer_before_billing(db, user, org)
     usage = quota_snapshot(db, org)
+    access_profile = access_profile_metadata(org)
     return {
         "plan": _normalize_plan_id(org.plan) or "free",
         "subscription_status": org.subscription_status,
         "current_period_start": org.current_period_start.isoformat() if org.current_period_start else None,
         "current_period_end": org.current_period_end.isoformat() if org.current_period_end else None,
         "cancel_at_period_end": bool(org.cancel_at_period_end),
+        "access_profile": access_profile["profile"],
+        "billing_required": access_profile["billing_required"],
         "entitlements": serialize_entitlements(org, db),
         "usage": usage,
     }
