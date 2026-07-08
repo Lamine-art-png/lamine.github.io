@@ -7,8 +7,13 @@ workers_dev = false
 binding = "AI"
 
 [vars]
-# Zhipu GLM is optimized for instruction following across 100+ languages.
-MODEL = "@cf/zai-org/glm-4.7-flash"
+# Reliability-first edge lane. Hosted GLM 5.2 remains the primary reasoning brain;
+# the edge origin must answer quickly when hosted inference is unavailable.
+MODEL = "@cf/meta/llama-3.1-8b-instruct-fast"
+# Independent Cloudflare-hosted Chinese-model fallback.
+FALLBACK_MODEL = "@cf/qwen/qwen3-30b-a3b-fp8"
+MODEL_TIMEOUT_MS = "12000"
+FALLBACK_TIMEOUT_MS = "22000"
 
 [[routes]]
 pattern = "local-ai.agroai-pilot.com/*"
