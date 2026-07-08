@@ -48,7 +48,6 @@ export function useLocale() {
   );
   const effectiveLocale = useMemo(() => normalizeLocale(selectedLocale), [selectedLocale]);
   const resolution = useMemo(() => resolveLocaleDetailed(selectedLocale), [selectedLocale]);
-  const fullCatalogReady = effectiveLocale === "en" || hasCompleteLocaleCatalog(selectedLocale);
 
   useEffect(() => {
     const listener = ((event: CustomEvent) => {
@@ -97,6 +96,11 @@ export function useLocale() {
         if (cancelled) return;
         notifyLocaleRuntime();
 
+        // Critical/core localization is enough to make the portal interactive.
+        // Full literal convergence continues without holding the product behind
+        // a global startup cover; failure still rolls back to the last stable locale.
+        setCatalogLoading(false);
+
         if (!hasCompleteLocaleCatalog(selectedLocale)) {
           await ensureLocaleCatalog(selectedLocale, "full");
         }
@@ -107,7 +111,6 @@ export function useLocale() {
 
         markStable(selectedLocale);
         notifyLocaleRuntime();
-        setCatalogLoading(false);
       } catch (cause) {
         if (cancelled) return;
         const message = cause instanceof Error ? cause.message : "UI translation unavailable";
@@ -174,7 +177,7 @@ export function useLocale() {
     resolution,
     setLocale,
     activateLocale,
-    catalogLoading: catalogLoading || !fullCatalogReady,
+    catalogLoading,
     catalogError,
     t: (key: string) => {
       void runtimeRevision;

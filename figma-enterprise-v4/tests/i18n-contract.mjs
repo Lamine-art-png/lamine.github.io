@@ -12,6 +12,7 @@ const literalPaths = fs.readdirSync(sharedRoot)
   .sort()
   .map((name) => path.join(sharedRoot, name));
 const literalCatalog = Object.assign({}, ...literalPaths.map((file) => JSON.parse(fs.readFileSync(file, "utf8"))));
+const app = fs.readFileSync(path.join(src, "App.tsx"), "utf8");
 const i18n = fs.readFileSync(path.join(src, "i18n.ts"), "utf8");
 const hook = fs.readFileSync(path.join(src, "hooks", "useLocale.ts"), "utf8");
 const selector = fs.readFileSync(path.join(src, "components", "LanguageSelector.tsx"), "utf8");
@@ -53,6 +54,13 @@ assert(hook.includes("hasCoreLocaleCatalog"), "bundled core copy must remain usa
 assert(hook.includes('ensureLocaleCatalog(selectedLocale, "core")'), "non-English locales must hydrate the small core catalog first");
 assert(hook.includes('ensureLocaleCatalog(selectedLocale, "full")'), "full portal literal hydration must follow core hydration");
 assert(hook.indexOf('ensureLocaleCatalog(selectedLocale, "core")') < hook.indexOf('ensureLocaleCatalog(selectedLocale, "full")'), "core hydration must occur before full hydration");
+const coreHydrationIndex = hook.indexOf('ensureLocaleCatalog(selectedLocale, "core")');
+const fullHydrationIndex = hook.indexOf('ensureLocaleCatalog(selectedLocale, "full")');
+const interactiveReadyIndex = hook.indexOf("setCatalogLoading(false);", coreHydrationIndex);
+assert(interactiveReadyIndex > coreHydrationIndex && interactiveReadyIndex < fullHydrationIndex, "portal interactivity must resume before full literal hydration");
+assert(!hook.includes("catalogLoading: catalogLoading || !fullCatalogReady"), "incomplete full catalogs must never force a permanent startup cover");
+assert(app.includes("MAX_LOCALE_TRANSITION_COVER_MS"), "locale transition cover must have a hard availability bound");
+assert(app.includes("localeCoverVisible"), "locale transition cover visibility must be independently fail-open");
 assert(hook.includes("notifyLocaleRuntime"), "locale activation must notify all mounted consumers");
 assert(dynamicCatalog.includes('"/v1/i18n/catalog"'), "dynamic UI catalogs must use the backend localization contract");
 assert(dynamicCatalog.includes("exactKeyParity"), "dynamic catalogs must fail closed on key drift");

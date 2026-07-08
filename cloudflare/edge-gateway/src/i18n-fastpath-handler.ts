@@ -44,7 +44,8 @@ const LOCAL_LOCALES: LocaleEntry[] = ((localeManifest as LocaleManifest).locales
 const EDGE_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60;
 const PUBLIC_FASTPATH_MAX_KEYS = 40;
 const WORKERS_AI_CIRCUIT_MS = 10 * 60 * 1_000;
-const I18N_UPSTREAM_TIMEOUT_MS = 120_000;
+const I18N_EDGE_GENERATION_TIMEOUT_MS = 12_000;
+const I18N_UPSTREAM_TIMEOUT_MS = 30_000;
 const TRANSLATION_INFLIGHT = new Map<string, Promise<TranslationResult>>();
 let workersAiBlockedUntil = 0;
 
@@ -66,6 +67,20 @@ function markUpstreamFallback(response: Response): Response {
 
 function diagnosticText(value: unknown): string {
   return String(value || "unknown_error").replace(/\s+/g, " ").slice(0, 1200);
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number, reason: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(reason)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function workersAiQuotaFailure(value: unknown): boolean {
@@ -295,7 +310,11 @@ export async function handleI18nFastpath<Host, Cf>(request: Request<Host, Cf>, e
   }
 
   try {
-    const translated = await translateWithDurableEdgeCache(env.AI, locale.code, locale.name, source);
+    const translated = await withTimeout(
+      translateWithDurableEdgeCache(env.AI, locale.code, locale.name, source),
+      I18N_EDGE_GENERATION_TIMEOUT_MS,
+      "edge_i18n_generation_timeout",
+    );
     const catalog = translated.catalog;
     if (isCanary) {
       const changed = Object.keys(source).filter((key) => catalog[key] !== source[key]);
