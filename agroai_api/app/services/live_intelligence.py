@@ -88,11 +88,7 @@ class LiveIntelligence:
             if self.provider == "ollama" and "local-ai.agroai-pilot.com" in self.base.lower()
             else ""
         )
-        # The production local-ai hostname is currently a Cloudflare Workers AI
-        # Ollama-compatible origin, not the Mac. Treat it as edge truthfully.
         self.edge_base = explicit_edge_base or legacy_edge_base
-        # Backwards-compatible local fallback only when AI_BASE_URL is an Ollama
-        # deployment that is not the known Workers AI hostname.
         self.local_base = explicit_local_base or (
             self.base if self.provider == "ollama" and self.base and not self.edge_base else ""
         )
@@ -135,7 +131,6 @@ class LiveIntelligence:
             return (self.base, key, "openrouter") if key else None
         if p in {"openai", "openai-compatible", "openai_compatible"} and self.base and self.ai_key:
             return self.base, self.ai_key, "openai_compatible"
-        # Local/edge deployments can still use OpenRouter as the hosted frontier lane.
         if p == "ollama":
             key = self.openrouter_key or self.ai_key
             return ("https://openrouter.ai/api/v1", key, "openrouter") if key else None
@@ -224,8 +219,6 @@ class LiveIntelligence:
                             "max_tokens": tokens,
                         },
                     )
-                    # Authentication and account-credit failures are account-wide.
-                    # Do not burn latency retrying the same broken account across eight models.
                     if response.status_code in {401, 402, 403}:
                         return None
                     if response.status_code >= 400:
@@ -379,7 +372,7 @@ class LiveIntelligence:
         if language_matches_target(answer, response_code):
             return LiveResult("ok", answer, provider, model, response_code, profile)
         if allow_remote_repair and remote:
-            repair_models = self.models(profile, remote[2], "auto")
+            repair_models = self.models(profile, remote[2])
             if repair_models:
                 repaired = await self.repair(remote, repair_models[0], answer, response_code, response_name)
                 if repaired is not None:
@@ -407,8 +400,6 @@ class LiveIntelligence:
             return ["edge", "remote", "local"]
         if self.routing_mode == "local_first":
             return ["local", "edge", "remote"]
-        # Hybrid: low-latency always-on edge for quick chat; frontier first for
-        # reasoning/report/deep work; actual Mac Ollama remains a last-resort lane.
         return ["edge", "local", "remote"] if profile == "fast" else ["remote", "edge", "local"]
 
     async def run(self, task: str, question: str, messages: list[dict[str, str]], preferred_language: str | None) -> LiveResult:
@@ -456,7 +447,7 @@ class LiveIntelligence:
         last_failure: LiveResult | None = None
         for lane in self.auto_order(profile):
             if lane == "remote" and remote:
-                candidates = self.models(profile, remote[2], "auto")
+                candidates = self.models(profile, remote[2])
                 if candidates:
                     result = await self.run_remote(remote, candidates, prepared, profile)
                     if result:
