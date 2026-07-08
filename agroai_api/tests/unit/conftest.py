@@ -10,17 +10,32 @@ _STABLE_SQLITE_TARGETS = {
 
 
 @pytest.fixture(autouse=True)
-def _stable_connector_runtime_database(request):
-    """Make multi-request connector contract tests runner-independent.
+def _unit_test_runtime_compatibility(request):
+    """Keep focused unit fixtures aligned with the production runtime contract.
 
-    The target contracts cross several TestClient requests and SQLAlchemy
-    sessions. Python 3.11 / pytest 9 can expose a runner-specific anonymous
-    in-memory SQLite + StaticPool artifact where follow-up sessions do not see
-    rows committed through the TestClient thread. Resolve helper fixtures lazily
-    so unrelated unit tests pay no filesystem or monkeypatch overhead.
+    Connector contracts that span TestClient threads use a stable temporary
+    SQLite file. Intelligence-core tests exercise the paid execution engine, so
+    their synthetic organization is promoted to an active Professional fixture
+    after the legacy helper seeds it. Free-plan 402 behavior is covered by the
+    dedicated Ask AGRO-AI commercial-boundary tests.
     """
     module = getattr(request, "module", None)
     if module is None:
+        yield
+        return
+
+    if module.__name__.endswith("test_intelligence_core"):
+        monkeypatch = request.getfixturevalue("monkeypatch")
+        original_seed = module._seed_auth_context
+
+        def paid_intelligence_seed(db):
+            user, org, workspace = original_seed(db)
+            org.plan = "professional"
+            org.subscription_status = "active"
+            db.commit()
+            return user, org, workspace
+
+        monkeypatch.setattr(module, "_seed_auth_context", paid_intelligence_seed)
         yield
         return
 
