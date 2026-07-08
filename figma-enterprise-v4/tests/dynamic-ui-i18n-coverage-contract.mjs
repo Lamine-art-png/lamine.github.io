@@ -32,6 +32,8 @@ for (const key of [
   "dynamic.evidence.store",
   "dynamic.overview.commandCenter",
   "dynamic.cockpit.exceptionQueue",
+  "dynamic.cockpit.providerNeedsAttentionTemplate",
+  "dynamic.cockpit.connectorStale",
   "dynamic.integrations.upgradeMessageTemplate",
   "dynamic.integrations.setupStateTemplate",
   "dynamic.cockpit.connectionsTemplate",
