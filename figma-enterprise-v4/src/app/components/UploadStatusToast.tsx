@@ -9,6 +9,13 @@ type UploadState = {
 };
 
 const EVENT = "agroai:upload-state";
+const COPY = {
+  failed: { label: "Upload failed" },
+  complete: { label: "File ready" },
+  stored: { label: "Securely stored" },
+  uploading: { label: "Uploading file" },
+  working: { label: "Working..." },
+};
 
 export function UploadStatusToast() {
   const [state, setState] = useState<UploadState | null>(null);
@@ -37,6 +44,7 @@ export function UploadStatusToast() {
   const complete = state.phase === "complete";
   const stored = state.phase === "stored";
   const Icon = failed ? AlertCircle : complete ? CheckCircle2 : stored ? ShieldCheck : LoaderCircle;
+  const title = failed ? COPY.failed.label : complete ? COPY.complete.label : stored ? COPY.stored.label : COPY.uploading.label;
 
   return (
     <div className="fixed right-6 top-6 z-[150] w-[390px] max-w-[calc(100vw-32px)] rounded-2xl p-4 shadow-2xl" style={{ background: "#FFFEFA", border: `1px solid ${failed ? "rgba(153,27,27,0.28)" : "rgba(16,35,27,0.18)"}` }} role="status" aria-live="polite">
@@ -45,10 +53,8 @@ export function UploadStatusToast() {
           <Icon size={18} className={state.phase === "uploading" ? "animate-spin" : ""} />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="text-[13px] font-semibold" style={{ color: "#10231B" }}>
-            {failed ? "Upload failed" : complete ? "File ready" : stored ? "Securely stored" : "Uploading file"}
-          </div>
-          <div className="mt-1 text-[12px] leading-5" style={{ color: failed ? "#991B1B" : "#607168" }}>{state.message || state.filename || "Working..."}</div>
+          <div className="text-[13px] font-semibold" style={{ color: "#10231B" }}>{title}</div>
+          <div className="mt-1 text-[12px] leading-5" style={{ color: failed ? "#991B1B" : "#607168" }}>{state.message || state.filename || COPY.working.label}</div>
           {state.job_id && !failed ? <div className="mt-2 text-[10px] font-medium uppercase tracking-wider" style={{ color: "#839087" }}>Processing receipt active</div> : null}
         </div>
         <button type="button" onClick={() => setState(null)} className="rounded-lg p-1" style={{ color: "#718078" }} aria-label="Dismiss upload status"><X size={15} /></button>
