@@ -1,5 +1,4 @@
-import { MouseEvent as ReactMouseEvent } from "react";
-import { Lock } from "lucide-react";
+import { MouseEvent as ReactMouseEvent, useEffect, useRef } from "react";
 import { useAuth } from "../auth/AuthProvider";
 import { openCommercialBoundary } from "./CommercialBoundaryHost";
 import { TeamPage } from "./ProductShell";
@@ -16,6 +15,7 @@ export function MonetizedTeamV2() {
   const { currentOrganization } = useAuth();
   const current = plan(currentOrganization?.plan);
   const locked = ORDER.indexOf(current) < ORDER.indexOf("team");
+  const opened = useRef(false);
 
   function openWall() {
     openCommercialBoundary({
@@ -23,22 +23,26 @@ export function MonetizedTeamV2() {
       code: "upgrade_required",
       feature: "team.invite",
       recommended_plan: "team",
-      message: "Team unlocks direct invitations, role controls, shared operating access, and approval workflows.",
+      message: "Team turns individual AGRO-AI work into coordinated operations with invitations, roles, shared evidence, and approvals.",
       source: "team",
     });
   }
 
+  useEffect(() => {
+    if (!locked || opened.current) return;
+    opened.current = true;
+    const timer = window.setTimeout(openWall, 80);
+    return () => window.clearTimeout(timer);
+  }, [locked]);
+
   function capture(event: ReactMouseEvent<HTMLDivElement>) {
     if (!locked) return;
-    const button = (event.target as HTMLElement).closest("button");
-    if (!button || !/request invite|send invitation/i.test(button.textContent || "")) return;
+    const interactive = (event.target as HTMLElement).closest("button, a, input, select");
+    if (!interactive) return;
     event.preventDefault();
     event.stopPropagation();
     openWall();
   }
 
-  return <div onClickCapture={capture}>
-    {locked ? <div className="mx-8 mt-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-[#CFE1CB] bg-[#F0F7EE] p-5 text-[#1F5A43]"><div className="flex items-start gap-3"><div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-[#DDEB8F] text-[#10231B]"><Lock className="h-4 w-4" /></div><div><div className="text-[13px] font-semibold">Direct collaboration starts on Team</div><p className="mt-1 max-w-2xl text-[11px] leading-5 opacity-80">Unlock direct invitations, role controls, shared evidence, approvals, and 10 included seats.</p></div></div><button type="button" onClick={openWall} className="h-10 rounded-xl bg-[#0D2B1E] px-4 text-[12px] font-semibold text-white">Compare Team access</button></div> : null}
-    <TeamPage />
-  </div>;
+  return <div onClickCapture={capture}><TeamPage /></div>;
 }
