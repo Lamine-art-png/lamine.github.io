@@ -11,8 +11,10 @@ from . import recovery_v2 as recovery_module  # noqa: E402
 auth_module.router.include_router(recovery_module.router)
 
 from . import billing as billing_module  # noqa: E402,F401
+from app.services.ask_agro_ai_commercial_policy import install_ask_agro_ai_commercial_policy  # noqa: E402
 from app.services.commercial_billing_lifecycle import install_commercial_billing_lifecycle  # noqa: E402
 
+install_ask_agro_ai_commercial_policy()
 install_commercial_billing_lifecycle()
 
 from . import brain as brain_module  # noqa: E402
@@ -36,6 +38,7 @@ from . import connectors as connector_compat_module  # noqa: E402
 from . import product_shell as product_shell_module  # noqa: E402
 from . import monetization_convergence as monetization_module  # noqa: E402
 from . import non_customer_access as non_customer_access_module  # noqa: E402
+from . import ask_agro_ai_paywall as ask_agro_ai_paywall_module  # noqa: E402
 from app.services.commercial_packaging_v2 import apply_catalog_packaging, install_commercial_packaging_v2  # noqa: E402
 from app.services.commercial_upload_metering_v2 import install_commercial_upload_metering  # noqa: E402
 
@@ -90,5 +93,6 @@ install_commercial_upload_metering((connector_module.router, connector_compat_mo
 _remove_duplicate_product_checkout()
 product_shell_module.router.include_router(monetization_module.router)
 product_shell_module.router.include_router(non_customer_access_module.router)
+product_shell_module.router.include_router(ask_agro_ai_paywall_module.router)
 
 _hide_compat_schema_shadows()
