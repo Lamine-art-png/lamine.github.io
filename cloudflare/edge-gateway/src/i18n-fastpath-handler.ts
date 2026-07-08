@@ -149,7 +149,7 @@ function validatedI18nUpstreamOrigin(raw: string, incoming: URL): URL {
   return upstream;
 }
 
-async function directI18nUpstreamFetch(request: Request, env: I18nFastpathEnv): Promise<Response> {
+async function directI18nUpstreamFetch<Host, Cf>(request: Request<Host, Cf>, env: I18nFastpathEnv): Promise<Response> {
   const incoming = new URL(request.url);
   const upstream = validatedI18nUpstreamOrigin(env.UPSTREAM_API_ORIGIN, incoming);
   const target = new URL(upstream.toString());
