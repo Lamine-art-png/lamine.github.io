@@ -38,6 +38,7 @@ assert(ask.includes('recommended_plan: "professional"'), "Ask AGRO-AI must recom
 assert(ask.includes('if (!locked) return <Intelligence />;'), "Only entitled customers may mount the expensive Ask AGRO-AI component.");
 assert(layout.includes('"intelligence.ask"') && layout.includes('locked: !canAskAgroAi, upgradeTo: "professional"'), "Ask AGRO-AI must visibly show a Professional lock in portal navigation.");
 assert(viewModel.includes('"intelligence.ask": "intelligence.title"'), "The shared commercial modal must label the Ask AGRO-AI capability explicitly.");
+assert(!viewModel.includes('bullets: ["commercialBoundary.plan.free.bullet1", "commercialBoundary.plan.free.bullet2"'), "The shared Free plan card must never advertise the retired 25-action AI allowance.");
 
 assert(pricing.includes('["professional", "team", "network"].includes(plan.id)'), "Professional, Team, and Network must all carry annual savings treatment.");
 assert(pricing.includes("Professional, Team, and Network save 17% on annual billing."), "Pricing header must explain the 17% annual saving across self-serve paid tiers.");
