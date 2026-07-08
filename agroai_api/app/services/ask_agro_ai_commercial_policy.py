@@ -7,7 +7,10 @@ package can be imported more than once in tests and process bootstraps.
 """
 from __future__ import annotations
 
+from dataclasses import replace
+
 from app.services.commercial_control import BASE_ENTITLEMENTS, PAID_VARIABLE_COST_FEATURES
+from app.services.entitlements import PLAN_LIMITS
 from app.services.product_plans import PLANS
 
 
@@ -24,6 +27,15 @@ def install_ask_agro_ai_commercial_policy() -> None:
     free["quota.ai_action.monthly"] = 0
     free["quota.deep_investigation.monthly"] = 0
     PAID_VARIABLE_COST_FEATURES.add("intelligence.ask")
+
+    # Keep the legacy customer-safe compatibility serializer aligned with the
+    # canonical commercial control plane. Otherwise Free would still advertise
+    # 25 AGRO-AI messages and can_run_agro_ai=true despite the authoritative 402.
+    PLAN_LIMITS["free"] = replace(
+        PLAN_LIMITS["free"],
+        max_agro_ai_messages_monthly=0,
+    )
+    PLAN_LIMITS["pilot"] = PLAN_LIMITS["free"]
 
     for plan in PLANS:
         if plan.get("id") == "free":
