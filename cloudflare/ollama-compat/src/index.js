@@ -42,7 +42,9 @@ export default {
     if (!raw) return Response.json({ error: "empty_ai_response" }, { status: 503 });
     const content = JSON.stringify({ answer: raw });
     return Response.json({
-      model: body.model ?? env.MODEL,
+      provider: "cloudflare-workers-ai",
+      model: env.MODEL,
+      requested_model: body.model ?? null,
       message: { role: "assistant", content },
       response: content,
       done: true,
