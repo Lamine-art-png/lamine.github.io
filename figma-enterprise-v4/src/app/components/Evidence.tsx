@@ -136,49 +136,49 @@ export function Evidence() {
   }
 
   return (
-    <div className="min-h-screen" style={{ background: BG }} data-tour="evidence-page">
-      <header className="px-8 py-7" style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}>
-        <div className="flex items-start justify-between gap-6">
-          <div>
-            <div className="flex items-center gap-2 mb-3">
+    <div className="min-h-full" style={{ background: BG }} data-tour="evidence-page">
+      <header className="px-4 py-5 sm:px-8 sm:py-7" style={{ background: SURFACE, borderBottom: `1px solid ${BORDER}` }}>
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-6">
+          <div className="min-w-0">
+            <div className="mb-3 flex flex-wrap items-center gap-2">
               <StatusBadge label="Evidence Store" tone="good" />
               <StatusBadge label={tf("{score}% readiness", { score: summary.readiness_score ?? 0 })} tone={(summary.readiness_score || 0) > 50 ? "good" : "warn"} />
             </div>
-            <h1 className="text-[30px] font-semibold tracking-tight" style={{ color: TEXT }}>Evidence</h1>
-            <p className="mt-2 max-w-3xl text-[14px] leading-relaxed" style={{ color: MUTED }}>
+            <h1 className="text-[26px] font-semibold tracking-tight sm:text-[30px]" style={{ color: TEXT }}>Evidence</h1>
+            <p className="mt-2 max-w-3xl text-[13px] leading-relaxed sm:text-[14px]" style={{ color: MUTED }}>
               Uploaded source files stay visible here. AGRO-AI organizes each source, derives evidence records when possible, and keeps provenance linked back to the original file.
             </p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2 sm:flex-nowrap">
             <PortalButton variant="secondary" onClick={refresh}>Refresh</PortalButton>
             <PortalButton onClick={() => window.location.assign("/integrations")}>Open Connectors</PortalButton>
           </div>
         </div>
       </header>
 
-      <div className="px-8 py-6 space-y-5" style={{ maxWidth: 1220 }}>
-        <section className="rounded-2xl p-6" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-          <div className="flex items-start justify-between gap-5">
-            <div>
-              <div className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: MUTED }}>Fast upload</div>
-              <h2 className="text-[18px] font-semibold mb-2" style={{ color: TEXT }}>Drop fragmented customer files here first.</h2>
-              <p className="text-[13px] leading-relaxed max-w-2xl" style={{ color: MUTED }}>
+      <div className="space-y-4 px-4 py-4 sm:space-y-5 sm:px-8 sm:py-6" style={{ maxWidth: 1220 }}>
+        <section className="rounded-2xl p-4 sm:p-6" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-5">
+            <div className="min-w-0">
+              <div className="mb-2 text-[10px] font-semibold uppercase tracking-widest" style={{ color: MUTED }}>Fast upload</div>
+              <h2 className="mb-2 text-[17px] font-semibold sm:text-[18px]" style={{ color: TEXT }}>Drop fragmented customer files here first.</h2>
+              <p className="max-w-2xl text-[13px] leading-relaxed" style={{ color: MUTED }}>
                 AGRO-AI stores the source, tracks processing, parses supported content, links derived evidence, and makes available source context usable by workspace intelligence.
               </p>
             </div>
 
-            <label className="min-w-[260px] rounded-2xl p-5 cursor-pointer text-center" style={{ background: BG, border: `1px dashed ${BORDER}` }}>
-              <div className="text-[14px] font-semibold mb-1" style={{ color: TEXT }}>
+            <label className="w-full cursor-pointer rounded-2xl p-4 text-center sm:w-auto sm:min-w-[260px] sm:p-5" style={{ background: BG, border: `1px dashed ${BORDER}` }}>
+              <div className="mb-1 text-[14px] font-semibold" style={{ color: TEXT }}>
                 {uploading ? "Uploading…" : "Choose files"}
               </div>
-              <div className="text-[11px] mb-3" style={{ color: MUTED }}>CSV, JSON, TXT, PDF</div>
+              <div className="mb-3 text-[11px]" style={{ color: MUTED }}>CSV, JSON, TXT, PDF</div>
               <input
                 type="file"
                 multiple
                 accept=".csv,.json,.txt,.pdf"
                 disabled={uploading}
                 onChange={(event) => uploadFiles(event.target.files)}
-                className="text-[11px] max-w-[220px]"
+                className="max-w-full text-[11px] sm:max-w-[220px]"
                 style={{ color: MUTED }}
               />
             </label>
@@ -196,45 +196,49 @@ export function Evidence() {
         {sourcesState.error ? <InlineState title={sourcesState.error} /> : null}
         {summaryState.error ? <InlineState title={summaryState.error} /> : null}
 
-        <section className="grid grid-cols-4 gap-4">
+        <section className="grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4">
           <Metric label="Evidence records" value={String(summary.evidence_count ?? rows.length)} />
           <Metric label="Source files" value={String(summary.source_count ?? sources.length)} />
           <Metric label="Readiness" value={`${summary.readiness_score ?? 0}%`} />
           <Metric label="Evidence types" value={String(Object.keys(summary.by_type || {}).length)} />
         </section>
 
-        <section className="rounded-2xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }} data-tour="evidence-source-library">
-          <div className="flex items-center justify-between gap-4 mb-4">
-            <div>
-              <h2 className="text-[18px] font-semibold" style={{ color: TEXT }}>Uploaded source files</h2>
-              <p className="mt-1 text-[12px]" style={{ color: MUTED }}>Your original uploads remain organized as sources; evidence records below stay linked to them.</p>
+        <section className="rounded-2xl p-4 sm:p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }} data-tour="evidence-source-library">
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
+            <div className="min-w-0">
+              <h2 className="text-[17px] font-semibold sm:text-[18px]" style={{ color: TEXT }}>Uploaded source files</h2>
+              <p className="mt-1 text-[12px] leading-relaxed" style={{ color: MUTED }}>Your original uploads remain organized as sources; evidence records below stay linked to them.</p>
             </div>
-            <PortalButton variant="secondary" onClick={() => window.location.assign("/sources")}>Open source library</PortalButton>
+            <div className="flex-shrink-0"><PortalButton variant="secondary" onClick={() => window.location.assign("/sources")}>Open source library</PortalButton></div>
           </div>
           <div className="space-y-2">
             {sources.length ? sources.slice(0, 8).map((source) => (
-              <article key={source.id} className="grid items-center gap-4 rounded-xl px-4 py-3" style={{ gridTemplateColumns: "1.6fr 0.8fr 0.7fr 0.7fr auto", background: BG, border: `1px solid ${BORDER}` }}>
-                <div className="min-w-0">
-                  <div className="truncate text-[13px] font-semibold" style={{ color: TEXT }}>{source.filename || "Untitled source"}</div>
-                  <div className="mt-1 text-[11px]" style={{ color: MUTED }}>{source.provider || "manual"} · {source.source_type || "file"}</div>
+              <article key={source.id} className="rounded-xl p-3 sm:p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="break-words text-[13px] font-semibold" style={{ color: TEXT }}>{source.filename || "Untitled source"}</div>
+                    <div className="mt-1 text-[11px]" style={{ color: MUTED }}>{source.provider || "manual"} · {source.source_type || "file"}</div>
+                  </div>
+                  <StatusBadge label={source.intelligence_ready ? "Intelligence ready" : (source.processing_status || source.status || "stored")} tone={sourceTone(source)} />
                 </div>
-                <span className="text-[12px]" style={{ color: MUTED }}>{source.rows_parsed || 0} rows</span>
-                <span className="text-[12px]" style={{ color: MUTED }}>{source.evidence_count || 0} evidence</span>
-                <StatusBadge label={source.intelligence_ready ? "Intelligence ready" : (source.processing_status || source.status || "stored")} tone={sourceTone(source)} />
-                {source.pending ? (
-                  <span className="text-[12px] font-semibold" style={{ color: MUTED }}>Processing</span>
-                ) : (
-                  <button type="button" onClick={() => window.location.assign(`/sources?source=${encodeURIComponent(source.id)}`)} className="text-[12px] font-semibold" style={{ color: "#16533C" }}>View</button>
-                )}
+                <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-[11px]" style={{ color: MUTED }}>
+                  <span>{source.rows_parsed || 0} rows</span>
+                  <span>{source.evidence_count || 0} evidence</span>
+                  {source.pending ? (
+                    <span className="font-semibold">Processing</span>
+                  ) : (
+                    <button type="button" onClick={() => window.location.assign(`/sources?source=${encodeURIComponent(source.id)}`)} className="font-semibold" style={{ color: "#16533C" }}>View</button>
+                  )}
+                </div>
               </article>
             )) : <InlineState title="No uploaded source files yet." detail="Upload a file above or use Connectors. The original source will appear here after secure storage." />}
           </div>
         </section>
 
         {(summary.missing_data || []).length ? (
-          <section className="rounded-xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-            <div className="text-[10px] font-semibold uppercase tracking-widest mb-3" style={{ color: MUTED }}>Missing data</div>
-            <div className="grid grid-cols-2 gap-2">
+          <section className="rounded-xl p-4 sm:p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+            <div className="mb-3 text-[10px] font-semibold uppercase tracking-widest" style={{ color: MUTED }}>Missing data</div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {(summary.missing_data || []).map((item) => (
                 <div key={item} className="rounded-lg px-4 py-3 text-[13px]" style={{ background: BG, color: MUTED }}>{item}</div>
               ))}
@@ -242,43 +246,74 @@ export function Evidence() {
           </section>
         ) : null}
 
-        <section className="rounded-xl overflow-hidden" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-          <div className="grid px-6 py-2.5 gap-4" style={{ gridTemplateColumns: "1.4fr 1fr 1fr 1fr auto", borderBottom: `1px solid ${BORDER}`, background: BG }}>
-            {["Evidence", "Type", "Source", "Time", "Quality"].map((header) => (
-              <span key={header} className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: MUTED }}>{header}</span>
-            ))}
+        <section className="overflow-hidden rounded-xl" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+          <div className="hidden md:block">
+            <div className="grid gap-4 px-6 py-2.5" style={{ gridTemplateColumns: "1.4fr 1fr 1fr 1fr auto", borderBottom: `1px solid ${BORDER}`, background: BG }}>
+              {["Evidence", "Type", "Source", "Time", "Quality"].map((header) => (
+                <span key={header} className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: MUTED }}>{header}</span>
+              ))}
+            </div>
+            {rows.length ? rows.map((row, index) => {
+              const source = row.data_source_id ? sourceById.get(row.data_source_id) : undefined;
+              return (
+                <div key={row.id || index} className="grid items-center gap-4 px-6 py-4" style={{ gridTemplateColumns: "1.4fr 1fr 1fr 1fr auto", borderTop: index > 0 ? `1px solid ${BORDER}` : "none" }}>
+                  <EvidencePrimary row={row} />
+                  <span className="text-[12px]" style={{ color: MUTED }}>{row.evidence_type || row.domain || "unknown"}</span>
+                  <span className="text-[12px]" style={{ color: MUTED }}>{source?.filename || row.citation_label || row.source || "source"}</span>
+                  <span className="text-[12px]" style={{ color: MUTED }}>{row.occurred_at || row.created_at ? new Date(row.occurred_at || row.created_at || "").toLocaleString() : "No timestamp"}</span>
+                  <StatusBadge label={row.quality_status || row.status || "usable"} tone={(row.quality_status || row.status) === "usable" ? "good" : "warn"} />
+                </div>
+              );
+            }) : <div className="p-6"><InlineState title="No derived evidence records yet." detail="A source file can still be securely stored even when it produces no structured evidence rows. Check Uploaded source files above." /></div>}
           </div>
 
-          {rows.length ? rows.map((row, index) => {
-            const source = row.data_source_id ? sourceById.get(row.data_source_id) : undefined;
-            return (
-              <div key={row.id || index} className="grid px-6 py-4 gap-4 items-center" style={{ gridTemplateColumns: "1.4fr 1fr 1fr 1fr auto", borderTop: index > 0 ? `1px solid ${BORDER}` : "none" }}>
-                <div>
-                  <div className="text-[13px] font-semibold" style={{ color: TEXT }}>{row.title || row.name || "Evidence item"}</div>
-                  <div className="text-[11px] leading-relaxed mt-1" style={{ color: MUTED }}>{row.summary || "No summary returned."}</div>
-                </div>
-                <span className="text-[12px]" style={{ color: MUTED }}>{row.evidence_type || row.domain || "unknown"}</span>
-                <span className="text-[12px]" style={{ color: MUTED }}>{source?.filename || row.citation_label || row.source || "source"}</span>
-                <span className="text-[12px]" style={{ color: MUTED }}>{row.occurred_at || row.created_at ? new Date(row.occurred_at || row.created_at || "").toLocaleString() : "No timestamp"}</span>
-                <StatusBadge label={row.quality_status || row.status || "usable"} tone={(row.quality_status || row.status) === "usable" ? "good" : "warn"} />
-              </div>
-            );
-          }) : (
-            <div className="p-6">
-              <InlineState title="No derived evidence records yet." detail="A source file can still be securely stored even when it produces no structured evidence rows. Check Uploaded source files above." />
-            </div>
-          )}
+          <div className="divide-y md:hidden" style={{ borderColor: BORDER }}>
+            {rows.length ? rows.map((row, index) => {
+              const source = row.data_source_id ? sourceById.get(row.data_source_id) : undefined;
+              return (
+                <article key={row.id || index} className="p-4">
+                  <div className="flex items-start justify-between gap-3">
+                    <EvidencePrimary row={row} />
+                    <StatusBadge label={row.quality_status || row.status || "usable"} tone={(row.quality_status || row.status) === "usable" ? "good" : "warn"} />
+                  </div>
+                  <div className="mt-3 grid grid-cols-1 gap-2 min-[420px]:grid-cols-2">
+                    <MobileDatum label="Type" value={row.evidence_type || row.domain || "unknown"} />
+                    <MobileDatum label="Source" value={source?.filename || row.citation_label || row.source || "source"} />
+                  </div>
+                  <div className="mt-3 text-[11px]" style={{ color: MUTED }}>{row.occurred_at || row.created_at ? new Date(row.occurred_at || row.created_at || "").toLocaleString() : "No timestamp"}</div>
+                </article>
+              );
+            }) : <div className="p-4"><InlineState title="No derived evidence records yet." detail="A source file can still be securely stored even when it produces no structured evidence rows. Check Uploaded source files above." /></div>}
+          </div>
         </section>
       </div>
     </div>
   );
 }
 
+function EvidencePrimary({ row }: { row: EvidenceItem }) {
+  return (
+    <div className="min-w-0">
+      <div className="break-words text-[13px] font-semibold" style={{ color: TEXT }}>{row.title || row.name || "Evidence item"}</div>
+      <div className="mt-1 break-words text-[11px] leading-relaxed" style={{ color: MUTED }}>{row.summary || "No summary returned."}</div>
+    </div>
+  );
+}
+
+function MobileDatum({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg px-3 py-2" style={{ background: BG }}>
+      <div className="text-[9px] font-semibold uppercase tracking-wider" style={{ color: MUTED }}>{label}</div>
+      <div className="mt-1 break-words text-[12px]" style={{ color: TEXT }}>{value}</div>
+    </div>
+  );
+}
+
 function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <section className="rounded-xl p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-      <div className="text-[10px] font-semibold uppercase tracking-widest mb-2" style={{ color: MUTED }}>{label}</div>
-      <div className="text-[24px] font-semibold" style={{ color: TEXT }}>{value}</div>
+    <section className="rounded-xl p-4 sm:p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
+      <div className="mb-2 text-[9px] font-semibold uppercase tracking-widest sm:text-[10px]" style={{ color: MUTED }}>{label}</div>
+      <div className="text-[22px] font-semibold sm:text-[24px]" style={{ color: TEXT }}>{value}</div>
     </section>
   );
 }
