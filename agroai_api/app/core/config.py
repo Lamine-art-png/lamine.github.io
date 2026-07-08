@@ -146,6 +146,9 @@ class Settings(BaseSettings):
     AI_LOCAL_CF_ACCESS_CLIENT_SECRET: str = ""
     AI_EDGE_BASE_URL: str = ""
     AI_EDGE_MODEL: str = "@cf/zai-org/glm-4.7-flash"
+    # Optional shared bearer secret for the Workers AI origin. Set the matching
+    # Worker secret ORIGIN_TOKEN before enforcing it in production.
+    AI_EDGE_AUTH_TOKEN: str = ""
 
     AI_CHALLENGER_MODEL: str = "deepseek/deepseek-v4-pro"
     AI_FREE_MODEL: str = ""
