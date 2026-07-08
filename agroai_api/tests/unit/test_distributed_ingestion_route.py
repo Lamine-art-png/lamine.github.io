@@ -85,7 +85,10 @@ def test_stream_route_stages_durable_object_and_outbox(tmp_path, monkeypatch):
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["status"] == "queued"
-    assert body["object_uri"] == "s3://agroai-test/raw/object.csv"
+    assert body["phase"] == "stored"
+    assert body["durable_stored"] is True
+    assert body["processing_pending"] is True
     assert body["job_id"]
     assert body["queue_publication"] == {"published": 1, "failed": 0}
+    assert "object_uri" not in body
     assert fake.uploaded
