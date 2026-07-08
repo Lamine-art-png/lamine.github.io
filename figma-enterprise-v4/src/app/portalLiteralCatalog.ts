@@ -6,9 +6,13 @@ import literalCatalogPart5 from "../../../shared/ui-literals.en.5.json";
 import literalCatalogPart6 from "../../../shared/ui-literals.en.6.json";
 import literalCatalogPart7 from "../../../shared/ui-literals.en.7.json";
 import dynamicCopyCatalog from "../../../shared/ui-dynamic-copy.en.json";
+import dynamicCopyExtraCatalog from "../../../shared/ui-dynamic-copy-extra.en.json";
 import { getStoredLocale, t, TRANSLATIONS } from "./i18n";
 
-export const DYNAMIC_UI_COPY_CATALOG: Record<string, string> = dynamicCopyCatalog;
+export const DYNAMIC_UI_COPY_CATALOG: Record<string, string> = {
+  ...dynamicCopyCatalog,
+  ...dynamicCopyExtraCatalog,
+};
 
 export const PORTAL_LITERAL_CATALOG: Record<string, string> = Object.assign(
   {},
