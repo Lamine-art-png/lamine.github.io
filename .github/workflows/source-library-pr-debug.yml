@@ -1,0 +1,38 @@
+name: Source Library PR Debug
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portal-contract-debug:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Install portal dependencies
+        working-directory: figma-enterprise-v4
+        run: npm ci
+      - name: Run portal contracts with captured output
+        working-directory: figma-enterprise-v4
+        shell: bash
+        run: |
+          set +e
+          npm run test:i18n 2>&1 | tee /tmp/source-library-test-i18n.log
+          status=${PIPESTATUS[0]}
+          echo "$status" > /tmp/source-library-test-i18n.status
+          exit "$status"
+      - name: Upload exact contract output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: source-library-test-i18n
+          path: |
+            /tmp/source-library-test-i18n.log
+            /tmp/source-library-test-i18n.status
+          if-no-files-found: warn
