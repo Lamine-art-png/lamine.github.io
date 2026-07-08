@@ -22,6 +22,8 @@ import {
 export const COMMERCIAL_BOUNDARY_EVENT = "agroai:commercial-boundary";
 export type { CommercialBoundaryDetail } from "./commercialBoundaryViewModel";
 
+const DEMO_BOOKING_URL = "https://agroai-pilot.com/book-a-demo";
+
 type Translate = (key: string) => string;
 type Copy = (value: string) => string;
 
@@ -133,7 +135,9 @@ function CommercialBoundaryDialog({
         ? t("commercialBoundary.title.restore")
         : t("commercialBoundary.title.upgrade");
   const body = isQuota ? t("commercialBoundary.body.quota") : t("commercialBoundary.body.unavailable");
-  const href = `/pricing?upgrade=${target}${detail.feature ? `&feature=${encodeURIComponent(detail.feature)}` : ""}${detail.metric ? `&metric=${encodeURIComponent(detail.metric)}` : ""}`;
+  const href = target === "enterprise"
+    ? DEMO_BOOKING_URL
+    : `/pricing?upgrade=${target}${detail.feature ? `&feature=${encodeURIComponent(detail.feature)}` : ""}${detail.metric ? `&metric=${encodeURIComponent(detail.metric)}` : ""}`;
   const targetName = t(PLAN[target].nameKey);
   const primaryAction = target === "enterprise"
     ? t("commercialBoundary.talkToSales")
