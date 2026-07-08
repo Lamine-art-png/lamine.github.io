@@ -1,8 +1,9 @@
 """Internal/demo access profile API.
 
 No endpoint accepts a client-selected paid plan or entitlement map. Self-activation
-is possible only when the authenticated email already appears in a server-side
-allowlist. Environment provisioning requires a separate secret token.
+is possible only when the authenticated email appears in a server-side allowlist
+and the identity owns the target organization. Environment provisioning requires
+a separate secret token.
 """
 from __future__ import annotations
 
@@ -80,11 +81,12 @@ def access_profile_status(ctx: AuthContext = Depends(get_auth_context)) -> dict:
     org = _require_org(ctx)
     actual = access_profile_metadata(org)
     configured = configured_profile_for_user(ctx.user)
+    owns_org = str(getattr(org, "owner_user_id", "") or "") == str(getattr(ctx.user, "id", "") or "")
     return {
         "access_profile": actual["profile"],
         "billing_required": actual["billing_required"],
         "configured_profile": configured if configured in FULL_ACCESS_PROFILES else CUSTOMER_PROFILE,
-        "activation_available": configured in FULL_ACCESS_PROFILES,
+        "activation_available": configured in FULL_ACCESS_PROFILES and owns_org,
         "demo_data_policy": actual.get("demo_data_policy"),
     }
 
@@ -94,7 +96,7 @@ def activate_access_profile(
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Idempotently activate the profile pre-authorized for this authenticated email."""
+    """Idempotently activate the profile pre-authorized for this authenticated owner."""
 
     org = _require_org(ctx)
     result = activate_configured_profile(db, user=ctx.user, org=org)
