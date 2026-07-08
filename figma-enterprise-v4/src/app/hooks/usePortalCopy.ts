@@ -6,12 +6,17 @@ import {
 } from "../dynamicLocaleCatalog";
 import { formatTranslation, getStoredLocale, normalizeLocale } from "../i18n";
 import { getLocaleRuntimeSnapshot, subscribeLocaleRuntime } from "../localeRuntimeStore";
-import { dynamicCopySourceForNamespaces, translatePortalLiteral } from "../portalLiteralCatalog";
+import {
+  dynamicCopySourceForNamespaces,
+  portalCopySourceForValues,
+  translatePortalLiteral,
+} from "../portalLiteralCatalog";
 
 export type PortalCopyValues = Record<string, string | number | undefined>;
 
-export function usePortalCopy(namespaces: readonly string[]) {
+export function usePortalCopy(namespaces: readonly string[], literalValues: readonly string[] = []) {
   const namespaceKey = namespaces.join("|");
+  const literalKey = literalValues.join("\u0001");
   const [locale, setLocale] = useState(getStoredLocale());
   const runtimeRevision = useSyncExternalStore(
     subscribeLocaleRuntime,
@@ -19,8 +24,11 @@ export function usePortalCopy(namespaces: readonly string[]) {
     getLocaleRuntimeSnapshot,
   );
   const source = useMemo(
-    () => dynamicCopySourceForNamespaces(namespaceKey.split("|").filter(Boolean)),
-    [namespaceKey],
+    () => ({
+      ...dynamicCopySourceForNamespaces(namespaceKey.split("|").filter(Boolean)),
+      ...portalCopySourceForValues(literalKey ? literalKey.split("\u0001") : []),
+    }),
+    [namespaceKey, literalKey],
   );
 
   useEffect(() => {
@@ -42,7 +50,7 @@ export function usePortalCopy(namespaces: readonly string[]) {
         error: error instanceof Error ? error.message : String(error),
       });
     });
-  }, [locale, namespaceKey, source]);
+  }, [locale, namespaceKey, literalKey, source]);
 
   const tx = (value: string): string => {
     void runtimeRevision;
