@@ -238,7 +238,9 @@ async function loadLocaleCatalog(effectiveLocale: string, source: Record<string,
       if (result.status === "fulfilled") {
         const { chunk, catalog } = result.value;
         Object.assign(merged, catalog);
-        installLocaleCatalog(effectiveLocale, chunk, catalog, true);
+        // Progressive translation remains visible in-memory, but partial chunks
+        // are never persisted. Cache writes are atomic after full validation.
+        installLocaleCatalog(effectiveLocale, chunk, catalog, false);
       } else if (!waveFailure) {
         waveFailure = result.reason;
       }
@@ -258,34 +260,31 @@ export async function ensureLocaleCatalog(locale: string, scope: CatalogScope = 
   const effectiveLocale = normalizeLocale(locale);
   const source = sourceForScope(scope);
   const current = TRANSLATIONS[effectiveLocale];
-
   if (effectiveLocale === "en") {
-    if (catalogCoversSource(current, source)) return false;
     installLocaleCatalog("en", source, source, false);
     return true;
   }
-  if (catalogCoversSource(current, source)) return false;
+  if (catalogCoversSource(current, source)) return true;
 
-  const requestKey = `${effectiveLocale}:${sourceFingerprint(source)}`;
-  const retryAfter = RETRY_AFTER.get(requestKey) || 0;
-  if (retryAfter > Date.now()) throw new Error(`UI translation retry cooldown for ${effectiveLocale}`);
-  if (retryAfter) RETRY_AFTER.delete(requestKey);
+  const inflightKey = `${effectiveLocale}:${scope}`;
+  const inflight = INFLIGHT.get(inflightKey);
+  if (inflight) return inflight;
 
-  const existing = INFLIGHT.get(requestKey);
-  if (existing) return existing;
+  const retryAt = RETRY_AFTER.get(inflightKey) || 0;
+  if (retryAt > Date.now()) return false;
 
-  const pending = loadLocaleCatalog(effectiveLocale, source)
-    .then((changed) => {
-      RETRY_AFTER.delete(requestKey);
-      return changed;
+  const request = loadLocaleCatalog(effectiveLocale, source)
+    .then((ok) => {
+      if (ok) RETRY_AFTER.delete(inflightKey);
+      return ok;
     })
-    .catch((error) => {
-      RETRY_AFTER.set(requestKey, Date.now() + RETRY_COOLDOWN_MS);
-      throw error;
+    .catch(() => {
+      RETRY_AFTER.set(inflightKey, Date.now() + RETRY_COOLDOWN_MS);
+      return false;
     })
     .finally(() => {
-      INFLIGHT.delete(requestKey);
+      INFLIGHT.delete(inflightKey);
     });
-  INFLIGHT.set(requestKey, pending);
-  return pending;
+  INFLIGHT.set(inflightKey, request);
+  return request;
 }
