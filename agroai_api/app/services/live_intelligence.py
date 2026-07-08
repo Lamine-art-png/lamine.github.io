@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import ipaddress
 import json
 import os
 import re
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
 
 import httpx
 
@@ -93,6 +95,8 @@ class LiveIntelligence:
             self.base if self.provider == "ollama" and self.base and not self.edge_base else ""
         )
         self.local_model = (settings.AI_LOCAL_MODEL or "").strip()
+        self.local_access_client_id = (settings.AI_LOCAL_CF_ACCESS_CLIENT_ID or "").strip()
+        self.local_access_client_secret = (settings.AI_LOCAL_CF_ACCESS_CLIENT_SECRET or "").strip()
         self.edge_model = (settings.AI_EDGE_MODEL or "").strip() or "@cf/zai-org/glm-4.7-flash"
         self.challenger_model = (settings.AI_CHALLENGER_MODEL or "").strip() or "deepseek/deepseek-v4-pro"
         self.free_model = (settings.AI_FREE_MODEL or "").strip()
@@ -168,13 +172,41 @@ class LiveIntelligence:
             *defaults,
         ])
 
+    def local_requires_access(self) -> bool:
+        """Fail closed for public DNS/IP local origins unless Access credentials exist."""
+        if not self.local_base:
+            return False
+        host = (urlparse(self.local_base).hostname or "").strip().lower()
+        if not host or host == "localhost" or host.endswith(".localhost"):
+            return False
+        try:
+            address = ipaddress.ip_address(host)
+            return not (address.is_private or address.is_loopback or address.is_link_local)
+        except ValueError:
+            return True
+
+    def local_access_configured(self) -> bool:
+        return bool(self.local_access_client_id and self.local_access_client_secret)
+
+    def local_access_headers(self) -> dict[str, str]:
+        if not self.local_access_configured():
+            return {}
+        return {
+            "CF-Access-Client-Id": self.local_access_client_id,
+            "CF-Access-Client-Secret": self.local_access_client_secret,
+        }
+
     def ollama_model(self) -> str | None:
         model = self.local_model or (
             (settings.AI_MODEL or "").strip()
             if self.provider == "ollama" and "/" not in (settings.AI_MODEL or "")
             else ""
         )
-        return model if self.local_base and model and "/" not in model else None
+        if not (self.local_base and model and "/" not in model):
+            return None
+        if self.local_requires_access() and not self.local_access_configured():
+            return None
+        return model
 
     def edge(self) -> tuple[str, str] | None:
         return (self.edge_base, self.edge_model) if self.edge_base and self.edge_model else None
@@ -233,6 +265,8 @@ class LiveIntelligence:
     async def run_local(self, model: str, messages: list[dict[str, str]], profile: str) -> tuple[str, str] | None:
         if not self.local_base:
             return None
+        if self.local_requires_access() and not self.local_access_configured():
+            return None
         if profile == "fast":
             num_predict = min(self.local_max_tokens, 600)
             num_ctx = min(self.local_num_ctx, 4096)
@@ -260,7 +294,11 @@ class LiveIntelligence:
         }
         try:
             async with httpx.AsyncClient(timeout=self.local_timeout) as client:
-                response = await client.post(f"{self.local_base}/api/chat", json=payload)
+                response = await client.post(
+                    f"{self.local_base}/api/chat",
+                    headers=self.local_access_headers(),
+                    json=payload,
+                )
                 response.raise_for_status()
                 body = response.json()
             answer = _ollama_compatible_answer(body)
@@ -419,7 +457,10 @@ class LiveIntelligence:
 
         if route == "local":
             if not local_model:
-                return LiveResult("unavailable", "", "ollama", None, language.response_code, profile, "No actual local Ollama origin and model are configured.")
+                detail = "No actual local Ollama origin and model are configured."
+                if self.local_base and self.local_requires_access() and not self.local_access_configured():
+                    detail = "Public local Ollama origin is blocked until Cloudflare Access service-token credentials are configured."
+                return LiveResult("unavailable", "", "ollama", None, language.response_code, profile, detail)
             local = await self.run_local(local_model, prepared, profile)
             if not local:
                 return LiveResult("unavailable", "", "ollama", local_model, language.response_code, profile, "The forced local model did not complete the request.")
