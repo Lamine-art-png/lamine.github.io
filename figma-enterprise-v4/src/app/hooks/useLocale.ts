@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import {
   ensureLocaleCatalog,
   hasCompleteLocaleCatalog,
+  hasCoreLocaleCatalog,
   hasCriticalLocaleCatalog,
   primeLocaleCatalogFromCache,
 } from "../dynamicLocaleCatalog";
@@ -26,6 +27,7 @@ function delay(ms: number) {
 
 function primeKnownLocale(locale: string) {
   primeLocaleCatalogFromCache(locale, "critical");
+  primeLocaleCatalogFromCache(locale, "core");
   primeLocaleCatalogFromCache(locale, "full");
 }
 
@@ -84,13 +86,23 @@ export function useLocale() {
           }
           if (cancelled) return;
 
-          // Once the navigation/settings shell is translated, release the UI.
-          // Full coverage keeps converging in the background from durable chunks.
+          // Release the portal as soon as the navigation/settings shell is
+          // translated. Every successful critical chunk is already durable.
           if (hasCriticalLocaleCatalog(selectedLocale)) {
             setCatalogLoading(false);
             notifyLocaleRuntime();
           }
 
+          // Expand to the remaining bundled core copy. Reusable critical chunks
+          // are merged first, so this stage requests only missing core keys.
+          if (!hasCoreLocaleCatalog(selectedLocale)) {
+            await ensureLocaleCatalog(selectedLocale, "core");
+          }
+          if (cancelled) return;
+          notifyLocaleRuntime();
+
+          // Full literal convergence likewise requests only keys still missing
+          // after the durable critical and core stages.
           if (!hasCompleteLocaleCatalog(selectedLocale)) {
             await ensureLocaleCatalog(selectedLocale, "full");
           }
