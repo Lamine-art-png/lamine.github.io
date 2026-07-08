@@ -4,7 +4,7 @@ import urllib.parse
 
 from app.api.v1.connector_launch import CONNECTOR_MANIFESTS, OAUTH_PROVIDERS
 from app.api.v1.connectors import catalog_item
-from app.services.john_deere_sync import GLOBAL_ROUTE_SPECS, ORG_ROUTE_SPECS
+from app.services.john_deere_sync import GLOBAL_ROUTE_SPECS, ORG_ROUTE_SPECS, _trusted_api_url
 from app.services.oauth_urls import oauth_url
 from app.services.provider_sync_jobs import SUPPORTED_PROVIDERS
 
@@ -59,3 +59,12 @@ def test_phase_one_deere_sync_never_calls_work_plans():
     assert "fields" in routes
     assert "boundaries" in routes
     assert "equipment" in routes
+
+
+def test_deere_pagination_cannot_exfiltrate_bearer_token(monkeypatch):
+    monkeypatch.setenv("JOHN_DEERE_API_BASE_URL", "https://api.deere.com/platform")
+    assert _trusted_api_url("/platform/organizations?page=2") == "https://api.deere.com/platform/organizations?page=2"
+    assert _trusted_api_url("https://api.deere.com/platform/organizations?page=2") == "https://api.deere.com/platform/organizations?page=2"
+    assert _trusted_api_url("https://evil.example/steal") is None
+    assert _trusted_api_url("http://api.deere.com/platform/organizations?page=2") is None
+    assert _trusted_api_url("https://api.deere.com/other-root") is None
