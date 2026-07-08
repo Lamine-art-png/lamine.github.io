@@ -10,10 +10,19 @@ jobs:
   literal-inventory:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Strict literal inventory
-        working-directory: figma-enterprise-v4
-        run: python3 scripts/check_ui_literal_inventory.py --check
+      - name: Download exact merge snapshot and run strict inventory
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir repo
+          curl --fail --silent --show-error --location \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/${GITHUB_REPOSITORY}/tarball/${GITHUB_SHA}" \
+            | tar -xz --strip-components=1 -C repo
+          cd repo/figma-enterprise-v4
+          python3 scripts/check_ui_literal_inventory.py --check
 
   core-i18n-contract:
     runs-on: ubuntu-latest
