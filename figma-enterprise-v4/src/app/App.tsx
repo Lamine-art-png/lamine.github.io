@@ -38,7 +38,7 @@ function LocaleTransitionCover() {
     >
       <div className="flex flex-col items-center gap-4">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl" style={{ background: "#10231B", color: "#E4F57A" }}>
-          <span className="text-[13px] font-bold tracking-[0.08em]">AGRO</span>
+          <span className="text-[13px] font-bold tracking-[0.08em]">{"AGRO"}</span>
         </div>
         <div className="h-1.5 w-28 overflow-hidden rounded-full" style={{ background: "#D6DDD0" }}>
           <div className="h-full w-1/2 animate-pulse rounded-full" style={{ background: "#2D6A4F" }} />
