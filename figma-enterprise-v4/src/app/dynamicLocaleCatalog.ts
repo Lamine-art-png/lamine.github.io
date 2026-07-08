@@ -174,6 +174,20 @@ function writeCached(locale: string, source: Record<string, string>, catalog: Re
   }
 }
 
+function clearCachedLocale(locale: string) {
+  try {
+    const prefix = `${CACHE_PREFIX}${locale}:`;
+    const keys: string[] = [];
+    for (let index = 0; index < localStorage.length; index += 1) {
+      const key = localStorage.key(index);
+      if (key?.startsWith(prefix)) keys.push(key);
+    }
+    keys.forEach((key) => localStorage.removeItem(key));
+  } catch {
+    // Cache invalidation is best-effort only.
+  }
+}
+
 export function primeLocaleCatalogFromCache(locale: string, scope: CatalogScope = "critical"): boolean {
   const effectiveLocale = normalizeLocale(locale);
   const source = sourceForScope(scope);
@@ -209,7 +223,7 @@ function reusableCatalog(locale: string, source: Record<string, string>): Record
   return reusable;
 }
 
-async function loadLocaleCatalog(effectiveLocale: string, source: Record<string, string>): Promise<boolean> {
+async function loadLocaleCatalog(effectiveLocale: string, source: Record<string, string>, persistFinal: boolean): Promise<boolean> {
   const cached = cachedCoverage(effectiveLocale, source);
   if (cached) {
     installLocaleCatalog(effectiveLocale, source, cached, false);
@@ -238,8 +252,8 @@ async function loadLocaleCatalog(effectiveLocale: string, source: Record<string,
       if (result.status === "fulfilled") {
         const { chunk, catalog } = result.value;
         Object.assign(merged, catalog);
-        // Progressive translation remains visible in-memory, but partial chunks
-        // are never persisted. Cache writes are atomic after full validation.
+        // Progressive translation remains visible in-memory. Only a complete
+        // full-scope catalog may persist across sessions.
         installLocaleCatalog(effectiveLocale, chunk, catalog, false);
       } else if (!waveFailure) {
         waveFailure = result.reason;
@@ -252,7 +266,7 @@ async function loadLocaleCatalog(effectiveLocale: string, source: Record<string,
     throw new Error(`Incomplete UI translation catalog for ${effectiveLocale}`);
   }
 
-  installLocaleCatalog(effectiveLocale, source, merged, true);
+  installLocaleCatalog(effectiveLocale, source, merged, persistFinal);
   return true;
 }
 
@@ -273,12 +287,13 @@ export async function ensureLocaleCatalog(locale: string, scope: CatalogScope = 
   const retryAt = RETRY_AFTER.get(inflightKey) || 0;
   if (retryAt > Date.now()) return false;
 
-  const request = loadLocaleCatalog(effectiveLocale, source)
+  const request = loadLocaleCatalog(effectiveLocale, source, scope === "full")
     .then((ok) => {
       if (ok) RETRY_AFTER.delete(inflightKey);
       return ok;
     })
     .catch(() => {
+      if (scope === "full") clearCachedLocale(effectiveLocale);
       RETRY_AFTER.set(inflightKey, Date.now() + RETRY_COOLDOWN_MS);
       return false;
     })
