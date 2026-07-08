@@ -21,6 +21,13 @@ function translationMessages(messages) {
   }
 }
 
+function authorized(request, env) {
+  const expected = String(env.ORIGIN_TOKEN || "").trim();
+  if (!expected) return true;
+  const supplied = String(request.headers.get("authorization") || "").trim();
+  return supplied === `Bearer ${expected}`;
+}
+
 export default {
   async fetch(request, env) {
     const url = new URL(request.url);
@@ -30,6 +37,10 @@ export default {
     if (request.method !== "POST" || url.pathname !== "/api/chat") {
       return Response.json({ error: "not_found" }, { status: 404 });
     }
+    if (!authorized(request, env)) {
+      return Response.json({ error: "unauthorized" }, { status: 401 });
+    }
+
     const body = await request.json();
     const incoming = Array.isArray(body.messages) ? body.messages : [];
     const translated = translationMessages(incoming);
@@ -40,11 +51,15 @@ export default {
     });
     const raw = String(result?.response ?? result?.result?.response ?? result?.choices?.[0]?.message?.content ?? "").trim();
     if (!raw) return Response.json({ error: "empty_ai_response" }, { status: 503 });
-    const content = JSON.stringify({ answer: raw });
+
+    // UI translation callers need the translated JSON object itself. Normal
+    // chat callers keep the stable {answer: ...} wrapper expected by AGRO-AI.
+    const content = translated ? raw : JSON.stringify({ answer: raw });
     return Response.json({
       provider: "cloudflare-workers-ai",
       model: env.MODEL,
       requested_model: body.model ?? null,
+      translation_mode: Boolean(translated),
       message: { role: "assistant", content },
       response: content,
       done: true,
