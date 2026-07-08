@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import re
 from dataclasses import dataclass
@@ -15,13 +16,22 @@ from app.services.operational_invariants import check_operational_invariants
 _TEST_ROUTE_ALIASES = {
     "auto": "auto",
     "local": "local",
+    "edge": "edge",
     "glm": "glm",
     "primary": "primary",
     "deepseek": "challenger",
     "challenger": "challenger",
     "free": "free",
 }
-_VALID_ROUTING_MODES = {"hybrid", "remote_first", "local_first", "remote_only", "local_only"}
+_VALID_ROUTING_MODES = {
+    "hybrid",
+    "remote_first",
+    "edge_first",
+    "local_first",
+    "remote_only",
+    "edge_only",
+    "local_only",
+}
 
 
 @dataclass
@@ -44,22 +54,62 @@ def _dedupe(values: list[str | None]) -> list[str]:
     return output
 
 
+def _ollama_compatible_answer(body: dict[str, Any]) -> str:
+    """Extract customer text from real Ollama or the edge Ollama-compatible wrapper."""
+    if not isinstance(body, dict):
+        return ""
+    value = (body.get("message") or {}).get("content") or body.get("response") or ""
+    text = str(value or "").strip()
+    if not text:
+        return ""
+    try:
+        parsed = json.loads(text)
+    except (json.JSONDecodeError, TypeError):
+        return text
+    if isinstance(parsed, dict):
+        for key in ("answer", "summary", "content", "message"):
+            item = parsed.get(key)
+            if isinstance(item, str) and item.strip():
+                return item.strip()
+    return text
+
+
 class LiveIntelligence:
     def __init__(self) -> None:
         self.provider = (settings.AI_PROVIDER or "").strip().lower()
         self.base = (settings.AI_BASE_URL or "").strip().rstrip("/")
         self.ai_key = (settings.AI_API_KEY or "").strip()
         self.openrouter_key = (os.getenv("OPENROUTER_API_KEY") or "").strip()
+
+        explicit_local_base = (settings.AI_LOCAL_BASE_URL or "").strip().rstrip("/")
+        explicit_edge_base = (settings.AI_EDGE_BASE_URL or "").strip().rstrip("/")
+        legacy_edge_base = (
+            self.base
+            if self.provider == "ollama" and "local-ai.agroai-pilot.com" in self.base.lower()
+            else ""
+        )
+        # The production local-ai hostname is currently a Cloudflare Workers AI
+        # Ollama-compatible origin, not the Mac. Treat it as edge truthfully.
+        self.edge_base = explicit_edge_base or legacy_edge_base
+        # Backwards-compatible local fallback only when AI_BASE_URL is an Ollama
+        # deployment that is not the known Workers AI hostname.
+        self.local_base = explicit_local_base or (
+            self.base if self.provider == "ollama" and self.base and not self.edge_base else ""
+        )
         self.local_model = (settings.AI_LOCAL_MODEL or "").strip()
+        self.edge_model = (settings.AI_EDGE_MODEL or "").strip() or "@cf/zai-org/glm-4.7-flash"
         self.challenger_model = (settings.AI_CHALLENGER_MODEL or "").strip() or "deepseek/deepseek-v4-pro"
         self.free_model = (settings.AI_FREE_MODEL or "").strip()
+
         configured_mode = (settings.AI_ROUTING_MODE or "hybrid").strip().lower()
         self.routing_mode = configured_mode if configured_mode in _VALID_ROUTING_MODES else "hybrid"
         self.test_commands_enabled = bool(settings.AI_MODEL_TEST_COMMANDS_ENABLED)
+
         self.local_num_ctx = max(2048, min(int(settings.AI_LOCAL_NUM_CTX or 6144), 16384))
         self.local_max_tokens = max(200, min(int(settings.AI_LOCAL_MAX_TOKENS or 1200), 2800))
         self.local_timeout = max(30, min(int(settings.AI_LOCAL_TIMEOUT_SECONDS or 90), 180))
         self.local_thinking = bool(settings.AI_LOCAL_THINKING)
+        self.edge_timeout = max(10, min(int(settings.AI_EDGE_TIMEOUT_SECONDS or 45), 90))
         self.timeout = max(10, min(int(settings.AI_TIMEOUT_SECONDS or 30), 90))
 
     def profile(self, task: str, question: str) -> str:
@@ -85,6 +135,7 @@ class LiveIntelligence:
             return (self.base, key, "openrouter") if key else None
         if p in {"openai", "openai-compatible", "openai_compatible"} and self.base and self.ai_key:
             return self.base, self.ai_key, "openai_compatible"
+        # Local/edge deployments can still use OpenRouter as the hosted frontier lane.
         if p == "ollama":
             key = self.openrouter_key or self.ai_key
             return ("https://openrouter.ai/api/v1", key, "openrouter") if key else None
@@ -123,10 +174,15 @@ class LiveIntelligence:
         ])
 
     def ollama_model(self) -> str | None:
-        if self.provider != "ollama" or not self.base:
-            return None
-        model = self.local_model or (settings.AI_MODEL or "").strip()
-        return model if model and "/" not in model else None
+        model = self.local_model or (
+            (settings.AI_MODEL or "").strip()
+            if self.provider == "ollama" and "/" not in (settings.AI_MODEL or "")
+            else ""
+        )
+        return model if self.local_base and model and "/" not in model else None
+
+    def edge(self) -> tuple[str, str] | None:
+        return (self.edge_base, self.edge_model) if self.edge_base and self.edge_model else None
 
     @staticmethod
     def content(body: dict[str, Any]) -> str:
@@ -182,6 +238,8 @@ class LiveIntelligence:
         return None
 
     async def run_local(self, model: str, messages: list[dict[str, str]], profile: str) -> tuple[str, str] | None:
+        if not self.local_base:
+            return None
         if profile == "fast":
             num_predict = min(self.local_max_tokens, 600)
             num_ctx = min(self.local_num_ctx, 4096)
@@ -209,12 +267,35 @@ class LiveIntelligence:
         }
         try:
             async with httpx.AsyncClient(timeout=self.local_timeout) as client:
-                response = await client.post(f"{self.base}/api/chat", json=payload)
+                response = await client.post(f"{self.local_base}/api/chat", json=payload)
                 response.raise_for_status()
                 body = response.json()
-            answer = str((body.get("message") or {}).get("content") or body.get("response") or "").strip()
+            answer = _ollama_compatible_answer(body)
             return (answer, model) if answer else None
-        except (httpx.HTTPError, ValueError, KeyError):
+        except (httpx.HTTPError, ValueError, KeyError, TypeError):
+            return None
+
+    async def run_edge(self, cfg: tuple[str, str], messages: list[dict[str, str]], profile: str) -> tuple[str, str] | None:
+        base_url, model = cfg
+        max_tokens = 2200 if profile == "deep" else 1800 if profile == "report" else 1400 if profile == "reasoning" else 700
+        payload = {
+            "model": model,
+            "messages": messages,
+            "stream": False,
+            "think": False,
+            "options": {
+                "temperature": 0.15 if profile == "deep" else 0.2,
+                "num_predict": max_tokens,
+            },
+        }
+        try:
+            async with httpx.AsyncClient(timeout=self.edge_timeout) as client:
+                response = await client.post(f"{base_url}/api/chat", json=payload)
+                response.raise_for_status()
+                body = response.json()
+            answer = _ollama_compatible_answer(body)
+            return (answer, model) if answer else None
+        except (httpx.HTTPError, ValueError, KeyError, TypeError):
             return None
 
     async def repair(self, cfg: tuple[str, str, str], model: str, answer: str, code: str, name: str) -> str | None:
@@ -241,7 +322,7 @@ class LiveIntelligence:
     def parse_test_route(self, question: str) -> tuple[str, str]:
         if not self.test_commands_enabled:
             return "auto", question
-        match = re.match(r"^\s*/(auto|local|glm|primary|deepseek|challenger|free)\b\s*", question or "", flags=re.IGNORECASE)
+        match = re.match(r"^\s*/(auto|local|edge|glm|primary|deepseek|challenger|free)\b\s*", question or "", flags=re.IGNORECASE)
         if not match:
             return "auto", question
         alias = match.group(1).lower()
@@ -283,10 +364,11 @@ class LiveIntelligence:
             )
         return LiveResult("ok", repaired, cfg[2], model, response_code, profile)
 
-    async def finish_local(
+    async def finish_lane(
         self,
         answer: str,
         model: str,
+        provider: str,
         response_code: str,
         response_name: str,
         profile: str,
@@ -295,17 +377,17 @@ class LiveIntelligence:
         allow_remote_repair: bool,
     ) -> LiveResult:
         if language_matches_target(answer, response_code):
-            return LiveResult("ok", answer, "ollama", model, response_code, profile)
+            return LiveResult("ok", answer, provider, model, response_code, profile)
         if allow_remote_repair and remote:
             repair_models = self.models(profile, remote[2], "auto")
             if repair_models:
                 repaired = await self.repair(remote, repair_models[0], answer, response_code, response_name)
                 if repaired is not None:
-                    return LiveResult("ok", repaired, "ollama", model, response_code, profile)
+                    return LiveResult("ok", repaired, provider, model, response_code, profile)
         return LiveResult(
             "language_generation_failed",
             "",
-            "ollama",
+            provider,
             model,
             response_code,
             profile,
@@ -315,13 +397,19 @@ class LiveIntelligence:
     def auto_order(self, profile: str) -> list[str]:
         if self.routing_mode == "remote_only":
             return ["remote"]
+        if self.routing_mode == "edge_only":
+            return ["edge"]
         if self.routing_mode == "local_only":
             return ["local"]
         if self.routing_mode == "remote_first":
-            return ["remote", "local"]
+            return ["remote", "edge", "local"]
+        if self.routing_mode == "edge_first":
+            return ["edge", "remote", "local"]
         if self.routing_mode == "local_first":
-            return ["local", "remote"]
-        return ["local", "remote"] if profile == "fast" else ["remote", "local"]
+            return ["local", "edge", "remote"]
+        # Hybrid: low-latency always-on edge for quick chat; frontier first for
+        # reasoning/report/deep work; actual Mac Ollama remains a last-resort lane.
+        return ["edge", "local", "remote"] if profile == "fast" else ["remote", "edge", "local"]
 
     async def run(self, task: str, question: str, messages: list[dict[str, str]], preferred_language: str | None) -> LiveResult:
         route, clean_question = self.parse_test_route(question)
@@ -336,14 +424,23 @@ class LiveIntelligence:
         prepared = [system, *[dict(x) for x in rewritten_messages if x.get("role") != "system"]]
         remote = self.remote()
         local_model = self.ollama_model()
+        edge = self.edge()
 
         if route == "local":
             if not local_model:
-                return LiveResult("unavailable", "", "ollama", None, language.response_code, profile, "No local Ollama model is configured.")
+                return LiveResult("unavailable", "", "ollama", None, language.response_code, profile, "No actual local Ollama origin and model are configured.")
             local = await self.run_local(local_model, prepared, profile)
             if not local:
                 return LiveResult("unavailable", "", "ollama", local_model, language.response_code, profile, "The forced local model did not complete the request.")
-            return await self.finish_local(local[0], local[1], language.response_code, language.response_name, profile, remote, allow_remote_repair=False)
+            return await self.finish_lane(local[0], local[1], "ollama", language.response_code, language.response_name, profile, remote, allow_remote_repair=False)
+
+        if route == "edge":
+            if not edge:
+                return LiveResult("unavailable", "", "cloudflare_workers_ai", None, language.response_code, profile, "No edge AI origin is configured.")
+            edge_result = await self.run_edge(edge, prepared, profile)
+            if not edge_result:
+                return LiveResult("unavailable", "", "cloudflare_workers_ai", edge[1], language.response_code, profile, "The forced edge model did not complete the request.")
+            return await self.finish_lane(edge_result[0], edge_result[1], "cloudflare_workers_ai", language.response_code, language.response_name, profile, remote, allow_remote_repair=False)
 
         if route in {"glm", "primary", "challenger", "free"}:
             if not remote:
@@ -356,17 +453,33 @@ class LiveIntelligence:
                 return LiveResult("unavailable", "", remote[2], candidates[0], language.response_code, profile, f"The forced {route} model did not complete the request.")
             return await self.finish_remote(remote, result[0], result[1], language.response_code, language.response_name, profile)
 
+        last_failure: LiveResult | None = None
         for lane in self.auto_order(profile):
             if lane == "remote" and remote:
                 candidates = self.models(profile, remote[2], "auto")
                 if candidates:
                     result = await self.run_remote(remote, candidates, prepared, profile)
                     if result:
-                        return await self.finish_remote(remote, result[0], result[1], language.response_code, language.response_name, profile)
+                        finished = await self.finish_remote(remote, result[0], result[1], language.response_code, language.response_name, profile)
+                        if finished.status == "ok":
+                            return finished
+                        last_failure = finished
+            if lane == "edge" and edge:
+                edge_result = await self.run_edge(edge, prepared, profile)
+                if edge_result:
+                    finished = await self.finish_lane(edge_result[0], edge_result[1], "cloudflare_workers_ai", language.response_code, language.response_name, profile, remote, allow_remote_repair=True)
+                    if finished.status == "ok":
+                        return finished
+                    last_failure = finished
             if lane == "local" and local_model:
                 local = await self.run_local(local_model, prepared, profile)
                 if local:
-                    return await self.finish_local(local[0], local[1], language.response_code, language.response_name, profile, remote, allow_remote_repair=True)
+                    finished = await self.finish_lane(local[0], local[1], "ollama", language.response_code, language.response_name, profile, remote, allow_remote_repair=True)
+                    if finished.status == "ok":
+                        return finished
+                    last_failure = finished
 
-        provider = remote[2] if remote else self.provider or "unconfigured"
+        if last_failure is not None:
+            return last_failure
+        provider = remote[2] if remote else "cloudflare_workers_ai" if edge else "ollama" if local_model else self.provider or "unconfigured"
         return LiveResult("unavailable", "", provider, None, language.response_code, profile, "No live model provider completed the request.")
