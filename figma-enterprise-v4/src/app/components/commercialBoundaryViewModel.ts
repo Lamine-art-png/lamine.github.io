@@ -46,6 +46,7 @@ export const FEATURE_TITLE_KEY: Record<string, string> = {
   "admin.requests": "commercialBoundary.feature.adminRequests",
   "agents.execute_safe": "commercialBoundary.feature.agentsExecuteSafe",
   "agents.execute_approval_gated": "commercialBoundary.feature.agentsExecuteApproval",
+  "intelligence.ask": "intelligence.title",
   "intelligence.deep_analysis": "commercialBoundary.feature.intelligenceDeepAnalysis",
 };
 
@@ -62,6 +63,7 @@ export const CAPABILITY_KEY: Record<string, string> = {
   "admin.requests": "commercialBoundary.capability.adminRequests",
   "agents.execute_safe": "commercialBoundary.capability.agentsExecuteSafe",
   "agents.execute_approval_gated": "commercialBoundary.capability.agentsExecuteApproval",
+  "intelligence.ask": "intelligence.title",
   "intelligence.deep_analysis": "commercialBoundary.capability.intelligenceDeepAnalysis",
 };
 
