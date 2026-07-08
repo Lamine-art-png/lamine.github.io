@@ -6,7 +6,7 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite",
-    "test:i18n": "python3 scripts/check_ui_literal_inventory.py --check && node tests/i18n-contract.mjs && node tests/commercial-boundary-i18n-contract.mjs && node tests/paywall-refinements-v4-contract.mjs && node tests/dynamic-ui-i18n-coverage-contract.mjs"
+    "test:i18n": "python3 scripts/check_ui_literal_inventory.py --check && node tests/i18n-contract.mjs && node tests/commercial-boundary-i18n-contract.mjs && node tests/paywall-refinements-v4-contract.mjs && node tests/dynamic-ui-i18n-coverage-contract.mjs && node tests/product-tour-source-library-contract.mjs"
   },
   "dependencies": {
     "@emotion/react": "11.14.0",

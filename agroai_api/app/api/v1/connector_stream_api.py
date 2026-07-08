@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.core.security import require_current_tenant_id
 from app.db.base import get_db
-from app.models.operational_records import IngestionJob
+from app.models.operational_records import DataSource, IngestionJob
 from app.services.object_storage import get_object_store
 from app.services.task_outbox_service import drain_pending_outbox
 
@@ -22,23 +22,27 @@ def connector_ingestion_job_status(
     tenant_id: str = Depends(require_current_tenant_id),
     db: Session = Depends(get_db),
 ) -> dict:
-    """Return a tenant-scoped, customer-safe ingestion receipt.
-
-    The durable upload route is intentionally asynchronous in production. This
-    endpoint lets the portal follow the exact job it just created without
-    exposing object-store URIs, queue internals, or another tenant's job.
-    """
+    """Return a tenant-scoped, customer-safe ingestion receipt."""
     job = db.get(IngestionJob, job_id)
     if job is None or job.tenant_id != tenant_id:
         raise HTTPException(status_code=404, detail="Ingestion job not found")
+
     output = dict(job.output_json or {})
+    source_id = str(output.get("data_source_id") or job.data_source_id or "") or None
+    source = db.get(DataSource, source_id) if source_id else None
+    if source is not None and source.tenant_id != tenant_id:
+        source = None
+
     return {
         "job": {
             "id": job.id,
             "status": job.status,
             "job_type": job.job_type,
             "connection_id": job.connector_connection_id,
-            "data_source_id": output.get("data_source_id") or job.data_source_id,
+            "data_source_id": source_id,
+            "source_visible": bool(source),
+            "filename": source.filename if source is not None else (job.input_json or {}).get("filename"),
+            "source_status": source.status if source is not None else None,
             "rows_parsed": int(output.get("rows_parsed") or 0),
             "evidence_records_created": int(output.get("evidence_records_created") or 0),
             "deduplicated": bool(output.get("deduplicated", False)),
@@ -51,11 +55,13 @@ def connector_ingestion_job_status(
     }
 
 
-# Internal Queue callbacks are intentionally mounted on this compatibility router
-# so app.main can preserve its existing include boundary.
+# Internal Queue callbacks and customer source-library routes are mounted on this
+# compatibility router so app.main preserves its existing include boundary.
 from app.api.v1.cloudflare_queue import router as cloudflare_queue_router  # noqa: E402
+from app.api.v1.source_library import router as source_library_router  # noqa: E402
 
 router.include_router(cloudflare_queue_router)
+router.include_router(source_library_router)
 
 
 __all__ = ["router", "get_object_store", "drain_pending_outbox"]

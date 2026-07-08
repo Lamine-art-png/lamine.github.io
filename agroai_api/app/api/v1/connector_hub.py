@@ -12,18 +12,17 @@ from sqlalchemy.orm import Session
 from app.api.v1.connectors import (
     _create_evidence_rows,
     _job,
-    _job_public,
     create_or_get_connection,
     evidence_public,
     parse_rows,
     public_connection,
-    row_to_dict,
     safe_credential_ref,
     sanitize_config,
     save_upload_bytes,
     suggest_mapping,
     verify_connector_schema,
 )
+from app.api.v1.source_library import source_public
 from app.core.security import require_current_tenant_id
 from app.db.base import get_db
 from app.models.operational_records import ConnectorConnection, DataSource, EvidenceRecord, IngestionJob
@@ -36,6 +35,20 @@ router = APIRouter(tags=["connector-hub-actions"])
 ProviderId = Literal["wiseconn", "talgil", "universal_controller", "weather", "openet", "manual_csv", "chat_upload", "gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce", "google_earth_engine", "custom_api"]
 ACCOUNT_PROVIDERS = {"gmail", "outlook", "google_drive", "dropbox", "box", "slack", "salesforce"}
 UPLOAD_PROVIDERS = {"wiseconn", "talgil", "universal_controller", "manual_csv", "chat_upload", "weather", "openet"}
+_PRIVATE_RESPONSE_KEYS = {
+    "storage_path",
+    "object_uri",
+    "durable_object_uri",
+    "raw_text",
+    "credentials_ref",
+    "credential_ref",
+    "access_token",
+    "refresh_token",
+    "api_key",
+    "password",
+    "secret",
+    "oauth_state",
+}
 
 
 class ConnectorConnectRequest(BaseModel):
@@ -129,13 +142,65 @@ def _save_job(db: Session, *, tenant_id: str, connection: ConnectorConnection, j
     return row
 
 
+def _safe_public_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        safe: dict[str, Any] = {}
+        for key, item in value.items():
+            lowered = str(key).lower()
+            if lowered in _PRIVATE_RESPONSE_KEYS or lowered.endswith("_path") or lowered.endswith("_uri"):
+                continue
+            safe[str(key)] = _safe_public_value(item)
+        return safe
+    if isinstance(value, list):
+        return [_safe_public_value(item) for item in value]
+    return value
+
+
+def _job_customer_safe(job: IngestionJob) -> dict[str, Any]:
+    return {
+        "id": job.id,
+        "workspace_id": job.workspace_id,
+        "connection_id": job.connector_connection_id,
+        "data_source_id": job.data_source_id,
+        "job_type": job.job_type,
+        "status": job.status,
+        "input_json": _safe_public_value(job.input_json or {}),
+        "output_json": _safe_public_value(job.output_json or {}),
+        "error": job.error,
+        "attempt_count": job.attempt_count,
+        "max_attempts": job.max_attempts,
+        "created_at": job.created_at,
+        "updated_at": job.updated_at,
+        "completed_at": job.completed_at,
+    }
+
+
 def ingest_upload(db: Session, *, tenant_id: str, connection: ConnectorConnection, filename: str, content_type: str | None, data: bytes) -> dict[str, Any]:
     if connection.provider not in UPLOAD_PROVIDERS:
         raise HTTPException(status_code=400, detail="This connector does not accept file uploads. Use account/API connection instead.")
     raw_text, rows, columns, warnings = parse_rows(filename, content_type, data)
     storage_path = save_upload_bytes(tenant_id, connection.id, filename, data)
     mapping = suggest_mapping(columns)
-    source = DataSource(tenant_id=tenant_id, workspace_id=connection.workspace_id, connector_connection_id=connection.id, source_type=_source_type(filename, content_type, connection.provider), provider=connection.provider, filename=filename, content_type=content_type, storage_path=storage_path, raw_text=raw_text[:200000], metadata_json={"columns": columns, "rows_parsed": len(rows), "parsed_rows": rows[:500], "mapping_suggestions": mapping, "storage_path": storage_path, "normalized_gateway": connection.provider == "universal_controller", "warnings": warnings}, status="parsed_with_warnings" if warnings else "parsed")
+    source = DataSource(
+        tenant_id=tenant_id,
+        workspace_id=connection.workspace_id,
+        connector_connection_id=connection.id,
+        source_type=_source_type(filename, content_type, connection.provider),
+        provider=connection.provider,
+        filename=filename,
+        content_type=content_type,
+        storage_path=storage_path,
+        raw_text=raw_text[:200000],
+        metadata_json={
+            "columns": columns,
+            "rows_parsed": len(rows),
+            "parsed_rows": rows[:500],
+            "mapping_suggestions": mapping,
+            "normalized_gateway": connection.provider == "universal_controller",
+            "warnings": warnings,
+        },
+        status="parsed_with_warnings" if warnings else "parsed",
+    )
     db.add(source)
     db.commit()
     db.refresh(source)
@@ -143,10 +208,31 @@ def ingest_upload(db: Session, *, tenant_id: str, connection: ConnectorConnectio
     connection.status = "synced" if records else "mapping_required"
     connection.last_sync_at = datetime.utcnow()
     connection.last_error = None if records else "Uploaded file stored but produced no evidence records."
-    job = _job(db, tenant_id=tenant_id, workspace_id=connection.workspace_id, connection_id=connection.id, data_source_id=source.id, job_type="connector_hub_upload_parse", input_json={"provider": connection.provider, "filename": filename}, output_json={"rows_parsed": len(rows), "columns": columns, "mapping_suggestions": mapping, "evidence_records_created": len(records), "warnings": warnings, "data_source_id": source.id, "storage_path": storage_path}, status_value="completed_with_warnings" if warnings else "completed")
+    job = _job(
+        db,
+        tenant_id=tenant_id,
+        workspace_id=connection.workspace_id,
+        connection_id=connection.id,
+        data_source_id=source.id,
+        job_type="connector_hub_upload_parse",
+        input_json={"provider": connection.provider, "filename": filename},
+        output_json={"rows_parsed": len(rows), "columns": columns, "mapping_suggestions": mapping, "evidence_records_created": len(records), "warnings": warnings, "data_source_id": source.id},
+        status_value="completed_with_warnings" if warnings else "completed",
+    )
     db.commit()
     db.refresh(connection)
-    return {"status": source.status, "connection": public_connection(connection), "data_source": row_to_dict(source), "job": _job_public(job), "rows_parsed": len(rows), "columns": columns, "mapping_suggestions": mapping, "evidence_records_created": len(records), "warnings": warnings, "evidence_preview": [evidence_public(record) for record in records[:8]]}
+    return {
+        "status": source.status,
+        "connection": public_connection(connection),
+        "data_source": source_public(source, evidence_count=len(records)),
+        "job": _job_customer_safe(job),
+        "rows_parsed": len(rows),
+        "columns": columns,
+        "mapping_suggestions": mapping,
+        "evidence_records_created": len(records),
+        "warnings": warnings,
+        "evidence_preview": [evidence_public(record) for record in records[:8]],
+    }
 
 
 @router.post("/connectors/connect")
@@ -168,7 +254,7 @@ async def connect_provider(payload: ConnectorConnectRequest, tenant_id: str = De
     job = _save_job(db, tenant_id=tenant_id, connection=connection, job_type="connector_connect", output_json={"status": "connected", "capabilities": caps})
     db.commit()
     db.refresh(connection)
-    return {"status": "connected", "message": f"{payload.provider} connected.", "connection": public_connection(connection), "job": row_to_dict(job), "capabilities": caps}
+    return {"status": "connected", "message": f"{payload.provider} connected.", "connection": public_connection(connection), "job": _job_customer_safe(job), "capabilities": caps}
 
 
 @router.post("/connectors/oauth/start")
@@ -192,7 +278,7 @@ async def start_oauth(payload: OAuthStartRequest, tenant_id: str = Depends(requi
     db.commit()
     db.refresh(connection)
     message = "OAuth authorization URL created." if auth_url else f"{payload.provider} connected for internal testing. Configure provider OAuth client credentials to enable real account authorization."
-    return {"status": connection.status, "message": message, "auth_url": auth_url, "oauth_error": oauth_error, "connection": public_connection(connection), "job": row_to_dict(job), "capabilities": caps}
+    return {"status": connection.status, "message": message, "auth_url": auth_url, "oauth_error": oauth_error, "connection": public_connection(connection), "job": _job_customer_safe(job), "capabilities": caps}
 
 
 @router.post("/evidence/upload")
@@ -222,7 +308,7 @@ async def list_data_sources(provider: str | None = None, connection_id: str | No
     if connection_id:
         query = query.filter(DataSource.connector_connection_id == connection_id)
     rows = query.order_by(DataSource.created_at.desc()).limit(200).all()
-    return {"status": "ok", "data_sources": [row_to_dict(row) for row in rows]}
+    return {"status": "ok", "data_sources": [source_public(row) for row in rows]}
 
 
 @router.get("/connectors/jobs")
@@ -232,7 +318,7 @@ async def list_connector_jobs(connection_id: str | None = None, tenant_id: str =
     if connection_id:
         query = query.filter(IngestionJob.connector_connection_id == connection_id)
     rows = query.order_by(IngestionJob.created_at.desc()).limit(200).all()
-    return {"status": "ok", "jobs": [row_to_dict(row) for row in rows]}
+    return {"status": "ok", "jobs": [_job_customer_safe(row) for row in rows]}
 
 
 @router.get("/connectors/connections/{connection_id}/data")
@@ -242,7 +328,13 @@ async def connector_data_status(connection_id: str, tenant_id: str = Depends(req
     sources = db.query(DataSource).filter(DataSource.tenant_id == tenant_id, DataSource.connector_connection_id == connection_id).order_by(DataSource.created_at.desc()).limit(50).all()
     evidence = db.query(EvidenceRecord).filter(EvidenceRecord.tenant_id == tenant_id, EvidenceRecord.connector_connection_id == connection_id).order_by(EvidenceRecord.created_at.desc()).limit(50).all()
     jobs = db.query(IngestionJob).filter(IngestionJob.tenant_id == tenant_id, IngestionJob.connector_connection_id == connection_id).order_by(IngestionJob.created_at.desc()).limit(20).all()
-    return {"status": "ok", "data_sources": [row_to_dict(row) for row in sources], "evidence": [evidence_public(row) for row in evidence], "jobs": [row_to_dict(row) for row in jobs], "counts": {"data_sources": len(sources), "evidence": len(evidence), "jobs": len(jobs)}}
+    return {
+        "status": "ok",
+        "data_sources": [source_public(row) for row in sources],
+        "evidence": [evidence_public(row) for row in evidence],
+        "jobs": [_job_customer_safe(row) for row in jobs],
+        "counts": {"data_sources": len(sources), "evidence": len(evidence), "jobs": len(jobs)},
+    }
 
 
 # Keep the v3 self-service agricultural lifecycle on the already-mounted

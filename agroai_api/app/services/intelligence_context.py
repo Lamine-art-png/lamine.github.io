@@ -12,6 +12,7 @@ from app.services.commercial_billing_lifecycle import install_commercial_billing
 from app.services.commercial_control import require_feature
 from app.services.intelligence_policy import PROFILE_BASE
 from app.services.operator_cockpit import build_context, decision_workbench, exceptions, field_intelligence, readiness_summary, report_factory
+from app.services.source_content import parsed_rows_preview, source_content_excerpt
 
 
 # Main imports billing before Brain/intelligence context and includes chat artifacts
@@ -23,6 +24,9 @@ install_report_commercial_guards()
 
 
 SECRET_HINTS = ("secret", "token", "password", "api_key", "apikey", "oauth_code", "credential", "private_key")
+MAX_SOURCE_TEXT_CONTEXT_CHARS = 24_000
+PER_SOURCE_TEXT_CHARS = 4_000
+PER_EVIDENCE_EXCERPT_CHARS = 2_000
 
 
 def _redact(value: Any) -> Any:
@@ -49,10 +53,47 @@ def _tool_citations(ctx: Any, workspace_id: str | None, max_items: int) -> list[
                 tenant_id=ctx.organization_id,
                 workspace_id=workspace_id or record.workspace_id,
                 fields=["title", "summary", "evidence_type", "occurred_at"],
-                trace={"citation_label": record.citation_label},
+                trace={"citation_label": record.citation_label, "data_source_id": record.data_source_id},
             )
         )
     return citations
+
+
+def _source_rows(ctx: Any, source_limit: int) -> tuple[list[dict[str, Any]], list[ToolCitation]]:
+    remaining = MAX_SOURCE_TEXT_CONTEXT_CHARS
+    rows: list[dict[str, Any]] = []
+    citations: list[ToolCitation] = []
+
+    for source in ctx.sources[:source_limit]:
+        excerpt_limit = min(PER_SOURCE_TEXT_CHARS, max(0, remaining))
+        excerpt = source_content_excerpt(source, max_chars=excerpt_limit) if excerpt_limit else ""
+        remaining -= len(excerpt)
+        preview = _redact(parsed_rows_preview(source, limit=12))
+        rows.append(
+            {
+                "id": source.id,
+                "provider": source.provider,
+                "source_type": source.source_type,
+                "filename": source.filename,
+                "status": source.status,
+                "content_excerpt": excerpt,
+                "parsed_rows_preview": preview,
+                "metadata_json": _redact(source.metadata_json or {}),
+            }
+        )
+        if source.filename:
+            citations.append(
+                ToolCitation(
+                    source_type=f"data_source:{source.source_type}",
+                    source_id=source.id,
+                    title=source.filename,
+                    tenant_id=ctx.organization_id,
+                    workspace_id=ctx.workspace_id or source.workspace_id,
+                    fields=["filename", "source_type", "content_excerpt", "parsed_rows_preview"],
+                    trace={"provider": source.provider, "status": source.status},
+                )
+            )
+    return rows, citations
 
 
 def build_intelligence_context(
@@ -99,23 +140,16 @@ def build_intelligence_context(
         "missing_source_types": readiness.get("missing_source_types") or [],
     }
 
-    data_sources = [
-        {
-            "id": row.id,
-            "provider": row.provider,
-            "source_type": row.source_type,
-            "filename": row.filename,
-            "status": row.status,
-            "metadata_json": _redact(row.metadata_json or {}),
-        }
-        for row in cockpit.sources[:source_limit]
-    ]
+    data_sources, source_citations = _source_rows(cockpit, source_limit)
     evidence_rows = [
         {
             "id": row.id,
+            "data_source_id": row.data_source_id,
             "type": row.evidence_type,
             "title": row.title,
             "summary": row.summary,
+            "source_excerpt": str(row.source_excerpt or "")[:PER_EVIDENCE_EXCERPT_CHARS],
+            "value_json": _redact(row.value_json or {}),
             "field_id": row.field_id,
             "block_id": row.block_id,
             "occurred_at": row.occurred_at.isoformat() if row.occurred_at else None,
@@ -124,7 +158,7 @@ def build_intelligence_context(
         for row in cockpit.evidence[:source_limit]
     ]
 
-    citations = _tool_citations(cockpit, workspace.id if workspace else workspace_id, source_limit)
+    citations = _tool_citations(cockpit, workspace.id if workspace else workspace_id, source_limit) + source_citations
     evidence_context = EvidenceContext(
         organization_id=tenant_id,
         workspace_id=workspace.id if workspace else workspace_id,
