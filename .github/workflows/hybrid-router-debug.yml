@@ -1,0 +1,32 @@
+name: Hybrid Router Debug
+
+on:
+  push:
+    branches:
+      - feat/hybrid-model-router-v1
+
+permissions:
+  contents: read
+
+jobs:
+  focused-backend-unit-debug:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend dependencies quietly
+        run: python -m pip install -q -r requirements.txt pytest >/tmp/pip.log 2>&1
+      - name: Run unit suite and print compact failure tail
+        shell: bash
+        run: |
+          set +e
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short tests/unit > /tmp/pytest.log 2>&1
+          status=$?
+          echo "=== PYTEST TAIL ==="
+          tail -n 100 /tmp/pytest.log
+          exit "$status"
