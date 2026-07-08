@@ -19,7 +19,7 @@ function Toggle({ checked, onChange, label, detail }: { checked: boolean; onChan
 
 export function SettingsPage() {
   const { currentOrganization, currentWorkspace, user, refreshMe } = useAuth();
-  const { t, setLocale, selectedLocale } = useLocale();
+  const { t, setLocale, selectedLocale, catalogLoading } = useLocale();
   const plan = currentOrganization?.plan || "free";
   const [name, setName] = useState(user?.name || "");
   const [company, setCompany] = useState(currentOrganization?.name || "");
@@ -36,7 +36,7 @@ export function SettingsPage() {
   const [busy, setBusy] = useState("");
 
   useEffect(() => { setName(user?.name || ""); setCompany(currentOrganization?.name || ""); }, [user?.name, currentOrganization?.name]);
-  useEffect(() => { if (!primaryGoalEdited) setPrimaryGoal(translatePortalLiteral(PRIMARY_GOAL_DEFAULT, selectedLocale)); }, [selectedLocale, primaryGoalEdited]);
+  useEffect(() => { if (!primaryGoalEdited && !catalogLoading) setPrimaryGoal(translatePortalLiteral(PRIMARY_GOAL_DEFAULT, selectedLocale)); }, [selectedLocale, catalogLoading, primaryGoalEdited]);
   useEffect(() => { let mounted = true; apiClient.get("/v1/settings/preferences").then((response: any) => { if (!mounted) return; const prefs = response?.preferences || {}; const notifications = prefs.notifications || {}; const ui = prefs.ui || {}; if (prefs.locale) setLocale(String(prefs.locale)); setNotifyReports(notifications.report_delivery !== false); setNotifyAlerts(notifications.operational_alerts !== false); setNotifySupport(notifications.support_updates !== false); setAssistantSpeed(String(ui.assistant_speed || "balanced")); setJobTitle(String(ui.job_title || "")); }).catch(() => null); return () => { mounted = false; }; }, []);
 
   async function saveProfile() { setBusy("profile"); setMessage(""); try { await apiClient.patch("/v1/settings/profile", { name, company, job_title: jobTitle, organization_id: currentOrganization?.id }); await refreshMe().catch(() => null); setMessage(t("saved")); } catch (error) { setMessage(error instanceof Error ? error.message : "Could not save profile."); } finally { setBusy(""); } }
