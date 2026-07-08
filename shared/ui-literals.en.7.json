@@ -33,7 +33,6 @@
   "literal.b1d3b432bc92652b": "Resolve OpenET scope from explicit OpenET IDs or usable field geometry already attached to this workspace.",
   "literal.bc8a366215e824df": "Agent execution requires Professional or above.",
   "literal.bca7e55616119284": "Runs on AGRO-AI's durable connector queue with retries, tenant-scoped credentials, idempotent evidence persistence, and sync cursors.",
-  "literal.c8dcb4535ceceda1": "Authorize, choose scope, sync, done. Provider complexity stays behind AGRO-AI.",
   "literal.c8e73b40dfacd305": "Upload GeoJSON boundaries",
   "literal.cf0d1aa8f948a5f2": "Increase capacity",
   "literal.d51baaa8bb2d2501": "Attach exports, logs, reports, and fragmented customer evidence.",
