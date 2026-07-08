@@ -12,7 +12,7 @@ from app.models.task_outbox import TaskOutbox
 
 
 TASK_TYPE = "connector_provider_sync"
-SUPPORTED_PROVIDERS = {"google_drive", "outlook", "wiseconn", "talgil", "openet"}
+SUPPORTED_PROVIDERS = {"google_drive", "outlook", "john_deere", "wiseconn", "talgil", "openet"}
 
 
 def queue_provider_sync(db: Session, *, tenant_id: str, connection: ConnectorConnection) -> tuple[IngestionJob, bool]:
