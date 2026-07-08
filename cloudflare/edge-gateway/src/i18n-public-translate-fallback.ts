@@ -17,6 +17,13 @@ type EncodedBatch = {
   protectedValues: string[];
 };
 
+type ProviderAttempt = {
+  name: string;
+  maxChars: number;
+  provider: (targetLocale: string, text: string) => Promise<string>;
+  recoverMarkerLossIndividually?: boolean;
+};
+
 class ProviderHttpError extends Error {
   readonly status: number;
 
@@ -199,13 +206,40 @@ async function lingvaTranslateText(targetLocale: string, text: string): Promise<
   return value;
 }
 
+function batchStructureFailure(error: unknown): boolean {
+  const message = String(error || "");
+  return /public_translation_(missing_item_marker|missing_item_boundary|unrestored_token)_\d+/.test(message);
+}
+
+async function translateEntriesIndividually(
+  targetLocale: string,
+  entries: SourceEntry[],
+  provider: (targetLocale: string, text: string) => Promise<string>,
+): Promise<Record<string, string>> {
+  const pairs = await Promise.all(entries.map(async ([key, sourceValue]) => {
+    const translated = (await provider(targetLocale, sourceValue)).trim();
+    if (!translated) throw new Error(`public_translation_empty_individual_${key}`);
+    return [key, translated] as const;
+  }));
+  return Object.fromEntries(pairs);
+}
+
 async function translatePack(
   targetLocale: string,
   pack: SourceEntry[],
   provider: (targetLocale: string, text: string) => Promise<string>,
+  recoverMarkerLossIndividually: boolean,
 ): Promise<Record<string, string>> {
   const encoded = encodeBatch(pack);
-  return decodeBatch(await provider(targetLocale, encoded.text), encoded);
+  try {
+    return decodeBatch(await provider(targetLocale, encoded.text), encoded);
+  } catch (error) {
+    if (!recoverMarkerLossIndividually || !batchStructureFailure(error)) throw error;
+    // Some live providers translate or remove our item delimiters. Rebuild the
+    // catalog by original keys instead of failing over to an unhealthy backend.
+    // The outer validCatalog check still enforces exact keys and placeholders.
+    return await translateEntriesIndividually(targetLocale, pack, provider);
+  }
 }
 
 async function translateThroughProvider(
@@ -213,10 +247,11 @@ async function translateThroughProvider(
   entries: SourceEntry[],
   maxChars: number,
   provider: (targetLocale: string, text: string) => Promise<string>,
+  recoverMarkerLossIndividually: boolean,
 ): Promise<Record<string, string>> {
   const output: Record<string, string> = {};
   for (const pack of packEntries(entries, maxChars)) {
-    Object.assign(output, await translatePack(targetLocale, pack, provider));
+    Object.assign(output, await translatePack(targetLocale, pack, provider, recoverMarkerLossIndividually));
   }
   return output;
 }
@@ -230,12 +265,8 @@ export async function translateWithPublicFallback(
   const failures: string[] = [];
   const myMemoryFitsOneRequest = packEntries(entries, MYMEMORY_BATCH_MAX_CHARS).length === 1;
 
-  const attempts: Array<{
-    name: string;
-    maxChars: number;
-    provider: (targetLocale: string, text: string) => Promise<string>;
-  }> = [
-    { name: "google", maxChars: GOOGLE_BATCH_MAX_CHARS, provider: googleTranslateText },
+  const attempts: ProviderAttempt[] = [
+    { name: "google", maxChars: GOOGLE_BATCH_MAX_CHARS, provider: googleTranslateText, recoverMarkerLossIndividually: true },
     { name: "lingva", maxChars: LINGVA_BATCH_MAX_CHARS, provider: lingvaTranslateText },
     ...(myMemoryFitsOneRequest
       ? [{ name: "mymemory", maxChars: MYMEMORY_BATCH_MAX_CHARS, provider: myMemoryTranslateText }]
@@ -244,7 +275,13 @@ export async function translateWithPublicFallback(
 
   for (const attempt of attempts) {
     try {
-      const output = await translateThroughProvider(targetLocale, entries, attempt.maxChars, attempt.provider);
+      const output = await translateThroughProvider(
+        targetLocale,
+        entries,
+        attempt.maxChars,
+        attempt.provider,
+        Boolean(attempt.recoverMarkerLossIndividually),
+      );
       if (!validCatalog(source, output)) throw new Error(`${attempt.name}_translation_catalog_reconciliation_failed`);
       return output;
     } catch (error) {
@@ -255,4 +292,4 @@ export async function translateWithPublicFallback(
   throw new Error(`public_translation_provider_chain_exhausted: ${failures.join("; ")}`);
 }
 
-export const publicTranslationProvider = "public_translation_provider_chain_v4";
+export const publicTranslationProvider = "public_translation_provider_chain_v5";
