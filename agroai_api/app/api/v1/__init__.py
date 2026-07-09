@@ -41,6 +41,7 @@ from . import product_shell as product_shell_module  # noqa: E402
 from . import monetization_convergence as monetization_module  # noqa: E402
 from . import non_customer_access as non_customer_access_module  # noqa: E402
 from . import ask_agro_ai_paywall as ask_agro_ai_paywall_module  # noqa: E402
+from app.outreach import router as outreach_router  # noqa: E402
 from app.services.commercial_packaging_v2 import apply_catalog_packaging, install_commercial_packaging_v2  # noqa: E402
 from app.services.commercial_upload_metering_v2 import install_commercial_upload_metering  # noqa: E402
 
@@ -129,5 +130,6 @@ _remove_shadow_ask_execution_routes()
 product_shell_module.router.include_router(monetization_module.router)
 product_shell_module.router.include_router(non_customer_access_module.router)
 product_shell_module.router.include_router(ask_agro_ai_paywall_module.router)
+product_shell_module.router.include_router(outreach_router)
 
 _hide_compat_schema_shadows()
