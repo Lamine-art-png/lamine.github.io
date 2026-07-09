@@ -23,9 +23,12 @@ export const COMMERCIAL_BOUNDARY_EVENT = "agroai:commercial-boundary";
 export type { CommercialBoundaryDetail } from "./commercialBoundaryViewModel";
 
 const DEMO_BOOKING_URL = "https://agroai-pilot.com/book-a-demo";
+const BILLING_PERIOD_STORAGE_KEY = "agroai_selected_billing_period";
+const PLAN_STORAGE_KEY = "agroai_selected_plan";
 
 type Translate = (key: string) => string;
 type Copy = (value: string) => string;
+type BillingPeriod = "monthly" | "annual";
 
 function metricLabel(metric: string | undefined, t: Translate) {
   if (!metric) return t("commercialBoundary.planUsage");
@@ -80,6 +83,14 @@ function CompactPlanPrice({ id, t }: { id: PlanId; t: Translate }) {
   </span>;
 }
 
+function selectedBillingPeriod(): BillingPeriod {
+  try {
+    return window.localStorage.getItem(BILLING_PERIOD_STORAGE_KEY) === "annual" ? "annual" : "monthly";
+  } catch {
+    return "monthly";
+  }
+}
+
 export function openCommercialBoundary(detail: CommercialBoundaryDetail) {
   window.dispatchEvent(new CustomEvent(COMMERCIAL_BOUNDARY_EVENT, { detail }));
 }
@@ -102,6 +113,8 @@ export function CommercialBoundaryHost({ children }: { children: ReactNode }) {
   const target = useMemo(() => {
     if (!detail) return nextPlan(currentPlan);
     const requested = detail.recommended_plan ? canonicalPlan(detail.recommended_plan) : null;
+    if (detail.code === "subscription_inactive" && requested && requested !== "free") return requested;
+    if (detail.code === "subscription_inactive" && currentPlan !== "free") return currentPlan;
     if (requested && ORDER.indexOf(requested) > ORDER.indexOf(currentPlan)) return requested;
     return currentPlan === "enterprise" ? "enterprise" : nextPlan(currentPlan);
   }, [detail, currentPlan]);
@@ -125,6 +138,8 @@ function CommercialBoundaryDialog({
 }) {
   const { t } = useLocale();
   const { tx } = usePortalCopy(["paywall", "shared"]);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
+  const [checkoutError, setCheckoutError] = useState("");
   const isQuota = isCommercialQuota(detail);
   const featureTitleKey = detail.feature ? FEATURE_TITLE_KEY[detail.feature] : undefined;
   const title = isQuota
@@ -135,13 +150,40 @@ function CommercialBoundaryDialog({
         ? t("commercialBoundary.title.restore")
         : t("commercialBoundary.title.upgrade");
   const body = isQuota ? t("commercialBoundary.body.quota") : t("commercialBoundary.body.unavailable");
-  const href = target === "enterprise"
-    ? DEMO_BOOKING_URL
-    : `/pricing?upgrade=${target}${detail.feature ? `&feature=${encodeURIComponent(detail.feature)}` : ""}${detail.metric ? `&metric=${encodeURIComponent(detail.metric)}` : ""}`;
   const targetName = t(PLAN[target].nameKey);
   const primaryAction = target === "enterprise"
     ? t("commercialBoundary.talkToSales")
     : formatTranslation(t("commercialBoundary.upgradeTo"), { plan: targetName });
+
+  async function handlePrimaryAction() {
+    setCheckoutError("");
+    if (target === "enterprise") {
+      window.location.assign(DEMO_BOOKING_URL);
+      return;
+    }
+
+    const billingPeriod = selectedBillingPeriod();
+    setCheckoutBusy(true);
+    try {
+      try {
+        window.localStorage.setItem(PLAN_STORAGE_KEY, target);
+        window.localStorage.setItem(BILLING_PERIOD_STORAGE_KEY, billingPeriod);
+      } catch {
+        // Checkout does not depend on local storage; preference persistence is best-effort.
+      }
+
+      const response = await apiClient.billing.checkout({ plan_id: target, billing_period: billingPeriod }) as Record<string, unknown>;
+      const checkoutUrl = typeof response.checkout_url === "string" ? response.checkout_url.trim() : "";
+      if (!checkoutUrl) {
+        throw new Error(typeof response.message === "string" && response.message.trim() ? response.message : t("commercialBoundary.body.unavailable"));
+      }
+      window.location.assign(checkoutUrl);
+    } catch (error) {
+      setCheckoutError(error instanceof Error && error.message ? error.message : t("commercialBoundary.body.unavailable"));
+    } finally {
+      setCheckoutBusy(false);
+    }
+  }
 
   return <div className="fixed inset-0 z-[120] flex items-center justify-center bg-[#061D15]/80 px-4 py-8 backdrop-blur-[2px]" role="dialog" aria-modal="true" aria-label={title}>
     <div className="relative w-full max-w-[880px] overflow-hidden rounded-[26px] border border-white/10 bg-[#FFFDF8] shadow-[0_32px_120px_rgba(0,0,0,0.42)]">
@@ -166,7 +208,8 @@ function CommercialBoundaryDialog({
             <div className="text-[12px] font-semibold text-[#10231B]">{t("commercialBoundary.why")}</div>
             <p className="mt-2 text-[12px] leading-6 text-[#4F675B]">{reasonText(detail, t, tx)}</p>
           </div>
-          <div className="mt-6 flex flex-wrap gap-3"><a href={href} className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#0D2B1E] px-5 text-[13px] font-semibold text-white">{primaryAction}<ArrowRight className="h-4 w-4" /></a><button type="button" onClick={onClose} className="h-11 rounded-xl border border-[#D6DDD0] bg-white px-5 text-[13px] font-semibold text-[#10231B]">{t("commercialBoundary.notNow")}</button></div>
+          {checkoutError ? <div className="mt-4 rounded-xl border border-[#E9C7BD] bg-[#FFF4F0] px-4 py-3 text-[12px] leading-5 text-[#8A3D2B]" role="alert">{checkoutError}</div> : null}
+          <div className="mt-6 flex flex-wrap gap-3"><button type="button" onClick={handlePrimaryAction} disabled={checkoutBusy} aria-busy={checkoutBusy} className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#0D2B1E] px-5 text-[13px] font-semibold text-white disabled:cursor-wait disabled:opacity-60">{primaryAction}<ArrowRight className={`h-4 w-4 ${checkoutBusy ? "animate-pulse" : ""}`} /></button><button type="button" onClick={onClose} disabled={checkoutBusy} className="h-11 rounded-xl border border-[#D6DDD0] bg-white px-5 text-[13px] font-semibold text-[#10231B] disabled:opacity-50">{t("commercialBoundary.notNow")}</button></div>
         </section>
       </div>
     </div>
