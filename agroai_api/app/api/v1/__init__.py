@@ -41,6 +41,7 @@ from . import product_shell as product_shell_module  # noqa: E402
 from . import monetization_convergence as monetization_module  # noqa: E402
 from . import non_customer_access as non_customer_access_module  # noqa: E402
 from . import ask_agro_ai_paywall as ask_agro_ai_paywall_module  # noqa: E402
+from app.outreach import router as outreach_router  # noqa: E402
 from app.services.commercial_packaging_v2 import apply_catalog_packaging, install_commercial_packaging_v2  # noqa: E402
 from app.services.commercial_upload_metering_v2 import install_commercial_upload_metering  # noqa: E402
 
@@ -129,15 +130,6 @@ _remove_shadow_ask_execution_routes()
 product_shell_module.router.include_router(monetization_module.router)
 product_shell_module.router.include_router(non_customer_access_module.router)
 product_shell_module.router.include_router(ask_agro_ai_paywall_module.router)
+product_shell_module.router.include_router(outreach_router)
 
 _hide_compat_schema_shadows()
-
-# The production FastAPI app is already created before Python imports this v1
-# package from app.main. Mount the founder-only outreach router once here so the
-# live api.agroai-pilot.com service receives /v1/outreach/* without coupling it
-# to customer portal routers or billing/auth entitlements.
-from app.main import app as _production_app  # noqa: E402
-from app.outreach import router as _outreach_router  # noqa: E402
-
-if not any(getattr(route, "path", "").startswith("/v1/outreach") for route in _production_app.routes):
-    _production_app.include_router(_outreach_router)
