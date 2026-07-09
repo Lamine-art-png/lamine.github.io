@@ -18,7 +18,10 @@ from .templates import RenderedEmail, render_email
 from .tokens import InvalidUnsubscribeToken, create_unsubscribe_token, verify_unsubscribe_token
 
 
-router = APIRouter(prefix="/v1/outreach", tags=["outreach"])
+# This router is mounted inside product_shell_router, which production app.main
+# already mounts with prefix="/v1". Final public paths are therefore
+# /v1/outreach/* without importing app.main from a child package.
+router = APIRouter(prefix="/outreach", tags=["outreach"])
 settings = OutreachSettings.from_env()
 resend = ResendClient(settings)
 VERIFIED_STATUSES = {
