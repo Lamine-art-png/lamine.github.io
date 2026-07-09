@@ -4,7 +4,6 @@ The outreach sender intentionally uses its own Resend credential so customer
 outreach cannot accidentally share or rotate the transactional auth/careers
 key. Safe defaults keep delivery in preview-only mode.
 """
-
 from __future__ import annotations
 
 import os
@@ -86,7 +85,7 @@ class OutreachSettings:
             ).strip(),
             launch_video_thumbnail_url=os.getenv(
                 "OUTREACH_LAUNCH_VIDEO_THUMBNAIL_URL",
-                "https://i.ytimg.com/vi/NKVhX8imyT4/hqdefault.jpg",
+                "https://i.ytimg.com/vi/NKVhX8imyT4/maxresdefault.jpg",
             ).strip(),
             company_address=os.getenv(
                 "OUTREACH_COMPANY_ADDRESS",
