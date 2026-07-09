@@ -1,5 +1,4 @@
 """Protected production API for previewing and sending AGRO-AI outreach."""
-
 from __future__ import annotations
 
 import hashlib
@@ -19,8 +18,7 @@ from .tokens import InvalidUnsubscribeToken, create_unsubscribe_token, verify_un
 
 
 # This router is mounted inside product_shell_router, which production app.main
-# already mounts with prefix="/v1". Final public paths are therefore
-# /v1/outreach/* without importing app.main from a child package.
+# already mounts with prefix="/v1". Final public paths are /v1/outreach/*.
 router = APIRouter(prefix="/outreach", tags=["outreach"])
 settings = OutreachSettings.from_env()
 resend = ResendClient(settings)
@@ -53,15 +51,43 @@ def _assert_sendable(prospect: OutreachProspect) -> None:
         raise HTTPException(status_code=409, detail="Recipient is on the suppression list")
 
 
-def _idempotency_key(prospect: OutreachProspect, subject: str) -> str:
-    raw = f"agroai-outreach-v2|{prospect.prospect_id}|{prospect.email}|{subject}".encode("utf-8")
+def _assert_live_localization(rendered: RenderedEmail) -> None:
+    if rendered.language != "en" and not rendered.localization_ready:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "message": "Non-English live send blocked because dynamic personalization is not fully localized.",
+                "resolved_language": rendered.language,
+                "required": [
+                    "localized_observation",
+                    "localized_pilot_wedge",
+                    "localized_role_relevance when role_relevance is populated",
+                    "localized_why_now when why_now is populated",
+                    "localized_subject when a custom subject is populated",
+                ],
+                "rule": "The machine refuses mixed-language customer emails.",
+            },
+        )
+
+
+def _idempotency_key(prospect: OutreachProspect, rendered: RenderedEmail) -> str:
+    raw = f"agroai-outreach-v3|{prospect.prospect_id}|{prospect.email}|{rendered.language}|{rendered.subject}".encode("utf-8")
     return "agroai-" + hashlib.sha256(raw).hexdigest()
+
+
+def _language_metadata(rendered: RenderedEmail) -> dict[str, Any]:
+    return {
+        "language": rendered.language,
+        "language_source": rendered.language_source,
+        "language_confidence": rendered.language_confidence,
+        "localization_ready": rendered.localization_ready,
+    }
 
 
 def _execute_one(prospect: OutreachProspect, *, send_now: bool) -> dict[str, Any]:
     _assert_sendable(prospect)
     rendered = _rendered(prospect)
-    key = _idempotency_key(prospect, rendered.subject)
+    key = _idempotency_key(prospect, rendered)
     live = bool(send_now and not settings.dry_run)
 
     if not live:
@@ -73,7 +99,12 @@ def _execute_one(prospect: OutreachProspect, *, send_now: bool) -> dict[str, Any
             status="preview",
             idempotency_key=key,
             dry_run=True,
-            metadata={"verification": prospect.email_verification_status.value, "requested_send_now": send_now, "server_dry_run": settings.dry_run},
+            metadata={
+                "verification": prospect.email_verification_status.value,
+                "requested_send_now": send_now,
+                "server_dry_run": settings.dry_run,
+                **_language_metadata(rendered),
+            },
         )
         return {
             "status": "preview",
@@ -83,9 +114,12 @@ def _execute_one(prospect: OutreachProspect, *, send_now: bool) -> dict[str, Any
             "account": prospect.account,
             "subject": rendered.subject,
             "reply_to": settings.reply_to,
+            **_language_metadata(rendered),
             "send_now_requested": send_now,
             "server_dry_run": settings.dry_run,
         }
+
+    _assert_live_localization(rendered)
 
     if not settings.send_ready:
         raise HTTPException(status_code=503, detail="Live sending requires OUTREACH_RESEND_API_KEY, OUTREACH_ADMIN_TOKEN, and OUTREACH_UNSUBSCRIBE_SECRET")
@@ -109,7 +143,11 @@ def _execute_one(prospect: OutreachProspect, *, send_now: bool) -> dict[str, Any
             idempotency_key=key,
             dry_run=False,
             error_text=str(exc),
-            metadata={"verification": prospect.email_verification_status.value, "resend_status_code": exc.status_code},
+            metadata={
+                "verification": prospect.email_verification_status.value,
+                "resend_status_code": exc.status_code,
+                **_language_metadata(rendered),
+            },
         )
         raise HTTPException(status_code=502, detail={"message": str(exc), "record_id": record_id}) from exc
 
@@ -122,7 +160,7 @@ def _execute_one(prospect: OutreachProspect, *, send_now: bool) -> dict[str, Any
         idempotency_key=key,
         dry_run=False,
         resend_id=result.id,
-        metadata={"verification": prospect.email_verification_status.value},
+        metadata={"verification": prospect.email_verification_status.value, **_language_metadata(rendered)},
     )
     return {
         "status": "sent",
@@ -133,6 +171,7 @@ def _execute_one(prospect: OutreachProspect, *, send_now: bool) -> dict[str, Any
         "account": prospect.account,
         "subject": rendered.subject,
         "reply_to": settings.reply_to,
+        **_language_metadata(rendered),
     }
 
 
@@ -152,10 +191,20 @@ async def outreach_status(_: None = Depends(_require_admin)) -> dict[str, Any]:
         "reply_to": settings.reply_to,
         "resend_key_variable": "OUTREACH_RESEND_API_KEY",
         "launch_video_url": settings.launch_video_url,
+        "launch_video_thumbnail_url": settings.launch_video_thumbnail_url,
+        "thumbnail_profile": "hd_16_9",
         "daily_send_limit": settings.daily_send_limit,
         "live_sends_last_24h": live_sends,
         "max_batch_size": settings.max_batch_size,
         "ledger_ready": ledger_ready,
+        "multilingual_outreach": {
+            "supported_languages": ["en", "fr", "es", "pt", "ar"],
+            "auto_country_routing": True,
+            "explicit_override": True,
+            "mixed_language_live_sends": "blocked",
+            "ambiguous_global_accounts": "english_fallback_unless_overridden",
+        },
+        "outreach_release": "production-i18n-hd-thumbnail-v1",
         "email_integrity_rule": "unverified addresses are refused",
     }
 
@@ -169,6 +218,7 @@ async def preview_email(payload: PreviewRequest, _: None = Depends(_require_admi
         "from": settings.sender,
         "reply_to": settings.reply_to,
         "subject": rendered.subject,
+        **_language_metadata(rendered),
         "html": rendered.html,
         "text": rendered.text,
         "unsubscribe_url": rendered.unsubscribe_url,
