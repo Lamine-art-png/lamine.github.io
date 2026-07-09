@@ -27,6 +27,10 @@ assert(host.includes("flex-wrap items-baseline"), "Commercial plan price must be
 assert(host.includes("whitespace-nowrap text-[15px]"), "Commercial plan names must stay on one line across every shared paywall.");
 assert(host.includes('detail.source || ""'), "Commercial wall must honor contextual section/provider sources.");
 assert(host.includes('target === "enterprise"') && host.includes("https://agroai-pilot.com/book-a-demo"), "Enterprise paywall CTAs must route to the public demo-booking page.");
+assert(!host.includes("/pricing?upgrade="), "Self-serve paywall CTAs must never bounce customers through Pricing before checkout.");
+assert(host.includes("apiClient.billing.checkout"), "Self-serve paywalls must call the authoritative billing checkout API directly.");
+assert(host.includes('plan_id: target, billing_period: "monthly"'), "Paywall checkout must send the recommended self-serve plan and explicit billing period.");
+assert(host.includes("window.location.assign(response.checkout_url)"), "Paywalls must follow the Stripe checkout URL returned by the backend.");
 
 assert(reports.includes('source: "reports"') && reports.includes('recommended_plan: "professional"'), "Reports must open the rich Professional comparison wall.");
 assert(team.includes('source: "team"') && team.includes('recommended_plan: "team"'), "Team must open the rich Team comparison wall.");
