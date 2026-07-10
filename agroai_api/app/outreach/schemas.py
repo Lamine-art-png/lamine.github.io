@@ -13,6 +13,7 @@ class VerificationStatus(str, Enum):
     verified_public_direct = "verified_public_direct"
     verified_public_role = "verified_public_role"
     verified_vendor = "verified_vendor"
+    first_party_signup = "first_party_signup"
     unverified = "unverified"
 
 
@@ -99,6 +100,8 @@ class OutreachProspect(BaseModel):
     @model_validator(mode="after")
     def validate_message_specific_copy(self):
         if self.message_type == OutreachMessageType.cold_outreach:
+            if self.email_verification_status == VerificationStatus.first_party_signup:
+                raise ValueError("first_party_signup provenance is only valid for post-signup follow-up")
             if len(self.observation) < 12:
                 raise ValueError("cold outreach requires observation with at least 12 characters")
             if len(self.pilot_wedge) < 8:
