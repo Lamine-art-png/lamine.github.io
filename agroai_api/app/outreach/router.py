@@ -22,10 +22,11 @@ from .tokens import InvalidUnsubscribeToken, create_unsubscribe_token, verify_un
 router = APIRouter(prefix="/outreach", tags=["outreach"])
 settings = OutreachSettings.from_env()
 resend = ResendClient(settings)
-VERIFIED_STATUSES = {
+SENDABLE_STATUSES = {
     VerificationStatus.verified_public_direct,
     VerificationStatus.verified_public_role,
     VerificationStatus.verified_vendor,
+    VerificationStatus.first_party_signup,
 }
 
 
@@ -45,8 +46,8 @@ def _rendered(prospect: OutreachProspect) -> RenderedEmail:
 
 
 def _assert_sendable(prospect: OutreachProspect) -> None:
-    if prospect.email_verification_status not in VERIFIED_STATUSES:
-        raise HTTPException(status_code=422, detail="Recipient email is not verified. Guessed or pattern-inferred addresses cannot be sent.")
+    if prospect.email_verification_status not in SENDABLE_STATUSES:
+        raise HTTPException(status_code=422, detail="Recipient email is not sendable. Guessed or pattern-inferred addresses cannot be sent.")
     if store.is_suppressed(prospect.email):
         raise HTTPException(status_code=409, detail="Recipient is on the suppression list")
 
@@ -71,7 +72,10 @@ def _assert_live_localization(rendered: RenderedEmail) -> None:
 
 
 def _idempotency_key(prospect: OutreachProspect, rendered: RenderedEmail) -> str:
-    raw = f"agroai-outreach-v3|{prospect.prospect_id}|{prospect.email}|{rendered.language}|{rendered.subject}".encode("utf-8")
+    raw = (
+        f"agroai-outreach-v4|{prospect.message_type.value}|{prospect.prospect_id}|"
+        f"{prospect.email}|{rendered.language}|{rendered.subject}"
+    ).encode("utf-8")
     return "agroai-" + hashlib.sha256(raw).hexdigest()
 
 
@@ -81,6 +85,13 @@ def _language_metadata(rendered: RenderedEmail) -> dict[str, Any]:
         "language_source": rendered.language_source,
         "language_confidence": rendered.language_confidence,
         "localization_ready": rendered.localization_ready,
+    }
+
+
+def _message_metadata(prospect: OutreachProspect) -> dict[str, Any]:
+    return {
+        "message_type": prospect.message_type.value,
+        "recipient_provenance": prospect.email_verification_status.value,
     }
 
 
@@ -103,6 +114,7 @@ def _execute_one(prospect: OutreachProspect, *, send_now: bool) -> dict[str, Any
                 "verification": prospect.email_verification_status.value,
                 "requested_send_now": send_now,
                 "server_dry_run": settings.dry_run,
+                **_message_metadata(prospect),
                 **_language_metadata(rendered),
             },
         )
@@ -114,6 +126,7 @@ def _execute_one(prospect: OutreachProspect, *, send_now: bool) -> dict[str, Any
             "account": prospect.account,
             "subject": rendered.subject,
             "reply_to": settings.reply_to,
+            **_message_metadata(prospect),
             **_language_metadata(rendered),
             "send_now_requested": send_now,
             "server_dry_run": settings.dry_run,
@@ -146,6 +159,7 @@ def _execute_one(prospect: OutreachProspect, *, send_now: bool) -> dict[str, Any
             metadata={
                 "verification": prospect.email_verification_status.value,
                 "resend_status_code": exc.status_code,
+                **_message_metadata(prospect),
                 **_language_metadata(rendered),
             },
         )
@@ -160,7 +174,11 @@ def _execute_one(prospect: OutreachProspect, *, send_now: bool) -> dict[str, Any
         idempotency_key=key,
         dry_run=False,
         resend_id=result.id,
-        metadata={"verification": prospect.email_verification_status.value, **_language_metadata(rendered)},
+        metadata={
+            "verification": prospect.email_verification_status.value,
+            **_message_metadata(prospect),
+            **_language_metadata(rendered),
+        },
     )
     return {
         "status": "sent",
@@ -171,6 +189,7 @@ def _execute_one(prospect: OutreachProspect, *, send_now: bool) -> dict[str, Any
         "account": prospect.account,
         "subject": rendered.subject,
         "reply_to": settings.reply_to,
+        **_message_metadata(prospect),
         **_language_metadata(rendered),
     }
 
@@ -197,6 +216,12 @@ async def outreach_status(_: None = Depends(_require_admin)) -> dict[str, Any]:
         "live_sends_last_24h": live_sends,
         "max_batch_size": settings.max_batch_size,
         "ledger_ready": ledger_ready,
+        "supported_message_types": ["cold_outreach", "post_signup_founder_followup"],
+        "first_party_signup_followup": {
+            "enabled": True,
+            "cold_outreach_use": "blocked",
+            "lifecycle_language": "en",
+        },
         "multilingual_outreach": {
             "supported_languages": ["en", "fr", "es", "pt", "ar"],
             "auto_country_routing": True,
@@ -204,8 +229,8 @@ async def outreach_status(_: None = Depends(_require_admin)) -> dict[str, Any]:
             "mixed_language_live_sends": "blocked",
             "ambiguous_global_accounts": "english_fallback_unless_overridden",
         },
-        "outreach_release": "production-i18n-hd-thumbnail-v1",
-        "email_integrity_rule": "unverified addresses are refused",
+        "outreach_release": "production-i18n-hd-thumbnail-signup-followup-v1",
+        "email_integrity_rule": "guessed or pattern-inferred addresses are refused; first-party signup addresses are lifecycle-only",
     }
 
 
@@ -218,6 +243,7 @@ async def preview_email(payload: PreviewRequest, _: None = Depends(_require_admi
         "from": settings.sender,
         "reply_to": settings.reply_to,
         "subject": rendered.subject,
+        **_message_metadata(payload.prospect),
         **_language_metadata(rendered),
         "html": rendered.html,
         "text": rendered.text,
