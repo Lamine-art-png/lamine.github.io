@@ -263,6 +263,7 @@ from app.api.v1.evaluation import legacy_router as evaluation_legacy_router  # n
 from app.api.v1.evaluation import router as evaluation_router  # noqa: E402
 from app.api.v1.preferences import router as preferences_router  # noqa: E402
 from app.api.v1.product_shell import router as product_shell_router  # noqa: E402
+from app.api.v1.platform_admin import router as platform_admin_router  # noqa: E402
 
 app.include_router(auth_router, prefix="/v1")
 app.include_router(billing_router, prefix="/v1")
@@ -270,6 +271,7 @@ app.include_router(evaluation_router)
 app.include_router(evaluation_legacy_router)
 app.include_router(preferences_router, prefix="/v1")
 app.include_router(product_shell_router, prefix="/v1")
+app.include_router(platform_admin_router, prefix="/v1")
 
 from app.api.v1.saas import router as saas_router  # noqa: E402
 app.include_router(saas_router, prefix="/v1")

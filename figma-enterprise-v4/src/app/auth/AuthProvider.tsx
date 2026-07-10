@@ -36,6 +36,7 @@ type AuthContextValue = {
   currentOrganization: Organization | null;
   currentWorkspace: Workspace | null;
   entitlements: Record<string, unknown>;
+  platformAdmin: boolean;
   token: string | null;
   isLoading: boolean;
   isAuthenticated: boolean;
@@ -106,6 +107,7 @@ function normalizeMe(response: unknown) {
     currentOrganization: currentOrganization || organizations[0] || null,
     currentWorkspace: null as Workspace | null,
     entitlements: ((data.entitlements || {}) as Record<string, unknown>) || {},
+    platformAdmin: data.platform_admin === true,
     verification: rawVerification?.status === "verified" ? null : rawVerification,
   };
 }
@@ -117,6 +119,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [currentOrganization, setCurrentOrganization] = useState<Organization | null>(null);
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
   const [entitlements, setEntitlements] = useState<Record<string, unknown>>({});
+  const [platformAdmin, setPlatformAdmin] = useState(false);
   const [verification, setVerification] = useState<VerificationState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -128,6 +131,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCurrentOrganization(null);
     setCurrentWorkspace(null);
     setEntitlements({});
+    setPlatformAdmin(false);
   }, []);
 
   const clearVerification = useCallback(() => {
@@ -155,6 +159,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCurrentOrganization(normalized.currentOrganization || orgs[0] || null);
     setCurrentWorkspace(workspaces[0] || null);
     setEntitlements(normalized.entitlements);
+    setPlatformAdmin(normalized.platformAdmin);
     setVerification(normalized.verification);
   }, [clearSession]);
 
@@ -235,6 +240,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCurrentOrganization(normalized.currentOrganization);
     setCurrentWorkspace(normalized.currentWorkspace);
     setEntitlements(normalized.entitlements);
+    setPlatformAdmin(normalized.platformAdmin);
     setVerification(null);
 
     await refreshMe().catch(() => null);
@@ -279,6 +285,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     currentOrganization,
     currentWorkspace,
     entitlements,
+    platformAdmin,
     token,
     isLoading,
     isAuthenticated: Boolean(token && user),
@@ -290,7 +297,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     requestVerification,
     confirmVerification,
     clearVerification,
-  }), [clearVerification, confirmVerification, currentOrganization, currentWorkspace, entitlements, isLoading, login, logout, organizations, refreshMe, register, requestVerification, token, user, verification]);
+  }), [clearVerification, confirmVerification, currentOrganization, currentWorkspace, entitlements, isLoading, login, logout, organizations, platformAdmin, refreshMe, register, requestVerification, token, user, verification]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

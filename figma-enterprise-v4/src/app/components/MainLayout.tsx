@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Outlet, NavLink, useLocation } from "react-router";
-import { CreditCard, HelpCircle, Lock, LogOut, Menu, Plus, Settings, Shield, UserCircle, X } from "lucide-react";
+import { CreditCard, HelpCircle, Lock, LogOut, Menu, Plus, Settings, Shield, UserCircle, Users, X } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 import { useLocale } from "../hooks/useLocale";
 import { usePortalCopy } from "../hooks/usePortalCopy";
@@ -48,7 +48,7 @@ function capabilityEnabled(entitlements: Record<string, unknown>, key: string, f
 }
 
 export function MainLayout() {
-  const { currentOrganization, currentWorkspace, entitlements, logout } = useAuth();
+  const { currentOrganization, currentWorkspace, entitlements, platformAdmin, logout } = useAuth();
   const { t } = useLocale();
   const location = useLocation();
   const { tx } = usePortalCopy(copyNamespacesForPath(location.pathname), PLAN_COPY_VALUES);
@@ -89,6 +89,7 @@ export function MainLayout() {
     { name: t("support"), path: "/support", icon: HelpCircle },
     { name: t("requests"), path: "/admin/requests", icon: HelpCircle, locked: !canAccessAdminRequests, upgradeTo: "team" },
     { name: t("admin"), path: "/admin", icon: Settings },
+    ...(platformAdmin ? [{ name: "Customer accounts", path: "/admin/customers", icon: Users }] : []),
   ];
 
   const allPrimaryItems = [...operateItems, ...intelligenceItems, ...workspaceItems, ...accountItems];

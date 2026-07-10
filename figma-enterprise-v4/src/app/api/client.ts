@@ -247,6 +247,19 @@ export type OnboardingPayload = { current_step?: string; selected_plan?: string;
 export type ConversationPayload = { title?: string; workspace_id?: string; message?: string };
 export type ConversationMessagePayload = { content: string; audience?: string; output?: string; preferred_language?: string };
 export type AdminRequestUpdatePayload = { status?: "received" | "triaged" | "in_progress" | "waiting_on_customer" | "closed"; priority?: "low" | "medium" | "high" | "urgent" };
+export type PlatformAdminCustomerFilters = { search?: string; verification?: "all" | "verified" | "unverified"; active?: "all" | "active" | "inactive"; plan?: string; sort?: "newest" | "oldest" | "recent_login"; limit?: number; offset?: number };
+
+function platformAdminCustomerQuery(filters: PlatformAdminCustomerFilters = {}) {
+  const query = new URLSearchParams();
+  if (filters.search) query.set("search", filters.search);
+  if (filters.verification && filters.verification !== "all") query.set("verification", filters.verification);
+  if (filters.active && filters.active !== "all") query.set("active", filters.active);
+  if (filters.plan) query.set("plan", filters.plan);
+  if (filters.sort) query.set("sort", filters.sort);
+  if (typeof filters.limit === "number") query.set("limit", String(filters.limit));
+  if (typeof filters.offset === "number") query.set("offset", String(filters.offset));
+  return query.toString();
+}
 
 export const apiClient = {
   get, post, patch, remove, request, download,
@@ -266,6 +279,16 @@ export const apiClient = {
   sales: { contact: (payload: unknown) => post("/v1/sales/contact", payload), networkInquiry: (payload: unknown) => post("/v1/sales/network-inquiry", payload) },
   conversations: { list: () => get("/v1/conversations"), create: (payload: ConversationPayload) => post("/v1/conversations", payload), get: (conversationId: string) => get(`/v1/conversations/${encodeURIComponent(conversationId)}`), message: (conversationId: string, payload: ConversationMessagePayload) => post(`/v1/conversations/${encodeURIComponent(conversationId)}/messages`, payload), delete: (conversationId: string) => remove(`/v1/conversations/${encodeURIComponent(conversationId)}`) },
   adminRequests: { list: (type?: string) => get(`/v1/admin/requests${type ? `?type=${encodeURIComponent(type)}` : ""}`), update: (requestId: string, payload: AdminRequestUpdatePayload) => patch(`/v1/admin/requests/${encodeURIComponent(requestId)}`, payload), system: () => get("/v1/admin/system") },
+  platformAdmin: {
+    customers: (filters: PlatformAdminCustomerFilters = {}) => {
+      const query = platformAdminCustomerQuery(filters);
+      return get(`/v1/platform-admin/customers${query ? `?${query}` : ""}`);
+    },
+    exportCustomers: (filters: PlatformAdminCustomerFilters = {}) => {
+      const query = platformAdminCustomerQuery(filters);
+      return download(`/v1/platform-admin/customers.csv${query ? `?${query}` : ""}`);
+    },
+  },
   team: { members: () => get("/v1/team/members"), invitations: () => get("/v1/team/invitations"), invite: (payload: TeamInvitationPayload) => post("/v1/team/invitations", payload), revoke: (invitationId: string) => remove(`/v1/team/invitations/${encodeURIComponent(invitationId)}`) },
   orgs: { list: () => get("/v1/orgs"), create: (payload: CreateOrgPayload) => post("/v1/orgs", payload) },
   workspaces: { list: () => get("/v1/workspaces"), create: (payload: CreateWorkspacePayload) => post("/v1/workspaces", payload) },
