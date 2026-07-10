@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+import re
 
 from fastapi import Depends, Header, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials
@@ -136,6 +137,38 @@ def get_auth_context(user: User = Depends(get_current_user), db: Session = Depen
     organization = membership.organization if membership else None
     _activate_server_authorized_access_profile(db, user, organization)
     return AuthContext(user=user, organization=organization, membership=membership)
+
+
+def platform_admin_emails() -> set[str]:
+    """Return the server-only allowlist for global platform administration."""
+
+    raw = str(getattr(settings, "PLATFORM_ADMIN_EMAILS", "") or "")
+    return {value.strip().lower() for value in re.split(r"[,;\s]+", raw) if value.strip()}
+
+
+def is_platform_admin_user(user: User) -> bool:
+    """Check global platform access without trusting organization roles or JWT claims."""
+
+    email = str(getattr(user, "email", "") or "").strip().lower()
+    verified = bool(
+        getattr(user, "email_verification_status", None) == "verified"
+        and getattr(user, "email_verified_at", None)
+    )
+    return bool(email and verified and email in platform_admin_emails())
+
+
+def require_platform_admin(ctx: AuthContext = Depends(get_auth_context)) -> AuthContext:
+    """Fail closed unless the verified account is explicitly allowlisted server-side."""
+
+    if not is_platform_admin_user(ctx.user):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "platform_admin_required",
+                "message": "Platform administrator access is required.",
+            },
+        )
+    return ctx
 
 
 def require_org_membership(org_id: str, user: User, db: Session) -> tuple[Organization, OrganizationMembership]:

@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
-from app.api.deps import AuthContext, get_auth_context, get_current_user, get_current_user_optional
+from app.api.deps import AuthContext, get_auth_context, get_current_user, get_current_user_optional, is_platform_admin_user
 from app.core.security import create_access_token
 from app.db.base import get_db
 from app.models.saas import Organization, OrganizationMembership, User, Workspace
@@ -113,6 +113,7 @@ def _session_response(user: User, org: Organization, membership: OrganizationMem
             "role": membership.role,
         },
         "entitlements": serialize_entitlements(org),
+        "platform_admin": is_platform_admin_user(user),
     }
 
 
@@ -315,4 +316,5 @@ def me(ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_d
         "subscription_status": current["subscription_status"] if current else None,
         "entitlements": serialize_entitlements(ctx.organization) if ctx.organization else None,
         "verification": _verification_payload(ctx.user),
+        "platform_admin": is_platform_admin_user(ctx.user),
     }

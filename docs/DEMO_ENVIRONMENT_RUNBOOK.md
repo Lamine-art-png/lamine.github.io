@@ -129,9 +129,10 @@ For the founder account in the appropriate backend environment:
 
 ```text
 INTERNAL_FULL_ACCESS_EMAILS=<verified founder account email>
+PLATFORM_ADMIN_EMAILS=<verified founder account email>
 ```
 
-Do not commit the real email list or passwords to the repository.
+`PLATFORM_ADMIN_EMAILS` is a separate least-privilege permission for the founder-only customer account directory and CSV export. Do not commit the real email list or passwords to the repository.
 
 ## Frontend configuration
 

@@ -90,6 +90,10 @@ class Settings(BaseSettings):
     DEMO_FULL_ACCESS_EMAILS: str = ""
     NON_CUSTOMER_ACCESS_PROVISIONING_TOKEN: str = ""
 
+    # Fail-closed global customer observability. These verified accounts may
+    # inspect platform-wide signup metadata; organization owners cannot.
+    PLATFORM_ADMIN_EMAILS: str = ""
+
     # Optional idempotent demo-environment seed identities. Passwords are secrets.
     DEMO_AUTO_PROVISION: bool = False
     DEMO_FULL_EMAIL: str = ""

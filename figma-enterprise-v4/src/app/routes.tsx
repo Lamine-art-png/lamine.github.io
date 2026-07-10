@@ -50,6 +50,7 @@ export const router = createBrowserRouter([
       { path: "sources", lazy: lazyComponent(() => import("./components/Sources"), "Sources") },
       { path: "audit", lazy: lazyComponent(() => import("./components/Audit"), "Audit") },
       { path: "admin", lazy: lazyComponent(() => import("./components/Admin"), "Admin") },
+      { path: "admin/customers", lazy: lazyComponent(() => import("./components/Admin"), "CustomerAccountsPage") },
       { path: "admin/system", lazy: lazyComponent(() => import("./components/Admin"), "SystemHealthPage") },
       { path: "admin/requests", lazy: lazyComponent(() => import("./components/MonetizedRequestsV2"), "MonetizedRequestsV2") },
       { path: "pricing", lazy: lazyComponent(() => import("./components/PricingPage"), "PricingPage") },
