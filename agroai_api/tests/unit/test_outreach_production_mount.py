@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import importlib
 
+import pytest
+
 
 def test_production_app_mounts_outreach_status_route(monkeypatch):
     monkeypatch.setenv("OUTREACH_ADMIN_TOKEN", "test-admin-token")
@@ -143,7 +145,7 @@ def test_post_signup_founder_followup_preserves_brand_and_exact_lifecycle_copy(m
     prospect = OutreachProspect(
         prospect_id="signup-andreas-agvolution-20260710",
         email="a.heckmann@agvolution.com",
-        email_verification_status=VerificationStatus.verified_public_direct,
+        email_verification_status=VerificationStatus.first_party_signup,
         first_name="Andreas",
         person_name="Andreas Heckmann",
         title="Managing Director",
@@ -178,3 +180,22 @@ def test_post_signup_founder_followup_preserves_brand_and_exact_lifecycle_copy(m
     assert "Unsubscribe" in rendered.html
     assert "I’m reaching out because" not in rendered.html
     assert "We launched the AGRO-AI Enterprise Portal globally this week" not in rendered.html
+
+
+def test_first_party_signup_provenance_cannot_be_used_for_cold_outreach():
+    from app.outreach.schemas import OutreachProspect, VerificationStatus
+
+    with pytest.raises(ValueError, match="first_party_signup provenance is only valid for post-signup follow-up"):
+        OutreachProspect(
+            prospect_id="invalid-cold-signup-001",
+            email="person@example.com",
+            email_verification_status=VerificationStatus.first_party_signup,
+            first_name="Person",
+            person_name="Person Example",
+            title="Executive",
+            account="Example Co",
+            country="United States",
+            segment="Enterprise Grower / Operator",
+            observation="the team operates across multiple agricultural workflows",
+            pilot_wedge="connect evidence and assigned actions across operations",
+        )
