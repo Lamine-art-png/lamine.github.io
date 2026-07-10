@@ -4,7 +4,7 @@ from __future__ import annotations
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from .localization import OutreachLanguage
 
@@ -14,6 +14,11 @@ class VerificationStatus(str, Enum):
     verified_public_role = "verified_public_role"
     verified_vendor = "verified_vendor"
     unverified = "unverified"
+
+
+class OutreachMessageType(str, Enum):
+    cold_outreach = "cold_outreach"
+    post_signup_founder_followup = "post_signup_founder_followup"
 
 
 class OutreachProspect(BaseModel):
@@ -26,13 +31,20 @@ class OutreachProspect(BaseModel):
     account: str = Field(min_length=1, max_length=250)
     country: str = Field(default="", max_length=120)
     segment: str = Field(min_length=1, max_length=180)
+    message_type: OutreachMessageType = OutreachMessageType.cold_outreach
 
-    # Source-language personalization fields.
-    observation: str = Field(min_length=12, max_length=1200)
+    # Cold-outreach personalization fields. They are conditionally required for
+    # cold outreach but intentionally optional for lifecycle follow-up emails.
+    observation: str = Field(default="", max_length=1200)
     role_relevance: str = Field(default="", max_length=800)
-    pilot_wedge: str = Field(min_length=8, max_length=1000)
+    pilot_wedge: str = Field(default="", max_length=1000)
     why_now: str = Field(default="", max_length=1000)
     subject: str | None = Field(default=None, max_length=180)
+
+    # Post-signup lifecycle personalization. This is the executive-specific
+    # paragraph that explains why the signup is interesting without pretending
+    # the recipient is a cold lead.
+    signup_interest_context: str = Field(default="", max_length=1200)
 
     # Conservative language routing. Explicit preference wins; otherwise a
     # single-country market hint is used and ambiguous/global records fall back
@@ -73,6 +85,7 @@ class OutreachProspect(BaseModel):
         "role_relevance",
         "pilot_wedge",
         "why_now",
+        "signup_interest_context",
         "localized_observation",
         "localized_role_relevance",
         "localized_pilot_wedge",
@@ -82,6 +95,18 @@ class OutreachProspect(BaseModel):
     @classmethod
     def strip_text(cls, value):
         return value.strip() if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def validate_message_specific_copy(self):
+        if self.message_type == OutreachMessageType.cold_outreach:
+            if len(self.observation) < 12:
+                raise ValueError("cold outreach requires observation with at least 12 characters")
+            if len(self.pilot_wedge) < 8:
+                raise ValueError("cold outreach requires pilot_wedge with at least 8 characters")
+        elif self.message_type == OutreachMessageType.post_signup_founder_followup:
+            if len(self.signup_interest_context) < 12:
+                raise ValueError("post-signup founder follow-up requires signup_interest_context")
+        return self
 
 
 class PreviewRequest(BaseModel):
@@ -112,6 +137,7 @@ class SuppressionRequest(BaseModel):
 __all__ = [
     "BatchSendRequest",
     "OutreachLanguage",
+    "OutreachMessageType",
     "OutreachProspect",
     "PreviewRequest",
     "SendRequest",
