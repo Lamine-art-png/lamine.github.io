@@ -46,6 +46,12 @@ from app.models.workbench_persistence import (
     WorkbenchSessionRecord, WorkbenchDataArtifactRecord, WorkbenchAnalysisRecord,
     WorkbenchAuditEventRecord, WorkbenchEvidenceActionRecord,
 )
+from app.models.platform_api import (
+    ActionSafetyConfiguration, ApiProject, ApiServiceAccount,
+    PlatformApiKey, PlatformApiUsageEvent, PlatformIdempotencyRecord,
+    PlatformWebhookDeliveryAttempt, PlatformWebhookEndpoint,
+    PlatformWebhookEvent, ProviderCapabilityRecord, ProviderExternalIdentityMap,
+)
 
 __all__ = [
     "Tenant", "Client", "Block", "Telemetry", "Event", "Recommendation",
@@ -69,4 +75,8 @@ __all__ = [
     "AgentRecommendation", "AgentActionProposal", "AgentToolCall", "AgentMessage",
     "AgentRunAuditEvent", "WorkbenchSessionRecord", "WorkbenchDataArtifactRecord",
     "WorkbenchAnalysisRecord", "WorkbenchAuditEventRecord", "WorkbenchEvidenceActionRecord",
+    "ActionSafetyConfiguration", "ApiProject", "ApiServiceAccount",
+    "PlatformApiKey", "PlatformApiUsageEvent", "PlatformIdempotencyRecord",
+    "PlatformWebhookDeliveryAttempt", "PlatformWebhookEndpoint",
+    "PlatformWebhookEvent", "ProviderCapabilityRecord", "ProviderExternalIdentityMap",
 ]

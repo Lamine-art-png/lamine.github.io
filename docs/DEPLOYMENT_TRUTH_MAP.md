@@ -141,6 +141,48 @@ exposing the Mac directly to the public internet.
 Service persistence for the tunnel and Ollama is an operator/runtime concern;
 the repository must not assume that an interactive terminal remains open.
 
+## F2. Platform API Private Beta
+
+Runtime: the existing production FastAPI backend behind the existing Cloudflare
+API edge.
+
+Authoritative backend source:
+
+`agroai_api/`
+
+Authoritative Portal source for the gated developer control plane:
+
+`figma-enterprise-v4/`
+
+Namespace:
+
+`/v1/platform/*`
+
+Initial rollout state:
+
+- `PLATFORM_API_ENABLED=false`
+- `PLATFORM_API_DEVELOPER_CONTROL_PLANE_ENABLED=false`
+- `PLATFORM_API_LIVE_PROJECTS_ENABLED=false`
+- `PLATFORM_API_WEBHOOK_DELIVERY_ENABLED=false`
+- `EARTHDAILY_ADAPTER_ENABLED=false`
+- `VALLEY_IRRIGATION_ADAPTER_ENABLED=false`
+- `VALLEY_IRRIGATION_WRITE_CAPABILITY_ENABLED=false`
+
+Production requirements before external partner traffic:
+
+- `PLATFORM_API_KEY_PEPPER` configured outside the database;
+- `PLATFORM_API_RATE_LIMIT_BACKEND=redis`;
+- `PLATFORM_API_REDIS_URL` or durable `REDIS_URL` configured;
+- public OpenAPI explicitly enabled only when the curated route manifest is
+  reviewed;
+- developer control plane enabled only for platform administrators or approved
+  internal test organizations.
+
+EarthDaily and Valley Irrigation are not live from this foundation. They remain
+integration-readiness adapters with status `awaiting_partner_contract` until
+official documentation, credentials, sandbox proof, provider calls, and
+activation approval exist. Valley physical command execution is disabled.
+
 ## G. Release Pipeline
 
 Authoritative workflow:

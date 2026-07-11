@@ -147,7 +147,10 @@ export function MainLayout() {
     { name: t("support"), path: "/support", icon: HelpCircle },
     { name: t("requests"), path: "/admin/requests", icon: HelpCircle, locked: !canAccessAdminRequests, upgradeTo: "team" },
     { name: t("admin"), path: "/admin", icon: Settings },
-    ...(platformAdmin ? [{ name: "Customer accounts", path: "/admin/customers", icon: Users }] : []),
+    ...(platformAdmin ? [
+      { name: "Customer accounts", path: "/admin/customers", icon: Users },
+      { name: "Developers/API", path: "/developers/api", icon: Shield },
+    ] : []),
   ];
 
   const allPrimaryItems = [...operateItems, ...intelligenceItems, ...workspaceItems, ...accountItems];
