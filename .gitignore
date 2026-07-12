@@ -10,11 +10,12 @@ agroai/agroai_results.csv
 agroai/charts/*.png
 agroai/reports/*.html
 
-# Terraform local secrets
+# Terraform local secrets and generated deployment snapshots
 terraform/terraform.tfvars
 terraform/*.tfvars
 terraform/*.tfvars.local
 terraform.tfvars.local
+terraform/taskdef*.json
 
 # OS
 .DS_Store
