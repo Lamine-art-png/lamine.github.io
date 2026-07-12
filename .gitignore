@@ -17,6 +17,12 @@ terraform/*.tfvars.local
 terraform.tfvars.local
 terraform/taskdef*.json
 
+# Notebook outputs that previously embedded provider credentials
+AGRO_AI_Weather_data.ipynb
+assets/AGRO_AI_Weather_data.ipynb
+.ipynb_checkpoints/
+**/.ipynb_checkpoints/
+
 # OS
 .DS_Store
 
