@@ -1,6 +1,8 @@
-const SOURCE_URL = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/urnrd-capability-review-2026/index.html";
+const REVIEW_SOURCE_URL = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/urnrd-capability-review-2026/index.html";
+const ENGINEERING_SOURCE_URL = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/urnrd-capability-review-2026/engineering/index.html";
 const REVIEW_PATH = "/urnrd-capability-review-2026";
-const PUBLIC_REPO_LINK = '<a href="https://github.com/Lamine-art-png/lamine.github.io" target="_blank" rel="noopener">Public engineering repository</a>';
+const ENGINEERING_PATH = `${REVIEW_PATH}/engineering`;
+const PUBLIC_MONOREPO_URL = "https://github.com/Lamine-art-png/lamine.github.io";
 
 function securityHeaders(): Headers {
   const headers = new Headers();
@@ -13,8 +15,11 @@ function securityHeaders(): Headers {
   return headers;
 }
 
-function sanitizeReviewHtml(html: string): string {
-  return html.replace(PUBLIC_REPO_LINK, "");
+function sanitizeReviewHtml(html: string, origin: string): string {
+  const safeEngineeringUrl = `${origin}${ENGINEERING_PATH}/`;
+  return html
+    .replaceAll(PUBLIC_MONOREPO_URL, safeEngineeringUrl)
+    .replaceAll("Public engineering repository", "Public engineering portfolio");
 }
 
 export default {
@@ -22,27 +27,32 @@ export default {
     const url = new URL(request.url);
     const path = url.pathname.replace(/\/$/, "");
 
-    if (path !== REVIEW_PATH) {
+    const isReview = path === REVIEW_PATH;
+    const isEngineering = path === ENGINEERING_PATH;
+    if (!isReview && !isEngineering) {
       return new Response("Not found", { status: 404 });
     }
 
-    if (url.pathname === REVIEW_PATH) {
-      return Response.redirect(`${url.origin}${REVIEW_PATH}/`, 308);
+    const canonicalPath = isReview ? REVIEW_PATH : ENGINEERING_PATH;
+    if (url.pathname === canonicalPath) {
+      return Response.redirect(`${url.origin}${canonicalPath}/`, 308);
     }
 
-    const upstream = await fetch(SOURCE_URL, {
+    const sourceUrl = isReview ? REVIEW_SOURCE_URL : ENGINEERING_SOURCE_URL;
+    const upstream = await fetch(sourceUrl, {
       cf: { cacheEverything: true, cacheTtl: 60 },
-      headers: { "user-agent": "AGRO-AI-URNRD-Review/1.0" },
+      headers: { "user-agent": "AGRO-AI-URNRD-Review/2.0" },
     });
 
     if (!upstream.ok) {
-      return new Response("The capability review is temporarily unavailable.", {
+      return new Response("The requested AGRO-AI review material is temporarily unavailable.", {
         status: 503,
         headers: securityHeaders(),
       });
     }
 
-    const html = sanitizeReviewHtml(await upstream.text());
+    const sourceHtml = await upstream.text();
+    const html = isReview ? sanitizeReviewHtml(sourceHtml, url.origin) : sourceHtml;
     return new Response(html, {
       status: 200,
       headers: securityHeaders(),
