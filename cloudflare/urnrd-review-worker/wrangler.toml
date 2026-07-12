@@ -1,0 +1,8 @@
+name = "agroai-urnrd-capability-review"
+main = "src/index.ts"
+compatibility_date = "2026-07-12"
+workers_dev = false
+
+routes = [
+  { pattern = "agroai-pilot.com/urnrd-capability-review-2026*", zone_name = "agroai-pilot.com" }
+]

@@ -1,0 +1,74 @@
+name: Deploy URNRD Capability Review
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "client/public/urnrd-capability-review-2026/**"
+      - "cloudflare/urnrd-review-worker/**"
+      - ".github/workflows/deploy-urnrd-capability-review.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: urnrd-capability-review-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy and prove live review route
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      REVIEW_URL: https://agroai-pilot.com/urnrd-capability-review-2026/
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail closed on missing Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+
+      - name: Validate source review document
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s client/public/urnrd-capability-review-2026/index.html
+          grep -F "AGRO-AI Capability & Selected Work" client/public/urnrd-capability-review-2026/index.html >/dev/null
+          grep -F "Upper Republican Natural Resources District" client/public/urnrd-capability-review-2026/index.html >/dev/null
+
+      - name: Validate Worker bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 deploy --dry-run --config cloudflare/urnrd-review-worker/wrangler.toml
+
+      - name: Deploy narrow production route
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 deploy --config cloudflare/urnrd-review-worker/wrangler.toml
+
+      - name: Prove live customer URL
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            status="$(curl -sS -L -o review.html -w '%{http_code}' --max-time 20 "${REVIEW_URL}" || true)"
+            if [ "$status" = "200" ] && \
+               grep -F "AGRO-AI Capability & Selected Work" review.html >/dev/null && \
+               grep -F "Upper Republican Natural Resources District" review.html >/dev/null; then
+              echo "review_url=${REVIEW_URL}"
+              echo "review_route=verified"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "URNRD review route did not become healthy"
+          exit 1
