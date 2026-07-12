@@ -1,0 +1,124 @@
+name: Audit Public Repository Security Summary
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/audit-public-repo-security-summary.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit-summary:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Produce redacted audit summary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY' > public-repo-audit-summary.txt
+          import re
+          import subprocess
+          from collections import Counter
+          from pathlib import Path
+
+          patterns = {
+              "aws_access_key": re.compile(r"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
+              "google_api_key": re.compile(r"\bAIza[0-9A-Za-z_-]{35}\b"),
+              "github_token": re.compile(r"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
+              "stripe_secret": re.compile(r"\bsk_(?:live|test)_[0-9A-Za-z]{16,}\b"),
+              "slack_token": re.compile(r"\bxox[baprs]-[0-9A-Za-z-]{20,}\b"),
+              "private_key": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+              "openai_style_key": re.compile(r"\bsk-[A-Za-z0-9_-]{24,}\b"),
+              "openrouter_key": re.compile(r"\bsk-or-v1-[A-Za-z0-9]{32,}\b"),
+              "generic_32_hex_provider_key": re.compile(r"(?i)(?:api[_-]?key|token)[^\n\r]{0,80}[\"'=:\s]([a-f0-9]{32})\b"),
+          }
+
+          proc = subprocess.Popen(
+              ["git", "log", "-p", "--all", "--no-color", "--full-history"],
+              stdout=subprocess.PIPE,
+              text=True,
+              errors="replace",
+          )
+          current_path = "<unknown>"
+          history = set()
+          assert proc.stdout
+          for line in proc.stdout:
+              if line.startswith("diff --git a/"):
+                  parts = line.strip().split(" b/", 1)
+                  current_path = parts[1] if len(parts) == 2 else line.strip()
+              for name, pattern in patterns.items():
+                  if pattern.search(line):
+                      history.add((name, current_path))
+          proc.wait()
+
+          print(f"HISTORY_FINDING_COUNT={len(history)}")
+          for name, count in sorted(Counter(name for name, _ in history).items()):
+              print(f"HISTORY_RULE {name} {count}")
+          for name, path in sorted(history):
+              print(f"HISTORY_PATH {name} {path}")
+
+          ignored = {".git", "node_modules", "dist", "build", ".venv", "venv"}
+          current = set()
+          for f in Path('.').rglob('*'):
+              if not f.is_file() or any(part in ignored for part in f.parts) or f.stat().st_size > 2_000_000:
+                  continue
+              try:
+                  text = f.read_text(encoding='utf-8', errors='ignore')
+              except Exception:
+                  continue
+              for name, pattern in patterns.items():
+                  if pattern.search(text):
+                      current.add((name, str(f)))
+          print(f"CURRENT_FINDING_COUNT={len(current)}")
+          for name, path in sorted(current):
+              print(f"CURRENT_PATH {name} {path}")
+
+          roots = ["agroai_api", "terraform", "cloudflare", "agroai-cloudflare-worker", "apps", "figma-enterprise-v4", "docs", ".github/workflows"]
+          code_exts = {".py", ".ts", ".tsx", ".js", ".jsx", ".tf", ".sql", ".sh", ".yml", ".yaml"}
+          docs_exts = {".md", ".txt", ".html"}
+          total = code = docs = 0
+          for root in roots:
+              p = Path(root)
+              if not p.exists():
+                  continue
+              files = [f for f in p.rglob('*') if f.is_file()]
+              rc = sum(f.suffix.lower() in code_exts for f in files)
+              rd = sum(f.suffix.lower() in docs_exts for f in files)
+              print(f"EXPOSED_ROOT {root} files={len(files)} code={rc} docs={rd}")
+              total += len(files); code += rc; docs += rd
+          print(f"EXPOSED_TOTAL files={total} code={code} docs={docs}")
+
+          categories = {
+              "customer_or_agency_names": ["Manulife", "PGIM", "Fox Canyon", "Upper Republican", "URNRD", "Gladstone", "Waterford"],
+              "integration_partners": ["John Deere", "WiseConn", "Talgil", "OpenET", "Salesforce", "Dropbox", "Microsoft", "Google"],
+              "internal_delivery_language": ["PILOT-READY", "delivery summary", "pilot playbook", "Codex", "Claude instructions", "runtime diagnosis"],
+          }
+          readable = [f for root in roots for f in Path(root).rglob('*') if f.is_file() and f.stat().st_size < 2_000_000]
+          for category, terms in categories.items():
+              paths = set()
+              for f in readable:
+                  try:
+                      text = f.read_text(encoding='utf-8', errors='ignore')
+                  except Exception:
+                      continue
+                  if any(term.lower() in text.lower() for term in terms):
+                      paths.add(str(f))
+              print(f"SENSITIVE_CATEGORY {category} files={len(paths)}")
+              for path in sorted(paths):
+                  print(f"SENSITIVE_PATH {category} {path}")
+          PY
+
+          cat public-repo-audit-summary.txt
+
+      - name: Upload redacted audit summary
+        uses: actions/upload-artifact@v4
+        with:
+          name: public-repo-audit-summary
+          path: public-repo-audit-summary.txt
+          retention-days: 7
