@@ -17,35 +17,75 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Install gitleaks
+      - name: Scan all reachable Git history for high-confidence credentials
         shell: bash
         run: |
           set -euo pipefail
-          go install github.com/gitleaks/gitleaks/v8@latest
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
-
-      - name: Scan all reachable Git history for secrets
-        shell: bash
-        run: |
-          set -euo pipefail
-          gitleaks git . --redact --report-format json --report-path /tmp/gitleaks.json --exit-code 0
           python - <<'PY'
-          import json
+          import re
+          import subprocess
           from collections import Counter
-          report_path = "/tmp/gitleaks.json"
-          try:
-              findings = json.load(open(report_path, encoding="utf-8"))
-          except FileNotFoundError:
-              findings = []
-          print(f"GITLEAKS_FINDING_COUNT={len(findings)}")
-          by_rule = Counter(item.get("RuleID", "unknown") for item in findings)
-          for rule, count in sorted(by_rule.items()):
-              print(f"GITLEAKS_RULE {rule} {count}")
-          paths = sorted({item.get("File", "") for item in findings if item.get("File")})
-          for path in paths[:100]:
-              print(f"GITLEAKS_PATH {path}")
-          if len(paths) > 100:
-              print(f"GITLEAKS_PATHS_TRUNCATED={len(paths)-100}")
+
+          patterns = {
+              "aws_access_key": re.compile(rb"\b(?:AKIA|ASIA)[A-Z0-9]{16}\b"),
+              "google_api_key": re.compile(rb"\bAIza[0-9A-Za-z_-]{35}\b"),
+              "github_token": re.compile(rb"\bgh[pousr]_[A-Za-z0-9_]{20,}\b"),
+              "stripe_secret": re.compile(rb"\bsk_(?:live|test)_[0-9A-Za-z]{16,}\b"),
+              "slack_token": re.compile(rb"\bxox[baprs]-[0-9A-Za-z-]{20,}\b"),
+              "private_key": re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
+              "openai_style_key": re.compile(rb"\bsk-[A-Za-z0-9_-]{24,}\b"),
+              "openrouter_key": re.compile(rb"\bsk-or-v1-[A-Za-z0-9]{32,}\b"),
+          }
+
+          raw = subprocess.check_output(["git", "rev-list", "--objects", "--all"], text=True, errors="replace")
+          path_by_sha = {}
+          for line in raw.splitlines():
+              parts = line.split(" ", 1)
+              sha = parts[0]
+              path = parts[1] if len(parts) > 1 else "<unknown>"
+              path_by_sha.setdefault(sha, path)
+
+          shas = list(path_by_sha)
+          check = subprocess.Popen(
+              ["git", "cat-file", "--batch-check=%(objectname) %(objecttype) %(objectsize)"],
+              stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True
+          )
+          check_out, _ = check.communicate("\n".join(shas) + "\n")
+          eligible = []
+          for line in check_out.splitlines():
+              parts = line.split()
+              if len(parts) == 3 and parts[1] == "blob" and int(parts[2]) <= 2_000_000:
+                  eligible.append((parts[0], int(parts[2])))
+
+          proc = subprocess.Popen(["git", "cat-file", "--batch"], stdin=subprocess.PIPE, stdout=subprocess.PIPE)
+          assert proc.stdin and proc.stdout
+          for sha, _ in eligible:
+              proc.stdin.write((sha + "\n").encode())
+          proc.stdin.close()
+
+          findings = []
+          for sha, expected_size in eligible:
+              header = proc.stdout.readline().decode(errors="replace").strip()
+              parts = header.split()
+              if len(parts) < 3 or parts[1] != "blob":
+                  continue
+              size = int(parts[2])
+              data = proc.stdout.read(size)
+              proc.stdout.read(1)
+              for name, pattern in patterns.items():
+                  if pattern.search(data):
+                      findings.append((name, path_by_sha.get(sha, "<unknown>"), sha))
+
+          proc.wait()
+          unique = sorted(set(findings))
+          print(f"HISTORY_HIGH_CONFIDENCE_COUNT={len(unique)}")
+          counts = Counter(name for name, _, _ in unique)
+          for name, count in sorted(counts.items()):
+              print(f"HISTORY_RULE {name} {count}")
+          for name, path, sha in unique[:100]:
+              print(f"HISTORY_FINDING {name} path={path} blob={sha[:12]}")
+          if len(unique) > 100:
+              print(f"HISTORY_FINDINGS_TRUNCATED={len(unique)-100}")
           PY
 
       - name: Inventory exposed product source and internal material
@@ -109,6 +149,7 @@ jobs:
               "slack_token": re.compile(r"\bxox[baprs]-[0-9A-Za-z-]{20,}\b"),
               "private_key": re.compile(r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----"),
               "openai_style_key": re.compile(r"\bsk-[A-Za-z0-9_-]{24,}\b"),
+              "openrouter_key": re.compile(r"\bsk-or-v1-[A-Za-z0-9]{32,}\b"),
           }
           ignored = {".git", "node_modules", "dist", "build", ".venv", "venv"}
           findings = []
@@ -122,7 +163,8 @@ jobs:
               for name, pattern in patterns.items():
                   if pattern.search(text):
                       findings.append((name, str(f)))
-          print(f"HIGH_CONFIDENCE_CURRENT_COUNT={len(findings)}")
-          for name, path in sorted(set(findings)):
+          unique = sorted(set(findings))
+          print(f"HIGH_CONFIDENCE_CURRENT_COUNT={len(unique)}")
+          for name, path in unique:
               print(f"HIGH_CONFIDENCE_CURRENT {name} {path}")
           PY
