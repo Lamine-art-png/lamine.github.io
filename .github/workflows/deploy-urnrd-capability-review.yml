@@ -18,13 +18,15 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy and prove live review route
+    name: Deploy and prove live review routes
     runs-on: ubuntu-latest
     environment: production
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       REVIEW_URL: https://agroai-pilot.com/urnrd-capability-review-2026/
+      ENGINEERING_URL: https://agroai-pilot.com/urnrd-capability-review-2026/engineering/
+      PUBLIC_MONOREPO_URL: https://github.com/Lamine-art-png/lamine.github.io
     steps:
       - uses: actions/checkout@v4
 
@@ -35,13 +37,20 @@ jobs:
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
 
-      - name: Validate source review document
+      - name: Validate source review documents
         shell: bash
         run: |
           set -euo pipefail
           test -s client/public/urnrd-capability-review-2026/index.html
+          test -s client/public/urnrd-capability-review-2026/engineering/index.html
           grep -F "AGRO-AI Capability & Selected Work" client/public/urnrd-capability-review-2026/index.html >/dev/null
           grep -F "Upper Republican Natural Resources District" client/public/urnrd-capability-review-2026/index.html >/dev/null
+          grep -F "AGRO-AI Public Engineering Portfolio" client/public/urnrd-capability-review-2026/engineering/index.html >/dev/null
+          grep -F "Public-safe technical overview" client/public/urnrd-capability-review-2026/engineering/index.html >/dev/null
+          if grep -F "${PUBLIC_MONOREPO_URL}" client/public/urnrd-capability-review-2026/engineering/index.html >/dev/null; then
+            echo "Unsafe monorepo URL found in public engineering portfolio"
+            exit 1
+          fi
 
       - name: Validate Worker bundle
         shell: bash
@@ -55,20 +64,44 @@ jobs:
           set -euo pipefail
           npx --yes wrangler@4.107.0 deploy --config cloudflare/urnrd-review-worker/wrangler.toml
 
-      - name: Prove live customer URL
+      - name: Prove live customer URLs and security boundary
         shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 30); do
-            status="$(curl -sS -L -o review.html -w '%{http_code}' --max-time 20 "${REVIEW_URL}" || true)"
-            if [ "$status" = "200" ] && \
+            review_status="$(curl -sS -L -o review.html -w '%{http_code}' --max-time 20 "${REVIEW_URL}" || true)"
+            engineering_status="$(curl -sS -L -o engineering.html -w '%{http_code}' --max-time 20 "${ENGINEERING_URL}" || true)"
+
+            review_safe=false
+            engineering_safe=false
+
+            if [ "$review_status" = "200" ] && \
                grep -F "AGRO-AI Capability & Selected Work" review.html >/dev/null && \
-               grep -F "Upper Republican Natural Resources District" review.html >/dev/null; then
+               grep -F "Upper Republican Natural Resources District" review.html >/dev/null && \
+               grep -F "Public engineering portfolio" review.html >/dev/null && \
+               grep -F "${ENGINEERING_URL}" review.html >/dev/null && \
+               ! grep -F "${PUBLIC_MONOREPO_URL}" review.html >/dev/null; then
+              review_safe=true
+            fi
+
+            if [ "$engineering_status" = "200" ] && \
+               grep -F "AGRO-AI Public Engineering Portfolio" engineering.html >/dev/null && \
+               grep -F "Public-safe technical overview" engineering.html >/dev/null && \
+               grep -F "Security boundary" engineering.html >/dev/null && \
+               ! grep -F "${PUBLIC_MONOREPO_URL}" engineering.html >/dev/null; then
+              engineering_safe=true
+            fi
+
+            if [ "$review_safe" = "true" ] && [ "$engineering_safe" = "true" ]; then
               echo "review_url=${REVIEW_URL}"
-              echo "review_route=verified"
+              echo "engineering_url=${ENGINEERING_URL}"
+              echo "review_route=verified_safe"
+              echo "engineering_route=verified_safe"
               exit 0
             fi
+
             sleep 5
           done
-          echo "URNRD review route did not become healthy"
+
+          echo "URNRD review routes did not become healthy and safe"
           exit 1
