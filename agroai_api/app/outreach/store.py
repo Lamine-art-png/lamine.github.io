@@ -1,9 +1,8 @@
-"""Durable outreach suppression and send ledger on the existing AGRO-AI database.
+"""Durable outreach suppression, send ledger, and engagement events.
 
 Schema ownership belongs exclusively to Alembic. Runtime code only reads and
-writes the tables introduced by revision 017_outreach_machine.
+writes the tables introduced by outreach migrations 017 and 018.
 """
-
 from __future__ import annotations
 
 import json
@@ -20,6 +19,16 @@ class OutreachStore:
     @staticmethod
     def _now() -> str:
         return datetime.now(timezone.utc).isoformat()
+
+    @staticmethod
+    def _parse_json(value: Any) -> dict[str, Any]:
+        if not value:
+            return {}
+        try:
+            parsed = json.loads(str(value))
+        except (TypeError, json.JSONDecodeError):
+            return {}
+        return parsed if isinstance(parsed, dict) else {}
 
     def is_suppressed(self, email: str) -> bool:
         with engine.begin() as conn:
@@ -75,6 +84,13 @@ class OutreachStore:
             ).scalar_one()
         return int(value or 0)
 
+    def count_live_sends(self) -> int:
+        with engine.begin() as conn:
+            value = conn.execute(
+                text("SELECT COUNT(*) FROM outreach_sends WHERE dry_run=0 AND status='sent'")
+            ).scalar_one()
+        return int(value or 0)
+
     def log_send(
         self,
         *,
@@ -88,8 +104,9 @@ class OutreachStore:
         resend_id: str | None = None,
         error_text: str | None = None,
         metadata: dict[str, Any] | None = None,
+        record_id: str | None = None,
     ) -> str:
-        record_id = str(uuid.uuid4())
+        send_id = (record_id or str(uuid.uuid4())).strip()
         with engine.begin() as conn:
             conn.execute(
                 text(
@@ -101,7 +118,7 @@ class OutreachStore:
                     ":metadata_json,:created_at)"
                 ),
                 {
-                    "id": record_id,
+                    "id": send_id,
                     "prospect_id": prospect_id,
                     "email": email.strip().lower(),
                     "account": account,
@@ -115,7 +132,162 @@ class OutreachStore:
                     "created_at": self._now(),
                 },
             )
-        return record_id
+        return send_id
+
+    def get_send(self, send_id: str) -> dict[str, Any] | None:
+        with engine.begin() as conn:
+            row = conn.execute(
+                text(
+                    "SELECT id, prospect_id, email, account, subject, status, resend_id, "
+                    "dry_run, metadata_json, created_at "
+                    "FROM outreach_sends WHERE id=:send_id"
+                ),
+                {"send_id": send_id.strip()},
+            ).mappings().first()
+        if row is None:
+            return None
+        item = dict(row)
+        item["dry_run"] = bool(item.get("dry_run"))
+        item["metadata"] = self._parse_json(item.pop("metadata_json", None))
+        return item
+
+    def recent_sends(self, *, limit: int = 100) -> list[dict[str, Any]]:
+        with engine.begin() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT id, prospect_id, email, account, subject, status, resend_id, "
+                    "dry_run, error_text, metadata_json, created_at "
+                    "FROM outreach_sends ORDER BY created_at DESC LIMIT :limit"
+                ),
+                {"limit": limit},
+            ).mappings().all()
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            item["dry_run"] = bool(item.get("dry_run"))
+            item["metadata"] = self._parse_json(item.pop("metadata_json", None))
+            items.append(item)
+        return items
+
+    def log_event(
+        self,
+        *,
+        send_id: str,
+        event_type: str,
+        link_key: str | None = None,
+        user_agent: str | None = None,
+        metadata: dict[str, Any] | None = None,
+    ) -> str | None:
+        send = self.get_send(send_id)
+        if not send or send.get("status") != "sent" or bool(send.get("dry_run")):
+            return None
+        event_id = str(uuid.uuid4())
+        with engine.begin() as conn:
+            conn.execute(
+                text(
+                    "INSERT INTO outreach_events "
+                    "(id,send_id,event_type,link_key,user_agent,metadata_json,created_at) "
+                    "VALUES (:id,:send_id,:event_type,:link_key,:user_agent,:metadata_json,:created_at)"
+                ),
+                {
+                    "id": event_id,
+                    "send_id": send_id,
+                    "event_type": event_type[:96],
+                    "link_key": (link_key or "")[:32] or None,
+                    "user_agent": (user_agent or "")[:500] or None,
+                    "metadata_json": json.dumps(metadata or {}, ensure_ascii=False),
+                    "created_at": self._now(),
+                },
+            )
+        return event_id
+
+    def recent_events(self, *, limit: int = 250) -> list[dict[str, Any]]:
+        with engine.begin() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT e.id, e.send_id, e.event_type, e.link_key, e.user_agent, "
+                    "e.metadata_json, e.created_at, s.prospect_id, s.email, s.account, "
+                    "s.subject, s.resend_id "
+                    "FROM outreach_events e "
+                    "JOIN outreach_sends s ON s.id=e.send_id "
+                    "ORDER BY e.created_at DESC LIMIT :limit"
+                ),
+                {"limit": limit},
+            ).mappings().all()
+        items: list[dict[str, Any]] = []
+        for row in rows:
+            item = dict(row)
+            item["metadata"] = self._parse_json(item.pop("metadata_json", None))
+            items.append(item)
+        return items
+
+    def engagement_summary(self, *, limit: int = 10_000) -> dict[str, Any]:
+        sent_total = self.count_live_sends()
+        events = self.recent_events(limit=limit)
+        prospects: dict[str, dict[str, Any]] = {}
+        counts: dict[str, int] = {}
+
+        for event in reversed(events):
+            event_type = str(event.get("event_type") or "unknown")
+            counts[event_type] = counts.get(event_type, 0) + 1
+            send_id = str(event.get("send_id") or "").strip()
+            if not send_id:
+                continue
+            row = prospects.setdefault(
+                send_id,
+                {
+                    "send_id": send_id,
+                    "prospect_id": event.get("prospect_id"),
+                    "email": event.get("email"),
+                    "account": event.get("account"),
+                    "subject": event.get("subject"),
+                    "resend_id": event.get("resend_id"),
+                    "open_signals": 0,
+                    "clicks": 0,
+                    "clicked_links": [],
+                    "first_event_at": event.get("created_at"),
+                    "last_event_at": event.get("created_at"),
+                },
+            )
+            row["last_event_at"] = event.get("created_at")
+            if event_type == "first_party.opened":
+                row["open_signals"] += 1
+            if event_type.startswith("first_party.clicked."):
+                row["clicks"] += 1
+                link = event.get("link_key")
+                if link and link not in row["clicked_links"]:
+                    row["clicked_links"].append(link)
+
+        ranked = sorted(
+            prospects.values(),
+            key=lambda row: (row["clicks"], row["open_signals"], row["last_event_at"] or ""),
+            reverse=True,
+        )
+        unique_opened = sum(1 for row in ranked if row["open_signals"] > 0)
+        unique_clicked = sum(1 for row in ranked if row["clicks"] > 0)
+        total_open_signals = sum(row["open_signals"] for row in ranked)
+        total_clicks = sum(row["clicks"] for row in ranked)
+        click_counts = {
+            key: counts.get(f"first_party.clicked.{key}", 0)
+            for key in ("portal", "meeting", "video")
+        }
+
+        return {
+            "sent_total": sent_total,
+            "unique_open_signal_sends": unique_opened,
+            "unique_clicked_sends": unique_clicked,
+            "total_open_signals": total_open_signals,
+            "total_clicks": total_clicks,
+            "open_signal_rate_percent": round((unique_opened / sent_total * 100), 2) if sent_total else 0.0,
+            "click_through_rate_percent": round((unique_clicked / sent_total * 100), 2) if sent_total else 0.0,
+            "click_counts": click_counts,
+            "event_counts": counts,
+            "engaged_prospects": ranked,
+            "measurement_note": (
+                "Open signals are approximate because email clients and privacy proxies may prefetch or block images. "
+                "CTA clicks are stronger intent signals."
+            ),
+        }
 
 
 store = OutreachStore()
