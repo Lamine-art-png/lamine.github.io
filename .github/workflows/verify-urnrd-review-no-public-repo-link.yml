@@ -1,0 +1,33 @@
+name: Verify URNRD Review Hides Public Repository
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/verify-urnrd-review-no-public-repo-link.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify customer page and removed repository link
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://agroai-pilot.com/urnrd-capability-review-2026/"
+          for attempt in $(seq 1 20); do
+            status="$(curl -sS -L -o review.html -w '%{http_code}' --max-time 20 "$url" || true)"
+            if [ "$status" = "200" ] && \
+               grep -F "AGRO-AI Capability & Selected Work" review.html >/dev/null && \
+               ! grep -F "github.com/Lamine-art-png/lamine.github.io" review.html >/dev/null && \
+               ! grep -F "Public engineering repository" review.html >/dev/null; then
+              echo "review_page=healthy"
+              echo "public_repo_link=absent"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "verification_failed"
+          exit 1
