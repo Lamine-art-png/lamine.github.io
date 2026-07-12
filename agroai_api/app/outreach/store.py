@@ -91,6 +91,26 @@ class OutreachStore:
             ).scalar_one()
         return int(value or 0)
 
+    def count_trackable_live_sends(self) -> int:
+        """Count only sends whose HTML actually contains first-party tracking.
+
+        Historical sends created before engagement tracking launched must not
+        dilute open or click rates. Metadata parsing stays database-portable
+        across SQLite and PostgreSQL instead of relying on vendor JSON syntax.
+        """
+        with engine.begin() as conn:
+            rows = conn.execute(
+                text(
+                    "SELECT metadata_json FROM outreach_sends "
+                    "WHERE dry_run=0 AND status='sent'"
+                )
+            ).all()
+        return sum(
+            1
+            for row in rows
+            if self._parse_json(row[0] if row else None).get("engagement_tracking") is True
+        )
+
     def log_send(
         self,
         *,
@@ -222,7 +242,8 @@ class OutreachStore:
         return items
 
     def engagement_summary(self, *, limit: int = 10_000) -> dict[str, Any]:
-        sent_total = self.count_live_sends()
+        sent_total_all_time = self.count_live_sends()
+        trackable_sent_total = self.count_trackable_live_sends()
         events = self.recent_events(limit=limit)
         prospects: dict[str, dict[str, Any]] = {}
         counts: dict[str, int] = {}
@@ -273,19 +294,21 @@ class OutreachStore:
         }
 
         return {
-            "sent_total": sent_total,
+            "sent_total_all_time": sent_total_all_time,
+            "trackable_sent_total": trackable_sent_total,
+            "measurement_denominator": "trackable_sent_total",
             "unique_open_signal_sends": unique_opened,
             "unique_clicked_sends": unique_clicked,
             "total_open_signals": total_open_signals,
             "total_clicks": total_clicks,
-            "open_signal_rate_percent": round((unique_opened / sent_total * 100), 2) if sent_total else 0.0,
-            "click_through_rate_percent": round((unique_clicked / sent_total * 100), 2) if sent_total else 0.0,
+            "open_signal_rate_percent": round((unique_opened / trackable_sent_total * 100), 2) if trackable_sent_total else 0.0,
+            "click_through_rate_percent": round((unique_clicked / trackable_sent_total * 100), 2) if trackable_sent_total else 0.0,
             "click_counts": click_counts,
             "event_counts": counts,
             "engaged_prospects": ranked,
             "measurement_note": (
-                "Open signals are approximate because email clients and privacy proxies may prefetch or block images. "
-                "CTA clicks are stronger intent signals."
+                "Rates include only live sends whose HTML contained first-party tracking. Historical untracked sends are excluded. "
+                "Open signals remain approximate because email clients and privacy proxies may prefetch or block images; CTA clicks are stronger intent signals."
             ),
         }
 

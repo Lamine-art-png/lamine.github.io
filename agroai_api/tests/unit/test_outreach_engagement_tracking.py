@@ -89,3 +89,81 @@ def test_engagement_migration_is_chained_and_contains_required_indexes():
     assert "ix_outreach_events_send_created" in migration
     assert "ix_outreach_events_type_created" in migration
     assert "ip_address" not in migration
+
+
+def test_trackable_send_count_ignores_historical_uninstrumented_sends(monkeypatch):
+    store_module = importlib.import_module("app.outreach.store")
+
+    class Result:
+        def all(self):
+            return [
+                ('{"engagement_tracking": true}',),
+                ('{"engagement_tracking": false}',),
+                ('{}',),
+                (None,),
+                ('{"engagement_tracking": true}',),
+            ]
+
+    class Connection:
+        def execute(self, *_args, **_kwargs):
+            return Result()
+
+    class Begin:
+        def __enter__(self):
+            return Connection()
+
+        def __exit__(self, *_args):
+            return False
+
+    class Engine:
+        def begin(self):
+            return Begin()
+
+    monkeypatch.setattr(store_module, "engine", Engine())
+    assert store_module.OutreachStore().count_trackable_live_sends() == 2
+
+
+def test_engagement_rates_use_trackable_send_denominator(monkeypatch):
+    from app.outreach.store import OutreachStore
+
+    outreach_store = OutreachStore()
+    monkeypatch.setattr(outreach_store, "count_live_sends", lambda: 50)
+    monkeypatch.setattr(outreach_store, "count_trackable_live_sends", lambda: 2)
+    monkeypatch.setattr(
+        outreach_store,
+        "recent_events",
+        lambda **_kwargs: [
+            {
+                "id": "event-1",
+                "send_id": "send-1",
+                "event_type": "first_party.opened",
+                "link_key": None,
+                "created_at": "2026-07-12T09:00:00+00:00",
+                "prospect_id": "prospect-1",
+                "email": "one@example.com",
+                "account": "Account One",
+                "subject": "Subject One",
+                "resend_id": "resend-1",
+            },
+            {
+                "id": "event-2",
+                "send_id": "send-1",
+                "event_type": "first_party.clicked.portal",
+                "link_key": "portal",
+                "created_at": "2026-07-12T09:01:00+00:00",
+                "prospect_id": "prospect-1",
+                "email": "one@example.com",
+                "account": "Account One",
+                "subject": "Subject One",
+                "resend_id": "resend-1",
+            },
+        ],
+    )
+
+    summary = outreach_store.engagement_summary()
+
+    assert summary["sent_total_all_time"] == 50
+    assert summary["trackable_sent_total"] == 2
+    assert summary["measurement_denominator"] == "trackable_sent_total"
+    assert summary["open_signal_rate_percent"] == 50.0
+    assert summary["click_through_rate_percent"] == 50.0
