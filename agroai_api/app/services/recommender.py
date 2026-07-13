@@ -39,6 +39,10 @@ class Recommender:
         self._forecast_engine = ForecastEngine()
         self._confidence_adjuster = ConfidenceAdjuster()
 
+    def _extract_features(self, db: Session, block_id: str, horizon_hours: float) -> Dict:
+        """Legacy cache compatibility wrapper around the canonical feature builder."""
+        return self._feature_builder.build(db, block_id).to_dict()
+
     def compute(
         self,
         db: Session,

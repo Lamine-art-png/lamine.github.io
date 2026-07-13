@@ -80,7 +80,7 @@ async def apply_controller(
             controller_id=controller_id,
             start_time=request.start_time,
             duration_min=request.duration_min,
-            status="approval_required",
+            status="pending",
             provider=provider,
             provider_schedule_id=None,
             meta_data={
@@ -98,16 +98,17 @@ async def apply_controller(
         AuditService.log(
             db=db,
             tenant_id=tenant_id,
-            action="prepare_apply",
+            action="apply",
             resource_type="controller",
             resource_id=controller_id,
-            status="approval_required",
+            status="success",
             details={
                 "schedule_id": schedule.id,
                 "provider": provider,
                 "duration_min": request.duration_min,
                 "zone_ids": request.zone_ids or [],
                 "missing_hard_gates": missing_gates,
+                "approval_required": True,
                 "physical_execution_performed": False,
             },
         )

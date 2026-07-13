@@ -340,4 +340,6 @@ async def connector_data_status(connection_id: str, tenant_id: str = Depends(req
 # Keep the v3 self-service agricultural lifecycle on the already-mounted
 # Connector Hub router so there is one production route owner at runtime.
 from app.api.v1.connector_unified_v3 import router as unified_v3_router  # noqa: E402
+from app.api.v1.router_compat import materialize_included_routes  # noqa: E402
 router.include_router(unified_v3_router)
+materialize_included_routes(router)

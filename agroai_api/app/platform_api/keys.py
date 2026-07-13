@@ -108,6 +108,8 @@ def verify_platform_key(db: Session, plaintext: str) -> VerifiedPlatformKey | No
     now = datetime.utcnow()
     if row.expires_at and row.expires_at <= now:
         return None
+    if row.overlap_expires_at and row.overlap_expires_at <= now:
+        return None
     project = db.get(ApiProject, row.api_project_id)
     if project is None or project.status != "active":
         return None

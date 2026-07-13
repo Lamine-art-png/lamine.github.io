@@ -285,19 +285,30 @@ from app.api.v1.auth import router as auth_router  # noqa: E402
 from app.api.v1.billing import router as billing_router  # noqa: E402
 from app.api.v1.evaluation import legacy_router as evaluation_legacy_router  # noqa: E402
 from app.api.v1.evaluation import router as evaluation_router  # noqa: E402
+from app.api.v1.ingestion import router as ingestion_router  # noqa: E402
+from app.api.v1.orchestration import router as orchestration_router  # noqa: E402
 from app.api.v1.preferences import router as preferences_router  # noqa: E402
 from app.api.v1.product_shell import router as product_shell_router  # noqa: E402
 from app.api.v1.platform_admin import router as platform_admin_router  # noqa: E402
 from app.api.v1.platform_api import router as platform_api_router  # noqa: E402
+from app.api.v1.recommendations import router as recommendations_router  # noqa: E402
+from app.api.v1.reports import router as reports_router  # noqa: E402
+from app.api.v1.router_compat import materialize_included_routes  # noqa: E402
+from app.api.v1.webhooks import router as webhooks_router  # noqa: E402
 
 app.include_router(auth_router, prefix="/v1")
 app.include_router(billing_router, prefix="/v1")
 app.include_router(evaluation_router)
 app.include_router(evaluation_legacy_router)
+app.include_router(ingestion_router, prefix="/v1")
+app.include_router(orchestration_router, prefix="/v1")
 app.include_router(preferences_router, prefix="/v1")
 app.include_router(product_shell_router, prefix="/v1")
 app.include_router(platform_admin_router, prefix="/v1")
 app.include_router(platform_api_router, prefix="/v1")
+app.include_router(recommendations_router, prefix="/v1")
+app.include_router(reports_router, prefix="/v1")
+app.include_router(webhooks_router, prefix="/v1")
 
 from app.api.v1.saas import router as saas_router  # noqa: E402
 app.include_router(saas_router, prefix="/v1")
@@ -367,3 +378,5 @@ app.include_router(operator_cockpit_router, prefix="/v1")
 
 from app.api.v1.field_operations import router as field_operations_router  # noqa: E402
 app.include_router(field_operations_router, prefix="/v1")
+
+materialize_included_routes(app.router)
