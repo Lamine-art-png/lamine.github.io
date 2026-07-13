@@ -23,7 +23,8 @@ from app.platform_api.deps import require_developer_control_plane, require_platf
 from app.platform_api.idempotency import begin_idempotent_operation, complete_idempotent_operation
 from app.platform_api.keys import create_platform_key, rotate_platform_key
 from app.platform_api.principal import PlatformPrincipal
-from app.platform_api.rate_limits import enforce_rate_limit
+from app.platform_api.credential_vault import production_vault_keyring_configured
+from app.platform_api.rate_limits import apply_rate_limit_headers, enforce_rate_limit, platform_rate_limiter_readiness
 from app.platform_api.route_manifest import manifest_dicts, public_routes
 from app.platform_api.scopes import normalize_scopes, require_scopes
 from app.platform_api.usage import record_usage_event
@@ -141,10 +142,16 @@ def _key_public(row: PlatformApiKey) -> dict[str, Any]:
 
 @router.get("/platform/health")
 def platform_health() -> dict[str, Any]:
+    enabled = bool(getattr(settings, "PLATFORM_API_ENABLED", False))
+    limiter = platform_rate_limiter_readiness() if enabled else {"ready": False, "backend": None, "reason": "platform_api_disabled"}
+    production_vault_ready = production_vault_keyring_configured() if enabled and str(getattr(settings, "APP_ENV", "development")).lower() == "production" else None
+    runtime_ready = enabled and limiter["ready"] and production_vault_ready is not False
     return {
-        "status": "ok",
-        "platform_api_enabled": bool(getattr(settings, "PLATFORM_API_ENABLED", False)),
+        "status": "ready" if runtime_ready else ("disabled" if not enabled else "not_ready"),
+        "platform_api_enabled": enabled,
         "developer_control_plane_enabled": bool(getattr(settings, "PLATFORM_API_DEVELOPER_CONTROL_PLANE_ENABLED", False)),
+        "rate_limiter": limiter,
+        "production_vault_keyring_ready": production_vault_ready,
         "earthdaily_status": "awaiting_partner_contract",
         "valley_irrigation_status": "awaiting_partner_contract",
         "physical_irrigation_commands": "disabled",
@@ -191,9 +198,7 @@ def platform_me(
 ) -> dict[str, Any]:
     require_scopes(principal.scopes, {"projects:read"})
     decision = enforce_rate_limit(principal, route_id="platform.me")
-    response.headers["RateLimit-Limit"] = str(decision.limit)
-    response.headers["RateLimit-Remaining"] = str(decision.remaining)
-    response.headers["RateLimit-Reset"] = str(decision.reset_epoch)
+    apply_rate_limit_headers(response, decision)
     record_usage_event(db, principal=principal, event_type="api_request", metric="api_requests", operation="platform.me", status_code=200)
     db.commit()
     return {
@@ -216,11 +221,13 @@ def platform_me(
 
 @router.get("/platform/providers")
 def platform_providers(
+    response: Response,
     principal: PlatformPrincipal = Depends(require_platform_api_principal),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     require_scopes(principal.scopes, {"connectors:read"})
-    enforce_rate_limit(principal, route_id="platform.providers")
+    decision = enforce_rate_limit(principal, route_id="platform.providers")
+    apply_rate_limit_headers(response, decision)
     record_usage_event(db, principal=principal, event_type="api_request", metric="api_requests", operation="platform.providers", status_code=200)
     db.commit()
     return {"status": "ok", "providers": provider_catalog()}
@@ -230,12 +237,14 @@ def platform_providers(
 def validate_provider_credentials(
     provider_id: str,
     payload: ProviderCredentialProbe,
+    response: Response,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     principal: PlatformPrincipal = Depends(require_platform_api_principal),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     require_scopes(principal.scopes, {"connectors:write"})
-    enforce_rate_limit(principal, route_id="platform.provider.validate", cost=2)
+    decision = enforce_rate_limit(principal, route_id="platform.provider.validate")
+    apply_rate_limit_headers(response, decision)
     idem, replay = begin_idempotent_operation(db, principal=principal, operation=f"provider.validate:{provider_id}", idempotency_key=idempotency_key, payload=payload.model_dump())
     if replay and idem and idem.response_json:
         return idem.response_json
@@ -251,12 +260,14 @@ def validate_provider_credentials(
 @router.post("/platform/actions/plan")
 def plan_action(
     payload: ActionPlanRequest,
+    response: Response,
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     principal: PlatformPrincipal = Depends(require_platform_api_principal),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
     require_scopes(principal.scopes, {"actions:plan"})
-    enforce_rate_limit(principal, route_id="platform.actions.plan", cost=2)
+    decision = enforce_rate_limit(principal, route_id="platform.actions.plan")
+    apply_rate_limit_headers(response, decision)
     idem, replay = begin_idempotent_operation(db, principal=principal, operation="actions.plan", idempotency_key=idempotency_key, payload=payload.model_dump())
     if replay and idem and idem.response_json:
         return idem.response_json
@@ -279,6 +290,7 @@ def execute_action(
     principal: PlatformPrincipal = Depends(require_platform_api_principal),
 ) -> dict[str, Any]:
     require_scopes(principal.scopes, {"actions:execute"})
+    enforce_rate_limit(principal, route_id="platform.actions.execute")
     raise HTTPException(
         status_code=status.HTTP_403_FORBIDDEN,
         detail={

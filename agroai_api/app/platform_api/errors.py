@@ -6,6 +6,10 @@ from fastapi import HTTPException, Request
 from fastapi.responses import JSONResponse
 
 
+class PlatformApiHTTPException(HTTPException):
+    """Platform-only exception rendered without FastAPI's legacy detail wrapper."""
+
+
 def platform_error(
     code: str,
     message: str,

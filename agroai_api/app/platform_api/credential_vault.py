@@ -6,6 +6,7 @@ from typing import Any
 
 from sqlalchemy.orm import Session
 
+from app.core.config import settings
 from app.models.connector_security import ConnectorCredential
 from app.models.operational_records import ConnectorConnection
 from app.models.platform_api import ApiProject, ApiServiceAccount
@@ -13,6 +14,7 @@ from app.platform_api.principal import PlatformPrincipal
 from app.services.connector_vault import (
     ALGORITHM,
     credential_reference,
+    explicit_versioned_keyring_configured,
     load_connector_credentials,
     revoke_connector_credentials,
     store_connector_credentials,
@@ -33,9 +35,17 @@ class CredentialVaultContext:
 
 
 def production_vault_keyring_configured() -> bool:
-    """Return whether the shared connector AES-GCM vault can fail closed."""
+    """Return whether Platform API production has an explicit versioned keyring."""
 
-    return vault_configured()
+    return explicit_versioned_keyring_configured()
+
+
+def _require_platform_vault_configuration() -> None:
+    if str(getattr(settings, "APP_ENV", "development")).strip().lower() == "production":
+        if not production_vault_keyring_configured():
+            raise RuntimeError("Platform API production requires CONNECTOR_CREDENTIAL_KEYS_JSON with the active key version")
+    elif not vault_configured():
+        raise RuntimeError("connector credential vault is not configured")
 
 
 def _provider_allowed(principal: PlatformPrincipal, provider: str) -> bool:
@@ -89,6 +99,23 @@ def _assert_service_account_context(db: Session, *, principal: PlatformPrincipal
         raise PermissionError("connectors:sync scope is required")
 
 
+def _assert_store_project_context(
+    db: Session,
+    *,
+    organization_id: str,
+    api_project_id: str,
+    connection: ConnectorConnection,
+) -> None:
+    project = db.query(ApiProject).filter(
+        ApiProject.id == api_project_id,
+        ApiProject.organization_id == organization_id,
+    ).first()
+    if project is None or project.status != "active":
+        raise ValueError("api project ownership mismatch")
+    if project.workspace_id and connection.workspace_id and project.workspace_id != connection.workspace_id:
+        raise ValueError("api project workspace mismatch")
+
+
 def _assert_retrieval_authorized(db: Session, context: CredentialVaultContext) -> ConnectorConnection:
     principal = context.principal
     if principal.authentication_type != "platform_api_key":
@@ -127,8 +154,17 @@ def store_platform_connector_secret(
     token_expires_at: datetime | None = None,
     scopes: list[str] | None = None,
 ) -> ConnectorCredential:
+    _require_platform_vault_configuration()
     if connection.tenant_id != organization_id or connection.provider != provider:
         raise ValueError("connector credential ownership mismatch")
+    if connection.status in {"disabled", "revoked"}:
+        raise ValueError("connector credential connection is inactive")
+    _assert_store_project_context(
+        db,
+        organization_id=organization_id,
+        api_project_id=api_project_id,
+        connection=connection,
+    )
     config = dict(connection.config_json or {})
     config["platform_api_project_id"] = api_project_id
     config["platform_api_secret_type"] = secret_type
@@ -145,6 +181,7 @@ def store_platform_connector_secret(
 
 
 def retrieve_platform_connector_secret(db: Session, *, context: CredentialVaultContext) -> dict[str, Any]:
+    _require_platform_vault_configuration()
     connection = _assert_retrieval_authorized(db, context)
     return load_connector_credentials(db, tenant_id=connection.tenant_id, connection_id=connection.id)
 

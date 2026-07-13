@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 import os
 from dataclasses import asdict, dataclass
 from urllib.parse import urlparse
@@ -55,6 +57,20 @@ def _setting(settings: Settings, name: str, default: str = "") -> str:
     if value not in (None, ""):
         return str(value).strip()
     return os.getenv(name, default).strip()
+
+
+def _platform_vault_keyring_valid(settings: Settings) -> bool:
+    raw = _setting(settings, "CONNECTOR_CREDENTIAL_KEYS_JSON")
+    active = _setting(settings, "CONNECTOR_CREDENTIAL_ACTIVE_KEY_VERSION", "v1") or "v1"
+    if not raw:
+        return False
+    try:
+        parsed = json.loads(raw)
+        encoded = parsed[active] if isinstance(parsed, dict) else None
+        key = base64.urlsafe_b64decode(str(encoded) + "=" * (-len(str(encoded)) % 4))
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        return False
+    return len(key) == 32
 
 
 def _require_r2_contract(settings: Settings, blockers: list[ReadinessFinding]) -> None:
@@ -218,6 +234,24 @@ def evaluate_production_readiness(settings: Settings, *, target_scale: str = "pr
                     "blocker",
                     "platform_api",
                     "Enabled Platform API traffic requires PLATFORM_API_REDIS_URL or REDIS_URL for shared rate-limit state.",
+                )
+            )
+        if bool(getattr(settings, "PLATFORM_API_RATE_LIMIT_FAIL_OPEN", False)):
+            blockers.append(
+                ReadinessFinding(
+                    "platform_api.rate_limiter_fail_open",
+                    "blocker",
+                    "platform_api",
+                    "Enabled Platform API production must fail closed when Redis is unavailable.",
+                )
+            )
+        if not _platform_vault_keyring_valid(settings):
+            blockers.append(
+                ReadinessFinding(
+                    "platform_api.explicit_vault_keyring_missing",
+                    "blocker",
+                    "platform_api",
+                    "Enabled Platform API production requires a valid explicit versioned connector credential keyring containing the active key version.",
                 )
             )
 

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import base64
+import json
 import uuid
+from dataclasses import replace
 from datetime import datetime, timedelta
 
 import pytest
 
 from app.core.config import settings
-from app.core.security import create_access_token
+from app.core.security import create_access_token, get_current_tenant_id
+from app.main import app
 from fastapi import HTTPException
 
 from app.models.platform_api import ApiProject, ApiServiceAccount, PlatformApiKey
@@ -28,6 +31,7 @@ from app.platform_api.keys import create_platform_key, rotate_platform_key, veri
 from app.platform_api.principal import PlatformPrincipal
 from app.platform_api.rate_limits import _MEMORY_BUCKETS, RedisRateLimiter, check_rate_limit, enforce_rate_limit
 from app.platform_api.webhooks import generate_webhook_secret, validate_webhook_url, webhook_signature
+from app.api.v1.platform_api import platform_health
 from app.provider_adapters.security import validate_provider_base_url
 from app.provider_adapters.registry import get_provider_adapter, provider_catalog
 
@@ -40,6 +44,7 @@ class SharedFakeRedis:
     def __init__(self):
         self.values = {}
         self.expirations = {}
+        self.responses = {}
         self.fail = False
 
     def eval(self, _script, numkeys, *keys_and_args):
@@ -49,20 +54,24 @@ class SharedFakeRedis:
         args = list(keys_and_args[numkeys:])
         cost = int(args[0])
         now = int(args[1])
+        counter_count = int(args[2])
+        retry_key = keys[counter_count]
+        if retry_key in self.responses:
+            return self.responses[retry_key]
         allowed = 1
         selected_limit = 0
         selected_reset = 0
         min_remaining = None
         retry_after = 0
-        for index, key in enumerate(keys):
-            offset = 2 + index * 3
+        for index, key in enumerate(keys[:counter_count]):
+            offset = 3 + index * 3
             limit = int(args[offset])
-            window_seconds = int(args[offset + 1])
+            _window_seconds = int(args[offset + 1])
             reset = int(args[offset + 2])
             used = self.values.get(key, 0) + cost
             self.values[key] = used
             if used == cost:
-                self.expirations[key] = window_seconds + 5
+                self.expirations[key] = reset + 5
             remaining = limit - used
             if min_remaining is None or remaining < min_remaining:
                 min_remaining = remaining
@@ -71,7 +80,24 @@ class SharedFakeRedis:
             if used > limit:
                 allowed = 0
                 retry_after = max(retry_after, reset - now)
-        return [allowed, selected_limit, max(0, min_remaining or 0), selected_reset, max(1, retry_after) if not allowed else 0]
+        result = [allowed, selected_limit, max(0, min_remaining or 0), selected_reset, max(1, retry_after) if not allowed else 0]
+        self.responses[retry_key] = result
+        return result
+
+
+class AmbiguousWriteFakeRedis(SharedFakeRedis):
+    def __init__(self):
+        super().__init__()
+        self.raise_after_first_write = True
+
+    def eval(self, *args, **kwargs):
+        result = super().eval(*args, **kwargs)
+        if self.raise_after_first_write:
+            from redis.exceptions import ConnectionError as RedisConnectionError
+
+            self.raise_after_first_write = False
+            raise RedisConnectionError("response lost after atomic write")
+        return result
 
 
 def _org(db):
@@ -212,6 +238,23 @@ def test_platform_routes_require_platform_api_key_and_do_not_accept_portal_jwt(c
     assert response.json()["detail"]["code"] == "invalid_api_key"
 
 
+def test_test_tenant_fallback_cannot_activate_in_production(monkeypatch):
+    monkeypatch.setattr(settings, "APP_ENV", "production")
+    monkeypatch.setenv("PYTEST_CURRENT_TEST", "attacker-controlled-value")
+
+    with pytest.raises(HTTPException) as exc:
+        get_current_tenant_id(credentials=None)
+
+    assert exc.value.status_code == 401
+
+
+def test_legacy_demo_tenant_fallback_remains_local_only(monkeypatch):
+    monkeypatch.setattr(settings, "APP_ENV", "development")
+    monkeypatch.delenv("PYTEST_CURRENT_TEST", raising=False)
+
+    assert get_current_tenant_id(credentials=None) == "demo-tenant"
+
+
 def test_platform_key_can_call_me_with_scope(client, db, monkeypatch):
     *_items, plaintext = _project_and_key(db)
     monkeypatch.setattr(settings, "PLATFORM_API_ENABLED", True)
@@ -224,6 +267,31 @@ def test_platform_key_can_call_me_with_scope(client, db, monkeypatch):
     body = response.json()
     assert body["principal"]["authentication_type"] == "platform_api_key"
     assert body["principal"]["request_id"] == "req-test-1"
+
+
+def test_platform_rate_limit_response_uses_standard_envelope_and_headers(client, db, monkeypatch):
+    *_items, plaintext = _project_and_key(db)
+    _MEMORY_BUCKETS.clear()
+    monkeypatch.setattr(settings, "PLATFORM_API_ENABLED", True)
+    monkeypatch.setattr(settings, "PLATFORM_API_RATE_LIMIT_BACKEND", "memory")
+    monkeypatch.setattr(settings, "PLATFORM_API_TEST_BURST_LIMIT", 1)
+    monkeypatch.setattr(settings, "PLATFORM_API_TEST_SUSTAINED_LIMIT", 10)
+    monkeypatch.setattr(settings, "APP_ENV", "test")
+
+    first = client.get("/v1/platform/me", headers={"Authorization": f"Bearer {plaintext}"})
+    denied = client.get("/v1/platform/me", headers={"Authorization": f"Bearer {plaintext}"})
+
+    assert first.status_code == 200
+    assert first.headers["RateLimit-Limit"] == "1"
+    assert first.headers["RateLimit-Remaining"] == "0"
+    assert "RateLimit-Reset" in first.headers
+    assert denied.status_code == 429
+    assert denied.json()["code"] == "rate_limit_exceeded"
+    assert "detail" not in denied.json()
+    assert denied.headers["RateLimit-Limit"] == "1"
+    assert denied.headers["RateLimit-Remaining"] == "0"
+    assert "RateLimit-Reset" in denied.headers
+    assert int(denied.headers["Retry-After"]) >= 1
 
 
 def test_provider_readiness_adapters_do_not_claim_live_status():
@@ -265,6 +333,40 @@ def test_public_openapi_excludes_internal_admin_and_portal_routes(client, monkey
     assert "/auth/login" not in text
 
 
+def test_pre_platform_root_route_order_is_preserved_and_platform_routes_are_additive():
+    baseline_paths = [
+        "/openapi.json",
+        "/docs",
+        "/docs/oauth2-redirect",
+        "/redoc",
+        "/v1/readiness",
+        "/health",
+        "/v1/health",
+        "/v1/runtime/ai-status",
+        "/v1/auth/email-delivery/status",
+    ]
+    actual_paths = [getattr(route, "path", "") for route in app.routes]
+
+    assert actual_paths[: len(baseline_paths)] == baseline_paths
+    assert "/v1/platform/me" in actual_paths
+    assert "/v1/auth/login" in actual_paths
+    assert "/v1/orgs" in actual_paths
+    assert "/v1/connectors/connect" in actual_paths
+
+
+def test_full_openapi_operation_surface_has_no_method_path_collisions():
+    schema = app.openapi()
+    operations = [
+        (method.upper(), path)
+        for path, path_item in schema["paths"].items()
+        for method in path_item
+        if method.lower() in {"get", "post", "put", "patch", "delete", "options", "head"}
+    ]
+
+    assert len(operations) == len(set(operations))
+    assert any(path.startswith("/v1/platform/") for _method, path in operations)
+
+
 def test_rate_limiter_memory_backend_fails_closed_in_production(monkeypatch):
     *_items, key, plaintext = (None, None, None, None, None, None, "unused")
     from app.platform_api.principal import PlatformPrincipal
@@ -281,6 +383,56 @@ def test_rate_limiter_memory_backend_fails_closed_in_production(monkeypatch):
 
     with pytest.raises(RuntimeError):
         check_rate_limit(principal, route_id="test")
+
+
+def test_rate_limiter_fail_open_override_cannot_activate_in_production(monkeypatch):
+    monkeypatch.setattr(settings, "PLATFORM_API_RATE_LIMIT_BACKEND", "memory")
+    monkeypatch.setattr(settings, "PLATFORM_API_RATE_LIMIT_FAIL_OPEN", True)
+    monkeypatch.setattr(settings, "APP_ENV", "production")
+    principal = PlatformPrincipal(
+        authentication_type="platform_api_key",
+        organization_id="org",
+        api_project_id="project",
+        api_key_id="key",
+        environment="live",
+    )
+
+    with pytest.raises(RuntimeError):
+        check_rate_limit(principal, route_id="platform.me")
+
+
+def test_rate_limiter_unavailable_is_a_fail_closed_503(monkeypatch):
+    principal = PlatformPrincipal(
+        authentication_type="platform_api_key",
+        organization_id="org",
+        api_project_id="project",
+        api_key_id="key",
+        environment="live",
+        request_id="req-unavailable",
+    )
+
+    def unavailable(*_args, **_kwargs):
+        raise RuntimeError("redis unavailable")
+
+    monkeypatch.setattr("app.platform_api.rate_limits.check_rate_limit", unavailable)
+    with pytest.raises(HTTPException) as exc:
+        enforce_rate_limit(principal, route_id="platform.me")
+
+    assert exc.value.status_code == 503
+    assert exc.value.detail["code"] == "rate_limiter_unavailable"
+    assert exc.value.detail["request_id"] == "req-unavailable"
+
+
+def test_platform_health_is_not_ready_when_enabled_without_redis(monkeypatch):
+    monkeypatch.setattr(settings, "PLATFORM_API_ENABLED", True)
+    monkeypatch.setattr(settings, "PLATFORM_API_RATE_LIMIT_BACKEND", "redis")
+    monkeypatch.setattr(settings, "PLATFORM_API_REDIS_URL", "")
+    monkeypatch.setattr(settings, "REDIS_URL", "")
+
+    health = platform_health()
+
+    assert health["status"] == "not_ready"
+    assert health["rate_limiter"] == {"ready": False, "backend": "redis", "reason": "redis_url_missing"}
 
 
 def test_key_expiration_revocation_project_and_service_account_disable(db):
@@ -484,6 +636,31 @@ def test_rate_limit_dimensions_costs_and_429_headers(monkeypatch):
     assert "Retry-After" in exc.value.headers
 
 
+def test_rate_limit_uses_server_owned_weighted_route_costs(monkeypatch):
+    _MEMORY_BUCKETS.clear()
+    monkeypatch.setattr(settings, "PLATFORM_API_RATE_LIMIT_BACKEND", "memory")
+    monkeypatch.setattr(settings, "PLATFORM_API_TEST_BURST_LIMIT", 3)
+    monkeypatch.setattr(settings, "PLATFORM_API_TEST_SUSTAINED_LIMIT", 10)
+    monkeypatch.setattr(settings, "APP_ENV", "test")
+    principal = PlatformPrincipal(
+        authentication_type="platform_api_key",
+        organization_id="org-weighted",
+        api_project_id="project-weighted",
+        api_key_id="key-weighted",
+        environment="test",
+    )
+
+    validation = check_rate_limit(principal, route_id="platform.provider.validate")
+    read = check_rate_limit(principal, route_id="platform.me")
+    denied = check_rate_limit(principal, route_id="platform.providers")
+
+    assert validation.allowed is True
+    assert validation.remaining == 1
+    assert read.allowed is True
+    assert read.remaining == 0
+    assert denied.allowed is False
+
+
 def test_redis_rate_limiter_shares_state_across_instances_and_dimensions():
     fake = SharedFakeRedis()
     limiter_a = RedisRateLimiter(client=fake)
@@ -521,6 +698,18 @@ def test_redis_rate_limiter_failure_is_not_allowed_by_default():
 
     with pytest.raises(RuntimeError):
         limiter.check(principal, cost=1)
+
+
+def test_redis_rate_limiter_retry_is_idempotent_after_ambiguous_write():
+    fake = AmbiguousWriteFakeRedis()
+    limiter = RedisRateLimiter(client=fake, max_retries=1)
+    principal = PlatformPrincipal(authentication_type="platform_api_key", organization_id="org", api_project_id="project", api_key_id="key", environment="test")
+
+    decision = limiter.check(principal, cost=59, operation_id="one-logical-check")
+
+    assert decision.allowed is True
+    assert decision.remaining == 1
+    assert set(fake.values.values()) == {59}
 
 
 def test_live_and_test_key_prefixes_differ(db):
@@ -598,6 +787,9 @@ def test_platform_credential_vault_denies_wrong_ownership_contexts(db, monkeypat
     good_principal = _platform_principal_for(org, workspace, project, service_account, key, scopes={"connectors:sync"})
     other_org_principal = _platform_principal_for(other_org, other_workspace, other_project, other_sa, other_key, scopes={"connectors:sync"})
     no_sync_scope = _platform_principal_for(org, workspace, project, service_account, key, scopes={"connectors:read"})
+    wrong_project = replace(good_principal, api_project_id=other_project.id)
+    wrong_service_account = replace(good_principal, service_account_id=other_sa.id)
+    legacy_tenant_principal = replace(good_principal, authentication_type="portal_user")
     cases = [
         CredentialVaultContext(principal=good_principal, provider_job_authorized=False, connection_id=connection.id, provider="earthdaily"),
         CredentialVaultContext(principal=other_org_principal, provider_job_authorized=True, connection_id=connection.id, provider="earthdaily"),
@@ -605,11 +797,71 @@ def test_platform_credential_vault_denies_wrong_ownership_contexts(db, monkeypat
         CredentialVaultContext(principal=good_principal, provider_job_authorized=True, connection_id=connection.id, provider="valley_irrigation"),
         CredentialVaultContext(principal=good_principal, provider_job_authorized=True, connection_id=connection.id, provider="earthdaily", secret_type="webhook_secret"),
         CredentialVaultContext(principal=no_sync_scope, provider_job_authorized=True, connection_id=connection.id, provider="earthdaily"),
+        CredentialVaultContext(principal=wrong_project, provider_job_authorized=True, connection_id=connection.id, provider="earthdaily"),
+        CredentialVaultContext(principal=wrong_service_account, provider_job_authorized=True, connection_id=connection.id, provider="earthdaily"),
+        CredentialVaultContext(principal=legacy_tenant_principal, provider_job_authorized=True, connection_id=connection.id, provider="earthdaily"),
     ]
 
     for context in cases:
         with pytest.raises(PermissionError):
             retrieve_platform_connector_secret(db, context=context)
+
+
+def test_platform_credential_vault_store_denies_cross_project_and_workspace_custody(db, monkeypatch):
+    monkeypatch.setenv("CONNECTOR_CREDENTIAL_MASTER_KEY", _vault_key())
+    monkeypatch.setenv("CONNECTOR_CREDENTIAL_ACTIVE_KEY_VERSION", "v-test")
+    user, org, workspace, project, _service_account, _key, _plaintext = _project_and_key(db, scopes=["connectors:sync"])
+    _other_user, _other_org, _other_workspace, other_project, _other_sa, _other_key, _other_plaintext = _project_and_key(
+        db,
+        scopes=["connectors:sync"],
+    )
+    connection = _connector_connection(db, org=org, workspace=workspace, provider="earthdaily")
+
+    with pytest.raises(ValueError, match="api project ownership mismatch"):
+        store_platform_connector_secret(
+            db,
+            organization_id=org.id,
+            api_project_id=other_project.id,
+            connection=connection,
+            provider="earthdaily",
+            payload={"access_token": "must-not-be-written"},
+        )
+
+    other_workspace = Workspace(organization_id=org.id, name="Other Platform Workspace", mode="evaluation")
+    db.add(other_workspace)
+    db.flush()
+    other_workspace_project = ApiProject(
+        organization_id=org.id,
+        workspace_id=other_workspace.id,
+        name="Other workspace project",
+        slug=f"other-workspace-{uuid.uuid4().hex[:8]}",
+        environment="test",
+        status="active",
+        default_rate_limit_policy={},
+        created_by_user_id=user.id,
+    )
+    db.add(other_workspace_project)
+    db.flush()
+
+    with pytest.raises(ValueError, match="api project workspace mismatch"):
+        store_platform_connector_secret(
+            db,
+            organization_id=org.id,
+            api_project_id=other_workspace_project.id,
+            connection=connection,
+            provider="earthdaily",
+            payload={"access_token": "must-not-be-written"},
+        )
+
+    row = store_platform_connector_secret(
+        db,
+        organization_id=org.id,
+        api_project_id=project.id,
+        connection=connection,
+        provider="earthdaily",
+        payload={"access_token": "encrypted"},
+    )
+    assert row.tenant_id == org.id
 
 
 def test_platform_credential_vault_rotation_revocation_and_provider_restriction(db, monkeypatch):
@@ -649,6 +901,65 @@ def test_platform_credential_vault_rotation_revocation_and_provider_restriction(
     db.commit()
     with pytest.raises(LookupError):
         retrieve_platform_connector_secret(db, context=context)
+
+
+def test_platform_credential_vault_requires_explicit_versioned_keyring_in_production(db, monkeypatch):
+    monkeypatch.setattr(settings, "APP_ENV", "production")
+    monkeypatch.setattr(settings, "PLATFORM_API_KEY_PEPPER", "explicit-test-pepper")
+    monkeypatch.setenv("CONNECTOR_CREDENTIAL_MASTER_KEY", _vault_key())
+    monkeypatch.setenv("CONNECTOR_CREDENTIAL_ACTIVE_KEY_VERSION", "v-test")
+    monkeypatch.delenv("CONNECTOR_CREDENTIAL_KEYS_JSON", raising=False)
+    _user, org, workspace, project, _service_account, _key, _plaintext = _project_and_key(db, scopes=["connectors:sync"])
+    connection = _connector_connection(db, org=org, workspace=workspace, provider="earthdaily")
+
+    with pytest.raises(RuntimeError, match="CONNECTOR_CREDENTIAL_KEYS_JSON"):
+        store_platform_connector_secret(
+            db,
+            organization_id=org.id,
+            api_project_id=project.id,
+            connection=connection,
+            provider="earthdaily",
+            payload={"access_token": "must-not-be-written"},
+        )
+
+    monkeypatch.setenv("CONNECTOR_CREDENTIAL_KEYS_JSON", json.dumps({"v-test": _vault_key()}))
+    row = store_platform_connector_secret(
+        db,
+        organization_id=org.id,
+        api_project_id=project.id,
+        connection=connection,
+        provider="earthdaily",
+        payload={"access_token": "encrypted"},
+    )
+    assert row.key_version == "v-test"
+
+
+def test_platform_credential_vault_never_logs_plaintext(db, monkeypatch, caplog):
+    monkeypatch.setenv("CONNECTOR_CREDENTIAL_MASTER_KEY", _vault_key())
+    monkeypatch.setenv("CONNECTOR_CREDENTIAL_ACTIVE_KEY_VERSION", "v-test")
+    _user, org, workspace, project, service_account, key, _plaintext = _project_and_key(db, scopes=["connectors:sync"])
+    connection = _connector_connection(db, org=org, workspace=workspace, provider="earthdaily")
+    secret = "plaintext-must-never-appear-in-logs"
+    store_platform_connector_secret(
+        db,
+        organization_id=org.id,
+        api_project_id=project.id,
+        connection=connection,
+        provider="earthdaily",
+        payload={"access_token": secret},
+    )
+    principal = _platform_principal_for(org, workspace, project, service_account, key, scopes={"connectors:sync"})
+    retrieve_platform_connector_secret(
+        db,
+        context=CredentialVaultContext(
+            principal=principal,
+            provider_job_authorized=True,
+            connection_id=connection.id,
+            provider="earthdaily",
+        ),
+    )
+
+    assert secret not in caplog.text
 
 
 def test_provider_base_url_ssrf_and_allowlist(monkeypatch):

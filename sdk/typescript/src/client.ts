@@ -5,6 +5,10 @@ export type RateLimitMetadata = {
   retryAfter?: number;
 };
 
+const runtimeEnvironment = (globalThis as typeof globalThis & {
+  process?: { env?: Record<string, string | undefined> };
+}).process?.env ?? {};
+
 export class AgroAIPlatformError extends Error {
   status?: number;
   code?: string;
@@ -24,8 +28,8 @@ export class AgroAIPlatformClient {
   private timeoutMs: number;
 
   constructor(options: { apiKey?: string; baseUrl?: string; timeoutMs?: number } = {}) {
-    this.apiKey = options.apiKey || process.env.AGROAI_API_KEY || "";
-    this.baseUrl = (options.baseUrl || process.env.AGROAI_BASE_URL || "https://api.agroai-pilot.com").replace(/\/$/, "");
+    this.apiKey = options.apiKey || runtimeEnvironment.AGROAI_API_KEY || "";
+    this.baseUrl = (options.baseUrl || runtimeEnvironment.AGROAI_BASE_URL || "https://api.agroai-pilot.com").replace(/\/$/, "");
     this.timeoutMs = options.timeoutMs || 20_000;
     if (!this.apiKey) throw new Error("AGROAI_API_KEY is required");
   }

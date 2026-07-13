@@ -295,6 +295,12 @@ from app.api.v1.recommendations import router as recommendations_router  # noqa:
 from app.api.v1.reports import router as reports_router  # noqa: E402
 from app.api.v1.router_compat import materialize_included_routes  # noqa: E402
 from app.api.v1.webhooks import router as webhooks_router  # noqa: E402
+from app.platform_api.errors import PlatformApiHTTPException, error_response  # noqa: E402
+
+
+@app.exception_handler(PlatformApiHTTPException)
+async def platform_api_exception_handler(request: Request, exc: PlatformApiHTTPException) -> JSONResponse:
+    return error_response(request, exc)
 
 app.include_router(auth_router, prefix="/v1")
 app.include_router(billing_router, prefix="/v1")
