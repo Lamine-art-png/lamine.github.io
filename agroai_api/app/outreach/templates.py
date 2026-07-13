@@ -32,10 +32,13 @@ def _sentence(value: str) -> str:
 
 def localization_ready(prospect: OutreachProspect, language: OutreachLanguage) -> bool:
     """Require fully localized dynamic personalization for non-English live sends."""
-    if prospect.message_type == OutreachMessageType.post_signup_founder_followup:
-        # The post-signup lifecycle template currently ships as an English
-        # founder-to-founder email. A non-English live send is blocked until a
-        # dedicated localized lifecycle version exists.
+    if prospect.message_type in {
+        OutreachMessageType.post_signup_founder_followup,
+        OutreachMessageType.warm_buyer_reengagement,
+    }:
+        # These relationship-aware templates currently ship as English founder
+        # emails. Non-English delivery remains blocked until dedicated localized
+        # versions exist, preventing mixed-language customer communications.
         return language == OutreachLanguage.en
     if language == OutreachLanguage.en:
         return True
@@ -180,10 +183,131 @@ def _render_post_signup_founder_followup(
     )
 
 
+def _render_warm_buyer_reengagement(
+    prospect: OutreachProspect,
+    settings: OutreachSettings,
+    *,
+    unsubscribe_url: str,
+    resolution: LanguageResolution,
+) -> RenderedEmail:
+    language = resolution.language
+    locale = locale_for(language)
+    subject = (
+        prospect.subject
+        or f"A meaningful AGRO-AI update since we last spoke — {prospect.account}"
+    ).strip()
+    greeting = _greeting(prospect, language)
+    ready = localization_ready(prospect, language)
+    prior_context = prospect.prior_relationship_context.strip()
+    progress = prospect.progress_since_last_contact.strip()
+    value = prospect.current_value_hypothesis.strip()
+    ask = prospect.reengagement_ask.strip()
+
+    reconnect = (
+        "I wanted to reconnect personally—not as a cold introduction, but because our earlier conversation "
+        "helped clarify what AGRO-AI needed to become before it would be genuinely useful in your environment."
+    )
+    launch_bridge = (
+        "We have now launched the AGRO-AI Enterprise Portal: a live operating workspace for connecting "
+        "field and water evidence, surfacing priority exceptions, assigning follow-up, and keeping decisions "
+        "and verified outcomes in one reviewable workflow. It is designed to sit alongside existing systems, not replace them."
+    )
+    closing = (
+        "There is no need to restart an old sales process. The simplest next step is to review the portal directly, "
+        "then decide whether a focused working session around your real workflow is worth reopening."
+    )
+
+    text = "\n".join(
+        [
+            greeting,
+            "",
+            reconnect,
+            "",
+            prior_context,
+            "",
+            f"Since we last spoke, {progress}",
+            "",
+            launch_bridge,
+            "",
+            value,
+            "",
+            ask,
+            "",
+            "Review the AGRO-AI Enterprise Portal:",
+            settings.enterprise_portal_url,
+            "",
+            "Book a focused working session:",
+            settings.calendly_url,
+            "",
+            closing,
+            "",
+            "Watch the Enterprise Portal launch video:",
+            settings.launch_video_url,
+            "",
+            locale.signoff,
+            "Lamine Dabo",
+            locale.founder_title,
+            "San Francisco, California",
+            settings.website_url,
+            "",
+            f"AGRO-AI Inc. · {settings.company_address.replace('AGRO-AI Inc., ', '')}",
+            f"{locale.footer_unsubscribe}: {unsubscribe_url}",
+        ]
+    )
+
+    html = f"""<!doctype html>
+<html lang="en" dir="ltr">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{escape(subject)}</title></head>
+<body style="margin:0;padding:0;background:#f5f7f6;color:#17211c;font-family:Arial,Helvetica,sans-serif;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="background:#f5f7f6;"><tr><td align="center" style="padding:28px 14px;">
+<table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="max-width:660px;background:#fff;border:1px solid #e7ebe8;border-radius:12px;overflow:hidden;">
+<tr><td style="height:5px;background:#176b45;font-size:0;line-height:0;">&nbsp;</td></tr>
+<tr><td style="padding:34px 38px 30px;font-size:16px;line-height:1.62;color:#202a24;text-align:left;">
+<p style="margin:0 0 18px;">{escape(greeting)}</p>
+<p style="margin:0 0 18px;">{escape(reconnect)}</p>
+<p style="margin:0 0 18px;">{escape(prior_context)}</p>
+<p style="margin:0 0 18px;"><strong>Since we last spoke,</strong> {escape(progress)}</p>
+<p style="margin:0 0 18px;">{escape(launch_bridge)}</p>
+<p style="margin:0 0 18px;">{escape(value)}</p>
+<p style="margin:0 0 20px;">{escape(ask)}</p>
+<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 16px;"><tr><td style="border-radius:7px;background:#176b45;"><a href="{escape(settings.enterprise_portal_url, quote=True)}" style="display:inline-block;padding:13px 19px;color:#fff;text-decoration:none;font-size:14px;font-weight:700;">Review the AGRO-AI Enterprise Portal</a></td></tr></table>
+<p style="margin:0 0 20px;color:#5f6b63;font-size:14px;">Prefer to map it to your operation first? <a href="{escape(settings.calendly_url, quote=True)}" style="color:#176b45;text-decoration:underline;">Book a focused working session with me</a>.</p>
+<p style="margin:0 0 22px;">{escape(closing)}</p>
+<a href="{escape(settings.launch_video_url, quote=True)}" style="display:block;text-decoration:none;margin:0 0 24px;"><img src="{escape(settings.launch_video_thumbnail_url, quote=True)}" width="584" height="329" alt="AGRO-AI Enterprise Portal launch video" style="display:block;width:100%;max-width:584px;height:auto;aspect-ratio:16/9;object-fit:cover;border:0;border-radius:9px;"></a>
+<p style="margin:0;">{escape(locale.signoff)}</p><p style="margin:4px 0 0;font-weight:700;color:#111814;">Lamine Dabo</p>
+<p style="margin:2px 0 0;color:#526158;font-size:14px;">{escape(locale.founder_title)}</p>
+<p style="margin:2px 0 0;color:#526158;font-size:14px;">San Francisco, California</p>
+<p style="margin:6px 0 0;font-size:14px;"><a href="{escape(settings.website_url, quote=True)}" style="color:#176b45;text-decoration:none;">{escape(settings.website_url.replace('https://', ''))}</a></p>
+</td></tr>
+<tr><td style="padding:24px 38px 26px;background:#f3f5f4;border-top:1px solid #e2e7e4;text-align:center;color:#7a857e;font-size:12px;line-height:1.55;">
+<div style="font-weight:700;color:#566159;margin-bottom:5px;">AGRO-AI Inc.</div><div>{escape(settings.company_address.replace('AGRO-AI Inc., ', ''))}</div>
+<div style="margin-top:8px;"><a href="{escape(settings.enterprise_portal_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">Enterprise Portal</a><span style="padding:0 7px;color:#b0b7b2;">·</span><a href="{escape(settings.launch_video_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">Launch video</a><span style="padding:0 7px;color:#b0b7b2;">·</span><a href="{escape(unsubscribe_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">Unsubscribe</a></div>
+<div style="margin-top:10px;color:#98a19b;">You are receiving this because we previously discussed AGRO-AI or a potential operational fit.</div>
+</td></tr></table></td></tr></table></body></html>"""
+
+    return RenderedEmail(
+        subject=subject,
+        html=html,
+        text=text,
+        unsubscribe_url=unsubscribe_url,
+        language=language.value,
+        language_source=resolution.source,
+        language_confidence=resolution.confidence,
+        localization_ready=ready,
+    )
+
+
 def render_email(prospect: OutreachProspect, settings: OutreachSettings, *, unsubscribe_url: str) -> RenderedEmail:
     resolution: LanguageResolution = resolve_language(prospect.preferred_language, prospect.country)
     if prospect.message_type == OutreachMessageType.post_signup_founder_followup:
         return _render_post_signup_founder_followup(
+            prospect,
+            settings,
+            unsubscribe_url=unsubscribe_url,
+            resolution=resolution,
+        )
+    if prospect.message_type == OutreachMessageType.warm_buyer_reengagement:
+        return _render_warm_buyer_reengagement(
             prospect,
             settings,
             unsubscribe_url=unsubscribe_url,
