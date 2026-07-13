@@ -2,7 +2,8 @@ const REVIEW_SOURCE_URL = "https://raw.githubusercontent.com/Lamine-art-png/lami
 const ENGINEERING_SOURCE_URL = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/urnrd-capability-review-2026/engineering/index.html";
 const REVIEW_PATH = "/urnrd-capability-review-2026";
 const ENGINEERING_PATH = `${REVIEW_PATH}/engineering`;
-const PUBLIC_MONOREPO_URL = "https://github.com/Lamine-art-png/lamine.github.io";
+const UNSAFE_MONOREPO_URL = "https://github.com/Lamine-art-png/lamine.github.io";
+const SAFE_ENGINEERING_REPO_URL = "https://github.com/Lamine-art-png/agro-ai-public-engineering";
 
 function securityHeaders(): Headers {
   const headers = new Headers();
@@ -15,11 +16,10 @@ function securityHeaders(): Headers {
   return headers;
 }
 
-function sanitizeReviewHtml(html: string, origin: string): string {
-  const safeEngineeringUrl = `${origin}${ENGINEERING_PATH}/`;
+function sanitizeReviewHtml(html: string): string {
   return html
-    .replaceAll(PUBLIC_MONOREPO_URL, safeEngineeringUrl)
-    .replaceAll("Public engineering repository", "Public engineering portfolio");
+    .replaceAll(UNSAFE_MONOREPO_URL, SAFE_ENGINEERING_REPO_URL)
+    .replaceAll("Public engineering portfolio", "Public engineering repository");
 }
 
 export default {
@@ -41,7 +41,7 @@ export default {
     const sourceUrl = isReview ? REVIEW_SOURCE_URL : ENGINEERING_SOURCE_URL;
     const upstream = await fetch(sourceUrl, {
       cf: { cacheEverything: true, cacheTtl: 60 },
-      headers: { "user-agent": "AGRO-AI-URNRD-Review/2.0" },
+      headers: { "user-agent": "AGRO-AI-URNRD-Review/3.0" },
     });
 
     if (!upstream.ok) {
@@ -52,7 +52,7 @@ export default {
     }
 
     const sourceHtml = await upstream.text();
-    const html = isReview ? sanitizeReviewHtml(sourceHtml, url.origin) : sourceHtml;
+    const html = isReview ? sanitizeReviewHtml(sourceHtml) : sourceHtml;
     return new Response(html, {
       status: 200,
       headers: securityHeaders(),

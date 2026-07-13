@@ -26,7 +26,10 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       REVIEW_URL: https://agroai-pilot.com/urnrd-capability-review-2026/
       ENGINEERING_URL: https://agroai-pilot.com/urnrd-capability-review-2026/engineering/
-      PUBLIC_MONOREPO_URL: https://github.com/Lamine-art-png/lamine.github.io
+      UNSAFE_MONOREPO_URL: https://github.com/Lamine-art-png/lamine.github.io
+      SAFE_ENGINEERING_REPO_URL: https://github.com/Lamine-art-png/agro-ai-public-engineering
+      SAFE_ENGINEERING_REPO_API: https://api.github.com/repos/Lamine-art-png/agro-ai-public-engineering
+      SAFE_ENGINEERING_README: https://raw.githubusercontent.com/Lamine-art-png/agro-ai-public-engineering/main/README.md
     steps:
       - uses: actions/checkout@v4
 
@@ -47,8 +50,23 @@ jobs:
           grep -F "Upper Republican Natural Resources District" client/public/urnrd-capability-review-2026/index.html >/dev/null
           grep -F "AGRO-AI Public Engineering Portfolio" client/public/urnrd-capability-review-2026/engineering/index.html >/dev/null
           grep -F "Public-safe technical overview" client/public/urnrd-capability-review-2026/engineering/index.html >/dev/null
-          if grep -F "${PUBLIC_MONOREPO_URL}" client/public/urnrd-capability-review-2026/engineering/index.html >/dev/null; then
+          if grep -F "${UNSAFE_MONOREPO_URL}" client/public/urnrd-capability-review-2026/engineering/index.html >/dev/null; then
             echo "Unsafe monorepo URL found in public engineering portfolio"
+            exit 1
+          fi
+
+      - name: Verify safe public GitHub repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL "${SAFE_ENGINEERING_REPO_API}" -o repo.json
+          grep -F '"full_name": "Lamine-art-png/agro-ai-public-engineering"' repo.json >/dev/null
+          grep -F '"private": false' repo.json >/dev/null
+          curl -fsSL "${SAFE_ENGINEERING_README}" -o engineering-readme.md
+          grep -F "AGRO-AI Public Engineering" engineering-readme.md >/dev/null
+          grep -F "This repository does not contain" engineering-readme.md >/dev/null
+          if grep -F "${UNSAFE_MONOREPO_URL}" engineering-readme.md >/dev/null; then
+            echo "Unsafe monorepo URL found in safe engineering README"
             exit 1
           fi
 
@@ -78,9 +96,9 @@ jobs:
             if [ "$review_status" = "200" ] && \
                grep -F "AGRO-AI Capability & Selected Work" review.html >/dev/null && \
                grep -F "Upper Republican Natural Resources District" review.html >/dev/null && \
-               grep -F "Public engineering portfolio" review.html >/dev/null && \
-               grep -F "${ENGINEERING_URL}" review.html >/dev/null && \
-               ! grep -F "${PUBLIC_MONOREPO_URL}" review.html >/dev/null; then
+               grep -F "Public engineering repository" review.html >/dev/null && \
+               grep -F "${SAFE_ENGINEERING_REPO_URL}" review.html >/dev/null && \
+               ! grep -F "${UNSAFE_MONOREPO_URL}" review.html >/dev/null; then
               review_safe=true
             fi
 
@@ -88,15 +106,15 @@ jobs:
                grep -F "AGRO-AI Public Engineering Portfolio" engineering.html >/dev/null && \
                grep -F "Public-safe technical overview" engineering.html >/dev/null && \
                grep -F "Security boundary" engineering.html >/dev/null && \
-               ! grep -F "${PUBLIC_MONOREPO_URL}" engineering.html >/dev/null; then
+               ! grep -F "${UNSAFE_MONOREPO_URL}" engineering.html >/dev/null; then
               engineering_safe=true
             fi
 
             if [ "$review_safe" = "true" ] && [ "$engineering_safe" = "true" ]; then
               echo "review_url=${REVIEW_URL}"
-              echo "engineering_url=${ENGINEERING_URL}"
+              echo "safe_engineering_repo=${SAFE_ENGINEERING_REPO_URL}"
               echo "review_route=verified_safe"
-              echo "engineering_route=verified_safe"
+              echo "engineering_repository=verified_safe"
               exit 0
             fi
 
