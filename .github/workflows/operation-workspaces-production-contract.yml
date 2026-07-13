@@ -1,0 +1,164 @@
+name: Operation Workspaces Production Contract
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "agroai_api/app/api/v1/saas.py"
+      - "agroai_api/app/services/commercial_control.py"
+      - "figma-enterprise-v4/src/app/auth/AuthProvider.tsx"
+      - "figma-enterprise-v4/src/app/components/MainLayout.tsx"
+      - "figma-enterprise-v4/src/app/components/NewOperationPage.tsx"
+      - "figma-enterprise-v4/src/app/components/OperationRouteBoundary.tsx"
+      - "figma-enterprise-v4/src/app/components/SettingsPage.tsx"
+      - "figma-enterprise-v4/src/app/routes.tsx"
+      - "figma-enterprise-v4/tests/browser/operation-workspaces.spec.mjs"
+      - ".github/workflows/operation-workspaces-production-contract.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: operation-workspaces-production-contract
+  cancel-in-progress: true
+
+env:
+  PORTAL_URL: https://app.agroai-pilot.com
+  RELEASE_CONTRACT_URL: https://api-preview.agroai-pilot.com/v1/internal/release/health
+
+jobs:
+  prove-production:
+    name: Prove operation workspaces in production
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    env:
+      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail closed on missing release credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QUEUE_CONSUMER_TOKEN:-}"
+
+      - name: Wait for the exact backend release
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 120); do
+            payload="$(curl --fail --silent --show-error --max-time 20 \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+              "${RELEASE_CONTRACT_URL}" 2>/dev/null || true)"
+            if printf '%s' "$payload" | jq -e --arg sha "$GITHUB_SHA" \
+              '.status == "ok" and .contract == "agroai-release-v1" and .build_sha == $sha and .schema_current == true and .queue_configured == true and .object_storage_configured == true and .object_storage_reachable == true and .production_ready == true' \
+              >/dev/null 2>&1; then
+              printf '%s' "$payload" > operation-backend-release-contract.json
+              ready=1
+              break
+            fi
+            sleep 10
+          done
+          test "$ready" -eq 1
+
+      - name: Prove the live portal bundle contains operation controls
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf operation-portal-smoke
+          mkdir -p operation-portal-smoke/assets
+
+          ready=0
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error --location --max-time 20 \
+              "${PORTAL_URL}/" -o operation-portal-smoke/index.html; then
+              title="$(sed -n 's:.*<title>\(.*\)</title>.*:\1:p' operation-portal-smoke/index.html | head -1)"
+              if [ "$title" = "AGRO-AI Enterprise Portal" ]; then
+                ready=1
+                break
+              fi
+            fi
+            sleep 5
+          done
+          test "$ready" -eq 1
+
+          curl --fail --silent --show-error --location --max-time 20 \
+            "${PORTAL_URL}/operations/new" -o operation-portal-smoke/new-operation.html
+          grep -F '<title>AGRO-AI Enterprise Portal</title>' operation-portal-smoke/new-operation.html >/dev/null
+
+          grep -oE '/assets/[A-Za-z0-9._/-]+\.js' operation-portal-smoke/index.html | sed 's#^/##' > operation-portal-smoke/queue.txt
+          : > operation-portal-smoke/seen.txt
+          for pass in 1 2 3 4 5; do
+            sort -u operation-portal-smoke/queue.txt -o operation-portal-smoke/queue.txt
+            while IFS= read -r asset; do
+              [ -n "$asset" ] || continue
+              grep -Fx "$asset" operation-portal-smoke/seen.txt >/dev/null 2>&1 && continue
+              echo "$asset" >> operation-portal-smoke/seen.txt
+              target="operation-portal-smoke/assets/$(basename "$asset")"
+              curl --fail --silent --show-error --max-time 20 "${PORTAL_URL}/${asset}" -o "$target"
+              grep -oE 'assets/[A-Za-z0-9._/-]+\.js' "$target" >> operation-portal-smoke/queue.txt || true
+              grep -oE '\./[A-Za-z0-9._/-]+\.js' "$target" | sed 's#^\./#assets/#' >> operation-portal-smoke/queue.txt || true
+            done < operation-portal-smoke/queue.txt
+          done
+
+          cat operation-portal-smoke/assets/*.js > operation-portal-smoke/all-js.txt
+          grep -F 'agroai_active_operation_v1:' operation-portal-smoke/all-js.txt >/dev/null
+          grep -F 'agroai_sidebar_collapsed_v1' operation-portal-smoke/all-js.txt >/dev/null
+          grep -F 'data-new-operation-page' operation-portal-smoke/all-js.txt >/dev/null
+          grep -F 'data-operation-name-input' operation-portal-smoke/all-js.txt >/dev/null
+          grep -F '/v1/workspaces' operation-portal-smoke/all-js.txt >/dev/null
+          grep -F 'Switch operation' operation-portal-smoke/all-js.txt >/dev/null
+
+          jq -n \
+            --arg release_sha "$GITHUB_SHA" \
+            --arg portal_url "$PORTAL_URL" \
+            --arg verified_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{status:"ok", contract:"operation-workspaces-production-v1", release_sha:$release_sha, portal_url:$portal_url, verified_at:$verified_at}' \
+            > operation-production-contract.json
+
+      - name: Upload immutable production evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operation-workspaces-production-${{ github.sha }}
+          path: |
+            operation-backend-release-contract.json
+            operation-production-contract.json
+            operation-portal-smoke/index.html
+            operation-portal-smoke/new-operation.html
+            operation-portal-smoke/seen.txt
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Publish production contract status
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          JOB_RESULT: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          state="failure"
+          description="Operation workspace production contract failed"
+          if [ "$JOB_RESULT" = "success" ]; then
+            state="success"
+            description="Operation creation, switching, rename, and sidebar controls are live"
+          fi
+          jq -n \
+            --arg state "$state" \
+            --arg target_url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            --arg description "$description" \
+            --arg context "production/operation-workspaces-live" \
+            '{state:$state,target_url:$target_url,description:$description,context:$context}' \
+            > operation-status.json
+          curl --fail --silent --show-error --location \
+            --request POST \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary @operation-status.json >/dev/null
