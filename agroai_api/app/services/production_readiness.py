@@ -198,6 +198,29 @@ def evaluate_production_readiness(settings: Settings, *, target_scale: str = "pr
     if queue_backend in {"redis", "redis_streams", "redis-streams"} and not redis_url:
         warnings.append(ReadinessFinding("coordination.redis_missing", "warning", "coordination", "Redis queue mode is selected without a distributed coordination endpoint."))
 
+    platform_api_enabled = bool(getattr(settings, "PLATFORM_API_ENABLED", False))
+    platform_limiter_backend = _setting(settings, "PLATFORM_API_RATE_LIMIT_BACKEND", "memory").lower()
+    platform_redis_url = _setting(settings, "PLATFORM_API_REDIS_URL") or redis_url
+    if platform_api_enabled:
+        if platform_limiter_backend != "redis":
+            blockers.append(
+                ReadinessFinding(
+                    "platform_api.rate_limiter_not_distributed",
+                    "blocker",
+                    "platform_api",
+                    "Enabled Platform API traffic requires the Redis distributed rate-limit backend.",
+                )
+            )
+        if not platform_redis_url:
+            blockers.append(
+                ReadinessFinding(
+                    "platform_api.redis_missing",
+                    "blocker",
+                    "platform_api",
+                    "Enabled Platform API traffic requires PLATFORM_API_REDIS_URL or REDIS_URL for shared rate-limit state.",
+                )
+            )
+
     vault_key = _setting(settings, "CONNECTOR_CREDENTIAL_MASTER_KEY")
     vault_ring = _setting(settings, "CONNECTOR_CREDENTIAL_KEYS_JSON")
     derivable_runtime_root = bool(settings.SECRET_KEY and settings.WEBHOOK_SECRET) and not default_secret and not default_webhook_secret

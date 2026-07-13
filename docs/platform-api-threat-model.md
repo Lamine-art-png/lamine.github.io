@@ -10,7 +10,7 @@
 - Key-prefix enumeration: prefixes are non-secret identifiers only; verification uses full HMAC hash.
 - Idempotency replay: records are scoped by organization, project, operation, key, and request hash.
 - Webhook forgery/replay: HMAC signatures, timestamps, event IDs, and secret rotation are designed into the model.
-- Rate-limit bypass: production requires Redis-backed project/key-aware limiting.
+- Rate-limit bypass: production requires Redis-backed organization/project/key-aware limiting with atomic burst and sustained counters.
 - Customer key used against internal routes: internal routes use queue tokens, not customer keys.
 - SSRF through provider or webhook URLs: provider URL validation and webhook URL validation require HTTPS and block unsafe local/private hosts in production.
 - Malicious provider payloads: adapters normalize only known canonical fields and place unknown values in provider extensions.
@@ -22,6 +22,6 @@
 
 ## Residual Risks
 
-- Redis rate-limit production behavior still needs a deployed backend proof.
+- Redis rate-limit code paths are covered by shared-backend contract tests; production rollout still requires operator-configured Redis and readiness evidence for the deployed environment.
 - Webhook delivery worker execution is modeled but not live-delivering by default.
 - Provider schemas cannot be validated against EarthDaily or Valley until official contracts arrive.

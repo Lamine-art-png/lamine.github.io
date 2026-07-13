@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import uuid
 from datetime import datetime, timedelta
 
@@ -11,15 +12,66 @@ from fastapi import HTTPException
 
 from app.models.platform_api import ApiProject, ApiServiceAccount, PlatformApiKey
 from app.models.platform_api import ActionSafetyConfiguration
+from app.models.operational_records import ConnectorConnection
 from app.models.saas import Organization, OrganizationMembership, User, Workspace
 from app.platform_api.action_safety import PhysicalActionSafetyInput, evaluate_physical_action_safety
+from app.platform_api.credential_vault import (
+    CredentialVaultContext,
+    inspect_platform_connector_secret,
+    retrieve_platform_connector_secret,
+    revoke_platform_connector_secret,
+    rotate_platform_connector_secret,
+    store_platform_connector_secret,
+)
 from app.platform_api.idempotency import begin_idempotent_operation, complete_idempotent_operation
 from app.platform_api.keys import create_platform_key, rotate_platform_key, verify_platform_key
 from app.platform_api.principal import PlatformPrincipal
-from app.platform_api.rate_limits import _MEMORY_BUCKETS, check_rate_limit, enforce_rate_limit
+from app.platform_api.rate_limits import _MEMORY_BUCKETS, RedisRateLimiter, check_rate_limit, enforce_rate_limit
 from app.platform_api.webhooks import generate_webhook_secret, validate_webhook_url, webhook_signature
 from app.provider_adapters.security import validate_provider_base_url
 from app.provider_adapters.registry import get_provider_adapter, provider_catalog
+
+
+def _vault_key() -> str:
+    return base64.urlsafe_b64encode(b"k" * 32).decode("ascii").rstrip("=")
+
+
+class SharedFakeRedis:
+    def __init__(self):
+        self.values = {}
+        self.expirations = {}
+        self.fail = False
+
+    def eval(self, _script, numkeys, *keys_and_args):
+        if self.fail:
+            raise RuntimeError("redis unavailable")
+        keys = list(keys_and_args[:numkeys])
+        args = list(keys_and_args[numkeys:])
+        cost = int(args[0])
+        now = int(args[1])
+        allowed = 1
+        selected_limit = 0
+        selected_reset = 0
+        min_remaining = None
+        retry_after = 0
+        for index, key in enumerate(keys):
+            offset = 2 + index * 3
+            limit = int(args[offset])
+            window_seconds = int(args[offset + 1])
+            reset = int(args[offset + 2])
+            used = self.values.get(key, 0) + cost
+            self.values[key] = used
+            if used == cost:
+                self.expirations[key] = window_seconds + 5
+            remaining = limit - used
+            if min_remaining is None or remaining < min_remaining:
+                min_remaining = remaining
+                selected_limit = limit
+                selected_reset = reset
+            if used > limit:
+                allowed = 0
+                retry_after = max(retry_after, reset - now)
+        return [allowed, selected_limit, max(0, min_remaining or 0), selected_reset, max(1, retry_after) if not allowed else 0]
 
 
 def _org(db):
@@ -32,7 +84,13 @@ def _org(db):
     )
     db.add(user)
     db.flush()
-    org = Organization(name="Platform Farms", slug=f"platform-farms-{suffix}", owner_user_id=user.id, plan="enterprise")
+    org = Organization(
+        name="Platform Farms",
+        slug=f"platform-farms-{suffix}",
+        owner_user_id=user.id,
+        plan="enterprise",
+        subscription_status="active",
+    )
     db.add(org)
     db.flush()
     workspace = Workspace(organization_id=org.id, name="Platform Workspace", mode="evaluation")
@@ -79,6 +137,36 @@ def _project_and_key(db, *, scopes=None, environment="test"):
     )
     db.commit()
     return user, org, workspace, project, service_account, key, plaintext
+
+
+def _connector_connection(db, *, org, workspace, provider="earthdaily", status="credentials_submitted"):
+    connection = ConnectorConnection(
+        tenant_id=org.id,
+        workspace_id=workspace.id,
+        provider=provider,
+        display_name=provider,
+        status=status,
+        mode="api",
+        required_plan="enterprise",
+        config_json={},
+    )
+    db.add(connection)
+    db.flush()
+    return connection
+
+
+def _platform_principal_for(org, workspace, project, service_account, key=None, *, scopes=None, provider_restrictions=None):
+    return PlatformPrincipal(
+        authentication_type="platform_api_key",
+        organization_id=org.id,
+        workspace_id=workspace.id,
+        api_project_id=project.id,
+        service_account_id=service_account.id,
+        api_key_id=key.id if key is not None else "key-test",
+        scopes=frozenset(scopes or {"connectors:sync", "connectors:read"}),
+        environment=project.environment,
+        provider_restrictions=provider_restrictions or {},
+    )
 
 
 def test_platform_key_plaintext_is_one_time_and_hash_is_not_public(db):
@@ -386,7 +474,7 @@ def test_rate_limit_dimensions_costs_and_429_headers(monkeypatch):
     first = check_rate_limit(principal, route_id="weighted", cost=59)
     assert first.allowed is True
     assert first.remaining == 1
-    assert check_rate_limit(other_key, route_id="weighted", cost=59).allowed is True
+    assert check_rate_limit(other_key, route_id="weighted", cost=1).allowed is True
 
     with pytest.raises(HTTPException) as exc:
         enforce_rate_limit(principal, route_id="weighted", cost=2)
@@ -394,6 +482,45 @@ def test_rate_limit_dimensions_costs_and_429_headers(monkeypatch):
     assert exc.value.headers["RateLimit-Limit"] == "60"
     assert exc.value.headers["RateLimit-Remaining"] == "0"
     assert "Retry-After" in exc.value.headers
+
+
+def test_redis_rate_limiter_shares_state_across_instances_and_dimensions():
+    fake = SharedFakeRedis()
+    limiter_a = RedisRateLimiter(client=fake)
+    limiter_b = RedisRateLimiter(client=fake)
+    principal = PlatformPrincipal(authentication_type="platform_api_key", organization_id="org", api_project_id="project", api_key_id="key", environment="test")
+
+    first = limiter_a.check(principal, cost=59)
+    second = limiter_b.check(principal, cost=2)
+
+    assert first.allowed is True
+    assert second.allowed is False
+    assert second.limit == 60
+    assert second.remaining == 0
+    assert second.retry_after > 0
+
+
+def test_redis_rate_limiter_isolates_organizations_projects_keys_and_environments():
+    fake = SharedFakeRedis()
+    limiter = RedisRateLimiter(client=fake)
+    base = PlatformPrincipal(authentication_type="platform_api_key", organization_id="org", api_project_id="project", api_key_id="key", environment="test")
+    other_org = PlatformPrincipal(authentication_type="platform_api_key", organization_id="org-2", api_project_id="project-2", api_key_id="key-2", environment="test")
+    live_same_ids = PlatformPrincipal(authentication_type="platform_api_key", organization_id="org", api_project_id="project", api_key_id="key", environment="live")
+
+    assert limiter.check(base, cost=60).allowed is True
+    assert limiter.check(base, cost=1).allowed is False
+    assert limiter.check(other_org, cost=60).allowed is True
+    assert limiter.check(live_same_ids, cost=600).allowed is True
+
+
+def test_redis_rate_limiter_failure_is_not_allowed_by_default():
+    fake = SharedFakeRedis()
+    fake.fail = True
+    limiter = RedisRateLimiter(client=fake)
+    principal = PlatformPrincipal(authentication_type="platform_api_key", organization_id="org", api_project_id="project", api_key_id="key", environment="live")
+
+    with pytest.raises(RuntimeError):
+        limiter.check(principal, cost=1)
 
 
 def test_live_and_test_key_prefixes_differ(db):
@@ -415,6 +542,113 @@ def test_webhook_secret_signature_and_url_ssrf_protection():
     for unsafe in ("http://hooks.example.com", "https://user:pass@hooks.example.com", "https://localhost/hook", "https://internal.local/hook"):
         with pytest.raises(ValueError):
             validate_webhook_url(unsafe)
+
+
+def test_platform_credential_vault_authorized_provider_job_round_trip(db, monkeypatch):
+    monkeypatch.setenv("CONNECTOR_CREDENTIAL_MASTER_KEY", _vault_key())
+    monkeypatch.setenv("CONNECTOR_CREDENTIAL_ACTIVE_KEY_VERSION", "v-test")
+    user, org, workspace, project, service_account, key, _plaintext = _project_and_key(db, scopes=["connectors:sync"])
+    connection = _connector_connection(db, org=org, workspace=workspace, provider="earthdaily")
+    row = store_platform_connector_secret(
+        db,
+        organization_id=org.id,
+        api_project_id=project.id,
+        connection=connection,
+        provider="earthdaily",
+        secret_type="provider_credentials",
+        payload={"access_token": "secret-token"},
+    )
+    db.commit()
+    principal = _platform_principal_for(org, workspace, project, service_account, key, scopes={"connectors:sync"})
+    context = CredentialVaultContext(
+        principal=principal,
+        provider_job_authorized=True,
+        connection_id=connection.id,
+        provider="earthdaily",
+        secret_type="provider_credentials",
+    )
+
+    metadata = inspect_platform_connector_secret(db, organization_id=org.id, connection_id=connection.id)
+    loaded = retrieve_platform_connector_secret(db, context=context)
+
+    assert loaded == {"access_token": "secret-token"}
+    assert row.ciphertext_b64 != "secret-token"
+    assert "ciphertext" not in metadata
+    assert "nonce" not in metadata
+    assert "secret-token" not in str(metadata)
+
+
+def test_platform_credential_vault_denies_wrong_ownership_contexts(db, monkeypatch):
+    monkeypatch.setenv("CONNECTOR_CREDENTIAL_MASTER_KEY", _vault_key())
+    monkeypatch.setenv("CONNECTOR_CREDENTIAL_ACTIVE_KEY_VERSION", "v-test")
+    user, org, workspace, project, service_account, key, _plaintext = _project_and_key(db, scopes=["connectors:sync"])
+    _other_user, other_org, other_workspace, other_project, other_sa, other_key, _other_plaintext = _project_and_key(db, scopes=["connectors:sync"])
+    connection = _connector_connection(db, org=org, workspace=workspace, provider="earthdaily")
+    store_platform_connector_secret(
+        db,
+        organization_id=org.id,
+        api_project_id=project.id,
+        connection=connection,
+        provider="earthdaily",
+        secret_type="provider_credentials",
+        payload={"access_token": "secret-token"},
+    )
+    db.commit()
+
+    good_principal = _platform_principal_for(org, workspace, project, service_account, key, scopes={"connectors:sync"})
+    other_org_principal = _platform_principal_for(other_org, other_workspace, other_project, other_sa, other_key, scopes={"connectors:sync"})
+    no_sync_scope = _platform_principal_for(org, workspace, project, service_account, key, scopes={"connectors:read"})
+    cases = [
+        CredentialVaultContext(principal=good_principal, provider_job_authorized=False, connection_id=connection.id, provider="earthdaily"),
+        CredentialVaultContext(principal=other_org_principal, provider_job_authorized=True, connection_id=connection.id, provider="earthdaily"),
+        CredentialVaultContext(principal=good_principal, provider_job_authorized=True, connection_id="wrong-connection", provider="earthdaily"),
+        CredentialVaultContext(principal=good_principal, provider_job_authorized=True, connection_id=connection.id, provider="valley_irrigation"),
+        CredentialVaultContext(principal=good_principal, provider_job_authorized=True, connection_id=connection.id, provider="earthdaily", secret_type="webhook_secret"),
+        CredentialVaultContext(principal=no_sync_scope, provider_job_authorized=True, connection_id=connection.id, provider="earthdaily"),
+    ]
+
+    for context in cases:
+        with pytest.raises(PermissionError):
+            retrieve_platform_connector_secret(db, context=context)
+
+
+def test_platform_credential_vault_rotation_revocation_and_provider_restriction(db, monkeypatch):
+    monkeypatch.setenv("CONNECTOR_CREDENTIAL_MASTER_KEY", _vault_key())
+    monkeypatch.setenv("CONNECTOR_CREDENTIAL_ACTIVE_KEY_VERSION", "v-test")
+    user, org, workspace, project, service_account, key, _plaintext = _project_and_key(db, scopes=["connectors:sync"])
+    connection = _connector_connection(db, org=org, workspace=workspace, provider="earthdaily")
+    store_platform_connector_secret(db, organization_id=org.id, api_project_id=project.id, connection=connection, provider="earthdaily", payload={"access_token": "old"})
+    db.commit()
+    rotate_platform_connector_secret(db, organization_id=org.id, api_project_id=project.id, connection=connection, provider="earthdaily", payload={"access_token": "new"})
+    db.commit()
+    principal = _platform_principal_for(
+        org,
+        workspace,
+        project,
+        service_account,
+        key,
+        scopes={"connectors:sync"},
+        provider_restrictions={"allow": ["earthdaily"]},
+    )
+    context = CredentialVaultContext(principal=principal, provider_job_authorized=True, connection_id=connection.id, provider="earthdaily")
+
+    assert retrieve_platform_connector_secret(db, context=context) == {"access_token": "new"}
+    restricted = _platform_principal_for(
+        org,
+        workspace,
+        project,
+        service_account,
+        key,
+        scopes={"connectors:sync"},
+        provider_restrictions={"allow": ["valley_irrigation"]},
+    )
+    with pytest.raises(PermissionError):
+        retrieve_platform_connector_secret(db, context=CredentialVaultContext(principal=restricted, provider_job_authorized=True, connection_id=connection.id, provider="earthdaily"))
+
+    assert revoke_platform_connector_secret(db, organization_id=org.id, connection_id=connection.id) is True
+    db.commit()
+    with pytest.raises(LookupError):
+        retrieve_platform_connector_secret(db, context=context)
 
 
 def test_provider_base_url_ssrf_and_allowlist(monkeypatch):

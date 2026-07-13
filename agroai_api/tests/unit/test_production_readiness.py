@@ -95,3 +95,39 @@ def test_in_process_scheduler_blocks_horizontal_replication_contract():
     settings.ENABLE_SCHEDULER = True
     report = evaluate_production_readiness(settings)
     assert "scheduler.in_process" in _codes(report)
+
+
+def test_platform_api_enabled_requires_distributed_redis_limiter():
+    settings = _ready_settings()
+    settings.__dict__["PLATFORM_API_ENABLED"] = True
+    settings.__dict__["PLATFORM_API_RATE_LIMIT_BACKEND"] = "memory"
+    settings.__dict__["PLATFORM_API_REDIS_URL"] = ""
+
+    report = evaluate_production_readiness(settings)
+
+    codes = _codes(report)
+    assert "platform_api.rate_limiter_not_distributed" in codes
+    assert "platform_api.redis_missing" not in codes
+
+
+def test_platform_api_enabled_with_redis_limiter_is_ready_when_other_contracts_are_ready():
+    settings = _ready_settings()
+    settings.__dict__["PLATFORM_API_ENABLED"] = True
+    settings.__dict__["PLATFORM_API_RATE_LIMIT_BACKEND"] = "redis"
+    settings.__dict__["PLATFORM_API_REDIS_URL"] = "redis://platform-limiter.example/0"
+
+    report = evaluate_production_readiness(settings)
+
+    assert report.ready is True, report.to_dict()
+
+
+def test_platform_api_enabled_without_any_redis_url_fails_readiness():
+    settings = _ready_settings()
+    settings.__dict__["PLATFORM_API_ENABLED"] = True
+    settings.__dict__["PLATFORM_API_RATE_LIMIT_BACKEND"] = "redis"
+    settings.__dict__["PLATFORM_API_REDIS_URL"] = ""
+    settings.__dict__["REDIS_URL"] = ""
+
+    report = evaluate_production_readiness(settings)
+
+    assert "platform_api.redis_missing" in _codes(report)

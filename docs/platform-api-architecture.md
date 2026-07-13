@@ -30,7 +30,11 @@ Platform API keys are hashed with HMAC-SHA256 and a server-side pepper. In produ
 
 ## Rate Limiting
 
-`PLATFORM_API_RATE_LIMIT_BACKEND=redis` is the production backend. The memory backend is accepted only outside production and fails closed in production.
+`PLATFORM_API_RATE_LIMIT_BACKEND=redis` is the production backend. The limiter uses atomic Redis counters across organization, project, and API-key dimensions with burst and sustained windows. Weighted route costs are applied by the route handler. Test and live environments have separate Redis keys and policies. The memory backend is accepted only outside production and fails closed in production. Existing Portal traffic is not routed through this limiter in this phase.
+
+## Credential Vault
+
+The Platform API reuses the existing connector AES-256-GCM credential vault through a compatibility adapter. Retrieval is restricted to authorized provider jobs with a Platform API principal, active service account, `connectors:sync` scope, matching organization, matching project, matching provider, matching secret type metadata, and compatible workspace. Metadata inspection excludes ciphertext and nonce.
 
 ## Providers
 
