@@ -19,8 +19,7 @@ function securityHeaders(): Headers {
 function sanitizeReviewHtml(html: string): string {
   return html
     .replaceAll(UNSAFE_MONOREPO_URL, SAFE_ENGINEERING_REPO_URL)
-    .replaceAll("Public engineering portfolio", "Public engineering repository")
-    .replaceAll("Public engineering repository", "Public engineering repository");
+    .replaceAll("Public engineering portfolio", "Public engineering repository");
 }
 
 export default {
