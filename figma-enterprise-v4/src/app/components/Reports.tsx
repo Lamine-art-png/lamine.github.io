@@ -1,10 +1,12 @@
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { apiClient, ReportFactoryPayload } from "../api/client";
+import { useAuth } from "../auth/AuthProvider";
 import { arrayFromUnknown, usePortalResource } from "../hooks/usePortalResource";
 import { BG, BORDER, InlineState, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
 
 type Report = {
   id?: string;
+  workspace_id?: string;
   title?: string;
   filename?: string;
   artifact_type?: string;
@@ -28,8 +30,14 @@ function asArray(value: unknown): unknown[] {
 }
 
 export function Reports() {
+  const { currentWorkspace } = useAuth();
+  const workspaceId = currentWorkspace?.id;
   const reports = usePortalResource<unknown>(useCallback(() => apiClient.reports.list(), []));
-  const rows = arrayFromUnknown<Report>(reports.data, ["reports", "items", "artifacts", "data"]);
+  const allRows = arrayFromUnknown<Report>(reports.data, ["reports", "items", "artifacts", "data"]);
+  const rows = useMemo(
+    () => workspaceId ? allRows.filter((report) => report.workspace_id === workspaceId) : [],
+    [allRows, workspaceId],
+  );
   const [reportType, setReportType] = useState("evidence_summary");
   const [format, setFormat] = useState<"markdown" | "pdf">("pdf");
   const [message, setMessage] = useState("");
@@ -47,7 +55,7 @@ export function Reports() {
     setPreview("");
 
     try {
-      const result = await apiClient.reports.generate({ report_type: reportType, format }) as any;
+      const result = await apiClient.reports.generate({ report_type: reportType, format, workspace_id: workspaceId }) as any;
       setArtifact(result.artifact || null);
       setPreview(result.preview || "");
       setMessage("Report generated.");
@@ -75,7 +83,7 @@ export function Reports() {
     setMessage("");
 
     try {
-      const payload = { report_type: factoryType, audience: factoryAudience };
+      const payload: ReportFactoryPayload = { report_type: factoryType, audience: factoryAudience, workspace_id: workspaceId };
       const result = await apiClient.reportFactory.generate(payload) as any;
       setFactoryPreview(result.report || null);
       setFactoryRequest(payload);
@@ -92,7 +100,7 @@ export function Reports() {
     setMessage("");
 
     try {
-      const payload = factoryRequest || { report_type: factoryType, audience: factoryAudience };
+      const payload: ReportFactoryPayload = factoryRequest || { report_type: factoryType, audience: factoryAudience, workspace_id: workspaceId };
       if (!factoryRequest) {
         const result = await apiClient.reportFactory.generate(payload) as any;
         setFactoryPreview(result.report || null);
