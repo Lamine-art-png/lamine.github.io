@@ -80,6 +80,51 @@ def _clean_workspace_name(value: str) -> str:
     return name
 
 
+def _adopt_legacy_operation_records(db: Session, organization_id: str, primary_workspace_id: str) -> int:
+    """Attach pre-operation records to the original workspace before adding another.
+
+    Earlier portal releases allowed a small set of operational records to carry a
+    null workspace_id. Leaving those rows unassigned would make them appear in
+    every newly created operation because legacy read paths treat null as shared.
+    The backfill is transaction-bound to operation creation and limited to tables
+    whose rows are intrinsically operational rather than organization-wide.
+    """
+    inspector = inspect(db.get_bind())
+    table_columns = {
+        table_name: {column["name"] for column in inspector.get_columns(table_name)}
+        for table_name in inspector.get_table_names()
+    }
+    operational_tables = {
+        "connector_connections": "tenant_id",
+        "data_sources": "tenant_id",
+        "ingestion_jobs": "tenant_id",
+        "evidence_records": "tenant_id",
+        "intelligence_runs": "tenant_id",
+        "generated_artifacts": "tenant_id",
+        "chat_conversations": "tenant_id",
+        "chat_messages": "tenant_id",
+        "conversations": "organization_id",
+    }
+    quote = db.get_bind().dialect.identifier_preparer.quote
+    adopted = 0
+    for table_name, owner_column in operational_tables.items():
+        columns = table_columns.get(table_name, set())
+        if not {"workspace_id", owner_column}.issubset(columns):
+            continue
+        result = db.execute(
+            text(
+                f"UPDATE {quote(table_name)} "
+                f"SET {quote('workspace_id')} = :workspace_id "
+                f"WHERE {quote(owner_column)} = :organization_id "
+                f"AND {quote('workspace_id')} IS NULL"
+            ),
+            {"workspace_id": primary_workspace_id, "organization_id": organization_id},
+        )
+        if result.rowcount and result.rowcount > 0:
+            adopted += int(result.rowcount)
+    return adopted
+
+
 def _verify_preferences_table(db: Session) -> None:
     inspector = inspect(db.get_bind())
     if "user_preferences" not in set(inspector.get_table_names()):
@@ -187,6 +232,14 @@ def create_workspace(payload: WorkspaceCreate, user: User = Depends(get_current_
     locked_org = db.query(Organization).filter(Organization.id == org.id).with_for_update().one()
     assert_can_create_workspace(db, locked_org, payload.mode)
 
+    primary_workspace = (
+        db.query(Workspace)
+        .filter(Workspace.organization_id == locked_org.id)
+        .order_by(Workspace.created_at.asc(), Workspace.id.asc())
+        .first()
+    )
+    legacy_records_adopted = _adopt_legacy_operation_records(db, locked_org.id, primary_workspace.id) if primary_workspace else 0
+
     workspace = Workspace(
         organization_id=locked_org.id,
         name=_clean_workspace_name(payload.name),
@@ -202,7 +255,7 @@ def create_workspace(payload: WorkspaceCreate, user: User = Depends(get_current_
         user_id=user.id,
         event_type="workspace_created",
         quantity=1,
-        metadata_json={"operation_name": workspace.name, "mode": workspace.mode},
+        metadata_json={"operation_name": workspace.name, "mode": workspace.mode, "legacy_records_adopted": legacy_records_adopted},
     ))
     db.commit()
     db.refresh(workspace)
