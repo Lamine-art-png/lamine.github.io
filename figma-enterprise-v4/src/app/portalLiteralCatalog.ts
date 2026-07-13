@@ -5,6 +5,7 @@ import literalCatalogPart4 from "../../../shared/ui-literals.en.4.json";
 import literalCatalogPart5 from "../../../shared/ui-literals.en.5.json";
 import literalCatalogPart6 from "../../../shared/ui-literals.en.6.json";
 import literalCatalogPart7 from "../../../shared/ui-literals.en.7.json";
+import literalCatalogPart8 from "../../../shared/ui-literals.en.8.json";
 import dynamicCopyCatalog from "../../../shared/ui-dynamic-copy.en.json";
 import dynamicCopyExtraCatalog from "../../../shared/ui-dynamic-copy-extra.en.json";
 import { formatTranslation, getStoredLocale, t, TRANSLATIONS } from "./i18n";
@@ -18,6 +19,7 @@ export const STATIC_PORTAL_LITERAL_CATALOG: Record<string, string> = Object.assi
   literalCatalogPart5,
   literalCatalogPart6,
   literalCatalogPart7,
+  literalCatalogPart8,
 );
 
 export const DYNAMIC_UI_COPY_CATALOG: Record<string, string> = {
