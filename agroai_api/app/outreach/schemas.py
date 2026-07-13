@@ -20,6 +20,7 @@ class VerificationStatus(str, Enum):
 class OutreachMessageType(str, Enum):
     cold_outreach = "cold_outreach"
     post_signup_founder_followup = "post_signup_founder_followup"
+    warm_buyer_reengagement = "warm_buyer_reengagement"
 
 
 class OutreachProspect(BaseModel):
@@ -35,7 +36,7 @@ class OutreachProspect(BaseModel):
     message_type: OutreachMessageType = OutreachMessageType.cold_outreach
 
     # Cold-outreach personalization fields. They are conditionally required for
-    # cold outreach but intentionally optional for lifecycle follow-up emails.
+    # cold outreach but intentionally optional for lifecycle and relationship emails.
     observation: str = Field(default="", max_length=1200)
     role_relevance: str = Field(default="", max_length=800)
     pilot_wedge: str = Field(default="", max_length=1000)
@@ -46,6 +47,14 @@ class OutreachProspect(BaseModel):
     # paragraph that explains why the signup is interesting without pretending
     # the recipient is a cold lead.
     signup_interest_context: str = Field(default="", max_length=1200)
+
+    # Warm buyer re-engagement fields. These preserve the prior relationship,
+    # explain what materially changed, connect the new product to the buyer's
+    # known operating problem, and make a low-friction next step explicit.
+    prior_relationship_context: str = Field(default="", max_length=1800)
+    progress_since_last_contact: str = Field(default="", max_length=1800)
+    current_value_hypothesis: str = Field(default="", max_length=1800)
+    reengagement_ask: str = Field(default="", max_length=1000)
 
     # Conservative language routing. Explicit preference wins; otherwise a
     # single-country market hint is used and ambiguous/global records fall back
@@ -87,6 +96,10 @@ class OutreachProspect(BaseModel):
         "pilot_wedge",
         "why_now",
         "signup_interest_context",
+        "prior_relationship_context",
+        "progress_since_last_contact",
+        "current_value_hypothesis",
+        "reengagement_ask",
         "localized_observation",
         "localized_role_relevance",
         "localized_pilot_wedge",
@@ -109,6 +122,17 @@ class OutreachProspect(BaseModel):
         elif self.message_type == OutreachMessageType.post_signup_founder_followup:
             if len(self.signup_interest_context) < 12:
                 raise ValueError("post-signup founder follow-up requires signup_interest_context")
+        elif self.message_type == OutreachMessageType.warm_buyer_reengagement:
+            if self.email_verification_status == VerificationStatus.first_party_signup:
+                raise ValueError("first_party_signup provenance cannot be used for buyer re-engagement")
+            if len(self.prior_relationship_context) < 20:
+                raise ValueError("warm buyer re-engagement requires prior_relationship_context")
+            if len(self.progress_since_last_contact) < 20:
+                raise ValueError("warm buyer re-engagement requires progress_since_last_contact")
+            if len(self.current_value_hypothesis) < 20:
+                raise ValueError("warm buyer re-engagement requires current_value_hypothesis")
+            if len(self.reengagement_ask) < 12:
+                raise ValueError("warm buyer re-engagement requires reengagement_ask")
         return self
 
 
