@@ -32,12 +32,35 @@ jobs:
   prove-production:
     name: Prove operation workspaces in production
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 20
     environment: production
     env:
       QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Publish pending production status
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg state "pending" \
+            --arg target_url "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}" \
+            --arg description "Verifying operation workspaces in production" \
+            --arg context "production/operation-workspaces-live" \
+            '{state:$state,target_url:$target_url,description:$description,context:$context}' \
+            > operation-status.json
+          curl --fail --silent --show-error --location \
+            --request POST \
+            --header "Authorization: Bearer ${GH_TOKEN}" \
+            --header "Accept: application/vnd.github+json" \
+            --header "X-GitHub-Api-Version: 2022-11-28" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+            --data-binary @operation-status.json >/dev/null
 
       - name: Fail closed on missing release credential
         shell: bash
@@ -45,25 +68,58 @@ jobs:
           set -euo pipefail
           test -n "${QUEUE_CONSUMER_TOKEN:-}"
 
-      - name: Wait for the exact backend release
+      - name: Resolve the backend revision that contains the operation feature
+        id: revision
         shell: bash
         run: |
           set -euo pipefail
+          expected_backend_sha="$(git log -1 --format=%H -- \
+            agroai_api/app/api/v1/saas.py \
+            agroai_api/app/services/commercial_control.py \
+            agroai_api/tests/unit/test_operation_workspaces.py)"
+          test -n "$expected_backend_sha"
+          echo "backend_sha=$expected_backend_sha" >> "$GITHUB_OUTPUT"
+          printf 'expected_backend_sha=%s\nverification_sha=%s\n' \
+            "$expected_backend_sha" "$GITHUB_SHA" | tee operation-expected-revisions.txt
+
+      - name: Wait for the deployed backend feature revision
+        shell: bash
+        env:
+          EXPECTED_BACKEND_SHA: ${{ steps.revision.outputs.backend_sha }}
+        run: |
+          set -euo pipefail
           ready=0
-          for attempt in $(seq 1 120); do
+          : > operation-backend-release-contract-last.json
+          for attempt in $(seq 1 90); do
             payload="$(curl --fail --silent --show-error --max-time 20 \
               -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
               "${RELEASE_CONTRACT_URL}" 2>/dev/null || true)"
-            if printf '%s' "$payload" | jq -e --arg sha "$GITHUB_SHA" \
+
+            if printf '%s' "$payload" | jq -e . >/dev/null 2>&1; then
+              printf '%s' "$payload" | jq \
+                '{status,contract,build_sha,schema_current,queue_configured,object_storage_configured,object_storage_reachable,production_ready,production_blocker_codes}' \
+                > operation-backend-release-contract-last.json
+            else
+              jq -n --arg status "unavailable" '{status:$status}' \
+                > operation-backend-release-contract-last.json
+            fi
+
+            if printf '%s' "$payload" | jq -e --arg sha "$EXPECTED_BACKEND_SHA" \
               '.status == "ok" and .contract == "agroai-release-v1" and .build_sha == $sha and .schema_current == true and .queue_configured == true and .object_storage_configured == true and .object_storage_reachable == true and .production_ready == true' \
               >/dev/null 2>&1; then
-              printf '%s' "$payload" > operation-backend-release-contract.json
+              cp operation-backend-release-contract-last.json operation-backend-release-contract.json
               ready=1
               break
             fi
             sleep 10
           done
-          test "$ready" -eq 1
+
+          if [ "$ready" -ne 1 ]; then
+            echo "Expected backend feature revision: ${EXPECTED_BACKEND_SHA}"
+            echo "Last redacted release contract:"
+            cat operation-backend-release-contract-last.json
+            exit 1
+          fi
 
       - name: Prove the live portal bundle contains operation controls
         shell: bash
@@ -114,10 +170,11 @@ jobs:
           grep -F 'Switch operation' operation-portal-smoke/all-js.txt >/dev/null
 
           jq -n \
-            --arg release_sha "$GITHUB_SHA" \
+            --arg verification_sha "$GITHUB_SHA" \
+            --arg backend_sha "${{ steps.revision.outputs.backend_sha }}" \
             --arg portal_url "$PORTAL_URL" \
             --arg verified_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{status:"ok", contract:"operation-workspaces-production-v1", release_sha:$release_sha, portal_url:$portal_url, verified_at:$verified_at}' \
+            '{status:"ok",contract:"operation-workspaces-production-v2",verification_sha:$verification_sha,backend_feature_sha:$backend_sha,portal_url:$portal_url,verified_at:$verified_at}' \
             > operation-production-contract.json
 
       - name: Upload immutable production evidence
@@ -126,7 +183,9 @@ jobs:
         with:
           name: operation-workspaces-production-${{ github.sha }}
           path: |
+            operation-expected-revisions.txt
             operation-backend-release-contract.json
+            operation-backend-release-contract-last.json
             operation-production-contract.json
             operation-portal-smoke/index.html
             operation-portal-smoke/new-operation.html
