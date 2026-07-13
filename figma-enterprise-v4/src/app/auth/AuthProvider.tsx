@@ -2,6 +2,7 @@ import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, 
 import { apiClient, ApiError, LoginPayload, RegisterPayload } from "../api/client";
 
 const tokenKey = "agroai_access_token";
+const activeWorkspaceKeyPrefix = "agroai_active_operation_v1:";
 
 type User = {
   id?: string;
@@ -17,11 +18,24 @@ type Organization = {
   role?: string;
 };
 
-type Workspace = {
+export type Workspace = {
   id?: string;
+  organization_id?: string;
   name?: string;
+  crop?: string;
+  region?: string;
+  mode?: string;
   status?: string;
   evaluation_status?: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+export type CreateOperationPayload = {
+  name: string;
+  crop?: string;
+  region?: string;
+  mode?: "evaluation" | "live";
 };
 
 type VerificationState = {
@@ -34,6 +48,7 @@ type AuthContextValue = {
   user: User | null;
   organizations: Organization[];
   currentOrganization: Organization | null;
+  workspaces: Workspace[];
   currentWorkspace: Workspace | null;
   entitlements: Record<string, unknown>;
   platformAdmin: boolean;
@@ -45,6 +60,9 @@ type AuthContextValue = {
   register: (payload: RegisterPayload) => Promise<void>;
   logout: () => Promise<void>;
   refreshMe: () => Promise<void>;
+  selectWorkspace: (workspaceId: string) => void;
+  createWorkspace: (payload: CreateOperationPayload) => Promise<Workspace>;
+  updateWorkspace: (workspaceId: string, payload: { name: string }) => Promise<Workspace>;
   requestVerification: (email?: string) => Promise<string>;
   confirmVerification: (token: string) => Promise<void>;
   clearVerification: () => void;
@@ -81,6 +99,27 @@ function getStoredToken() {
   return stored;
 }
 
+function workspaceStorageKey(organizationId?: string) {
+  return `${activeWorkspaceKeyPrefix}${organizationId || "default"}`;
+}
+
+function storedWorkspaceId(organizationId?: string) {
+  try {
+    return localStorage.getItem(workspaceStorageKey(organizationId));
+  } catch {
+    return null;
+  }
+}
+
+function storeWorkspaceId(organizationId: string | undefined, workspaceId: string | undefined) {
+  if (!workspaceId) return;
+  try {
+    localStorage.setItem(workspaceStorageKey(organizationId), workspaceId);
+  } catch {
+    // Active-operation persistence is best effort; server state remains authoritative.
+  }
+}
+
 function arrayFromResponse<T>(response: unknown, key: string): T[] {
   if (Array.isArray(response)) return response as T[];
   if (response && typeof response === "object" && key in response) {
@@ -112,11 +151,19 @@ function normalizeMe(response: unknown) {
   };
 }
 
+function workspaceFromResponse(response: unknown): Workspace | null {
+  if (!response || typeof response !== "object") return null;
+  const data = response as Record<string, unknown>;
+  const candidate = data.workspace;
+  return candidate && typeof candidate === "object" ? candidate as Workspace : null;
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => getStoredToken());
   const [user, setUser] = useState<User | null>(null);
   const [organizations, setOrganizations] = useState<Organization[]>([]);
   const [currentOrganization, setCurrentOrganization] = useState<Organization | null>(null);
+  const [workspaces, setWorkspaces] = useState<Workspace[]>([]);
   const [currentWorkspace, setCurrentWorkspace] = useState<Workspace | null>(null);
   const [entitlements, setEntitlements] = useState<Record<string, unknown>>({});
   const [platformAdmin, setPlatformAdmin] = useState(false);
@@ -129,6 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
     setOrganizations([]);
     setCurrentOrganization(null);
+    setWorkspaces([]);
     setCurrentWorkspace(null);
     setEntitlements({});
     setPlatformAdmin(false);
@@ -153,15 +201,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const workspacesResponse = await apiClient.getWorkspaces().catch(() => null);
     const normalized = normalizeMe(meResponse);
     const orgs = arrayFromResponse<Organization>(orgsResponse, "organizations");
-    const workspaces = arrayFromResponse<Workspace>(workspacesResponse, "workspaces");
+    const nextOrganization = normalized.currentOrganization || orgs[0] || null;
+    const nextWorkspaces = arrayFromResponse<Workspace>(workspacesResponse, "workspaces");
+    const organizationWorkspaces = nextOrganization?.id
+      ? nextWorkspaces.filter((workspace) => !workspace.organization_id || workspace.organization_id === nextOrganization.id)
+      : nextWorkspaces;
+
     setUser(normalized.user);
     setOrganizations(orgs.length ? orgs : normalized.organizations);
-    setCurrentOrganization(normalized.currentOrganization || orgs[0] || null);
-    setCurrentWorkspace(workspaces[0] || null);
+    setCurrentOrganization(nextOrganization);
+    setWorkspaces(nextWorkspaces);
+    setCurrentWorkspace((previous) => {
+      const preferredId = previous?.organization_id === nextOrganization?.id
+        ? previous.id
+        : storedWorkspaceId(nextOrganization?.id);
+      const selected = organizationWorkspaces.find((workspace) => workspace.id === preferredId) || organizationWorkspaces[0] || null;
+      storeWorkspaceId(nextOrganization?.id, selected?.id);
+      return selected;
+    });
     setEntitlements(normalized.entitlements);
     setPlatformAdmin(normalized.platformAdmin);
     setVerification(normalized.verification);
   }, [clearSession]);
+
+  const selectWorkspace = useCallback((workspaceId: string) => {
+    setCurrentWorkspace((previous) => {
+      const selected = workspaces.find((workspace) => workspace.id === workspaceId);
+      if (!selected) return previous;
+      if (currentOrganization?.id && selected.organization_id && selected.organization_id !== currentOrganization.id) return previous;
+      storeWorkspaceId(currentOrganization?.id, selected.id);
+      return selected;
+    });
+  }, [currentOrganization?.id, workspaces]);
+
+  const createWorkspace = useCallback(async (payload: CreateOperationPayload) => {
+    if (!currentOrganization?.id) throw new Error("No active organization is available.");
+    const response = await apiClient.post("/v1/workspaces", {
+      organization_id: currentOrganization.id,
+      name: payload.name,
+      crop: payload.crop,
+      region: payload.region,
+      mode: payload.mode || "evaluation",
+    }) as Record<string, unknown>;
+    const workspace = workspaceFromResponse(response);
+    if (!workspace?.id) throw new Error("The operation was created without a valid workspace identifier.");
+    setWorkspaces((current) => [...current.filter((item) => item.id !== workspace.id), workspace]);
+    setCurrentWorkspace(workspace);
+    storeWorkspaceId(currentOrganization.id, workspace.id);
+    if (response.entitlements && typeof response.entitlements === "object") {
+      setEntitlements(response.entitlements as Record<string, unknown>);
+    }
+    return workspace;
+  }, [currentOrganization?.id]);
+
+  const updateWorkspace = useCallback(async (workspaceId: string, payload: { name: string }) => {
+    const response = await apiClient.patch(`/v1/workspaces/${encodeURIComponent(workspaceId)}`, payload) as Record<string, unknown>;
+    const workspace = workspaceFromResponse(response);
+    if (!workspace?.id) throw new Error("The operation update did not return a valid workspace.");
+    setWorkspaces((current) => current.map((item) => item.id === workspace.id ? workspace : item));
+    setCurrentWorkspace((current) => current?.id === workspace.id ? workspace : current);
+    return workspace;
+  }, []);
 
   const handleVerificationRequired = useCallback((error: ApiError, fallbackEmail?: string) => {
     clearSession();
@@ -218,9 +318,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const nextToken = getAccessToken(response);
     const responseVerification = (response.verification || null) as VerificationState | null;
 
-    // Backward-compatible fallback while frontend/backend deployments roll out.
-    // The new backend returns a session token; an older backend still yields a
-    // clear verified state instead of silently dropping the customer.
     if (!nextToken) {
       setVerification({
         email: responseVerification?.email,
@@ -230,14 +327,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    // Establish authenticated state immediately from the atomic verify response.
-    // A secondary /me refresh enriches workspace state but cannot undo successful
-    // verification if another service is briefly unavailable during launch.
     const normalized = normalizeMe(response);
     applyToken(nextToken);
     setUser(normalized.user);
     setOrganizations(normalized.organizations);
     setCurrentOrganization(normalized.currentOrganization);
+    setWorkspaces([]);
     setCurrentWorkspace(normalized.currentWorkspace);
     setEntitlements(normalized.entitlements);
     setPlatformAdmin(normalized.platformAdmin);
@@ -283,6 +378,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user,
     organizations,
     currentOrganization,
+    workspaces,
     currentWorkspace,
     entitlements,
     platformAdmin,
@@ -294,10 +390,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     register,
     logout,
     refreshMe,
+    selectWorkspace,
+    createWorkspace,
+    updateWorkspace,
     requestVerification,
     confirmVerification,
     clearVerification,
-  }), [clearVerification, confirmVerification, currentOrganization, currentWorkspace, entitlements, isLoading, login, logout, organizations, platformAdmin, refreshMe, register, requestVerification, token, user, verification]);
+  }), [clearVerification, confirmVerification, createWorkspace, currentOrganization, currentWorkspace, entitlements, isLoading, login, logout, organizations, platformAdmin, refreshMe, register, requestVerification, selectWorkspace, token, updateWorkspace, user, verification, workspaces]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
