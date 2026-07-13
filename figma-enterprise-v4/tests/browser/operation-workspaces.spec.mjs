@@ -17,6 +17,7 @@ async function prepare(page, { plan = "professional", maxWorkspaces = 5, workspa
   await page.addInitScript((token) => {
     localStorage.setItem("agroai_access_token", token);
     localStorage.setItem("agroai_locale_v1", "en");
+    localStorage.setItem("agroai_product_tour_product_tour_v2_qa", "done");
   }, qaToken());
 
   await page.route(`${API_ORIGIN}/**`, async (route) => {
