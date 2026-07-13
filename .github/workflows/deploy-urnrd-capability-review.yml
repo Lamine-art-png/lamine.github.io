@@ -64,7 +64,7 @@ jobs:
           grep -F '"private": false' repo.json >/dev/null
           curl -fsSL "${SAFE_ENGINEERING_README}" -o engineering-readme.md
           grep -F "AGRO-AI Public Engineering" engineering-readme.md >/dev/null
-          grep -F "This repository does not contain" engineering-readme.md >/dev/null
+          grep -F "What is not included" engineering-readme.md >/dev/null
           if grep -F "${UNSAFE_MONOREPO_URL}" engineering-readme.md >/dev/null; then
             echo "Unsafe monorepo URL found in safe engineering README"
             exit 1
