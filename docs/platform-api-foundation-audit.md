@@ -1,7 +1,7 @@
 # AGRO-AI Platform API Foundation Audit
 
-Branch: `feat/platform-api-private-beta`  
-Base inspected: `origin/main` at `420c55f0` (`Add branded post-signup founder follow-up (#222)`)  
+Branch: `feat/platform-api-private-beta`
+Base inspected: `origin/main` at `420c55f0` (`Add branded post-signup founder follow-up (#222)`)
 Audit date: 2026-07-10
 
 ## Scope
