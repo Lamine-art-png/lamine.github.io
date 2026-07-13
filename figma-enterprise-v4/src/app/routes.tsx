@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 import { createBrowserRouter, Navigate } from "react-router";
 import { MainLayout } from "./components/MainLayout";
+import { OperationRouteBoundary } from "./components/OperationRouteBoundary";
 import { RouteRecovery } from "./components/RouteRecovery";
 import { VerifyEmailPage } from "./components/VerifyEmail";
 import { useLocale } from "./hooks/useLocale";
@@ -25,6 +26,40 @@ const lazyComponent = (loader: () => Promise<Record<string, unknown>>, exportNam
   return { Component: module[exportName] as ComponentType };
 };
 
+const operationRoutes = [
+  { index: true, lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
+  { path: "field-queue", lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
+  { path: "tasks", lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
+  { path: "readiness", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "Readiness") },
+  { path: "fields", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "Fields") },
+  { path: "exceptions", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "Exceptions") },
+  { path: "decision-workbench", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "DecisionWorkbench") },
+  { path: "report-factory", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "ReportFactory") },
+  { path: "operations/new", lazy: lazyComponent(() => import("./components/NewOperationPage"), "NewOperationPage") },
+  { path: "operations", lazy: lazyComponent(() => import("./components/Operations"), "Operations") },
+  { path: "assurance", lazy: lazyComponent(() => import("./components/Assurance"), "Assurance") },
+  { path: "evidence", lazy: lazyComponent(() => import("./components/Evidence"), "Evidence") },
+  { path: "reports", lazy: lazyComponent(() => import("./components/MonetizedReportsV2"), "MonetizedReportsV2") },
+  { path: "agents", lazy: lazyComponent(() => import("./components/Agents"), "Agents") },
+  { path: "intelligence", lazy: lazyComponent(() => import("./components/MonetizedIntelligenceV2"), "MonetizedIntelligenceV2") },
+  { path: "integrations", lazy: lazyComponent(() => import("./components/IntegrationsV3"), "IntegrationsV3") },
+  { path: "sources", lazy: lazyComponent(() => import("./components/Sources"), "Sources") },
+  { path: "audit", lazy: lazyComponent(() => import("./components/Audit"), "Audit") },
+  { path: "admin", lazy: lazyComponent(() => import("./components/Admin"), "Admin") },
+  { path: "admin/customers", lazy: lazyComponent(() => import("./components/Admin"), "CustomerAccountsPage") },
+  { path: "admin/system", lazy: lazyComponent(() => import("./components/Admin"), "SystemHealthPage") },
+  { path: "admin/requests", lazy: lazyComponent(() => import("./components/MonetizedRequestsV2"), "MonetizedRequestsV2") },
+  { path: "pricing", lazy: lazyComponent(() => import("./components/PricingPage"), "PricingPage") },
+  { path: "profile", lazy: lazyComponent(() => import("./components/ProductShell"), "ProfilePage") },
+  { path: "billing", lazy: lazyComponent(() => import("./components/BillingPageV2"), "BillingPageV2") },
+  { path: "security", lazy: lazyComponent(() => import("./components/ProductShell"), "SecurityPage") },
+  { path: "support", lazy: lazyComponent(() => import("./components/SupportPage"), "SupportPage") },
+  { path: "settings", lazy: lazyComponent(() => import("./components/SettingsPage"), "SettingsPage") },
+  { path: "team", lazy: lazyComponent(() => import("./components/MonetizedTeamV2"), "MonetizedTeamV2") },
+  { path: "onboarding", lazy: lazyComponent(() => import("./components/ProductShell"), "OnboardingPage") },
+  { path: "*", Component: RouteRecovery },
+];
+
 export const router = createBrowserRouter([
   { path: "/verify-email", Component: VerifyEmailPage, errorElement: <PortalRouteError /> },
   {
@@ -32,36 +67,10 @@ export const router = createBrowserRouter([
     Component: MainLayout,
     errorElement: <RouteRecovery />,
     children: [
-      { index: true, lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
-      { path: "field-queue", lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
-      { path: "tasks", lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
-      { path: "readiness", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "Readiness") },
-      { path: "fields", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "Fields") },
-      { path: "exceptions", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "Exceptions") },
-      { path: "decision-workbench", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "DecisionWorkbench") },
-      { path: "report-factory", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "ReportFactory") },
-      { path: "operations", lazy: lazyComponent(() => import("./components/Operations"), "Operations") },
-      { path: "assurance", lazy: lazyComponent(() => import("./components/Assurance"), "Assurance") },
-      { path: "evidence", lazy: lazyComponent(() => import("./components/Evidence"), "Evidence") },
-      { path: "reports", lazy: lazyComponent(() => import("./components/MonetizedReportsV2"), "MonetizedReportsV2") },
-      { path: "agents", lazy: lazyComponent(() => import("./components/Agents"), "Agents") },
-      { path: "intelligence", lazy: lazyComponent(() => import("./components/MonetizedIntelligenceV2"), "MonetizedIntelligenceV2") },
-      { path: "integrations", lazy: lazyComponent(() => import("./components/IntegrationsV3"), "IntegrationsV3") },
-      { path: "sources", lazy: lazyComponent(() => import("./components/Sources"), "Sources") },
-      { path: "audit", lazy: lazyComponent(() => import("./components/Audit"), "Audit") },
-      { path: "admin", lazy: lazyComponent(() => import("./components/Admin"), "Admin") },
-      { path: "admin/customers", lazy: lazyComponent(() => import("./components/Admin"), "CustomerAccountsPage") },
-      { path: "admin/system", lazy: lazyComponent(() => import("./components/Admin"), "SystemHealthPage") },
-      { path: "admin/requests", lazy: lazyComponent(() => import("./components/MonetizedRequestsV2"), "MonetizedRequestsV2") },
-      { path: "pricing", lazy: lazyComponent(() => import("./components/PricingPage"), "PricingPage") },
-      { path: "profile", lazy: lazyComponent(() => import("./components/ProductShell"), "ProfilePage") },
-      { path: "billing", lazy: lazyComponent(() => import("./components/BillingPageV2"), "BillingPageV2") },
-      { path: "security", lazy: lazyComponent(() => import("./components/ProductShell"), "SecurityPage") },
-      { path: "support", lazy: lazyComponent(() => import("./components/SupportPage"), "SupportPage") },
-      { path: "settings", lazy: lazyComponent(() => import("./components/SettingsPage"), "SettingsPage") },
-      { path: "team", lazy: lazyComponent(() => import("./components/MonetizedTeamV2"), "MonetizedTeamV2") },
-      { path: "onboarding", lazy: lazyComponent(() => import("./components/ProductShell"), "OnboardingPage") },
-      { path: "*", Component: RouteRecovery },
+      {
+        Component: OperationRouteBoundary,
+        children: operationRoutes,
+      },
     ],
   },
   { path: "*", element: <PortalRouteError /> },

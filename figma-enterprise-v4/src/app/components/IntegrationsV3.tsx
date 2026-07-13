@@ -105,7 +105,12 @@ export function IntegrationsV3() {
   const [activeType, setActiveType] = useState<ConnectorType | "all">("all");
 
   const catalog = useMemo(() => asArray(catalogState.data?.connectors) as Connector[], [catalogState.data]);
-  const connections = asArray(connectionsState.data?.connections);
+  const connections = useMemo(
+    () => currentWorkspace?.id
+      ? asArray(connectionsState.data?.connections).filter((row) => row.workspace_id === currentWorkspace.id)
+      : [],
+    [connectionsState.data, currentWorkspace?.id],
+  );
   const plan = canonicalPlan(currentOrganization?.plan);
   const cards = useMemo(() => {
     const byId = new Map(catalog.map((item) => [item.id, item]));

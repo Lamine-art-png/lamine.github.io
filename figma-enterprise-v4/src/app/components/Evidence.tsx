@@ -7,6 +7,7 @@ import { BG, BORDER, InlineState, MUTED, PortalButton, StatusBadge, SURFACE, TEX
 
 type EvidenceItem = {
   id?: string;
+  workspace_id?: string;
   data_source_id?: string;
   title?: string;
   name?: string;
@@ -83,7 +84,11 @@ export function Evidence() {
   const evidence = usePortalResource<unknown>(useCallback(() => apiClient.evidence.list(), []));
   const sourcesState = usePortalResource<unknown>(useCallback(() => apiClient.get(`/v1/source-library${queryString(workspaceId)}`), [workspaceId]));
   const summaryState = usePortalResource<Summary>(useCallback(() => apiClient.get(`/v1/source-library/summary${queryString(workspaceId)}`), [workspaceId]));
-  const rows = arrayFromUnknown<EvidenceItem>(evidence.data, ["records", "evidence", "items", "data"]);
+  const allRows = arrayFromUnknown<EvidenceItem>(evidence.data, ["records", "evidence", "items", "data"]);
+  const rows = useMemo(
+    () => workspaceId ? allRows.filter((row) => row.workspace_id === workspaceId) : [],
+    [allRows, workspaceId],
+  );
   const sources = arrayFromUnknown<SourceItem>(sourcesState.data, ["sources", "data_sources", "items", "data"]);
   const summary = summaryState.data || {};
   const sourceById = useMemo(() => new Map(sources.filter((source) => !source.pending).map((source) => [source.id, source])), [sources]);
