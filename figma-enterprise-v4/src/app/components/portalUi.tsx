@@ -1,3 +1,5 @@
+import type { ButtonHTMLAttributes, ReactNode } from "react";
+
 export const BG = "#F6F4EE";
 export const SURFACE = "#FFFEFA";
 export const BORDER = "rgba(16,35,27,0.12)";
@@ -14,6 +16,7 @@ export function InlineState({ title, detail }: { title: string; detail?: string 
     </div>
   );
 }
+
 export function StatusBadge({ label, tone = "neutral" }: { label: string; tone?: "neutral" | "good" | "warn" | "locked" }) {
   const styles = {
     neutral: { background: BG, color: MUTED, border: `1px solid ${BORDER}` },
@@ -28,37 +31,43 @@ export function StatusBadge({ label, tone = "neutral" }: { label: string; tone?:
   );
 }
 
+type PortalButtonProps = Omit<ButtonHTMLAttributes<HTMLButtonElement>, "children"> & {
+  children: ReactNode;
+  variant?: "primary" | "secondary";
+};
+
 export function PortalButton({
   children,
   disabled,
   onClick,
   variant = "primary",
-}: {
-  children: ReactNode;
-  disabled?: boolean;
-  onClick?: () => void;
-  variant?: "primary" | "secondary";
-}) {
+  className = "",
+  type = "button",
+  ...rest
+}: PortalButtonProps) {
   const isPrimary = variant === "primary";
   return (
     <button
-      type="button"
+      {...rest}
+      type={type}
       disabled={disabled}
       onClick={onClick}
-      className="px-4 py-2 text-[12px] font-medium rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-60"
+      className={`px-4 py-2 text-[12px] font-medium rounded-lg transition-colors disabled:cursor-not-allowed disabled:opacity-60 ${className}`.trim()}
       style={
         disabled
-          ? { background: "#E7E2D7", color: MUTED }
+          ? { background: "#E7E2D7", color: MUTED, ...rest.style }
           : isPrimary
-            ? { background: GREEN, color: "white" }
-            : { border: `1px solid ${BORDER}`, color: TEXT, background: "transparent" }
+            ? { background: GREEN, color: "white", ...rest.style }
+            : { border: `1px solid ${BORDER}`, color: TEXT, background: "transparent", ...rest.style }
       }
       onMouseEnter={(event) => {
-        if (disabled) return;
+        rest.onMouseEnter?.(event);
+        if (disabled || event.defaultPrevented) return;
         event.currentTarget.style.background = isPrimary ? GREEN_HOVER : BG;
       }}
       onMouseLeave={(event) => {
-        if (disabled) return;
+        rest.onMouseLeave?.(event);
+        if (disabled || event.defaultPrevented) return;
         event.currentTarget.style.background = isPrimary ? GREEN : "transparent";
       }}
     >
@@ -66,4 +75,3 @@ export function PortalButton({
     </button>
   );
 }
-import { ReactNode } from "react";
