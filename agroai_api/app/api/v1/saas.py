@@ -33,10 +33,14 @@ class OrganizationCreate(BaseModel):
 
 class WorkspaceCreate(BaseModel):
     organization_id: str | None = None
-    name: str = Field(min_length=2)
-    crop: str | None = None
-    region: str | None = None
+    name: str = Field(min_length=2, max_length=120)
+    crop: str | None = Field(default=None, max_length=120)
+    region: str | None = Field(default=None, max_length=160)
     mode: str = "evaluation"
+
+
+class WorkspaceUpdate(BaseModel):
+    name: str = Field(min_length=2, max_length=120)
 
 
 class PortalProfileUpdate(BaseModel):
@@ -54,7 +58,26 @@ class PortalPreferencesUpdate(BaseModel):
 
 
 def _workspace_payload(workspace: Workspace) -> dict:
-    return {"id": workspace.id, "organization_id": workspace.organization_id, "name": workspace.name, "crop": workspace.crop, "region": workspace.region, "mode": workspace.mode, "created_at": workspace.created_at.isoformat(), "updated_at": workspace.updated_at.isoformat()}
+    return {
+        "id": workspace.id,
+        "organization_id": workspace.organization_id,
+        "name": workspace.name,
+        "crop": workspace.crop,
+        "region": workspace.region,
+        "mode": workspace.mode,
+        "created_at": workspace.created_at.isoformat(),
+        "updated_at": workspace.updated_at.isoformat(),
+    }
+
+
+def _clean_workspace_name(value: str) -> str:
+    name = " ".join(str(value or "").strip().split())
+    if len(name) < 2:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail={"code": "invalid_operation_name", "message": "Operation name must contain at least two characters."},
+        )
+    return name
 
 
 def _verify_preferences_table(db: Session) -> None:
@@ -156,13 +179,54 @@ def create_workspace(payload: WorkspaceCreate, user: User = Depends(get_current_
     org_id = payload.organization_id or (user.memberships[0].organization_id if user.memberships else None)
     if not org_id:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="organization_id is required")
-    org, _membership = require_org_membership(org_id, user, db)
-    assert_can_create_workspace(db, org, payload.mode)
-    workspace = Workspace(organization_id=org.id, name=payload.name, crop=payload.crop, region=payload.region, mode=payload.mode)
+    org, membership = require_org_membership(org_id, user, db)
+    require_owner_or_admin(membership.role)
+
+    # Serialize concurrent operation creation for this organization so plan limits
+    # remain authoritative even when multiple browser tabs submit at once.
+    locked_org = db.query(Organization).filter(Organization.id == org.id).with_for_update().one()
+    assert_can_create_workspace(db, locked_org, payload.mode)
+
+    workspace = Workspace(
+        organization_id=locked_org.id,
+        name=_clean_workspace_name(payload.name),
+        crop=(payload.crop or "").strip() or None,
+        region=(payload.region or "").strip() or None,
+        mode=payload.mode,
+    )
     db.add(workspace)
+    db.flush()
+    db.add(UsageEvent(
+        organization_id=locked_org.id,
+        workspace_id=workspace.id,
+        user_id=user.id,
+        event_type="workspace_created",
+        quantity=1,
+        metadata_json={"operation_name": workspace.name, "mode": workspace.mode},
+    ))
     db.commit()
     db.refresh(workspace)
-    return {"workspace": _workspace_payload(workspace), "entitlements": serialize_entitlements(org)}
+    return {"workspace": _workspace_payload(workspace), "entitlements": serialize_entitlements(locked_org, db)}
+
+
+@router.patch("/workspaces/{workspace_id}")
+def update_workspace(workspace_id: str, payload: WorkspaceUpdate, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
+    workspace, membership = require_workspace_access(workspace_id, user, db)
+    require_owner_or_admin(membership.role)
+    previous_name = workspace.name
+    workspace.name = _clean_workspace_name(payload.name)
+    workspace.updated_at = datetime.utcnow()
+    db.add(UsageEvent(
+        organization_id=workspace.organization_id,
+        workspace_id=workspace.id,
+        user_id=user.id,
+        event_type="workspace_renamed",
+        quantity=1,
+        metadata_json={"previous_name": previous_name, "operation_name": workspace.name},
+    ))
+    db.commit()
+    db.refresh(workspace)
+    return {"workspace": _workspace_payload(workspace), "message": "Operation name updated."}
 
 
 @router.get("/settings/preferences")
