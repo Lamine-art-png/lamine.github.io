@@ -1,0 +1,51 @@
+name: Verify URNRD Safe GitHub Link Live
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/verify-urnrd-safe-github-link-live.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prove capability review links to safe public repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          review_url="https://agroai-pilot.com/urnrd-capability-review-2026/"
+          safe_repo_url="https://github.com/Lamine-art-png/agro-ai-public-engineering"
+          unsafe_repo_url="https://github.com/Lamine-art-png/lamine.github.io"
+          repo_api="https://api.github.com/repos/Lamine-art-png/agro-ai-public-engineering"
+          readme_url="https://raw.githubusercontent.com/Lamine-art-png/agro-ai-public-engineering/main/README.md"
+
+          for attempt in $(seq 1 30); do
+            review_status="$(curl -sS -L -o review.html -w '%{http_code}' --max-time 20 "$review_url" || true)"
+            repo_status="$(curl -sS -L -o repo.json -w '%{http_code}' --max-time 20 "$repo_api" || true)"
+            readme_status="$(curl -sS -L -o README.md -w '%{http_code}' --max-time 20 "$readme_url" || true)"
+
+            if [ "$review_status" = "200" ] && \
+               [ "$repo_status" = "200" ] && \
+               [ "$readme_status" = "200" ] && \
+               grep -F "AGRO-AI Capability & Selected Work" review.html >/dev/null && \
+               grep -F "Public engineering repository" review.html >/dev/null && \
+               grep -F "$safe_repo_url" review.html >/dev/null && \
+               ! grep -F "$unsafe_repo_url" review.html >/dev/null && \
+               grep -F '"full_name": "Lamine-art-png/agro-ai-public-engineering"' repo.json >/dev/null && \
+               grep -F '"private": false' repo.json >/dev/null && \
+               grep -F "AGRO-AI Public Engineering" README.md >/dev/null; then
+              echo "review_url=$review_url"
+              echo "safe_repo_url=$safe_repo_url"
+              echo "live_link_verification=passed"
+              exit 0
+            fi
+
+            echo "attempt=$attempt review=$review_status repo=$repo_status readme=$readme_status"
+            sleep 5
+          done
+
+          echo "live_link_verification=failed"
+          exit 1
