@@ -83,6 +83,20 @@ test("new operation creates and activates an isolated workspace", async ({ page 
   await expect.poll(() => page.evaluate(() => localStorage.getItem("agroai_active_operation_v1:org"))).toBe("ws-3");
 });
 
+test("operation switcher changes and persists the active workspace", async ({ page }) => {
+  await prepare(page);
+  await page.goto("http://127.0.0.1:4173/");
+
+  const operationSwitcher = page.getByRole("combobox", { name: "Switch operation" });
+  await expect(operationSwitcher).toHaveValue("ws-1");
+  await operationSwitcher.selectOption("ws-2");
+  await expect(operationSwitcher).toHaveValue("ws-2");
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("agroai_active_operation_v1:org"))).toBe("ws-2");
+
+  await page.reload();
+  await expect(page.getByRole("combobox", { name: "Switch operation" })).toHaveValue("ws-2");
+});
+
 test("plan capacity blocks creation without hiding existing operations", async ({ page }) => {
   await prepare(page, {
     plan: "free",
