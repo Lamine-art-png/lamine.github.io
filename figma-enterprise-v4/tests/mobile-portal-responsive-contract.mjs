@@ -15,7 +15,10 @@ const styleEntry = read("../src/styles/index.css");
 const htmlEntry = read("../index.html");
 
 assert.match(shell, /h-\[100dvh\]/, "portal shell must use dynamic viewport height");
-assert.match(shell, /hidden w-\[280px\].*md:flex/s, "desktop sidebar must be hidden on phones");
+assert.match(shell, /<aside[\s\S]*?hidden[\s\S]*?md:flex/, "desktop sidebar must be hidden on phones");
+assert.match(shell, /data-desktop-sidebar/, "desktop sidebar contract missing");
+assert.match(shell, /transition-\[width\]/, "desktop sidebar must animate width changes");
+assert.match(shell, /agroai_sidebar_collapsed_v1/, "desktop sidebar collapse preference must persist");
 assert.match(shell, /data-mobile-portal-header/, "mobile header contract missing");
 assert.match(shell, /data-mobile-navigation/, "mobile overlay navigation missing");
 assert.match(shell, /w-\[min\(86vw,320px\)\]/, "mobile navigation must be viewport-bounded");
