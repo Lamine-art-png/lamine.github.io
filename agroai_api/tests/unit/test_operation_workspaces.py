@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from app.models.operational_records import ConnectorConnection, DataSource, EvidenceRecord
 from app.models.saas import Organization, OrganizationMembership, UsageEvent, Workspace
 
 
@@ -88,6 +89,72 @@ def test_plan_workspace_limits_are_server_authoritative(client, db):
     assert over_limit.status_code == 403
     assert over_limit.json()["detail"]["limit"] == 5
     assert db.query(Workspace).filter(Workspace.organization_id == org_id).count() == 5
+
+
+def test_creating_second_operation_adopts_legacy_records_into_original(client, db):
+    body, headers = _register_and_login(client, db, email="legacy@example.com", organization="Legacy Farms")
+    org_id = body["current_organization"]["id"]
+    original_workspace_id = client.get("/v1/workspaces", headers=headers).json()["workspaces"][0]["id"]
+    org = db.get(Organization, org_id)
+    org.plan = "professional"
+    org.subscription_status = "active"
+
+    connection = ConnectorConnection(
+        tenant_id=org_id,
+        workspace_id=None,
+        provider="manual_csv",
+        display_name="Legacy upload",
+        status="connected",
+        mode="manual_upload",
+        required_plan="free",
+    )
+    db.add(connection)
+    db.flush()
+    source = DataSource(
+        tenant_id=org_id,
+        workspace_id=None,
+        connector_connection_id=connection.id,
+        source_type="file",
+        provider="manual_csv",
+        filename="legacy.csv",
+        status="uploaded",
+    )
+    db.add(source)
+    db.flush()
+    evidence = EvidenceRecord(
+        tenant_id=org_id,
+        workspace_id=None,
+        data_source_id=source.id,
+        connector_connection_id=connection.id,
+        evidence_type="field_context",
+        title="Legacy field record",
+        summary="Operational record created before explicit operation scoping.",
+        citation_label="legacy.csv",
+    )
+    db.add(evidence)
+    db.commit()
+
+    response = client.post(
+        "/v1/workspaces",
+        headers=headers,
+        json={"organization_id": org_id, "name": "Clean second operation", "mode": "evaluation"},
+    )
+
+    assert response.status_code == 201, response.text
+    new_workspace_id = response.json()["workspace"]["id"]
+    db.refresh(connection)
+    db.refresh(source)
+    db.refresh(evidence)
+    assert connection.workspace_id == original_workspace_id
+    assert source.workspace_id == original_workspace_id
+    assert evidence.workspace_id == original_workspace_id
+    assert new_workspace_id != original_workspace_id
+    event = (
+        db.query(UsageEvent)
+        .filter(UsageEvent.workspace_id == new_workspace_id, UsageEvent.event_type == "workspace_created")
+        .one()
+    )
+    assert event.metadata_json["legacy_records_adopted"] == 3
 
 
 def test_only_owner_or_admin_can_create_or_rename_operations(client, db):
