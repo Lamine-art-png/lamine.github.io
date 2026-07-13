@@ -32,7 +32,7 @@ jobs:
         run: |
           set -o pipefail
           npm run build 2>&1 | tee locale-production-build.log
-      - name: Run global locale switching contracts
+      - name: Run global locale and operation contracts
         run: |
           set -euo pipefail
           npx vite preview --host 127.0.0.1 --port 4173 > locale-vite-preview.log 2>&1 &
@@ -53,6 +53,7 @@ jobs:
             tests/browser/locale-migration.spec.mjs \
             tests/browser/locale-preference-sync.spec.mjs \
             tests/browser/global-language-switching.spec.mjs \
+            tests/browser/operation-workspaces.spec.mjs \
             --config=playwright.contract.config.ts --browser=chromium --reporter=line 2>&1 | tee locale-playwright.log
           status=${PIPESTATUS[0]}
           exit $status
