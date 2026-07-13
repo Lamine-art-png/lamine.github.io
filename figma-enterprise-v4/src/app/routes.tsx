@@ -40,6 +40,7 @@ export const router = createBrowserRouter([
       { path: "exceptions", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "Exceptions") },
       { path: "decision-workbench", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "DecisionWorkbench") },
       { path: "report-factory", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "ReportFactory") },
+      { path: "operations/new", lazy: lazyComponent(() => import("./components/NewOperationPage"), "NewOperationPage") },
       { path: "operations", lazy: lazyComponent(() => import("./components/Operations"), "Operations") },
       { path: "assurance", lazy: lazyComponent(() => import("./components/Assurance"), "Assurance") },
       { path: "evidence", lazy: lazyComponent(() => import("./components/Evidence"), "Evidence") },
