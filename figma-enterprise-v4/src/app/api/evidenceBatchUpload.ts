@@ -129,40 +129,51 @@ export async function uploadEvidenceBatch(
   const failures: EvidenceUploadFailure[] = [];
   const warnings: string[] = [];
   const concurrency = Math.max(1, Math.min(options.concurrency || 4, 6, total));
-  let cursor = 0;
+  let cursor = 1;
   let completed = 0;
   let stored = 0;
+
+  async function processFile(index: number) {
+    const file = files[index];
+    try {
+      const receipt = await stageEvidenceFile(file, workspaceId);
+      receipts.push(receipt);
+      stored += 1;
+      warnings.push(...(receipt.warnings || []));
+    } catch (error) {
+      failures.push({
+        filename: file.name,
+        message: error instanceof Error ? error.message : "Upload failed.",
+      });
+    } finally {
+      completed += 1;
+      options.onProgress?.({
+        total,
+        completed,
+        stored,
+        failed: failures.length,
+        filename: file.name,
+      });
+    }
+  }
+
+  // The first receipt creates/reuses the workspace connector connection before
+  // concurrent requests begin. This avoids racing multiple connection inserts while
+  // retaining parallel durable storage for the rest of the batch.
+  await processFile(0);
 
   async function worker() {
     while (true) {
       const index = cursor;
       cursor += 1;
       if (index >= total) return;
-      const file = files[index];
-      try {
-        const receipt = await stageEvidenceFile(file, workspaceId);
-        receipts.push(receipt);
-        stored += 1;
-        warnings.push(...(receipt.warnings || []));
-      } catch (error) {
-        failures.push({
-          filename: file.name,
-          message: error instanceof Error ? error.message : "Upload failed.",
-        });
-      } finally {
-        completed += 1;
-        options.onProgress?.({
-          total,
-          completed,
-          stored,
-          failed: failures.length,
-          filename: file.name,
-        });
-      }
+      await processFile(index);
     }
   }
 
-  await Promise.all(Array.from({ length: concurrency }, () => worker()));
+  if (total > 1) {
+    await Promise.all(Array.from({ length: Math.min(concurrency, total - 1) }, () => worker()));
+  }
   const processing = receipts.filter((receipt) => receipt.processing_pending).length;
   return {
     total,
