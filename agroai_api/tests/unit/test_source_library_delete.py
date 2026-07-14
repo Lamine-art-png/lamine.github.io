@@ -125,12 +125,14 @@ def test_completed_source_delete_removes_object_evidence_jobs_and_allows_reuploa
                 metadata_json={},
             )
         )
+        # Legacy durable jobs linked the source only in output_json. Deletion must
+        # still remove their idempotency rows regardless of tenant job volume.
         job = IngestionJob(
             id="source-job",
             tenant_id="source-org",
             workspace_id="source-workspace",
             connector_connection_id="source-connection",
-            data_source_id=source.id,
+            data_source_id=None,
             job_type="connector_ingest_object",
             status="succeeded",
             input_json={"object_uri": source.storage_path, "filename": source.filename},
