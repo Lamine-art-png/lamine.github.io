@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import HTTPException, status
-from sqlalchemy import update
+from sqlalchemy import or_, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import AuthContext
@@ -76,24 +76,24 @@ def _delete_backing_object(*, uri: str | None, tenant_id: str, connection_id: st
 
 
 def _related_jobs(db: Session, *, tenant_id: str, source_id: str) -> list[IngestionJob]:
-    direct = (
+    """Return every job that owns or resolved to the source, without a history cap.
+
+    Older ingestion workers persisted ``data_source_id`` only inside ``output_json``.
+    Querying the JSON scalar directly keeps deletion complete for arbitrarily large
+    tenants and removes the idempotency row so the same file can be uploaded again.
+    """
+    output_source_id = IngestionJob.output_json["data_source_id"].as_string()
+    return (
         db.query(IngestionJob)
-        .filter(IngestionJob.tenant_id == tenant_id, IngestionJob.data_source_id == source_id)
+        .filter(
+            IngestionJob.tenant_id == tenant_id,
+            or_(
+                IngestionJob.data_source_id == source_id,
+                output_source_id == source_id,
+            ),
+        )
         .all()
     )
-    known = {job.id for job in direct}
-    candidates = (
-        db.query(IngestionJob)
-        .filter(IngestionJob.tenant_id == tenant_id)
-        .order_by(IngestionJob.created_at.desc())
-        .limit(5_000)
-        .all()
-    )
-    for job in candidates:
-        if job.id not in known and _job_source_id(job) == source_id:
-            direct.append(job)
-            known.add(job.id)
-    return direct
 
 
 def _record_delete_event(
