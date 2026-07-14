@@ -56,12 +56,25 @@ async function prepare(page, { plan = "professional", maxWorkspaces = 5, workspa
       if (failUploadNumber && state.uploads.length === failUploadNumber) {
         return reply({ detail: { code: "test_upload_failure", message: "Synthetic upload failure" } }, 500);
       }
+      const jobId = `job-${state.uploads.length}`;
+      sourceRows.push({
+        id: `source-${state.uploads.length}`,
+        job_id: jobId,
+        filename: `uploaded-${state.uploads.length}.csv`,
+        provider: url.searchParams.get("provider") || "manual_csv",
+        source_type: "pending_upload",
+        processing_status: "queued",
+        evidence_count: 0,
+        rows_parsed: 0,
+        intelligence_ready: false,
+        pending: true,
+      });
       return reply({
         status: "queued",
         phase: "stored",
         durable_stored: true,
         processing_pending: true,
-        job_id: `job-${state.uploads.length}`,
+        job_id: jobId,
         queue_publication: { published: 1, failed: 0 },
       });
     }
