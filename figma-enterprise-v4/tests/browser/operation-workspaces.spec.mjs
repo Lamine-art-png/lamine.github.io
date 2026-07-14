@@ -7,8 +7,8 @@ function qaToken() {
   return `qa.${body}.sig`;
 }
 
-async function prepare(page, { plan = "professional", maxWorkspaces = 5, workspaces } = {}) {
-  const state = { creates: [], renames: [] };
+async function prepare(page, { plan = "professional", maxWorkspaces = 5, workspaces, failUploadNumber = 0 } = {}) {
+  const state = { creates: [], renames: [], uploads: [], jobPolls: 0 };
   const workspaceRows = workspaces || [
     { id: "ws-1", organization_id: "org", name: "North Ranch", mode: "evaluation" },
     { id: "ws-2", organization_id: "org", name: "South Ranch", mode: "evaluation" },
@@ -50,6 +50,24 @@ async function prepare(page, { plan = "professional", maxWorkspaces = 5, workspa
         entitlements: { max_workspaces: maxWorkspaces, access_profile: "customer", capabilities: {} },
       }, 201);
     }
+    if (request.method() === "POST" && url.pathname === "/v1/evidence/upload") {
+      state.uploads.push({ workspaceId: url.searchParams.get("workspace_id"), provider: url.searchParams.get("provider") });
+      if (failUploadNumber && state.uploads.length === failUploadNumber) {
+        return reply({ detail: { code: "test_upload_failure", message: "Synthetic upload failure" } }, 500);
+      }
+      return reply({
+        status: "queued",
+        phase: "stored",
+        durable_stored: true,
+        processing_pending: true,
+        job_id: `job-${state.uploads.length}`,
+        queue_publication: { published: 1, failed: 0 },
+      });
+    }
+    if (request.method() === "GET" && url.pathname.startsWith("/v1/connectors/jobs/")) {
+      state.jobPolls += 1;
+      return reply({ job: { status: "queued" } });
+    }
     if (request.method() === "PATCH" && url.pathname === "/v1/workspaces/ws-1") {
       const payload = request.postDataJSON();
       state.renames.push(payload);
@@ -82,6 +100,25 @@ test("new operation creates and activates an isolated workspace", async ({ page 
     mode: "evaluation",
   }]);
   await expect.poll(() => page.evaluate(() => localStorage.getItem("agroai_active_operation_v1:org"))).toBe("ws-3");
+});
+
+test("new operation stages every selected file without waiting on each processing job", async ({ page }) => {
+  const state = await prepare(page, { failUploadNumber: 3 });
+  await page.goto("http://127.0.0.1:4173/operations/new");
+  await page.locator("[data-operation-name-input]").fill("Eight-file operation");
+  await page.locator("[data-operation-file-input]").setInputFiles(
+    Array.from({ length: 8 }, (_, index) => ({
+      name: `${String(index + 1).padStart(2, "0")}_source.csv`,
+      mimeType: "text/csv",
+      buffer: Buffer.from("field,value\nA,1\n"),
+    })),
+  );
+
+  await page.locator("[data-create-operation-button]").click();
+  await expect(page).toHaveURL(/\/evidence$/);
+  await expect.poll(() => state.uploads.length).toBe(8);
+  expect(state.uploads.every((upload) => upload.workspaceId === "ws-3")).toBe(true);
+  expect(state.jobPolls).toBe(0);
 });
 
 test("operation switcher changes and persists the active workspace", async ({ page }) => {
