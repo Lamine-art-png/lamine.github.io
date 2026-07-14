@@ -50,7 +50,7 @@ export function usePortalResource<T>(
   return { data, error, isLoading, isUnavailable, refresh };
 }
 
-export function arrayFromUnknown<T>(value: unknown, keys: string[] = []) {
+export function arrayFromUnknown<T>(value: unknown, keys: string[] = []): T[] {
   if (Array.isArray(value)) return value as T[];
   if (!value || typeof value !== "object") return [];
 
