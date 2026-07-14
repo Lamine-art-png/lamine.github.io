@@ -36,12 +36,14 @@ def _publish_pending(*, limit: int):
 
 
 async def _inline_processing_fallback(job_id: str, tenant_id: str) -> None:
-    """Give a durably staged job a second execution path when queue publication stalls.
+    """Give every durably staged job a delayed second execution path.
 
-    The external queue remains primary. The worker lease and idempotency contract make
-    this delayed fallback safe if the queue starts processing the same job first.
+    The external queue remains primary. After a short grace period this path checks
+    the same lease-fenced, idempotent job. It becomes a no-op when the queue already
+    completed or claimed the job, and it processes the file when queue delivery is
+    delayed or broken.
     """
-    await asyncio.sleep(5)
+    await asyncio.sleep(8)
     from app.services.connector_task_processor import process_connector_task
     from app.services.durable_ingestion_staging import TASK_TYPE
 
@@ -116,21 +118,22 @@ async def upload_stream_secure(
             publication = await asyncio.to_thread(_publish_pending, limit=50)
             published = int(publication.get("published", 0) or 0)
             failed = int(publication.get("failed", 0) or 0)
-            fallback_scheduled = job.status in {"queued", "retrying", "running"} and (published == 0 or failed > 0)
+            processing_pending = job.status in {"queued", "retrying", "running"}
+            fallback_scheduled = processing_pending
             if fallback_scheduled:
                 background_tasks.add_task(_inline_processing_fallback, job.id, tenant_id)
 
             warnings = []
-            if fallback_scheduled:
+            if failed > 0 or published == 0:
                 warnings.append(
                     "External queue delivery is delayed. The file is durable and AGRO-AI scheduled an automatic processing fallback."
                 )
 
             return {
                 "status": job.status,
-                "phase": "stored" if job.status in {"queued", "retrying", "running"} else job.status,
+                "phase": "stored" if processing_pending else job.status,
                 "durable_stored": True,
-                "processing_pending": job.status in {"queued", "retrying", "running"},
+                "processing_pending": processing_pending,
                 "job_id": job.id,
                 "content_sha256": receipt.sha256,
                 "size_bytes": receipt.size_bytes,
