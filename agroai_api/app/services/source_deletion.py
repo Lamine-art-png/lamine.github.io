@@ -70,7 +70,7 @@ def _delete_backing_object(*, uri: str | None, tenant_id: str, connection_id: st
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={
                 "code": "source_object_delete_failed",
-                "message": "AGRO-AI could not remove the stored file. Nothing else was deleted; retry in a moment.",
+                "message": "AGRO-AI could not remove the stored file. The deletion remains recoverable; retry in a moment.",
             },
         ) from exc
 
@@ -133,7 +133,8 @@ def _delete_completed_source(db: Session, *, auth: AuthContext, source: DataSour
     if source.tenant_id != tenant_id:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Source not found")
 
-    jobs = _related_jobs(db, tenant_id=tenant_id, source_id=source.id)
+    source_id = source.id
+    jobs = _related_jobs(db, tenant_id=tenant_id, source_id=source_id)
     if any(job.status == _RUNNING_STATUS for job in jobs):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -151,7 +152,7 @@ def _delete_completed_source(db: Session, *, auth: AuthContext, source: DataSour
     job_ids = [job.id for job in jobs]
     evidence_deleted = int(
         db.query(EvidenceRecord)
-        .filter(EvidenceRecord.tenant_id == tenant_id, EvidenceRecord.data_source_id == source.id)
+        .filter(EvidenceRecord.tenant_id == tenant_id, EvidenceRecord.data_source_id == source_id)
         .delete(synchronize_session=False)
         or 0
     )
@@ -163,7 +164,7 @@ def _delete_completed_source(db: Session, *, auth: AuthContext, source: DataSour
         db,
         auth=auth,
         workspace_id=workspace_id,
-        source_ref=source.id,
+        source_ref=source_id,
         filename=filename,
         evidence_deleted=evidence_deleted,
         jobs_deleted=len(job_ids),
@@ -173,7 +174,7 @@ def _delete_completed_source(db: Session, *, auth: AuthContext, source: DataSour
     db.commit()
     return {
         "status": "deleted",
-        "source_id": source.id,
+        "source_id": source_id,
         "filename": filename,
         "evidence_deleted": evidence_deleted,
         "jobs_deleted": len(job_ids),
@@ -230,6 +231,16 @@ def _delete_pending_job(db: Session, *, auth: AuthContext, job_id: str) -> dict[
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Source cannot be deleted in its current state")
 
     db.refresh(job)
+
+    # The worker may finish between the first read and our conditional cancellation.
+    # Re-check the durable result after the claim. If a source was created, delete the
+    # complete source graph rather than leaving its evidence behind as an orphan.
+    completed_source_id = _job_source_id(job)
+    if completed_source_id:
+        completed_source = db.get(DataSource, completed_source_id)
+        if completed_source is not None and completed_source.tenant_id == tenant_id:
+            return _delete_completed_source(db, auth=auth, source=completed_source)
+
     payload = dict(job.input_json or {}) if isinstance(job.input_json, dict) else {}
     filename = str(payload.get("filename") or "") or None
     object_deleted = _delete_backing_object(
