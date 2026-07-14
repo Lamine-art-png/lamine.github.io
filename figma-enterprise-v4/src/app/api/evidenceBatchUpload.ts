@@ -129,7 +129,6 @@ export async function uploadEvidenceBatch(
   const failures: EvidenceUploadFailure[] = [];
   const warnings: string[] = [];
   const concurrency = Math.max(1, Math.min(options.concurrency || 4, 6, total));
-  let cursor = 1;
   let completed = 0;
   let stored = 0;
 
@@ -157,22 +156,35 @@ export async function uploadEvidenceBatch(
     }
   }
 
-  // The first receipt creates/reuses the workspace connector connection before
-  // concurrent requests begin. This avoids racing multiple connection inserts while
-  // retaining parallel durable storage for the rest of the batch.
-  await processFile(0);
+  const seenProviders = new Set<string>();
+  const prewarmIndexes: number[] = [];
+  const remainingIndexes: number[] = [];
+  files.forEach((file, index) => {
+    const provider = providerForUpload(file);
+    if (seenProviders.has(provider)) remainingIndexes.push(index);
+    else {
+      seenProviders.add(provider);
+      prewarmIndexes.push(index);
+    }
+  });
 
+  // Each provider gets one completed receipt before parallel requests begin. This
+  // prevents concurrent inserts of the same workspace/provider connection while
+  // retaining bounded parallel durable storage for the rest of the batch.
+  for (const index of prewarmIndexes) await processFile(index);
+
+  let cursor = 0;
   async function worker() {
     while (true) {
-      const index = cursor;
+      const position = cursor;
       cursor += 1;
-      if (index >= total) return;
-      await processFile(index);
+      if (position >= remainingIndexes.length) return;
+      await processFile(remainingIndexes[position]);
     }
   }
 
-  if (total > 1) {
-    await Promise.all(Array.from({ length: Math.min(concurrency, total - 1) }, () => worker()));
+  if (remainingIndexes.length) {
+    await Promise.all(Array.from({ length: Math.min(concurrency, remainingIndexes.length) }, () => worker()));
   }
   const processing = receipts.filter((receipt) => receipt.processing_pending).length;
   return {
