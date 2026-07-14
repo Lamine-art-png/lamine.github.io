@@ -25,7 +25,7 @@ class FakeObjectStore:
 
 def _runtime(role: str = "operator"):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
-    Session = sessionmaker(bind=engine)
+    Session = sessionmaker(bind=engine, expire_on_commit=False)
     Base.metadata.create_all(bind=engine)
     with Session() as db:
         user = User(id="source-user", email="source-user@example.com", password_hash="x", is_active=True)
@@ -37,10 +37,6 @@ def _runtime(role: str = "operator"):
             plan="enterprise",
             subscription_status="active",
         )
-        db.add(user)
-        db.flush()
-        db.add(org)
-        db.flush()
         membership = OrganizationMembership(
             id="source-membership",
             organization_id=org.id,
@@ -59,11 +55,8 @@ def _runtime(role: str = "operator"):
             required_plan="free",
             config_json={},
         )
-        db.add_all([membership, workspace, connection])
+        db.add_all([user, org, membership, workspace, connection])
         db.commit()
-        db.refresh(user)
-        db.refresh(org)
-        db.refresh(membership)
         auth = AuthContext(user=user, organization=org, membership=membership)
 
     def override_db():
