@@ -1,5 +1,7 @@
-import { useCallback, useMemo } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent } from "react";
+import { AlertTriangle, Trash2, Upload, X } from "lucide-react";
 import { apiClient } from "../api/client";
+import { uploadEvidenceBatch } from "../api/evidenceBatchUpload";
 import { useAuth } from "../auth/AuthProvider";
 import { arrayFromUnknown, usePortalResource } from "../hooks/usePortalResource";
 import { usePortalCopy } from "../hooks/usePortalCopy";
@@ -57,7 +59,7 @@ function openSource(source: SourceItem) {
 }
 
 export function Sources() {
-  const { currentWorkspace } = useAuth();
+  const { currentWorkspace, currentOrganization } = useAuth();
   const workspaceId = currentWorkspace?.id;
   const { tx } = usePortalCopy(["sources", "shared"]);
   const selectedId = new URLSearchParams(window.location.search).get("source") || "";
@@ -66,6 +68,91 @@ export function Sources() {
   const sources = arrayFromUnknown<SourceItem>(sourcesState.data, ["sources", "data_sources", "items", "data"]);
   const selected = detailState.data?.source;
   const intelligenceReady = useMemo(() => sources.filter((source) => source.intelligence_ready).length, [sources]);
+  const processingCount = useMemo(() => sources.filter((source) => ["queued", "retrying", "running"].includes(String(source.processing_status || ""))).length, [sources]);
+  const role = String(currentOrganization?.role || "viewer");
+  const canManageSources = ["owner", "admin", "manager", "operator"].includes(role);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [uploadMessage, setUploadMessage] = useState("");
+  const [uploadWarnings, setUploadWarnings] = useState<string[]>([]);
+  const [deleteCandidate, setDeleteCandidate] = useState<SourceItem | null>(null);
+  const [deletingId, setDeletingId] = useState("");
+  const [actionMessage, setActionMessage] = useState("");
+  const [dragging, setDragging] = useState(false);
+
+  const refreshSources = useCallback(async (silent = false) => {
+    await Promise.all([
+      sourcesState.refresh({ silent }),
+      selectedId ? detailState.refresh({ silent }) : Promise.resolve(),
+    ]);
+  }, [detailState.refresh, selectedId, sourcesState.refresh]);
+
+  useEffect(() => {
+    if (!workspaceId || processingCount <= 0) return;
+    const timer = window.setInterval(() => { void refreshSources(true); }, 2_500);
+    return () => window.clearInterval(timer);
+  }, [processingCount, refreshSources, workspaceId]);
+
+  async function uploadFiles(files: File[]) {
+    if (!files.length || uploading || !canManageSources) return;
+    setUploading(true);
+    setUploadWarnings([]);
+    setActionMessage("");
+    setUploadMessage(`Securely storing 0 of ${files.length} files…`);
+    try {
+      const result = await uploadEvidenceBatch(files, workspaceId, {
+        concurrency: 4,
+        onProgress: ({ total, completed, stored, failed }) => {
+          const failureNote = failed ? ` · ${failed} failed` : "";
+          setUploadMessage(`Securely stored ${stored} of ${total} files · ${completed} completed${failureNote}`);
+        },
+      });
+      const failures = result.failures.map((failure) => `${failure.filename}: ${failure.message}`);
+      setUploadWarnings([...result.warnings, ...failures]);
+      if (result.failed) {
+        setUploadMessage(`${result.stored} of ${result.total} files were securely stored. ${result.failed} failed and can be selected again.`);
+      } else {
+        setUploadMessage(`All ${result.total} files are securely stored. You can upload another batch now while AGRO-AI processes these files.`);
+      }
+      await refreshSources();
+    } catch (error) {
+      setUploadMessage(error instanceof Error ? error.message : "Upload failed.");
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  function handleDrop(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    setDragging(false);
+    if (!canManageSources || uploading) return;
+    void uploadFiles(Array.from(event.dataTransfer.files || []));
+  }
+
+  async function confirmDelete() {
+    if (!deleteCandidate || deletingId) return;
+    const candidate = deleteCandidate;
+    setDeletingId(candidate.id);
+    setActionMessage("");
+    try {
+      const result = await apiClient.request<{ filename?: string; evidence_deleted?: number }>(
+        `/v1/source-library/${encodeURIComponent(candidate.id)}`,
+        { method: "DELETE" },
+      );
+      setDeleteCandidate(null);
+      setActionMessage(`${result.filename || candidate.filename || "File"} was deleted with ${Number(result.evidence_deleted || 0)} linked evidence record(s).`);
+      if (selectedId === candidate.id) {
+        window.location.assign("/sources");
+        return;
+      }
+      await refreshSources();
+    } catch (error) {
+      setActionMessage(error instanceof Error ? error.message : "The file could not be deleted.");
+    } finally {
+      setDeletingId("");
+    }
+  }
 
   return (
     <div className="min-h-full" style={{ background: BG }} data-tour="sources-page">
@@ -78,17 +165,58 @@ export function Sources() {
             </div>
             <h1 className="text-[26px] font-semibold tracking-tight sm:text-[30px]" style={{ color: TEXT }}>{tx("Sources")}</h1>
             <p className="mt-2 max-w-3xl text-[13px] leading-relaxed sm:text-[14px]" style={{ color: MUTED }}>
-              Your organized source library. Uploaded files remain visible with provider, processing state, evidence links, and intelligence readiness.
+              Your organized source library. Add more files whenever you need them, review processing, and remove files that no longer belong in this operation.
             </p>
           </div>
           <div className="flex flex-wrap gap-2 sm:flex-nowrap">
-            <PortalButton variant="secondary" onClick={() => sourcesState.refresh()}>{tx("Refresh")}</PortalButton>
-            <PortalButton onClick={() => window.location.assign("/integrations")}>{tx("Add Source")}</PortalButton>
+            <PortalButton variant="secondary" onClick={() => refreshSources()}>{tx("Refresh")}</PortalButton>
+            {canManageSources ? <PortalButton onClick={() => fileInputRef.current?.click()}>Upload files</PortalButton> : null}
+            <PortalButton variant="secondary" onClick={() => window.location.assign("/integrations")}>Connect system</PortalButton>
           </div>
         </div>
       </header>
 
       <main className="space-y-4 px-4 py-4 sm:space-y-5 sm:px-8 sm:py-6" style={{ maxWidth: 1280 }}>
+        {canManageSources ? (
+          <section
+            className="rounded-2xl p-5 sm:p-6"
+            style={{ background: dragging ? "#F0F8E9" : SURFACE, border: `1px ${dragging ? "solid #77A861" : "dashed #AAB8AE"}` }}
+            onDragEnter={(event) => { event.preventDefault(); setDragging(true); }}
+            onDragOver={(event) => event.preventDefault()}
+            onDragLeave={(event) => { if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false); }}
+            onDrop={handleDrop}
+            data-repeat-source-upload
+          >
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-start gap-4">
+                <span className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-xl" style={{ background: "#EAF5E1", color: "#245F3E" }}><Upload className="h-5 w-5" /></span>
+                <div className="min-w-0">
+                  <h2 className="text-[17px] font-semibold" style={{ color: TEXT }}>Add more files anytime</h2>
+                  <p className="mt-1 max-w-3xl text-[12px] leading-6" style={{ color: MUTED }}>
+                    Drop another batch here or choose files. New uploads are added to this operation; they do not replace the files already stored.
+                  </p>
+                  <div className="mt-2 text-[11px]" style={{ color: MUTED }}>CSV, JSON, TXT, PDF · multiple files supported · repeat as often as needed</div>
+                </div>
+              </div>
+              <PortalButton disabled={uploading} onClick={() => fileInputRef.current?.click()}>{uploading ? "Uploading…" : sources.length ? "Upload more files" : "Choose files"}</PortalButton>
+            </div>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              accept=".csv,.json,.txt,.pdf"
+              className="sr-only"
+              disabled={uploading}
+              onChange={(event) => { void uploadFiles(Array.from(event.currentTarget.files || [])); }}
+              data-source-repeat-file-input
+            />
+            {uploadMessage ? <div className="mt-4"><InlineState title={uploadMessage} detail={uploadWarnings.join("; ") || undefined} /></div> : null}
+          </section>
+        ) : (
+          <InlineState title="Read-only source access" detail="Ask an operator, manager, admin, or owner to upload or delete files." />
+        )}
+
+        {actionMessage ? <InlineState title={actionMessage} /> : null}
         {sourcesState.isLoading ? <InlineState title="Loading sources" /> : null}
         {sourcesState.error ? <InlineState title={sourcesState.error} /> : null}
 
@@ -96,8 +224,28 @@ export function Sources() {
           <Metric label="Source files" value={String(sources.length)} />
           <Metric label="Intelligence ready" value={String(intelligenceReady)} />
           <Metric label="Evidence linked" value={String(sources.reduce((sum, source) => sum + Number(source.evidence_count || 0), 0))} />
-          <Metric label="Processing" value={String(sources.filter((source) => ["queued", "retrying", "running"].includes(String(source.processing_status || ""))).length)} />
+          <Metric label="Processing" value={String(processingCount)} />
         </section>
+
+        {deleteCandidate ? (
+          <section className="rounded-2xl p-4 sm:p-5" style={{ background: "#FFF8ED", border: "1px solid #E7C98B" }} role="alertdialog" aria-label="Confirm file deletion">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-start gap-3">
+                <AlertTriangle className="mt-0.5 h-5 w-5 flex-shrink-0" style={{ color: "#9A6511" }} />
+                <div>
+                  <h2 className="text-[15px] font-semibold" style={{ color: TEXT }}>Delete {deleteCandidate.filename || "this file"}?</h2>
+                  <p className="mt-1 text-[12px] leading-5" style={{ color: MUTED }}>
+                    This permanently removes the stored file and its derived evidence from this operation. Existing reports and past chat answers are not rewritten.
+                  </p>
+                </div>
+              </div>
+              <div className="flex flex-shrink-0 gap-2">
+                <PortalButton variant="secondary" disabled={Boolean(deletingId)} onClick={() => setDeleteCandidate(null)}><X className="mr-2 inline h-4 w-4" />Cancel</PortalButton>
+                <PortalButton disabled={Boolean(deletingId)} onClick={() => void confirmDelete()}><Trash2 className="mr-2 inline h-4 w-4" />{deletingId ? "Deleting…" : deleteCandidate.pending ? "Cancel & delete" : "Delete permanently"}</PortalButton>
+              </div>
+            </div>
+          </section>
+        ) : null}
 
         {selectedId ? (
           <section className="rounded-2xl p-4 sm:p-5" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
@@ -106,7 +254,10 @@ export function Sources() {
                 <div className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: MUTED }}>Selected source</div>
                 <h2 className="mt-2 break-words text-[18px] font-semibold sm:text-[20px]" style={{ color: TEXT }}>{selected?.filename || "Loading source…"}</h2>
               </div>
-              <button type="button" onClick={() => window.location.assign("/sources")} className="flex-shrink-0 text-[12px] font-semibold" style={{ color: "#16533C" }}>Close</button>
+              <div className="flex flex-shrink-0 items-center gap-3">
+                {selected && canManageSources ? <button type="button" onClick={() => setDeleteCandidate(selected)} className="text-[12px] font-semibold" style={{ color: "#A12A2A" }}>Delete</button> : null}
+                <button type="button" onClick={() => window.location.assign("/sources")} className="text-[12px] font-semibold" style={{ color: "#16533C" }}>Close</button>
+              </div>
             </div>
             {detailState.error ? <div className="mt-4"><InlineState title={detailState.error} /></div> : null}
             {selected ? (
@@ -145,10 +296,10 @@ export function Sources() {
           </section>
         ) : null}
 
-        <section className="rounded-2xl overflow-hidden" style={{ background: SURFACE, border: `1px solid ${BORDER}` }} data-tour="source-library-table">
+        <section className="overflow-hidden rounded-2xl" style={{ background: SURFACE, border: `1px solid ${BORDER}` }} data-tour="source-library-table">
           <div className="hidden md:block">
             <div className="grid gap-4 px-6 py-3" style={{ gridTemplateColumns: "1.6fr 0.8fr 0.8fr 0.7fr 0.8fr auto", background: BG, borderBottom: `1px solid ${BORDER}` }}>
-              {["Source", "Provider", "Processing", "Evidence", "Intelligence", ""].map((label, index) => <span key={`${label}-${index}`} className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: MUTED }}>{label}</span>)}
+              {["Source", "Provider", "Processing", "Evidence", "Intelligence", "Actions"].map((label) => <span key={label} className="text-[10px] font-semibold uppercase tracking-widest" style={{ color: MUTED }}>{label}</span>)}
             </div>
             {sources.length ? sources.map((source, index) => (
               <article key={source.id} className="grid items-center gap-4 px-6 py-4" style={{ gridTemplateColumns: "1.6fr 0.8fr 0.8fr 0.7fr 0.8fr auto", borderTop: index ? `1px solid ${BORDER}` : "none" }}>
@@ -157,9 +308,12 @@ export function Sources() {
                 <StatusBadge label={source.processing_status || source.status || "stored"} tone={statusTone(source)} />
                 <span className="text-[12px]" style={{ color: MUTED }}>{source.evidence_count || 0}</span>
                 <StatusBadge label={source.intelligence_ready ? "Ready" : "Pending"} tone={source.intelligence_ready ? "good" : "neutral"} />
-                {source.pending ? <span className="text-[12px] font-semibold" style={{ color: MUTED }}>Processing</span> : <button type="button" onClick={() => openSource(source)} className="text-[12px] font-semibold" style={{ color: "#16533C" }}>View</button>}
+                <div className="flex items-center justify-end gap-3">
+                  {source.pending ? <span className="text-[12px] font-semibold" style={{ color: MUTED }}>Processing</span> : <button type="button" onClick={() => openSource(source)} className="text-[12px] font-semibold" style={{ color: "#16533C" }}>View</button>}
+                  {canManageSources ? <button type="button" onClick={() => setDeleteCandidate(source)} className="text-[12px] font-semibold" style={{ color: "#A12A2A" }}>{source.pending ? "Cancel" : "Delete"}</button> : null}
+                </div>
               </article>
-            )) : <div className="p-6"><InlineState title="No sources yet." detail="Upload a file from Evidence or connect a system from Connectors. Stored sources will appear here." /></div>}
+            )) : <div className="p-6"><InlineState title="No sources yet." detail="Upload one or many files above, then return anytime to add another batch." /></div>}
           </div>
 
           <div className="divide-y md:hidden" style={{ borderColor: BORDER }}>
@@ -177,10 +331,13 @@ export function Sources() {
                 </div>
                 <div className="mt-3 flex items-center justify-between gap-3">
                   <span className="text-[11px]" style={{ color: MUTED }}>{source.created_at ? new Date(source.created_at).toLocaleString() : "time pending"}</span>
-                  <span className="text-[12px] font-semibold" style={{ color: source.pending ? MUTED : "#16533C" }}>{source.pending ? "Processing" : "View"}</span>
+                  <div className="flex items-center gap-3">
+                    <span className="text-[12px] font-semibold" style={{ color: source.pending ? MUTED : "#16533C" }}>{source.pending ? "Processing" : "View"}</span>
+                    {canManageSources ? <button type="button" onClick={(event) => { event.stopPropagation(); setDeleteCandidate(source); }} className="text-[12px] font-semibold" style={{ color: "#A12A2A" }}>{source.pending ? "Cancel" : "Delete"}</button> : null}
+                  </div>
                 </div>
               </article>
-            )) : <div className="p-4"><InlineState title="No sources yet." detail="Upload a file from Evidence or connect a system from Connectors. Stored sources will appear here." /></div>}
+            )) : <div className="p-4"><InlineState title="No sources yet." detail="Upload one or many files above, then return anytime to add another batch." /></div>}
           </div>
         </section>
       </main>
