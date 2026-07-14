@@ -7,8 +7,9 @@ function qaToken() {
   return `qa.${body}.sig`;
 }
 
-async function prepare(page, { plan = "professional", maxWorkspaces = 5, workspaces, failUploadNumber = 0 } = {}) {
-  const state = { creates: [], renames: [], uploads: [], jobPolls: 0 };
+async function prepare(page, { plan = "professional", maxWorkspaces = 5, workspaces, failUploadNumber = 0, sources = [] } = {}) {
+  const sourceRows = sources.map((source) => ({ ...source }));
+  const state = { creates: [], renames: [], uploads: [], deletes: [], jobPolls: 0, sourceRows };
   const workspaceRows = workspaces || [
     { id: "ws-1", organization_id: "org", name: "North Ranch", mode: "evaluation" },
     { id: "ws-2", organization_id: "org", name: "South Ranch", mode: "evaluation" },
@@ -55,14 +56,43 @@ async function prepare(page, { plan = "professional", maxWorkspaces = 5, workspa
       if (failUploadNumber && state.uploads.length === failUploadNumber) {
         return reply({ detail: { code: "test_upload_failure", message: "Synthetic upload failure" } }, 500);
       }
+      const jobId = `job-${state.uploads.length}`;
+      sourceRows.push({
+        id: `source-${state.uploads.length}`,
+        job_id: jobId,
+        filename: `uploaded-${state.uploads.length}.csv`,
+        provider: url.searchParams.get("provider") || "manual_csv",
+        source_type: "pending_upload",
+        processing_status: "queued",
+        evidence_count: 0,
+        rows_parsed: 0,
+        intelligence_ready: false,
+        pending: true,
+      });
       return reply({
         status: "queued",
         phase: "stored",
         durable_stored: true,
         processing_pending: true,
-        job_id: `job-${state.uploads.length}`,
+        job_id: jobId,
         queue_publication: { published: 1, failed: 0 },
       });
+    }
+    if (request.method() === "GET" && url.pathname === "/v1/source-library") {
+      return reply({ status: "ok", source_count: sourceRows.length, sources: sourceRows });
+    }
+    if (request.method() === "GET" && url.pathname.startsWith("/v1/source-library/")) {
+      const id = decodeURIComponent(url.pathname.split("/").pop() || "");
+      const source = sourceRows.find((item) => item.id === id);
+      return source ? reply({ status: "ok", source, evidence: [] }) : reply({ detail: "Source not found" }, 404);
+    }
+    if (request.method() === "DELETE" && url.pathname.startsWith("/v1/source-library/")) {
+      const id = decodeURIComponent(url.pathname.split("/").pop() || "");
+      const index = sourceRows.findIndex((item) => item.id === id);
+      if (index < 0) return reply({ detail: "Source not found" }, 404);
+      const [deleted] = sourceRows.splice(index, 1);
+      state.deletes.push(id);
+      return reply({ status: "deleted", source_id: id, filename: deleted.filename, evidence_deleted: deleted.evidence_count || 0 });
     }
     if (request.method() === "GET" && url.pathname.startsWith("/v1/connectors/jobs/")) {
       state.jobPolls += 1;
@@ -119,6 +149,50 @@ test("new operation stages every selected file without waiting on each processin
   await expect.poll(() => state.uploads.length).toBe(8);
   expect(state.uploads.every((upload) => upload.workspaceId === "ws-3")).toBe(true);
   expect(state.jobPolls).toBe(0);
+});
+
+test("source library accepts repeated upload batches in the same operation", async ({ page }) => {
+  const state = await prepare(page);
+  await page.goto("http://127.0.0.1:4173/sources");
+  const input = page.locator("[data-source-repeat-file-input]");
+
+  await input.setInputFiles([
+    { name: "first.csv", mimeType: "text/csv", buffer: Buffer.from("field,value\nA,1\n") },
+    { name: "second.csv", mimeType: "text/csv", buffer: Buffer.from("field,value\nB,2\n") },
+  ]);
+  await expect.poll(() => state.uploads.length).toBe(2);
+  await expect(page.getByText("Upload more files", { exact: true })).toBeVisible();
+
+  await input.setInputFiles([
+    { name: "third.csv", mimeType: "text/csv", buffer: Buffer.from("field,value\nC,3\n") },
+  ]);
+  await expect.poll(() => state.uploads.length).toBe(3);
+  expect(state.uploads.every((upload) => upload.workspaceId === "ws-1")).toBe(true);
+});
+
+test("source library permanently deletes a stored file after confirmation", async ({ page }) => {
+  const state = await prepare(page, {
+    sources: [{
+      id: "source-delete-me",
+      filename: "delete-me.csv",
+      provider: "manual_csv",
+      source_type: "telemetry_csv",
+      processing_status: "succeeded",
+      evidence_count: 2,
+      rows_parsed: 4,
+      intelligence_ready: true,
+      pending: false,
+    }],
+  });
+  await page.goto("http://127.0.0.1:4173/sources");
+
+  const row = page.locator('[data-tour="source-library-table"] article').filter({ hasText: "delete-me.csv" }).first();
+  await row.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page.getByRole("alertdialog", { name: "Confirm file deletion" })).toBeVisible();
+  await page.getByRole("button", { name: "Delete permanently" }).click();
+
+  await expect.poll(() => state.deletes).toEqual(["source-delete-me"]);
+  await expect(page.getByText("delete-me.csv was deleted with 2 linked evidence record(s).")).toBeVisible();
 });
 
 test("operation switcher changes and persists the active workspace", async ({ page }) => {
