@@ -28,15 +28,11 @@ class FakeObjectStore:
             content_type=kwargs.get("content_type"),
         )
 
-    def delete(self, uri):
+    def delete(self, uri, **_kwargs):
         self.deleted.append(uri)
 
 
-def fake_outbox_drain(**_kwargs):
-    return {"published": 1, "failed": 0}
-
-
-def test_stream_route_stages_durable_object_and_outbox(tmp_path, monkeypatch):
+def test_stream_route_stages_durable_object_and_republishes_deduplicated_retry(tmp_path, monkeypatch):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     Session = sessionmaker(bind=engine)
     Base.metadata.create_all(bind=engine)
@@ -62,6 +58,12 @@ def test_stream_route_stages_durable_object_and_outbox(tmp_path, monkeypatch):
         finally:
             db.close()
 
+    publication_calls = []
+
+    def fake_outbox_drain(**kwargs):
+        publication_calls.append(dict(kwargs))
+        return {"published": 1, "failed": 0}
+
     fake = FakeObjectStore()
     monkeypatch.setattr(settings, "CONNECTOR_UPLOAD_DIR", str(tmp_path))
     monkeypatch.setattr(settings, "CONNECTOR_OBJECT_STORAGE_BACKEND", "s3")
@@ -74,7 +76,12 @@ def test_stream_route_stages_durable_object_and_outbox(tmp_path, monkeypatch):
     app.dependency_overrides[get_db] = override_db
     app.dependency_overrides[require_current_tenant_id] = lambda: "org-test"
     try:
-        response = TestClient(app).post(
+        client = TestClient(app)
+        response = client.post(
+            "/v1/evidence/upload-stream?provider=manual_csv",
+            files={"file": ("sample.csv", BytesIO(b"timestamp,value\n2026-07-05,42\n"), "text/csv")},
+        )
+        duplicate = client.post(
             "/v1/evidence/upload-stream?provider=manual_csv",
             files={"file": ("sample.csv", BytesIO(b"timestamp,value\n2026-07-05,42\n"), "text/csv")},
         )
@@ -90,5 +97,14 @@ def test_stream_route_stages_durable_object_and_outbox(tmp_path, monkeypatch):
     assert body["processing_pending"] is True
     assert body["job_id"]
     assert body["queue_publication"] == {"published": 1, "failed": 0}
+    assert body["processing_fallback_scheduled"] is False
     assert "object_uri" not in body
     assert fake.uploaded
+
+    assert duplicate.status_code == 200, duplicate.text
+    duplicate_body = duplicate.json()
+    assert duplicate_body["job_id"] == body["job_id"]
+    assert duplicate_body["deduplicated"] is True
+    assert duplicate_body["queue_publication"] == {"published": 1, "failed": 0}
+    assert len(publication_calls) == 2
+    assert fake.deleted == ["s3://agroai-test/raw/object.csv"]
