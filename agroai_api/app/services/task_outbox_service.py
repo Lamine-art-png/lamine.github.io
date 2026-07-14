@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.db.base import SessionLocal
 from app.models.operational_records import IngestionJob
 from app.models.task_outbox import TaskOutbox
+from app.services.redis_task_queue import get_task_publisher
 
 
 _OUTBOX_CLAIM_TIMEOUT_SECONDS = 300
