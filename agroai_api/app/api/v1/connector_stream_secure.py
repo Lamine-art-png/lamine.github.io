@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +19,7 @@ from app.services.object_storage import object_storage_configured
 from app.services.redis_task_queue import queue_configured
 
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["connector-stream-ingestion"])
 _ALLOWED_PROVIDERS = {
     "wiseconn", "talgil", "universal_controller", "weather", "openet",
@@ -47,13 +49,16 @@ async def _inline_processing_fallback(job_id: str, tenant_id: str) -> None:
     from app.services.connector_task_processor import process_connector_task
     from app.services.durable_ingestion_staging import TASK_TYPE
 
-    await asyncio.to_thread(
-        process_connector_task,
-        job_id=job_id,
-        tenant_id=tenant_id,
-        task_type=TASK_TYPE,
-        worker_id=f"upload-fallback:{job_id[:16]}",
-    )
+    try:
+        await asyncio.to_thread(
+            process_connector_task,
+            job_id=job_id,
+            tenant_id=tenant_id,
+            task_type=TASK_TYPE,
+            worker_id=f"upload-fallback:{job_id[:16]}",
+        )
+    except Exception:
+        logger.exception("upload processing fallback failed job_id=%s tenant_id=%s", job_id, tenant_id)
 
 
 @router.post("/evidence/upload-stream")
@@ -116,7 +121,6 @@ async def upload_stream_secure(
             # failed first publication could leave the durable job queued forever,
             # because the retry found the same job and skipped publishing its outbox.
             publication = await asyncio.to_thread(_publish_pending, limit=50)
-            published = int(publication.get("published", 0) or 0)
             failed = int(publication.get("failed", 0) or 0)
             processing_pending = job.status in {"queued", "retrying", "running"}
             fallback_scheduled = processing_pending
@@ -124,7 +128,7 @@ async def upload_stream_secure(
                 background_tasks.add_task(_inline_processing_fallback, job.id, tenant_id)
 
             warnings = []
-            if failed > 0 or published == 0:
+            if failed > 0:
                 warnings.append(
                     "External queue delivery is delayed. The file is durable and AGRO-AI scheduled an automatic processing fallback."
                 )
