@@ -6,11 +6,12 @@ from sqlalchemy import and_, or_, update
 from sqlalchemy.orm import Session
 
 from app.db.base import SessionLocal
+from app.models.operational_records import IngestionJob
 from app.models.task_outbox import TaskOutbox
-from app.services.redis_task_queue import get_task_publisher
 
 
 _OUTBOX_CLAIM_TIMEOUT_SECONDS = 300
+_STALE_PUBLISHED_JOB_SECONDS = 60
 
 
 def _claimable_outbox(now: datetime):
@@ -22,6 +23,46 @@ def _claimable_outbox(now: datetime):
         ),
         and_(TaskOutbox.status == "publishing", TaskOutbox.updated_at <= stale_before),
     )
+
+
+def recover_stale_published_ingestion_jobs(
+    db: Session,
+    *,
+    limit: int = 100,
+    stale_after_seconds: int = _STALE_PUBLISHED_JOB_SECONDS,
+) -> int:
+    """Re-arm queue receipts whose jobs never advanced after publication.
+
+    A Cloudflare/Redis delivery can be accepted while its consumer callback later
+    fails or reaches a dead-letter queue. The durable object and idempotent job are
+    still valid, so a bounded stale-job scan safely republishes the same job. Worker
+    leases prevent concurrent execution and completed jobs are never selected.
+    """
+    now = datetime.utcnow()
+    stale_before = now - timedelta(seconds=max(30, stale_after_seconds))
+    rows = (
+        db.query(TaskOutbox)
+        .join(IngestionJob, IngestionJob.id == TaskOutbox.job_id)
+        .filter(
+            TaskOutbox.task_type == "connector_ingest_object",
+            TaskOutbox.status.in_(["published", "publishing"]),
+            IngestionJob.status.in_(["queued", "retrying"]),
+            IngestionJob.updated_at <= stale_before,
+            TaskOutbox.updated_at <= stale_before,
+        )
+        .order_by(TaskOutbox.updated_at.asc())
+        .limit(max(1, min(limit, 200)))
+        .all()
+    )
+    for row in rows:
+        row.status = "pending"
+        row.next_attempt_at = now
+        row.published_at = None
+        row.last_error = "Stale queued ingestion job automatically re-armed for delivery."
+        row.updated_at = now
+    if rows:
+        db.commit()
+    return len(rows)
 
 
 def publish_pending_outbox(db: Session, *, limit: int = 50) -> dict[str, int]:
@@ -102,6 +143,7 @@ def drain_pending_outbox(*, limit: int = 50) -> dict[str, int]:
     """
     db = SessionLocal()
     try:
+        recover_stale_published_ingestion_jobs(db, limit=limit)
         return publish_pending_outbox(db, limit=limit)
     except Exception:
         db.rollback()
