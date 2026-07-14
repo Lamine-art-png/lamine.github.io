@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.v1.connector_hub import connector_mode
@@ -18,6 +19,7 @@ from app.services.object_storage import object_storage_configured
 from app.services.redis_task_queue import queue_configured
 
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["connector-stream-ingestion"])
 _ALLOWED_PROVIDERS = {
     "wiseconn", "talgil", "universal_controller", "weather", "openet",
@@ -35,8 +37,33 @@ def _publish_pending(*, limit: int):
     return drain_pending_outbox(limit=limit)
 
 
+async def _inline_processing_fallback(job_id: str, tenant_id: str) -> None:
+    """Give every durably staged job a delayed second execution path.
+
+    The external queue remains primary. After a short grace period this path checks
+    the same lease-fenced, idempotent job. It becomes a no-op when the queue already
+    completed or claimed the job, and it processes the file when queue delivery is
+    delayed or broken.
+    """
+    await asyncio.sleep(8)
+    from app.services.connector_task_processor import process_connector_task
+    from app.services.durable_ingestion_staging import TASK_TYPE
+
+    try:
+        await asyncio.to_thread(
+            process_connector_task,
+            job_id=job_id,
+            tenant_id=tenant_id,
+            task_type=TASK_TYPE,
+            worker_id=f"upload-fallback:{job_id[:16]}",
+        )
+    except Exception:
+        logger.exception("upload processing fallback failed job_id=%s tenant_id=%s", job_id, tenant_id)
+
+
 @router.post("/evidence/upload-stream")
 async def upload_stream_secure(
+    background_tasks: BackgroundTasks,
     provider: str = Query(default="manual_csv"),
     workspace_id: str | None = Query(default=None),
     file: UploadFile = File(...),
@@ -89,19 +116,35 @@ async def upload_stream_secure(
                 filename=receipt.filename,
                 content_type=receipt.content_type,
             )
-            publication = {"published": 0, "failed": 0}
-            if not deduplicated:
-                publication = await asyncio.to_thread(_publish_pending, limit=10)
+
+            # Drain after every receipt, including a deduplicated retry. Previously a
+            # failed first publication could leave the durable job queued forever,
+            # because the retry found the same job and skipped publishing its outbox.
+            publication = await asyncio.to_thread(_publish_pending, limit=50)
+            failed = int(publication.get("failed", 0) or 0)
+            processing_pending = job.status in {"queued", "retrying", "running"}
+            fallback_scheduled = processing_pending
+            if fallback_scheduled:
+                background_tasks.add_task(_inline_processing_fallback, job.id, tenant_id)
+
+            warnings = []
+            if failed > 0:
+                warnings.append(
+                    "External queue delivery is delayed. The file is durable and AGRO-AI scheduled an automatic processing fallback."
+                )
+
             return {
                 "status": job.status,
-                "phase": "stored" if job.status in {"queued", "retrying", "running"} else job.status,
+                "phase": "stored" if processing_pending else job.status,
                 "durable_stored": True,
-                "processing_pending": job.status in {"queued", "retrying", "running"},
+                "processing_pending": processing_pending,
                 "job_id": job.id,
                 "content_sha256": receipt.sha256,
                 "size_bytes": receipt.size_bytes,
                 "deduplicated": deduplicated,
                 "queue_publication": publication,
+                "processing_fallback_scheduled": fallback_scheduled,
+                "warnings": warnings,
                 "message": "File securely stored and queued for AGRO-AI processing.",
             }
         except Exception as exc:

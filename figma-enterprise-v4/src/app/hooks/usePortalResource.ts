@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useState } from "react";
 import { ApiError } from "../api/client";
 
+type RefreshOptions = {
+  silent?: boolean;
+};
+
 type ResourceState<T> = {
   data: T | null;
   error: string;
   isLoading: boolean;
   isUnavailable: boolean;
-  refresh: () => Promise<void>;
+  refresh: (options?: RefreshOptions) => Promise<void>;
 };
 
 export function usePortalResource<T>(
@@ -19,10 +23,11 @@ export function usePortalResource<T>(
   const [isUnavailable, setIsUnavailable] = useState(false);
   const enabled = options.enabled ?? true;
 
-  const refresh = useCallback(async () => {
+  const refresh = useCallback(async (refreshOptions: RefreshOptions = {}) => {
     if (!enabled) return;
+    const silent = Boolean(refreshOptions.silent);
 
-    setIsLoading(true);
+    if (!silent) setIsLoading(true);
     setError("");
     setIsUnavailable(false);
 
@@ -30,11 +35,11 @@ export function usePortalResource<T>(
       setData(await loader());
     } catch (err) {
       const apiError = err as ApiError;
-      setData(null);
+      if (!silent) setData(null);
       setIsUnavailable(apiError.status === 404 || apiError.status === 405);
       setError(apiError.message || "Backend unavailable. Retry.");
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   }, [enabled, loader]);
 

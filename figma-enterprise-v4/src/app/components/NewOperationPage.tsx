@@ -1,7 +1,7 @@
 import { useMemo, useState, type ChangeEvent, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router";
 import { ArrowRight, Check, Database, FileUp, Leaf, MapPin, ShieldCheck } from "lucide-react";
-import { apiClient } from "../api/client";
+import { persistEvidenceUploadBatch, uploadEvidenceBatch } from "../api/evidenceBatchUpload";
 import { useAuth, type Workspace } from "../auth/AuthProvider";
 import { BG, BORDER, MUTED, PortalButton, SURFACE, TEXT } from "./portalUi";
 
@@ -85,6 +85,7 @@ export function NewOperationPage() {
       return;
     }
 
+    const selectedFiles = [...files];
     setBusy(true);
     setError("");
     setProgress("Creating a clean operation…");
@@ -98,20 +99,24 @@ export function NewOperationPage() {
       });
       setCreatedWorkspace(created);
 
-      if (!files.length) {
+      if (!selectedFiles.length) {
         navigate("/");
         return;
       }
 
-      for (let index = 0; index < files.length; index += 1) {
-        setProgress(`Uploading ${index + 1} of ${files.length}: ${files[index].name}`);
-        await apiClient.evidence.upload(files[index], undefined, created.id);
-      }
+      const result = await uploadEvidenceBatch(selectedFiles, created.id, {
+        concurrency: 4,
+        onProgress: ({ total, completed, stored, failed }) => {
+          const failureNote = failed ? ` · ${failed} failed` : "";
+          setProgress(`Securely stored ${stored} of ${total} files · ${completed} completed${failureNote}`);
+        },
+      });
+      persistEvidenceUploadBatch(result);
       navigate("/evidence");
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : "The operation could not be created.";
       if (created) {
-        setError(`The operation was created, but a file upload needs attention: ${message}`);
+        setError(`The operation was created, but file storage needs attention: ${message}`);
       } else {
         setError(message);
       }

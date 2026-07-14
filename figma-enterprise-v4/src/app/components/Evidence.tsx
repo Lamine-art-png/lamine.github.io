@@ -1,5 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { apiClient } from "../api/client";
+import { consumeEvidenceUploadBatch, uploadEvidenceBatch } from "../api/evidenceBatchUpload";
 import { useAuth } from "../auth/AuthProvider";
 import { arrayFromUnknown, usePortalResource } from "../hooks/usePortalResource";
 import { usePortalCopy } from "../hooks/usePortalCopy";
@@ -58,8 +59,6 @@ type UploadResult = {
   rows_parsed?: number;
   evidence_records_created?: number;
   warnings?: string[];
-  filename?: string;
-  data_source_id?: string;
   processing_pending?: boolean;
 };
 
@@ -91,47 +90,78 @@ export function Evidence() {
   );
   const sources = arrayFromUnknown<SourceItem>(sourcesState.data, ["sources", "data_sources", "items", "data"]);
   const summary = summaryState.data || {};
+  const processingCount = Number(summary.processing_count || 0);
   const sourceById = useMemo(() => new Map(sources.filter((source) => !source.pending).map((source) => [source.id, source])), [sources]);
 
-  async function refresh() {
-    await Promise.all([evidence.refresh(), sourcesState.refresh(), summaryState.refresh()]);
+  async function refresh(silent = false) {
+    await Promise.all([
+      evidence.refresh({ silent }),
+      sourcesState.refresh({ silent }),
+      summaryState.refresh({ silent }),
+    ]);
   }
+
+  useEffect(() => {
+    const previous = consumeEvidenceUploadBatch();
+    if (!previous) return;
+    const failureWarnings = previous.failures.map((failure) => `${failure.filename}: ${failure.message}`);
+    setUploadResult({
+      status: previous.failed ? "partial" : previous.processing ? "processing" : "uploaded",
+      warnings: [...previous.warnings, ...failureWarnings],
+      processing_pending: previous.processing > 0,
+    });
+    if (previous.failed) {
+      setUploadMessage(`${previous.stored} of ${previous.total} files were securely stored. ${previous.failed} failed and can be retried. Stored files are processing in the background.`);
+    } else {
+      setUploadMessage(`All ${previous.total} files were securely stored. AGRO-AI is processing them in the background.`);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!workspaceId || processingCount <= 0) return;
+    const poll = () => {
+      void Promise.all([
+        evidence.refresh({ silent: true }),
+        sourcesState.refresh({ silent: true }),
+        summaryState.refresh({ silent: true }),
+      ]);
+    };
+    const timer = window.setInterval(poll, 2500);
+    return () => window.clearInterval(timer);
+  }, [workspaceId, processingCount, evidence.refresh, sourcesState.refresh, summaryState.refresh]);
 
   async function uploadFiles(files?: FileList | null) {
     if (!files?.length) return;
+    const selectedFiles = Array.from(files);
     setUploading(true);
-    setUploadMessage("");
+    setUploadMessage(`Securely storing 0 of ${selectedFiles.length} files…`);
     setUploadResult(null);
 
     try {
-      let totalRows = 0;
-      let totalEvidence = 0;
-      const warnings: string[] = [];
-      let lastSourceId = "";
-      let processingPending = false;
-
-      for (const file of Array.from(files)) {
-        const result = await apiClient.evidence.upload(file, undefined, workspaceId) as UploadResult;
-        totalRows += Number(result.rows_parsed || 0);
-        totalEvidence += Number(result.evidence_records_created || 0);
-        warnings.push(...(result.warnings || []));
-        lastSourceId = result.data_source_id || lastSourceId;
-        processingPending = Boolean(result.processing_pending) || processingPending;
-      }
-
-      setUploadResult({
-        status: processingPending ? "processing" : "uploaded",
-        rows_parsed: totalRows,
-        evidence_records_created: totalEvidence,
-        warnings,
-        data_source_id: lastSourceId,
-        processing_pending: processingPending,
+      const result = await uploadEvidenceBatch(selectedFiles, workspaceId, {
+        concurrency: 4,
+        onProgress: ({ total, completed, stored, failed }) => {
+          const failureNote = failed ? ` · ${failed} failed` : "";
+          setUploadMessage(`Securely stored ${stored} of ${total} files · ${completed} completed${failureNote}`);
+        },
       });
-      setUploadMessage(
-        processingPending
-          ? tf("Uploaded {files} file(s). Secure storage is complete and processing is still running.", { files: files.length })
-          : tf("Uploaded {files} file(s). Created {evidence} evidence records from {rows} parsed rows.", { files: files.length, evidence: totalEvidence, rows: totalRows }),
-      );
+      const failureWarnings = result.failures.map((failure) => `${failure.filename}: ${failure.message}`);
+      setUploadResult({
+        status: result.failed ? "partial" : result.processing ? "processing" : "uploaded",
+        rows_parsed: result.receipts.reduce((sum, receipt) => sum + Number(receipt.rows_parsed || 0), 0),
+        evidence_records_created: result.receipts.reduce((sum, receipt) => sum + Number(receipt.evidence_records_created || 0), 0),
+        warnings: [...result.warnings, ...failureWarnings],
+        processing_pending: result.processing > 0,
+      });
+      if (result.failed) {
+        setUploadMessage(`${result.stored} of ${result.total} files were securely stored. ${result.failed} failed and can be retried.`);
+      } else if (result.processing) {
+        setUploadMessage(`All ${result.total} files are securely stored. AGRO-AI is processing them in the background.`);
+      } else {
+        const rowsParsed = result.receipts.reduce((sum, receipt) => sum + Number(receipt.rows_parsed || 0), 0);
+        const evidenceCreated = result.receipts.reduce((sum, receipt) => sum + Number(receipt.evidence_records_created || 0), 0);
+        setUploadMessage(tf("Uploaded {files} file(s). Created {evidence} evidence records from {rows} parsed rows.", { files: result.total, evidence: evidenceCreated, rows: rowsParsed }));
+      }
       await refresh();
     } catch (error) {
       setUploadMessage(error instanceof Error ? error.message : "Upload failed.");
@@ -155,7 +185,7 @@ export function Evidence() {
             </p>
           </div>
           <div className="flex flex-wrap gap-2 sm:flex-nowrap">
-            <PortalButton variant="secondary" onClick={refresh}>Refresh</PortalButton>
+            <PortalButton variant="secondary" onClick={() => refresh()}>Refresh</PortalButton>
             <PortalButton onClick={() => window.location.assign("/integrations")}>Open Connectors</PortalButton>
           </div>
         </div>
@@ -182,7 +212,10 @@ export function Evidence() {
                 multiple
                 accept=".csv,.json,.txt,.pdf"
                 disabled={uploading}
-                onChange={(event) => uploadFiles(event.target.files)}
+                onChange={(event) => {
+                  const input = event.currentTarget;
+                  void uploadFiles(input.files).finally(() => { input.value = ""; });
+                }}
                 className="max-w-full text-[11px] sm:max-w-[220px]"
                 style={{ color: MUTED }}
               />
@@ -217,7 +250,7 @@ export function Evidence() {
             <div className="flex-shrink-0"><PortalButton variant="secondary" onClick={() => window.location.assign("/sources")}>Open source library</PortalButton></div>
           </div>
           <div className="space-y-2">
-            {sources.length ? sources.slice(0, 8).map((source) => (
+            {sources.length ? sources.slice(0, 20).map((source) => (
               <article key={source.id} className="rounded-xl p-3 sm:p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
