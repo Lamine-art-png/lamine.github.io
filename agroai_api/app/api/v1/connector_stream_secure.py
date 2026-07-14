@@ -4,7 +4,7 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
 from app.api.v1.connector_hub import connector_mode
@@ -35,8 +35,28 @@ def _publish_pending(*, limit: int):
     return drain_pending_outbox(limit=limit)
 
 
+async def _inline_processing_fallback(job_id: str, tenant_id: str) -> None:
+    """Give a durably staged job a second execution path when queue publication stalls.
+
+    The external queue remains primary. The worker lease and idempotency contract make
+    this delayed fallback safe if the queue starts processing the same job first.
+    """
+    await asyncio.sleep(5)
+    from app.services.connector_task_processor import process_connector_task
+    from app.services.durable_ingestion_staging import TASK_TYPE
+
+    await asyncio.to_thread(
+        process_connector_task,
+        job_id=job_id,
+        tenant_id=tenant_id,
+        task_type=TASK_TYPE,
+        worker_id=f"upload-fallback:{job_id[:16]}",
+    )
+
+
 @router.post("/evidence/upload-stream")
 async def upload_stream_secure(
+    background_tasks: BackgroundTasks,
     provider: str = Query(default="manual_csv"),
     workspace_id: str | None = Query(default=None),
     file: UploadFile = File(...),
@@ -89,9 +109,23 @@ async def upload_stream_secure(
                 filename=receipt.filename,
                 content_type=receipt.content_type,
             )
-            publication = {"published": 0, "failed": 0}
-            if not deduplicated:
-                publication = await asyncio.to_thread(_publish_pending, limit=10)
+
+            # Drain after every receipt, including a deduplicated retry. Previously a
+            # failed first publication could leave the durable job queued forever,
+            # because the retry found the same job and skipped publishing its outbox.
+            publication = await asyncio.to_thread(_publish_pending, limit=50)
+            published = int(publication.get("published", 0) or 0)
+            failed = int(publication.get("failed", 0) or 0)
+            fallback_scheduled = job.status in {"queued", "retrying", "running"} and (published == 0 or failed > 0)
+            if fallback_scheduled:
+                background_tasks.add_task(_inline_processing_fallback, job.id, tenant_id)
+
+            warnings = []
+            if fallback_scheduled:
+                warnings.append(
+                    "External queue delivery is delayed. The file is durable and AGRO-AI scheduled an automatic processing fallback."
+                )
+
             return {
                 "status": job.status,
                 "phase": "stored" if job.status in {"queued", "retrying", "running"} else job.status,
@@ -102,6 +136,8 @@ async def upload_stream_secure(
                 "size_bytes": receipt.size_bytes,
                 "deduplicated": deduplicated,
                 "queue_publication": publication,
+                "processing_fallback_scheduled": fallback_scheduled,
+                "warnings": warnings,
                 "message": "File securely stored and queued for AGRO-AI processing.",
             }
         except Exception as exc:
