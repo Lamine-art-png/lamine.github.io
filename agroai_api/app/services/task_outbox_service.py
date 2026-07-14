@@ -48,6 +48,7 @@ def recover_stale_published_ingestion_jobs(
             TaskOutbox.task_type == "connector_ingest_object",
             TaskOutbox.status.in_(["published", "publishing"]),
             IngestionJob.status.in_(["queued", "retrying"]),
+            or_(IngestionJob.next_attempt_at.is_(None), IngestionJob.next_attempt_at <= now),
             IngestionJob.updated_at <= stale_before,
             TaskOutbox.updated_at <= stale_before,
         )
