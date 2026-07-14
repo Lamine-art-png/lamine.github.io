@@ -29,6 +29,9 @@ def _runtime(role: str = "operator"):
     Base.metadata.create_all(bind=engine)
     with Session() as db:
         user = User(id="source-user", email="source-user@example.com", password_hash="x", is_active=True)
+        db.add(user)
+        db.commit()
+
         org = Organization(
             id="source-org",
             name="Source Delete Org",
@@ -37,6 +40,9 @@ def _runtime(role: str = "operator"):
             plan="enterprise",
             subscription_status="active",
         )
+        db.add(org)
+        db.commit()
+
         membership = OrganizationMembership(
             id="source-membership",
             organization_id=org.id,
@@ -44,6 +50,9 @@ def _runtime(role: str = "operator"):
             role=role,
         )
         workspace = Workspace(id="source-workspace", organization_id=org.id, name="Source operation", mode="evaluation")
+        db.add_all([membership, workspace])
+        db.commit()
+
         connection = ConnectorConnection(
             id="source-connection",
             tenant_id=org.id,
@@ -55,7 +64,7 @@ def _runtime(role: str = "operator"):
             required_plan="free",
             config_json={},
         )
-        db.add_all([user, org, membership, workspace, connection])
+        db.add(connection)
         db.commit()
         auth = AuthContext(user=user, organization=org, membership=membership)
 
