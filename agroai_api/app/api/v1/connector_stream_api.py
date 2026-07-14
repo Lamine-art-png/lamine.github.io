@@ -59,9 +59,11 @@ def connector_ingestion_job_status(
 # compatibility router so app.main preserves its existing include boundary.
 from app.api.v1.cloudflare_queue import router as cloudflare_queue_router  # noqa: E402
 from app.api.v1.source_library import router as source_library_router  # noqa: E402
+from app.api.v1.source_library_delete import router as source_library_delete_router  # noqa: E402
 
 router.include_router(cloudflare_queue_router)
 router.include_router(source_library_router)
+router.include_router(source_library_delete_router)
 
 
 __all__ = ["router", "get_object_store", "drain_pending_outbox"]
