@@ -6,7 +6,7 @@ from sqlalchemy.orm import sessionmaker
 from app.db.base import Base
 from app.models.hardened_records import IngestionJobState
 from app.models.task_outbox import TaskOutbox
-from app.services.task_outbox_service import publish_pending_outbox
+from app.services.task_outbox_service import publish_pending_outbox, recover_stale_published_ingestion_jobs
 
 
 class FakeQueue:
@@ -113,3 +113,25 @@ def test_stale_publication_claim_is_recovered(monkeypatch):
     assert result == {"published": 1, "failed": 0}
     assert queue.sent == [(job.id, "tenant-1", "connector_ingest_object")]
     assert row.status == "published"
+
+
+def test_stale_published_job_is_rearmed_for_delivery():
+    engine = create_engine("sqlite:///:memory:")
+    Base.metadata.create_all(bind=engine)
+    db = sessionmaker(bind=engine)()
+    job, row = _pending_row(db)
+    stale = datetime.utcnow() - timedelta(minutes=5)
+    job.updated_at = stale
+    row.status = "published"
+    row.published_at = stale
+    row.updated_at = stale
+    db.commit()
+
+    recovered = recover_stale_published_ingestion_jobs(db, stale_after_seconds=30)
+    db.refresh(row)
+
+    assert recovered == 1
+    assert row.status == "pending"
+    assert row.published_at is None
+    assert row.next_attempt_at is not None
+    assert "automatically re-armed" in row.last_error
