@@ -42,7 +42,9 @@ jobs:
       - name: Run focused outreach tests
         run: |
           set +e
-          python -m pip install --disable-pip-version-check -q pytest fastapi pydantic pydantic-settings httpx requests sqlalchemy
+          python -m pip install --disable-pip-version-check -q \
+            pytest fastapi pydantic pydantic-settings httpx requests sqlalchemy \
+            "python-jose[cryptography]"
           cd agroai_api
           python -m pytest -q \
             tests/unit/test_outreach_live_demo_email.py \
