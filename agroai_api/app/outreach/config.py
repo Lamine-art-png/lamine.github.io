@@ -43,6 +43,8 @@ class OutreachSettings:
     calendly_url: str
     launch_video_url: str
     launch_video_thumbnail_url: str
+    live_demo_url: str
+    live_demo_thumbnail_url: str
     company_address: str
     dry_run: bool
     daily_send_limit: int
@@ -86,6 +88,14 @@ class OutreachSettings:
             launch_video_thumbnail_url=os.getenv(
                 "OUTREACH_LAUNCH_VIDEO_THUMBNAIL_URL",
                 "https://i.ytimg.com/vi/NKVhX8imyT4/maxresdefault.jpg",
+            ).strip(),
+            live_demo_url=os.getenv(
+                "OUTREACH_LIVE_DEMO_URL",
+                "https://youtu.be/4KgH4R57tco",
+            ).strip(),
+            live_demo_thumbnail_url=os.getenv(
+                "OUTREACH_LIVE_DEMO_THUMBNAIL_URL",
+                "https://i.ytimg.com/vi/4KgH4R57tco/maxresdefault.jpg",
             ).strip(),
             company_address=os.getenv(
                 "OUTREACH_COMPANY_ADDRESS",
