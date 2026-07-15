@@ -87,6 +87,56 @@ def _greeting(prospect: OutreachProspect, language: OutreachLanguage) -> str:
     return locale.individual_greeting.format(first_name=prospect.first_name)
 
 
+_LIVE_DEMO_COPY: dict[OutreachLanguage, tuple[str, str, str]] = {
+    OutreachLanguage.en: (
+        "Watch a live demo",
+        "See the AGRO-AI Enterprise Portal working with real operational workflows",
+        "AGRO-AI Enterprise Portal live demo — from raw field data to operational decisions",
+    ),
+    OutreachLanguage.fr: (
+        "Voir la démo en direct",
+        "Découvrez le portail d’entreprise AGRO-AI en action sur des flux opérationnels réels",
+        "Démo en direct du portail d’entreprise AGRO-AI — des données terrain brutes aux décisions opérationnelles",
+    ),
+    OutreachLanguage.es: (
+        "Ver una demostración en vivo",
+        "Vea el Portal Empresarial de AGRO-AI funcionando con flujos operativos reales",
+        "Demostración en vivo del Portal Empresarial de AGRO-AI — de los datos de campo a las decisiones operativas",
+    ),
+    OutreachLanguage.pt: (
+        "Assistir a uma demonstração ao vivo",
+        "Veja o Portal Empresarial da AGRO-AI funcionando com fluxos operacionais reais",
+        "Demonstração ao vivo do Portal Empresarial da AGRO-AI — dos dados de campo às decisões operacionais",
+    ),
+    OutreachLanguage.ar: (
+        "شاهد العرض التوضيحي المباشر",
+        "شاهد بوابة AGRO-AI للمؤسسات وهي تعمل على تدفقات تشغيلية واقعية",
+        "عرض توضيحي مباشر لبوابة AGRO-AI للمؤسسات — من بيانات الحقول الخام إلى القرارات التشغيلية",
+    ),
+}
+
+
+def _live_demo_copy(language: OutreachLanguage) -> tuple[str, str, str]:
+    return _LIVE_DEMO_COPY.get(language, _LIVE_DEMO_COPY[OutreachLanguage.en])
+
+
+def _render_live_demo_html(settings: OutreachSettings, language: OutreachLanguage) -> str:
+    cta, heading, alt = _live_demo_copy(language)
+    return (
+        f'<p style="margin:0 0 12px;color:#202a24;font-size:15px;"><strong>{escape(heading)}</strong></p>'
+        '<table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 14px;">'
+        '<tr><td style="border-radius:7px;background:#111814;border:1px solid #8eea45;">'
+        f'<a href="{escape(settings.live_demo_url, quote=True)}" '
+        'style="display:inline-block;padding:13px 19px;color:#ffffff;text-decoration:none;font-size:14px;font-weight:700;letter-spacing:.1px;">'
+        f'{escape(cta)}</a></td></tr></table>'
+        f'<a href="{escape(settings.live_demo_url, quote=True)}" style="display:block;text-decoration:none;margin:0 0 24px;">'
+        f'<img src="{escape(settings.live_demo_thumbnail_url, quote=True)}" width="584" height="329" '
+        f'alt="{escape(alt, quote=True)}" '
+        'style="display:block;width:100%;max-width:584px;height:auto;aspect-ratio:16/9;object-fit:cover;border:0;border-radius:9px;image-rendering:auto;">'
+        '</a>'
+    )
+
+
 def _render_post_signup_founder_followup(
     prospect: OutreachProspect,
     settings: OutreachSettings,
@@ -130,6 +180,9 @@ def _render_post_signup_founder_followup(
             "",
             closing,
             "",
+            _live_demo_copy(language)[1] + ":",
+            settings.live_demo_url,
+            "",
             locale.launch_video_label,
             settings.launch_video_url,
             "",
@@ -159,6 +212,8 @@ def _render_post_signup_founder_followup(
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 18px;"><tr><td style="border-radius:7px;background:#176b45;"><a href="{escape(settings.enterprise_portal_url, quote=True)}" style="display:inline-block;padding:13px 19px;color:#fff;text-decoration:none;font-size:14px;font-weight:700;">Open your AGRO-AI workspace</a></td></tr></table>
 <p style="margin:0 0 18px;color:#5f6b63;font-size:14px;">Prefer to talk first? <a href="{escape(settings.calendly_url, quote=True)}" style="color:#176b45;text-decoration:underline;">Book 30 minutes with me</a>.</p>
 <p style="margin:0 0 22px;">{escape(closing)}</p>
+{_render_live_demo_html(settings, language)}
+<p style="margin:0 0 12px;color:#5f6b63;font-size:14px;"><strong>{escape(locale.launch_video_label.rstrip(':').rstrip('：'))}</strong></p>
 <a href="{escape(settings.launch_video_url, quote=True)}" style="display:block;text-decoration:none;margin:0 0 24px;"><img src="{escape(settings.launch_video_thumbnail_url, quote=True)}" width="584" height="329" alt="{escape(locale.launch_alt, quote=True)}" style="display:block;width:100%;max-width:584px;height:auto;aspect-ratio:16/9;object-fit:cover;border:0;border-radius:9px;"></a>
 <p style="margin:0;">{escape(locale.signoff)}</p><p style="margin:4px 0 0;font-weight:700;color:#111814;">Lamine Dabo</p>
 <p style="margin:2px 0 0;color:#526158;font-size:14px;">{escape(locale.founder_title)}</p>
@@ -167,7 +222,7 @@ def _render_post_signup_founder_followup(
 </td></tr>
 <tr><td style="padding:24px 38px 26px;background:#f3f5f4;border-top:1px solid #e2e7e4;text-align:center;color:#7a857e;font-size:12px;line-height:1.55;">
 <div style="font-weight:700;color:#566159;margin-bottom:5px;">AGRO-AI Inc.</div><div>{escape(settings.company_address.replace('AGRO-AI Inc., ', ''))}</div>
-<div style="margin-top:8px;"><a href="{escape(settings.enterprise_portal_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">{escape(locale.footer_portal)}</a><span style="padding:0 7px;color:#b0b7b2;">·</span><a href="{escape(settings.launch_video_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">{escape(locale.footer_video)}</a><span style="padding:0 7px;color:#b0b7b2;">·</span><a href="{escape(unsubscribe_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">{escape(locale.footer_unsubscribe)}</a></div>
+<div style="margin-top:8px;"><a href="{escape(settings.enterprise_portal_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">{escape(locale.footer_portal)}</a><span style="padding:0 7px;color:#b0b7b2;">·</span><a href="{escape(settings.live_demo_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">{escape(_live_demo_copy(language)[0])}</a><span style="padding:0 7px;color:#b0b7b2;">·</span><a href="{escape(settings.launch_video_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">{escape(locale.footer_video)}</a><span style="padding:0 7px;color:#b0b7b2;">·</span><a href="{escape(unsubscribe_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">{escape(locale.footer_unsubscribe)}</a></div>
 <div style="margin-top:10px;color:#98a19b;">{escape(locale.footer_reason)}</div>
 </td></tr></table></td></tr></table></body></html>"""
 
@@ -241,6 +296,9 @@ def _render_warm_buyer_reengagement(
             "",
             closing,
             "",
+            _live_demo_copy(language)[1] + ":",
+            settings.live_demo_url,
+            "",
             "Watch the Enterprise Portal launch video:",
             settings.launch_video_url,
             "",
@@ -273,6 +331,8 @@ def _render_warm_buyer_reengagement(
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 16px;"><tr><td style="border-radius:7px;background:#176b45;"><a href="{escape(settings.enterprise_portal_url, quote=True)}" style="display:inline-block;padding:13px 19px;color:#fff;text-decoration:none;font-size:14px;font-weight:700;">Review the AGRO-AI Enterprise Portal</a></td></tr></table>
 <p style="margin:0 0 20px;color:#5f6b63;font-size:14px;">Prefer to map it to your operation first? <a href="{escape(settings.calendly_url, quote=True)}" style="color:#176b45;text-decoration:underline;">Book a focused working session with me</a>.</p>
 <p style="margin:0 0 22px;">{escape(closing)}</p>
+{_render_live_demo_html(settings, language)}
+<p style="margin:0 0 12px;color:#5f6b63;font-size:14px;"><strong>Enterprise Portal launch video</strong></p>
 <a href="{escape(settings.launch_video_url, quote=True)}" style="display:block;text-decoration:none;margin:0 0 24px;"><img src="{escape(settings.launch_video_thumbnail_url, quote=True)}" width="584" height="329" alt="AGRO-AI Enterprise Portal launch video" style="display:block;width:100%;max-width:584px;height:auto;aspect-ratio:16/9;object-fit:cover;border:0;border-radius:9px;"></a>
 <p style="margin:0;">{escape(locale.signoff)}</p><p style="margin:4px 0 0;font-weight:700;color:#111814;">Lamine Dabo</p>
 <p style="margin:2px 0 0;color:#526158;font-size:14px;">{escape(locale.founder_title)}</p>
@@ -281,7 +341,7 @@ def _render_warm_buyer_reengagement(
 </td></tr>
 <tr><td style="padding:24px 38px 26px;background:#f3f5f4;border-top:1px solid #e2e7e4;text-align:center;color:#7a857e;font-size:12px;line-height:1.55;">
 <div style="font-weight:700;color:#566159;margin-bottom:5px;">AGRO-AI Inc.</div><div>{escape(settings.company_address.replace('AGRO-AI Inc., ', ''))}</div>
-<div style="margin-top:8px;"><a href="{escape(settings.enterprise_portal_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">Enterprise Portal</a><span style="padding:0 7px;color:#b0b7b2;">·</span><a href="{escape(settings.launch_video_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">Launch video</a><span style="padding:0 7px;color:#b0b7b2;">·</span><a href="{escape(unsubscribe_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">Unsubscribe</a></div>
+<div style="margin-top:8px;"><a href="{escape(settings.enterprise_portal_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">Enterprise Portal</a><span style="padding:0 7px;color:#b0b7b2;">·</span><a href="{escape(settings.live_demo_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">Live demo</a><span style="padding:0 7px;color:#b0b7b2;">·</span><a href="{escape(settings.launch_video_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">Launch video</a><span style="padding:0 7px;color:#b0b7b2;">·</span><a href="{escape(unsubscribe_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">Unsubscribe</a></div>
 <div style="margin-top:10px;color:#98a19b;">You are receiving this because we previously discussed AGRO-AI or a potential operational fit.</div>
 </td></tr></table></td></tr></table></body></html>"""
 
@@ -343,6 +403,9 @@ def render_email(prospect: OutreachProspect, settings: OutreachSettings, *, unsu
         locale.launch_message,
         settings.enterprise_portal_url,
         "",
+        _live_demo_copy(language)[1] + ":",
+        settings.live_demo_url,
+        "",
         locale.launch_video_label,
         settings.launch_video_url,
         "",
@@ -381,6 +444,8 @@ def render_email(prospect: OutreachProspect, settings: OutreachSettings, *, unsu
 <p style="margin:0 0 16px;">{escape(locale.launch_message)}</p>
 <table role="presentation" cellspacing="0" cellpadding="0" border="0" style="margin:0 0 18px;"><tr><td style="border-radius:7px;background:#176b45;"><a href="{escape(settings.enterprise_portal_url, quote=True)}" style="display:inline-block;padding:13px 19px;color:#fff;text-decoration:none;font-size:14px;font-weight:700;">{escape(locale.primary_cta)}</a></td></tr></table>
 <p style="margin:0 0 22px;color:#5f6b63;font-size:14px;">{escape(locale.secondary_prefix)} <a href="{escape(settings.calendly_url, quote=True)}" style="color:#176b45;text-decoration:underline;">{escape(locale.secondary_cta)}</a>.</p>
+{_render_live_demo_html(settings, language)}
+<p style="margin:0 0 12px;color:#5f6b63;font-size:14px;"><strong>{escape(locale.launch_video_label.rstrip(':').rstrip('：'))}</strong></p>
 <a href="{escape(settings.launch_video_url, quote=True)}" style="display:block;text-decoration:none;margin:0 0 24px;"><img src="{escape(settings.launch_video_thumbnail_url, quote=True)}" width="584" height="329" alt="{escape(locale.launch_alt, quote=True)}" style="display:block;width:100%;max-width:584px;height:auto;aspect-ratio:16/9;object-fit:cover;border:0;border-radius:9px;"></a>
 <p style="margin:0;">{escape(locale.signoff)}</p><p style="margin:4px 0 0;font-weight:700;color:#111814;">Lamine Dabo</p>
 <p style="margin:2px 0 0;color:#526158;font-size:14px;">{escape(locale.founder_title)}</p>
@@ -389,7 +454,7 @@ def render_email(prospect: OutreachProspect, settings: OutreachSettings, *, unsu
 </td></tr>
 <tr><td style="padding:24px 38px 26px;background:#f3f5f4;border-top:1px solid #e2e7e4;text-align:center;color:#7a857e;font-size:12px;line-height:1.55;">
 <div style="font-weight:700;color:#566159;margin-bottom:5px;">AGRO-AI Inc.</div><div>{escape(settings.company_address.replace('AGRO-AI Inc., ', ''))}</div>
-<div style="margin-top:8px;"><a href="{escape(settings.enterprise_portal_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">{escape(locale.footer_portal)}</a><span style="padding:0 7px;color:#b0b7b2;">·</span><a href="{escape(settings.launch_video_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">{escape(locale.footer_video)}</a><span style="padding:0 7px;color:#b0b7b2;">·</span><a href="{escape(unsubscribe_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">{escape(locale.footer_unsubscribe)}</a></div>
+<div style="margin-top:8px;"><a href="{escape(settings.enterprise_portal_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">{escape(locale.footer_portal)}</a><span style="padding:0 7px;color:#b0b7b2;">·</span><a href="{escape(settings.live_demo_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">{escape(_live_demo_copy(language)[0])}</a><span style="padding:0 7px;color:#b0b7b2;">·</span><a href="{escape(settings.launch_video_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">{escape(locale.footer_video)}</a><span style="padding:0 7px;color:#b0b7b2;">·</span><a href="{escape(unsubscribe_url, quote=True)}" style="color:#5f6b63;text-decoration:underline;">{escape(locale.footer_unsubscribe)}</a></div>
 <div style="margin-top:10px;color:#98a19b;">{escape(locale.footer_reason)}</div>
 </td></tr></table></td></tr></table></body></html>"""
 
