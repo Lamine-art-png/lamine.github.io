@@ -1,21 +1,25 @@
-/home/runner/.local/lib/python3.12/site-packages/_pytest/config/__init__.py:331: PluggyTeardownRaisedWarning: A plugin raised an exception during an old-style hookwrapper teardown.
-Plugin: helpconfig, Hook: pytest_cmdline_parse
-ConftestImportFailure: ModuleNotFoundError: No module named 'redis' (from /home/runner/work/lamine.github.io/lamine.github.io/agroai_api/tests/conftest.py)
-For more information see https://pluggy.readthedocs.io/en/stable/api_reference.html#pluggy.PluggyTeardownRaisedWarning
-  config = pluginmanager.hook.pytest_cmdline_parse(
-ImportError while loading conftest '/home/runner/work/lamine.github.io/lamine.github.io/agroai_api/tests/conftest.py'.
-tests/conftest.py:12: in <module>
-    from app.main import app
-app/main.py:260: in <module>
-    from app.api.v1.auth import router as auth_router  # noqa: E402
-app/api/v1/__init__.py:30: in <module>
-    from . import connector_hub as connector_module  # noqa: E402
-app/api/v1/connector_hub.py:342: in <module>
-    from app.api.v1.connector_unified_v3 import router as unified_v3_router  # noqa: E402
-app/api/v1/connector_unified_v3.py:37: in <module>
-    from app.services.task_outbox_service import drain_pending_outbox
-app/services/task_outbox_service.py:11: in <module>
-    from app.services.redis_task_queue import get_task_publisher
-app/services/redis_task_queue.py:7: in <module>
-    import redis
-E   ModuleNotFoundError: No module named 'redis'
+============================= test session starts ==============================
+platform linux -- Python 3.12.3, pytest-7.4.4, pluggy-1.6.0
+rootdir: /home/runner/work/lamine.github.io/lamine.github.io/agroai_api
+configfile: pytest.ini
+plugins: asyncio-0.23.3, mock-3.12.0, Faker-22.0.0, cov-4.1.0, anyio-4.14.2
+asyncio: mode=Mode.STRICT
+collected 7 items
+
+tests/unit/test_outreach_live_demo_email.py ..F                          [ 42%]
+tests/unit/test_outreach_warm_buyer_reengagement.py ....                 [100%]
+
+=================================== FAILURES ===================================
+_____________ test_live_demo_is_a_first_party_tracked_destination ______________
+tests/unit/test_outreach_live_demo_email.py:59: in test_live_demo_is_a_first_party_tracked_destination
+    assert "live_demo" in router._TRACKED_LINK_KEYS
+E   AttributeError: 'APIRouter' object has no attribute '_TRACKED_LINK_KEYS'
+=============================== warnings summary ===============================
+tests/unit/test_outreach_live_demo_email.py::test_live_demo_defaults_are_hd_and_distinct_from_launch_video
+  /home/runner/.local/lib/python3.12/site-packages/pydantic/_internal/_config.py:271: PydanticDeprecatedSince20: Support for class-based `config` is deprecated, use ConfigDict instead. Deprecated in Pydantic V2.0 to be removed in V3.0. See Pydantic V2 Migration Guide at https://errors.pydantic.dev/2.5/migration/
+    warnings.warn(DEPRECATION_MESSAGE, DeprecationWarning)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/unit/test_outreach_live_demo_email.py::test_live_demo_is_a_first_party_tracked_destination - AttributeError: 'APIRouter' object has no attribute '_TRACKED_LINK_KEYS'
+==================== 1 failed, 6 passed, 1 warning in 0.82s ====================
