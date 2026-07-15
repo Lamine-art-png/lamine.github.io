@@ -95,7 +95,7 @@ class OutreachSettings:
             ).strip(),
             live_demo_thumbnail_url=os.getenv(
                 "OUTREACH_LIVE_DEMO_THUMBNAIL_URL",
-                "https://i.ytimg.com/vi/4KgH4R57tco/maxresdefault.jpg",
+                "https://api.agroai-pilot.com/v1/outreach/assets/live-demo-thumbnail.jpg",
             ).strip(),
             company_address=os.getenv(
                 "OUTREACH_COMPANY_ADDRESS",
