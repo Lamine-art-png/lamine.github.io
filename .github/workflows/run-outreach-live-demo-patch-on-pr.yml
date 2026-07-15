@@ -42,7 +42,9 @@ jobs:
       - name: Run focused outreach tests
         run: |
           set +e
-          python -m pip install --disable-pip-version-check -q -r agroai_api/requirements-enterprise.txt
+          python -m pip install --disable-pip-version-check -q \
+            -r agroai_api/requirements-enterprise.txt \
+            -r requirements.txt
           cd agroai_api
           python -m pytest -q \
             tests/unit/test_outreach_live_demo_email.py \
