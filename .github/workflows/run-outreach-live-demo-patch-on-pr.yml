@@ -41,12 +41,26 @@ jobs:
 
       - name: Run focused outreach tests
         run: |
+          set +e
           python -m pip install --disable-pip-version-check -q pytest fastapi pydantic pydantic-settings httpx requests sqlalchemy
           cd agroai_api
           python -m pytest -q \
             tests/unit/test_outreach_live_demo_email.py \
             tests/unit/test_outreach_production_mount.py \
-            tests/unit/test_outreach_warm_buyer_reengagement.py
+            tests/unit/test_outreach_warm_buyer_reengagement.py \
+            > /tmp/outreach-live-demo-tests.log 2>&1
+          status=$?
+          cat /tmp/outreach-live-demo-tests.log
+          cd ..
+          if [ "$status" -ne 0 ]; then
+            cp /tmp/outreach-live-demo-tests.log outreach-live-demo-patch-error.txt
+            git config user.name "AGRO-AI Automation"
+            git config user.email "agroaicontact@gmail.com"
+            git add outreach-live-demo-patch-error.txt
+            git commit -m "chore: capture live demo test failure"
+            git push origin HEAD:${{ github.event.pull_request.head.ref }}
+            exit "$status"
+          fi
 
       - name: Commit verified product changes
         run: |
