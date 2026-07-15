@@ -1,1 +1,16 @@
-agroai_api/app/outreach/templates.py: expected exactly one match, found 0: '            closing,\n                "",\n                locale.launch_video_label,\n                '
+ImportError while loading conftest '/home/runner/work/lamine.github.io/lamine.github.io/agroai_api/tests/conftest.py'.
+tests/conftest.py:12: in <module>
+    from app.main import app
+app/main.py:260: in <module>
+    from app.api.v1.auth import router as auth_router  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/api/v1/__init__.py:8: in <module>
+    from . import auth as auth_module  # noqa: E402
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+app/api/v1/auth.py:13: in <module>
+    from app.api.deps import AuthContext, get_auth_context, get_current_user, get_current_user_optional, is_platform_admin_user
+app/api/deps.py:10: in <module>
+    from app.core.security import http_bearer, verify_token
+app/core/security.py:4: in <module>
+    from jose import JWTError, jwt
+E   ModuleNotFoundError: No module named 'jose'
