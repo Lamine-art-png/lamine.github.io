@@ -7,6 +7,7 @@ on:
     paths:
       - .github/workflows/apply-outreach-live-demo-email.yml
       - .github/workflows/run-outreach-live-demo-patch-on-pr.yml
+      - .github/scripts/apply_outreach_live_demo.py
 
 permissions:
   contents: write
@@ -22,31 +23,10 @@ jobs:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
-      - name: Execute the verified patch embedded in the staging workflow
+      - name: Apply deterministic production patch
         run: |
           set +e
-          python - <<'PY' > /tmp/outreach-live-demo-patch.log 2>&1
-          from pathlib import Path
-
-          workflow = Path('.github/workflows/apply-outreach-live-demo-email.yml').read_text(encoding='utf-8')
-          marker = "          python - <<'PY'\n"
-          start = workflow.index(marker) + len(marker)
-          end = workflow.index("\n          PY\n", start)
-          raw_lines = workflow[start:end].splitlines()
-          script = "\n".join(
-              line[10:] if line.startswith("          ") else line
-              for line in raw_lines
-          )
-          script = script.replace(
-              '"""        "video": settings.launch_video_url,\n        }\n"""',
-              '"""        "video": settings.launch_video_url,\n    }\n"""',
-          )
-          script = script.replace(
-              '"""        "video": settings.launch_video_url,\n            "live_demo": settings.live_demo_url,\n        }\n"""',
-              '"""        "video": settings.launch_video_url,\n        "live_demo": settings.live_demo_url,\n    }\n"""',
-          )
-          exec(compile(script, 'apply-outreach-live-demo-email', 'exec'), {})
-          PY
+          python .github/scripts/apply_outreach_live_demo.py > /tmp/outreach-live-demo-patch.log 2>&1
           status=$?
           cat /tmp/outreach-live-demo-patch.log
           if [ "$status" -ne 0 ]; then
@@ -72,9 +52,10 @@ jobs:
         run: |
           git config user.name "AGRO-AI Automation"
           git config user.email "agroaicontact@gmail.com"
-          rm -f outreach-live-demo-patch-error.txt
-          git rm .github/workflows/apply-outreach-live-demo-email.yml \
-                 .github/workflows/run-outreach-live-demo-patch-on-pr.yml
+          git rm -f .github/workflows/apply-outreach-live-demo-email.yml \
+                    .github/workflows/run-outreach-live-demo-patch-on-pr.yml \
+                    .github/scripts/apply_outreach_live_demo.py
+          git rm -f outreach-live-demo-patch-error.txt 2>/dev/null || true
           git add agroai_api/app/outreach/config.py \
                   agroai_api/app/outreach/router.py \
                   agroai_api/app/outreach/templates.py \
