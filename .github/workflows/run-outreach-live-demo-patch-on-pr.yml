@@ -37,6 +37,14 @@ jobs:
               line[10:] if line.startswith("          ") else line
               for line in raw_lines
           )
+          script = script.replace(
+              '"""        "video": settings.launch_video_url,\n        }\n"""',
+              '"""        "video": settings.launch_video_url,\n    }\n"""',
+          )
+          script = script.replace(
+              '"""        "video": settings.launch_video_url,\n            "live_demo": settings.live_demo_url,\n        }\n"""',
+              '"""        "video": settings.launch_video_url,\n        "live_demo": settings.live_demo_url,\n    }\n"""',
+          )
           exec(compile(script, 'apply-outreach-live-demo-email', 'exec'), {})
           PY
           status=$?
