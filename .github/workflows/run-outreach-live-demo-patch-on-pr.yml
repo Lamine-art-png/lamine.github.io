@@ -39,6 +39,29 @@ jobs:
             exit "$status"
           fi
 
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("agroai_api/tests/unit/test_outreach_live_demo_email.py")
+          text = path.read_text(encoding="utf-8")
+          old = '''def test_live_demo_is_a_first_party_tracked_destination():
+    from app.outreach import router
+
+    assert "live_demo" in router._TRACKED_LINK_KEYS
+    assert router._tracking_destinations()["live_demo"] == router.settings.live_demo_url
+'''
+          new = '''def test_live_demo_is_a_first_party_tracked_destination():
+    import importlib
+
+    router_module = importlib.import_module("app.outreach.router")
+    assert "live_demo" in router_module._TRACKED_LINK_KEYS
+    assert router_module._tracking_destinations()["live_demo"] == router_module.settings.live_demo_url
+'''
+          if text.count(old) != 1:
+              raise SystemExit("generated tracking test did not match expected source")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+
       - name: Run focused outreach tests
         run: |
           set +e
