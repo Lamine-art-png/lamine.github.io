@@ -34,7 +34,7 @@ SENDABLE_STATUSES = {
     VerificationStatus.first_party_signup,
 }
 _PIXEL_GIF = base64.b64decode("R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==")
-_TRACKED_LINK_KEYS = ("portal", "meeting", "video")
+_TRACKED_LINK_KEYS = ("portal", "meeting", "video", "live_demo")
 
 
 def _require_admin(x_outreach_token: str | None = Header(default=None)) -> None:
@@ -49,6 +49,7 @@ def _tracking_destinations() -> dict[str, str]:
         "portal": settings.enterprise_portal_url,
         "meeting": settings.calendly_url,
         "video": settings.launch_video_url,
+        "live_demo": settings.live_demo_url,
     }
 
 
@@ -323,6 +324,9 @@ async def outreach_status(_: None = Depends(_require_admin)) -> dict[str, Any]:
         "launch_video_url": settings.launch_video_url,
         "launch_video_thumbnail_url": settings.launch_video_thumbnail_url,
         "thumbnail_profile": "hd_16_9",
+        "live_demo_url": settings.live_demo_url,
+        "live_demo_thumbnail_url": settings.live_demo_thumbnail_url,
+        "live_demo_thumbnail_profile": "hd_16_9_maxres",
         "daily_send_limit": settings.daily_send_limit,
         "live_sends_last_24h": live_sends,
         "max_batch_size": settings.max_batch_size,
@@ -348,7 +352,7 @@ async def outreach_status(_: None = Depends(_require_admin)) -> dict[str, Any]:
             "mixed_language_live_sends": "blocked",
             "ambiguous_global_accounts": "english_fallback_unless_overridden",
         },
-        "outreach_release": "production-i18n-hd-thumbnail-signup-followup-engagement-v1",
+        "outreach_release": "production-live-demo-hd-cta-engagement-v2",
         "email_integrity_rule": "guessed or pattern-inferred addresses are refused; first-party signup addresses are lifecycle-only",
     }
 
