@@ -24,7 +24,8 @@ jobs:
 
       - name: Execute the verified patch embedded in the staging workflow
         run: |
-          python - <<'PY'
+          set +e
+          python - <<'PY' > /tmp/outreach-live-demo-patch.log 2>&1
           from pathlib import Path
           from textwrap import dedent
 
@@ -35,6 +36,17 @@ jobs:
           script = dedent(workflow[start:end])
           exec(compile(script, 'apply-outreach-live-demo-email', 'exec'), {})
           PY
+          status=$?
+          cat /tmp/outreach-live-demo-patch.log
+          if [ "$status" -ne 0 ]; then
+            cp /tmp/outreach-live-demo-patch.log outreach-live-demo-patch-error.txt
+            git config user.name "AGRO-AI Automation"
+            git config user.email "agroaicontact@gmail.com"
+            git add outreach-live-demo-patch-error.txt
+            git commit -m "chore: capture live demo patch failure"
+            git push origin HEAD:${{ github.event.pull_request.head.ref }}
+            exit "$status"
+          fi
 
       - name: Run focused outreach tests
         run: |
@@ -49,6 +61,7 @@ jobs:
         run: |
           git config user.name "AGRO-AI Automation"
           git config user.email "agroaicontact@gmail.com"
+          rm -f outreach-live-demo-patch-error.txt
           git rm .github/workflows/apply-outreach-live-demo-email.yml \
                  .github/workflows/run-outreach-live-demo-patch-on-pr.yml
           git add agroai_api/app/outreach/config.py \
