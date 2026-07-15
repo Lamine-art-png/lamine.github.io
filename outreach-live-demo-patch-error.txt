@@ -1,1 +1,1 @@
-agroai_api/app/outreach/router.py: expected exactly one match, found 0: '        "video": settings.launch_video_url,\n        }\n'
+agroai_api/app/outreach/templates.py: expected exactly one match, found 0: '            closing,\n                "",\n                locale.launch_video_label,\n                '
