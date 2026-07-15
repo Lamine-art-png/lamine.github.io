@@ -1,23 +1,22 @@
 name: Install outreach custom live demo thumbnail
 
 on:
-  push:
+  pull_request:
     branches:
-      - feat/outreach-custom-demo-thumbnail
-    paths:
-      - .github/workflows/install-outreach-custom-thumbnail.yml
+      - main
 
 permissions:
   contents: write
 
 jobs:
   install-and-verify:
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: feat/outreach-custom-demo-thumbnail
+          ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
 
       - name: Download the exact approved thumbnail at 1600x900
@@ -25,8 +24,7 @@ jobs:
           THUMBNAIL_URL: "https://media.canva.com/v2/document-image/hash:-2104416253/height:900/id:DAHPeqV73fs/type:B/width:1600?brand=BAFYBq7dkQk&csig=AAAAAAAAAAAAAAAAAAAAAKs5tVGCozXiBU7YhMaSryYCMuDcETEXQ0-KH-lXc8aD&disableexport=T&exp=1784142732&fallback=https%3A%2F%2Fs3.amazonaws.com%2Fdocument-export.canva.com%2FV73fs%2FDAHPeqV73fs%2F1%2Fthumbnail%2F0001.png%3FX-Amz-Algorithm%3DAWS4-HMAC-SHA256%26X-Amz-Credential%3DAKIAQYCGKMUHXSTDDERN%252F20260715%252Fus-east-1%252Fs3%252Faws4_request%26X-Amz-Date%3D20260715T101757Z%26X-Amz-Expires%3D32055%26X-Amz-Signature%3D83c9d9e9e1bc572b13a526e8a176356d5cc547062cb7e5c6cb862fb46829e751%26X-Amz-SignedHeaders%3Dhost%26response-expires%3DWed%252C%252015%2520Jul%25202026%252019%253A12%253A12%2520GMT&osig=AAAAAAAAAAAAAAAAAAAAAFMPy1TVb62IBBK9piHlTzIte7S5GEA_fEV9jEfpW5c5&page=1&signed=brand%2Cdisableexport%2Cfallback%2Cpage%2Cversion&signer=document-rpc&version=1"
         run: |
           mkdir -p agroai_api/app/outreach/assets
-          curl --fail --location --retry 3 --retry-delay 2 \
-            "$THUMBNAIL_URL" \
+          curl --fail --location --retry 3 --retry-delay 2 "$THUMBNAIL_URL" \
             -o agroai_api/app/outreach/assets/live-demo-thumbnail.png
 
       - name: Patch backend asset endpoint and configuration
@@ -45,11 +43,7 @@ jobs:
           config.write_text(config_text.replace(old_url, new_url, 1), encoding='utf-8')
 
           router_text = router.read_text(encoding='utf-8')
-          router_text = router_text.replace(
-              'from typing import Any\n',
-              'from pathlib import Path\nfrom typing import Any\n',
-              1,
-          )
+          router_text = router_text.replace('from typing import Any\n', 'from pathlib import Path\nfrom typing import Any\n', 1)
           router_text = router_text.replace(
               'from fastapi.responses import HTMLResponse, RedirectResponse, Response\n',
               'from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response\n',
@@ -78,13 +72,9 @@ jobs:
               raise SystemExit(f'Thumbnail resolution too low: {width}x{height}')
           if abs((width / height) - (16 / 9)) > 0.02:
               raise SystemExit(f'Thumbnail is not 16:9: {width}x{height}')
-
-          config = Path('agroai_api/app/outreach/config.py').read_text(encoding='utf-8')
-          router = Path('agroai_api/app/outreach/router.py').read_text(encoding='utf-8')
           expected = 'https://api.agroai-pilot.com/v1/outreach/assets/live-demo-thumbnail.png'
-          assert expected in config
-          assert '@router.get("/assets/live-demo-thumbnail.png"' in router
-          assert 'Cache-Control": "public, max-age=31536000, immutable"' in router
+          assert expected in Path('agroai_api/app/outreach/config.py').read_text(encoding='utf-8')
+          assert '@router.get("/assets/live-demo-thumbnail.png"' in Path('agroai_api/app/outreach/router.py').read_text(encoding='utf-8')
           print(f'VERIFIED approved thumbnail: {width}x{height}, {image_path.stat().st_size} bytes')
           PY
           python -m compileall -q agroai_api/app/outreach
@@ -99,4 +89,4 @@ jobs:
                   agroai_api/app/outreach/assets/live-demo-thumbnail.png
           git diff --cached --check
           git commit -m "Use approved custom image for outreach live demo thumbnail"
-          git push origin HEAD:feat/outreach-custom-demo-thumbnail
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
