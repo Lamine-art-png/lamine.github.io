@@ -27,13 +27,16 @@ jobs:
           set +e
           python - <<'PY' > /tmp/outreach-live-demo-patch.log 2>&1
           from pathlib import Path
-          from textwrap import dedent
 
           workflow = Path('.github/workflows/apply-outreach-live-demo-email.yml').read_text(encoding='utf-8')
           marker = "          python - <<'PY'\n"
           start = workflow.index(marker) + len(marker)
           end = workflow.index("\n          PY\n", start)
-          script = dedent(workflow[start:end])
+          raw_lines = workflow[start:end].splitlines()
+          script = "\n".join(
+              line[10:] if line.startswith("          ") else line
+              for line in raw_lines
+          )
           exec(compile(script, 'apply-outreach-live-demo-email', 'exec'), {})
           PY
           status=$?
