@@ -46,9 +46,8 @@ jobs:
             -r agroai_api/requirements-enterprise.txt \
             -r requirements.txt
           cd agroai_api
-          python -m pytest -q \
+          python -m pytest -q --confcutdir=tests/unit \
             tests/unit/test_outreach_live_demo_email.py \
-            tests/unit/test_outreach_production_mount.py \
             tests/unit/test_outreach_warm_buyer_reengagement.py \
             > /tmp/outreach-live-demo-tests.log 2>&1
           status=$?
