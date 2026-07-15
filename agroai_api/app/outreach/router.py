@@ -7,11 +7,12 @@ import hmac
 import uuid
 from dataclasses import replace
 from html import escape
+from pathlib import Path
 from typing import Any
 from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, status
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 
 from .config import OutreachSettings
 from .resend_client import ResendClient, ResendError
@@ -300,6 +301,21 @@ async def track_click(
         url=destination,
         status_code=status.HTTP_302_FOUND,
         headers={"Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow"},
+    )
+
+
+@router.get("/assets/live-demo-thumbnail.jpg", include_in_schema=False)
+async def live_demo_thumbnail() -> FileResponse:
+    asset_path = Path(__file__).resolve().parent / "assets" / "live-demo-thumbnail.jpg"
+    if not asset_path.is_file():
+        raise HTTPException(status_code=404, detail="Live demo thumbnail is unavailable")
+    return FileResponse(
+        asset_path,
+        media_type="image/jpeg",
+        headers={
+            "Cache-Control": "public, max-age=31536000, immutable",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 
