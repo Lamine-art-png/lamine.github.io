@@ -280,6 +280,15 @@ function platformAdminCustomerQuery(filters: PlatformAdminCustomerFilters = {}) 
   return query.toString();
 }
 
+export type FieldCapturePayload = Record<string, unknown> & { client_capture_id: string; idempotency_key?: string };
+
+function uploadFieldAsset<T>(captureId: string, fields: Record<string, string>, file: File): Promise<T> {
+  const form = new FormData();
+  Object.entries(fields).forEach(([key, value]) => form.append(key, value));
+  form.append("file", file);
+  return request<T>(`/v1/field-intelligence/captures/${encodeURIComponent(captureId)}/assets`, { method: "POST", body: form });
+}
+
 export const apiClient = {
   get, post, patch, remove, request, download,
   auth: { register: (payload: RegisterPayload) => post("/v1/auth/register", payload), login: (payload: LoginPayload) => post("/v1/auth/login", payload), logout: () => post("/v1/auth/logout"), me: () => get("/v1/auth/me"), requestEmailVerification: (payload?: EmailVerificationRequestPayload) => post("/v1/auth/email-verification/request", payload), confirmEmailVerification: (payload: EmailVerificationConfirmPayload) => post("/v1/auth/email-verification/confirm", payload) },
@@ -324,6 +333,20 @@ export const apiClient = {
   decisions: { workbench: (workspaceId?: string, fieldId?: string) => { const query = new URLSearchParams(); if (workspaceId) query.set("workspace_id", workspaceId); if (fieldId) query.set("field_id", fieldId); const suffix = query.toString() ? `?${query.toString()}` : ""; return get(`/v1/decisions/workbench${suffix}`); }, runWorkbench: (payload: WorkbenchRunPayload) => post("/v1/decisions/workbench/run", payload) },
   reportFactory: { generate: (payload: ReportFactoryPayload) => post("/v1/reports/factory", payload), pdf: (payload: ReportFactoryPayload) => downloadPost("/v1/reports/factory/pdf", payload) },
   fieldOps: { commandCenter: (workspaceId?: string) => get(`/v1/field-ops/command-center${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`), tasks: (workspaceId?: string) => get(`/v1/field-ops/tasks${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`), createTask: (payload: FieldOpsTaskPayload) => post("/v1/field-ops/tasks/create", payload), updateTaskStatus: (taskId: string, payload: FieldOpsTaskStatusPayload) => post(`/v1/field-ops/tasks/${encodeURIComponent(taskId)}/status`, payload), fieldUpdate: (payload: FieldUpdatePayload) => post("/v1/field-ops/field-update", payload), fieldMessage: (payload: FieldMessagePayload) => post("/v1/field-ops/field-message", payload), autopilotReport: (payload: AutopilotReportPayload) => post("/v1/field-ops/autopilot-report", payload), auditTrail: (workspaceId?: string) => get(`/v1/field-ops/audit-trail${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`) },
+  fieldIntelligence: {
+    initiate: (payload: FieldCapturePayload) => post("/v1/field-intelligence/captures/initiate", payload),
+    complete: (captureId: string, payload?: unknown) => post(`/v1/field-intelligence/captures/${encodeURIComponent(captureId)}/complete`, payload || {}),
+    getCapture: (captureId: string) => get(`/v1/field-intelligence/captures/${encodeURIComponent(captureId)}`),
+    syncBatch: (captures: unknown[]) => post("/v1/field-intelligence/sync/batch", { captures }),
+    uploadAsset: (captureId: string, fields: Record<string, string>, file: File) => uploadFieldAsset(captureId, fields, file),
+    observations: (query?: string) => get(`/v1/field-intelligence/observations${query ? `?${query}` : ""}`),
+    observation: (observationId: string) => get(`/v1/field-intelligence/observations/${encodeURIComponent(observationId)}`),
+    patchObservation: (observationId: string, payload: unknown) => patch(`/v1/field-intelligence/observations/${encodeURIComponent(observationId)}`, payload),
+    deleteObservation: (observationId: string) => remove(`/v1/field-intelligence/observations/${encodeURIComponent(observationId)}`),
+    createTask: (observationId: string, payload: unknown) => post(`/v1/field-intelligence/observations/${encodeURIComponent(observationId)}/tasks`, payload),
+    search: (query: string) => get(`/v1/field-intelligence/search?${query}`),
+    map: (workspaceId?: string) => get(`/v1/field-intelligence/map${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`),
+  },
   connectorHub: { catalog: () => get("/v1/connectors/catalog"), connections: () => get("/v1/connectors/connections"), create: (payload: unknown) => post("/v1/connectors/connections", payload), connect: (payload: ConnectorConnectPayload) => post("/v1/connectors/connect", payload), start: (payload: ConnectorStartPayload) => post("/v1/connectors/start", payload), oauthStart: (payload: unknown) => post("/v1/connectors/oauth/start", payload), get: (connectionId: string) => get(`/v1/connectors/connections/${encodeURIComponent(connectionId)}`), update: (connectionId: string, payload: unknown) => patch(`/v1/connectors/connections/${encodeURIComponent(connectionId)}`, payload), test: (connectionId: string) => post(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/test`), upload: (connectionId: string, file: File) => upload(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/upload`, file), data: (connectionId: string) => get(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/data`), dataSources: () => get("/v1/connectors/data-sources"), jobs: () => get("/v1/connectors/jobs"), jobStatus: (jobId: string) => get(`/v1/connectors/jobs/${encodeURIComponent(jobId)}`), mappingSuggestions: (connectionId: string) => get(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/mapping/suggestions`), saveMapping: (connectionId: string, mapping: Record<string, string>) => post(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/mapping`, { mapping }), sync: (connectionId: string) => post(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/sync`), delete: (connectionId: string) => remove(`/v1/connectors/connections/${encodeURIComponent(connectionId)}`) },
   controllers: { environments: () => get("/v1/controllers/environments"), dataContract: () => get("/v1/controllers/universal/data-contract"), executionReadiness: (workspaceId?: string) => get(`/v1/controllers/execution-readiness${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`), customerConnect: (payload: unknown) => post("/v1/controllers/customer-connect", payload), prepareExecution: (payload: unknown) => post("/v1/controllers/execution/prepare", payload) },
   integrations: { list: () => get("/v1/integrations"), status: () => get("/v1/integrations/status"), wiseconn: () => get("/v1/wiseconn/status"), talgil: () => get("/v1/talgil/status") },
