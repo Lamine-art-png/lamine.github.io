@@ -9,9 +9,10 @@ from app.services.durable_ingestion_staging import TASK_TYPE as INGESTION_TASK_T
 from app.services.ingestion_job_runner import process_ingestion_job
 from app.services.provider_sync_jobs import TASK_TYPE as PROVIDER_SYNC_TASK_TYPE
 from app.services.provider_sync_runner import process_provider_sync_job
+from app.platform_api.webhook_delivery import WEBHOOK_TASK_TYPE, process_webhook_delivery_task
 
 
-SUPPORTED_TASK_TYPES = frozenset({INGESTION_TASK_TYPE, PROVIDER_SYNC_TASK_TYPE})
+SUPPORTED_TASK_TYPES = frozenset({INGESTION_TASK_TYPE, PROVIDER_SYNC_TASK_TYPE, WEBHOOK_TASK_TYPE})
 
 
 def worker_identity(prefix: str = "connector-worker") -> str:
@@ -45,6 +46,12 @@ def process_connector_task(
                 db,
                 job_id=job_id,
                 tenant_id=tenant_id,
+                worker_id=resolved_worker_id,
+            )
+        if task_type == WEBHOOK_TASK_TYPE:
+            return process_webhook_delivery_task(
+                outbox_id=job_id,
+                organization_id=tenant_id,
                 worker_id=resolved_worker_id,
             )
         raise AssertionError("validated connector task type lost dispatch coverage")

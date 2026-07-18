@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.core.security import http_bearer
 from app.db.base import get_db
 from app.models.saas import OrganizationMembership
+from app.platform_api.client_ip import client_ip_allowed
 from app.platform_api.keys import verify_platform_key
 from app.platform_api.principal import PlatformPrincipal
 from app.platform_api.request_context import bounded_request_id
@@ -43,7 +44,7 @@ def require_platform_api_principal(
                 "message": "The Platform API private beta is not enabled for this environment.",
             },
         )
-    request_id = bounded_request_id(x_request_id)
+    request_id = str(getattr(request.state, "request_id", "") or bounded_request_id(x_request_id))
     request.state.request_id = request_id
     if not credentials:
         raise HTTPException(
@@ -65,6 +66,17 @@ def require_platform_api_principal(
                 "code": "invalid_api_key",
                 "type": "authentication_error",
                 "message": "The Platform API key is invalid, expired, revoked, or disabled.",
+                "request_id": request_id,
+            },
+        )
+    if not client_ip_allowed(request, list(verified.key.cidr_allowlist_json or [])):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            headers={"WWW-Authenticate": "Bearer"},
+            detail={
+                "code": "client_ip_not_allowed",
+                "type": "authentication_error",
+                "message": "The client address could not be safely resolved or is outside this API key's CIDR allowlist.",
                 "request_id": request_id,
             },
         )

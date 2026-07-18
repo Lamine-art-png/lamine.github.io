@@ -12,7 +12,7 @@ ALLOWED_ORIGINS = "https://app.agroai-pilot.com,https://agroai-pilot.com,https:/
 binding = "AI"
 
 [secrets]
-required = [ "QUEUE_PUBLISH_TOKEN", "QUEUE_CONSUMER_TOKEN" ]
+required = [ "QUEUE_PUBLISH_TOKEN", "QUEUE_CONSUMER_TOKEN", "EDGE_ORIGIN_AUTH_TOKEN" ]
 
 [[routes]]
 pattern = "app.agroai-pilot.com/v1/*"

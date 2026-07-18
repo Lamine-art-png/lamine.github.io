@@ -33,6 +33,23 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "oauth_state_nonces": {"id", "tenant_id", "connection_id", "nonce_hash", "consumed_at"},
     "connector_credentials": {"id", "tenant_id", "connection_id", "key_version", "ciphertext_b64"},
     "task_outbox": {"id", "job_id", "tenant_id", "status", "publish_attempts"},
+    "api_projects": {"id", "organization_id", "workspace_id", "environment", "status"},
+    "api_service_accounts": {"id", "organization_id", "api_project_id", "workspace_id", "status"},
+    "platform_api_keys": {"id", "organization_id", "api_project_id", "service_account_id", "workspace_id", "cidr_allowlist_json"},
+    "platform_idempotency_records": {"id", "organization_id", "api_project_id", "operation", "idempotency_key", "request_hash", "status"},
+    "platform_webhook_endpoints": {
+        "id",
+        "organization_id",
+        "api_project_id",
+        "signing_secret_key_version",
+        "signing_secret_nonce_b64",
+        "signing_secret_ciphertext_b64",
+        "revoked_at",
+    },
+    "platform_webhook_events": {"id", "organization_id", "api_project_id", "event_type", "version"},
+    "platform_webhook_delivery_attempts": {"id", "event_id", "endpoint_id", "attempt_number", "status"},
+    "platform_webhook_outbox": {"id", "organization_id", "api_project_id", "event_id", "endpoint_id", "status"},
+    "platform_webhook_audit_events": {"id", "organization_id", "api_project_id", "endpoint_id", "action"},
 }
 
 

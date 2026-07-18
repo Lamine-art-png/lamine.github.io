@@ -213,12 +213,19 @@ class PlatformWebhookEndpoint(Base):
     signing_secret_hash = Column(String(64), nullable=False)
     signing_secret_prefix = Column(String(24), nullable=False)
     signing_secret_version = Column(String, default="v1", nullable=False)
+    signing_secret_key_version = Column(String, nullable=True)
+    signing_secret_nonce_b64 = Column(Text, nullable=True)
+    signing_secret_ciphertext_b64 = Column(Text, nullable=True)
     previous_secret_hash = Column(String(64), nullable=True)
+    previous_secret_key_version = Column(String, nullable=True)
+    previous_secret_nonce_b64 = Column(Text, nullable=True)
+    previous_secret_ciphertext_b64 = Column(Text, nullable=True)
     previous_secret_expires_at = Column(DateTime, nullable=True)
     created_by_user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
     disabled_at = Column(DateTime, nullable=True)
+    revoked_at = Column(DateTime, nullable=True)
 
 
 class PlatformWebhookEvent(Base):
@@ -257,6 +264,46 @@ class PlatformWebhookDeliveryAttempt(Base):
     started_at = Column(DateTime, nullable=True)
     completed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class PlatformWebhookOutbox(Base):
+    __tablename__ = "platform_webhook_outbox"
+    __table_args__ = (
+        UniqueConstraint("event_id", "endpoint_id", name="uq_platform_webhook_outbox_event_endpoint"),
+        Index("ix_platform_webhook_outbox_ready", "status", "next_attempt_at", "created_at"),
+    )
+
+    id = Column(String, primary_key=True, default=new_platform_id)
+    organization_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    api_project_id = Column(String, ForeignKey("api_projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_id = Column(String, ForeignKey("platform_webhook_events.id", ondelete="CASCADE"), nullable=False, index=True)
+    endpoint_id = Column(String, ForeignKey("platform_webhook_endpoints.id", ondelete="CASCADE"), nullable=False, index=True)
+    status = Column(String, default="pending", nullable=False, index=True)
+    attempt_count = Column(Integer, default=0, nullable=False)
+    next_attempt_at = Column(DateTime, nullable=True)
+    claimed_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    last_error = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+
+class PlatformWebhookAuditEvent(Base):
+    __tablename__ = "platform_webhook_audit_events"
+    __table_args__ = (
+        Index("ix_platform_webhook_audit_org_endpoint_time", "organization_id", "endpoint_id", "created_at"),
+    )
+
+    id = Column(String, primary_key=True, default=new_platform_id)
+    organization_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
+    api_project_id = Column(String, ForeignKey("api_projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    endpoint_id = Column(String, ForeignKey("platform_webhook_endpoints.id", ondelete="CASCADE"), nullable=False, index=True)
+    action = Column(String, nullable=False, index=True)
+    actor_type = Column(String, nullable=False)
+    actor_id = Column(String, nullable=True)
+    request_id = Column(String, nullable=True)
+    details_json = Column(JSON, nullable=False, default=dict)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
 
 class ActionSafetyConfiguration(Base):

@@ -49,7 +49,8 @@ from app.models.workbench_persistence import (
 from app.models.platform_api import (
     ActionSafetyConfiguration, ApiProject, ApiServiceAccount,
     PlatformApiKey, PlatformApiUsageEvent, PlatformIdempotencyRecord,
-    PlatformWebhookDeliveryAttempt, PlatformWebhookEndpoint,
+    PlatformWebhookAuditEvent, PlatformWebhookDeliveryAttempt, PlatformWebhookEndpoint,
+    PlatformWebhookOutbox,
     PlatformWebhookEvent, ProviderCapabilityRecord, ProviderExternalIdentityMap,
 )
 
@@ -77,6 +78,7 @@ __all__ = [
     "WorkbenchAnalysisRecord", "WorkbenchAuditEventRecord", "WorkbenchEvidenceActionRecord",
     "ActionSafetyConfiguration", "ApiProject", "ApiServiceAccount",
     "PlatformApiKey", "PlatformApiUsageEvent", "PlatformIdempotencyRecord",
-    "PlatformWebhookDeliveryAttempt", "PlatformWebhookEndpoint",
+    "PlatformWebhookAuditEvent", "PlatformWebhookDeliveryAttempt", "PlatformWebhookEndpoint",
+    "PlatformWebhookOutbox",
     "PlatformWebhookEvent", "ProviderCapabilityRecord", "ProviderExternalIdentityMap",
 ]

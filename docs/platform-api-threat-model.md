@@ -8,11 +8,12 @@
 - JWT claim spoofing: Platform API partner routes do not accept Portal JWTs.
 - Confused deputy behavior: Portal, Platform API, internal Queue, and platform-admin auth dependencies are separate.
 - Key-prefix enumeration: prefixes are non-secret identifiers only; verification uses full HMAC hash.
-- Idempotency replay: records are scoped by organization, project, operation, key, and request hash.
-- Webhook forgery/replay: HMAC signatures, timestamps, event IDs, and secret rotation are designed into the model.
+- Idempotency replay: PostgreSQL-safe atomic claims are scoped by organization, project, operation, key, and request hash. Matching completed requests replay, live claims return `operation_in_progress`, conflicting payloads return 409, and expired claims are atomically reclaimed.
+- Webhook forgery/replay: outgoing deliveries use HMAC signatures over timestamp, event ID, and body. Secrets use a separate versioned AES-256-GCM keyring with organization/project/endpoint associated data and bounded rotation overlap.
 - Rate-limit bypass: production requires Redis-backed organization/project/key-aware limiting with atomic burst and sustained counters.
 - Customer key used against internal routes: internal routes use queue tokens, not customer keys.
-- SSRF through provider or webhook URLs: provider URL validation and webhook URL validation require HTTPS and block unsafe local/private hosts in production.
+- CIDR header spoofing: the Cloudflare edge strips all incoming forwarding headers and writes client IP only alongside a dedicated edge-to-origin secret. Render rejects unauthenticated forwarding context and allowlisted keys fail closed when identity is unavailable.
+- SSRF through provider or webhook URLs: webhook URLs require HTTPS on approved ports, reject credentials and all non-global IPv4/IPv6 classes, resolve every DNS answer, pin the validated address for the connection, bound redirects, and repeat validation after each redirect.
 - Malicious provider payloads: adapters normalize only known canonical fields and place unknown values in provider extensions.
 - Object-store namespace collision: existing R2 namespace/checksum safeguards are preserved.
 - Cursor corruption and duplicate provider records: provider identity maps and cursor records are organization-scoped; cursor advancement must follow durable commits.
@@ -23,5 +24,5 @@
 ## Residual Risks
 
 - Redis rate-limit code paths are covered by shared-backend contract tests; production rollout still requires operator-configured Redis and readiness evidence for the deployed environment.
-- Webhook delivery worker execution is modeled but not live-delivering by default.
+- Webhook delivery remains disabled by default and requires the queue transport, webhook AES keyring, authenticated Cloudflare queue boundary, and explicit delivery flag before any network request.
 - Provider schemas cannot be validated against EarthDaily or Valley until official contracts arrive.

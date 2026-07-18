@@ -43,4 +43,7 @@ def error_response(request: Request, exc: HTTPException) -> JSONResponse:
             "message": "The Platform API request could not be completed.",
             "request_id": request_id,
         }
-    return JSONResponse(payload, status_code=exc.status_code, headers=getattr(exc, "headers", None))
+    headers = dict(getattr(exc, "headers", None) or {})
+    if request_id:
+        headers.setdefault("X-Request-Id", request_id)
+    return JSONResponse(payload, status_code=exc.status_code, headers=headers)

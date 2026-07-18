@@ -73,6 +73,20 @@ def _platform_vault_keyring_valid(settings: Settings) -> bool:
     return len(key) == 32
 
 
+def _webhook_vault_keyring_valid(settings: Settings) -> bool:
+    raw = _setting(settings, "PLATFORM_API_WEBHOOK_SECRET_KEYS_JSON")
+    active = _setting(settings, "PLATFORM_API_WEBHOOK_SECRET_ACTIVE_KEY_VERSION", "v1") or "v1"
+    if not raw:
+        return False
+    try:
+        parsed = json.loads(raw)
+        encoded = parsed[active] if isinstance(parsed, dict) else None
+        key = base64.urlsafe_b64decode(str(encoded) + "=" * (-len(str(encoded)) % 4))
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        return False
+    return len(key) == 32
+
+
 def _require_r2_contract(settings: Settings, blockers: list[ReadinessFinding]) -> None:
     endpoint = _setting(settings, "CONNECTOR_OBJECT_ENDPOINT_URL")
     access_key = _setting(settings, "CLOUDFLARE_R2_ACCESS_KEY_ID")
@@ -252,6 +266,24 @@ def evaluate_production_readiness(settings: Settings, *, target_scale: str = "pr
                     "blocker",
                     "platform_api",
                     "Enabled Platform API production requires a valid explicit versioned connector credential keyring containing the active key version.",
+                )
+            )
+        if not _setting(settings, "PLATFORM_API_EDGE_AUTH_SECRET"):
+            blockers.append(
+                ReadinessFinding(
+                    "platform_api.edge_auth_missing",
+                    "blocker",
+                    "platform_api",
+                    "Enabled Platform API production requires the dedicated Cloudflare-to-Render edge authentication secret for authoritative client IP enforcement.",
+                )
+            )
+        if bool(getattr(settings, "PLATFORM_API_WEBHOOK_DELIVERY_ENABLED", False)) and not _webhook_vault_keyring_valid(settings):
+            blockers.append(
+                ReadinessFinding(
+                    "platform_api.webhook_vault_keyring_missing",
+                    "blocker",
+                    "platform_api",
+                    "Enabled webhook delivery requires a separate valid versioned webhook AES-GCM keyring.",
                 )
             )
 

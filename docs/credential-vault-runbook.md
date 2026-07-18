@@ -34,3 +34,19 @@ Rotation:
 5. Remove old versions only after proof that no rows need them.
 
 Revocation sets `revoked_at` through the shared vault and immediately removes the row from active retrieval. Rotation writes a new nonce, ciphertext, and active key version through the same compatibility adapter; old plaintext and ciphertext are never returned.
+
+## Webhook signing-secret custody
+
+Webhook signing secrets use a separate, purpose-specific AES-256-GCM keyring:
+
+- `PLATFORM_API_WEBHOOK_SECRET_KEYS_JSON`
+- `PLATFORM_API_WEBHOOK_SECRET_ACTIVE_KEY_VERSION`
+
+Do not reuse `PLATFORM_API_KEY_PEPPER`, connector-vault keys, or application
+signing secrets. Associated data binds organization, API project, endpoint, and
+key version. Plaintext is returned once at endpoint creation or rotation.
+Delivery workers retrieve only the exact active endpoint secret, and every
+creation, worker retrieval, rotation, revocation, and disablement is audited.
+During the bounded overlap window, deliveries carry signatures from the current
+and previous secret. Customer-facing responses and logs exclude ciphertext,
+nonces, and plaintext.

@@ -17,6 +17,7 @@ from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
 from app.core.rate_limiting import limiter
+from app.platform_api.request_context import bounded_request_id
 
 logger = logging.getLogger(__name__)
 
@@ -189,6 +190,8 @@ async def durable_upload_compatibility_boundary(request: Request, call_next):
 @app.middleware("http")
 async def runtime_error_boundary(request: Request, call_next):
     origin = request.headers.get("origin")
+    if request.url.path.startswith("/v1/platform/"):
+        request.state.request_id = bounded_request_id(request.headers.get("x-request-id"))
     try:
         response = await call_next(request)
     except Exception as exc:  # pragma: no cover
@@ -208,6 +211,9 @@ async def runtime_error_boundary(request: Request, call_next):
         response.headers.setdefault("Access-Control-Allow-Credentials", "true")
         response.headers.setdefault("Vary", "Origin")
     response.headers.setdefault("x-agroai-runtime", VERSION)
+    request_id = str(getattr(request.state, "request_id", "") or "")
+    if request_id and request.url.path.startswith("/v1/platform/"):
+        response.headers.setdefault("X-Request-Id", request_id)
     return response
 
 
@@ -296,11 +302,43 @@ from app.api.v1.reports import router as reports_router  # noqa: E402
 from app.api.v1.router_compat import materialize_included_routes  # noqa: E402
 from app.api.v1.webhooks import router as webhooks_router  # noqa: E402
 from app.platform_api.errors import PlatformApiHTTPException, error_response  # noqa: E402
+from starlette.exceptions import HTTPException as StarletteHTTPException  # noqa: E402
+from fastapi.exceptions import RequestValidationError  # noqa: E402
+from fastapi.exception_handlers import request_validation_exception_handler  # noqa: E402
 
 
 @app.exception_handler(PlatformApiHTTPException)
 async def platform_api_exception_handler(request: Request, exc: PlatformApiHTTPException) -> JSONResponse:
     return error_response(request, exc)
+
+
+@app.exception_handler(StarletteHTTPException)
+async def scoped_http_exception_handler(request: Request, exc: StarletteHTTPException) -> JSONResponse:
+    if request.url.path.startswith("/v1/platform/"):
+        return error_response(request, exc)
+    return JSONResponse(
+        {"detail": exc.detail},
+        status_code=exc.status_code,
+        headers=getattr(exc, "headers", None),
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def scoped_validation_exception_handler(request: Request, exc: RequestValidationError) -> JSONResponse:
+    if request.url.path.startswith("/v1/platform/"):
+        request_id = str(getattr(request.state, "request_id", "") or request.headers.get("x-request-id") or "")
+        headers = {"X-Request-Id": request_id} if request_id else None
+        return JSONResponse(
+            {
+                "code": "invalid_request",
+                "type": "request_error",
+                "message": "The Platform API request did not match the required schema.",
+                "request_id": request_id,
+            },
+            status_code=422,
+            headers=headers,
+        )
+    return await request_validation_exception_handler(request, exc)
 
 app.include_router(auth_router, prefix="/v1")
 app.include_router(billing_router, prefix="/v1")

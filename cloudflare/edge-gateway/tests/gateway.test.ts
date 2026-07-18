@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { configuredOrigins, originAllowed, requestId, validTask, validatedUpstreamOrigin } from "../src/index";
+import { configuredOrigins, originAllowed, requestId, upstreamRequest, validTask, validatedUpstreamOrigin } from "../src/index";
 
 describe("edge origin policy", () => {
   it("allows exact production origins and approved Pages projects", () => {
@@ -41,10 +41,46 @@ describe("request identifiers", () => {
   });
 });
 
+describe("authoritative client IP forwarding", () => {
+  it("replaces spoofed forwarding headers with Cloudflare-authenticated context", async () => {
+    const request = new Request("https://api.agroai-pilot.com/v1/platform/me", {
+      headers: {
+        "cf-connecting-ip": "2001:db8::42",
+        "x-forwarded-for": "127.0.0.1",
+        "x-agroai-edge-client-ip": "10.0.0.1",
+        "x-agroai-edge-auth": "attacker",
+      },
+    });
+    const upstream = upstreamRequest(
+      request,
+      new URL("https://api-preview.agroai-pilot.com"),
+      "req-1",
+      { EDGE_ORIGIN_AUTH_TOKEN: "edge-shared-secret" },
+    );
+
+    expect(upstream.headers.get("x-agroai-edge-client-ip")).toBe("2001:db8::42");
+    expect(upstream.headers.get("x-agroai-edge-auth")).toBe("edge-shared-secret");
+    expect(upstream.headers.get("x-forwarded-for")).toBeNull();
+    expect(upstream.headers.get("cf-connecting-ip")).toBeNull();
+  });
+
+  it("omits client identity when the edge-to-origin secret is absent", () => {
+    const upstream = upstreamRequest(
+      new Request("https://api.agroai-pilot.com/v1/platform/me", { headers: { "cf-connecting-ip": "203.0.113.8" } }),
+      new URL("https://api-preview.agroai-pilot.com"),
+      "req-2",
+      {},
+    );
+    expect(upstream.headers.get("x-agroai-edge-client-ip")).toBeNull();
+    expect(upstream.headers.get("x-agroai-edge-auth")).toBeNull();
+  });
+});
+
 describe("connector task envelope", () => {
   it("accepts only bounded known connector task contracts", () => {
     expect(validTask({ job_id: "job-1", tenant_id: "tenant-1", task_type: "connector_provider_sync" })).toBe(true);
     expect(validTask({ job_id: "job-2", tenant_id: "tenant-1", task_type: "connector_ingest_object" })).toBe(true);
+    expect(validTask({ job_id: "outbox-1", tenant_id: "tenant-1", task_type: "platform_webhook_delivery" })).toBe(true);
     expect(validTask({ job_id: "", tenant_id: "tenant-1", task_type: "connector_provider_sync" })).toBe(false);
     expect(validTask({ job_id: "x".repeat(257), tenant_id: "tenant-1", task_type: "connector_provider_sync" })).toBe(false);
     expect(validTask({ job_id: "job-3", tenant_id: "tenant-1", task_type: "unknown_task" })).toBe(false);

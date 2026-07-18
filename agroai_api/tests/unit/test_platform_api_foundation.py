@@ -235,7 +235,7 @@ def test_platform_routes_require_platform_api_key_and_do_not_accept_portal_jwt(c
     response = client.get("/v1/platform/me", headers={"Authorization": f"Bearer {token}"})
 
     assert response.status_code == 401
-    assert response.json()["detail"]["code"] == "invalid_api_key"
+    assert response.json()["code"] == "invalid_api_key"
 
 
 def test_test_tenant_fallback_cannot_activate_in_production(monkeypatch):
@@ -318,7 +318,7 @@ def test_physical_action_execution_is_disabled(client, db, monkeypatch):
     )
 
     assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "physical_action_disabled"
+    assert response.json()["code"] == "physical_action_disabled"
 
 
 def test_public_openapi_excludes_internal_admin_and_portal_routes(client, monkeypatch):
@@ -596,7 +596,7 @@ def test_key_without_required_scope_is_denied(client, db, monkeypatch):
     response = client.get("/v1/platform/providers", headers={"Authorization": f"Bearer {plaintext}"})
 
     assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "scope_denied"
+    assert response.json()["code"] == "scope_denied"
 
 
 def test_idempotency_replay_and_payload_conflict(db):
@@ -720,7 +720,11 @@ def test_live_and_test_key_prefixes_differ(db):
     assert live_plaintext.startswith("agro_live_")
 
 
-def test_webhook_secret_signature_and_url_ssrf_protection():
+def test_webhook_secret_signature_and_url_ssrf_protection(monkeypatch):
+    monkeypatch.setattr(
+        "socket.getaddrinfo",
+        lambda *args, **kwargs: [(None, None, None, None, ("93.184.216.34", 443))],
+    )
     secret, digest, prefix = generate_webhook_secret()
     assert secret.startswith("whsec_")
     assert digest != secret
@@ -1168,7 +1172,7 @@ def test_valley_physical_write_configured_kill_switches_are_enforced(db, monkeyp
 def test_risky_feature_flags_default_safely():
     assert settings.PLATFORM_API_ENABLED is False
     assert settings.PLATFORM_API_DEVELOPER_CONTROL_PLANE_ENABLED is False
-    assert settings.PLATFORM_API_TEST_PROJECTS_ENABLED is True
+    assert settings.PLATFORM_API_TEST_PROJECTS_ENABLED is False
     assert settings.PLATFORM_API_LIVE_PROJECTS_ENABLED is False
     assert settings.PLATFORM_API_WEBHOOK_DELIVERY_ENABLED is False
     assert settings.PLATFORM_API_PUBLIC_DOCS_ENABLED is False

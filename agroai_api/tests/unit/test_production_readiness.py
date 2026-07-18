@@ -26,6 +26,7 @@ def _ready_settings():
     settings.__dict__["CONNECTOR_CREDENTIAL_MASTER_KEY"] = "configured"
     key = base64.urlsafe_b64encode(b"k" * 32).decode("ascii").rstrip("=")
     settings.__dict__["CONNECTOR_CREDENTIAL_KEYS_JSON"] = json.dumps({"v1": key})
+    settings.__dict__["PLATFORM_API_EDGE_AUTH_SECRET"] = "dedicated-edge-origin-secret"
     settings.__dict__["OAUTH_STATE_SIGNING_KEY"] = "configured"
     settings.__dict__["STRIPE_SECRET_KEY"] = "configured"
     settings.__dict__["STRIPE_WEBHOOK_SECRET"] = "configured"
@@ -136,6 +137,17 @@ def test_platform_api_enabled_without_any_redis_url_fails_readiness():
     report = evaluate_production_readiness(settings)
 
     assert "platform_api.redis_missing" in _codes(report)
+
+
+def test_platform_api_enabled_requires_authenticated_edge_client_ip_context():
+    settings = _ready_settings()
+    settings.__dict__["PLATFORM_API_ENABLED"] = True
+    settings.__dict__["PLATFORM_API_RATE_LIMIT_BACKEND"] = "redis"
+    settings.__dict__["PLATFORM_API_EDGE_AUTH_SECRET"] = ""
+
+    report = evaluate_production_readiness(settings)
+
+    assert "platform_api.edge_auth_missing" in _codes(report)
 
 
 def test_platform_api_enabled_requires_explicit_vault_keyring():

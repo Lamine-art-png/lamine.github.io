@@ -10,19 +10,20 @@ from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.db.base import get_db
+from app.db.base import SessionLocal, get_db
 from app.services.connector_object_gc import run_connector_object_gc
 from app.services.object_storage_probe import probe_object_storage
 from app.services.production_readiness import evaluate_production_readiness
 from app.services.redis_task_queue import queue_configured
 from app.services.release_contract import evaluate_release_contract
 from app.services.task_outbox_service import drain_pending_outbox
+from app.platform_api.webhook_delivery import WEBHOOK_TASK_TYPE, publish_pending_webhook_outbox
 
 
 router = APIRouter(tags=["internal-connector-queue"])
 QUEUE_CONTRACT = "cloudflare-queue-v1"
 RELEASE_CONTRACT = "agroai-release-v1"
-_TERMINAL = {"succeeded", "failed", "cancelled"}
+_TERMINAL = {"succeeded", "failed", "cancelled", "delivered", "disabled"}
 _TRANSIENT = {"retrying", "deferred", "queued", "running"}
 
 
@@ -120,6 +121,8 @@ async def deliver_connector_task(payload: ConnectorTaskDelivery) -> dict:
         ) from exc
     if status in _TERMINAL:
         return {"status": status, "job_id": payload.job_id, "terminal": True}
+    if payload.task_type == WEBHOOK_TASK_TYPE and status == "retrying":
+        return {"status": status, "job_id": payload.job_id, "terminal": True, "durable_retry_scheduled": True}
     if status in _TRANSIENT:
         raise HTTPException(
             status_code=503,
@@ -137,13 +140,22 @@ async def drain_task_outbox() -> dict:
         raise HTTPException(status_code=503, detail="Durable connector queue is not configured")
     try:
         outbox = await asyncio.to_thread(drain_pending_outbox, limit=100)
+        webhook_outbox = await asyncio.to_thread(_drain_webhook_outbox)
         object_gc = await asyncio.to_thread(run_connector_object_gc, limit=50)
     except Exception as exc:
         raise HTTPException(
             status_code=503,
             detail={"error": "scheduled_maintenance_failed", "reason": exc.__class__.__name__},
         ) from exc
-    return {"status": "ok", "outbox": outbox, "object_gc": object_gc}
+    return {"status": "ok", "outbox": outbox, "webhook_outbox": webhook_outbox, "object_gc": object_gc}
+
+
+def _drain_webhook_outbox() -> dict[str, int]:
+    db = SessionLocal()
+    try:
+        return publish_pending_webhook_outbox(db, limit=100)
+    finally:
+        db.close()
 
 
 @router.post("/internal/queue/maintenance", dependencies=[Depends(_require_queue_token)])
