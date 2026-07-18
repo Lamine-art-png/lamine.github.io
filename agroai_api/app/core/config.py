@@ -60,9 +60,13 @@ class Settings(BaseSettings):
     COMPLIANCE_OBJECT_STORAGE_BACKEND: str = "disabled"
 
     # Field Intelligence (voice-first / offline field capture)
-    FIELD_TRANSCRIPTION_PROVIDER: str = ""  # "", fake, fake_fail, or a real provider id
+    FIELD_TRANSCRIPTION_PROVIDER: str = ""  # "", fake, fake_fail, http/configured
+    FIELD_TRANSCRIPTION_ENDPOINT: str = ""  # real provider endpoint (http provider)
+    FIELD_TRANSCRIPTION_API_KEY: str = ""  # provider credential (never sent to browser)
+    FIELD_TRANSCRIPTION_MODEL: str = ""
     FIELD_ASSET_MAX_BYTES: int = 52428800  # 50 MiB per captured asset
     FIELD_AUDIO_MAX_SECONDS: int = 900  # 15 minutes of durable audio
+    FIELD_SYNC_MAX_BATCH: int = 50  # bounded offline sync batch size
     FIELD_MAP_STYLE_URL: str = ""  # optional MapLibre style; empty => graceful fallback
 
     # Scheduler
