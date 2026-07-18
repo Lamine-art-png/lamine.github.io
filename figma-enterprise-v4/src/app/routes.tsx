@@ -29,6 +29,7 @@ const lazyComponent = (loader: () => Promise<Record<string, unknown>>, exportNam
 const operationRoutes = [
   { index: true, lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
   { path: "field-queue", lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
+  { path: "field-intelligence", lazy: lazyComponent(() => import("./components/FieldIntelligence"), "FieldIntelligence") },
   { path: "tasks", lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
   { path: "readiness", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "Readiness") },
   { path: "fields", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "Fields") },
