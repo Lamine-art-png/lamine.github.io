@@ -13,9 +13,13 @@ import tempfile
 from datetime import datetime
 from typing import Literal
 
+import json
+import re
+
 from fastapi import (
-    APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, Response, UploadFile, status,
+    APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Query, Request, Response, UploadFile, status,
 )
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
@@ -24,12 +28,19 @@ from app.core.config import settings
 from app.db.base import SessionLocal, get_db
 from app.services import field_intelligence as svc
 
+_CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f\"\\]")
+
+
+def _sanitize_filename(name: str | None) -> str:
+    cleaned = _CONTROL_CHARS.sub("_", (name or "asset").strip()) or "asset"
+    return cleaned[:200]
+
 router = APIRouter(prefix="/field-intelligence", tags=["field-intelligence"])
 
 _KIND_MAGIC: dict[str, list[bytes]] = {
-    "audio": [b"OggS", b"ID3", b"RIFF", b"\x1aE\xdf\xa3", b"\xff\xfb", b"\xff\xf3", b"\xff\xf2"],
-    "video": [b"\x1aE\xdf\xa3", b"ftyp", b"RIFF"],
-    "photo": [b"\xff\xd8\xff", b"\x89PNG", b"GIF8", b"RIFF"],
+    "audio": [b"OggS", b"ID3", b"RIFF", b"\x1aE\xdf\xa3", b"fLaC", b"ftyp", b"\xff\xfb", b"\xff\xf3", b"\xff\xf2"],
+    "video": [b"\x1aE\xdf\xa3", b"ftyp", b"RIFF", b"OggS"],
+    "photo": [b"\xff\xd8\xff", b"\x89PNG", b"GIF8", b"RIFF", b"BM"],
 }
 _MAX_TEXT = 8000
 _MAX_NAME = 200
@@ -51,9 +62,28 @@ def drain_field_intelligence_processing() -> None:
         db.close()
 
 
+def _bounded_metadata(value: dict) -> dict:
+    if not isinstance(value, dict):
+        raise ValueError("metadata must be an object")
+    serialized = json.dumps(value, default=str)
+    if len(serialized) > 8000:
+        raise ValueError("metadata too large")
+    if _json_depth(value) > 5:
+        raise ValueError("metadata nested too deeply")
+    return value
+
+
+def _json_depth(value, depth: int = 1) -> int:
+    if isinstance(value, dict):
+        return max([depth] + [_json_depth(v, depth + 1) for v in value.values()])
+    if isinstance(value, list):
+        return max([depth] + [_json_depth(v, depth + 1) for v in value])
+    return depth
+
+
 class CaptureInitiateRequest(BaseModel):
     client_capture_id: str = Field(max_length=_MAX_NAME)
-    idempotency_key: str | None = Field(default=None, max_length=_MAX_NAME)
+    idempotency_key: str | None = Field(default=None, max_length=120)
     workspace_id: str | None = Field(default=None, max_length=_MAX_NAME)
     capture_source: Literal["voice", "typed"] = "typed"
     note_text: str | None = Field(default=None, max_length=_MAX_TEXT)
@@ -88,6 +118,18 @@ class CaptureInitiateRequest(BaseModel):
             raise ValueError("longitude out of range")
         return v
 
+    @field_validator("metadata")
+    @classmethod
+    def _meta(cls, v):
+        return _bounded_metadata(v or {})
+
+
+class SyncCaptureItem(CaptureInitiateRequest):
+    """A batch item carries the same constraints as a single initiation, plus
+    the optional completion fields."""
+    corrected_transcript: str | None = Field(default=None, max_length=_MAX_TEXT)
+    language: str | None = Field(default="en", max_length=16)
+
 
 class CaptureCompleteRequest(BaseModel):
     corrected_transcript: str | None = Field(default=None, max_length=_MAX_TEXT)
@@ -95,7 +137,10 @@ class CaptureCompleteRequest(BaseModel):
 
 
 class SyncBatchRequest(BaseModel):
-    captures: list[dict] = Field(min_length=1)
+    captures: list[SyncCaptureItem] = Field(min_length=1)
+
+
+PATCH_STATUSES = ("needs_review", "acknowledged", "completed")
 
 
 class ObservationPatchRequest(BaseModel):
@@ -107,8 +152,18 @@ class ObservationPatchRequest(BaseModel):
     crop: str | None = Field(default=None, max_length=_MAX_NAME)
     event_type: str | None = Field(default=None, max_length=64)
     severity: str | None = Field(default=None, max_length=32)
-    status: str | None = Field(default=None, max_length=32)
+    # Only non-destructive, non-internal statuses may be set via PATCH.
+    status: Literal["needs_review", "acknowledged", "completed"] | None = None
     structured: dict | None = None
+
+    @field_validator("structured")
+    @classmethod
+    def _structured(cls, v):
+        if v is None:
+            return v
+        if len(json.dumps(v, default=str)) > 8000:
+            raise ValueError("structured patch too large")
+        return v
 
 
 class TaskCreateRequest(BaseModel):
@@ -174,7 +229,7 @@ async def upload_asset(
         asset = svc.register_asset(
             db, ctx, capture_id,
             client_asset_id=client_asset_id, kind=kind, content_type=file.content_type,
-            filename=file.filename, content_sha256=digest.hexdigest(), size_bytes=total,
+            filename=_sanitize_filename(file.filename), content_sha256=digest.hexdigest(), size_bytes=total,
             duration_seconds=duration_seconds, spool_path=spool_path,
         )
         return {"status": "stored", "asset": svc._serialize_asset(asset)}
@@ -221,7 +276,10 @@ def sync_batch(
 ) -> dict:
     if len(payload.captures) > int(settings.FIELD_SYNC_MAX_BATCH):
         raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Sync batch too large")
-    result = svc.sync_batch(db, ctx, payload.captures)
+    items = [item.model_dump() for item in payload.captures]
+    if len(json.dumps(items, default=str)) > int(settings.FIELD_SYNC_MAX_BODY_BYTES):
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Sync batch body too large")
+    result = svc.sync_batch(db, ctx, items)
     background.add_task(drain_field_intelligence_processing)
     return {"status": "processed", **result}
 
@@ -345,22 +403,42 @@ def create_task(
 # Authorized asset retrieval / deletion
 # ---------------------------------------------------------------------------
 
+_RANGE_RE = re.compile(r"bytes=(\d+)-(\d*)")
+
+
 @router.get("/assets/{asset_id}/content")
 def get_asset_content(
     asset_id: str,
+    range_header: str | None = Header(default=None, alias="Range"),
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
-) -> Response:
-    asset, data = svc.read_asset_bytes(db, ctx, asset_id)
-    filename = (asset.filename or asset.id).replace('"', "")
-    return Response(
-        content=data,
-        media_type=asset.content_type or "application/octet-stream",
-        headers={
-            "X-Content-Type-Options": "nosniff",
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            "Cache-Control": "private, no-store",
-        },
+) -> StreamingResponse:
+    byte_range = None
+    if range_header:
+        match = _RANGE_RE.fullmatch(range_header.strip())
+        if match:
+            start = int(match.group(1))
+            end = int(match.group(2)) if match.group(2) else (1 << 62)
+            byte_range = (start, end)
+    asset, iterator, total, served = svc.open_asset_stream(db, ctx, asset_id, byte_range=byte_range)
+    filename = _sanitize_filename(asset.filename or asset.id)
+    headers = {
+        "X-Content-Type-Options": "nosniff",
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Cache-Control": "private, no-store",
+        "Accept-Ranges": "bytes",
+    }
+    status_code = status.HTTP_200_OK
+    if served is not None:
+        start, end, size = served
+        headers["Content-Range"] = f"bytes {start}-{end}/{size}"
+        headers["Content-Length"] = str(end - start + 1)
+        status_code = status.HTTP_206_PARTIAL_CONTENT
+    elif total:
+        headers["Content-Length"] = str(total)
+    return StreamingResponse(
+        iterator, status_code=status_code,
+        media_type=asset.content_type or "application/octet-stream", headers=headers,
     )
 
 
@@ -376,15 +454,15 @@ def delete_asset(
 
 def _content_matches_kind(kind: str, head: bytes, content_type: str | None) -> bool:
     if kind == "file":
-        return True  # generic attachments allowed; still size-bounded + hashed
+        # Generic attachments are size-bounded + hashed, but still reject the
+        # obviously-dangerous archive/executable signatures.
+        return head[:2] not in (b"MZ",) and head[:4] != b"\x7fELF"
     if head[:5] in (b"PK\x03\x04", b"%PDF-") or head[:1] in (b"{", b"["):
         return False  # reject document/text payloads masquerading as media
+    # Media must present a recognized container signature — never trust the
+    # declared MIME type alone.
     magics = _KIND_MAGIC.get(kind, [])
-    if any(head.startswith(magic) or magic in head[:16] for magic in magics):
-        return True
-    declared = (content_type or "").lower()
-    prefix = {"audio": "audio/", "video": "video/", "photo": "image/"}.get(kind, "")
-    return bool(prefix and declared.startswith(prefix))
+    return any(head.startswith(magic) or magic in head[:16] for magic in magics)
 
 
 def _safe_unlink(path: str) -> None:

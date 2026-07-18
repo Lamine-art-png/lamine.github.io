@@ -28,8 +28,14 @@ class FakeStoreClient:
         body, metadata = self.items[(Bucket, Key)]
         return {"ContentLength": len(body), "Metadata": metadata}
 
-    def get_object(self, Bucket, Key):
+    def get_object(self, Bucket, Key, Range=None):
         body, metadata = self.items[(Bucket, Key)]
+        if Range:
+            import re as _re
+            m = _re.fullmatch(r"bytes=(\d+)-(\d+)", Range)
+            if m:
+                start, end = int(m.group(1)), int(m.group(2))
+                body = body[start:end + 1]
         return {"ContentLength": len(body), "Metadata": metadata, "Body": io.BytesIO(body)}
 
     def delete_object(self, Bucket, Key):
@@ -78,7 +84,8 @@ def _complete(client, headers, capture_id, **payload):
 
 def _process(db, headers=None):
     # Drive the durable processing plane directly (the request only stages it).
-    return svc.run_field_intelligence_jobs(db, limit=25)
+    from app.services.field_intelligence_worker import drain_until_empty
+    return drain_until_empty(db)
 
 
 def _fetch(client, headers, observation_id):
@@ -149,11 +156,16 @@ def test_tenant_isolation(client, db):
 def test_sync_batch_partial_success_and_bounds(client, db):
     _, _, headers = _auth(db)
     good = {"client_capture_id": "b1", "idempotency_key": "b1", "note_text": "Pump filter clogged on Block B, urgent."}
-    bad = {"idempotency_key": "b2", "note_text": "missing client id"}
-    res = client.post("/v1/field-intelligence/sync/batch", json={"captures": [good, bad]}, headers=headers)
-    assert res.status_code == 200
+    # structurally valid but reuses the same key with a different payload -> per-item conflict
+    conflict = {"client_capture_id": "b2", "idempotency_key": "b1", "note_text": "different content"}
+    res = client.post("/v1/field-intelligence/sync/batch", json={"captures": [good, conflict]}, headers=headers)
+    assert res.status_code == 200, res.text
     body = res.json()
     assert body["accepted"] == 1 and body["failed"] == 1
+    # a structurally invalid item (same model + constraints) rejects the batch
+    malformed = client.post("/v1/field-intelligence/sync/batch",
+                            json={"captures": [{"idempotency_key": "x", "note_text": "no client id"}]}, headers=headers)
+    assert malformed.status_code == 422
 
 
 def test_correlation_source_mode_and_freshness_not_conflated(client, db):
@@ -163,7 +175,7 @@ def test_correlation_source_mode_and_freshness_not_conflated(client, db):
     _process(db)
     corr = _fetch(client, headers, obs_id)["correlation"]
     assert "source_mode_summary" in corr and "freshness_summary" in corr
-    assert set(corr["source_mode_summary"].keys()) == {"live", "sample", "uploaded"}
+    assert {"live", "sample", "uploaded", "unavailable", "unknown"}.issubset(corr["source_mode_summary"].keys())
     assert set(corr["freshness_summary"].keys()) == {"fresh", "stale", "unavailable"}
 
 
@@ -304,10 +316,13 @@ def test_deleted_observation_disables_asset_retrieval_and_removes_object(client,
     # retrievable while live
     assert client.get(f"/v1/field-intelligence/assets/{asset_id}/content", headers=headers).status_code == 200
     assert len(fake_store.client.items) == 1
-    # delete observation -> retrieval disabled + durable object removed
+    # delete observation -> retrieval disabled immediately (before worker runs)
     assert client.delete(f"/v1/field-intelligence/observations/{obs_id}", headers=headers).status_code == 200
     got = client.get(f"/v1/field-intelligence/assets/{asset_id}/content", headers=headers)
     assert got.status_code in (404, 410)
+    assert len(fake_store.client.items) == 1  # not yet physically deleted (durable job pending)
+    # worker performs the durable R2 deletion
+    svc.run_field_intelligence_deletions(db)
     assert len(fake_store.client.items) == 0  # R2 object physically removed
 
 
@@ -329,3 +344,238 @@ def test_asset_retrieval_has_safe_headers(client, db, fake_store):
 
 def test_unauthenticated_rejected(client, db):
     assert client.get("/v1/field-intelligence/observations").status_code in (401, 403)
+
+
+# ---- item 2: complete idempotency fingerprint --------------------------- #
+
+def test_idempotency_conflict_on_workspace_metadata_assignee_manifest(client, db):
+    _, ws, headers = _auth(db)
+    ws2 = Workspace(id="ws-fi-2", organization_id="org-fi", name="Second", crop="Grapes", region="CA", mode="live")
+    db.add(ws2); db.commit()
+    _initiate(client, headers, client_capture_id="cc", idempotency_key="k1", assignee="alice", metadata={"a": 1})
+    # differing dimensions each conflict under the same key
+    assert _initiate(client, headers, client_capture_id="cc", idempotency_key="k1", assignee="bob", metadata={"a": 1}).status_code == 409
+    assert _initiate(client, headers, client_capture_id="cc", idempotency_key="k1", assignee="alice", metadata={"a": 2}).status_code == 409
+    assert _initiate(client, headers, client_capture_id="cc", idempotency_key="k1", assignee="alice", metadata={"a": 1}, workspace_id="ws-fi-2").status_code == 409
+    assert _initiate(client, headers, client_capture_id="cc", idempotency_key="k1", assignee="alice", metadata={"a": 1},
+                     asset_manifest=[{"client_asset_id": "z", "kind": "photo", "content_type": "image/png"}]).status_code == 409
+    # identical replay still returns the same capture
+    again = _initiate(client, headers, client_capture_id="cc", idempotency_key="k1", assignee="alice", metadata={"a": 1})
+    assert again.status_code == 200
+
+
+# ---- item 3: strict asset idempotency ----------------------------------- #
+
+def test_asset_idempotency_conflict(client, db, fake_store):
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    png1 = b"\x89PNG\r\n\x1a\n" + b"A" * 40
+    png2 = b"\x89PNG\r\n\x1a\n" + b"B" * 80
+    r1 = client.post(f"/v1/field-intelligence/captures/{cap['id']}/assets",
+                     files={"file": ("p.png", io.BytesIO(png1), "image/png")},
+                     data={"client_asset_id": "same", "kind": "photo"}, headers=headers)
+    assert r1.status_code == 200
+    # same id, different content -> conflict (does not silently discard)
+    r2 = client.post(f"/v1/field-intelligence/captures/{cap['id']}/assets",
+                     files={"file": ("p.png", io.BytesIO(png2), "image/png")},
+                     data={"client_asset_id": "same", "kind": "photo"}, headers=headers)
+    assert r2.status_code == 409 and r2.json()["detail"]["code"] == "asset_idempotency_conflict"
+    # same id, same content -> idempotent replay
+    r3 = client.post(f"/v1/field-intelligence/captures/{cap['id']}/assets",
+                     files={"file": ("p.png", io.BytesIO(png1), "image/png")},
+                     data={"client_asset_id": "same", "kind": "photo"}, headers=headers)
+    assert r3.status_code == 200 and r3.json()["asset"]["id"] == r1.json()["asset"]["id"]
+
+
+# ---- item 4: compensating upload leaves no orphan R2 object ------------- #
+
+def test_compensating_upload_deletes_orphan_on_registration_failure(client, db, fake_store, monkeypatch):
+    from sqlalchemy.exc import IntegrityError
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    from app.services import field_intelligence as s
+
+    class Ctx:
+        organization = type("O", (), {"id": "org-fi"})()
+        user = type("U", (), {"id": "user-org-fi"})()
+    real_commit = db.commit
+
+    def boom_commit():
+        raise IntegrityError("insert", {}, Exception("dup"))
+    monkeypatch.setattr(db, "commit", boom_commit)
+    spool = __import__("tempfile").NamedTemporaryFile(prefix="agroai-field-", delete=False)
+    spool.write(b"\x89PNG\r\n\x1a\n" + b"C" * 32); spool.flush(); spool.close()
+    import hashlib
+    sha = hashlib.sha256(open(spool.name, "rb").read()).hexdigest()
+    with __import__("pytest").raises(Exception):
+        s.register_asset(db, Ctx(), cap["id"], client_asset_id="race", kind="photo", content_type="image/png",
+                         filename="p.png", content_sha256=sha, size_bytes=41, duration_seconds=None, spool_path=spool.name)
+    monkeypatch.setattr(db, "commit", real_commit)
+    db.rollback()
+    assert len(fake_store.client.items) == 0  # uploaded object was compensated (no orphan)
+    __import__("os").unlink(spool.name)
+
+
+# ---- item 5: durable deletion never confirms without physical delete ---- #
+
+def test_deletion_stays_pending_until_storage_confirms(client, db, fake_store, monkeypatch):
+    from app.models.field_intelligence import FieldObservationAsset
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    up = client.post(f"/v1/field-intelligence/captures/{cap['id']}/assets",
+                     files={"file": ("p.png", io.BytesIO(b"\x89PNG\r\n\x1a\n" + b"D" * 32), "image/png")},
+                     data={"client_asset_id": "a", "kind": "photo"}, headers=headers)
+    asset_id = up.json()["asset"]["id"]
+    assert client.delete(f"/v1/field-intelligence/assets/{asset_id}", headers=headers).status_code == 200
+    # storage unavailable -> object cannot be confirmed deleted -> stays pending
+    monkeypatch.setattr(svc, "object_storage_configured", lambda: False)
+    svc.run_field_intelligence_deletions(db)
+    db.expire_all()
+    assert db.get(FieldObservationAsset, asset_id).status == "pending_deletion"
+    assert len(fake_store.client.items) == 1  # never claimed deleted without confirmation
+    # storage back -> worker confirms + marks deleted (clear the retry backoff window)
+    from app.models.operational_records import IngestionJob
+    job = db.query(IngestionJob).filter(IngestionJob.job_type == "field_intelligence_asset_delete").first()
+    job.next_attempt_at = datetime.utcnow()
+    db.commit()
+    monkeypatch.setattr(svc, "object_storage_configured", lambda: True)
+    svc.run_field_intelligence_deletions(db)
+    db.expire_all()
+    assert db.get(FieldObservationAsset, asset_id).status == "deleted"
+    assert len(fake_store.client.items) == 0
+
+
+# ---- item 6: append-only audit ------------------------------------------ #
+
+def test_append_only_audit_events(client, db):
+    from app.models.field_intelligence import FieldObservationAuditEvent
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    obs_id = _complete(client, headers, cap["id"]).json()["observation"]["id"]
+    _process(db)
+    rows = db.query(FieldObservationAuditEvent).filter(FieldObservationAuditEvent.observation_id == obs_id).all()
+    actions = {r.action for r in rows}
+    assert {"capture_created", "extraction_completed", "correlation_completed", "evidence_linked"}.issubset(actions)
+    before = len(rows)
+    client.patch(f"/v1/field-intelligence/observations/{obs_id}", json={"severity": "high"}, headers=headers)
+    after = db.query(FieldObservationAuditEvent).filter(FieldObservationAuditEvent.observation_id == obs_id).count()
+    assert after > before  # append-only: events only ever added
+
+
+# ---- item 7: retryable transcription auto-retries ----------------------- #
+
+def test_retryable_transcription_does_not_complete_job(client, db, fake_store, monkeypatch):
+    from app.services import field_transcription as ft
+    from app.models.operational_records import IngestionJob
+    ft.reset_fake_retry_state()
+    monkeypatch.setattr("app.core.config.settings.FIELD_TRANSCRIPTION_PROVIDER", "fake_retry")
+    monkeypatch.setattr("app.core.config.settings.FIELD_TRANSCRIPTION_FAKE_RETRY_FAILS", 1)
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers, capture_source="voice", note_text=None).json()["capture"]
+    client.post(f"/v1/field-intelligence/captures/{cap['id']}/assets",
+                files={"file": ("v.ogg", io.BytesIO(b"OggS" + b"0" * 40), "audio/ogg")},
+                data={"client_asset_id": "aud", "kind": "audio"}, headers=headers)
+    obs_id = _complete(client, headers, cap["id"]).json()["observation"]["id"]
+    _process(db)  # first attempt fails retryably; job must NOT complete
+    assert _fetch(client, headers, obs_id)["status"] not in {"completed", "needs_review"}
+    job = db.query(IngestionJob).filter(IngestionJob.job_type == "field_intelligence_process").first()
+    assert job.status == "queued" and job.attempt_count >= 1
+    # simulate backoff elapsed -> second attempt succeeds
+    job.next_attempt_at = datetime.utcnow()
+    db.commit()
+    _process(db)
+    assert _fetch(client, headers, obs_id)["provenance"]["transcription_status"] == "completed"
+
+
+# ---- item 8: worker drains a 50-item batch without more traffic --------- #
+
+def test_worker_drains_50_item_batch(client, db):
+    _, _, headers = _auth(db)
+    captures = [{"client_capture_id": f"c{i}", "idempotency_key": f"c{i}", "note_text": f"Note {i} on Block A"} for i in range(50)]
+    res = client.post("/v1/field-intelligence/sync/batch", json={"captures": captures}, headers=headers)
+    assert res.json()["accepted"] == 50
+    from app.services.field_intelligence_worker import drain_until_empty
+    drain_until_empty(db)  # the scheduled worker, driven directly (no user traffic)
+    rows = client.get("/v1/field-intelligence/observations?limit=500", headers=headers).json()["observations"]
+    assert len(rows) == 50
+    assert all(o["status"] in {"completed", "needs_review"} for o in rows)
+
+
+# ---- item 12: PATCH cannot reach destructive/internal status ------------ #
+
+def test_patch_status_deleted_rejected(client, db):
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    obs_id = _complete(client, headers, cap["id"]).json()["observation"]["id"]
+    _process(db)
+    r = client.patch(f"/v1/field-intelligence/observations/{obs_id}", json={"status": "deleted"}, headers=headers)
+    assert r.status_code in (400, 422)
+    # observation is still present (not bypass-deleted)
+    assert client.get(f"/v1/field-intelligence/observations/{obs_id}", headers=headers).status_code == 200
+
+
+# ---- item 13: untranscribed blank recording is not usable evidence ------ #
+
+def test_blank_recording_not_usable_evidence(client, db, fake_store):
+    from app.models.operational_records import EvidenceRecord
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers, capture_source="voice", note_text=None).json()["capture"]
+    client.post(f"/v1/field-intelligence/captures/{cap['id']}/assets",
+                files={"file": ("v.ogg", io.BytesIO(b"OggS" + b"0" * 30), "audio/ogg")},
+                data={"client_asset_id": "aud", "kind": "audio"}, headers=headers)
+    obs_id = _complete(client, headers, cap["id"]).json()["observation"]["id"]
+    _process(db)  # disabled provider -> unavailable, no confirmed text
+    rec = db.query(EvidenceRecord).filter(EvidenceRecord.evidence_type == "field_observation").first()
+    assert rec is not None
+    assert rec.quality_status == "unusable"
+    assert rec.confidence == 0.0  # actual 0.0 preserved, never coerced to 0.5
+
+
+# ---- item 14: correction reprocesses downstream ------------------------- #
+
+def test_correction_enqueues_reprocess(client, db):
+    from app.models.operational_records import IngestionJob
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers, note_text="vague").json()["capture"]
+    obs_id = _complete(client, headers, cap["id"]).json()["observation"]["id"]
+    _process(db)
+    client.patch(f"/v1/field-intelligence/observations/{obs_id}",
+                 json={"corrected_transcript": "Irrigation ran 30 minutes applied 900 gallons on Block A"}, headers=headers)
+    jobs = db.query(IngestionJob).filter(IngestionJob.job_type == "field_intelligence_process").all()
+    active = [j for j in jobs if j.status in ("queued", "running") and (j.input_json or {}).get("observation_id") == obs_id]
+    assert len(active) == 1  # exactly one active reprocess (deduped)
+    _process(db)
+    obs = _fetch(client, headers, obs_id)
+    assert "reprocess_requested" in {e["action"] for e in obs["audit_history"]}
+    assert obs["structured"]["applied_water_gallons"] == 900  # refreshed extraction
+
+
+# ---- item 15: streaming range retrieval --------------------------------- #
+
+def test_asset_range_retrieval(client, db, fake_store):
+    from app.models.field_intelligence import FieldObservationAsset
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    payload = b"\x89PNG\r\n\x1a\n" + bytes(range(0, 200)) [:120]
+    client.post(f"/v1/field-intelligence/captures/{cap['id']}/assets",
+                files={"file": ("p.png", io.BytesIO(payload), "image/png")},
+                data={"client_asset_id": "a", "kind": "photo"}, headers=headers)
+    row = db.query(FieldObservationAsset).first()
+    resp = client.get(f"/v1/field-intelligence/assets/{row.id}/content", headers={**headers, "Range": "bytes=0-9"})
+    assert resp.status_code == 206
+    assert resp.headers["content-range"].startswith("bytes 0-9/")
+    assert resp.headers["accept-ranges"] == "bytes"
+    assert len(resp.content) == 10
+
+
+# ---- item 11: same-org / different-workspace isolation ------------------ #
+
+def test_workspace_isolation_same_org(client, db):
+    _, ws1, headers = _auth(db)
+    ws2 = Workspace(id="ws-iso-2", organization_id="org-fi", name="W2", crop="Grapes", region="CA", mode="live")
+    db.add(ws2); db.commit()
+    cap = _initiate(client, headers, workspace_id=ws1.id).json()["capture"]
+    obs_id = _complete(client, headers, cap["id"]).json()["observation"]["id"]
+    _process(db)
+    in_ws2 = client.get(f"/v1/field-intelligence/observations?workspace_id={ws2.id}", headers=headers).json()
+    assert all(o["id"] != obs_id for o in in_ws2["observations"])  # ws1 observation not visible under ws2
