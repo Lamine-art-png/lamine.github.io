@@ -17,7 +17,7 @@ from typing import Any, Iterable
 
 from fastapi import HTTPException, status
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, object_session
 
 from app.api.deps import AuthContext
 from app.core.config import settings
@@ -25,17 +25,19 @@ from app.models.field_intelligence import (
     FieldCaptureSession,
     FieldObservation,
     FieldObservationAsset,
+    FieldObservationAuditEvent,
     FieldObservationProcessingRun,
 )
 from app.models.operational_records import EvidenceRecord, IngestionJob
 from app.models.saas import Workspace
 from app.services.field_observation_correlation import correlate_observation
 from app.services.field_observation_extraction import extract_observation
-from app.services.field_transcription import transcribe_audio
+from app.services.field_transcription import RetryableTranscriptionError, transcribe_audio
 from app.services.object_storage import get_object_store, object_storage_configured
 
 NEEDS_REVIEW_CONFIDENCE = 0.5
 PROCESS_JOB_TYPE = "field_intelligence_process"
+ASSET_DELETE_JOB_TYPE = "field_intelligence_asset_delete"
 MAX_PROCESS_ATTEMPTS = 5
 PROCESS_LEASE_SECONDS = 120
 ASSET_READ_MAX_BYTES = 64 * 1024 * 1024
@@ -71,9 +73,32 @@ def _object_store():
     return get_object_store()
 
 
-def _payload_fingerprint(payload: dict) -> str:
+def _normalized_manifest(payload: dict) -> list:
+    """Fully normalize the asset manifest (client id, kind, content type)."""
+    items = []
+    for asset in payload.get("asset_manifest") or []:
+        if not isinstance(asset, dict):
+            continue
+        items.append(
+            {
+                "client_asset_id": str(asset.get("client_asset_id") or ""),
+                "kind": str(asset.get("kind") or ""),
+                "content_type": str(asset.get("content_type") or ""),
+            }
+        )
+    return sorted(items, key=lambda a: a["client_asset_id"])
+
+
+def _payload_fingerprint(payload: dict, *, workspace_id: str | None) -> str:
+    """Canonical fingerprint of the *accepted* capture payload.
+
+    Includes every field the server persists so that a replay with any material
+    difference (workspace, assignee, metadata, manifest, ...) is a conflict.
+    """
     canonical = {
+        "workspace_id": workspace_id,
         "note_text": (payload.get("note_text") or "").strip(),
+        "transcript_preview": (payload.get("transcript_preview") or "").strip(),
         "capture_source": payload.get("capture_source") or "typed",
         "field_id": payload.get("field_id"),
         "field_name": payload.get("field_name"),
@@ -82,26 +107,48 @@ def _payload_fingerprint(payload: dict) -> str:
         "crop": payload.get("crop"),
         "event_type": payload.get("event_type"),
         "severity": payload.get("severity"),
+        "assignee": payload.get("assignee"),
         "occurred_at": str(payload.get("occurred_at") or ""),
+        "client_created_at": str(payload.get("client_created_at") or ""),
         "latitude": payload.get("latitude"),
         "longitude": payload.get("longitude"),
-        "asset_manifest": sorted(
-            [str(a.get("client_asset_id")) for a in (payload.get("asset_manifest") or []) if isinstance(a, dict)]
-        ),
+        "location_accuracy_m": payload.get("location_accuracy_m"),
+        "metadata": payload.get("metadata") or {},
+        "asset_manifest": _normalized_manifest(payload),
     }
     blob = json.dumps(canonical, sort_keys=True, default=str)
     return hashlib.sha256(blob.encode("utf-8")).hexdigest()
 
 
 def _audit(observation: FieldObservation, action: str, *, actor: str | None, details: dict | None = None) -> None:
+    """Record an audit event.
+
+    The authoritative record is an append-only row in
+    ``field_observation_audit_events``; ``observation.audit_json`` is only a
+    denormalized presentation cache.
+    """
+    now = datetime.utcnow()
+    actor_type = "system" if actor == "system" else "user"
+    session = object_session(observation)
+    if session is not None:
+        session.add(
+            FieldObservationAuditEvent(
+                id=str(uuid.uuid4()),
+                tenant_id=observation.tenant_id,
+                workspace_id=observation.workspace_id,
+                observation_id=observation.id,
+                capture_session_id=observation.capture_session_id,
+                asset_id=(details or {}).get("asset_id"),
+                action=action,
+                actor=actor,
+                actor_type=actor_type,
+                details_json=details or {},
+                created_at=now,
+            )
+        )
     events = list(observation.audit_json or [])
     events.append(
-        {
-            "action": action,
-            "actor": actor,
-            "at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
-            "details": details or {},
-        }
+        {"action": action, "actor": actor, "at": now.isoformat(timespec="seconds") + "Z", "details": details or {}}
     )
     observation.audit_json = events
 
@@ -157,8 +204,10 @@ def initiate_capture(db: Session, ctx: AuthContext, payload: dict) -> FieldCaptu
     idempotency_key = str(payload.get("idempotency_key") or client_capture_id or "").strip()
     if not client_capture_id or not idempotency_key:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="client_capture_id and idempotency_key are required")
+    if len(idempotency_key) > 120:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="idempotency_key exceeds 120 characters")
 
-    fingerprint = _payload_fingerprint(payload)
+    fingerprint = _payload_fingerprint(payload, workspace_id=workspace_id)
 
     existing = (
         db.query(FieldCaptureSession)
@@ -487,6 +536,16 @@ def _process_observation(db: Session, job: IngestionJob) -> None:
         actor="system", details={"provider": tr.provider, "status": tr.status, "error": tr.error},
     )
 
+    # A transient provider failure (429/5xx/timeout/network) must not complete
+    # the job — raise so the durable plane retries with backoff. Persist what we
+    # have first so the audit/run trail survives the rollback-free retry.
+    if tr.status == "failed" and tr.retryable:
+        observation.status = "processing"
+        db.flush()
+        raise RetryableTranscriptionError(tr.error or "transcription_retryable_failure")
+
+    transcription_ok = tr.status in {"completed", "skipped"}
+
     # --- Extraction ---
     source_text = corrected or transcript or (session.note_text if session else "") or ""
     extraction = extract_observation(
@@ -537,7 +596,7 @@ def _process_observation(db: Session, job: IngestionJob) -> None:
     })
 
     # --- Feed into the AGRO-AI evidence graph ---
-    _link_evidence_record(db, observation)
+    _link_evidence_record(db, observation, source_text=source_text, transcription_ok=transcription_ok)
 
     observation.status = "needs_review" if extraction.confidence < NEEDS_REVIEW_CONFIDENCE else "completed"
     observation.processing_error = None
@@ -548,36 +607,32 @@ def _process_observation(db: Session, job: IngestionJob) -> None:
 
 
 def reprocess_observation(db: Session, ctx: AuthContext, observation_id: str) -> FieldObservation:
-    """Re-enqueue processing for a failed/needs-review observation."""
+    """Re-enqueue processing for a failed/needs-review observation (no duplicates)."""
     observation = get_observation(db, ctx, observation_id)
-    organization_id = require_org(ctx)
-    observation.status = "staged"
-    observation.processing_error = None
-    _audit(observation, "reprocess_requested", actor=ctx.user.id)
-    job = IngestionJob(
-        id=str(uuid.uuid4()),
-        tenant_id=organization_id,
-        workspace_id=observation.workspace_id,
-        job_type=PROCESS_JOB_TYPE,
-        status="queued",
-        input_json={"observation_id": observation.id, "capture_id": observation.capture_session_id, "language": "en"},
-        output_json={},
-        idempotency_key=f"fi-proc-{observation.id}-{uuid.uuid4().hex[:8]}",
-        attempt_count=0,
-        max_attempts=MAX_PROCESS_ATTEMPTS,
-        next_attempt_at=datetime.utcnow(),
-    )
-    db.add(job)
+    _enqueue_reprocess(db, observation, ctx_user_id=ctx.user.id)
     db.commit()
     db.refresh(observation)
     return observation
 
 
-def _link_evidence_record(db: Session, observation: FieldObservation) -> None:
+def _link_evidence_record(db: Session, observation: FieldObservation, *, source_text: str, transcription_ok: bool) -> None:
     """Create/refresh an EvidenceRecord so the observation joins the graph.
 
-    Idempotent: one evidence record per observation (keyed by metadata).
+    An untranscribed/failed voice capture with no confirmed text must NOT enter
+    AGRO-AI as usable, confident evidence. Quality is derived explicitly and the
+    real confidence (including 0.0) is preserved — never coerced to 0.5.
     """
+    confirmed_text = (source_text or "").strip()
+    confidence = observation.confidence if observation.confidence is not None else 0.0
+    if not confirmed_text:
+        # No usable content: failed/blank transcription. Mark unusable so Ask /
+        # Reports evidence consumers (which require usable) cannot read it.
+        quality_status = "unusable"
+    elif confidence < NEEDS_REVIEW_CONFIDENCE:
+        quality_status = "needs_review"
+    else:
+        quality_status = "usable"
+
     existing = (
         db.query(EvidenceRecord)
         .filter(EvidenceRecord.tenant_id == observation.tenant_id)
@@ -587,11 +642,20 @@ def _link_evidence_record(db: Session, observation: FieldObservation) -> None:
         if db.bind and db.bind.dialect.name == "postgresql"
         else _find_evidence_slow(db, observation)
     )
-    summary = observation.summary or observation.corrected_transcript or observation.transcript or "Field observation"
+    summary = (observation.summary or confirmed_text or "Field observation (no confirmed text)")[:2000]
+    metadata = {
+        "observation_id": observation.id,
+        "capture_session_id": observation.capture_session_id,
+        "source_mode": "field_capture",
+        "transcription_ok": transcription_ok,
+        "provenance": observation.provenance_json,
+    }
     if existing:
-        existing.summary = summary[:2000]
+        existing.summary = summary
         existing.value_json = observation.structured_json or {}
-        existing.confidence = observation.confidence or 0.5
+        existing.confidence = confidence
+        existing.quality_status = quality_status
+        existing.metadata_json = metadata
         return
     record = EvidenceRecord(
         id=str(uuid.uuid4()),
@@ -603,26 +667,21 @@ def _link_evidence_record(db: Session, observation: FieldObservation) -> None:
         occurred_at=observation.occurred_at,
         source_updated_at=datetime.utcnow(),
         title=(observation.field_name or "Field observation") + f" — {observation.event_type or 'observation'}",
-        summary=summary[:2000],
+        summary=summary,
         value_json=observation.structured_json or {},
         units=None,
-        confidence=observation.confidence or 0.5,
-        quality_status="usable",
+        confidence=confidence,
+        quality_status=quality_status,
         citation_label=f"Field observation {observation.id[:8]}",
         source_excerpt=(observation.corrected_transcript or observation.transcript or "")[:1000] or None,
-        metadata_json={
-            "observation_id": observation.id,
-            "capture_session_id": observation.capture_session_id,
-            "source_mode": "field_capture",
-            "provenance": observation.provenance_json,
-        },
+        metadata_json=metadata,
     )
     db.add(record)
     db.flush()
     evidence_ids = list(observation.evidence_ids_json or [])
     evidence_ids.append(record.id)
     observation.evidence_ids_json = evidence_ids
-    _audit(observation, "evidence_linked", actor="system", details={"evidence_id": record.id})
+    _audit(observation, "evidence_linked", actor="system", details={"evidence_id": record.id, "quality_status": quality_status})
 
 
 def _find_evidence_slow(db: Session, observation: FieldObservation) -> EvidenceRecord | None:
@@ -671,7 +730,17 @@ def register_asset(
         .first()
     )
     if existing and existing.status != "deleted":
-        return existing  # safe replay: no re-upload, spool cleaned by caller
+        # Strict idempotency: identical intent replays; different intent conflicts.
+        if _asset_matches(existing, content_sha256, size_bytes, kind, content_type):
+            return existing  # safe replay: no re-upload, spool cleaned by caller
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "code": "asset_idempotency_conflict",
+                "message": "This client_asset_id already stored different content.",
+                "asset_id": existing.id,
+            },
+        )
 
     # Same-content dedupe within the capture reuses the durable object.
     twin = (
@@ -682,6 +751,7 @@ def register_asset(
         .filter(FieldObservationAsset.status == "stored")
         .first()
     )
+    uploaded_new_ref: str | None = None
     if twin:
         object_ref = twin.object_ref
         backend = twin.storage_backend
@@ -698,6 +768,7 @@ def register_asset(
         )
         object_ref = stored.uri
         backend = "s3"
+        uploaded_new_ref = stored.uri  # track for compensating delete on race loss
 
     asset = FieldObservationAsset(
         id=str(uuid.uuid4()),
@@ -724,6 +795,8 @@ def register_asset(
     try:
         db.commit()
     except IntegrityError:
+        # Lost a concurrent race. If our upload created a *new* object that the
+        # winning row does not reference, delete it so no orphan remains in R2.
         db.rollback()
         winner = (
             db.query(FieldObservationAsset)
@@ -732,11 +805,30 @@ def register_asset(
             .filter(FieldObservationAsset.client_asset_id == client_asset_id)
             .first()
         )
+        if uploaded_new_ref and (not winner or winner.object_ref != uploaded_new_ref):
+            _best_effort_object_delete(organization_id, session.id, uploaded_new_ref)
         if winner:
             return winner
         raise
     db.refresh(asset)
     return asset
+
+
+def _asset_matches(asset: FieldObservationAsset, sha256: str, size: int, kind: str, content_type: str | None) -> bool:
+    return (
+        (asset.content_sha256 or "") == sha256
+        and int(asset.size_bytes or -1) == int(size)
+        and (asset.kind or "") == kind
+        and (asset.content_type or "") == (content_type or "")
+    )
+
+
+def _best_effort_object_delete(tenant_id: str, capture_session_id: str, object_ref: str) -> None:
+    try:
+        if object_storage_configured():
+            get_object_store().delete(object_ref, tenant_id=tenant_id, connection_id=capture_session_id)
+    except Exception:  # noqa: BLE001 - compensating delete is best-effort
+        pass
 
 
 def read_asset_bytes(db: Session, ctx: AuthContext, asset_id: str) -> tuple[FieldObservationAsset, bytes]:
@@ -764,6 +856,43 @@ def read_asset_bytes(db: Session, ctx: AuthContext, asset_id: str) -> tuple[Fiel
     return asset, data
 
 
+def open_asset_stream(db: Session, ctx: AuthContext, asset_id: str, *, byte_range: tuple[int, int] | None = None):
+    """Authorize an asset and return (asset, iterator, total_size, served_range).
+
+    Streams from R2 without buffering the whole object in API memory. Retrieval
+    is disabled the instant the asset leaves ``stored`` (deletion) or its
+    observation is deleted.
+    """
+    organization_id = require_org(ctx)
+    asset = (
+        db.query(FieldObservationAsset)
+        .filter(FieldObservationAsset.tenant_id == organization_id)
+        .filter(FieldObservationAsset.id == asset_id)
+        .first()
+    )
+    if not asset or asset.status != "stored":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    if asset.observation_id:
+        observation = db.get(FieldObservation, asset.observation_id)
+        if observation and observation.status == "deleted":
+            raise HTTPException(status_code=status.HTTP_410_GONE, detail="Asset no longer available")
+    store = _object_store()
+    total = int(asset.size_bytes or 0)
+    served_range = None
+    if byte_range is not None:
+        start, end = byte_range
+        end = min(end, max(total - 1, 0)) if total else end
+        if start > end or start < 0:
+            raise HTTPException(status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE, detail="Invalid range")
+        served_range = (start, end, total)
+    iterator = store.stream_object(
+        asset.object_ref, tenant_id=organization_id, connection_id=asset.capture_session_id,
+        byte_range=(served_range[0], served_range[1]) if served_range else None,
+        chunk_size=int(settings.FIELD_ASSET_STREAM_CHUNK),
+    )
+    return asset, iterator, total, served_range
+
+
 def delete_asset(db: Session, ctx: AuthContext, asset_id: str) -> None:
     organization_id = require_org(ctx)
     asset = (
@@ -774,55 +903,128 @@ def delete_asset(db: Session, ctx: AuthContext, asset_id: str) -> None:
     )
     if not asset:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
-    _schedule_asset_deletion(db, asset)
+    _mark_pending_deletion(db, asset)
     if asset.observation_id:
         observation = db.get(FieldObservation, asset.observation_id)
         if observation:
             _audit(observation, "asset_deleted", actor=ctx.user.id, details={"asset_id": asset_id})
-    db.commit()
+    db.commit()  # first transaction commits pending_deletion + the deletion job
 
 
-def _schedule_asset_deletion(db: Session, asset: FieldObservationAsset) -> None:
-    """Mark pending deletion, then attempt durable object removal."""
+def _mark_pending_deletion(db: Session, asset: FieldObservationAsset) -> None:
+    """First transaction: mark pending and stage an idempotent deletion job.
+
+    The physical R2 delete happens later in the worker, in its own transaction.
+    Retrieval is already disabled the moment status leaves ``stored``.
+    """
+    if asset.status in {"pending_deletion", "deleted"}:
+        return
     asset.status = "pending_deletion"
     asset.deleted_at = datetime.utcnow()
+    idempotency_key = f"fi-del-{asset.id}"
+    exists = (
+        db.query(IngestionJob)
+        .filter(IngestionJob.tenant_id == asset.tenant_id)
+        .filter(IngestionJob.idempotency_key == idempotency_key)
+        .first()
+    )
+    if not exists:
+        db.add(
+            IngestionJob(
+                id=str(uuid.uuid4()),
+                tenant_id=asset.tenant_id,
+                workspace_id=asset.workspace_id,
+                job_type=ASSET_DELETE_JOB_TYPE,
+                status="queued",
+                input_json={"asset_id": asset.id},
+                output_json={},
+                idempotency_key=idempotency_key,
+                attempt_count=0,
+                max_attempts=MAX_PROCESS_ATTEMPTS,
+                next_attempt_at=datetime.utcnow(),
+            )
+        )
+
+
+def _execute_object_deletion(db: Session, asset: FieldObservationAsset) -> bool:
+    """Worker step: physically remove the R2 object, confirm, mark deleted.
+
+    Never marks ``deleted`` unless the object is confirmed gone (or there is no
+    durable object / it is still shared). On failure the asset stays
+    ``pending_deletion`` for retry.
+    """
+    if asset.status == "deleted":
+        return True
     if not asset.object_ref or asset.storage_backend != "s3":
         asset.status = "deleted"
-        return
-    # Only remove the durable object when no other stored asset references it.
+        asset.object_deleted_at = datetime.utcnow()
+        return True
     shared = (
         db.query(FieldObservationAsset)
         .filter(FieldObservationAsset.tenant_id == asset.tenant_id)
         .filter(FieldObservationAsset.object_ref == asset.object_ref)
         .filter(FieldObservationAsset.id != asset.id)
-        .filter(FieldObservationAsset.status == "stored")
+        .filter(FieldObservationAsset.status.in_(["stored", "pending_deletion"]))
         .count()
     )
     try:
-        if shared == 0 and object_storage_configured():
+        if shared == 0:
+            if not object_storage_configured():
+                asset.delete_attempts = int(asset.delete_attempts or 0) + 1
+                return False  # storage unavailable -> remain pending_deletion
             get_object_store().delete(
                 asset.object_ref, tenant_id=asset.tenant_id, connection_id=asset.capture_session_id
             )
         asset.status = "deleted"
         asset.object_deleted_at = datetime.utcnow()
-    except Exception:  # noqa: BLE001 - keep pending for retry, never lose the row
+        return True
+    except Exception:  # noqa: BLE001 - remain pending for retry, never lose the row
         asset.delete_attempts = int(asset.delete_attempts or 0) + 1
+        return False
 
 
-def run_pending_asset_deletions(db: Session, *, limit: int = 50) -> int:
-    pending = (
-        db.query(FieldObservationAsset)
-        .filter(FieldObservationAsset.status == "pending_deletion")
+def run_field_intelligence_deletions(db: Session, *, limit: int = 50, worker_id: str | None = None) -> dict:
+    """Durable worker: process staged asset-deletion jobs (leased, retried)."""
+    worker_id = worker_id or f"del-{uuid.uuid4().hex[:8]}"
+    now = datetime.utcnow()
+    candidates = (
+        db.query(IngestionJob)
+        .filter(IngestionJob.job_type == ASSET_DELETE_JOB_TYPE)
+        .filter(IngestionJob.status.in_(["queued", "running"]))
+        .filter((IngestionJob.next_attempt_at.is_(None)) | (IngestionJob.next_attempt_at <= now))
+        .filter((IngestionJob.lease_expires_at.is_(None)) | (IngestionJob.lease_expires_at <= now))
+        .order_by(IngestionJob.created_at.asc())
         .limit(limit)
         .all()
     )
-    done = 0
-    for asset in pending:
-        _schedule_asset_deletion(db, asset)
-        if asset.status == "deleted":
-            done += 1
-    db.commit()
-    return done
+    deleted = 0
+    for job in candidates:
+        if not _claim_job(db, job, worker_id):
+            continue
+        db.refresh(job)
+        asset = db.get(FieldObservationAsset, (job.input_json or {}).get("asset_id"))
+        if not asset:
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            job.lease_expires_at = None
+            db.commit()
+            continue
+        try:
+            ok = _execute_object_deletion(db, asset)
+            if ok:
+                job.status = "completed"
+                job.completed_at = datetime.utcnow()
+                job.lease_expires_at = None
+                job.worker_id = None
+                db.commit()
+                deleted += 1
+            else:
+                db.commit()
+                _fail_or_retry(db, job.id, RuntimeError("object_deletion_incomplete"))
+        except Exception as exc:  # noqa: BLE001
+            db.rollback()
+            _fail_or_retry(db, job.id, exc)
+    return {"deleted": deleted, "worker_id": worker_id}
 
 
 # ---------------------------------------------------------------------------
@@ -884,9 +1086,16 @@ def get_observation(db: Session, ctx: AuthContext, observation_id: str) -> Field
     return observation
 
 
+# Statuses a user may set through the generic PATCH endpoint. Destructive and
+# internal-processing states are intentionally excluded — DELETE is the only
+# destructive path, and processing state is owned by the worker.
+USER_SETTABLE_STATUSES = {"needs_review", "acknowledged", "completed"}
+
+
 def patch_observation(db: Session, ctx: AuthContext, observation_id: str, changes: dict) -> FieldObservation:
     observation = get_observation(db, ctx, observation_id)
     corrected = changes.get("corrected_transcript")
+    correction_changed = corrected is not None and corrected != (observation.corrected_transcript or "")
     if corrected is not None:
         observation.corrected_transcript = corrected
         observation.search_text = _search_text(observation, corrected)
@@ -899,13 +1108,65 @@ def patch_observation(db: Session, ctx: AuthContext, observation_id: str, change
         merged["corrected_by_user"] = True
         observation.structured_json = merged
     if changes.get("status"):
+        if changes["status"] not in USER_SETTABLE_STATUSES:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail={"code": "invalid_status", "message": "That status cannot be set via patch.", "allowed": sorted(USER_SETTABLE_STATUSES)},
+            )
         observation.status = changes["status"]
     _audit(observation, "observation_corrected", actor=ctx.user.id, details={"fields": sorted(changes.keys())})
-    # keep the linked evidence in sync
-    _refresh_linked_evidence(db, observation)
+    # A transcript correction re-runs extraction/correlation/evidence downstream.
+    if correction_changed:
+        _enqueue_reprocess(db, observation, ctx_user_id=ctx.user.id)
+    else:
+        _refresh_linked_evidence(db, observation)
     db.commit()
     db.refresh(observation)
     return observation
+
+
+def _has_active_process_job(db: Session, observation_id: str) -> bool:
+    return (
+        db.query(IngestionJob)
+        .filter(IngestionJob.job_type == PROCESS_JOB_TYPE)
+        .filter(IngestionJob.status.in_(["queued", "running"]))
+        .filter(IngestionJob.input_json["observation_id"].as_string() == observation_id)
+        .first()
+        is not None
+        if db.bind and db.bind.dialect.name == "postgresql"
+        else any(
+            (j.input_json or {}).get("observation_id") == observation_id
+            for j in db.query(IngestionJob)
+            .filter(IngestionJob.job_type == PROCESS_JOB_TYPE)
+            .filter(IngestionJob.status.in_(["queued", "running"]))
+            .all()
+        )
+    )
+
+
+def _enqueue_reprocess(db: Session, observation: FieldObservation, *, ctx_user_id: str | None) -> bool:
+    """Stage a reprocess job unless one is already active (no duplicates)."""
+    if _has_active_process_job(db, observation.id):
+        return False
+    observation.status = "staged"
+    observation.processing_error = None
+    _audit(observation, "reprocess_requested", actor=ctx_user_id or "system")
+    db.add(
+        IngestionJob(
+            id=str(uuid.uuid4()),
+            tenant_id=observation.tenant_id,
+            workspace_id=observation.workspace_id,
+            job_type=PROCESS_JOB_TYPE,
+            status="queued",
+            input_json={"observation_id": observation.id, "capture_id": observation.capture_session_id, "language": "en"},
+            output_json={},
+            idempotency_key=f"fi-proc-{observation.id}-{uuid.uuid4().hex[:8]}",
+            attempt_count=0,
+            max_attempts=MAX_PROCESS_ATTEMPTS,
+            next_attempt_at=datetime.utcnow(),
+        )
+    )
+    return True
 
 
 def _refresh_linked_evidence(db: Session, observation: FieldObservation) -> None:
@@ -927,7 +1188,7 @@ def delete_observation(db: Session, ctx: AuthContext, observation_id: str) -> No
         .filter(FieldObservationAsset.status == "stored")
         .all()
     ):
-        _schedule_asset_deletion(db, asset)
+        _mark_pending_deletion(db, asset)
     # remove linked evidence from the graph
     evidence = _find_evidence_slow(db, observation)
     if evidence:

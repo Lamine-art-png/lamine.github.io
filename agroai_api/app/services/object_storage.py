@@ -230,6 +230,43 @@ class S3ObjectStore:
         key = self._validated_key(uri, tenant_id=tenant_id, connection_id=connection_id)
         self.client.delete_object(Bucket=self.bucket, Key=key)
 
+    def stat(self, uri: str, *, tenant_id: str | None = None, connection_id: str | None = None) -> tuple[int, str | None]:
+        """Return (size_bytes, content_type) for an authorized object."""
+        key = self._validated_key(uri, tenant_id=tenant_id, connection_id=connection_id)
+        head = self.client.head_object(Bucket=self.bucket, Key=key)
+        return int(head.get("ContentLength") or 0), head.get("ContentType")
+
+    def stream_object(
+        self,
+        uri: str,
+        *,
+        tenant_id: str | None = None,
+        connection_id: str | None = None,
+        byte_range: tuple[int, int] | None = None,
+        chunk_size: int = 256 * 1024,
+    ):
+        """Stream an authorized object without buffering it fully in memory.
+
+        Supports HTTP range requests. Tenant/connection namespace is validated
+        against the key before any bytes are read; integrity of the stored object
+        was verified at upload time.
+        """
+        key = self._validated_key(uri, tenant_id=tenant_id, connection_id=connection_id)
+        kwargs: dict[str, Any] = {"Bucket": self.bucket, "Key": key}
+        if byte_range is not None:
+            kwargs["Range"] = f"bytes={byte_range[0]}-{byte_range[1]}"
+        response = self.client.get_object(**kwargs)
+        body = response["Body"]
+
+        def _iterator():
+            while True:
+                chunk = body.read(chunk_size)
+                if not chunk:
+                    break
+                yield chunk
+
+        return _iterator()
+
 
 def object_storage_configured() -> bool:
     backend = getattr(settings, "CONNECTOR_OBJECT_STORAGE_BACKEND", "disabled").strip().lower()

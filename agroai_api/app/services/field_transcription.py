@@ -24,12 +24,23 @@ class TranscriptionResult:
     duration_seconds: float | None = None
     latency_ms: int | None = None
     error: str | None = None
+    # True => a transient provider error (429/5xx/timeout/network); the durable
+    # job should retry with backoff. False => terminal (invalid audio, 4xx).
+    retryable: bool = False
     attempt_count: int = 1
     metadata: dict = field(default_factory=dict)
 
     @property
     def succeeded(self) -> bool:
         return self.status == "completed" and bool(self.transcript)
+
+
+# HTTP status codes / error classes that warrant a durable retry.
+_RETRYABLE_HTTP = {408, 425, 429, 500, 502, 503, 504}
+
+
+class RetryableTranscriptionError(Exception):
+    """Raised by callers to force durable job retry on a transient failure."""
 
 
 class TranscriptionProvider(Protocol):
@@ -169,24 +180,62 @@ class HttpTranscriptionProvider:
                 return TranscriptionResult(
                     provider=self.name, status="failed", model=model, language=language,
                     latency_ms=latency, error=f"provider_http_{response.status_code}",
+                    retryable=response.status_code in _RETRYABLE_HTTP,
                 )
             payload = response.json()
             transcript = (payload.get("text") or payload.get("transcript") or "").strip()
             if not transcript:
+                # Empty transcript from a 2xx is treated as terminal (no text).
                 return TranscriptionResult(
                     provider=self.name, status="failed", model=model, language=language,
-                    latency_ms=latency, error="provider_returned_empty_transcript",
+                    latency_ms=latency, error="provider_returned_empty_transcript", retryable=False,
                 )
             return TranscriptionResult(
                 provider=self.name, status="completed", transcript=transcript, model=model,
                 language=payload.get("language") or language, latency_ms=latency,
             )
         except Exception as exc:  # noqa: BLE001 - surface failure truthfully
+            # Timeouts and network/connection errors are transient -> retryable.
+            name = exc.__class__.__name__.lower()
+            transient = any(tok in name for tok in ("timeout", "connect", "network", "pool", "protocol", "read"))
             return TranscriptionResult(
                 provider=self.name, status="failed", model=model, language=language,
                 latency_ms=int((time.monotonic() - started) * 1000),
-                error=exc.__class__.__name__,
+                error=exc.__class__.__name__, retryable=transient,
             )
+
+
+# Process-local counter so the retry provider can fail transiently a bounded
+# number of times before succeeding, exercising durable auto-retry.
+_FAKE_RETRY_ATTEMPTS = {"n": 0}
+
+
+class FakeRetryTranscriptionProvider:
+    """Fails with a retryable error for the first N attempts, then succeeds."""
+
+    name = "fake_retry"
+
+    def __init__(self, fail_times: int = 1):
+        self._fail_times = fail_times
+
+    def available(self) -> bool:
+        return True
+
+    def transcribe_bytes(self, *, audio, content_type, language) -> TranscriptionResult:
+        _FAKE_RETRY_ATTEMPTS["n"] += 1
+        if _FAKE_RETRY_ATTEMPTS["n"] <= self._fail_times:
+            return TranscriptionResult(
+                provider=self.name, status="failed", model="fake-retry", language=language or "en",
+                error="synthetic_transient_503", retryable=True,
+            )
+        return TranscriptionResult(
+            provider=self.name, status="completed", model="fake-retry", language=language or "en",
+            transcript=f"[fake retry transcript of {len(audio or b'')} audio bytes]",
+        )
+
+
+def reset_fake_retry_state() -> None:
+    _FAKE_RETRY_ATTEMPTS["n"] = 0
 
 
 def get_transcription_provider() -> TranscriptionProvider:
@@ -196,6 +245,8 @@ def get_transcription_provider() -> TranscriptionProvider:
         return FakeTranscriptionProvider()
     if mode in {"fake_fail", "test_fail"}:
         return FakeTranscriptionProvider(fail=True)
+    if mode in {"fake_retry", "test_retry"}:
+        return FakeRetryTranscriptionProvider(int(getattr(settings, "FIELD_TRANSCRIPTION_FAKE_RETRY_FAILS", 1) or 1))
     if mode in {"http", "configured", "production"}:
         provider = HttpTranscriptionProvider()
         return provider if provider.available() else DisabledTranscriptionProvider()

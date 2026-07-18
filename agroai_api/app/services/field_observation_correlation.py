@@ -111,10 +111,16 @@ def correlate_observation(db: Session, observation: FieldObservation) -> dict:
             source_mode = "live"
             freshness = _freshness(reference, connection.last_sync_at)
         elif conn_status in {"not_configured", "needs_credentials"}:
-            source_mode = "uploaded"
+            # Not configured is neither uploaded nor sample data — it is simply
+            # unavailable as an evidence source.
+            source_mode = "unavailable"
+            freshness = "unavailable"
+        elif conn_status in {"sample", "demo"}:
+            source_mode = "sample"
             freshness = "unavailable"
         else:
-            source_mode = "sample"
+            # error/disconnected/unknown states: don't imply data exists.
+            source_mode = "unknown"
             freshness = "unavailable"
         connector_summary.append(
             {
@@ -127,27 +133,32 @@ def correlate_observation(db: Session, observation: FieldObservation) -> dict:
         )
         providers.add(connection.provider)
 
-    # Recent prior observations on the same field, and open operator tasks.
-    recent_observations = (
+    # Recent prior observations on the same field + open operator tasks, scoped
+    # to the active workspace (null-workspace rows are shared/platform scope).
+    recent_q = (
         db.query(FieldObservation)
         .filter(FieldObservation.tenant_id == tenant_id)
         .filter(FieldObservation.id != observation.id)
         .filter(FieldObservation.status.notin_(["deleted"]))
         .filter(FieldObservation.field_id == observation.field_id)
-        .order_by(FieldObservation.occurred_at.desc())
-        .limit(5)
-        .all()
-        if observation.field_id
-        else []
     )
-    open_tasks = (
+    if workspace_id:
+        recent_q = recent_q.filter(
+            (FieldObservation.workspace_id == workspace_id) | (FieldObservation.workspace_id.is_(None))
+        )
+    recent_observations = recent_q.order_by(FieldObservation.occurred_at.desc()).limit(5).all() if observation.field_id else []
+
+    tasks_q = (
         db.query(IngestionJob)
         .filter(IngestionJob.tenant_id == tenant_id)
         .filter(IngestionJob.job_type == TASK_JOB_TYPE)
         .filter(IngestionJob.status.in_(["open", "in_progress"]))
-        .limit(10)
-        .all()
     )
+    if workspace_id:
+        tasks_q = tasks_q.filter(
+            (IngestionJob.workspace_id == workspace_id) | (IngestionJob.workspace_id.is_(None))
+        )
+    open_tasks = tasks_q.limit(10).all()
 
     fresh_live = sum(1 for e in related_evidence if e["source_mode"] == "live" and e["freshness"] == "fresh")
     severity = (observation.severity or "info").lower()
@@ -176,11 +187,8 @@ def correlate_observation(db: Session, observation: FieldObservation) -> dict:
         ],
         "open_tasks": [{"task_id": t.id, "title": (t.input_json or {}).get("title")} for t in open_tasks],
         "source_providers": sorted(providers),
-        "source_mode_summary": {
-            "live": sum(1 for e in related_evidence if e["source_mode"] == "live"),
-            "sample": sum(1 for e in related_evidence if e["source_mode"] == "sample"),
-            "uploaded": sum(1 for e in related_evidence if e["source_mode"] == "uploaded"),
-        },
+        "source_mode_summary": _count_modes(related_evidence),
+        "connector_mode_summary": _count_modes(connector_summary),
         "freshness_summary": {
             "fresh": sum(1 for e in related_evidence if e["freshness"] == "fresh"),
             "stale": sum(1 for e in related_evidence if e["freshness"] == "stale"),
@@ -192,6 +200,18 @@ def correlate_observation(db: Session, observation: FieldObservation) -> dict:
         "should_create_task": should_create_task,
         "additional_evidence_required": additional_evidence_required,
     }
+
+
+# Every source mode the system can report, so summaries are explicit and stable.
+SOURCE_MODES = ("live", "sample", "uploaded", "field_capture", "unavailable", "unknown")
+
+
+def _count_modes(rows: list[dict]) -> dict:
+    counts = {mode: 0 for mode in SOURCE_MODES}
+    for row in rows:
+        mode = row.get("source_mode", "unknown")
+        counts[mode] = counts.get(mode, 0) + 1
+    return counts
 
 
 def _evidence_provider(db: Session, row: EvidenceRecord) -> str:

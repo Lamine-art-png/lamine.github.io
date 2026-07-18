@@ -89,7 +89,25 @@ async def lifespan(app: FastAPI):
             bool(settings.WISECONN_API_KEY),
         )
 
+    field_worker_started = False
+    try:
+        from app.services.field_intelligence_worker import start_field_intelligence_worker
+
+        if start_field_intelligence_worker() is not None:
+            field_worker_started = True
+            logger.info("Field Intelligence worker started")
+    except Exception:
+        logger.exception("Field Intelligence worker failed to start; captures will still stage durably")
+
     yield
+
+    if field_worker_started:
+        try:
+            from app.services.field_intelligence_worker import stop_field_intelligence_worker
+
+            stop_field_intelligence_worker()
+        except Exception:
+            logger.exception("Field Intelligence worker failed to stop cleanly")
 
     if scheduler_started:
         try:

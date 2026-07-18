@@ -64,9 +64,15 @@ class Settings(BaseSettings):
     FIELD_TRANSCRIPTION_ENDPOINT: str = ""  # real provider endpoint (http provider)
     FIELD_TRANSCRIPTION_API_KEY: str = ""  # provider credential (never sent to browser)
     FIELD_TRANSCRIPTION_MODEL: str = ""
+    FIELD_TRANSCRIPTION_FAKE_RETRY_FAILS: int = 1  # test provider transient-fail count
     FIELD_ASSET_MAX_BYTES: int = 52428800  # 50 MiB per captured asset
+    FIELD_ASSET_STREAM_CHUNK: int = 262144  # 256 KiB streaming chunk for retrieval
     FIELD_AUDIO_MAX_SECONDS: int = 900  # 15 minutes of durable audio
     FIELD_SYNC_MAX_BATCH: int = 50  # bounded offline sync batch size
+    FIELD_SYNC_MAX_BODY_BYTES: int = 5242880  # 5 MiB cap on a sync batch body
+    FIELD_INTELLIGENCE_WORKER_ENABLED: bool = True
+    FIELD_WORKER_INTERVAL_SECONDS: int = 15
+    FIELD_WORKER_BATCH: int = 25
     FIELD_MAP_STYLE_URL: str = ""  # optional MapLibre style; empty => graceful fallback
 
     # Scheduler
