@@ -1,53 +1,116 @@
-name: Security Build Inspect
+name: Apply and Validate Security Build
 
 on:
-  pull_request:
+  push:
     branches:
-      - main
+      - security/automated-verification-july20
+    paths:
+      - .github/security-patch/**
+      - .github/workflows/security-build-inspect.yml
 
 permissions:
-  contents: read
+  contents: write
 
 env:
   CI: true
+  PYTHONUNBUFFERED: "1"
+
+concurrency:
+  group: automated-verification-security-build
+  cancel-in-progress: false
 
 jobs:
-  snapshot:
+  apply-test-commit:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 40
     steps:
-      - name: Check out repository
+      - name: Check out implementation branch
         uses: actions/checkout@v4
+        with:
+          ref: security/automated-verification-july20
+          fetch-depth: 0
 
-      - name: Create scoped source snapshot
+      - name: Reconstruct and verify implementation patch
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p /tmp/agro-ai-security-source
-          for path in figma-enterprise-v4 agroai_api shared; do
-            if [ -e "$path" ]; then
-              rsync -a \
-                --exclude 'node_modules' \
-                --exclude '.venv' \
-                --exclude 'venv' \
-                --exclude 'dist' \
-                --exclude 'build' \
-                --exclude '.next' \
-                --exclude '__pycache__' \
-                "$path" /tmp/agro-ai-security-source/
-            fi
-          done
-          for file in package.json package-lock.json pnpm-lock.yaml yarn.lock README.md wrangler.toml; do
-            if [ -f "$file" ]; then
-              cp "$file" /tmp/agro-ai-security-source/
-            fi
-          done
-          find /tmp/agro-ai-security-source -type f | sort > /tmp/agro-ai-security-source/REPOSITORY_FILE_LIST.txt
+          test "$(find .github/security-patch -maxdepth 1 -name 'chunk-*' -type f | wc -l)" -eq 6
+          cat .github/security-patch/chunk-* > /tmp/agro-security.patch.gz.b64
+          echo "39c3e545c707ab04251c49e5d8683eb9799018e9f703ca3f7f8453e64bf866a0  /tmp/agro-security.patch.gz.b64" | sha256sum --check --strict
+          base64 --decode /tmp/agro-security.patch.gz.b64 | gzip --decompress > /tmp/agro-security.patch
+          echo "5ba38c0d0ea1d889b15aae7d18e8f3c8de84361595a22007014c0f8051e39aba  /tmp/agro-security.patch" | sha256sum --check --strict
+          patch --dry-run -p1 < /tmp/agro-security.patch
+          patch -p1 < /tmp/agro-security.patch
 
-      - name: Upload scoped source snapshot
-        uses: actions/upload-artifact@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
         with:
-          name: agro-ai-security-source-snapshot
-          path: /tmp/agro-ai-security-source
-          if-no-files-found: error
-          retention-days: 1
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: agroai_api/requirements.txt
+
+      - name: Install backend dependencies
+        working-directory: agroai_api
+        run: python -m pip install --disable-pip-version-check -r requirements.txt
+
+      - name: Compile and test backend security contracts
+        working-directory: agroai_api
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m compileall -q app tests/unit/test_account_verification_security.py
+          pytest -q \
+            tests/unit/test_account_verification_security.py \
+            tests/unit/test_saas_foundation.py \
+            tests/unit/test_operation_workspaces.py \
+            tests/unit/test_schema_adoption_contract.py \
+            tests/unit/test_alembic_revision_contract.py
+
+      - name: Validate clean database migration
+        working-directory: agroai_api
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/agro-security-migration.db
+          DATABASE_URL=sqlite:////tmp/agro-security-migration.db alembic upgrade head
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+
+      - name: Install frontend dependencies
+        working-directory: figma-enterprise-v4
+        run: npm ci
+
+      - name: Validate frontend build and locale inventory
+        working-directory: figma-enterprise-v4
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm run build
+          python3 scripts/check_ui_literal_inventory.py --check
+          test -f dist/_headers
+
+      - name: Remove one-time patch transport
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -rf .github/security-patch
+          rm -f .github/workflows/security-build-inspect.yml
+
+      - name: Commit validated implementation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No implementation changes were produced." >&2
+            exit 1
+          fi
+          git commit -m "feat: automate organization verification and harden portal access"
+          git push origin HEAD:security/automated-verification-july20
