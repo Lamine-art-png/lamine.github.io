@@ -1,9 +1,9 @@
 name: Apply and Validate Security Build
 
 on:
-  push:
+  pull_request:
     branches:
-      - security/automated-verification-july20
+      - main
     paths:
       - .github/security-patch/**
       - .github/workflows/security-build-inspect.yml
@@ -21,6 +21,7 @@ concurrency:
 
 jobs:
   apply-test-commit:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'security/automated-verification-july20'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     steps:
