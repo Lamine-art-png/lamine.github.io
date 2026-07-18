@@ -365,3 +365,6 @@ app.include_router(operator_cockpit_router, prefix="/v1")
 
 from app.api.v1.field_operations import router as field_operations_router  # noqa: E402
 app.include_router(field_operations_router, prefix="/v1")
+
+from app.api.v1.field_intelligence import router as field_intelligence_router  # noqa: E402
+app.include_router(field_intelligence_router, prefix="/v1")

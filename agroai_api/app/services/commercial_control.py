@@ -27,6 +27,7 @@ BASE_ENTITLEMENTS: dict[str, dict[str, Any]] = {
     "free": {
         "intelligence.profile": "essential",
         "intelligence.ask": "enabled",
+        "field_intelligence.capture": "enabled",
         "intelligence.deep_analysis": "locked",
         "intelligence.workspace_memory": "preview",
         "intelligence.shared_memory": "locked",
