@@ -8,7 +8,7 @@ import { useLocale } from "../hooks/useLocale";
 import { apiClient } from "../api/client";
 import { fieldApi } from "../fieldIntelligence/fieldApi";
 import {
-  allCaptures, deleteUnsyncedRecord, flushQueue, getLastSyncedAt, indexedDbAvailable,
+  allCaptures, configureIdentity, deleteUnsyncedRecord, flushQueue, getLastSyncedAt, indexedDbAvailable,
   newCaptureId, pendingCount, putAsset, putCapture, retryRecord, subscribe,
   type CaptureRecord, type SyncState,
 } from "../fieldIntelligence/offlineQueue";
@@ -24,8 +24,15 @@ type Observation = Record<string, any>;
 
 export function FieldIntelligence() {
   const { t } = useLocale();
-  const { entitlements, currentWorkspace, workspaces } = useAuth() as any;
+  const { entitlements, currentWorkspace, workspaces, currentOrganization, user } = useAuth() as any;
   const workspaceId: string | undefined = currentWorkspace?.id || workspaces?.[0]?.id;
+
+  // Namespace the offline queue by authenticated org + user so one account can
+  // never read or sync another account's local captures. Re-runs on login,
+  // logout, account/org change.
+  useEffect(() => {
+    configureIdentity(currentOrganization?.id || null, user?.id || null);
+  }, [currentOrganization?.id, user?.id]);
 
   const capabilityEnabled = useMemo(() => {
     const caps = (entitlements?.capabilities || {}) as Record<string, unknown>;
