@@ -30,6 +30,10 @@ class User(Base):
     email_verified_at = Column(DateTime, nullable=True)
     email_verification_status = Column(String, default="unverified", nullable=False, index=True)
     credentials_changed_at = Column(DateTime, nullable=True)
+    account_status = Column(String, default="active", nullable=False, index=True)
+    failed_login_attempts = Column(Integer, default=0, nullable=False)
+    failed_login_window_started_at = Column(DateTime, nullable=True)
+    locked_until = Column(DateTime, nullable=True, index=True)
 
     owned_organizations = relationship("Organization", back_populates="owner")
     memberships = relationship("OrganizationMembership", back_populates="user", cascade="all, delete-orphan")
@@ -37,6 +41,7 @@ class User(Base):
     email_verification_tokens = relationship("EmailVerificationToken", back_populates="user", cascade="all, delete-orphan")
     account_recovery_tokens = relationship("AccountRecoveryToken", back_populates="user", cascade="all, delete-orphan")
     team_invitations_sent = relationship("TeamInvitation", back_populates="invited_by_user", cascade="all, delete-orphan")
+    security_events = relationship("SecurityAuditEvent", back_populates="user")
 
 
 class Organization(Base):
@@ -52,6 +57,12 @@ class Organization(Base):
     organization_type = Column(String, nullable=True, index=True)
     commercial_metadata_json = Column(JSON, nullable=True)
     subscription_status = Column(String, default="inactive", nullable=False)
+    verification_status = Column(String, default="approved_legacy", nullable=False, index=True)
+    verification_score = Column(Integer, nullable=True)
+    verification_reason_codes_json = Column(JSON, nullable=True)
+    verification_engine_version = Column(String, nullable=True)
+    verification_submitted_at = Column(DateTime, nullable=True)
+    verified_at = Column(DateTime, nullable=True)
     subscription_source = Column(String, default="local", nullable=False, index=True)
     stripe_customer_id = Column(String, nullable=True, index=True)
     stripe_subscription_id = Column(String, nullable=True, index=True)
@@ -68,6 +79,59 @@ class Organization(Base):
     workspaces = relationship("Workspace", back_populates="organization", cascade="all, delete-orphan")
     billing_events = relationship("BillingEvent", back_populates="organization")
     usage_events = relationship("UsageEvent", back_populates="organization")
+    verification_profile = relationship("OrganizationVerificationProfile", back_populates="organization", uselist=False, cascade="all, delete-orphan")
+    security_events = relationship("SecurityAuditEvent", back_populates="organization")
+
+
+class OrganizationVerificationProfile(Base):
+    __tablename__ = "organization_verification_profiles"
+
+    id = Column(String, primary_key=True, default=new_id, index=True)
+    organization_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
+    professional_role = Column(String, nullable=False)
+    organization_type = Column(String, nullable=False, index=True)
+    website_url = Column(String, nullable=True)
+    professional_profile_url = Column(String, nullable=True)
+    country = Column(String, nullable=False, index=True)
+    operating_region = Column(String, nullable=False)
+    acres_or_sites = Column(String, nullable=False)
+    primary_crops = Column(String, nullable=False)
+    intended_use = Column(Text, nullable=False)
+    planned_data_sources = Column(Text, nullable=False)
+    email_domain = Column(String, nullable=False, index=True)
+    domain_classification = Column(String, nullable=False, index=True)
+    phone_algorithm = Column(String, nullable=False)
+    phone_key_version = Column(String, nullable=False)
+    phone_nonce_b64 = Column(Text, nullable=False)
+    phone_ciphertext_b64 = Column(Text, nullable=False)
+    phone_last4 = Column(String(4), nullable=False)
+    decision = Column(String, nullable=False, index=True)
+    score = Column(Integer, nullable=False)
+    reason_codes_json = Column(JSON, nullable=True)
+    engine_version = Column(String, nullable=False)
+    evidence_digest = Column(String(64), nullable=False, index=True)
+    submitted_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    decided_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    organization = relationship("Organization", back_populates="verification_profile")
+
+
+class SecurityAuditEvent(Base):
+    __tablename__ = "security_audit_events"
+
+    id = Column(String, primary_key=True, default=new_id, index=True)
+    organization_id = Column(String, ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    event_type = Column(String, nullable=False, index=True)
+    outcome = Column(String, nullable=False, index=True)
+    subject_hash = Column(String(64), nullable=True, index=True)
+    ip_hash = Column(String(64), nullable=True, index=True)
+    user_agent_hash = Column(String(64), nullable=True)
+    metadata_json = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    organization = relationship("Organization", back_populates="security_events")
+    user = relationship("User", back_populates="security_events")
 
 
 class OrganizationMembership(Base):

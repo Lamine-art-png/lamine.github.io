@@ -217,7 +217,26 @@ async function submitSupportTicket(payload: SupportTicketPayload) {
   }
 }
 
-export type RegisterPayload = { name: string; email: string; password: string; organization_name: string; workspace_name: string; crop?: string; region?: string };
+export type RegisterPayload = {
+  name: string;
+  email: string;
+  password: string;
+  organization_name: string;
+  organization_type: string;
+  professional_role: string;
+  phone_number: string;
+  website_url?: string;
+  professional_profile_url?: string;
+  country: string;
+  operating_region: string;
+  acres_or_sites: string;
+  primary_crops: string;
+  intended_use: string;
+  planned_data_sources: string;
+  workspace_name: string;
+  crop?: string;
+  region?: string;
+};
 export type LoginPayload = { email: string; password: string };
 export type CreateWorkspacePayload = { name: string; crop?: string; region?: string };
 export type CreateOrgPayload = { name: string };

@@ -10,7 +10,11 @@ from app.core.config import settings
 logger = logging.getLogger(__name__)
 
 # Initialize rate limiter
-limiter = Limiter(key_func=get_remote_address)
+limiter = Limiter(
+    key_func=get_remote_address,
+    storage_uri=(str(getattr(settings, "REDIS_URL", "") or "").strip() or "memory://"),
+    headers_enabled=False,
+)
 
 
 class RateLimiterDependency:
