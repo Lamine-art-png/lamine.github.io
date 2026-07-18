@@ -264,3 +264,31 @@ class FieldObservationProcessingRun(Base):
         Index("ix_field_processing_obs_stage", "observation_id", "stage"),
         Index("ix_field_processing_status", "tenant_id", "status", "created_at"),
     )
+
+
+class FieldObservationAuditEvent(Base):
+    """Append-only audit trail for field intelligence.
+
+    This table is the authoritative, insert-only record of what happened to a
+    capture/observation/asset. ``FieldObservation.audit_json`` is only a
+    presentation cache; rows here are never mutated or deleted.
+    """
+
+    __tablename__ = "field_observation_audit_events"
+
+    id = Column(String, primary_key=True, default=new_id, index=True)
+    tenant_id = Column(String, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    workspace_id = Column(String, nullable=True, index=True)
+    observation_id = Column(String, nullable=True, index=True)
+    capture_session_id = Column(String, nullable=True, index=True)
+    asset_id = Column(String, nullable=True)
+    action = Column(String, nullable=False, index=True)
+    actor = Column(String, nullable=True)
+    actor_type = Column(String, default="user", nullable=False)  # user | system
+    details_json = Column(JSON, default=dict, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    __table_args__ = (
+        Index("ix_field_audit_tenant_time", "tenant_id", "created_at"),
+        Index("ix_field_audit_observation", "observation_id", "created_at"),
+    )

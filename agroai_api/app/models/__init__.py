@@ -29,7 +29,7 @@ from app.models.operational_records import (
 )
 from app.models.field_intelligence import (
     FieldCaptureSession, FieldObservation, FieldObservationAsset,
-    FieldObservationProcessingRun,
+    FieldObservationProcessingRun, FieldObservationAuditEvent,
 )
 from app.models.compliance import (
     ComplianceJurisdiction, ComplianceOrganizationRole, ComplianceParcel,
@@ -63,7 +63,7 @@ __all__ = [
     "DataSource", "IngestionJob", "EvidenceRecord", "IntelligenceRun",
     "GeneratedArtifact", "ChatConversation", "ChatMessage",
     "FieldCaptureSession", "FieldObservation", "FieldObservationAsset",
-    "FieldObservationProcessingRun", "ComplianceJurisdiction",
+    "FieldObservationProcessingRun", "FieldObservationAuditEvent", "ComplianceJurisdiction",
     "ComplianceOrganizationRole", "ComplianceParcel", "ComplianceWell",
     "ComplianceMeter", "ComplianceMeasurement", "ComplianceExecutionLedger",
     "ComplianceWaterBudget", "ComplianceEvidence", "ComplianceRulePack",

@@ -207,9 +207,31 @@ def upgrade() -> None:
     _create_index("ix_field_processing_obs_stage", "field_observation_processing_runs", ["observation_id", "stage"])
     _create_index("ix_field_processing_status", "field_observation_processing_runs", ["tenant_id", "status", "created_at"])
 
+    if not _has_table("field_observation_audit_events"):
+        op.create_table(
+            "field_observation_audit_events",
+            sa.Column("id", sa.String(), primary_key=True),
+            sa.Column("tenant_id", sa.String(), nullable=False),
+            sa.Column("workspace_id", sa.String(), nullable=True),
+            sa.Column("observation_id", sa.String(), nullable=True),
+            sa.Column("capture_session_id", sa.String(), nullable=True),
+            sa.Column("asset_id", sa.String(), nullable=True),
+            sa.Column("action", sa.String(), nullable=False),
+            sa.Column("actor", sa.String(), nullable=True),
+            sa.Column("actor_type", sa.String(), nullable=False, server_default="user"),
+            sa.Column("details_json", sa.JSON(), nullable=False),
+            sa.Column("created_at", sa.DateTime(), nullable=False),
+            sa.ForeignKeyConstraint(["tenant_id"], ["organizations.id"], name="fk_field_audit_tenant", ondelete="RESTRICT"),
+        )
+    _create_index("ix_field_observation_audit_events_id", "field_observation_audit_events", ["id"])
+    _create_index("ix_field_observation_audit_events_tenant_id", "field_observation_audit_events", ["tenant_id"])
+    _create_index("ix_field_audit_tenant_time", "field_observation_audit_events", ["tenant_id", "created_at"])
+    _create_index("ix_field_audit_observation", "field_observation_audit_events", ["observation_id", "created_at"])
+
 
 def downgrade() -> None:
     for table in (
+        "field_observation_audit_events",
         "field_observation_processing_runs",
         "field_observation_assets",
         "field_observations",
