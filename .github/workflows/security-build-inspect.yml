@@ -1,0 +1,53 @@
+name: Security Build Inspect
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+env:
+  CI: true
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Create scoped source snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/agro-ai-security-source
+          for path in figma-enterprise-v4 agroai_api shared; do
+            if [ -e "$path" ]; then
+              rsync -a \
+                --exclude 'node_modules' \
+                --exclude '.venv' \
+                --exclude 'venv' \
+                --exclude 'dist' \
+                --exclude 'build' \
+                --exclude '.next' \
+                --exclude '__pycache__' \
+                "$path" /tmp/agro-ai-security-source/
+            fi
+          done
+          for file in package.json package-lock.json pnpm-lock.yaml yarn.lock README.md wrangler.toml; do
+            if [ -f "$file" ]; then
+              cp "$file" /tmp/agro-ai-security-source/
+            fi
+          done
+          find /tmp/agro-ai-security-source -type f | sort > /tmp/agro-ai-security-source/REPOSITORY_FILE_LIST.txt
+
+      - name: Upload scoped source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: agro-ai-security-source-snapshot
+          path: /tmp/agro-ai-security-source
+          if-no-files-found: error
+          retention-days: 1
