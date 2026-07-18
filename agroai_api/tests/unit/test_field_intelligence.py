@@ -389,15 +389,25 @@ def test_asset_idempotency_conflict(client, db, fake_store):
 
 # ---- item 4: compensating upload leaves no orphan R2 object ------------- #
 
+def _real_ctx(db, org_id="org-fi", user_id="user-org-fi"):
+    from app.api.deps import AuthContext
+    user = db.get(User, user_id)
+    org = db.get(Organization, org_id)
+    membership = (
+        db.query(OrganizationMembership)
+        .filter(OrganizationMembership.organization_id == org_id, OrganizationMembership.user_id == user_id)
+        .first()
+    )
+    return AuthContext(user=user, organization=org, membership=membership)
+
+
 def test_compensating_upload_deletes_orphan_on_registration_failure(client, db, fake_store, monkeypatch):
     from sqlalchemy.exc import IntegrityError
     _, _, headers = _auth(db)
     cap = _initiate(client, headers).json()["capture"]
     from app.services import field_intelligence as s
 
-    class Ctx:
-        organization = type("O", (), {"id": "org-fi"})()
-        user = type("U", (), {"id": "user-org-fi"})()
+    Ctx = lambda: _real_ctx(db)  # noqa: E731
     real_commit = db.commit
 
     def boom_commit():

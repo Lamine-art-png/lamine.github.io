@@ -10,16 +10,20 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
+import threading
 import uuid
+from contextlib import contextmanager
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Iterable
 
 from fastapi import HTTPException, status
+from sqlalchemy import func, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session, object_session
 
-from app.api.deps import AuthContext
+from app.api.deps import AuthContext, require_workspace_access
 from app.core.config import settings
 from app.models.field_intelligence import (
     FieldCaptureSession,
@@ -32,12 +36,19 @@ from app.models.operational_records import EvidenceRecord, IngestionJob
 from app.models.saas import Workspace
 from app.services.field_observation_correlation import correlate_observation
 from app.services.field_observation_extraction import extract_observation
-from app.services.field_transcription import RetryableTranscriptionError, transcribe_audio
+from app.services.field_transcription import (
+    RetryableTranscriptionError,
+    classify_transcription_error,
+    transcribe_audio,
+)
 from app.services.object_storage import get_object_store, object_storage_configured
+
+logger = logging.getLogger(__name__)
 
 NEEDS_REVIEW_CONFIDENCE = 0.5
 PROCESS_JOB_TYPE = "field_intelligence_process"
 ASSET_DELETE_JOB_TYPE = "field_intelligence_asset_delete"
+ORPHAN_CLEANUP_JOB_TYPE = "field_intelligence_orphan_cleanup"
 MAX_PROCESS_ATTEMPTS = 5
 PROCESS_LEASE_SECONDS = 120
 ASSET_READ_MAX_BYTES = 64 * 1024 * 1024
@@ -51,6 +62,85 @@ def require_org(ctx: AuthContext) -> str:
     if not ctx.organization:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required")
     return ctx.organization.id
+
+
+# Roles allowed to create/modify field intelligence data. ``viewer`` is
+# read-only; destructive actions additionally require owner/admin.
+WRITE_ROLES = {"owner", "admin", "operator"}
+
+
+def authorize_workspace_action(
+    db: Session,
+    ctx: AuthContext,
+    workspace_id: str | None,
+    *,
+    write: bool = False,
+    destructive: bool = False,
+) -> None:
+    """Enforce the platform's workspace-access authorization on a specific record.
+
+    Applied on every direct-ID route (captures, observations, assets, patch,
+    delete, reprocess, task creation) — never only on list-query filtering.
+    Denial of a foreign workspace is a 404 so existence is not leaked.
+    """
+    from app.services.entitlements import require_owner_or_admin
+
+    organization_id = require_org(ctx)
+    membership = getattr(ctx, "membership", None)
+    if workspace_id:
+        workspace, membership = require_workspace_access(workspace_id, ctx.user, db)
+        if workspace.organization_id != organization_id:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    role = str(getattr(membership, "role", None) or "")
+    if destructive:
+        require_owner_or_admin(role)
+    elif write and role not in WRITE_ROLES:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "write_role_required", "message": "Your role cannot modify field intelligence data."},
+        )
+
+
+def require_capability(db: Session, ctx: AuthContext, feature_key: str):
+    """Server-side commercial boundary — frontend locks are UX only."""
+    from app.services.commercial_control import require_feature
+
+    if not ctx.organization:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required")
+    return require_feature(db, ctx.organization, feature_key)
+
+
+def enforce_storage_quota(db: Session, ctx: AuthContext, incoming_bytes: int) -> None:
+    """Enforce the plan's durable field-media storage quota before upload."""
+    from app.services.commercial_control import resolve_effective_entitlements
+
+    organization_id = require_org(ctx)
+    effective = resolve_effective_entitlements(db, ctx.organization)
+    limit_mb = effective.value("quota.field_intelligence.storage_mb")
+    if limit_mb is None:
+        return
+    try:
+        limit_bytes = int(limit_mb) * 1024 * 1024
+    except (TypeError, ValueError):
+        return
+    used = (
+        db.query(func.coalesce(func.sum(FieldObservationAsset.size_bytes), 0))
+        .filter(FieldObservationAsset.tenant_id == organization_id)
+        .filter(FieldObservationAsset.status == "stored")
+        .scalar()
+        or 0
+    )
+    if int(used) + int(incoming_bytes) > limit_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "code": "storage_quota_exceeded",
+                "metric": "field_intelligence.storage_mb",
+                "limit_mb": int(limit_mb),
+                "used_bytes": int(used),
+                "message": "Field media storage quota reached for this plan.",
+            },
+        )
 
 
 def resolve_workspace(db: Session, organization_id: str, workspace_id: str | None) -> Workspace | None:
@@ -165,6 +255,7 @@ def _record_run(
     latency_ms: int | None = None,
     error: str | None = None,
     output: dict | None = None,
+    attempt_count: int = 1,
 ) -> None:
     run = FieldObservationProcessingRun(
         id=str(uuid.uuid4()),
@@ -179,6 +270,7 @@ def _record_run(
         status=stage_status,
         latency_ms=latency_ms,
         error=error,
+        attempt_count=attempt_count,
         input_json={},
         output_json=output or {},
         completed_at=datetime.utcnow(),
@@ -199,6 +291,15 @@ def initiate_capture(db: Session, ctx: AuthContext, payload: dict) -> FieldCaptu
     organization_id = require_org(ctx)
     workspace = resolve_workspace(db, organization_id, payload.get("workspace_id"))
     workspace_id = workspace.id if workspace else None
+    authorize_workspace_action(db, ctx, workspace_id, write=True)
+    require_capability(db, ctx, "field_intelligence.capture")
+    manifest_kinds = {
+        str(item.get("kind") or "")
+        for item in (payload.get("asset_manifest") or [])
+        if isinstance(item, dict)
+    }
+    if payload.get("capture_source") == "voice" or manifest_kinds & {"audio", "video"}:
+        require_capability(db, ctx, "field_intelligence.voice")
 
     client_capture_id = str(payload.get("client_capture_id") or "").strip()
     idempotency_key = str(payload.get("idempotency_key") or client_capture_id or "").strip()
@@ -291,6 +392,8 @@ def complete_capture(db: Session, ctx: AuthContext, capture_ref: str, payload: d
     payload = payload or {}
     organization_id = require_org(ctx)
     session = _load_session(db, organization_id, capture_ref)
+    authorize_workspace_action(db, ctx, session.workspace_id, write=True)
+    require_capability(db, ctx, "field_intelligence.capture")
 
     if session.observation_id:
         observation = db.get(FieldObservation, session.observation_id)
@@ -383,6 +486,7 @@ def sync_batch(db: Session, ctx: AuthContext, items: Iterable[dict]) -> dict:
     Each item is initiated and staged for durable processing. A failed item is
     reported but never lost, and never rolls back an already-accepted item.
     """
+    require_capability(db, ctx, "field_intelligence.offline_sync")
     results: list[dict] = []
     accepted = 0
     failed = 0
@@ -422,6 +526,86 @@ def sync_batch(db: Session, ctx: AuthContext, items: Iterable[dict]) -> dict:
 # ---------------------------------------------------------------------------
 # Durable processing plane (leased, retried, terminal)
 # ---------------------------------------------------------------------------
+
+class JobOwnershipLost(Exception):
+    """This worker no longer owns the job lease; abandon without side effects."""
+
+
+def _renew_job_lease(db: Session, job: IngestionJob) -> None:
+    """Extend the running job's lease in the current transaction.
+
+    Committed at the next stage checkpoint so a second API worker never sees an
+    expired lease on a legitimately progressing job.
+    """
+    now = datetime.utcnow()
+    job.lease_expires_at = now + timedelta(seconds=PROCESS_LEASE_SECONDS)
+    job.last_heartbeat_at = now
+
+
+class _JobLeaseHeartbeat:
+    """Background lease renewal for long blocking stages (R2 reads, provider calls).
+
+    Runs on its own session/connection against the same engine so renewal is
+    transaction-safe and independent of the pipeline transaction. A tick that
+    matches zero rows means another worker took ownership -> ``lost`` is set and
+    the pipeline aborts at the next checkpoint. Transient DB errors (e.g. a
+    SQLite write lock held by the pipeline) are retried on the next tick and
+    never treated as lost ownership.
+    """
+
+    def __init__(self, db: Session, job_id: str, worker_id: str, *, interval_seconds: float | None = None):
+        self._engine = db.get_bind()
+        self._job_id = job_id
+        self._worker_id = worker_id
+        self._interval = interval_seconds or max(PROCESS_LEASE_SECONDS / 3.0, 0.2)
+        self._stop = threading.Event()
+        self.lost = threading.Event()
+        self._thread: threading.Thread | None = None
+
+    def beat_once(self) -> None:
+        try:
+            with Session(bind=self._engine) as session:
+                now = datetime.utcnow()
+                updated = (
+                    session.query(IngestionJob)
+                    .filter(IngestionJob.id == self._job_id)
+                    .filter(IngestionJob.worker_id == self._worker_id)
+                    .filter(IngestionJob.status == "running")
+                    .update(
+                        {
+                            IngestionJob.lease_expires_at: now + timedelta(seconds=PROCESS_LEASE_SECONDS),
+                            IngestionJob.last_heartbeat_at: now,
+                        },
+                        synchronize_session=False,
+                    )
+                )
+                session.commit()
+            if updated == 0:
+                self.lost.set()
+        except Exception:  # noqa: BLE001 - transient; retry next tick
+            pass
+
+    def _run(self) -> None:
+        while not self._stop.wait(self._interval):
+            if self.lost.is_set():
+                return
+            self.beat_once()
+
+    def start(self) -> "_JobLeaseHeartbeat":
+        self._thread = threading.Thread(target=self._run, name=f"fi-lease-{self._job_id[:8]}", daemon=True)
+        self._thread.start()
+        return self
+
+    def stop(self) -> None:
+        self._stop.set()
+        if self._thread is not None:
+            self._thread.join(timeout=2.0)
+            self._thread = None
+
+    def check(self) -> None:
+        if self.lost.is_set():
+            raise JobOwnershipLost(self._job_id)
+
 
 def _claim_job(db: Session, job: IngestionJob, worker_id: str) -> bool:
     now = datetime.utcnow()
@@ -465,32 +649,84 @@ def run_field_intelligence_jobs(db: Session, *, limit: int = 25, worker_id: str 
         if not _claim_job(db, job, worker_id):
             continue
         db.refresh(job)
+        heartbeat = _JobLeaseHeartbeat(db, job.id, worker_id).start()
         try:
-            _process_observation(db, job)
+            _process_observation(db, job, heartbeat=heartbeat)
+            heartbeat.stop()
+            heartbeat.check()
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             job.lease_expires_at = None
             job.worker_id = None
             db.commit()
             processed += 1
+        except JobOwnershipLost:
+            # Another worker legitimately owns the job now; leave its state alone.
+            db.rollback()
         except Exception as exc:  # noqa: BLE001
             db.rollback()
             _fail_or_retry(db, job.id, exc)
             failed += 1
+        finally:
+            heartbeat.stop()
     return {"processed": processed, "failed": failed, "worker_id": worker_id}
 
 
 def _fail_or_retry(db: Session, job_id: str, exc: Exception) -> None:
+    """Requeue or terminally fail a job — and durably record the attempt.
+
+    Runs after the pipeline transaction rolled back, so the attempted stage's
+    processing run and audit event are re-recorded here in their own
+    transaction. Provider/model/classification/latency travel on the
+    exception's ``provenance`` where available.
+    """
     job = db.get(IngestionJob, job_id)
     if not job:
         return
-    terminal = int(job.attempt_count or 0) >= int(job.max_attempts or MAX_PROCESS_ATTEMPTS)
+    attempt = int(job.attempt_count or 0)
+    terminal = attempt >= int(job.max_attempts or MAX_PROCESS_ATTEMPTS)
+    disposition = "terminal" if terminal else "retryable"
     job.error = f"{exc.__class__.__name__}: {exc}"[:500]
     job.lease_expires_at = None
     job.worker_id = None
+    observation = db.get(FieldObservation, (job.input_json or {}).get("observation_id"))
+    if observation is not None:
+        provenance = dict(getattr(exc, "provenance", None) or {})
+        stage = provenance.get("stage") or "pipeline"
+        error_text = provenance.get("error") or job.error
+        _record_run(
+            db,
+            observation,
+            stage=stage,
+            provider=provenance.get("provider"),
+            stage_status="failed",
+            model=provenance.get("model"),
+            language=provenance.get("language"),
+            latency_ms=provenance.get("latency_ms"),
+            error=error_text,
+            attempt_count=attempt,
+            output={
+                "attempt": attempt,
+                "disposition": disposition,
+                "retryable": bool(provenance.get("retryable", not terminal)),
+                "http_classification": provenance.get("http_classification")
+                or classify_transcription_error(error_text),
+            },
+        )
+        _audit(
+            observation,
+            "processing_attempt_failed",
+            actor="system",
+            details={
+                "stage": stage,
+                "attempt": attempt,
+                "disposition": disposition,
+                "provider": provenance.get("provider"),
+                "error": error_text,
+            },
+        )
     if terminal:
         job.status = "failed"
-        observation = db.get(FieldObservation, (job.input_json or {}).get("observation_id"))
         if observation:
             observation.status = "failed"
             observation.processing_error = job.error
@@ -501,7 +737,15 @@ def _fail_or_retry(db: Session, job_id: str, exc: Exception) -> None:
     db.commit()
 
 
-def _process_observation(db: Session, job: IngestionJob) -> None:
+def _process_observation(db: Session, job: IngestionJob, *, heartbeat: _JobLeaseHeartbeat | None = None) -> None:
+    def _checkpoint() -> None:
+        # Stage boundary: renew the job lease and durably commit the stage's
+        # provenance so a slow later stage can never be reclaimed or lose runs.
+        if heartbeat is not None:
+            heartbeat.check()
+        _renew_job_lease(db, job)
+        db.commit()
+
     job_input = job.input_json or {}
     observation = db.get(FieldObservation, job_input.get("observation_id"))
     if not observation:
@@ -512,15 +756,39 @@ def _process_observation(db: Session, job: IngestionJob) -> None:
     session = db.get(FieldCaptureSession, observation.capture_session_id)
     corrected = job_input.get("corrected_transcript") or (observation.corrected_transcript)
     language = job_input.get("language") or "en"
+    _checkpoint()  # release the pipeline write transaction before slow R2/provider I/O
 
     # --- Transcription from verified durable audio (never client references) ---
     audio_bytes, audio_asset = _load_capture_audio(db, observation)
+    _checkpoint()
     tr = transcribe_audio(
         audio=audio_bytes,
         content_type=(audio_asset.content_type if audio_asset else None),
         language=language,
         note_text=(session.note_text if session else None),
     )
+    if heartbeat is not None:
+        heartbeat.check()
+
+    # A transient provider failure (429/5xx/timeout/network) must not complete
+    # the job — raise so the durable plane retries with backoff. The attempt's
+    # run + audit provenance travel on the exception and are persisted by
+    # ``_fail_or_retry`` after the pipeline transaction rolls back.
+    if tr.status == "failed" and tr.retryable:
+        raise RetryableTranscriptionError(
+            tr.error or "transcription_retryable_failure",
+            provenance={
+                "stage": "transcription",
+                "provider": tr.provider,
+                "model": tr.model,
+                "language": tr.language,
+                "latency_ms": tr.latency_ms,
+                "error": tr.error,
+                "retryable": True,
+                "http_classification": classify_transcription_error(tr.error),
+            },
+        )
+
     transcript = tr.transcript if tr.status in {"completed", "skipped"} else None
     observation.transcript = transcript
     if corrected:
@@ -528,6 +796,7 @@ def _process_observation(db: Session, job: IngestionJob) -> None:
     _record_run(
         db, observation, stage="transcription", provider=tr.provider, stage_status=tr.status,
         model=tr.model, language=tr.language, latency_ms=tr.latency_ms, error=tr.error,
+        attempt_count=int(job.attempt_count or 1),
         output={"status": tr.status, "has_transcript": bool(tr.transcript), "audio_bytes": len(audio_bytes or b"")},
     )
     _audit(
@@ -535,14 +804,7 @@ def _process_observation(db: Session, job: IngestionJob) -> None:
         "transcription_completed" if tr.succeeded else ("transcription_skipped" if tr.status == "skipped" else "transcription_failed"),
         actor="system", details={"provider": tr.provider, "status": tr.status, "error": tr.error},
     )
-
-    # A transient provider failure (429/5xx/timeout/network) must not complete
-    # the job — raise so the durable plane retries with backoff. Persist what we
-    # have first so the audit/run trail survives the rollback-free retry.
-    if tr.status == "failed" and tr.retryable:
-        observation.status = "processing"
-        db.flush()
-        raise RetryableTranscriptionError(tr.error or "transcription_retryable_failure")
+    _checkpoint()
 
     transcription_ok = tr.status in {"completed", "skipped"}
 
@@ -570,9 +832,11 @@ def _process_observation(db: Session, job: IngestionJob) -> None:
     observation.search_text = _search_text(observation, source_text)
     _record_run(
         db, observation, stage="extraction", provider="deterministic", stage_status="completed",
-        model=extraction.method, output={"confidence": extraction.confidence, "uncertain": extraction.uncertain_fields},
+        model=extraction.method, attempt_count=int(job.attempt_count or 1),
+        output={"confidence": extraction.confidence, "uncertain": extraction.uncertain_fields},
     )
     _audit(observation, "extraction_completed", actor="system", details={"confidence": extraction.confidence})
+    _checkpoint()
 
     # --- Correlation ---
     correlation = correlate_observation(db, observation)
@@ -609,10 +873,58 @@ def _process_observation(db: Session, job: IngestionJob) -> None:
 def reprocess_observation(db: Session, ctx: AuthContext, observation_id: str) -> FieldObservation:
     """Re-enqueue processing for a failed/needs-review observation (no duplicates)."""
     observation = get_observation(db, ctx, observation_id)
+    authorize_workspace_action(db, ctx, observation.workspace_id, write=True)
+    require_capability(db, ctx, "field_intelligence.extraction")
     _enqueue_reprocess(db, observation, ctx_user_id=ctx.user.id)
     db.commit()
     db.refresh(observation)
     return observation
+
+
+def _evidence_quality(observation: FieldObservation, confirmed_text: str) -> str:
+    """Derive quality explicitly; real confidence (incl. 0.0) is never coerced."""
+    if not (confirmed_text or "").strip():
+        # No usable content: failed/blank transcription. Mark unusable so Ask /
+        # Reports evidence consumers (which require usable) cannot read it.
+        return "unusable"
+    confidence = observation.confidence if observation.confidence is not None else 0.0
+    return "needs_review" if confidence < NEEDS_REVIEW_CONFIDENCE else "usable"
+
+
+def _apply_evidence_fields(
+    record: EvidenceRecord,
+    observation: FieldObservation,
+    *,
+    source_text: str,
+    transcription_ok: bool | None = None,
+) -> None:
+    """Mirror the observation onto its evidence record — every consumer-visible
+    field, so a correction never leaves stale text, provenance or quality behind."""
+    confirmed_text = (source_text or "").strip()
+    confidence = observation.confidence if observation.confidence is not None else 0.0
+    record.title = (observation.field_name or "Field observation") + f" — {observation.event_type or 'observation'}"
+    record.summary = (observation.summary or confirmed_text or "Field observation (no confirmed text)")[:2000]
+    record.value_json = observation.structured_json or {}
+    record.confidence = confidence
+    record.quality_status = _evidence_quality(observation, confirmed_text)
+    record.field_id = observation.field_id
+    record.block_id = observation.block_id
+    record.occurred_at = observation.occurred_at
+    record.source_updated_at = datetime.utcnow()
+    record.source_excerpt = (observation.corrected_transcript or observation.transcript or "")[:1000] or None
+    metadata = dict(record.metadata_json or {})
+    metadata.update(
+        {
+            "observation_id": observation.id,
+            "capture_session_id": observation.capture_session_id,
+            "source_mode": "field_capture",
+            "provenance": observation.provenance_json,
+            "quality_status": record.quality_status,
+        }
+    )
+    if transcription_ok is not None:
+        metadata["transcription_ok"] = transcription_ok
+    record.metadata_json = metadata
 
 
 def _link_evidence_record(db: Session, observation: FieldObservation, *, source_text: str, transcription_ok: bool) -> None:
@@ -622,17 +934,6 @@ def _link_evidence_record(db: Session, observation: FieldObservation, *, source_
     AGRO-AI as usable, confident evidence. Quality is derived explicitly and the
     real confidence (including 0.0) is preserved — never coerced to 0.5.
     """
-    confirmed_text = (source_text or "").strip()
-    confidence = observation.confidence if observation.confidence is not None else 0.0
-    if not confirmed_text:
-        # No usable content: failed/blank transcription. Mark unusable so Ask /
-        # Reports evidence consumers (which require usable) cannot read it.
-        quality_status = "unusable"
-    elif confidence < NEEDS_REVIEW_CONFIDENCE:
-        quality_status = "needs_review"
-    else:
-        quality_status = "usable"
-
     existing = (
         db.query(EvidenceRecord)
         .filter(EvidenceRecord.tenant_id == observation.tenant_id)
@@ -642,46 +943,25 @@ def _link_evidence_record(db: Session, observation: FieldObservation, *, source_
         if db.bind and db.bind.dialect.name == "postgresql"
         else _find_evidence_slow(db, observation)
     )
-    summary = (observation.summary or confirmed_text or "Field observation (no confirmed text)")[:2000]
-    metadata = {
-        "observation_id": observation.id,
-        "capture_session_id": observation.capture_session_id,
-        "source_mode": "field_capture",
-        "transcription_ok": transcription_ok,
-        "provenance": observation.provenance_json,
-    }
     if existing:
-        existing.summary = summary
-        existing.value_json = observation.structured_json or {}
-        existing.confidence = confidence
-        existing.quality_status = quality_status
-        existing.metadata_json = metadata
+        _apply_evidence_fields(existing, observation, source_text=source_text, transcription_ok=transcription_ok)
         return
     record = EvidenceRecord(
         id=str(uuid.uuid4()),
         tenant_id=observation.tenant_id,
         workspace_id=observation.workspace_id,
         evidence_type="field_observation",
-        field_id=observation.field_id,
-        block_id=observation.block_id,
-        occurred_at=observation.occurred_at,
-        source_updated_at=datetime.utcnow(),
-        title=(observation.field_name or "Field observation") + f" — {observation.event_type or 'observation'}",
-        summary=summary,
-        value_json=observation.structured_json or {},
         units=None,
-        confidence=confidence,
-        quality_status=quality_status,
         citation_label=f"Field observation {observation.id[:8]}",
-        source_excerpt=(observation.corrected_transcript or observation.transcript or "")[:1000] or None,
-        metadata_json=metadata,
+        metadata_json={},
     )
+    _apply_evidence_fields(record, observation, source_text=source_text, transcription_ok=transcription_ok)
     db.add(record)
     db.flush()
     evidence_ids = list(observation.evidence_ids_json or [])
     evidence_ids.append(record.id)
     observation.evidence_ids_json = evidence_ids
-    _audit(observation, "evidence_linked", actor="system", details={"evidence_id": record.id, "quality_status": quality_status})
+    _audit(observation, "evidence_linked", actor="system", details={"evidence_id": record.id, "quality_status": record.quality_status})
 
 
 def _find_evidence_slow(db: Session, observation: FieldObservation) -> EvidenceRecord | None:
@@ -721,6 +1001,11 @@ def register_asset(
     """
     organization_id = require_org(ctx)
     session = _load_session(db, organization_id, capture_ref)
+    authorize_workspace_action(db, ctx, session.workspace_id, write=True)
+    require_capability(db, ctx, "field_intelligence.capture")
+    if kind in {"audio", "video"}:
+        require_capability(db, ctx, "field_intelligence.voice")
+    enforce_storage_quota(db, ctx, size_bytes)
 
     existing = (
         db.query(FieldObservationAsset)
@@ -806,9 +1091,16 @@ def register_asset(
             .first()
         )
         if uploaded_new_ref and (not winner or winner.object_ref != uploaded_new_ref):
-            _best_effort_object_delete(organization_id, session.id, uploaded_new_ref)
+            _compensate_object_upload(db, organization_id, session.id, uploaded_new_ref)
         if winner:
             return winner
+        raise
+    except Exception:
+        # ANY database failure after a successful R2 upload (connection loss,
+        # constraint, disk, ...) must not leave an orphan durable object.
+        db.rollback()
+        if uploaded_new_ref:
+            _compensate_object_upload(db, organization_id, session.id, uploaded_new_ref)
         raise
     db.refresh(asset)
     return asset
@@ -823,12 +1115,112 @@ def _asset_matches(asset: FieldObservationAsset, sha256: str, size: int, kind: s
     )
 
 
-def _best_effort_object_delete(tenant_id: str, capture_session_id: str, object_ref: str) -> None:
+def _compensate_object_upload(db: Session, tenant_id: str, capture_session_id: str, object_ref: str) -> None:
+    """Remove an uploaded object whose DB registration failed.
+
+    A failed compensating delete is never silently swallowed: it durably stages
+    an idempotent orphan-object-cleanup job so the object is removed later.
+    """
     try:
-        if object_storage_configured():
-            get_object_store().delete(object_ref, tenant_id=tenant_id, connection_id=capture_session_id)
-    except Exception:  # noqa: BLE001 - compensating delete is best-effort
-        pass
+        if not object_storage_configured():
+            raise RuntimeError("object storage unavailable for compensating delete")
+        get_object_store().delete(object_ref, tenant_id=tenant_id, connection_id=capture_session_id)
+        return
+    except Exception:  # noqa: BLE001 - fall through to durable cleanup
+        logger.exception(
+            "field-intelligence compensating delete failed; staging orphan cleanup (tenant=%s ref=%s)",
+            tenant_id, object_ref,
+        )
+    _stage_orphan_cleanup_job(db, tenant_id, capture_session_id, object_ref)
+
+
+def _stage_orphan_cleanup_job(db: Session, tenant_id: str, capture_session_id: str, object_ref: str) -> None:
+    """Durably stage an idempotent cleanup job for a possibly-orphaned object."""
+    idempotency_key = f"fi-orphan-{hashlib.sha256(object_ref.encode('utf-8')).hexdigest()[:32]}"
+    try:
+        exists = (
+            db.query(IngestionJob)
+            .filter(IngestionJob.tenant_id == tenant_id)
+            .filter(IngestionJob.idempotency_key == idempotency_key)
+            .first()
+        )
+        if exists:
+            return
+        db.add(
+            IngestionJob(
+                id=str(uuid.uuid4()),
+                tenant_id=tenant_id,
+                job_type=ORPHAN_CLEANUP_JOB_TYPE,
+                status="queued",
+                input_json={"object_ref": object_ref, "capture_session_id": capture_session_id},
+                output_json={},
+                idempotency_key=idempotency_key,
+                attempt_count=0,
+                max_attempts=MAX_PROCESS_ATTEMPTS,
+                next_attempt_at=datetime.utcnow(),
+            )
+        )
+        db.commit()
+    except Exception:  # noqa: BLE001 - the database itself is down
+        db.rollback()
+        logger.critical(
+            "field-intelligence orphan cleanup could not be staged; object may be orphaned (tenant=%s ref=%s)",
+            tenant_id, object_ref,
+        )
+
+
+def run_field_intelligence_orphan_cleanup(db: Session, *, limit: int = 25, worker_id: str | None = None) -> dict:
+    """Durable worker: remove objects whose registration never became durable.
+
+    Idempotent: a missing object deletes as a no-op; an object that gained a
+    live DB reference in the meantime is left alone and the job completes.
+    """
+    worker_id = worker_id or f"orphan-{uuid.uuid4().hex[:8]}"
+    now = datetime.utcnow()
+    candidates = (
+        db.query(IngestionJob)
+        .filter(IngestionJob.job_type == ORPHAN_CLEANUP_JOB_TYPE)
+        .filter(IngestionJob.status.in_(["queued", "running"]))
+        .filter((IngestionJob.next_attempt_at.is_(None)) | (IngestionJob.next_attempt_at <= now))
+        .filter((IngestionJob.lease_expires_at.is_(None)) | (IngestionJob.lease_expires_at <= now))
+        .order_by(IngestionJob.created_at.asc())
+        .limit(limit)
+        .all()
+    )
+    cleaned = 0
+    for job in candidates:
+        if not _claim_job(db, job, worker_id):
+            continue
+        db.refresh(job)
+        job_input = job.input_json or {}
+        object_ref = job_input.get("object_ref")
+        try:
+            referenced = (
+                db.query(FieldObservationAsset)
+                .filter(FieldObservationAsset.tenant_id == job.tenant_id)
+                .filter(FieldObservationAsset.object_ref == object_ref)
+                .filter(FieldObservationAsset.status.in_(["stored", "pending_deletion"]))
+                .count()
+                if object_ref
+                else 0
+            )
+            if object_ref and referenced == 0:
+                if not object_storage_configured():
+                    raise RuntimeError("object storage unavailable for orphan cleanup")
+                get_object_store().delete(
+                    object_ref, tenant_id=job.tenant_id, connection_id=job_input.get("capture_session_id")
+                )
+            job.status = "completed"
+            job.completed_at = datetime.utcnow()
+            job.lease_expires_at = None
+            job.worker_id = None
+            job.output_json = {"referenced": referenced, "deleted": bool(object_ref and referenced == 0)}
+            db.commit()
+            cleaned += 1
+        except Exception as exc:  # noqa: BLE001
+            db.rollback()
+            _fail_or_retry(db, job.id, exc)
+    return {"cleaned": cleaned, "worker_id": worker_id}
 
 
 def read_asset_bytes(db: Session, ctx: AuthContext, asset_id: str) -> tuple[FieldObservationAsset, bytes]:
@@ -841,6 +1233,7 @@ def read_asset_bytes(db: Session, ctx: AuthContext, asset_id: str) -> tuple[Fiel
     )
     if not asset or asset.status != "stored":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    authorize_workspace_action(db, ctx, asset.workspace_id)
     # A deleted observation immediately disables retrieval of its assets.
     if asset.observation_id:
         observation = db.get(FieldObservation, asset.observation_id)
@@ -872,6 +1265,7 @@ def open_asset_stream(db: Session, ctx: AuthContext, asset_id: str, *, byte_rang
     )
     if not asset or asset.status != "stored":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    authorize_workspace_action(db, ctx, asset.workspace_id)
     if asset.observation_id:
         observation = db.get(FieldObservation, asset.observation_id)
         if observation and observation.status == "deleted":
@@ -903,6 +1297,8 @@ def delete_asset(db: Session, ctx: AuthContext, asset_id: str) -> None:
     )
     if not asset:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Asset not found")
+    authorize_workspace_action(db, ctx, asset.workspace_id, destructive=True)
+    require_capability(db, ctx, "field_intelligence.retention")
     _mark_pending_deletion(db, asset)
     if asset.observation_id:
         observation = db.get(FieldObservation, asset.observation_id)
@@ -946,12 +1342,44 @@ def _mark_pending_deletion(db: Session, asset: FieldObservationAsset) -> None:
         )
 
 
+# Process-local per-object locks (SQLite / single-node). On PostgreSQL the
+# transaction-scoped advisory lock is authoritative across workers.
+_OBJECT_DELETE_LOCKS: dict[str, threading.Lock] = {}
+_OBJECT_DELETE_LOCKS_GUARD = threading.Lock()
+
+
+def _advisory_lock_key(object_ref: str) -> int:
+    return int.from_bytes(hashlib.sha256(object_ref.encode("utf-8")).digest()[:8], "big", signed=True)
+
+
+@contextmanager
+def _object_deletion_lock(db: Session, object_ref: str):
+    """Serialize deletion decisions for one physical object.
+
+    The lock must span the liveness count, the row transition AND the commit —
+    otherwise two workers deleting two assets that share an ``object_ref`` can
+    each observe the other as still live and neither performs the physical
+    delete (or both do). On PostgreSQL a transaction advisory lock provides the
+    cross-worker guarantee; elsewhere a process lock covers threaded workers on
+    the single-writer database.
+    """
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(text("SELECT pg_advisory_xact_lock(:key)"), {"key": _advisory_lock_key(object_ref)})
+        yield  # released when the surrounding transaction commits or rolls back
+        return
+    with _OBJECT_DELETE_LOCKS_GUARD:
+        lock = _OBJECT_DELETE_LOCKS.setdefault(object_ref, threading.Lock())
+    with lock:
+        yield
+
+
 def _execute_object_deletion(db: Session, asset: FieldObservationAsset) -> bool:
     """Worker step: physically remove the R2 object, confirm, mark deleted.
 
     Never marks ``deleted`` unless the object is confirmed gone (or there is no
     durable object / it is still shared). On failure the asset stays
-    ``pending_deletion`` for retry.
+    ``pending_deletion`` for retry. Callers must hold the object deletion lock
+    and commit while it is held.
     """
     if asset.status == "deleted":
         return True
@@ -1010,16 +1438,21 @@ def run_field_intelligence_deletions(db: Session, *, limit: int = 50, worker_id:
             db.commit()
             continue
         try:
-            ok = _execute_object_deletion(db, asset)
-            if ok:
-                job.status = "completed"
-                job.completed_at = datetime.utcnow()
-                job.lease_expires_at = None
-                job.worker_id = None
-                db.commit()
-                deleted += 1
-            else:
-                db.commit()
+            # The lock spans count -> transition -> COMMIT so that concurrent
+            # deletion of assets sharing one object_ref resolves to exactly one
+            # physical object deletion.
+            with _object_deletion_lock(db, asset.object_ref or asset.id):
+                ok = _execute_object_deletion(db, asset)
+                if ok:
+                    job.status = "completed"
+                    job.completed_at = datetime.utcnow()
+                    job.lease_expires_at = None
+                    job.worker_id = None
+                    db.commit()
+                    deleted += 1
+                else:
+                    db.commit()
+            if not ok:
                 _fail_or_retry(db, job.id, RuntimeError("object_deletion_incomplete"))
         except Exception as exc:  # noqa: BLE001
             db.rollback()
@@ -1083,6 +1516,8 @@ def get_observation(db: Session, ctx: AuthContext, observation_id: str) -> Field
     )
     if not observation or observation.status == "deleted":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Observation not found")
+    # Direct-ID access is workspace-authorized, never tenant-filtered only.
+    authorize_workspace_action(db, ctx, observation.workspace_id)
     return observation
 
 
@@ -1094,6 +1529,7 @@ USER_SETTABLE_STATUSES = {"needs_review", "acknowledged", "completed"}
 
 def patch_observation(db: Session, ctx: AuthContext, observation_id: str, changes: dict) -> FieldObservation:
     observation = get_observation(db, ctx, observation_id)
+    authorize_workspace_action(db, ctx, observation.workspace_id, write=True)
     corrected = changes.get("corrected_transcript")
     correction_changed = corrected is not None and corrected != (observation.corrected_transcript or "")
     if corrected is not None:
@@ -1170,14 +1606,24 @@ def _enqueue_reprocess(db: Session, observation: FieldObservation, *, ctx_user_i
 
 
 def _refresh_linked_evidence(db: Session, observation: FieldObservation) -> None:
+    """Fully re-mirror the evidence record after a non-transcript patch
+    (field/block/severity/structured/status edits that skip reprocessing)."""
     record = _find_evidence_slow(db, observation)
     if record:
-        record.summary = (observation.summary or observation.corrected_transcript or observation.transcript or "Field observation")[:2000]
-        record.value_json = observation.structured_json or {}
+        session = db.get(FieldCaptureSession, observation.capture_session_id) if observation.capture_session_id else None
+        source_text = (
+            observation.corrected_transcript
+            or observation.transcript
+            or (session.note_text if session else None)
+            or ""
+        )
+        _apply_evidence_fields(record, observation, source_text=source_text)
 
 
 def delete_observation(db: Session, ctx: AuthContext, observation_id: str) -> None:
     observation = get_observation(db, ctx, observation_id)
+    authorize_workspace_action(db, ctx, observation.workspace_id, destructive=True)
+    require_capability(db, ctx, "field_intelligence.retention")
     _audit(observation, "observation_deleted", actor=ctx.user.id)
     observation.status = "deleted"
     # disable + schedule durable deletion of every linked asset
@@ -1200,6 +1646,7 @@ def create_task_from_observation(db: Session, ctx: AuthContext, observation_id: 
     from app.services.field_operating_loop import build_field_ops_context, create_task
 
     observation = get_observation(db, ctx, observation_id)
+    authorize_workspace_action(db, ctx, observation.workspace_id, write=True)
     organization_id = require_org(ctx)
     workspace = resolve_workspace(db, organization_id, observation.workspace_id)
     fops = build_field_ops_context(db, organization_id, workspace)
@@ -1224,6 +1671,7 @@ def create_task_from_observation(db: Session, ctx: AuthContext, observation_id: 
 
 
 def map_observations(db: Session, ctx: AuthContext, filters: dict) -> dict:
+    require_capability(db, ctx, "field_intelligence.map")
     rows, _total = list_observations(db, ctx, {**filters, "limit": 500})
     features = [
         {

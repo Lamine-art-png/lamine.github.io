@@ -264,6 +264,7 @@ def get_capture(
 ) -> dict:
     organization_id = svc.require_org(ctx)
     session = svc._load_session(db, organization_id, capture_id)
+    svc.authorize_workspace_action(db, ctx, session.workspace_id)
     return {"status": "ok", "capture": svc.serialize_capture(session)}
 
 

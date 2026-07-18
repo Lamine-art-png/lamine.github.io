@@ -26,9 +26,11 @@ def drain_once() -> dict:
     """Process a bounded slice of queued jobs on a fresh session."""
     db = SessionLocal()
     try:
-        processed = svc.run_field_intelligence_jobs(db, limit=int(getattr(settings, "FIELD_WORKER_BATCH", 25)))
-        deletions = svc.run_field_intelligence_deletions(db, limit=int(getattr(settings, "FIELD_WORKER_BATCH", 25)))
-        return {"processing": processed, "deletions": deletions}
+        batch = int(getattr(settings, "FIELD_WORKER_BATCH", 25))
+        processed = svc.run_field_intelligence_jobs(db, limit=batch)
+        deletions = svc.run_field_intelligence_deletions(db, limit=batch)
+        orphans = svc.run_field_intelligence_orphan_cleanup(db, limit=batch)
+        return {"processing": processed, "deletions": deletions, "orphan_cleanup": orphans}
     except Exception:  # noqa: BLE001 - a worker tick must never crash the loop
         db.rollback()
         logger.exception("field intelligence worker tick failed")
@@ -41,14 +43,22 @@ def drain_until_empty(db, *, max_rounds: int = 100) -> dict:
     """Process every currently-drainable job (used by tests and admin drains)."""
     total_processed = 0
     total_deleted = 0
+    total_cleaned = 0
     for _ in range(max_rounds):
         proc = svc.run_field_intelligence_jobs(db, limit=50)
         dele = svc.run_field_intelligence_deletions(db, limit=50)
+        orph = svc.run_field_intelligence_orphan_cleanup(db, limit=50)
         total_processed += proc.get("processed", 0)
         total_deleted += dele.get("deleted", 0)
-        if proc.get("processed", 0) == 0 and proc.get("failed", 0) == 0 and dele.get("deleted", 0) == 0:
+        total_cleaned += orph.get("cleaned", 0)
+        if (
+            proc.get("processed", 0) == 0
+            and proc.get("failed", 0) == 0
+            and dele.get("deleted", 0) == 0
+            and orph.get("cleaned", 0) == 0
+        ):
             break
-    return {"processed": total_processed, "deleted": total_deleted}
+    return {"processed": total_processed, "deleted": total_deleted, "cleaned": total_cleaned}
 
 
 def start_field_intelligence_worker() -> AsyncIOScheduler | None:

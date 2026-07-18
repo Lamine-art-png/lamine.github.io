@@ -17,6 +17,7 @@ from __future__ import annotations
 from datetime import datetime, timedelta
 from typing import Any
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models.field_intelligence import FieldObservation
@@ -66,6 +67,9 @@ def correlate_observation(db: Session, observation: FieldObservation) -> dict:
         .filter(EvidenceRecord.occurred_at.isnot(None))
         .filter(EvidenceRecord.occurred_at >= window_start)
         .filter(EvidenceRecord.occurred_at <= window_end)
+        # Unusable evidence (e.g. blank/untranscribed captures) must never feed
+        # correlation for other observations.
+        .filter(or_(EvidenceRecord.quality_status.is_(None), EvidenceRecord.quality_status != "unusable"))
     )
     if workspace_id:
         evidence_query = evidence_query.filter(

@@ -53,7 +53,11 @@ def _tool_citations(ctx: Any, workspace_id: str | None, max_items: int) -> list[
                 tenant_id=ctx.organization_id,
                 workspace_id=workspace_id or record.workspace_id,
                 fields=["title", "summary", "evidence_type", "occurred_at"],
-                trace={"citation_label": record.citation_label, "data_source_id": record.data_source_id},
+                trace={
+                    "citation_label": record.citation_label,
+                    "data_source_id": record.data_source_id,
+                    "quality_status": record.quality_status,
+                },
             )
         )
     return citations
@@ -152,6 +156,8 @@ def build_intelligence_context(
             "value_json": _redact(row.value_json or {}),
             "field_id": row.field_id,
             "block_id": row.block_id,
+            "confidence": row.confidence,
+            "quality_status": row.quality_status,
             "occurred_at": row.occurred_at.isoformat() if row.occurred_at else None,
             "metadata_json": _redact(row.metadata_json or {}),
         }

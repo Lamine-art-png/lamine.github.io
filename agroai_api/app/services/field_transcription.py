@@ -40,7 +40,34 @@ _RETRYABLE_HTTP = {408, 425, 429, 500, 502, 503, 504}
 
 
 class RetryableTranscriptionError(Exception):
-    """Raised by callers to force durable job retry on a transient failure."""
+    """Raised by callers to force durable job retry on a transient failure.
+
+    ``provenance`` carries the attempted run's provider/model/classification/
+    latency so the durable plane can persist attempt provenance even though the
+    pipeline transaction rolls back.
+    """
+
+    def __init__(self, message: str, *, provenance: dict | None = None):
+        super().__init__(message)
+        self.provenance = provenance or {}
+
+
+def classify_transcription_error(error: str | None) -> str:
+    """Map a provider error string onto a stable HTTP/transport classification."""
+    text = (error or "").strip().lower()
+    if not text:
+        return "unclassified"
+    import re as _re
+
+    match = _re.search(r"(?:http[_ ]?|_)(\d{3})\b", text)
+    if match:
+        code = int(match.group(1))
+        if code in _RETRYABLE_HTTP:
+            return f"http_{code}_retryable"
+        return f"http_{code}"
+    if any(tok in text for tok in ("timeout", "connect", "network", "pool", "protocol", "read")):
+        return "transport_transient"
+    return "unclassified"
 
 
 class TranscriptionProvider(Protocol):
