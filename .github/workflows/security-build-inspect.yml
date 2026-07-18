@@ -65,7 +65,16 @@ jobs:
             tests/unit/test_saas_foundation.py \
             tests/unit/test_operation_workspaces.py \
             tests/unit/test_schema_adoption_contract.py \
-            tests/unit/test_alembic_revision_contract.py
+            tests/unit/test_alembic_revision_contract.py 2>&1 | tee /tmp/agro-security-backend-tests.log
+
+      - name: Upload backend failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: agro-security-backend-test-diagnostics
+          path: /tmp/agro-security-backend-tests.log
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Validate clean database migration
         working-directory: agroai_api
