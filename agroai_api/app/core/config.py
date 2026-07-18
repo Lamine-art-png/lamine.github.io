@@ -59,6 +59,12 @@ class Settings(BaseSettings):
     COMPLIANCE_ALLOW_BROWSER_TENANT_API_KEYS: bool = False
     COMPLIANCE_OBJECT_STORAGE_BACKEND: str = "disabled"
 
+    # Field Intelligence (voice-first / offline field capture)
+    FIELD_TRANSCRIPTION_PROVIDER: str = ""  # "", fake, fake_fail, or a real provider id
+    FIELD_ASSET_MAX_BYTES: int = 52428800  # 50 MiB per captured asset
+    FIELD_AUDIO_MAX_SECONDS: int = 900  # 15 minutes of durable audio
+    FIELD_MAP_STYLE_URL: str = ""  # optional MapLibre style; empty => graceful fallback
+
     # Scheduler
     SYNC_INTERVAL_MINUTES: int = 15
     SYNC_LOOKBACK_DAYS: int = 14
