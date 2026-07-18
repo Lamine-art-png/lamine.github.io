@@ -11,7 +11,11 @@ Design notes
 * Binary media never lives in Postgres. Only authorized object references are
   stored on :class:`FieldObservationAsset`.
 * Idempotency is a first-class column so an offline client can safely replay a
-  capture without creating duplicate observations or assets.
+  capture. A canonical payload fingerprint distinguishes a benign replay from a
+  conflicting reuse of the same key.
+* Foreign keys are declared with deliberate delete behavior. There is no
+  circular FK: a capture points at an observation by id only; the observation
+  owns the unique FK back to its capture (one observation per capture).
 """
 from __future__ import annotations
 
@@ -29,6 +33,7 @@ from sqlalchemy import (
     JSON,
     String,
     Text,
+    UniqueConstraint,
 )
 
 from app.db.base import Base
@@ -50,27 +55,32 @@ CAPTURE_STATES = (
     "conflict",
 )
 
-OBSERVATION_STATES = ("processing", "completed", "failed", "needs_review")
+OBSERVATION_STATES = ("staged", "processing", "completed", "failed", "needs_review", "deleted")
+ASSET_STATES = ("stored", "pending_deletion", "deleted")
 
 
 class FieldCaptureSession(Base):
     """A single field capture as it moves from the client into durable storage.
 
     One session yields at most one :class:`FieldObservation`. The session owns
-    the idempotency contract: the same ``idempotency_key`` (or the stable
-    client-generated ``client_capture_id``) must never create two observations.
+    the idempotency contract: the same ``idempotency_key`` must never create two
+    observations, and reusing it with a different canonical payload is a
+    conflict rather than a silent overwrite.
     """
 
     __tablename__ = "field_capture_sessions"
 
     id = Column(String, primary_key=True, default=new_id, index=True)
-    tenant_id = Column(String, ForeignKey("organizations.id"), nullable=False, index=True)
-    workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=True, index=True)
-    user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
+    tenant_id = Column(String, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    workspace_id = Column(String, ForeignKey("workspaces.id", ondelete="RESTRICT"), nullable=True, index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
 
     # Stable client-generated identity + idempotency key survive offline replay.
     client_capture_id = Column(String, nullable=False, index=True)
     idempotency_key = Column(String(120), nullable=False, index=True)
+    # Canonical fingerprint of the accepted payload; a replay with the same key
+    # but a different fingerprint is rejected as an idempotency conflict.
+    payload_fingerprint = Column(String(64), nullable=True)
 
     capture_source = Column(String, default="typed", nullable=False)  # voice | typed
     status = Column(String, default="received", nullable=False, index=True)
@@ -96,7 +106,8 @@ class FieldCaptureSession(Base):
     metadata_json = Column(JSON, default=dict, nullable=False)
     last_error = Column(Text, nullable=True)
 
-    observation_id = Column(String, ForeignKey("field_observations.id"), nullable=True, index=True)
+    # Pointer only (no FK) so there is no circular constraint with observations.
+    observation_id = Column(String, nullable=True, index=True)
 
     client_created_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
@@ -117,10 +128,16 @@ class FieldObservation(Base):
     __tablename__ = "field_observations"
 
     id = Column(String, primary_key=True, default=new_id, index=True)
-    tenant_id = Column(String, ForeignKey("organizations.id"), nullable=False, index=True)
-    workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=True, index=True)
-    user_id = Column(String, ForeignKey("users.id"), nullable=True, index=True)
-    capture_session_id = Column(String, nullable=True, index=True)
+    tenant_id = Column(String, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    workspace_id = Column(String, ForeignKey("workspaces.id", ondelete="RESTRICT"), nullable=True, index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    # Unique FK enforces exactly one observation per capture session.
+    capture_session_id = Column(
+        String,
+        ForeignKey("field_capture_sessions.id", ondelete="CASCADE"),
+        nullable=True,
+        unique=True,
+    )
 
     field_id = Column(String, nullable=True, index=True)
     field_name = Column(String, nullable=True)
@@ -129,7 +146,8 @@ class FieldObservation(Base):
     crop = Column(String, nullable=True)
     event_type = Column(String, nullable=True, index=True)
     severity = Column(String, nullable=True, index=True)
-    status = Column(String, default="processing", nullable=False, index=True)
+    status = Column(String, default="staged", nullable=False, index=True)
+    processing_error = Column(Text, nullable=True)
 
     occurred_at = Column(DateTime, nullable=True, index=True)
     observed_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
@@ -174,36 +192,45 @@ class FieldObservationAsset(Base):
     """Authorized object reference for a captured media asset.
 
     The binary lives in R2-compatible object storage; only the reference,
-    checksum and validated content type live here.
+    checksum and validated content type live here. ``status`` transitions
+    stored -> pending_deletion -> deleted as durable object deletion is
+    scheduled and confirmed.
     """
 
     __tablename__ = "field_observation_assets"
 
     id = Column(String, primary_key=True, default=new_id, index=True)
-    tenant_id = Column(String, ForeignKey("organizations.id"), nullable=False, index=True)
-    workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=True, index=True)
-    capture_session_id = Column(String, ForeignKey("field_capture_sessions.id"), nullable=True, index=True)
-    observation_id = Column(String, ForeignKey("field_observations.id"), nullable=True, index=True)
+    tenant_id = Column(String, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    workspace_id = Column(String, ForeignKey("workspaces.id", ondelete="RESTRICT"), nullable=True, index=True)
+    capture_session_id = Column(
+        String, ForeignKey("field_capture_sessions.id", ondelete="CASCADE"), nullable=True, index=True
+    )
+    observation_id = Column(
+        String, ForeignKey("field_observations.id", ondelete="CASCADE"), nullable=True, index=True
+    )
 
     client_asset_id = Column(String, nullable=False, index=True)
     kind = Column(String, nullable=False)  # audio | photo | video | file
     content_type = Column(String, nullable=True)
     filename = Column(String, nullable=True)
-    storage_backend = Column(String, default="local", nullable=False)
+    storage_backend = Column(String, default="s3", nullable=False)
     object_ref = Column(String, nullable=True)  # never a public URL
     content_sha256 = Column(String(64), nullable=True, index=True)
     size_bytes = Column(BigInteger, nullable=True)
     duration_seconds = Column(Float, nullable=True)
     status = Column(String, default="stored", nullable=False, index=True)
     deleted_at = Column(DateTime, nullable=True)
+    object_deleted_at = Column(DateTime, nullable=True)
+    delete_attempts = Column(Integer, default=0, nullable=False)
     metadata_json = Column(JSON, default=dict, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
 
     __table_args__ = (
-        # Safe-retry dedupe: same content in the same capture is stored once.
-        Index("uq_field_asset_identity", "tenant_id", "capture_session_id", "client_asset_id", unique=True),
+        # Safe-retry dedupe: same client asset in the same capture is stored once.
+        UniqueConstraint("tenant_id", "capture_session_id", "client_asset_id", name="uq_field_asset_identity"),
         Index("ix_field_asset_checksum", "tenant_id", "content_sha256"),
         Index("ix_field_asset_observation", "tenant_id", "observation_id"),
+        Index("ix_field_asset_status", "tenant_id", "status"),
     )
 
 
@@ -213,12 +240,14 @@ class FieldObservationProcessingRun(Base):
     __tablename__ = "field_observation_processing_runs"
 
     id = Column(String, primary_key=True, default=new_id, index=True)
-    tenant_id = Column(String, ForeignKey("organizations.id"), nullable=False, index=True)
-    workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=True, index=True)
-    observation_id = Column(String, ForeignKey("field_observations.id"), nullable=True, index=True)
+    tenant_id = Column(String, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False, index=True)
+    workspace_id = Column(String, ForeignKey("workspaces.id", ondelete="RESTRICT"), nullable=True, index=True)
+    observation_id = Column(
+        String, ForeignKey("field_observations.id", ondelete="CASCADE"), nullable=True, index=True
+    )
     capture_session_id = Column(String, nullable=True, index=True)
 
-    stage = Column(String, nullable=False, index=True)  # transcription | extraction | correlation
+    stage = Column(String, nullable=False, index=True)  # transcription | extraction | correlation | pipeline
     provider = Column(String, nullable=True)
     model = Column(String, nullable=True)
     language = Column(String, nullable=True)
