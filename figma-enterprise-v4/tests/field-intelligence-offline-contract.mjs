@@ -131,6 +131,68 @@ await check("failed sync retained for manual/auto retry", async () => {
   assert.ok(rec.nextAttemptAt > Date.now());
 });
 
+// 8) item 9: after MAX_ATTEMPTS auto-flush stops until explicit manual retry
+await check("retries are bounded; attempt N+1 does not happen automatically", async () => {
+  q.configureIdentity("orgBound", "u");
+  await q.putCapture(baseRecord("capBound"));
+  let calls = 0;
+  const failing = { initiate: async () => { calls += 1; throw new Error("down"); }, uploadAsset: async () => ({}), complete: async () => ({}) };
+  for (let i = 0; i < q.MAX_ATTEMPTS + 3; i += 1) {
+    const rec = await q.getCapture("capBound");
+    if (rec) { rec.nextAttemptAt = undefined; await q.putCapture(rec); } // advance past backoff each round
+    await q.flushQueue(failing);
+  }
+  const rec = await q.getCapture("capBound");
+  assert.strictEqual(rec.syncState, "manual_recovery", "record must become terminal");
+  assert.strictEqual(calls, q.MAX_ATTEMPTS, `must stop after ${q.MAX_ATTEMPTS} attempts, got ${calls}`);
+  // even with the backoff window cleared, automatic flush must not attempt again
+  rec.nextAttemptAt = undefined; await q.putCapture(rec);
+  await q.flushQueue(failing);
+  assert.strictEqual(calls, q.MAX_ATTEMPTS, "no automatic attempt in terminal state");
+  // explicit manual retry resumes
+  const ok = { initiate: async () => ({ capture: { id: "s" } }), uploadAsset: async () => ({}), complete: async () => ({ observation: { id: "o" } }) };
+  await q.retryRecord(ok, "capBound");
+  assert.strictEqual((await q.getCapture("capBound")).syncState, "synced");
+});
+
+// 9) item 10: two contexts, slow op — the lease cannot be stolen mid-flight
+await check("a leased record is not double-flushed by another tab during a slow op", async () => {
+  // second module instance = a second tab (its own TAB_ID), same shared IndexedDB
+  const js2 = esbuild.transformSync(src, { loader: "ts", format: "esm" }).code;
+  const gen2 = path.join(root, "tests", ".offlineQueue.gen2.mjs");
+  fs.writeFileSync(gen2, js2);
+  const qB = await import(pathToFileURL(gen2).href);
+
+  q.configureIdentity("orgTabs", "u");
+  qB.configureIdentity("orgTabs", "u");
+  await q.putCapture(baseRecord("capTabs"));
+
+  let release;
+  const slow = new Promise((r) => { release = r; });
+  let aCompletes = 0;
+  let bCompletes = 0;
+  const slowApi = { initiate: async () => ({ capture: { id: "s" } }), uploadAsset: async () => ({}), complete: async () => { aCompletes += 1; await slow; return { observation: { id: "o" } }; } };
+  const okApi = { initiate: async () => ({ capture: { id: "s" } }), uploadAsset: async () => ({}), complete: async () => { bCompletes += 1; return { observation: { id: "o2" } }; } };
+
+  const aRun = q.flushQueue(slowApi);          // A starts, holds the lease, blocks in complete()
+  await new Promise((r) => setTimeout(r, 20));
+  await qB.flushQueue(okApi);                    // B must skip A's actively-leased record
+  assert.strictEqual(bCompletes, 0, "second tab must not process a record leased by the first");
+  release();
+  await aRun;
+  assert.strictEqual(aCompletes, 1);
+  assert.strictEqual((await q.getCapture("capTabs")).syncState, "synced");
+  fs.unlinkSync(gen2);
+});
+
+// 10: renewLease extends ownership so a slow op survives past LEASE_MS
+await check("renewLease extends the owner's lease", async () => {
+  q.configureIdentity("orgRenew", "u");
+  await q.putCapture(baseRecord("capRenew"));
+  // non-owner cannot renew
+  assert.strictEqual(await q.renewLease("capRenew"), false);
+});
+
 function rawAssetCount(dbName, captureId) {
   return new Promise((resolve, reject) => {
     const open = indexedDB.open(dbName);

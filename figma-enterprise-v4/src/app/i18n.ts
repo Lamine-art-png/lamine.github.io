@@ -148,6 +148,7 @@ const en: Record<string, string> = {
   "fieldIntel.evt.compliance_note": "Compliance note", "fieldIntel.evt.operator_note": "Operator note",
   "fieldIntel.state.draft": "Draft", "fieldIntel.state.queued": "Queued", "fieldIntel.state.syncing": "Syncing",
   "fieldIntel.state.processing": "Processing", "fieldIntel.state.synced": "Synced", "fieldIntel.state.failed": "Failed", "fieldIntel.state.conflict": "Conflict",
+  "fieldIntel.state.manual_recovery": "Needs manual retry",
 };
 
 const frFR: Record<string, string> = {
@@ -243,6 +244,7 @@ const frFR: Record<string, string> = {
   "fieldIntel.evt.compliance_note": "Note de conformité", "fieldIntel.evt.operator_note": "Note d’opérateur",
   "fieldIntel.state.draft": "Brouillon", "fieldIntel.state.queued": "En file", "fieldIntel.state.syncing": "Synchronisation",
   "fieldIntel.state.processing": "Traitement", "fieldIntel.state.synced": "Synchronisé", "fieldIntel.state.failed": "Échec", "fieldIntel.state.conflict": "Conflit",
+  "fieldIntel.state.manual_recovery": "Nouvelle tentative manuelle requise",
 };
 
 export const TRANSLATIONS: Record<string, Record<string, string>> = { en, "fr-FR": frFR };

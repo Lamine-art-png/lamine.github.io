@@ -18,7 +18,7 @@ const EVENT_TYPES = [
   "observation", "irrigation_event", "issue", "meter_reading",
   "pest_disease", "equipment", "compliance_note", "operator_note",
 ] as const;
-const SYNC_STATES: SyncState[] = ["draft", "queued", "syncing", "processing", "synced", "failed", "conflict"];
+const SYNC_STATES: SyncState[] = ["draft", "queued", "syncing", "processing", "synced", "failed", "conflict", "manual_recovery"];
 
 type Observation = Record<string, any>;
 
@@ -621,7 +621,7 @@ function SelectField({ id, label, value, onChange, options }: any) {
 function StateChip({ t, state }: { t: any; state: SyncState }) {
   const colors: Record<SyncState, string> = {
     draft: "#65736A", queued: "#2D6A4F", syncing: "#B26B00", processing: "#B26B00",
-    synced: "#1B5E3F", failed: "#B23B2E", conflict: "#B23B2E",
+    synced: "#1B5E3F", failed: "#B23B2E", conflict: "#B23B2E", manual_recovery: "#8A1F14",
   };
   return (
     <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11px] font-semibold"

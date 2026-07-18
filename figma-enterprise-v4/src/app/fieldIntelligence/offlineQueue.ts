@@ -12,7 +12,11 @@
 //   lease expires. Retries are bounded; exhausted records enter a manual
 //   recovery ("failed") state without losing data.
 
-export type SyncState = "draft" | "queued" | "syncing" | "processing" | "synced" | "failed" | "conflict";
+export type SyncState =
+  | "draft" | "queued" | "syncing" | "processing" | "synced" | "failed" | "conflict"
+  // Terminal: retries exhausted. Automatic flush stops until an explicit manual
+  // retry. Data is preserved.
+  | "manual_recovery";
 
 export type QueuedAsset = {
   id: string;
@@ -284,6 +288,26 @@ async function acquireLease(clientCaptureId: string): Promise<CaptureRecord | nu
   });
 }
 
+// Renew the cross-tab lease mid-operation so a slow upload/complete cannot be
+// stolen by another tab after LEASE_MS elapses. Only the owner can renew.
+export async function renewLease(clientCaptureId: string): Promise<boolean> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const transaction = db.transaction(CAPTURES, "readwrite");
+    const store = transaction.objectStore(CAPTURES);
+    const read = store.get(clientCaptureId);
+    read.onsuccess = () => {
+      const record = read.result as CaptureRecord | undefined;
+      if (!record || record.leaseOwner !== TAB_ID) return resolve(false);
+      record.leaseExpiresAt = Date.now() + LEASE_MS;
+      store.put(record);
+      transaction.oncomplete = () => resolve(true);
+      transaction.onerror = () => reject(transaction.error);
+    };
+    read.onerror = () => reject(read.error);
+  });
+}
+
 async function flushRecord(api: FieldApi, clientCaptureId: string): Promise<boolean> {
   if (inFlight.has(clientCaptureId)) return false;
   inFlight.add(clientCaptureId);
@@ -298,6 +322,7 @@ async function flushRecord(api: FieldApi, clientCaptureId: string): Promise<bool
 
     const initiated = await api.initiate(toInitiatePayload(record));
     record.serverCaptureId = (initiated?.capture?.id as string | undefined) ?? record.serverCaptureId;
+    await renewLease(clientCaptureId); // heartbeat after initiation
 
     const assets = await assetsForCapture(record.clientCaptureId);
     for (const asset of assets) {
@@ -310,10 +335,12 @@ async function flushRecord(api: FieldApi, clientCaptureId: string): Promise<bool
       }, file);
       asset.uploaded = true;
       await putAsset(asset);
+      await renewLease(clientCaptureId); // heartbeat after each upload
     }
 
     record.syncState = "processing";
     await putCapture(record);
+    await renewLease(clientCaptureId); // heartbeat before the long completion wait
     const completed = await api.complete(record.serverCaptureId || record.clientCaptureId, {});
     record.observationId = completed?.observation?.id ?? null;
     record.syncState = "synced";
@@ -335,8 +362,8 @@ async function flushRecord(api: FieldApi, clientCaptureId: string): Promise<bool
       record.retryCount += 1;
       record.leaseOwner = null;
       record.leaseExpiresAt = null;
-      if (error?.status === 409) record.syncState = "conflict";
-      else if (record.retryCount >= MAX_ATTEMPTS) record.syncState = "failed"; // manual recovery
+      if (error?.status === 409) record.syncState = "conflict"; // terminal until manual
+      else if (record.retryCount >= MAX_ATTEMPTS) record.syncState = "manual_recovery"; // terminal
       else record.syncState = "failed";
       record.lastError = error?.message || "sync_failed";
       record.nextAttemptAt = Date.now() + backoffDelay(record.retryCount);
@@ -372,7 +399,8 @@ export async function flushQueue(api: FieldApi): Promise<{ synced: number; faile
   for (const record of rows) {
     if (record.syncState === "synced") continue;
     if (record.syncState === "syncing" || record.syncState === "processing") continue;
-    if (record.retryCount >= MAX_ATTEMPTS && record.syncState === "failed" && (record.nextAttemptAt || 0) > now) continue;
+    // Terminal states require an explicit manual retry — no automatic attempts.
+    if (record.syncState === "manual_recovery" || record.syncState === "conflict") continue;
     if (record.nextAttemptAt && record.nextAttemptAt > now) continue;
     const ok = await flushRecord(api, record.clientCaptureId);
     if (ok) synced += 1; else failed += 1;
@@ -383,8 +411,10 @@ export async function flushQueue(api: FieldApi): Promise<{ synced: number; faile
 export async function retryRecord(api: FieldApi, clientCaptureId: string): Promise<boolean> {
   const record = await getCapture(clientCaptureId);
   if (!record) return false;
-  record.nextAttemptAt = undefined; // manual retry ignores backoff + attempt ceiling
-  record.retryCount = Math.min(record.retryCount, MAX_ATTEMPTS - 1);
+  // Explicit manual retry clears the terminal state and the attempt ceiling.
+  record.nextAttemptAt = undefined;
+  record.retryCount = 0;
+  record.lastError = null;
   record.syncState = "queued";
   await putCapture(record);
   return flushRecord(api, clientCaptureId);
