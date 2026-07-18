@@ -42,6 +42,7 @@ jobs:
           echo "5ba38c0d0ea1d889b15aae7d18e8f3c8de84361595a22007014c0f8051e39aba  /tmp/agro-security.patch" | sha256sum --check --strict
           patch --dry-run -p1 < /tmp/agro-security.patch
           patch -p1 < /tmp/agro-security.patch
+          sed -i '/^from __future__ import annotations$/d' agroai_api/app/api/v1/auth.py
 
       - name: Set up Python
         uses: actions/setup-python@v5
