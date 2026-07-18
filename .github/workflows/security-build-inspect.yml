@@ -43,6 +43,27 @@ jobs:
           patch --dry-run -p1 < /tmp/agro-security.patch
           patch -p1 < /tmp/agro-security.patch
           sed -i '/^from __future__ import annotations$/d' agroai_api/app/api/v1/auth.py
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("agroai_api/app/api/v1/auth.py")
+          source = path.read_text()
+          old = '''def _request_metadata(request: Request) -> tuple[str | None, str | None]:
+              ip_address = request.client.host if request.client else None
+              return ip_address, request.headers.get("user-agent")
+          '''
+          new = '''def _request_metadata(request: Request) -> tuple[str | None, str | None]:
+              forwarded_ip = (
+                  request.headers.get("cf-connecting-ip")
+                  or request.headers.get("x-forwarded-for", "").split(",", 1)[0].strip()
+              )
+              ip_address = forwarded_ip or (request.client.host if request.client else None) or "unknown"
+              return ip_address, request.headers.get("user-agent")
+          '''
+          if old not in source:
+              raise SystemExit("request metadata compatibility block not found")
+          path.write_text(source.replace(old, new, 1))
+          PY
 
       - name: Set up Python
         uses: actions/setup-python@v5
