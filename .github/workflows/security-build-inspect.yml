@@ -52,7 +52,7 @@ jobs:
 
       - name: Install backend dependencies
         working-directory: agroai_api
-        run: python -m pip install --disable-pip-version-check -r requirements.txt
+        run: python -m pip install --disable-pip-version-check -r requirements.txt pytest
 
       - name: Compile and test backend security contracts
         working-directory: agroai_api
