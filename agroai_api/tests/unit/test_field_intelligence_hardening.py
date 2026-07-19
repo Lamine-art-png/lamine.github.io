@@ -671,6 +671,97 @@ def test_restricted_account_blocked_from_field_intelligence(client, db):
         assert response.json()["detail"]["code"] == "account_access_restricted"
 
 
+def test_suspended_pending_appeal_user_blocked_on_every_field_route(client, db, fake_store):
+    """A suspended_pending_appeal account is 403-blocked with the appeal
+    affordance on every Field Intelligence surface — read, write, stream,
+    delete, sync, map and reprocess — through the canonical shared boundary."""
+    from app.models.saas import User as _User
+
+    _, ws, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    up = _upload(client, headers, cap["id"])
+    assert up.status_code == 200
+    asset_id = up.json()["asset"]["id"]
+    obs_id = _complete(client, headers, cap["id"]).json()["observation"]["id"]
+    _process(db)
+
+    user = db.query(_User).one()
+    user.account_status = "suspended_pending_appeal"
+    db.commit()
+
+    attempts = [
+        ("initiate", _initiate(client, headers, client_capture_id="sp1", idempotency_key="sp1")),
+        ("upload", _upload(client, headers, cap["id"], client_asset_id="sp-a")),
+        ("complete", _complete(client, headers, cap["id"])),
+        ("get_capture", client.get(f"/v1/field-intelligence/captures/{cap['id']}", headers=headers)),
+        ("sync", client.post("/v1/field-intelligence/sync/batch",
+                             json={"captures": [{"client_capture_id": "sp2", "idempotency_key": "sp2", "note_text": "x"}]},
+                             headers=headers)),
+        ("list", client.get("/v1/field-intelligence/observations", headers=headers)),
+        ("search", client.get("/v1/field-intelligence/search?q=x", headers=headers)),
+        ("map", client.get("/v1/field-intelligence/map", headers=headers)),
+        ("get", client.get(f"/v1/field-intelligence/observations/{obs_id}", headers=headers)),
+        ("patch", client.patch(f"/v1/field-intelligence/observations/{obs_id}",
+                               json={"severity": "high"}, headers=headers)),
+        ("reprocess", client.post(f"/v1/field-intelligence/observations/{obs_id}/reprocess", headers=headers)),
+        ("task", client.post(f"/v1/field-intelligence/observations/{obs_id}/tasks",
+                             json={"title": "t"}, headers=headers)),
+        ("stream", client.get(f"/v1/field-intelligence/assets/{asset_id}/content", headers=headers)),
+        ("delete_asset", client.delete(f"/v1/field-intelligence/assets/{asset_id}", headers=headers)),
+        ("delete_obs", client.delete(f"/v1/field-intelligence/observations/{obs_id}", headers=headers)),
+    ]
+    for name, response in attempts:
+        assert response.status_code == 403, f"{name}: {response.status_code} {response.text[:200]}"
+        detail = response.json()["detail"]
+        assert detail["code"] == "account_access_restricted", name
+        assert detail["appeal_available"] is True, name
+        assert detail["appeal_path"] == "/appeal", name
+
+    # Nothing was captured, mutated or deleted while suspended.
+    assert db.get(FieldObservationAsset, asset_id).status == "stored"
+
+
+def test_suspended_pending_appeal_organization_blocked_from_field_intelligence(client, db):
+    org, _, headers = _auth(db)
+    org.verification_status = "suspended_pending_appeal"
+    db.commit()
+    for response in (
+        _initiate(client, headers, client_capture_id="so1", idempotency_key="so1"),
+        client.get("/v1/field-intelligence/observations", headers=headers),
+        client.get("/v1/field-intelligence/map", headers=headers),
+    ):
+        assert response.status_code == 403, response.text
+        assert response.json()["detail"]["code"] == "organization_verification_required"
+
+
+def test_approved_appeal_record_alone_does_not_restore_field_access(client, db):
+    """Platform-admin appeal review must not grant access until the
+    authoritative account and organization states are actually updated."""
+    from datetime import datetime as _dt
+
+    from app.models.saas import AccountAccessAppeal, User as _User
+
+    org, _, headers = _auth(db)
+    user = db.query(_User).one()
+    user.account_status = "suspended_pending_appeal"
+    db.add(AccountAccessAppeal(
+        user_id=user.id, organization_id=org.id, token_hash="a" * 64,
+        token_expires_at=_dt(2030, 1, 1), status="approved", submitted_at=_dt(2026, 7, 19),
+    ))
+    db.commit()
+
+    blocked = client.get("/v1/field-intelligence/observations", headers=headers)
+    assert blocked.status_code == 403
+    assert blocked.json()["detail"]["code"] == "account_access_restricted"
+
+    # Only the authoritative account state flipping back to active restores
+    # access (organization status remains approved).
+    user.account_status = "active"
+    db.commit()
+    restored = client.get("/v1/field-intelligence/observations", headers=headers)
+    assert restored.status_code == 200, restored.text
+
+
 # --------------------------------------------------------------------------- #
 # Item 8 — server-side commercial capabilities and quotas
 # --------------------------------------------------------------------------- #
