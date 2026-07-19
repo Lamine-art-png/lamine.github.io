@@ -186,7 +186,11 @@ def commit_credits(
     principal: PlatformPrincipal,
     status_code: int,
 ) -> PlatformApiUsageEvent:
-    logical_id = reservation.logical_operation_id if reservation else principal.request_id or str(uuid.uuid4())
+    logical_id = (
+        reservation.logical_operation_id
+        if reservation
+        else principal.billing_operation_id or str(uuid.uuid4())
+    )
     existing = (
         db.query(PlatformApiUsageEvent)
         .filter(
@@ -215,7 +219,14 @@ def commit_credits(
         request_id=principal.request_id,
         idempotency_key=logical_id,
         status_code=status_code,
-        metadata_json={"logical_operation_id": logical_id},
+        metadata_json={
+            "logical_operation_id": logical_id,
+            **(
+                {"client_correlation_id": principal.client_correlation_id}
+                if principal.client_correlation_id
+                else {}
+            ),
+        },
     )
     db.add(event)
     db.flush()

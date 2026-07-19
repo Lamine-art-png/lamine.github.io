@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import HTTPException, status
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.core.organization_access import organization_access_allowed
@@ -101,15 +102,25 @@ def require_api_entitlement(
     *,
     environment: str,
     operation: str,
+    api_project_id: str | None,
 ) -> tuple[PlatformProgramEnrollment, PlatformApiSubscription | None]:
     enrollment = require_active_enrollment(db, organization, environment=environment, operation=operation)
     if environment == "live":
         moment = datetime.utcnow()
+        project_scope = (
+            PlatformLiveAccessRequest.api_project_id.is_(None)
+            if api_project_id is None
+            else or_(
+                PlatformLiveAccessRequest.api_project_id.is_(None),
+                PlatformLiveAccessRequest.api_project_id == api_project_id,
+            )
+        )
         live_approval = (
             db.query(PlatformLiveAccessRequest)
             .filter(
                 PlatformLiveAccessRequest.organization_id == organization.id,
                 PlatformLiveAccessRequest.status == "approved",
+                project_scope,
             )
             .order_by(PlatformLiveAccessRequest.decided_at.desc())
             .first()

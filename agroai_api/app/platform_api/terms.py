@@ -16,7 +16,7 @@ from app.models.platform_product import PlatformTermsAcceptance, PlatformTermsDo
 
 def required_documents(db: Session, *, now: datetime | None = None) -> list[PlatformTermsDocument]:
     moment = now or datetime.utcnow()
-    return (
+    rows = (
         db.query(PlatformTermsDocument)
         .filter(
             PlatformTermsDocument.status == "approved_effective",
@@ -26,6 +26,10 @@ def required_documents(db: Session, *, now: datetime | None = None) -> list[Plat
         .order_by(PlatformTermsDocument.document_type.asc(), PlatformTermsDocument.effective_at.desc())
         .all()
     )
+    latest_by_type: dict[str, PlatformTermsDocument] = {}
+    for row in rows:
+        latest_by_type.setdefault(row.document_type, row)
+    return list(latest_by_type.values())
 
 
 def _enforcement_error(code: str, message: str, *, status_code: int) -> HTTPException:
@@ -49,6 +53,7 @@ def require_user_acceptance(db: Session, *, organization_id: str, user_id: str) 
             .filter(
                 PlatformTermsAcceptance.organization_id == organization_id,
                 PlatformTermsAcceptance.user_id == user_id,
+                PlatformTermsAcceptance.document_id == document.id,
                 PlatformTermsAcceptance.document_type == document.document_type,
                 PlatformTermsAcceptance.document_version == document.version,
             )
@@ -75,6 +80,7 @@ def require_organization_acceptance(db: Session, *, organization_id: str) -> Non
             db.query(PlatformTermsAcceptance)
             .filter(
                 PlatformTermsAcceptance.organization_id == organization_id,
+                PlatformTermsAcceptance.document_id == document.id,
                 PlatformTermsAcceptance.document_type == document.document_type,
                 PlatformTermsAcceptance.document_version == document.version,
             )

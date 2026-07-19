@@ -1105,6 +1105,7 @@ def request_logs(
     def serialize(row: PlatformRequestLog) -> dict:
         return {
             "request_id": row.request_id,
+            "client_correlation_id": row.client_correlation_id,
             "timestamp": row.created_at.isoformat(),
             "method": row.method,
             "operation_id": row.operation_id,
@@ -1151,6 +1152,7 @@ def portal_request_logs(
         "items": [
             {
                 "request_id": row.request_id,
+                "client_correlation_id": row.client_correlation_id,
                 "timestamp": row.created_at.isoformat(),
                 "method": row.method,
                 "operation_id": row.operation_id,

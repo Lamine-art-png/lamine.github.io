@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
+import pytest
+from fastapi import HTTPException
+
 from app.api.v1 import platform_access, platform_operations
 from app.api.v1.platform_api import platform_openapi
 from app.core.config import settings
@@ -17,11 +20,16 @@ from app.models.platform_product import (
     PlatformTermsAcceptance,
     PlatformTermsDocument,
 )
+from app.models.platform_api import ApiProject, ApiServiceAccount
+from app.models.saas import OrganizationMembership, User
 from app.platform_api.credits import commit_credits, reserve_credits
+from app.platform_api.keys import create_platform_key
 from app.platform_api.notifications import process_key_expiration_notifications
 from app.platform_api.principal import PlatformPrincipal
+from app.platform_api.programs import require_api_entitlement
 from app.platform_api.route_manifest import public_routes
 from app.platform_api.sandbox import sandbox_dataset
+from app.platform_api.terms import require_user_acceptance
 from app.services.object_storage import StoredObject
 from tests.unit.test_platform_api_foundation import _project_and_key
 
@@ -158,6 +166,91 @@ def test_application_isolation_and_spam_limit(client, db, monkeypatch):
     assert client.get("/v1/platform/applications", headers=second_headers).json()["applications"] == []
 
 
+def test_application_withdrawal_is_limited_to_applicant_or_org_admin(
+    client,
+    db,
+    monkeypatch,
+):
+    owner, organization, *_ = _project_and_key(db)
+    suffix = organization.id[:8]
+    applicant = User(
+        email=f"applicant-{suffix}@example.com",
+        password_hash="x",
+        email_verification_status="verified",
+        email_verified_at=datetime.utcnow(),
+    )
+    ordinary_member = User(
+        email=f"member-{suffix}@example.com",
+        password_hash="x",
+        email_verification_status="verified",
+        email_verified_at=datetime.utcnow(),
+    )
+    db.add_all([applicant, ordinary_member])
+    db.flush()
+    db.add_all(
+        [
+            OrganizationMembership(
+                organization_id=organization.id,
+                user_id=applicant.id,
+                role="member",
+            ),
+            OrganizationMembership(
+                organization_id=organization.id,
+                user_id=ordinary_member.id,
+                role="member",
+            ),
+        ]
+    )
+    organization.verification_status = "approved"
+    db.commit()
+    monkeypatch.setattr(settings, "PLATFORM_API_APPLICATIONS_ENABLED", True)
+    monkeypatch.setattr(settings, "PLATFORM_API_APPLICATION_LIMIT_PER_DAY", 3)
+    applicant_headers = {
+        "Authorization": f"Bearer {create_access_token({'sub': applicant.id})}"
+    }
+    member_headers = {
+        "Authorization": f"Bearer {create_access_token({'sub': ordinary_member.id})}"
+    }
+    owner_headers = {
+        "Authorization": f"Bearer {create_access_token({'sub': owner.id})}"
+    }
+
+    first = client.post(
+        "/v1/platform/applications",
+        headers=applicant_headers,
+        json=_application_payload(applicant.email),
+    )
+    assert first.status_code == 202
+    first_id = first.json()["application"]["id"]
+    denied = client.post(
+        f"/v1/platform/applications/{first_id}/withdraw",
+        headers=member_headers,
+    )
+    assert denied.status_code == 403
+    assert denied.json()["code"] == "application_withdrawal_not_authorized"
+    assert (
+        client.post(
+            f"/v1/platform/applications/{first_id}/withdraw",
+            headers=applicant_headers,
+        ).status_code
+        == 200
+    )
+
+    second = client.post(
+        "/v1/platform/applications",
+        headers=applicant_headers,
+        json=_application_payload(applicant.email),
+    )
+    assert second.status_code == 202
+    assert (
+        client.post(
+            f"/v1/platform/applications/{second.json()['application']['id']}/withdraw",
+            headers=owner_headers,
+        ).status_code
+        == 200
+    )
+
+
 def test_strategic_partner_fields_and_truthful_contract_status(client, db, monkeypatch):
     user, organization, *_ = _project_and_key(db)
     organization.verification_status = "approved"
@@ -211,6 +304,143 @@ def test_live_access_is_review_gated_and_never_auto_approved(client, db, monkeyp
     assert reviewed.status_code == 200
     enrollment = db.query(PlatformProgramEnrollment).filter_by(organization_id=organization.id).first()
     assert "live" in enrollment.allowed_environments_json
+
+
+def test_live_access_approval_is_project_scoped_with_org_wide_null_fallback(
+    client,
+    db,
+    monkeypatch,
+):
+    user, organization, workspace, first_project, first_sa, _key, first_plaintext = (
+        _project_and_key(db, environment="live")
+    )
+    organization.verification_status = "approved"
+    enrollment = (
+        db.query(PlatformProgramEnrollment)
+        .filter_by(organization_id=organization.id)
+        .one()
+    )
+    enrollment.billing_mode = "contract"
+    second_project = ApiProject(
+        organization_id=organization.id,
+        workspace_id=workspace.id,
+        name="Second live project",
+        slug="second-live-project",
+        environment="live",
+        status="active",
+        default_rate_limit_policy={},
+        created_by_user_id=user.id,
+    )
+    db.add(second_project)
+    db.flush()
+    second_sa = ApiServiceAccount(
+        organization_id=organization.id,
+        api_project_id=second_project.id,
+        workspace_id=workspace.id,
+        name="second-live-service",
+        status="active",
+        scopes=["projects:read"],
+        created_by_user_id=user.id,
+    )
+    db.add(second_sa)
+    db.flush()
+    _second_key, second_plaintext = create_platform_key(
+        db,
+        project=second_project,
+        service_account=second_sa,
+        name="second live key",
+        scopes=["projects:read"],
+        created_by_user_id=user.id,
+        workspace_id=workspace.id,
+    )
+    db.add(
+        platform_access.PlatformLiveAccessRequest(
+            organization_id=organization.id,
+            requested_by_user_id=user.id,
+            api_project_id=first_project.id,
+            status="approved",
+            intended_production_use="Approved first project",
+            expected_users="10",
+            expected_volume="1000",
+            expected_peak_rate="2",
+            data_categories_json=[],
+            provider_dependencies_json=[],
+            geographic_regions_json=[],
+            security_contact=user.email,
+            incident_contact=user.email,
+            cidr_strategy="fixed",
+            data_retention="30 days",
+            billing_plan="enterprise",
+            decided_at=datetime.utcnow(),
+        )
+    )
+    db.commit()
+
+    require_api_entitlement(
+        db,
+        organization,
+        environment="live",
+        operation="api_key_authentication",
+        api_project_id=first_project.id,
+    )
+    with pytest.raises(HTTPException) as denied:
+        require_api_entitlement(
+            db,
+            organization,
+            environment="live",
+            operation="api_key_authentication",
+            api_project_id=second_project.id,
+        )
+    assert denied.value.detail["code"] == "live_access_approval_required"
+
+    monkeypatch.setattr(settings, "PLATFORM_API_ENABLED", True)
+    monkeypatch.setattr(settings, "PLATFORM_API_PRIVATE_BETA_ENABLED", True)
+    monkeypatch.setattr(settings, "PLATFORM_API_RATE_LIMIT_BACKEND", "memory")
+    monkeypatch.setattr(settings, "APP_ENV", "test")
+    assert (
+        client.get(
+            "/v1/platform/me",
+            headers={"Authorization": f"Bearer {first_plaintext}"},
+        ).status_code
+        == 200
+    )
+    assert (
+        client.get(
+            "/v1/platform/me",
+            headers={"Authorization": f"Bearer {second_plaintext}"},
+        ).status_code
+        == 403
+    )
+
+    db.add(
+        platform_access.PlatformLiveAccessRequest(
+            organization_id=organization.id,
+            requested_by_user_id=user.id,
+            api_project_id=None,
+            status="approved",
+            intended_production_use="Organization-wide approval",
+            expected_users="10",
+            expected_volume="1000",
+            expected_peak_rate="2",
+            data_categories_json=[],
+            provider_dependencies_json=[],
+            geographic_regions_json=[],
+            security_contact=user.email,
+            incident_contact=user.email,
+            cidr_strategy="fixed",
+            data_retention="30 days",
+            billing_plan="enterprise",
+            decided_at=datetime.utcnow(),
+        )
+    )
+    db.commit()
+    assert (
+        client.get(
+            "/v1/platform/me",
+            headers={"Authorization": f"Bearer {second_plaintext}"},
+        ).status_code
+        == 200
+    )
 
 
 def test_program_suspension_immediately_invalidates_existing_key(client, db, monkeypatch):
@@ -334,6 +564,47 @@ def test_terms_enforcement_is_user_scoped_for_console_and_org_scoped_for_keys(cl
     )
     assert rejected.status_code == 422
 
+
+def test_terms_enforcement_requires_acceptance_of_exact_latest_effective_document(
+    db,
+):
+    user, organization, *_ = _project_and_key(db)
+    older = PlatformTermsDocument(
+        document_type="api_terms",
+        version="legal-v1",
+        status="approved_effective",
+        content_digest="1" * 64,
+        effective_at=datetime.utcnow() - timedelta(days=2),
+        reacceptance_required=True,
+    )
+    current = PlatformTermsDocument(
+        document_type="api_terms",
+        version="legal-v2",
+        status="approved_effective",
+        content_digest="2" * 64,
+        effective_at=datetime.utcnow() - timedelta(days=1),
+        reacceptance_required=True,
+    )
+    db.add_all([older, current])
+    db.flush()
+    db.add(
+        PlatformTermsAcceptance(
+            organization_id=organization.id,
+            user_id=user.id,
+            document_id=older.id,
+            document_type=current.document_type,
+            document_version=current.version,
+        )
+    )
+    db.commit()
+
+    with pytest.raises(HTTPException) as denied:
+        require_user_acceptance(
+            db,
+            organization_id=organization.id,
+            user_id=user.id,
+        )
+    assert denied.value.detail["code"] == "platform_terms_acceptance_required"
 
 def test_curated_openapi_contains_domain_contract_and_no_control_plane(monkeypatch):
     monkeypatch.setattr(settings, "PLATFORM_API_PUBLIC_DOCS_ENABLED", True)

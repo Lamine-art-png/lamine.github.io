@@ -19,6 +19,8 @@ class PlatformPrincipal:
     scopes: frozenset[str] = field(default_factory=frozenset)
     environment: str | None = None
     request_id: str | None = None
+    client_correlation_id: str | None = None
+    billing_operation_id: str | None = None
     resource_restrictions: dict[str, Any] = field(default_factory=dict)
     provider_restrictions: dict[str, Any] = field(default_factory=dict)
     actor_metadata: dict[str, Any] = field(default_factory=dict)
