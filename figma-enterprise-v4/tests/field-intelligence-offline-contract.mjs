@@ -20,6 +20,8 @@ assert(src.includes("dbNameFor"), "namespaced database name helper must exist");
 assert(src.includes("acquireLease"), "cross-tab lease must exist");
 assert(src.includes("recoverStale"), "stale-sync recovery must exist");
 assert(src.includes("MAX_ATTEMPTS"), "bounded retry ceiling must exist");
+assert(src.includes("startLeaseHeartbeat"), "continuous lease heartbeat must exist");
+assert(src.includes("LeaseLostError"), "lost-ownership fail-safe must exist");
 
 const js = esbuild.transformSync(src, { loader: "ts", format: "esm" }).code;
 const genPath = path.join(root, "tests", ".offlineQueue.gen.mjs");
@@ -193,6 +195,153 @@ await check("renewLease extends the owner's lease", async () => {
   assert.strictEqual(await q.renewLease("capRenew"), false);
 });
 
+// ---------------------------------------------------------------------------
+// Fake-clock heartbeat contract: the lease is renewed continuously *while* a
+// single network operation is in flight, so advancing time beyond LEASE_MS
+// mid-upload must not let a second tab steal the record. (The previous 20ms
+// real-time test could not prove this.)
+// ---------------------------------------------------------------------------
+
+function makeFakeClock(start = 1_000_000) {
+  let now = start;
+  let nextId = 1;
+  const timers = new Map();
+  const drainReal = () => new Promise((resolve) => setTimeout(resolve, 0));
+  return {
+    api: {
+      now: () => now,
+      setInterval: (fn, ms) => {
+        const id = nextId++;
+        timers.set(id, { fn, ms, next: now + ms });
+        return id;
+      },
+      clearInterval: (id) => timers.delete(id),
+    },
+    time: () => now,
+    async advance(ms) {
+      const target = now + ms;
+      for (;;) {
+        let earliest = null;
+        for (const timer of timers.values()) {
+          if (timer.next <= target && (!earliest || timer.next < earliest.next)) earliest = timer;
+        }
+        if (!earliest) break;
+        now = earliest.next;
+        earliest.next = now + earliest.ms;
+        earliest.fn();
+        await drainReal(); // let the tick's IndexedDB work settle
+      }
+      now = target;
+      await drainReal();
+    },
+  };
+}
+
+const drainReal = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+await check("fake clock: heartbeat holds the lease through one upload longer than LEASE_MS; second tab cannot steal", async () => {
+  const js3 = esbuild.transformSync(src, { loader: "ts", format: "esm" }).code;
+  const gen3 = path.join(root, "tests", ".offlineQueue.gen3.mjs");
+  fs.writeFileSync(gen3, js3);
+  const qB = await import(pathToFileURL(gen3).href);
+
+  const fake = makeFakeClock();
+  q._setClockForTests(fake.api);
+  // tab B shares the same time source (its own heartbeats are irrelevant here)
+  qB._setClockForTests({ now: fake.api.now });
+
+  q.configureIdentity("orgClock", "u");
+  qB.configureIdentity("orgClock", "u");
+  await q.putCapture(baseRecord("capClock"));
+  await q.putAsset({
+    id: "asClock", clientCaptureId: "capClock", kind: "audio", contentType: "audio/ogg",
+    filename: "a.ogg", blob: new Blob([new Uint8Array(16)]), uploaded: false,
+  });
+
+  let releaseUpload;
+  const uploadGate = new Promise((resolve) => { releaseUpload = resolve; });
+  let bCompletes = 0;
+  const slowApi = {
+    initiate: async () => ({ capture: { id: "srvClock" } }),
+    uploadAsset: async () => { await uploadGate; return { status: "stored" }; },
+    complete: async () => ({ observation: { id: "obsA" } }),
+  };
+  const bApi = {
+    initiate: async () => ({ capture: { id: "srvB" } }),
+    uploadAsset: async () => ({}),
+    complete: async () => { bCompletes += 1; return { observation: { id: "obsB" } }; },
+  };
+
+  let uploadStarted = false;
+  const originalUpload = slowApi.uploadAsset;
+  slowApi.uploadAsset = async (...args) => { uploadStarted = true; return originalUpload(...args); };
+
+  const aRun = q.flushQueue(slowApi);
+  // let A acquire the lease, initiate, and block inside the single upload
+  for (let i = 0; i < 200 && !uploadStarted; i += 1) await drainReal();
+  assert.ok(uploadStarted, "test setup: A must be blocked inside the upload");
+
+  await fake.advance(q.LEASE_MS * 2); // heartbeats fire while the upload is still awaiting
+  for (let i = 0; i < 20; i += 1) await drainReal(); // settle in-flight renewals
+
+  const mid = await q.getCapture("capClock");
+  assert.ok((mid.leaseExpiresAt || 0) > fake.time(), "lease must have been renewed beyond the advanced clock");
+
+  // Tab B tries to flush after the original lease would have expired: without
+  // the heartbeat, recoverStale would requeue and B would double-process.
+  await qB.flushQueue(bApi);
+  assert.strictEqual(bCompletes, 0, "second tab must not steal a heartbeating record");
+  assert.strictEqual((await q.getCapture("capClock")).syncState, "syncing");
+
+  releaseUpload();
+  await aRun;
+  const done = await q.getCapture("capClock");
+  assert.strictEqual(done.syncState, "synced");
+  assert.strictEqual(done.observationId, "obsA");
+  q._setClockForTests();
+  qB._setClockForTests();
+  fs.unlinkSync(gen3);
+});
+
+await check("fake clock: losing ownership mid-flight stops the heartbeat and fails safely", async () => {
+  const fake = makeFakeClock();
+  q._setClockForTests(fake.api);
+  q.configureIdentity("orgSteal", "u");
+  await q.putCapture(baseRecord("capSteal"));
+
+  let releaseComplete;
+  const gate = new Promise((resolve) => { releaseComplete = resolve; });
+  const api = {
+    initiate: async () => ({ capture: { id: "srvSteal" } }),
+    uploadAsset: async () => ({}),
+    complete: async () => { await gate; return { observation: { id: "must-not-persist" } }; },
+  };
+  let completeStarted = false;
+  const originalComplete = api.complete;
+  api.complete = async (...args) => { completeStarted = true; return originalComplete(...args); };
+
+  const run = q.flushQueue(api);
+  for (let i = 0; i < 200 && !completeStarted; i += 1) await drainReal(); // A blocked in complete()
+  assert.ok(completeStarted, "test setup: A must be blocked inside complete");
+
+  // Another tab forcibly takes ownership (its acquire path after a crash).
+  const rec = await q.getCapture("capSteal");
+  rec.leaseOwner = "other-tab";
+  rec.leaseExpiresAt = fake.time() + 10 * 60 * 1000;
+  await q.putCapture(rec);
+
+  await fake.advance(q.HEARTBEAT_MS + 1); // heartbeat observes the loss and stops
+  releaseComplete();
+  await run;
+
+  const after = await q.getCapture("capSteal");
+  assert.strictEqual(after.leaseOwner, "other-tab", "aborted flush must not clear the new owner's lease");
+  assert.notStrictEqual(after.observationId, "must-not-persist");
+  assert.notStrictEqual(after.syncState, "synced");
+  assert.strictEqual(after.retryCount, 0, "a lost lease is not counted as a retry failure");
+  q._setClockForTests();
+});
+
 function rawAssetCount(dbName, captureId) {
   return new Promise((resolve, reject) => {
     const open = indexedDB.open(dbName);
@@ -212,3 +361,6 @@ if (failures > 0) {
   process.exit(1);
 }
 console.log("\nField Intelligence offline contract passed");
+// Open BroadcastChannels (cross-tab notification) keep the Node event loop
+// alive; exit explicitly so CI never hangs on a green run.
+process.exit(0);

@@ -66,7 +66,39 @@ const META = "meta";
 export const MAX_ATTEMPTS = 8;
 const BACKOFF_BASE_MS = 2000;
 const BACKOFF_MAX_MS = 5 * 60 * 1000;
-const LEASE_MS = 60 * 1000;
+export const LEASE_MS = 60 * 1000;
+// Continuous heartbeat cadence while a flush awaits network responses. Three
+// renewals fit inside one lease window so a single missed tick cannot lose
+// ownership.
+export const HEARTBEAT_MS = Math.floor(LEASE_MS / 3);
+
+// Injectable clock so lease/heartbeat behavior is provable with fake timers.
+export type QueueClock = {
+  now: () => number;
+  setInterval: (fn: () => void, ms: number) => unknown;
+  clearInterval: (id: unknown) => void;
+};
+
+const realClock: QueueClock = {
+  now: () => Date.now(),
+  setInterval: (fn, ms) => setInterval(fn, ms),
+  clearInterval: (id) => clearInterval(id as ReturnType<typeof setInterval>),
+};
+
+let clock: QueueClock = realClock;
+
+export function _setClockForTests(next?: Partial<QueueClock>): void {
+  clock = next ? { ...realClock, ...next } : realClock;
+}
+
+// Thrown (and swallowed into a safe `false` result) when another tab took
+// ownership mid-operation. The record is never touched after that point.
+export class LeaseLostError extends Error {
+  constructor(clientCaptureId: string) {
+    super(`lease_lost:${clientCaptureId}`);
+    this.name = "LeaseLostError";
+  }
+}
 
 // A per-tab identity used for cross-tab lease ownership.
 const TAB_ID = (globalThis.crypto && "randomUUID" in globalThis.crypto)
@@ -93,7 +125,7 @@ export function backoffDelay(retryCount: number): number {
   return Math.min(BACKOFF_BASE_MS * 2 ** retryCount, BACKOFF_MAX_MS);
 }
 
-export function isLeaseExpired(record: CaptureRecord, now = Date.now()): boolean {
+export function isLeaseExpired(record: CaptureRecord, now = clock.now()): boolean {
   return !record.leaseExpiresAt || record.leaseExpiresAt <= now;
 }
 
@@ -275,7 +307,7 @@ async function acquireLease(clientCaptureId: string): Promise<CaptureRecord | nu
     read.onsuccess = () => {
       const record = read.result as CaptureRecord | undefined;
       if (!record) return resolve(null);
-      const now = Date.now();
+      const now = clock.now();
       const heldByOther = record.leaseOwner && record.leaseOwner !== TAB_ID && (record.leaseExpiresAt || 0) > now;
       if (heldByOther) return resolve(null);
       record.leaseOwner = TAB_ID;
@@ -299,7 +331,7 @@ export async function renewLease(clientCaptureId: string): Promise<boolean> {
     read.onsuccess = () => {
       const record = read.result as CaptureRecord | undefined;
       if (!record || record.leaseOwner !== TAB_ID) return resolve(false);
-      record.leaseExpiresAt = Date.now() + LEASE_MS;
+      record.leaseExpiresAt = clock.now() + LEASE_MS;
       store.put(record);
       transaction.oncomplete = () => resolve(true);
       transaction.onerror = () => reject(transaction.error);
@@ -308,21 +340,91 @@ export async function renewLease(clientCaptureId: string): Promise<boolean> {
   });
 }
 
+// Continuous cross-tab lease heartbeat. Runs on an interval for the entire
+// time a flush is awaiting network responses — never only after an operation
+// finishes — so a slow initiate/upload/complete cannot exceed LEASE_MS and be
+// stolen by another tab. If ownership is lost the heartbeat stops itself and
+// the flush fails safely at its next checkpoint.
+function startLeaseHeartbeat(clientCaptureId: string): { stop: () => void; lost: () => boolean } {
+  let lost = false;
+  let stopped = false;
+  let timer: unknown = null;
+  const stop = () => {
+    stopped = true;
+    if (timer !== null) {
+      clock.clearInterval(timer);
+      timer = null;
+    }
+  };
+  timer = clock.setInterval(() => {
+    if (stopped || lost) return;
+    renewLease(clientCaptureId).then(
+      (owned) => {
+        if (!owned) {
+          lost = true;
+          stop();
+        }
+      },
+      () => {
+        /* transient IndexedDB failure: keep the current lease, retry next tick */
+      },
+    );
+  }, HEARTBEAT_MS);
+  return { stop, lost: () => lost };
+}
+
+// Write the record only if this tab still owns the lease, checked inside the
+// same IndexedDB transaction as the write. This closes the race where another
+// tab takes ownership while our last network call is resolving: the stale
+// flush can never overwrite the new owner's state.
+async function putCaptureOwned(record: CaptureRecord): Promise<boolean> {
+  const db = await openDb();
+  const wrote = await new Promise<boolean>((resolve, reject) => {
+    const transaction = db.transaction(CAPTURES, "readwrite");
+    const store = transaction.objectStore(CAPTURES);
+    const read = store.get(record.clientCaptureId);
+    read.onsuccess = () => {
+      const current = read.result as CaptureRecord | undefined;
+      if (!current || current.leaseOwner !== TAB_ID) {
+        transaction.abort();
+        return resolve(false);
+      }
+      store.put(record);
+      transaction.oncomplete = () => resolve(true);
+      transaction.onerror = () => reject(transaction.error);
+    };
+    read.onerror = () => reject(read.error);
+  });
+  if (wrote) {
+    broadcast();
+    notify();
+  }
+  return wrote;
+}
+
 async function flushRecord(api: FieldApi, clientCaptureId: string): Promise<boolean> {
   if (inFlight.has(clientCaptureId)) return false;
   inFlight.add(clientCaptureId);
+  let heartbeat: { stop: () => void; lost: () => boolean } | null = null;
   try {
     const record = await acquireLease(clientCaptureId);
     if (!record) return false; // another tab owns the lease
     if (record.syncState === "synced") return true;
 
+    heartbeat = startLeaseHeartbeat(clientCaptureId);
+    // Every write below is gated on still owning the lease; losing it aborts
+    // without touching the record (the new owner's state is authoritative).
+    const assertOwned = () => {
+      if (heartbeat!.lost()) throw new LeaseLostError(clientCaptureId);
+    };
+
     record.syncState = "syncing";
     record.lastError = null;
-    await putCapture(record);
+    if (!(await putCaptureOwned(record))) throw new LeaseLostError(clientCaptureId);
 
     const initiated = await api.initiate(toInitiatePayload(record));
+    assertOwned();
     record.serverCaptureId = (initiated?.capture?.id as string | undefined) ?? record.serverCaptureId;
-    await renewLease(clientCaptureId); // heartbeat after initiation
 
     const assets = await assetsForCapture(record.clientCaptureId);
     for (const asset of assets) {
@@ -333,30 +435,38 @@ async function flushRecord(api: FieldApi, clientCaptureId: string): Promise<bool
         kind: asset.kind,
         ...(asset.durationSeconds ? { duration_seconds: String(asset.durationSeconds) } : {}),
       }, file);
+      assertOwned();
       asset.uploaded = true;
       await putAsset(asset);
-      await renewLease(clientCaptureId); // heartbeat after each upload
     }
 
     record.syncState = "processing";
-    await putCapture(record);
-    await renewLease(clientCaptureId); // heartbeat before the long completion wait
+    assertOwned();
+    if (!(await putCaptureOwned(record))) throw new LeaseLostError(clientCaptureId);
     const completed = await api.complete(record.serverCaptureId || record.clientCaptureId, {});
+    assertOwned();
     record.observationId = completed?.observation?.id ?? null;
     record.syncState = "synced";
     record.retryCount = 0;
     record.nextAttemptAt = undefined;
     record.leaseOwner = null;
     record.leaseExpiresAt = null;
-    await putCapture(record);
+    // transactional owned-write: a tab that lost the lease can never mark synced
+    if (!(await putCaptureOwned(record))) throw new LeaseLostError(clientCaptureId);
+    heartbeat.stop();
 
     // durable acceptance confirmed — reclaim blob space
     for (const asset of assets) await deleteAsset(asset.id);
-    await setLastSyncedAt(Date.now());
+    await setLastSyncedAt(clock.now());
     broadcast();
     notify();
     return true;
   } catch (error: any) {
+    if (error instanceof LeaseLostError || (heartbeat && heartbeat.lost())) {
+      // Fail safe: another tab owns the record now. Do not mutate its state,
+      // do not count a retry — the owner's flush is authoritative.
+      return false;
+    }
     const record = await getCapture(clientCaptureId);
     if (record) {
       record.retryCount += 1;
@@ -366,11 +476,13 @@ async function flushRecord(api: FieldApi, clientCaptureId: string): Promise<bool
       else if (record.retryCount >= MAX_ATTEMPTS) record.syncState = "manual_recovery"; // terminal
       else record.syncState = "failed";
       record.lastError = error?.message || "sync_failed";
-      record.nextAttemptAt = Date.now() + backoffDelay(record.retryCount);
-      await putCapture(record);
+      record.nextAttemptAt = clock.now() + backoffDelay(record.retryCount);
+      // owned write: if another tab already took the record, leave it alone
+      await putCaptureOwned(record);
     }
     return false;
   } finally {
+    heartbeat?.stop();
     inFlight.delete(clientCaptureId);
   }
 }
@@ -378,7 +490,7 @@ async function flushRecord(api: FieldApi, clientCaptureId: string): Promise<bool
 // Recover records abandoned mid-sync by a crashed tab (expired lease).
 async function recoverStale(): Promise<void> {
   const rows = await allCaptures();
-  const now = Date.now();
+  const now = clock.now();
   for (const record of rows) {
     if ((record.syncState === "syncing" || record.syncState === "processing") && isLeaseExpired(record, now)) {
       record.syncState = "queued";
@@ -393,7 +505,7 @@ export async function flushQueue(api: FieldApi): Promise<{ synced: number; faile
   if (!indexedDbAvailable()) return { synced: 0, failed: 0 };
   await recoverStale();
   const rows = await allCaptures();
-  const now = Date.now();
+  const now = clock.now();
   let synced = 0;
   let failed = 0;
   for (const record of rows) {
