@@ -3,7 +3,7 @@ name: Field Intelligence CI
 on:
   pull_request:
   push:
-    branches: [feature/field-intelligence]
+    branches: [feature/field-intelligence, feature/field-intelligence-launch]
   workflow_dispatch:
 
 jobs:
