@@ -138,6 +138,12 @@ if getattr(settings, "APP_URL", "") and settings.APP_URL not in ALLOWED_ORIGINS:
 ALLOWED_ORIGIN_REGEX = r"^https://([a-z0-9-]+\.)?(agroai-portal|lamine-github-io|agroai-command-center-v2-preview)\.pages\.dev$"
 _ALLOWED_ORIGIN_PATTERN = re.compile(ALLOWED_ORIGIN_REGEX)
 
+from app.core.request_body_limit import FieldIntelligenceBodyLimitMiddleware  # noqa: E402
+
+# Streaming byte enforcement for chunked JSON bodies on Field Intelligence
+# routes — bounded before any Pydantic parsing, independent of Content-Length.
+app.add_middleware(FieldIntelligenceBodyLimitMiddleware)
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,

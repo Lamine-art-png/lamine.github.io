@@ -61,6 +61,19 @@ def drain_until_empty(db, *, max_rounds: int = 100) -> dict:
     return {"processed": total_processed, "deleted": total_deleted, "cleaned": total_cleaned}
 
 
+def reconcile_once() -> dict:
+    """Reconcile object-store-resident pending registrations on a fresh session."""
+    db = SessionLocal()
+    try:
+        return svc.reconcile_pending_objects(db)
+    except Exception:  # noqa: BLE001 - a reconciler tick must never crash the loop
+        db.rollback()
+        logger.exception("field intelligence pending-object reconciliation tick failed")
+        return {"error": True}
+    finally:
+        db.close()
+
+
 def start_field_intelligence_worker() -> AsyncIOScheduler | None:
     global _scheduler
     if not bool(getattr(settings, "FIELD_INTELLIGENCE_WORKER_ENABLED", True)):
@@ -78,8 +91,19 @@ def start_field_intelligence_worker() -> AsyncIOScheduler | None:
         max_instances=1,
         coalesce=True,
     )
+    reconcile_interval = int(getattr(settings, "FIELD_RECONCILER_INTERVAL_SECONDS", 900))
+    _scheduler.add_job(
+        reconcile_once,
+        trigger=IntervalTrigger(seconds=reconcile_interval),
+        id="field_intelligence_pending_reconcile",
+        replace_existing=True,
+        max_instances=1,
+        coalesce=True,
+    )
     _scheduler.start()
-    logger.info("Field Intelligence worker started (interval=%ss)", interval)
+    logger.info(
+        "Field Intelligence worker started (interval=%ss, reconcile=%ss)", interval, reconcile_interval
+    )
     return _scheduler
 
 
