@@ -41,3 +41,25 @@ def test_alembic_revision_ids_fit_existing_version_table_and_are_unique():
         revisions[revision] = path
 
     assert not violations, "\n".join(violations)
+
+
+def test_account_verification_and_platform_api_revisions_form_one_linear_tail():
+    expected_tail = {
+        "019_account_verification": "018_outreach_engagement",
+        "020_platform_api_private_beta": "019_account_verification",
+        "021_platform_api_hardening": "020_platform_api_private_beta",
+    }
+    actual_tail = {}
+
+    for path in sorted(VERSIONS_DIR.glob("*.py")):
+        if path.name.startswith("__"):
+            continue
+        module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+        revision = _literal_assignment(module, "revision")
+        if revision in expected_tail:
+            actual_tail[revision] = _literal_assignment(module, "down_revision")
+
+    assert actual_tail == expected_tail
+    all_down_revisions = set(actual_tail.values())
+    assert "019_platform_api_private_beta" not in all_down_revisions
+    assert "020_platform_api_hardening" not in actual_tail

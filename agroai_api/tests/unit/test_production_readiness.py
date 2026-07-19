@@ -1,3 +1,6 @@
+import base64
+import json
+
 from app.core.config import Settings
 from app.services.production_readiness import evaluate_production_readiness
 
@@ -21,6 +24,9 @@ def _ready_settings():
     settings.__dict__["TASK_QUEUE_BACKEND"] = "redis_streams"
     settings.__dict__["REDIS_URL"] = "redis://redis.example/0"
     settings.__dict__["CONNECTOR_CREDENTIAL_MASTER_KEY"] = "configured"
+    key = base64.urlsafe_b64encode(b"k" * 32).decode("ascii").rstrip("=")
+    settings.__dict__["CONNECTOR_CREDENTIAL_KEYS_JSON"] = json.dumps({"v1": key})
+    settings.__dict__["PLATFORM_API_EDGE_AUTH_SECRET"] = "dedicated-edge-origin-secret"
     settings.__dict__["OAUTH_STATE_SIGNING_KEY"] = "configured"
     settings.__dict__["STRIPE_SECRET_KEY"] = "configured"
     settings.__dict__["STRIPE_WEBHOOK_SECRET"] = "configured"
@@ -95,3 +101,83 @@ def test_in_process_scheduler_blocks_horizontal_replication_contract():
     settings.ENABLE_SCHEDULER = True
     report = evaluate_production_readiness(settings)
     assert "scheduler.in_process" in _codes(report)
+
+
+def test_platform_api_enabled_requires_distributed_redis_limiter():
+    settings = _ready_settings()
+    settings.__dict__["PLATFORM_API_ENABLED"] = True
+    settings.__dict__["PLATFORM_API_RATE_LIMIT_BACKEND"] = "memory"
+    settings.__dict__["PLATFORM_API_REDIS_URL"] = ""
+
+    report = evaluate_production_readiness(settings)
+
+    codes = _codes(report)
+    assert "platform_api.rate_limiter_not_distributed" in codes
+    assert "platform_api.redis_missing" not in codes
+
+
+def test_platform_api_enabled_with_redis_limiter_is_ready_when_other_contracts_are_ready():
+    settings = _ready_settings()
+    settings.__dict__["PLATFORM_API_ENABLED"] = True
+    settings.__dict__["PLATFORM_API_RATE_LIMIT_BACKEND"] = "redis"
+    settings.__dict__["PLATFORM_API_REDIS_URL"] = "redis://platform-limiter.example/0"
+
+    report = evaluate_production_readiness(settings)
+
+    assert report.ready is True, report.to_dict()
+
+
+def test_platform_api_enabled_without_any_redis_url_fails_readiness():
+    settings = _ready_settings()
+    settings.__dict__["PLATFORM_API_ENABLED"] = True
+    settings.__dict__["PLATFORM_API_RATE_LIMIT_BACKEND"] = "redis"
+    settings.__dict__["PLATFORM_API_REDIS_URL"] = ""
+    settings.__dict__["REDIS_URL"] = ""
+
+    report = evaluate_production_readiness(settings)
+
+    assert "platform_api.redis_missing" in _codes(report)
+
+
+def test_platform_api_enabled_requires_authenticated_edge_client_ip_context():
+    settings = _ready_settings()
+    settings.__dict__["PLATFORM_API_ENABLED"] = True
+    settings.__dict__["PLATFORM_API_RATE_LIMIT_BACKEND"] = "redis"
+    settings.__dict__["PLATFORM_API_EDGE_AUTH_SECRET"] = ""
+
+    report = evaluate_production_readiness(settings)
+
+    assert "platform_api.edge_auth_missing" in _codes(report)
+
+
+def test_disabled_platform_api_does_not_require_edge_auth_for_deployment_readiness():
+    settings = _ready_settings()
+    settings.__dict__["PLATFORM_API_ENABLED"] = False
+    settings.__dict__["PLATFORM_API_EDGE_AUTH_SECRET"] = ""
+
+    report = evaluate_production_readiness(settings)
+
+    assert report.ready is True, report.to_dict()
+    assert "platform_api.edge_auth_missing" not in _codes(report)
+
+
+def test_platform_api_enabled_requires_explicit_vault_keyring():
+    settings = _ready_settings()
+    settings.__dict__["PLATFORM_API_ENABLED"] = True
+    settings.__dict__["PLATFORM_API_RATE_LIMIT_BACKEND"] = "redis"
+    settings.__dict__["CONNECTOR_CREDENTIAL_KEYS_JSON"] = ""
+
+    report = evaluate_production_readiness(settings)
+
+    assert "platform_api.explicit_vault_keyring_missing" in _codes(report)
+
+
+def test_platform_api_enabled_rejects_fail_open_limiter_configuration():
+    settings = _ready_settings()
+    settings.__dict__["PLATFORM_API_ENABLED"] = True
+    settings.__dict__["PLATFORM_API_RATE_LIMIT_BACKEND"] = "redis"
+    settings.__dict__["PLATFORM_API_RATE_LIMIT_FAIL_OPEN"] = True
+
+    report = evaluate_production_readiness(settings)
+
+    assert "platform_api.rate_limiter_fail_open" in _codes(report)

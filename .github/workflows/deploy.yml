@@ -88,6 +88,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       QUEUE_PUBLISH_TOKEN: ${{ secrets.QUEUE_PUBLISH_TOKEN }}
       QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
+      EDGE_ORIGIN_AUTH_TOKEN: ${{ secrets.EDGE_ORIGIN_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -128,6 +129,11 @@ jobs:
             if printf '%s' "$payload" | jq -e --arg sha "$GITHUB_SHA" \
               '.status == "ok" and .contract == "agroai-release-v1" and .build_sha == $sha and .schema_current == true and .queue_configured == true and .object_storage_configured == true and .object_storage_reachable == true and .production_ready == true' \
               >/dev/null 2>&1; then
+              platform_api_enabled="$(printf '%s' "$payload" | jq -r '.platform_api_enabled == true')"
+              if [ "$platform_api_enabled" = "true" ] && [ -z "${EDGE_ORIGIN_AUTH_TOKEN:-}" ]; then
+                echo "Missing required production secret for enabled Platform API: EDGE_ORIGIN_AUTH_TOKEN"
+                exit 1
+              fi
               printf '%s' "$payload" > upstream-release-contract.json
               echo "Exact backend build, schema, storage, and Queue contract is ready"
               exit 0
@@ -171,7 +177,9 @@ jobs:
           jq -n \
             --arg publish "$QUEUE_PUBLISH_TOKEN" \
             --arg consumer "$QUEUE_CONSUMER_TOKEN" \
-            '{QUEUE_PUBLISH_TOKEN: $publish, QUEUE_CONSUMER_TOKEN: $consumer}' > "$secrets_file"
+            --arg edge_origin_auth "$EDGE_ORIGIN_AUTH_TOKEN" \
+            '{QUEUE_PUBLISH_TOKEN: $publish, QUEUE_CONSUMER_TOKEN: $consumer}
+             + if $edge_origin_auth == "" then {} else {EDGE_ORIGIN_AUTH_TOKEN: $edge_origin_auth} end' > "$secrets_file"
           npx wrangler deploy --config ../../wrangler.toml --secrets-file "$secrets_file"
           rm -f "$secrets_file"
           trap - EXIT

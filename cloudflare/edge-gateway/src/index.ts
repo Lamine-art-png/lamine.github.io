@@ -7,10 +7,11 @@ export interface Env {
   QUEUE_PUBLISH_TOKEN: string;
   QUEUE_PUBLISH_TOKEN_PREVIOUS?: string;
   QUEUE_CONSUMER_TOKEN: string;
+  EDGE_ORIGIN_AUTH_TOKEN?: string;
   CONNECTOR_TASKS: Queue<ConnectorTaskEnvelope>;
 }
 
-export type ConnectorTaskType = "connector_ingest_object" | "connector_provider_sync";
+export type ConnectorTaskType = "connector_ingest_object" | "connector_provider_sync" | "platform_webhook_delivery";
 
 export interface ConnectorTaskEnvelope {
   job_id: string;
@@ -27,7 +28,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 const PAGES_ORIGIN = /^https:\/\/(?:[a-z0-9-]+\.)?(?:agroai-portal|lamine-github-io|agroai-command-center-v2-preview)\.pages\.dev$/i;
 const TRANSIENT_UPSTREAM_STATUS = new Set([408, 429, 502, 503, 504]);
-const ALLOWED_TASK_TYPES = new Set<ConnectorTaskType>(["connector_ingest_object", "connector_provider_sync"]);
+const ALLOWED_TASK_TYPES = new Set<ConnectorTaskType>(["connector_ingest_object", "connector_provider_sync", "platform_webhook_delivery"]);
 const SAFE_REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const EDGE_VERSION = "cloudflare-edge-v1";
 const MAX_TASK_FIELD_LENGTH = 256;
@@ -133,7 +134,7 @@ function timeoutForPath(pathname: string): number {
   return /\/(?:brain|intelligence|ai)(?:\/|$)/.test(pathname) ? 120_000 : 45_000;
 }
 
-function upstreamRequest(request: Request, upstream: URL, id: string): Request {
+export function upstreamRequest(request: Request, upstream: URL, id: string, env: Pick<Env, "EDGE_ORIGIN_AUTH_TOKEN">): Request {
   const incoming = new URL(request.url);
   const target = new URL(upstream.toString());
   target.pathname = `${upstream.pathname}${incoming.pathname}`.replace(/\/+/g, "/");
@@ -150,9 +151,17 @@ function upstreamRequest(request: Request, upstream: URL, id: string): Request {
     "x-real-ip",
     "x-agroai-internal-token",
     "x-agroai-edge",
+    "x-agroai-edge-auth",
+    "x-agroai-edge-client-ip",
   ]) headers.delete(header);
   headers.set("x-request-id", id);
   headers.set("x-agroai-edge", EDGE_VERSION);
+  const clientIp = (request.headers.get("cf-connecting-ip") || "").trim();
+  const edgeAuth = (env.EDGE_ORIGIN_AUTH_TOKEN || "").trim();
+  if (clientIp && edgeAuth) {
+    headers.set("x-agroai-edge-client-ip", clientIp);
+    headers.set("x-agroai-edge-auth", edgeAuth);
+  }
   headers.set("x-forwarded-host", incoming.host);
   headers.set("x-forwarded-proto", "https");
 
@@ -176,7 +185,7 @@ async function proxyToUpstream(request: Request, env: Env): Promise<Response> {
 
   for (let attempt = 0; attempt < attempts; attempt += 1) {
     try {
-      const response = await fetchWithTimeout(upstreamRequest(request, upstream, id), timeoutMs);
+      const response = await fetchWithTimeout(upstreamRequest(request, upstream, id, env), timeoutMs);
       if (attempt + 1 < attempts && TRANSIENT_UPSTREAM_STATUS.has(response.status)) {
         await response.body?.cancel();
         continue;

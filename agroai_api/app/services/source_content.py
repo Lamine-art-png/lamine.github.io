@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import base64
+import re
+import zlib
 from io import BytesIO
 from pathlib import Path
 from typing import Any
@@ -65,7 +68,63 @@ def _extract_pdf_text(data: bytes) -> str:
                 break
         return "\n\n".join(parts)[:200_000]
     except Exception:
-        return ""
+        return _extract_pdf_text_fallback(data)
+
+
+def _extract_pdf_text_fallback(data: bytes) -> str:
+    """Best-effort bounded text extraction when optional PDF deps are absent."""
+    parts: list[str] = []
+    for match in re.finditer(rb"stream\r?\n(.*?)endstream", data, flags=re.DOTALL):
+        stream = match.group(1).strip()[:MAX_SOURCE_BYTES]
+        decoded = _decode_pdf_stream(stream)
+        if not decoded:
+            continue
+        text = _literal_pdf_text(decoded)
+        if text:
+            parts.append(text)
+        if sum(len(part) for part in parts) >= 200_000:
+            break
+    return "\n\n".join(parts)[:200_000]
+
+
+def _decode_pdf_stream(stream: bytes) -> bytes:
+    candidates = [stream]
+    try:
+        candidates.append(base64.a85decode(stream, adobe=True))
+    except Exception:
+        pass
+    for candidate in list(candidates):
+        try:
+            inflated = zlib.decompress(candidate)
+        except Exception:
+            continue
+        candidates.append(inflated)
+    for candidate in reversed(candidates):
+        if b"(" in candidate and b")" in candidate:
+            return candidate
+    return candidates[-1] if candidates else b""
+
+
+def _literal_pdf_text(decoded: bytes) -> str:
+    values: list[str] = []
+    for raw in re.findall(rb"\((?:\\.|[^\\)])*\)", decoded):
+        literal = raw[1:-1]
+        literal = (
+            literal.replace(rb"\\(", b"(")
+            .replace(rb"\\)", b")")
+            .replace(rb"\\\\", b"\\")
+            .replace(rb"\\n", b"\n")
+            .replace(rb"\\r", b"\r")
+            .replace(rb"\\t", b"\t")
+        )
+        try:
+            text = literal.decode("utf-8")
+        except UnicodeDecodeError:
+            text = literal.decode("latin-1", errors="ignore")
+        text = " ".join(text.split())
+        if text:
+            values.append(text)
+    return "\n".join(values)
 
 
 def source_text(source: DataSource) -> str:
