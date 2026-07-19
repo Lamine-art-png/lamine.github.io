@@ -249,7 +249,7 @@ export function AuthScreen() {
                 <div className="mb-5">
                   <h2 className="text-[18px] font-semibold text-[#10231B]">Verify your organization</h2>
                   <p className="mt-1 text-[13px] leading-6 text-[#65736A]">
-                    The system automatically accepts or rejects access using organization, operational, identity, and use-case signals. No manual founder review is required.
+                    The system automatically accepts or rejects access using organization, operational, identity, and use-case signals. No manual review is required.
                   </p>
                 </div>
                 <form className="space-y-5" onSubmit={handleRegister}>

@@ -70,7 +70,6 @@
   "literal.124e0f1d64ac1f79": "Sensitive verification data",
   "literal.0a261f23c502cd46": "Sign in to a verified AGRO-AI organization workspace.",
   "literal.6730353b8a8cd286": "Systems or data sources to connect",
-  "literal.6b99476a8f9a223d": "The system automatically accepts or rejects access using organization, operational, identity, and use-case signals. No manual founder review is required.",
   "literal.aa4668a654b213ed": "Use at least 12 characters. Do not include your email name.",
   "literal.99a8ba173aecd03b": "Verification ID",
   "literal.663a3548f23bcb0a": "Verified agricultural access",
@@ -78,5 +77,6 @@
   "literal.c405da0f5e5e0349": "Verify your organization",
   "literal.6ef09738077bcf96": "WiseConn, John Deere, PDFs, spreadsheets...",
   "literal.ce76b71983c1ee09": "Your organization passed automated screening.",
-  "literal.489f57999b5ab3af": "to activate secure portal access."
+  "literal.489f57999b5ab3af": "to activate secure portal access.",
+  "literal.40496666b4783382": "The system automatically accepts or rejects access using organization, operational, identity, and use-case signals. No manual review is required."
 }
