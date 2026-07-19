@@ -1,0 +1,50 @@
+name: Debug access appeal patcher
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  capture:
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+      - name: Extract and run patch script with captured output
+        id: patch
+        continue-on-error: true
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          source = Path('.github/workflows/one-time-finish-access-appeals.yml').read_text(encoding='utf-8')
+          marker = "          python - <<'PY'\n"
+          start = source.index(marker) + len(marker)
+          end = source.index("\n          PY\n", start)
+          lines = source[start:end].splitlines()
+          script = "\n".join(line[10:] if line.startswith("          ") else line for line in lines) + "\n"
+          Path('/tmp/apply_access_appeals.py').write_text(script, encoding='utf-8')
+          PY
+          python /tmp/apply_access_appeals.py > /tmp/patch.log 2>&1
+      - name: Record patch result
+        if: always()
+        shell: bash
+        run: |
+          echo "outcome=${{ steps.patch.outcome }}" > /tmp/result.txt
+          test -f /tmp/patch.log || echo "patch log was not created" > /tmp/patch.log
+          tail -n 200 /tmp/patch.log >> /tmp/result.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: access-appeal-patch-debug
+          path: |
+            /tmp/result.txt
+            /tmp/patch.log
+          retention-days: 2
