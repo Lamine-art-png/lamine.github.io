@@ -36,7 +36,7 @@ jobs:
       - name: Enforce revision graph contract
         run: |
           PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --confcutdir=tests/unit tests/unit/test_alembic_revision_contract.py
-          test "$(alembic heads)" = "023_field_intelligence (head)"
+          test "$(alembic heads)" = "026_platform_api_operations (head)"
       - name: Migrate real PostgreSQL to repository head
         env:
           DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
@@ -62,5 +62,9 @@ jobs:
         env:
           PLATFORM_API_POSTGRES_TEST_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
         run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests/integration/test_platform_api_idempotency_postgres.py
+      - name: Prove quota and delivery outbox concurrency with independent sessions
+        env:
+          PLATFORM_API_POSTGRES_TEST_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
+        run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests/integration/test_platform_api_product_concurrency_postgres.py
       - name: Run complete backend unit suite
         run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short tests/unit

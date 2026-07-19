@@ -29,6 +29,10 @@ assets/AGRO_AI_Weather_data.ipynb
 # Python
 __pycache__/
 *.pyc
+.venv/
+**/.venv/
+*.egg-info/
+agroai.db
 
 # accidental root init
 __init__.py

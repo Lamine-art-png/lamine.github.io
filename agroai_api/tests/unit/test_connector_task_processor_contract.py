@@ -27,5 +27,7 @@ def test_supported_task_type_set_is_exact():
     assert processor.SUPPORTED_TASK_TYPES == {
         "connector_ingest_object",
         "connector_provider_sync",
+        "platform_api_operation",
+        "platform_stripe_meter_export",
         "platform_webhook_delivery",
     }

@@ -179,6 +179,7 @@ class OrganizationMembership(Base):
     organization_id = Column(String, ForeignKey("organizations.id"), nullable=False, index=True)
     user_id = Column(String, ForeignKey("users.id"), nullable=False, index=True)
     role = Column(String, default="operator", nullable=False)
+    status = Column(String, default="active", nullable=False, index=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
 
     organization = relationship("Organization", back_populates="memberships")
