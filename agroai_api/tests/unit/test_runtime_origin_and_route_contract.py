@@ -47,3 +47,17 @@ def test_edge_deployment_keeps_queue_tokens_required_and_edge_auth_activation_ga
         '&& [ -z "${EDGE_ORIGIN_AUTH_TOKEN:-}" ]; then'
     ) in deploy
     assert 'if $edge_origin_auth == "" then {} else {EDGE_ORIGIN_AUTH_TOKEN: $edge_origin_auth} end' in deploy
+
+
+def test_operation_production_proof_accepts_only_deployed_descendants_in_current_history():
+    root = Path(__file__).resolve().parents[3]
+    workflow = (root / ".github/workflows/operation-workspaces-production-contract.yml").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'git cat-file -e "${deployed_sha}^{commit}"' in workflow
+    assert 'git merge-base --is-ancestor "$EXPECTED_FEATURE_SHA" "$deployed_sha"' in workflow
+    assert 'git merge-base --is-ancestor "$deployed_sha" "$GITHUB_SHA"' in workflow
+    assert ".build_sha == $sha" not in workflow
+    assert "deployed_backend_sha" in workflow
+    assert "operation-workspaces-production-v3" in workflow
