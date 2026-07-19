@@ -1,0 +1,87 @@
+name: Remove Founder Review Copy
+
+on:
+  push:
+    branches:
+      - fix/remove-founder-review-copy
+    paths:
+      - .github/workflows/remove-founder-review-copy.yml
+
+permissions:
+  contents: write
+
+env:
+  CI: true
+
+jobs:
+  patch-validate-commit:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out copy-fix branch
+        uses: actions/checkout@v4
+        with:
+          ref: fix/remove-founder-review-copy
+          fetch-depth: 0
+
+      - name: Apply exact copy replacement
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          from pathlib import Path
+
+          old = (
+              "The system automatically accepts or rejects access using organization, operational, "
+              "identity, and use-case signals. No manual founder review is required."
+          )
+          new = (
+              "The system automatically accepts or rejects access using organization, operational, "
+              "identity, and use-case signals. No manual review is required."
+          )
+
+          auth_path = Path("figma-enterprise-v4/src/app/components/AuthScreen.tsx")
+          auth = auth_path.read_text(encoding="utf-8")
+          if auth.count(old) != 1:
+              raise SystemExit(f"Expected exactly one AuthScreen copy match, found {auth.count(old)}")
+          auth_path.write_text(auth.replace(old, new), encoding="utf-8")
+
+          catalog_path = Path("shared/ui-literals.en.8.json")
+          catalog = json.loads(catalog_path.read_text(encoding="utf-8"))
+          old_key = "literal.6b99476a8f9a223d"
+          new_key = "literal.40496666b4783382"
+          if catalog.get(old_key) != old:
+              raise SystemExit("Expected founder-review literal was not found in ui-literals.en.8.json")
+          catalog.pop(old_key)
+          catalog[new_key] = new
+          catalog_path.write_text(json.dumps(catalog, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
+          PY
+
+      - name: Validate portal copy and localization inventory
+        working-directory: figma-enterprise-v4
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci
+          python3 scripts/check_ui_literal_inventory.py --check
+          npm run build
+
+      - name: Prove founder wording is gone
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! grep -RIn --exclude-dir=node_modules --exclude-dir=dist "No manual founder review is required" figma-enterprise-v4 shared
+          grep -RIn --exclude-dir=node_modules --exclude-dir=dist "No manual review is required" figma-enterprise-v4 shared
+
+      - name: Remove one-time workflow and commit validated fix
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/remove-founder-review-copy.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: remove founder wording from access review copy"
+          git push origin HEAD:fix/remove-founder-review-copy
