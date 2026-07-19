@@ -37,6 +37,7 @@ jobs:
           lines = source[start:end].splitlines()
           script = "\n".join(line[10:] if line.startswith("          ") else line for line in lines) + "\n"
           script = script.replace("                       <td", "                      <td")
+          script = script.replace("figma-enterprise-v4/scripts/check_ui_literals.py", "figma-enterprise-v4/scripts/check_ui_literal_inventory.py")
           Path('/tmp/apply_access_appeals.py').write_text(script, encoding='utf-8')
           PY
           python /tmp/apply_access_appeals.py
