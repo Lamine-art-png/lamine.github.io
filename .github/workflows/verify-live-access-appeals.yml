@@ -1,0 +1,81 @@
+name: Verify live access appeals
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live:
+    if: github.event.pull_request.head.ref == 'ops/verify-live-access-appeals'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Wait for and verify production rollout
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f /tmp/verified /tmp/result.txt
+          for attempt in $(seq 1 36); do
+            echo "Attempt ${attempt}/36"
+            rm -rf /tmp/agroai-live
+            mkdir -p /tmp/agroai-live/assets
+
+            health_ok=false
+            appeal_api_ok=false
+            portal_ok=false
+
+            if curl -fsS --max-time 20 https://api.agroai-pilot.com/v1/health -o /tmp/agroai-live/health.json; then
+              health_ok=true
+            fi
+
+            if curl -fsS --max-time 20 \
+              -H 'content-type: application/json' \
+              -d '{"email":"deployment-verification-does-not-exist@agroai-pilot.com"}' \
+              https://api.agroai-pilot.com/v1/access-appeals/request \
+              -o /tmp/agroai-live/appeal-api.json; then
+              if grep -Fq 'If the account is eligible for an appeal, a secure link has been sent.' /tmp/agroai-live/appeal-api.json; then
+                appeal_api_ok=true
+              fi
+            fi
+
+            if curl -fsS --max-time 20 https://app.agroai-pilot.com/appeal -o /tmp/agroai-live/index.html; then
+              mapfile -t assets < <(grep -Eo 'src="[^"]+\.js[^\"]*"' /tmp/agroai-live/index.html | sed -E 's/^src="|"$//g' | sort -u)
+              for asset in "${assets[@]:-}"; do
+                if [[ "$asset" == http* ]]; then
+                  url="$asset"
+                else
+                  url="https://app.agroai-pilot.com${asset}"
+                fi
+                name=$(printf '%s' "$url" | sha256sum | cut -d' ' -f1)
+                curl -fsS --max-time 20 "$url" -o "/tmp/agroai-live/assets/${name}.js" || true
+              done
+              if grep -R -Fq 'Request restoration of access' /tmp/agroai-live/assets; then
+                portal_ok=true
+              fi
+            fi
+
+            printf 'attempt=%s\nhealth=%s\nappeal_api=%s\nportal=%s\n' "$attempt" "$health_ok" "$appeal_api_ok" "$portal_ok" | tee /tmp/result.txt
+            if [[ "$health_ok" == true && "$appeal_api_ok" == true && "$portal_ok" == true ]]; then
+              touch /tmp/verified
+              break
+            fi
+            sleep 10
+          done
+
+          test -f /tmp/verified
+      - name: Upload live verification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: live-access-appeal-verification
+          path: |
+            /tmp/result.txt
+            /tmp/agroai-live/health.json
+            /tmp/agroai-live/appeal-api.json
+            /tmp/agroai-live/index.html
+          if-no-files-found: warn
+          retention-days: 2
