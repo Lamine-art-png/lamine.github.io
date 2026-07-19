@@ -17,48 +17,56 @@ jobs:
       - name: Wait for and verify production rollout
         shell: bash
         run: |
-          set -euo pipefail
-          rm -f /tmp/verified /tmp/result.txt
-          for attempt in $(seq 1 36); do
-            echo "Attempt ${attempt}/36"
+          set -u
+          rm -f /tmp/verified /tmp/result.txt /tmp/history.txt
+          for attempt in $(seq 1 48); do
+            echo "Attempt ${attempt}/48"
             rm -rf /tmp/agroai-live
             mkdir -p /tmp/agroai-live/assets
 
             health_ok=false
             appeal_api_ok=false
             portal_ok=false
+            health_code=000
+            appeal_code=000
+            portal_code=000
 
-            if curl -fsS --max-time 20 https://api.agroai-pilot.com/v1/health -o /tmp/agroai-live/health.json; then
-              health_ok=true
-            fi
+            health_code=$(curl -sS --max-time 20 -o /tmp/agroai-live/health.json -w '%{http_code}' https://api.agroai-pilot.com/v1/health || printf 000)
+            [[ "$health_code" == 200 ]] && health_ok=true
 
-            if curl -fsS --max-time 20 \
+            appeal_code=$(curl -sS --max-time 20 \
               -H 'content-type: application/json' \
               -d '{"email":"deployment-verification-does-not-exist@agroai-pilot.com"}' \
-              https://api.agroai-pilot.com/v1/access-appeals/request \
-              -o /tmp/agroai-live/appeal-api.json; then
-              if grep -Fq 'If the account is eligible for an appeal, a secure link has been sent.' /tmp/agroai-live/appeal-api.json; then
-                appeal_api_ok=true
-              fi
+              -o /tmp/agroai-live/appeal-api.json \
+              -w '%{http_code}' \
+              https://api.agroai-pilot.com/v1/access-appeals/request || printf 000)
+            if [[ "$appeal_code" == 200 ]] && grep -Fq 'If the account is eligible for an appeal, a secure link has been sent.' /tmp/agroai-live/appeal-api.json; then
+              appeal_api_ok=true
             fi
 
-            if curl -fsS --max-time 20 https://app.agroai-pilot.com/appeal -o /tmp/agroai-live/index.html; then
+            portal_code=$(curl -sS --max-time 20 -o /tmp/agroai-live/index.html -w '%{http_code}' https://app.agroai-pilot.com/appeal || printf 000)
+            if [[ "$portal_code" == 200 ]]; then
               mapfile -t assets < <(grep -Eo 'src="[^"]+\.js[^\"]*"' /tmp/agroai-live/index.html | sed -E 's/^src="|"$//g' | sort -u)
               for asset in "${assets[@]:-}"; do
+                [[ -z "$asset" ]] && continue
                 if [[ "$asset" == http* ]]; then
                   url="$asset"
                 else
                   url="https://app.agroai-pilot.com${asset}"
                 fi
                 name=$(printf '%s' "$url" | sha256sum | cut -d' ' -f1)
-                curl -fsS --max-time 20 "$url" -o "/tmp/agroai-live/assets/${name}.js" || true
+                curl -sS --max-time 20 "$url" -o "/tmp/agroai-live/assets/${name}.js" || true
               done
               if grep -R -Fq 'Request restoration of access' /tmp/agroai-live/assets; then
                 portal_ok=true
               fi
             fi
 
-            printf 'attempt=%s\nhealth=%s\nappeal_api=%s\nportal=%s\n' "$attempt" "$health_ok" "$appeal_api_ok" "$portal_ok" | tee /tmp/result.txt
+            printf 'attempt=%s health_code=%s health=%s appeal_code=%s appeal_api=%s portal_code=%s portal=%s\n' \
+              "$attempt" "$health_code" "$health_ok" "$appeal_code" "$appeal_api_ok" "$portal_code" "$portal_ok" | tee -a /tmp/history.txt
+            printf 'attempt=%s\nhealth_code=%s\nhealth=%s\nappeal_code=%s\nappeal_api=%s\nportal_code=%s\nportal=%s\n' \
+              "$attempt" "$health_code" "$health_ok" "$appeal_code" "$appeal_api_ok" "$portal_code" "$portal_ok" > /tmp/result.txt
+
             if [[ "$health_ok" == true && "$appeal_api_ok" == true && "$portal_ok" == true ]]; then
               touch /tmp/verified
               break
@@ -66,7 +74,10 @@ jobs:
             sleep 10
           done
 
-          test -f /tmp/verified
+          if [[ ! -f /tmp/verified ]]; then
+            echo 'Live rollout did not satisfy all checks within the retry window.' >&2
+            exit 1
+          fi
       - name: Upload live verification evidence
         if: always()
         uses: actions/upload-artifact@v4
@@ -74,8 +85,10 @@ jobs:
           name: live-access-appeal-verification
           path: |
             /tmp/result.txt
+            /tmp/history.txt
             /tmp/agroai-live/health.json
             /tmp/agroai-live/appeal-api.json
             /tmp/agroai-live/index.html
+            /tmp/agroai-live/assets
           if-no-files-found: warn
           retention-days: 2
