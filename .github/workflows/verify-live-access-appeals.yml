@@ -46,16 +46,20 @@ jobs:
 
             portal_code=$(curl -sS --max-time 20 -o /tmp/agroai-live/index.html -w '%{http_code}' https://app.agroai-pilot.com/appeal || printf 000)
             if [[ "$portal_code" == 200 ]]; then
-              mapfile -t assets < <(grep -Eo 'src="[^"]+\.js[^\"]*"' /tmp/agroai-live/index.html | sed -E 's/^src="|"$//g' | sort -u)
-              for asset in "${assets[@]:-}"; do
-                [[ -z "$asset" ]] && continue
-                if [[ "$asset" == http* ]]; then
-                  url="$asset"
-                else
-                  url="https://app.agroai-pilot.com${asset}"
-                fi
-                name=$(printf '%s' "$url" | sha256sum | cut -d' ' -f1)
-                curl -sS --max-time 20 "$url" -o "/tmp/agroai-live/assets/${name}.js" || true
+              grep -oE '/assets/[A-Za-z0-9._/-]+\.js' /tmp/agroai-live/index.html | sed 's#^/##' > /tmp/agroai-live/queue.txt || true
+              : > /tmp/agroai-live/seen.txt
+              for pass in 1 2 3 4 5; do
+                sort -u /tmp/agroai-live/queue.txt -o /tmp/agroai-live/queue.txt
+                cp /tmp/agroai-live/queue.txt /tmp/agroai-live/pass-queue.txt
+                while IFS= read -r asset; do
+                  [[ -n "$asset" ]] || continue
+                  grep -Fx "$asset" /tmp/agroai-live/seen.txt >/dev/null 2>&1 && continue
+                  echo "$asset" >> /tmp/agroai-live/seen.txt
+                  target="/tmp/agroai-live/assets/$(printf '%s' "$asset" | sha256sum | cut -d' ' -f1).js"
+                  curl -sS --max-time 20 "https://app.agroai-pilot.com/${asset}" -o "$target" || continue
+                  grep -oE 'assets/[A-Za-z0-9._/-]+\.js' "$target" >> /tmp/agroai-live/queue.txt || true
+                  grep -oE '\./[A-Za-z0-9._/-]+\.js' "$target" | sed 's#^\./#assets/#' >> /tmp/agroai-live/queue.txt || true
+                done < /tmp/agroai-live/pass-queue.txt
               done
               if grep -R -Fq 'Request restoration of access' /tmp/agroai-live/assets; then
                 portal_ok=true
@@ -89,6 +93,7 @@ jobs:
             /tmp/agroai-live/health.json
             /tmp/agroai-live/appeal-api.json
             /tmp/agroai-live/index.html
+            /tmp/agroai-live/seen.txt
             /tmp/agroai-live/assets
           if-no-files-found: warn
           retention-days: 2
