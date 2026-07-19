@@ -361,6 +361,22 @@ export const apiClient = {
     createTask: (observationId: string, payload: unknown) => post(`/v1/field-intelligence/observations/${encodeURIComponent(observationId)}/tasks`, payload),
     search: (query: string) => get(`/v1/field-intelligence/search?${query}`),
     map: (workspaceId?: string) => get(`/v1/field-intelligence/map${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`),
+    assetBlob: async (assetId: string, range?: string): Promise<Blob> => {
+      const token = localStorage.getItem(tokenKey);
+      const headers = new Headers();
+      if (token) headers.set("Authorization", `Bearer ${token}`);
+      if (range) headers.set("Range", range);
+      const response = await fetch(
+        `${API_BASE_URL}/v1/field-intelligence/assets/${encodeURIComponent(assetId)}/content`,
+        { headers },
+      );
+      if (!response.ok) {
+        const error = new Error(`Media request failed with status ${response.status}`) as ApiError;
+        error.status = response.status;
+        throw error;
+      }
+      return response.blob();
+    },
   },
   connectorHub: { catalog: () => get("/v1/connectors/catalog"), connections: () => get("/v1/connectors/connections"), create: (payload: unknown) => post("/v1/connectors/connections", payload), connect: (payload: ConnectorConnectPayload) => post("/v1/connectors/connect", payload), start: (payload: ConnectorStartPayload) => post("/v1/connectors/start", payload), oauthStart: (payload: unknown) => post("/v1/connectors/oauth/start", payload), get: (connectionId: string) => get(`/v1/connectors/connections/${encodeURIComponent(connectionId)}`), update: (connectionId: string, payload: unknown) => patch(`/v1/connectors/connections/${encodeURIComponent(connectionId)}`, payload), test: (connectionId: string) => post(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/test`), upload: (connectionId: string, file: File) => upload(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/upload`, file), data: (connectionId: string) => get(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/data`), dataSources: () => get("/v1/connectors/data-sources"), jobs: () => get("/v1/connectors/jobs"), jobStatus: (jobId: string) => get(`/v1/connectors/jobs/${encodeURIComponent(jobId)}`), mappingSuggestions: (connectionId: string) => get(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/mapping/suggestions`), saveMapping: (connectionId: string, mapping: Record<string, string>) => post(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/mapping`, { mapping }), sync: (connectionId: string) => post(`/v1/connectors/connections/${encodeURIComponent(connectionId)}/sync`), delete: (connectionId: string) => remove(`/v1/connectors/connections/${encodeURIComponent(connectionId)}`) },
   controllers: { environments: () => get("/v1/controllers/environments"), dataContract: () => get("/v1/controllers/universal/data-contract"), executionReadiness: (workspaceId?: string) => get(`/v1/controllers/execution-readiness${workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : ""}`), customerConnect: (payload: unknown) => post("/v1/controllers/customer-connect", payload), prepareExecution: (payload: unknown) => post("/v1/controllers/execution/prepare", payload) },

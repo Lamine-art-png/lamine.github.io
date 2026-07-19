@@ -170,6 +170,8 @@ jobs:
       - run: npm ci
       - name: Offline multi-tab behavioral contract (fake-clock lease heartbeat)
         run: npm run test:field-intelligence
+      - name: Launch portal contract (PWA shell, map, media, recorder, sync center)
+        run: npm run test:field-intelligence-launch
       - name: i18n contracts
         run: npm run test:i18n
       - name: Portal build

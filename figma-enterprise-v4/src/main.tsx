@@ -24,6 +24,23 @@ function bootFailure(error: unknown) {
   });
 }
 
+// Installable PWA shell: static assets only — the worker never caches /v1/
+// responses or cross-origin requests (see public/sw.js + launch contract test).
+if ("serviceWorker" in navigator && !import.meta.env.DEV) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").then((registration) => {
+      registration.addEventListener("updatefound", () => {
+        const worker = registration.installing;
+        worker?.addEventListener("statechange", () => {
+          if (worker.state === "installed" && navigator.serviceWorker.controller) {
+            window.dispatchEvent(new CustomEvent("agroai:sw-update", { detail: { registration } }));
+          }
+        });
+      });
+    }).catch(() => undefined);
+  });
+}
+
 const rootEl = document.getElementById("root");
 if (!rootEl) {
   bootFailure(new Error("Missing #root element"));
