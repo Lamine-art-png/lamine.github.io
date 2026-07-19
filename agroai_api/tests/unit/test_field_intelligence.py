@@ -24,6 +24,14 @@ class FakeStoreClient:
     def upload_fileobj(self, handle, bucket, key, ExtraArgs=None):
         self.items[(bucket, key)] = (handle.read(), dict((ExtraArgs or {}).get("Metadata") or {}))
 
+    def put_object(self, Bucket, Key, Body, ContentType=None):
+        body = Body if isinstance(Body, bytes) else bytes(Body)
+        self.items[(Bucket, Key)] = (body, {})
+
+    def list_objects_v2(self, Bucket, Prefix="", MaxKeys=1000, ContinuationToken=None):
+        keys = sorted(k for (b, k) in self.items if b == Bucket and k.startswith(Prefix))
+        return {"Contents": [{"Key": k} for k in keys[:MaxKeys]]}
+
     def head_object(self, Bucket, Key):
         body, metadata = self.items[(Bucket, Key)]
         return {"ContentLength": len(body), "Metadata": metadata}
@@ -65,10 +73,31 @@ def _auth(db, *, email="fi@example.com", org_id="org-fi", workspace_id="ws-fi"):
     return org, workspace, {"Authorization": f"Bearer {token}"}
 
 
+def _ogg_crc_table() -> list[int]:
+    table = []
+    for i in range(256):
+        r = i << 24
+        for _ in range(8):
+            r = ((r << 1) ^ 0x04C11DB7) & 0xFFFFFFFF if r & 0x80000000 else (r << 1) & 0xFFFFFFFF
+        table.append(r)
+    return table
+
+
+_OGG_CRC_TABLE = _ogg_crc_table()
+
+
+def _ogg_crc(data: bytes) -> int:
+    crc = 0
+    for byte in data:
+        crc = ((crc << 8) & 0xFFFFFFFF) ^ _OGG_CRC_TABLE[((crc >> 24) & 0xFF) ^ byte]
+    return crc
+
+
 def _ogg_opus(seconds: float = 3.0, pad: int = 64) -> bytes:
     """Synthesize a minimal, structurally valid Ogg Opus stream.
 
-    Real media inspection parses container tracks, so tests must upload real
+    Real media inspection (and the bounded ffprobe verifier) parses container
+    tracks and checks page CRCs, so tests must upload genuinely valid
     containers: a BOS page with an OpusHead, an OpusTags page, and an EOS page
     whose granule position encodes the duration.
     """
@@ -81,16 +110,81 @@ def _ogg_opus(seconds: float = 3.0, pad: int = 64) -> bytes:
             lacing.append(255)
             remaining -= 255
         lacing.append(remaining)
-        return (
+        raw = (
             b"OggS" + bytes([0, header_type]) + _struct.pack("<q", granule)
             + _struct.pack("<I", 1) + _struct.pack("<I", seq) + _struct.pack("<I", 0)
             + bytes([len(lacing)]) + bytes(lacing) + payload
         )
+        return raw[:22] + _struct.pack("<I", _ogg_crc(raw)) + raw[26:]
 
     head = b"OpusHead" + bytes([1, 1]) + _struct.pack("<H", 0) + _struct.pack("<I", 48000) + _struct.pack("<h", 0) + b"\x00"
     tags = b"OpusTags" + _struct.pack("<I", 0) + _struct.pack("<I", 0)
     audio = b"\x00" * max(pad, 1)
     return page(0x02, 0, 0, head) + page(0x00, 0, 1, tags) + page(0x04, int(seconds * 48000), 2, audio)
+
+
+def _ebml_el(element_id: int, payload: bytes) -> bytes:
+    """Encode one EBML element (id bytes as-is, size as a marked vint)."""
+    id_bytes = element_id.to_bytes((element_id.bit_length() + 7) // 8, "big")
+    for length in range(1, 9):
+        if len(payload) < (1 << (7 * length)) - 1:
+            size = ((1 << (8 * length - length)) | len(payload)).to_bytes(length, "big")
+            return id_bytes + size + payload
+    raise ValueError("payload too large for EBML vint")
+
+
+def _ebml_uint(value: int) -> bytes:
+    return value.to_bytes(max(1, (value.bit_length() + 7) // 8), "big")
+
+
+def _webm(actual_seconds: float, declared_seconds: float | None, *, video: bool = False) -> bytes:
+    """Build a real, demuxable WebM.
+
+    ``declared_seconds=None`` mirrors a MediaRecorder capture (no Duration
+    element); a mismatching ``declared_seconds`` forges the header claim while
+    the clusters carry ``actual_seconds`` of real packets.
+    """
+    import struct as _struct
+
+    header = _ebml_el(
+        0x1A45DFA3,
+        _ebml_el(0x4286, _ebml_uint(1)) + _ebml_el(0x42F7, _ebml_uint(1))
+        + _ebml_el(0x42F2, _ebml_uint(4)) + _ebml_el(0x42F3, _ebml_uint(8))
+        + _ebml_el(0x4282, b"webm") + _ebml_el(0x4287, _ebml_uint(2)) + _ebml_el(0x4285, _ebml_uint(2)),
+    )
+    info_children = _ebml_el(0x2AD7B1, _ebml_uint(1_000_000))
+    if declared_seconds is not None:
+        info_children += _ebml_el(0x4489, _struct.pack(">d", declared_seconds * 1000.0))
+    info = _ebml_el(0x1549A966, info_children)
+    if video:
+        track = _ebml_el(
+            0xAE,
+            _ebml_el(0xD7, _ebml_uint(1)) + _ebml_el(0x73C5, _ebml_uint(1)) + _ebml_el(0x83, _ebml_uint(1))
+            + _ebml_el(0x86, b"V_VP8")
+            + _ebml_el(0xE0, _ebml_el(0xB0, _ebml_uint(16)) + _ebml_el(0xBA, _ebml_uint(16))),
+        )
+    else:
+        track = _ebml_el(
+            0xAE,
+            _ebml_el(0xD7, _ebml_uint(1)) + _ebml_el(0x73C5, _ebml_uint(1)) + _ebml_el(0x83, _ebml_uint(2))
+            + _ebml_el(0x86, b"A_OPUS")
+            + _ebml_el(0x63A2, b"OpusHead" + bytes([1, 1]) + _struct.pack("<H", 0)
+                       + _struct.pack("<I", 48000) + _struct.pack("<h", 0) + b"\x00")
+            + _ebml_el(0xE1, _ebml_el(0xB5, _struct.pack(">f", 48000.0)) + _ebml_el(0x9F, _ebml_uint(1))),
+        )
+    tracks = _ebml_el(0x1654AE6B, track)
+    clusters = b""
+    step_ms = 20 if not video else 40
+    second = 0
+    while second < actual_seconds:
+        blocks = b""
+        for ms in range(0, 1000, step_ms):
+            if second + ms / 1000.0 >= actual_seconds:
+                break
+            blocks += _ebml_el(0xA3, b"\x81" + _struct.pack(">h", ms) + b"\x80" + b"\xfc\xff\xfe")
+        clusters += _ebml_el(0x1F43B675, _ebml_el(0xE7, _ebml_uint(second * 1000)) + blocks)
+        second += 1
+    return header + _ebml_el(0x18538067, info + tracks + clusters)
 
 
 def _initiate(client, headers, **overrides):

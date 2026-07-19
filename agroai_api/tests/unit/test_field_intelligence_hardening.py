@@ -40,6 +40,7 @@ from tests.unit.test_field_intelligence import (  # reuse the shared harness
     _ogg_opus,
     _process,
     _real_ctx,
+    _webm,
 )
 
 
@@ -289,7 +290,10 @@ def test_failed_compensation_stages_orphan_cleanup_and_worker_removes_object(cli
     state = {"fail_commits": 1, "fail_deletes": 1}
 
     def flaky_commit():
-        if state["fail_commits"] > 0:
+        # Fail exactly the asset-registration commit (the quota reservation
+        # commits earlier in its own transaction and must succeed).
+        registering = any(isinstance(obj, FieldObservationAsset) for obj in db.new)
+        if state["fail_commits"] > 0 and registering:
             state["fail_commits"] -= 1
             raise RuntimeError("db_connection_lost")
         return real_commit()
@@ -317,8 +321,10 @@ def test_failed_compensation_stages_orphan_cleanup_and_worker_removes_object(cli
         )
     monkeypatch.setattr(db, "commit", real_commit)
 
-    # Upload happened, compensation failed once -> object still there, cleanup staged.
-    assert len(fake_store.client.items) == 1
+    # Upload happened, compensation failed once -> object still there (plus its
+    # store-resident pending-registration marker), cleanup staged.
+    data_objects = [k for (_b, k) in fake_store.client.items if "/pending-registration/" not in k]
+    assert len(data_objects) == 1
     jobs = db.query(IngestionJob).filter(IngestionJob.job_type == svc.ORPHAN_CLEANUP_JOB_TYPE).all()
     assert len(jobs) == 1, "a durable orphan-cleanup job must be staged when compensation fails"
 
@@ -341,6 +347,99 @@ def test_orphan_cleanup_leaves_referenced_objects_alone(client, db, fake_store):
     result = svc.run_field_intelligence_orphan_cleanup(db)
     assert result["cleaned"] == 1  # job completes but the live object is preserved
     assert len(fake_store.client.items) == 1
+
+
+# --------------------------------------------------------------------------- #
+# Item 4b — object-store-resident orphan recovery that survives total DB
+# unavailability (no compensation, no cleanup job — only the staged marker)
+# --------------------------------------------------------------------------- #
+
+def test_reconciler_removes_orphan_after_total_database_unavailability(client, db, fake_store, monkeypatch):
+    """R2 upload succeeds -> DB registration fails -> compensating delete fails
+    -> the cleanup job can not be inserted either (DB fully down). The
+    store-resident pending-registration marker alone lets the periodic
+    reconciler remove the orphan later."""
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    ctx = _real_ctx(db)
+
+    real_commit = db.commit
+    # The quota reservation (the first commit inside register_asset) succeeds;
+    # the database then becomes fully unavailable: registration, the
+    # compensating job insert and the reservation release all fail.
+    state = {"db_down": False, "allowed_commits": 1}
+
+    def dead_commit():
+        if state["db_down"]:
+            if state["allowed_commits"] > 0:
+                state["allowed_commits"] -= 1
+                return real_commit()
+            raise RuntimeError("database_unavailable")
+        return real_commit()
+
+    def dead_delete(Bucket, Key):
+        raise RuntimeError("r2_delete_unavailable")
+
+    import hashlib as _hashlib, tempfile as _tempfile
+    body = b"\x89PNG\r\n\x1a\n" + b"D" * 32
+    spool = _tempfile.NamedTemporaryFile(prefix="agroai-field-", delete=False)
+    spool.write(body); spool.flush(); spool.close()
+
+    monkeypatch.setattr(db, "commit", dead_commit)
+    monkeypatch.setattr(fake_store.client, "delete_object", dead_delete)
+    state["db_down"] = True
+    with pytest.raises(RuntimeError):
+        svc.register_asset(
+            db, ctx, cap["id"], client_asset_id="dead", kind="photo", content_type="image/png",
+            filename="p.png", content_sha256=_hashlib.sha256(body).hexdigest(),
+            size_bytes=len(body), duration_seconds=None, spool_path=spool.name,
+        )
+    state["db_down"] = False
+    monkeypatch.setattr(db, "commit", real_commit)
+    db.rollback()
+
+    # Nothing durable could be recorded in the database...
+    assert db.query(IngestionJob).filter(IngestionJob.job_type == svc.ORPHAN_CLEANUP_JOB_TYPE).count() == 0
+    assert db.query(FieldObservationAsset).count() == 0
+    # ...but the object AND its store-resident marker survive in R2.
+    keys = [k for (_b, k) in fake_store.client.items]
+    assert any("/pending-registration/" in k for k in keys)
+    assert any("/pending-registration/" not in k for k in keys)
+
+    # Restore the store and reconcile after the grace period: idempotent, and
+    # the orphan (plus marker) is removed with no database record needed.
+    monkeypatch.setattr(fake_store.client, "delete_object",
+                        type(fake_store.client).delete_object.__get__(fake_store.client))
+    result = svc.reconcile_pending_objects(db, grace_seconds=0)
+    assert result["removed"] == 1
+    assert len(fake_store.client.items) == 0
+    # Replay is a no-op.
+    again = svc.reconcile_pending_objects(db, grace_seconds=0)
+    assert again["removed"] == 0 and again["errors"] == 0
+
+
+def test_reconciler_respects_grace_period_and_live_references(client, db, fake_store):
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+
+    # A live, registered asset whose promotion was lost: re-stage its marker.
+    up = _upload(client, headers, cap["id"])
+    assert up.status_code == 200
+    asset = db.query(FieldObservationAsset).one()
+    object_key = asset.object_ref.split("/", 3)[3]
+    fake_store.stage_pending_registration(object_key)
+
+    # Inside the grace window nothing is touched.
+    held = svc.reconcile_pending_objects(db, grace_seconds=3600)
+    assert held["skipped"] == 1 and held["removed"] == 0
+
+    # After the grace period the marker is cleared but the referenced object
+    # is never deleted.
+    result = svc.reconcile_pending_objects(db, grace_seconds=0)
+    assert result["promoted"] == 1 and result["removed"] == 0
+    keys = [k for (_b, k) in fake_store.client.items]
+    assert keys and all("/pending-registration/" not in k for k in keys)
+    assert svc.read_asset_bytes(db, _real_ctx(db), asset.id)[1]  # content still served
 
 
 # --------------------------------------------------------------------------- #
@@ -533,6 +632,46 @@ def test_foreign_workspace_direct_id_access_denied(client, db):
 
 
 # --------------------------------------------------------------------------- #
+# Item 7b — organization verification / account security gating (migration
+# 019_account_verification) applies to every Field Intelligence route
+# --------------------------------------------------------------------------- #
+
+def test_unapproved_organization_blocked_from_field_intelligence(client, db):
+    org, _, headers = _auth(db)
+    ok = _initiate(client, headers)
+    assert ok.status_code == 200  # approved_legacy default passes
+    org.verification_status = "pending_review"
+    db.commit()
+    for response in (
+        _initiate(client, headers, client_capture_id="v2", idempotency_key="v2"),
+        client.get("/v1/field-intelligence/observations", headers=headers),
+        client.get("/v1/field-intelligence/map", headers=headers),
+        client.post(
+            "/v1/field-intelligence/sync/batch",
+            json={"captures": [{"client_capture_id": "vb", "idempotency_key": "vb", "note_text": "x"}]},
+            headers=headers,
+        ),
+    ):
+        assert response.status_code == 403, response.text
+        assert response.json()["detail"]["code"] == "organization_verification_required"
+
+
+def test_restricted_account_blocked_from_field_intelligence(client, db):
+    from app.models.saas import User as _User
+
+    _, _, headers = _auth(db)
+    user = db.query(_User).one()
+    user.account_status = "suspended"
+    db.commit()
+    for response in (
+        _initiate(client, headers, client_capture_id="v3", idempotency_key="v3"),
+        client.get("/v1/field-intelligence/observations", headers=headers),
+    ):
+        assert response.status_code == 403, response.text
+        assert response.json()["detail"]["code"] == "account_access_restricted"
+
+
+# --------------------------------------------------------------------------- #
 # Item 8 — server-side commercial capabilities and quotas
 # --------------------------------------------------------------------------- #
 
@@ -583,6 +722,49 @@ def test_storage_quota_enforced_before_upload(client, db, fake_store):
     assert res.status_code == 402
     assert res.json()["detail"]["code"] == "storage_quota_exceeded"
     assert len(fake_store.client.items) == 0  # rejected before any durable write
+
+
+def test_at_quota_identical_replay_succeeds_and_shared_object_counts_once(client, db, fake_store):
+    """A tenant exactly at quota can still replay an identical upload (no new
+    storage is consumed), and logical assets sharing one physical object are
+    charged once."""
+    org, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    _lock_feature(db, org.id, "quota.field_intelligence.storage_mb", 1)
+    body = b"\x89PNG\r\n\x1a\n" + b"Q" * (1024 * 1024 - 8)  # exactly 1 MiB
+
+    first = _upload(client, headers, cap["id"], client_asset_id="full", body=body)
+    assert first.status_code == 200, first.text
+    assert svc.physical_storage_used_bytes(db, org.id) == 1024 * 1024  # exactly at quota
+
+    # Identical replay of the same client_asset_id/content succeeds without
+    # consuming or rechecking new quota.
+    replay = _upload(client, headers, cap["id"], client_asset_id="full", body=body)
+    assert replay.status_code == 200, replay.text
+    assert replay.json()["asset"]["id"] == first.json()["asset"]["id"]
+
+    # Same-content dedupe under a different client_asset_id reuses the durable
+    # object: usage does not double even though a second logical row exists.
+    twin = _upload(client, headers, cap["id"], client_asset_id="twin", body=body)
+    assert twin.status_code == 200, twin.text
+    assert twin.json()["asset"]["id"] != first.json()["asset"]["id"]
+    assert svc.physical_storage_used_bytes(db, org.id) == 1024 * 1024
+
+    # A genuinely new object is refused at quota.
+    fresh = _upload(client, headers, cap["id"], client_asset_id="fresh")
+    assert fresh.status_code == 402
+    assert fresh.json()["detail"]["code"] == "storage_quota_exceeded"
+
+    # Physical usage is released only when the shared object is actually
+    # deleted: removing one logical row keeps the object charged.
+    a_first = first.json()["asset"]["id"]
+    a_twin = twin.json()["asset"]["id"]
+    assert client.delete(f"/v1/field-intelligence/assets/{a_first}", headers=headers).status_code == 200
+    svc.run_field_intelligence_deletions(db)
+    assert svc.physical_storage_used_bytes(db, org.id) == 1024 * 1024  # twin still references it
+    assert client.delete(f"/v1/field-intelligence/assets/{a_twin}", headers=headers).status_code == 200
+    svc.run_field_intelligence_deletions(db)
+    assert svc.physical_storage_used_bytes(db, org.id) == 0  # object physically gone -> released
 
 
 # --------------------------------------------------------------------------- #
@@ -654,6 +836,45 @@ def test_body_size_precheck_rejects_declared_oversize(client, db, monkeypatch):
     assert res.status_code == 413
 
 
+def test_chunked_json_body_enforced_before_parsing(client, db, monkeypatch):
+    """A chunked request without Content-Length is terminated by streamed byte
+    accounting the moment it exceeds the cap — Pydantic never parses it."""
+    _, _, headers = _auth(db)
+    monkeypatch.setattr("app.core.config.settings.FIELD_SYNC_MAX_BODY_BYTES", 4096)
+
+    def chunked_body():
+        yield b'{"captures": ['
+        for _ in range(64):  # 64 * 512 = 32 KiB >> 4 KiB cap
+            yield b'"' + b"x" * 510 + b'",'
+        yield b'""]}'
+
+    res = client.post(
+        "/v1/field-intelligence/sync/batch",
+        content=chunked_body(),
+        headers={**headers, "Content-Type": "application/json"},
+    )
+    assert res.status_code == 413
+
+    # A valid small request still parses normally afterwards.
+    ok = client.post(
+        "/v1/field-intelligence/sync/batch",
+        json={"captures": [{"client_capture_id": "cb1", "idempotency_key": "cb1", "note_text": "ok"}]},
+        headers=headers,
+    )
+    assert ok.status_code == 200, ok.text
+
+
+def test_multipart_uploads_exempt_from_json_body_limit(client, db, fake_store, monkeypatch):
+    """Media uploads (multipart) are governed by FIELD_ASSET_MAX_BYTES, not the
+    JSON body cap — a photo larger than the JSON cap still stores fine."""
+    monkeypatch.setattr("app.core.config.settings.FIELD_SYNC_MAX_BODY_BYTES", 4096)
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    body = b"\x89PNG\r\n\x1a\n" + b"0" * (64 * 1024)  # 64 KiB > 4 KiB JSON cap
+    res = _upload(client, headers, cap["id"], client_asset_id="big", body=body)
+    assert res.status_code == 200, res.text
+
+
 # --------------------------------------------------------------------------- #
 # Item 10 — real media inspection
 # --------------------------------------------------------------------------- #
@@ -672,9 +893,21 @@ def test_video_upload_accepted_with_video_track(client, db, fake_store):
     _, _, headers = _auth(db)
     cap = _initiate(client, headers).json()["capture"]
     res = _upload(client, headers, cap["id"], client_asset_id="v", kind="video",
-                  body=_mp4_bytes(handlers=("vide",)), filename="v.mp4", content_type="video/mp4")
+                  body=_webm(3.0, 3.0, video=True), filename="v.webm", content_type="video/webm")
     assert res.status_code == 200, res.text
-    assert res.json()["asset"]["duration_seconds"] == pytest.approx(5.0)
+    assert res.json()["asset"]["duration_seconds"] == pytest.approx(3.0, abs=0.25)
+
+
+def test_sampleless_mp4_duration_claim_is_unverifiable(client, db, fake_store):
+    """An MP4 whose header claims a duration but carries no actual samples
+    cannot be verified — capped media with unverifiable duration fails closed."""
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    res = _upload(client, headers, cap["id"], client_asset_id="v", kind="video",
+                  body=_mp4_bytes(handlers=("vide",)), filename="v.mp4", content_type="video/mp4")
+    assert res.status_code == 422, res.text
+    assert res.json()["detail"]["code"] == "media_unverifiable"
+    assert len(fake_store.client.items) == 0
 
 
 def test_audio_without_any_audio_track_rejected(client, db, fake_store):
@@ -743,6 +976,82 @@ def test_wav_duration_measured(client, db, fake_store):
                   body=wav, filename="a.wav", content_type="audio/wav")
     assert res.status_code == 200, res.text
     assert res.json()["asset"]["duration_seconds"] == pytest.approx(2.0)
+
+
+# --------------------------------------------------------------------------- #
+# Item 10b — fail-closed duration verification (bounded ffprobe)
+# --------------------------------------------------------------------------- #
+
+def test_mediarecorder_webm_without_duration_verified_by_probe(client, db, fake_store):
+    """A MediaRecorder-style WebM has no Duration element; the bounded probe
+    measures the real packet timeline and the upload is accepted with the
+    server-verified duration."""
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    res = _upload(client, headers, cap["id"], client_asset_id="nr", kind="audio",
+                  body=_webm(3.0, None), filename="rec.webm", content_type="audio/webm")
+    assert res.status_code == 200, res.text
+    assert res.json()["asset"]["duration_seconds"] == pytest.approx(3.0, abs=0.25)
+
+
+def test_webm_without_duration_rejected_when_probe_unavailable(client, db, fake_store, monkeypatch):
+    """Capped audio with unknown container duration fails closed when the
+    verifier cannot run — the claim is never accepted on trust."""
+    monkeypatch.setattr("app.core.config.settings.FIELD_MEDIA_FFPROBE_PATH",
+                        "/nonexistent/ffprobe-fail-closed")
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    res = _upload(client, headers, cap["id"], client_asset_id="nr", kind="audio",
+                  body=_webm(3.0, None), filename="rec.webm", content_type="audio/webm")
+    assert res.status_code == 422, res.text
+    assert res.json()["detail"]["code"] == "media_unverifiable"
+    assert res.json()["detail"]["reason"] == "probe_unavailable"
+    assert len(fake_store.client.items) == 0
+
+
+def test_forged_webm_duration_rejected(client, db, fake_store, monkeypatch):
+    """A WebM whose header claims 3 seconds but whose clusters carry ~60
+    seconds of real packets is a forgery and is rejected."""
+    monkeypatch.setattr("app.core.config.settings.FIELD_AUDIO_MAX_SECONDS", 900)
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    res = _upload(client, headers, cap["id"], client_asset_id="fg", kind="audio",
+                  body=_webm(60.0, 3.0), filename="fg.webm", content_type="audio/webm")
+    assert res.status_code == 422, res.text
+    assert res.json()["detail"]["code"] == "media_unverifiable"
+    assert res.json()["detail"]["reason"] == "forged_duration"
+    assert len(fake_store.client.items) == 0
+
+
+def test_forged_short_claim_cannot_bypass_duration_cap(client, db, fake_store, monkeypatch):
+    """With a 5-second cap, a WebM claiming 3 seconds over ~60 seconds of real
+    packets must not slip under the cap via its forged header."""
+    monkeypatch.setattr("app.core.config.settings.FIELD_AUDIO_MAX_SECONDS", 5)
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    res = _upload(client, headers, cap["id"], client_asset_id="fgc", kind="audio",
+                  body=_webm(60.0, 3.0), filename="fg.webm", content_type="audio/webm")
+    assert res.status_code in {413, 422}, res.text
+    assert len(fake_store.client.items) == 0
+
+
+def test_probe_timeout_rejects_upload(client, db, fake_store, monkeypatch, tmp_path):
+    """A probe that exceeds its wall-clock budget is killed and the upload is
+    rejected — a hostile container cannot stall the API."""
+    import os as _os
+    import sys as _sys
+    stub = tmp_path / "slow-ffprobe"
+    stub.write_text(f"#!{_sys.executable}\nimport time\ntime.sleep(30)\n")
+    _os.chmod(stub, 0o755)
+    monkeypatch.setattr("app.core.config.settings.FIELD_MEDIA_FFPROBE_PATH", str(stub))
+    monkeypatch.setattr("app.core.config.settings.FIELD_MEDIA_PROBE_TIMEOUT_SECONDS", 1)
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    res = _upload(client, headers, cap["id"], client_asset_id="to", kind="audio",
+                  body=_webm(3.0, None), filename="rec.webm", content_type="audio/webm")
+    assert res.status_code == 422, res.text
+    assert res.json()["detail"]["reason"] == "probe_timeout"
+    assert len(fake_store.client.items) == 0
 
 
 # --------------------------------------------------------------------------- #
