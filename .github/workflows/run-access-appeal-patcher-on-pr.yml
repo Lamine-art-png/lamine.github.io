@@ -56,7 +56,7 @@ jobs:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
         run: |
           python -m compileall -q app alembic/versions
-          python -m pytest -q --tb=short tests/unit/test_account_verification_security.py tests/unit/test_platform_admin.py tests/unit/test_alembic_revisions.py
+          python -m pytest -q --tb=short tests/unit/test_account_verification_security.py tests/unit/test_platform_admin.py
           python -m pytest -q --tb=short tests/unit
       - name: Validate portal
         working-directory: figma-enterprise-v4
