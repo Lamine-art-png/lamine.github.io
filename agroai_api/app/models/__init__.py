@@ -29,7 +29,7 @@ from app.models.operational_records import (
 )
 from app.models.field_intelligence import (
     FieldCaptureSession, FieldObservation, FieldObservationAsset,
-    FieldObservationProcessingRun, FieldObservationAuditEvent,
+    FieldObservationProcessingRun, FieldObservationAuditEvent, FieldStorageReservation,
 )
 from app.models.compliance import (
     ComplianceJurisdiction, ComplianceOrganizationRole, ComplianceParcel,

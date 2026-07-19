@@ -31,6 +31,7 @@ from app.models.field_intelligence import (
     FieldObservationAsset,
     FieldObservationAuditEvent,
     FieldObservationProcessingRun,
+    FieldStorageReservation,
 )
 from app.models.operational_records import EvidenceRecord, IngestionJob
 from app.models.saas import Workspace
@@ -110,37 +111,144 @@ def require_capability(db: Session, ctx: AuthContext, feature_key: str):
     return require_feature(db, ctx.organization, feature_key)
 
 
-def enforce_storage_quota(db: Session, ctx: AuthContext, incoming_bytes: int) -> None:
-    """Enforce the plan's durable field-media storage quota before upload."""
+def storage_quota_limit_bytes(db: Session, ctx: AuthContext) -> tuple[int, int] | None:
+    """Return ``(limit_bytes, limit_mb)`` for the plan quota, or None if unlimited."""
     from app.services.commercial_control import resolve_effective_entitlements
 
-    organization_id = require_org(ctx)
     effective = resolve_effective_entitlements(db, ctx.organization)
     limit_mb = effective.value("quota.field_intelligence.storage_mb")
     if limit_mb is None:
-        return
+        return None
     try:
-        limit_bytes = int(limit_mb) * 1024 * 1024
+        return int(limit_mb) * 1024 * 1024, int(limit_mb)
     except (TypeError, ValueError):
-        return
-    used = (
+        return None
+
+
+def physical_storage_used_bytes(db: Session, tenant_id: str) -> int:
+    """Tenant media usage counted per *physical object*, not per logical row.
+
+    Multiple logical assets that share one ``object_ref`` count once. Usage is
+    released only when the physical object is actually deleted (every sharing
+    row has left the stored/pending_deletion states).
+    """
+    live = ["stored", "pending_deletion"]
+    per_object = (
+        db.query(func.max(FieldObservationAsset.size_bytes).label("size_bytes"))
+        .filter(FieldObservationAsset.tenant_id == tenant_id)
+        .filter(FieldObservationAsset.status.in_(live))
+        .filter(FieldObservationAsset.object_ref.isnot(None))
+        .group_by(FieldObservationAsset.object_ref)
+        .subquery()
+    )
+    shared = db.query(func.coalesce(func.sum(per_object.c.size_bytes), 0)).scalar() or 0
+    unbacked = (
         db.query(func.coalesce(func.sum(FieldObservationAsset.size_bytes), 0))
-        .filter(FieldObservationAsset.tenant_id == organization_id)
-        .filter(FieldObservationAsset.status == "stored")
+        .filter(FieldObservationAsset.tenant_id == tenant_id)
+        .filter(FieldObservationAsset.status.in_(live))
+        .filter(FieldObservationAsset.object_ref.is_(None))
         .scalar()
         or 0
     )
-    if int(used) + int(incoming_bytes) > limit_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail={
-                "code": "storage_quota_exceeded",
-                "metric": "field_intelligence.storage_mb",
-                "limit_mb": int(limit_mb),
-                "used_bytes": int(used),
-                "message": "Field media storage quota reached for this plan.",
-            },
+    return int(shared) + int(unbacked)
+
+
+def _active_reservation_bytes(db: Session, tenant_id: str) -> int:
+    total = (
+        db.query(func.coalesce(func.sum(FieldStorageReservation.size_bytes), 0))
+        .filter(FieldStorageReservation.tenant_id == tenant_id)
+        .filter(FieldStorageReservation.expires_at > datetime.utcnow())
+        .scalar()
+        or 0
+    )
+    return int(total)
+
+
+# Process-local per-tenant storage locks (SQLite / single-node). On PostgreSQL
+# the transaction-scoped advisory lock is authoritative across API workers.
+_STORAGE_LOCKS: dict[str, threading.Lock] = {}
+_STORAGE_LOCKS_GUARD = threading.Lock()
+
+
+@contextmanager
+def _tenant_storage_lock(db: Session, tenant_id: str):
+    """Serialize quota accounting for one tenant across concurrent uploads."""
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(
+            text("SELECT pg_advisory_xact_lock(:key)"),
+            {"key": _advisory_lock_key(f"fi-storage:{tenant_id}")},
         )
+        yield  # released when the surrounding transaction commits or rolls back
+        return
+    with _STORAGE_LOCKS_GUARD:
+        lock = _STORAGE_LOCKS.setdefault(tenant_id, threading.Lock())
+    with lock:
+        yield
+
+
+def reserve_storage(
+    db: Session, ctx: AuthContext, incoming_bytes: int, *, capture_session_id: str | None = None
+) -> FieldStorageReservation | None:
+    """Atomically reserve quota *before* a new physical object is created.
+
+    The check and the reservation insert commit under a per-tenant lock, so
+    concurrent uploads cannot overshoot the plan quota. Returns None when the
+    plan is unlimited. Raises 402 when the quota would be exceeded.
+    """
+    organization_id = require_org(ctx)
+    limits = storage_quota_limit_bytes(db, ctx)
+    if limits is None:
+        return None
+    limit_bytes, limit_mb = limits
+    with _tenant_storage_lock(db, organization_id):
+        # Expired reservations from crashed uploads never block new capacity.
+        (
+            db.query(FieldStorageReservation)
+            .filter(FieldStorageReservation.tenant_id == organization_id)
+            .filter(FieldStorageReservation.expires_at <= datetime.utcnow())
+            .delete(synchronize_session=False)
+        )
+        used = physical_storage_used_bytes(db, organization_id)
+        reserved = _active_reservation_bytes(db, organization_id)
+        if used + reserved + int(incoming_bytes) > limit_bytes:
+            db.rollback()
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail={
+                    "code": "storage_quota_exceeded",
+                    "metric": "field_intelligence.storage_mb",
+                    "limit_mb": limit_mb,
+                    "used_bytes": used,
+                    "message": "Field media storage quota reached for this plan.",
+                },
+            )
+        reservation = FieldStorageReservation(
+            id=str(uuid.uuid4()),
+            tenant_id=organization_id,
+            capture_session_id=capture_session_id,
+            size_bytes=int(incoming_bytes),
+            expires_at=datetime.utcnow()
+            + timedelta(seconds=int(getattr(settings, "FIELD_STORAGE_RESERVATION_TTL_SECONDS", 3600))),
+        )
+        db.add(reservation)
+        db.commit()
+    return reservation
+
+
+def release_storage_reservation(db: Session, reservation: FieldStorageReservation | None) -> None:
+    """Best-effort release; an unreleasable reservation expires by TTL."""
+    if reservation is None:
+        return
+    try:
+        (
+            db.query(FieldStorageReservation)
+            .filter(FieldStorageReservation.id == reservation.id)
+            .delete(synchronize_session=False)
+        )
+        db.commit()
+    except Exception:  # noqa: BLE001 - TTL expiry is the durable fallback
+        db.rollback()
+        logger.warning("field-intelligence storage reservation release failed (id=%s)", reservation.id)
 
 
 def resolve_workspace(db: Session, organization_id: str, workspace_id: str | None) -> Workspace | None:
@@ -1007,8 +1115,10 @@ def register_asset(
     require_capability(db, ctx, "field_intelligence.capture")
     if kind in {"audio", "video"}:
         require_capability(db, ctx, "field_intelligence.voice")
-    enforce_storage_quota(db, ctx, size_bytes)
 
+    # Idempotent replay is resolved BEFORE any quota accounting: replaying an
+    # already-stored asset consumes no new storage, so a tenant exactly at
+    # quota can still safely retry an interrupted sync.
     existing = (
         db.query(FieldObservationAsset)
         .filter(FieldObservationAsset.tenant_id == organization_id)
@@ -1029,7 +1139,9 @@ def register_asset(
             },
         )
 
-    # Same-content dedupe within the capture reuses the durable object.
+    # Same-content dedupe within the capture reuses the durable object. The
+    # shared physical object is already accounted for, so no new quota is
+    # reserved or consumed.
     twin = (
         db.query(FieldObservationAsset)
         .filter(FieldObservationAsset.tenant_id == organization_id)
@@ -1039,20 +1151,29 @@ def register_asset(
         .first()
     )
     uploaded_new_ref: str | None = None
+    reservation: FieldStorageReservation | None = None
     if twin:
         object_ref = twin.object_ref
         backend = twin.storage_backend
     else:
+        # Reserve quota atomically BEFORE creating the physical object so
+        # concurrent uploads can never overshoot the plan limit.
+        reservation = reserve_storage(db, ctx, size_bytes, capture_session_id=session.id)
         store = _object_store()
-        stored = store.put_path(
-            spool_path,
-            tenant_id=organization_id,
-            connection_id=session.id,  # capture session is the storage scope
-            filename=filename or f"{client_asset_id}",
-            content_type=content_type,
-            expected_sha256=content_sha256,
-            expected_size=size_bytes,
-        )
+        try:
+            stored = store.put_path(
+                spool_path,
+                tenant_id=organization_id,
+                connection_id=session.id,  # capture session is the storage scope
+                filename=filename or f"{client_asset_id}",
+                content_type=content_type,
+                expected_sha256=content_sha256,
+                expected_size=size_bytes,
+                pending_registration=True,
+            )
+        except Exception:
+            release_storage_reservation(db, reservation)
+            raise
         object_ref = stored.uri
         backend = "s3"
         uploaded_new_ref = stored.uri  # track for compensating delete on race loss
@@ -1081,6 +1202,14 @@ def register_asset(
         ),
     )
     db.add(asset)
+    if reservation is not None:
+        # The reservation converts into the registered row in the SAME
+        # transaction: usage accounting never double-counts and never gaps.
+        (
+            db.query(FieldStorageReservation)
+            .filter(FieldStorageReservation.id == reservation.id)
+            .delete(synchronize_session=False)
+        )
     manifest = list(session.asset_manifest_json or [])
     if not any(isinstance(m, dict) and m.get("client_asset_id") == client_asset_id for m in manifest):
         manifest.append({"client_asset_id": client_asset_id, "kind": kind, "content_type": content_type})
@@ -1100,6 +1229,7 @@ def register_asset(
         )
         if uploaded_new_ref and (not winner or winner.object_ref != uploaded_new_ref):
             _compensate_object_upload(db, organization_id, session.id, uploaded_new_ref)
+        release_storage_reservation(db, reservation)
         if winner:
             return winner
         raise
@@ -1109,7 +1239,16 @@ def register_asset(
         db.rollback()
         if uploaded_new_ref:
             _compensate_object_upload(db, organization_id, session.id, uploaded_new_ref)
+        release_storage_reservation(db, reservation)
         raise
+    if uploaded_new_ref:
+        # Promotion is best-effort: with the row durably committed, a leftover
+        # marker is harmless — the reconciler sees the live reference and only
+        # clears the marker.
+        try:
+            _object_store().promote(uploaded_new_ref, tenant_id=organization_id, connection_id=session.id)
+        except Exception:  # noqa: BLE001
+            logger.warning("field-intelligence pending-marker promotion failed (ref=%s)", uploaded_new_ref)
     db.refresh(asset)
     return asset
 
@@ -1132,7 +1271,12 @@ def _compensate_object_upload(db: Session, tenant_id: str, capture_session_id: s
     try:
         if not object_storage_configured():
             raise RuntimeError("object storage unavailable for compensating delete")
-        get_object_store().delete(object_ref, tenant_id=tenant_id, connection_id=capture_session_id)
+        store = get_object_store()
+        store.delete(object_ref, tenant_id=tenant_id, connection_id=capture_session_id)
+        try:
+            store.promote(object_ref, tenant_id=tenant_id, connection_id=capture_session_id)
+        except Exception:  # noqa: BLE001 - stale marker is reconciled later
+            pass
         return
     except Exception:  # noqa: BLE001 - fall through to durable cleanup
         logger.exception(
@@ -1215,9 +1359,16 @@ def run_field_intelligence_orphan_cleanup(db: Session, *, limit: int = 25, worke
             if object_ref and referenced == 0:
                 if not object_storage_configured():
                     raise RuntimeError("object storage unavailable for orphan cleanup")
-                get_object_store().delete(
+                store = get_object_store()
+                store.delete(
                     object_ref, tenant_id=job.tenant_id, connection_id=job_input.get("capture_session_id")
                 )
+                try:
+                    store.promote(
+                        object_ref, tenant_id=job.tenant_id, connection_id=job_input.get("capture_session_id")
+                    )
+                except Exception:  # noqa: BLE001 - stale marker is reconciled later
+                    pass
             job.status = "completed"
             job.completed_at = datetime.utcnow()
             job.lease_expires_at = None
@@ -1229,6 +1380,66 @@ def run_field_intelligence_orphan_cleanup(db: Session, *, limit: int = 25, worke
             db.rollback()
             _fail_or_retry(db, job.id, exc)
     return {"cleaned": cleaned, "worker_id": worker_id}
+
+
+def reconcile_pending_objects(db: Session, *, grace_seconds: int | None = None, limit: int = 500) -> dict:
+    """Object-store-resident orphan recovery.
+
+    Every new upload stages a pending-registration marker in the object store
+    itself *before* the object bytes, so even total database unavailability —
+    where neither the compensating delete nor the durable cleanup job could be
+    recorded — leaves a store-resident trail. This reconciler:
+
+    * skips markers younger than the grace period (upload may be in flight);
+    * clears the marker (only) when the database shows a live reference —
+      registration succeeded but promotion was lost;
+    * deletes object + marker when no live reference exists after the grace
+      period — the orphan case;
+    * never deletes anything when the database cannot be consulted, and every
+      step is idempotent, so retries are safe.
+    """
+    if not object_storage_configured():
+        return {"status": "skipped", "reason": "object_storage_unconfigured"}
+    grace = int(
+        grace_seconds
+        if grace_seconds is not None
+        else getattr(settings, "FIELD_PENDING_OBJECT_GRACE_SECONDS", 21600)
+    )
+    cutoff = datetime.utcnow() - timedelta(seconds=grace)
+    store = get_object_store()
+    promoted = 0
+    removed = 0
+    skipped = 0
+    errors = 0
+    for entry in store.list_pending_registrations(limit=limit):
+        uploaded_at = entry.get("uploaded_at")
+        object_key = entry.get("key")
+        object_uri = entry.get("uri")
+        if uploaded_at is not None and uploaded_at > cutoff:
+            skipped += 1
+            continue  # inside the grace window; the upload may still be registering
+        try:
+            if object_uri:
+                # The liveness check MUST succeed before any delete: if the
+                # database is unavailable here, fail safe and keep the object.
+                referenced = (
+                    db.query(FieldObservationAsset)
+                    .filter(FieldObservationAsset.object_ref == object_uri)
+                    .filter(FieldObservationAsset.status.in_(["stored", "pending_deletion"]))
+                    .count()
+                )
+                if referenced:
+                    store.clear_pending_marker(entry["marker_key"])
+                    promoted += 1
+                    continue
+                store.delete_unregistered_object(object_key)
+            store.clear_pending_marker(entry["marker_key"])
+            removed += 1
+        except Exception:  # noqa: BLE001 - keep the object; retry next cycle
+            db.rollback()
+            errors += 1
+            logger.exception("field-intelligence pending-object reconciliation failed (key=%s)", object_key)
+    return {"status": "ok", "promoted": promoted, "removed": removed, "skipped": skipped, "errors": errors}
 
 
 def read_asset_bytes(db: Session, ctx: AuthContext, asset_id: str) -> tuple[FieldObservationAsset, bytes]:

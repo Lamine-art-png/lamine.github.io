@@ -266,6 +266,29 @@ class FieldObservationProcessingRun(Base):
     )
 
 
+class FieldStorageReservation(Base):
+    """Durable, TTL-bounded reservation of tenant media-storage quota.
+
+    A reservation is committed *before* a new physical object is created so
+    concurrent uploads cannot overshoot the plan quota, and is atomically
+    replaced by the registered asset row in the same transaction. A crashed
+    upload leaks nothing: the reservation expires and is purged.
+    """
+
+    __tablename__ = "field_storage_reservations"
+
+    id = Column(String, primary_key=True, default=new_id, index=True)
+    tenant_id = Column(String, ForeignKey("organizations.id", ondelete="RESTRICT"), nullable=False)
+    capture_session_id = Column(String, nullable=True)
+    size_bytes = Column(BigInteger, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+
+    __table_args__ = (
+        Index("ix_field_storage_res_tenant", "tenant_id", "expires_at"),
+    )
+
+
 class FieldObservationAuditEvent(Base):
     """Append-only audit trail for field intelligence.
 

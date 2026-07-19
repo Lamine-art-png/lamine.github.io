@@ -74,6 +74,13 @@ class Settings(BaseSettings):
     FIELD_WORKER_INTERVAL_SECONDS: int = 15
     FIELD_WORKER_BATCH: int = 25
     FIELD_MAP_STYLE_URL: str = ""  # optional MapLibre style; empty => graceful fallback
+    FIELD_STORAGE_RESERVATION_TTL_SECONDS: int = 3600  # quota reservation lifetime for one in-flight upload
+    FIELD_PENDING_OBJECT_GRACE_SECONDS: int = 21600  # 6h before an unregistered object is reconciled away
+    FIELD_RECONCILER_INTERVAL_SECONDS: int = 900  # pending-registration reconciler cadence
+    FIELD_MEDIA_FFPROBE_PATH: str = "ffprobe"  # bounded media verification binary
+    FIELD_MEDIA_PROBE_TIMEOUT_SECONDS: int = 20  # hard wall-clock limit per probe subprocess
+    FIELD_MEDIA_PROBE_MAX_OUTPUT_BYTES: int = 8388608  # 8 MiB cap on probe subprocess output
+    FIELD_MEDIA_PROBE_MEMORY_LIMIT_MB: int = 512  # address-space limit for the probe subprocess
 
     # Scheduler
     SYNC_INTERVAL_MINUTES: int = 15
