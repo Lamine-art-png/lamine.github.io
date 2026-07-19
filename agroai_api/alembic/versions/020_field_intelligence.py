@@ -1,7 +1,7 @@
 """Add Field Intelligence capture, observation, asset and processing tables.
 
-Revision ID: 019_field_intelligence
-Revises: 018_outreach_engagement
+Revision ID: 020_field_intelligence
+Revises: 019_account_verification
 Create Date: 2026-07-18
 
 Foreign keys and delete behavior are deliberate:
@@ -19,8 +19,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "019_field_intelligence"
-down_revision = "018_outreach_engagement"
+revision = "020_field_intelligence"
+down_revision = "019_account_verification"
 branch_labels = None
 depends_on = None
 
@@ -207,6 +207,20 @@ def upgrade() -> None:
     _create_index("ix_field_processing_obs_stage", "field_observation_processing_runs", ["observation_id", "stage"])
     _create_index("ix_field_processing_status", "field_observation_processing_runs", ["tenant_id", "status", "created_at"])
 
+    if not _has_table("field_storage_reservations"):
+        op.create_table(
+            "field_storage_reservations",
+            sa.Column("id", sa.String(), primary_key=True),
+            sa.Column("tenant_id", sa.String(), nullable=False),
+            sa.Column("capture_session_id", sa.String(), nullable=True),
+            sa.Column("size_bytes", sa.BigInteger(), nullable=False),
+            sa.Column("created_at", sa.DateTime(), nullable=False),
+            sa.Column("expires_at", sa.DateTime(), nullable=False),
+            sa.ForeignKeyConstraint(["tenant_id"], ["organizations.id"], name="fk_field_storage_res_tenant", ondelete="RESTRICT"),
+        )
+    _create_index("ix_field_storage_reservations_id", "field_storage_reservations", ["id"])
+    _create_index("ix_field_storage_res_tenant", "field_storage_reservations", ["tenant_id", "expires_at"])
+
     if not _has_table("field_observation_audit_events"):
         op.create_table(
             "field_observation_audit_events",
@@ -232,6 +246,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     for table in (
         "field_observation_audit_events",
+        "field_storage_reservations",
         "field_observation_processing_runs",
         "field_observation_assets",
         "field_observations",
