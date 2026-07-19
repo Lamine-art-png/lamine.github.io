@@ -43,11 +43,12 @@ def test_alembic_revision_ids_fit_existing_version_table_and_are_unique():
     assert not violations, "\n".join(violations)
 
 
-def test_account_verification_and_platform_api_revisions_form_one_linear_tail():
+def test_account_verification_platform_api_and_appeal_revisions_form_one_linear_tail():
     expected_tail = {
         "019_account_verification": "018_outreach_engagement",
         "020_platform_api_private_beta": "019_account_verification",
         "021_platform_api_hardening": "020_platform_api_private_beta",
+        "022_account_access_appeals": "021_platform_api_hardening",
     }
     actual_tail = {}
 
