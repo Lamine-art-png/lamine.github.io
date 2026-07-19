@@ -258,11 +258,30 @@ def _profile(ctx: AuthContext, db: Session) -> dict:
 
 def _security_payload(ctx: AuthContext) -> dict:
     verified = bool(ctx.user.email_verified_at and ctx.user.email_verification_status == "verified")
+    org = ctx.organization
+    profile = getattr(org, "verification_profile", None) if org else None
+    organization_status = getattr(org, "verification_status", "verification_required") if org else "verification_required"
     return {
         "email_verification": {
             "status": "verified" if verified else "unverified",
             "customer_label": "Verified" if verified else "Verification required",
             "action_label": "Verified" if verified else "Resend verification email",
+        },
+        "organization_verification": {
+            "verification_id": getattr(profile, "id", None),
+            "status": organization_status,
+            "customer_label": "Verified organization" if organization_status in {"approved", "approved_legacy"} else "Access restricted",
+            "score": getattr(org, "verification_score", None) if org else None,
+            "engine_version": getattr(org, "verification_engine_version", None) if org else None,
+            "email_domain_type": getattr(profile, "domain_classification", None),
+            "phone_last4": getattr(profile, "phone_last4", None),
+            "verified_at": org.verified_at.isoformat() if org and org.verified_at else None,
+        },
+        "account_protection": {
+            "status": getattr(ctx.user, "account_status", "active"),
+            "failed_attempt_lockout": True,
+            "security_audit_logging": True,
+            "sensitive_verification_data_encrypted": True,
         },
         "two_factor": {
             "status": "not_available_yet",
@@ -272,8 +291,8 @@ def _security_payload(ctx: AuthContext) -> dict:
         "login_methods": ["password"],
         "active_sessions": [],
         "recommended_security_actions": [
-            "Verify your email address" if not verified else "Review active sessions",
-            "Request two-factor setup",
+            "Verify your email address" if not verified else "Keep your recovery method current",
+            "Use a unique password of at least 12 characters",
         ],
     }
 

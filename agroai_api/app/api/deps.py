@@ -18,6 +18,46 @@ class AuthContext:
     organization: Organization | None = None
     membership: OrganizationMembership | None = None
 
+APPROVED_ORGANIZATION_STATUSES = {"approved", "approved_legacy"}
+
+
+def require_approved_organization(organization: Organization | None) -> None:
+    if organization is None or getattr(organization, "verification_status", None) not in APPROVED_ORGANIZATION_STATUSES:
+        current = getattr(organization, "verification_status", None) or "verification_required"
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "organization_verification_required",
+                "message": "This organization is not approved for live portal access.",
+                "verification_status": current,
+            },
+        )
+
+
+def _assert_account_access(user: User) -> None:
+    if getattr(user, "account_status", "active") != "active":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "account_access_restricted",
+                "message": "This account is not approved for portal access.",
+            },
+        )
+
+
+def _assert_token_organization_access(payload: dict, user: User, db: Session) -> None:
+    org_id = payload.get("org_id") or payload.get("tenant_id")
+    if not org_id:
+        return
+    membership = (
+        db.query(OrganizationMembership)
+        .filter(OrganizationMembership.organization_id == str(org_id), OrganizationMembership.user_id == user.id)
+        .first()
+    )
+    if not membership:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Session organization is no longer available")
+    require_approved_organization(membership.organization)
+
 
 def _assert_credential_freshness(payload: dict, user: User) -> None:
     changed_at = getattr(user, "credentials_changed_at", None)
@@ -65,6 +105,8 @@ def get_current_user(
     if not user or not user.is_active:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found or inactive")
     _assert_credential_freshness(payload, user)
+    _assert_account_access(user)
+    _assert_token_organization_access(payload, user, db)
     return user
 
 
@@ -82,6 +124,8 @@ def get_current_user_optional(
     if not user or not user.is_active:
         return None
     _assert_credential_freshness(payload, user)
+    _assert_account_access(user)
+    _assert_token_organization_access(payload, user, db)
     return user
 
 
@@ -135,6 +179,7 @@ def get_auth_context(user: User = Depends(get_current_user), db: Session = Depen
         .first()
     )
     organization = membership.organization if membership else None
+    require_approved_organization(organization)
     _activate_server_authorized_access_profile(db, user, organization)
     return AuthContext(user=user, organization=organization, membership=membership)
 
@@ -179,6 +224,7 @@ def require_org_membership(org_id: str, user: User, db: Session) -> tuple[Organi
     )
     if not membership:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
+    require_approved_organization(membership.organization)
     return membership.organization, membership
 
 
@@ -196,6 +242,7 @@ def require_workspace_access(workspace_id: str, user: User, db: Session) -> tupl
     )
     if not membership:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+    require_approved_organization(membership.organization)
     return workspace, membership
 
 

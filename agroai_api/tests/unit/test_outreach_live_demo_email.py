@@ -33,7 +33,7 @@ def test_live_demo_defaults_are_hd_and_distinct_from_launch_video(monkeypatch):
     assert settings.launch_video_url == "https://youtu.be/NKVhX8imyT4"
     assert settings.launch_video_thumbnail_url == "https://i.ytimg.com/vi/NKVhX8imyT4/maxresdefault.jpg"
     assert settings.live_demo_url == "https://youtu.be/4KgH4R57tco"
-    assert settings.live_demo_thumbnail_url == "https://i.ytimg.com/vi/4KgH4R57tco/maxresdefault.jpg"
+    assert settings.live_demo_thumbnail_url == "https://api.agroai-pilot.com/v1/outreach/assets/live-demo-thumbnail.jpg"
     assert settings.live_demo_url != settings.launch_video_url
 
 

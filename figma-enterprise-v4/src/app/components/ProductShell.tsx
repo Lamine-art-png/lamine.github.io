@@ -522,6 +522,8 @@ export function SecurityPage() {
   const [message, setMessage] = useState("");
   const data = securityState.data || {};
   const emailVerification = (data.email_verification || {}) as Record<string, unknown>;
+  const organizationVerification = (data.organization_verification || {}) as Record<string, unknown>;
+  const accountProtection = (data.account_protection || {}) as Record<string, unknown>;
   const twoFactor = (data.two_factor || {}) as Record<string, unknown>;
 
   const resend = async () => {
@@ -539,6 +541,21 @@ export function SecurityPage() {
       {message ? <Banner message={message} /> : null}
       {securityState.error ? <Banner tone="warn" message={securityState.error} /> : null}
       <div className="grid gap-5 md:grid-cols-2">
+        <Panel title="Organization verification">
+          <ShieldCheck className="mb-3 h-5 w-5" style={{ color: GREEN }} />
+          <Row label="Status" value={organizationVerification.customer_label} />
+          <Row label="Decision" value={organizationVerification.status} />
+          <Row label="Verification ID" value={organizationVerification.verification_id || "Legacy verified organization"} />
+          <Row label="Email domain" value={organizationVerification.email_domain_type || "Existing verified account"} />
+          {organizationVerification.phone_last4 ? <Row label="Protected phone" value={`Encrypted · ending ${organizationVerification.phone_last4}`} /> : null}
+        </Panel>
+        <Panel title="Account protection">
+          <ShieldCheck className="mb-3 h-5 w-5" style={{ color: GREEN }} />
+          <Row label="Account status" value={accountProtection.status} />
+          <Row label="Failed-login lockout" value={accountProtection.failed_attempt_lockout ? "Enabled" : "Unavailable"} />
+          <Row label="Security audit logging" value={accountProtection.security_audit_logging ? "Enabled" : "Unavailable"} />
+          <Row label="Sensitive verification data" value={accountProtection.sensitive_verification_data_encrypted ? "Encrypted" : "Unavailable"} />
+        </Panel>
         <Panel title="Email verification" action={<PortalButton onClick={resend}>{safe(emailVerification.action_label, "Resend verification email")}</PortalButton>}>
           <ShieldCheck className="mb-3 h-5 w-5" style={{ color: GREEN }} />
           <Row label="Status" value={emailVerification.customer_label} />

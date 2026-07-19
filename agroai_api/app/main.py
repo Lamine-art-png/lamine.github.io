@@ -12,8 +12,11 @@ from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from sqlalchemy import inspect
+from slowapi import _rate_limit_exceeded_handler
+from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
+from app.core.rate_limiting import limiter
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +24,10 @@ VERSION = "2.0.1"
 
 
 _SAAS_REQUIRED_SCHEMA: dict[str, set[str]] = {
-    "users": {"id", "email", "email_verified_at", "email_verification_status", "credentials_changed_at"},
+    "users": {"id", "email", "email_verified_at", "email_verification_status", "credentials_changed_at", "account_status", "failed_login_attempts", "locked_until"},
+    "organizations": {"id", "verification_status", "verification_score", "verification_engine_version"},
+    "organization_verification_profiles": {"id", "organization_id", "decision", "score", "phone_ciphertext_b64", "evidence_digest"},
+    "security_audit_events": {"id", "event_type", "outcome", "subject_hash", "ip_hash", "created_at"},
     "email_verification_tokens": {"id", "user_id", "token_hash", "expires_at", "used_at", "created_at"},
     "team_invitations": {"id", "organization_id", "email", "role", "status", "invited_by_user_id", "token_hash", "expires_at", "created_at", "updated_at"},
     "user_preferences": {"user_id", "locale", "timezone", "notifications_json", "ui_json", "created_at", "updated_at"},
@@ -95,6 +101,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="AGRO-AI API", version=VERSION, lifespan=lifespan)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 ALLOWED_ORIGINS = [
     "https://app.agroai-pilot.com",
@@ -117,8 +125,8 @@ app.add_middleware(
     allow_origins=ALLOWED_ORIGINS,
     allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept", "X-API-Key", "Idempotency-Key"],
     expose_headers=["x-agroai-runtime", "x-agroai-error"],
 )
 
@@ -132,9 +140,25 @@ def _add_runtime_cors_headers(response: JSONResponse, origin: str | None) -> JSO
         response.headers["Access-Control-Allow-Origin"] = origin
         response.headers["Access-Control-Allow-Credentials"] = "true"
         response.headers["Access-Control-Allow-Methods"] = "GET,POST,PUT,PATCH,DELETE,OPTIONS"
-        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "Authorization, Content-Type, Accept, X-API-Key, Idempotency-Key"
         response.headers["Vary"] = "Origin"
     response.headers["x-agroai-runtime"] = VERSION
+    return response
+
+
+@app.middleware("http")
+async def security_response_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=(), usb=()")
+    response.headers.setdefault("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
+    if str(getattr(settings, "APP_ENV", "development") or "development").lower() in {"production", "prod"}:
+        response.headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
+    if request.url.path.startswith("/v1/auth/") or request.url.path.startswith("/v1/account/"):
+        response.headers.setdefault("Cache-Control", "no-store, max-age=0")
+        response.headers.setdefault("Pragma", "no-cache")
     return response
 
 
