@@ -1,0 +1,139 @@
+name: Field Intelligence CI
+
+on:
+  pull_request:
+  push:
+    branches: [feature/field-intelligence]
+  workflow_dispatch:
+
+jobs:
+  postgres-migration-roundtrip:
+    name: PostgreSQL migration upgrade/downgrade/upgrade
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: agroai_field_intelligence_ci
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: agroai_api
+    env:
+      DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agroai_field_intelligence_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -q -r requirements.txt pytest
+      - name: Upgrade to repository head
+        run: alembic upgrade head
+      - name: Downgrade the Field Intelligence revision
+        run: alembic downgrade 018_outreach_engagement
+      - name: Prove field intelligence tables are gone
+        run: |
+          python - <<'PY'
+          import os, sqlalchemy as sa
+          engine = sa.create_engine(os.environ["DATABASE_URL"])
+          inspector = sa.inspect(engine)
+          tables = set(inspector.get_table_names())
+          removed = {"field_capture_sessions", "field_observations", "field_observation_assets",
+                     "field_observation_processing_runs", "field_observation_audit_events"}
+          leftover = removed & tables
+          assert not leftover, f"downgrade left tables behind: {sorted(leftover)}"
+          print("downgrade removed:", sorted(removed))
+          PY
+      - name: Re-upgrade to repository head
+        run: alembic upgrade head
+      - name: Prove persisted revision equals repository head
+        run: |
+          python - <<'PY'
+          import os
+          import sqlalchemy as sa
+          from alembic.config import Config
+          from alembic.script import ScriptDirectory
+          cfg = Config("alembic.ini")
+          heads = sorted(ScriptDirectory.from_config(cfg).get_heads())
+          engine = sa.create_engine(os.environ["DATABASE_URL"])
+          with engine.connect() as connection:
+              versions = sorted(row[0] for row in connection.execute(sa.text("SELECT version_num FROM alembic_version")))
+          assert versions == heads, {"persisted": versions, "repository": heads}
+          print({"persisted_heads": versions})
+          PY
+
+  backend-field-intelligence:
+    name: Backend Field Intelligence, worker and R2 tests
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -q -r requirements.txt pytest
+      - name: Compile backend and migration tree
+        run: python -m compileall -q app alembic scripts
+      - name: Field Intelligence suites (capture, pipeline, hardening)
+        run: >
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short
+          tests/unit/test_field_intelligence.py
+          tests/unit/test_field_intelligence_hardening.py
+          tests/unit/test_field_operating_loop.py
+          tests/unit/test_live_field_context.py
+      - name: Worker and R2 object storage suites
+        run: >
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short
+          tests/unit/test_object_storage.py
+
+  release-contracts:
+    name: Release and revision contracts
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -q -r requirements.txt pytest
+      - name: Release contract suite
+        run: >
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short
+          tests/unit/test_release_contract.py
+          tests/unit/test_alembic_revision_contract.py
+
+  portal:
+    name: Portal build, i18n and offline multi-tab contracts
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: figma-enterprise-v4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: npm ci
+      - name: Offline multi-tab behavioral contract (fake-clock lease heartbeat)
+        run: npm run test:field-intelligence
+      - name: i18n contracts
+        run: npm run test:i18n
+      - name: Portal build
+        run: npm run build
