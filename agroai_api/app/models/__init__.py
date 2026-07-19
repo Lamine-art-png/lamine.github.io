@@ -27,6 +27,10 @@ from app.models.operational_records import (
     ChatConversation, ChatMessage, ConnectorConnection, DataSource,
     EvidenceRecord, GeneratedArtifact, IngestionJob, IntelligenceRun,
 )
+from app.models.field_intelligence import (
+    FieldCaptureSession, FieldObservation, FieldObservationAsset,
+    FieldObservationProcessingRun, FieldObservationAuditEvent, FieldStorageReservation,
+)
 from app.models.compliance import (
     ComplianceJurisdiction, ComplianceOrganizationRole, ComplianceParcel,
     ComplianceWell, ComplianceMeter, ComplianceMeasurement, ComplianceExecutionLedger,
@@ -64,7 +68,9 @@ __all__ = [
     "OrganizationMembership", "OrganizationVerificationProfile", "QuotaReservation", "SaaSRequest", "SecurityAuditEvent", "TeamInvitation",
     "UsageEvent", "User", "UserPreference", "Workspace", "ConnectorConnection",
     "DataSource", "IngestionJob", "EvidenceRecord", "IntelligenceRun",
-    "GeneratedArtifact", "ChatConversation", "ChatMessage", "ComplianceJurisdiction",
+    "GeneratedArtifact", "ChatConversation", "ChatMessage",
+    "FieldCaptureSession", "FieldObservation", "FieldObservationAsset",
+    "FieldObservationProcessingRun", "FieldObservationAuditEvent", "ComplianceJurisdiction",
     "ComplianceOrganizationRole", "ComplianceParcel", "ComplianceWell",
     "ComplianceMeter", "ComplianceMeasurement", "ComplianceExecutionLedger",
     "ComplianceWaterBudget", "ComplianceEvidence", "ComplianceRulePack",

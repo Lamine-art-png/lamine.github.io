@@ -14,6 +14,7 @@ import {
   HelpCircle,
   LayoutDashboard,
   ListTodo,
+  Radio,
   Lock,
   LogOut,
   Menu,
@@ -109,6 +110,7 @@ export function MainLayout() {
   const canAccessAdminRequests = capabilityEnabled(entitlements, "admin.requests", Boolean(entitlements.can_access_admin_requests));
   const canGeneratePdf = capabilityEnabled(entitlements, "reports.pdf_export", Boolean(entitlements.can_generate_pdf));
   const canAskAgroAi = capabilityEnabled(entitlements, "intelligence.ask", !["free", "pilot"].includes(currentPlan));
+  const canFieldIntelligence = capabilityEnabled(entitlements, "field_intelligence.capture", true);
   const currentPlanLabel = PLAN_LABELS[currentPlan] || "Free";
   const organizationWorkspaces = useMemo(
     () => currentOrganization?.id
@@ -121,6 +123,7 @@ export function MainLayout() {
   const operateItems: NavItem[] = [
     { name: t("commandCenter"), path: "/", icon: LayoutDashboard },
     { name: t("fieldQueue"), path: "/field-queue", icon: ListTodo },
+    { name: t("fieldIntelligence"), path: "/field-intelligence", icon: Radio, locked: !canFieldIntelligence, upgradeTo: "professional" },
     { name: t("tasks"), path: "/tasks", icon: ClipboardCheck },
     { name: t("decisions"), path: "/operations", icon: SlidersHorizontal },
     { name: t("evidence"), path: "/evidence", icon: FileSearch },

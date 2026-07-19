@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 import uuid
 from dataclasses import dataclass
@@ -129,6 +130,89 @@ class S3ObjectStore:
                 raise ValueError("object URI is outside the connector tenant namespace")
         return key
 
+    # ------------------------------------------------------------------ #
+    # Pending-registration staging
+    #
+    # A durable upload whose database registration may still fail leaves a
+    # small marker object under ``<prefix>/pending-registration/``. The marker
+    # lives in the object store itself, so it survives total database
+    # unavailability. Successful registration promotes the object by deleting
+    # the marker; a periodic reconciler removes stale unpromoted objects.
+    # ------------------------------------------------------------------ #
+
+    def _pending_prefix(self) -> str:
+        return f"{self.prefix}/pending-registration/"
+
+    def _pending_marker_key(self, object_key: str) -> str:
+        return self._pending_prefix() + hashlib.sha256(object_key.encode("utf-8")).hexdigest() + ".json"
+
+    def stage_pending_registration(self, object_key: str) -> str:
+        """Durably record that ``object_key`` awaits database registration."""
+        marker_key = self._pending_marker_key(object_key)
+        body = json.dumps({
+            "key": object_key,
+            "uploaded_at": datetime.utcnow().isoformat() + "Z",
+        }).encode("utf-8")
+        self.client.put_object(Bucket=self.bucket, Key=marker_key, Body=body,
+                               ContentType="application/json")
+        return marker_key
+
+    def promote(self, uri: str, *, tenant_id: str | None = None, connection_id: str | None = None) -> None:
+        """Clear the pending-registration marker after a durable DB commit.
+
+        Idempotent; a missing marker is a no-op. Failure is safe: the
+        reconciler sees the live database reference and only clears the marker.
+        """
+        key = self._validated_key(uri, tenant_id=tenant_id, connection_id=connection_id)
+        self.client.delete_object(Bucket=self.bucket, Key=self._pending_marker_key(key))
+
+    def list_pending_registrations(self, *, limit: int = 1000) -> list[dict]:
+        """Enumerate pending-registration markers with their object keys."""
+        entries: list[dict] = []
+        token: str | None = None
+        prefix = self._pending_prefix()
+        while len(entries) < limit:
+            kwargs: dict[str, Any] = {"Bucket": self.bucket, "Prefix": prefix,
+                                      "MaxKeys": min(limit - len(entries), 1000)}
+            if token:
+                kwargs["ContinuationToken"] = token
+            response = self.client.list_objects_v2(**kwargs)
+            for item in response.get("Contents") or []:
+                marker_key = item.get("Key")
+                if not marker_key:
+                    continue
+                try:
+                    body = self.client.get_object(Bucket=self.bucket, Key=marker_key)["Body"].read(64 * 1024)
+                    payload = json.loads(body.decode("utf-8"))
+                    object_key = str(payload.get("key") or "")
+                    uploaded_raw = str(payload.get("uploaded_at") or "").rstrip("Z")
+                    uploaded_at = datetime.fromisoformat(uploaded_raw) if uploaded_raw else None
+                except Exception:  # noqa: BLE001 - malformed marker: surface for cleanup
+                    object_key, uploaded_at = "", None
+                if not object_key.startswith(self.prefix.rstrip("/") + "/"):
+                    object_key = ""  # never act outside the configured prefix
+                entries.append({
+                    "marker_key": marker_key,
+                    "key": object_key or None,
+                    "uri": _s3_uri(self.bucket, object_key) if object_key else None,
+                    "uploaded_at": uploaded_at,
+                })
+            token = response.get("NextContinuationToken")
+            if not token:
+                break
+        return entries
+
+    def clear_pending_marker(self, marker_key: str) -> None:
+        if not marker_key.startswith(self._pending_prefix()):
+            raise ValueError("marker key is outside the pending-registration prefix")
+        self.client.delete_object(Bucket=self.bucket, Key=marker_key)
+
+    def delete_unregistered_object(self, object_key: str) -> None:
+        """Delete a staged object by key (reconciler only; prefix-validated)."""
+        if not object_key.startswith(self.prefix.rstrip("/") + "/"):
+            raise ValueError("object key is outside the configured prefix")
+        self.client.delete_object(Bucket=self.bucket, Key=object_key)
+
     def put_path(
         self,
         path: str | Path,
@@ -139,6 +223,7 @@ class S3ObjectStore:
         content_type: str | None,
         expected_sha256: str,
         expected_size: int,
+        pending_registration: bool = False,
     ) -> StoredObject:
         source = Path(path)
         if not source.is_file():
@@ -163,6 +248,10 @@ class S3ObjectStore:
         }
         if content_type:
             extra["ContentType"] = content_type
+        if pending_registration:
+            # Marker precedes the object: a crash at any later point leaves a
+            # store-resident record the reconciler can act on without the DB.
+            self.stage_pending_registration(key)
         with source.open("rb") as handle:
             self.client.upload_fileobj(handle, self.bucket, key, ExtraArgs=extra)
         head = self.client.head_object(Bucket=self.bucket, Key=key)
@@ -229,6 +318,52 @@ class S3ObjectStore:
     ) -> None:
         key = self._validated_key(uri, tenant_id=tenant_id, connection_id=connection_id)
         self.client.delete_object(Bucket=self.bucket, Key=key)
+
+    def stat(self, uri: str, *, tenant_id: str | None = None, connection_id: str | None = None) -> tuple[int, str | None]:
+        """Return (size_bytes, content_type) for an authorized object."""
+        key = self._validated_key(uri, tenant_id=tenant_id, connection_id=connection_id)
+        head = self.client.head_object(Bucket=self.bucket, Key=key)
+        return int(head.get("ContentLength") or 0), head.get("ContentType")
+
+    def stream_object(
+        self,
+        uri: str,
+        *,
+        tenant_id: str | None = None,
+        connection_id: str | None = None,
+        byte_range: tuple[int, int] | None = None,
+        chunk_size: int = 256 * 1024,
+    ):
+        """Stream an authorized object without buffering it fully in memory.
+
+        Supports HTTP range requests. Tenant/connection namespace is validated
+        against the key before any bytes are read; integrity of the stored object
+        was verified at upload time.
+        """
+        key = self._validated_key(uri, tenant_id=tenant_id, connection_id=connection_id)
+        kwargs: dict[str, Any] = {"Bucket": self.bucket, "Key": key}
+        if byte_range is not None:
+            kwargs["Range"] = f"bytes={byte_range[0]}-{byte_range[1]}"
+        response = self.client.get_object(**kwargs)
+        body = response["Body"]
+
+        def _iterator():
+            # The finally block guarantees the S3/R2 body (and its pooled HTTP
+            # connection) is released on normal completion, on error, and on
+            # client cancellation (GeneratorExit via StreamingResponse close).
+            try:
+                while True:
+                    chunk = body.read(chunk_size)
+                    if not chunk:
+                        break
+                    yield chunk
+            finally:
+                try:
+                    body.close()
+                except Exception:  # noqa: BLE001 - releasing is best-effort
+                    pass
+
+        return _iterator()
 
 
 def object_storage_configured() -> bool:

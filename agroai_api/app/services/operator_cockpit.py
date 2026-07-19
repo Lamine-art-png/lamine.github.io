@@ -86,11 +86,29 @@ class CockpitContext:
         )
 
 
-def build_context(db: Session, organization_id: str, workspace: Workspace | None = None) -> CockpitContext:
+def build_context(
+    db: Session,
+    organization_id: str,
+    workspace: Workspace | None = None,
+    *,
+    include_unusable: bool = False,
+) -> CockpitContext:
+    """Load the tenant's operational context.
+
+    Evidence with ``quality_status == "unusable"`` (e.g. a blank, untranscribed
+    voice capture) is excluded by default so Ask AGRO-AI, Reports, Readiness,
+    Decision Workbench and citations never treat it as usable evidence.
+    Review-oriented consumers may pass ``include_unusable=True`` and must then
+    surface ``quality_status`` alongside each record.
+    """
     workspace_id = workspace.id if workspace else None
     connection_query = db.query(ConnectorConnection).filter(ConnectorConnection.tenant_id == organization_id)
     source_query = db.query(DataSource).filter(DataSource.tenant_id == organization_id)
     evidence_query = db.query(EvidenceRecord).filter(EvidenceRecord.tenant_id == organization_id)
+    if not include_unusable:
+        evidence_query = evidence_query.filter(
+            or_(EvidenceRecord.quality_status.is_(None), EvidenceRecord.quality_status != "unusable")
+        )
     job_query = db.query(IngestionJob).filter(IngestionJob.tenant_id == organization_id)
     if workspace_id:
         connection_query = connection_query.filter(or_(ConnectorConnection.workspace_id == workspace_id, ConnectorConnection.workspace_id.is_(None)))
@@ -674,6 +692,7 @@ def _evidence_ref(row: EvidenceRecord) -> dict[str, Any]:
         "label": row.citation_label,
         "title": row.title,
         "type": row.evidence_type,
+        "quality_status": row.quality_status,
         "occurred_at": _iso(row.occurred_at or row.created_at),
     }
 

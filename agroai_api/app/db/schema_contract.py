@@ -5,7 +5,7 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "022_account_access_appeals"
+HEAD_ALEMBIC_REVISION = "023_field_intelligence"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
@@ -72,6 +72,27 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "platform_webhook_delivery_attempts": {"id", "event_id", "endpoint_id", "attempt_number", "status"},
     "platform_webhook_outbox": {"id", "organization_id", "api_project_id", "event_id", "endpoint_id", "status"},
     "platform_webhook_audit_events": {"id", "organization_id", "api_project_id", "endpoint_id", "action"},
+    "field_capture_sessions": {
+        "id", "tenant_id", "workspace_id", "user_id", "client_capture_id",
+        "idempotency_key", "status", "asset_manifest_json", "metadata_json",
+    },
+    "field_observations": {
+        "id", "tenant_id", "workspace_id", "capture_session_id", "status",
+        "structured_json", "confidence", "provenance_json",
+    },
+    "field_observation_assets": {
+        "id", "tenant_id", "capture_session_id", "client_asset_id", "object_ref",
+        "content_sha256", "status",
+    },
+    "field_observation_processing_runs": {
+        "id", "tenant_id", "capture_session_id", "stage", "status", "attempt_count",
+    },
+    "field_observation_audit_events": {
+        "id", "tenant_id", "capture_session_id", "action", "created_at",
+    },
+    "field_storage_reservations": {
+        "id", "tenant_id", "capture_session_id", "size_bytes", "expires_at",
+    },
 }
 
 

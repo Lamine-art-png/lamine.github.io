@@ -91,6 +91,29 @@ class Settings(BaseSettings):
     COMPLIANCE_ALLOW_BROWSER_TENANT_API_KEYS: bool = False
     COMPLIANCE_OBJECT_STORAGE_BACKEND: str = "disabled"
 
+    # Field Intelligence (voice-first / offline field capture)
+    FIELD_TRANSCRIPTION_PROVIDER: str = ""  # "", fake, fake_fail, http/configured
+    FIELD_TRANSCRIPTION_ENDPOINT: str = ""  # real provider endpoint (http provider)
+    FIELD_TRANSCRIPTION_API_KEY: str = ""  # provider credential (never sent to browser)
+    FIELD_TRANSCRIPTION_MODEL: str = ""
+    FIELD_TRANSCRIPTION_FAKE_RETRY_FAILS: int = 1  # test provider transient-fail count
+    FIELD_ASSET_MAX_BYTES: int = 52428800  # 50 MiB per captured asset
+    FIELD_ASSET_STREAM_CHUNK: int = 262144  # 256 KiB streaming chunk for retrieval
+    FIELD_AUDIO_MAX_SECONDS: int = 900  # 15 minutes of durable audio
+    FIELD_SYNC_MAX_BATCH: int = 50  # bounded offline sync batch size
+    FIELD_SYNC_MAX_BODY_BYTES: int = 5242880  # 5 MiB cap on a sync batch body
+    FIELD_INTELLIGENCE_WORKER_ENABLED: bool = True
+    FIELD_WORKER_INTERVAL_SECONDS: int = 15
+    FIELD_WORKER_BATCH: int = 25
+    FIELD_MAP_STYLE_URL: str = ""  # optional MapLibre style; empty => graceful fallback
+    FIELD_STORAGE_RESERVATION_TTL_SECONDS: int = 3600  # quota reservation lifetime for one in-flight upload
+    FIELD_PENDING_OBJECT_GRACE_SECONDS: int = 21600  # 6h before an unregistered object is reconciled away
+    FIELD_RECONCILER_INTERVAL_SECONDS: int = 900  # pending-registration reconciler cadence
+    FIELD_MEDIA_FFPROBE_PATH: str = "ffprobe"  # bounded media verification binary
+    FIELD_MEDIA_PROBE_TIMEOUT_SECONDS: int = 20  # hard wall-clock limit per probe subprocess
+    FIELD_MEDIA_PROBE_MAX_OUTPUT_BYTES: int = 8388608  # 8 MiB cap on probe subprocess output
+    FIELD_MEDIA_PROBE_MEMORY_LIMIT_MB: int = 512  # address-space limit for the probe subprocess
+
     # Scheduler
     SYNC_INTERVAL_MINUTES: int = 15
     SYNC_LOOKBACK_DAYS: int = 14
