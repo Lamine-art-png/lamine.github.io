@@ -18,6 +18,7 @@ from app.api.deps import (
     require_approved_organization,
 )
 from app.core.config import settings
+from app.core.organization_access import APPROVED_ORGANIZATION_STATUSES
 from app.core.rate_limiting import limiter
 from app.core.security import create_access_token
 from app.db.base import get_db
@@ -45,7 +46,6 @@ pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 logger = logging.getLogger(__name__)
 
 GENERIC_VERIFICATION_MESSAGE = "If an account exists, we sent a verification email."
-APPROVED_ORGANIZATION_STATUSES = {"approved", "approved_legacy"}
 _PRODUCTION_RATE_LIMITS = str(getattr(settings, "APP_ENV", "development") or "development").strip().lower() in {"production", "prod"}
 REGISTER_RATE_LIMIT = "5/minute" if _PRODUCTION_RATE_LIMITS else "1000/minute"
 LOGIN_RATE_LIMIT = "10/minute" if _PRODUCTION_RATE_LIMITS else "1000/minute"

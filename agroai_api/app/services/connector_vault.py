@@ -81,6 +81,23 @@ def vault_configured() -> bool:
         return False
 
 
+def explicit_versioned_keyring_configured() -> bool:
+    """Validate the independently rotatable keyring required by Platform API production."""
+
+    raw_ring = os.getenv("CONNECTOR_CREDENTIAL_KEYS_JSON", "").strip()
+    active = os.getenv("CONNECTOR_CREDENTIAL_ACTIVE_KEY_VERSION", "v1").strip() or "v1"
+    if not raw_ring:
+        return False
+    try:
+        parsed = json.loads(raw_ring)
+        if not isinstance(parsed, dict):
+            return False
+        ring = {str(version): _decode_key(str(value)) for version, value in parsed.items()}
+    except (json.JSONDecodeError, RuntimeError, TypeError, ValueError):
+        return False
+    return active in ring
+
+
 def _aad(tenant_id: str, connection_id: str, provider: str, key_version: str) -> bytes:
     return f"agroai-connector-v1|{tenant_id}|{connection_id}|{provider}|{key_version}".encode("utf-8")
 

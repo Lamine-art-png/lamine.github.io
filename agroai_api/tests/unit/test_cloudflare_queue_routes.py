@@ -1,3 +1,6 @@
+import asyncio
+from types import SimpleNamespace
+
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
@@ -48,6 +51,38 @@ def test_queue_contract_health_fails_closed_when_backend_transport_is_incomplete
     )
     assert response.status_code == 503
     assert response.json()["detail"]["contract"] == module.QUEUE_CONTRACT
+
+
+def test_release_contract_reports_platform_api_activation_state(monkeypatch):
+    monkeypatch.setattr(module.settings, "PLATFORM_API_ENABLED", True)
+    monkeypatch.setattr(
+        module,
+        "evaluate_release_contract",
+        lambda _db: {
+            "status": "ok",
+            "build_sha": "exact-sha",
+            "schema_current": True,
+            "database_heads": ["021_platform_api_hardening"],
+            "repository_heads": ["021_platform_api_hardening"],
+            "queue_configured": True,
+        },
+    )
+    monkeypatch.setattr(
+        module,
+        "probe_object_storage",
+        lambda: {"configured": True, "reachable": True},
+    )
+    monkeypatch.setattr(
+        module,
+        "evaluate_production_readiness",
+        lambda _settings: SimpleNamespace(
+            to_dict=lambda: {"ready": True, "blockers": []}
+        ),
+    )
+
+    payload = asyncio.run(module.release_contract_health(db=SimpleNamespace()))
+
+    assert payload["platform_api_enabled"] is True
 
 
 def test_terminal_task_delivery_acknowledges_success(monkeypatch):

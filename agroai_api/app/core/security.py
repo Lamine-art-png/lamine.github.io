@@ -1,4 +1,5 @@
 """Security utilities for authentication and authorization."""
+import os
 from datetime import datetime, timedelta
 from typing import Optional
 from jose import JWTError, jwt
@@ -52,8 +53,16 @@ def get_current_tenant_id(
 ) -> str:
     """Extract tenant ID from OAuth2 token. Stub implementation for demo."""
     if not credentials:
-        # For demo/dev: allow unauthenticated with default tenant
-        return "demo-tenant"
+        app_env = str(getattr(settings, "APP_ENV", "development")).strip().lower()
+        if app_env == "test" and os.getenv("PYTEST_CURRENT_TEST"):
+            return "test-tenant"
+        if app_env in {"development", "dev", "local", "demo"}:
+            return "demo-tenant"
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Authentication required",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
     token = credentials.credentials
     payload = verify_token(token)

@@ -32,7 +32,9 @@ jobs:
       - name: Compile backend and migration tree
         run: python -m compileall -q app alembic scripts
       - name: Enforce revision graph contract
-        run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --confcutdir=tests/unit tests/unit/test_alembic_revision_contract.py
+        run: |
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --confcutdir=tests/unit tests/unit/test_alembic_revision_contract.py
+          test "$(alembic heads)" = "022_field_intelligence (head)"
       - name: Migrate real PostgreSQL to repository head
         env:
           DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
@@ -54,5 +56,9 @@ jobs:
           assert versions == heads, {"persisted": versions, "repository": heads}
           print({"persisted_heads": versions})
           PY
+      - name: Prove PostgreSQL idempotency concurrency with independent sessions
+        env:
+          PLATFORM_API_POSTGRES_TEST_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
+        run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests/integration/test_platform_api_idempotency_postgres.py
       - name: Run complete backend unit suite
         run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short tests/unit

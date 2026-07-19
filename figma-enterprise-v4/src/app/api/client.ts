@@ -317,6 +317,16 @@ export const apiClient = {
       return download(`/v1/platform-admin/customers.csv${query ? `?${query}` : ""}`);
     },
   },
+  platformDeveloper: {
+    health: () => get("/v1/platform/health"),
+    projects: () => get("/v1/platform/developer/projects"),
+    createProject: (payload: unknown) => post("/v1/platform/developer/projects", payload),
+    createServiceAccount: (projectId: string, payload: unknown) => post(`/v1/platform/developer/projects/${encodeURIComponent(projectId)}/service-accounts`, payload),
+    createKey: (serviceAccountId: string, payload: unknown) => post(`/v1/platform/developer/service-accounts/${encodeURIComponent(serviceAccountId)}/keys`, payload),
+    usage: () => get("/v1/platform/developer/usage"),
+    webhooks: () => get("/v1/platform/developer/webhooks"),
+    createWebhook: (payload: unknown) => post("/v1/platform/developer/webhooks", payload),
+  },
   team: { members: () => get("/v1/team/members"), invitations: () => get("/v1/team/invitations"), invite: (payload: TeamInvitationPayload) => post("/v1/team/invitations", payload), revoke: (invitationId: string) => remove(`/v1/team/invitations/${encodeURIComponent(invitationId)}`) },
   orgs: { list: () => get("/v1/orgs"), create: (payload: CreateOrgPayload) => post("/v1/orgs", payload) },
   workspaces: { list: () => get("/v1/workspaces"), create: (payload: CreateWorkspacePayload) => post("/v1/workspaces", payload) },

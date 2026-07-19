@@ -7,6 +7,10 @@ from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.organization_access import (
+    normalized_organization_status,
+    organization_access_allowed,
+)
 from app.core.security import http_bearer, verify_token
 from app.db.base import get_db
 from app.models.saas import Organization, OrganizationMembership, User, Workspace
@@ -18,12 +22,9 @@ class AuthContext:
     organization: Organization | None = None
     membership: OrganizationMembership | None = None
 
-APPROVED_ORGANIZATION_STATUSES = {"approved", "approved_legacy"}
-
-
 def require_approved_organization(organization: Organization | None) -> None:
-    if organization is None or getattr(organization, "verification_status", None) not in APPROVED_ORGANIZATION_STATUSES:
-        current = getattr(organization, "verification_status", None) or "verification_required"
+    if not organization_access_allowed(organization):
+        current = normalized_organization_status(organization)
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail={

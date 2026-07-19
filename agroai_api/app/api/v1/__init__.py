@@ -11,6 +11,7 @@ from . import recovery_v2 as recovery_module  # noqa: E402
 auth_module.router.include_router(recovery_module.router)
 
 from . import billing as billing_module  # noqa: E402,F401
+from .router_compat import materialize_included_routes  # noqa: E402
 from app.services.ask_agro_ai_commercial_policy import install_ask_agro_ai_commercial_policy  # noqa: E402
 from app.services.commercial_billing_lifecycle import install_commercial_billing_lifecycle  # noqa: E402
 
@@ -23,6 +24,7 @@ from . import brain_commercial as brain_commercial_module  # noqa: E402
 
 brain_module.router.include_router(brain_safety_module.router)
 brain_module.router.include_router(brain_commercial_module.router)
+materialize_included_routes(brain_module.router)
 
 from . import ai as ai_module  # noqa: E402
 from . import ai_stable as ai_stable_module  # noqa: E402

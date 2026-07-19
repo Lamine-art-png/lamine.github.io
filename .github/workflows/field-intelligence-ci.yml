@@ -35,13 +35,13 @@ jobs:
         with:
           python-version: "3.11"
       - run: python -m pip install -q -r requirements.txt pytest
-      - name: Upgrade existing-main baseline (019_account_verification)
-        run: alembic upgrade 019_account_verification
-      - name: Upgrade existing main database to repository head (019 -> 020)
+      - name: Upgrade current-main baseline (021_platform_api_hardening)
+        run: alembic upgrade 021_platform_api_hardening
+      - name: Upgrade current-main database to repository head (021 -> 022)
         run: alembic upgrade head
       - name: Downgrade the Field Intelligence revision
-        run: alembic downgrade 019_account_verification
-      - name: Prove field intelligence tables are gone and verification tables survive
+        run: alembic downgrade 021_platform_api_hardening
+      - name: Prove field tables are gone and current-main schemas survive
         run: |
           python - <<'PY'
           import os, sqlalchemy as sa
@@ -53,15 +53,23 @@ jobs:
                      "field_storage_reservations"}
           leftover = removed & tables
           assert not leftover, f"downgrade left tables behind: {sorted(leftover)}"
-          preserved = {"organization_verification_profiles", "security_audit_events"}
+          preserved = {
+              "organization_verification_profiles", "security_audit_events",
+              "api_projects", "platform_api_keys", "platform_webhook_outbox",
+              "platform_webhook_audit_events",
+          }
           missing = preserved - tables
           assert not missing, f"downgrade removed verification tables: {sorted(missing)}"
           user_columns = {c["name"] for c in inspector.get_columns("users")}
           assert {"account_status", "failed_login_attempts", "locked_until"} <= user_columns, user_columns
           org_columns = {c["name"] for c in inspector.get_columns("organizations")}
           assert {"verification_status", "verification_score", "verified_at"} <= org_columns, org_columns
+          webhook_columns = {c["name"] for c in inspector.get_columns("platform_webhook_endpoints")}
+          assert {
+              "signing_secret_key_version", "signing_secret_ciphertext_b64", "revoked_at",
+          } <= webhook_columns, webhook_columns
           print("downgrade removed:", sorted(removed))
-          print("verification schema preserved:", sorted(preserved))
+          print("current-main schema preserved:", sorted(preserved))
           PY
       - name: Re-upgrade to repository head
         run: alembic upgrade head

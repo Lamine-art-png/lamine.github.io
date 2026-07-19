@@ -117,6 +117,11 @@ jobs:
           print("redis streams transport smoke passed")
           PY
 
+      - name: Prove Platform API distributed Redis limiter
+        env:
+          PLATFORM_API_REDIS_INTEGRATION_URL: redis://127.0.0.1:6379/15
+        run: python -m pytest tests/integration/test_platform_api_redis_limiter.py -q
+
       - name: Start independent connector worker
         run: |
           nohup python -m app.workers.connector_worker > /tmp/agroai-connector-worker.log 2>&1 &

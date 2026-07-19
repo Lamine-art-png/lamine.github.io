@@ -1,6 +1,11 @@
 import sqlalchemy as sa
 
-from app.db.schema_contract import HEAD_SCHEMA_REQUIREMENTS, schema_contract_gaps, schema_matches_head_contract
+from app.db.schema_contract import (
+    HEAD_ALEMBIC_REVISION,
+    HEAD_SCHEMA_REQUIREMENTS,
+    schema_contract_gaps,
+    schema_matches_head_contract,
+)
 
 
 def test_column_contract_detects_partial_existing_table():
@@ -26,7 +31,10 @@ def test_column_contract_accepts_complete_shape():
 
 
 def test_head_contract_covers_security_queue_and_provenance_layers():
+    assert HEAD_ALEMBIC_REVISION == "022_field_intelligence"
     assert {"nonce_hash", "consumed_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["oauth_state_nonces"])
     assert {"key_version", "ciphertext_b64"}.issubset(HEAD_SCHEMA_REQUIREMENTS["connector_credentials"])
     assert {"status", "publish_attempts"}.issubset(HEAD_SCHEMA_REQUIREMENTS["task_outbox"])
     assert {"provenance_json", "freshness_json"}.issubset(HEAD_SCHEMA_REQUIREMENTS["intelligence_runs"])
+    assert {"client_capture_id", "idempotency_key"}.issubset(HEAD_SCHEMA_REQUIREMENTS["field_capture_sessions"])
+    assert {"capture_session_id", "size_bytes"}.issubset(HEAD_SCHEMA_REQUIREMENTS["field_storage_reservations"])

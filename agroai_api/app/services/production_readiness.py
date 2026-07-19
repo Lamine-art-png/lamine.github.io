@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import base64
+import json
 import os
 from dataclasses import asdict, dataclass
 from urllib.parse import urlparse
@@ -55,6 +57,34 @@ def _setting(settings: Settings, name: str, default: str = "") -> str:
     if value not in (None, ""):
         return str(value).strip()
     return os.getenv(name, default).strip()
+
+
+def _platform_vault_keyring_valid(settings: Settings) -> bool:
+    raw = _setting(settings, "CONNECTOR_CREDENTIAL_KEYS_JSON")
+    active = _setting(settings, "CONNECTOR_CREDENTIAL_ACTIVE_KEY_VERSION", "v1") or "v1"
+    if not raw:
+        return False
+    try:
+        parsed = json.loads(raw)
+        encoded = parsed[active] if isinstance(parsed, dict) else None
+        key = base64.urlsafe_b64decode(str(encoded) + "=" * (-len(str(encoded)) % 4))
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        return False
+    return len(key) == 32
+
+
+def _webhook_vault_keyring_valid(settings: Settings) -> bool:
+    raw = _setting(settings, "PLATFORM_API_WEBHOOK_SECRET_KEYS_JSON")
+    active = _setting(settings, "PLATFORM_API_WEBHOOK_SECRET_ACTIVE_KEY_VERSION", "v1") or "v1"
+    if not raw:
+        return False
+    try:
+        parsed = json.loads(raw)
+        encoded = parsed[active] if isinstance(parsed, dict) else None
+        key = base64.urlsafe_b64decode(str(encoded) + "=" * (-len(str(encoded)) % 4))
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        return False
+    return len(key) == 32
 
 
 def _require_r2_contract(settings: Settings, blockers: list[ReadinessFinding]) -> None:
@@ -197,6 +227,65 @@ def evaluate_production_readiness(settings: Settings, *, target_scale: str = "pr
         blockers.append(ReadinessFinding("workers.cloudflare_queue_incomplete", "blocker", "workers", "Cloudflare Queue mode requires publish URL, publish token, and consumer token together."))
     if queue_backend in {"redis", "redis_streams", "redis-streams"} and not redis_url:
         warnings.append(ReadinessFinding("coordination.redis_missing", "warning", "coordination", "Redis queue mode is selected without a distributed coordination endpoint."))
+
+    platform_api_enabled = bool(getattr(settings, "PLATFORM_API_ENABLED", False))
+    platform_limiter_backend = _setting(settings, "PLATFORM_API_RATE_LIMIT_BACKEND", "memory").lower()
+    platform_redis_url = _setting(settings, "PLATFORM_API_REDIS_URL") or redis_url
+    if platform_api_enabled:
+        if platform_limiter_backend != "redis":
+            blockers.append(
+                ReadinessFinding(
+                    "platform_api.rate_limiter_not_distributed",
+                    "blocker",
+                    "platform_api",
+                    "Enabled Platform API traffic requires the Redis distributed rate-limit backend.",
+                )
+            )
+        if not platform_redis_url:
+            blockers.append(
+                ReadinessFinding(
+                    "platform_api.redis_missing",
+                    "blocker",
+                    "platform_api",
+                    "Enabled Platform API traffic requires PLATFORM_API_REDIS_URL or REDIS_URL for shared rate-limit state.",
+                )
+            )
+        if bool(getattr(settings, "PLATFORM_API_RATE_LIMIT_FAIL_OPEN", False)):
+            blockers.append(
+                ReadinessFinding(
+                    "platform_api.rate_limiter_fail_open",
+                    "blocker",
+                    "platform_api",
+                    "Enabled Platform API production must fail closed when Redis is unavailable.",
+                )
+            )
+        if not _platform_vault_keyring_valid(settings):
+            blockers.append(
+                ReadinessFinding(
+                    "platform_api.explicit_vault_keyring_missing",
+                    "blocker",
+                    "platform_api",
+                    "Enabled Platform API production requires a valid explicit versioned connector credential keyring containing the active key version.",
+                )
+            )
+        if not _setting(settings, "PLATFORM_API_EDGE_AUTH_SECRET"):
+            blockers.append(
+                ReadinessFinding(
+                    "platform_api.edge_auth_missing",
+                    "blocker",
+                    "platform_api",
+                    "Enabled Platform API production requires the dedicated Cloudflare-to-Render edge authentication secret for authoritative client IP enforcement.",
+                )
+            )
+        if bool(getattr(settings, "PLATFORM_API_WEBHOOK_DELIVERY_ENABLED", False)) and not _webhook_vault_keyring_valid(settings):
+            blockers.append(
+                ReadinessFinding(
+                    "platform_api.webhook_vault_keyring_missing",
+                    "blocker",
+                    "platform_api",
+                    "Enabled webhook delivery requires a separate valid versioned webhook AES-GCM keyring.",
+                )
+            )
 
     vault_key = _setting(settings, "CONNECTOR_CREDENTIAL_MASTER_KEY")
     vault_ring = _setting(settings, "CONNECTOR_CREDENTIAL_KEYS_JSON")

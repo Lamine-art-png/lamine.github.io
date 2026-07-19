@@ -1,7 +1,7 @@
 """Add Field Intelligence capture, observation, asset and processing tables.
 
-Revision ID: 020_field_intelligence
-Revises: 019_account_verification
+Revision ID: 022_field_intelligence
+Revises: 021_platform_api_hardening
 Create Date: 2026-07-18
 
 Foreign keys and delete behavior are deliberate:
@@ -19,8 +19,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "020_field_intelligence"
-down_revision = "019_account_verification"
+revision = "022_field_intelligence"
+down_revision = "021_platform_api_hardening"
 branch_labels = None
 depends_on = None
 
