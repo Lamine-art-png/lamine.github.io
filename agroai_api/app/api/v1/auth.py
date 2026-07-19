@@ -558,7 +558,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
     if user.account_status != "active":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail={"code": "account_access_restricted", "message": "This account is not approved for portal access."},
+            detail={"code": "account_access_restricted", "message": "This account is restricted pending organization reverification.", "appeal_available": user.account_status == "suspended_pending_appeal", "appeal_path": "/appeal"},
         )
     require_approved_organization(membership.organization)
 

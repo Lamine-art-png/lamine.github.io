@@ -13,13 +13,16 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Query, Response
+from fastapi import APIRouter, Depends, HTTPException, Query, Response, status
+from pydantic import BaseModel, Field
 from sqlalchemy import func, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import AuthContext, require_platform_admin
 from app.db.base import get_db
-from app.models.saas import Organization, OrganizationMembership, UsageEvent, User, Workspace
+from app.models.saas import AccountAccessAppeal, Organization, OrganizationMembership, UsageEvent, User, Workspace
+from app.services.account_access_email import send_appeal_decision
+from app.services.security_audit import record_security_event
 
 
 router = APIRouter(prefix="/platform-admin", tags=["platform-admin"])
@@ -196,6 +199,9 @@ def _serialize_customers(db: Session, users: list[User]) -> list[dict]:
                 "verification_status": user.email_verification_status,
                 "email_verified_at": user.email_verified_at.isoformat() if user.email_verified_at else None,
                 "auth_provider": user.auth_provider or "password",
+                "account_status": user.account_status,
+                "access_restriction_reason": user.access_restriction_reason,
+                "access_restricted_at": user.access_restricted_at.isoformat() if user.access_restricted_at else None,
                 "organizations": organizations,
                 "organization_count": len(organizations),
                 "activity": usage_by_user.get(
@@ -337,3 +343,101 @@ def export_customers_csv(
             "Pragma": "no-cache",
         },
     )
+
+
+class AppealDecisionRequest(BaseModel):
+    action: Literal["approve", "reject", "request_information"]
+    notes: str | None = Field(default=None, max_length=3000)
+
+
+def _serialize_appeal(appeal: AccountAccessAppeal) -> dict:
+    return {
+        "id": appeal.id,
+        "status": appeal.status,
+        "user": {"id": appeal.user.id, "name": appeal.user.name, "email": appeal.user.email, "account_status": appeal.user.account_status},
+        "organization": {"id": appeal.organization.id, "name": appeal.organization.name, "verification_status": appeal.organization.verification_status} if appeal.organization else None,
+        "full_name": appeal.full_name,
+        "professional_role": appeal.professional_role,
+        "organization_name": appeal.organization_name,
+        "website_url": appeal.website_url,
+        "professional_profile_url": appeal.professional_profile_url,
+        "agricultural_use_case": appeal.agricultural_use_case,
+        "acres_or_sites": appeal.acres_or_sites,
+        "planned_data_sources": appeal.planned_data_sources,
+        "explanation": appeal.explanation,
+        "supporting_evidence_url": appeal.supporting_evidence_url,
+        "submitted_at": appeal.submitted_at.isoformat() if appeal.submitted_at else None,
+        "reviewed_at": appeal.reviewed_at.isoformat() if appeal.reviewed_at else None,
+        "review_notes": appeal.review_notes,
+        "created_at": appeal.created_at.isoformat() if appeal.created_at else None,
+    }
+
+
+@router.get("/access-appeals")
+def list_access_appeals(
+    response: Response,
+    appeal_status: str = Query(default="pending", alias="status", max_length=60),
+    limit: int = Query(default=100, ge=1, le=200),
+    ctx: AuthContext = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    _no_store(response)
+    query = db.query(AccountAccessAppeal)
+    if appeal_status != "all":
+        query = query.filter(AccountAccessAppeal.status == appeal_status)
+    appeals = query.order_by(AccountAccessAppeal.submitted_at.desc(), AccountAccessAppeal.created_at.desc()).limit(limit).all()
+    logger.info("Platform access appeals viewed actor_user_id=%s count=%s status=%s", ctx.user.id, len(appeals), appeal_status)
+    return {"appeals": [_serialize_appeal(appeal) for appeal in appeals], "count": len(appeals), "status": appeal_status}
+
+
+@router.post("/access-appeals/{appeal_id}/decision")
+def decide_access_appeal(
+    appeal_id: str,
+    payload: AppealDecisionRequest,
+    ctx: AuthContext = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    appeal = db.get(AccountAccessAppeal, appeal_id)
+    if not appeal:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Appeal not found")
+    user = appeal.user
+    organization = appeal.organization
+    now = datetime.utcnow()
+    if payload.action == "approve":
+        user.is_active = True
+        user.account_status = "active"
+        user.access_restriction_reason = None
+        user.access_restricted_at = None
+        user.credentials_changed_at = now
+        if organization:
+            organization.verification_status = "approved_manual_appeal"
+            organization.verified_at = now
+        appeal.status = "approved"
+    elif payload.action == "request_information":
+        user.is_active = False
+        user.account_status = "suspended_pending_appeal"
+        appeal.status = "additional_information_required"
+    else:
+        user.is_active = False
+        user.account_status = "suspended_pending_appeal"
+        appeal.status = "rejected"
+    appeal.review_notes = (payload.notes or "").strip() or None
+    appeal.reviewed_at = now
+    appeal.reviewed_by_user_id = ctx.user.id
+    appeal.updated_at = now
+    record_security_event(
+        db,
+        event_type="access_appeal_decision",
+        outcome=payload.action,
+        organization_id=organization.id if organization else None,
+        user_id=user.id,
+        subject=user.email,
+        metadata={"appeal_id": appeal.id, "reviewed_by_user_id": ctx.user.id},
+    )
+    db.commit()
+    try:
+        send_appeal_decision(user, action=payload.action, notes=appeal.review_notes)
+    except Exception:
+        logger.exception("Access appeal decision email failed appeal_id=%s", appeal.id)
+    db.refresh(appeal)
+    return {"appeal": _serialize_appeal(appeal)}
