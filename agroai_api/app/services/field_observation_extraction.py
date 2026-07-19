@@ -1,21 +1,36 @@
 """Schema-constrained structured extraction for field observations.
 
-Replaces ad hoc regex-only behavior with a strict Pydantic schema plus a
-deterministic fallback extractor. Model-provider logic stays out of routes and
-never fabricates a field, block, measurement or timestamp: anything not clearly
-present in the text is recorded as uncertain and left null.
+Two extractors behind one strict Pydantic schema:
+
+* a deterministic rule extractor (always available, fully offline);
+* a model-routed extractor through the existing :class:`ModelRouter`, with
+  hard grounding validation — a model value that is not literally supported
+  by the source text or the authorized workspace vocabulary is discarded and
+  recorded as uncertain, never persisted as fact.
+
+Model-provider logic stays out of routes, the fallback is truthful
+(``method`` provenance says exactly which path produced the result), and
+nothing ever fabricates a field, block, measurement or timestamp.
 """
 from __future__ import annotations
 
+import asyncio
+import json
+import logging
 import re
+import threading
 from datetime import datetime
 from typing import Literal, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ValidationError
 
-# Version the schema + deterministic prompt/rules so provenance is auditable.
-EXTRACTION_SCHEMA_VERSION = "field-observation-extraction/1.0.0"
+logger = logging.getLogger(__name__)
+
+# Version the schema + prompts so provenance is auditable.
+EXTRACTION_SCHEMA_VERSION = "field-observation-extraction/1.1.0"
 EXTRACTION_METHOD_DETERMINISTIC = "deterministic-v1"
+EXTRACTION_METHOD_MODEL = "model-routed-v1"
+EXTRACTION_PROMPT_VERSION = "field-extraction-prompt/1"
 
 EventType = Literal[
     "observation",
@@ -60,6 +75,10 @@ class FieldObservationExtraction(BaseModel):
     uncertain_fields: list[str] = Field(default_factory=list)
     method: str = EXTRACTION_METHOD_DETERMINISTIC
     schema_version: str = EXTRACTION_SCHEMA_VERSION
+    prompt_version: Optional[str] = None
+    provider: Optional[str] = None
+    model: Optional[str] = None
+    fallback_reason: Optional[str] = None
 
 
 _SEVERITY_WORDS = {
@@ -192,6 +211,260 @@ def deterministic_extract(
     )
 
 
+# --------------------------------------------------------------------------- #
+# Model-routed extraction (schema-constrained, grounded, truthful fallback)
+# --------------------------------------------------------------------------- #
+
+_ALLOWED_EVENT_TYPES = {
+    "observation", "irrigation_event", "issue", "meter_reading",
+    "pest_disease", "equipment", "compliance_note", "operator_note",
+}
+_ALLOWED_SEVERITIES = {"info", "low", "medium", "high", "critical"}
+
+
+def _run_coroutine(coro):
+    """Run a coroutine from sync code, even inside a running event loop."""
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    result: dict = {}
+
+    def _target() -> None:
+        try:
+            result["value"] = asyncio.run(coro)
+        except Exception as exc:  # noqa: BLE001 - surfaced to caller
+            result["error"] = exc
+
+    thread = threading.Thread(target=_target, daemon=True)
+    thread.start()
+    thread.join()
+    if "error" in result:
+        raise result["error"]
+    return result.get("value")
+
+
+def _numbers_in(text: str) -> set[str]:
+    return {match.replace(",", "") for match in re.findall(r"\d[\d,]*(?:\.\d+)?", text or "")}
+
+
+def _normalize_name(value: str | None) -> str:
+    return re.sub(r"[^a-z0-9]", "", (value or "").lower())
+
+
+def _ground_model_output(
+    raw: dict,
+    text: str,
+    *,
+    field_hint: str | None,
+    block_hint: str | None,
+    crop_hint: str | None,
+    occurred_at: datetime | None,
+    workspace_fields: list[str] | None,
+    workspace_blocks: list[str] | None,
+    workspace_crops: list[str] | None,
+) -> FieldObservationExtraction:
+    """Validate + ground a model response. Anything the source text or the
+    authorized workspace vocabulary cannot support is discarded and recorded
+    as uncertain — the model can propose, never assert."""
+    uncertain: set[str] = set()
+    source_numbers = _numbers_in(text)
+
+    def grounded_number(value) -> Optional[float]:
+        if value is None:
+            return None
+        try:
+            number = float(value)
+        except (TypeError, ValueError):
+            return None
+        token = ("%g" % number)
+        if token in source_numbers or str(int(number)) in source_numbers:
+            return number
+        return None  # not literally present in the note: rejected
+
+    event_type = str(raw.get("event_type") or "observation").strip().lower()
+    if event_type not in _ALLOWED_EVENT_TYPES:
+        event_type = "observation"
+        uncertain.add("event_type")
+    severity = str(raw.get("severity") or "info").strip().lower()
+    if severity not in _ALLOWED_SEVERITIES:
+        severity = "info"
+        uncertain.add("severity")
+
+    def match_vocabulary(candidate, vocabulary, hint, label):
+        if hint:
+            return hint  # explicit composer selection is authoritative
+        value = str(candidate or "").strip() or None
+        if not value:
+            uncertain.add(label)
+            return None
+        normalized = _normalize_name(value)
+        for known in vocabulary or []:
+            if _normalize_name(known) == normalized:
+                return known  # authorized workspace spelling wins
+        if _normalize_name(value) and _normalize_name(value) in _normalize_name(text):
+            uncertain.add(label)  # present in the note but not an authorized name
+            return value
+        uncertain.add(label)
+        return None  # not in the note, not authorized: rejected
+
+    field_candidate = match_vocabulary(raw.get("field_candidate"), workspace_fields, field_hint, "field_candidate")
+    block_candidate = match_vocabulary(raw.get("block_candidate"), workspace_blocks, block_hint, "block_candidate")
+    crop = match_vocabulary(raw.get("crop"), workspace_crops, crop_hint, "crop")
+
+    measurements: list[Measurement] = []
+    for item in (raw.get("measurements") or [])[:20]:
+        if not isinstance(item, dict):
+            continue
+        value = grounded_number(item.get("value"))
+        label = str(item.get("label") or "").strip()[:80]
+        unit = str(item.get("unit") or "").strip()[:40]
+        if value is None or not label or not unit:
+            if label:
+                uncertain.add(f"measurement:{label}")
+            continue
+        measurements.append(Measurement(label=label, value=value, unit=unit))
+
+    duration = grounded_number(raw.get("irrigation_duration_minutes"))
+    gallons = grounded_number(raw.get("applied_water_gallons"))
+    flow = grounded_number(raw.get("flow_rate_gpm"))
+    for name, value in (("irrigation_duration_minutes", raw.get("irrigation_duration_minutes")),
+                        ("applied_water_gallons", raw.get("applied_water_gallons")),
+                        ("flow_rate_gpm", raw.get("flow_rate_gpm"))):
+        if value is not None and grounded_number(value) is None:
+            uncertain.add(name)
+
+    # Timestamps are never taken from the model: only the composer-supplied
+    # occurrence time (or nothing) is persisted.
+    if raw.get("occurrence_time") and occurred_at is None:
+        uncertain.add("occurrence_time")
+
+    people = [str(p).strip()[:80] for p in (raw.get("people") or [])[:10]
+              if str(p).strip() and _normalize_name(str(p)) in _normalize_name(text)]
+    equipment = [str(e).strip()[:80] for e in (raw.get("equipment") or [])[:10] if str(e).strip()]
+
+    issue = str(raw.get("issue") or "").strip()[:240] or None
+    recommended = str(raw.get("recommended_follow_up") or "").strip()[:500] or None
+    evidence_requirements = [str(e).strip()[:60] for e in (raw.get("evidence_requirements") or [])[:10] if str(e).strip()]
+    summary = str(raw.get("summary") or "").strip()[:280] or (text or "")[:280]
+
+    try:
+        confidence = max(0.0, min(float(raw.get("confidence") or 0.0), 1.0))
+    except (TypeError, ValueError):
+        confidence = 0.0
+    for entry in raw.get("uncertain_fields") or []:
+        uncertain.add(str(entry)[:60])
+    if uncertain:
+        confidence = min(confidence, 0.85)
+
+    return FieldObservationExtraction(
+        event_type=event_type,  # type: ignore[arg-type]
+        field_candidate=field_candidate,
+        block_candidate=block_candidate,
+        crop=crop,
+        issue=issue,
+        severity=severity,  # type: ignore[arg-type]
+        measurements=measurements,
+        irrigation_duration_minutes=duration,
+        applied_water_gallons=gallons,
+        flow_rate_gpm=flow,
+        equipment=equipment,
+        people=people,
+        occurrence_time=occurred_at,
+        recommended_follow_up=recommended,
+        evidence_requirements=evidence_requirements,
+        summary=summary,
+        confidence=confidence,
+        uncertain_fields=sorted(uncertain),
+        method=EXTRACTION_METHOD_MODEL,
+        prompt_version=EXTRACTION_PROMPT_VERSION,
+    )
+
+
+def _model_extract(
+    text: str,
+    *,
+    field_hint: str | None,
+    block_hint: str | None,
+    crop_hint: str | None,
+    occurred_at: datetime | None,
+    workspace_fields: list[str] | None,
+    workspace_blocks: list[str] | None,
+    workspace_crops: list[str] | None,
+) -> FieldObservationExtraction | None:
+    """Schema-constrained extraction through the existing model router.
+
+    Returns None (with the reason logged) when the router is unconfigured or
+    the response cannot be validated — the caller falls back truthfully.
+    """
+    from app.services.model_router import ModelRouter
+
+    router = ModelRouter()
+    if router.mode() == "offline":
+        return None
+    vocabulary = {
+        "fields": (workspace_fields or [])[:50],
+        "blocks": (workspace_blocks or [])[:50],
+        "crops": (workspace_crops or [])[:25],
+    }
+    system = (
+        "You extract structured agricultural field observations. Reply with ONLY a JSON object "
+        "matching this schema: {event_type: one of observation|irrigation_event|issue|meter_reading|"
+        "pest_disease|equipment|compliance_note|operator_note, field_candidate: string|null, "
+        "block_candidate: string|null, crop: string|null, issue: string|null, severity: one of "
+        "info|low|medium|high|critical, measurements: [{label, value, unit}], "
+        "irrigation_duration_minutes: number|null, applied_water_gallons: number|null, "
+        "flow_rate_gpm: number|null, equipment: [string], people: [string], "
+        "recommended_follow_up: string|null, evidence_requirements: [string], summary: string, "
+        "confidence: number 0..1, uncertain_fields: [string]}. "
+        "The observation may be in any language; keep summary in the source language. "
+        "NEVER invent numbers, names, fields, times or measurements that are not explicitly in the text. "
+        "Prefer field/block/crop names from the authorized vocabulary. "
+        "List anything you are unsure about in uncertain_fields."
+    )
+    user = json.dumps({
+        "observation_text": (text or "")[:8000],
+        "authorized_vocabulary": vocabulary,
+        "hints": {"field": field_hint, "block": block_hint, "crop": crop_hint},
+    }, ensure_ascii=False)
+    try:
+        result, selection = _run_coroutine(router.run(
+            task="field_observation_extraction",
+            messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+            temperature=0.0,
+            response_format={"type": "json_object"},
+            max_tokens=1200,
+            timeout_seconds=45,
+        ))
+    except Exception as exc:  # noqa: BLE001 - fall back truthfully
+        logger.warning("model extraction transport failure: %s", exc.__class__.__name__)
+        return None
+    if getattr(result, "status", "") != "ok" or not (result.content or "").strip():
+        return None
+    from app.services.ai_gateway import parse_model_json
+
+    try:
+        raw = parse_model_json(result.content)
+    except Exception:  # noqa: BLE001
+        logger.warning("model extraction returned unparseable JSON")
+        return None
+    try:
+        grounded = _ground_model_output(
+            raw, text,
+            field_hint=field_hint, block_hint=block_hint, crop_hint=crop_hint,
+            occurred_at=occurred_at,
+            workspace_fields=workspace_fields, workspace_blocks=workspace_blocks,
+            workspace_crops=workspace_crops,
+        )
+    except ValidationError:
+        logger.warning("model extraction failed schema validation")
+        return None
+    return grounded.model_copy(update={
+        "provider": getattr(result, "provider", None),
+        "model": getattr(result, "model", None) or getattr(selection, "model", None),
+    })
+
+
 def extract_observation(
     text: str,
     *,
@@ -200,20 +473,41 @@ def extract_observation(
     crop_hint: str | None = None,
     event_type_hint: str | None = None,
     occurred_at: datetime | None = None,
+    workspace_fields: list[str] | None = None,
+    workspace_blocks: list[str] | None = None,
+    workspace_crops: list[str] | None = None,
 ) -> FieldObservationExtraction:
-    """Public entrypoint.
+    """Public entrypoint: model-routed when configured, deterministic fallback.
 
-    Currently backed by the deterministic extractor. A model-routed extractor
-    (validated against :class:`FieldObservationExtraction`) can be layered in
-    behind this function without changing callers or routes.
+    ``FIELD_EXTRACTION_MODE``: ``auto`` (model when the router is live, else
+    deterministic), ``model`` (model only; deterministic fallback is labeled),
+    ``deterministic`` (never call a model).
     """
-    result = deterministic_extract(
-        text,
-        field_hint=field_hint,
-        block_hint=block_hint,
-        crop_hint=crop_hint,
-        occurred_at=occurred_at,
-    )
+    from app.core.config import settings
+
+    mode = str(getattr(settings, "FIELD_EXTRACTION_MODE", "auto") or "auto").strip().lower()
+    result: FieldObservationExtraction | None = None
+    fallback_reason: str | None = None
+    if mode in {"auto", "model"} and (text or "").strip():
+        result = _model_extract(
+            text,
+            field_hint=field_hint, block_hint=block_hint, crop_hint=crop_hint,
+            occurred_at=occurred_at,
+            workspace_fields=workspace_fields, workspace_blocks=workspace_blocks,
+            workspace_crops=workspace_crops,
+        )
+        if result is None and mode in {"auto", "model"}:
+            fallback_reason = "model_unavailable_or_invalid"
+    if result is None:
+        result = deterministic_extract(
+            text,
+            field_hint=field_hint,
+            block_hint=block_hint,
+            crop_hint=crop_hint,
+            occurred_at=occurred_at,
+        )
+        if fallback_reason:
+            result = result.model_copy(update={"fallback_reason": fallback_reason})
     if event_type_hint:
         # Explicit composer selection wins over inferred classification.
         try:

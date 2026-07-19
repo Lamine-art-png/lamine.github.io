@@ -125,6 +125,7 @@ class Settings(BaseSettings):
     FIELD_TRANSCRIPTION_MAX_BYTES: int = 26214400  # 25 MiB provider input bound
     FIELD_DELETION_RETENTION_DAYS: int = 0  # 0 = delete as soon as the worker runs
     FIELD_METRICS_ENABLED: bool = True
+    FIELD_EXTRACTION_MODE: str = "auto"  # auto | model | deterministic
     FIELD_WORKER_HEARTBEAT_TTL_SECONDS: int = 120  # worker considered stale after this
     FIELD_STALE_JOB_ALERT_SECONDS: int = 900  # queued/running older than this is stale
     FIELD_RELEASE_PORTAL_SHA: str = ""  # deploy pipeline reports the portal build SHA

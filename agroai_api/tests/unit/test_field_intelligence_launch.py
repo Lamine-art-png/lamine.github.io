@@ -379,3 +379,165 @@ def test_migration_cli_roundtrip_sqlite(tmp_path):
     assert code == 0 and payload["ok"], payload
     code, payload = run("upgrade")
     assert code == 0 and payload["ok"], payload
+
+
+# --------------------------------------------------------------------------- #
+# Model-routed extraction (Stage B1)
+# --------------------------------------------------------------------------- #
+
+class _FakeRouterResult:
+    def __init__(self, content, status="ok"):
+        self.status = status
+        self.content = content
+        self.provider = "fake-hosted"
+        self.model = "fake-extractor-1"
+
+
+def _install_fake_router(monkeypatch, payload: dict, *, status="ok"):
+    import json as _json
+
+    class _FakeRouter:
+        def mode(self):
+            return "hosted"
+
+        async def run(self, **kwargs):
+            _FakeRouter.seen = kwargs
+            class _Sel:
+                model = "fake-extractor-1"
+            return _FakeRouterResult(_json.dumps(payload), status=status), _Sel()
+
+    monkeypatch.setattr("app.services.model_router.ModelRouter", lambda: _FakeRouter())
+    return _FakeRouter
+
+
+def test_model_extraction_grounded_and_provenanced(monkeypatch):
+    from app.services.field_observation_extraction import extract_observation
+
+    _install_fake_router(monkeypatch, {
+        "event_type": "irrigation_event",
+        "field_candidate": "north ranch",
+        "block_candidate": "Block A",
+        "crop": "Almonds",
+        "severity": "medium",
+        "measurements": [{"label": "irrigation_duration", "value": 45, "unit": "minutes"}],
+        "irrigation_duration_minutes": 45,
+        "applied_water_gallons": 1200,
+        "summary": "Irrigated Block A for 45 minutes, 1200 gallons.",
+        "confidence": 0.9,
+        "uncertain_fields": [],
+    })
+    result = extract_observation(
+        "Irrigation ran 45 minutes on Block A, applied 1200 gallons.",
+        workspace_fields=["North Ranch"], workspace_blocks=["Block A"], workspace_crops=["Almonds"],
+    )
+    assert result.method == "model-routed-v1"
+    assert result.provider == "fake-hosted" and result.model == "fake-extractor-1"
+    assert result.prompt_version
+    assert result.field_candidate == "North Ranch"  # authorized spelling wins
+    assert result.irrigation_duration_minutes == 45
+    assert result.applied_water_gallons == 1200
+
+
+def test_model_extraction_rejects_hallucinated_values(monkeypatch):
+    from app.services.field_observation_extraction import extract_observation
+
+    _install_fake_router(monkeypatch, {
+        "event_type": "irrigation_event",
+        "field_candidate": "Secret Government Field",  # not authorized, not in text
+        "severity": "critical",
+        "measurements": [{"label": "applied_water", "value": 99999, "unit": "gallons"}],
+        "applied_water_gallons": 99999,  # number not present in the note
+        "occurrence_time": "2020-01-01T00:00:00Z",  # model may never set times
+        "people": ["Nonexistent Person"],
+        "summary": "made up",
+        "confidence": 0.99,
+    })
+    result = extract_observation(
+        "Checked the pump today, everything nominal.",
+        workspace_fields=["North Ranch"],
+    )
+    assert result.method == "model-routed-v1"
+    assert result.field_candidate is None
+    assert result.applied_water_gallons is None
+    assert not result.measurements
+    assert result.occurrence_time is None
+    assert result.people == []
+    assert "applied_water_gallons" in result.uncertain_fields
+    assert result.confidence <= 0.85  # uncertainty caps confidence
+
+
+def test_model_extraction_falls_back_truthfully(monkeypatch):
+    from app.services.field_observation_extraction import extract_observation
+
+    class _OfflineRouter:
+        def mode(self):
+            return "offline"
+
+    monkeypatch.setattr("app.services.model_router.ModelRouter", lambda: _OfflineRouter())
+    result = extract_observation("Irrigation ran 45 minutes on Block A.")
+    assert result.method == "deterministic-v1"
+    assert result.fallback_reason == "model_unavailable_or_invalid"
+
+
+def test_extraction_mode_deterministic_never_calls_model(monkeypatch):
+    from app.services.field_observation_extraction import extract_observation
+
+    monkeypatch.setattr("app.core.config.settings.FIELD_EXTRACTION_MODE", "deterministic")
+
+    def _boom():
+        raise AssertionError("model router must not be constructed")
+
+    monkeypatch.setattr("app.services.model_router.ModelRouter", _boom)
+    result = extract_observation("Irrigation ran 45 minutes.")
+    assert result.method == "deterministic-v1"
+    assert result.fallback_reason is None
+
+
+def test_model_extraction_multilingual_passthrough(monkeypatch):
+    from app.services.field_observation_extraction import extract_observation
+
+    _install_fake_router(monkeypatch, {
+        "event_type": "irrigation_event",
+        "severity": "info",
+        "measurements": [{"label": "duracion", "value": 45, "unit": "minutos"}],
+        "irrigation_duration_minutes": 45,
+        "summary": "Riego de 45 minutos en el bloque A.",
+        "confidence": 0.8,
+    })
+    result = extract_observation("Riego de 45 minutos en el bloque A.")
+    assert result.summary.startswith("Riego")
+    assert result.irrigation_duration_minutes == 45
+
+
+# --------------------------------------------------------------------------- #
+# Expanded correlation (Stage B2)
+# --------------------------------------------------------------------------- #
+
+def test_correlation_reports_expanded_context(client, db, fake_store):
+    from tests.unit.test_field_intelligence import _complete, _process
+
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    obs_id = _complete(client, headers, cap["id"]).json()["observation"]["id"]
+    _process(db)
+    obs = client.get(f"/v1/field-intelligence/observations/{obs_id}", headers=headers).json()["observation"]
+    correlation = obs["correlation"]
+    assert correlation["schema_version"] == "field-observation-correlation/1.2.0"
+    for key in ("telemetry", "satellite_evidence_ids", "recent_decisions", "missing_evidence",
+                "verification_required", "recently_completed_tasks", "time_window"):
+        assert key in correlation, key
+    assert correlation["telemetry"]["weather_et"]["available"] is False
+    assert correlation["telemetry"]["weather_et"]["freshness"] == "unavailable"
+
+
+@pytest.fixture
+def fake_store(monkeypatch):
+    from app.services import field_intelligence as svc
+    from app.services.object_storage import S3ObjectStore
+    from tests.unit.test_field_intelligence import FakeStoreClient
+
+    client = FakeStoreClient()
+    store = S3ObjectStore(bucket="agroai-test", prefix="agroai", client=client)
+    monkeypatch.setattr(svc, "get_object_store", lambda **_: store)
+    monkeypatch.setattr(svc, "object_storage_configured", lambda: True)
+    return store

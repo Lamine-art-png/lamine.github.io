@@ -953,6 +953,20 @@ def _process_observation(db: Session, job: IngestionJob, *, heartbeat: _JobLease
 
     # --- Extraction ---
     source_text = corrected or transcript or (session.note_text if session else "") or ""
+    # Authorized workspace vocabulary for model grounding: names this tenant
+    # has actually used. The model may only match against these or text that
+    # is literally present in the note — never invent geography.
+    vocabulary_rows = (
+        db.query(FieldObservation.field_name, FieldObservation.block_name, FieldObservation.crop)
+        .filter(FieldObservation.tenant_id == observation.tenant_id)
+        .filter(FieldObservation.status != "deleted")
+        .order_by(FieldObservation.created_at.desc())
+        .limit(200)
+        .all()
+    )
+    workspace_fields = sorted({row[0] for row in vocabulary_rows if row[0]})
+    workspace_blocks = sorted({row[1] for row in vocabulary_rows if row[1]})
+    workspace_crops = sorted({row[2] for row in vocabulary_rows if row[2]})
     extraction = extract_observation(
         source_text,
         field_hint=observation.field_name,
@@ -960,6 +974,9 @@ def _process_observation(db: Session, job: IngestionJob, *, heartbeat: _JobLease
         crop_hint=observation.crop,
         event_type_hint=observation.event_type,
         occurred_at=observation.occurred_at,
+        workspace_fields=workspace_fields,
+        workspace_blocks=workspace_blocks,
+        workspace_crops=workspace_crops,
     )
     extraction_dict = extraction.model_dump(mode="json")
     observation.structured_json = extraction_dict
