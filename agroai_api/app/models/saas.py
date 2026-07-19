@@ -34,6 +34,9 @@ class User(Base):
     failed_login_attempts = Column(Integer, default=0, nullable=False)
     failed_login_window_started_at = Column(DateTime, nullable=True)
     locked_until = Column(DateTime, nullable=True, index=True)
+    access_restriction_reason = Column(String, nullable=True, index=True)
+    access_restricted_at = Column(DateTime, nullable=True, index=True)
+    access_restriction_notified_at = Column(DateTime, nullable=True)
 
     owned_organizations = relationship("Organization", back_populates="owner")
     memberships = relationship("OrganizationMembership", back_populates="user", cascade="all, delete-orphan")
@@ -42,6 +45,7 @@ class User(Base):
     account_recovery_tokens = relationship("AccountRecoveryToken", back_populates="user", cascade="all, delete-orphan")
     team_invitations_sent = relationship("TeamInvitation", back_populates="invited_by_user", cascade="all, delete-orphan")
     security_events = relationship("SecurityAuditEvent", back_populates="user")
+    access_appeals = relationship("AccountAccessAppeal", back_populates="user", foreign_keys="AccountAccessAppeal.user_id", cascade="all, delete-orphan")
 
 
 class Organization(Base):
@@ -81,6 +85,7 @@ class Organization(Base):
     usage_events = relationship("UsageEvent", back_populates="organization")
     verification_profile = relationship("OrganizationVerificationProfile", back_populates="organization", uselist=False, cascade="all, delete-orphan")
     security_events = relationship("SecurityAuditEvent", back_populates="organization")
+    access_appeals = relationship("AccountAccessAppeal", back_populates="organization", cascade="all, delete-orphan")
 
 
 class OrganizationVerificationProfile(Base):
@@ -132,6 +137,38 @@ class SecurityAuditEvent(Base):
 
     organization = relationship("Organization", back_populates="security_events")
     user = relationship("User", back_populates="security_events")
+
+
+class AccountAccessAppeal(Base):
+    __tablename__ = "account_access_appeals"
+
+    id = Column(String, primary_key=True, default=new_id, index=True)
+    user_id = Column(String, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    organization_id = Column(String, ForeignKey("organizations.id", ondelete="SET NULL"), nullable=True, index=True)
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    token_expires_at = Column(DateTime, nullable=False, index=True)
+    token_used_at = Column(DateTime, nullable=True)
+    status = Column(String, default="link_sent", nullable=False, index=True)
+    full_name = Column(String, nullable=True)
+    professional_role = Column(String, nullable=True)
+    organization_name = Column(String, nullable=True)
+    website_url = Column(String, nullable=True)
+    professional_profile_url = Column(String, nullable=True)
+    agricultural_use_case = Column(Text, nullable=True)
+    acres_or_sites = Column(String, nullable=True)
+    planned_data_sources = Column(Text, nullable=True)
+    explanation = Column(Text, nullable=True)
+    supporting_evidence_url = Column(String, nullable=True)
+    submitted_at = Column(DateTime, nullable=True, index=True)
+    reviewed_at = Column(DateTime, nullable=True, index=True)
+    reviewed_by_user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True, index=True)
+    review_notes = Column(Text, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    user = relationship("User", foreign_keys=[user_id], back_populates="access_appeals")
+    organization = relationship("Organization", back_populates="access_appeals")
+    reviewed_by = relationship("User", foreign_keys=[reviewed_by_user_id])
 
 
 class OrganizationMembership(Base):
