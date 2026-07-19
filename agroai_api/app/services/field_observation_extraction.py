@@ -476,6 +476,7 @@ def extract_observation(
     workspace_fields: list[str] | None = None,
     workspace_blocks: list[str] | None = None,
     workspace_crops: list[str] | None = None,
+    allow_model: bool = True,
 ) -> FieldObservationExtraction:
     """Public entrypoint: model-routed when configured, deterministic fallback.
 
@@ -488,6 +489,9 @@ def extract_observation(
     mode = str(getattr(settings, "FIELD_EXTRACTION_MODE", "auto") or "auto").strip().lower()
     result: FieldObservationExtraction | None = None
     fallback_reason: str | None = None
+    if not allow_model:
+        mode = "deterministic"
+        fallback_reason = "model_extraction_not_entitled"
     if mode in {"auto", "model"} and (text or "").strip():
         result = _model_extract(
             text,

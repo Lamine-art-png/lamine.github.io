@@ -541,3 +541,71 @@ def fake_store(monkeypatch):
     monkeypatch.setattr(svc, "get_object_store", lambda **_: store)
     monkeypatch.setattr(svc, "object_storage_configured", lambda: True)
     return store
+
+
+# --------------------------------------------------------------------------- #
+# Commercial packaging (Stage B8)
+# --------------------------------------------------------------------------- #
+
+def test_free_plan_voice_note_monthly_quota(client, db, monkeypatch):
+    from app.models.saas import Organization
+
+    org, _, headers = _auth(db)
+    org.plan = "free"
+    db.commit()
+    # Tighten the cap for the test via override semantics (plan default is 25).
+    from app.models.saas import EntitlementOverride as _EO
+    db.add(_EO(organization_id=org.id, feature_key="quota.field_intelligence.voice_notes.monthly",
+               value_json={"value": 2}))
+    db.commit()
+    for index in range(2):
+        response = _initiate(client, headers, capture_source="voice", note_text=None,
+                             client_capture_id=f"vn{index}", idempotency_key=f"vn{index}")
+        assert response.status_code == 200, response.text
+    blocked = _initiate(client, headers, capture_source="voice", note_text=None,
+                        client_capture_id="vn9", idempotency_key="vn9")
+    assert blocked.status_code == 402
+    assert blocked.json()["detail"]["code"] == "voice_note_quota_exceeded"
+    # Typed capture is unaffected by the voice cap.
+    typed = _initiate(client, headers, client_capture_id="tn1", idempotency_key="tn1")
+    assert typed.status_code == 200
+    # Replaying an existing voice capture still succeeds at the cap.
+    replay = _initiate(client, headers, capture_source="voice", note_text=None,
+                       client_capture_id="vn0", idempotency_key="vn0")
+    assert replay.status_code == 200
+
+
+def test_free_plan_model_extraction_locked(db, monkeypatch):
+    from app.models.saas import Organization
+    from app.services.commercial_control import resolve_effective_entitlements
+
+    org, _, _headers = _auth(db)
+    org.plan = "free"
+    db.commit()
+    effective = resolve_effective_entitlements(db, org)
+    assert effective.state("field_intelligence.model_extraction") == "locked"
+    assert effective.value("quota.field_intelligence.voice_notes.monthly") == 25
+    org.plan = "professional"
+    db.commit()
+    effective = resolve_effective_entitlements(db, org)
+    assert effective.enabled("field_intelligence.model_extraction")
+    assert effective.value("quota.field_intelligence.voice_notes.monthly") is None
+
+
+def test_pipeline_honors_model_extraction_entitlement(client, db, fake_store, monkeypatch):
+    """A Free-plan tenant gets deterministic extraction with a truthful
+    fallback label even when the model router is configured."""
+    from tests.unit.test_field_intelligence import _complete, _process
+
+    org, _, headers = _auth(db)
+    org.plan = "free"
+    db.commit()
+    _install_fake_router(monkeypatch, {"event_type": "observation", "severity": "info",
+                                       "summary": "model output", "confidence": 0.9})
+    cap = _initiate(client, headers).json()["capture"]
+    obs_id = _complete(client, headers, cap["id"]).json()["observation"]["id"]
+    _process(db)
+    obs = client.get(f"/v1/field-intelligence/observations/{obs_id}", headers=headers).json()["observation"]
+    structured = obs["structured"]
+    assert structured["method"] == "deterministic-v1"
+    assert structured["fallback_reason"] == "model_extraction_not_entitled"

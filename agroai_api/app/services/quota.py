@@ -24,6 +24,7 @@ METRIC_TO_LIMIT = {
     "report_export": "quota.report_export.monthly",
     "active_connector": "quota.active_connector",
     "managed_entity": "quota.managed_entity",
+    "field_voice_note": "quota.field_intelligence.voice_notes.monthly",
 }
 
 

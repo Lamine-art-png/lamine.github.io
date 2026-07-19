@@ -111,6 +111,53 @@ def require_capability(db: Session, ctx: AuthContext, feature_key: str):
     return require_feature(db, ctx.organization, feature_key)
 
 
+def _enforce_voice_note_quota(db: Session, ctx: AuthContext) -> None:
+    """Plan-scoped monthly voice-note cap (deliberate commercial packaging).
+
+    Unlimited when the plan has no quota value. New voice captures beyond the
+    cap are refused with the standard commercial 402; replays of an existing
+    idempotency key never reach this check.
+    """
+    from app.services.quota import committed_usage, quota_limit
+
+    organization = ctx.organization
+    if organization is None:
+        return
+    limit = quota_limit(db, organization, "field_voice_note")
+    if limit is None:
+        return
+    used = committed_usage(db, organization, "field_voice_note")
+    if used >= limit:
+        raise HTTPException(
+            status_code=status.HTTP_402_PAYMENT_REQUIRED,
+            detail={
+                "code": "voice_note_quota_exceeded",
+                "metric": "field_intelligence.voice_notes.monthly",
+                "limit": limit,
+                "used": used,
+                "message": "The monthly voice-note allowance for this plan is used up.",
+            },
+        )
+
+
+def _record_voice_note_usage(db: Session, ctx: AuthContext) -> None:
+    from app.services.quota import record_usage
+
+    if ctx.organization is None:
+        return
+    try:
+        record_usage(db, ctx.organization, "field_voice_note", quantity=1,
+                     metadata={"surface": "field_intelligence"})
+    except TypeError:
+        # Older record_usage signatures; usage metering must never break capture.
+        try:
+            record_usage(db, ctx.organization, "field_voice_note", 1)
+        except Exception:  # noqa: BLE001
+            logger.warning("voice-note usage recording unavailable")
+    except Exception:  # noqa: BLE001
+        logger.warning("voice-note usage recording failed")
+
+
 def storage_quota_limit_bytes(db: Session, ctx: AuthContext) -> tuple[int, int] | None:
     """Return ``(limit_bytes, limit_mb)`` for the plan quota, or None if unlimited."""
     from app.services.commercial_control import resolve_effective_entitlements
@@ -418,7 +465,8 @@ def initiate_capture(db: Session, ctx: AuthContext, payload: dict) -> FieldCaptu
         for item in (payload.get("asset_manifest") or [])
         if isinstance(item, dict)
     }
-    if payload.get("capture_source") == "voice" or manifest_kinds & {"audio", "video"}:
+    is_voice_capture = payload.get("capture_source") == "voice" or bool(manifest_kinds & {"audio", "video"})
+    if is_voice_capture:
         require_capability(db, ctx, "field_intelligence.voice")
 
     client_capture_id = str(payload.get("client_capture_id") or "").strip()
@@ -451,6 +499,10 @@ def initiate_capture(db: Session, ctx: AuthContext, payload: dict) -> FieldCaptu
             )
         return existing
 
+    if is_voice_capture:
+        # Quota binds only on NEW voice captures; idempotent replays above
+        # returned before ever reaching this check.
+        _enforce_voice_note_quota(db, ctx)
     session = FieldCaptureSession(
         id=str(uuid.uuid4()),
         tenant_id=organization_id,
@@ -483,6 +535,8 @@ def initiate_capture(db: Session, ctx: AuthContext, payload: dict) -> FieldCaptu
     db.add(session)
     try:
         db.commit()
+        if is_voice_capture:
+            _record_voice_note_usage(db, ctx)
     except IntegrityError:
         # Concurrent initiate with the same key: re-read the winner.
         db.rollback()
@@ -967,6 +1021,13 @@ def _process_observation(db: Session, job: IngestionJob, *, heartbeat: _JobLease
     workspace_fields = sorted({row[0] for row in vocabulary_rows if row[0]})
     workspace_blocks = sorted({row[1] for row in vocabulary_rows if row[1]})
     workspace_crops = sorted({row[2] for row in vocabulary_rows if row[2]})
+    # Model-routed extraction is a paid capability; deterministic extraction
+    # runs for everyone. The fallback label is truthful either way.
+    from app.models.saas import Organization as _Organization
+    from app.services.commercial_control import resolve_effective_entitlements as _resolve_ents
+
+    _org = db.get(_Organization, observation.tenant_id)
+    _allow_model = bool(_org) and _resolve_ents(db, _org).enabled("field_intelligence.model_extraction")
     extraction = extract_observation(
         source_text,
         field_hint=observation.field_name,
@@ -977,6 +1038,7 @@ def _process_observation(db: Session, job: IngestionJob, *, heartbeat: _JobLease
         workspace_fields=workspace_fields,
         workspace_blocks=workspace_blocks,
         workspace_crops=workspace_crops,
+        allow_model=_allow_model,
     )
     extraction_dict = extraction.model_dump(mode="json")
     observation.structured_json = extraction_dict
