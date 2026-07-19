@@ -15,7 +15,7 @@ from fastapi import HTTPException
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from app.api.v1.platform_api import ServiceAccountCreate, create_service_account
+from app.api.v1.platform_api import ServiceAccountCreate, create_service_account, redeliver_webhook
 from app.core.config import settings
 from app.db.base import Base
 from app.models.platform_api import (
@@ -503,6 +503,73 @@ def test_webhook_delivery_disabled_never_calls_network(db, monkeypatch):
     ) == "disabled"
     client.close()
     assert calls == 0
+
+
+def test_manual_redelivery_publishes_exact_replay_not_older_unrelated_row(db, monkeypatch):
+    org, project, endpoint, _plaintext = _create_encrypted_endpoint(db, monkeypatch)
+    other_org, other_project, other_endpoint, _other_plaintext = _create_encrypted_endpoint(db, monkeypatch)
+    requested_event = emit_webhook_event(
+        db,
+        organization_id=org.id,
+        api_project_id=project.id,
+        event_type="action.approval_required",
+        payload={"resource_id": "requested"},
+    )
+    unrelated_event = emit_webhook_event(
+        db,
+        organization_id=other_org.id,
+        api_project_id=other_project.id,
+        event_type="action.approval_required",
+        payload={"resource_id": "unrelated"},
+    )
+    db.commit()
+    requested = db.query(PlatformWebhookOutbox).filter_by(
+        event_id=requested_event.id,
+        endpoint_id=endpoint.id,
+    ).one()
+    unrelated = db.query(PlatformWebhookOutbox).filter_by(
+        event_id=unrelated_event.id,
+        endpoint_id=other_endpoint.id,
+    ).one()
+    unrelated.created_at = datetime.utcnow() - timedelta(hours=1)
+    unrelated.next_attempt_at = unrelated.created_at
+    db.commit()
+
+    class RecordingPublisher:
+        def __init__(self):
+            self.calls = []
+
+        def enqueue(self, job_id, tenant_id, task_type):
+            self.calls.append((job_id, tenant_id, task_type))
+            return job_id
+
+    publisher = RecordingPublisher()
+    monkeypatch.setattr(settings, "PLATFORM_API_WEBHOOK_DELIVERY_ENABLED", True)
+    monkeypatch.setattr(
+        "app.platform_api.webhook_delivery.get_task_publisher",
+        lambda: publisher,
+    )
+    ctx = SimpleNamespace(organization=org, user=SimpleNamespace(id="portal-user"))
+
+    result = redeliver_webhook(
+        endpoint.id,
+        requested.id,
+        ctx=ctx,
+        db=db,
+    )
+
+    assert result["status"] == "queued"
+    assert result["delivery_id"] != unrelated.id
+    assert publisher.calls == [
+        (result["delivery_id"], org.id, "platform_webhook_delivery")
+    ]
+    db.refresh(unrelated)
+    replay = db.get(PlatformWebhookOutbox, result["delivery_id"])
+    assert unrelated.status == "pending"
+    assert replay.status == "queued"
+    assert replay.organization_id == org.id
+    assert replay.api_project_id == project.id
+    assert replay.endpoint_id == endpoint.id
 
 
 def test_webhook_delivery_exponential_retry_reaches_final_failure(db, monkeypatch):

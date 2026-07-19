@@ -9,7 +9,7 @@
 - `PLATFORM_API_PUBLIC_DOCS_ENABLED=false`.
 - `PLATFORM_API_USAGE_METERING_ENFORCEMENT_ENABLED=false`.
 - `PLATFORM_API_KEY_PEPPER` configured outside the database.
-- `PLATFORM_API_EDGE_AUTH_SECRET` configured with the same dedicated value as the Cloudflare Worker `EDGE_ORIGIN_AUTH_TOKEN`. CIDR-bound keys fail closed without this authenticated edge context; `X-Forwarded-For` is never trusted.
+- Before activation, `PLATFORM_API_EDGE_AUTH_SECRET` configured with the same dedicated value as the Cloudflare Worker `EDGE_ORIGIN_AUTH_TOKEN`. CIDR-bound keys fail closed without this authenticated edge context; `X-Forwarded-For` is never trusted.
 - `PLATFORM_API_RATE_LIMIT_BACKEND=redis`.
 - `PLATFORM_API_REDIS_URL` or existing `REDIS_URL`.
 - `PLATFORM_API_REDIS_MAX_RETRIES=1` (idempotent transient retry; increase only with load evidence).
@@ -23,6 +23,13 @@
 - `EARTHDAILY_ADAPTER_ENABLED=false`.
 - `VALLEY_IRRIGATION_ADAPTER_ENABLED=false`.
 - `VALLEY_IRRIGATION_WRITE_CAPABILITY_ENABLED=false`.
+
+The edge/origin secret is activation-gated, not a prerequisite for deploying the
+disabled foundation. With `PLATFORM_API_ENABLED=false`, the Worker may be
+deployed without `EDGE_ORIGIN_AUTH_TOKEN`; it strips caller-supplied edge
+identity headers and forwards no trusted client identity. Production readiness
+blocks any later Platform API activation until the matching Worker and backend
+secret is configured.
 
 ## Readiness Checks
 

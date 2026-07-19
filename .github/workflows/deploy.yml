@@ -51,7 +51,7 @@ jobs:
           npm run check
           secrets_file="$(mktemp)"
           trap 'rm -f "$secrets_file"' EXIT
-          printf '%s' '{"QUEUE_PUBLISH_TOKEN":"ci-dry-run-only","QUEUE_CONSUMER_TOKEN":"ci-dry-run-only","EDGE_ORIGIN_AUTH_TOKEN":"ci-dry-run-only"}' > "$secrets_file"
+          printf '%s' '{"QUEUE_PUBLISH_TOKEN":"ci-dry-run-only","QUEUE_CONSUMER_TOKEN":"ci-dry-run-only"}' > "$secrets_file"
           npx wrangler deploy --dry-run --config ../../wrangler.toml --secrets-file "$secrets_file"
 
       - uses: actions/setup-python@v5
@@ -101,7 +101,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID QUEUE_PUBLISH_TOKEN QUEUE_CONSUMER_TOKEN EDGE_ORIGIN_AUTH_TOKEN; do
+          for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID QUEUE_PUBLISH_TOKEN QUEUE_CONSUMER_TOKEN; do
             if [ -z "${!name:-}" ]; then
               echo "Missing required production secret: ${name}"
               exit 1
@@ -129,6 +129,11 @@ jobs:
             if printf '%s' "$payload" | jq -e --arg sha "$GITHUB_SHA" \
               '.status == "ok" and .contract == "agroai-release-v1" and .build_sha == $sha and .schema_current == true and .queue_configured == true and .object_storage_configured == true and .object_storage_reachable == true and .production_ready == true' \
               >/dev/null 2>&1; then
+              platform_api_enabled="$(printf '%s' "$payload" | jq -r '.platform_api_enabled == true')"
+              if [ "$platform_api_enabled" = "true" ] && [ -z "${EDGE_ORIGIN_AUTH_TOKEN:-}" ]; then
+                echo "Missing required production secret for enabled Platform API: EDGE_ORIGIN_AUTH_TOKEN"
+                exit 1
+              fi
               printf '%s' "$payload" > upstream-release-contract.json
               echo "Exact backend build, schema, storage, and Queue contract is ready"
               exit 0
@@ -173,7 +178,8 @@ jobs:
             --arg publish "$QUEUE_PUBLISH_TOKEN" \
             --arg consumer "$QUEUE_CONSUMER_TOKEN" \
             --arg edge_origin_auth "$EDGE_ORIGIN_AUTH_TOKEN" \
-            '{QUEUE_PUBLISH_TOKEN: $publish, QUEUE_CONSUMER_TOKEN: $consumer, EDGE_ORIGIN_AUTH_TOKEN: $edge_origin_auth}' > "$secrets_file"
+            '{QUEUE_PUBLISH_TOKEN: $publish, QUEUE_CONSUMER_TOKEN: $consumer}
+             + if $edge_origin_auth == "" then {} else {EDGE_ORIGIN_AUTH_TOKEN: $edge_origin_auth} end' > "$secrets_file"
           npx wrangler deploy --config ../../wrangler.toml --secrets-file "$secrets_file"
           rm -f "$secrets_file"
           trap - EXIT

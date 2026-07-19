@@ -30,11 +30,11 @@ from app.platform_api.keys import create_platform_key, rotate_platform_key
 from app.platform_api.principal import PlatformPrincipal
 from app.platform_api.credential_vault import production_vault_keyring_configured
 from app.platform_api.rate_limits import apply_rate_limit_headers, enforce_rate_limit, platform_rate_limiter_readiness
-from app.platform_api.route_manifest import manifest_dicts, public_routes
+from app.platform_api.route_manifest import public_routes
 from app.platform_api.scopes import normalize_scopes, require_scopes
 from app.platform_api.restrictions import enforce_provider_access, enforce_resource_access, provider_allowed
 from app.platform_api.usage import record_usage_event
-from app.platform_api.webhook_delivery import emit_webhook_event, publish_pending_webhook_outbox
+from app.platform_api.webhook_delivery import emit_webhook_event, publish_webhook_outbox
 from app.platform_api.webhooks import (
     SAFE_WEBHOOK_EVENTS,
     audit_webhook_event,
@@ -200,7 +200,9 @@ def platform_health() -> dict[str, Any]:
 
 @router.get("/platform/route-manifest")
 def route_manifest() -> dict[str, Any]:
-    return {"status": "ok", "routes": manifest_dicts()}
+    if not bool(getattr(settings, "PLATFORM_API_PUBLIC_DOCS_ENABLED", False)):
+        raise HTTPException(status_code=404, detail="Not found")
+    return {"status": "ok", "routes": public_routes()}
 
 
 @router.get("/platform/openapi.json")
@@ -964,11 +966,19 @@ def redeliver_webhook(
             "redelivery_event_id": replay_event.id,
         },
     )
+    replay_outbox_id = replay_outbox.id
+    replay_event_id = replay_event.id
     db.commit()
-    queue_result = publish_pending_webhook_outbox(db, limit=1)
+    queue_result = publish_webhook_outbox(
+        db,
+        outbox_id=replay_outbox_id,
+        organization_id=ctx.organization.id,
+        api_project_id=endpoint.api_project_id,
+        endpoint_id=endpoint.id,
+    )
     return {
         "status": "queued" if queue_result["published"] else "accepted",
-        "delivery_id": replay_outbox.id,
-        "event_id": replay_event.id,
+        "delivery_id": replay_outbox_id,
+        "event_id": replay_event_id,
         "delivery_enabled": bool(getattr(settings, "PLATFORM_API_WEBHOOK_DELIVERY_ENABLED", False)),
     }

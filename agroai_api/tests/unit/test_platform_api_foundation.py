@@ -333,6 +333,38 @@ def test_public_openapi_excludes_internal_admin_and_portal_routes(client, monkey
     assert "/auth/login" not in text
 
 
+def test_route_manifest_is_private_until_docs_enabled_and_remains_curated(client, monkeypatch):
+    monkeypatch.setattr(settings, "PLATFORM_API_PUBLIC_DOCS_ENABLED", False)
+    assert client.get("/v1/platform/route-manifest").status_code == 404
+
+    monkeypatch.setattr(settings, "PLATFORM_API_PUBLIC_DOCS_ENABLED", True)
+    response = client.get("/v1/platform/route-manifest")
+
+    assert response.status_code == 200
+    routes = response.json()["routes"]
+    assert routes
+    assert all(route["public_openapi"] is True for route in routes)
+    rendered = json.dumps(routes)
+    assert "/platform/developer/" not in rendered
+    assert "/internal/" not in rendered
+    assert "/platform-admin" not in rendered
+    assert "/auth/" not in rendered
+
+
+def test_disabled_developer_control_plane_has_no_platform_admin_bypass(client, db, monkeypatch):
+    user, _org_row, _workspace, _project, _service_account, _key, _plaintext = _project_and_key(db)
+    monkeypatch.setattr(settings, "PLATFORM_ADMIN_EMAILS", user.email)
+    monkeypatch.setattr(settings, "PLATFORM_API_DEVELOPER_CONTROL_PLANE_ENABLED", False)
+    token = create_access_token({"sub": user.id})
+
+    response = client.get(
+        "/v1/platform/developer/projects",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 404
+
+
 def test_pre_platform_root_route_order_is_preserved_and_platform_routes_are_additive():
     baseline_paths = [
         "/openapi.json",

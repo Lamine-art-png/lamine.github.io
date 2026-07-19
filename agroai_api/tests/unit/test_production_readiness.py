@@ -150,6 +150,17 @@ def test_platform_api_enabled_requires_authenticated_edge_client_ip_context():
     assert "platform_api.edge_auth_missing" in _codes(report)
 
 
+def test_disabled_platform_api_does_not_require_edge_auth_for_deployment_readiness():
+    settings = _ready_settings()
+    settings.__dict__["PLATFORM_API_ENABLED"] = False
+    settings.__dict__["PLATFORM_API_EDGE_AUTH_SECRET"] = ""
+
+    report = evaluate_production_readiness(settings)
+
+    assert report.ready is True, report.to_dict()
+    assert "platform_api.edge_auth_missing" not in _codes(report)
+
+
 def test_platform_api_enabled_requires_explicit_vault_keyring():
     settings = _ready_settings()
     settings.__dict__["PLATFORM_API_ENABLED"] = True

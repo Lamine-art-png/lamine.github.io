@@ -101,19 +101,7 @@ def _deliverable(now: datetime):
     )
 
 
-def publish_pending_webhook_outbox(db: Session, *, limit: int = 100) -> dict[str, int]:
-    if not bool(getattr(settings, "PLATFORM_API_WEBHOOK_DELIVERY_ENABLED", False)):
-        return {"published": 0, "failed": 0, "disabled": 1}
-    now = datetime.utcnow()
-    rows = (
-        db.query(PlatformWebhookOutbox)
-        .filter(_publishable(now))
-        .order_by(PlatformWebhookOutbox.created_at.asc())
-        .limit(max(1, min(limit, 200)))
-        .all()
-    )
-    if not rows:
-        return {"published": 0, "failed": 0, "disabled": 0}
+def _publish_webhook_rows(db: Session, rows: list[PlatformWebhookOutbox]) -> dict[str, int]:
     queue = get_task_publisher()
     published = 0
     failed = 0
@@ -128,6 +116,50 @@ def publish_pending_webhook_outbox(db: Session, *, limit: int = 100) -> dict[str
             db.rollback()
             failed += 1
     return {"published": published, "failed": failed, "disabled": 0}
+
+
+def publish_pending_webhook_outbox(db: Session, *, limit: int = 100) -> dict[str, int]:
+    if not bool(getattr(settings, "PLATFORM_API_WEBHOOK_DELIVERY_ENABLED", False)):
+        return {"published": 0, "failed": 0, "disabled": 1}
+    now = datetime.utcnow()
+    rows = (
+        db.query(PlatformWebhookOutbox)
+        .filter(_publishable(now))
+        .order_by(PlatformWebhookOutbox.created_at.asc())
+        .limit(max(1, min(limit, 200)))
+        .all()
+    )
+    if not rows:
+        return {"published": 0, "failed": 0, "disabled": 0}
+    return _publish_webhook_rows(db, rows)
+
+
+def publish_webhook_outbox(
+    db: Session,
+    *,
+    outbox_id: str,
+    organization_id: str,
+    api_project_id: str,
+    endpoint_id: str,
+) -> dict[str, int]:
+    """Publish one exact, tenant-scoped delivery without selecting unrelated work."""
+
+    if not bool(getattr(settings, "PLATFORM_API_WEBHOOK_DELIVERY_ENABLED", False)):
+        return {"published": 0, "failed": 0, "disabled": 1}
+    row = (
+        db.query(PlatformWebhookOutbox)
+        .filter(
+            PlatformWebhookOutbox.id == outbox_id,
+            PlatformWebhookOutbox.organization_id == organization_id,
+            PlatformWebhookOutbox.api_project_id == api_project_id,
+            PlatformWebhookOutbox.endpoint_id == endpoint_id,
+            _publishable(datetime.utcnow()),
+        )
+        .one_or_none()
+    )
+    if row is None:
+        return {"published": 0, "failed": 0, "disabled": 0}
+    return _publish_webhook_rows(db, [row])
 
 
 def _pinned_url(destination, address: str) -> str:

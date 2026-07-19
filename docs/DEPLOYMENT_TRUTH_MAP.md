@@ -175,8 +175,16 @@ Production requirements before external partner traffic:
 - `PLATFORM_API_REDIS_URL` or durable `REDIS_URL` configured;
 - public OpenAPI explicitly enabled only when the curated route manifest is
   reviewed;
-- developer control plane enabled only for platform administrators or approved
-  internal test organizations.
+- developer control plane enabled only by the explicit
+  `PLATFORM_API_DEVELOPER_CONTROL_PLANE_ENABLED` flag and then limited to
+  organization owners/admins. Platform-admin status does not bypass this gate.
+
+`EDGE_ORIGIN_AUTH_TOKEN` is activation-gated rather than an unconditional
+Worker deployment prerequisite. When absent, the Worker still removes
+caller-supplied edge identity headers and forwards no authoritative client IP;
+CIDR-bound Platform API keys therefore fail closed. Production readiness
+requires the matching `PLATFORM_API_EDGE_AUTH_SECRET` before
+`PLATFORM_API_ENABLED=true`.
 
 EarthDaily and Valley Irrigation are not live from this foundation. They remain
 integration-readiness adapters with status `awaiting_partner_contract` until

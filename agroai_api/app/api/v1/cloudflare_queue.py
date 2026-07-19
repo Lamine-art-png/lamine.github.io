@@ -91,6 +91,7 @@ async def release_contract_health(db: Session = Depends(get_db)) -> dict:
         "object_storage_reachable": bool(storage.get("reachable")),
         "production_ready": bool(production.get("ready")),
         "production_blocker_codes": [item.get("code") for item in production.get("blockers", [])],
+        "platform_api_enabled": bool(getattr(settings, "PLATFORM_API_ENABLED", False)),
     }
     if (
         report["status"] != "ok"

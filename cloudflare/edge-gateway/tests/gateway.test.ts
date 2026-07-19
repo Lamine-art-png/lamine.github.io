@@ -66,13 +66,22 @@ describe("authoritative client IP forwarding", () => {
 
   it("omits client identity when the edge-to-origin secret is absent", () => {
     const upstream = upstreamRequest(
-      new Request("https://api.agroai-pilot.com/v1/platform/me", { headers: { "cf-connecting-ip": "203.0.113.8" } }),
+      new Request("https://api.agroai-pilot.com/v1/platform/me", {
+        headers: {
+          "cf-connecting-ip": "203.0.113.8",
+          "x-forwarded-for": "198.51.100.99",
+          "x-agroai-edge-client-ip": "198.51.100.99",
+          "x-agroai-edge-auth": "attacker",
+        },
+      }),
       new URL("https://api-preview.agroai-pilot.com"),
       "req-2",
       {},
     );
     expect(upstream.headers.get("x-agroai-edge-client-ip")).toBeNull();
     expect(upstream.headers.get("x-agroai-edge-auth")).toBeNull();
+    expect(upstream.headers.get("x-forwarded-for")).toBeNull();
+    expect(upstream.headers.get("cf-connecting-ip")).toBeNull();
   });
 });
 
