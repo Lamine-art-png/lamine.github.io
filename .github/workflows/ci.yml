@@ -33,6 +33,8 @@ jobs:
           cache-dependency-path: agroai_api/requirements.txt
       - name: Install backend and test dependencies
         run: pip install -r requirements.txt pytest==8.3.5
+      - name: Install ffmpeg (Field Intelligence bounded media verification)
+        run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
       - name: Compile backend
         run: python -m compileall app
       - name: Import FastAPI application

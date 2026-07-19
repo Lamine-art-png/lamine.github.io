@@ -84,6 +84,8 @@ jobs:
         with:
           python-version: "3.11"
       - run: python -m pip install -q -r requirements.txt pytest
+      - name: Install ffmpeg (Field Intelligence bounded media verification)
+        run: sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
       - name: Run complete backend unit suite
         run: |
           set +e
