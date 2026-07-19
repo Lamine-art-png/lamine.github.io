@@ -1,0 +1,49 @@
+name: Diagnose live release origins
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    if: github.event.pull_request.head.ref == 'ops/verify-live-access-appeals'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe preview origin, public API, and portal
+        shell: bash
+        run: |
+          set -u
+          mkdir -p /tmp/release-diagnostics
+          probe_get() {
+            name="$1"
+            url="$2"
+            curl -sS --max-time 25 -D "/tmp/release-diagnostics/${name}.headers" -o "/tmp/release-diagnostics/${name}.body" -w '%{http_code}\n' "$url" > "/tmp/release-diagnostics/${name}.status" || true
+          }
+          probe_post() {
+            name="$1"
+            url="$2"
+            curl -sS --max-time 25 -D "/tmp/release-diagnostics/${name}.headers" -o "/tmp/release-diagnostics/${name}.body" -w '%{http_code}\n' -H 'content-type: application/json' -d '{"email":"deployment-verification-does-not-exist@agroai-pilot.com"}' "$url" > "/tmp/release-diagnostics/${name}.status" || true
+          }
+          probe_get preview_health https://api-preview.agroai-pilot.com/v1/health
+          probe_post preview_appeal https://api-preview.agroai-pilot.com/v1/access-appeals/request
+          probe_get public_health https://api.agroai-pilot.com/v1/health
+          probe_post public_appeal https://api.agroai-pilot.com/v1/access-appeals/request
+          probe_get portal_appeal https://app.agroai-pilot.com/appeal
+          {
+            for name in preview_health preview_appeal public_health public_appeal portal_appeal; do
+              echo "--- ${name} ---"
+              echo "status=$(cat /tmp/release-diagnostics/${name}.status 2>/dev/null || echo missing)"
+              head -c 800 "/tmp/release-diagnostics/${name}.body" 2>/dev/null || true
+              echo
+            done
+          } | tee /tmp/release-diagnostics/summary.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-release-origin-diagnostics
+          path: /tmp/release-diagnostics
+          retention-days: 2
