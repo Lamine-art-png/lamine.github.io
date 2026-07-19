@@ -36,6 +36,7 @@ jobs:
           end = source.index("\n          PY\n", start)
           lines = source[start:end].splitlines()
           script = "\n".join(line[10:] if line.startswith("          ") else line for line in lines) + "\n"
+          script = script.replace("                       <td", "                      <td")
           Path('/tmp/apply_access_appeals.py').write_text(script, encoding='utf-8')
           PY
           python /tmp/apply_access_appeals.py
@@ -63,6 +64,6 @@ jobs:
           git config user.email "security@agroai-pilot.com"
           git add agroai_api figma-enterprise-v4 shared
           git commit -m "Complete secure account suspension and appeal review"
-          git rm .github/workflows/one-time-finish-access-appeals.yml .github/workflows/run-access-appeal-patcher-on-pr.yml
+          git rm .github/workflows/one-time-finish-access-appeals.yml .github/workflows/run-access-appeal-patcher-on-pr.yml .github/workflows/debug-access-appeal-patcher.yml
           git commit -m "Remove one-time access appeal workflows"
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
