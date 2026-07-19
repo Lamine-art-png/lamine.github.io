@@ -29,6 +29,8 @@ const initialRegisterForm: RegisterPayload = {
   region: "",
 };
 
+const ACCESS_APPEAL_LABEL = "Access restricted? Submit an appeal.";
+
 const organizationTypes = [
   ["farm_or_grower", "Farm or grower"],
   ["agribusiness", "Agribusiness"],
@@ -242,6 +244,7 @@ export function AuthScreen() {
                     {isSubmitting ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
                     Sign in
                   </Button>
+                  <a href="/appeal" className="block text-center text-[12px] font-medium text-[#2D6A4F] hover:underline">{ACCESS_APPEAL_LABEL}</a>
                 </form>
               </TabsContent>
 

@@ -25,10 +25,11 @@ VERSION = "2.0.1"
 
 
 _SAAS_REQUIRED_SCHEMA: dict[str, set[str]] = {
-    "users": {"id", "email", "email_verified_at", "email_verification_status", "credentials_changed_at", "account_status", "failed_login_attempts", "locked_until"},
+    "users": {"id", "email", "email_verified_at", "email_verification_status", "credentials_changed_at", "account_status", "failed_login_attempts", "locked_until", "access_restriction_reason", "access_restricted_at"},
     "organizations": {"id", "verification_status", "verification_score", "verification_engine_version"},
     "organization_verification_profiles": {"id", "organization_id", "decision", "score", "phone_ciphertext_b64", "evidence_digest"},
     "security_audit_events": {"id", "event_type", "outcome", "subject_hash", "ip_hash", "created_at"},
+    "account_access_appeals": {"id", "user_id", "token_hash", "token_expires_at", "status", "submitted_at", "reviewed_at", "created_at"},
     "email_verification_tokens": {"id", "user_id", "token_hash", "expires_at", "used_at", "created_at"},
     "team_invitations": {"id", "organization_id", "email", "role", "status", "invited_by_user_id", "token_hash", "expires_at", "created_at", "updated_at"},
     "user_preferences": {"user_id", "locale", "timezone", "notifications_json", "ui_json", "created_at", "updated_at"},
@@ -312,6 +313,7 @@ async def email_delivery_runtime_status() -> Dict[str, Any]:
 
 
 from app.api.v1.auth import router as auth_router  # noqa: E402
+from app.api.v1.access_appeals import router as access_appeals_router  # noqa: E402
 from app.api.v1.billing import router as billing_router  # noqa: E402
 from app.api.v1.evaluation import legacy_router as evaluation_legacy_router  # noqa: E402
 from app.api.v1.evaluation import router as evaluation_router  # noqa: E402
@@ -365,6 +367,7 @@ async def scoped_validation_exception_handler(request: Request, exc: RequestVali
     return await request_validation_exception_handler(request, exc)
 
 app.include_router(auth_router, prefix="/v1")
+app.include_router(access_appeals_router, prefix="/v1")
 app.include_router(billing_router, prefix="/v1")
 app.include_router(evaluation_router)
 app.include_router(evaluation_legacy_router)

@@ -5,18 +5,37 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "022_field_intelligence"
+HEAD_ALEMBIC_REVISION = "023_field_intelligence"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "compliance_export_metadata": {"id", "tenant_id"},
     "assurance_passports": {"id"},
     "agent_workflow_runs": {"id"},
-    "users": {"id", "email", "credentials_changed_at", "account_status", "failed_login_attempts", "locked_until"},
+    "users": {
+        "id",
+        "email",
+        "credentials_changed_at",
+        "account_status",
+        "failed_login_attempts",
+        "locked_until",
+        "access_restriction_reason",
+        "access_restricted_at",
+    },
     "organizations": {"id", "owner_user_id", "verification_status", "verification_score", "verification_engine_version"},
     "workspaces": {"id", "organization_id"},
     "organization_verification_profiles": {"id", "organization_id", "decision", "score", "phone_ciphertext_b64", "evidence_digest"},
     "security_audit_events": {"id", "event_type", "outcome", "subject_hash", "ip_hash", "created_at"},
+    "account_access_appeals": {
+        "id",
+        "user_id",
+        "token_hash",
+        "token_expires_at",
+        "status",
+        "submitted_at",
+        "reviewed_at",
+        "created_at",
+    },
     "conversations": {"id", "organization_id", "user_id"},
     "conversation_messages": {"id", "conversation_id", "organization_id"},
     "email_verification_tokens": {"id", "user_id", "token_hash"},

@@ -5,6 +5,8 @@ import { useAuth } from "../auth/AuthProvider";
 import { usePortalResource } from "../hooks/usePortalResource";
 import { BG, BORDER, MUTED, PortalButton, StatusBadge, SURFACE, TEXT } from "./portalUi";
 
+const ACCESS_APPEALS_LABEL = "Access appeals";
+
 function safe(value: unknown, fallback = "—") {
   if (value === null || value === undefined || value === "") return fallback;
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") return String(value);
@@ -31,6 +33,7 @@ export function Admin() {
           </div>
           <div className="flex flex-wrap gap-2">
             {platformAdmin ? <PortalButton onClick={() => window.location.assign("/admin/customers")}>Customer accounts</PortalButton> : null}
+{platformAdmin ? <PortalButton variant="secondary" onClick={() => window.location.assign("/admin/access-appeals")}>{ACCESS_APPEALS_LABEL}</PortalButton> : null}
             <PortalButton variant="secondary" onClick={() => window.location.assign("/admin/system")}>Open System Health</PortalButton>
           </div>
         </div>
@@ -92,6 +95,9 @@ type CustomerAccount = {
   last_login_at?: string | null;
   is_active: boolean;
   verification_status: string;
+  account_status: string;
+  access_restriction_reason?: string | null;
+  access_restricted_at?: string | null;
   email_verified_at?: string | null;
   organizations: CustomerOrganization[];
   organization_count: number;
@@ -242,12 +248,12 @@ export function CustomerAccountsPage() {
             <table className="w-full min-w-[1120px] border-collapse text-left">
               <thead>
                 <tr style={{ background: BG }}>
-                  {['Customer', 'Registered', 'Verification', 'Last login', 'Organization', 'Plan', 'Workspaces', 'Activity'].map((label) => <th key={label} className="border-b px-4 py-3 text-[10px] font-semibold uppercase tracking-wider" style={{ borderColor: BORDER, color: MUTED }}>{label}</th>)}
+                  {['Customer', 'Registered', 'Verification', 'Access', 'Last login', 'Organization', 'Plan', 'Workspaces', 'Activity'].map((label) => <th key={label} className="border-b px-4 py-3 text-[10px] font-semibold uppercase tracking-wider" style={{ borderColor: BORDER, color: MUTED }}>{label}</th>)}
                 </tr>
               </thead>
               <tbody>
-                {loading ? <tr><td colSpan={8} className="px-4 py-12 text-center text-[13px]" style={{ color: MUTED }}>Loading customer accounts…</td></tr> : null}
-                {!loading && !data?.customers.length ? <tr><td colSpan={8} className="px-4 py-12 text-center text-[13px]" style={{ color: MUTED }}>No accounts match these filters.</td></tr> : null}
+                {loading ? <tr><td colSpan={9} className="px-4 py-12 text-center text-[13px]" style={{ color: MUTED }}>Loading customer accounts…</td></tr> : null}
+                {!loading && !data?.customers.length ? <tr><td colSpan={9} className="px-4 py-12 text-center text-[13px]" style={{ color: MUTED }}>No accounts match these filters.</td></tr> : null}
                 {!loading ? data?.customers.map((customer) => {
                   const primary = customer.organizations[0];
                   return (
@@ -255,6 +261,7 @@ export function CustomerAccountsPage() {
                       <td className="px-4 py-4"><div className="text-[13px] font-semibold" style={{ color: TEXT }}>{customer.name || "Unnamed account"}</div><div className="mt-1 text-[12px]" style={{ color: MUTED }}>{customer.email}</div></td>
                       <td className="px-4 py-4 text-[12px]" style={{ color: TEXT }}>{displayDate(customer.created_at)}</td>
                       <td className="px-4 py-4"><StatusBadge label={customer.verification_status === "verified" ? "Verified" : "Unverified"} tone={customer.verification_status === "verified" ? "good" : "warning"} /></td>
+                      <td className="px-4 py-4"><StatusBadge label={customer.account_status === "active" ? "Active" : customer.account_status.replaceAll("_", " ")} tone={customer.account_status === "active" ? "good" : "warning"} /></td>
                       <td className="px-4 py-4 text-[12px]" style={{ color: TEXT }}>{displayDate(customer.last_login_at)}</td>
                       <td className="px-4 py-4"><div className="text-[12px] font-semibold" style={{ color: TEXT }}>{primary?.name || "No organization"}</div>{customer.organization_count > 1 ? <div className="mt-1 text-[11px]" style={{ color: MUTED }}>+{customer.organization_count - 1} more</div> : null}</td>
                       <td className="px-4 py-4"><div className="text-[12px] font-semibold capitalize" style={{ color: TEXT }}>{primary?.plan || "—"}</div><div className="mt-1 text-[11px] capitalize" style={{ color: MUTED }}>{primary?.subscription_status || "—"}</div></td>

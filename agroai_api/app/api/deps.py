@@ -41,7 +41,9 @@ def _assert_account_access(user: User) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail={
                 "code": "account_access_restricted",
-                "message": "This account is not approved for portal access.",
+                "message": "This account is restricted pending organization reverification.",
+                "appeal_available": getattr(user, "account_status", "") == "suspended_pending_appeal",
+                "appeal_path": "/appeal",
             },
         )
 

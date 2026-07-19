@@ -267,6 +267,8 @@ export type ConversationPayload = { title?: string; workspace_id?: string; messa
 export type ConversationMessagePayload = { content: string; audience?: string; output?: string; preferred_language?: string };
 export type AdminRequestUpdatePayload = { status?: "received" | "triaged" | "in_progress" | "waiting_on_customer" | "closed"; priority?: "low" | "medium" | "high" | "urgent" };
 export type PlatformAdminCustomerFilters = { search?: string; verification?: "all" | "verified" | "unverified"; active?: "all" | "active" | "inactive"; plan?: string; sort?: "newest" | "oldest" | "recent_login"; limit?: number; offset?: number };
+export type AccessAppealSubmission = { full_name: string; professional_role: string; organization_name: string; website_url?: string; professional_profile_url?: string; agricultural_use_case: string; acres_or_sites: string; planned_data_sources: string; explanation: string; supporting_evidence_url?: string };
+export type AccessAppealDecision = { action: "approve" | "reject" | "request_information"; notes?: string };
 
 function platformAdminCustomerQuery(filters: PlatformAdminCustomerFilters = {}) {
   const query = new URLSearchParams();
@@ -292,6 +294,7 @@ function uploadFieldAsset<T>(captureId: string, fields: Record<string, string>, 
 export const apiClient = {
   get, post, patch, remove, request, download,
   auth: { register: (payload: RegisterPayload) => post("/v1/auth/register", payload), login: (payload: LoginPayload) => post("/v1/auth/login", payload), logout: () => post("/v1/auth/logout"), me: () => get("/v1/auth/me"), requestEmailVerification: (payload?: EmailVerificationRequestPayload) => post("/v1/auth/email-verification/request", payload), confirmEmailVerification: (payload: EmailVerificationConfirmPayload) => post("/v1/auth/email-verification/confirm", payload) },
+  accessAppeals: { request: (payload: { email: string }) => post("/v1/access-appeals/request", payload, null), form: (token: string) => get(`/v1/access-appeals/form/${encodeURIComponent(token)}`, null), submit: (token: string, payload: AccessAppealSubmission) => post(`/v1/access-appeals/submit/${encodeURIComponent(token)}`, payload, null) },
   billing: {
     status: () => get("/v1/billing/status"),
     commercialSummary: () => get("/v1/billing/commercial-summary"),
@@ -316,6 +319,8 @@ export const apiClient = {
       const query = platformAdminCustomerQuery(filters);
       return download(`/v1/platform-admin/customers.csv${query ? `?${query}` : ""}`);
     },
+    appeals: (status = "pending") => get(`/v1/platform-admin/access-appeals?status=${encodeURIComponent(status)}`),
+    decideAppeal: (appealId: string, payload: AccessAppealDecision) => post(`/v1/platform-admin/access-appeals/${encodeURIComponent(appealId)}/decision`, payload),
   },
   platformDeveloper: {
     health: () => get("/v1/platform/health"),

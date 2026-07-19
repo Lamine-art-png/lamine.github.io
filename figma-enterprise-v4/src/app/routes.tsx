@@ -4,6 +4,7 @@ import { MainLayout } from "./components/MainLayout";
 import { OperationRouteBoundary } from "./components/OperationRouteBoundary";
 import { RouteRecovery } from "./components/RouteRecovery";
 import { VerifyEmailPage } from "./components/VerifyEmail";
+import { AccessAppealPage } from "./components/AccessAppeal";
 import { useLocale } from "./hooks/useLocale";
 
 function PortalHome() {
@@ -48,6 +49,7 @@ const operationRoutes = [
   { path: "audit", lazy: lazyComponent(() => import("./components/Audit"), "Audit") },
   { path: "admin", lazy: lazyComponent(() => import("./components/Admin"), "Admin") },
   { path: "admin/customers", lazy: lazyComponent(() => import("./components/Admin"), "CustomerAccountsPage") },
+  { path: "admin/access-appeals", lazy: lazyComponent(() => import("./components/AccessAppealsAdmin"), "AccessAppealsAdminPage") },
   { path: "admin/system", lazy: lazyComponent(() => import("./components/Admin"), "SystemHealthPage") },
   { path: "admin/requests", lazy: lazyComponent(() => import("./components/MonetizedRequestsV2"), "MonetizedRequestsV2") },
   { path: "pricing", lazy: lazyComponent(() => import("./components/PricingPage"), "PricingPage") },
@@ -64,6 +66,7 @@ const operationRoutes = [
 
 export const router = createBrowserRouter([
   { path: "/verify-email", Component: VerifyEmailPage, errorElement: <PortalRouteError /> },
+  { path: "/appeal", Component: AccessAppealPage, errorElement: <PortalRouteError /> },
   {
     path: "/",
     Component: MainLayout,
