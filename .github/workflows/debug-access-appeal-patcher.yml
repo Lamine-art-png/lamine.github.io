@@ -30,6 +30,7 @@ jobs:
           end = source.index("\n          PY\n", start)
           lines = source[start:end].splitlines()
           script = "\n".join(line[10:] if line.startswith("          ") else line for line in lines) + "\n"
+          script = script.replace("                       <td", "                      <td")
           Path('/tmp/apply_access_appeals.py').write_text(script, encoding='utf-8')
           PY
           python /tmp/apply_access_appeals.py > /tmp/patch.log 2>&1
