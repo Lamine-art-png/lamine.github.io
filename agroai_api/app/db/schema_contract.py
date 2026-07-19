@@ -5,6 +5,9 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
+HEAD_ALEMBIC_REVISION = "021_platform_api_hardening"
+
+
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "compliance_export_metadata": {"id", "tenant_id"},
     "assurance_passports": {"id"},

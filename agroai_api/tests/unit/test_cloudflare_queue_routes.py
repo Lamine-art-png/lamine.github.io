@@ -62,8 +62,8 @@ def test_release_contract_reports_platform_api_activation_state(monkeypatch):
             "status": "ok",
             "build_sha": "exact-sha",
             "schema_current": True,
-            "database_heads": ["020_platform_api_hardening"],
-            "repository_heads": ["020_platform_api_hardening"],
+            "database_heads": ["021_platform_api_hardening"],
+            "repository_heads": ["021_platform_api_hardening"],
             "queue_configured": True,
         },
     )

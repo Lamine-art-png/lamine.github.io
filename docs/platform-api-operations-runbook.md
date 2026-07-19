@@ -33,6 +33,8 @@ secret is configured.
 
 ## Readiness Checks
 
+- The required linear Alembic tail is `019_account_verification` → `020_platform_api_private_beta` → `021_platform_api_hardening`; `alembic heads` must return only `021_platform_api_hardening`.
+- Portal JWT and Platform API key access share the same server-authoritative organization policy. Only `approved` and `approved_legacy` organizations may authenticate; changing the persisted organization status invalidates existing keys on their next request.
 - Portal readiness remains `/v1/readiness`.
 - Platform API readiness is `/v1/platform/health`.
 - When Platform API is enabled, `/v1/platform/health` pings the configured Redis backend and reports `not_ready` when Redis is absent or unavailable.

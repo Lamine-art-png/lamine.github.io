@@ -1,7 +1,7 @@
 """Harden Platform API isolation, idempotency, and webhook delivery.
 
-Revision ID: 020_platform_api_hardening
-Revises: 019_platform_api_private_beta
+Revision ID: 021_platform_api_hardening
+Revises: 020_platform_api_private_beta
 Create Date: 2026-07-18
 """
 from __future__ import annotations
@@ -13,8 +13,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "020_platform_api_hardening"
-down_revision = "019_platform_api_private_beta"
+revision = "021_platform_api_hardening"
+down_revision = "020_platform_api_private_beta"
 branch_labels = None
 depends_on = None
 

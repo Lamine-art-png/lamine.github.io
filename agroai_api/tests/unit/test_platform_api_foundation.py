@@ -13,7 +13,12 @@ from app.core.security import create_access_token, get_current_tenant_id
 from app.main import app
 from fastapi import HTTPException
 
-from app.models.platform_api import ApiProject, ApiServiceAccount, PlatformApiKey
+from app.models.platform_api import (
+    ApiProject,
+    ApiServiceAccount,
+    PlatformApiKey,
+    PlatformWebhookEndpoint,
+)
 from app.models.platform_api import ActionSafetyConfiguration
 from app.models.operational_records import ConnectorConnection
 from app.models.saas import Organization, OrganizationMembership, User, Workspace
@@ -363,6 +368,160 @@ def test_disabled_developer_control_plane_has_no_platform_admin_bypass(client, d
     )
 
     assert response.status_code == 404
+
+
+@pytest.mark.parametrize(
+    ("verification_status", "expected_status"),
+    [
+        ("approved", 200),
+        ("approved_legacy", 200),
+        ("pending", 401),
+        ("rejected", 401),
+        ("blocked", 401),
+        ("suspended", 401),
+        ("verification_required", 401),
+        ("unrecognized_status", 401),
+    ],
+)
+def test_platform_key_authentication_enforces_current_organization_status(
+    client,
+    db,
+    monkeypatch,
+    verification_status,
+    expected_status,
+):
+    _user, organization, _workspace, _project, _service_account, _key, plaintext = _project_and_key(db)
+    organization.verification_status = verification_status
+    db.commit()
+    monkeypatch.setattr(settings, "PLATFORM_API_ENABLED", True)
+    monkeypatch.setattr(settings, "PLATFORM_API_RATE_LIMIT_BACKEND", "memory")
+    monkeypatch.setattr(settings, "APP_ENV", "test")
+
+    response = client.get(
+        "/v1/platform/me",
+        headers={"Authorization": f"Bearer {plaintext}"},
+    )
+
+    assert response.status_code == expected_status
+
+
+def test_organization_status_change_immediately_invalidates_existing_platform_key(
+    client,
+    db,
+    monkeypatch,
+):
+    _user, organization, _workspace, _project, _service_account, _key, plaintext = _project_and_key(db)
+    organization.verification_status = "approved"
+    db.commit()
+    monkeypatch.setattr(settings, "PLATFORM_API_ENABLED", True)
+    monkeypatch.setattr(settings, "PLATFORM_API_RATE_LIMIT_BACKEND", "memory")
+    monkeypatch.setattr(settings, "APP_ENV", "test")
+    headers = {"Authorization": f"Bearer {plaintext}"}
+
+    assert client.get("/v1/platform/me", headers=headers).status_code == 200
+    organization.verification_status = "suspended"
+    db.commit()
+    assert client.get("/v1/platform/me", headers=headers).status_code == 401
+
+
+@pytest.mark.parametrize("verification_status", ["approved", "approved_legacy"])
+def test_approved_organization_can_use_explicitly_enabled_developer_control_plane(
+    client,
+    db,
+    monkeypatch,
+    verification_status,
+):
+    user, organization, _workspace, _project, _service_account, _key, _plaintext = _project_and_key(db)
+    organization.verification_status = verification_status
+    db.commit()
+    monkeypatch.setattr(settings, "PLATFORM_API_DEVELOPER_CONTROL_PLANE_ENABLED", True)
+    token = create_access_token({"sub": user.id})
+
+    response = client.get(
+        "/v1/platform/developer/projects",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    assert response.status_code == 200
+
+
+def test_unapproved_organization_cannot_create_platform_control_plane_resources(
+    client,
+    db,
+    monkeypatch,
+):
+    user, organization, workspace, project, service_account, _key, _plaintext = _project_and_key(db)
+    organization.verification_status = "pending"
+    db.commit()
+    monkeypatch.setattr(settings, "PLATFORM_API_DEVELOPER_CONTROL_PLANE_ENABLED", True)
+    monkeypatch.setattr(settings, "PLATFORM_API_TEST_PROJECTS_ENABLED", True)
+    headers = {"Authorization": f"Bearer {create_access_token({'sub': user.id})}"}
+    counts_before = (
+        db.query(ApiProject).count(),
+        db.query(ApiServiceAccount).count(),
+        db.query(PlatformApiKey).count(),
+        db.query(PlatformWebhookEndpoint).count(),
+    )
+
+    responses = [
+        client.post(
+            "/v1/platform/developer/projects",
+            headers=headers,
+            json={
+                "name": "Denied project",
+                "slug": "denied-project",
+                "environment": "test",
+                "workspace_id": workspace.id,
+            },
+        ),
+        client.post(
+            f"/v1/platform/developer/projects/{project.id}/service-accounts",
+            headers=headers,
+            json={
+                "name": "Denied service account",
+                "scopes": ["projects:read"],
+                "workspace_id": workspace.id,
+            },
+        ),
+        client.post(
+            f"/v1/platform/developer/service-accounts/{service_account.id}/keys",
+            headers=headers,
+            json={"name": "Denied key", "scopes": ["projects:read"]},
+        ),
+        client.post(
+            "/v1/platform/developer/webhooks",
+            headers=headers,
+            json={
+                "api_project_id": project.id,
+                "url": "https://hooks.example.com/agroai",
+                "subscribed_event_types": ["sync.completed"],
+            },
+        ),
+    ]
+
+    assert [response.status_code for response in responses] == [403, 403, 403, 403]
+    assert counts_before == (
+        db.query(ApiProject).count(),
+        db.query(ApiServiceAccount).count(),
+        db.query(PlatformApiKey).count(),
+        db.query(PlatformWebhookEndpoint).count(),
+    )
+
+
+def test_platform_key_creation_service_rejects_unapproved_organization(db):
+    user, organization, _workspace, project, service_account, _key, _plaintext = _project_and_key(db)
+    organization.verification_status = "rejected"
+    db.commit()
+
+    with pytest.raises(ValueError, match="organization is not approved"):
+        create_platform_key(
+            db,
+            project=project,
+            service_account=service_account,
+            name="denied",
+            scopes=["projects:read"],
+            created_by_user_id=user.id,
+        )
 
 
 def test_pre_platform_root_route_order_is_preserved_and_platform_routes_are_additive():

@@ -32,7 +32,9 @@ jobs:
       - name: Compile backend and migration tree
         run: python -m compileall -q app alembic scripts
       - name: Enforce revision graph contract
-        run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --confcutdir=tests/unit tests/unit/test_alembic_revision_contract.py
+        run: |
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --confcutdir=tests/unit tests/unit/test_alembic_revision_contract.py
+          test "$(alembic heads)" = "021_platform_api_hardening (head)"
       - name: Migrate real PostgreSQL to repository head
         env:
           DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci

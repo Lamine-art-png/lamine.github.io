@@ -58,7 +58,9 @@ jobs:
           if-no-files-found: error
           retention-days: 3
       - name: Verify single Alembic head
-        run: test "$(alembic heads | wc -l)" -eq 1
+        run: |
+          test "$(alembic heads | wc -l)" -eq 1
+          test "$(alembic heads)" = "021_platform_api_hardening (head)"
       - name: Upgrade clean temporary database through head
         env:
           DATABASE_URL: sqlite:////tmp/agroai-commercial-control-plane.db

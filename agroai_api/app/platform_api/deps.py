@@ -4,7 +4,7 @@ from fastapi import Depends, Header, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
-from app.api.deps import AuthContext, get_auth_context
+from app.api.deps import AuthContext, get_auth_context, require_approved_organization
 from app.core.config import settings
 from app.core.security import http_bearer
 from app.db.base import get_db
@@ -24,6 +24,7 @@ def require_developer_control_plane(ctx: AuthContext = Depends(get_auth_context)
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
     if not ctx.organization or not ctx.membership:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization membership required")
+    require_approved_organization(ctx.organization)
     if ctx.membership.role not in {"owner", "admin"}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization administrator access required")
     return ctx

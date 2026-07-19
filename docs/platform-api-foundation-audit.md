@@ -287,7 +287,7 @@ Do not casually refactor:
 ## Database Migration Risks
 
 - Alembic is the sole schema owner.
-- Existing migrations are linear through `018_outreach_engagement`; the Platform API foundation extends that chain with `019_platform_api_private_beta`.
+- Existing production migrations are linear through `019_account_verification`; the Platform API foundation extends that chain with `020_platform_api_private_beta`, followed by `021_platform_api_hardening`.
 - Tests currently use `Base.metadata.create_all`, but production must not.
 - New tables must be additive and downgrade-safe.
 - Do not backfill legacy tenant keys into organizations.

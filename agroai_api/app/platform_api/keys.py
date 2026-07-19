@@ -10,6 +10,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.organization_access import organization_access_allowed
 from app.models.platform_api import ApiProject, ApiServiceAccount, PlatformApiKey
 from app.models.saas import Organization
 from app.platform_api.client_ip import normalize_cidr_allowlist
@@ -67,6 +68,9 @@ def create_platform_key(
     provider_restrictions: dict[str, Any] | None = None,
     resource_restrictions: dict[str, Any] | None = None,
 ) -> tuple[PlatformApiKey, str]:
+    organization = db.get(Organization, project.organization_id)
+    if not organization_access_allowed(organization):
+        raise ValueError("organization is not approved for Platform API access")
     resolved_workspace_id = compatible_workspace_id(
         db,
         organization_id=project.organization_id,
@@ -150,7 +154,7 @@ def verify_platform_key(db: Session, plaintext: str) -> VerifiedPlatformKey | No
     except ValueError:
         return None
     org = db.get(Organization, row.organization_id)
-    if org is None:
+    if not organization_access_allowed(org):
         return None
     return VerifiedPlatformKey(key=row, project=project, service_account=service_account)
 
@@ -166,6 +170,9 @@ def rotate_platform_key(
     service_account = db.get(ApiServiceAccount, old_key.service_account_id)
     if project is None or service_account is None:
         raise ValueError("key ownership is incomplete")
+    organization = db.get(Organization, old_key.organization_id)
+    if not organization_access_allowed(organization):
+        raise ValueError("organization is not approved for Platform API access")
     now = datetime.utcnow()
     if old_key.status != "active" or old_key.revoked_at is not None:
         raise ValueError("only an active, unrevoked key can be rotated")

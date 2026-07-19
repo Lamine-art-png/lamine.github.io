@@ -1,7 +1,7 @@
 """Add Platform API private beta foundation tables.
 
-Revision ID: 019_platform_api_private_beta
-Revises: 018_outreach_engagement
+Revision ID: 020_platform_api_private_beta
+Revises: 019_account_verification
 Create Date: 2026-07-10
 """
 from __future__ import annotations
@@ -10,8 +10,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "019_platform_api_private_beta"
-down_revision = "018_outreach_engagement"
+revision = "020_platform_api_private_beta"
+down_revision = "019_account_verification"
 branch_labels = None
 depends_on = None
 
