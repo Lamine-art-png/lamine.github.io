@@ -68,24 +68,25 @@ jobs:
           set -euo pipefail
           test -n "${QUEUE_CONSUMER_TOKEN:-}"
 
-      - name: Resolve the backend revision that contains the operation feature
+      - name: Resolve the backend revision that introduced the operation feature
         id: revision
         shell: bash
         run: |
           set -euo pipefail
-          expected_backend_sha="$(git log -1 --format=%H -- \
+          feature_sha="$(git log -1 --format=%H -- \
             agroai_api/app/api/v1/saas.py \
             agroai_api/app/services/commercial_control.py \
             agroai_api/tests/unit/test_operation_workspaces.py)"
-          test -n "$expected_backend_sha"
-          echo "backend_sha=$expected_backend_sha" >> "$GITHUB_OUTPUT"
-          printf 'expected_backend_sha=%s\nverification_sha=%s\n' \
-            "$expected_backend_sha" "$GITHUB_SHA" | tee operation-expected-revisions.txt
+          test -n "$feature_sha"
+          echo "feature_sha=$feature_sha" >> "$GITHUB_OUTPUT"
+          printf 'expected_feature_sha=%s\nverification_sha=%s\n' \
+            "$feature_sha" "$GITHUB_SHA" | tee operation-expected-revisions.txt
 
-      - name: Wait for the deployed backend feature revision
+      - name: Wait for a production-ready deployed backend containing the operation feature
+        id: backend
         shell: bash
         env:
-          EXPECTED_BACKEND_SHA: ${{ steps.revision.outputs.backend_sha }}
+          EXPECTED_FEATURE_SHA: ${{ steps.revision.outputs.feature_sha }}
         run: |
           set -euo pipefail
           ready=0
@@ -104,10 +105,21 @@ jobs:
                 > operation-backend-release-contract-last.json
             fi
 
-            if printf '%s' "$payload" | jq -e --arg sha "$EXPECTED_BACKEND_SHA" \
-              '.status == "ok" and .contract == "agroai-release-v1" and .build_sha == $sha and .schema_current == true and .queue_configured == true and .object_storage_configured == true and .object_storage_reachable == true and .production_ready == true' \
+            deployed_sha="$(printf '%s' "$payload" | jq -r '.build_sha // empty' 2>/dev/null || true)"
+            release_ready=0
+            if printf '%s' "$payload" | jq -e \
+              '.status == "ok" and .contract == "agroai-release-v1" and .schema_current == true and .queue_configured == true and .object_storage_configured == true and .object_storage_reachable == true and .production_ready == true' \
               >/dev/null 2>&1; then
+              release_ready=1
+            fi
+
+            if [ "$release_ready" -eq 1 ] \
+              && [ -n "$deployed_sha" ] \
+              && git cat-file -e "${deployed_sha}^{commit}" 2>/dev/null \
+              && git merge-base --is-ancestor "$EXPECTED_FEATURE_SHA" "$deployed_sha" \
+              && git merge-base --is-ancestor "$deployed_sha" "$GITHUB_SHA"; then
               cp operation-backend-release-contract-last.json operation-backend-release-contract.json
+              echo "deployed_sha=$deployed_sha" >> "$GITHUB_OUTPUT"
               ready=1
               break
             fi
@@ -115,7 +127,9 @@ jobs:
           done
 
           if [ "$ready" -ne 1 ]; then
-            echo "Expected backend feature revision: ${EXPECTED_BACKEND_SHA}"
+            echo "Expected operation feature revision: ${EXPECTED_FEATURE_SHA}"
+            echo "Verification revision: ${GITHUB_SHA}"
+            echo "The deployed backend must be in this release history and contain the feature revision."
             echo "Last redacted release contract:"
             cat operation-backend-release-contract-last.json
             exit 1
@@ -171,10 +185,11 @@ jobs:
 
           jq -n \
             --arg verification_sha "$GITHUB_SHA" \
-            --arg backend_sha "${{ steps.revision.outputs.backend_sha }}" \
+            --arg backend_feature_sha "${{ steps.revision.outputs.feature_sha }}" \
+            --arg deployed_backend_sha "${{ steps.backend.outputs.deployed_sha }}" \
             --arg portal_url "$PORTAL_URL" \
             --arg verified_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{status:"ok",contract:"operation-workspaces-production-v2",verification_sha:$verification_sha,backend_feature_sha:$backend_sha,portal_url:$portal_url,verified_at:$verified_at}' \
+            '{status:"ok",contract:"operation-workspaces-production-v3",verification_sha:$verification_sha,backend_feature_sha:$backend_feature_sha,deployed_backend_sha:$deployed_backend_sha,portal_url:$portal_url,verified_at:$verified_at}' \
             > operation-production-contract.json
 
       - name: Upload immutable production evidence
