@@ -60,7 +60,7 @@ jobs:
       - name: Verify single Alembic head
         run: |
           test "$(alembic heads | wc -l)" -eq 1
-          test "$(alembic heads)" = "021_platform_api_hardening (head)"
+          test "$(alembic heads)" = "022_account_access_appeals (head)"
       - name: Upgrade clean temporary database through head
         env:
           DATABASE_URL: sqlite:////tmp/agroai-commercial-control-plane.db
