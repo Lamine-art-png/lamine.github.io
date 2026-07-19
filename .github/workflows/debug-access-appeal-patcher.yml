@@ -17,6 +17,9 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.ref }}
           fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
       - name: Extract and run patch script with captured output
         id: patch
         continue-on-error: true
@@ -35,18 +38,49 @@ jobs:
           Path('/tmp/apply_access_appeals.py').write_text(script, encoding='utf-8')
           PY
           python /tmp/apply_access_appeals.py > /tmp/patch.log 2>&1
-      - name: Record patch result
+      - name: Install backend dependencies
+        if: steps.patch.outcome == 'success'
+        working-directory: agroai_api
+        run: python -m pip install -q -r requirements.txt pytest
+      - name: Run focused backend validation
+        id: focused
+        if: steps.patch.outcome == 'success'
+        continue-on-error: true
+        working-directory: agroai_api
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+        shell: bash
+        run: |
+          python -m compileall -q app alembic/versions > /tmp/backend-focused.log 2>&1
+          python -m pytest -q --tb=short tests/unit/test_account_verification_security.py tests/unit/test_platform_admin.py tests/unit/test_alembic_revisions.py >> /tmp/backend-focused.log 2>&1
+      - name: Run complete backend validation
+        id: full
+        if: steps.patch.outcome == 'success' && steps.focused.outcome == 'success'
+        continue-on-error: true
+        working-directory: agroai_api
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: '1'
+        shell: bash
+        run: python -m pytest -q --tb=short tests/unit > /tmp/backend-full.log 2>&1
+      - name: Record results
         if: always()
         shell: bash
         run: |
-          echo "outcome=${{ steps.patch.outcome }}" > /tmp/result.txt
+          {
+            echo "patch=${{ steps.patch.outcome }}"
+            echo "focused=${{ steps.focused.outcome }}"
+            echo "full=${{ steps.full.outcome }}"
+          } > /tmp/result.txt
           test -f /tmp/patch.log || echo "patch log was not created" > /tmp/patch.log
-          tail -n 200 /tmp/patch.log >> /tmp/result.txt
+          test -f /tmp/backend-focused.log || echo "focused backend log was not created" > /tmp/backend-focused.log
+          test -f /tmp/backend-full.log || echo "full backend log was not created" > /tmp/backend-full.log
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: access-appeal-patch-debug
+          name: access-appeal-validation-debug
           path: |
             /tmp/result.txt
             /tmp/patch.log
+            /tmp/backend-focused.log
+            /tmp/backend-full.log
           retention-days: 2
