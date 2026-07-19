@@ -38,6 +38,12 @@ jobs:
           Path('/tmp/apply_access_appeals.py').write_text(script, encoding='utf-8')
           PY
           python /tmp/apply_access_appeals.py > /tmp/patch.log 2>&1
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('agroai_api/app/api/v1/access_appeals.py')
+          text = path.read_text(encoding='utf-8')
+          path.write_text(text.replace('from __future__ import annotations\n\n', '', 1), encoding='utf-8')
+          PY
       - name: Install backend dependencies
         if: steps.patch.outcome == 'success'
         working-directory: agroai_api
@@ -55,7 +61,7 @@ jobs:
           python -m pytest -q --tb=short tests/unit/test_account_verification_security.py tests/unit/test_platform_admin.py tests/unit/test_alembic_revisions.py >> /tmp/backend-focused.log 2>&1
       - name: Run complete backend validation
         id: full
-        if: steps.patch.outcome == 'success' && steps.focused.outcome == 'success'
+        if: always() && steps.patch.outcome == 'success'
         continue-on-error: true
         working-directory: agroai_api
         env:
