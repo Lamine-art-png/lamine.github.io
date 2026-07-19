@@ -180,6 +180,61 @@ def _require_billing_contract(settings: Settings, blockers: list[ReadinessFindin
         )
 
 
+def _require_field_intelligence_contract(
+    settings: Settings, blockers: list[ReadinessFinding], warnings: list[ReadinessFinding]
+) -> None:
+    """Field Intelligence launch contract — enforced when the feature would be
+    live in production (release state other than disabled). Production must
+    fail truthfully rather than silently downgrade to local disk or fake
+    transcription."""
+    release_state = _setting(settings, "FIELD_INTELLIGENCE_RELEASE_STATE").lower()
+    if release_state in {"", "disabled"}:
+        return  # not activating: no additional launch requirements
+
+    object_backend = _setting(settings, "CONNECTOR_OBJECT_STORAGE_BACKEND", "disabled").lower()
+    if object_backend not in {"s3", "r2", "s3_compatible"} or not _setting(settings, "CONNECTOR_OBJECT_BUCKET"):
+        blockers.append(ReadinessFinding(
+            "field_intelligence.object_storage_missing", "blocker", "field_intelligence",
+            "Field Intelligence activation requires durable R2/S3-compatible object storage and bucket.",
+        ))
+    provider = _setting(settings, "FIELD_TRANSCRIPTION_PROVIDER").lower()
+    if provider in {"", "disabled"}:
+        blockers.append(ReadinessFinding(
+            "field_intelligence.transcription_provider_missing", "blocker", "field_intelligence",
+            "Field Intelligence activation requires a configured transcription provider (voice capture fails closed without one).",
+        ))
+    elif provider.startswith("fake") or provider.startswith("test"):
+        blockers.append(ReadinessFinding(
+            "field_intelligence.transcription_provider_fake", "blocker", "field_intelligence",
+            "A fake/test transcription provider is configured for a production activation.",
+        ))
+    elif provider in {"http", "configured", "production", "openai_whisper", "whisper"}:
+        if not _setting(settings, "FIELD_TRANSCRIPTION_ENDPOINT") or not _setting(settings, "FIELD_TRANSCRIPTION_API_KEY"):
+            blockers.append(ReadinessFinding(
+                "field_intelligence.transcription_credentials_missing", "blocker", "field_intelligence",
+                "The transcription provider requires both endpoint and API key.",
+            ))
+    import shutil as _shutil
+
+    ffprobe = _setting(settings, "FIELD_MEDIA_FFPROBE_PATH", "ffprobe") or "ffprobe"
+    if _shutil.which(ffprobe) is None:
+        blockers.append(ReadinessFinding(
+            "field_intelligence.ffprobe_missing", "blocker", "field_intelligence",
+            "ffprobe is required for fail-closed media verification and is not on PATH.",
+        ))
+    if not bool(getattr(settings, "FIELD_INTELLIGENCE_WORKER_ENABLED", True)):
+        warnings.append(ReadinessFinding(
+            "field_intelligence.worker_disabled", "warning", "field_intelligence",
+            "The in-process Field Intelligence worker is disabled; a dedicated worker process must be deployed.",
+        ))
+    if release_state == "general":
+        if not (_setting(settings, "FIELD_RELEASE_PORTAL_SHA") and _setting(settings, "FIELD_RELEASE_EDGE_SHA")):
+            blockers.append(ReadinessFinding(
+                "field_intelligence.release_shas_unreported", "blocker", "field_intelligence",
+                "General activation requires the deploy pipeline to report portal and edge release SHAs for exact-SHA alignment.",
+            ))
+
+
 def evaluate_production_readiness(settings: Settings, *, target_scale: str = "production") -> ReadinessReport:
     blockers: list[ReadinessFinding] = []
     warnings: list[ReadinessFinding] = []
@@ -310,6 +365,8 @@ def evaluate_production_readiness(settings: Settings, *, target_scale: str = "pr
 
     if not settings.AI_PROVIDER:
         blockers.append(ReadinessFinding("intelligence.provider_missing", "blocker", "intelligence", "No live intelligence provider is configured."))
+
+    _require_field_intelligence_contract(settings, blockers, warnings)
 
     return ReadinessReport(
         ready=not blockers,

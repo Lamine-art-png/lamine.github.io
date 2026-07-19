@@ -37,7 +37,7 @@ jobs:
       - run: python -m pip install -q -r requirements.txt pytest
       - name: Upgrade current-main baseline (022_account_access_appeals)
         run: alembic upgrade 022_account_access_appeals
-      - name: Upgrade current-main database to repository head (022 -> 023)
+      - name: Upgrade current-main database to repository head (022 -> 024)
         run: alembic upgrade head
       - name: Downgrade the Field Intelligence revision
         run: alembic downgrade 022_account_access_appeals
@@ -50,7 +50,7 @@ jobs:
           tables = set(inspector.get_table_names())
           removed = {"field_capture_sessions", "field_observations", "field_observation_assets",
                      "field_observation_processing_runs", "field_observation_audit_events",
-                     "field_storage_reservations"}
+                     "field_storage_reservations", "field_runtime_flags", "field_worker_heartbeats"}
           leftover = removed & tables
           assert not leftover, f"downgrade left tables behind: {sorted(leftover)}"
           preserved = {

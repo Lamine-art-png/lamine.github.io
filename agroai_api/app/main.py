@@ -453,4 +453,9 @@ app.include_router(field_operations_router, prefix="/v1")
 from app.api.v1.field_intelligence import router as field_intelligence_router  # noqa: E402
 app.include_router(field_intelligence_router, prefix="/v1")
 
+# Admin/ops surface mounts WITHOUT the release gate: operators must reach the
+# kill switch and rollout controls precisely when the feature is disabled.
+from app.api.v1.field_intelligence_admin import router as field_intelligence_admin_router  # noqa: E402
+app.include_router(field_intelligence_admin_router, prefix="/v1")
+
 materialize_included_routes(app.router)

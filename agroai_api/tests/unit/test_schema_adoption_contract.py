@@ -31,7 +31,7 @@ def test_column_contract_accepts_complete_shape():
 
 
 def test_head_contract_covers_security_queue_provenance_access_appeals_and_field_intelligence():
-    assert HEAD_ALEMBIC_REVISION == "023_field_intelligence"
+    assert HEAD_ALEMBIC_REVISION == "024_field_intelligence_launch"
     assert {"nonce_hash", "consumed_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["oauth_state_nonces"])
     assert {"key_version", "ciphertext_b64"}.issubset(HEAD_SCHEMA_REQUIREMENTS["connector_credentials"])
     assert {"status", "publish_attempts"}.issubset(HEAD_SCHEMA_REQUIREMENTS["task_outbox"])

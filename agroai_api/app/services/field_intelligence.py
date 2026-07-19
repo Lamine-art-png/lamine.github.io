@@ -212,6 +212,9 @@ def reserve_storage(
         reserved = _active_reservation_bytes(db, organization_id)
         if used + reserved + int(incoming_bytes) > limit_bytes:
             db.rollback()
+            from app.services.field_intelligence_metrics import quota_reservation_failures
+
+            quota_reservation_failures.inc()
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail={
@@ -365,6 +368,15 @@ def _record_run(
     output: dict | None = None,
     attempt_count: int = 1,
 ) -> None:
+    from app.services.field_intelligence_metrics import processing_outcomes, stage_latency, transcription_latency
+
+    processing_outcomes.labels(stage=stage, outcome=stage_status).inc()
+    if latency_ms is not None:
+        stage_latency.labels(stage=stage).observe(max(latency_ms, 0) / 1000.0)
+        if stage == "transcription":
+            transcription_latency.labels(provider=provider or "unknown", status=stage_status).observe(
+                max(latency_ms, 0) / 1000.0
+            )
     run = FieldObservationProcessingRun(
         id=str(uuid.uuid4()),
         tenant_id=observation.tenant_id,
@@ -489,6 +501,13 @@ def initiate_capture(db: Session, ctx: AuthContext, payload: dict) -> FieldCaptu
             )
         return winner
     db.refresh(session)
+    from app.services.field_intelligence_metrics import captures_initiated
+    from app.services.field_intelligence_rollout import organization_cohort
+
+    captures_initiated.labels(
+        source=str(payload.get("capture_source") or "typed"),
+        cohort=organization_cohort(db, ctx.organization),
+    ).inc()
     return session
 
 
@@ -586,6 +605,10 @@ def complete_capture(db: Session, ctx: AuthContext, capture_ref: str, payload: d
     session.observation_id = observation.id
     db.commit()
     db.refresh(observation)
+    from app.services.field_intelligence_metrics import observations_created
+    from app.services.field_intelligence_rollout import organization_cohort
+
+    observations_created.labels(cohort=organization_cohort(db, ctx.organization)).inc()
     return observation
 
 
@@ -629,6 +652,9 @@ def sync_batch(db: Session, ctx: AuthContext, items: Iterable[dict]) -> dict:
             db.rollback()
             failed += 1
             results.append({"client_capture_id": client_capture_id, "status": "failed", "error": exc.__class__.__name__})
+    from app.services.field_intelligence_metrics import sync_batches
+
+    sync_batches.labels(outcome="processed").inc()
     return {"accepted": accepted, "failed": failed, "total": accepted + failed, "results": results}
 
 
@@ -718,6 +744,11 @@ class _JobLeaseHeartbeat:
 
 def _claim_job(db: Session, job: IngestionJob, worker_id: str) -> bool:
     now = datetime.utcnow()
+    if job.worker_id and job.lease_expires_at and job.lease_expires_at <= now:
+        # A previous worker's lease lapsed; this claim is a stale-lease reclaim.
+        from app.services.field_intelligence_metrics import stale_leases
+
+        stale_leases.inc()
     updated = (
         db.query(IngestionJob)
         .filter(IngestionJob.id == job.id)
@@ -782,6 +813,9 @@ def run_field_intelligence_jobs(db: Session, *, limit: int = 25, worker_id: str 
 
 
 def _fail_or_retry(db: Session, job_id: str, exc: Exception) -> None:
+    from app.services.field_intelligence_metrics import processing_retries
+
+    processing_retries.labels(stage="job").inc()
     """Requeue or terminally fail a job — and durably record the attempt.
 
     Runs after the pipeline transaction rolled back, so the attempted stage's
@@ -1037,6 +1071,9 @@ def _apply_evidence_fields(
 
 
 def _link_evidence_record(db: Session, observation: FieldObservation, *, source_text: str, transcription_ok: bool) -> None:
+    from app.services.field_intelligence_metrics import evidence_created
+
+    evidence_created.inc()
     """Create/refresh an EvidenceRecord so the observation joins the graph.
 
     An untranscribed/failed voice capture with no confirmed text must NOT enter
@@ -1439,6 +1476,11 @@ def reconcile_pending_objects(db: Session, *, grace_seconds: int | None = None, 
             db.rollback()
             errors += 1
             logger.exception("field-intelligence pending-object reconciliation failed (key=%s)", object_key)
+    from app.services.field_intelligence_metrics import orphans_reconciled
+
+    for outcome, count in (("promoted", promoted), ("removed", removed), ("skipped", skipped), ("errors", errors)):
+        if count:
+            orphans_reconciled.labels(outcome=outcome).inc(count)
     return {"status": "ok", "promoted": promoted, "removed": removed, "skipped": skipped, "errors": errors}
 
 
@@ -1657,6 +1699,9 @@ def _execute_object_deletion(db: Session, asset: FieldObservationAsset) -> bool:
             get_object_store().delete(
                 asset.object_ref, tenant_id=asset.tenant_id, connection_id=asset.capture_session_id
             )
+            from app.services.field_intelligence_metrics import objects_deleted
+
+            objects_deleted.inc()
         asset.status = "deleted"
         asset.object_deleted_at = datetime.utcnow()
         return True
@@ -1897,6 +1942,9 @@ def delete_observation(db: Session, ctx: AuthContext, observation_id: str) -> No
 
 
 def create_task_from_observation(db: Session, ctx: AuthContext, observation_id: str, payload: dict) -> dict:
+    from app.services.field_intelligence_metrics import tasks_created
+
+    tasks_created.inc()
     from app.services.field_operating_loop import build_field_ops_context, create_task
 
     observation = get_observation(db, ctx, observation_id)

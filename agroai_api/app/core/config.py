@@ -114,6 +114,22 @@ class Settings(BaseSettings):
     FIELD_MEDIA_PROBE_MAX_OUTPUT_BYTES: int = 8388608  # 8 MiB cap on probe subprocess output
     FIELD_MEDIA_PROBE_MEMORY_LIMIT_MB: int = 512  # address-space limit for the probe subprocess
 
+    # Field Intelligence launch control (Stage A — production activation)
+    # Release states: disabled | internal | canary | general. Deployment
+    # configuration sets the default; the DB kill switch always wins.
+    # "" (unset) => disabled in production/staging, general in dev/test.
+    FIELD_INTELLIGENCE_RELEASE_STATE: str = ""
+    FIELD_INTERNAL_ORGANIZATION_IDS: str = ""  # csv; internal-cohort organizations
+    FIELD_CANARY_ORGANIZATION_IDS: str = ""  # csv; canary allowlist (secure config)
+    FIELD_TRANSCRIPTION_TIMEOUT_SECONDS: float = 60.0  # per provider request
+    FIELD_TRANSCRIPTION_MAX_BYTES: int = 26214400  # 25 MiB provider input bound
+    FIELD_DELETION_RETENTION_DAYS: int = 0  # 0 = delete as soon as the worker runs
+    FIELD_METRICS_ENABLED: bool = True
+    FIELD_WORKER_HEARTBEAT_TTL_SECONDS: int = 120  # worker considered stale after this
+    FIELD_STALE_JOB_ALERT_SECONDS: int = 900  # queued/running older than this is stale
+    FIELD_RELEASE_PORTAL_SHA: str = ""  # deploy pipeline reports the portal build SHA
+    FIELD_RELEASE_EDGE_SHA: str = ""  # deploy pipeline reports the edge gateway SHA
+
     # Scheduler
     SYNC_INTERVAL_MINUTES: int = 15
     SYNC_LOOKBACK_DAYS: int = 14

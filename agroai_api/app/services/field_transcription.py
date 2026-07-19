@@ -163,6 +163,108 @@ class FakeTranscriptionProvider:
         )
 
 
+def _provider_timeout() -> float:
+    try:
+        return max(1.0, float(getattr(settings, "FIELD_TRANSCRIPTION_TIMEOUT_SECONDS", 60.0)))
+    except (TypeError, ValueError):
+        return 60.0
+
+
+def _input_bound_error(provider_name: str, audio: bytes | None, language: str | None) -> TranscriptionResult | None:
+    """Terminal (non-retryable) rejection for provider input beyond the bound."""
+    limit = int(getattr(settings, "FIELD_TRANSCRIPTION_MAX_BYTES", 26214400) or 26214400)
+    if audio is not None and len(audio) > limit:
+        return TranscriptionResult(
+            provider=provider_name, status="failed", language=language,
+            error="audio_exceeds_provider_input_bound", retryable=False,
+            metadata={"audio_bytes": len(audio), "limit_bytes": limit},
+        )
+    return None
+
+
+class OpenAIWhisperTranscriptionProvider:
+    """Production speech-to-text via an OpenAI-compatible transcription API.
+
+    Posts multipart ``file`` + ``model`` (+ optional ``language``) to the
+    configured ``/audio/transcriptions``-style endpoint. Multilingual by
+    default: when no language hint is supplied the provider detects it, and
+    the detected language is preserved as provenance. Credentials come from
+    settings and are never logged or echoed.
+    """
+
+    name = "openai_whisper"
+
+    _EXTENSIONS = {
+        "audio/webm": "webm", "video/webm": "webm", "audio/ogg": "ogg",
+        "audio/mpeg": "mp3", "audio/mp4": "m4a", "video/mp4": "mp4",
+        "audio/wav": "wav", "audio/x-wav": "wav", "audio/flac": "flac",
+    }
+
+    def available(self) -> bool:
+        return bool(
+            str(getattr(settings, "FIELD_TRANSCRIPTION_ENDPOINT", "") or "").strip()
+            and str(getattr(settings, "FIELD_TRANSCRIPTION_API_KEY", "") or "").strip()
+        )
+
+    def transcribe_bytes(self, *, audio, content_type, language) -> TranscriptionResult:
+        started = time.monotonic()
+        if not self.available():
+            return TranscriptionResult(
+                provider=self.name, status="unavailable",
+                error="transcription_provider_not_configured", language=language,
+            )
+        bound = _input_bound_error(self.name, audio, language)
+        if bound is not None:
+            return bound
+        endpoint = str(settings.FIELD_TRANSCRIPTION_ENDPOINT).strip()
+        api_key = str(settings.FIELD_TRANSCRIPTION_API_KEY).strip()
+        model = str(getattr(settings, "FIELD_TRANSCRIPTION_MODEL", "") or "").strip() or "whisper-1"
+        extension = self._EXTENSIONS.get((content_type or "").split(";")[0].strip().lower(), "webm")
+        try:
+            import httpx
+
+            data: dict = {"model": model, "response_format": "json"}
+            if language:
+                data["language"] = language  # hint only; detection otherwise
+            files = {"file": (f"audio.{extension}", audio, content_type or "application/octet-stream")}
+            with httpx.Client(timeout=_provider_timeout()) as http:
+                response = http.post(
+                    endpoint,
+                    headers={"Authorization": f"Bearer {api_key}"},
+                    data=data,
+                    files=files,
+                )
+            latency = int((time.monotonic() - started) * 1000)
+            if response.status_code >= 400:
+                return TranscriptionResult(
+                    provider=self.name, status="failed", model=model, language=language,
+                    latency_ms=latency, error=f"provider_http_{response.status_code}",
+                    retryable=response.status_code in _RETRYABLE_HTTP,
+                )
+            payload = response.json()
+            transcript = str(payload.get("text") or "").strip()
+            if not transcript:
+                return TranscriptionResult(
+                    provider=self.name, status="failed", model=model, language=language,
+                    latency_ms=latency, error="provider_returned_empty_transcript", retryable=False,
+                )
+            detected = str(payload.get("language") or "").strip() or None
+            return TranscriptionResult(
+                provider=self.name, status="completed", transcript=transcript, model=model,
+                language=detected or language, latency_ms=latency,
+                metadata={"detected_language": detected, "language_hint": language,
+                          "audio_bytes": len(audio or b"")},
+            )
+        except Exception as exc:  # noqa: BLE001 - surface failure truthfully
+            name = exc.__class__.__name__.lower()
+            transient = any(tok in name for tok in ("timeout", "connect", "network", "pool", "protocol", "read"))
+            return TranscriptionResult(
+                provider=self.name, status="failed", model=model, language=language,
+                latency_ms=int((time.monotonic() - started) * 1000),
+                error=exc.__class__.__name__, retryable=transient,
+            )
+
+
 class HttpTranscriptionProvider:
     """Real, configured speech-to-text adapter (provider-neutral HTTP).
 
@@ -187,6 +289,9 @@ class HttpTranscriptionProvider:
                 provider=self.name, status="unavailable",
                 error="transcription_provider_not_configured", language=language,
             )
+        bound = _input_bound_error(self.name, audio, language)
+        if bound is not None:
+            return bound
         endpoint = str(settings.FIELD_TRANSCRIPTION_ENDPOINT).strip()
         api_key = str(settings.FIELD_TRANSCRIPTION_API_KEY).strip()
         model = str(getattr(settings, "FIELD_TRANSCRIPTION_MODEL", "") or "").strip() or None
@@ -200,7 +305,7 @@ class HttpTranscriptionProvider:
             params = {"language": language or "en"}
             if model:
                 params["model"] = model
-            with httpx.Client(timeout=60.0) as http:
+            with httpx.Client(timeout=_provider_timeout()) as http:
                 response = http.post(endpoint, content=audio, headers=headers, params=params)
             latency = int((time.monotonic() - started) * 1000)
             if response.status_code >= 400:
@@ -274,6 +379,9 @@ def get_transcription_provider() -> TranscriptionProvider:
         return FakeTranscriptionProvider(fail=True)
     if mode in {"fake_retry", "test_retry"}:
         return FakeRetryTranscriptionProvider(int(getattr(settings, "FIELD_TRANSCRIPTION_FAKE_RETRY_FAILS", 1) or 1))
+    if mode in {"openai_whisper", "whisper"}:
+        whisper = OpenAIWhisperTranscriptionProvider()
+        return whisper if whisper.available() else DisabledTranscriptionProvider()
     if mode in {"http", "configured", "production"}:
         provider = HttpTranscriptionProvider()
         return provider if provider.available() else DisabledTranscriptionProvider()

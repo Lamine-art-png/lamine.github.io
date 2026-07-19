@@ -5,7 +5,7 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "023_field_intelligence"
+HEAD_ALEMBIC_REVISION = "024_field_intelligence_launch"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
@@ -93,6 +93,8 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "field_storage_reservations": {
         "id", "tenant_id", "capture_session_id", "size_bytes", "expires_at",
     },
+    "field_runtime_flags": {"key", "value_json", "updated_at"},
+    "field_worker_heartbeats": {"worker_id", "git_sha", "last_heartbeat_at"},
 }
 
 

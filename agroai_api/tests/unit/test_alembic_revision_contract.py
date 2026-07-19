@@ -50,6 +50,7 @@ def test_account_verification_platform_api_appeals_and_field_intelligence_form_o
         "021_platform_api_hardening": "020_platform_api_private_beta",
         "022_account_access_appeals": "021_platform_api_hardening",
         "023_field_intelligence": "022_account_access_appeals",
+        "024_field_intelligence_launch": "023_field_intelligence",
     }
     actual_tail = {}
 
