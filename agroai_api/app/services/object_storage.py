@@ -259,11 +259,20 @@ class S3ObjectStore:
         body = response["Body"]
 
         def _iterator():
-            while True:
-                chunk = body.read(chunk_size)
-                if not chunk:
-                    break
-                yield chunk
+            # The finally block guarantees the S3/R2 body (and its pooled HTTP
+            # connection) is released on normal completion, on error, and on
+            # client cancellation (GeneratorExit via StreamingResponse close).
+            try:
+                while True:
+                    chunk = body.read(chunk_size)
+                    if not chunk:
+                        break
+                    yield chunk
+            finally:
+                try:
+                    body.close()
+                except Exception:  # noqa: BLE001 - releasing is best-effort
+                    pass
 
         return _iterator()
 

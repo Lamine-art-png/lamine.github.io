@@ -355,7 +355,8 @@ def initiate_capture(db: Session, ctx: AuthContext, payload: dict) -> FieldCaptu
         latitude=_as_float(payload.get("latitude")),
         longitude=_as_float(payload.get("longitude")),
         location_accuracy_m=_as_float(payload.get("location_accuracy_m")),
-        asset_manifest_json=payload.get("asset_manifest") or [],
+        # Persist exactly what was fingerprinted — the normalized manifest.
+        asset_manifest_json=_normalized_manifest(payload),
         metadata_json=payload.get("metadata") or {},
         client_created_at=_parse_dt(payload.get("client_created_at")),
     )
@@ -993,6 +994,7 @@ def register_asset(
     size_bytes: int,
     duration_seconds: float | None,
     spool_path: str,
+    client_reported_duration: float | None = None,
 ) -> FieldObservationAsset:
     """Durably store an asset in R2/S3 and register its authorized reference.
 
@@ -1069,8 +1071,14 @@ def register_asset(
         object_ref=object_ref,
         content_sha256=content_sha256,
         size_bytes=size_bytes,
+        # server-measured duration only; the client's claim is metadata
         duration_seconds=duration_seconds,
         status="stored",
+        metadata_json=(
+            {"client_reported_duration_seconds": client_reported_duration}
+            if client_reported_duration is not None
+            else {}
+        ),
     )
     db.add(asset)
     manifest = list(session.asset_manifest_json or [])
@@ -1249,12 +1257,53 @@ def read_asset_bytes(db: Session, ctx: AuthContext, asset_id: str) -> tuple[Fiel
     return asset, data
 
 
-def open_asset_stream(db: Session, ctx: AuthContext, asset_id: str, *, byte_range: tuple[int, int] | None = None):
+def _range_not_satisfiable(total: int) -> HTTPException:
+    # RFC 9110: a 416 carries Content-Range: bytes */<complete-length>.
+    return HTTPException(
+        status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE,
+        detail="Requested range not satisfiable",
+        headers={"Content-Range": f"bytes */{total}"},
+    )
+
+
+def resolve_byte_range(range_spec: tuple[int | None, int | None] | None, total: int) -> tuple[int, int, int] | None:
+    """Resolve a parsed Range spec against the object size.
+
+    ``(start, end)`` — bounded range; ``(start, None)`` — open-ended;
+    ``(None, n)`` — suffix range (last ``n`` bytes). Raises 416 with
+    ``Content-Range: bytes */total`` when unsatisfiable.
+    """
+    if range_spec is None:
+        return None
+    start, end = range_spec
+    if start is None:
+        # suffix range: bytes=-N
+        if not end or total <= 0:
+            raise _range_not_satisfiable(total)
+        start = max(total - int(end), 0)
+        end = total - 1
+    else:
+        if total <= 0 or start >= total:
+            raise _range_not_satisfiable(total)
+        end = total - 1 if end is None else min(int(end), total - 1)
+        if start > end:
+            raise _range_not_satisfiable(total)
+    return int(start), int(end), total
+
+
+def open_asset_stream(
+    db: Session,
+    ctx: AuthContext,
+    asset_id: str,
+    *,
+    range_spec: tuple[int | None, int | None] | None = None,
+):
     """Authorize an asset and return (asset, iterator, total_size, served_range).
 
     Streams from R2 without buffering the whole object in API memory. Retrieval
     is disabled the instant the asset leaves ``stored`` (deletion) or its
-    observation is deleted.
+    observation is deleted. Supports bounded, open-ended and suffix ranges;
+    unsatisfiable ranges raise 416 with ``Content-Range: bytes */total``.
     """
     organization_id = require_org(ctx)
     asset = (
@@ -1272,13 +1321,7 @@ def open_asset_stream(db: Session, ctx: AuthContext, asset_id: str, *, byte_rang
             raise HTTPException(status_code=status.HTTP_410_GONE, detail="Asset no longer available")
     store = _object_store()
     total = int(asset.size_bytes or 0)
-    served_range = None
-    if byte_range is not None:
-        start, end = byte_range
-        end = min(end, max(total - 1, 0)) if total else end
-        if start > end or start < 0:
-            raise HTTPException(status_code=status.HTTP_416_REQUESTED_RANGE_NOT_SATISFIABLE, detail="Invalid range")
-        served_range = (start, end, total)
+    served_range = resolve_byte_range(range_spec, total)
     iterator = store.stream_object(
         asset.object_ref, tenant_id=organization_id, connection_id=asset.capture_session_id,
         byte_range=(served_range[0], served_range[1]) if served_range else None,

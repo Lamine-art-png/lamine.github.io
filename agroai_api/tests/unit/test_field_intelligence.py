@@ -65,6 +65,34 @@ def _auth(db, *, email="fi@example.com", org_id="org-fi", workspace_id="ws-fi"):
     return org, workspace, {"Authorization": f"Bearer {token}"}
 
 
+def _ogg_opus(seconds: float = 3.0, pad: int = 64) -> bytes:
+    """Synthesize a minimal, structurally valid Ogg Opus stream.
+
+    Real media inspection parses container tracks, so tests must upload real
+    containers: a BOS page with an OpusHead, an OpusTags page, and an EOS page
+    whose granule position encodes the duration.
+    """
+    import struct as _struct
+
+    def page(header_type: int, granule: int, seq: int, payload: bytes) -> bytes:
+        lacing = []
+        remaining = len(payload)
+        while remaining >= 255:
+            lacing.append(255)
+            remaining -= 255
+        lacing.append(remaining)
+        return (
+            b"OggS" + bytes([0, header_type]) + _struct.pack("<q", granule)
+            + _struct.pack("<I", 1) + _struct.pack("<I", seq) + _struct.pack("<I", 0)
+            + bytes([len(lacing)]) + bytes(lacing) + payload
+        )
+
+    head = b"OpusHead" + bytes([1, 1]) + _struct.pack("<H", 0) + _struct.pack("<I", 48000) + _struct.pack("<h", 0) + b"\x00"
+    tags = b"OpusTags" + _struct.pack("<I", 0) + _struct.pack("<I", 0)
+    audio = b"\x00" * max(pad, 1)
+    return page(0x02, 0, 0, head) + page(0x00, 0, 1, tags) + page(0x04, int(seconds * 48000), 2, audio)
+
+
 def _initiate(client, headers, **overrides):
     body = {
         "client_capture_id": overrides.pop("client_capture_id", "cap-1"),
@@ -255,10 +283,14 @@ def test_asset_wrong_content_rejected_no_orphan(client, db, fake_store):
 def test_uploaded_audio_is_what_gets_transcribed(client, db, fake_store, monkeypatch):
     monkeypatch.setattr("app.core.config.settings.FIELD_TRANSCRIPTION_PROVIDER", "fake")
     _, _, headers = _auth(db)
-    # client manifest lies about the object ref; server must ignore it and use the DB row
+    # a manifest smuggling an object_ref (or any unknown key) is rejected outright
+    sneaky = _initiate(client, headers, capture_source="voice", note_text=None,
+                       asset_manifest=[{"kind": "audio", "client_asset_id": "aud",
+                                        "content_type": "audio/ogg", "object_ref": "s3://evil/hacked"}])
+    assert sneaky.status_code == 422
     cap = _initiate(client, headers, capture_source="voice", note_text=None,
-                    asset_manifest=[{"kind": "audio", "client_asset_id": "aud", "object_ref": "s3://evil/hacked"}]).json()["capture"]
-    audio = b"OggS" + b"\x00" * 500  # 504 bytes of "audio"
+                    asset_manifest=[{"kind": "audio", "client_asset_id": "aud", "content_type": "audio/ogg"}]).json()["capture"]
+    audio = _ogg_opus(seconds=3.0, pad=500)
     up = client.post(f"/v1/field-intelligence/captures/{cap['id']}/assets",
                      files={"file": ("v.ogg", io.BytesIO(audio), "audio/ogg")},
                      data={"client_asset_id": "aud", "kind": "audio", "duration_seconds": "3"}, headers=headers)
@@ -273,7 +305,7 @@ def test_uploaded_audio_is_what_gets_transcribed(client, db, fake_store, monkeyp
 def test_transcription_unavailable_without_provider(client, db, fake_store):
     _, _, headers = _auth(db)
     cap = _initiate(client, headers, capture_source="voice", note_text=None).json()["capture"]
-    audio = b"OggS" + b"\x00" * 100
+    audio = _ogg_opus(seconds=2.0, pad=100)
     client.post(f"/v1/field-intelligence/captures/{cap['id']}/assets",
                 files={"file": ("v.ogg", io.BytesIO(audio), "audio/ogg")},
                 data={"client_asset_id": "aud", "kind": "audio"}, headers=headers)
@@ -289,7 +321,7 @@ def test_failed_transcription_can_be_reprocessed(client, db, fake_store, monkeyp
     _, _, headers = _auth(db)
     cap = _initiate(client, headers, capture_source="voice", note_text=None).json()["capture"]
     client.post(f"/v1/field-intelligence/captures/{cap['id']}/assets",
-                files={"file": ("v.ogg", io.BytesIO(b"OggS" + b"0" * 50), "audio/ogg")},
+                files={"file": ("v.ogg", io.BytesIO(_ogg_opus(pad=50)), "audio/ogg")},
                 data={"client_asset_id": "aud", "kind": "audio"}, headers=headers)
     obs_id = _complete(client, headers, cap["id"]).json()["observation"]["id"]
     _process(db)
@@ -308,7 +340,7 @@ def test_deleted_observation_disables_asset_retrieval_and_removes_object(client,
     _, _, headers = _auth(db)
     cap = _initiate(client, headers, capture_source="voice", note_text=None).json()["capture"]
     up = client.post(f"/v1/field-intelligence/captures/{cap['id']}/assets",
-                     files={"file": ("v.ogg", io.BytesIO(b"OggS" + b"0" * 40), "audio/ogg")},
+                     files={"file": ("v.ogg", io.BytesIO(_ogg_opus(pad=40)), "audio/ogg")},
                      data={"client_asset_id": "aud", "kind": "audio"}, headers=headers)
     asset_id = up.json()["asset"]["id"]
     obs_id = _complete(client, headers, cap["id"]).json()["observation"]["id"]
@@ -483,7 +515,7 @@ def test_retryable_transcription_does_not_complete_job(client, db, fake_store, m
     _, _, headers = _auth(db)
     cap = _initiate(client, headers, capture_source="voice", note_text=None).json()["capture"]
     client.post(f"/v1/field-intelligence/captures/{cap['id']}/assets",
-                files={"file": ("v.ogg", io.BytesIO(b"OggS" + b"0" * 40), "audio/ogg")},
+                files={"file": ("v.ogg", io.BytesIO(_ogg_opus(pad=40)), "audio/ogg")},
                 data={"client_asset_id": "aud", "kind": "audio"}, headers=headers)
     obs_id = _complete(client, headers, cap["id"]).json()["observation"]["id"]
     _process(db)  # first attempt fails retryably; job must NOT complete
@@ -531,7 +563,7 @@ def test_blank_recording_not_usable_evidence(client, db, fake_store):
     _, _, headers = _auth(db)
     cap = _initiate(client, headers, capture_source="voice", note_text=None).json()["capture"]
     client.post(f"/v1/field-intelligence/captures/{cap['id']}/assets",
-                files={"file": ("v.ogg", io.BytesIO(b"OggS" + b"0" * 30), "audio/ogg")},
+                files={"file": ("v.ogg", io.BytesIO(_ogg_opus(pad=30)), "audio/ogg")},
                 data={"client_asset_id": "aud", "kind": "audio"}, headers=headers)
     obs_id = _complete(client, headers, cap["id"]).json()["observation"]["id"]
     _process(db)  # disabled provider -> unavailable, no confirmed text

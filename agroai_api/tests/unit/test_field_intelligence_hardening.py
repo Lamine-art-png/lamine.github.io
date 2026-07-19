@@ -37,6 +37,7 @@ from tests.unit.test_field_intelligence import (  # reuse the shared harness
     _auth,
     _complete,
     _initiate,
+    _ogg_opus,
     _process,
     _real_ctx,
 )
@@ -71,7 +72,7 @@ def test_blank_recording_absent_from_cockpit_and_ask_context(client, db, fake_st
     org, _, headers = _auth(db)
     cap = _initiate(client, headers, capture_source="voice", note_text=None).json()["capture"]
     _upload(client, headers, cap["id"], client_asset_id="aud", kind="audio",
-            body=b"OggS" + b"\x00" * 40, filename="v.ogg", content_type="audio/ogg")
+            body=_ogg_opus(pad=40), filename="v.ogg", content_type="audio/ogg")
     _complete(client, headers, cap["id"])
     _process(db)  # no transcription provider -> blank, unusable evidence
 
@@ -97,7 +98,7 @@ def test_blank_recording_absent_from_ask_agro_ai_intelligence_context(client, db
     org, _, headers = _auth(db)
     cap = _initiate(client, headers, capture_source="voice", note_text=None).json()["capture"]
     _upload(client, headers, cap["id"], client_asset_id="aud", kind="audio",
-            body=b"OggS" + b"\x00" * 40, filename="v.ogg", content_type="audio/ogg")
+            body=_ogg_opus(pad=40), filename="v.ogg", content_type="audio/ogg")
     _complete(client, headers, cap["id"])
     _process(db)
 
@@ -211,7 +212,7 @@ def test_retry_attempt_provenance_persisted(client, db, fake_store, monkeypatch)
     _, _, headers = _auth(db)
     cap = _initiate(client, headers, capture_source="voice", note_text=None).json()["capture"]
     _upload(client, headers, cap["id"], client_asset_id="aud", kind="audio",
-            body=b"OggS" + b"\x00" * 40, filename="v.ogg", content_type="audio/ogg")
+            body=_ogg_opus(pad=40), filename="v.ogg", content_type="audio/ogg")
     obs_id = _complete(client, headers, cap["id"]).json()["observation"]["id"]
     _process(db)  # first attempt fails retryably and is requeued
 
@@ -412,7 +413,7 @@ def test_lease_heartbeat_prevents_reclaim_during_slow_processing(client, db, fak
     _, _, headers = _auth(db)
     cap = _initiate(client, headers, capture_source="voice", note_text=None).json()["capture"]
     _upload(client, headers, cap["id"], client_asset_id="aud", kind="audio",
-            body=b"OggS" + b"\x00" * 40, filename="v.ogg", content_type="audio/ogg")
+            body=_ogg_opus(pad=40), filename="v.ogg", content_type="audio/ogg")
     obs_id = _complete(client, headers, cap["id"]).json()["observation"]["id"]
 
     real_transcribe = svc.transcribe_audio
@@ -582,3 +583,244 @@ def test_storage_quota_enforced_before_upload(client, db, fake_store):
     assert res.status_code == 402
     assert res.json()["detail"]["code"] == "storage_quota_exceeded"
     assert len(fake_store.client.items) == 0  # rejected before any durable write
+
+
+# --------------------------------------------------------------------------- #
+# Item 9 — strict asset manifest + body size precheck
+# --------------------------------------------------------------------------- #
+
+def _mp4_bytes(handlers=("vide",), codec=b"avc1", timescale=1000, duration=5000):
+    import struct as _struct
+
+    def box(box_type, payload):
+        return _struct.pack(">I", 8 + len(payload)) + box_type + payload
+
+    mvhd = box(b"mvhd", b"\x00" * 12 + _struct.pack(">I", timescale) + _struct.pack(">I", duration) + b"\x00" * 80)
+    traks = b""
+    for handler in handlers:
+        hdlr = box(b"hdlr", b"\x00" * 8 + handler.encode() + b"\x00" * 12)
+        entry = box(codec, b"\x00" * 8)
+        stsd = box(b"stsd", b"\x00" * 8 + entry)
+        stbl = box(b"stbl", stsd)
+        minf = box(b"minf", stbl)
+        mdia = box(b"mdia", hdlr + minf)
+        traks += box(b"trak", mdia)
+    moov = box(b"moov", mvhd + traks)
+    ftyp = box(b"ftyp", b"isom\x00\x00\x02\x00isomiso2")
+    return ftyp + moov
+
+
+def test_manifest_strictness(client, db):
+    _, _, headers = _auth(db)
+    base = {"client_capture_id": "m1", "idempotency_key": "m1", "note_text": "x"}
+    # unknown field
+    r = client.post("/v1/field-intelligence/captures/initiate", headers=headers, json={
+        **base, "asset_manifest": [{"client_asset_id": "a", "kind": "audio", "content_type": "audio/ogg", "evil": 1}]})
+    assert r.status_code == 422
+    # invalid kind
+    r = client.post("/v1/field-intelligence/captures/initiate", headers=headers, json={
+        **base, "asset_manifest": [{"client_asset_id": "a", "kind": "script", "content_type": "audio/ogg"}]})
+    assert r.status_code == 422
+    # missing content_type
+    r = client.post("/v1/field-intelligence/captures/initiate", headers=headers, json={
+        **base, "asset_manifest": [{"client_asset_id": "a", "kind": "audio"}]})
+    assert r.status_code == 422
+    # unbounded ids rejected
+    r = client.post("/v1/field-intelligence/captures/initiate", headers=headers, json={
+        **base, "asset_manifest": [{"client_asset_id": "a" * 500, "kind": "audio", "content_type": "audio/ogg"}]})
+    assert r.status_code == 422
+
+
+def test_persisted_manifest_identical_to_fingerprinted(client, db):
+    from app.models.field_intelligence import FieldCaptureSession
+    _, _, headers = _auth(db)
+    manifest = [
+        {"client_asset_id": "b", "kind": "photo", "content_type": "image/png"},
+        {"client_asset_id": "a", "kind": "audio", "content_type": "audio/ogg"},
+    ]
+    cap = _initiate(client, headers, asset_manifest=manifest,
+                    capture_source="voice").json()["capture"]
+    session = db.get(FieldCaptureSession, cap["id"])
+    normalized = svc._normalized_manifest({"asset_manifest": manifest})
+    assert session.asset_manifest_json == normalized
+    # normalizing the persisted manifest is a fixpoint (identical shapes)
+    assert svc._normalized_manifest({"asset_manifest": session.asset_manifest_json}) == normalized
+
+
+def test_body_size_precheck_rejects_declared_oversize(client, db, monkeypatch):
+    _, _, headers = _auth(db)
+    monkeypatch.setattr("app.core.config.settings.FIELD_SYNC_MAX_BODY_BYTES", 64)
+    res = _initiate(client, headers, note_text="Y" * 300)
+    assert res.status_code == 413
+
+
+# --------------------------------------------------------------------------- #
+# Item 10 — real media inspection
+# --------------------------------------------------------------------------- #
+
+def test_video_track_rejected_for_audio_kind(client, db, fake_store):
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    res = _upload(client, headers, cap["id"], client_asset_id="v", kind="audio",
+                  body=_mp4_bytes(handlers=("vide",)), filename="v.mp4", content_type="audio/mp4")
+    assert res.status_code == 415
+    assert res.json()["detail"]["reason"] in {"video_track_in_audio_upload", "no_audio_track"}
+    assert len(fake_store.client.items) == 0
+
+
+def test_video_upload_accepted_with_video_track(client, db, fake_store):
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    res = _upload(client, headers, cap["id"], client_asset_id="v", kind="video",
+                  body=_mp4_bytes(handlers=("vide",)), filename="v.mp4", content_type="video/mp4")
+    assert res.status_code == 200, res.text
+    assert res.json()["asset"]["duration_seconds"] == pytest.approx(5.0)
+
+
+def test_audio_without_any_audio_track_rejected(client, db, fake_store):
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    # magic-only fake: OggS signature but no parseable stream
+    res = _upload(client, headers, cap["id"], client_asset_id="a", kind="audio",
+                  body=b"OggS" + b"\x00" * 200, filename="a.ogg", content_type="audio/ogg")
+    assert res.status_code == 415
+    assert len(fake_store.client.items) == 0
+
+
+def test_server_measured_duration_overrides_browser_claim(client, db, fake_store):
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    res = client.post(
+        f"/v1/field-intelligence/captures/{cap['id']}/assets",
+        files={"file": ("v.ogg", io.BytesIO(_ogg_opus(seconds=3.0)), "audio/ogg")},
+        data={"client_asset_id": "aud", "kind": "audio", "duration_seconds": "99999"},
+        headers=headers,
+    )
+    assert res.status_code == 200, res.text
+    asset = db.get(FieldObservationAsset, res.json()["asset"]["id"])
+    assert asset.duration_seconds == pytest.approx(3.0)
+    assert (asset.metadata_json or {}).get("client_reported_duration_seconds") == 99999.0
+
+
+def test_browser_duration_cannot_bypass_limit(client, db, fake_store, monkeypatch):
+    monkeypatch.setattr("app.core.config.settings.FIELD_AUDIO_MAX_SECONDS", 2)
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    res = client.post(
+        f"/v1/field-intelligence/captures/{cap['id']}/assets",
+        files={"file": ("v.ogg", io.BytesIO(_ogg_opus(seconds=10.0)), "audio/ogg")},
+        data={"client_asset_id": "aud", "kind": "audio", "duration_seconds": "1"},  # lying client
+        headers=headers,
+    )
+    assert res.status_code == 413
+    assert len(fake_store.client.items) == 0
+
+
+def test_misleading_mime_type_rejected(client, db, fake_store):
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    # audio bytes declared as video/*: the container has no video track
+    res = _upload(client, headers, cap["id"], client_asset_id="m", kind="audio",
+                  body=_ogg_opus(), filename="a.ogg", content_type="video/ogg")
+    assert res.status_code == 415
+    # image bytes declared as audio
+    res = _upload(client, headers, cap["id"], client_asset_id="m2", kind="audio",
+                  body=b"\x89PNG\r\n\x1a\n" + b"0" * 64, filename="a.ogg", content_type="audio/ogg")
+    assert res.status_code == 415
+
+
+def test_wav_duration_measured(client, db, fake_store):
+    import struct as _struct
+    _, _, headers = _auth(db)
+    cap = _initiate(client, headers).json()["capture"]
+    byte_rate = 16000
+    data = b"\x00" * (byte_rate * 2)  # exactly 2 seconds
+    fmt = _struct.pack("<HHIIHH", 1, 1, 16000, byte_rate, 1, 8)
+    wav = (b"RIFF" + _struct.pack("<I", 36 + len(data)) + b"WAVE"
+           + b"fmt " + _struct.pack("<I", len(fmt)) + fmt
+           + b"data" + _struct.pack("<I", len(data)) + data)
+    res = _upload(client, headers, cap["id"], client_asset_id="w", kind="audio",
+                  body=wav, filename="a.wav", content_type="audio/wav")
+    assert res.status_code == 200, res.text
+    assert res.json()["asset"]["duration_seconds"] == pytest.approx(2.0)
+
+
+# --------------------------------------------------------------------------- #
+# Item 11 — streaming: ranges, 416, resource release, cancellation
+# --------------------------------------------------------------------------- #
+
+def _stored_asset(client, db, headers, size=128):
+    cap = _initiate(client, headers).json()["capture"]
+    body = b"\x89PNG\r\n\x1a\n" + bytes(range(256))[: size - 8]
+    res = _upload(client, headers, cap["id"], body=body)
+    assert res.status_code == 200
+    return res.json()["asset"]["id"], len(body)
+
+
+def test_suffix_range(client, db, fake_store):
+    _, _, headers = _auth(db)
+    asset_id, total = _stored_asset(client, db, headers)
+    res = client.get(f"/v1/field-intelligence/assets/{asset_id}/content",
+                     headers={**headers, "Range": "bytes=-10"})
+    assert res.status_code == 206
+    assert res.headers["content-range"] == f"bytes {total-10}-{total-1}/{total}"
+    assert len(res.content) == 10
+
+
+def test_open_ended_range(client, db, fake_store):
+    _, _, headers = _auth(db)
+    asset_id, total = _stored_asset(client, db, headers)
+    res = client.get(f"/v1/field-intelligence/assets/{asset_id}/content",
+                     headers={**headers, "Range": "bytes=5-"})
+    assert res.status_code == 206
+    assert res.headers["content-range"] == f"bytes 5-{total-1}/{total}"
+    assert len(res.content) == total - 5
+
+
+def test_unsatisfiable_ranges_return_416_with_content_range(client, db, fake_store):
+    _, _, headers = _auth(db)
+    asset_id, total = _stored_asset(client, db, headers)
+    res = client.get(f"/v1/field-intelligence/assets/{asset_id}/content",
+                     headers={**headers, "Range": "bytes=999999-"})
+    assert res.status_code == 416
+    assert res.headers["content-range"] == f"bytes */{total}"
+    res = client.get(f"/v1/field-intelligence/assets/{asset_id}/content",
+                     headers={**headers, "Range": "bytes=50-10"})
+    assert res.status_code == 416
+    assert res.headers["content-range"] == f"bytes */{total}"
+    res = client.get(f"/v1/field-intelligence/assets/{asset_id}/content",
+                     headers={**headers, "Range": "bytes=-0"})
+    assert res.status_code == 416
+
+
+def test_stream_body_closed_on_completion_and_cancellation():
+    closed = []
+
+    class TrackingBody(io.BytesIO):
+        def close(self):
+            closed.append(True)
+            super().close()
+
+    class TrackingClient(FakeStoreClient):
+        def get_object(self, Bucket, Key, Range=None):
+            response = super().get_object(Bucket, Key, Range=Range)
+            response["Body"] = TrackingBody(response["Body"].read())
+            return response
+
+    store = S3ObjectStore(bucket="b", prefix="agroai", client=TrackingClient())
+    payload = io.BytesIO(b"x" * 1024)
+    key = store._namespace(tenant_id="t", connection_id="c") + "raw/f"
+    store.client.upload_fileobj(payload, "b", key)
+    uri = f"s3://b/{key}"
+
+    # normal completion closes the body
+    iterator = store.stream_object(uri, tenant_id="t", connection_id="c", chunk_size=64)
+    assert b"".join(iterator) == b"x" * 1024
+    assert closed == [True]
+
+    # client cancellation (generator close -> GeneratorExit) also closes it
+    closed.clear()
+    iterator = store.stream_object(uri, tenant_id="t", connection_id="c", chunk_size=64)
+    next(iterator)
+    iterator.close()
+    assert closed == [True]

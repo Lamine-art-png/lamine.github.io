@@ -20,13 +20,14 @@ from fastapi import (
     APIRouter, BackgroundTasks, Depends, File, Form, Header, HTTPException, Query, Request, Response, UploadFile, status,
 )
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
 
 from app.api.deps import AuthContext, get_auth_context
 from app.core.config import settings
 from app.db.base import SessionLocal, get_db
 from app.services import field_intelligence as svc
+from app.services.media_inspection import inspect_media_file, validate_media_for_kind
 
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f\"\\]")
 
@@ -36,6 +37,18 @@ def _sanitize_filename(name: str | None) -> str:
     return cleaned[:200]
 
 router = APIRouter(prefix="/field-intelligence", tags=["field-intelligence"])
+
+
+def enforce_json_body_limit(request: Request) -> None:
+    """Reject oversized JSON bodies from the declared Content-Length before
+    model parsing runs (chunked bodies without a length still hit the
+    post-parse byte checks)."""
+    declared = (request.headers.get("content-length") or "").strip()
+    if declared.isdigit() and int(declared) > int(settings.FIELD_SYNC_MAX_BODY_BYTES):
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Request body too large",
+        )
 
 _KIND_MAGIC: dict[str, list[bytes]] = {
     "audio": [b"OggS", b"ID3", b"RIFF", b"\x1aE\xdf\xa3", b"fLaC", b"ftyp", b"\xff\xfb", b"\xff\xf3", b"\xff\xf2"],
@@ -81,6 +94,20 @@ def _json_depth(value, depth: int = 1) -> int:
     return depth
 
 
+class AssetManifestItem(BaseModel):
+    """Strict manifest entry: bounded fields, unknown keys rejected.
+
+    The persisted manifest and the idempotency-fingerprinted manifest are both
+    derived from exactly these three fields, so they can never diverge.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    client_asset_id: str = Field(min_length=1, max_length=_MAX_NAME)
+    kind: Literal["audio", "video", "photo", "file"]
+    content_type: str = Field(min_length=1, max_length=200)
+
+
 class CaptureInitiateRequest(BaseModel):
     client_capture_id: str = Field(max_length=_MAX_NAME)
     idempotency_key: str | None = Field(default=None, max_length=120)
@@ -100,7 +127,7 @@ class CaptureInitiateRequest(BaseModel):
     latitude: float | None = None
     longitude: float | None = None
     location_accuracy_m: float | None = None
-    asset_manifest: list[dict] = Field(default_factory=list, max_length=25)
+    asset_manifest: list[AssetManifestItem] = Field(default_factory=list, max_length=25)
     metadata: dict = Field(default_factory=dict)
     client_created_at: datetime | None = None
 
@@ -179,7 +206,7 @@ class TaskCreateRequest(BaseModel):
 # Captures
 # ---------------------------------------------------------------------------
 
-@router.post("/captures/initiate")
+@router.post("/captures/initiate", dependencies=[Depends(enforce_json_body_limit)])
 def initiate_capture(
     payload: CaptureInitiateRequest,
     ctx: AuthContext = Depends(get_auth_context),
@@ -221,16 +248,37 @@ async def upload_asset(
         spool.close()
         if total == 0:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Empty asset")
-        if kind == "audio" and duration_seconds and duration_seconds > settings.FIELD_AUDIO_MAX_SECONDS:
-            raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Audio exceeds duration limit")
-        if not _content_matches_kind(kind, head, file.content_type):
-            raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Content does not match declared media type")
+
+        # Real media inspection: parse actual container tracks and measure
+        # duration server-side under a hard budget. The browser-supplied
+        # duration is never trusted for limits or persisted as authoritative.
+        measured_duration: float | None = None
+        if kind == "file":
+            if not _content_matches_kind(kind, head, file.content_type):
+                raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Content does not match declared media type")
+        else:
+            inspection = inspect_media_file(spool_path)
+            ok, reason = validate_media_for_kind(
+                inspection, kind=kind, content_type=file.content_type,
+                max_audio_seconds=float(settings.FIELD_AUDIO_MAX_SECONDS),
+            )
+            if not ok:
+                if reason == "duration_exceeds_limit":
+                    raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                                        detail={"code": "duration_exceeds_limit", "message": "Media exceeds the duration limit."})
+                raise HTTPException(
+                    status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                    detail={"code": "media_rejected", "reason": reason,
+                            "message": "Content does not match the declared media type or is unsupported."},
+                )
+            measured_duration = inspection.duration_seconds
 
         asset = svc.register_asset(
             db, ctx, capture_id,
             client_asset_id=client_asset_id, kind=kind, content_type=file.content_type,
             filename=_sanitize_filename(file.filename), content_sha256=digest.hexdigest(), size_bytes=total,
-            duration_seconds=duration_seconds, spool_path=spool_path,
+            duration_seconds=measured_duration, spool_path=spool_path,
+            client_reported_duration=duration_seconds,
         )
         return {"status": "stored", "asset": svc._serialize_asset(asset)}
     finally:
@@ -268,7 +316,7 @@ def get_capture(
     return {"status": "ok", "capture": svc.serialize_capture(session)}
 
 
-@router.post("/sync/batch")
+@router.post("/sync/batch", dependencies=[Depends(enforce_json_body_limit)])
 def sync_batch(
     payload: SyncBatchRequest,
     background: BackgroundTasks,
@@ -404,7 +452,26 @@ def create_task(
 # Authorized asset retrieval / deletion
 # ---------------------------------------------------------------------------
 
-_RANGE_RE = re.compile(r"bytes=(\d+)-(\d*)")
+_RANGE_RE = re.compile(r"bytes=(\d*)-(\d*)")
+
+
+def _parse_range_header(range_header: str | None) -> tuple[int | None, int | None] | None:
+    """Parse ``bytes=start-end`` / ``bytes=start-`` / ``bytes=-suffix``.
+
+    Returns ``None`` (serve the full object) for absent or syntactically
+    invalid headers, per RFC 9110 §14.2 (an unparseable Range is ignored).
+    """
+    if not range_header:
+        return None
+    match = _RANGE_RE.fullmatch(range_header.strip())
+    if not match:
+        return None
+    start_raw, end_raw = match.group(1), match.group(2)
+    if not start_raw and not end_raw:
+        return None
+    if not start_raw:
+        return (None, int(end_raw))  # suffix: last N bytes
+    return (int(start_raw), int(end_raw) if end_raw else None)
 
 
 @router.get("/assets/{asset_id}/content")
@@ -414,14 +481,8 @@ def get_asset_content(
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> StreamingResponse:
-    byte_range = None
-    if range_header:
-        match = _RANGE_RE.fullmatch(range_header.strip())
-        if match:
-            start = int(match.group(1))
-            end = int(match.group(2)) if match.group(2) else (1 << 62)
-            byte_range = (start, end)
-    asset, iterator, total, served = svc.open_asset_stream(db, ctx, asset_id, byte_range=byte_range)
+    range_spec = _parse_range_header(range_header)
+    asset, iterator, total, served = svc.open_asset_stream(db, ctx, asset_id, range_spec=range_spec)
     filename = _sanitize_filename(asset.filename or asset.id)
     headers = {
         "X-Content-Type-Options": "nosniff",
