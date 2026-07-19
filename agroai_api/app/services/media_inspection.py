@@ -13,8 +13,12 @@ parsed as their declared kind are rejected, not guessed.
 """
 from __future__ import annotations
 
+import json
 import os
+import signal
 import struct
+import subprocess
+import threading
 from dataclasses import dataclass, field
 
 # Hard parsing budgets. Uploads are already size-capped upstream; these bound
@@ -133,6 +137,297 @@ def validate_media_for_kind(
     ):
         return False, "duration_exceeds_limit"
     return True, None
+
+
+# --------------------------------------------------------------------------- #
+# Bounded ffprobe verification (authoritative duration / track / codec)
+#
+# The structural parsers above read what the container *claims*. Duration caps
+# must bind on what the media *actually contains*, so capped audio/video is
+# verified by a bounded ffprobe subprocess that scans real packets. A file
+# whose duration cannot be verified is rejected — never accepted on trust.
+# --------------------------------------------------------------------------- #
+
+_FFPROBE_AUDIO_CODECS = {
+    "opus", "vorbis", "mp3", "mp3float", "aac", "flac", "alaw", "mulaw", "pcm",
+}
+_FFPROBE_VIDEO_CODECS = {"vp8", "vp9", "av1", "h264", "hevc", "h265", "theora"}
+
+# Understating the real duration is the attack the cap must resist; the
+# tolerance absorbs codec priming/padding and rounding, not forgery.
+_DURATION_FORGERY_TOLERANCE_SECONDS = 2.0
+_DURATION_FORGERY_TOLERANCE_RATIO = 0.15
+
+
+@dataclass
+class MediaProbeResult:
+    ok: bool
+    reason: str | None = None
+    duration_seconds: float | None = None
+    has_audio: bool = False
+    has_video: bool = False
+    codecs: list[str] = field(default_factory=list)
+    container_duration_seconds: float | None = None
+
+
+def _normalize_probe_codec(name: str) -> str:
+    lowered = (name or "").strip().lower()
+    if lowered.startswith(("pcm_", "adpcm")):
+        return "pcm"
+    if lowered in {"mp3float"}:
+        return "mp3"
+    if lowered in {"pcm_alaw", "alaw"}:
+        return "alaw"
+    if lowered in {"pcm_mulaw", "mulaw"}:
+        return "mulaw"
+    return lowered
+
+
+def _probe_process_limits(memory_limit_mb: int, cpu_seconds: int):
+    def _apply() -> None:  # pragma: no cover - runs in the child process
+        import resource
+
+        try:
+            resource.setrlimit(resource.RLIMIT_CPU, (cpu_seconds, cpu_seconds))
+        except (ValueError, OSError):
+            pass
+        try:
+            limit = int(memory_limit_mb) * 1024 * 1024
+            resource.setrlimit(resource.RLIMIT_AS, (limit, limit))
+        except (ValueError, OSError):
+            pass
+        try:
+            resource.setrlimit(resource.RLIMIT_FSIZE, (0, 0))  # the probe writes no files
+        except (ValueError, OSError):
+            pass
+        try:
+            resource.setrlimit(resource.RLIMIT_NPROC, (64, 64))
+        except (ValueError, OSError, AttributeError):
+            pass
+
+    return _apply
+
+
+def _run_bounded_probe(
+    cmd: list[str],
+    *,
+    timeout_seconds: float,
+    max_output_bytes: int,
+    memory_limit_mb: int,
+) -> tuple[bytes | None, str | None]:
+    """Run ffprobe with hard wall-clock, output and process resource limits."""
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+            preexec_fn=_probe_process_limits(memory_limit_mb, int(timeout_seconds) + 2),
+            close_fds=True,
+        )
+    except FileNotFoundError:
+        return None, "probe_unavailable"
+    except Exception:  # noqa: BLE001
+        return None, "probe_failed"
+
+    chunks: list[bytes] = []
+    state = {"total": 0, "overflow": False}
+
+    def _drain() -> None:
+        stream = proc.stdout
+        while True:
+            chunk = stream.read(65536)
+            if not chunk:
+                return
+            state["total"] += len(chunk)
+            if state["total"] > max_output_bytes:
+                state["overflow"] = True
+                return
+            chunks.append(chunk)
+
+    reader = threading.Thread(target=_drain, daemon=True)
+    reader.start()
+    reader.join(timeout_seconds)
+    timed_out = reader.is_alive()
+    if timed_out or state["overflow"]:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            proc.kill()
+        try:
+            proc.wait(timeout=5)
+        except subprocess.TimeoutExpired:  # pragma: no cover - kill already sent
+            pass
+        reader.join(1)
+        return None, "probe_timeout" if timed_out else "probe_output_limit"
+    try:
+        proc.wait(timeout=max(timeout_seconds, 1))
+    except subprocess.TimeoutExpired:
+        try:
+            os.killpg(proc.pid, signal.SIGKILL)
+        except (ProcessLookupError, PermissionError, OSError):
+            proc.kill()
+        return None, "probe_timeout"
+    if proc.returncode != 0:
+        return None, "probe_failed"
+    return b"".join(chunks), None
+
+
+def probe_media_file(
+    path: str,
+    *,
+    ffprobe_path: str,
+    timeout_seconds: float,
+    max_output_bytes: int,
+    memory_limit_mb: int,
+) -> MediaProbeResult:
+    """Verify tracks, codecs and *actual* duration with a bounded subprocess.
+
+    Duration is measured from the real packet timeline, never taken from the
+    container header, so a forged or absent Duration element cannot bypass the
+    upload cap.
+    """
+    # (ffprobe has no -nostdin option; stdin is already /dev/null.)
+    base = [ffprobe_path, "-hide_banner", "-v", "error"]
+    streams_raw, reason = _run_bounded_probe(
+        base + ["-print_format", "json", "-show_streams", "-show_format", path],
+        timeout_seconds=timeout_seconds,
+        max_output_bytes=max_output_bytes,
+        memory_limit_mb=memory_limit_mb,
+    )
+    if streams_raw is None:
+        return MediaProbeResult(ok=False, reason=reason)
+    try:
+        described = json.loads(streams_raw.decode("utf-8", "replace"))
+    except ValueError:
+        return MediaProbeResult(ok=False, reason="probe_failed")
+    streams = described.get("streams") or []
+    if not streams:
+        return MediaProbeResult(ok=False, reason="no_tracks")
+    has_audio = False
+    has_video = False
+    codecs: list[str] = []
+    for stream in streams:
+        codec_type = str(stream.get("codec_type") or "").lower()
+        codec_name = _normalize_probe_codec(str(stream.get("codec_name") or ""))
+        if codec_type == "audio":
+            has_audio = True
+            codecs.append(codec_name)
+        elif codec_type == "video":
+            # Attached pictures (e.g. ID3 cover art) are not video tracks.
+            if not int((stream.get("disposition") or {}).get("attached_pic") or 0):
+                has_video = True
+                codecs.append(codec_name)
+        else:
+            codecs.append(codec_name)
+    container_duration = None
+    try:
+        raw = (described.get("format") or {}).get("duration")
+        if raw is not None:
+            container_duration = float(raw)
+    except (TypeError, ValueError):
+        container_duration = None
+
+    packets_raw, reason = _run_bounded_probe(
+        base + ["-show_entries", "packet=pts_time,dts_time,duration_time", "-of", "csv=p=0", path],
+        timeout_seconds=timeout_seconds,
+        max_output_bytes=max_output_bytes,
+        memory_limit_mb=memory_limit_mb,
+    )
+    if packets_raw is None:
+        return MediaProbeResult(ok=False, reason=reason, has_audio=has_audio,
+                                has_video=has_video, codecs=codecs,
+                                container_duration_seconds=container_duration)
+    measured: float | None = None
+    for line in packets_raw.decode("utf-8", "replace").splitlines():
+        parts = line.split(",")
+        stamp = None
+        for cell in parts[:2]:  # pts_time, then dts_time as fallback
+            try:
+                stamp = float(cell)
+                break
+            except (TypeError, ValueError):
+                continue
+        if stamp is None:
+            continue
+        length = 0.0
+        if len(parts) >= 3:
+            try:
+                length = max(float(parts[2]), 0.0)
+            except (TypeError, ValueError):
+                length = 0.0
+        end = stamp + length
+        if measured is None or end > measured:
+            measured = end
+    if measured is None:
+        return MediaProbeResult(ok=False, reason="duration_unverifiable", has_audio=has_audio,
+                                has_video=has_video, codecs=codecs,
+                                container_duration_seconds=container_duration)
+    return MediaProbeResult(ok=True, duration_seconds=measured, has_audio=has_audio,
+                            has_video=has_video, codecs=codecs,
+                            container_duration_seconds=container_duration)
+
+
+def verify_capped_media_duration(
+    path: str,
+    inspection: MediaInspection,
+    *,
+    kind: str,
+    max_seconds: float,
+    ffprobe_path: str,
+    timeout_seconds: float,
+    max_output_bytes: int,
+    memory_limit_mb: int,
+) -> tuple[bool, str | None, float | None]:
+    """Fail-closed duration verification for capped audio/video uploads.
+
+    Returns ``(ok, reason, authoritative_duration_seconds)``. Rejects when the
+    duration cannot be measured, when a container-declared duration understates
+    the measured packet timeline (forgery), when tracks/codecs contradict the
+    declared kind, or when the effective duration exceeds the cap.
+    """
+    probe = probe_media_file(
+        path,
+        ffprobe_path=ffprobe_path,
+        timeout_seconds=timeout_seconds,
+        max_output_bytes=max_output_bytes,
+        memory_limit_mb=memory_limit_mb,
+    )
+    if not probe.ok or probe.duration_seconds is None:
+        return False, probe.reason or "duration_unverifiable", None
+
+    if kind == "audio":
+        if probe.has_video:
+            return False, "video_track_in_audio_upload", None
+        if not probe.has_audio:
+            return False, "no_audio_track", None
+        unsupported = [c for c in probe.codecs if c not in _FFPROBE_AUDIO_CODECS]
+        if unsupported:
+            return False, f"unsupported_codec:{unsupported[0]}", None
+    elif kind == "video":
+        if not probe.has_video:
+            return False, "no_video_track", None
+        unsupported = [
+            c for c in probe.codecs
+            if c not in _FFPROBE_VIDEO_CODECS and c not in _FFPROBE_AUDIO_CODECS
+        ]
+        if unsupported:
+            return False, f"unsupported_codec:{unsupported[0]}", None
+
+    measured = float(probe.duration_seconds)
+    claims = [
+        value for value in (inspection.duration_seconds, probe.container_duration_seconds)
+        if value is not None
+    ]
+    tolerance = max(_DURATION_FORGERY_TOLERANCE_SECONDS, measured * _DURATION_FORGERY_TOLERANCE_RATIO)
+    for claim in claims:
+        if float(claim) + tolerance < measured:
+            return False, "forged_duration", measured
+    effective = max([measured, *[float(c) for c in claims]])
+    if effective > max_seconds:
+        return False, "duration_exceeds_limit", effective
+    return True, None, effective
 
 
 # --------------------------------------------------------------------------- #

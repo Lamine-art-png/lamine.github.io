@@ -27,7 +27,11 @@ from app.api.deps import AuthContext, get_auth_context
 from app.core.config import settings
 from app.db.base import SessionLocal, get_db
 from app.services import field_intelligence as svc
-from app.services.media_inspection import inspect_media_file, validate_media_for_kind
+from app.services.media_inspection import (
+    inspect_media_file,
+    validate_media_for_kind,
+    verify_capped_media_duration,
+)
 
 _CONTROL_CHARS = re.compile(r"[\x00-\x1f\x7f\"\\]")
 
@@ -272,6 +276,32 @@ async def upload_asset(
                             "message": "Content does not match the declared media type or is unsupported."},
                 )
             measured_duration = inspection.duration_seconds
+            if kind in {"audio", "video"}:
+                # Duration caps bind on the *verified* packet timeline. Audio and
+                # video whose real duration cannot be measured by the bounded
+                # probe are rejected — the container header (and the browser)
+                # only ever claim a duration; they never prove one.
+                verified, probe_reason, verified_duration = verify_capped_media_duration(
+                    spool_path, inspection, kind=kind,
+                    max_seconds=float(settings.FIELD_AUDIO_MAX_SECONDS),
+                    ffprobe_path=str(settings.FIELD_MEDIA_FFPROBE_PATH or "ffprobe"),
+                    timeout_seconds=float(settings.FIELD_MEDIA_PROBE_TIMEOUT_SECONDS),
+                    max_output_bytes=int(settings.FIELD_MEDIA_PROBE_MAX_OUTPUT_BYTES),
+                    memory_limit_mb=int(settings.FIELD_MEDIA_PROBE_MEMORY_LIMIT_MB),
+                )
+                if not verified:
+                    if probe_reason == "duration_exceeds_limit":
+                        raise HTTPException(
+                            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                            detail={"code": "duration_exceeds_limit",
+                                    "message": "Media exceeds the duration limit."},
+                        )
+                    raise HTTPException(
+                        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                        detail={"code": "media_unverifiable", "reason": probe_reason,
+                                "message": "Media duration or structure could not be verified."},
+                    )
+                measured_duration = verified_duration
 
         asset = svc.register_asset(
             db, ctx, capture_id,
