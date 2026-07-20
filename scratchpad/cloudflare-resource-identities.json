@@ -1,0 +1,16 @@
+{
+  "account_id": "e2fe627bff2d8e7b2b10bf078956acfe",
+  "contract": "cloudflare-resource-identity-inventory-v2",
+  "object_contents_read": false,
+  "pages_projects": [],
+  "pages_status": 400,
+  "pages_success": false,
+  "r2_buckets": [
+    "agro-ai-applications",
+    "agroai-connector-objects-prod",
+    "agroai-field-intelligence-staging"
+  ],
+  "r2_status": 200,
+  "r2_success": true,
+  "resource_changes": false
+}
