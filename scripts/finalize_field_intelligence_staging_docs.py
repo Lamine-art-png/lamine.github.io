@@ -14,14 +14,11 @@ def replace(path: str, old: str, new: str, *, required: bool = True) -> None:
 
 
 workflow = ".github/workflows/field-intelligence-staging.yml"
-# Bound workflow discovery to the exact feature head so the response is one
-# valid JSON document and old PR/base runs cannot satisfy the gate.
 replace(
     workflow,
     'gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?event=pull_request&per_page=100" > /tmp/pr-runs.json',
     'gh api "repos/${GITHUB_REPOSITORY}/actions/runs?event=pull_request&head_sha=${STAGE_SHA}&per_page=100" > /tmp/pr-runs.json',
 )
-# The contract defaults and the runtime environment must be identical.
 replace(
     workflow,
     'FIELD_STAGING_OBJECT_PREFIX: ${{ vars.FIELD_STAGING_OBJECT_PREFIX }}',
@@ -33,8 +30,6 @@ replace(
     "FIELD_STAGING_RELEASE_STATE: ${{ vars.FIELD_STAGING_RELEASE_STATE || 'internal' }}",
 )
 
-# The authenticated internal admin token is required before the first deploy
-# call because rollout/readiness verification always uses it.
 contract_path = Path("agroai_api/scripts/field_intelligence_staging_contract.py")
 contract = contract_path.read_text(encoding="utf-8")
 contract = contract.replace(
@@ -55,10 +50,9 @@ if '"FIELD_STAGING_SMOKE_TOKEN": "staging-admin-token"' not in test_text:
         '    "FIELD_STAGING_INTERNAL_ORGANIZATION_IDS": "org-staging-internal",\n'
         '    "FIELD_STAGING_SMOKE_TOKEN": "staging-admin-token",\n',
     )
+test_text = test_text.replace('assert "pulls/258" in text', 'assert "pulls/${STAGING_PR}" in text')
 test_path.write_text(test_text, encoding="utf-8")
 
-# Upgrade the placeholder-only environment template to the immutable identity
-# contract without introducing credential values.
 env_path = Path("agroai_api/.env.staging.example")
 env = env_path.read_text(encoding="utf-8")
 env = env.replace(
@@ -97,8 +91,6 @@ if "FIELD_RELEASE_PORTAL_SHA=" not in env:
     )
 env_path.write_text(env, encoding="utf-8")
 
-# Keep the runbook truthful and aligned with the linear migration and exact
-# merge-ref dispatch contract.
 runbook_path = Path("docs/field-intelligence-staging-runbook.md")
 runbook = runbook_path.read_text(encoding="utf-8")
 for old, new in {
