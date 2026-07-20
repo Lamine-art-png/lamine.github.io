@@ -54,14 +54,29 @@ jobs:
             printf '%s|%s|%s|%s\n' "$name" "$result" "$code" "$summary"
           }
 
+          probe_page() {
+            local name="$1" url="$2" marker="$3"
+            local body code result summary
+            body="$(mktemp)"
+            code="$(curl -L -sS -o "$body" -w '%{http_code}' --connect-timeout 10 --max-time 60 "$url" 2>/dev/null || printf '000')"
+            result="closed"
+            if [[ "$code" =~ ^2 ]]; then
+              result="fallback"
+              if grep -Fq "$marker" "$body"; then result="open"; fi
+            fi
+            summary="$(tr '\n' ' ' < "$body" | head -c 180 | sed 's/`/\\`/g')"
+            rm -f "$body"
+            printf '%s|%s|%s|%s\n' "$name" "$result" "$code" "$summary"
+          }
+
           {
             probe custom_upstream_health "${CUSTOM_UPSTREAM}/v1/health"
             probe direct_render_health "${DIRECT_RENDER_UPSTREAM}/v1/health"
             probe public_edge_health "${PUBLIC_API}/v1/edge-health"
             probe public_api_health "${PUBLIC_API}/v1/health"
             probe enterprise_portal "${PORTAL_URL}/"
-            probe platform_api_marketing "${MARKETING_URL}"
-            probe developer_documentation "${DOCS_URL}"
+            probe_page platform_api_marketing "${MARKETING_URL}" '<title>AGRO-AI Platform API</title>'
+            probe_page developer_documentation "${DOCS_URL}" '<title>AGRO-AI Platform API Documentation</title>'
           } > probes.txt
 
           {
@@ -69,6 +84,7 @@ jobs:
             echo
             echo "- workflow SHA: \`${GITHUB_SHA}\`"
             echo "- run: \`${GITHUB_RUN_ID}\`"
+            echo "- page state \`fallback\` means HTTP 2xx returned the homepage or another document instead of the required API page marker"
             echo
             echo '| Probe | State | HTTP | Redacted preview |'
             echo '|---|---:|---:|---|'
@@ -99,9 +115,9 @@ jobs:
               -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN:-}" \
               "$url" 2>/dev/null || printf '000')"
             if jq -e . "$payload" >/dev/null 2>&1; then
-              jq -c '{status,contract,build_sha,schema_current,queue_configured,object_storage_configured,object_storage_reachable,production_ready,production_blocker_codes,platform_api_enabled}' "$payload"
+              jq -c --arg required_sha "$GITHUB_SHA" '{status,contract,build_sha,exact_sha_current:(.build_sha == $required_sha),schema_current,queue_configured,object_storage_configured,object_storage_reachable,production_ready,production_blocker_codes,platform_api_enabled}' "$payload"
             else
-              printf '{"status":"unavailable","http":"%s"}' "$code"
+              printf '{"status":"unavailable","http":"%s","exact_sha_current":false}' "$code"
             fi
             rm -f "$payload"
           }
@@ -123,6 +139,43 @@ jobs:
             echo "### Direct Render upstream"
             echo '```json'
             echo "$direct" | jq . 2>/dev/null || echo "$direct"
+            echo '```'
+          } > comment.md
+
+          gh issue comment "${OPS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body-file comment.md
+
+  marketing-pages-topology:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Report redacted marketing Pages topology
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          payload="$(mktemp)"
+          code="$(curl -sS -o "$payload" -w '%{http_code}' --connect-timeout 10 --max-time 60 \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN:-}" \
+            -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID:-}/pages/projects?per_page=100" 2>/dev/null || printf '000')"
+
+          if jq -e '.success == true' "$payload" >/dev/null 2>&1; then
+            project="$(jq -c '[.result[] | select((.domains // []) | index("agroai-pilot.com"))][0] // null | if . == null then {status:"not_found"} else {status:"found",name,subdomain,domains,production_branch,build_config,source:{type:.source.type,config:{owner:.source.config.owner,repo_name:.source.config.repo_name,production_branch:.source.config.production_branch,deployments_enabled:.source.config.deployments_enabled,production_deployments_enabled:.source.config.production_deployments_enabled,preview_deployment_setting:.source.config.preview_deployment_setting}}} end' "$payload")"
+          else
+            project="$(printf '{"status":"unavailable","http":"%s"}' "$code")"
+          fi
+          rm -f "$payload"
+
+          {
+            echo "## Marketing Cloudflare Pages topology"
+            echo
+            echo "- workflow SHA: \`${GITHUB_SHA}\`"
+            echo '```json'
+            echo "$project" | jq . 2>/dev/null || echo "$project"
             echo '```'
           } > comment.md
 
