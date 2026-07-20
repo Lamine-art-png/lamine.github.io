@@ -1,0 +1,7 @@
+{
+  "contract": "field-intelligence-staging-environment-bootstrap-v1",
+  "environment": "field-intelligence-staging",
+  "resource_changes": false,
+  "secrets_written": false,
+  "status": "environment-referenced-by-successful-job"
+}
