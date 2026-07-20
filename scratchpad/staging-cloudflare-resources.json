@@ -1,0 +1,21 @@
+{
+  "account_id": "e2fe627bff2d8e7b2b10bf078956acfe",
+  "contract": "field-intelligence-cloudflare-staging-resources-v1",
+  "dedicated_r2_runtime_credentials_created": false,
+  "remaining_blocker": "Cloudflare token cannot create subordinate API tokens and GitHub token cannot store environment secrets",
+  "resources": {
+    "pages": {
+      "created_by_this_run": true,
+      "name": "agroai-field-intelligence-staging",
+      "production_branch": "field-intelligence-staging",
+      "url": "https://agroai-field-intelligence-staging.pages.dev"
+    },
+    "r2": {
+      "created_by_this_run": true,
+      "endpoint": "https://e2fe627bff2d8e7b2b10bf078956acfe.r2.cloudflarestorage.com",
+      "fingerprint": "e2fe627bff2d8e7b2b10bf078956acfe:agroai-field-intelligence-staging",
+      "name": "agroai-field-intelligence-staging",
+      "private_by_default": true
+    }
+  }
+}
