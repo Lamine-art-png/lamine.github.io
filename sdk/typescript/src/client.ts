@@ -8,18 +8,28 @@ export type RateLimitMetadata = {
 export type ApiResponse<T> = {
   data: T;
   requestId?: string;
+  clientCorrelationId: string;
   rateLimit: RateLimitMetadata;
 };
 
 type RequestOptions = {
   body?: unknown;
   idempotencyKey?: string;
+  clientCorrelationId?: string;
   query?: Record<string, string | number | undefined>;
 };
 
 const runtimeEnvironment = (globalThis as typeof globalThis & {
   process?: { env?: Record<string, string | undefined> };
 }).process?.env ?? {};
+
+function clientCorrelationId(value?: string): string {
+  const candidate = value || `corr_${crypto.randomUUID()}`;
+  if (!/^[A-Za-z0-9_.:-]{1,96}$/.test(candidate)) {
+    throw new Error("clientCorrelationId must contain 1-96 safe correlation characters");
+  }
+  return candidate;
+}
 
 export class AgroAIPlatformError extends Error {
   status?: number;
@@ -85,6 +95,7 @@ export class AgroAIPlatformClient {
   }
 
   async upload(uploadUrl: string, body: BodyInit, contentType: string) {
+    if (!uploadUrl) throw new Error("uploadUrl is required");
     const response = await fetch(uploadUrl, { method: "PUT", body, headers: { "Content-Type": contentType } });
     if (!response.ok) throw new AgroAIPlatformError(`Upload failed with status ${response.status}`, { status: response.status });
   }
@@ -104,7 +115,7 @@ export class AgroAIPlatformClient {
   }
 
   async request<T>(method: string, path: string, options: RequestOptions = {}): Promise<ApiResponse<T>> {
-    const requestId = `req_${crypto.randomUUID()}`;
+    const correlationId = clientCorrelationId(options.clientCorrelationId);
     const query = new URLSearchParams();
     Object.entries(options.query || {}).forEach(([key, value]) => {
       if (value !== undefined) query.set(key, String(value));
@@ -123,7 +134,7 @@ export class AgroAIPlatformClient {
             Authorization: `Bearer ${this.apiKey}`,
             Accept: "application/json",
             ...(options.body ? { "Content-Type": "application/json" } : {}),
-            "X-Request-Id": requestId,
+            "X-Request-Id": correlationId,
             ...(options.idempotencyKey ? { "Idempotency-Key": options.idempotencyKey } : {}),
           },
           body: options.body ? JSON.stringify(options.body) : undefined,
@@ -141,12 +152,13 @@ export class AgroAIPlatformClient {
       throw new AgroAIPlatformError(detail.message || "AGRO-AI Platform API request failed", {
         status: response.status,
         code: detail.code,
-        requestId: detail.request_id,
+        requestId: detail.request_id || response.headers.get("X-Request-Id") || undefined,
       });
     }
     return {
       data: payload as T,
-      requestId: response.headers.get("X-Request-Id") || requestId,
+      requestId: response.headers.get("X-Request-Id") || undefined,
+      clientCorrelationId: correlationId,
       rateLimit: rateLimit(response),
     };
   }
