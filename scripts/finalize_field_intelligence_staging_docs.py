@@ -13,16 +13,52 @@ def replace(path: str, old: str, new: str, *, required: bool = True) -> None:
     target.write_text(text.replace(old, new), encoding="utf-8")
 
 
-# Bound the workflow lookup to the exact feature head. One response is valid
-# JSON and old PR/base runs cannot satisfy the gate.
+workflow = ".github/workflows/field-intelligence-staging.yml"
+# Bound workflow discovery to the exact feature head so the response is one
+# valid JSON document and old PR/base runs cannot satisfy the gate.
 replace(
-    ".github/workflows/field-intelligence-staging.yml",
+    workflow,
     'gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?event=pull_request&per_page=100" > /tmp/pr-runs.json',
     'gh api "repos/${GITHUB_REPOSITORY}/actions/runs?event=pull_request&head_sha=${STAGE_SHA}&per_page=100" > /tmp/pr-runs.json',
 )
+# The contract defaults and the runtime environment must be identical.
+replace(
+    workflow,
+    'FIELD_STAGING_OBJECT_PREFIX: ${{ vars.FIELD_STAGING_OBJECT_PREFIX }}',
+    "FIELD_STAGING_OBJECT_PREFIX: ${{ vars.FIELD_STAGING_OBJECT_PREFIX || 'staging/field-intelligence' }}",
+)
+replace(
+    workflow,
+    'FIELD_STAGING_RELEASE_STATE: ${{ vars.FIELD_STAGING_RELEASE_STATE }}',
+    "FIELD_STAGING_RELEASE_STATE: ${{ vars.FIELD_STAGING_RELEASE_STATE || 'internal' }}",
+)
+
+# The authenticated internal admin token is required before the first deploy
+# call because rollout/readiness verification always uses it.
+contract_path = Path("agroai_api/scripts/field_intelligence_staging_contract.py")
+contract = contract_path.read_text(encoding="utf-8")
+contract = contract.replace(
+    '    "FIELD_STAGING_INTERNAL_ORGANIZATION_IDS",\n    "FIELD_STAGING_PORTAL_PROJECT",',
+    '    "FIELD_STAGING_INTERNAL_ORGANIZATION_IDS",\n    "FIELD_STAGING_SMOKE_TOKEN",\n    "FIELD_STAGING_PORTAL_PROJECT",',
+)
+contract = contract.replace(
+    '    "FIELD_STAGING_SMOKE_TOKEN",\n    "FIELD_STAGING_RESTRICTED_SMOKE_TOKEN",',
+    '    "FIELD_STAGING_RESTRICTED_SMOKE_TOKEN",',
+)
+contract_path.write_text(contract, encoding="utf-8")
+
+test_path = Path("agroai_api/tests/unit/test_field_intelligence_staging_contract.py")
+test_text = test_path.read_text(encoding="utf-8")
+if '"FIELD_STAGING_SMOKE_TOKEN": "staging-admin-token"' not in test_text:
+    test_text = test_text.replace(
+        '    "FIELD_STAGING_INTERNAL_ORGANIZATION_IDS": "org-staging-internal",\n',
+        '    "FIELD_STAGING_INTERNAL_ORGANIZATION_IDS": "org-staging-internal",\n'
+        '    "FIELD_STAGING_SMOKE_TOKEN": "staging-admin-token",\n',
+    )
+test_path.write_text(test_text, encoding="utf-8")
 
 # Upgrade the placeholder-only environment template to the immutable identity
-# contract without introducing any credential value.
+# contract without introducing credential values.
 env_path = Path("agroai_api/.env.staging.example")
 env = env_path.read_text(encoding="utf-8")
 env = env.replace(
@@ -61,7 +97,7 @@ if "FIELD_RELEASE_PORTAL_SHA=" not in env:
     )
 env_path.write_text(env, encoding="utf-8")
 
-# Keep the runbook truthful and aligned with the new linear migration and exact
+# Keep the runbook truthful and aligned with the linear migration and exact
 # merge-ref dispatch contract.
 runbook_path = Path("docs/field-intelligence-staging-runbook.md")
 runbook = runbook_path.read_text(encoding="utf-8")
@@ -77,7 +113,7 @@ runbook = runbook.replace(
     "`confirm=STAGE_FIELD_INTELLIGENCE`, `sha=<exact branch head>`, optional\n`run_smoke=true`.",
     "`confirm=STAGE_FIELD_INTELLIGENCE`, `sha=<exact branch head>`,\n"
     "`merge_sha=<current PR #258 merge commit>`, optional `run_smoke=true`.\n"
-    "The workflow requires all mandatory PR workflows to exist and be terminal\n"
+    "The workflow requires every mandatory PR workflow to be present, terminal,\n"
     "and successful for the exact head and current `main` base.",
 )
 if "## Immutable identity gates" not in runbook:
