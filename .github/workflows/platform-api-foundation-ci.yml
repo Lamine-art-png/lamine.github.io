@@ -7,6 +7,10 @@ on:
       - "figma-enterprise-v4/**"
       - "cloudflare/edge-gateway/**"
       - "sdk/**"
+      - "platform-api/**"
+      - "developers/**"
+      - "functions/platform-api/**"
+      - "functions/developers/**"
       - "docs/platform-api-*"
       - "docs/earthdaily-integration-readiness.md"
       - "docs/valley-integration-readiness.md"
@@ -21,12 +25,38 @@ jobs:
         working-directory: agroai_api
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
       - run: python -m pip install --upgrade pip
       - run: python -m pip install -r requirements.txt pytest
-      - run: python -m pytest tests/unit/test_platform_api_foundation.py tests/unit/test_platform_api_enterprise_hardening.py tests/unit/test_production_readiness.py tests/unit/test_saas_foundation.py tests/unit/test_connector_vault.py tests/unit/test_cloudflare_queue_routes.py
+      - name: Compile backend, migrations, and operator scripts
+        run: python -m compileall -q app alembic scripts
+      - name: Run Platform API foundation and product contracts
+        run: >-
+          python -m pytest -q
+          tests/unit/test_platform_api_foundation.py
+          tests/unit/test_platform_api_enterprise_hardening.py
+          tests/unit/test_platform_api_product.py
+          tests/unit/test_platform_api_public_resources.py
+          tests/unit/test_platform_api_billing_product.py
+          tests/unit/test_platform_api_stripe_provision.py
+          tests/unit/test_production_readiness.py
+          tests/unit/test_saas_foundation.py
+          tests/unit/test_connector_vault.py
+          tests/unit/test_cloudflare_queue_routes.py
+      - name: Verify route, migration, and public contract surfaces
+        run: >-
+          python -m pytest -q
+          tests/unit/test_alembic_revision_contract.py
+          tests/unit/test_schema_adoption_contract.py
+      - name: Reject whitespace errors in the exact-head change
+        working-directory: .
+        run: |
+          git fetch --no-tags --depth=2 origin "pull/${{ github.event.pull_request.number }}/head"
+          git diff --check FETCH_HEAD^ FETCH_HEAD
 
   portal-build:
     runs-on: ubuntu-latest
@@ -41,6 +71,7 @@ jobs:
           cache: npm
           cache-dependency-path: figma-enterprise-v4/package-lock.json
       - run: npm ci
+      - run: npm run test:i18n
       - run: npm run build
 
   edge-contract:
@@ -56,4 +87,51 @@ jobs:
           cache: npm
           cache-dependency-path: cloudflare/edge-gateway/package-lock.json
       - run: npm ci
-      - run: npm test
+      - run: npm run check
+
+  sdk-contracts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - name: Build and test Python SDK
+        run: |
+          python -m pip install -q pytest -e ./sdk/python
+          python -m pytest -q sdk/python/tests
+      - name: Build and test TypeScript SDK
+        working-directory: sdk/typescript
+        run: |
+          npm ci
+          npm test
+
+  disabled-public-surface-contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify Pages launch gates and robots policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -q 'PLATFORM_API_MARKETING_ENABLED' 'functions/platform-api/[[path]].ts'
+          grep -q 'PLATFORM_API_PUBLIC_DOCS_ENABLED' 'functions/developers/[[path]].ts'
+          grep -q 'status: 404' 'functions/platform-api/[[path]].ts'
+          grep -q 'status: 404' 'functions/developers/[[path]].ts'
+          grep -q 'noindex,nofollow' platform-api/index.html
+          grep -q 'noindex,nofollow' developers/index.html
+
+  repository-secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Reject recognizable production credentials
+        run: python agroai_api/scripts/scan_repository_secrets.py
