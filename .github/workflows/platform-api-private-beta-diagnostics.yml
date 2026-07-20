@@ -25,6 +25,7 @@ concurrency:
 
 env:
   OPS_ISSUE: "262"
+  TOPOLOGY_ISSUE: "267"
   CUSTOM_UPSTREAM: "https://api-preview.agroai-pilot.com"
   DIRECT_RENDER_UPSTREAM: "https://agroai-api-preview.onrender.com"
   PUBLIC_API: "https://api.agroai-pilot.com"
@@ -171,12 +172,16 @@ jobs:
           rm -f "$payload"
 
           {
-            echo "## Marketing Cloudflare Pages topology"
+            echo "# Marketing Cloudflare Pages topology"
             echo
-            echo "- workflow SHA: \`${GITHUB_SHA}\`"
+            echo "Workflow SHA: \`${GITHUB_SHA}\`"
+            echo
             echo '```json'
             echo "$project" | jq . 2>/dev/null || echo "$project"
             echo '```'
-          } > comment.md
+            echo
+            echo "This snapshot is redacted and contains no credential values."
+          } > topology.md
 
-          gh issue comment "${OPS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body-file comment.md
+          gh issue edit "${TOPOLOGY_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body-file topology.md
+          gh issue comment "${OPS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body "Marketing Pages topology snapshot updated in #${TOPOLOGY_ISSUE} for workflow SHA \`${GITHUB_SHA}\`."
