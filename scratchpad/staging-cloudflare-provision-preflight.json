@@ -1,0 +1,22 @@
+{
+  "cloudflare": {
+    "account_token_admin": false,
+    "account_token_admin_status": 403,
+    "pages_read": true,
+    "pages_status": 200,
+    "r2_read": true,
+    "r2_status": 200,
+    "token_active": true,
+    "user_token_admin": false,
+    "user_token_admin_status": 403
+  },
+  "contract": "field-intelligence-cloudflare-provision-preflight-v1",
+  "github": {
+    "environment_admin": false,
+    "environment_secret_key_status": 404,
+    "environment_secret_write_preflight": false,
+    "environment_status": 404
+  },
+  "ready_for_recoverable_cloudflare_provisioning": false,
+  "resource_changes": false
+}
