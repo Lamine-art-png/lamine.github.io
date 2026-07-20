@@ -98,6 +98,7 @@ export function MainLayout() {
     selectWorkspace,
     entitlements,
     platformAdmin,
+    platformDeveloper,
     logout,
   } = useAuth();
   const { t } = useLocale();
@@ -150,9 +151,12 @@ export function MainLayout() {
     { name: t("support"), path: "/support", icon: HelpCircle },
     { name: t("requests"), path: "/admin/requests", icon: HelpCircle, locked: !canAccessAdminRequests, upgradeTo: "team" },
     { name: t("admin"), path: "/admin", icon: Settings },
+    ...(platformDeveloper ? [
+      { name: "Developers/API", path: "/developers/api", icon: Shield },
+    ] : []),
     ...(platformAdmin ? [
       { name: "Customer accounts", path: "/admin/customers", icon: Users },
-      { name: "Developers/API", path: "/developers/api", icon: Shield },
+      { name: "Platform API review", path: "/admin/platform-api", icon: Shield },
     ] : []),
   ];
 

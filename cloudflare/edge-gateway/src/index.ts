@@ -11,7 +11,7 @@ export interface Env {
   CONNECTOR_TASKS: Queue<ConnectorTaskEnvelope>;
 }
 
-export type ConnectorTaskType = "connector_ingest_object" | "connector_provider_sync" | "platform_webhook_delivery";
+export type ConnectorTaskType = "connector_ingest_object" | "connector_provider_sync" | "platform_webhook_delivery" | "platform_api_operation" | "platform_stripe_meter_export";
 
 export interface ConnectorTaskEnvelope {
   job_id: string;
@@ -28,7 +28,7 @@ const DEFAULT_ALLOWED_ORIGINS = [
 ];
 const PAGES_ORIGIN = /^https:\/\/(?:[a-z0-9-]+\.)?(?:agroai-portal|lamine-github-io|agroai-command-center-v2-preview)\.pages\.dev$/i;
 const TRANSIENT_UPSTREAM_STATUS = new Set([408, 429, 502, 503, 504]);
-const ALLOWED_TASK_TYPES = new Set<ConnectorTaskType>(["connector_ingest_object", "connector_provider_sync", "platform_webhook_delivery"]);
+const ALLOWED_TASK_TYPES = new Set<ConnectorTaskType>(["connector_ingest_object", "connector_provider_sync", "platform_webhook_delivery", "platform_api_operation", "platform_stripe_meter_export"]);
 const SAFE_REQUEST_ID = /^[A-Za-z0-9._:-]{1,128}$/;
 const EDGE_VERSION = "cloudflare-edge-v1";
 const MAX_TASK_FIELD_LENGTH = 256;
