@@ -26,7 +26,7 @@ jobs:
           set -euo pipefail
           mkdir -p scratchpad
           python3 - <<'PY'
-          import json, os, urllib.request
+          import json, os, urllib.error, urllib.request
 
           token = os.environ["CLOUDFLARE_API_TOKEN"]
           account = os.environ["CLOUDFLARE_ACCOUNT_ID"]
@@ -37,20 +37,39 @@ jobs:
               request.add_header("Authorization", f"Bearer {token}")
               request.add_header("Accept", "application/json")
               request.add_header("User-Agent", "agroai-resource-identity-inventory")
-              with urllib.request.urlopen(request, timeout=45) as response:
-                  payload = json.load(response)
-              if payload.get("success") is not True:
-                  raise RuntimeError(f"Cloudflare inventory failed for {path}")
-              return payload.get("result")
+              try:
+                  with urllib.request.urlopen(request, timeout=45) as response:
+                      payload = json.load(response)
+                      return response.status, payload
+              except urllib.error.HTTPError as exc:
+                  try:
+                      payload = json.loads(exc.read().decode("utf-8", errors="replace"))
+                  except Exception:
+                      payload = {}
+                  return exc.code, payload
 
-          projects = get(f"/accounts/{account}/pages/projects?per_page=100") or []
-          buckets_payload = get(f"/accounts/{account}/r2/buckets?per_page=100") or {}
-          buckets = buckets_payload.get("buckets") if isinstance(buckets_payload, dict) else buckets_payload
+          pages_status, pages_payload = get(f"/accounts/{account}/pages/projects?per_page=100")
+          r2_status, r2_payload = get(f"/accounts/{account}/r2/buckets?per_page=100")
+
+          projects_result = pages_payload.get("result") if isinstance(pages_payload, dict) else []
+          projects = projects_result if isinstance(projects_result, list) else []
+          r2_result = r2_payload.get("result") if isinstance(r2_payload, dict) else {}
+          if isinstance(r2_result, dict):
+              buckets = r2_result.get("buckets") or []
+          elif isinstance(r2_result, list):
+              buckets = r2_result
+          else:
+              buckets = []
+
           report = {
-              "contract": "cloudflare-resource-identity-inventory-v1",
+              "contract": "cloudflare-resource-identity-inventory-v2",
               "account_id": account,
-              "pages_projects": sorted({str(item.get("name") or "") for item in projects if item.get("name")}),
-              "r2_buckets": sorted({str(item.get("name") or "") for item in (buckets or []) if item.get("name")}),
+              "pages_status": pages_status,
+              "r2_status": r2_status,
+              "pages_success": bool(isinstance(pages_payload, dict) and pages_payload.get("success") is True),
+              "r2_success": bool(isinstance(r2_payload, dict) and r2_payload.get("success") is True),
+              "pages_projects": sorted({str(item.get("name") or "") for item in projects if isinstance(item, dict) and item.get("name")}),
+              "r2_buckets": sorted({str(item.get("name") or "") for item in buckets if isinstance(item, dict) and item.get("name")}),
               "object_contents_read": False,
               "resource_changes": False,
           }
