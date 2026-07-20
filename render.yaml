@@ -1,0 +1,176 @@
+# AGRO-AI Field Intelligence isolated staging stack.
+# Deploy only from the ops/field-intelligence-staging-provision branch.
+# Every runtime is pinned to the tested feature branch and auto-deploy is disabled.
+
+previews:
+  generation: off
+
+services:
+  - type: web
+    name: agroai-field-intelligence-staging-api
+    runtime: docker
+    plan: starter
+    region: oregon
+    repo: https://github.com/Lamine-art-png/lamine.github.io
+    branch: feature/field-intelligence-launch
+    autoDeploy: false
+    dockerContext: .
+    dockerfilePath: ./agroai_api/Dockerfile
+    dockerCommand: cd /app/agroai_api && ./start-production.sh
+    healthCheckPath: /v1/health
+    envVars:
+      - key: APP_ENV
+        value: staging
+      - key: GIT_SHA
+        value: 9854a3084c6223bd7ddab5e0d182c3ba363e1790
+      - key: APP_URL
+        value: https://agroai-field-intelligence-staging.pages.dev
+      - key: DATABASE_URL
+        fromDatabase:
+          name: agroai-field-intelligence-staging-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: OAUTH_STATE_SIGNING_KEY
+        generateValue: true
+      - key: DEMO_API_KEY
+        generateValue: true
+      - key: NON_CUSTOMER_ACCESS_PROVISIONING_TOKEN
+        generateValue: true
+      - key: ACCOUNT_VERIFICATION_MODE
+        value: auto
+      - key: ENABLE_SCHEDULER
+        value: "false"
+      - key: PLATFORM_API_ENABLED
+        value: "false"
+      - key: CONNECTOR_OBJECT_STORAGE_BACKEND
+        value: r2
+      - key: CONNECTOR_OBJECT_BUCKET
+        value: agroai-field-intelligence-staging
+      - key: CONNECTOR_OBJECT_ENDPOINT_URL
+        value: https://e2fe627bff2d8e7b2b10bf078956acfe.r2.cloudflarestorage.com
+      - key: CONNECTOR_OBJECT_REGION
+        value: auto
+      - key: CONNECTOR_OBJECT_PREFIX
+        value: staging/field-intelligence
+      - key: CLOUDFLARE_R2_ACCESS_KEY_ID
+        sync: false
+      - key: CLOUDFLARE_R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: FIELD_TRANSCRIPTION_PROVIDER
+        value: openai_whisper
+      - key: FIELD_TRANSCRIPTION_ENDPOINT
+        value: https://api.openai.com/v1/audio/transcriptions
+      - key: FIELD_TRANSCRIPTION_MODEL
+        value: gpt-4o-mini-transcribe
+      - key: FIELD_TRANSCRIPTION_API_KEY
+        sync: false
+      - key: FIELD_INTELLIGENCE_RELEASE_STATE
+        value: internal
+      - key: FIELD_INTELLIGENCE_WORKER_ENABLED
+        value: "false"
+      - key: FIELD_WORKER_INTERVAL_SECONDS
+        value: "5"
+      - key: FIELD_WORKER_BATCH
+        value: "25"
+      - key: FIELD_RECONCILER_INTERVAL_SECONDS
+        value: "300"
+      - key: FIELD_DELETION_RETENTION_DAYS
+        value: "0"
+      - key: FIELD_MEDIA_FFPROBE_PATH
+        value: ffprobe
+      - key: PLATFORM_ADMIN_EMAILS
+        sync: false
+
+  - type: worker
+    name: agroai-field-intelligence-staging-worker
+    runtime: docker
+    plan: starter
+    region: oregon
+    repo: https://github.com/Lamine-art-png/lamine.github.io
+    branch: feature/field-intelligence-launch
+    autoDeploy: false
+    dockerContext: .
+    dockerfilePath: ./agroai_api/Dockerfile
+    dockerCommand: cd /app/agroai_api && python -m scripts.run_field_intelligence_worker --interval 5 --reconcile-every 60
+    envVars:
+      - key: APP_ENV
+        value: staging
+      - key: GIT_SHA
+        value: 9854a3084c6223bd7ddab5e0d182c3ba363e1790
+      - key: DATABASE_URL
+        fromDatabase:
+          name: agroai-field-intelligence-staging-db
+          property: connectionString
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: agroai-field-intelligence-staging-api
+          envVarKey: SECRET_KEY
+      - key: WEBHOOK_SECRET
+        fromService:
+          type: web
+          name: agroai-field-intelligence-staging-api
+          envVarKey: WEBHOOK_SECRET
+      - key: ENABLE_SCHEDULER
+        value: "false"
+      - key: PLATFORM_API_ENABLED
+        value: "false"
+      - key: CONNECTOR_OBJECT_STORAGE_BACKEND
+        value: r2
+      - key: CONNECTOR_OBJECT_BUCKET
+        value: agroai-field-intelligence-staging
+      - key: CONNECTOR_OBJECT_ENDPOINT_URL
+        value: https://e2fe627bff2d8e7b2b10bf078956acfe.r2.cloudflarestorage.com
+      - key: CONNECTOR_OBJECT_REGION
+        value: auto
+      - key: CONNECTOR_OBJECT_PREFIX
+        value: staging/field-intelligence
+      - key: CLOUDFLARE_R2_ACCESS_KEY_ID
+        fromService:
+          type: web
+          name: agroai-field-intelligence-staging-api
+          envVarKey: CLOUDFLARE_R2_ACCESS_KEY_ID
+      - key: CLOUDFLARE_R2_SECRET_ACCESS_KEY
+        fromService:
+          type: web
+          name: agroai-field-intelligence-staging-api
+          envVarKey: CLOUDFLARE_R2_SECRET_ACCESS_KEY
+      - key: FIELD_TRANSCRIPTION_PROVIDER
+        value: openai_whisper
+      - key: FIELD_TRANSCRIPTION_ENDPOINT
+        value: https://api.openai.com/v1/audio/transcriptions
+      - key: FIELD_TRANSCRIPTION_MODEL
+        value: gpt-4o-mini-transcribe
+      - key: FIELD_TRANSCRIPTION_API_KEY
+        fromService:
+          type: web
+          name: agroai-field-intelligence-staging-api
+          envVarKey: FIELD_TRANSCRIPTION_API_KEY
+      - key: FIELD_INTELLIGENCE_RELEASE_STATE
+        value: internal
+      - key: FIELD_INTELLIGENCE_WORKER_ENABLED
+        value: "false"
+      - key: FIELD_WORKER_INTERVAL_SECONDS
+        value: "5"
+      - key: FIELD_WORKER_BATCH
+        value: "25"
+      - key: FIELD_RECONCILER_INTERVAL_SECONDS
+        value: "300"
+      - key: FIELD_DELETION_RETENTION_DAYS
+        value: "0"
+      - key: FIELD_MEDIA_FFPROBE_PATH
+        value: ffprobe
+
+# A paid, persistent staging database is deliberate: migration rollback,
+# concurrency and worker testing are not trustworthy on a short-lived free DB.
+databases:
+  - name: agroai-field-intelligence-staging-db
+    plan: basic-256mb
+    region: oregon
+    postgresMajorVersion: "17"
+    databaseName: agroai_field_intelligence_staging
+    user: agroai_field_staging
+    connectionPool: none
