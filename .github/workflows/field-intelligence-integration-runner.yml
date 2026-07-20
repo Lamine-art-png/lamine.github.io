@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - .github/workflows/field-intelligence-integration-runner.yml
+      - scripts/finalize_field_intelligence_staging_docs.py
 
 permissions:
   contents: write
@@ -49,6 +50,10 @@ jobs:
           fi
           rm -f scratchpad/.blob-sync-marker
 
+          git show origin/integration/field-intelligence-resolved-v2:scripts/finalize_field_intelligence_staging_docs.py \
+            > /tmp/finalize_field_intelligence_staging_docs.py
+          python3 /tmp/finalize_field_intelligence_staging_docs.py
+
           cd agroai_api
           python -m pip install -q -r requirements.txt pytest
           sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
@@ -71,7 +76,10 @@ jobs:
           VITE_API_BASE_URL=https://agroai-api-staging.invalid \
           VITE_DEPLOYMENT_ENVIRONMENT=staging \
           VITE_BUILD_SHA="$feature_before" npm run build
-          cd ..
+          cd ../cloudflare/edge-gateway
+          npm ci --no-audit --no-fund
+          npm run check
+          cd ../..
           git diff --check
           git add -A
           git commit -m "Merge current main into Field Intelligence staging candidate"
@@ -87,7 +95,7 @@ jobs:
           git checkout -B integration/field-intelligence-resolved-v2 origin/integration/field-intelligence-resolved-v2
           mkdir -p scratchpad
           cat > scratchpad/field-intelligence-tested-candidate.json <<EOF
-          {"candidate_sha":"${candidate}","feature_before":"${feature_before}","main_sha":"${main_head}","merge_exit":${merge_rc},"push_exit":${push_rc},"focused_backend":"passed","portal_contracts":"passed","portal_build":"passed","alembic_head":"027_field_intelligence_launch"}
+          {"candidate_sha":"${candidate}","feature_before":"${feature_before}","main_sha":"${main_head}","merge_exit":${merge_rc},"push_exit":${push_rc},"focused_backend":"passed","portal_contracts":"passed","portal_build":"passed","edge_contracts":"passed","alembic_head":"027_field_intelligence_launch"}
           EOF
           git add scratchpad/field-intelligence-tested-candidate.json
           git commit -m "docs: record tested Field Intelligence merge candidate" || true
