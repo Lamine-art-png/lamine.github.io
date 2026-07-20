@@ -1,0 +1,110 @@
+name: Validate Field Intelligence Render Blueprint
+
+on:
+  push:
+    branches: [ops/field-intelligence-staging-provision]
+    paths:
+      - render.yaml
+      - .github/workflows/field-intelligence-render-blueprint-contract.yml
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ops/field-intelligence-staging-provision
+          token: ${{ github.token }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Validate Blueprint structure and isolation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -q pyyaml
+          mkdir -p scratchpad
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import yaml
+
+          expected_sha = "9854a3084c6223bd7ddab5e0d182c3ba363e1790"
+          raw = Path("render.yaml").read_text(encoding="utf-8")
+          data = yaml.safe_load(raw)
+          services = data.get("services") or []
+          databases = data.get("databases") or []
+          by_name = {service["name"]: service for service in services}
+          api = by_name.get("agroai-field-intelligence-staging-api")
+          worker = by_name.get("agroai-field-intelligence-staging-worker")
+          assert api and worker, "API and worker must both exist"
+          assert api["type"] == "web" and worker["type"] == "worker"
+          assert api["runtime"] == worker["runtime"] == "docker"
+          assert api.get("branch") == worker.get("branch") == "feature/field-intelligence-launch"
+          assert api.get("autoDeploy") is False and worker.get("autoDeploy") is False
+          assert api.get("healthCheckPath") == "/v1/health"
+          assert "run_field_intelligence_worker" in worker.get("dockerCommand", "")
+          assert len(databases) == 1
+          database = databases[0]
+          assert database["name"] == "agroai-field-intelligence-staging-db"
+          assert "staging" in database["name"]
+          assert database["plan"] != "free"
+
+          def env_map(service):
+              return {item["key"]: item for item in service.get("envVars") or []}
+
+          api_env = env_map(api)
+          worker_env = env_map(worker)
+          assert api_env["APP_ENV"].get("value") == "staging"
+          assert api_env["GIT_SHA"].get("value") == expected_sha
+          assert worker_env["GIT_SHA"].get("value") == expected_sha
+          assert api_env["FIELD_INTELLIGENCE_RELEASE_STATE"].get("value") == "internal"
+          assert api_env["FIELD_INTELLIGENCE_WORKER_ENABLED"].get("value") == "false"
+          assert worker_env["FIELD_INTELLIGENCE_WORKER_ENABLED"].get("value") == "false"
+          assert api_env["CONNECTOR_OBJECT_BUCKET"].get("value") == "agroai-field-intelligence-staging"
+          assert api_env["CONNECTOR_OBJECT_PREFIX"].get("value") == "staging/field-intelligence"
+          assert api_env["FIELD_TRANSCRIPTION_MODEL"].get("value") == "gpt-4o-mini-transcribe"
+          for secret_name in (
+              "CLOUDFLARE_R2_ACCESS_KEY_ID",
+              "CLOUDFLARE_R2_SECRET_ACCESS_KEY",
+              "FIELD_TRANSCRIPTION_API_KEY",
+              "PLATFORM_ADMIN_EMAILS",
+          ):
+              assert api_env[secret_name].get("sync") is False
+              assert "value" not in api_env[secret_name]
+          forbidden_fragments = (
+              "api.agroai-pilot.com",
+              "app.agroai-pilot.com",
+              "agroai-connector-objects-prod",
+              "sk-",
+              "postgresql://",
+              "render.com/deploy/",
+          )
+          assert not any(fragment in raw for fragment in forbidden_fragments)
+          report = {
+              "contract": "field-intelligence-render-blueprint-contract-v1",
+              "status": "passed",
+              "api": api["name"],
+              "worker": worker["name"],
+              "database": database["name"],
+              "tested_sha": expected_sha,
+              "auto_deploy_disabled": True,
+              "secret_values_in_source": False,
+          }
+          Path("scratchpad/render-blueprint-contract.json").write_text(
+              json.dumps(report, indent=2, sort_keys=True), encoding="utf-8"
+          )
+          print(json.dumps(report, sort_keys=True))
+          PY
+      - name: Persist Blueprint validation evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "agroai-render-blueprint-bot"
+          git config user.email "render-blueprint@agroai-pilot.com"
+          git add scratchpad/render-blueprint-contract.json
+          git commit -m "docs: record Render Blueprint validation" || exit 0
+          git push origin HEAD:ops/field-intelligence-staging-provision
