@@ -1,11 +1,6 @@
 name: Field Intelligence Integration Runner
 
 on:
-  push:
-    branches: [integration/field-intelligence-resolved-v2]
-    paths:
-      - .github/workflows/field-intelligence-integration-runner.yml
-      - scripts/finalize_field_intelligence_staging_docs.py
   pull_request:
     branches: [main]
     paths:
@@ -25,35 +20,19 @@ jobs:
           ref: feature/field-intelligence-launch
           fetch-depth: 0
           token: ${{ github.token }}
-      - name: Build and persist a tested current-main merge candidate
+
+      - name: Prepare current-main candidate and apply hardening patch
+        id: prepare
         shell: bash
         run: |
           set -euo pipefail
-          exec > >(tee /tmp/field-intelligence-candidate.log) 2>&1
-          persist_failure() {
-            rc=$?
-            if [ "$rc" -ne 0 ]; then
-              set +e
-              git merge --abort >/dev/null 2>&1 || true
-              git fetch origin integration/field-intelligence-resolved-v2
-              git checkout -B integration/field-intelligence-resolved-v2 origin/integration/field-intelligence-resolved-v2
-              mkdir -p scratchpad
-              cp /tmp/field-intelligence-candidate.log scratchpad/field-intelligence-candidate-failure.log
-              git config user.name "agroai-integration-bot"
-              git config user.email "integration-bot@agroai-pilot.com"
-              git add scratchpad/field-intelligence-candidate-failure.log
-              git commit -m "docs: persist Field Intelligence candidate failure" || true
-              git push origin HEAD:integration/field-intelligence-resolved-v2 || true
-            fi
-            exit "$rc"
-          }
-          trap persist_failure EXIT
-
           git config user.name "agroai-integration-bot"
           git config user.email "integration-bot@agroai-pilot.com"
           git fetch origin main feature/field-intelligence-launch integration/field-intelligence-resolved-v2
           feature_before="$(git rev-parse HEAD)"
           main_head="$(git rev-parse origin/main)"
+          echo "FEATURE_BEFORE=$feature_before" >> "$GITHUB_ENV"
+          echo "MAIN_HEAD=$main_head" >> "$GITHUB_ENV"
           echo "FEATURE_BEFORE=$feature_before"
           echo "MAIN_HEAD=$main_head"
 
@@ -61,6 +40,7 @@ jobs:
           git merge --no-commit --no-ff origin/main
           merge_rc=$?
           set -e
+          echo "MERGE_RC=$merge_rc" >> "$GITHUB_ENV"
           conflicts="$(git diff --name-only --diff-filter=U | sort)"
           allowed=".github/workflows/platform-api-private-beta-diagnostics.yml"
           unexpected="$(comm -13 <(printf '%s\n' "$allowed" | sort) <(printf '%s\n' "$conflicts" | sort) || true)"
@@ -73,12 +53,17 @@ jobs:
             git checkout --theirs -- .github/workflows/platform-api-private-beta-diagnostics.yml
           fi
           rm -f scratchpad/.blob-sync-marker
-
           git show origin/integration/field-intelligence-resolved-v2:scripts/finalize_field_intelligence_staging_docs.py \
             > /tmp/finalize_field_intelligence_staging_docs.py
           python3 /tmp/finalize_field_intelligence_staging_docs.py
+          git diff --check
 
-          cd agroai_api
+      - name: Compile and run focused backend contracts
+        id: backend
+        working-directory: agroai_api
+        shell: bash
+        run: |
+          set -euo pipefail
           python -m pip install -q -r requirements.txt pytest
           sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
           python -m compileall -q app alembic scripts
@@ -92,18 +77,35 @@ jobs:
             tests/unit/test_field_intelligence_staging_contract.py \
             tests/unit/test_object_storage.py \
             tests/unit/test_production_readiness.py
-          cd ../figma-enterprise-v4
+
+      - name: Run portal offline, launch, localization, and staging build contracts
+        id: portal
+        working-directory: figma-enterprise-v4
+        shell: bash
+        run: |
+          set -euo pipefail
           npm ci
           npm run test:field-intelligence
           npm run test:field-intelligence-launch
           npm run test:i18n
           VITE_API_BASE_URL=https://agroai-api-staging.invalid \
           VITE_DEPLOYMENT_ENVIRONMENT=staging \
-          VITE_BUILD_SHA="$feature_before" npm run build
-          cd ../cloudflare/edge-gateway
+          VITE_BUILD_SHA="$FEATURE_BEFORE" npm run build
+
+      - name: Run edge gateway contracts
+        id: edge
+        working-directory: cloudflare/edge-gateway
+        shell: bash
+        run: |
+          set -euo pipefail
           npm ci --no-audit --no-fund
           npm run check
-          cd ../..
+
+      - name: Commit and publish tested candidate evidence
+        id: finalize
+        shell: bash
+        run: |
+          set -euo pipefail
           git diff --check
           git add -A
           git commit -m "Harden Field Intelligence staging evidence and smoke"
@@ -119,9 +121,33 @@ jobs:
           git checkout -B integration/field-intelligence-resolved-v2 origin/integration/field-intelligence-resolved-v2
           mkdir -p scratchpad
           cat > scratchpad/field-intelligence-tested-candidate.json <<EOF
-          {"candidate_sha":"${candidate}","feature_before":"${feature_before}","main_sha":"${main_head}","merge_exit":${merge_rc},"push_exit":${push_rc},"focused_backend":"passed","portal_contracts":"passed","portal_build":"passed","edge_contracts":"passed","alembic_head":"027_field_intelligence_launch","staging_smoke_evidence":"hardened"}
+          {"candidate_sha":"${candidate}","feature_before":"${FEATURE_BEFORE}","main_sha":"${MAIN_HEAD}","merge_exit":${MERGE_RC},"push_exit":${push_rc},"focused_backend":"passed","portal_contracts":"passed","portal_build":"passed","edge_contracts":"passed","alembic_head":"027_field_intelligence_launch","staging_smoke_evidence":"hardened"}
           EOF
-          rm -f scratchpad/field-intelligence-candidate-failure.log
-          git add scratchpad/field-intelligence-tested-candidate.json scratchpad/field-intelligence-candidate-failure.log 2>/dev/null || true
+          rm -f scratchpad/field-intelligence-candidate-failure.json
+          git add scratchpad/field-intelligence-tested-candidate.json
           git commit -m "docs: record tested Field Intelligence merge candidate" || true
           git push origin HEAD:integration/field-intelligence-resolved-v2
+
+      - name: Persist failed subsystem outcomes
+        if: failure()
+        shell: bash
+        env:
+          PREPARE_OUTCOME: ${{ steps.prepare.outcome }}
+          BACKEND_OUTCOME: ${{ steps.backend.outcome }}
+          PORTAL_OUTCOME: ${{ steps.portal.outcome }}
+          EDGE_OUTCOME: ${{ steps.edge.outcome }}
+          FINALIZE_OUTCOME: ${{ steps.finalize.outcome }}
+        run: |
+          set +e
+          git merge --abort >/dev/null 2>&1 || true
+          git fetch origin integration/field-intelligence-resolved-v2
+          git checkout -B integration/field-intelligence-resolved-v2 origin/integration/field-intelligence-resolved-v2
+          mkdir -p scratchpad
+          cat > scratchpad/field-intelligence-candidate-failure.json <<EOF
+          {"feature_before":"${FEATURE_BEFORE:-unknown}","main_sha":"${MAIN_HEAD:-unknown}","prepare":"${PREPARE_OUTCOME}","backend":"${BACKEND_OUTCOME}","portal":"${PORTAL_OUTCOME}","edge":"${EDGE_OUTCOME}","finalize":"${FINALIZE_OUTCOME}"}
+          EOF
+          git config user.name "agroai-integration-bot"
+          git config user.email "integration-bot@agroai-pilot.com"
+          git add scratchpad/field-intelligence-candidate-failure.json
+          git commit -m "docs: persist Field Intelligence candidate subsystem failure" || true
+          git push origin HEAD:integration/field-intelligence-resolved-v2 || true
