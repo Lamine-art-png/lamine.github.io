@@ -1,10 +1,13 @@
 {
   "api": "agroai-field-intelligence-staging-api",
+  "api_plan": "free",
   "auto_deploy_disabled": true,
-  "contract": "field-intelligence-render-blueprint-contract-v1",
+  "contract": "field-intelligence-render-free-blueprint-contract-v2",
   "database": "agroai-field-intelligence-staging-db",
+  "database_plan": "free",
   "secret_values_in_source": false,
   "status": "passed",
   "tested_sha": "9854a3084c6223bd7ddab5e0d182c3ba363e1790",
-  "worker": "agroai-field-intelligence-staging-worker"
+  "transcription_provider": "groq-free-tier",
+  "worker_mode": "in_process"
 }
