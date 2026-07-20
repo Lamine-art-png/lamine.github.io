@@ -28,8 +28,10 @@ fingerprint and the production bucket name.
 ## Deployment order (all via the manually gated workflow)
 
 Run **Field Intelligence Staging** (`workflow_dispatch` only) with:
-`confirm=STAGE_FIELD_INTELLIGENCE`, `sha=<exact branch head>`, optional
-`run_smoke=true`. The workflow, in order:
+`confirm=STAGE_FIELD_INTELLIGENCE`, `sha=<exact branch head>`,
+`merge_sha=<current PR #258 merge commit>`, optional `run_smoke=true`.
+The workflow requires every mandatory PR workflow to be present, terminal,
+and successful for the exact head and current `main` base. The workflow, in order:
 
 1. validates the confirmation, pins the SHA to the branch head, refuses main,
    and verifies PR #258 merge-ref CI is green for that head;
@@ -130,3 +132,32 @@ The workflow fails closed until every item exists:
    `FIELD_STAGING_SMOKE_TOKEN`, `FIELD_STAGING_RESTRICTED_SMOKE_TOKEN`).
 9. **Future DNS (optional, manual):** `api-staging.agroai-pilot.com` →
    staging API; a staging portal hostname. Never automated by this workflow.
+
+
+## Immutable identity gates
+
+Before any deploy hook is called, the staging contract requires and compares:
+
+- staging and production API service IDs;
+- staging and production worker service IDs;
+- normalized database identities (`host:port/database`);
+- normalized object-store identities (`account-id:bucket-name`);
+- staging and production Cloudflare Pages project names;
+- recognized provider deploy hooks whose embedded service ID exactly matches
+  the declared staging service.
+
+Missing production fingerprints fail closed. A naming convention such as
+`staging` is additional defense, not the isolation proof.
+
+For the direct-provider `internal` topology, API, worker, and database identity
+are proven through the backend; the portal is then fetched live and verified
+against its public deployment metadata. Portal/edge labels absent from the API
+are not represented as deployed surfaces.
+
+## Current provisioning status
+
+No staging infrastructure is provisioned by source code. Until the protected
+`field-intelligence-staging` environment contains the isolated API, database,
+worker, R2, transcription, Pages, internal-account, and immutable fingerprint
+values, the workflow fails before network deployment. Production remains
+untouched and the server-side release state remains disabled there.

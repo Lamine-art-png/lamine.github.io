@@ -108,7 +108,7 @@ jobs:
           MAIN_SHA: ${{ steps.resolve.outputs.main_sha }}
         run: |
           set -euo pipefail
-          gh api --paginate "repos/${GITHUB_REPOSITORY}/actions/runs?event=pull_request&per_page=100" > /tmp/pr-runs.json
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs?event=pull_request&head_sha=${STAGE_SHA}&per_page=100" > /tmp/pr-runs.json
           python3 - <<'PY'
           import json, os, sys
           expected = {
@@ -227,7 +227,7 @@ jobs:
       FIELD_STAGING_OBJECT_ACCOUNT_ID: ${{ vars.FIELD_STAGING_OBJECT_ACCOUNT_ID }}
       FIELD_STAGING_OBJECT_ENDPOINT_URL: ${{ secrets.FIELD_STAGING_OBJECT_ENDPOINT_URL }}
       FIELD_STAGING_OBJECT_REGION: ${{ vars.FIELD_STAGING_OBJECT_REGION }}
-      FIELD_STAGING_OBJECT_PREFIX: ${{ vars.FIELD_STAGING_OBJECT_PREFIX }}
+      FIELD_STAGING_OBJECT_PREFIX: ${{ vars.FIELD_STAGING_OBJECT_PREFIX || 'staging/field-intelligence' }}
       FIELD_STAGING_R2_ACCESS_KEY_ID: ${{ secrets.FIELD_STAGING_R2_ACCESS_KEY_ID }}
       FIELD_STAGING_R2_SECRET_ACCESS_KEY: ${{ secrets.FIELD_STAGING_R2_SECRET_ACCESS_KEY }}
       FIELD_STAGING_TRANSCRIPTION_PROVIDER: ${{ vars.FIELD_STAGING_TRANSCRIPTION_PROVIDER }}
@@ -238,7 +238,7 @@ jobs:
       FIELD_STAGING_SMOKE_TOKEN: ${{ secrets.FIELD_STAGING_SMOKE_TOKEN }}
       FIELD_STAGING_RESTRICTED_SMOKE_TOKEN: ${{ secrets.FIELD_STAGING_RESTRICTED_SMOKE_TOKEN }}
       FIELD_STAGING_PORTAL_PROJECT: ${{ vars.FIELD_STAGING_PORTAL_PROJECT }}
-      FIELD_STAGING_RELEASE_STATE: ${{ vars.FIELD_STAGING_RELEASE_STATE }}
+      FIELD_STAGING_RELEASE_STATE: ${{ vars.FIELD_STAGING_RELEASE_STATE || 'internal' }}
       FIELD_STAGING_CONFIRM_CANARY: ${{ inputs.confirm_canary }}
       PRODUCTION_DATABASE_RESOURCE_FINGERPRINT: ${{ vars.PRODUCTION_DATABASE_RESOURCE_FINGERPRINT }}
       PRODUCTION_OBJECT_BUCKET_FINGERPRINT: ${{ vars.PRODUCTION_OBJECT_BUCKET_FINGERPRINT }}
@@ -426,8 +426,14 @@ jobs:
           assert rollout.get("configured_state") == os.environ["FIELD_STAGING_RELEASE_STATE"], rollout
           assert rollout.get("effective_state") == os.environ["FIELD_STAGING_RELEASE_STATE"], rollout
           assert rollout.get("kill_switch") is False, rollout
-          assert (rollout.get("release_alignment") or {}).get("aligned") is True, rollout
-          print(json.dumps({"schema_ready": True, "field_blockers": 0, "rollout": rollout.get("effective_state"), "aligned": True}))
+          alignment = rollout.get("release_alignment") or {}
+          assert alignment.get("api_sha") == os.environ["STAGE_SHA"], alignment
+          assert alignment.get("worker_shas") == [os.environ["STAGE_SHA"]], alignment
+          assert alignment.get("database_heads") == ["027_field_intelligence_launch"], alignment
+          allowed_external = {"portal_sha_unreported", "edge_sha_unreported"}
+          unexpected = set(alignment.get("mismatches") or []) - allowed_external
+          assert not unexpected, {"unexpected_alignment_mismatches": sorted(unexpected), "alignment": alignment}
+          print(json.dumps({"schema_ready": True, "field_blockers": 0, "rollout": rollout.get("effective_state"), "api_worker_database_aligned": True, "externally_verified_later": sorted(set(alignment.get("mismatches") or []) & allowed_external)}))
           PY
 
       - uses: actions/setup-node@v4

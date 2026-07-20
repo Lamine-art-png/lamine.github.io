@@ -25,6 +25,7 @@ concurrency:
 
 env:
   OPS_ISSUE: "262"
+  TOPOLOGY_ISSUE: "267"
   CUSTOM_UPSTREAM: "https://api-preview.agroai-pilot.com"
   DIRECT_RENDER_UPSTREAM: "https://agroai-api-preview.onrender.com"
   PUBLIC_API: "https://api.agroai-pilot.com"
@@ -156,27 +157,33 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -u
+          set -euo pipefail
           payload="$(mktemp)"
           code="$(curl -sS -o "$payload" -w '%{http_code}' --connect-timeout 10 --max-time 60 \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN:-}" \
             -H "Content-Type: application/json" \
-            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID:-}/pages/projects?per_page=100" 2>/dev/null || printf '000')"
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID:-}/pages/projects" 2>/dev/null || printf '000')"
 
           if jq -e '.success == true' "$payload" >/dev/null 2>&1; then
             project="$(jq -c '[.result[] | select((.domains // []) | index("agroai-pilot.com"))][0] // null | if . == null then {status:"not_found"} else {status:"found",name,subdomain,domains,production_branch,build_config,source:{type:.source.type,config:{owner:.source.config.owner,repo_name:.source.config.repo_name,production_branch:.source.config.production_branch,deployments_enabled:.source.config.deployments_enabled,production_deployments_enabled:.source.config.production_deployments_enabled,preview_deployment_setting:.source.config.preview_deployment_setting}}} end' "$payload")"
+          elif jq -e . "$payload" >/dev/null 2>&1; then
+            project="$(jq -c --arg http "$code" '{status:"unavailable",http:$http,errors:[(.errors // [])[] | {code,message}]}' "$payload")"
           else
-            project="$(printf '{"status":"unavailable","http":"%s"}' "$code")"
+            project="$(printf '{"status":"unavailable","http":"%s","errors":[]}' "$code")"
           fi
           rm -f "$payload"
 
           {
-            echo "## Marketing Cloudflare Pages topology"
+            echo "# Marketing Cloudflare Pages topology"
             echo
-            echo "- workflow SHA: \`${GITHUB_SHA}\`"
+            echo "Workflow SHA: \`${GITHUB_SHA}\`"
+            echo
             echo '```json'
             echo "$project" | jq . 2>/dev/null || echo "$project"
             echo '```'
-          } > comment.md
+            echo
+            echo "This snapshot is redacted and contains no credential values."
+          } > topology.md
 
-          gh issue comment "${OPS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body-file comment.md
+          gh issue comment "${TOPOLOGY_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body-file topology.md
+          gh issue comment "${OPS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body "Marketing Pages topology evidence posted to #${TOPOLOGY_ISSUE} for workflow SHA \`${GITHUB_SHA}\`."

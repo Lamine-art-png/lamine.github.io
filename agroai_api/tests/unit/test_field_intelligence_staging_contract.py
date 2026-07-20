@@ -32,6 +32,7 @@ BASE_ENV = {
     "FIELD_STAGING_TRANSCRIPTION_API_KEY": "staging-stt-key",
     "FIELD_STAGING_TRANSCRIPTION_MODEL": "whisper-1",
     "FIELD_STAGING_INTERNAL_ORGANIZATION_IDS": "org-staging-internal",
+    "FIELD_STAGING_SMOKE_TOKEN": "staging-admin-token",
     "FIELD_STAGING_PORTAL_PROJECT": "agroai-portal-staging",
     "FIELD_STAGING_RELEASE_STATE": "internal",
     "PRODUCTION_DATABASE_RESOURCE_FINGERPRINT": "prod-db.internal:5432/agroai_production",
@@ -170,7 +171,7 @@ def test_workflow_is_dispatch_only_and_requires_exact_head_and_merge_ref():
     assert "push:" not in trigger_block and "pull_request:" not in trigger_block and "schedule:" not in trigger_block
     assert "STAGE_FIELD_INTELLIGENCE" in text
     assert "merge_sha:" in text
-    assert "pulls/258" in text
+    assert "pulls/${STAGING_PR}" in text
     assert "origin/main" in text
     assert "merge_commit_sha" in text
     assert "PR head SHA does not equal the requested staging SHA" in text
