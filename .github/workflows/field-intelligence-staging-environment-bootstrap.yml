@@ -1,0 +1,39 @@
+name: Bootstrap Field Intelligence Staging Environment
+
+on:
+  push:
+    branches: [ops/field-intelligence-staging-provision]
+    paths:
+      - .github/workflows/field-intelligence-staging-environment-bootstrap.yml
+
+permissions:
+  contents: write
+
+jobs:
+  bootstrap:
+    runs-on: ubuntu-latest
+    environment: field-intelligence-staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ops/field-intelligence-staging-provision
+          token: ${{ github.token }}
+      - name: Record environment bootstrap without secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p scratchpad
+          cat > scratchpad/field-intelligence-staging-environment.json <<'EOF'
+          {
+            "contract": "field-intelligence-staging-environment-bootstrap-v1",
+            "environment": "field-intelligence-staging",
+            "resource_changes": false,
+            "secrets_written": false,
+            "status": "environment-referenced-by-successful-job"
+          }
+          EOF
+          git config user.name "agroai-staging-environment-bot"
+          git config user.email "staging-environment@agroai-pilot.com"
+          git add scratchpad/field-intelligence-staging-environment.json
+          git commit -m "docs: record staging environment bootstrap" || exit 0
+          git push origin HEAD:ops/field-intelligence-staging-provision
