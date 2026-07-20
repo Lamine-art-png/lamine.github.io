@@ -13,42 +13,82 @@ permissions:
 jobs:
   integrate:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
           ref: feature/field-intelligence-launch
           fetch-depth: 0
           token: ${{ github.token }}
-      - name: Sync the latest main, verify the repaired head, and push
+      - name: Build and persist a tested current-main merge candidate
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "agroai-integration-bot"
           git config user.email "integration-bot@agroai-pilot.com"
-          git fetch origin main feature/field-intelligence-launch
-          before="$(git rev-parse HEAD)"
+          git fetch origin main feature/field-intelligence-launch integration/field-intelligence-resolved-v2
+          feature_before="$(git rev-parse HEAD)"
           main_head="$(git rev-parse origin/main)"
-          echo "FEATURE_BEFORE=$before"
+          echo "FEATURE_BEFORE=$feature_before"
           echo "MAIN_HEAD=$main_head"
+
+          set +e
           git merge --no-commit --no-ff origin/main
+          merge_rc=$?
+          set -e
           conflicts="$(git diff --name-only --diff-filter=U | sort)"
-          test -z "$conflicts" || { echo "Unexpected conflicts:"; echo "$conflicts"; exit 1; }
+          allowed=".github/workflows/platform-api-private-beta-diagnostics.yml"
+          unexpected="$(comm -13 <(printf '%s\n' "$allowed" | sort) <(printf '%s\n' "$conflicts" | sort) || true)"
+          if [ -n "$unexpected" ]; then
+            echo "Unexpected conflicts:"
+            echo "$unexpected"
+            exit 1
+          fi
+          if [ -n "$conflicts" ]; then
+            git checkout --theirs -- .github/workflows/platform-api-private-beta-diagnostics.yml
+          fi
+          rm -f scratchpad/.blob-sync-marker
 
           cd agroai_api
           python -m pip install -q -r requirements.txt pytest
+          sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
           python -m compileall -q app alembic scripts
           test "$(alembic heads)" = "027_field_intelligence_launch (head)"
           PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short \
             tests/unit/test_alembic_revision_contract.py \
             tests/unit/test_schema_adoption_contract.py \
+            tests/unit/test_field_intelligence.py \
+            tests/unit/test_field_intelligence_hardening.py \
             tests/unit/test_field_intelligence_launch.py \
             tests/unit/test_field_intelligence_staging_contract.py \
+            tests/unit/test_object_storage.py \
             tests/unit/test_production_readiness.py
+          cd ../figma-enterprise-v4
+          npm ci
+          npm run test:field-intelligence
+          npm run test:field-intelligence-launch
+          npm run test:i18n
+          VITE_API_BASE_URL=https://agroai-api-staging.invalid \
+          VITE_DEPLOYMENT_ENVIRONMENT=staging \
+          VITE_BUILD_SHA="$feature_before" npm run build
           cd ..
-
-          git checkout "$before" -- .github/workflows
           git diff --check
           git add -A
-          git commit -m "Merge latest main into Field Intelligence launch"
+          git commit -m "Merge current main into Field Intelligence staging candidate"
+          candidate="$(git rev-parse HEAD)"
+          echo "CANDIDATE_SHA=$candidate"
+
+          set +e
           git push origin HEAD:feature/field-intelligence-launch
+          push_rc=$?
+          set -e
+
+          git fetch origin integration/field-intelligence-resolved-v2
+          git checkout -B integration/field-intelligence-resolved-v2 origin/integration/field-intelligence-resolved-v2
+          mkdir -p scratchpad
+          cat > scratchpad/field-intelligence-tested-candidate.json <<EOF
+          {"candidate_sha":"${candidate}","feature_before":"${feature_before}","main_sha":"${main_head}","merge_exit":${merge_rc},"push_exit":${push_rc},"focused_backend":"passed","portal_contracts":"passed","portal_build":"passed","alembic_head":"027_field_intelligence_launch"}
+          EOF
+          git add scratchpad/field-intelligence-tested-candidate.json
+          git commit -m "docs: record tested Field Intelligence merge candidate" || true
+          git push origin HEAD:integration/field-intelligence-resolved-v2
