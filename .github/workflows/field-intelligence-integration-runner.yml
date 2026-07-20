@@ -85,7 +85,6 @@ jobs:
           git show origin/integration/field-intelligence-resolved-v2:scripts/field_intelligence_integration_repair.py \
             > /tmp/field_intelligence_integration_repair.py
           python3 /tmp/field_intelligence_integration_repair.py
-          rm -f .github/workflows/field-intelligence-integration-diagnostic.yml
 
           cd agroai_api
           python -m pip install -q -r requirements.txt pytest
@@ -98,6 +97,11 @@ jobs:
             tests/unit/test_field_intelligence_staging_contract.py \
             tests/unit/test_production_readiness.py
           cd ..
+
+          # The Actions token cannot update workflow files. Preserve the exact
+          # pre-run workflow tree for this push; validated workflow updates are
+          # applied immediately afterward through the repository integration.
+          git checkout "$before" -- .github/workflows
           git diff --check
           git add -A
           git commit -m "Merge current main and rebase Field Intelligence launch onto Platform API operations"
