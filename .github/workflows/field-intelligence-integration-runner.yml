@@ -27,6 +27,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          exec > >(tee /tmp/field-intelligence-prepare.log) 2>&1
           git config user.name "agroai-integration-bot"
           git config user.email "integration-bot@agroai-pilot.com"
           git fetch --quiet origin main:refs/remotes/origin/main
@@ -60,6 +61,15 @@ jobs:
             > /tmp/finalize_field_intelligence_staging_docs.py
           python3 /tmp/finalize_field_intelligence_staging_docs.py
           git diff --check
+
+      - name: Upload preparation diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: field-intelligence-prepare-${{ github.run_id }}
+          path: /tmp/field-intelligence-prepare.log
+          if-no-files-found: error
+          retention-days: 3
 
       - name: Compile and run focused backend contracts
         id: backend
