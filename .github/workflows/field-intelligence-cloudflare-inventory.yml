@@ -1,0 +1,69 @@
+name: Inventory Cloudflare Resource Identities
+
+on:
+  push:
+    branches: [ops/field-intelligence-staging-provision]
+    paths:
+      - .github/workflows/field-intelligence-cloudflare-inventory.yml
+
+permissions:
+  contents: write
+
+jobs:
+  inventory:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ops/field-intelligence-staging-provision
+          token: ${{ github.token }}
+      - name: Read only Pages project and R2 bucket names
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p scratchpad
+          python3 - <<'PY'
+          import json, os, urllib.request
+
+          token = os.environ["CLOUDFLARE_API_TOKEN"]
+          account = os.environ["CLOUDFLARE_ACCOUNT_ID"]
+          base = "https://api.cloudflare.com/client/v4"
+
+          def get(path):
+              request = urllib.request.Request(base + path)
+              request.add_header("Authorization", f"Bearer {token}")
+              request.add_header("Accept", "application/json")
+              request.add_header("User-Agent", "agroai-resource-identity-inventory")
+              with urllib.request.urlopen(request, timeout=45) as response:
+                  payload = json.load(response)
+              if payload.get("success") is not True:
+                  raise RuntimeError(f"Cloudflare inventory failed for {path}")
+              return payload.get("result")
+
+          projects = get(f"/accounts/{account}/pages/projects?per_page=100") or []
+          buckets_payload = get(f"/accounts/{account}/r2/buckets?per_page=100") or {}
+          buckets = buckets_payload.get("buckets") if isinstance(buckets_payload, dict) else buckets_payload
+          report = {
+              "contract": "cloudflare-resource-identity-inventory-v1",
+              "account_id": account,
+              "pages_projects": sorted({str(item.get("name") or "") for item in projects if item.get("name")}),
+              "r2_buckets": sorted({str(item.get("name") or "") for item in (buckets or []) if item.get("name")}),
+              "object_contents_read": False,
+              "resource_changes": False,
+          }
+          with open("scratchpad/cloudflare-resource-identities.json", "w", encoding="utf-8") as handle:
+              json.dump(report, handle, indent=2, sort_keys=True)
+          print(json.dumps(report, sort_keys=True))
+          PY
+      - name: Persist non-secret inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "agroai-resource-inventory-bot"
+          git config user.email "resource-inventory@agroai-pilot.com"
+          git add scratchpad/cloudflare-resource-identities.json
+          git commit -m "docs: record Cloudflare resource identities" || exit 0
+          git push origin HEAD:ops/field-intelligence-staging-provision
