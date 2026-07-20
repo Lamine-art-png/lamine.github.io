@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import os
+import re
 import time
 import uuid
 from dataclasses import dataclass
@@ -24,6 +25,7 @@ class RateLimitMetadata:
 class ApiResponse:
     data: dict[str, Any]
     request_id: str | None
+    client_correlation_id: str
     rate_limit: RateLimitMetadata
 
 
@@ -35,13 +37,18 @@ class AgroAIPlatformError(RuntimeError):
         self.request_id = request_id
 
 
-def _error(payload: dict[str, Any], status_code: int) -> AgroAIPlatformError:
+def _error(
+    payload: dict[str, Any],
+    status_code: int,
+    *,
+    request_id: str | None = None,
+) -> AgroAIPlatformError:
     detail = payload.get("detail") if isinstance(payload.get("detail"), dict) else payload
     return AgroAIPlatformError(
         str(detail.get("message") or "AGRO-AI Platform API request failed"),
         status_code=status_code,
         code=detail.get("code"),
-        request_id=detail.get("request_id"),
+        request_id=detail.get("request_id") or request_id,
     )
 
 
@@ -58,6 +65,18 @@ def _metadata(headers: Any) -> RateLimitMetadata:
     )
 
 
+_CLIENT_CORRELATION_ID = re.compile(r"^[A-Za-z0-9_.:-]{1,96}$")
+
+
+def _client_correlation_id(value: str | None) -> str:
+    candidate = value or f"corr_{uuid.uuid4().hex}"
+    if not _CLIENT_CORRELATION_ID.fullmatch(candidate):
+        raise ValueError(
+            "client_correlation_id must contain 1-96 safe correlation characters"
+        )
+    return candidate
+
+
 class AgroAIPlatformClient:
     """Server-side synchronous client. Never embed an API key in browser code."""
 
@@ -68,11 +87,19 @@ class AgroAIPlatformClient:
         if not self.api_key:
             raise ValueError("AGROAI_API_KEY is required")
 
-    def request(self, method: str, path: str, *, json: Any | None = None, idempotency_key: str | None = None) -> ApiResponse:
+    def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: Any | None = None,
+        idempotency_key: str | None = None,
+        client_correlation_id: str | None = None,
+    ) -> ApiResponse:
         method = method.upper()
         attempts = 3 if method in {"GET", "HEAD"} else 1
         response: requests.Response | None = None
-        request_id = f"req_{uuid.uuid4().hex}"
+        correlation_id = _client_correlation_id(client_correlation_id)
         for attempt in range(attempts):
             response = requests.request(
                 method,
@@ -81,7 +108,7 @@ class AgroAIPlatformClient:
                 headers={
                     "Authorization": f"Bearer {self.api_key}",
                     "Accept": "application/json",
-                    "X-Request-Id": request_id,
+                    "X-Request-Id": correlation_id,
                     **({"Idempotency-Key": idempotency_key} if idempotency_key else {}),
                 },
                 timeout=self.timeout,
@@ -92,10 +119,15 @@ class AgroAIPlatformClient:
         assert response is not None
         payload = response.json() if response.content else {}
         if not response.ok:
-            raise _error(payload, response.status_code)
+            raise _error(
+                payload,
+                response.status_code,
+                request_id=response.headers.get("X-Request-Id"),
+            )
         return ApiResponse(
             data=payload,
-            request_id=response.headers.get("X-Request-Id") or request_id,
+            request_id=response.headers.get("X-Request-Id"),
+            client_correlation_id=correlation_id,
             rate_limit=_metadata(response.headers),
         )
 
@@ -152,9 +184,17 @@ class AsyncAgroAIPlatformClient:
         if not self.api_key:
             raise ValueError("AGROAI_API_KEY is required")
 
-    async def request(self, method: str, path: str, *, json: Any | None = None, idempotency_key: str | None = None) -> ApiResponse:
+    async def request(
+        self,
+        method: str,
+        path: str,
+        *,
+        json: Any | None = None,
+        idempotency_key: str | None = None,
+        client_correlation_id: str | None = None,
+    ) -> ApiResponse:
         method = method.upper()
-        request_id = f"req_{uuid.uuid4().hex}"
+        correlation_id = _client_correlation_id(client_correlation_id)
         attempts = 3 if method in {"GET", "HEAD"} else 1
         async with httpx.AsyncClient(timeout=self.timeout) as client:
             response: httpx.Response | None = None
@@ -166,7 +206,7 @@ class AsyncAgroAIPlatformClient:
                     headers={
                         "Authorization": f"Bearer {self.api_key}",
                         "Accept": "application/json",
-                        "X-Request-Id": request_id,
+                        "X-Request-Id": correlation_id,
                         **({"Idempotency-Key": idempotency_key} if idempotency_key else {}),
                     },
                 )
@@ -176,8 +216,17 @@ class AsyncAgroAIPlatformClient:
         assert response is not None
         payload = response.json() if response.content else {}
         if not response.is_success:
-            raise _error(payload, response.status_code)
-        return ApiResponse(payload, response.headers.get("X-Request-Id") or request_id, _metadata(response.headers))
+            raise _error(
+                payload,
+                response.status_code,
+                request_id=response.headers.get("X-Request-Id"),
+            )
+        return ApiResponse(
+            data=payload,
+            request_id=response.headers.get("X-Request-Id"),
+            client_correlation_id=correlation_id,
+            rate_limit=_metadata(response.headers),
+        )
 
     async def iter_fields(self, *, page_size: int = 50) -> AsyncIterator[dict[str, Any]]:
         cursor = None
