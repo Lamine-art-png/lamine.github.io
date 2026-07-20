@@ -1,0 +1,41 @@
+name: Field Intelligence Integration Diagnostic
+
+on:
+  push:
+    branches:
+      - feature/field-intelligence-launch
+    paths:
+      - .github/workflows/field-intelligence-integration-diagnostic.yml
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Attempt current-main merge and report conflicts
+        shell: bash
+        run: |
+          set -u
+          git config user.name "agroai-integration-bot"
+          git config user.email "integration-bot@agroai-pilot.com"
+          git fetch origin main
+          echo "BRANCH_HEAD=$(git rev-parse HEAD)"
+          echo "MAIN_HEAD=$(git rev-parse origin/main)"
+          set +e
+          git merge --no-commit --no-ff origin/main
+          rc=$?
+          set -e
+          echo "MERGE_EXIT=$rc"
+          echo "CONFLICTS_BEGIN"
+          git diff --name-only --diff-filter=U | sort
+          echo "CONFLICTS_END"
+          echo "STATUS_BEGIN"
+          git status --short
+          echo "STATUS_END"
+          git merge --abort >/dev/null 2>&1 || true
+          exit 0
