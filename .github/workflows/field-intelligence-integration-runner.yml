@@ -5,7 +5,6 @@ on:
     branches: [main]
     paths:
       - .github/workflows/field-intelligence-integration-runner.yml
-      - scripts/field_intelligence_integration_repair.py
 
 permissions:
   contents: write
@@ -14,77 +13,27 @@ permissions:
 jobs:
   integrate:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
         with:
           ref: feature/field-intelligence-launch
           fetch-depth: 0
           token: ${{ github.token }}
-      - name: Merge current main, repair the linear migration, test, and push
+      - name: Sync the latest main, verify the repaired head, and push
         shell: bash
         run: |
           set -euo pipefail
-          exec > >(tee /tmp/field-intelligence-integration-run.log) 2>&1
-          persist_failure() {
-            rc=$?
-            if [ "$rc" -ne 0 ]; then
-              set +e
-              git merge --abort >/dev/null 2>&1 || true
-              git fetch origin integration/field-intelligence-resolved-v2
-              git checkout -B integration/field-intelligence-resolved-v2 origin/integration/field-intelligence-resolved-v2
-              mkdir -p scratchpad
-              cp /tmp/field-intelligence-integration-run.log scratchpad/field-intelligence-integration-failure.log
-              git add scratchpad/field-intelligence-integration-failure.log
-              git config user.name "agroai-integration-bot"
-              git config user.email "integration-bot@agroai-pilot.com"
-              git commit -m "docs: persist Field Intelligence integration failure" || true
-              git push origin HEAD:integration/field-intelligence-resolved-v2 || true
-            fi
-            exit "$rc"
-          }
-          trap persist_failure EXIT
-
           git config user.name "agroai-integration-bot"
           git config user.email "integration-bot@agroai-pilot.com"
-          git fetch origin main feature/field-intelligence-launch integration/field-intelligence-resolved-v2
+          git fetch origin main feature/field-intelligence-launch
           before="$(git rev-parse HEAD)"
           main_head="$(git rev-parse origin/main)"
           echo "FEATURE_BEFORE=$before"
           echo "MAIN_HEAD=$main_head"
-
-          set +e
           git merge --no-commit --no-ff origin/main
-          merge_rc=$?
-          set -e
-          actual="$(git diff --name-only --diff-filter=U | sort)"
-          expected="$(printf '%s\n' \
-            '.github/workflows/ci.yml' \
-            '.github/workflows/hardening-backend-reusable.yml' \
-            'agroai_api/app/db/schema_contract.py' \
-            'agroai_api/tests/unit/test_alembic_revision_contract.py' \
-            'agroai_api/tests/unit/test_schema_adoption_contract.py' \
-            'docs/DEPLOYMENT_TRUTH_MAP.md' \
-            'docs/platform-api-operations-runbook.md')"
-          echo "MERGE_EXIT=$merge_rc"
-          printf 'CONFLICTS:\n%s\n' "$actual"
-          unexpected="$(comm -13 <(printf '%s\n' "$expected" | sort) <(printf '%s\n' "$actual" | sort) || true)"
-          if [ -n "$unexpected" ]; then
-            echo "Unexpected conflicts; refusing automated resolution:"
-            echo "$unexpected"
-            exit 1
-          fi
-          for path in $actual; do
-            git checkout --theirs -- "$path"
-          done
-
-          if [ -f agroai_api/alembic/versions/024_field_intelligence_launch.py ]; then
-            git mv agroai_api/alembic/versions/024_field_intelligence_launch.py \
-              agroai_api/alembic/versions/027_field_intelligence_launch.py
-          fi
-          git show origin/integration/field-intelligence-resolved-v2:scripts/field_intelligence_integration_repair.py \
-            > /tmp/field_intelligence_integration_repair.py
-          python3 /tmp/field_intelligence_integration_repair.py
+          conflicts="$(git diff --name-only --diff-filter=U | sort)"
+          test -z "$conflicts" || { echo "Unexpected conflicts:"; echo "$conflicts"; exit 1; }
 
           cd agroai_api
           python -m pip install -q -r requirements.txt pytest
@@ -98,11 +47,8 @@ jobs:
             tests/unit/test_production_readiness.py
           cd ..
 
-          # The Actions token cannot update workflow files. Preserve the exact
-          # pre-run workflow tree for this push; validated workflow updates are
-          # applied immediately afterward through the repository integration.
           git checkout "$before" -- .github/workflows
           git diff --check
           git add -A
-          git commit -m "Merge current main and rebase Field Intelligence launch onto Platform API operations"
+          git commit -m "Merge latest main into Field Intelligence launch"
           git push origin HEAD:feature/field-intelligence-launch
