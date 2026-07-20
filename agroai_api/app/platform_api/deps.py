@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import Depends, Header, HTTPException, Request, Response, status
+from fastapi import Depends, HTTPException, Request, Response, status
 from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
@@ -16,7 +16,11 @@ from app.platform_api.abuse import record_abuse_signal
 from app.platform_api.keys import verify_platform_key
 from app.platform_api.principal import PlatformPrincipal
 from app.platform_api.programs import require_active_enrollment, require_api_entitlement
-from app.platform_api.request_context import bounded_request_id
+from app.platform_api.request_context import (
+    bounded_client_correlation_id,
+    new_billing_operation_id,
+    new_server_request_id,
+)
 from app.platform_api.rate_limits import apply_rate_limit_headers, enforce_rate_limit
 from app.platform_api.terms import require_organization_acceptance, require_user_acceptance
 from app.platform_api.credits import reserve_credits
@@ -61,7 +65,6 @@ def require_platform_api_principal(
     request: Request,
     response: Response,
     credentials: HTTPAuthorizationCredentials | None = Depends(http_bearer),
-    x_request_id: str | None = Header(default=None, alias="X-Request-Id"),
     db: Session = Depends(get_db),
 ) -> PlatformPrincipal:
     if not _feature_enabled():
@@ -73,8 +76,16 @@ def require_platform_api_principal(
                 "message": "The Platform API private beta is not enabled for this environment.",
             },
         )
-    request_id = str(getattr(request.state, "request_id", "") or bounded_request_id(x_request_id))
+    request_id = str(getattr(request.state, "request_id", "") or new_server_request_id())
+    client_correlation_id = getattr(request.state, "client_correlation_id", None)
+    if client_correlation_id is None:
+        client_correlation_id = bounded_client_correlation_id(request.headers.get("x-request-id"))
+    billing_operation_id = str(
+        getattr(request.state, "billing_operation_id", "") or new_billing_operation_id()
+    )
     request.state.request_id = request_id
+    request.state.client_correlation_id = client_correlation_id
+    request.state.billing_operation_id = billing_operation_id
     if not credentials:
         platform_authentication.labels(environment="unknown", outcome="missing_key").inc()
         raise HTTPException(
@@ -142,6 +153,7 @@ def require_platform_api_principal(
                 organization,
                 environment=verified.key.environment,
                 operation="api_key_authentication",
+                api_project_id=verified.key.api_project_id,
             )
         except HTTPException as exc:
             platform_authentication.labels(environment=verified.key.environment, outcome="entitlement_denied").inc()
@@ -166,6 +178,8 @@ def require_platform_api_principal(
         scopes=frozenset(verified.key.scopes or []),
         environment=verified.key.environment,
         request_id=request_id,
+        client_correlation_id=client_correlation_id,
+        billing_operation_id=billing_operation_id,
         resource_restrictions=dict(verified.key.resource_restrictions_json or {}),
         provider_restrictions=dict(verified.key.provider_restrictions_json or {}),
         actor_metadata={"key_fingerprint": verified.key.fingerprint, "project_status": verified.project.status},
@@ -194,7 +208,7 @@ def require_platform_api_principal(
             db,
             principal=principal,
             operation_id=operation_id,
-            logical_operation_id=request_id,
+            logical_operation_id=billing_operation_id,
         )
         request.state.platform_read_metering = True
     platform_authentication.labels(environment=principal.environment or "unknown", outcome="success").inc()

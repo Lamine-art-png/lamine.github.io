@@ -32,7 +32,7 @@ def platform_error(
 
 
 def error_response(request: Request, exc: HTTPException) -> JSONResponse:
-    request_id = str(getattr(request.state, "request_id", "") or request.headers.get("x-request-id") or "")
+    request_id = str(getattr(request.state, "request_id", "") or "")
     if isinstance(exc.detail, dict) and exc.detail.get("code"):
         safe_keys = {
             "code",

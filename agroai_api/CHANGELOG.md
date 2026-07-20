@@ -6,7 +6,7 @@
   enrollments, live review, deterministic sandbox, public domain resources,
   versioned provisional plans/credits, test-mode Stripe architecture, support,
   status, administrative controls, public marketing/docs, and unpublished SDKs.
-- Adds additive Alembic revisions 022–024.
+- Adds additive Alembic revisions 024–026.
 - EarthDaily and Valley remain `awaiting_partner_contract`; Valley physical
   writes remain disabled.
 

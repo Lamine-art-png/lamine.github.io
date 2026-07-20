@@ -25,10 +25,20 @@ from app.models.platform_product import (
 from app.models.platform_api import PlatformApiUsageEvent
 from app.models.saas import Organization
 from app.platform_api.deps import require_developer_control_plane
+from app.platform_api.checkout_idempotency import (
+    claim_checkout,
+    complete_checkout,
+    fail_checkout,
+    stripe_checkout_idempotency_key,
+)
 from app.platform_api.product_audit import record_product_audit
 from app.platform_api.notifications import notify_subscription_state
 from app.platform_api.stripe_metering import publish_pending_meter_outbox
 from app.platform_api.programs import active_enrollments
+from app.platform_api.stripe_mode import (
+    platform_stripe_configuration_error,
+    platform_stripe_livemode_matches,
+)
 
 router = APIRouter(prefix="/platform", tags=["platform-billing"])
 
@@ -66,6 +76,12 @@ def _flag(name: str) -> None:
 def _stripe() -> None:
     if not settings.PLATFORM_API_STRIPE_SECRET_KEY:
         raise HTTPException(status_code=503, detail={"code": "api_billing_stripe_not_configured"})
+    configuration_error = platform_stripe_configuration_error(
+        mode=settings.PLATFORM_API_STRIPE_MODE,
+        secret_key=settings.PLATFORM_API_STRIPE_SECRET_KEY,
+    )
+    if configuration_error:
+        raise HTTPException(status_code=503, detail={"code": configuration_error})
     stripe.api_key = settings.PLATFORM_API_STRIPE_SECRET_KEY
 
 
@@ -235,22 +251,36 @@ def create_api_checkout(
     _flag("PLATFORM_API_STRIPE_CHECKOUT_ENABLED")
     if payload.plan not in {"developer", "scale"}:
         raise HTTPException(status_code=422, detail={"code": "checkout_plan_not_supported"})
-    plan = _active_plan(db, payload.plan)
-    price_id = _price_for(plan, payload.billing_interval)
-    overage_price_id = _overage_price_for(plan)
-    existing = (
-        db.query(PlatformApiSubscription)
-        .filter(
-            PlatformApiSubscription.organization_id == ctx.organization.id,
-            PlatformApiSubscription.status_slot == "active",
-        )
-        .first()
+    canonical_payload = payload.model_dump(mode="json")
+    claim, replay = claim_checkout(
+        db,
+        organization_id=ctx.organization.id,
+        client_key=idempotency_key,
+        payload=canonical_payload,
+        request_id=getattr(request.state, "request_id", None),
     )
-    if existing and existing.status not in {"canceled"}:
-        raise HTTPException(status_code=409, detail={"code": "api_subscription_already_exists"})
-    _stripe()
-    customer_id = ctx.organization.stripe_customer_id
+    # Persist the local claim before any external Stripe side effect.
+    db.commit()
+    claim_id = claim.id
+    if replay:
+        return dict(claim.response_json or {})
+
     try:
+        plan = _active_plan(db, payload.plan)
+        price_id = _price_for(plan, payload.billing_interval)
+        overage_price_id = _overage_price_for(plan)
+        existing = (
+            db.query(PlatformApiSubscription)
+            .filter(
+                PlatformApiSubscription.organization_id == ctx.organization.id,
+                PlatformApiSubscription.status_slot == "active",
+            )
+            .first()
+        )
+        if existing and existing.status not in {"canceled"}:
+            raise HTTPException(status_code=409, detail={"code": "api_subscription_already_exists"})
+        _stripe()
+        customer_id = ctx.organization.stripe_customer_id
         if not customer_id:
             customer = stripe.Customer.create(
                 name=ctx.organization.name,
@@ -301,17 +331,40 @@ def create_api_checkout(
             "metadata": metadata,
             "subscription_data": {"metadata": metadata},
             "automatic_tax": {"enabled": bool(settings.PLATFORM_API_STRIPE_TAX_ENABLED)},
-            "idempotency_key": idempotency_key,
+            "idempotency_key": stripe_checkout_idempotency_key(
+                organization_id=ctx.organization.id,
+                operation=claim.operation,
+                client_key=idempotency_key,
+                request_hash=claim.request_hash,
+            ),
         }
         if settings.PLATFORM_API_STRIPE_TAX_ENABLED:
             checkout_kwargs["customer_update"] = {"address": "auto"}
         checkout = stripe.checkout.Session.create(
             **checkout_kwargs,
         )
+    except HTTPException:
+        db.rollback()
+        failed_claim = db.get(type(claim), claim_id)
+        if failed_claim is not None:
+            fail_checkout(failed_claim)
+            db.commit()
+        raise
     except stripe.error.StripeError as exc:
         db.rollback()
+        failed_claim = db.get(type(claim), claim_id)
+        if failed_claim is not None:
+            fail_checkout(failed_claim)
+            db.commit()
         platform_billing_events.labels(event_class="checkout", outcome="failed").inc()
         raise HTTPException(status_code=503, detail={"code": "api_checkout_unavailable", "reason": exc.__class__.__name__}) from exc
+    except Exception:
+        db.rollback()
+        failed_claim = db.get(type(claim), claim_id)
+        if failed_claim is not None:
+            fail_checkout(failed_claim)
+            db.commit()
+        raise
     record_product_audit(
         db,
         event_type="platform.billing.checkout_created",
@@ -322,9 +375,19 @@ def create_api_checkout(
         request_id=getattr(request.state, "request_id", None),
         metadata={"plan": plan.plan_identifier, "interval": payload.billing_interval},
     )
+    response_json = {
+        "checkout_url": checkout["url"],
+        "subscription": _subscription_public(existing, plan),
+    }
+    complete_checkout(
+        claim,
+        subscription_id=existing.id,
+        stripe_checkout_session_id=str(checkout.get("id") or "") or None,
+        response_json=response_json,
+    )
     db.commit()
     platform_billing_events.labels(event_class="checkout", outcome="created").inc()
-    return {"checkout_url": checkout["url"], "subscription": _subscription_public(existing, plan)}
+    return response_json
 
 
 @router.post("/developer/billing/portal")
@@ -358,31 +421,74 @@ def _event_object(event: dict) -> dict:
     return dict(((event.get("data") or {}).get("object") or {}))
 
 
-def _organization_for_event(db: Session, obj: dict) -> Organization | None:
-    metadata = dict(obj.get("metadata") or {})
-    organization_id = metadata.get("organization_id") or obj.get("client_reference_id")
-    if organization_id:
-        return db.get(Organization, str(organization_id))
-    customer = obj.get("customer")
-    if customer:
-        return db.query(Organization).filter(Organization.stripe_customer_id == str(customer)).first()
+def _platform_event_metadata(obj: dict) -> dict:
+    """Read only explicit metadata carried by this billing object."""
+
+    merged = dict(obj.get("metadata") or {})
+    for container_name in ("subscription_details", "parent"):
+        container = obj.get(container_name)
+        if not isinstance(container, dict):
+            continue
+        details = (
+            container.get("subscription_details")
+            if container_name == "parent"
+            else container
+        )
+        if isinstance(details, dict):
+            for key, value in dict(details.get("metadata") or {}).items():
+                merged.setdefault(key, value)
+    return merged
+
+
+def _stripe_subscription_id(obj: dict) -> str | None:
+    direct = obj.get("subscription")
+    if direct:
+        return str(direct)
+    if str(obj.get("object") or "") == "subscription" and obj.get("id"):
+        return str(obj["id"])
+    parent = obj.get("parent")
+    if isinstance(parent, dict):
+        details = parent.get("subscription_details")
+        if isinstance(details, dict) and details.get("subscription"):
+            return str(details["subscription"])
     return None
 
 
-def _subscription_for_event(db: Session, organization: Organization, obj: dict) -> PlatformApiSubscription | None:
-    metadata = dict(obj.get("metadata") or {})
+def _subscription_for_event(
+    db: Session,
+    obj: dict,
+    metadata: dict,
+) -> PlatformApiSubscription | None:
     local_id = metadata.get("api_subscription_id")
-    stripe_subscription_id = obj.get("subscription") or (obj.get("id") if str(obj.get("object") or "") == "subscription" else None)
-    query = db.query(PlatformApiSubscription).filter(PlatformApiSubscription.organization_id == organization.id)
+    stripe_subscription_id = _stripe_subscription_id(obj)
+    local_row = None
+    stripe_row = None
     if local_id:
-        row = query.filter(PlatformApiSubscription.id == str(local_id)).first()
-        if row:
-            return row
+        local_row = db.get(PlatformApiSubscription, str(local_id))
     if stripe_subscription_id:
-        row = query.filter(PlatformApiSubscription.stripe_subscription_id == str(stripe_subscription_id)).first()
-        if row:
-            return row
-    return query.filter(PlatformApiSubscription.status_slot == "active").first()
+        stripe_row = (
+            db.query(PlatformApiSubscription)
+            .filter(
+                PlatformApiSubscription.stripe_subscription_id
+                == str(stripe_subscription_id)
+            )
+            .first()
+        )
+    if local_row is not None and stripe_row is not None and local_row.id != stripe_row.id:
+        return None
+    row = local_row or stripe_row
+    if row is None:
+        return None
+    organization_id = metadata.get("organization_id") or obj.get("client_reference_id")
+    if organization_id and row.organization_id != str(organization_id):
+        return None
+    if (
+        stripe_subscription_id
+        and row.stripe_subscription_id
+        and row.stripe_subscription_id != stripe_subscription_id
+    ):
+        return None
+    return row
 
 
 @router.post("/billing/stripe-webhook")
@@ -403,6 +509,18 @@ async def api_stripe_webhook(
         platform_billing_events.labels(event_class="stripe_webhook", outcome="signature_denied").inc()
         raise HTTPException(status_code=400, detail="Invalid Stripe signature") from exc
     event = dict(event)
+    if not platform_stripe_livemode_matches(
+        mode=settings.PLATFORM_API_STRIPE_MODE,
+        livemode=bool(event.get("livemode")),
+    ):
+        platform_billing_events.labels(
+            event_class="stripe_webhook",
+            outcome="mode_mismatch",
+        ).inc()
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "api_billing_stripe_event_mode_mismatch"},
+        )
     event_id = str(event.get("id") or "")
     if not event_id:
         raise HTTPException(status_code=400, detail="Invalid Stripe event")
@@ -411,9 +529,43 @@ async def api_stripe_webhook(
         platform_billing_events.labels(event_class="stripe_webhook", outcome="duplicate").inc()
         return {"status": "duplicate", "event_id": event_id}
     obj = _event_object(event)
-    organization = _organization_for_event(db, obj)
-    subscription = _subscription_for_event(db, organization, obj) if organization else None
+    metadata = _platform_event_metadata(obj)
+    billing_product = str(metadata.get("billing_product") or "")
     created = datetime.utcfromtimestamp(int(event.get("created") or 0))
+    if billing_product != "platform_api":
+        organization_id = metadata.get("organization_id") or obj.get(
+            "client_reference_id"
+        )
+        organization = (
+            db.get(Organization, str(organization_id)) if organization_id else None
+        )
+        row = PlatformStripeEvent(
+            stripe_event_id=event_id,
+            event_type=str(event.get("type") or "unknown"),
+            organization_id=organization.id if organization else None,
+            subscription_id=None,
+            status="ignored_non_platform_api",
+            event_created_at=created,
+            payload_digest=hashlib.sha256(raw).hexdigest(),
+            safe_metadata_json={
+                "livemode": bool(event.get("livemode")),
+                "object": str(obj.get("object") or "")[:80],
+                "billing_product": billing_product[:80] or None,
+            },
+            processed_at=datetime.utcnow(),
+        )
+        db.add(row)
+        db.commit()
+        platform_billing_events.labels(
+            event_class="stripe_webhook",
+            outcome="ignored_non_platform_api",
+        ).inc()
+        return {"status": "ignored_non_platform_api", "event_id": event_id}
+
+    subscription = _subscription_for_event(db, obj, metadata)
+    organization = (
+        db.get(Organization, subscription.organization_id) if subscription else None
+    )
     row = PlatformStripeEvent(
         stripe_event_id=event_id,
         event_type=str(event.get("type") or "unknown"),
@@ -422,14 +574,22 @@ async def api_stripe_webhook(
         status="received",
         event_created_at=created,
         payload_digest=hashlib.sha256(raw).hexdigest(),
-        safe_metadata_json={"livemode": bool(event.get("livemode")), "object": str(obj.get("object") or "")[:80]},
+        safe_metadata_json={
+            "livemode": bool(event.get("livemode")),
+            "object": str(obj.get("object") or "")[:80],
+            "billing_product": "platform_api",
+        },
     )
     db.add(row)
     if organization is None or subscription is None:
-        row.status = "unmapped"
+        row.status = "ignored_non_platform_api"
+        row.processed_at = datetime.utcnow()
         db.commit()
-        platform_billing_events.labels(event_class="stripe_webhook", outcome="unmapped").inc()
-        return {"status": "accepted_unmapped", "event_id": event_id}
+        platform_billing_events.labels(
+            event_class="stripe_webhook",
+            outcome="ignored_non_platform_api",
+        ).inc()
+        return {"status": "ignored_non_platform_api", "event_id": event_id}
     if subscription.organization_id != organization.id:
         raise HTTPException(status_code=409, detail={"code": "stripe_organization_mapping_conflict"})
     if subscription.stripe_state_updated_at and created < subscription.stripe_state_updated_at:

@@ -8,6 +8,7 @@ from app.core.security import create_access_token
 from app.models.platform_product import (
     PlatformApiPlan,
     PlatformApiSubscription,
+    PlatformCheckoutIdempotency,
     PlatformRequestLog,
     PlatformStripeEvent,
     PlatformStripeMeterOutbox,
@@ -96,6 +97,87 @@ def test_checkout_uses_only_server_catalog_prices_and_includes_metered_overage(c
     assert manipulated.status_code == 422
 
 
+def test_checkout_idempotency_is_local_payload_bound_and_organization_scoped(
+    client,
+    db,
+    monkeypatch,
+):
+    first_user, first_org, *_ = _project_and_key(db)
+    second_user, second_org, *_ = _project_and_key(db)
+    first_org.verification_status = second_org.verification_status = "approved"
+    _developer_plan(db)
+    _enable_checkout(monkeypatch)
+    checkout_calls: list[dict] = []
+    customer_counter = iter(("cus_first", "cus_second"))
+
+    monkeypatch.setattr(
+        platform_billing.stripe.Customer,
+        "create",
+        lambda **_kwargs: {"id": next(customer_counter)},
+    )
+
+    def create_checkout(**kwargs):
+        checkout_calls.append(kwargs)
+        ordinal = len(checkout_calls)
+        return {
+            "id": f"cs_test_{ordinal}",
+            "url": f"https://checkout.stripe.test/session/{ordinal}",
+        }
+
+    monkeypatch.setattr(
+        platform_billing.stripe.checkout.Session,
+        "create",
+        create_checkout,
+    )
+    payload = {"plan": "developer", "billing_interval": "monthly"}
+    first_headers = {
+        "Authorization": f"Bearer {create_access_token({'sub': first_user.id})}",
+        "Idempotency-Key": "shared-client-key",
+    }
+    second_headers = {
+        "Authorization": f"Bearer {create_access_token({'sub': second_user.id})}",
+        "Idempotency-Key": "shared-client-key",
+    }
+
+    first = client.post(
+        "/v1/platform/developer/billing/checkout",
+        headers=first_headers,
+        json=payload,
+    )
+    replay = client.post(
+        "/v1/platform/developer/billing/checkout",
+        headers=first_headers,
+        json=payload,
+    )
+    conflict = client.post(
+        "/v1/platform/developer/billing/checkout",
+        headers=first_headers,
+        json={"plan": "developer", "billing_interval": "annual"},
+    )
+    other_org = client.post(
+        "/v1/platform/developer/billing/checkout",
+        headers=second_headers,
+        json=payload,
+    )
+
+    assert first.status_code == replay.status_code == other_org.status_code == 200
+    assert replay.json() == first.json()
+    assert conflict.status_code == 409
+    assert conflict.json()["code"] == "idempotency_conflict"
+    assert len(checkout_calls) == 2
+    assert checkout_calls[0]["idempotency_key"] != "shared-client-key"
+    assert (
+        checkout_calls[0]["idempotency_key"]
+        != checkout_calls[1]["idempotency_key"]
+    )
+    assert (
+        db.query(PlatformCheckoutIdempotency)
+        .filter_by(client_key="shared-client-key", status="completed")
+        .count()
+        == 2
+    )
+
+
 def test_api_billing_webhook_is_separate_signed_deduplicated_and_order_safe(client, db, monkeypatch):
     _user, organization, *_ = _project_and_key(db)
     plan = _developer_plan(db)
@@ -127,6 +209,7 @@ def test_api_billing_webhook_is_separate_signed_deduplicated_and_order_safe(clie
                 "metadata": {
                     "organization_id": organization.id,
                     "api_subscription_id": subscription.id,
+                    "billing_product": "platform_api",
                 },
             }
         },
@@ -164,6 +247,116 @@ def test_api_billing_webhook_is_separate_signed_deduplicated_and_order_safe(clie
     assert ignored.json()["status"] == "ignored_out_of_order"
     db.refresh(subscription)
     assert subscription.status == "past_due"
+
+
+def test_portal_and_unrelated_invoice_events_never_mutate_api_subscription(
+    client,
+    db,
+    monkeypatch,
+):
+    _user, organization, *_ = _project_and_key(db)
+    plan = _developer_plan(db)
+    organization.stripe_customer_id = "cus_shared"
+    subscription = PlatformApiSubscription(
+        organization_id=organization.id,
+        plan_id=plan.id,
+        status="active",
+        status_slot="active",
+        billing_mode="stripe",
+        stripe_customer_id="cus_shared",
+        stripe_subscription_id="sub_platform_api",
+    )
+    db.add(subscription)
+    db.commit()
+    monkeypatch.setattr(settings, "PLATFORM_API_BILLING_ENABLED", True)
+    monkeypatch.setattr(settings, "PLATFORM_API_STRIPE_MODE", "test")
+    monkeypatch.setattr(
+        settings,
+        "PLATFORM_API_STRIPE_WEBHOOK_SECRET",
+        "whsec_platform_api",
+    )
+
+    portal_event = {
+        "id": "evt_portal_subscription",
+        "type": "customer.subscription.updated",
+        "created": 2_000_000_100,
+        "livemode": False,
+        "data": {
+            "object": {
+                "object": "subscription",
+                "id": "sub_portal",
+                "customer": "cus_shared",
+                "status": "past_due",
+                "metadata": {
+                    "organization_id": organization.id,
+                    "billing_product": "enterprise_portal",
+                },
+            }
+        },
+    }
+    monkeypatch.setattr(
+        platform_billing.stripe.Webhook,
+        "construct_event",
+        lambda *_args, **_kwargs: portal_event,
+    )
+    ignored = client.post(
+        "/v1/platform/billing/stripe-webhook",
+        headers={"Stripe-Signature": "valid"},
+        content=b"portal",
+    )
+    assert ignored.json()["status"] == "ignored_non_platform_api"
+    db.refresh(subscription)
+    assert subscription.status == "active"
+    assert (
+        db.query(PlatformStripeEvent)
+        .filter_by(
+            stripe_event_id="evt_portal_subscription",
+            status="ignored_non_platform_api",
+        )
+        .count()
+        == 1
+    )
+
+    unrelated_invoice = {
+        "id": "evt_unrelated_invoice",
+        "type": "invoice.payment_failed",
+        "created": 2_000_000_200,
+        "livemode": False,
+        "data": {
+            "object": {
+                "object": "invoice",
+                "id": "in_unrelated",
+                "customer": "cus_shared",
+                "subscription": "sub_unrelated",
+                "metadata": {
+                    "organization_id": organization.id,
+                    "billing_product": "platform_api",
+                },
+            }
+        },
+    }
+    monkeypatch.setattr(
+        platform_billing.stripe.Webhook,
+        "construct_event",
+        lambda *_args, **_kwargs: unrelated_invoice,
+    )
+    unrelated = client.post(
+        "/v1/platform/billing/stripe-webhook",
+        headers={"Stripe-Signature": "valid"},
+        content=b"invoice",
+    )
+    assert unrelated.json()["status"] == "ignored_non_platform_api"
+    db.refresh(subscription)
+    assert subscription.status == "active"
+    assert (
+        db.query(PlatformStripeEvent)
+        .filter_by(
+            stripe_event_id="evt_unrelated_invoice",
+            status="ignored_non_platform_api",
+        )
+        .count()
+        == 1
+    )
 
 
 def test_meter_export_is_idempotent_and_never_exports_twice(db, monkeypatch):

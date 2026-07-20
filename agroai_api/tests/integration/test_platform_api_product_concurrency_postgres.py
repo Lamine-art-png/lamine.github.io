@@ -23,11 +23,13 @@ from app.models.platform_product import (
     PlatformApiOperationCost,
     PlatformApiPlan,
     PlatformApiSubscription,
+    PlatformCheckoutIdempotency,
     PlatformCreditReservation,
     PlatformStripeMeterOutbox,
 )
 from app.models.saas import Organization, User, Workspace
 from app.platform_api import stripe_metering, webhook_delivery
+from app.platform_api.checkout_idempotency import claim_checkout, complete_checkout
 from app.platform_api.credits import reserve_credits
 from app.platform_api.principal import PlatformPrincipal
 
@@ -190,6 +192,108 @@ def test_credit_reservations_use_two_sessions_and_cannot_oversubscribe(monkeypat
             workspace_id=workspace_id,
             plan_id=plan_id,
             cost_id=cost_id,
+        )
+        engine.dispose()
+
+
+def test_checkout_idempotency_claim_is_atomic_across_two_sessions():
+    engine, Session = _sessions()
+    user_id, organization_id, workspace_id, _project_id = _seed_project(Session)
+    barrier = threading.Barrier(2)
+    payload = {"plan": "developer", "billing_interval": "monthly"}
+    plan_id = None
+
+    def claim(index: int) -> str:
+        session = Session()
+        try:
+            barrier.wait()
+            try:
+                row, replay = claim_checkout(
+                    session,
+                    organization_id=organization_id,
+                    client_key="checkout-concurrent",
+                    payload=payload,
+                    request_id=f"req-checkout-{index}",
+                )
+                assert replay is False
+                session.commit()
+                return f"claimed:{row.id}"
+            except HTTPException as exc:
+                session.rollback()
+                assert exc.status_code == 409
+                assert exc.detail["code"] == "operation_in_progress"
+                return "in_progress"
+        finally:
+            session.close()
+
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            results = list(pool.map(claim, (1, 2)))
+        assert len([item for item in results if item.startswith("claimed:")]) == 1
+        assert results.count("in_progress") == 1
+
+        complete_session = Session()
+        plan = PlatformApiPlan(
+            catalog_version=f"checkout-{uuid.uuid4().hex}",
+            plan_identifier="checkout-concurrency",
+            display_name="Checkout concurrency",
+            status="test",
+            active=True,
+            currency="USD",
+            included_credits=1,
+            overages_allowed=False,
+            limits_json={},
+            support_tier="test",
+        )
+        complete_session.add(plan)
+        complete_session.flush()
+        subscription = PlatformApiSubscription(
+            organization_id=organization_id,
+            plan_id=plan.id,
+            status="checkout_pending",
+            status_slot="active",
+            billing_mode="stripe",
+        )
+        complete_session.add(subscription)
+        complete_session.flush()
+        row = (
+            complete_session.query(PlatformCheckoutIdempotency)
+            .filter_by(
+                organization_id=organization_id,
+                client_key="checkout-concurrent",
+            )
+            .one()
+        )
+        complete_checkout(
+            row,
+            subscription_id=subscription.id,
+            stripe_checkout_session_id="cs_concurrent",
+            response_json={"checkout_url": "https://checkout.stripe.test/concurrent"},
+        )
+        complete_session.commit()
+        plan_id = plan.id
+        complete_session.close()
+
+        replay_session = Session()
+        replay_row, replay = claim_checkout(
+            replay_session,
+            organization_id=organization_id,
+            client_key="checkout-concurrent",
+            payload=payload,
+            request_id="req-checkout-replay",
+        )
+        assert replay is True
+        assert replay_row.response_json == {
+            "checkout_url": "https://checkout.stripe.test/concurrent"
+        }
+        replay_session.close()
+    finally:
+        _cleanup(
+            Session,
+            user_id=user_id,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            plan_id=plan_id,
         )
         engine.dispose()
 

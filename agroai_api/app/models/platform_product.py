@@ -346,6 +346,42 @@ class PlatformApiSubscription(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
 
 
+class PlatformCheckoutIdempotency(Base):
+    __tablename__ = "platform_checkout_idempotency"
+    __table_args__ = (
+        UniqueConstraint(
+            "organization_id",
+            "operation",
+            "client_key",
+            name="uq_platform_checkout_idempotency_scope",
+        ),
+        Index("ix_platform_checkout_idempotency_expires", "expires_at"),
+    )
+
+    id = Column(String, primary_key=True, default=new_product_id)
+    organization_id = Column(
+        String,
+        ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    operation = Column(String, nullable=False)
+    client_key = Column(String(255), nullable=False)
+    request_hash = Column(String(64), nullable=False)
+    status = Column(String, default="in_progress", nullable=False, index=True)
+    subscription_id = Column(
+        String,
+        ForeignKey("platform_api_subscriptions.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    stripe_checkout_session_id = Column(String, nullable=True)
+    response_json = Column(JSON, nullable=True)
+    first_request_id = Column(String, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    expires_at = Column(DateTime, nullable=False, index=True)
+
+
 class PlatformCreditReservation(Base):
     __tablename__ = "platform_credit_reservations"
     __table_args__ = (
@@ -427,6 +463,7 @@ class PlatformRequestLog(Base):
     organization_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False, index=True)
     api_project_id = Column(String, ForeignKey("api_projects.id", ondelete="CASCADE"), nullable=False, index=True)
     request_id = Column(String, nullable=False)
+    client_correlation_id = Column(String(96), nullable=True, index=True)
     method = Column(String, nullable=False)
     operation_id = Column(String, nullable=False, index=True)
     status_code = Column(Integer, nullable=False)

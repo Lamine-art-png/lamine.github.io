@@ -290,7 +290,9 @@ def test_platform_key_can_call_me_with_scope(client, db, monkeypatch):
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["principal"]["authentication_type"] == "platform_api_key"
-    assert body["principal"]["request_id"] == "req-test-1"
+    assert body["principal"]["request_id"].startswith("req_")
+    assert body["principal"]["request_id"] != "req-test-1"
+    assert response.headers["x-request-id"] == body["principal"]["request_id"]
 
 
 def test_platform_rate_limit_response_uses_standard_envelope_and_headers(client, db, monkeypatch):

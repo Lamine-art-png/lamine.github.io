@@ -603,6 +603,17 @@ def withdraw_application(
     )
     if row is None:
         raise HTTPException(status_code=404, detail="Not found")
+    is_applicant = row.applicant_user_id == ctx.user.id
+    is_org_admin = bool(
+        ctx.membership
+        and getattr(ctx.membership, "status", "active") == "active"
+        and ctx.membership.role in {"owner", "admin"}
+    )
+    if not is_applicant and not is_org_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"code": "application_withdrawal_not_authorized"},
+        )
     if row.status not in {"draft", "submitted", "under_review", "needs_information"}:
         raise HTTPException(status_code=409, detail={"code": "application_not_withdrawable"})
     row.status = "withdrawn"
@@ -1061,6 +1072,7 @@ def accept_terms(
         .filter(
             PlatformTermsAcceptance.organization_id == ctx.organization.id,
             PlatformTermsAcceptance.user_id == ctx.user.id,
+            PlatformTermsAcceptance.document_id == document.id,
             PlatformTermsAcceptance.document_type == payload.document_type,
             PlatformTermsAcceptance.document_version == payload.document_version,
         )

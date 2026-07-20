@@ -59,7 +59,8 @@ from app.models.platform_api import (
 )
 from app.models.platform_product import (
     PlatformAbuseEvent, PlatformApiApplication, PlatformApiOperationCost,
-    PlatformApiPlan, PlatformApiSubscription, PlatformCreditReservation,
+    PlatformApiPlan, PlatformApiSubscription, PlatformCheckoutIdempotency,
+    PlatformCreditReservation,
     PlatformLiveAccessRequest, PlatformNotification, PlatformPartnerDossier,
     PlatformProductAuditEvent, PlatformProgramEnrollment, PlatformRequestLog,
     PlatformSandboxState, PlatformStatusComponent, PlatformStatusIncident,
@@ -98,7 +99,8 @@ __all__ = [
     "PlatformWebhookOutbox",
     "PlatformWebhookEvent", "ProviderCapabilityRecord", "ProviderExternalIdentityMap",
     "PlatformAbuseEvent", "PlatformApiApplication", "PlatformApiOperationCost",
-    "PlatformApiPlan", "PlatformApiSubscription", "PlatformCreditReservation",
+    "PlatformApiPlan", "PlatformApiSubscription", "PlatformCheckoutIdempotency",
+    "PlatformCreditReservation",
     "PlatformLiveAccessRequest", "PlatformNotification", "PlatformPartnerDossier",
     "PlatformProductAuditEvent", "PlatformProgramEnrollment", "PlatformRequestLog",
     "PlatformSandboxState", "PlatformStatusComponent", "PlatformStatusIncident",

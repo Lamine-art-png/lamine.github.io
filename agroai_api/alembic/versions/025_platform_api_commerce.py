@@ -90,6 +90,34 @@ def upgrade() -> None:
     op.create_index("ix_platform_api_subscription_stripe", "platform_api_subscriptions", ["stripe_subscription_id"])
 
     op.create_table(
+        "platform_checkout_idempotency",
+        _id(),
+        sa.Column("organization_id", sa.String(), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
+        sa.Column("operation", sa.String(), nullable=False),
+        sa.Column("client_key", sa.String(length=255), nullable=False),
+        sa.Column("request_hash", sa.String(length=64), nullable=False),
+        sa.Column("status", sa.String(), nullable=False),
+        sa.Column("subscription_id", sa.String(), sa.ForeignKey("platform_api_subscriptions.id", ondelete="SET NULL"), nullable=True),
+        sa.Column("stripe_checkout_session_id", sa.String(), nullable=True),
+        sa.Column("response_json", sa.JSON(), nullable=True),
+        sa.Column("first_request_id", sa.String(), nullable=True),
+        sa.Column("created_at", sa.DateTime(), nullable=False),
+        sa.Column("updated_at", sa.DateTime(), nullable=False),
+        sa.Column("expires_at", sa.DateTime(), nullable=False),
+        sa.UniqueConstraint(
+            "organization_id",
+            "operation",
+            "client_key",
+            name="uq_platform_checkout_idempotency_scope",
+        ),
+    )
+    op.create_index(
+        "ix_platform_checkout_idempotency_expires",
+        "platform_checkout_idempotency",
+        ["expires_at"],
+    )
+
+    op.create_table(
         "platform_credit_reservations",
         _id(),
         sa.Column("organization_id", sa.String(), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
@@ -156,6 +184,7 @@ def upgrade() -> None:
         sa.Column("organization_id", sa.String(), sa.ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False),
         sa.Column("api_project_id", sa.String(), sa.ForeignKey("api_projects.id", ondelete="CASCADE"), nullable=False),
         sa.Column("request_id", sa.String(), nullable=False),
+        sa.Column("client_correlation_id", sa.String(length=96), nullable=True),
         sa.Column("method", sa.String(), nullable=False),
         sa.Column("operation_id", sa.String(), nullable=False),
         sa.Column("status_code", sa.Integer(), nullable=False),
@@ -168,6 +197,7 @@ def upgrade() -> None:
         sa.UniqueConstraint("organization_id", "request_id", name="uq_platform_request_log_org_request"),
     )
     op.create_index("ix_platform_request_log_project_time", "platform_request_logs", ["api_project_id", "created_at"])
+    op.create_index("ix_platform_request_logs_client_correlation_id", "platform_request_logs", ["client_correlation_id"])
 
     op.create_table(
         "platform_notifications",
@@ -377,6 +407,7 @@ def downgrade() -> None:
         "platform_stripe_events",
         "platform_stripe_meter_outbox",
         "platform_credit_reservations",
+        "platform_checkout_idempotency",
         "platform_api_subscriptions",
         "platform_api_operation_costs",
         "platform_api_plans",

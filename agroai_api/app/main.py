@@ -17,7 +17,11 @@ from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
 from app.core.rate_limiting import limiter
-from app.platform_api.request_context import bounded_request_id
+from app.platform_api.request_context import (
+    bounded_client_correlation_id,
+    new_billing_operation_id,
+    new_server_request_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +220,11 @@ async def durable_upload_compatibility_boundary(request: Request, call_next):
 async def runtime_error_boundary(request: Request, call_next):
     origin = request.headers.get("origin")
     if request.url.path.startswith("/v1/platform/"):
-        request.state.request_id = bounded_request_id(request.headers.get("x-request-id"))
+        request.state.request_id = new_server_request_id()
+        request.state.client_correlation_id = bounded_client_correlation_id(
+            request.headers.get("x-request-id")
+        )
+        request.state.billing_operation_id = new_billing_operation_id()
     try:
         response = await call_next(request)
     except Exception as exc:  # pragma: no cover
@@ -294,6 +302,7 @@ async def platform_request_metadata_log(request: Request, call_next):
                         organization_id=principal.organization_id,
                         api_project_id=principal.api_project_id,
                         request_id=principal.request_id,
+                        client_correlation_id=principal.client_correlation_id,
                         method=request.method[:12],
                         operation_id=operation_id,
                         status_code=int(response.status_code),

@@ -10,6 +10,7 @@ from app.core.config import settings
 from app.core.metrics import platform_billing_events
 from app.db.base import SessionLocal
 from app.models.platform_product import PlatformApiSubscription, PlatformStripeMeterOutbox
+from app.platform_api.stripe_mode import platform_stripe_livemode_matches
 from app.services.redis_task_queue import get_task_publisher
 
 
@@ -115,7 +116,10 @@ def process_meter_export_task(*, outbox_id: str, organization_id: str, worker_id
                 },
                 identifier=row.meter_event_identifier[:100],
             )
-            if bool(getattr(meter_event, "livemode", False)) and not settings.PLATFORM_API_STRIPE_SECRET_KEY.startswith("sk_live_"):
+            if not platform_stripe_livemode_matches(
+                mode=settings.PLATFORM_API_STRIPE_MODE,
+                livemode=bool(getattr(meter_event, "livemode", False)),
+            ):
                 raise RuntimeError("stripe_meter_mode_mismatch")
             row.status = "exported"
             row.exported_at = datetime.utcnow()

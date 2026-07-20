@@ -4,6 +4,7 @@ from datetime import datetime
 
 from app.core.config import settings
 from app.models.operational_records import ConnectorConnection, IngestionJob
+from app.models.platform_api import PlatformApiUsageEvent
 from app.models.platform_product import PlatformLiveAccessRequest, PlatformProgramEnrollment, PlatformRequestLog
 from app.models.saas import ManagedEntity
 from app.models.task_outbox import TaskOutbox
@@ -33,6 +34,66 @@ def _enable_api(monkeypatch) -> None:
     monkeypatch.setattr(settings, "PLATFORM_API_RATE_LIMIT_BACKEND", "memory")
     monkeypatch.setattr(settings, "PLATFORM_API_USAGE_METERING_ENFORCEMENT_ENABLED", False)
     monkeypatch.setattr(settings, "APP_ENV", "test")
+
+
+def test_repeated_client_request_id_never_deduplicates_get_metering(
+    client,
+    db,
+    monkeypatch,
+):
+    _enable_api(monkeypatch)
+    _user, organization, _workspace, project, _service_account, _key, plaintext = (
+        _project_and_key(db)
+    )
+    headers = {
+        "Authorization": f"Bearer {plaintext}",
+        "X-Request-Id": "client-correlation-repeat",
+    }
+
+    first = client.get("/v1/platform/me", headers=headers)
+    second = client.get("/v1/platform/me", headers=headers)
+    cross_route = client.get("/v1/platform/providers", headers=headers)
+
+    assert first.status_code == second.status_code == cross_route.status_code == 200
+    server_request_ids = {
+        first.headers["x-request-id"],
+        second.headers["x-request-id"],
+        cross_route.headers["x-request-id"],
+    }
+    assert len(server_request_ids) == 3
+    assert "client-correlation-repeat" not in server_request_ids
+
+    db.expire_all()
+    logs = (
+        db.query(PlatformRequestLog)
+        .filter(
+            PlatformRequestLog.organization_id == organization.id,
+            PlatformRequestLog.api_project_id == project.id,
+            PlatformRequestLog.client_correlation_id
+            == "client-correlation-repeat",
+        )
+        .all()
+    )
+    assert len(logs) == 3
+    assert {row.request_id for row in logs} == server_request_ids
+    assert len({row.operation_id for row in logs}) == 2
+
+    usage = (
+        db.query(PlatformApiUsageEvent)
+        .filter(
+            PlatformApiUsageEvent.organization_id == organization.id,
+            PlatformApiUsageEvent.api_project_id == project.id,
+            PlatformApiUsageEvent.request_id.in_(server_request_ids),
+        )
+        .all()
+    )
+    assert len(usage) == 3
+    assert len({row.idempotency_key for row in usage}) == 3
+    assert all(
+        (row.metadata_json or {}).get("client_correlation_id")
+        == "client-correlation-repeat"
+        for row in usage
+    )
 
 
 def test_field_lifecycle_is_idempotent_isolated_and_request_logs_are_metadata_only(client, db, monkeypatch):
