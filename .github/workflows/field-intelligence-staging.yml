@@ -379,7 +379,7 @@ jobs:
           CONNECTOR_OBJECT_BUCKET: ${{ vars.FIELD_STAGING_OBJECT_BUCKET }}
           CONNECTOR_OBJECT_ENDPOINT_URL: ${{ secrets.FIELD_STAGING_OBJECT_ENDPOINT_URL }}
           CONNECTOR_OBJECT_REGION: ${{ vars.FIELD_STAGING_OBJECT_REGION }}
-          CONNECTOR_OBJECT_PREFIX: ${{ vars.FIELD_STAGING_OBJECT_PREFIX }}
+          CONNECTOR_OBJECT_PREFIX: ${{ env.FIELD_STAGING_OBJECT_PREFIX }}
           CLOUDFLARE_R2_ACCESS_KEY_ID: ${{ secrets.FIELD_STAGING_R2_ACCESS_KEY_ID }}
           CLOUDFLARE_R2_SECRET_ACCESS_KEY: ${{ secrets.FIELD_STAGING_R2_SECRET_ACCESS_KEY }}
         run: |
@@ -515,9 +515,14 @@ jobs:
           FIELD_SMOKE_TOKEN: ${{ secrets.FIELD_STAGING_SMOKE_TOKEN }}
           FIELD_SMOKE_RESTRICTED_TOKEN: ${{ secrets.FIELD_STAGING_RESTRICTED_SMOKE_TOKEN }}
         run: |
-          set -o pipefail
+          set -euo pipefail
           python -m pip install -q httpx
-          python scripts/field_intelligence_canary_smoke.py 2>&1 | tee ../staging-smoke.log
+          sudo apt-get update -q
+          sudo apt-get install -y -q espeak-ng
+          speech_fixture="$(mktemp --suffix=.wav)"
+          trap 'rm -f "$speech_fixture"' EXIT
+          espeak-ng -s 150 -w "$speech_fixture"             "Irrigation ran forty five minutes on Block A. One thousand two hundred gallons applied."
+          FIELD_SMOKE_AUDIO_PATH="$speech_fixture"           FIELD_SMOKE_AUDIO_CONTENT_TYPE="audio/wav"             python scripts/field_intelligence_canary_smoke.py 2>&1 | tee ../staging-smoke.log
 
       - name: Collect immutable redacted staging evidence
         if: always()

@@ -1,4 +1,4 @@
-"""Manually-gated production canary smoke for Field Intelligence.
+"""Manually-gated deployed-environment smoke for Field Intelligence.
 
 Runs the full capture → durability → processing → intelligence → deletion →
 audit journey against a *deployed* environment as a real signed-in user.
@@ -20,6 +20,8 @@ import io
 import json
 import os
 import struct
+import zlib
+from pathlib import Path
 import sys
 import time
 import uuid
@@ -53,44 +55,27 @@ def finish() -> None:
 
 
 def _png() -> bytes:
-    return b"\x89PNG\r\n\x1a\n" + os.urandom(64)
+    """Return a structurally valid 1x1 RGB PNG, not a magic-byte stub."""
+    def chunk(kind: bytes, payload: bytes) -> bytes:
+        checksum = zlib.crc32(kind + payload) & 0xFFFFFFFF
+        return struct.pack(">I", len(payload)) + kind + payload + struct.pack(">I", checksum)
+
+    ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)
+    scanline = b"\x00\x2c\x7a\x3f"
+    return b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr) + chunk(b"IDAT", zlib.compress(scanline)) + chunk(b"IEND", b"")
 
 
-def _ogg_crc_table():
-    table = []
-    for i in range(256):
-        r = i << 24
-        for _ in range(8):
-            r = ((r << 1) ^ 0x04C11DB7) & 0xFFFFFFFF if r & 0x80000000 else (r << 1) & 0xFFFFFFFF
-        table.append(r)
-    return table
-
-
-_CRC = _ogg_crc_table()
-
-
-def _ogg_opus(seconds: float = 2.0) -> bytes:
-    def crc(raw: bytes) -> int:
-        value = 0
-        for byte in raw:
-            value = ((value << 8) & 0xFFFFFFFF) ^ _CRC[((value >> 24) & 0xFF) ^ byte]
-        return value
-
-    def page(header_type: int, granule: int, seq: int, payload: bytes) -> bytes:
-        lacing = []
-        remaining = len(payload)
-        while remaining >= 255:
-            lacing.append(255)
-            remaining -= 255
-        lacing.append(remaining)
-        raw = (b"OggS" + bytes([0, header_type]) + struct.pack("<q", granule)
-               + struct.pack("<I", 1) + struct.pack("<I", seq) + struct.pack("<I", 0)
-               + bytes([len(lacing)]) + bytes(lacing) + payload)
-        return raw[:22] + struct.pack("<I", crc(raw)) + raw[26:]
-
-    head = b"OpusHead" + bytes([1, 1]) + struct.pack("<H", 0) + struct.pack("<I", 48000) + struct.pack("<h", 0) + b"\x00"
-    tags = b"OpusTags" + struct.pack("<I", 0) + struct.pack("<I", 0)
-    return page(2, 0, 0, head) + page(0, 0, 1, tags) + page(4, int(seconds * 48000), 2, b"\x00" * 64)
+def _speech_audio() -> tuple[bytes, str, str]:
+    raw_path = (os.environ.get("FIELD_SMOKE_AUDIO_PATH") or "").strip()
+    if not raw_path:
+        raise RuntimeError("FIELD_SMOKE_AUDIO_PATH is required for a real transcription smoke")
+    path = Path(raw_path)
+    if not path.is_file():
+        raise RuntimeError("FIELD_SMOKE_AUDIO_PATH does not reference a file")
+    payload = path.read_bytes()
+    if len(payload) < 44 or not payload.startswith(b"RIFF") or payload[8:12] != b"WAVE":
+        raise RuntimeError("FIELD_SMOKE_AUDIO_PATH is not a valid WAV container")
+    return payload, path.name or "field-smoke.wav", (os.environ.get("FIELD_SMOKE_AUDIO_CONTENT_TYPE") or "audio/wav").strip()
 
 
 def main() -> None:
@@ -116,10 +101,10 @@ def main() -> None:
     capture_id = cap.json()["capture"]["id"]
 
     # 3. Upload real small audio + photo evidence
-    audio = _ogg_opus()
+    audio, audio_filename, audio_content_type = _speech_audio()
     up_audio = http.post(f"/v1/field-intelligence/captures/{capture_id}/assets", headers=auth,
                          data={"client_asset_id": f"aud-{run_id}", "kind": "audio"},
-                         files={"file": ("smoke.ogg", io.BytesIO(audio), "audio/ogg")})
+                         files={"file": (audio_filename, io.BytesIO(audio), audio_content_type)})
     step("audio evidence uploaded", up_audio.status_code == 200, up_audio.text[:120])
     up_photo = http.post(f"/v1/field-intelligence/captures/{capture_id}/assets", headers=auth,
                          data={"client_asset_id": f"pic-{run_id}", "kind": "photo"},
@@ -150,8 +135,9 @@ def main() -> None:
     step("worker processed the job", bool(observation) and observation.get("status") in {"completed", "needs_review"},
          f"status={observation and observation.get('status')}")
     provenance = (observation or {}).get("provenance") or {}
-    step("transcription ran", provenance.get("transcription_status") in {"completed", "skipped"},
-         str(provenance.get("transcription_status")))
+    transcript = str((observation or {}).get("transcript") or "").strip()
+    step("real transcription completed", provenance.get("transcription_status") == "completed" and bool(transcript),
+         f"status={provenance.get('transcription_status')} transcript_chars={len(transcript)}")
     step("extraction present", bool((observation or {}).get("structured")), "")
     step("correlation present", isinstance((observation or {}).get("correlation"), dict), "")
 
@@ -189,8 +175,12 @@ def main() -> None:
         time.sleep(3)
     step("object physically deleted by worker", gone, "")
 
-    # 19. Audit provenance survives deletion (capture remains queryable? audit is server-side)
-    step("audit provenance recorded", True, "verified via observation provenance before deletion")
+    # 19. The append-only audit row survives the observation soft deletion.
+    audit = http.get("/v1/field-intelligence/admin/audit",
+                     params={"observation_id": observation_id, "limit": 100}, headers=auth)
+    audit_actions = {event.get("action") for event in (audit.json().get("events", []) if audit.status_code == 200 else [])}
+    step("audit provenance recorded", audit.status_code == 200 and "observation_deleted" in audit_actions,
+         f"http {audit.status_code}; actions={sorted(action for action in audit_actions if action)}")
 
     # 20. Restricted user remains blocked
     if RESTRICTED_TOKEN:

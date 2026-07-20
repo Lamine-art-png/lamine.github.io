@@ -167,6 +167,28 @@ def test_admin_surface_reachable_while_feature_disabled(client, db, monkeypatch)
     assert client.get("/v1/field-intelligence/admin/rollout", headers=headers).status_code == 200
 
 
+
+def test_admin_audit_is_platform_admin_only_bounded_and_metadata_only(client, db, monkeypatch):
+    from app.models.field_intelligence import FieldObservationAuditEvent
+
+    org, _, headers = _auth(db)
+    db.add(FieldObservationAuditEvent(
+        id="audit-proof-1", tenant_id=org.id, observation_id="obs-audit-proof",
+        action="observation_deleted", actor="sensitive-actor-id", actor_type="user",
+        details_json={"private_detail": "must-not-leak"},
+    ))
+    db.commit()
+    path = "/v1/field-intelligence/admin/audit?observation_id=obs-audit-proof&limit=10"
+    assert client.get(path, headers=headers).status_code == 403
+    monkeypatch.setattr("app.core.config.settings.PLATFORM_ADMIN_EMAILS", "fi@example.com")
+    response = client.get(path, headers=headers)
+    assert response.status_code == 200, response.text
+    payload = response.json()
+    assert payload["count"] == 1 and payload["events"][0]["action"] == "observation_deleted"
+    assert set(payload["events"][0]) == {"id", "action", "actor_type", "created_at"}
+    assert "sensitive-actor-id" not in response.text and "private_detail" not in response.text
+
+
 # --------------------------------------------------------------------------- #
 # Worker topology
 # --------------------------------------------------------------------------- #

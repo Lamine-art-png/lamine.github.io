@@ -248,3 +248,21 @@ def test_workflow_smoke_is_manual_and_artifacts_are_redacted():
     assert "field-intelligence-staging-${{ needs.validate-source.outputs.sha }}" in text
     assert "upload-artifact" in text
     assert "echo ${{ secrets." not in text
+
+
+
+def test_storage_probe_uses_the_effective_staging_prefix():
+    text = _workflow_text()
+    assert "FIELD_STAGING_OBJECT_PREFIX: ${{ vars.FIELD_STAGING_OBJECT_PREFIX || 'staging/field-intelligence' }}" in text
+    assert "CONNECTOR_OBJECT_PREFIX: ${{ env.FIELD_STAGING_OBJECT_PREFIX }}" in text
+    assert "CONNECTOR_OBJECT_PREFIX: ${{ vars.FIELD_STAGING_OBJECT_PREFIX }}" not in text
+
+
+def test_live_smoke_uses_real_speech_and_reads_append_only_audit():
+    smoke = (REPO / "agroai_api" / "scripts" / "field_intelligence_canary_smoke.py").read_text(encoding="utf-8")
+    workflow = _workflow_text()
+    assert "FIELD_SMOKE_AUDIO_PATH" in smoke and "valid WAV container" in smoke
+    assert "real transcription completed" in smoke
+    assert "/v1/field-intelligence/admin/audit" in smoke
+    assert 'step("audit provenance recorded", True' not in smoke
+    assert "espeak-ng" in workflow and "FIELD_SMOKE_AUDIO_PATH" in workflow
