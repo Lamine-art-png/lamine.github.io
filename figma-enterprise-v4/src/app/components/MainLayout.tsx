@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { useAuth, type Workspace } from "../auth/AuthProvider";
 import { SyncCenter } from "../fieldIntelligence/SyncCenter";
+import { StagingBanner } from "./StagingBanner";
 import { useLocale } from "../hooks/useLocale";
 import { usePortalCopy } from "../hooks/usePortalCopy";
 import { ImageWithFallback } from "./figma/ImageWithFallback";
@@ -245,6 +246,7 @@ export function MainLayout() {
         </header>
 
         <main className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto" data-portal-content>
+          <StagingBanner />
           <div className="flex justify-end px-3 pt-2" data-sync-center>
             <SyncCenter />
           </div>

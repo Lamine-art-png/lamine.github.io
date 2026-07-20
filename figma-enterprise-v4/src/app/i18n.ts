@@ -182,6 +182,8 @@ const en: Record<string, string> = {
   "syncCenter.discard": "Discard",
   "syncCenter.discardConfirm": "Discard this unsynced observation? Its local recording and attachments will be lost.",
   "syncCenter.noErrorDetail": "No error detail recorded.",
+  "staging.banner": "Staging environment — not production data",
+  "staging.buildSha": "Deployed build commit",
 };
 
 const frFR: Record<string, string> = {
@@ -311,6 +313,8 @@ const frFR: Record<string, string> = {
   "syncCenter.discard": "Abandonner",
   "syncCenter.discardConfirm": "Abandonner cette observation non synchronisée ? Son enregistrement local et ses pièces jointes seront perdus.",
   "syncCenter.noErrorDetail": "Aucun détail d’erreur enregistré.",
+  "staging.banner": "Environnement de préproduction — données non réelles",
+  "staging.buildSha": "Commit de build déployé",
 };
 
 export const TRANSLATIONS: Record<string, Record<string, string>> = { en, "fr-FR": frFR };

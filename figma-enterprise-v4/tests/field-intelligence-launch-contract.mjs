@@ -97,6 +97,15 @@ ok("summarize counts queued+draft together", summary.queued === 2);
 ok("summarize flags attention states", summary.attention === 3);
 ok("summarize totals all records", summary.total === 7);
 
+// --- Staging experience -----------------------------------------------------
+const banner = readFileSync(join(root, "src", "app", "components", "StagingBanner.tsx"), "utf8");
+ok("staging banner is build-variable gated", banner.includes('DEPLOYMENT_ENVIRONMENT === "staging"'));
+ok("staging banner never renders undeclared", banner.includes("if (!isStagingBuild()) return null"));
+ok("staging banner shows the exact build SHA", banner.includes("VITE_BUILD_SHA") && banner.includes(".slice(0, 10)"));
+ok("staging pages are noindexed", banner.includes('"noindex, nofollow"'));
+ok("staging banner is mounted in the shell", layout.includes("<StagingBanner />"));
+ok("staging banner exposes no secrets or origins", !/https?:\/\//.test(banner));
+
 if (failures > 0) {
   console.error(`Field Intelligence launch portal contract FAILED (${failures})`);
   process.exit(1);

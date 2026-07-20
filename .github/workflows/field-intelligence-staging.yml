@@ -1,0 +1,373 @@
+name: Field Intelligence Staging
+
+# Manually gated, fully isolated staging deployment for Field Intelligence.
+# NEVER runs on push. NEVER touches production: app.agroai-pilot.com,
+# api.agroai-pilot.com, api-preview.agroai-pilot.com (the production
+# upstream), the agroai-portal Pages project, the production database, the
+# production R2 bucket or production secrets. Every credential comes from the
+# protected `field-intelligence-staging` GitHub environment.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type STAGE_FIELD_INTELLIGENCE to proceed"
+        required: true
+      sha:
+        description: "Exact commit SHA to stage (must equal the branch head)"
+        required: true
+      run_smoke:
+        description: "Run the 20-step staging smoke (true/false)"
+        required: false
+        default: "false"
+      confirm_canary:
+        description: "ONLY to stage release state canary: type CONFIRM_STAGING_CANARY"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: field-intelligence-staging
+  cancel-in-progress: false
+
+env:
+  NODE_VERSION: "22"
+  STAGING_BRANCH: feature/field-intelligence-launch
+  STAGING_PORTAL_PROJECT: agroai-portal-staging
+  STAGING_PORTAL_BRANCH: field-intelligence-staging
+
+jobs:
+  validate-source:
+    name: Validate confirmation, SHA and merge-ref CI
+    runs-on: ubuntu-latest
+    outputs:
+      sha: ${{ steps.resolve.outputs.sha }}
+    steps:
+      - name: Require exact confirmation phrase
+        if: ${{ inputs.confirm != 'STAGE_FIELD_INTELLIGENCE' }}
+        run: |
+          echo "Refusing: confirmation phrase mismatch."
+          exit 1
+      - name: Refuse staging from main
+        if: ${{ github.ref_name == 'main' }}
+        run: |
+          echo "Refusing: this staging workflow must not run from main."
+          exit 1
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Resolve and pin the exact SHA to the branch head
+        id: resolve
+        shell: bash
+        run: |
+          set -euo pipefail
+          requested="${{ inputs.sha }}"
+          head="$(git rev-parse "origin/${STAGING_BRANCH}")"
+          if [ "$requested" != "$head" ]; then
+            echo "Refusing: requested SHA ($requested) is not the ${STAGING_BRANCH} head ($head)."
+            exit 1
+          fi
+          echo "sha=$head" >> "$GITHUB_OUTPUT"
+      - name: Verify PR merge-ref CI is green for this head
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          sha="${{ steps.resolve.outputs.sha }}"
+          # Every completed check run on the head must be success/neutral/skipped,
+          # except the known pre-existing external Cloudflare Pages project
+          # failure that also fails on main and is outside this repository.
+          gh api "repos/${{ github.repository }}/commits/${sha}/check-runs?per_page=100" \
+            --jq '[.check_runs[] | select(.conclusion != null)
+                    | select(.name != "Cloudflare Pages: lamine-github-io")
+                    | select(.conclusion != "success" and .conclusion != "neutral" and .conclusion != "skipped")
+                    | .name] | length' | tee /tmp/failing_count
+          test "$(cat /tmp/failing_count)" = "0" || { echo "Refusing: merge-ref checks not green."; exit 1; }
+
+  build-and-test:
+    name: Compile and test API, worker, portal, edge
+    needs: validate-source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-source.outputs.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Backend + worker compile and focused suites
+        working-directory: agroai_api
+        run: |
+          python -m pip install -q -r requirements.txt pytest
+          sudo apt-get update -q && sudo apt-get install -y -q ffmpeg
+          python -m compileall -q app alembic scripts
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short \
+            tests/unit/test_field_intelligence_launch.py \
+            tests/unit/test_field_intelligence.py \
+            tests/unit/test_field_intelligence_hardening.py \
+            tests/unit/test_object_storage.py
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - name: Portal staging build + contracts
+        working-directory: figma-enterprise-v4
+        env:
+          VITE_API_BASE_URL: https://staging-api.invalid.local  # placeholder; real URL injected at deploy
+          VITE_DEPLOYMENT_ENVIRONMENT: staging
+          VITE_BUILD_SHA: ${{ needs.validate-source.outputs.sha }}
+        run: |
+          npm ci
+          npm run test:field-intelligence-launch
+          npm run test:field-intelligence
+          npm run test:i18n
+          npm run build
+      - name: Edge checks
+        working-directory: cloudflare/edge-gateway
+        run: |
+          npm ci --no-audit --no-fund
+          npm run check
+
+  stage:
+    name: Deploy isolated staging (API, DB, worker, portal)
+    needs: [validate-source, build-and-test]
+    runs-on: ubuntu-latest
+    environment: field-intelligence-staging
+    env:
+      STAGE_SHA: ${{ needs.validate-source.outputs.sha }}
+      FIELD_STAGING_API_URL: ${{ vars.FIELD_STAGING_API_URL }}
+      FIELD_STAGING_PORTAL_URL: ${{ vars.FIELD_STAGING_PORTAL_URL }}
+      FIELD_STAGING_PORTAL_PROJECT: ${{ vars.FIELD_STAGING_PORTAL_PROJECT || 'agroai-portal-staging' }}
+      FIELD_STAGING_DATABASE_URL: ${{ secrets.FIELD_STAGING_DATABASE_URL }}
+      FIELD_STAGING_DEPLOY_HOOK: ${{ secrets.FIELD_STAGING_DEPLOY_HOOK }}
+      FIELD_STAGING_WORKER_DEPLOY_HOOK: ${{ secrets.FIELD_STAGING_WORKER_DEPLOY_HOOK }}
+      FIELD_STAGING_OBJECT_STORAGE_BACKEND: ${{ vars.FIELD_STAGING_OBJECT_STORAGE_BACKEND || 'r2' }}
+      FIELD_STAGING_OBJECT_BUCKET: ${{ vars.FIELD_STAGING_OBJECT_BUCKET }}
+      FIELD_STAGING_OBJECT_ENDPOINT_URL: ${{ secrets.FIELD_STAGING_OBJECT_ENDPOINT_URL }}
+      FIELD_STAGING_OBJECT_REGION: ${{ vars.FIELD_STAGING_OBJECT_REGION || 'auto' }}
+      FIELD_STAGING_R2_ACCESS_KEY_ID: ${{ secrets.FIELD_STAGING_R2_ACCESS_KEY_ID }}
+      FIELD_STAGING_R2_SECRET_ACCESS_KEY: ${{ secrets.FIELD_STAGING_R2_SECRET_ACCESS_KEY }}
+      FIELD_STAGING_TRANSCRIPTION_PROVIDER: ${{ vars.FIELD_STAGING_TRANSCRIPTION_PROVIDER }}
+      FIELD_STAGING_TRANSCRIPTION_ENDPOINT: ${{ secrets.FIELD_STAGING_TRANSCRIPTION_ENDPOINT }}
+      FIELD_STAGING_TRANSCRIPTION_API_KEY: ${{ secrets.FIELD_STAGING_TRANSCRIPTION_API_KEY }}
+      FIELD_STAGING_TRANSCRIPTION_MODEL: ${{ vars.FIELD_STAGING_TRANSCRIPTION_MODEL }}
+      FIELD_STAGING_INTERNAL_ORGANIZATION_IDS: ${{ secrets.FIELD_STAGING_INTERNAL_ORGANIZATION_IDS }}
+      FIELD_STAGING_SMOKE_TOKEN: ${{ secrets.FIELD_STAGING_SMOKE_TOKEN }}
+      FIELD_STAGING_RESTRICTED_SMOKE_TOKEN: ${{ secrets.FIELD_STAGING_RESTRICTED_SMOKE_TOKEN }}
+      FIELD_STAGING_RELEASE_STATE: ${{ vars.FIELD_STAGING_RELEASE_STATE || 'internal' }}
+      FIELD_STAGING_CONFIRM_CANARY: ${{ inputs.confirm_canary }}
+      PRODUCTION_DATABASE_HOST_FINGERPRINT: ${{ vars.PRODUCTION_DATABASE_HOST_FINGERPRINT }}
+      CLOUDFLARE_STAGING_API_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_API_TOKEN }}
+      CLOUDFLARE_STAGING_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate-source.outputs.sha }}
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend tooling
+        working-directory: agroai_api
+        run: python -m pip install -q -r requirements.txt
+
+      - name: Validate the staging configuration contract (fail closed)
+        working-directory: agroai_api
+        run: python scripts/field_intelligence_staging_contract.py | tee ../staging-contract-report.json
+
+      - name: Trigger staging API deployment from the exact SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${FIELD_STAGING_DEPLOY_HOOK:-}" ]; then
+            echo "Refusing: FIELD_STAGING_DEPLOY_HOOK is not provisioned (see the staging runbook checklist)."
+            exit 1
+          fi
+          curl --fail --silent --show-error --max-time 30 -X POST "${FIELD_STAGING_DEPLOY_HOOK}" >/dev/null
+          echo "Staging API deployment triggered."
+
+      - name: Wait for staging API to report the exact SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 90); do
+            payload="$(curl --fail --silent --max-time 20 "${FIELD_STAGING_API_URL%/}/v1/health/release" 2>/dev/null \
+              || curl --fail --silent --max-time 20 "${FIELD_STAGING_API_URL%/}/v1/health" 2>/dev/null || true)"
+            if printf '%s' "$payload" | python3 -c "
+          import json,os,sys
+          try: d=json.load(sys.stdin)
+          except Exception: sys.exit(1)
+          sha=os.environ['STAGE_SHA']
+          sys.exit(0 if (d.get('build_sha')==sha or d.get('git_sha')==sha) else 1)
+          "; then
+              echo "Staging API reports the exact SHA."
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "Staging API never reported build SHA ${STAGE_SHA}; refusing to continue."
+          exit 1
+
+      - name: Staging migration preflight, upgrade and verify
+        working-directory: agroai_api
+        env:
+          DATABASE_URL: ${{ secrets.FIELD_STAGING_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          python scripts/field_intelligence_migration.py preflight --database-url "$DATABASE_URL" | tee ../staging-migration-preflight.json
+          python scripts/field_intelligence_migration.py upgrade   --database-url "$DATABASE_URL" | tee ../staging-migration-upgrade.json
+          python scripts/field_intelligence_migration.py verify    --database-url "$DATABASE_URL" | tee ../staging-migration-verify.json
+
+      - name: Prove rollback on a disposable staging validation database
+        working-directory: agroai_api
+        shell: bash
+        env:
+          DATABASE_URL: ${{ secrets.FIELD_STAGING_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          # A separate validation database on the SAME staging server proves
+          # 024 -> 022 -> 024 without destroying real staging smoke data.
+          python3 - <<'PY'
+          import os, sqlalchemy as sa
+          url = sa.engine.make_url(os.environ["DATABASE_URL"])
+          admin = url.set(database="postgres")
+          engine = sa.create_engine(admin.render_as_string(hide_password=False), isolation_level="AUTOCOMMIT")
+          with engine.connect() as connection:
+              connection.execute(sa.text("DROP DATABASE IF EXISTS fi_staging_rollback_proof"))
+              connection.execute(sa.text("CREATE DATABASE fi_staging_rollback_proof"))
+          PY
+          proof_url="$(python3 -c "
+          import os, sqlalchemy as sa
+          url = sa.engine.make_url(os.environ['DATABASE_URL']).set(database='fi_staging_rollback_proof')
+          print(url.render_as_string(hide_password=False))")"
+          for cmd in upgrade verify downgrade verify-rollback upgrade verify; do
+            python scripts/field_intelligence_migration.py "$cmd" --database-url "$proof_url" >> ../staging-rollback-proof.json
+          done
+
+      - name: Trigger dedicated staging worker deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${FIELD_STAGING_WORKER_DEPLOY_HOOK:-}" ]; then
+            curl --fail --silent --show-error --max-time 30 -X POST "${FIELD_STAGING_WORKER_DEPLOY_HOOK}" >/dev/null
+            echo "Staging worker deployment triggered."
+          else
+            echo "No separate worker hook: the staging API service runs the in-process worker (FIELD_INTELLIGENCE_WORKER_ENABLED=true)."
+          fi
+
+      - name: Verify worker liveness and SHA-bearing heartbeat
+        working-directory: agroai_api
+        env:
+          DATABASE_URL: ${{ secrets.FIELD_STAGING_DATABASE_URL }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, os, time, sqlalchemy as sa
+          engine = sa.create_engine(os.environ["DATABASE_URL"])
+          deadline = time.time() + 300
+          sha = os.environ["STAGE_SHA"]
+          while time.time() < deadline:
+              with engine.connect() as connection:
+                  rows = connection.execute(sa.text(
+                      "SELECT worker_id, git_sha, last_heartbeat_at FROM field_worker_heartbeats "
+                      "WHERE last_heartbeat_at > now() - interval '120 seconds'"
+                  )).all()
+              live = [dict(r._mapping) for r in rows]
+              if any(r["git_sha"] == sha for r in live):
+                  print(json.dumps({"live_workers": len(live), "sha_match": True}, default=str))
+                  raise SystemExit(0)
+              time.sleep(10)
+          raise SystemExit("no live staging worker heartbeat with the exact SHA")
+          PY
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - name: Deploy the staging portal against ONLY the staging API
+        working-directory: figma-enterprise-v4
+        env:
+          VITE_API_BASE_URL: ${{ vars.FIELD_STAGING_API_URL }}
+          VITE_DEPLOYMENT_ENVIRONMENT: staging
+          VITE_BUILD_SHA: ${{ needs.validate-source.outputs.sha }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_STAGING_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_STAGING_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+          case "${VITE_API_BASE_URL}" in
+            *api.agroai-pilot.com*|*api-preview.agroai-pilot.com*|*onrender.com*)
+              # onrender host must be the dedicated staging service; production
+              # upstreams are always refused.
+              case "${VITE_API_BASE_URL}" in
+                *agroai-api-preview.onrender.com*) echo "Refusing: production upstream"; exit 1 ;;
+                *api.agroai-pilot.com*|*api-preview.agroai-pilot.com*) echo "Refusing: production API"; exit 1 ;;
+              esac ;;
+          esac
+          test "${FIELD_STAGING_PORTAL_PROJECT}" != "agroai-portal" || { echo "Refusing: production portal project"; exit 1; }
+          npm ci
+          npm run build
+          npx --yes wrangler@4.107.0 pages deploy dist \
+            --project-name "${FIELD_STAGING_PORTAL_PROJECT}" \
+            --branch "${STAGING_PORTAL_BRANCH}" \
+            --commit-hash "${STAGE_SHA}"
+
+      - name: Verify release alignment and internal release state
+        working-directory: agroai_api
+        env:
+          DATABASE_URL: ${{ secrets.FIELD_STAGING_DATABASE_URL }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          state="${FIELD_STAGING_RELEASE_STATE}"
+          if [ "$state" = "general" ]; then echo "Refusing: general is never staged"; exit 1; fi
+          if [ "$state" = "canary" ] && [ "${FIELD_STAGING_CONFIRM_CANARY}" != "CONFIRM_STAGING_CANARY" ]; then
+            echo "Refusing: canary requires CONFIRM_STAGING_CANARY"; exit 1
+          fi
+          python3 - <<'PY'
+          import json, os, sqlalchemy as sa
+          engine = sa.create_engine(os.environ["DATABASE_URL"])
+          with engine.connect() as connection:
+              revisions = [r[0] for r in connection.execute(sa.text("SELECT version_num FROM alembic_version"))]
+          report = {"database_revisions": revisions,
+                    "expected": "024_field_intelligence_launch",
+                    "release_state": os.environ["FIELD_STAGING_RELEASE_STATE"]}
+          print(json.dumps(report))
+          assert revisions == ["024_field_intelligence_launch"], revisions
+          PY
+
+      - name: Run the 20-step staging smoke (manually gated)
+        if: ${{ inputs.run_smoke == 'true' }}
+        working-directory: agroai_api
+        env:
+          FIELD_SMOKE_BASE_URL: ${{ vars.FIELD_STAGING_API_URL }}
+          FIELD_SMOKE_TOKEN: ${{ secrets.FIELD_STAGING_SMOKE_TOKEN }}
+          FIELD_SMOKE_RESTRICTED_TOKEN: ${{ secrets.FIELD_STAGING_RESTRICTED_SMOKE_TOKEN }}
+        run: |
+          set -o pipefail
+          python -m pip install -q httpx
+          python scripts/field_intelligence_canary_smoke.py 2>&1 | tee ../staging-smoke.log
+
+      - name: Collect immutable staging evidence
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p staging-evidence
+          for f in staging-contract-report.json staging-migration-preflight.json \
+                   staging-migration-upgrade.json staging-migration-verify.json \
+                   staging-rollback-proof.json staging-smoke.log; do
+            [ -f "$f" ] && cp "$f" staging-evidence/ || true
+          done
+          printf '{"sha":"%s","portal_project":"%s","release_state":"%s","timestamp":"%s"}\n' \
+            "${STAGE_SHA}" "${FIELD_STAGING_PORTAL_PROJECT}" "${FIELD_STAGING_RELEASE_STATE}" \
+            "$(date -u +%FT%TZ)" > staging-evidence/deployment-metadata.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: field-intelligence-staging-${{ needs.validate-source.outputs.sha }}
+          path: staging-evidence/
+          retention-days: 30
