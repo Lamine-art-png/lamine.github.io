@@ -19,29 +19,48 @@ jobs:
           ref: feature/field-intelligence-launch
           fetch-depth: 0
           token: ${{ github.token }}
-      - name: Attempt merge and print exact conflict report
+      - name: Attempt merge and persist exact conflict report
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "agroai-integration-bot"
           git config user.email "integration-bot@agroai-pilot.com"
-          git fetch origin main
-          echo "FEATURE_HEAD=$(git rev-parse HEAD)"
-          echo "MAIN_HEAD=$(git rev-parse origin/main)"
+          git fetch origin main integration/field-intelligence-resolved-v2
+          feature_head="$(git rev-parse HEAD)"
+          main_head="$(git rev-parse origin/main)"
           set +e
           git merge --no-commit --no-ff origin/main
           rc=$?
           set -e
-          echo "MERGE_EXIT=$rc"
-          echo "CONFLICTS_BEGIN"
-          git diff --name-only --diff-filter=U | sort
-          echo "CONFLICTS_END"
-          echo "CONFLICT_EXCERPTS_BEGIN"
-          while IFS= read -r path; do
-            [ -n "$path" ] || continue
-            echo "===== $path ====="
-            sed -n '/^<<<<<<< /,/^>>>>>>> /p' "$path" | head -n 260 || true
-          done < <(git diff --name-only --diff-filter=U | sort)
-          echo "CONFLICT_EXCERPTS_END"
+          mkdir -p /tmp/fi-integration
+          {
+            echo "# Field Intelligence integration conflict report"
+            echo
+            echo "- feature head: \`$feature_head\`"
+            echo "- current main head: \`$main_head\`"
+            echo "- merge exit: \`$rc\`"
+            echo
+            echo "## Conflicting files"
+            echo '```'
+            git diff --name-only --diff-filter=U | sort
+            echo '```'
+            echo
+            echo "## Conflict excerpts"
+            while IFS= read -r path; do
+              [ -n "$path" ] || continue
+              echo
+              echo "### \`$path\`"
+              echo '```diff'
+              sed -n '/^<<<<<<< /,/^>>>>>>> /p' "$path" | head -n 400 || true
+              echo '```'
+            done < <(git diff --name-only --diff-filter=U | sort)
+          } > /tmp/fi-integration/conflicts.md
           git merge --abort >/dev/null 2>&1 || true
-          exit 0
+          git checkout -B integration/field-intelligence-resolved-v2 origin/integration/field-intelligence-resolved-v2
+          mkdir -p scratchpad
+          cp /tmp/fi-integration/conflicts.md scratchpad/field-intelligence-integration-conflicts.md
+          git add scratchpad/field-intelligence-integration-conflicts.md
+          if ! git diff --cached --quiet; then
+            git commit -m "docs: persist Field Intelligence integration conflict report"
+            git push origin HEAD:integration/field-intelligence-resolved-v2
+          fi
