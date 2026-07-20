@@ -84,7 +84,7 @@ jobs:
           python -m compileall -q app alembic scripts
           test "$(alembic heads)" = "027_field_intelligence_launch (head)"
           PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short \
-            tests/unit/test_almbic_revision_contract.py \
+            tests/unit/test_alembic_revision_contract.py \
             tests/unit/test_schema_adoption_contract.py \
             tests/unit/test_field_intelligence.py \
             tests/unit/test_field_intelligence_hardening.py \
