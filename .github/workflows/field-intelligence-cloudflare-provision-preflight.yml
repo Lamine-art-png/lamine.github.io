@@ -1,0 +1,123 @@
+name: Field Intelligence Cloudflare Provisioning Preflight
+
+on:
+  push:
+    branches: [ops/field-intelligence-staging-provision]
+    paths:
+      - .github/workflows/field-intelligence-cloudflare-provision-preflight.yml
+
+permissions:
+  actions: write
+  contents: write
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
+      STAGING_PAGES_PROJECT: agroai-field-intelligence-staging
+      STAGING_R2_BUCKET: agroai-field-intelligence-staging
+      STAGING_ENVIRONMENT: field-intelligence-staging
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ops/field-intelligence-staging-provision
+          token: ${{ github.token }}
+
+      - name: Inspect non-mutating Cloudflare and GitHub capabilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p scratchpad
+          python3 - <<'PY'
+          import json
+          import os
+          import urllib.error
+          import urllib.request
+
+          token = os.environ.get("CLOUDFLARE_API_TOKEN", "")
+          account = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "")
+          repo = os.environ["GITHUB_REPOSITORY"]
+          gh_token = os.environ.get("GH_TOKEN", "")
+          environment = os.environ["STAGING_ENVIRONMENT"]
+
+          def request(url, *, bearer, method="GET"):
+              req = urllib.request.Request(url, method=method)
+              req.add_header("Authorization", f"Bearer {bearer}")
+              req.add_header("Accept", "application/vnd.github+json" if "api.github.com" in url else "application/json")
+              req.add_header("User-Agent", "agroai-field-intelligence-staging-preflight")
+              try:
+                  with urllib.request.urlopen(req, timeout=30) as response:
+                      raw = response.read().decode("utf-8")
+                      return response.status, json.loads(raw) if raw else {}
+              except urllib.error.HTTPError as exc:
+                  raw = exc.read().decode("utf-8", errors="replace")
+                  try:
+                      payload = json.loads(raw) if raw else {}
+                  except Exception:
+                      payload = {"message": raw[:500]}
+                  return exc.code, payload
+
+          report = {
+              "contract": "field-intelligence-cloudflare-provision-preflight-v1",
+              "resource_changes": False,
+              "cloudflare": {},
+              "github": {},
+          }
+
+          status, payload = request("https://api.cloudflare.com/client/v4/user/tokens/verify", bearer=token)
+          report["cloudflare"]["token_active"] = status == 200 and payload.get("success") is True
+
+          status, payload = request(f"https://api.cloudflare.com/client/v4/accounts/{account}/pages/projects?per_page=1", bearer=token)
+          report["cloudflare"]["pages_read"] = status == 200 and payload.get("success") is True
+          report["cloudflare"]["pages_status"] = status
+
+          status, payload = request(f"https://api.cloudflare.com/client/v4/accounts/{account}/r2/buckets?per_page=1", bearer=token)
+          report["cloudflare"]["r2_read"] = status == 200 and payload.get("success") is True
+          report["cloudflare"]["r2_status"] = status
+
+          status, payload = request("https://api.cloudflare.com/client/v4/user/tokens/permission_groups", bearer=token)
+          user_token_admin = status == 200 and payload.get("success") is True
+          report["cloudflare"]["user_token_admin"] = user_token_admin
+          report["cloudflare"]["user_token_admin_status"] = status
+          if user_token_admin:
+              names = sorted(str(item.get("name") or "") for item in payload.get("result") or [])
+              report["cloudflare"]["r2_bucket_permission_groups"] = [name for name in names if "R2" in name and "Bucket Item" in name]
+
+          status, payload = request(f"https://api.cloudflare.com/client/v4/accounts/{account}/tokens/permission_groups", bearer=token)
+          report["cloudflare"]["account_token_admin"] = status == 200 and payload.get("success") is True
+          report["cloudflare"]["account_token_admin_status"] = status
+
+          status, payload = request(f"https://api.github.com/repos/{repo}/environments/{environment}", bearer=gh_token)
+          report["github"]["environment_admin"] = status == 200
+          report["github"]["environment_status"] = status
+
+          status, payload = request(f"https://api.github.com/repos/{repo}/environments/{environment}/secrets/public-key", bearer=gh_token)
+          report["github"]["environment_secret_write_preflight"] = status == 200 and bool(payload.get("key_id"))
+          report["github"]["environment_secret_key_status"] = status
+
+          report["ready_for_recoverable_cloudflare_provisioning"] = all([
+              report["cloudflare"]["token_active"],
+              report["cloudflare"]["pages_read"],
+              report["cloudflare"]["r2_read"],
+              report["cloudflare"]["user_token_admin"] or report["cloudflare"]["account_token_admin"],
+              report["github"]["environment_secret_write_preflight"],
+          ])
+
+          path = "scratchpad/staging-cloudflare-provision-preflight.json"
+          with open(path, "w", encoding="utf-8") as handle:
+              json.dump(report, handle, indent=2, sort_keys=True)
+          print(json.dumps(report, sort_keys=True))
+          PY
+
+      - name: Persist redacted preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "agroai-staging-preflight-bot"
+          git config user.email "staging-preflight@agroai-pilot.com"
+          git add scratchpad/staging-cloudflare-provision-preflight.json
+          git commit -m "docs: record Cloudflare staging provision preflight" || exit 0
+          git push origin HEAD:ops/field-intelligence-staging-provision
