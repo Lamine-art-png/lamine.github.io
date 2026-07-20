@@ -37,6 +37,8 @@ jobs:
         working-directory: figma-enterprise-v4
         env:
           VITE_API_BASE_URL: ${{ env.API_URL }}
+          VITE_DEPLOYMENT_ENVIRONMENT: production
+          VITE_BUILD_SHA: ${{ github.sha }}
         run: |
           npm ci
           npm run test:i18n
@@ -224,6 +226,8 @@ jobs:
         working-directory: figma-enterprise-v4
         env:
           VITE_API_BASE_URL: ${{ env.API_URL }}
+          VITE_DEPLOYMENT_ENVIRONMENT: production
+          VITE_BUILD_SHA: ${{ github.sha }}
         run: |
           npm ci
           npm run test:i18n

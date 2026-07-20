@@ -13,7 +13,11 @@
  *    incompatible shells from surviving an upgrade;
  *  - SKIP_WAITING message lets the app apply an update on user consent.
  */
-const CACHE_VERSION = "agroai-shell-v1";
+const SW_ENV = new URL(self.location.href).searchParams.get("env") || "production";
+// Environment-namespaced cache: a staging shell can never serve (or evict)
+// production-cached resources and vice versa; activate() clears every cache
+// that is not the current environment+version namespace.
+const CACHE_VERSION = `agroai-shell-${SW_ENV}-v1`;
 const SHELL_PATHS = ["/", "/index.html", "/manifest.webmanifest", "/pwa-icon.svg"];
 
 self.addEventListener("install", (event) => {

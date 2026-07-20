@@ -20,7 +20,7 @@ function ok(name, condition, detail = "") {
 
 // --- Service worker: static shell only, never authenticated data -----------
 const sw = readFileSync(join(root, "public", "sw.js"), "utf8");
-ok("sw exists and is versioned", /CACHE_VERSION\s*=\s*"agroai-shell-v\d+"/.test(sw));
+ok("sw exists and is versioned", /CACHE_VERSION = `agroai-shell-\$\{SW_ENV\}-v\d+`/.test(sw));
 ok("sw never touches non-GET requests", sw.includes('request.method !== "GET"'));
 ok("sw never touches cross-origin requests", sw.includes("url.origin !== self.location.origin"));
 ok("sw never caches API paths", sw.includes('url.pathname.startsWith("/v1/")'));
@@ -37,8 +37,14 @@ ok("index.html links the manifest",
 
 // --- SW registration: production only, with update event --------------------
 const main = readFileSync(join(root, "src", "main.tsx"), "utf8");
-ok("sw registered outside dev only", main.includes("serviceWorker") && main.includes("!import.meta.env.DEV"));
+ok("sw registered only for declared deployment environments",
+   main.includes("VITE_DEPLOYMENT_ENVIRONMENT")
+   && main.includes('["production", "staging"].includes(deploymentEnvironment)')
+   && main.includes("!import.meta.env.DEV"));
 ok("sw update dispatches user-visible event", main.includes("agroai:sw-update"));
+ok("sw cache namespace is environment-scoped", sw.includes("agroai-shell-${SW_ENV}-v1"));
+ok("staging and production caches cannot collide",
+   sw.includes('searchParams.get("env")') && main.includes("/sw.js?env="));
 
 // --- MapLibre map -----------------------------------------------------------
 const map = readFileSync(join(root, "src", "app", "fieldIntelligence", "FieldMap.tsx"), "utf8");
