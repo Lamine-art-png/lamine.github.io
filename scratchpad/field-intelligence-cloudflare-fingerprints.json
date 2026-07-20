@@ -1,0 +1,21 @@
+{
+  "contract": "field-intelligence-cloudflare-isolation-fingerprints-v1",
+  "cloudflare_account_id": "e2fe627bff2d8e7b2b10bf078956acfe",
+  "production": {
+    "pages_project": "agroai-portal",
+    "object_bucket_fingerprint": "e2fe627bff2d8e7b2b10bf078956acfe:agroai-connector-objects-prod"
+  },
+  "staging": {
+    "pages_project": "agroai-field-intelligence-staging",
+    "pages_url": "https://agroai-field-intelligence-staging.pages.dev",
+    "object_bucket_fingerprint": "e2fe627bff2d8e7b2b10bf078956acfe:agroai-field-intelligence-staging",
+    "object_endpoint": "https://e2fe627bff2d8e7b2b10bf078956acfe.r2.cloudflarestorage.com",
+    "object_prefix": "staging/field-intelligence"
+  },
+  "assertions": {
+    "pages_projects_distinct": true,
+    "object_bucket_fingerprints_distinct": true,
+    "staging_names_explicit": true,
+    "production_resources_modified": false
+  }
+}
