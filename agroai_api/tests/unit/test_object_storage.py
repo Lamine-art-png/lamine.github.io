@@ -131,6 +131,42 @@ def test_durable_store_enforces_read_limit(tmp_path):
         store.read_bytes(stored.uri, max_bytes=50)
 
 
+def test_scoped_inspection_verifies_metadata_without_reading_customer_content(tmp_path):
+    payload, store, stored, client = _stored(tmp_path)
+    client.get_object = lambda **_kwargs: (_ for _ in ()).throw(AssertionError("content must not be read"))
+
+    inspected = store.inspect(
+        stored.uri,
+        tenant_id="org-one",
+        connection_id="conn-one",
+        max_bytes=1024,
+        expected_sha256=hashlib.sha256(payload).hexdigest(),
+    )
+
+    assert inspected.key == stored.key
+    assert inspected.size_bytes == len(payload)
+    assert inspected.sha256 == stored.sha256
+
+
+def test_scoped_inspection_rejects_foreign_purpose_and_oversized_objects(tmp_path):
+    _payload, store, stored, _client = _stored(tmp_path)
+
+    with pytest.raises(ValueError, match="tenant namespace"):
+        store.inspect(
+            stored.uri,
+            tenant_id="org-one",
+            connection_id="support-attachments",
+            max_bytes=1024,
+        )
+    with pytest.raises(RuntimeError, match="size"):
+        store.inspect(
+            stored.uri,
+            tenant_id="org-one",
+            connection_id="conn-one",
+            max_bytes=1,
+        )
+
+
 def test_durable_store_rejects_other_bucket():
     store = S3ObjectStore(bucket="agroai-test", client=FakeStoreClient())
     with pytest.raises(ValueError):

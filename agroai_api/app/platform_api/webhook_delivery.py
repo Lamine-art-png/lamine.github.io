@@ -22,6 +22,7 @@ from app.platform_api.webhooks import (
     retrieve_webhook_secrets_for_delivery,
     webhook_signature,
 )
+from app.platform_api.abuse import record_abuse_signal
 from app.services.redis_task_queue import get_task_publisher
 
 
@@ -126,6 +127,7 @@ def publish_pending_webhook_outbox(db: Session, *, limit: int = 100) -> dict[str
         db.query(PlatformWebhookOutbox)
         .filter(_publishable(now))
         .order_by(PlatformWebhookOutbox.created_at.asc())
+        .with_for_update(skip_locked=True)
         .limit(max(1, min(limit, 200)))
         .all()
     )
@@ -155,6 +157,7 @@ def publish_webhook_outbox(
             PlatformWebhookOutbox.endpoint_id == endpoint_id,
             _publishable(datetime.utcnow()),
         )
+        .with_for_update(skip_locked=True)
         .one_or_none()
     )
     if row is None:
@@ -347,6 +350,15 @@ def process_webhook_delivery(
         outbox.completed_at = completed
         outbox.next_attempt_at = None
         outbox.last_error = error
+        record_abuse_signal(
+            db,
+            signal_type="abnormal_webhook_failure",
+            severity="low",
+            organization_id=organization_id,
+            api_project_id=outbox.api_project_id,
+            automated_action="require_review",
+            evidence={"attempts": attempt_number, "error_class": error},
+        )
         db.commit()
         return "failed"
     delay = min(3600, 2 ** min(attempt_number, 11))

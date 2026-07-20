@@ -17,7 +17,11 @@ from slowapi.errors import RateLimitExceeded
 
 from app.core.config import settings
 from app.core.rate_limiting import limiter
-from app.platform_api.request_context import bounded_request_id
+from app.platform_api.request_context import (
+    bounded_client_correlation_id,
+    new_billing_operation_id,
+    new_server_request_id,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -216,7 +220,11 @@ async def durable_upload_compatibility_boundary(request: Request, call_next):
 async def runtime_error_boundary(request: Request, call_next):
     origin = request.headers.get("origin")
     if request.url.path.startswith("/v1/platform/"):
-        request.state.request_id = bounded_request_id(request.headers.get("x-request-id"))
+        request.state.request_id = new_server_request_id()
+        request.state.client_correlation_id = bounded_client_correlation_id(
+            request.headers.get("x-request-id")
+        )
+        request.state.billing_operation_id = new_billing_operation_id()
     try:
         response = await call_next(request)
     except Exception as exc:  # pragma: no cover
@@ -239,6 +247,78 @@ async def runtime_error_boundary(request: Request, call_next):
     request_id = str(getattr(request.state, "request_id", "") or "")
     if request_id and request.url.path.startswith("/v1/platform/"):
         response.headers.setdefault("X-Request-Id", request_id)
+    return response
+
+
+@app.middleware("http")
+async def platform_request_metadata_log(request: Request, call_next):
+    """Persist only bounded, customer-safe Platform API request metadata."""
+
+    started = datetime.datetime.utcnow()
+    response = await call_next(request)
+    principal = getattr(request.state, "platform_principal", None)
+    if principal is None or not request.url.path.startswith("/v1/platform/"):
+        return response
+    try:
+        from app.db.base import SessionLocal
+        from app.core.metrics import api_latency, api_requests
+        from app.models.platform_product import PlatformRequestLog
+        from app.platform_api.credits import commit_credits, release_credits
+
+        route = request.scope.get("route")
+        operation_id = str(getattr(route, "name", "") or "platform.unknown")[:200]
+        elapsed_seconds = max(0.0, (datetime.datetime.utcnow() - started).total_seconds())
+        api_requests.labels(
+            method=request.method[:12],
+            endpoint=operation_id,
+            status=str(response.status_code),
+        ).inc()
+        api_latency.labels(method=request.method[:12], endpoint=operation_id).observe(elapsed_seconds)
+        db = getattr(request.state, "platform_db", None)
+        owns_db = db is None
+        if db is None:
+            db = SessionLocal()
+        try:
+            reservation = getattr(request.state, "platform_credit_reservation", None)
+            read_metering = bool(getattr(request.state, "platform_read_metering", False))
+            usage_cost = 0
+            if read_metering:
+                if response.status_code < 400:
+                    commit_credits(db, reservation, principal=principal, status_code=response.status_code)
+                    usage_cost = int(reservation.reserved_credits) if reservation else 0
+                else:
+                    release_credits(db, reservation, reason=f"http_{response.status_code}")
+            exists = (
+                db.query(PlatformRequestLog)
+                .filter(
+                    PlatformRequestLog.organization_id == principal.organization_id,
+                    PlatformRequestLog.request_id == principal.request_id,
+                )
+                .first()
+            )
+            if exists is None:
+                db.add(
+                    PlatformRequestLog(
+                        organization_id=principal.organization_id,
+                        api_project_id=principal.api_project_id,
+                        request_id=principal.request_id,
+                        client_correlation_id=principal.client_correlation_id,
+                        method=request.method[:12],
+                        operation_id=operation_id,
+                        status_code=int(response.status_code),
+                        latency_ms=max(0, int(elapsed_seconds * 1000)),
+                        environment=principal.environment,
+                        key_fingerprint=str(principal.actor_metadata.get("key_fingerprint") or "")[:32] or None,
+                        usage_cost=usage_cost,
+                        safe_error_code=None if response.status_code < 400 else f"http_{response.status_code}",
+                    )
+                )
+                db.commit()
+        finally:
+            if owns_db:
+                db.close()
+    except Exception:
+        logger.exception("Platform request metadata logging failed")
     return response
 
 
@@ -323,6 +403,10 @@ from app.api.v1.preferences import router as preferences_router  # noqa: E402
 from app.api.v1.product_shell import router as product_shell_router  # noqa: E402
 from app.api.v1.platform_admin import router as platform_admin_router  # noqa: E402
 from app.api.v1.platform_api import router as platform_api_router  # noqa: E402
+from app.api.v1.platform_access import router as platform_access_router  # noqa: E402
+from app.api.v1.platform_resources import router as platform_resources_router  # noqa: E402
+from app.api.v1.platform_billing import router as platform_billing_router  # noqa: E402
+from app.api.v1.platform_operations import router as platform_operations_router  # noqa: E402
 from app.api.v1.recommendations import router as recommendations_router  # noqa: E402
 from app.api.v1.reports import router as reports_router  # noqa: E402
 from app.api.v1.router_compat import materialize_included_routes  # noqa: E402
@@ -377,6 +461,10 @@ app.include_router(preferences_router, prefix="/v1")
 app.include_router(product_shell_router, prefix="/v1")
 app.include_router(platform_admin_router, prefix="/v1")
 app.include_router(platform_api_router, prefix="/v1")
+app.include_router(platform_access_router, prefix="/v1")
+app.include_router(platform_resources_router, prefix="/v1")
+app.include_router(platform_billing_router, prefix="/v1")
+app.include_router(platform_operations_router, prefix="/v1")
 app.include_router(recommendations_router, prefix="/v1")
 app.include_router(reports_router, prefix="/v1")
 app.include_router(webhooks_router, prefix="/v1")

@@ -32,9 +32,24 @@ def platform_error(
 
 
 def error_response(request: Request, exc: HTTPException) -> JSONResponse:
-    request_id = str(getattr(request.state, "request_id", "") or request.headers.get("x-request-id") or "")
-    if isinstance(exc.detail, dict) and {"code", "type", "message"}.issubset(exc.detail):
-        payload = dict(exc.detail)
+    request_id = str(getattr(request.state, "request_id", "") or "")
+    if isinstance(exc.detail, dict) and exc.detail.get("code"):
+        safe_keys = {
+            "code",
+            "type",
+            "message",
+            "request_id",
+            "provider",
+            "readiness",
+            "environment",
+            "operation",
+            "resource",
+            "limit",
+            "included_credits",
+        }
+        payload = {key: value for key, value in exc.detail.items() if key in safe_keys}
+        payload.setdefault("type", "request_error")
+        payload.setdefault("message", str(payload["code"]).replace("_", " ").capitalize() + ".")
         payload.setdefault("request_id", request_id)
     else:
         payload = {
