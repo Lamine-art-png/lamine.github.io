@@ -1,0 +1,47 @@
+name: Field Intelligence Integration Runner
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/field-intelligence-integration-runner.yml
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/field-intelligence-launch
+          fetch-depth: 0
+          token: ${{ github.token }}
+      - name: Attempt merge and print exact conflict report
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "agroai-integration-bot"
+          git config user.email "integration-bot@agroai-pilot.com"
+          git fetch origin main
+          echo "FEATURE_HEAD=$(git rev-parse HEAD)"
+          echo "MAIN_HEAD=$(git rev-parse origin/main)"
+          set +e
+          git merge --no-commit --no-ff origin/main
+          rc=$?
+          set -e
+          echo "MERGE_EXIT=$rc"
+          echo "CONFLICTS_BEGIN"
+          git diff --name-only --diff-filter=U | sort
+          echo "CONFLICTS_END"
+          echo "CONFLICT_EXCERPTS_BEGIN"
+          while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            echo "===== $path ====="
+            sed -n '/^<<<<<<< /,/^>>>>>>> /p' "$path" | head -n 260 || true
+          done < <(git diff --name-only --diff-filter=U | sort)
+          echo "CONFLICT_EXCERPTS_END"
+          git merge --abort >/dev/null 2>&1 || true
+          exit 0
