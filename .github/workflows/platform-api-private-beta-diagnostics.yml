@@ -157,7 +157,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          set -u
+          set -euo pipefail
           payload="$(mktemp)"
           code="$(curl -sS -o "$payload" -w '%{http_code}' --connect-timeout 10 --max-time 60 \
             -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN:-}" \
@@ -185,5 +185,5 @@ jobs:
             echo "This snapshot is redacted and contains no credential values."
           } > topology.md
 
-          gh issue edit "${TOPOLOGY_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body-file topology.md
-          gh issue comment "${OPS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body "Marketing Pages topology snapshot updated in #${TOPOLOGY_ISSUE} for workflow SHA \`${GITHUB_SHA}\`."
+          gh issue comment "${TOPOLOGY_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body-file topology.md
+          gh issue comment "${OPS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body "Marketing Pages topology evidence posted to #${TOPOLOGY_ISSUE} for workflow SHA \`${GITHUB_SHA}\`."
