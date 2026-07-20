@@ -1,18 +1,16 @@
 // Field Intelligence launch portal contract.
 //
-// Enforces the safety properties of the PWA shell, the MapLibre map fallback,
-// the media viewer authorization path, the sync center and the draft-review
-// recorder lifecycle — statically, so a violation fails CI before review.
-import { readFileSync, existsSync } from "node:fs";
+// Enforces the safety properties of the PWA shell, MapLibre map fallback,
+// authorized media, sync recovery, draft review, and staging behavior.
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
 const root = dirname(dirname(fileURLToPath(import.meta.url)));
 let failures = 0;
 function ok(name, condition, detail = "") {
-  if (condition) {
-    console.log(`  ok - ${name}`);
-  } else {
+  if (condition) console.log(`  ok - ${name}`);
+  else {
     failures += 1;
     console.error(`  FAIL - ${name}${detail ? ` — ${detail}` : ""}`);
   }
@@ -20,11 +18,15 @@ function ok(name, condition, detail = "") {
 
 // --- Service worker: static shell only, never authenticated data -----------
 const sw = readFileSync(join(root, "public", "sw.js"), "utf8");
-ok("sw exists and is versioned", /CACHE_VERSION = `agroai-shell-\$\{SW_ENV\}-v\d+`/.test(sw));
+ok("sw exists and has an environment-scoped version family",
+   sw.includes("const CACHE_FAMILY = `agroai-shell-${SW_ENV}-`")
+   && sw.includes("const CACHE_VERSION = `${CACHE_FAMILY}v1`"));
 ok("sw never touches non-GET requests", sw.includes('request.method !== "GET"'));
 ok("sw never touches cross-origin requests", sw.includes("url.origin !== self.location.origin"));
 ok("sw never caches API paths", sw.includes('url.pathname.startsWith("/v1/")'));
-ok("sw cleans stale caches on activate", sw.includes("caches.delete"));
+ok("sw deletes only stale caches from its own environment",
+   sw.includes("name.startsWith(CACHE_FAMILY) && name !== CACHE_VERSION")
+   && !sw.includes("names.filter((name) => name !== CACHE_VERSION)"));
 ok("sw supports user-consented updates", sw.includes("SKIP_WAITING"));
 ok("sw caches no Authorization-bearing route", !/authorization/i.test(sw));
 
@@ -35,16 +37,16 @@ ok("manifest has icons", Array.isArray(manifest.icons) && manifest.icons.length 
 ok("index.html links the manifest",
    readFileSync(join(root, "index.html"), "utf8").includes('rel="manifest"'));
 
-// --- SW registration: production only, with update event --------------------
+// --- SW registration: declared production/staging only ---------------------
 const main = readFileSync(join(root, "src", "main.tsx"), "utf8");
 ok("sw registered only for declared deployment environments",
    main.includes("VITE_DEPLOYMENT_ENVIRONMENT")
    && main.includes('["production", "staging"].includes(deploymentEnvironment)')
    && main.includes("!import.meta.env.DEV"));
 ok("sw update dispatches user-visible event", main.includes("agroai:sw-update"));
-ok("sw cache namespace is environment-scoped", sw.includes("agroai-shell-${SW_ENV}-v1"));
 ok("staging and production caches cannot collide",
-   sw.includes('searchParams.get("env")') && main.includes("/sw.js?env="));
+   sw.includes('searchParams.get("env")') && main.includes("/sw.js?env=")
+   && sw.includes("CACHE_FAMILY"));
 
 // --- MapLibre map -----------------------------------------------------------
 const map = readFileSync(join(root, "src", "app", "fieldIntelligence", "FieldMap.tsx"), "utf8");
@@ -53,7 +55,7 @@ ok("map style comes from the backend, not a bundled secret",
 ok("map clusters observations", map.includes("cluster: true"));
 ok("map has severity encoding", map.includes("SEVERITY_COLORS"));
 ok("map degrades to accessible fallback", map.includes("fieldIntel.mapFallback"));
-ok("map is lazy-loaded (no eager bundle cost)", map.includes('await import("maplibre-gl")'));
+ok("map is lazy-loaded", map.includes('await import("maplibre-gl")'));
 
 // --- Media viewer -----------------------------------------------------------
 const media = readFileSync(join(root, "src", "app", "fieldIntelligence", "MediaViewer.tsx"), "utf8");
@@ -81,7 +83,6 @@ ok("discard requires confirmation", syncCenter.includes("syncCenter.discardConfi
 const layout = readFileSync(join(root, "src", "app", "components", "MainLayout.tsx"), "utf8");
 ok("sync center is mounted in the portal shell", layout.includes("<SyncCenter />"));
 
-// --- summarizeQueue behavior (extracted and executed) -----------------------
 const summarizeSource = syncCenter
   .slice(syncCenter.indexOf("export function summarizeQueue"), syncCenter.indexOf("export function SyncCenter"))
   .replace("export function summarizeQueue(records: CaptureRecord[]): SyncSummary {", "function summarizeQueue(records) {")
