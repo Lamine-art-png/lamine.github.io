@@ -38,7 +38,7 @@ Run **Field Intelligence Staging** (`workflow_dispatch` only) with:
 4. triggers the staging API deploy hook and waits until `/v1/health`
    reports the exact `build_sha`;
 5. runs migration `preflight` → `upgrade` → `verify` against the staging DB;
-6. proves rollback `024→022→024` on the disposable
+6. proves rollback `027→026→027` on the disposable
    `fi_staging_rollback_proof` database on the same staging server (real
    staging smoke data is never destroyed for the proof);
 7. deploys/starts the staging worker and waits for a fresh SHA-matching row

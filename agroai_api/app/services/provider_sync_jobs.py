@@ -48,7 +48,13 @@ if not any(item.get("id") == "john_deere" for item in CATALOG):
     CATALOG.append(JOHN_DEERE_CATALOG_ITEM)
 
 
-def queue_provider_sync(db: Session, *, tenant_id: str, connection: ConnectorConnection) -> tuple[IngestionJob, bool]:
+def queue_provider_sync(
+    db: Session,
+    *,
+    tenant_id: str,
+    connection: ConnectorConnection,
+    commit: bool = True,
+) -> tuple[IngestionJob, bool]:
     if connection.tenant_id != tenant_id:
         raise ValueError("provider sync ownership mismatch")
     if connection.provider not in SUPPORTED_PROVIDERS:
@@ -96,6 +102,7 @@ def queue_provider_sync(db: Session, *, tenant_id: str, connection: ConnectorCon
             updated_at=now,
         )
     )
-    db.commit()
-    db.refresh(job)
+    if commit:
+        db.commit()
+        db.refresh(job)
     return job, False

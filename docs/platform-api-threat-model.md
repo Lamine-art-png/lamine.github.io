@@ -26,3 +26,22 @@
 - Redis rate-limit code paths are covered by shared-backend contract tests; production rollout still requires operator-configured Redis and readiness evidence for the deployed environment.
 - Webhook delivery remains disabled by default and requires the queue transport, webhook AES keyring, authenticated Cloudflare queue boundary, and explicit delivery flag before any network request.
 - Provider schemas cannot be validated against EarthDaily or Valley until official contracts arrive.
+# Phase 2–4 product threats
+
+| Threat | Control |
+| --- | --- |
+| Cross-organization/project access | Server-derived organization, active membership/enrollment, ownership joins, workspace compatibility, scoped hashes and foreign keys |
+| Test/live leakage | Immutable project environment, prefixed keys, synthetic sandbox, no live credentials, separate live approval and entitlement |
+| Plan/price escalation | Versioned inactive catalog, server-side plan/price lookup, no browser amount or price ID |
+| Forged/out-of-order Stripe state | Purpose-separated webhook secret, signature verification, event-ID dedupe, organization metadata validation, event timestamps |
+| Duplicate meter/double billing | Logical-operation reservation uniqueness, usage-event and meter-identifier uniqueness, Queue idempotency, reconciliation |
+| Quota races | PostgreSQL row locks and unique logical-operation keys; Redis only handles rate windows |
+| Key or request-log leakage | One-time plaintext, hashes at rest, bounded safe metadata, no bodies/auth headers/query secrets |
+| Application spam/injection | Active verified applicants, rate limits, honeypot, bounded strict schemas, HTTPS/email validation, no applicant approval fields |
+| Public route leakage | Explicit curated manifest and server-gated docs; admin/Portal/queue/internal routes excluded |
+| Provider credential leakage | Versioned AES-GCM vault and metadata references; no credential values in dossiers/support/logs |
+| SSRF/rebinding | HTTPS-only webhook destinations, prohibited address/port checks, pinned resolution, revalidation before each request/redirect |
+| Malicious uploads/support files | Presigned scoped custody, size/type/digest bounds, metadata-only support references, asynchronous parsing |
+| Admin confused deputy | Separate admin routes, explicit organization/subject IDs, no implicit impersonation, audit on every mutation |
+| Enterprise override misuse | Explicit bounded enrollment/catalog fields, reviewer identity/reason, audit, organization verification remains authoritative |
+| Physical-command activation | Test keys barred, provider writes contract-gated, Valley flags false, independent physical-write kill switch |

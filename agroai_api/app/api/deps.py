@@ -177,7 +177,10 @@ def get_auth_context(user: User = Depends(get_current_user), db: Session = Depen
     require_verified_user(user)
     membership = (
         db.query(OrganizationMembership)
-        .filter(OrganizationMembership.user_id == user.id)
+        .filter(
+            OrganizationMembership.user_id == user.id,
+            OrganizationMembership.status == "active",
+        )
         .order_by(OrganizationMembership.created_at.asc())
         .first()
     )

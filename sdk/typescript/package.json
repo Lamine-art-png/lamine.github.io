@@ -1,0 +1,20 @@
+{
+  "name": "@agro-ai/platform",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Unpublished server SDK for the AGRO-AI Platform API",
+  "exports": {
+    ".": "./dist/index.js",
+    "./browser": "./dist/browser.js"
+  },
+  "types": "./dist/index.d.ts",
+  "files": ["dist", "README.md", "CHANGELOG.md"],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "npm run build && node --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "typescript": "5.8.3"
+  }
+}

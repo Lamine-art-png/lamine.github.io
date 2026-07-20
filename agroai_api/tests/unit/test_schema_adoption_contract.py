@@ -30,14 +30,12 @@ def test_column_contract_accepts_complete_shape():
         assert schema_contract_gaps(connection, {"example": {"id", "required_value"}}) == {}
 
 
-def test_head_contract_covers_security_queue_provenance_access_appeals_and_field_intelligence():
-    assert HEAD_ALEMBIC_REVISION == "024_field_intelligence_launch"
+def test_head_contract_covers_security_queue_provenance_access_appeals_platform_api_and_field_launch():
+    assert HEAD_ALEMBIC_REVISION == "027_field_intelligence_launch"
     assert {"nonce_hash", "consumed_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["oauth_state_nonces"])
     assert {"key_version", "ciphertext_b64"}.issubset(HEAD_SCHEMA_REQUIREMENTS["connector_credentials"])
     assert {"status", "publish_attempts"}.issubset(HEAD_SCHEMA_REQUIREMENTS["task_outbox"])
     assert {"provenance_json", "freshness_json"}.issubset(HEAD_SCHEMA_REQUIREMENTS["intelligence_runs"])
-    assert {"client_capture_id", "idempotency_key"}.issubset(HEAD_SCHEMA_REQUIREMENTS["field_capture_sessions"])
-    assert {"capture_session_id", "size_bytes"}.issubset(HEAD_SCHEMA_REQUIREMENTS["field_storage_reservations"])
     assert {"access_restriction_reason", "access_restricted_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["users"])
     assert {
         "user_id",
@@ -47,3 +45,6 @@ def test_head_contract_covers_security_queue_provenance_access_appeals_and_field
         "submitted_at",
         "reviewed_at",
     }.issubset(HEAD_SCHEMA_REQUIREMENTS["account_access_appeals"])
+
+    assert {"key", "value_json", "updated_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["field_runtime_flags"])
+    assert {"worker_id", "git_sha", "last_heartbeat_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["field_worker_heartbeats"])

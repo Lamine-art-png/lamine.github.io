@@ -50,6 +50,7 @@ const operationRoutes = [
   { path: "admin", lazy: lazyComponent(() => import("./components/Admin"), "Admin") },
   { path: "admin/customers", lazy: lazyComponent(() => import("./components/Admin"), "CustomerAccountsPage") },
   { path: "admin/access-appeals", lazy: lazyComponent(() => import("./components/AccessAppealsAdmin"), "AccessAppealsAdminPage") },
+  { path: "admin/platform-api", lazy: lazyComponent(() => import("./components/PlatformApiAdmin"), "PlatformApiAdmin") },
   { path: "admin/system", lazy: lazyComponent(() => import("./components/Admin"), "SystemHealthPage") },
   { path: "admin/requests", lazy: lazyComponent(() => import("./components/MonetizedRequestsV2"), "MonetizedRequestsV2") },
   { path: "pricing", lazy: lazyComponent(() => import("./components/PricingPage"), "PricingPage") },

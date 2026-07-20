@@ -73,7 +73,7 @@ python scripts/field_intelligence_migration.py verify-rollback
 ```
 
 Chain proven in CI and locally: `022_account_access_appeals` →
-`024_field_intelligence_launch` → `022` → `024`. Rollback preserves every
+`027_field_intelligence_launch` → `022` → `024`. Rollback preserves every
 Platform API, verification, suspension and appeal table/column.
 
 ## Activation procedure

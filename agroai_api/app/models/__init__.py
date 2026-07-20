@@ -58,6 +58,17 @@ from app.models.platform_api import (
     PlatformWebhookOutbox,
     PlatformWebhookEvent, ProviderCapabilityRecord, ProviderExternalIdentityMap,
 )
+from app.models.platform_product import (
+    PlatformAbuseEvent, PlatformApiApplication, PlatformApiOperationCost,
+    PlatformApiPlan, PlatformApiSubscription, PlatformCheckoutIdempotency,
+    PlatformCreditReservation,
+    PlatformLiveAccessRequest, PlatformNotification, PlatformPartnerDossier,
+    PlatformProductAuditEvent, PlatformProgramEnrollment, PlatformRequestLog,
+    PlatformSandboxState, PlatformStatusComponent, PlatformStatusIncident,
+    PlatformStatusIncidentUpdate, PlatformStripeEvent, PlatformStripeMeterOutbox,
+    PlatformSupportMessage, PlatformSupportRequest, PlatformTermsAcceptance,
+    PlatformTermsDocument,
+)
 
 __all__ = [
     "Tenant", "Client", "Block", "Telemetry", "Event", "Recommendation",
@@ -88,4 +99,13 @@ __all__ = [
     "PlatformWebhookAuditEvent", "PlatformWebhookDeliveryAttempt", "PlatformWebhookEndpoint",
     "PlatformWebhookOutbox",
     "PlatformWebhookEvent", "ProviderCapabilityRecord", "ProviderExternalIdentityMap",
+    "PlatformAbuseEvent", "PlatformApiApplication", "PlatformApiOperationCost",
+    "PlatformApiPlan", "PlatformApiSubscription", "PlatformCheckoutIdempotency",
+    "PlatformCreditReservation",
+    "PlatformLiveAccessRequest", "PlatformNotification", "PlatformPartnerDossier",
+    "PlatformProductAuditEvent", "PlatformProgramEnrollment", "PlatformRequestLog",
+    "PlatformSandboxState", "PlatformStatusComponent", "PlatformStatusIncident",
+    "PlatformStatusIncidentUpdate", "PlatformStripeEvent", "PlatformStripeMeterOutbox",
+    "PlatformSupportMessage", "PlatformSupportRequest", "PlatformTermsAcceptance",
+    "PlatformTermsDocument",
 ]

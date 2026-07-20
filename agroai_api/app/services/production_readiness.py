@@ -342,6 +342,49 @@ def evaluate_production_readiness(settings: Settings, *, target_scale: str = "pr
                 )
             )
 
+    platform_api_billing_enabled = any(
+        bool(getattr(settings, name, False))
+        for name in (
+            "PLATFORM_API_BILLING_ENABLED",
+            "PLATFORM_API_STRIPE_CHECKOUT_ENABLED",
+            "PLATFORM_API_STRIPE_METER_EXPORT_ENABLED",
+        )
+    )
+    if platform_api_billing_enabled:
+        platform_stripe_mode = _setting(settings, "PLATFORM_API_STRIPE_MODE").lower()
+        platform_stripe_secret = _setting(settings, "PLATFORM_API_STRIPE_SECRET_KEY")
+        if platform_stripe_mode not in {"test", "live"}:
+            blockers.append(
+                ReadinessFinding(
+                    "platform_api.stripe_mode_invalid",
+                    "blocker",
+                    "platform_api_billing",
+                    "Platform API Stripe mode must be explicitly set to test or live.",
+                )
+            )
+        else:
+            expected_prefix = (
+                "sk_live_" if platform_stripe_mode == "live" else "sk_test_"
+            )
+            if not platform_stripe_secret.startswith(expected_prefix):
+                blockers.append(
+                    ReadinessFinding(
+                        "platform_api.stripe_key_mode_mismatch",
+                        "blocker",
+                        "platform_api_billing",
+                        "The Platform API Stripe secret does not match the explicitly configured Stripe mode.",
+                    )
+                )
+            if target_scale == "production" and platform_stripe_mode != "live":
+                blockers.append(
+                    ReadinessFinding(
+                        "platform_api.stripe_test_mode_in_production",
+                        "blocker",
+                        "platform_api_billing",
+                        "Enabled production API billing requires explicit Stripe live mode.",
+                    )
+                )
+
     vault_key = _setting(settings, "CONNECTOR_CREDENTIAL_MASTER_KEY")
     vault_ring = _setting(settings, "CONNECTOR_CREDENTIAL_KEYS_JSON")
     derivable_runtime_root = bool(settings.SECRET_KEY and settings.WEBHOOK_SECRET) and not default_secret and not default_webhook_secret

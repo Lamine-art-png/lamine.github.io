@@ -250,35 +250,35 @@ evidence.
 - Do not claim a deployment succeeded until the release workflow and production
   smoke checks succeed for the exact Git SHA.
 
-## G. Field Intelligence Staging (isolated)
+## J. Platform API product surfaces (disabled)
 
-An entirely separate topology for pre-production Field Intelligence review.
-Deployed ONLY by the manually gated `Field Intelligence Staging` workflow
-(`workflow_dispatch`, protected GitHub environment
-`field-intelligence-staging`); it never runs on push and never touches any
-production surface. `api-preview.agroai-pilot.com` and
-`agroai-api-preview.onrender.com` are the PRODUCTION upstream (the public
-edge routes to them) and are refused as staging targets.
+The authoritative public marketing source is the root Cloudflare Pages project.
+`/platform-api` and `/developers` are static assets guarded by Pages Functions
+using server-side `PLATFORM_API_MARKETING_ENABLED` and
+`PLATFORM_API_PUBLIC_DOCS_ENABLED`. Both default false, return 404 with
+`noindex` while disabled, and are not present in navigation or sitemap.
 
-- Portal: Cloudflare Pages project `agroai-portal-staging`, branch
-  `field-intelligence-staging`, built with
-  `VITE_DEPLOYMENT_ENVIRONMENT=staging` (visible banner + exact build SHA,
-  noindex, staging-namespaced service-worker cache) and
-  `VITE_API_BASE_URL=<staging API URL>` only.
-- API: dedicated staging service (`FIELD_STAGING_API_URL`), deployed from an
-  exact SHA via `FIELD_STAGING_DEPLOY_HOOK`; `/v1/health` reports
-  `build_sha` for alignment.
-- Database: dedicated staging PostgreSQL (`FIELD_STAGING_DATABASE_URL`);
-  migration chain and 024→022→024 rollback proven on a disposable
-  `fi_staging_rollback_proof` database per run.
-- Worker: staging worker service or the staging API's in-process worker;
-  SHA-bearing heartbeats in `field_worker_heartbeats` are required evidence.
-- Objects: dedicated staging R2 bucket (name contains `staging`), prefix
-  `staging/field-intelligence/`, staging-scoped credentials only.
-- Release state: `internal` (general refused; canary needs
-  `CONFIRM_STAGING_CANARY`).
-- Contracts: `agroai_api/scripts/field_intelligence_staging_contract.py` and
-  `tests/unit/test_field_intelligence_staging_contract.py` enforce all
-  refusals; runbook: `docs/field-intelligence-staging-runbook.md`.
-- Future DNS (manual only): `api-staging.agroai-pilot.com` and a staging
-  portal hostname.
+The customer developer console remains inside `figma-enterprise-v4` at
+`/developers/api`. Its navigation is granted only after the backend confirms
+the developer-control-plane flag, approved organization, active owner/admin
+membership, and active enrollment. Platform administrators use the separate
+`/admin/platform-api` route.
+
+API billing extends the existing backend but does not reinterpret Enterprise
+Portal subscriptions. Stripe configuration is server-only and all API billing,
+Checkout, meter export, pricing, Tax, support, status, applications, partner,
+self-service, and live-access flags default false.
+
+## K. Field Intelligence staging (isolated)
+
+Field Intelligence staging is an entirely separate topology deployed only by
+`.github/workflows/field-intelligence-staging.yml` through the protected
+`field-intelligence-staging` environment. It must never target
+`app.agroai-pilot.com`, `api.agroai-pilot.com`, `api-preview.agroai-pilot.com`,
+the production Render service, production database, production R2 bucket, or
+production Pages project. The launch migration is
+`027_field_intelligence_launch` after `026_platform_api_operations`; staging
+rollback proof is `027 → 026 → 027`, preserving the Field Intelligence
+foundation and every Platform API program, commerce, and operations table.
+The release state remains `internal` until a separately approved canary action.
+See `docs/field-intelligence-staging-runbook.md`.

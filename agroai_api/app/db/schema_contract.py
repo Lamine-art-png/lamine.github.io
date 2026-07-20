@@ -5,7 +5,7 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "024_field_intelligence_launch"
+HEAD_ALEMBIC_REVISION = "027_field_intelligence_launch"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
@@ -24,6 +24,7 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     },
     "organizations": {"id", "owner_user_id", "verification_status", "verification_score", "verification_engine_version"},
     "workspaces": {"id", "organization_id"},
+    "organization_memberships": {"id", "organization_id", "user_id", "role", "status"},
     "organization_verification_profiles": {"id", "organization_id", "decision", "score", "phone_ciphertext_b64", "evidence_digest"},
     "security_audit_events": {"id", "event_type", "outcome", "subject_hash", "ip_hash", "created_at"},
     "account_access_appeals": {
@@ -93,6 +94,43 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "field_storage_reservations": {
         "id", "tenant_id", "capture_session_id", "size_bytes", "expires_at",
     },
+    "platform_api_applications": {"id", "organization_id", "applicant_user_id", "application_type", "status"},
+    "platform_program_enrollments": {"id", "organization_id", "program", "status", "allowed_environments_json"},
+    "platform_live_access_requests": {"id", "organization_id", "requested_by_user_id", "status"},
+    "platform_partner_dossiers": {"id", "organization_id", "provider_id", "production_readiness"},
+    "platform_product_audit_events": {"id", "organization_id", "event_type", "subject_type", "subject_id"},
+    "platform_terms_documents": {"id", "document_type", "version", "status"},
+    "platform_terms_acceptances": {"id", "organization_id", "user_id", "document_id", "accepted_at"},
+    "platform_api_plans": {"id", "catalog_version", "plan_identifier", "active", "included_credits"},
+    "platform_api_operation_costs": {"id", "catalog_version", "operation_id", "environment", "credits"},
+    "platform_api_subscriptions": {"id", "organization_id", "plan_id", "status", "status_slot"},
+    "platform_checkout_idempotency": {
+        "id",
+        "organization_id",
+        "operation",
+        "client_key",
+        "request_hash",
+        "status",
+    },
+    "platform_credit_reservations": {"id", "organization_id", "api_project_id", "logical_operation_id", "state"},
+    "platform_stripe_meter_outbox": {"id", "organization_id", "usage_event_id", "meter_event_identifier", "status"},
+    "platform_stripe_events": {"id", "stripe_event_id", "event_type", "status"},
+    "platform_request_logs": {
+        "id",
+        "organization_id",
+        "api_project_id",
+        "request_id",
+        "client_correlation_id",
+        "operation_id",
+    },
+    "platform_notifications": {"id", "organization_id", "notification_type", "dedupe_key", "status"},
+    "platform_sandbox_states": {"id", "organization_id", "api_project_id", "fixture_version", "reset_counter"},
+    "platform_support_requests": {"id", "organization_id", "category", "severity", "status"},
+    "platform_support_messages": {"id", "support_request_id", "visibility", "body"},
+    "platform_status_components": {"id", "component_key", "status", "public"},
+    "platform_status_incidents": {"id", "status", "severity", "public_summary"},
+    "platform_status_incident_updates": {"id", "incident_id", "status", "public_message"},
+    "platform_abuse_events": {"id", "organization_id", "signal_type", "status"},
     "field_runtime_flags": {"key", "value_json", "updated_at"},
     "field_worker_heartbeats": {"worker_id", "git_sha", "last_heartbeat_at"},
 }

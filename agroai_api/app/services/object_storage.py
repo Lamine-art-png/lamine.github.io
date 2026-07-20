@@ -276,6 +276,74 @@ class S3ObjectStore:
             content_type=content_type,
         )
 
+    def create_presigned_upload(
+        self,
+        *,
+        tenant_id: str,
+        connection_id: str,
+        filename: str,
+        content_type: str,
+        expected_sha256: str,
+        expires_seconds: int = 900,
+    ) -> tuple[str, str, dict[str, str]]:
+        """Create a scoped direct-upload URL without exposing storage credentials."""
+
+        expected_sha256 = expected_sha256.strip().lower()
+        if not _SHA256.fullmatch(expected_sha256):
+            raise ValueError("expected upload checksum is invalid")
+        key = self._key(tenant_id=tenant_id, connection_id=connection_id, filename=filename)
+        metadata = {
+            "sha256": expected_sha256,
+            "tenant-scope": _scope_component(tenant_id, fallback="tenant"),
+            "connection-scope": _scope_component(connection_id, fallback="connection"),
+        }
+        url = self.client.generate_presigned_url(
+            "put_object",
+            Params={
+                "Bucket": self.bucket,
+                "Key": key,
+                "ContentType": content_type,
+                "Metadata": metadata,
+            },
+            ExpiresIn=max(60, min(int(expires_seconds), 3600)),
+            HttpMethod="PUT",
+        )
+        return url, _s3_uri(self.bucket, key), {f"x-amz-meta-{name}": value for name, value in metadata.items()}
+
+    def inspect(
+        self,
+        uri: str,
+        *,
+        tenant_id: str,
+        connection_id: str,
+        max_bytes: int,
+        expected_sha256: str | None = None,
+    ) -> StoredObject:
+        """Verify scoped object metadata without returning customer content."""
+
+        key = self._validated_key(uri, tenant_id=tenant_id, connection_id=connection_id)
+        response = self.client.head_object(Bucket=self.bucket, Key=key)
+        size = int(response.get("ContentLength") or -1)
+        if size < 0 or size > max_bytes:
+            raise RuntimeError("object size is outside the permitted range")
+        metadata = response.get("Metadata") or {}
+        sha256 = str(metadata.get("sha256") or "").strip().lower()
+        if not _SHA256.fullmatch(sha256):
+            raise RuntimeError("object checksum metadata is unavailable")
+        if expected_sha256 is not None and sha256 != expected_sha256.strip().lower():
+            raise RuntimeError("object checksum metadata does not match the request")
+        if metadata.get("tenant-scope") != _scope_component(tenant_id, fallback="tenant"):
+            raise RuntimeError("object tenant metadata mismatch")
+        if metadata.get("connection-scope") != _scope_component(connection_id, fallback="connection"):
+            raise RuntimeError("object purpose metadata mismatch")
+        return StoredObject(
+            uri=uri,
+            key=key,
+            size_bytes=size,
+            sha256=sha256,
+            content_type=response.get("ContentType"),
+        )
+
     def read_bytes(
         self,
         uri: str,

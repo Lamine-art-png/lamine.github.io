@@ -52,6 +52,9 @@
     <div id="root"></div>
     <script>
       (() => {
+        let platformApiAvailable = false;
+        let platformApiProbeStarted = false;
+
         const addCareersLink = () => {
           document.querySelectorAll('a[href="/about"]').forEach((aboutLink) => {
             const parent = aboutLink.parentElement;
@@ -64,6 +67,40 @@
             careersLink.setAttribute("aria-label", "Careers");
             aboutLink.insertAdjacentElement("afterend", careersLink);
           });
+        };
+
+        const addPlatformApiLink = () => {
+          if (!platformApiAvailable) return;
+          document.querySelectorAll('a[href="/about"]').forEach((aboutLink) => {
+            const parent = aboutLink.parentElement;
+            if (!parent || parent.querySelector('a[href="/platform-api"]')) return;
+            const hasDemoLink = Array.from(parent.querySelectorAll("a")).some((link) => /book a demo/i.test(link.textContent || ""));
+            if (!hasDemoLink) return;
+            const apiLink = aboutLink.cloneNode(true);
+            apiLink.href = "/platform-api";
+            apiLink.textContent = "API";
+            apiLink.setAttribute("aria-label", "AGRO-AI Platform API");
+            const careersLink = parent.querySelector('a[href="/careers"]');
+            (careersLink || aboutLink).insertAdjacentElement("afterend", apiLink);
+          });
+        };
+
+        const probePlatformApi = async () => {
+          if (platformApiProbeStarted) return;
+          platformApiProbeStarted = true;
+          try {
+            const response = await fetch("/platform-api", {
+              method: "GET",
+              cache: "no-store",
+              credentials: "same-origin",
+              headers: { Accept: "text/html" },
+            });
+            if (!response.ok) return;
+            const html = await response.text();
+            if (!html.includes("<title>AGRO-AI Platform API</title>")) return;
+            platformApiAvailable = true;
+            addPlatformApiLink();
+          } catch (_) {}
         };
 
         const shouldOpenConnectors = () => {
@@ -110,8 +147,11 @@
         };
 
         addCareersLink();
+        addPlatformApiLink();
+        probePlatformApi();
         const observer = new MutationObserver(() => {
           addCareersLink();
+          addPlatformApiLink();
           openConnectors();
         });
         observer.observe(document.documentElement, { childList: true, subtree: true });

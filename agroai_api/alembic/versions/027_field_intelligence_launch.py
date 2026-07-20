@@ -1,7 +1,7 @@
 """Field Intelligence launch control plane.
 
-Revision ID: 024_field_intelligence_launch
-Revises: 023_field_intelligence
+Revision ID: 027_field_intelligence_launch
+Revises: 026_platform_api_operations
 Create Date: 2026-07-19
 
 Adds the two small operational tables the controlled rollout needs:
@@ -20,8 +20,8 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "024_field_intelligence_launch"
-down_revision = "023_field_intelligence"
+revision = "027_field_intelligence_launch"
+down_revision = "026_platform_api_operations"
 branch_labels = None
 depends_on = None
 
