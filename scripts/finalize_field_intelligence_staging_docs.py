@@ -29,6 +29,19 @@ replace(
     'FIELD_STAGING_RELEASE_STATE: ${{ vars.FIELD_STAGING_RELEASE_STATE }}',
     "FIELD_STAGING_RELEASE_STATE: ${{ vars.FIELD_STAGING_RELEASE_STATE || 'internal' }}",
 )
+replace(
+    workflow,
+    '          assert (rollout.get("release_alignment") or {}).get("aligned") is True, rollout\n'
+    '          print(json.dumps({"schema_ready": True, "field_blockers": 0, "rollout": rollout.get("effective_state"), "aligned": True}))',
+    '          alignment = rollout.get("release_alignment") or {}\n'
+    '          assert alignment.get("api_sha") == os.environ["STAGE_SHA"], alignment\n'
+    '          assert alignment.get("worker_shas") == [os.environ["STAGE_SHA"]], alignment\n'
+    '          assert alignment.get("database_heads") == ["027_field_intelligence_launch"], alignment\n'
+    '          allowed_external = {"portal_sha_unreported", "edge_sha_unreported"}\n'
+    '          unexpected = set(alignment.get("mismatches") or []) - allowed_external\n'
+    '          assert not unexpected, {"unexpected_alignment_mismatches": sorted(unexpected), "alignment": alignment}\n'
+    '          print(json.dumps({"schema_ready": True, "field_blockers": 0, "rollout": rollout.get("effective_state"), "api_worker_database_aligned": True, "externally_verified_later": sorted(set(alignment.get("mismatches") or []) & allowed_external)}))',
+)
 
 contract_path = Path("agroai_api/scripts/field_intelligence_staging_contract.py")
 contract = contract_path.read_text(encoding="utf-8")
@@ -85,9 +98,10 @@ env = env.replace(
 )
 if "FIELD_RELEASE_PORTAL_SHA=" not in env:
     env += (
-        "\n# --- Exact release identity on the staging API service ------------------------\n"
-        "# FIELD_RELEASE_PORTAL_SHA=<exact staged SHA>\n"
-        "# FIELD_RELEASE_EDGE_SHA=<exact declared staging release SHA>\n"
+        "\n# --- Optional API-side release labels -----------------------------------------\n"
+        "# Internal staging verifies the live portal separately in the workflow.\n"
+        "# FIELD_RELEASE_PORTAL_SHA=<exact staged SHA when managed by the provider>\n"
+        "# FIELD_RELEASE_EDGE_SHA=<exact edge SHA when a staging edge exists>\n"
     )
 env_path.write_text(env, encoding="utf-8")
 
@@ -125,6 +139,11 @@ Before any deploy hook is called, the staging contract requires and compares:
 
 Missing production fingerprints fail closed. A naming convention such as
 `staging` is additional defense, not the isolation proof.
+
+For the direct-provider `internal` topology, API, worker, and database identity
+are proven through the backend; the portal is then fetched live and verified
+against its public deployment metadata. Portal/edge labels absent from the API
+are not represented as deployed surfaces.
 
 ## Current provisioning status
 
