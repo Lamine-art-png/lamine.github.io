@@ -25,15 +25,15 @@
 <pre><code>curl https://api.agroai-pilot.com/v1/platform/me \
   -H "Authorization: Bearer $AGROAI_API_KEY" \
   -H "X-Request-Id: quickstart-001"</code></pre>
-<pre><code>from agroai_platform import AgroAI
+<pre><code>from agroai_platform import AgroAIPlatformClient
 
-client = AgroAI(api_key=os.environ["AGROAI_API_KEY"])
-for field in client.fields.list():
-    print(field.id, field.name)</code></pre>
-<pre><code>import { AgroAI } from "@agro-ai/platform";
+client = AgroAIPlatformClient(api_key=os.environ["AGROAI_API_KEY"])
+for field in client.iter_fields():
+    print(field["id"], field.get("name"))</code></pre>
+<pre><code>import { AgroAIPlatformClient } from "@agro-ai/platform";
 
-const client = new AgroAI({ apiKey: process.env.AGROAI_API_KEY! });
-for await (const field of client.fields.list()) {
+const client = new AgroAIPlatformClient({ apiKey: process.env.AGROAI_API_KEY! });
+for await (const field of client.fields()) {
   console.log(field.id, field.name);
 }</code></pre></section>
     <section id="authentication"><h2>Authentication</h2><p>Send a Platform API key as a Bearer token. Portal JWTs are not API keys. Test keys begin with <code>agro_test_</code>; live keys begin with <code>agro_live_</code>.</p></section>
