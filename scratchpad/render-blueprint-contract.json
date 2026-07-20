@@ -1,0 +1,10 @@
+{
+  "api": "agroai-field-intelligence-staging-api",
+  "auto_deploy_disabled": true,
+  "contract": "field-intelligence-render-blueprint-contract-v1",
+  "database": "agroai-field-intelligence-staging-db",
+  "secret_values_in_source": false,
+  "status": "passed",
+  "tested_sha": "9854a3084c6223bd7ddab5e0d182c3ba363e1790",
+  "worker": "agroai-field-intelligence-staging-worker"
+}
