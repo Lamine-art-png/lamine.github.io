@@ -11,56 +11,331 @@ permissions:
   pull-requests: read
 
 jobs:
-  diagnose:
+  integrate:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
           ref: feature/field-intelligence-launch
           fetch-depth: 0
           token: ${{ github.token }}
-      - name: Attempt merge and persist exact conflict report
+      - name: Merge current main and resolve the known integration surface
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "agroai-integration-bot"
           git config user.email "integration-bot@agroai-pilot.com"
-          git fetch origin main integration/field-intelligence-resolved-v2
-          feature_head="$(git rev-parse HEAD)"
+          git fetch origin main feature/field-intelligence-launch
+          before="$(git rev-parse HEAD)"
           main_head="$(git rev-parse origin/main)"
+          echo "FEATURE_BEFORE=$before"
+          echo "MAIN_HEAD=$main_head"
+
           set +e
           git merge --no-commit --no-ff origin/main
-          rc=$?
+          merge_rc=$?
           set -e
-          mkdir -p /tmp/fi-integration
-          {
-            echo "# Field Intelligence integration conflict report"
-            echo
-            echo "- feature head: \`$feature_head\`"
-            echo "- current main head: \`$main_head\`"
-            echo "- merge exit: \`$rc\`"
-            echo
-            echo "## Conflicting files"
-            echo '```'
-            git diff --name-only --diff-filter=U | sort
-            echo '```'
-            echo
-            echo "## Conflict excerpts"
-            while IFS= read -r path; do
-              [ -n "$path" ] || continue
-              echo
-              echo "### \`$path\`"
-              echo '```diff'
-              sed -n '/^<<<<<<< /,/^>>>>>>> /p' "$path" | head -n 400 || true
-              echo '```'
-            done < <(git diff --name-only --diff-filter=U | sort)
-          } > /tmp/fi-integration/conflicts.md
-          git merge --abort >/dev/null 2>&1 || true
-          git checkout -B integration/field-intelligence-resolved-v2 origin/integration/field-intelligence-resolved-v2
-          mkdir -p scratchpad
-          cp /tmp/fi-integration/conflicts.md scratchpad/field-intelligence-integration-conflicts.md
-          git add scratchpad/field-intelligence-integration-conflicts.md
-          if ! git diff --cached --quiet; then
-            git commit -m "docs: persist Field Intelligence integration conflict report"
-            git push origin HEAD:integration/field-intelligence-resolved-v2
+
+          expected="$(cat <<'EOF'
+.github/workflows/ci.yml
+.github/workflows/hardening-backend-reusable.yml
+agroai_api/app/db/schema_contract.py
+agroai_api/tests/unit/test_alembic_revision_contract.py
+agroai_api/tests/unit/test_schema_adoption_contract.py
+docs/DEPLOYMENT_TRUTH_MAP.md
+docs/platform-api-operations-runbook.md
+EOF
+)"
+          actual="$(git diff --name-only --diff-filter=U | sort)"
+          echo "MERGE_EXIT=$merge_rc"
+          printf 'CONFLICTS:\n%s\n' "$actual"
+          unexpected="$(comm -13 <(printf '%s\n' "$expected" | sort) <(printf '%s\n' "$actual" | sort) || true)"
+          if [ -n "$unexpected" ]; then
+            echo "Unexpected conflicts; refusing automated resolution:"
+            echo "$unexpected"
+            exit 1
           fi
+          for path in $actual; do
+            git checkout --theirs -- "$path"
+          done
+
+          # The old launch revision is a sibling of Platform API 024. Move it
+          # after the actual current-main head so the repository has one linear head.
+          if [ -f agroai_api/alembic/versions/024_field_intelligence_launch.py ]; then
+            git mv agroai_api/alembic/versions/024_field_intelligence_launch.py \
+              agroai_api/alembic/versions/027_field_intelligence_launch.py
+          fi
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          root = Path('.')
+
+          def read(path):
+              return Path(path).read_text(encoding='utf-8')
+
+          def write(path, text):
+              Path(path).write_text(text, encoding='utf-8')
+
+          # Replace the old launch revision identifier everywhere in tracked text.
+          for raw in __import__('subprocess').check_output(
+              ['git', 'grep', '-Il', '024_field_intelligence_launch'], text=True
+          ).splitlines():
+              p = Path(raw)
+              try:
+                  text = p.read_text(encoding='utf-8')
+              except UnicodeDecodeError:
+                  continue
+              p.write_text(text.replace('024_field_intelligence_launch', '027_field_intelligence_launch'), encoding='utf-8')
+
+          migration = Path('agroai_api/alembic/versions/027_field_intelligence_launch.py')
+          text = migration.read_text(encoding='utf-8')
+          text = text.replace('Revision ID: 027_field_intelligence_launch\nRevises: 023_field_intelligence',
+                              'Revision ID: 027_field_intelligence_launch\nRevises: 026_platform_api_operations')
+          text = text.replace('down_revision = "023_field_intelligence"',
+                              'down_revision = "026_platform_api_operations"')
+          migration.write_text(text, encoding='utf-8')
+
+          # Current-main schema contract plus Field Intelligence launch tables.
+          path = 'agroai_api/app/db/schema_contract.py'
+          text = read(path).replace('HEAD_ALEMBIC_REVISION = "026_platform_api_operations"',
+                                    'HEAD_ALEMBIC_REVISION = "027_field_intelligence_launch"')
+          if '"field_runtime_flags"' not in text:
+              marker = '    "platform_abuse_events": {"id", "organization_id", "signal_type", "status"},\n}'
+              replacement = (
+                  '    "platform_abuse_events": {"id", "organization_id", "signal_type", "status"},\n'
+                  '    "field_runtime_flags": {"key", "value_json", "updated_at"},\n'
+                  '    "field_worker_heartbeats": {"worker_id", "git_sha", "last_heartbeat_at"},\n}'
+              )
+              if marker not in text:
+                  raise SystemExit('schema contract insertion marker missing')
+              text = text.replace(marker, replacement)
+          write(path, text)
+
+          # Linear Alembic ancestry contract.
+          path = 'agroai_api/tests/unit/test_alembic_revision_contract.py'
+          text = read(path)
+          marker = '        "026_platform_api_operations": "025_platform_api_commerce",'
+          addition = marker + '\n        "027_field_intelligence_launch": "026_platform_api_operations",'
+          if '"027_field_intelligence_launch": "026_platform_api_operations"' not in text:
+              if marker not in text:
+                  raise SystemExit('alembic ancestry marker missing')
+              text = text.replace(marker, addition)
+          write(path, text)
+
+          path = 'agroai_api/tests/unit/test_schema_adoption_contract.py'
+          text = read(path)
+          text = text.replace(
+              'def test_head_contract_covers_security_queue_provenance_access_appeals_and_platform_api():',
+              'def test_head_contract_covers_security_queue_provenance_access_appeals_platform_api_and_field_launch():'
+          )
+          text = text.replace('assert HEAD_ALEMBIC_REVISION == "026_platform_api_operations"',
+                              'assert HEAD_ALEMBIC_REVISION == "027_field_intelligence_launch"')
+          if 'HEAD_SCHEMA_REQUIREMENTS["field_runtime_flags"]' not in text:
+              text += ("\n    assert {\"key\", \"value_json\", \"updated_at\"}.issubset("
+                       "HEAD_SCHEMA_REQUIREMENTS[\"field_runtime_flags\"])\n"
+                       "    assert {\"worker_id\", \"git_sha\", \"last_heartbeat_at\"}.issubset("
+                       "HEAD_SCHEMA_REQUIREMENTS[\"field_worker_heartbeats\"])\n")
+          write(path, text)
+
+          # Main CI must assert the true linear head.
+          for path in ('.github/workflows/ci.yml', '.github/workflows/hardening-backend-reusable.yml'):
+              text = read(path).replace('026_platform_api_operations (head)',
+                                        '027_field_intelligence_launch (head)')
+              write(path, text)
+
+          # Field Intelligence migration tool now rolls back only the launch layer.
+          path = 'agroai_api/scripts/field_intelligence_migration.py'
+          text = read(path)
+          text = text.replace('downgrade        — advisory-locked rollback to 022_account_access_appeals',
+                              'downgrade        — advisory-locked rollback to 026_platform_api_operations')
+          text = text.replace('The rollback floor is ``022_account_access_appeals``: rolling back removes\nField Intelligence schema only',
+                              'The rollback floor is ``026_platform_api_operations``: rolling back removes\nonly the Field Intelligence launch-control schema')
+          text = text.replace('ROLLBACK_FLOOR = "022_account_access_appeals"',
+                              'ROLLBACK_FLOOR = "026_platform_api_operations"')
+          start = text.index('FIELD_TABLES = {')
+          end = text.index('PRESERVED_TABLES = {', start)
+          sets = '''FIELD_FOUNDATION_TABLES = {
+    "field_capture_sessions",
+    "field_observations",
+    "field_observation_assets",
+    "field_observation_processing_runs",
+    "field_observation_audit_events",
+    "field_storage_reservations",
+}
+FIELD_LAUNCH_TABLES = {
+    "field_runtime_flags",
+    "field_worker_heartbeats",
+}
+FIELD_TABLES = FIELD_FOUNDATION_TABLES | FIELD_LAUNCH_TABLES
+
+'''
+          text = text[:start] + sets + text[end:]
+          preserved_marker = '    "workspaces",\n}'
+          preserved_addition = '''    "workspaces",
+    "field_capture_sessions",
+    "field_observations",
+    "field_observation_assets",
+    "field_observation_processing_runs",
+    "field_observation_audit_events",
+    "field_storage_reservations",
+    "platform_api_applications",
+    "platform_program_enrollments",
+    "platform_live_access_requests",
+    "platform_partner_dossiers",
+    "platform_terms_documents",
+    "platform_terms_acceptances",
+    "platform_api_plans",
+    "platform_api_operation_costs",
+    "platform_api_subscriptions",
+    "platform_credit_reservations",
+    "platform_status_components",
+    "platform_abuse_events",
+}'''
+          if preserved_marker not in text:
+              raise SystemExit('migration preserved-table marker missing')
+          text = text.replace(preserved_marker, preserved_addition, 1)
+          old = '''    leftover = FIELD_TABLES & tables
+    if leftover:
+        _fail(report, f"rollback left Field Intelligence tables behind: {sorted(leftover)}")
+    missing = PRESERVED_TABLES - tables
+'''
+          new = '''    leftover = FIELD_LAUNCH_TABLES & tables
+    if leftover:
+        _fail(report, f"rollback left Field Intelligence launch tables behind: {sorted(leftover)}")
+    missing_foundation = FIELD_FOUNDATION_TABLES - tables
+    if missing_foundation:
+        _fail(report, f"rollback removed Field Intelligence foundation tables: {sorted(missing_foundation)}")
+    missing = PRESERVED_TABLES - tables
+'''
+          if old not in text:
+              raise SystemExit('verify-rollback block marker missing')
+          text = text.replace(old, new)
+          write(path, text)
+
+          # Rebuild the PostgreSQL roundtrip as 026 -> 027 -> 026 -> 027.
+          path = '.github/workflows/field-intelligence-ci.yml'
+          text = read(path)
+          pattern = re.compile(
+              r'      - name: Upgrade current-main baseline.*?'
+              r'(?=      - name: Re-upgrade to repository head)', re.S
+          )
+          block = '''      - name: Upgrade current-main baseline (026_platform_api_operations)
+        run: alembic upgrade 026_platform_api_operations
+      - name: Upgrade current-main database to repository head (026 -> 027)
+        run: alembic upgrade head
+      - name: Downgrade only the Field Intelligence launch revision
+        run: alembic downgrade 026_platform_api_operations
+      - name: Prove launch tables are gone and foundation/current-main schemas survive
+        run: |
+          python - <<'PY'
+          import os, sqlalchemy as sa
+          engine = sa.create_engine(os.environ["DATABASE_URL"])
+          inspector = sa.inspect(engine)
+          tables = set(inspector.get_table_names())
+          removed = {"field_runtime_flags", "field_worker_heartbeats"}
+          leftover = removed & tables
+          assert not leftover, f"downgrade left launch tables behind: {sorted(leftover)}"
+          preserved = {
+              "field_capture_sessions", "field_observations", "field_observation_assets",
+              "field_observation_processing_runs", "field_observation_audit_events",
+              "field_storage_reservations", "organization_verification_profiles",
+              "security_audit_events", "account_access_appeals", "api_projects",
+              "platform_api_keys", "platform_webhook_outbox", "platform_webhook_audit_events",
+              "platform_api_applications", "platform_program_enrollments",
+              "platform_live_access_requests", "platform_partner_dossiers",
+              "platform_api_plans", "platform_api_operation_costs",
+              "platform_api_subscriptions", "platform_credit_reservations",
+              "platform_status_components", "platform_abuse_events",
+          }
+          missing = preserved - tables
+          assert not missing, f"downgrade removed protected tables: {sorted(missing)}"
+          print("launch tables removed:", sorted(removed))
+          print("protected schemas preserved:", sorted(preserved))
+          PY
+'''
+          text, count = pattern.subn(block, text, count=1)
+          if count != 1:
+              raise SystemExit('Field Intelligence CI migration block not found')
+          write(path, text)
+
+          # Preserve both authoritative topology sections.
+          path = 'docs/DEPLOYMENT_TRUTH_MAP.md'
+          text = read(path).rstrip() + '''
+
+## K. Field Intelligence staging (isolated)
+
+Field Intelligence staging is an entirely separate topology deployed only by
+`.github/workflows/field-intelligence-staging.yml` through the protected
+`field-intelligence-staging` environment. It must never target
+`app.agroai-pilot.com`, `api.agroai-pilot.com`, `api-preview.agroai-pilot.com`,
+the production Render service, production database, production R2 bucket, or
+production Pages project. The launch migration is
+`027_field_intelligence_launch` after `026_platform_api_operations`; staging
+rollback proof is `027 → 026 → 027`, preserving the Field Intelligence
+foundation and every Platform API program, commerce, and operations table.
+The release state remains `internal` until a separately approved canary action.
+See `docs/field-intelligence-staging-runbook.md`.
+'''
+          write(path, text)
+
+          path = 'docs/platform-api-operations-runbook.md'
+          text = read(path)
+          text = re.sub(
+              r'- The required linear Alembic tail is .*?; `alembic heads` must return only `.*?`\.',
+              '- The required linear Alembic tail is `019_account_verification` → '
+              '`020_platform_api_private_beta` → `021_platform_api_hardening` → '
+              '`022_account_access_appeals` → `023_field_intelligence` → '
+              '`024_platform_api_programs` → `025_platform_api_commerce` → '
+              '`026_platform_api_operations` → `027_field_intelligence_launch`; '
+              '`alembic heads` must return only `027_field_intelligence_launch`.',
+              text,
+              count=1,
+          )
+          write(path, text)
+
+          # Update human-readable rollback proofs and old baseline labels.
+          replacements = {
+              '024→022→024': '027→026→027',
+              '024 -> 022 -> 024': '027 -> 026 -> 027',
+              '024 → 022 → 024': '027 → 026 → 027',
+              '024→022': '027→026',
+              '022→024': '026→027',
+              '022 -> 024': '026 -> 027',
+          }
+          for path in [Path(p) for p in __import__('subprocess').check_output(
+              ['git', 'ls-files'], text=True
+          ).splitlines()]:
+              if not path.is_file():
+                  continue
+              try:
+                  text = path.read_text(encoding='utf-8')
+              except UnicodeDecodeError:
+                  continue
+              changed = text
+              for old, new in replacements.items():
+                  changed = changed.replace(old, new)
+              if changed != text:
+                  path.write_text(changed, encoding='utf-8')
+          PY
+
+          rm -f .github/workflows/field-intelligence-integration-diagnostic.yml
+          git add -A
+
+          cd agroai_api
+          python -m pip install -q -r requirements.txt pytest
+          python -m compileall -q app alembic scripts
+          test "$(alembic heads)" = "027_field_intelligence_launch (head)"
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short \
+            tests/unit/test_alembic_revision_contract.py \
+            tests/unit/test_schema_adoption_contract.py \
+            tests/unit/test_field_intelligence_launch.py \
+            tests/unit/test_field_intelligence_staging_contract.py \
+            tests/unit/test_production_readiness.py
+          cd ..
+          git diff --check
+          git add -A
+          git commit -m "Merge current main and rebase Field Intelligence launch onto Platform API operations"
+          git push origin HEAD:feature/field-intelligence-launch
