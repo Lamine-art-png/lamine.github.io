@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import { createBrowserRouter, Navigate } from "react-router";
 import { MainLayout } from "./components/MainLayout";
 import { OperationRouteBoundary } from "./components/OperationRouteBoundary";
+import { PlatformConsoleApp } from "./components/PlatformConsole";
 import { RouteRecovery } from "./components/RouteRecovery";
 import { VerifyEmailPage } from "./components/VerifyEmail";
 import { AccessAppealPage } from "./components/AccessAppeal";
@@ -65,9 +66,18 @@ const operationRoutes = [
   { path: "*", Component: RouteRecovery },
 ];
 
-export const router = createBrowserRouter([
+const isPlatformHostname = window.location.hostname.toLowerCase() === "platform.agroai-pilot.com";
+
+const platformRouter = createBrowserRouter([
   { path: "/verify-email", Component: VerifyEmailPage, errorElement: <PortalRouteError /> },
   { path: "/appeal", Component: AccessAppealPage, errorElement: <PortalRouteError /> },
+  { path: "/*", Component: PlatformConsoleApp, errorElement: <PortalRouteError /> },
+]);
+
+const enterpriseRouter = createBrowserRouter([
+  { path: "/verify-email", Component: VerifyEmailPage, errorElement: <PortalRouteError /> },
+  { path: "/appeal", Component: AccessAppealPage, errorElement: <PortalRouteError /> },
+  { path: "/platform/*", Component: PlatformConsoleApp, errorElement: <PortalRouteError /> },
   {
     path: "/",
     Component: MainLayout,
@@ -81,3 +91,5 @@ export const router = createBrowserRouter([
   },
   { path: "*", element: <PortalRouteError /> },
 ]);
+
+export const router = isPlatformHostname ? platformRouter : enterpriseRouter;
