@@ -52,6 +52,22 @@ def test_edge_deployment_keeps_queue_tokens_required_and_edge_auth_activation_ga
     assert 'if $edge_origin_auth == "" then {} else {EDGE_ORIGIN_AUTH_TOKEN: $edge_origin_auth} end' in deploy
 
 
+def test_platform_custom_domain_smoke_is_explicitly_gated_and_recorded():
+    root = Path(__file__).resolve().parents[3]
+    deploy = (root / ".github/workflows/deploy.yml").read_text(encoding="utf-8")
+
+    assert "PLATFORM_URL: https://platform.agroai-pilot.com" in deploy
+    assert "PLATFORM_API_CUSTOM_DOMAIN_ENABLED" in deploy
+    assert "Smoke standalone Platform product when custom domain is enabled" in deploy
+    assert 'case "${PLATFORM_CUSTOM_DOMAIN_ENABLED,,}" in' in deploy
+    assert "smoke skipped without claiming activation" in deploy
+    assert 'curl --fail --silent --show-error --max-time 20 "${PLATFORM_URL}/v1/edge-health"' in deploy
+    assert 'curl --fail --silent --show-error --max-time 30 "${PLATFORM_URL}/v1/health"' in deploy
+    assert "Build on AGRO-AI." in deploy
+    assert "Permanent API keys never enter browser JavaScript." in deploy
+    assert 'echo "platform_custom_domain_enabled=${PLATFORM_CUSTOM_DOMAIN_ENABLED}"' in deploy
+
+
 def test_operation_production_proof_accepts_only_deployed_descendants_in_current_history():
     root = Path(__file__).resolve().parents[3]
     workflow = (root / ".github/workflows/operation-workspaces-production-contract.yml").read_text(
