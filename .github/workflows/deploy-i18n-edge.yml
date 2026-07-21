@@ -8,6 +8,8 @@ on:
       - "cloudflare/edge-gateway/src/i18n-*.ts"
       - "cloudflare/edge-gateway/src/edge-main-v3.ts"
       - "cloudflare/edge-gateway/src/edge-main-v3.test.ts"
+      - "agroai_api/app/api/v1/i18n.py"
+      - "agroai_api/app/services/i18n_translation_resilience.py"
       - "agroai_api/app/services/local_ui_translation.py"
       - "agroai_api/app/services/model_router.py"
       - "shared/ui-*.json"
