@@ -1,0 +1,15 @@
+# Cloudflare Pages headers — scoped to the Platform API developer experience.
+# These rules match ONLY /platform-api/* and therefore do not affect the rest
+# of the site. The CSP is deliberately tight: all first-party scripts are
+# external files (no inline <script>), so script-src stays 'self'. Inline
+# style="" attributes and the brand SVG require style-src 'unsafe-inline'.
+# connect-src allows the Explorer to load the local spec and, in Live mode,
+# reach the public API hosts the user selects.
+
+/platform-api/*
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=()
+  Cross-Origin-Opener-Policy: same-origin
+  Content-Security-Policy: default-src 'self'; base-uri 'self'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; img-src 'self' data:; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://fonts.cdnfonts.com; font-src 'self' https://fonts.gstatic.com https://fonts.cdnfonts.com; connect-src 'self' https://api.agroai-pilot.com https://api-preview.agroai-pilot.com

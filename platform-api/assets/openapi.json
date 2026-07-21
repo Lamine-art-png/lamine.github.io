@@ -1,0 +1,245 @@
+{
+  "info": {
+    "title": "AGRO-AI Platform API",
+    "version": "v1",
+    "servers": [
+      { "label": "Production", "url": "https://api.agroai-pilot.com/v1" },
+      { "label": "Sandbox", "url": "https://api-preview.agroai-pilot.com/v1" }
+    ],
+    "auth": {
+      "scheme": "Bearer",
+      "header": "Authorization",
+      "format": "Authorization: Bearer sk_live_..."
+    }
+  },
+  "tags": [
+    { "id": "fields", "name": "Fields", "description": "Register and manage the fields AGRO-AI reasons about." },
+    { "id": "water", "name": "Water intelligence", "description": "Evapotranspiration, soil-water balance, and weather signals." },
+    { "id": "irrigation", "name": "Irrigation", "description": "Model-backed irrigation recommendations." },
+    { "id": "webhooks", "name": "Webhooks", "description": "Subscribe to asynchronous events." }
+  ],
+  "endpoints": [
+    {
+      "id": "list-fields",
+      "tag": "fields",
+      "method": "GET",
+      "path": "/fields",
+      "summary": "List fields",
+      "description": "Returns a paginated list of the fields in your workspace, most recently created first.",
+      "params": [
+        { "in": "query", "name": "limit", "type": "integer", "required": false, "default": 20, "description": "Page size, 1–100." },
+        { "in": "query", "name": "starting_after", "type": "string", "required": false, "description": "A field id to page forward from." }
+      ],
+      "response": {
+        "status": 200,
+        "example": {
+          "object": "list",
+          "has_more": false,
+          "data": [
+            {
+              "id": "fld_3nZq7Kp2",
+              "object": "field",
+              "name": "North Quarter — Almonds",
+              "crop": "almond",
+              "area_hectares": 32.4,
+              "centroid": { "lat": 36.331, "lon": -119.292 },
+              "created": 1752710400
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "create-field",
+      "tag": "fields",
+      "method": "POST",
+      "path": "/fields",
+      "summary": "Create a field",
+      "description": "Registers a new field. Provide either a GeoJSON polygon boundary or a centroid with an area.",
+      "body": {
+        "example": {
+          "name": "North Quarter — Almonds",
+          "crop": "almond",
+          "boundary": {
+            "type": "Polygon",
+            "coordinates": [[[-119.29, 36.33], [-119.28, 36.33], [-119.28, 36.34], [-119.29, 36.34], [-119.29, 36.33]]]
+          }
+        },
+        "fields": [
+          { "name": "name", "type": "string", "required": true, "description": "Human-readable label." },
+          { "name": "crop", "type": "string", "required": true, "description": "Crop type, e.g. almond, pistachio, alfalfa." },
+          { "name": "boundary", "type": "GeoJSON Polygon", "required": false, "description": "Field boundary. Required if centroid is omitted." },
+          { "name": "centroid", "type": "object", "required": false, "description": "{ lat, lon }. Required if boundary is omitted." }
+        ]
+      },
+      "response": {
+        "status": 201,
+        "example": {
+          "id": "fld_3nZq7Kp2",
+          "object": "field",
+          "name": "North Quarter — Almonds",
+          "crop": "almond",
+          "area_hectares": 32.4,
+          "centroid": { "lat": 36.331, "lon": -119.292 },
+          "created": 1752710400
+        }
+      }
+    },
+    {
+      "id": "get-field",
+      "tag": "fields",
+      "method": "GET",
+      "path": "/fields/{field_id}",
+      "summary": "Retrieve a field",
+      "description": "Retrieves the field with the given id.",
+      "params": [
+        { "in": "path", "name": "field_id", "type": "string", "required": true, "description": "The field identifier, e.g. fld_3nZq7Kp2." }
+      ],
+      "response": {
+        "status": 200,
+        "example": {
+          "id": "fld_3nZq7Kp2",
+          "object": "field",
+          "name": "North Quarter — Almonds",
+          "crop": "almond",
+          "area_hectares": 32.4,
+          "centroid": { "lat": 36.331, "lon": -119.292 },
+          "created": 1752710400
+        }
+      }
+    },
+    {
+      "id": "get-et",
+      "tag": "water",
+      "method": "GET",
+      "path": "/fields/{field_id}/evapotranspiration",
+      "summary": "Get evapotranspiration",
+      "description": "Returns daily crop evapotranspiration (ETc, mm) for a field over a date range.",
+      "params": [
+        { "in": "path", "name": "field_id", "type": "string", "required": true, "description": "The field identifier." },
+        { "in": "query", "name": "start", "type": "string (date)", "required": true, "description": "Inclusive start date, YYYY-MM-DD." },
+        { "in": "query", "name": "end", "type": "string (date)", "required": true, "description": "Inclusive end date, YYYY-MM-DD." },
+        { "in": "query", "name": "model", "type": "string", "required": false, "default": "openet_ensemble", "description": "ET model: openet_ensemble, ssebop, or eemetric." }
+      ],
+      "response": {
+        "status": 200,
+        "example": {
+          "object": "evapotranspiration",
+          "field_id": "fld_3nZq7Kp2",
+          "model": "openet_ensemble",
+          "unit": "mm",
+          "series": [
+            { "date": "2026-07-18", "etc": 7.1 },
+            { "date": "2026-07-19", "etc": 7.4 },
+            { "date": "2026-07-20", "etc": 6.9 }
+          ]
+        }
+      }
+    },
+    {
+      "id": "get-water-balance",
+      "tag": "water",
+      "method": "GET",
+      "path": "/fields/{field_id}/water-balance",
+      "summary": "Get soil-water balance",
+      "description": "Returns the current modeled soil-water balance and root-zone depletion for a field.",
+      "params": [
+        { "in": "path", "name": "field_id", "type": "string", "required": true, "description": "The field identifier." }
+      ],
+      "response": {
+        "status": 200,
+        "example": {
+          "object": "water_balance",
+          "field_id": "fld_3nZq7Kp2",
+          "as_of": "2026-07-20",
+          "root_zone_depletion_mm": 41.2,
+          "readily_available_water_mm": 55.0,
+          "stress_risk": "low"
+        }
+      }
+    },
+    {
+      "id": "irrigation-recommendation",
+      "tag": "irrigation",
+      "method": "POST",
+      "path": "/irrigation/recommendations",
+      "summary": "Get an irrigation recommendation",
+      "description": "Returns a model-backed irrigation recommendation for a field. This is advisory output; it never actuates hardware.",
+      "body": {
+        "example": {
+          "field_id": "fld_3nZq7Kp2",
+          "horizon_days": 7
+        },
+        "fields": [
+          { "name": "field_id", "type": "string", "required": true, "description": "The field to advise on." },
+          { "name": "horizon_days", "type": "integer", "required": false, "description": "Planning horizon, 1–14 days. Defaults to 7." }
+        ]
+      },
+      "response": {
+        "status": 200,
+        "example": {
+          "object": "irrigation_recommendation",
+          "field_id": "fld_3nZq7Kp2",
+          "generated_at": "2026-07-20T14:02:00Z",
+          "recommended_depth_mm": 24.0,
+          "recommended_window": { "start": "2026-07-21", "end": "2026-07-22" },
+          "confidence": 0.82,
+          "rationale": "Root-zone depletion approaching RAW with 7.4 mm/day ETc and no forecast precipitation."
+        }
+      }
+    },
+    {
+      "id": "get-weather",
+      "tag": "water",
+      "method": "GET",
+      "path": "/weather",
+      "summary": "Get weather",
+      "description": "Returns recent and forecast weather for a coordinate, used by AGRO-AI's water models.",
+      "params": [
+        { "in": "query", "name": "lat", "type": "number", "required": true, "description": "Latitude in decimal degrees." },
+        { "in": "query", "name": "lon", "type": "number", "required": true, "description": "Longitude in decimal degrees." }
+      ],
+      "response": {
+        "status": 200,
+        "example": {
+          "object": "weather",
+          "lat": 36.331,
+          "lon": -119.292,
+          "current": { "temp_c": 34.2, "humidity": 0.28, "wind_mps": 3.1 },
+          "forecast": [
+            { "date": "2026-07-21", "et0_mm": 7.8, "precip_mm": 0.0 }
+          ]
+        }
+      }
+    },
+    {
+      "id": "create-webhook",
+      "tag": "webhooks",
+      "method": "POST",
+      "path": "/webhooks",
+      "summary": "Create a webhook endpoint",
+      "description": "Registers a URL to receive event notifications. AGRO-AI signs every delivery.",
+      "body": {
+        "example": {
+          "url": "https://example.com/agroai/webhooks",
+          "events": ["irrigation.recommendation.created", "field.updated"]
+        },
+        "fields": [
+          { "name": "url", "type": "string (https)", "required": true, "description": "HTTPS endpoint that receives POST deliveries." },
+          { "name": "events", "type": "string[]", "required": true, "description": "Event types to subscribe to." }
+        ]
+      },
+      "response": {
+        "status": 201,
+        "example": {
+          "id": "whk_8Ttz1Le9",
+          "object": "webhook_endpoint",
+          "url": "https://example.com/agroai/webhooks",
+          "events": ["irrigation.recommendation.created", "field.updated"],
+          "signing_secret": "whsec_masked_shown_once",
+          "created": 1752710400
+        }
+      }
+    }
+  ]
+}

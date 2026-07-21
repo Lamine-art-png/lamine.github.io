@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" role="img" aria-label="AGRO-AI">
+  <defs>
+    <linearGradient id="agLeaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#3d6b3e"/>
+      <stop offset="1" stop-color="#234224"/>
+    </linearGradient>
+  </defs>
+  <rect x="1" y="1" width="46" height="46" rx="12" fill="url(#agLeaf)"/>
+  <path d="M24 9c-7 3.4-11 9.2-11 15.7 0 4.2 1.8 7.9 4.7 10.3l2-2.6c-2.2-1.9-3.6-4.6-3.6-7.7 0-4.7 2.6-8.9 7.9-11.6z" fill="#bbde75"/>
+  <path d="M24 9c7 3.4 11 9.2 11 15.7 0 6.7-4.6 12.2-11 14.3V9z" fill="#7ea80f"/>
+  <circle cx="24" cy="24" r="2.6" fill="#eab308"/>
+</svg>
