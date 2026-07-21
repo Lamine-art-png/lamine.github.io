@@ -4,5 +4,6 @@ compatibility_date = "2026-07-21"
 workers_dev = false
 
 routes = [
+  { pattern = "agroai-pilot.com/news", zone_name = "agroai-pilot.com" },
   { pattern = "agroai-pilot.com/news/introducing-agro-ai-field-intelligence*", zone_name = "agroai-pilot.com" }
 ]
