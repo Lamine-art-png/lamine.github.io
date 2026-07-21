@@ -6,6 +6,7 @@ on:
     paths:
       - "platform-api/**"
       - "functions/platform-api/**"
+      - "figma-enterprise-v4/src/app/components/PlatformApplicationGate.tsx"
       - "figma-enterprise-v4/src/app/components/PlatformConsole.tsx"
       - "figma-enterprise-v4/src/app/components/PlatformSafetyNotice.tsx"
       - "figma-enterprise-v4/src/app/routes.tsx"
@@ -14,16 +15,17 @@ on:
       - "agroai_api/app/api/v1/platform_playground.py"
       - "agroai_api/app/api/v1/__init__.py"
       - "agroai_api/tests/unit/test_platform_playground.py"
+      - "agroai_api/tests/unit/test_platform_api_product.py"
       - "wrangler.toml"
       - "cloudflare/edge-gateway/src/index.ts"
       - "cloudflare/edge-gateway/tests/gateway.test.ts"
       - ".github/workflows/platform-api-experience-ci.yml"
   push:
-    branches:
-      - "feat/api-platform-experience-v2"
+    branches: ["feat/api-platform-experience-v2"]
     paths:
       - "platform-api/**"
       - "functions/platform-api/**"
+      - "figma-enterprise-v4/src/app/components/PlatformApplicationGate.tsx"
       - "figma-enterprise-v4/src/app/components/PlatformConsole.tsx"
       - "figma-enterprise-v4/src/app/components/PlatformSafetyNotice.tsx"
       - "figma-enterprise-v4/src/app/routes.tsx"
@@ -32,6 +34,7 @@ on:
       - "agroai_api/app/api/v1/platform_playground.py"
       - "agroai_api/app/api/v1/__init__.py"
       - "agroai_api/tests/unit/test_platform_playground.py"
+      - "agroai_api/tests/unit/test_platform_api_product.py"
       - "wrangler.toml"
       - "cloudflare/edge-gateway/src/index.ts"
       - "cloudflare/edge-gateway/tests/gateway.test.ts"
@@ -61,9 +64,7 @@ jobs:
           python-version: "3.11"
       - name: Structural, accessibility, link, truthfulness and localization checks
         run: python3 platform-api/tests/validate_platform.py
-      # OpenAPI regeneration imports the complete backend dependency graph and is
-      # owned by the dedicated Platform API Contract CI workflow. Do not duplicate
-      # a partial dependency-free invocation here.
+      # The dependency-complete Platform API Contract CI owns OpenAPI regeneration.
 
   authenticated-console:
     name: Authenticated console build and browser-secret boundary
@@ -79,7 +80,7 @@ jobs:
           cache: npm
           cache-dependency-path: figma-enterprise-v4/package-lock.json
       - run: npm ci --no-audit --no-fund
-      - name: Platform console architecture contract
+      - name: Platform product architecture contract
         run: node tests/platform-api-console-contract.mjs
       - name: Portal localization preservation
         run: npm run test:i18n
@@ -90,8 +91,8 @@ jobs:
           VITE_API_BASE_URL: https://api.agroai-pilot.com
         run: npm run build
 
-  server-mediated-playground:
-    name: Playground tenant isolation and test-only safety
+  application-and-playground:
+    name: Application review boundary and keyless Playground
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -104,10 +105,15 @@ jobs:
       - run: python -m pip install -q -r requirements.txt pytest
       - name: Compile changed backend modules
         run: python -m compileall -q app/api/v1/platform_playground.py app/api/v1/__init__.py
-      - name: Execute Playground safety suite
+      - name: Execute focused safety suites
         env:
           PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
-        run: python -m pytest -p no:debugging -q --tb=short tests/unit/test_platform_playground.py
+        run: >-
+          python -m pytest -p no:debugging -q --tb=short
+          tests/unit/test_platform_playground.py
+          tests/unit/test_platform_api_product.py::test_application_submit_review_enrollment_email_dedupe_and_audit
+          tests/unit/test_platform_api_product.py::test_application_isolation_and_spam_limit
+          tests/unit/test_platform_api_product.py::test_live_access_is_review_gated_and_never_auto_approved
 
   cloudflare-routing:
     name: Fail-closed Platform API Pages and edge routing
@@ -133,7 +139,7 @@ jobs:
           ]
           for item in required:
               assert item in source, item
-          assert 'url.pathname = "/platform-api/index.html"' not in source, "catch-all landing rewrite returned"
+          assert 'url.pathname = "/platform-api/index.html"' not in source
           assert "mapping.asset" in source
           print("Cloudflare Platform API Pages route contract passed")
           PY
