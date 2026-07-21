@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const authSource = readFileSync(new URL("../src/app/components/AuthScreen.tsx", import.meta.url), "utf8");
+const verificationSource = readFileSync(new URL("../src/app/components/VerifyEmail.tsx", import.meta.url), "utf8");
 const consoleSource = readFileSync(new URL("../src/app/components/PlatformConsole.tsx", import.meta.url), "utf8");
 const applicationSource = readFileSync(new URL("../src/app/components/PlatformApplicationGate.tsx", import.meta.url), "utf8");
 const safetySource = readFileSync(new URL("../src/app/components/PlatformSafetyNotice.tsx", import.meta.url), "utf8");
@@ -26,6 +27,15 @@ assert.ok(authSource.includes("Build on AGRO-AI."), "the standalone hostname mus
 assert.ok(authSource.includes("Platform API enrollment remains a separate reviewed step after sign-in."), "account verification and API enrollment must remain distinct");
 assert.ok(authSource.includes("It does not approve Platform API enrollment, issue API keys, enable live providers, activate billing, or authorize physical actions."), "registration must deny implied API activation");
 assert.ok(authSource.includes("AGRO-AI Enterprise Portal"), "the shared auth implementation must preserve Enterprise Portal identity");
+
+assert.ok(verificationSource.includes('query.get("product") === "platform_api"'), "verification may recognize only the fixed Platform product marker");
+assert.ok(verificationSource.includes("confirmVerification(token)"), "verification must adopt the authenticated session through the shared auth provider");
+assert.ok(verificationSource.includes('platformFlow ? (platformHostname ? "/" : "/platform") : "/"'), "Platform verification must return to a fixed first-party product path");
+assert.ok(verificationSource.includes("window.history.replaceState"), "the single-use verification token must be removed from browser history");
+assert.ok(!verificationSource.includes("return_to"), "verification must not support a caller-controlled return URL");
+assert.ok(!verificationSource.includes("redirect_uri"), "verification must not support a caller-controlled redirect URI");
+assert.ok(!verificationSource.includes("window.location.search).get(\"next\")"), "verification must not accept an arbitrary next target");
+assert.ok(verificationSource.includes("Platform API enrollment"), "the verification UI must preserve the separate enrollment boundary");
 
 assert.ok(applicationSource.includes('apiClient.get("/v1/platform/applications")'), "application status must come from the existing backend");
 assert.ok(applicationSource.includes('apiClient.post("/v1/platform/applications"'), "applications must use the reviewed backend contract");
@@ -57,4 +67,4 @@ assert.ok(safetySource.includes("Physical execution disabled"), "physical-action
 assert.ok(safetySource.includes("Automatic live approval disabled"), "automatic live approval must remain visibly disabled");
 assert.ok(safetySource.includes("Test data isolated"), "test-data isolation must remain visibly stated");
 
-console.log(`Platform API product contract passed: ${requiredRoutes.length} console routes, host-specific auth, reviewed application gate, keyless Playground, and visible controlled-launch boundaries.`);
+console.log(`Platform API product contract passed: ${requiredRoutes.length} console routes, host-specific auth, redirect-safe verification, reviewed application gate, keyless Playground, and visible controlled-launch boundaries.`);
