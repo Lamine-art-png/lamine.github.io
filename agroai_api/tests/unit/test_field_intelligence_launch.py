@@ -6,6 +6,7 @@ from __future__ import annotations
 import base64
 import json
 import os
+from pathlib import Path
 
 import pytest
 
@@ -29,11 +30,40 @@ def _set_state(monkeypatch, value):
     monkeypatch.setattr("app.core.config.settings.FIELD_INTELLIGENCE_RELEASE_STATE", value)
 
 
+def _auth_headers_for_existing_user(db, email: str):
+    from app.core.security import create_access_token
+    from app.models.saas import OrganizationMembership, User
+
+    user = db.query(User).filter(User.email == email).one()
+    membership = db.query(OrganizationMembership).filter(OrganizationMembership.user_id == user.id).one()
+    token = create_access_token({
+        "sub": user.id,
+        "tenant_id": membership.organization_id,
+        "org_id": membership.organization_id,
+        "role": membership.role,
+    })
+    return {"Authorization": f"Bearer {token}"}
+
+
 def test_default_state_is_disabled_in_production(monkeypatch, db):
     monkeypatch.setattr("app.core.config.settings.APP_ENV", "production")
+    monkeypatch.setattr("app.core.config.settings.PLATFORM_ADMIN_EMAILS", "")
+    monkeypatch.setattr("app.core.config.settings.INTERNAL_FULL_ACCESS_EMAILS", "")
     _set_state(monkeypatch, "")
     assert rollout.configured_release_state() == "disabled"
     assert rollout.effective_release_state(db) == "disabled"
+
+
+def test_configured_platform_admin_organization_gets_internal_launch(client, db, monkeypatch):
+    _auth(db)
+    monkeypatch.setattr("app.core.config.settings.APP_ENV", "production")
+    monkeypatch.setattr("app.core.config.settings.PLATFORM_ADMIN_EMAILS", "fi@example.com")
+    monkeypatch.setattr("app.core.config.settings.INTERNAL_FULL_ACCESS_EMAILS", "")
+    _set_state(monkeypatch, "")
+    headers = _auth_headers_for_existing_user(db, "fi@example.com")
+    assert rollout.configured_release_state() == "internal"
+    result = _initiate(client, headers, client_capture_id="internal-live", idempotency_key="internal-live")
+    assert result.status_code == 200, result.text
 
 
 def test_default_state_is_general_in_development(monkeypatch, db):
@@ -472,6 +502,53 @@ def test_cloudflare_workers_ai_readiness_requires_official_matching_endpoint(mon
         FIELD_TRANSCRIPTION_MODEL="@cf/openai/whisper-large-v3-turbo",
     )
     assert "field_intelligence.transcription_endpoint_invalid" in codes
+
+
+
+def test_cloudflare_workers_ai_production_edge_fallback(monkeypatch):
+    monkeypatch.setattr("app.core.config.settings.APP_ENV", "production")
+    monkeypatch.setattr("app.core.config.settings.API_URL", "https://api.agroai-pilot.com")
+    monkeypatch.setattr("app.core.config.settings.FIELD_TRANSCRIPTION_PROVIDER", "")
+    monkeypatch.setattr("app.core.config.settings.FIELD_TRANSCRIPTION_ENDPOINT", "")
+    monkeypatch.setattr("app.core.config.settings.FIELD_TRANSCRIPTION_API_KEY", "")
+    monkeypatch.setattr("app.core.config.settings.FIELD_TRANSCRIPTION_MODEL", "")
+    monkeypatch.setattr("app.core.config.settings.CLOUDFLARE_QUEUE_CONSUMER_TOKEN", "edge-consumer-secret")
+    provider = get_transcription_provider()
+    assert provider.name == "cloudflare_workers_ai"
+    assert provider.available() is True
+    assert provider.uses_internal_edge() is True
+    assert provider._resolved_endpoint() == "https://api.agroai-pilot.com/v1/internal/edge/field-transcription"
+    assert provider._resolved_api_key() == "edge-consumer-secret"
+
+
+def test_internal_launch_readiness_accepts_protected_edge_transcription(monkeypatch):
+    codes = _readiness_codes(
+        monkeypatch,
+        APP_ENV="production",
+        FIELD_INTELLIGENCE_RELEASE_STATE="",
+        PLATFORM_ADMIN_EMAILS="fi@example.com",
+        INTERNAL_FULL_ACCESS_EMAILS="",
+        FIELD_TRANSCRIPTION_PROVIDER="",
+        FIELD_TRANSCRIPTION_ENDPOINT="",
+        FIELD_TRANSCRIPTION_API_KEY="",
+        FIELD_TRANSCRIPTION_MODEL="",
+        API_URL="https://api.agroai-pilot.com",
+        CLOUDFLARE_QUEUE_CONSUMER_TOKEN="edge-consumer-secret",
+        CONNECTOR_OBJECT_STORAGE_BACKEND="r2",
+        CONNECTOR_OBJECT_BUCKET="agroai-connector-objects-prod",
+    )
+    assert "field_intelligence.transcription_provider_missing" not in codes
+    assert "field_intelligence.transcription_credentials_missing" not in codes
+    assert "field_intelligence.transcription_endpoint_invalid" not in codes
+
+
+def test_portal_allows_first_party_field_capture_devices():
+    headers_path = Path(__file__).resolve().parents[3] / "figma-enterprise-v4" / "public" / "_headers"
+    headers = headers_path.read_text(encoding="utf-8")
+    assert "microphone=(self)" in headers
+    assert "geolocation=(self)" in headers
+    assert "microphone=()" not in headers
+    assert "geolocation=()" not in headers
 
 
 # --------------------------------------------------------------------------- #

@@ -278,11 +278,35 @@ class CloudflareWorkersAITranscriptionProvider:
     name = "cloudflare_workers_ai"
     default_model = "@cf/openai/whisper-large-v3-turbo"
 
+    @staticmethod
+    def _internal_edge_endpoint() -> str:
+        api_url = str(getattr(settings, "API_URL", "") or "").strip().rstrip("/")
+        return f"{api_url}/v1/internal/edge/field-transcription" if api_url else ""
+
+    @staticmethod
+    def _resolved_endpoint() -> str:
+        explicit = str(getattr(settings, "FIELD_TRANSCRIPTION_ENDPOINT", "") or "").strip()
+        if explicit:
+            return explicit
+        if str(getattr(settings, "CLOUDFLARE_QUEUE_CONSUMER_TOKEN", "") or "").strip():
+            return CloudflareWorkersAITranscriptionProvider._internal_edge_endpoint()
+        return ""
+
+    @staticmethod
+    def _resolved_api_key() -> str:
+        explicit = str(getattr(settings, "FIELD_TRANSCRIPTION_API_KEY", "") or "").strip()
+        if explicit:
+            return explicit
+        return str(getattr(settings, "CLOUDFLARE_QUEUE_CONSUMER_TOKEN", "") or "").strip()
+
+    @classmethod
+    def uses_internal_edge(cls, endpoint: str | None = None) -> bool:
+        candidate = (endpoint or cls._resolved_endpoint()).rstrip("/")
+        internal = cls._internal_edge_endpoint().rstrip("/")
+        return bool(candidate and internal and candidate == internal)
+
     def available(self) -> bool:
-        return bool(
-            str(getattr(settings, "FIELD_TRANSCRIPTION_ENDPOINT", "") or "").strip()
-            and str(getattr(settings, "FIELD_TRANSCRIPTION_API_KEY", "") or "").strip()
-        )
+        return bool(self._resolved_endpoint() and self._resolved_api_key())
 
     @classmethod
     def endpoint_valid(cls, endpoint: str, model: str) -> bool:
@@ -291,17 +315,26 @@ class CloudflareWorkersAITranscriptionProvider:
         except ValueError:
             return False
         normalized_model = (model or cls.default_model).strip()
-        expected_suffix = f"/ai/run/{normalized_model}"
         path = (parsed.path or "").rstrip("/")
-        return bool(
+        clean_https = bool(
             parsed.scheme == "https"
-            and (parsed.hostname or "").lower() == "api.cloudflare.com"
             and parsed.username is None
             and parsed.password is None
             and not parsed.query
             and not parsed.fragment
-            and path.startswith("/client/v4/accounts/")
-            and path.endswith(expected_suffix)
+        )
+        if not clean_https:
+            return False
+        if (parsed.hostname or "").lower() == "api.cloudflare.com":
+            return bool(
+                path.startswith("/client/v4/accounts/")
+                and path.endswith(f"/ai/run/{normalized_model}")
+            )
+        internal = urlparse(cls._internal_edge_endpoint())
+        return bool(
+            normalized_model == cls.default_model
+            and parsed.netloc.lower() == internal.netloc.lower()
+            and path == (internal.path or "").rstrip("/")
         )
 
     @staticmethod
@@ -328,8 +361,8 @@ class CloudflareWorkersAITranscriptionProvider:
         if bound is not None:
             return bound
 
-        endpoint = str(settings.FIELD_TRANSCRIPTION_ENDPOINT).strip()
-        api_key = str(settings.FIELD_TRANSCRIPTION_API_KEY).strip()
+        endpoint = self._resolved_endpoint()
+        api_key = self._resolved_api_key()
         model = (
             str(getattr(settings, "FIELD_TRANSCRIPTION_MODEL", "") or "").strip()
             or self.default_model
@@ -354,6 +387,8 @@ class CloudflareWorkersAITranscriptionProvider:
         }
         if language:
             request_payload["language"] = language
+        if self.uses_internal_edge(endpoint):
+            request_payload["model"] = model
 
         try:
             import httpx
@@ -461,7 +496,11 @@ class CloudflareWorkersAITranscriptionProvider:
                 "word_count": word_count,
                 "segment_count": len(segments) if isinstance(segments, list) else None,
                 "vtt_available": bool(result_payload.get("vtt")),
-                "transport": "cloudflare_workers_ai_json_base64",
+                "transport": (
+                    "agroai_edge_workers_ai_json_base64"
+                    if self.uses_internal_edge(endpoint)
+                    else "cloudflare_workers_ai_json_base64"
+                ),
             }
             return TranscriptionResult(
                 provider=self.name,
@@ -597,6 +636,11 @@ def reset_fake_retry_state() -> None:
 def get_transcription_provider() -> TranscriptionProvider:
     """Resolve the configured provider without importing provider SDKs eagerly."""
     mode = str(getattr(settings, "FIELD_TRANSCRIPTION_PROVIDER", "") or "").strip().lower()
+    if not mode:
+        environment = str(getattr(settings, "APP_ENV", "development") or "development").strip().lower()
+        cloudflare = CloudflareWorkersAITranscriptionProvider()
+        if environment in {"production", "staging"} and cloudflare.available() and cloudflare.uses_internal_edge():
+            return cloudflare
     if mode in {"fake", "test"}:
         return FakeTranscriptionProvider()
     if mode in {"fake_fail", "test_fail"}:
