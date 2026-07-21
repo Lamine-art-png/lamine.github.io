@@ -6,6 +6,11 @@ on:
     paths:
       - scripts/adapt_field_transcription_cloudflare.py
       - .github/workflows/field-intelligence-cloudflare-transcription-adapter.yml
+  pull_request:
+    branches: [feature/field-intelligence-launch]
+    paths:
+      - scripts/adapt_field_transcription_cloudflare.py
+      - .github/workflows/field-intelligence-cloudflare-transcription-adapter.yml
 
 permissions:
   contents: write
