@@ -37,8 +37,9 @@ assert.ok(consoleSource.includes("portal_session_synthetic") || consoleSource.in
 assert.ok(!consoleSource.includes('type="password"'), "Platform console must not render an API-key/password input");
 assert.ok(!consoleSource.includes("sessionStorage"), "Platform console must not persist credentials in sessionStorage");
 assert.ok(!consoleSource.includes("localStorage"), "Platform console must not directly persist credentials in localStorage");
-assert.ok(!consoleSource.includes("agro_test_"), "Platform console must not hardcode a real-looking secret");
-assert.ok(!consoleSource.includes("agro_live_"), "Platform console must not hardcode a real-looking secret");
+assert.ok(!/agro_(?:test|live)_[A-Za-z0-9_-]{16,}/.test(consoleSource), "Platform console must not contain a complete hardcoded API credential");
+assert.ok(!/Authorization:\s*Bearer\s+agro_(?:test|live)_/i.test(consoleSource), "Platform console must not embed a concrete API credential in an Authorization header");
+assert.ok(consoleSource.includes("agro_test_") && consoleSource.includes("agro_live_"), "documentation may truthfully name the reviewed key prefixes");
 
 for (const capability of [
   "apiClient.platformDeveloper.projects()",
