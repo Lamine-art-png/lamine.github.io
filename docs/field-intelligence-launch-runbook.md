@@ -1,144 +1,161 @@
 # Field Intelligence — Production Launch Runbook
 
 Authoritative procedure for taking Field Intelligence from merged code to a
-controlled production activation. **Nothing here activates automatically.**
+controlled production activation.
 
 ## Release states
 
 | State | Who can use Field Intelligence |
 |---|---|
-| `disabled` | Nobody (default in production until explicit approval) |
-| `internal` | Organizations in `FIELD_INTERNAL_ORGANIZATION_IDS` or with an `internal` rollout override |
+| `disabled` | Nobody |
+| `internal` | Configured AGRO-AI internal/platform-admin operator organizations and explicit internal cohorts |
 | `canary` | Internal + `FIELD_CANARY_ORGANIZATION_IDS` / `canary` rollout overrides |
 | `general` | Everyone — **only** when exact-SHA release alignment holds |
 
 Controls, in precedence order:
+
 1. **Emergency kill switch** — `POST /v1/field-intelligence/admin/kill-switch`
-   (platform admin; audited via `security_audit_events`; immediate; pauses
-   processing but deletion/orphan-cleanup keep running).
+   (platform admin; audited; immediate; pauses processing while deletion and
+   orphan cleanup continue).
 2. **DB release override** — `POST /v1/field-intelligence/admin/release-override`
    (platform admin; audited).
 3. **Deployment config** — `FIELD_INTELLIGENCE_RELEASE_STATE`.
 
-An unset release state means `disabled` in production/staging. A routine plan
-or entitlement update can never grant `general`: per-organization
-`field_intelligence.rollout` overrides may only be `internal` or `canary`.
+An unset release state remains fail-closed in production unless the server
+already has a configured `PLATFORM_ADMIN_EMAILS` or
+`INTERNAL_FULL_ACCESS_EMAILS` allowlist. In that case the effective default is
+`internal`, and only organizations containing one of those server-authorized
+operators are admitted. No browser claim, JWT role, plan update, or hardcoded
+organization identifier can select that cohort. Ordinary customer
+organizations remain locked.
 
-## Environment contract (production)
+A routine plan or entitlement update can never grant `general`:
+per-organization `field_intelligence.rollout` overrides may only be `internal`
+or `canary`.
 
-Required when the release state is not `disabled` (validated by
-`evaluate_production_readiness` and surfaced as blockers):
+## Environment contract
 
-- `CONNECTOR_OBJECT_STORAGE_BACKEND=r2|s3|s3_compatible`, `CONNECTOR_OBJECT_BUCKET`,
-  `CONNECTOR_OBJECT_ENDPOINT_URL` (https), R2 credentials
-- A real transcription provider plus `FIELD_TRANSCRIPTION_ENDPOINT`,
-  `FIELD_TRANSCRIPTION_API_KEY`, and `FIELD_TRANSCRIPTION_MODEL`; fakes are
-  readiness blockers in production. Supported production adapters:
-  - `cloudflare_workers_ai`: Base64 JSON to the official account-scoped
-    `https://api.cloudflare.com/client/v4/accounts/<account-id>/ai/run/<model>`
-    endpoint. The endpoint host, account path, and model suffix are validated
-    before the token can leave the process. Recommended staging model:
-    `@cf/openai/whisper-large-v3-turbo`.
-  - `openai_whisper`: multipart OpenAI-compatible `/audio/transcriptions` API.
-  - `http`: provider-neutral raw-audio adapter for an explicitly reviewed endpoint.
-- `ffmpeg`/`ffprobe` on PATH (baked into both API images)
-- For `general`: `FIELD_RELEASE_PORTAL_SHA` and `FIELD_RELEASE_EDGE_SHA`
-  reported by the deploy pipeline
+Required whenever Field Intelligence is active:
 
-Cloudflare Workers AI requests contain the authorized durable audio bytes only;
-they never contain R2 credentials, object keys, user tokens, or unrelated
-workspace content. When no language hint is supplied, the model auto-detects it.
+- durable R2/S3-compatible storage and scoped credentials;
+- `ffmpeg`/`ffprobe` on the API image;
+- a real transcription path;
+- at least one live SHA-bearing Field Intelligence worker;
+- PostgreSQL at repository Alembic head `027_field_intelligence_launch`.
 
-Tuning (safe defaults exist): `FIELD_ASSET_MAX_BYTES`, `FIELD_AUDIO_MAX_SECONDS`,
-`FIELD_SYNC_MAX_BATCH`, `FIELD_SYNC_MAX_BODY_BYTES`,
-`FIELD_STORAGE_RESERVATION_TTL_SECONDS`, `FIELD_PENDING_OBJECT_GRACE_SECONDS`,
-`FIELD_RECONCILER_INTERVAL_SECONDS`, `FIELD_TRANSCRIPTION_TIMEOUT_SECONDS`,
-`FIELD_TRANSCRIPTION_MAX_BYTES`, `FIELD_DELETION_RETENTION_DAYS`,
-`FIELD_WORKER_*`, `FIELD_STALE_JOB_ALERT_SECONDS`.
+### Voice transcription
+
+Two production-safe Cloudflare Workers AI paths are supported:
+
+1. **Direct account endpoint** — explicit `FIELD_TRANSCRIPTION_ENDPOINT`,
+   `FIELD_TRANSCRIPTION_API_KEY`, and model. The backend accepts only the
+   official account-scoped HTTPS `ai/run` URL matching the model.
+2. **Protected AGRO-AI edge bridge** — when explicit transcription settings are
+   absent in production/staging, the backend uses
+   `CLOUDFLARE_QUEUE_CONSUMER_TOKEN` to call
+   `https://api.agroai-pilot.com/v1/internal/edge/field-transcription`. The API
+   edge validates that shared server credential, bounds and validates Base64
+   audio, permits only `@cf/openai/whisper-large-v3-turbo`, invokes its existing
+   Workers AI binding, and returns a no-store response. The browser never sees
+   the credential and the edge never logs audio or transcript content.
+
+Cloudflare Workers AI requests contain authorized durable audio bytes only;
+they never contain R2 credentials, object keys, customer access tokens, or
+unrelated workspace content.
+
+For later `general` activation, `FIELD_RELEASE_PORTAL_SHA` and
+`FIELD_RELEASE_EDGE_SHA` must be reported by the deployment pipeline so API,
+worker, portal, edge, and database alignment can be proven.
+
+## Browser capture contract
+
+The enterprise portal must send a first-party device policy:
+
+```text
+Permissions-Policy: camera=(self), microphone=(self), geolocation=(self), payment=(), usb=()
+```
+
+Disabling microphone or geolocation at the document policy makes otherwise
+correct `getUserMedia` and geolocation calls fail before the browser can prompt
+the user. CI verifies that the production `_headers` file permits these
+first-party capabilities while retaining all unrelated restrictions.
 
 ## Worker topology
 
-Run at least one dedicated worker per persistent environment:
+The application starts the Field Intelligence worker when
+`FIELD_INTELLIGENCE_WORKER_ENABLED=true`. It records exact-SHA heartbeats in
+`field_worker_heartbeats`, uses fenced job leases and PostgreSQL advisory locks,
+and is safe against duplicate claims.
+
+The initial internal release may use the in-process worker on the existing API
+service. Before broad/general activation or horizontal API scaling, deploy a
+dedicated persistent worker and set `FIELD_INTELLIGENCE_WORKER_ENABLED=false`
+on API replicas:
 
 ```bash
 python -m scripts.run_field_intelligence_worker --liveness-file /tmp/fi-worker-alive
 ```
 
-- Graceful SIGTERM/SIGINT (finishes the tick in flight).
-- SHA-bearing heartbeats in `field_worker_heartbeats`; instances and queue
-  depth visible at `GET /v1/field-intelligence/admin/workers`.
-- Multi-instance safe (job leases + PostgreSQL advisory locks).
-- Set `FIELD_INTELLIGENCE_WORKER_ENABLED=false` on API replicas when the
-  dedicated worker is deployed, so drains never depend on HTTP traffic.
-
-The disposable zero-payment Render staging proof is an explicit exception: it
-uses `FIELD_INTELLIGENCE_WORKER_ENABLED=true` in one free API service because
-Render has no free background-worker instance. That topology is acceptable only
-for the bounded smoke test; the process sleeps with the free web service and is
-not a production topology.
+The disposable zero-payment Render staging proof also uses one in-process
+worker because Render has no free background-worker instance.
 
 ## Database rollout
 
 ```bash
 export DATABASE_URL=postgresql://…
-python scripts/field_intelligence_migration.py preflight   # no writes
-python scripts/field_intelligence_migration.py upgrade     # advisory-locked
-python scripts/field_intelligence_migration.py verify      # tables/FKs/indexes/uniques/lineage
-# Rollback (removes ONLY the launch-control revision):
+python scripts/field_intelligence_migration.py preflight
+python scripts/field_intelligence_migration.py upgrade
+python scripts/field_intelligence_migration.py verify
+# Rollback removes only the launch-control revision:
 python scripts/field_intelligence_migration.py downgrade
 python scripts/field_intelligence_migration.py verify-rollback
 ```
 
-Chain proven in CI and locally: `026_platform_api_operations` →
-`027_field_intelligence_launch` → `026_platform_api_operations` →
-`027_field_intelligence_launch`. The one-revision rollback preserves the Field
-Intelligence foundation plus every Platform API, verification, suspension and
-appeal table/column.
+CI proves:
 
-## Activation procedure
+`026_platform_api_operations → 027_field_intelligence_launch → 026_platform_api_operations → 027_field_intelligence_launch`
 
-1. Deploy API + dedicated worker + portal + edge from ONE commit; the deploy
-   pipeline exports `GIT_SHA`, `FIELD_RELEASE_PORTAL_SHA`, `FIELD_RELEASE_EDGE_SHA`.
-2. Run migration `preflight` → `upgrade` → `verify`.
-3. Confirm readiness: `evaluate_production_readiness` has no
-   `field_intelligence.*` blockers; `GET /v1/field-intelligence/admin/rollout`
-   shows `release_alignment.aligned: true`.
-4. Set `FIELD_INTELLIGENCE_RELEASE_STATE=internal`; verify internal orgs only.
-5. Run the manually-gated canary smoke as a canary-org user:
-   `FIELD_SMOKE_BASE_URL=… FIELD_SMOKE_TOKEN=… python scripts/field_intelligence_canary_smoke.py`
-   (20 steps; any failure aborts activation).
-6. Move to `canary`; watch the dashboards below for at least one business day.
-7. `general` only with explicit approval; the server refuses `general`
-   while release alignment fails.
+The one-revision rollback preserves the Field Intelligence foundation and every
+Platform API, verification, suspension, and appeal table/column.
+
+## Internal production release procedure
+
+1. Merge the exact green Field Intelligence PR into `main`.
+2. The production backend auto-deploys the exact main SHA and runs Alembic under
+   the migration lock.
+3. The release workflow waits for exact backend SHA, current schema, durable
+   object storage, Queue transport, and production readiness before changing
+   public traffic.
+4. Deploy the API edge and existing Workers AI binding from that same SHA.
+5. Build and deploy `figma-enterprise-v4` to Cloudflare Pages project
+   `agroai-portal` with that same SHA.
+6. Verify `app.agroai-pilot.com`, public edge health, API health, microphone and
+   location access, typed capture, voice capture, upload, processing, timeline,
+   map, media retrieval, task creation, and deletion.
+7. Keep effective state `internal`; ordinary customers remain locked.
+8. Use the emergency kill switch immediately if object durability, tenant
+   isolation, processing, or deletion evidence fails.
+
+`general` remains a separate explicit decision and is never implied by this
+internal production release.
 
 ## Observability
 
-Prometheus: `agroai_field_*` series (captures, upload bytes/latency, media
+Prometheus `agroai_field_*` series cover captures, upload bytes/latency, media
 rejections, quota refusals, queue depth, stale jobs/leases, stage latency,
 processing outcomes/retries, sync batches, deletions, reconciliation, rollout
-decisions by cohort, `agroai_field_emergency_disable`). Labels never contain
-tenant identifiers, transcripts, object paths or secrets; structured events
-(`agroai.field_intelligence.events`) are centrally redacted.
+cohorts, and emergency disable. Labels and structured events never contain
+tenant identifiers, transcripts, object paths, credentials, or customer media.
 
-## Rollback conditions
+## Rollback
 
-Trigger the kill switch first (immediate, audited), then diagnose:
-- sustained processing failure rate, queue depth growth, or stale leases;
-- object-storage durability or deletion failures;
-- any cross-tenant access finding (sev-1: kill switch + incident process);
-- release misalignment after a partial deploy.
+Trigger the kill switch first, then diagnose:
 
-Schema rollback (`downgrade` + `verify-rollback`) is a last resort and removes
-launch-control state; export Field Intelligence data first when contractually
-required before any broader destructive rollback.
+- sustained processing failure or queue growth;
+- object-storage durability or deletion failure;
+- any cross-tenant access finding;
+- partial release or SHA misalignment.
 
-## External human-only steps
-
-- Provision R2 bucket + scoped credentials; set the env contract in the
-  deployment platform (never in the repository).
-- Provision the transcription-provider token directly in the deployment
-  secret store. For Cloudflare Workers AI, use a token scoped to Workers AI
-  Read/Edit in the intended Cloudflare account; never reuse an R2 S3 key.
-- The `lamine-github-io` Cloudflare Pages project build fails on main today;
-  fix or explicitly isolate it in the Cloudflare dashboard before public
-  activation (it is not driven from this repository).
+The production workflow records immutable edge and portal evidence. Schema
+rollback is a last resort and removes launch-control state; preserve required
+Field Intelligence data before any destructive rollback.
