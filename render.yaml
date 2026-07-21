@@ -27,7 +27,7 @@ services:
       - key: APP_ENV
         value: staging
       - key: GIT_SHA
-        value: 345bc3b89b1cbf8f6f540a29d325e9d1be8476d4
+        value: 1034dcb47ef37ecaf7be3fef515500779c575f66
       - key: APP_URL
         value: https://agroai-field-intelligence-staging.pages.dev
       - key: DATABASE_URL
