@@ -14,8 +14,7 @@ COPY agroai_api/ /app/agroai_api/
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app:/app/agroai_api
 
 EXPOSE 8000
-CMD ["uvicorn", "agroai_api.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-
+CMD ["/bin/sh", "/app/agroai_api/start-production.sh"]
