@@ -3,16 +3,19 @@
 Server-side release states — never frontend gates:
 
 * ``disabled``  — nobody can use Field Intelligence.
-* ``internal``  — only internal-cohort organizations.
+* ``internal``  — only internal-cohort organizations and configured AGRO-AI
+  internal/platform-admin operators.
 * ``canary``    — internal + canary-allowlisted organizations.
 * ``general``   — all authorized organizations (subject to entitlements), and
   only when the exact-SHA release alignment holds.
 
 The *default* state comes from deployment configuration
-(``FIELD_INTELLIGENCE_RELEASE_STATE``); an unset value means **disabled** in
-production/staging and ``general`` in development/test so local work and the
-existing suites keep functioning. Two database-resident runtime flags provide
-audited, redeploy-free control:
+(``FIELD_INTELLIGENCE_RELEASE_STATE``). An unset value remains fail-closed in
+production/staging unless an explicit internal operator email list is already
+configured, in which case the default is ``internal``. This allows the existing
+AGRO-AI operations account to use a newly shipped feature without silently
+opening it to customers. Two database-resident runtime flags provide audited,
+redeploy-free control:
 
 * the emergency kill switch (always wins, immediately);
 * an explicit release-state override (platform-admin only, audited).
@@ -42,16 +45,22 @@ RELEASE_STATES = ("disabled", "internal", "canary", "general")
 KILL_SWITCH_FLAG = "field_intelligence.kill_switch"
 RELEASE_OVERRIDE_FLAG = "field_intelligence.release_state_override"
 ROLLOUT_FEATURE_KEY = "field_intelligence.rollout"
-# Cohorts an entitlement override may grant. "general" is deliberately absent:
-# broad activation can only come from deployment config or the audited
-# platform-admin override — never from a routine plan/entitlement update.
 _OVERRIDE_COHORTS = {"internal", "canary"}
-
 _PRODUCTION_ENVS = {"production", "staging"}
 
 
 def _csv(value: str | None) -> set[str]:
     return {item.strip() for item in str(value or "").split(",") if item.strip()}
+
+
+def _configured_internal_operator_emails() -> set[str]:
+    return {
+        item.lower()
+        for item in (
+            _csv(getattr(settings, "PLATFORM_ADMIN_EMAILS", ""))
+            | _csv(getattr(settings, "INTERNAL_FULL_ACCESS_EMAILS", ""))
+        )
+    }
 
 
 def configured_release_state() -> str:
@@ -62,7 +71,13 @@ def configured_release_state() -> str:
         logger.warning("Unknown FIELD_INTELLIGENCE_RELEASE_STATE %r; treating as disabled", raw)
         return "disabled"
     env = str(getattr(settings, "APP_ENV", "development") or "").strip().lower()
-    return "disabled" if env in _PRODUCTION_ENVS else "general"
+    if env in _PRODUCTION_ENVS:
+        return "internal" if _configured_internal_operator_emails() else "disabled"
+    return "general"
+
+
+def internal_operator_email(email: str | None) -> bool:
+    return str(email or "").strip().lower() in _configured_internal_operator_emails()
 
 
 def _flag(db: Session, key: str) -> dict | None:
@@ -87,20 +102,11 @@ def release_state_override(db: Session) -> str | None:
 
 
 def effective_release_state(db: Session) -> str:
-    """Resolve the authoritative release state.
-
-    Precedence: kill switch (always ``disabled``) > audited DB override >
-    deployment configuration. ``general`` additionally requires the exact-SHA
-    release alignment to hold — a mismatched release degrades to ``canary``
-    and is logged, never silently broadened.
-    """
     if kill_switch_active(db):
         return "disabled"
     state = release_state_override(db) or configured_release_state()
     env = str(getattr(settings, "APP_ENV", "development") or "").strip().lower()
     if state == "general" and env in _PRODUCTION_ENVS:
-        # Development/test databases are created outside Alembic and cannot
-        # prove alignment; the exact-SHA guard binds where it matters.
         from app.services.field_release_proof import release_alignment
 
         alignment = release_alignment(db)
@@ -129,7 +135,6 @@ def _override_cohort(db: Session, organization_id: str) -> str | None:
 
 
 def organization_cohort(db: Session, organization: Organization | None) -> str:
-    """Classify the organization for rollout purposes (independent of state)."""
     if organization is None:
         return "none"
     org_id = str(organization.id)
@@ -144,11 +149,20 @@ def organization_cohort(db: Session, organization: Organization | None) -> str:
 
 
 def field_intelligence_access(
-    db: Session, organization: Organization | None
+    db: Session,
+    organization: Organization | None,
+    *,
+    user_email: str | None = None,
 ) -> tuple[bool, str, str]:
-    """Return ``(allowed, effective_state, cohort)`` for this organization."""
+    """Return ``(allowed, effective_state, cohort)`` for this request.
+
+    Configured AGRO-AI internal/platform-admin emails are treated as internal
+    operators without modifying the customer organization's commercial cohort.
+    """
     state = effective_release_state(db)
     cohort = organization_cohort(db, organization)
+    if internal_operator_email(user_email):
+        cohort = "internal"
     if state == "disabled":
         return False, state, cohort
     if state == "internal":
@@ -174,7 +188,6 @@ def _audit_rollout_change(
 
 
 def set_kill_switch(db: Session, *, active: bool, actor_user_id: str | None, reason: str | None = None) -> dict:
-    """Flip the emergency kill switch (platform-admin only at the route layer)."""
     row = db.get(FieldRuntimeFlag, KILL_SWITCH_FLAG)
     value = {"active": bool(active), "reason": (reason or "")[:500]}
     if row is None:
@@ -202,7 +215,6 @@ def set_kill_switch(db: Session, *, active: bool, actor_user_id: str | None, rea
 def set_release_override(
     db: Session, *, state: str | None, actor_user_id: str | None, reason: str | None = None
 ) -> dict:
-    """Set or clear the audited release-state override."""
     if state is not None:
         state = str(state).strip().lower()
         if state not in RELEASE_STATES:
@@ -230,7 +242,6 @@ def set_release_override(
 
 
 def rollout_status(db: Session) -> dict:
-    """Operational status for admin surfaces (no secrets, no org listing)."""
     from app.services.field_release_proof import release_alignment
 
     return {
