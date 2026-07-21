@@ -1,7 +1,9 @@
 const ARTICLE_PATH = "/news/introducing-agro-ai-field-intelligence";
 const COVER_PATH = `${ARTICLE_PATH}/cover.webp`;
 const ARTICLE_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/introducing-agro-ai-field-intelligence/index.html";
-const YOUTUBE_COVER = "https://img.youtube.com/vi/IMLVblFeW3s/maxresdefault.jpg";
+const CURRENT_VIDEO_ID = "GiM6WZY0HG0";
+const OBSOLETE_VIDEO_ID = "IMLVblFeW3s";
+const YOUTUBE_COVER = `https://img.youtube.com/vi/${CURRENT_VIDEO_ID}/maxresdefault.jpg`;
 
 function articleHeaders(): Headers {
   const headers = new Headers();
@@ -29,7 +31,7 @@ async function articleResponse(request: Request): Promise<Response> {
       headers: articleHeaders(),
     });
   }
-  const html = await upstream.text();
+  const html = (await upstream.text()).replaceAll(OBSOLETE_VIDEO_ID, CURRENT_VIDEO_ID);
   return new Response(request.method === "HEAD" ? null : html, { status: 200, headers: articleHeaders() });
 }
 
