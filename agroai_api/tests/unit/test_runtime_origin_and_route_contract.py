@@ -1,7 +1,35 @@
 from collections import Counter
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
+from starlette.requests import Request
+
+from app.api.v1.auth import _verification_product_surface
+from app.core.config import settings
 from app.main import _origin_allowed, app
+from app.services.email_verification import verification_url
+
+
+def _auth_request(*, origin: str | None = None, referer: str | None = None) -> Request:
+    headers: list[tuple[bytes, bytes]] = []
+    if origin is not None:
+        headers.append((b"origin", origin.encode("utf-8")))
+    if referer is not None:
+        headers.append((b"referer", referer.encode("utf-8")))
+    return Request(
+        {
+            "type": "http",
+            "http_version": "1.1",
+            "method": "POST",
+            "scheme": "https",
+            "path": "/v1/auth/register",
+            "raw_path": b"/v1/auth/register",
+            "query_string": b"",
+            "headers": headers,
+            "client": ("127.0.0.1", 12345),
+            "server": ("api.agroai-pilot.com", 443),
+        }
+    )
 
 
 def test_runtime_cors_fallback_uses_exact_pages_origin_policy():
@@ -66,6 +94,42 @@ def test_platform_custom_domain_smoke_is_explicitly_gated_and_recorded():
     assert "Build on AGRO-AI." in deploy
     assert "Permanent API keys never enter browser JavaScript." in deploy
     assert 'echo "platform_custom_domain_enabled=${PLATFORM_CUSTOM_DOMAIN_ENABLED}"' in deploy
+
+
+def test_platform_verification_release_contract_uses_only_first_party_surfaces(monkeypatch):
+    assert (
+        _verification_product_surface(
+            _auth_request(origin="https://platform.agroai-pilot.com")
+        )
+        == "platform_api"
+    )
+    assert (
+        _verification_product_surface(
+            _auth_request(
+                origin="https://app.agroai-pilot.com",
+                referer="https://app.agroai-pilot.com/platform/projects",
+            )
+        )
+        == "platform_api"
+    )
+    assert (
+        _verification_product_surface(
+            _auth_request(origin="https://platform.agroai-pilot.com.evil.test")
+        )
+        == "enterprise_portal"
+    )
+
+    monkeypatch.setattr(settings, "RESEND_APP_URL", "https://app.agroai-pilot.com")
+    parsed = urlsplit(verification_url("release-proof-token", product_surface="platform_api"))
+    query = parse_qs(parsed.query)
+    assert parsed.scheme == "https"
+    assert parsed.netloc == "app.agroai-pilot.com"
+    assert parsed.path == "/verify-email"
+    assert query == {
+        "token": ["release-proof-token"],
+        "product": ["platform_api"],
+    }
+    assert not ({"return", "redirect", "redirect_uri", "next"} & set(query))
 
 
 def test_operation_production_proof_accepts_only_deployed_descendants_in_current_history():
