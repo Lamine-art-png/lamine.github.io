@@ -2,12 +2,13 @@
   "api": "agroai-field-intelligence-staging-api",
   "api_plan": "free",
   "auto_deploy_disabled": true,
-  "contract": "field-intelligence-render-free-blueprint-contract-v2",
+  "contract": "field-intelligence-render-free-blueprint-contract-v3",
   "database": "agroai-field-intelligence-staging-db",
   "database_plan": "free",
   "secret_values_in_source": false,
   "status": "passed",
-  "tested_sha": "9854a3084c6223bd7ddab5e0d182c3ba363e1790",
-  "transcription_provider": "groq-free-tier",
+  "tested_sha": "345bc3b89b1cbf8f6f540a29d325e9d1be8476d4",
+  "transcription_model": "@cf/openai/whisper-large-v3-turbo",
+  "transcription_provider": "cloudflare-workers-ai-free-tier",
   "worker_mode": "in_process"
 }
