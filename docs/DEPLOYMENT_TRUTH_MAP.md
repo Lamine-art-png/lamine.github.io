@@ -10,8 +10,9 @@ must be updated whenever routing or runtime ownership changes.
 
 Runtime: Cloudflare Pages.
 
-The marketing site is independent from the authenticated enterprise portal and
-API release pipeline.
+The marketing site is independent from the authenticated products and API
+release pipeline. Its Platform API landing page and documentation live under
+`/platform-api` and remain guarded by server-side Pages Function flags.
 
 ## B. Enterprise Portal
 
@@ -23,6 +24,10 @@ Authoritative source application:
 
 `figma-enterprise-v4/`
 
+The Enterprise Portal is the agricultural operating room: operations, Field
+Intelligence, evidence, recommendations, reports, integrations, billing,
+account security, and platform administration.
+
 Production builds set:
 
 `VITE_API_BASE_URL=https://api.agroai-pilot.com`
@@ -30,19 +35,71 @@ Production builds set:
 The browser must use the custom API domain. It must not learn or hardcode the
 private upstream runtime origin.
 
+## B2. Authenticated Platform API Product
+
+Primary hostname:
+
+`platform.agroai-pilot.com`
+
+Controlled compatibility path:
+
+`app.agroai-pilot.com/platform/*`
+
+Runtime: the same reviewed Cloudflare Pages build as the Enterprise Portal,
+selected by an exact host-aware router.
+
+Authoritative source:
+
+- `figma-enterprise-v4/src/app/components/PlatformApplicationGate.tsx`
+- `figma-enterprise-v4/src/app/components/PlatformConsole.tsx`
+- `figma-enterprise-v4/src/app/components/PlatformSafetyNotice.tsx`
+- `figma-enterprise-v4/src/app/routes.tsx`
+
+The standalone product reuses the existing AGRO-AI authentication,
+organization verification, session, localization, API client, and Platform API
+control-plane routes. It does not create a second authentication system or a
+second API backend.
+
+Product states:
+
+1. signed-out users receive the secure AGRO-AI account flow with Platform-specific copy;
+2. verified but unenrolled organizations receive the private-beta application;
+3. submitted applications remain locked and expose a review timeline only;
+4. approved active test enrollments expose the developer control plane;
+5. live access remains a separate reviewed request;
+6. physical irrigation execution remains separately disabled.
+
+Application submission creates a review record only. It cannot create a
+project, issue a key, activate billing, accept draft legal documents, enable a
+provider, grant live access, or authorize a physical action.
+
+The standalone Pages custom domain must be attached and reviewed in Cloudflare
+before it is advertised. Repository readiness is not proof that the custom
+domain is already active. Detailed topology and activation boundaries are in
+`docs/platform-api-product-topology.md`.
+
 ## C. API Edge
 
+Machine API:
+
 `api.agroai-pilot.com/v1/*`
+
+Same-origin authenticated product routes:
+
+- `app.agroai-pilot.com/v1/*`
+- `platform.agroai-pilot.com/v1/*`
 
 Runtime: Cloudflare Worker `agroai-api-edge`.
 
 Authoritative source:
 
-`cloudflare/edge-gateway/src/index.ts`
+- `cloudflare/edge-gateway/src/index.ts`
+- `cloudflare/edge-gateway/src/edge-main-v3.ts`
+- `wrangler.toml`
 
 Responsibilities:
 
-- exact browser-origin policy;
+- exact browser-origin policy, including Portal and Platform product origins;
 - bounded trusted request IDs and security response headers;
 - removal of spoofable internal forwarding headers;
 - fail-closed upstream configuration;
@@ -150,46 +207,69 @@ Authoritative backend source:
 
 `agroai_api/`
 
-Authoritative Portal source for the gated developer control plane:
-
-`figma-enterprise-v4/`
-
 Namespace:
 
 `/v1/platform/*`
 
-Initial rollout state:
+Public product surfaces:
 
-- `PLATFORM_API_ENABLED=false`
-- `PLATFORM_API_DEVELOPER_CONTROL_PLANE_ENABLED=false`
-- `PLATFORM_API_LIVE_PROJECTS_ENABLED=false`
-- `PLATFORM_API_WEBHOOK_DELIVERY_ENABLED=false`
-- `EARTHDAILY_ADAPTER_ENABLED=false`
-- `VALLEY_IRRIGATION_ADAPTER_ENABLED=false`
-- `VALLEY_IRRIGATION_WRITE_CAPABILITY_ENABLED=false`
+- marketing and docs: `agroai-pilot.com/platform-api`
+- authenticated application: `platform.agroai-pilot.com`
+- machine API: `api.agroai-pilot.com/v1/platform/*`
 
-Production requirements before external partner traffic:
+The initial private-beta configuration may enable:
+
+- `PLATFORM_API_ENABLED`
+- `PLATFORM_API_DEVELOPER_CONTROL_PLANE_ENABLED`
+- `PLATFORM_API_TEST_PROJECTS_ENABLED`
+- `PLATFORM_API_APPLICATIONS_ENABLED`
+- `PLATFORM_API_PRIVATE_BETA_ENABLED`
+- `PLATFORM_API_PARTNER_PROGRAM_ENABLED`
+- `PLATFORM_API_SUPPORT_ENABLED`
+
+The following remain disabled until their separate launch gates are satisfied:
+
+- `PLATFORM_API_SELF_SERVICE_SANDBOX_ENABLED`
+- `PLATFORM_API_LIVE_PROJECTS_ENABLED`
+- `PLATFORM_API_LIVE_ACCESS_REQUESTS_ENABLED`
+- `PLATFORM_API_BILLING_ENABLED`
+- `PLATFORM_API_STRIPE_CHECKOUT_ENABLED`
+- `PLATFORM_API_STRIPE_METER_EXPORT_ENABLED`
+- `PLATFORM_API_PRICING_ENABLED`
+- `PLATFORM_API_SDK_DOWNLOADS_ENABLED`
+- `PLATFORM_API_WEBHOOK_DELIVERY_ENABLED`
+- `PLATFORM_API_TERMS_ENFORCEMENT_ENABLED`
+- `PLATFORM_API_LIVE_AUTO_APPROVAL_ENABLED`
+- `EARTHDAILY_ADAPTER_ENABLED`
+- `VALLEY_IRRIGATION_ADAPTER_ENABLED`
+- `VALLEY_IRRIGATION_WRITE_CAPABILITY_ENABLED`
+
+Production requirements before external developer traffic:
 
 - `PLATFORM_API_KEY_PEPPER` configured outside the database;
 - `PLATFORM_API_RATE_LIMIT_BACKEND=redis`;
 - `PLATFORM_API_REDIS_URL` or durable `REDIS_URL` configured;
-- public OpenAPI explicitly enabled only when the curated route manifest is
-  reviewed;
-- developer control plane enabled only by the explicit
-  `PLATFORM_API_DEVELOPER_CONTROL_PLANE_ENABLED` flag and then limited to
-  organization owners/admins. Platform-admin status does not bypass this gate.
+- fail-open rate limiting disabled;
+- matching edge-to-origin authentication secrets configured;
+- public OpenAPI explicitly enabled only when the curated route manifest is reviewed;
+- developer control plane limited to approved organization owners/admins with an active enrollment;
+- exact production build, schema, Queue, object-storage, vault, rate-limit, and readiness proof.
 
-`EDGE_ORIGIN_AUTH_TOKEN` is activation-gated rather than an unconditional
-Worker deployment prerequisite. When absent, the Worker still removes
-caller-supplied edge identity headers and forwards no authoritative client IP;
-CIDR-bound Platform API keys therefore fail closed. Production readiness
-requires the matching `PLATFORM_API_EDGE_AUTH_SECRET` before
-`PLATFORM_API_ENABLED=true`.
+The authenticated Playground is portal-session mediated and test-only.
+Permanent API keys do not enter browser JavaScript. It operates on deterministic
+synthetic data, records an audit event, consumes no production credits, and
+cannot access live providers or physical actions.
+
+`EDGE_ORIGIN_AUTH_TOKEN` is activation-gated rather than an unconditional Worker
+deployment prerequisite. When absent, the Worker still removes caller-supplied
+edge identity headers and forwards no authoritative client IP; CIDR-bound
+Platform API keys therefore fail closed. Production readiness requires the
+matching `PLATFORM_API_EDGE_AUTH_SECRET` before `PLATFORM_API_ENABLED=true`.
 
 EarthDaily and Valley Irrigation are not live from this foundation. They remain
 integration-readiness adapters with status `awaiting_partner_contract` until
-official documentation, credentials, sandbox proof, provider calls, and
-activation approval exist. Valley physical command execution is disabled.
+official documentation, credentials, sandbox proof, provider calls, contracts,
+and activation approval exist. Valley physical command execution is disabled.
 
 ## G. Release Pipeline
 
@@ -199,22 +279,26 @@ Authoritative workflow:
 
 On `main` release it:
 
-1. validates the enterprise portal;
-2. installs the edge from the committed npm lockfile;
-3. typechecks and tests the edge gateway;
-4. validates the Wrangler deployment bundle against required-secret declarations;
-5. compiles the backend and runs focused Queue, outbox, lease, object-storage, route, and readiness tests;
-6. fails closed if required production release values are absent;
-7. verifies current upstream health;
-8. waits for the exact backend Git SHA, exact Alembic schema, Queue configuration, reachable durable object storage, and full production-readiness contract;
-9. stores the upstream release-contract evidence artifact;
-10. ensures the primary and dead-letter queues exist idempotently;
-11. deploys Worker code and exact Queue secrets together from a mode-0600 temporary secrets file;
-12. smoke-tests edge health, upstream-through-edge health, and the authenticated exact release contract;
-13. builds the exact enterprise portal against the custom API domain;
-14. deploys the portal to Pages;
-15. smoke-tests the production portal;
-16. stores immutable release evidence keyed by Git SHA.
+1. validates the Enterprise Portal and authenticated Platform product build;
+2. validates localization and product-route preservation;
+3. installs the edge from the committed npm lockfile;
+4. typechecks and tests the edge gateway and exact origin policy;
+5. validates the Wrangler deployment bundle against required-secret declarations;
+6. compiles the backend and runs focused Queue, outbox, lease, object-storage, Platform, route, and readiness tests;
+7. fails closed if required production release values are absent;
+8. verifies current upstream health;
+9. waits for the exact backend Git SHA, exact Alembic schema, Queue configuration, reachable durable object storage, and full production-readiness contract;
+10. stores the upstream release-contract evidence artifact;
+11. ensures the primary and dead-letter queues exist idempotently;
+12. deploys Worker code and exact Queue secrets together from a mode-0600 temporary secrets file;
+13. smoke-tests edge health, upstream-through-edge health, and the authenticated exact release contract;
+14. builds the exact Pages application against the custom API domain;
+15. deploys the Pages build;
+16. smoke-tests `app.agroai-pilot.com`;
+17. when the standalone custom domain is configured, smoke-tests `platform.agroai-pilot.com` and its `/v1/*` Worker route;
+18. stores immutable release evidence keyed by Git SHA.
+
+A successful build or branch preview is not proof of production activation.
 
 The edge dependency graph is committed in
 `cloudflare/edge-gateway/package-lock.json`; CI and release paths must use
@@ -236,49 +320,26 @@ evidence.
 
 ## I. Safety Rules
 
-- Do not route the Worker upstream back to `api.agroai-pilot.com`; recursion is
-  rejected in code.
-- Do not expose queue tokens to browser bundles.
+- Do not route the Worker upstream back to `api.agroai-pilot.com`; recursion is rejected in code.
+- Do not expose queue tokens or permanent Platform API keys to browser bundles.
+- Do not duplicate authentication or Platform API persistence for the standalone product.
+- Do not let an application submission create a project, key, live enrollment, billing subscription, provider connection, or physical action.
 - Do not enable the in-process API scheduler in production.
-- Do not configure durable object storage without a durable task queue, or vice
-  versa; upload routes fail closed on a split-brain configuration.
-- Do not register a second customer `/v1/evidence/upload-stream` implementation;
-  the hardened secure route is authoritative.
+- Do not configure durable object storage without a durable task queue, or vice versa; upload routes fail closed on a split-brain configuration.
+- Do not register a second customer `/v1/evidence/upload-stream` implementation; the hardened secure route is authoritative.
 - Do not bypass Alembic schema ownership.
-- Do not acknowledge Queue messages when consumer custody or upstream processing
-  cannot be proven.
-- Do not claim a deployment succeeded until the release workflow and production
-  smoke checks succeed for the exact Git SHA.
+- Do not acknowledge Queue messages when consumer custody or upstream processing cannot be proven.
+- Do not claim EarthDaily, Valley, public billing, live projects, or physical writes are active while their flags remain disabled.
+- Do not claim a deployment succeeded until the release workflow and production smoke checks succeed for the exact Git SHA.
 
-## J. Platform API product surfaces (disabled)
+## J. Platform API Public Surfaces
 
 The authoritative public marketing source is the root Cloudflare Pages project.
-`/platform-api` and `/developers` are static assets guarded by Pages Functions
-using server-side `PLATFORM_API_MARKETING_ENABLED` and
-`PLATFORM_API_PUBLIC_DOCS_ENABLED`. Both default false, return 404 with
-`noindex` while disabled, and are not present in navigation or sitemap.
+`/platform-api` and its documentation/reference assets are guarded by Pages
+Functions using server-side `PLATFORM_API_MARKETING_ENABLED` and
+`PLATFORM_API_PUBLIC_DOCS_ENABLED`.
 
-The customer developer console remains inside `figma-enterprise-v4` at
-`/developers/api`. Its navigation is granted only after the backend confirms
-the developer-control-plane flag, approved organization, active owner/admin
-membership, and active enrollment. Platform administrators use the separate
-`/admin/platform-api` route.
-
-API billing extends the existing backend but does not reinterpret Enterprise
-Portal subscriptions. Stripe configuration is server-only and all API billing,
-Checkout, meter export, pricing, Tax, support, status, applications, partner,
-self-service, and live-access flags default false.
-
-## K. Field Intelligence staging (isolated)
-
-Field Intelligence staging is an entirely separate topology deployed only by
-`.github/workflows/field-intelligence-staging.yml` through the protected
-`field-intelligence-staging` environment. It must never target
-`app.agroai-pilot.com`, `api.agroai-pilot.com`, `api-preview.agroai-pilot.com`,
-the production Render service, production database, production R2 bucket, or
-production Pages project. The launch migration is
-`027_field_intelligence_launch` after `026_platform_api_operations`; staging
-rollback proof is `027 → 026 → 027`, preserving the Field Intelligence
-foundation and every Platform API program, commerce, and operations table.
-The release state remains `internal` until a separately approved canary action.
-See `docs/field-intelligence-staging-runbook.md`.
+Disabled or unknown routes return a genuine 404 with `noindex`; they do not
+collapse into the landing page. Public documentation is generated from the
+curated Platform API OpenAPI contract and must not invent endpoints, pricing,
+provider readiness, certifications, uptime, latency, or live-access availability.
