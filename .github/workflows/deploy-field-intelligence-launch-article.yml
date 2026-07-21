@@ -1,0 +1,92 @@
+name: Deploy Field Intelligence Launch Article
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "client/public/news/introducing-agro-ai-field-intelligence/**"
+      - "cloudflare/field-intelligence-launch-worker/**"
+      - ".github/workflows/deploy-field-intelligence-launch-article.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: field-intelligence-launch-article-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy and prove live launch article
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      ARTICLE_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence
+      COVER_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence/cover.webp
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail closed on missing Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+
+      - name: Validate launch source and commercial copy
+        shell: bash
+        run: |
+          set -euo pipefail
+          article="client/public/news/introducing-agro-ai-field-intelligence/index.html"
+          worker="cloudflare/field-intelligence-launch-worker/src/index.ts"
+          test -s "$article"
+          test -s "$worker"
+          grep -F "From field evidence to enterprise action" "$article" >/dev/null
+          grep -F 'CURRENT_VIDEO_ID = "GiM6WZY0HG0"' "$worker" >/dev/null
+          grep -F "3840" "$article" >/dev/null
+          grep -F "Field Intelligence record is one saved field observation" "$article" >/dev/null
+          grep -F '<td class="quota">2</td>' "$article" >/dev/null
+          grep -F '<td class="quota">100</td>' "$article" >/dev/null
+          grep -F '<td class="quota">500</td>' "$article" >/dev/null
+          grep -F '<td class="quota">2,500</td>' "$article" >/dev/null
+          grep -F "does not guarantee a specific yield increase" "$article" >/dev/null
+
+      - name: Validate Worker bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 deploy --dry-run --config cloudflare/field-intelligence-launch-worker/wrangler.toml
+
+      - name: Deploy narrow production route
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 deploy --config cloudflare/field-intelligence-launch-worker/wrangler.toml
+
+      - name: Prove live article, video, cover and access matrix
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 36); do
+            article_status="$(curl -sS -L -o article.html -w '%{http_code}' --max-time 25 "${ARTICLE_URL}" || true)"
+            cover_status="$(curl -sS -L -D cover.headers -o cover.bin -w '%{http_code}' --max-time 25 "${COVER_URL}" || true)"
+            if [ "$article_status" = "200" ] && [ "$cover_status" = "200" ] && \
+               grep -F "Introducing AGRO-AI Field Intelligence" article.html >/dev/null && \
+               grep -F "GiM6WZY0HG0" article.html >/dev/null && \
+               ! grep -F "IMLVblFeW3s" article.html >/dev/null && \
+               grep -F '<td class="quota">2</td>' article.html >/dev/null && \
+               grep -F '<td class="quota">2,500</td>' article.html >/dev/null && \
+               grep -Fi "x-agroai-cover-target: 3840x2160" cover.headers >/dev/null && \
+               test "$(wc -c < cover.bin)" -gt 50000; then
+              echo "article_url=${ARTICLE_URL}"
+              echo "cover_url=${COVER_URL}"
+              echo "field_intelligence_launch_article=verified_live"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Field Intelligence launch article did not become healthy"
+          exit 1
