@@ -2,11 +2,13 @@ import type { ComponentType } from "react";
 import { createBrowserRouter, Navigate } from "react-router";
 import { MainLayout } from "./components/MainLayout";
 import { OperationRouteBoundary } from "./components/OperationRouteBoundary";
+import { PlatformApplicationGate } from "./components/PlatformApplicationGate";
 import { PlatformConsoleApp } from "./components/PlatformConsole";
 import { PlatformSafetyNotice } from "./components/PlatformSafetyNotice";
 import { RouteRecovery } from "./components/RouteRecovery";
 import { VerifyEmailPage } from "./components/VerifyEmail";
 import { AccessAppealPage } from "./components/AccessAppeal";
+import { useAuth } from "./auth/AuthProvider";
 import { useLocale } from "./hooks/useLocale";
 
 function PortalHome() {
@@ -25,6 +27,8 @@ function PortalRouteError() {
 }
 
 function PlatformProduct() {
+  const { platformDeveloper } = useAuth();
+  if (!platformDeveloper) return <PlatformApplicationGate />;
   return <><PlatformConsoleApp /><PlatformSafetyNotice /></>;
 }
 
