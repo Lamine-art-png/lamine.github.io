@@ -21,7 +21,10 @@ from app.db.base import SessionLocal
 from app.models.field_intelligence import FieldWorkerHeartbeat
 from app.models.operational_records import IngestionJob
 from app.services import field_intelligence as svc
+from app.services.field_intelligence_vision_extension import install_field_vision_extension
 from app.services.release_contract import runtime_build_sha
+
+install_field_vision_extension(svc)
 
 logger = logging.getLogger(__name__)
 
