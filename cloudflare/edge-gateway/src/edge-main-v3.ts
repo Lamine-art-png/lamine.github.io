@@ -8,6 +8,12 @@ const FIELD_TRANSCRIPTION_PATH = "/v1/internal/edge/field-transcription";
 const FIELD_TRANSCRIPTION_MODEL = "@cf/openai/whisper-large-v3-turbo";
 const FIELD_TRANSCRIPTION_MAX_BYTES = 25 * 1024 * 1024;
 const FIELD_TRANSCRIPTION_MAX_BASE64 = Math.ceil(FIELD_TRANSCRIPTION_MAX_BYTES / 3) * 4 + 4;
+const FIELD_VISION_PATH = "/v1/internal/edge/field-vision";
+const FIELD_VISION_MODEL = "@cf/llava-hf/llava-1.5-7b-hf";
+const FIELD_VISION_MAX_BYTES = 8 * 1024 * 1024;
+const FIELD_VISION_MAX_BASE64 = Math.ceil(FIELD_VISION_MAX_BYTES / 3) * 4 + 4;
+const FIELD_VISION_MAX_PROMPT = 6000;
+const SAFE_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const SAFE_LANGUAGE = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/;
 
 async function baseFetch<Host, Cf>(request: Request<Host, Cf>, env: I18nFastpathEnv): Promise<Response> {
@@ -30,12 +36,19 @@ function json(payload: unknown, status = 200): Response {
   });
 }
 
-function validBase64Audio(value: unknown): value is string {
-  if (typeof value !== "string" || value.length < 4 || value.length > FIELD_TRANSCRIPTION_MAX_BASE64) return false;
+function validBase64(value: unknown, maxBase64: number, maxBytes: number): value is string {
+  if (typeof value !== "string" || value.length < 4 || value.length > maxBase64) return false;
   if (value.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(value)) return false;
   const padding = value.endsWith("==") ? 2 : value.endsWith("=") ? 1 : 0;
   const decodedBytes = (value.length * 3) / 4 - padding;
-  return decodedBytes > 0 && decodedBytes <= FIELD_TRANSCRIPTION_MAX_BYTES;
+  return decodedBytes > 0 && decodedBytes <= maxBytes;
+}
+
+function decodeBase64(value: string): Uint8Array {
+  const binary = atob(value);
+  const bytes = new Uint8Array(binary.length);
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+  return bytes;
 }
 
 export async function handleFieldTranscription(request: Request, env: I18nFastpathEnv): Promise<Response> {
@@ -60,7 +73,7 @@ export async function handleFieldTranscription(request: Request, env: I18nFastpa
   if (model !== FIELD_TRANSCRIPTION_MODEL) {
     return json({ success: false, error: "unsupported_model" }, 400);
   }
-  if (!validBase64Audio(payload.audio)) {
+  if (!validBase64(payload.audio, FIELD_TRANSCRIPTION_MAX_BASE64, FIELD_TRANSCRIPTION_MAX_BYTES)) {
     return json({ success: false, error: "invalid_audio" }, 400);
   }
   const language = typeof payload.language === "string" && SAFE_LANGUAGE.test(payload.language)
@@ -75,6 +88,45 @@ export async function handleFieldTranscription(request: Request, env: I18nFastpa
       condition_on_previous_text: false,
       ...(language ? { language } : {}),
     });
+    return json({ success: true, result });
+  } catch {
+    return json({ success: false, error: "workers_ai_unavailable" }, 502);
+  }
+}
+
+export async function handleFieldVision(request: Request, env: I18nFastpathEnv): Promise<Response> {
+  if (!matchesConfiguredToken(bearerToken(request), env.QUEUE_CONSUMER_TOKEN)) {
+    return json({ success: false, error: "unauthorized" }, 401);
+  }
+  const declared = Number(request.headers.get("content-length") || 0);
+  if (Number.isFinite(declared) && declared > FIELD_VISION_MAX_BASE64 + FIELD_VISION_MAX_PROMPT + 4096) {
+    return json({ success: false, error: "image_too_large" }, 413);
+  }
+
+  let payload: Record<string, unknown>;
+  try {
+    const candidate = await request.json();
+    if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) throw new Error("invalid");
+    payload = candidate as Record<string, unknown>;
+  } catch {
+    return json({ success: false, error: "invalid_json" }, 400);
+  }
+
+  const model = String(payload.model || FIELD_VISION_MODEL).trim();
+  const contentType = String(payload.content_type || "").toLowerCase().split(";")[0].trim();
+  const prompt = typeof payload.prompt === "string" ? payload.prompt.trim() : "";
+  if (model !== FIELD_VISION_MODEL) return json({ success: false, error: "unsupported_model" }, 400);
+  if (!SAFE_IMAGE_TYPES.has(contentType)) return json({ success: false, error: "unsupported_image_type" }, 400);
+  if (!validBase64(payload.image, FIELD_VISION_MAX_BASE64, FIELD_VISION_MAX_BYTES)) {
+    return json({ success: false, error: "invalid_image" }, 400);
+  }
+  if (!prompt || prompt.length > FIELD_VISION_MAX_PROMPT) {
+    return json({ success: false, error: "invalid_prompt" }, 400);
+  }
+
+  try {
+    const image = Array.from(decodeBase64(payload.image));
+    const result = await env.AI.run(FIELD_VISION_MODEL, { image, prompt, max_tokens: 900 });
     return json({ success: true, result });
   } catch {
     return json({ success: false, error: "workers_ai_unavailable" }, 502);
@@ -107,8 +159,10 @@ export default {
   async fetch(request: Request, env: I18nFastpathEnv): Promise<Response> {
     const pathname = new URL(request.url).pathname;
     if (request.method === "POST" && pathname === FIELD_TRANSCRIPTION_PATH) {
-      const response = await handleFieldTranscription(request, env);
-      return mergeFastpathHeaders(response, request, env);
+      return mergeFastpathHeaders(await handleFieldTranscription(request, env), request, env);
+    }
+    if (request.method === "POST" && pathname === FIELD_VISION_PATH) {
+      return mergeFastpathHeaders(await handleFieldVision(request, env), request, env);
     }
     if (request.method === "POST" && translationPaths.has(pathname)) {
       const response = await handleI18nFastpath(request, env, baseFetch);
