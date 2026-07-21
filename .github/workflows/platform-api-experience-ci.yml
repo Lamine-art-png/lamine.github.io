@@ -6,6 +6,10 @@ on:
     paths:
       - "platform-api/**"
       - "functions/platform-api/**"
+      - "docs/platform-api-product-topology.md"
+      - "shared/ui-literals.en.*.json"
+      - "figma-enterprise-v4/scripts/check_ui_literal_inventory.py"
+      - "figma-enterprise-v4/src/app/components/AuthScreen.tsx"
       - "figma-enterprise-v4/src/app/components/PlatformApplicationGate.tsx"
       - "figma-enterprise-v4/src/app/components/PlatformConsole.tsx"
       - "figma-enterprise-v4/src/app/components/PlatformSafetyNotice.tsx"
@@ -25,6 +29,10 @@ on:
     paths:
       - "platform-api/**"
       - "functions/platform-api/**"
+      - "docs/platform-api-product-topology.md"
+      - "shared/ui-literals.en.*.json"
+      - "figma-enterprise-v4/scripts/check_ui_literal_inventory.py"
+      - "figma-enterprise-v4/src/app/components/AuthScreen.tsx"
       - "figma-enterprise-v4/src/app/components/PlatformApplicationGate.tsx"
       - "figma-enterprise-v4/src/app/components/PlatformConsole.tsx"
       - "figma-enterprise-v4/src/app/components/PlatformSafetyNotice.tsx"
