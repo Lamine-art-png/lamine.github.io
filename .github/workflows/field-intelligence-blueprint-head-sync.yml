@@ -6,6 +6,11 @@ on:
     paths:
       - scripts/update_field_intelligence_blueprint_head.py
       - .github/workflows/field-intelligence-blueprint-head-sync.yml
+  pull_request:
+    branches: [feature/field-intelligence-launch]
+    paths:
+      - scripts/update_field_intelligence_blueprint_head.py
+      - .github/workflows/field-intelligence-blueprint-head-sync.yml
 
 permissions:
   contents: write
