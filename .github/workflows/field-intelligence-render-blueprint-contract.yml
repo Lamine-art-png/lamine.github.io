@@ -30,9 +30,15 @@ jobs:
           python3 - <<'PY'
           import json
           from pathlib import Path
+          from urllib.parse import urlparse
           import yaml
 
-          expected_sha = "9854a3084c6223bd7ddab5e0d182c3ba363e1790"
+          expected_sha = "345bc3b89b1cbf8f6f540a29d325e9d1be8476d4"
+          expected_model = "@cf/openai/whisper-large-v3-turbo"
+          expected_endpoint = (
+              "https://api.cloudflare.com/client/v4/accounts/"
+              "e2fe627bff2d8e7b2b10bf078956acfe/ai/run/" + expected_model
+          )
           raw = Path("render.yaml").read_text(encoding="utf-8")
           data = yaml.safe_load(raw)
           services = data.get("services") or []
@@ -63,8 +69,12 @@ jobs:
           assert api_env["FIELD_INTELLIGENCE_WORKER_ENABLED"].get("value") == "true"
           assert api_env["CONNECTOR_OBJECT_BUCKET"].get("value") == "agroai-field-intelligence-staging"
           assert api_env["CONNECTOR_OBJECT_PREFIX"].get("value") == "staging/field-intelligence"
-          assert api_env["FIELD_TRANSCRIPTION_ENDPOINT"].get("value") == "https://api.groq.com/openai/v1/audio/transcriptions"
-          assert api_env["FIELD_TRANSCRIPTION_MODEL"].get("value") == "whisper-large-v3-turbo"
+          assert api_env["FIELD_TRANSCRIPTION_PROVIDER"].get("value") == "cloudflare_workers_ai"
+          assert api_env["FIELD_TRANSCRIPTION_ENDPOINT"].get("value") == expected_endpoint
+          assert api_env["FIELD_TRANSCRIPTION_MODEL"].get("value") == expected_model
+          parsed = urlparse(expected_endpoint)
+          assert parsed.scheme == "https" and parsed.hostname == "api.cloudflare.com"
+          assert parsed.path.endswith(f"/ai/run/{expected_model}")
           for secret_name in (
               "CLOUDFLARE_R2_ACCESS_KEY_ID",
               "CLOUDFLARE_R2_SECRET_ACCESS_KEY",
@@ -78,17 +88,19 @@ jobs:
               "app.agroai-pilot.com",
               "agroai-connector-objects-prod",
               "api.openai.com/v1/audio/transcriptions",
+              "api.groq.com/openai/v1/audio/transcriptions",
               "gpt-4o-mini-transcribe",
               "plan: starter",
               "plan: basic-256mb",
               "type: worker",
               "sk-",
+              "gsk_",
               "postgresql://",
               "render.com/deploy/",
           )
           assert not any(fragment in raw for fragment in forbidden_fragments)
           report = {
-              "contract": "field-intelligence-render-free-blueprint-contract-v2",
+              "contract": "field-intelligence-render-free-blueprint-contract-v3",
               "status": "passed",
               "api": api["name"],
               "worker_mode": "in_process",
@@ -96,7 +108,8 @@ jobs:
               "tested_sha": expected_sha,
               "api_plan": "free",
               "database_plan": "free",
-              "transcription_provider": "groq-free-tier",
+              "transcription_provider": "cloudflare-workers-ai-free-tier",
+              "transcription_model": expected_model,
               "auto_deploy_disabled": True,
               "secret_values_in_source": False,
           }
@@ -112,5 +125,5 @@ jobs:
           git config user.name "agroai-render-blueprint-bot"
           git config user.email "render-blueprint@agroai-pilot.com"
           git add scratchpad/render-blueprint-contract.json
-          git commit -m "docs: record zero-payment Render Blueprint validation" || exit 0
+          git commit -m "docs: record Cloudflare Workers AI Blueprint validation" || exit 0
           git push origin HEAD:ops/field-intelligence-staging-provision
