@@ -1,0 +1,37 @@
+name: Synchronize Field Intelligence Blueprint Head
+
+on:
+  push:
+    branches: [ops/field-intelligence-staging-provision]
+    paths:
+      - scripts/update_field_intelligence_blueprint_head.py
+      - .github/workflows/field-intelligence-blueprint-head-sync.yml
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ops/field-intelligence-staging-provision
+          token: ${{ github.token }}
+      - name: Update and verify exact head
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/update_field_intelligence_blueprint_head.py
+          git diff --check
+          grep -q '1034dcb47ef37ecaf7be3fef515500779c575f66' render.yaml
+          grep -q '1034dcb47ef37ecaf7be3fef515500779c575f66' .github/workflows/field-intelligence-render-blueprint-contract.yml
+      - name: Commit synchronized Blueprint
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "agroai-blueprint-sync-bot"
+          git config user.email "blueprint-sync@agroai-pilot.com"
+          git add render.yaml .github/workflows/field-intelligence-render-blueprint-contract.yml
+          git commit -m "Pin free Field Intelligence staging Blueprint to current head"
+          git push origin HEAD:ops/field-intelligence-staging-provision
