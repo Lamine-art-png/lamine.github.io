@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+from app.models.saas import EntitlementOverride
 from app.services.commercial_control import customer_safe_entitlement_payload
+from app.services.field_intelligence_plan_access import ENTITLEMENT_KEY
 from app.services.quota import committed_usage
 from tests.unit.test_field_intelligence import _auth, _complete, _initiate
 
@@ -17,7 +19,8 @@ def _new_capture(client, headers, index: int):
     return initiated.json()["capture"]["id"]
 
 
-def test_plan_record_limits_are_customer_visible(db):
+def test_plan_record_limits_are_customer_visible(db, monkeypatch):
+    monkeypatch.setattr("app.core.config.settings.APP_ENV", "production")
     org, _, _ = _auth(db, org_id="org-plan-limits", workspace_id="ws-plan-limits")
     expected = {
         "free": 2,
@@ -28,6 +31,7 @@ def test_plan_record_limits_are_customer_visible(db):
     }
     for plan, limit in expected.items():
         org.plan = plan
+        org.subscription_status = "inactive" if plan == "free" else ("contracted" if plan == "enterprise" else "active")
         db.commit()
         payload = customer_safe_entitlement_payload(db, org)
         assert payload["quotas"]["field_intelligence.records.monthly"] == limit
@@ -35,8 +39,40 @@ def test_plan_record_limits_are_customer_visible(db):
             assert payload["capabilities"]["field_intelligence.model_extraction"] == "enabled"
 
 
+def test_inactive_paid_plan_receives_free_equivalent_launch_access(db, monkeypatch):
+    monkeypatch.setattr("app.core.config.settings.APP_ENV", "production")
+    org, _, _ = _auth(db, org_id="org-inactive-paid-fi", workspace_id="ws-inactive-paid-fi")
+    org.plan = "professional"
+    org.subscription_status = "past_due"
+    db.commit()
+
+    payload = customer_safe_entitlement_payload(db, org)
+    assert payload["plan"] == "professional"
+    assert payload["quotas"]["field_intelligence.records.monthly"] == 2
+    assert payload["capabilities"]["field_intelligence.model_extraction"] == "enabled"
+
+
+def test_enterprise_override_preserves_contract_configured_capacity(db, monkeypatch):
+    monkeypatch.setattr("app.core.config.settings.APP_ENV", "production")
+    org, _, _ = _auth(db, org_id="org-enterprise-fi", workspace_id="ws-enterprise-fi")
+    org.plan = "enterprise"
+    org.subscription_status = "contracted"
+    db.add(
+        EntitlementOverride(
+            organization_id=org.id,
+            feature_key=ENTITLEMENT_KEY,
+            value_json={"value": 9000},
+        )
+    )
+    db.commit()
+
+    payload = customer_safe_entitlement_payload(db, org)
+    assert payload["quotas"]["field_intelligence.records.monthly"] == 9000
+
+
 def test_free_plan_allows_two_completed_records_and_blocks_third(client, db, monkeypatch):
     monkeypatch.setattr("app.core.config.settings.FIELD_INTELLIGENCE_RELEASE_STATE", "general")
+    monkeypatch.setattr("app.core.config.settings.APP_ENV", "production")
     org, _, headers = _auth(db, org_id="org-free-fi", workspace_id="ws-free-fi")
     org.plan = "free"
     org.subscription_status = "inactive"
@@ -63,6 +99,7 @@ def test_free_plan_allows_two_completed_records_and_blocks_third(client, db, mon
 
 def test_corrections_and_reprocessing_do_not_consume_another_record(client, db, monkeypatch):
     monkeypatch.setattr("app.core.config.settings.FIELD_INTELLIGENCE_RELEASE_STATE", "general")
+    monkeypatch.setattr("app.core.config.settings.APP_ENV", "production")
     org, _, headers = _auth(db, org_id="org-idem-fi", workspace_id="ws-idem-fi")
     org.plan = "free"
     db.commit()

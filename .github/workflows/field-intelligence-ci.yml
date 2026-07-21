@@ -118,16 +118,34 @@ jobs:
       - name: Compile backend and migration tree
         run: python -m compileall -q app alembic scripts
       - name: Field Intelligence suites
-        run: >-
-          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short
-          tests/unit/test_field_intelligence.py
-          tests/unit/test_field_intelligence_hardening.py
-          tests/unit/test_field_intelligence_launch.py
-          tests/unit/test_field_intelligence_staging_contract.py
-          tests/unit/test_field_operating_loop.py
-          tests/unit/test_live_field_context.py
-          tests/unit/test_object_storage.py
-          tests/unit/test_production_readiness.py
+        id: field_intelligence_suite
+        shell: bash
+        run: |
+          set +e
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q -x --tb=short \
+            tests/unit/test_field_intelligence.py \
+            tests/unit/test_field_intelligence_hardening.py \
+            tests/unit/test_field_intelligence_launch.py \
+            tests/unit/test_field_intelligence_plan_access.py \
+            tests/unit/test_field_intelligence_staging_contract.py \
+            tests/unit/test_field_operating_loop.py \
+            tests/unit/test_live_field_context.py \
+            tests/unit/test_object_storage.py \
+            tests/unit/test_production_readiness.py 2>&1 | tee field-intelligence-test-output.txt
+          suite_status=${PIPESTATUS[0]}
+          echo "status=${suite_status}" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Preserve Field Intelligence diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: field-intelligence-test-output
+          path: agroai_api/field-intelligence-test-output.txt
+          if-no-files-found: error
+          retention-days: 7
+      - name: Enforce Field Intelligence result
+        if: steps.field_intelligence_suite.outputs.status != '0'
+        run: exit 1
 
   release-contracts:
     name: Release and revision contracts
