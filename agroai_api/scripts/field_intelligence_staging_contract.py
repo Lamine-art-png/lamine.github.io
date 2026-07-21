@@ -21,6 +21,9 @@ PRODUCTION_HOSTNAMES = {
     "www.agroai-pilot.com",
 }
 REAL_TRANSCRIPTION_PROVIDERS = {
+    "cloudflare_workers_ai",
+    "workers_ai",
+    "cloudflare_whisper",
     "openai_whisper",
     "whisper",
     "http",
@@ -238,6 +241,21 @@ def main() -> int:
         failures.append("real staging transcription requires endpoint and API key")
     if not values["FIELD_STAGING_TRANSCRIPTION_MODEL"]:
         failures.append("real staging transcription requires a model")
+    if transcription_provider in {"cloudflare_workers_ai", "workers_ai", "cloudflare_whisper"}:
+        endpoint = urlparse(values["FIELD_STAGING_TRANSCRIPTION_ENDPOINT"])
+        model = values["FIELD_STAGING_TRANSCRIPTION_MODEL"]
+        endpoint_path = (endpoint.path or "").rstrip("/")
+        if not (
+            endpoint.scheme == "https"
+            and (endpoint.hostname or "").lower() == "api.cloudflare.com"
+            and endpoint.username is None
+            and endpoint.password is None
+            and not endpoint.query
+            and not endpoint.fragment
+            and endpoint_path.startswith("/client/v4/accounts/")
+            and endpoint_path.endswith(f"/ai/run/{model}")
+        ):
+            failures.append("Cloudflare Workers AI transcription endpoint must be the official account-scoped ai/run URL matching the model")
     report["checks"]["transcription_provider"] = transcription_provider or None
 
     release_state = (values["FIELD_STAGING_RELEASE_STATE"] or "internal").lower()

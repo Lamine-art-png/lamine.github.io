@@ -27,10 +27,10 @@ BASE_ENV = {
     "FIELD_STAGING_OBJECT_ENDPOINT_URL": "https://stageacct123.r2.cloudflarestorage.com",
     "FIELD_STAGING_R2_ACCESS_KEY_ID": "staging-key",
     "FIELD_STAGING_R2_SECRET_ACCESS_KEY": "staging-secret",
-    "FIELD_STAGING_TRANSCRIPTION_PROVIDER": "openai_whisper",
-    "FIELD_STAGING_TRANSCRIPTION_ENDPOINT": "https://stt-staging.example/v1/audio/transcriptions",
-    "FIELD_STAGING_TRANSCRIPTION_API_KEY": "staging-stt-key",
-    "FIELD_STAGING_TRANSCRIPTION_MODEL": "whisper-1",
+    "FIELD_STAGING_TRANSCRIPTION_PROVIDER": "cloudflare_workers_ai",
+    "FIELD_STAGING_TRANSCRIPTION_ENDPOINT": "https://api.cloudflare.com/client/v4/accounts/stageacct123/ai/run/@cf/openai/whisper-large-v3-turbo",
+    "FIELD_STAGING_TRANSCRIPTION_API_KEY": "staging-workers-ai-key",
+    "FIELD_STAGING_TRANSCRIPTION_MODEL": "@cf/openai/whisper-large-v3-turbo",
     "FIELD_STAGING_INTERNAL_ORGANIZATION_IDS": "org-staging-internal",
     "FIELD_STAGING_SMOKE_TOKEN": "staging-admin-token",
     "FIELD_STAGING_PORTAL_PROJECT": "agroai-portal-staging",
@@ -131,6 +131,21 @@ def test_real_transcription_is_required():
     code, payload = run_contract({"FIELD_STAGING_TRANSCRIPTION_PROVIDER": "fake"})
     assert code == 1
     assert any("real configured provider" in item for item in payload["failures"])
+
+
+
+def test_cloudflare_transcription_endpoint_is_account_scoped_and_model_matched():
+    code, payload = run_contract({
+        "FIELD_STAGING_TRANSCRIPTION_ENDPOINT": "https://evil.example/client/v4/accounts/x/ai/run/@cf/openai/whisper-large-v3-turbo",
+    })
+    assert code == 1
+    assert any("official account-scoped ai/run URL" in item for item in payload["failures"])
+
+    code, payload = run_contract({
+        "FIELD_STAGING_TRANSCRIPTION_ENDPOINT": "https://api.cloudflare.com/client/v4/accounts/stageacct123/ai/run/@cf/openai/whisper",
+    })
+    assert code == 1
+    assert any("matching the model" in item for item in payload["failures"])
 
 
 def test_release_state_general_is_refused_and_canary_is_double_confirmed():

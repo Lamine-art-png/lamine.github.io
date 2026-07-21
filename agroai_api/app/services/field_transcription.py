@@ -7,9 +7,11 @@ transcript for failed or absent audio.
 """
 from __future__ import annotations
 
+import base64
 import time
 from dataclasses import dataclass, field
 from typing import Protocol
+from urllib.parse import urlparse
 
 from app.core.config import settings
 
@@ -265,6 +267,228 @@ class OpenAIWhisperTranscriptionProvider:
             )
 
 
+class CloudflareWorkersAITranscriptionProvider:
+    """Cloudflare Workers AI speech-to-text via the Execute AI Model REST API.
+
+    The provider sends Base64 JSON to Cloudflare's account-scoped ``ai/run``
+    endpoint. The API token is never sent anywhere except ``api.cloudflare.com``;
+    endpoint and model agreement is checked before any network request.
+    """
+
+    name = "cloudflare_workers_ai"
+    default_model = "@cf/openai/whisper-large-v3-turbo"
+
+    def available(self) -> bool:
+        return bool(
+            str(getattr(settings, "FIELD_TRANSCRIPTION_ENDPOINT", "") or "").strip()
+            and str(getattr(settings, "FIELD_TRANSCRIPTION_API_KEY", "") or "").strip()
+        )
+
+    @classmethod
+    def endpoint_valid(cls, endpoint: str, model: str) -> bool:
+        try:
+            parsed = urlparse(endpoint)
+        except ValueError:
+            return False
+        normalized_model = (model or cls.default_model).strip()
+        expected_suffix = f"/ai/run/{normalized_model}"
+        path = (parsed.path or "").rstrip("/")
+        return bool(
+            parsed.scheme == "https"
+            and (parsed.hostname or "").lower() == "api.cloudflare.com"
+            and parsed.username is None
+            and parsed.password is None
+            and not parsed.query
+            and not parsed.fragment
+            and path.startswith("/client/v4/accounts/")
+            and path.endswith(expected_suffix)
+        )
+
+    @staticmethod
+    def _envelope_retryable(errors: object) -> bool:
+        text = str(errors or "").lower()
+        return any(
+            token in text
+            for token in (
+                "rate limit", "too many requests", "temporar", "timeout",
+                "unavailable", "overload", "internal error", "try again",
+            )
+        )
+
+    def transcribe_bytes(self, *, audio, content_type, language) -> TranscriptionResult:
+        started = time.monotonic()
+        if not self.available():
+            return TranscriptionResult(
+                provider=self.name,
+                status="unavailable",
+                error="transcription_provider_not_configured",
+                language=language,
+            )
+        bound = _input_bound_error(self.name, audio, language)
+        if bound is not None:
+            return bound
+
+        endpoint = str(settings.FIELD_TRANSCRIPTION_ENDPOINT).strip()
+        api_key = str(settings.FIELD_TRANSCRIPTION_API_KEY).strip()
+        model = (
+            str(getattr(settings, "FIELD_TRANSCRIPTION_MODEL", "") or "").strip()
+            or self.default_model
+        )
+        if not self.endpoint_valid(endpoint, model):
+            return TranscriptionResult(
+                provider=self.name,
+                status="failed",
+                model=model,
+                language=language,
+                latency_ms=int((time.monotonic() - started) * 1000),
+                error="invalid_cloudflare_workers_ai_endpoint",
+                retryable=False,
+            )
+
+        request_payload: dict = {
+            "audio": base64.b64encode(audio or b"").decode("ascii"),
+            "task": "transcribe",
+            "vad_filter": True,
+            # Avoid conditioning loops in noisy field recordings.
+            "condition_on_previous_text": False,
+        }
+        if language:
+            request_payload["language"] = language
+
+        try:
+            import httpx
+
+            with httpx.Client(timeout=_provider_timeout()) as http:
+                response = http.post(
+                    endpoint,
+                    headers={
+                        "Authorization": f"Bearer {api_key}",
+                        "Content-Type": "application/json",
+                    },
+                    json=request_payload,
+                )
+            latency = int((time.monotonic() - started) * 1000)
+            if response.status_code >= 400:
+                return TranscriptionResult(
+                    provider=self.name,
+                    status="failed",
+                    model=model,
+                    language=language,
+                    latency_ms=latency,
+                    error=f"provider_http_{response.status_code}",
+                    retryable=response.status_code in _RETRYABLE_HTTP,
+                )
+            try:
+                payload = response.json()
+            except Exception:  # noqa: BLE001 - stable error, no response body leakage
+                return TranscriptionResult(
+                    provider=self.name,
+                    status="failed",
+                    model=model,
+                    language=language,
+                    latency_ms=latency,
+                    error="provider_invalid_json",
+                    retryable=True,
+                )
+            if not isinstance(payload, dict):
+                return TranscriptionResult(
+                    provider=self.name,
+                    status="failed",
+                    model=model,
+                    language=language,
+                    latency_ms=latency,
+                    error="provider_invalid_response",
+                    retryable=False,
+                )
+            if payload.get("success") is False:
+                errors = payload.get("errors") or []
+                return TranscriptionResult(
+                    provider=self.name,
+                    status="failed",
+                    model=model,
+                    language=language,
+                    latency_ms=latency,
+                    error="provider_envelope_error",
+                    retryable=self._envelope_retryable(errors),
+                    metadata={"provider_error_count": len(errors) if isinstance(errors, list) else 1},
+                )
+
+            result_payload = payload.get("result", payload)
+            if isinstance(result_payload, str):
+                transcript = result_payload.strip()
+                result_payload = {}
+            elif isinstance(result_payload, dict):
+                info = result_payload.get("transcription_info")
+                info = info if isinstance(info, dict) else {}
+                transcript = str(
+                    result_payload.get("text")
+                    or result_payload.get("transcript")
+                    or info.get("text")
+                    or ""
+                ).strip()
+            else:
+                transcript = ""
+                result_payload = {}
+                info = {}
+
+            if not transcript:
+                return TranscriptionResult(
+                    provider=self.name,
+                    status="failed",
+                    model=model,
+                    language=language,
+                    latency_ms=latency,
+                    error="provider_returned_empty_transcript",
+                    retryable=False,
+                )
+
+            info = result_payload.get("transcription_info")
+            info = info if isinstance(info, dict) else {}
+            detected = str(
+                result_payload.get("language")
+                or info.get("language")
+                or info.get("detected_language")
+                or ""
+            ).strip() or None
+            word_count = result_payload.get("word_count")
+            if word_count is None:
+                word_count = info.get("word_count")
+            segments = result_payload.get("segments")
+            metadata = {
+                "detected_language": detected,
+                "language_hint": language,
+                "audio_bytes": len(audio or b""),
+                "word_count": word_count,
+                "segment_count": len(segments) if isinstance(segments, list) else None,
+                "vtt_available": bool(result_payload.get("vtt")),
+                "transport": "cloudflare_workers_ai_json_base64",
+            }
+            return TranscriptionResult(
+                provider=self.name,
+                status="completed",
+                transcript=transcript,
+                model=model,
+                language=detected or language,
+                latency_ms=latency,
+                metadata=metadata,
+            )
+        except Exception as exc:  # noqa: BLE001 - surface failure truthfully
+            name = exc.__class__.__name__.lower()
+            transient = any(
+                token in name
+                for token in ("timeout", "connect", "network", "pool", "protocol", "read")
+            )
+            return TranscriptionResult(
+                provider=self.name,
+                status="failed",
+                model=model,
+                language=language,
+                latency_ms=int((time.monotonic() - started) * 1000),
+                error=exc.__class__.__name__,
+                retryable=transient,
+            )
+
+
 class HttpTranscriptionProvider:
     """Real, configured speech-to-text adapter (provider-neutral HTTP).
 
@@ -379,6 +603,9 @@ def get_transcription_provider() -> TranscriptionProvider:
         return FakeTranscriptionProvider(fail=True)
     if mode in {"fake_retry", "test_retry"}:
         return FakeRetryTranscriptionProvider(int(getattr(settings, "FIELD_TRANSCRIPTION_FAKE_RETRY_FAILS", 1) or 1))
+    if mode in {"cloudflare_workers_ai", "workers_ai", "cloudflare_whisper"}:
+        cloudflare = CloudflareWorkersAITranscriptionProvider()
+        return cloudflare if cloudflare.available() else DisabledTranscriptionProvider()
     if mode in {"openai_whisper", "whisper"}:
         whisper = OpenAIWhisperTranscriptionProvider()
         return whisper if whisper.available() else DisabledTranscriptionProvider()

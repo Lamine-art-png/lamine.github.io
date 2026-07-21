@@ -208,12 +208,34 @@ def _require_field_intelligence_contract(
             "field_intelligence.transcription_provider_fake", "blocker", "field_intelligence",
             "A fake/test transcription provider is configured for a production activation.",
         ))
-    elif provider in {"http", "configured", "production", "openai_whisper", "whisper"}:
+    elif provider in {
+        "http", "configured", "production", "openai_whisper", "whisper",
+        "cloudflare_workers_ai", "workers_ai", "cloudflare_whisper",
+    }:
         if not _setting(settings, "FIELD_TRANSCRIPTION_ENDPOINT") or not _setting(settings, "FIELD_TRANSCRIPTION_API_KEY"):
             blockers.append(ReadinessFinding(
                 "field_intelligence.transcription_credentials_missing", "blocker", "field_intelligence",
                 "The transcription provider requires both endpoint and API key.",
             ))
+        if provider in {"cloudflare_workers_ai", "workers_ai", "cloudflare_whisper"}:
+            endpoint = urlparse(_setting(settings, "FIELD_TRANSCRIPTION_ENDPOINT"))
+            model = _setting(settings, "FIELD_TRANSCRIPTION_MODEL", "@cf/openai/whisper-large-v3-turbo")
+            expected_suffix = f"/ai/run/{model}"
+            path = (endpoint.path or "").rstrip("/")
+            if not (
+                endpoint.scheme == "https"
+                and (endpoint.hostname or "").lower() == "api.cloudflare.com"
+                and endpoint.username is None
+                and endpoint.password is None
+                and not endpoint.query
+                and not endpoint.fragment
+                and path.startswith("/client/v4/accounts/")
+                and path.endswith(expected_suffix)
+            ):
+                blockers.append(ReadinessFinding(
+                    "field_intelligence.transcription_endpoint_invalid", "blocker", "field_intelligence",
+                    "Cloudflare Workers AI transcription requires the official account-scoped HTTPS ai/run endpoint matching the configured model.",
+                ))
     import shutil as _shutil
 
     ffprobe = _setting(settings, "FIELD_MEDIA_FFPROBE_PATH", "ffprobe") or "ffprobe"

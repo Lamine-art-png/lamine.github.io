@@ -3,6 +3,7 @@ release alignment, worker topology, migration tooling, provider hardening,
 metrics redaction and production-configuration truthfulness."""
 from __future__ import annotations
 
+import base64
 import json
 import os
 
@@ -12,6 +13,7 @@ from app.models.saas import EntitlementOverride
 from app.services import field_intelligence_rollout as rollout
 from app.services.field_intelligence_metrics import _redact
 from app.services.field_transcription import (
+    CloudflareWorkersAITranscriptionProvider,
     OpenAIWhisperTranscriptionProvider,
     get_transcription_provider,
 )
@@ -342,6 +344,134 @@ def test_whisper_provider_retryable_vs_terminal(monkeypatch):
     assert provider.transcribe_bytes(audio=b"x", content_type=None, language="en").retryable is True
     monkeypatch.setattr(httpx, "Client", _client_for(400))
     assert provider.transcribe_bytes(audio=b"x", content_type=None, language="en").retryable is False
+
+
+
+def _configure_cloudflare_transcription(monkeypatch):
+    model = "@cf/openai/whisper-large-v3-turbo"
+    endpoint = (
+        "https://api.cloudflare.com/client/v4/accounts/stage-account-123/ai/run/"
+        + model
+    )
+    monkeypatch.setattr("app.core.config.settings.FIELD_TRANSCRIPTION_PROVIDER", "cloudflare_workers_ai")
+    monkeypatch.setattr("app.core.config.settings.FIELD_TRANSCRIPTION_ENDPOINT", endpoint)
+    monkeypatch.setattr("app.core.config.settings.FIELD_TRANSCRIPTION_API_KEY", "cf-staging-token")
+    monkeypatch.setattr("app.core.config.settings.FIELD_TRANSCRIPTION_MODEL", model)
+    return endpoint, model
+
+
+def test_cloudflare_workers_ai_provider_selected_and_bounded(monkeypatch):
+    _configure_cloudflare_transcription(monkeypatch)
+    provider = get_transcription_provider()
+    assert provider.name == "cloudflare_workers_ai"
+    monkeypatch.setattr("app.core.config.settings.FIELD_TRANSCRIPTION_MAX_BYTES", 10)
+    result = provider.transcribe_bytes(audio=b"x" * 11, content_type="audio/wav", language=None)
+    assert result.status == "failed" and result.retryable is False
+    assert result.error == "audio_exceeds_provider_input_bound"
+
+
+def test_cloudflare_workers_ai_json_base64_and_response_provenance(monkeypatch):
+    endpoint, model = _configure_cloudflare_transcription(monkeypatch)
+
+    class _Resp:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {
+                "success": True,
+                "errors": [],
+                "messages": [],
+                "result": {
+                    "text": "irrigation ran forty five minutes on Block A",
+                    "transcription_info": {"language": "en", "word_count": 8},
+                    "segments": [{"start": 0.0, "end": 2.0}],
+                    "vtt": "WEBVTT",
+                },
+            }
+
+    class _Client:
+        def __init__(self, timeout=None):
+            _Client.timeout = timeout
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def post(self, url, headers=None, json=None):
+            _Client.seen = {"url": url, "headers": headers, "json": json}
+            return _Resp()
+
+    import httpx
+    monkeypatch.setattr(httpx, "Client", _Client)
+    audio = b"RIFF" + b"field-audio"
+    result = CloudflareWorkersAITranscriptionProvider().transcribe_bytes(
+        audio=audio, content_type="audio/wav", language=None
+    )
+    assert result.succeeded and result.model == model and result.language == "en"
+    assert result.metadata["transport"] == "cloudflare_workers_ai_json_base64"
+    assert result.metadata["word_count"] == 8
+    assert result.metadata["segment_count"] == 1
+    assert result.metadata["vtt_available"] is True
+    assert _Client.seen["url"] == endpoint
+    assert _Client.seen["headers"]["Authorization"] == "Bearer cf-staging-token"
+    assert base64.b64decode(_Client.seen["json"]["audio"]) == audio
+    assert _Client.seen["json"]["task"] == "transcribe"
+    assert _Client.seen["json"]["vad_filter"] is True
+    assert _Client.seen["json"]["condition_on_previous_text"] is False
+    assert "language" not in _Client.seen["json"]
+
+
+def test_cloudflare_workers_ai_language_hint_endpoint_guard_and_retry(monkeypatch):
+    endpoint, _model = _configure_cloudflare_transcription(monkeypatch)
+
+    class _EnvelopeError:
+        status_code = 200
+
+        @staticmethod
+        def json():
+            return {"success": False, "errors": [{"message": "rate limit exceeded"}]}
+
+    class _Client:
+        calls = 0
+
+        def __init__(self, timeout=None): ...
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+
+        def post(self, url, headers=None, json=None):
+            _Client.calls += 1
+            assert url == endpoint and json["language"] == "fr"
+            return _EnvelopeError()
+
+    import httpx
+    monkeypatch.setattr(httpx, "Client", _Client)
+    provider = CloudflareWorkersAITranscriptionProvider()
+    result = provider.transcribe_bytes(audio=b"audio", content_type="audio/wav", language="fr")
+    assert result.status == "failed" and result.error == "provider_envelope_error"
+    assert result.retryable is True and _Client.calls == 1
+
+    monkeypatch.setattr(
+        "app.core.config.settings.FIELD_TRANSCRIPTION_ENDPOINT",
+        "https://evil.example/client/v4/accounts/x/ai/run/@cf/openai/whisper-large-v3-turbo",
+    )
+    blocked = provider.transcribe_bytes(audio=b"audio", content_type="audio/wav", language=None)
+    assert blocked.error == "invalid_cloudflare_workers_ai_endpoint"
+    assert blocked.retryable is False and _Client.calls == 1
+
+
+def test_cloudflare_workers_ai_readiness_requires_official_matching_endpoint(monkeypatch):
+    codes = _readiness_codes(
+        monkeypatch,
+        FIELD_INTELLIGENCE_RELEASE_STATE="internal",
+        FIELD_TRANSCRIPTION_PROVIDER="cloudflare_workers_ai",
+        FIELD_TRANSCRIPTION_ENDPOINT="https://evil.example/ai/run/@cf/openai/whisper-large-v3-turbo",
+        FIELD_TRANSCRIPTION_API_KEY="configured",
+        FIELD_TRANSCRIPTION_MODEL="@cf/openai/whisper-large-v3-turbo",
+    )
+    assert "field_intelligence.transcription_endpoint_invalid" in codes
 
 
 # --------------------------------------------------------------------------- #
