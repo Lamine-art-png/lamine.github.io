@@ -1,62 +1,60 @@
-# Field Intelligence — Commercial Capability Matrix (Proposed → Implemented)
+# Field Intelligence — Commercial Capability Matrix
 
-This document records the deliberate packaging decision for Field
-Intelligence, replacing the incidental defaults that shipped with the
-feature branch. Server-side enforcement lives in
-`app/services/commercial_control.py`; the portal only mirrors it.
+This document is the source of truth for Field Intelligence launch packaging.
+The rollout gate (`disabled`, `internal`, `canary`, `general`) remains above
+commercial packaging. A plan can never bypass a release or security control.
 
-## Design principles
+## Record definition
 
-- Typed + photo capture is the free hook: every operator can record what
-  they see, so the data network grows.
-- Voice and AI model extraction are the paid differentiators: they carry
-  real provider costs (transcription minutes, model tokens).
-- Offline sync stays available on every plan — a field tool that loses
-  notes when coverage drops is not a product.
-- Storage/retention scale with plan; enterprise governs audit and custom
-  retention.
-- The rollout release-state gate (disabled/internal/canary/general) sits
-  ABOVE all of this and is never granted by a plan.
+One Field Intelligence record is one new capture completed into a saved field
+observation. A record can include voice or typed context, multiple media assets,
+location and structured metadata.
 
-## Matrix (implemented in BASE_ENTITLEMENTS)
+The following do **not** consume another record:
 
-| Capability | Free | Professional | Team | Network/Enterprise |
-|---|---|---|---|---|
-| Typed + photo capture | ✅ | ✅ | ✅ | ✅ |
-| Offline sync | ✅ | ✅ | ✅ | ✅ |
-| Field map | ✅ | ✅ | ✅ | ✅ |
-| Voice capture + transcription | 25 notes/mo | ✅ unlimited* | ✅ | ✅ |
-| AI model extraction | deterministic only | ✅ model-routed | ✅ | ✅ |
-| Storage quota | 512 MB | 10 GB | 25 GB | 100 GB (contract) |
-| Retention controls (delete media) | ✅ | ✅ | ✅ | ✅ + custom policies |
-| Enterprise audit view | — | — | ✅ read | ✅ full |
-| API/white-label access | — | — | — | contract_only |
+- idempotent completion retries;
+- transcript corrections;
+- reprocessing the same observation;
+- task creation from an existing observation; and
+- reading, searching or mapping existing observations.
 
-*subject to fair-use transcription minute metering (future metering key
-`quota.field_intelligence.voice_notes.monthly`, already enforced for Free).
+## Launch access
 
-## Entitlement keys
+| Plan | Field Intelligence records / month | Operating model |
+|---|---:|---|
+| Free | 2 | Complete capture and model-assisted analysis experience in one workspace. Intended for evaluation, not ongoing production volume. |
+| Professional | 100 | Recurring workflow for commercial farms, advisors and individual operators. |
+| Team | 500 | Shared evidence, assignments, roles, approvals and auditability. |
+| Network | 2,500 | Multi-workspace programs, network rollups and higher field volume. |
+| Enterprise | Contract-configured | Custom capacity, governance, retention, security review and deployment support. |
 
-- `field_intelligence.capture` — typed/photo capture routes
-- `field_intelligence.voice` — voice capture + transcription pipeline
-- `field_intelligence.offline_sync` — `/sync/batch`
-- `field_intelligence.map` — `/map`
-- `field_intelligence.extraction` — extraction stage; `model_extraction`
-  state (`enabled` vs `deterministic`) selects the model path
-- `field_intelligence.model_extraction` — model-routed extraction (paid)
-- `field_intelligence.retention` — deletion/retention surface
-- `field_intelligence.audit` — enterprise audit surface
-- `quota.field_intelligence.storage_mb` — physical-object storage quota
-- `quota.field_intelligence.voice_notes.monthly` — Free-plan voice cap
+The organization-level entitlement is
+`quota.field_intelligence.records.monthly`. The durable usage metric is
+`field_record`.
 
-## What changed from the incidental defaults
+## Capability model
 
-| Key | Old Free default | New Free default | Rationale |
-|---|---|---|---|
-| `field_intelligence.model_extraction` | (absent → model ran for all) | `locked` | model tokens are a paid cost |
-| `quota.field_intelligence.voice_notes.monthly` | (absent → unlimited) | `25` | transcription minutes are a paid cost |
-| `field_intelligence.audit` | (absent) | `locked` (Team: `enabled`) | governance is an enterprise feature |
+| Capability | Free | Professional | Team | Network | Enterprise |
+|---|---|---|---|---|---|
+| Voice and typed capture | Enabled | Enabled | Enabled | Enabled | Enabled |
+| Photo evidence and location | Enabled | Enabled | Enabled | Enabled | Enabled |
+| Offline queue and synchronization | Enabled | Enabled | Enabled | Enabled | Enabled |
+| Model-assisted extraction | Enabled within 2-record cap | Enabled | Enabled | Enabled | Enabled |
+| Map, timeline, search and review | Enabled | Enabled | Enabled | Enabled | Enabled |
+| Shared assignments and approvals | — | — | Enabled | Enabled | Enabled |
+| Field Intelligence audit capability | — | — | Enabled | Enabled | Enabled |
+| Cross-workspace and network rollups | — | — | Preview | Enabled | Enabled |
+| Custom retention, security and capacity | — | — | — | Requestable | Contract-configured |
 
-Stripe/billing state, admin overrides, suspended-account enforcement and
-the canary rollout gate are untouched. Existing paying organizations are
-unaffected (professional and above keep full voice + model extraction).
+## Enforcement
+
+- The API meters a record when a new capture is completed into an observation.
+- Metering is server-authoritative. Frontend locks are explanatory UX only.
+- The quota reservation is keyed to the capture session, so concurrent or
+  repeated completion calls cannot double-charge the organization.
+- A quota-exhausted response uses the standard `quota_exceeded` commercial
+  boundary and recommends the next appropriate plan.
+- Storage, evidence-upload, AI-action and other plan limits continue to apply
+  independently.
+- Enterprise capacity is contract-configured rather than presented as fake
+  unlimited usage.
