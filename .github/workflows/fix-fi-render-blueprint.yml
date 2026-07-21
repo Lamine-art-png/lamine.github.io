@@ -6,6 +6,11 @@ on:
       - ops/field-intelligence-staging-provision
     paths:
       - .github/workflows/fix-fi-render-blueprint.yml
+  pull_request:
+    branches:
+      - feature/field-intelligence-launch
+    paths:
+      - .github/workflows/fix-fi-render-blueprint.yml
 
 permissions:
   contents: write
