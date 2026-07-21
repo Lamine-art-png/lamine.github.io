@@ -8,6 +8,7 @@ on:
   push:
     branches: [feat/api-platform-experience-v2]
     paths:
+      - "figma-enterprise-v4/src/app/components/PlatformApplicationGate.tsx"
       - "figma-enterprise-v4/src/app/components/PlatformConsole.tsx"
       - "figma-enterprise-v4/src/app/components/PlatformSafetyNotice.tsx"
       - "figma-enterprise-v4/src/app/components/AuthScreen.tsx"
