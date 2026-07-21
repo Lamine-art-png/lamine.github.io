@@ -6,7 +6,7 @@ workers_dev = false
 [vars]
 EDGE_ENVIRONMENT = "production"
 UPSTREAM_API_ORIGIN = "https://api-preview.agroai-pilot.com"
-ALLOWED_ORIGINS = "https://app.agroai-pilot.com,https://agroai-pilot.com,https://www.agroai-pilot.com"
+ALLOWED_ORIGINS = "https://app.agroai-pilot.com,https://platform.agroai-pilot.com,https://agroai-pilot.com,https://www.agroai-pilot.com"
 
 [ai]
 binding = "AI"
@@ -16,6 +16,13 @@ required = [ "QUEUE_PUBLISH_TOKEN", "QUEUE_CONSUMER_TOKEN" ]
 
 [[routes]]
 pattern = "app.agroai-pilot.com/v1/*"
+zone_name = "agroai-pilot.com"
+
+# The standalone developer product shares the same authenticated backend and
+# production edge. This same-origin route also keeps a future relative /v1
+# client configuration possible without creating a second API deployment.
+[[routes]]
+pattern = "platform.agroai-pilot.com/v1/*"
 zone_name = "agroai-pilot.com"
 
 # Preserve the established API hostname used by Stripe live webhooks and older
