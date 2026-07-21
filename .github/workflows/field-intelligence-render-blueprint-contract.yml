@@ -4,7 +4,7 @@ on:
   push:
     branches: [ops/field-intelligence-staging-provision]
     paths:
-      - render.yaml
+      - render-field-intelligence-staging.yaml
       - .github/workflows/field-intelligence-render-blueprint-contract.yml
 
 permissions:
@@ -33,13 +33,14 @@ jobs:
           from urllib.parse import urlparse
           import yaml
 
-          expected_sha = "345bc3b89b1cbf8f6f540a29d325e9d1be8476d4"
+          manifest = "render-field-intelligence-staging.yaml"
+          expected_sha = "1034dcb47ef37ecaf7be3fef515500779c575f66"
           expected_model = "@cf/openai/whisper-large-v3-turbo"
           expected_endpoint = (
               "https://api.cloudflare.com/client/v4/accounts/"
               "e2fe627bff2d8e7b2b10bf078956acfe/ai/run/" + expected_model
           )
-          raw = Path("render.yaml").read_text(encoding="utf-8")
+          raw = Path(manifest).read_text(encoding="utf-8")
           data = yaml.safe_load(raw)
           services = data.get("services") or []
           databases = data.get("databases") or []
@@ -100,8 +101,9 @@ jobs:
           )
           assert not any(fragment in raw for fragment in forbidden_fragments)
           report = {
-              "contract": "field-intelligence-render-free-blueprint-contract-v3",
+              "contract": "field-intelligence-render-free-blueprint-contract-v4",
               "status": "passed",
+              "manifest": manifest,
               "api": api["name"],
               "worker_mode": "in_process",
               "database": database["name"],
@@ -125,5 +127,5 @@ jobs:
           git config user.name "agroai-render-blueprint-bot"
           git config user.email "render-blueprint@agroai-pilot.com"
           git add scratchpad/render-blueprint-contract.json
-          git commit -m "docs: record Cloudflare Workers AI Blueprint validation" || exit 0
+          git commit -m "docs: record explicit Cloudflare Workers AI Blueprint validation" || exit 0
           git push origin HEAD:ops/field-intelligence-staging-provision
