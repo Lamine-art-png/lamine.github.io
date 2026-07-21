@@ -141,7 +141,7 @@ ALLOWED_ORIGINS = [
 if getattr(settings, "APP_URL", "") and settings.APP_URL not in ALLOWED_ORIGINS:
     ALLOWED_ORIGINS.append(settings.APP_URL)
 
-ALLOWED_ORIGIN_REGEX = r"^https://([a-z0-9-]+\.)?(agroai-portal|lamine-github-io|agroai-command-center-v2-preview)\.pages\.dev$"
+ALLOWED_ORIGIN_REGEX = r"^https://([a-z0-9-]+\.)?(agroai-portal|agroai-portal-staging|lamine-github-io|agroai-command-center-v2-preview)\.pages\.dev$"
 _ALLOWED_ORIGIN_PATTERN = re.compile(ALLOWED_ORIGIN_REGEX)
 
 from app.core.request_body_limit import FieldIntelligenceBodyLimitMiddleware  # noqa: E402
@@ -323,7 +323,15 @@ async def platform_request_metadata_log(request: Request, call_next):
 
 
 async def health_payload() -> Dict[str, str]:
-    return {"status": "ok", "service": "agroai-api", "version": VERSION, "checked_at": datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z"}
+    from app.services.release_contract import runtime_build_sha
+
+    return {
+        "status": "ok", "service": "agroai-api", "version": VERSION,
+        # Non-secret release identity so staging/production alignment can be
+        # proven from the outside without privileged endpoints.
+        "build_sha": runtime_build_sha() or "",
+        "checked_at": datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z",
+    }
 
 
 @app.get("/v1/readiness")
@@ -540,5 +548,10 @@ app.include_router(field_operations_router, prefix="/v1")
 
 from app.api.v1.field_intelligence import router as field_intelligence_router  # noqa: E402
 app.include_router(field_intelligence_router, prefix="/v1")
+
+# Admin/ops surface mounts WITHOUT the release gate: operators must reach the
+# kill switch and rollout controls precisely when the feature is disabled.
+from app.api.v1.field_intelligence_admin import router as field_intelligence_admin_router  # noqa: E402
+app.include_router(field_intelligence_admin_router, prefix="/v1")
 
 materialize_included_routes(app.router)

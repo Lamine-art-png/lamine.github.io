@@ -27,6 +27,111 @@ FRESH_WINDOW = timedelta(hours=48)
 LOOKBACK_WINDOW = timedelta(days=14)
 TASK_JOB_TYPE = "field_ops_task"
 
+# Telemetry types folded into the weather/water context section.
+_WEATHER_ET_TYPES = ("et0", "eto", "weather", "precipitation", "temperature")
+_SOIL_TYPES = ("soil_vwc", "soil_moisture")
+_SATELLITE_MARKERS = ("satellite", "ndvi", "imagery", "openet")
+
+
+def _telemetry_context(db: Session, observation: FieldObservation, window_start: datetime,
+                       reference: datetime) -> dict:
+    """Weather / ET / soil telemetry near the observation, honestly windowed.
+
+    Telemetry rows are real synced signals (Telemetry model); nothing here is
+    fabricated — an empty section means no signal existed in the window.
+    """
+    from app.models import Block, Telemetry
+
+    block = None
+    if observation.block_name or observation.field_name:
+        candidates = (
+            db.query(Block)
+            .filter(Block.tenant_id == observation.tenant_id)
+            .limit(200)
+            .all()
+        )
+        wanted = {(observation.block_name or "").strip().lower(), (observation.field_name or "").strip().lower()}
+        for row in candidates:
+            if (row.name or "").strip().lower() in wanted:
+                block = row
+                break
+
+    query = (
+        db.query(Telemetry)
+        .filter(Telemetry.tenant_id == observation.tenant_id)
+        .filter(Telemetry.timestamp >= window_start)
+        .filter(Telemetry.timestamp <= reference + FRESH_WINDOW)
+    )
+    if block is not None:
+        query = query.filter(Telemetry.block_id == block.id)
+    rows = query.order_by(Telemetry.timestamp.desc()).limit(200).all()
+
+    def summarize(types: tuple[str, ...]) -> dict:
+        matched = [r for r in rows if (r.type or "").lower().startswith(types)]
+        if not matched:
+            return {"available": False, "freshness": "unavailable", "points": 0}
+        newest = matched[0]
+        return {
+            "available": True,
+            "points": len(matched),
+            "latest_value": newest.value,
+            "unit": newest.unit,
+            "latest_at": newest.timestamp.isoformat() if newest.timestamp else None,
+            "freshness": _freshness(reference, newest.timestamp),
+            "source": newest.source,
+        }
+
+    geometry = None
+    if block is not None and block.latitude is not None and block.longitude is not None:
+        geometry = {
+            "block_id": block.id,
+            "block_name": block.name,
+            "latitude": block.latitude,
+            "longitude": block.longitude,
+            "area_ha": getattr(block, "area_ha", None),
+        }
+    return {
+        "weather_et": summarize(_WEATHER_ET_TYPES),
+        "soil": summarize(_SOIL_TYPES),
+        "block_geometry": geometry,
+    }
+
+
+def _decision_context(db: Session, observation: FieldObservation, window_start: datetime) -> list[dict]:
+    """Recent decisions/recommendations for the tenant inside the window."""
+    from app.models import Recommendation
+
+    rows = (
+        db.query(Recommendation)
+        .filter(Recommendation.tenant_id == observation.tenant_id)
+        .filter(Recommendation.created_at >= window_start)
+        .order_by(Recommendation.created_at.desc())
+        .limit(5)
+        .all()
+    )
+    return [
+        {
+            "recommendation_id": row.id,
+            "created_at": row.created_at.isoformat() if row.created_at else None,
+            "status": getattr(row, "status", None),
+            "block_id": getattr(row, "block_id", None),
+        }
+        for row in rows
+    ]
+
+
+def _missing_evidence(observation: FieldObservation) -> list[str]:
+    """Evidence the extraction asked for that no attached asset satisfies."""
+    structured = observation.structured_json or {}
+    required = [str(item).strip().lower() for item in structured.get("evidence_requirements") or []]
+    if not required:
+        return []
+    attached_kinds = set()
+    for asset in getattr(observation, "assets", []) or []:
+        attached_kinds.add((getattr(asset, "kind", "") or "").lower())
+    satisfied = {"photo": "photo" in attached_kinds, "meter_reading": False, "video": "video" in attached_kinds}
+    return sorted({item for item in required if not satisfied.get(item, False)})
+
 
 def _freshness(reference: datetime, source_time: datetime | None) -> str:
     if source_time is None:
@@ -164,6 +269,25 @@ def correlate_observation(db: Session, observation: FieldObservation) -> dict:
         )
     open_tasks = tasks_q.limit(10).all()
 
+    completed_tasks = (
+        db.query(IngestionJob)
+        .filter(IngestionJob.tenant_id == tenant_id)
+        .filter(IngestionJob.job_type == TASK_JOB_TYPE)
+        .filter(IngestionJob.status == "completed")
+        .filter(IngestionJob.completed_at.isnot(None))
+        .filter(IngestionJob.completed_at >= window_start)
+        .order_by(IngestionJob.completed_at.desc())
+        .limit(5)
+        .all()
+    )
+    telemetry = _telemetry_context(db, observation, window_start, reference)
+    decisions = _decision_context(db, observation, window_start)
+    missing_evidence = _missing_evidence(observation)
+    satellite_evidence = [
+        e for e in related_evidence
+        if any(marker in (e.get("evidence_type") or "").lower() for marker in _SATELLITE_MARKERS)
+    ]
+
     fresh_live = sum(1 for e in related_evidence if e["source_mode"] == "live" and e["freshness"] == "fresh")
     severity = (observation.severity or "info").lower()
     should_create_task = severity in {"high", "critical"}
@@ -177,19 +301,31 @@ def correlate_observation(db: Session, observation: FieldObservation) -> dict:
     if should_create_task and not observation.recommended_action:
         recommended_action = "Create a follow-up task and verify with a field check."
 
+    verification_required = additional_evidence_required or bool(missing_evidence)
+
     return {
-        "schema_version": "field-observation-correlation/1.1.0",
+        "schema_version": "field-observation-correlation/1.2.0",
         "reference_time": reference.isoformat(),
         "time_window": {"start": window_start.isoformat(), "end": window_end.isoformat()},
         "relevant_evidence_ids": [e["evidence_id"] for e in related_evidence],
         "related_evidence": related_evidence,
         "connectors": connector_summary,
+        "telemetry": telemetry,
+        "satellite_evidence_ids": [e["evidence_id"] for e in satellite_evidence],
+        "recent_decisions": decisions,
+        "missing_evidence": missing_evidence,
+        "verification_required": verification_required,
         "recent_observations": [
             {"observation_id": o.id, "event_type": o.event_type, "severity": o.severity,
              "occurred_at": o.occurred_at.isoformat() if o.occurred_at else None}
             for o in recent_observations
         ],
         "open_tasks": [{"task_id": t.id, "title": (t.input_json or {}).get("title")} for t in open_tasks],
+        "recently_completed_tasks": [
+            {"task_id": t.id, "title": (t.input_json or {}).get("title"),
+             "completed_at": t.completed_at.isoformat() if t.completed_at else None}
+            for t in completed_tasks
+        ],
         "source_providers": sorted(providers),
         "source_mode_summary": _count_modes(related_evidence),
         "connector_mode_summary": _count_modes(connector_summary),

@@ -2,7 +2,10 @@ import { expect, test } from "@playwright/test";
 
 const APP_URL = "http://127.0.0.1:4173/settings";
 const API_ORIGIN = "https://api.agroai-pilot.com";
-const REQUEST_CHUNK_SIZE = 12;
+// Mirrors the client chunk ceiling, which aligns with the backend provider
+// chunk (_TRANSLATION_CHUNK_SIZE = 48). The API itself accepts up to 2000
+// keys per request; 48 is the per-provider-call bound.
+const REQUEST_CHUNK_SIZE = 48;
 
 function qaToken() {
   const body = Buffer.from(JSON.stringify({ sub: "qa", exp: 4102444800 })).toString("base64url");
