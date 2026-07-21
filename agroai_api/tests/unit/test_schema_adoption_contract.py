@@ -30,8 +30,8 @@ def test_column_contract_accepts_complete_shape():
         assert schema_contract_gaps(connection, {"example": {"id", "required_value"}}) == {}
 
 
-def test_head_contract_covers_security_queue_provenance_access_appeals_and_platform_api():
-    assert HEAD_ALEMBIC_REVISION == "026_platform_api_operations"
+def test_head_contract_covers_security_queue_provenance_access_appeals_platform_api_and_field_launch():
+    assert HEAD_ALEMBIC_REVISION == "027_field_intelligence_launch"
     assert {"nonce_hash", "consumed_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["oauth_state_nonces"])
     assert {"key_version", "ciphertext_b64"}.issubset(HEAD_SCHEMA_REQUIREMENTS["connector_credentials"])
     assert {"status", "publish_attempts"}.issubset(HEAD_SCHEMA_REQUIREMENTS["task_outbox"])
@@ -45,3 +45,6 @@ def test_head_contract_covers_security_queue_provenance_access_appeals_and_platf
         "submitted_at",
         "reviewed_at",
     }.issubset(HEAD_SCHEMA_REQUIREMENTS["account_access_appeals"])
+
+    assert {"key", "value_json", "updated_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["field_runtime_flags"])
+    assert {"worker_id", "git_sha", "last_heartbeat_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["field_worker_heartbeats"])

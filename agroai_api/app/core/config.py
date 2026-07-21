@@ -130,7 +130,7 @@ class Settings(BaseSettings):
     COMPLIANCE_OBJECT_STORAGE_BACKEND: str = "disabled"
 
     # Field Intelligence (voice-first / offline field capture)
-    FIELD_TRANSCRIPTION_PROVIDER: str = ""  # "", fake, fake_fail, http/configured
+    FIELD_TRANSCRIPTION_PROVIDER: str = ""  # cloudflare_workers_ai | openai_whisper | http | fake (dev only)
     FIELD_TRANSCRIPTION_ENDPOINT: str = ""  # real provider endpoint (http provider)
     FIELD_TRANSCRIPTION_API_KEY: str = ""  # provider credential (never sent to browser)
     FIELD_TRANSCRIPTION_MODEL: str = ""
@@ -151,6 +151,23 @@ class Settings(BaseSettings):
     FIELD_MEDIA_PROBE_TIMEOUT_SECONDS: int = 20  # hard wall-clock limit per probe subprocess
     FIELD_MEDIA_PROBE_MAX_OUTPUT_BYTES: int = 8388608  # 8 MiB cap on probe subprocess output
     FIELD_MEDIA_PROBE_MEMORY_LIMIT_MB: int = 512  # address-space limit for the probe subprocess
+
+    # Field Intelligence launch control (Stage A — production activation)
+    # Release states: disabled | internal | canary | general. Deployment
+    # configuration sets the default; the DB kill switch always wins.
+    # "" (unset) => disabled in production/staging, general in dev/test.
+    FIELD_INTELLIGENCE_RELEASE_STATE: str = ""
+    FIELD_INTERNAL_ORGANIZATION_IDS: str = ""  # csv; internal-cohort organizations
+    FIELD_CANARY_ORGANIZATION_IDS: str = ""  # csv; canary allowlist (secure config)
+    FIELD_TRANSCRIPTION_TIMEOUT_SECONDS: float = 60.0  # per provider request
+    FIELD_TRANSCRIPTION_MAX_BYTES: int = 26214400  # 25 MiB provider input bound
+    FIELD_DELETION_RETENTION_DAYS: int = 0  # 0 = delete as soon as the worker runs
+    FIELD_METRICS_ENABLED: bool = True
+    FIELD_EXTRACTION_MODE: str = "auto"  # auto | model | deterministic
+    FIELD_WORKER_HEARTBEAT_TTL_SECONDS: int = 120  # worker considered stale after this
+    FIELD_STALE_JOB_ALERT_SECONDS: int = 900  # queued/running older than this is stale
+    FIELD_RELEASE_PORTAL_SHA: str = ""  # deploy pipeline reports the portal build SHA
+    FIELD_RELEASE_EDGE_SHA: str = ""  # deploy pipeline reports the edge gateway SHA
 
     # Scheduler
     SYNC_INTERVAL_MINUTES: int = 15

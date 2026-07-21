@@ -289,6 +289,39 @@ class FieldStorageReservation(Base):
     )
 
 
+class FieldRuntimeFlag(Base):
+    """Server-authoritative runtime control (kill switch, rollout override).
+
+    Deployment configuration provides the default release state; a flag row is
+    the immediate, audited emergency control that needs no redeploy. Keys are
+    namespaced (``field_intelligence.*``) and values are small JSON documents.
+    """
+
+    __tablename__ = "field_runtime_flags"
+
+    key = Column(String(120), primary_key=True)
+    value_json = Column(JSON, nullable=False)
+    updated_by = Column(String, nullable=True)
+    updated_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class FieldWorkerHeartbeat(Base):
+    """One row per live Field Intelligence worker instance.
+
+    Lets readiness, queue health and exact-SHA release alignment be proven
+    from the same database the workers drain.
+    """
+
+    __tablename__ = "field_worker_heartbeats"
+
+    worker_id = Column(String(120), primary_key=True)
+    hostname = Column(String, nullable=True)
+    git_sha = Column(String(64), nullable=True)
+    started_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    last_heartbeat_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    last_tick_json = Column(JSON, nullable=True)
+
+
 class FieldObservationAuditEvent(Base):
     """Append-only audit trail for field intelligence.
 

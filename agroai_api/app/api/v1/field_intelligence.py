@@ -40,7 +40,37 @@ def _sanitize_filename(name: str | None) -> str:
     cleaned = _CONTROL_CHARS.sub("_", (name or "asset").strip()) or "asset"
     return cleaned[:200]
 
-router = APIRouter(prefix="/field-intelligence", tags=["field-intelligence"])
+def enforce_field_intelligence_release(
+    ctx: AuthContext = Depends(get_auth_context),
+    db: Session = Depends(get_db),
+) -> None:
+    """Server-side release gate for every Field Intelligence route.
+
+    The kill switch and release state are authoritative here — frontend locks
+    are UX only. Runs after the canonical account/organization enforcement in
+    ``get_auth_context`` so restricted accounts keep their existing 403s.
+    """
+    from app.services.field_intelligence_metrics import rollout_requests
+    from app.services.field_intelligence_rollout import field_intelligence_access
+
+    allowed, state, cohort = field_intelligence_access(db, ctx.organization)
+    rollout_requests.labels(state=state, cohort=cohort, allowed=str(allowed).lower()).inc()
+    if not allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "field_intelligence_not_released",
+                "release_state": state,
+                "message": "Field Intelligence is not enabled for this organization yet.",
+            },
+        )
+
+
+router = APIRouter(
+    prefix="/field-intelligence",
+    tags=["field-intelligence"],
+    dependencies=[Depends(enforce_field_intelligence_release)],
+)
 
 
 def enforce_json_body_limit(request: Request) -> None:
@@ -230,6 +260,12 @@ async def upload_asset(
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict:
+    from app.services.field_intelligence_metrics import (
+        asset_upload_bytes, asset_upload_latency, media_validation_failures,
+    )
+    import time as _time
+
+    _upload_started = _time.monotonic()
     max_bytes = int(settings.FIELD_ASSET_MAX_BYTES)
     digest = hashlib.sha256()
     total = 0
@@ -270,6 +306,7 @@ async def upload_asset(
                 if reason == "duration_exceeds_limit":
                     raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                                         detail={"code": "duration_exceeds_limit", "message": "Media exceeds the duration limit."})
+                media_validation_failures.labels(reason=str(reason or "unknown")[:60]).inc()
                 raise HTTPException(
                     status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
                     detail={"code": "media_rejected", "reason": reason,
@@ -296,6 +333,7 @@ async def upload_asset(
                             detail={"code": "duration_exceeds_limit",
                                     "message": "Media exceeds the duration limit."},
                         )
+                    media_validation_failures.labels(reason=str(probe_reason or "unverifiable")[:60]).inc()
                     raise HTTPException(
                         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
                         detail={"code": "media_unverifiable", "reason": probe_reason,
@@ -310,6 +348,8 @@ async def upload_asset(
             duration_seconds=measured_duration, spool_path=spool_path,
             client_reported_duration=duration_seconds,
         )
+        asset_upload_bytes.labels(kind=kind).observe(total)
+        asset_upload_latency.labels(kind=kind).observe(_time.monotonic() - _upload_started)
         return {"status": "stored", "asset": svc._serialize_asset(asset)}
     finally:
         # Always reclaim the spool — durable copy lives in R2, dedupe/replay

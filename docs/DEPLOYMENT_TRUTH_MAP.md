@@ -268,3 +268,17 @@ API billing extends the existing backend but does not reinterpret Enterprise
 Portal subscriptions. Stripe configuration is server-only and all API billing,
 Checkout, meter export, pricing, Tax, support, status, applications, partner,
 self-service, and live-access flags default false.
+
+## K. Field Intelligence staging (isolated)
+
+Field Intelligence staging is an entirely separate topology deployed only by
+`.github/workflows/field-intelligence-staging.yml` through the protected
+`field-intelligence-staging` environment. It must never target
+`app.agroai-pilot.com`, `api.agroai-pilot.com`, `api-preview.agroai-pilot.com`,
+the production Render service, production database, production R2 bucket, or
+production Pages project. The launch migration is
+`027_field_intelligence_launch` after `026_platform_api_operations`; staging
+rollback proof is `027 → 026 → 027`, preserving the Field Intelligence
+foundation and every Platform API program, commerce, and operations table.
+The release state remains `internal` until a separately approved canary action.
+See `docs/field-intelligence-staging-runbook.md`.

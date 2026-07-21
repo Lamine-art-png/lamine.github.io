@@ -12,6 +12,8 @@ import {
   newCaptureId, pendingCount, putAsset, putCapture, retryRecord, subscribe,
   type CaptureRecord, type SyncState,
 } from "../fieldIntelligence/offlineQueue";
+import { FieldMap } from "../fieldIntelligence/FieldMap";
+import { MediaViewer } from "../fieldIntelligence/MediaViewer";
 
 const SEVERITIES = ["info", "low", "medium", "high", "critical"] as const;
 const EVENT_TYPES = [
@@ -142,7 +144,8 @@ export function FieldIntelligence() {
             stateFilter={stateFilter} setStateFilter={setStateFilter}
           />
           {view === "map" ? (
-            <MapView t={t} observations={filteredObs} />
+            <FieldMap t={t} observations={filteredObs} workspaceId={workspaceId}
+              selectedId={selected?.id || null} onSelect={(o: Observation) => setSelected(o)} />
           ) : (
             <Timeline
               t={t}
@@ -214,6 +217,8 @@ function ShellHeader({ t, online, pending, lastSync, onSync, view, onView }: any
 }
 
 function Composer({ t, workspaceId, onSaved }: any) {
+  const MAX_RECORDING_SECONDS = 900; // mirrors FIELD_AUDIO_MAX_SECONDS server cap
+
   const [note, setNote] = useState("");
   const [fieldName, setFieldName] = useState("");
   const [blockName, setBlockName] = useState("");
@@ -227,41 +232,99 @@ function Composer({ t, workspaceId, onSaved }: any) {
   const [recording, setRecording] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [micError, setMicError] = useState<string | null>(null);
+  const [reviewing, setReviewing] = useState(false);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const chunksRef = useRef<Blob[]>([]);
-  const audioRef = useRef<File | null>(null);
+  const stopWaitersRef = useRef<Array<() => void>>([]);
   const timerRef = useRef<number | null>(null);
+  const elapsedRef = useRef(0);
 
   const micSupported = typeof window !== "undefined" && typeof (window as any).MediaRecorder !== "undefined"
     && !!navigator?.mediaDevices?.getUserMedia;
 
+  const releaseStream = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }, []);
+
+  const setRecordedAudio = useCallback((file: File | null) => {
+    setAudioFile(file);
+    setAudioUrl((previous) => {
+      if (previous) URL.revokeObjectURL(previous);
+      return file ? URL.createObjectURL(file) : null;
+    });
+  }, []);
+
+  const stopRecording = useCallback((): Promise<void> => {
+    const recorder = recorderRef.current;
+    if (timerRef.current) { window.clearInterval(timerRef.current); timerRef.current = null; }
+    setRecording(false);
+    if (!recorder || recorder.state === "inactive") { releaseStream(); return Promise.resolve(); }
+    return new Promise((resolve) => {
+      stopWaitersRef.current.push(resolve);
+      try { recorder.stop(); } catch { resolve(); }
+    });
+  }, [releaseStream]);
+
   const startRecording = useCallback(async () => {
     setMicError(null);
     if (!micSupported) { setMicError(t("fieldIntel.micUnsupported")); return; }
+    if (recorderRef.current && recorderRef.current.state !== "inactive") return; // already live
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      streamRef.current = stream;
       const recorder = new MediaRecorder(stream);
       chunksRef.current = [];
       recorder.ondataavailable = (e) => { if (e.data.size) chunksRef.current.push(e.data); };
       recorder.onstop = () => {
         const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
-        audioRef.current = new File([blob], `capture-${Date.now()}.webm`, { type: blob.type });
-        stream.getTracks().forEach((track) => track.stop());
+        setRecordedAudio(blob.size ? new File([blob], `capture-${Date.now()}.webm`, { type: blob.type }) : null);
+        releaseStream();
+        stopWaitersRef.current.splice(0).forEach((resolve) => resolve());
       };
+      // A device change (unplugged mic) ends the tracks: finish truthfully.
+      stream.getTracks().forEach((track) => { track.onended = () => { void stopRecording(); }; });
       recorder.start();
       recorderRef.current = recorder;
       setRecording(true);
       setElapsed(0);
-      timerRef.current = window.setInterval(() => setElapsed((v) => v + 1), 1000);
+      elapsedRef.current = 0;
+      timerRef.current = window.setInterval(() => {
+        elapsedRef.current += 1;
+        setElapsed(elapsedRef.current);
+        if (elapsedRef.current >= MAX_RECORDING_SECONDS) {
+          setMicError(t("fieldIntel.maxDurationReached"));
+          void stopRecording();
+        }
+      }, 1000);
     } catch {
+      releaseStream();
       setMicError(t("fieldIntel.micDenied"));
     }
-  }, [micSupported, t]);
+  }, [micSupported, releaseStream, setRecordedAudio, stopRecording, t]);
 
-  const stopRecording = useCallback(() => {
-    recorderRef.current?.stop();
+  // Unmount / refresh safety: stop the recorder, release the microphone and
+  // revoke playback URLs so nothing leaks across navigations.
+  useEffect(() => () => {
     if (timerRef.current) window.clearInterval(timerRef.current);
-    setRecording(false);
+    try { recorderRef.current?.stop(); } catch { /* already stopped */ }
+    releaseStream();
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const retake = useCallback(async () => {
+    await stopRecording();
+    setRecordedAudio(null);
+    setElapsed(0);
+    elapsedRef.current = 0;
+  }, [stopRecording, setRecordedAudio]);
+
+  const removeAttachment = useCallback((index: number) => {
+    setAttachments((current) => current.filter((_file, i) => i !== index));
   }, []);
 
   const captureLocation = useCallback(() => {
@@ -274,16 +337,24 @@ function Composer({ t, workspaceId, onSaved }: any) {
     );
   }, [t]);
 
-  const submit = useCallback(async () => {
-    if (!note.trim() && !audioRef.current) return;
+  const beginReview = useCallback(async () => {
+    // Stop/save race: an in-flight recording is finalized (and its bytes
+    // captured) before the draft review ever renders.
+    await stopRecording();
+    if (!note.trim() && !audioFile && chunksRef.current.length === 0 && attachments.length === 0) return;
+    setReviewing(true);
+  }, [attachments.length, audioFile, note, stopRecording]);
+
+  const confirmSubmit = useCallback(async () => {
+    if (!note.trim() && !audioFile && attachments.length === 0) { setReviewing(false); return; }
     const clientCaptureId = newCaptureId();
     const assetManifest: { client_asset_id: string; kind: string; content_type: string }[] = [];
     const assetBlobs: { id: string; kind: "audio" | "photo" | "video" | "file"; file: File; duration?: number }[] = [];
 
-    if (audioRef.current) {
+    if (audioFile) {
       const id = `${clientCaptureId}_audio`;
-      assetManifest.push({ client_asset_id: id, kind: "audio", content_type: audioRef.current.type });
-      assetBlobs.push({ id, kind: "audio", file: audioRef.current, duration: elapsed || undefined });
+      assetManifest.push({ client_asset_id: id, kind: "audio", content_type: audioFile.type });
+      assetBlobs.push({ id, kind: "audio", file: audioFile, duration: elapsedRef.current || undefined });
     }
     attachments.forEach((file, index) => {
       const id = `${clientCaptureId}_att${index}`;
@@ -297,7 +368,7 @@ function Composer({ t, workspaceId, onSaved }: any) {
       idempotencyKey: clientCaptureId,
       createdAt: Date.now(),
       workspaceId,
-      captureSource: audioRef.current ? "voice" : "typed",
+      captureSource: audioFile ? "voice" : "typed",
       noteText: note.trim() || undefined,
       fieldName: fieldName || undefined,
       blockName: blockName || undefined,
@@ -321,10 +392,81 @@ function Composer({ t, workspaceId, onSaved }: any) {
       });
     }
     // reset composer
-    setNote(""); setAttachments([]); setLocation(null); audioRef.current = null; setElapsed(0);
+    setNote(""); setAttachments([]); setLocation(null); setRecordedAudio(null); setElapsed(0);
+    elapsedRef.current = 0;
     setFieldName(""); setBlockName(""); setCrop(""); setSeverity("info"); setEventType("observation"); setAssignee("");
+    setReviewing(false);
     onSaved(t("fieldIntel.saved"));
-  }, [note, attachments, elapsed, workspaceId, fieldName, blockName, crop, eventType, severity, assignee, location, onSaved, t]);
+  }, [note, attachments, audioFile, workspaceId, fieldName, blockName, crop, eventType, severity,
+      assignee, location, onSaved, setRecordedAudio, t]);
+
+  if (reviewing) {
+    return (
+      <section className="rounded-2xl border border-[#D6DDD0] bg-white p-4" aria-label={t("fieldIntel.reviewTitle")}>
+        <h2 className="text-[15px] font-semibold text-[#10231B]">{t("fieldIntel.reviewTitle")}</h2>
+        <p className="mt-1 text-[12px] text-[#65736A]">{t("fieldIntel.reviewHint")}</p>
+
+        {audioUrl && (
+          <div className="mt-3 rounded-lg border border-[#D6DDD0] p-3">
+            {/* eslint-disable-next-line jsx-a11y/media-has-caption */}
+            <audio controls src={audioUrl} className="w-full" aria-label={t("fieldIntel.audioPlayer")} />
+            <div className="mt-2 flex items-center gap-2 text-[12px] text-[#65736A]">
+              <span>{formatElapsed(elapsed)}</span>
+              <button type="button" onClick={retake}
+                className="rounded border border-[#D6DDD0] px-2 py-0.5 font-semibold text-[#B23B2E]">
+                {t("fieldIntel.retake")}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {note.trim() && (
+          <div className="mt-3 rounded-lg border border-[#D6DDD0] bg-[#F7F8F5] p-3">
+            <div className="text-[11px] font-semibold uppercase tracking-wide text-[#2D6A4F]">{t("fieldIntel.typedNote")}</div>
+            <p className="mt-1 whitespace-pre-wrap text-[13px] text-[#10231B]">{note}</p>
+          </div>
+        )}
+
+        {attachments.length > 0 && (
+          <ul className="mt-3 space-y-1">
+            {attachments.map((file, index) => (
+              <li key={`${file.name}-${index}`} className="flex items-center justify-between rounded border border-[#D6DDD0] px-2 py-1 text-[12px] text-[#3B4A41]">
+                <span className="truncate">{file.name}</span>
+                <button type="button" onClick={() => removeAttachment(index)}
+                  aria-label={t("fieldIntel.removeAttachment")}
+                  className="ml-2 font-semibold text-[#B23B2E]">
+                  {t("fieldIntel.removeAttachment")}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-[12px] text-[#3B4A41]">
+          {fieldName ? (<><dt className="font-semibold">{t("fieldIntel.field")}</dt><dd>{fieldName}</dd></>) : null}
+          {blockName ? (<><dt className="font-semibold">{t("fieldIntel.block")}</dt><dd>{blockName}</dd></>) : null}
+          {crop ? (<><dt className="font-semibold">{t("fieldIntel.crop")}</dt><dd>{crop}</dd></>) : null}
+          <dt className="font-semibold">{t("fieldIntel.severity")}</dt><dd>{t(`fieldIntel.sev.${severity}`)}</dd>
+          <dt className="font-semibold">{t("fieldIntel.eventType")}</dt><dd>{t(`fieldIntel.evt.${eventType}`)}</dd>
+          {location ? (
+            <><dt className="font-semibold">{t("fieldIntel.locationCaptured")}</dt>
+              <dd>{location.lat.toFixed(5)}, {location.lon.toFixed(5)} (±{Math.round(location.acc)}m)</dd></>
+          ) : null}
+        </dl>
+
+        <div className="mt-4 flex gap-2">
+          <button type="button" onClick={() => setReviewing(false)}
+            className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl border border-[#D6DDD0] px-4 text-[14px] font-semibold text-[#10231B]">
+            {t("fieldIntel.backToEdit")}
+          </button>
+          <button type="button" onClick={confirmSubmit}
+            className="inline-flex min-h-[44px] flex-1 items-center justify-center rounded-xl bg-[#0D2B1E] px-4 text-[14px] font-semibold text-white">
+            {t("fieldIntel.confirmQueue")}
+          </button>
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="rounded-2xl border border-[#D6DDD0] bg-white p-4">
@@ -333,7 +475,7 @@ function Composer({ t, workspaceId, onSaved }: any) {
       <div className="mt-3 flex items-center gap-3">
         <button
           type="button"
-          onClick={recording ? stopRecording : startRecording}
+          onClick={recording ? () => { void stopRecording(); } : () => { void startRecording(); }}
           className="inline-flex min-h-[52px] min-w-[52px] items-center justify-center gap-2 rounded-xl px-4 text-[14px] font-semibold text-white"
           style={{ background: recording ? "#B23B2E" : "#0D2B1E" }}
           aria-pressed={recording}
@@ -345,6 +487,11 @@ function Composer({ t, workspaceId, onSaved }: any) {
         {recording && (
           <span role="status" aria-live="assertive" className="text-[13px] font-semibold text-[#B23B2E]">
             {t("fieldIntel.recording")} {formatElapsed(elapsed)}
+          </span>
+        )}
+        {!recording && audioFile && (
+          <span className="text-[13px] text-[#1B5E3F]">
+            {t("fieldIntel.recordingReady")} ({formatElapsed(elapsed)})
           </span>
         )}
       </div>
@@ -376,7 +523,7 @@ function Composer({ t, workspaceId, onSaved }: any) {
         <label className="inline-flex min-h-[40px] cursor-pointer items-center gap-1 rounded-lg border border-[#D6DDD0] px-3 text-[13px] font-semibold text-[#10231B]">
           <Paperclip className="h-4 w-4" aria-hidden /> {t("fieldIntel.attach")}
           <input type="file" multiple className="hidden"
-            onChange={(e) => setAttachments(Array.from(e.target.files || []))}
+            onChange={(e) => setAttachments((current) => [...current, ...Array.from(e.target.files || [])])}
             accept="image/*,video/*,audio/*,application/pdf" />
         </label>
         {location && (
@@ -384,15 +531,25 @@ function Composer({ t, workspaceId, onSaved }: any) {
             {t("fieldIntel.locationCaptured")} ({t("fieldIntel.accuracy")}: {Math.round(location.acc)}m)
           </span>
         )}
-        {attachments.length > 0 && (
-          <span className="text-[12px] text-[#65736A]">{attachments.length} {t("fieldIntel.attachments")}</span>
-        )}
       </div>
+      {attachments.length > 0 && (
+        <ul className="mt-2 space-y-1">
+          {attachments.map((file, index) => (
+            <li key={`${file.name}-${index}`} className="flex items-center justify-between rounded border border-[#D6DDD0] px-2 py-1 text-[12px] text-[#3B4A41]">
+              <span className="truncate">{file.name}</span>
+              <button type="button" onClick={() => removeAttachment(index)}
+                aria-label={t("fieldIntel.removeAttachment")} className="ml-2 font-semibold text-[#B23B2E]">
+                {t("fieldIntel.removeAttachment")}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
       {locError && <p className="mt-2 text-[12px] text-[#B23B2E]">{locError}</p>}
 
-      <button type="button" onClick={submit}
+      <button type="button" onClick={() => { void beginReview(); }}
         className="mt-4 inline-flex min-h-[48px] w-full items-center justify-center rounded-xl bg-[#0D2B1E] px-4 text-[14px] font-semibold text-white">
-        {t("fieldIntel.saveOffline")}
+        {t("fieldIntel.reviewAndSave")}
       </button>
     </section>
   );
@@ -473,30 +630,6 @@ function Timeline({ t, locals, observations, onRetry, onDelete, onSelect }: any)
   );
 }
 
-function MapView({ t, observations }: any) {
-  const points = observations.filter((o: Observation) => o.location);
-  return (
-    <div className="rounded-xl border border-[#D6DDD0] bg-[#F2F5F0] p-4">
-      <div className="flex items-center gap-2 text-[13px] font-semibold text-[#10231B]">
-        <MapPin className="h-4 w-4" aria-hidden /> {t("fieldIntel.mapFallback")}
-      </div>
-      {points.length === 0 ? (
-        <p className="mt-3 text-[13px] text-[#65736A]">{t("fieldIntel.noGeolocated")}</p>
-      ) : (
-        <ul className="mt-3 space-y-1">
-          {points.map((o: Observation) => (
-            <li key={o.id} className="flex items-center gap-2 text-[12px] text-[#3B4A41]">
-              <SeverityDot severity={o.severity} />
-              <span>{o.field_name || t("fieldIntel.unassignedField")}</span>
-              <span className="text-[#9AA79E]">{o.location.latitude.toFixed(4)}, {o.location.longitude.toFixed(4)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </div>
-  );
-}
-
 function ObservationDetail({ t, observation, onClose, onReload }: any) {
   const [correcting, setCorrecting] = useState(false);
   const [corrected, setCorrected] = useState(observation.corrected_transcript || observation.transcript || "");
@@ -525,6 +658,12 @@ function ObservationDetail({ t, observation, onClose, onReload }: any) {
           <button type="button" onClick={onClose} className="rounded-lg border border-[#D6DDD0] px-3 py-1 text-[13px]">{t("fieldIntel.close")}</button>
         </div>
 
+        {Array.isArray(observation.assets) && observation.assets.length > 0 && (
+          <Section title={t("fieldIntel.media")}>
+            <MediaViewer t={t} assets={observation.assets}
+              transcript={observation.corrected_transcript || observation.transcript || null} />
+          </Section>
+        )}
         <Section title={t("fieldIntel.transcript")}>
           {correcting ? (
             <>
