@@ -1,0 +1,94 @@
+# AGRO-AI Field Intelligence zero-payment isolated staging stack.
+# Explicit Blueprint path: render-field-intelligence-staging.yaml
+# Auto-deploy remains disabled. This is staging only.
+
+previews:
+  generation: off
+
+services:
+  - type: web
+    name: agroai-field-intelligence-staging-api
+    runtime: docker
+    plan: free
+    region: oregon
+    repo: https://github.com/Lamine-art-png/lamine.github.io
+    branch: feature/field-intelligence-launch
+    autoDeploy: false
+    dockerContext: .
+    dockerfilePath: ./agroai_api/Dockerfile
+    dockerCommand: cd /app/agroai_api && ./start-production.sh
+    healthCheckPath: /v1/health
+    envVars:
+      - key: APP_ENV
+        value: staging
+      - key: GIT_SHA
+        value: 1034dcb47ef37ecaf7be3fef515500779c575f66
+      - key: APP_URL
+        value: https://agroai-field-intelligence-staging.pages.dev
+      - key: DATABASE_URL
+        fromDatabase:
+          name: agroai-field-intelligence-staging-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      - key: OAUTH_STATE_SIGNING_KEY
+        generateValue: true
+      - key: DEMO_API_KEY
+        generateValue: true
+      - key: NON_CUSTOMER_ACCESS_PROVISIONING_TOKEN
+        generateValue: true
+      - key: ACCOUNT_VERIFICATION_MODE
+        value: auto
+      - key: ENABLE_SCHEDULER
+        value: "false"
+      - key: PLATFORM_API_ENABLED
+        value: "false"
+      - key: CONNECTOR_OBJECT_STORAGE_BACKEND
+        value: r2
+      - key: CONNECTOR_OBJECT_BUCKET
+        value: agroai-field-intelligence-staging
+      - key: CONNECTOR_OBJECT_ENDPOINT_URL
+        value: https://e2fe627bff2d8e7b2b10bf078956acfe.r2.cloudflarestorage.com
+      - key: CONNECTOR_OBJECT_REGION
+        value: auto
+      - key: CONNECTOR_OBJECT_PREFIX
+        value: staging/field-intelligence
+      - key: CLOUDFLARE_R2_ACCESS_KEY_ID
+        sync: false
+      - key: CLOUDFLARE_R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: FIELD_TRANSCRIPTION_PROVIDER
+        value: cloudflare_workers_ai
+      - key: FIELD_TRANSCRIPTION_ENDPOINT
+        value: https://api.cloudflare.com/client/v4/accounts/e2fe627bff2d8e7b2b10bf078956acfe/ai/run/@cf/openai/whisper-large-v3-turbo
+      - key: FIELD_TRANSCRIPTION_MODEL
+        value: "@cf/openai/whisper-large-v3-turbo"
+      - key: FIELD_TRANSCRIPTION_API_KEY
+        sync: false
+      - key: FIELD_INTELLIGENCE_RELEASE_STATE
+        value: internal
+      - key: FIELD_INTELLIGENCE_WORKER_ENABLED
+        value: "true"
+      - key: FIELD_WORKER_INTERVAL_SECONDS
+        value: "5"
+      - key: FIELD_WORKER_BATCH
+        value: "25"
+      - key: FIELD_RECONCILER_INTERVAL_SECONDS
+        value: "300"
+      - key: FIELD_DELETION_RETENTION_DAYS
+        value: "0"
+      - key: FIELD_MEDIA_FFPROBE_PATH
+        value: ffprobe
+      - key: PLATFORM_ADMIN_EMAILS
+        sync: false
+
+databases:
+  - name: agroai-field-intelligence-staging-db
+    plan: free
+    region: oregon
+    postgresMajorVersion: "17"
+    databaseName: agroai_field_intelligence_staging
+    user: agroai_field_staging
+    connectionPool: none
