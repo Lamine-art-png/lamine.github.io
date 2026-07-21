@@ -7,12 +7,16 @@ on:
       - "platform-api/**"
       - "functions/platform-api/**"
       - "figma-enterprise-v4/src/app/components/PlatformConsole.tsx"
+      - "figma-enterprise-v4/src/app/components/PlatformSafetyNotice.tsx"
       - "figma-enterprise-v4/src/app/routes.tsx"
       - "figma-enterprise-v4/src/app/api/client.ts"
       - "figma-enterprise-v4/tests/platform-api-console-contract.mjs"
       - "agroai_api/app/api/v1/platform_playground.py"
       - "agroai_api/app/api/v1/__init__.py"
       - "agroai_api/tests/unit/test_platform_playground.py"
+      - "wrangler.toml"
+      - "cloudflare/edge-gateway/src/index.ts"
+      - "cloudflare/edge-gateway/tests/gateway.test.ts"
       - ".github/workflows/platform-api-experience-ci.yml"
   push:
     branches:
@@ -21,12 +25,16 @@ on:
       - "platform-api/**"
       - "functions/platform-api/**"
       - "figma-enterprise-v4/src/app/components/PlatformConsole.tsx"
+      - "figma-enterprise-v4/src/app/components/PlatformSafetyNotice.tsx"
       - "figma-enterprise-v4/src/app/routes.tsx"
       - "figma-enterprise-v4/src/app/api/client.ts"
       - "figma-enterprise-v4/tests/platform-api-console-contract.mjs"
       - "agroai_api/app/api/v1/platform_playground.py"
       - "agroai_api/app/api/v1/__init__.py"
       - "agroai_api/tests/unit/test_platform_playground.py"
+      - "wrangler.toml"
+      - "cloudflare/edge-gateway/src/index.ts"
+      - "cloudflare/edge-gateway/tests/gateway.test.ts"
       - ".github/workflows/platform-api-experience-ci.yml"
   workflow_dispatch:
 
@@ -35,7 +43,7 @@ permissions:
 
 jobs:
   public-surface:
-    name: Public docs, contract, accessibility and truthfulness
+    name: Public docs, accessibility and truthfulness
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -53,8 +61,9 @@ jobs:
           python-version: "3.11"
       - name: Structural, accessibility, link, truthfulness and localization checks
         run: python3 platform-api/tests/validate_platform.py
-      - name: Verify the committed OpenAPI snapshot
-        run: python3 platform-api/contract/generate_contract.py --check
+      # OpenAPI regeneration imports the complete backend dependency graph and is
+      # owned by the dedicated Platform API Contract CI workflow. Do not duplicate
+      # a partial dependency-free invocation here.
 
   authenticated-console:
     name: Authenticated console build and browser-secret boundary
@@ -101,14 +110,14 @@ jobs:
         run: python -m pytest -p no:debugging -q --tb=short tests/unit/test_platform_playground.py
 
   cloudflare-routing:
-    name: Fail-closed Platform API Pages routing
+    name: Fail-closed Platform API Pages and edge routing
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Route contract
+      - name: Public Pages route contract
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -116,7 +125,7 @@ jobs:
           required = [
               "PLATFORM_API_MARKETING_ENABLED",
               "PLATFORM_API_PUBLIC_DOCS_ENABLED",
-              "ALLOWED_PUBLIC_FILES",
+              "STATIC_ROUTES",
               "noindex, nofollow",
               "Not found",
               "/platform-api/index.html",
@@ -125,5 +134,21 @@ jobs:
           for item in required:
               assert item in source, item
           assert 'url.pathname = "/platform-api/index.html"' not in source, "catch-all landing rewrite returned"
-          print("Cloudflare Platform API route contract passed")
+          assert "mapping.asset" in source
+          print("Cloudflare Platform API Pages route contract passed")
+          PY
+      - name: Production API edge contract
+        working-directory: cloudflare/edge-gateway
+        run: |
+          npm ci --no-audit --no-fund
+          npm run check
+      - name: Standalone Platform hostname contract
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          wrangler = Path("wrangler.toml").read_text()
+          assert 'pattern = "platform.agroai-pilot.com/v1/*"' in wrangler
+          allowed = next(line for line in wrangler.splitlines() if line.startswith("ALLOWED_ORIGINS ="))
+          assert "https://platform.agroai-pilot.com" in allowed
+          print("Standalone Platform hostname is owned by the production edge")
           PY
