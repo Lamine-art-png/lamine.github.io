@@ -1,0 +1,43 @@
+name: Platform API Experience CI
+
+# Quality + truthfulness gate for the developer platform (platform-api/).
+# Static site, no build step: validate JavaScript syntax and run a stdlib-only
+# structural / accessibility / link / truthfulness / localization check. The
+# contract-fidelity check lives in platform-api-contract-ci.yml.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "platform-api/**"
+      - ".github/workflows/platform-api-experience-ci.yml"
+  push:
+    branches:
+      - "feat/api-platform-experience-v2"
+    paths:
+      - "platform-api/**"
+      - ".github/workflows/platform-api-experience-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: JavaScript syntax check
+        run: |
+          for f in platform-api/assets/*.js; do
+            echo "node --check $f"
+            node --check "$f"
+          done
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Structural, accessibility, link, truthfulness & localization checks
+        run: python3 platform-api/tests/validate_platform.py
