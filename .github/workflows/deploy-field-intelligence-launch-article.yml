@@ -41,9 +41,11 @@ jobs:
         run: |
           set -euo pipefail
           article="client/public/news/introducing-agro-ai-field-intelligence/index.html"
+          worker="cloudflare/field-intelligence-launch-worker/src/index.ts"
           test -s "$article"
+          test -s "$worker"
           grep -F "From field evidence to enterprise action" "$article" >/dev/null
-          grep -F "IMLVblFeW3s" "$article" >/dev/null
+          grep -F 'CURRENT_VIDEO_ID = "GiM6WZY0HG0"' "$worker" >/dev/null
           grep -F "3840" "$article" >/dev/null
           grep -F "Field Intelligence record is one saved field observation" "$article" >/dev/null
           grep -F '<td class="quota">2</td>' "$article" >/dev/null
@@ -73,7 +75,8 @@ jobs:
             cover_status="$(curl -sS -L -D cover.headers -o cover.bin -w '%{http_code}' --max-time 25 "${COVER_URL}" || true)"
             if [ "$article_status" = "200" ] && [ "$cover_status" = "200" ] && \
                grep -F "Introducing AGRO-AI Field Intelligence" article.html >/dev/null && \
-               grep -F "IMLVblFeW3s" article.html >/dev/null && \
+               grep -F "GiM6WZY0HG0" article.html >/dev/null && \
+               ! grep -F "IMLVblFeW3s" article.html >/dev/null && \
                grep -F '<td class="quota">2</td>' article.html >/dev/null && \
                grep -F '<td class="quota">2,500</td>' article.html >/dev/null && \
                grep -Fi "x-agroai-cover-target: 3840x2160" cover.headers >/dev/null && \
