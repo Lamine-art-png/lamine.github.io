@@ -16,13 +16,13 @@ services:
     autoDeploy: false
     dockerContext: .
     dockerfilePath: ./agroai_api/Dockerfile
-    dockerCommand: cd /app/agroai_api && ./start-production.sh
+    dockerCommand: /bin/sh /app/agroai_api/start-production.sh
     healthCheckPath: /v1/health
     envVars:
       - key: APP_ENV
         value: staging
       - key: GIT_SHA
-        value: 1034dcb47ef37ecaf7be3fef515500779c575f66
+        value: abecf34ba8fde3068be8c00cc5dd99d753f441df
       - key: APP_URL
         value: https://agroai-field-intelligence-staging.pages.dev
       - key: DATABASE_URL
