@@ -1,0 +1,71 @@
+name: Adapt Field Intelligence Transcription to Cloudflare
+
+on:
+  push:
+    branches: [ops/field-intelligence-staging-provision]
+    paths:
+      - scripts/adapt_field_transcription_cloudflare.py
+      - .github/workflows/field-intelligence-cloudflare-transcription-adapter.yml
+
+permissions:
+  contents: write
+
+jobs:
+  adapt:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feature/field-intelligence-launch
+          fetch-depth: 2
+          show-progress: false
+          token: ${{ github.token }}
+
+      - name: Verify and apply deterministic provider adaptation
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="9854a3084c6223bd7ddab5e0d182c3ba363e1790"
+          actual="$(git rev-parse HEAD)"
+          test "$actual" = "$expected" || {
+            echo "Feature branch moved: expected $expected, got $actual" >&2
+            exit 1
+          }
+          git fetch --quiet origin ops/field-intelligence-staging-provision:refs/remotes/origin/ops/field-intelligence-staging-provision
+          git show origin/ops/field-intelligence-staging-provision:scripts/adapt_field_transcription_cloudflare.py > /tmp/adapt_field_transcription_cloudflare.py
+          python3 /tmp/adapt_field_transcription_cloudflare.py
+          git diff --check
+
+      - name: Compile and run focused backend contracts
+        working-directory: agroai_api
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install -q -r requirements.txt pytest
+          sudo apt-get update -q
+          sudo apt-get install -y -q ffmpeg
+          python -m compileall -q app scripts tests/unit
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short \
+            tests/unit/test_field_intelligence.py \
+            tests/unit/test_field_intelligence_hardening.py \
+            tests/unit/test_field_intelligence_launch.py \
+            tests/unit/test_field_intelligence_staging_contract.py \
+            tests/unit/test_production_readiness.py
+
+      - name: Commit and push tested adapter
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "agroai-cloudflare-adapter-bot"
+          git config user.email "cloudflare-adapter@agroai-pilot.com"
+          git add \
+            agroai_api/app/core/config.py \
+            agroai_api/app/services/field_transcription.py \
+            agroai_api/app/services/production_readiness.py \
+            agroai_api/scripts/field_intelligence_staging_contract.py \
+            agroai_api/.env.example \
+            agroai_api/tests/unit/test_field_intelligence_launch.py \
+            agroai_api/tests/unit/test_field_intelligence_staging_contract.py
+          git commit -m "Add Cloudflare Workers AI transcription provider"
+          git push origin HEAD:feature/field-intelligence-launch
