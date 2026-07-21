@@ -16,6 +16,8 @@ env:
   NODE_VERSION: "22"
   PORTAL_PROJECT: agroai-portal
   PORTAL_URL: https://app.agroai-pilot.com
+  PLATFORM_URL: https://platform.agroai-pilot.com
+  PLATFORM_CUSTOM_DOMAIN_ENABLED: ${{ vars.PLATFORM_API_CUSTOM_DOMAIN_ENABLED || 'false' }}
   API_URL: https://app.agroai-pilot.com
   UPSTREAM_HEALTH_URL: https://api-preview.agroai-pilot.com/v1/health
   UPSTREAM_RELEASE_CONTRACT_URL: https://api-preview.agroai-pilot.com/v1/internal/release/health
@@ -33,7 +35,7 @@ jobs:
           cache: npm
           cache-dependency-path: figma-enterprise-v4/package-lock.json
 
-      - name: Validate enterprise portal
+      - name: Validate enterprise portal and Platform product
         working-directory: figma-enterprise-v4
         env:
           VITE_API_BASE_URL: ${{ env.API_URL }}
@@ -42,6 +44,7 @@ jobs:
         run: |
           npm ci
           npm run test:i18n
+          node tests/platform-api-console-contract.mjs
           npm run build
 
       - name: Validate edge gateway
@@ -77,6 +80,7 @@ jobs:
             tests/unit/test_ingestion_job_leases.py \
             tests/unit/test_object_storage.py \
             tests/unit/test_runtime_origin_and_route_contract.py \
+            tests/unit/test_platform_playground.py \
             tests/unit/test_production_readiness.py \
             tests/unit/test_i18n_catalog_contract.py
 
@@ -207,7 +211,7 @@ jobs:
             jq -e --arg sha "$GITHUB_SHA" '.status == "ok" and .contract == "agroai-release-v1" and .build_sha == $sha and .schema_current == true and .queue_configured == true and .object_storage_configured == true and .object_storage_reachable == true and .production_ready == true' >/dev/null
 
   deploy-portal:
-    name: Deploy enterprise portal
+    name: Deploy enterprise portal and Platform product
     needs: [validate, deploy-edge]
     runs-on: ubuntu-latest
     environment: production
@@ -222,7 +226,7 @@ jobs:
           cache: npm
           cache-dependency-path: figma-enterprise-v4/package-lock.json
 
-      - name: Build exact enterprise portal
+      - name: Build exact enterprise portal and Platform product
         working-directory: figma-enterprise-v4
         env:
           VITE_API_BASE_URL: ${{ env.API_URL }}
@@ -231,9 +235,10 @@ jobs:
         run: |
           npm ci
           npm run test:i18n
+          node tests/platform-api-console-contract.mjs
           npm run build
 
-      - name: Deploy portal to Pages
+      - name: Deploy authenticated products to Pages
         run: npx --yes wrangler@4.107.0 pages deploy figma-enterprise-v4/dist --project-name "${PORTAL_PROJECT}" --branch main --commit-hash "${GITHUB_SHA}"
 
       - name: Smoke production portal and global language bundle
@@ -275,6 +280,55 @@ jobs:
           grep -F 'Full UI translation unavailable' portal-smoke/all-js.txt >/dev/null
           printf 'portal_global_language_bundle=ok\n'
 
+      - name: Smoke standalone Platform product when custom domain is enabled
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "${PLATFORM_CUSTOM_DOMAIN_ENABLED,,}" in
+            true|1|yes) ;;
+            *)
+              echo "Standalone Platform custom domain is not declared active; smoke skipped without claiming activation."
+              exit 0
+              ;;
+          esac
+
+          mkdir -p platform-smoke/assets
+          ready=0
+          for attempt in $(seq 1 30); do
+            if curl --fail --silent --show-error --location --max-time 20 "${PLATFORM_URL}/" -o platform-smoke/index.html; then
+              title="$(sed -n 's:.*<title>\(.*\)</title>.*:\1:p' platform-smoke/index.html | head -1)"
+              if [ "$title" = "AGRO-AI Enterprise Portal" ]; then
+                ready=1
+                break
+              fi
+            fi
+            sleep 5
+          done
+          test "$ready" -eq 1
+
+          grep -oE '/assets/[A-Za-z0-9._/-]+\.js' platform-smoke/index.html | sed 's#^/##' > platform-smoke/queue.txt
+          : > platform-smoke/seen.txt
+          for pass in 1 2 3 4; do
+            sort -u platform-smoke/queue.txt -o platform-smoke/queue.txt
+            while IFS= read -r asset; do
+              [ -n "$asset" ] || continue
+              grep -Fx "$asset" platform-smoke/seen.txt >/dev/null 2>&1 && continue
+              echo "$asset" >> platform-smoke/seen.txt
+              target="platform-smoke/assets/$(basename "$asset")"
+              curl --fail --silent --show-error --max-time 20 "${PLATFORM_URL}/${asset}" -o "$target"
+              grep -oE 'assets/[A-Za-z0-9._/-]+\.js' "$target" >> platform-smoke/queue.txt || true
+              grep -oE '\./[A-Za-z0-9._/-]+\.js' "$target" | sed 's#^\./#assets/#' >> platform-smoke/queue.txt || true
+            done < platform-smoke/queue.txt
+          done
+          cat platform-smoke/assets/*.js > platform-smoke/all-js.txt
+          grep -F 'platform.agroai-pilot.com' platform-smoke/all-js.txt >/dev/null
+          grep -F 'Build on AGRO-AI.' platform-smoke/all-js.txt >/dev/null
+          grep -F 'Platform API enrollment remains a separate reviewed step after sign-in.' platform-smoke/all-js.txt >/dev/null
+          grep -F 'Permanent API keys never enter browser JavaScript.' platform-smoke/all-js.txt >/dev/null
+          curl --fail --silent --show-error --max-time 20 "${PLATFORM_URL}/v1/edge-health" | jq -e '.status == "ok"' >/dev/null
+          curl --fail --silent --show-error --max-time 30 "${PLATFORM_URL}/v1/health" | jq -e '.status == "ok"' >/dev/null
+          printf 'standalone_platform_product=ok\n'
+
   release-evidence:
     name: Record release evidence
     needs: [deploy-edge, deploy-portal]
@@ -292,6 +346,8 @@ jobs:
             echo "portal_result=${PORTAL_RESULT}"
             echo "api_url=${API_URL}"
             echo "portal_url=${PORTAL_URL}"
+            echo "platform_url=${PLATFORM_URL}"
+            echo "platform_custom_domain_enabled=${PLATFORM_CUSTOM_DOMAIN_ENABLED}"
           } | tee release-evidence.txt
           test "$EDGE_RESULT" = "success"
           test "$PORTAL_RESULT" = "success"
