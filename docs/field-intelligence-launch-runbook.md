@@ -31,12 +31,23 @@ Required when the release state is not `disabled` (validated by
 
 - `CONNECTOR_OBJECT_STORAGE_BACKEND=r2|s3|s3_compatible`, `CONNECTOR_OBJECT_BUCKET`,
   `CONNECTOR_OBJECT_ENDPOINT_URL` (https), R2 credentials
-- `FIELD_TRANSCRIPTION_PROVIDER=openai_whisper|http` +
-  `FIELD_TRANSCRIPTION_ENDPOINT` + `FIELD_TRANSCRIPTION_API_KEY`
-  (+ `FIELD_TRANSCRIPTION_MODEL`); fakes are readiness blockers in production
+- A real transcription provider plus `FIELD_TRANSCRIPTION_ENDPOINT`,
+  `FIELD_TRANSCRIPTION_API_KEY`, and `FIELD_TRANSCRIPTION_MODEL`; fakes are
+  readiness blockers in production. Supported production adapters:
+  - `cloudflare_workers_ai`: Base64 JSON to the official account-scoped
+    `https://api.cloudflare.com/client/v4/accounts/<account-id>/ai/run/<model>`
+    endpoint. The endpoint host, account path, and model suffix are validated
+    before the token can leave the process. Recommended staging model:
+    `@cf/openai/whisper-large-v3-turbo`.
+  - `openai_whisper`: multipart OpenAI-compatible `/audio/transcriptions` API.
+  - `http`: provider-neutral raw-audio adapter for an explicitly reviewed endpoint.
 - `ffmpeg`/`ffprobe` on PATH (baked into both API images)
 - For `general`: `FIELD_RELEASE_PORTAL_SHA` and `FIELD_RELEASE_EDGE_SHA`
   reported by the deploy pipeline
+
+Cloudflare Workers AI requests contain the authorized durable audio bytes only;
+they never contain R2 credentials, object keys, user tokens, or unrelated
+workspace content. When no language hint is supplied, the model auto-detects it.
 
 Tuning (safe defaults exist): `FIELD_ASSET_MAX_BYTES`, `FIELD_AUDIO_MAX_SECONDS`,
 `FIELD_SYNC_MAX_BATCH`, `FIELD_SYNC_MAX_BODY_BYTES`,
@@ -47,7 +58,7 @@ Tuning (safe defaults exist): `FIELD_ASSET_MAX_BYTES`, `FIELD_AUDIO_MAX_SECONDS`
 
 ## Worker topology
 
-Run at least one dedicated worker per environment:
+Run at least one dedicated worker per persistent environment:
 
 ```bash
 python -m scripts.run_field_intelligence_worker --liveness-file /tmp/fi-worker-alive
@@ -60,6 +71,12 @@ python -m scripts.run_field_intelligence_worker --liveness-file /tmp/fi-worker-a
 - Set `FIELD_INTELLIGENCE_WORKER_ENABLED=false` on API replicas when the
   dedicated worker is deployed, so drains never depend on HTTP traffic.
 
+The disposable zero-payment Render staging proof is an explicit exception: it
+uses `FIELD_INTELLIGENCE_WORKER_ENABLED=true` in one free API service because
+Render has no free background-worker instance. That topology is acceptable only
+for the bounded smoke test; the process sleeps with the free web service and is
+not a production topology.
+
 ## Database rollout
 
 ```bash
@@ -67,14 +84,16 @@ export DATABASE_URL=postgresql://…
 python scripts/field_intelligence_migration.py preflight   # no writes
 python scripts/field_intelligence_migration.py upgrade     # advisory-locked
 python scripts/field_intelligence_migration.py verify      # tables/FKs/indexes/uniques/lineage
-# Rollback (removes ONLY Field Intelligence schema):
+# Rollback (removes ONLY the launch-control revision):
 python scripts/field_intelligence_migration.py downgrade
 python scripts/field_intelligence_migration.py verify-rollback
 ```
 
-Chain proven in CI and locally: `022_account_access_appeals` →
-`027_field_intelligence_launch` → `022` → `024`. Rollback preserves every
-Platform API, verification, suspension and appeal table/column.
+Chain proven in CI and locally: `026_platform_api_operations` →
+`027_field_intelligence_launch` → `026_platform_api_operations` →
+`027_field_intelligence_launch`. The one-revision rollback preserves the Field
+Intelligence foundation plus every Platform API, verification, suspension and
+appeal table/column.
 
 ## Activation procedure
 
@@ -109,14 +128,17 @@ Trigger the kill switch first (immediate, audited), then diagnose:
 - any cross-tenant access finding (sev-1: kill switch + incident process);
 - release misalignment after a partial deploy.
 
-Schema rollback (`downgrade` + `verify-rollback`) is a last resort and
-destroys Field Intelligence data — export first if contractually required.
+Schema rollback (`downgrade` + `verify-rollback`) is a last resort and removes
+launch-control state; export Field Intelligence data first when contractually
+required before any broader destructive rollback.
 
 ## External human-only steps
 
 - Provision R2 bucket + scoped credentials; set the env contract in the
   deployment platform (never in the repository).
-- Provision the transcription provider key.
+- Provision the transcription-provider token directly in the deployment
+  secret store. For Cloudflare Workers AI, use a token scoped to Workers AI
+  Read/Edit in the intended Cloudflare account; never reuse an R2 S3 key.
 - The `lamine-github-io` Cloudflare Pages project build fails on main today;
   fix or explicitly isolate it in the Cloudflare dashboard before public
   activation (it is not driven from this repository).
