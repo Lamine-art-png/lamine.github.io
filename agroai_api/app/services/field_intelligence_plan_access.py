@@ -3,6 +3,11 @@
 A Field Intelligence record is consumed only when a new capture is completed
 into an observation. Initiation, media upload, idempotent completion replay,
 transcript correction and reprocessing do not consume another record.
+
+The two-record Free experience includes model-assisted extraction in production.
+Development and test environments keep the earlier deterministic default unless
+they explicitly opt into production mode, which preserves deliberate test and
+local-development controls while making the public launch behavior authoritative.
 """
 from __future__ import annotations
 
@@ -25,7 +30,7 @@ NEXT_PLAN: dict[str, str] = {
 }
 RECORD_METRIC = "field_record"
 ENTITLEMENT_KEY = "quota.field_intelligence.records.monthly"
-_INSTALLED = False
+MODEL_EXTRACTION_KEY = "field_intelligence.model_extraction"
 
 
 def _plan_id(value: str | None) -> str:
@@ -53,6 +58,7 @@ def _meter_complete_capture(original: Callable[..., Any]) -> Callable[..., Any]:
     def wrapped(db, ctx, capture_ref: str, payload: dict | None = None):
         from app.models.field_intelligence import FieldObservation
         from app.services import field_intelligence as svc
+        from app.services.commercial_control import resolve_effective_entitlements
         from app.services.quota import record_usage
 
         organization_id = svc.require_org(ctx)
@@ -72,7 +78,9 @@ def _meter_complete_capture(original: Callable[..., Any]) -> Callable[..., Any]:
         if existing is not None:
             return original(db, ctx, capture_ref, payload)
 
-        plan = _plan_id(getattr(ctx.organization, "plan", None))
+        effective = resolve_effective_entitlements(db, ctx.organization)
+        source = str(effective.sources.get(ENTITLEMENT_KEY, ""))
+        quota_plan = "free" if source.startswith("subscription:") else _plan_id(effective.plan)
         try:
             record_usage(
                 db,
@@ -89,7 +97,7 @@ def _meter_complete_capture(original: Callable[..., Any]) -> Callable[..., Any]:
         except HTTPException as exc:
             db.rollback()
             if exc.status_code == status.HTTP_429_TOO_MANY_REQUESTS:
-                raise _quota_error(exc, plan) from exc
+                raise _quota_error(exc, quota_plan) from exc
             raise
         except Exception:
             db.rollback()
@@ -101,30 +109,69 @@ def _meter_complete_capture(original: Callable[..., Any]) -> Callable[..., Any]:
     return wrapped
 
 
+def _production_free_model_resolver(original: Callable[..., Any]) -> Callable[..., Any]:
+    def wrapped(db, org, *, at_time=None):
+        from app.core.config import settings
+        from app.services import commercial_control
+
+        effective = original(db, org, at_time=at_time)
+        if str(settings.APP_ENV or "").strip().lower() != "production":
+            return effective
+
+        inactive_paid = (
+            effective.plan != "free"
+            and effective.subscription_status not in commercial_control.ACTIVE_PAID_STATES
+        )
+        if effective.plan != "free" and not inactive_paid:
+            return effective
+
+        source = str(effective.sources.get(MODEL_EXTRACTION_KEY, ""))
+        # Contract and organization overrides remain authoritative. The launch
+        # default only upgrades plan/subscription-derived Free-equivalent access.
+        if source and not (source.startswith("plan:") or source.startswith("subscription:")):
+            return effective
+
+        values = dict(effective.values)
+        sources = dict(effective.sources)
+        values[MODEL_EXTRACTION_KEY] = "enabled"
+        sources[MODEL_EXTRACTION_KEY] = "launch:free-two-record"
+        return commercial_control.EffectiveEntitlements(
+            organization_id=effective.organization_id,
+            plan=effective.plan,
+            plan_version=effective.plan_version,
+            customer_class=effective.customer_class,
+            organization_type=effective.organization_type,
+            subscription_status=effective.subscription_status,
+            values=values,
+            sources=sources,
+        )
+
+    wrapped.__name__ = getattr(original, "__name__", "resolve_effective_entitlements")
+    wrapped.__doc__ = getattr(original, "__doc__", None)
+    wrapped.__agroai_field_record_access__ = True
+    return wrapped
+
+
 def install_field_intelligence_plan_access() -> None:
-    """Install once during API assembly, before Field Intelligence requests run.
+    """Install canonical plan limits, metering, and the production Free launch.
 
-    Plan values are written into the canonical BASE_ENTITLEMENTS dictionaries,
-    rather than layered through another resolver wrapper. This keeps the policy
-    stable when other startup hardeners are re-installed during tests or worker
-    bootstrap and makes inactive paid plans correctly fall back to Free's two-
-    record allowance.
+    Plan defaults are written before the canonical resolver applies commercial
+    contracts and organization overrides. Inactive paid subscriptions therefore
+    inherit Free's two-record allowance through the existing restriction layer,
+    while Enterprise contract capacity remains authoritative.
     """
-    global _INSTALLED
-    if _INSTALLED:
-        return
-
     from app.services import commercial_control, field_intelligence, quota
 
+    # Reapply these declarations on every installer call. Tests and worker
+    # bootstraps may restore module dictionaries without restarting the process.
     for plan, limit in PLAN_RECORD_LIMITS.items():
         commercial_control.BASE_ENTITLEMENTS[plan][ENTITLEMENT_KEY] = limit
-
-    # Free is a real two-record product experience. Model-assisted extraction is
-    # affordable because throughput is tightly bounded at the organization level.
-    commercial_control.BASE_ENTITLEMENTS["free"]["field_intelligence.model_extraction"] = "enabled"
-
     quota.METRIC_TO_LIMIT[RECORD_METRIC] = ENTITLEMENT_KEY
+
+    current_resolver = commercial_control.resolve_effective_entitlements
+    if not getattr(current_resolver, "__agroai_field_record_access__", False):
+        commercial_control.resolve_effective_entitlements = _production_free_model_resolver(current_resolver)
+
     current_complete = field_intelligence.complete_capture
     if not getattr(current_complete, "__agroai_field_record_metered__", False):
         field_intelligence.complete_capture = _meter_complete_capture(current_complete)
-    _INSTALLED = True
