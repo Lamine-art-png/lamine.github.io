@@ -149,6 +149,11 @@ def _production_free_model_resolver(original: Callable[..., Any]) -> Callable[..
     wrapped.__name__ = getattr(original, "__name__", "resolve_effective_entitlements")
     wrapped.__doc__ = getattr(original, "__doc__", None)
     wrapped.__agroai_field_record_access__ = True
+    # The Field Intelligence layer composes above the inactive-subscription
+    # resolver. Preserve that marker so a later billing bootstrap does not
+    # mistake the composed function for an unhardened resolver and replace it.
+    if getattr(original, "__agroai_inactive_subscription_hardened__", False):
+        wrapped.__agroai_inactive_subscription_hardened__ = True
     return wrapped
 
 
