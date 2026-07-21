@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const consoleSource = readFileSync(new URL("../src/app/components/PlatformConsole.tsx", import.meta.url), "utf8");
+const safetySource = readFileSync(new URL("../src/app/components/PlatformSafetyNotice.tsx", import.meta.url), "utf8");
 const routesSource = readFileSync(new URL("../src/app/routes.tsx", import.meta.url), "utf8");
 const clientSource = readFileSync(new URL("../src/app/api/client.ts", import.meta.url), "utf8");
 
@@ -26,8 +27,9 @@ for (const route of requiredRoutes) {
 }
 
 assert.ok(routesSource.includes('path: "/platform/*"'), "Enterprise Portal must expose the controlled /platform/* surface");
-assert.ok(routesSource.includes('path: "/*", Component: PlatformConsoleApp'), "platform.agroai-pilot.com must receive the standalone product shell");
+assert.ok(routesSource.includes('path: "/*", Component: PlatformProduct'), "platform.agroai-pilot.com must receive the standalone product shell");
 assert.ok(routesSource.includes('window.location.hostname.toLowerCase() === "platform.agroai-pilot.com"'), "router must select the product by hostname");
+assert.ok(routesSource.includes("<PlatformSafetyNotice />"), "the standalone product must render its controlled-launch state");
 
 assert.ok(consoleSource.includes("Permanent API keys never enter browser JavaScript."), "Playground must state the browser-secret boundary");
 assert.ok(consoleSource.includes("/v1/platform/developer/playground/execute"), "Playground must use the authenticated server-mediated endpoint");
@@ -52,7 +54,8 @@ for (const capability of [
 assert.ok(clientSource.includes('platformDeveloper: {'), "existing API client must remain the control-plane source");
 assert.ok(consoleSource.includes("No self-service charges are active."), "billing must remain truthful when disabled");
 assert.ok(consoleSource.includes("Live-access requests are not enabled"), "live access must remain truthful when disabled");
-assert.ok(consoleSource.includes("Physical execution"), "physical-action safety state must be visible");
-assert.ok(consoleSource.includes("Automatic live approval"), "automatic live approval must remain visibly disabled");
+assert.ok(safetySource.includes("Physical execution disabled"), "physical-action safety state must be visible");
+assert.ok(safetySource.includes("Automatic live approval disabled"), "automatic live approval must remain visibly disabled");
+assert.ok(safetySource.includes("Test data isolated"), "test-data isolation must remain visibly stated");
 
-console.log(`Platform API console contract passed: ${requiredRoutes.length} product routes, host split, server-mediated Playground, and no browser credential persistence.`);
+console.log(`Platform API console contract passed: ${requiredRoutes.length} product routes, host split, server-mediated Playground, and visible controlled-launch boundaries.`);
