@@ -6,7 +6,6 @@ transcript correction and reprocessing do not consume another record.
 """
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import Any, Callable
 
 from fastapi import HTTPException, status
@@ -33,28 +32,6 @@ def _plan_id(value: str | None) -> str:
     from app.services.product_plans import plan_by_id
 
     return str(plan_by_id(value)["id"])
-
-
-def _enrich_effective_entitlements(original: Callable[..., Any]) -> Callable[..., Any]:
-    def wrapped(db, org, *, at_time=None):
-        effective = original(db, org, at_time=at_time)
-        values = dict(effective.values)
-        sources = dict(effective.sources)
-        limit = PLAN_RECORD_LIMITS.get(effective.plan)
-        values[ENTITLEMENT_KEY] = limit
-        sources[ENTITLEMENT_KEY] = f"field_intelligence_launch:{effective.plan}"
-
-        # Free is a real two-record product experience. Model-assisted
-        # extraction is affordable because record throughput is tightly bounded.
-        if effective.plan == "free":
-            values["field_intelligence.model_extraction"] = "enabled"
-            sources["field_intelligence.model_extraction"] = "field_intelligence_launch:free"
-
-        return replace(effective, values=values, sources=sources)
-
-    wrapped.__name__ = getattr(original, "__name__", "resolve_effective_entitlements")
-    wrapped.__doc__ = getattr(original, "__doc__", None)
-    return wrapped
 
 
 def _quota_error(exc: HTTPException, plan: str) -> HTTPException:
@@ -120,20 +97,34 @@ def _meter_complete_capture(original: Callable[..., Any]) -> Callable[..., Any]:
 
     wrapped.__name__ = getattr(original, "__name__", "complete_capture")
     wrapped.__doc__ = getattr(original, "__doc__", None)
+    wrapped.__agroai_field_record_metered__ = True
     return wrapped
 
 
 def install_field_intelligence_plan_access() -> None:
-    """Install once during API assembly, before Field Intelligence requests run."""
+    """Install once during API assembly, before Field Intelligence requests run.
+
+    Plan values are written into the canonical BASE_ENTITLEMENTS dictionaries,
+    rather than layered through another resolver wrapper. This keeps the policy
+    stable when other startup hardeners are re-installed during tests or worker
+    bootstrap and makes inactive paid plans correctly fall back to Free's two-
+    record allowance.
+    """
     global _INSTALLED
     if _INSTALLED:
         return
 
     from app.services import commercial_control, field_intelligence, quota
 
-    commercial_control.resolve_effective_entitlements = _enrich_effective_entitlements(
-        commercial_control.resolve_effective_entitlements
-    )
+    for plan, limit in PLAN_RECORD_LIMITS.items():
+        commercial_control.BASE_ENTITLEMENTS[plan][ENTITLEMENT_KEY] = limit
+
+    # Free is a real two-record product experience. Model-assisted extraction is
+    # affordable because throughput is tightly bounded at the organization level.
+    commercial_control.BASE_ENTITLEMENTS["free"]["field_intelligence.model_extraction"] = "enabled"
+
     quota.METRIC_TO_LIMIT[RECORD_METRIC] = ENTITLEMENT_KEY
-    field_intelligence.complete_capture = _meter_complete_capture(field_intelligence.complete_capture)
+    current_complete = field_intelligence.complete_capture
+    if not getattr(current_complete, "__agroai_field_record_metered__", False):
+        field_intelligence.complete_capture = _meter_complete_capture(current_complete)
     _INSTALLED = True
