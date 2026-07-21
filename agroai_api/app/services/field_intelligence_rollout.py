@@ -37,7 +37,13 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.models.field_intelligence import FieldRuntimeFlag
-from app.models.saas import EntitlementOverride, Organization, SecurityAuditEvent
+from app.models.saas import (
+    EntitlementOverride,
+    Organization,
+    OrganizationMembership,
+    SecurityAuditEvent,
+    User,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -78,6 +84,38 @@ def configured_release_state() -> str:
 
 def internal_operator_email(email: str | None) -> bool:
     return str(email or "").strip().lower() in _configured_internal_operator_emails()
+
+
+def _organization_has_internal_operator(db: Session, organization: Organization | None) -> bool:
+    """Resolve the cohort from server-owned user and membership records.
+
+    Field Intelligence routes already pass a canonical authenticated
+    organization. This query allows that organization's configured AGRO-AI
+    operator account to activate the internal release without trusting a browser
+    claim or hardcoding an organization id.
+    """
+    if organization is None:
+        return False
+    allowed = _configured_internal_operator_emails()
+    if not allowed:
+        return False
+    owner_email = (
+        db.query(User.email)
+        .filter(User.id == organization.owner_user_id)
+        .scalar()
+    )
+    if internal_operator_email(owner_email):
+        return True
+    member_emails = (
+        db.query(User.email)
+        .join(OrganizationMembership, OrganizationMembership.user_id == User.id)
+        .filter(
+            OrganizationMembership.organization_id == organization.id,
+            OrganizationMembership.status == "active",
+        )
+        .all()
+    )
+    return any(internal_operator_email(row[0]) for row in member_emails)
 
 
 def _flag(db: Session, key: str) -> dict | None:
@@ -140,6 +178,8 @@ def organization_cohort(db: Session, organization: Organization | None) -> str:
     org_id = str(organization.id)
     if org_id in _csv(getattr(settings, "FIELD_INTERNAL_ORGANIZATION_IDS", "")):
         return "internal"
+    if _organization_has_internal_operator(db, organization):
+        return "internal"
     override = _override_cohort(db, org_id)
     if override == "internal":
         return "internal"
@@ -154,11 +194,7 @@ def field_intelligence_access(
     *,
     user_email: str | None = None,
 ) -> tuple[bool, str, str]:
-    """Return ``(allowed, effective_state, cohort)`` for this request.
-
-    Configured AGRO-AI internal/platform-admin emails are treated as internal
-    operators without modifying the customer organization's commercial cohort.
-    """
+    """Return ``(allowed, effective_state, cohort)`` for this request."""
     state = effective_release_state(db)
     cohort = organization_cohort(db, organization)
     if internal_operator_email(user_email):
