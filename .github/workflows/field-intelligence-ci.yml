@@ -123,6 +123,7 @@ jobs:
           tests/unit/test_field_intelligence.py
           tests/unit/test_field_intelligence_hardening.py
           tests/unit/test_field_intelligence_launch.py
+          tests/unit/test_field_intelligence_plan_access.py
           tests/unit/test_field_intelligence_staging_contract.py
           tests/unit/test_field_operating_loop.py
           tests/unit/test_live_field_context.py
