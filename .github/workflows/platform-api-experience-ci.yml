@@ -66,6 +66,27 @@ jobs:
         run: python3 platform-api/tests/validate_platform.py
       # The dependency-complete Platform API Contract CI owns OpenAPI regeneration.
 
+  localization-delta:
+    name: Generate deterministic Platform UI catalog delta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Generate exact missing catalog entries
+        working-directory: figma-enterprise-v4
+        run: python3 scripts/check_ui_literal_inventory.py --write-delta shared/ui-literals.en.9.json
+      - name: Verify generated catalog closes the complete inventory
+        working-directory: figma-enterprise-v4
+        run: python3 scripts/check_ui_literal_inventory.py --check
+      - uses: actions/upload-artifact@v4
+        with:
+          name: platform-api-ui-literals-${{ github.sha }}
+          path: shared/ui-literals.en.9.json
+          if-no-files-found: error
+          retention-days: 3
+
   authenticated-console:
     name: Authenticated console build and browser-secret boundary
     runs-on: ubuntu-latest
