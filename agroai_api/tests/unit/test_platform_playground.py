@@ -84,7 +84,10 @@ def test_playground_refuses_live_projects_even_when_live_access_exists(client, d
     )
 
     assert response.status_code == 403
-    assert response.json()["detail"]["code"] == "playground_test_project_required"
+    payload = response.json()
+    assert payload["code"] == "playground_test_project_required"
+    assert payload["type"] == "request_error"
+    assert payload["request_id"]
 
 
 def test_playground_is_organization_scoped(client, db, monkeypatch):
