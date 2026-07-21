@@ -27,7 +27,7 @@ services:
       - key: APP_ENV
         value: staging
       - key: GIT_SHA
-        value: 9854a3084c6223bd7ddab5e0d182c3ba363e1790
+        value: 345bc3b89b1cbf8f6f540a29d325e9d1be8476d4
       - key: APP_URL
         value: https://agroai-field-intelligence-staging.pages.dev
       - key: DATABASE_URL
@@ -65,11 +65,11 @@ services:
       - key: CLOUDFLARE_R2_SECRET_ACCESS_KEY
         sync: false
       - key: FIELD_TRANSCRIPTION_PROVIDER
-        value: openai_whisper
+        value: cloudflare_workers_ai
       - key: FIELD_TRANSCRIPTION_ENDPOINT
-        value: https://api.groq.com/openai/v1/audio/transcriptions
+        value: https://api.cloudflare.com/client/v4/accounts/e2fe627bff2d8e7b2b10bf078956acfe/ai/run/@cf/openai/whisper-large-v3-turbo
       - key: FIELD_TRANSCRIPTION_MODEL
-        value: whisper-large-v3-turbo
+        value: "@cf/openai/whisper-large-v3-turbo"
       - key: FIELD_TRANSCRIPTION_API_KEY
         sync: false
       - key: FIELD_INTELLIGENCE_RELEASE_STATE
