@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
+const authSource = readFileSync(new URL("../src/app/components/AuthScreen.tsx", import.meta.url), "utf8");
 const consoleSource = readFileSync(new URL("../src/app/components/PlatformConsole.tsx", import.meta.url), "utf8");
 const applicationSource = readFileSync(new URL("../src/app/components/PlatformApplicationGate.tsx", import.meta.url), "utf8");
 const safetySource = readFileSync(new URL("../src/app/components/PlatformSafetyNotice.tsx", import.meta.url), "utf8");
@@ -19,6 +20,12 @@ assert.ok(routesSource.includes('path: "/*", Component: PlatformProduct'), "plat
 assert.ok(routesSource.includes('window.location.hostname.toLowerCase() === "platform.agroai-pilot.com"'), "router must select the product by hostname");
 assert.ok(routesSource.includes("if (!platformDeveloper) return <PlatformApplicationGate />"), "unenrolled organizations must enter the application gate");
 assert.ok(routesSource.includes("<PlatformSafetyNotice />"), "enrolled developers must see the controlled-launch state");
+
+assert.ok(authSource.includes('window.location.hostname.toLowerCase() === "platform.agroai-pilot.com"'), "authentication must identify the standalone hostname exactly");
+assert.ok(authSource.includes("Build on AGRO-AI."), "the standalone hostname must present Platform product positioning");
+assert.ok(authSource.includes("Platform API enrollment remains a separate reviewed step after sign-in."), "account verification and API enrollment must remain distinct");
+assert.ok(authSource.includes("It does not approve Platform API enrollment, issue API keys, enable live providers, activate billing, or authorize physical actions."), "registration must deny implied API activation");
+assert.ok(authSource.includes("AGRO-AI Enterprise Portal"), "the shared auth implementation must preserve Enterprise Portal identity");
 
 assert.ok(applicationSource.includes('apiClient.get("/v1/platform/applications")'), "application status must come from the existing backend");
 assert.ok(applicationSource.includes('apiClient.post("/v1/platform/applications"'), "applications must use the reviewed backend contract");
@@ -50,4 +57,4 @@ assert.ok(safetySource.includes("Physical execution disabled"), "physical-action
 assert.ok(safetySource.includes("Automatic live approval disabled"), "automatic live approval must remain visibly disabled");
 assert.ok(safetySource.includes("Test data isolated"), "test-data isolation must remain visibly stated");
 
-console.log(`Platform API product contract passed: ${requiredRoutes.length} console routes, reviewed application gate, keyless Playground, and visible controlled-launch boundaries.`);
+console.log(`Platform API product contract passed: ${requiredRoutes.length} console routes, host-specific auth, reviewed application gate, keyless Playground, and visible controlled-launch boundaries.`);
