@@ -11,6 +11,7 @@ async function invoke(pathname, flags = {}, options = {}) {
     env: {
       PLATFORM_API_MARKETING_ENABLED: flags.marketing ? "true" : "false",
       PLATFORM_API_PUBLIC_DOCS_ENABLED: flags.docs ? "true" : "false",
+      PLATFORM_API_INDEXING_ENABLED: flags.indexing ? "true" : "false",
       ASSETS: {
         async fetch(request) {
           const url = new URL(request.url);
@@ -65,6 +66,20 @@ for (const pathname of [
   assert.equal((await invoke("/platform-api/contract/platform_api_openapi.json", { docs: true })).response.status, 200);
 }
 
+{
+  const publicMarketing = await invoke("/platform-api", { marketing: true, indexing: true });
+  assert.equal(publicMarketing.response.status, 200);
+  assert.equal(publicMarketing.response.headers.get("x-robots-tag"), null, "public indexing must require its own explicit gate");
+
+  const publicDocs = await invoke("/platform-api/docs/", { docs: true, indexing: true });
+  assert.equal(publicDocs.response.status, 200);
+  assert.equal(publicDocs.response.headers.get("x-robots-tag"), null);
+
+  const disabled = await invoke("/platform-api/private", { marketing: true, docs: true, indexing: true });
+  assert.equal(disabled.response.status, 404);
+  assert.equal(disabled.response.headers.get("x-robots-tag"), "noindex, nofollow", "indexing must never make unknown routes discoverable");
+}
+
 for (const pathname of [
   "/platform-api/private",
   "/platform-api/assets/..evil/index.html",
@@ -83,4 +98,4 @@ for (const pathname of [
   assert.equal(response.headers.get("cache-control"), "no-store");
 }
 
-console.log("Platform API Pages flag matrix passed: marketing, docs, shared assets, contracts, traversal rejection, and fail-closed storage errors.");
+console.log("Platform API Pages flag matrix passed: marketing, docs, shared assets, explicit public indexing, contracts, traversal rejection, and fail-closed storage errors.");
