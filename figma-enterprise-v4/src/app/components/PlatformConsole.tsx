@@ -121,8 +121,10 @@ type PlatformContextValue = {
   refresh: () => Promise<void>;
   secret: string;
   secretTitle: string;
-  revealSecret: (title: string, value: string) => void;
+  secretError: string;
+  revealSecret: (title: string, value: string) => boolean;
   clearSecret: () => void;
+  clearSecretError: () => void;
 };
 
 const PlatformContext = createContext<PlatformContextValue | null>(null);
@@ -173,6 +175,10 @@ function record(value: unknown): UnknownRecord {
 function rows(value: unknown, key: string): UnknownRecord[] {
   const source = record(value)[key];
   return Array.isArray(source) ? source : [];
+}
+
+function actionMessage(cause: unknown, fallback: string) {
+  return cause instanceof Error && cause.message.trim() ? cause.message : fallback;
 }
 
 function platformHost() {
@@ -247,6 +253,11 @@ function Field({ label, children, hint }: { label: string; children: ReactNode; 
   return <label className="block"><span className="mb-2 block text-[11px] font-bold uppercase tracking-[0.12em] text-[#53665A]">{label}</span>{children}{hint ? <span className="mt-2 block text-[11px] leading-5 text-[#7A867E]">{hint}</span> : null}</label>;
 }
 
+function ActionError({ message }: { message: string }) {
+  if (!message) return null;
+  return <div role="alert" aria-live="polite" className="rounded-xl border border-[#E4B9AE] bg-[#FFF2EE] px-4 py-3 text-[12px] leading-6 text-[#823628]">{message}</div>;
+}
+
 const inputClass = "h-11 w-full rounded-xl border border-[#D3DBD1] bg-white px-3 text-[13px] text-[#10231B] outline-none transition placeholder:text-[#98A39C] focus:border-[#6C987A] focus:ring-4 focus:ring-[#DCEADB]";
 
 function PlatformProvider({ children }: { children: ReactNode }) {
@@ -259,6 +270,7 @@ function PlatformProvider({ children }: { children: ReactNode }) {
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [secret, setSecret] = useState("");
   const [secretTitle, setSecretTitle] = useState("");
+  const [secretError, setSecretError] = useState("");
 
   const refresh = useCallback(async () => {
     if (!platformDeveloper) return;
@@ -302,11 +314,24 @@ function PlatformProvider({ children }: { children: ReactNode }) {
   useEffect(() => { void refresh(); }, [refresh]);
 
   const selectedProject = state.projects.find((item) => item.id === selectedProjectId) || state.projects[0];
-  const revealSecret = (title: string, value: string) => { setSecretTitle(title); setSecret(value); };
+  const revealSecret = (title: string, value: string) => {
+    const normalized = value.trim();
+    if (!normalized) {
+      setSecret("");
+      setSecretTitle("");
+      setSecretError("The server did not return the one-time secret. Nothing was saved or copied. Do not retry blindly; review the request log or contact support with the request ID.");
+      return false;
+    }
+    setSecretError("");
+    setSecretTitle(title);
+    setSecret(normalized);
+    return true;
+  };
   const clearSecret = () => { setSecret(""); setSecretTitle(""); };
+  const clearSecretError = () => setSecretError("");
 
   return (
-    <PlatformContext.Provider value={{ state, loading, error, selectedProjectId, selectedProject, setSelectedProjectId, refresh, secret, secretTitle, revealSecret, clearSecret }}>
+    <PlatformContext.Provider value={{ state, loading, error, selectedProjectId, selectedProject, setSelectedProjectId, refresh, secret, secretTitle, secretError, revealSecret, clearSecret, clearSecretError }}>
       {children}
     </PlatformContext.Provider>
   );
@@ -379,7 +404,7 @@ function SecretDrawer() {
 
 function PlatformShell() {
   const { platformDeveloper, currentOrganization, user, logout } = useAuth();
-  const { state, loading, error, selectedProjectId, setSelectedProjectId, refresh } = usePlatform();
+  const { state, loading, error, selectedProjectId, setSelectedProjectId, refresh, secretError, clearSecretError } = usePlatform();
   const location = useLocation();
   const navigate = useNavigate();
   const route = relativeRoute(location.pathname);
@@ -452,6 +477,7 @@ function PlatformShell() {
         <main className="px-4 py-6 md:px-7 md:py-8">
           <div className="mx-auto max-w-[1420px]">
             {error ? <div role="alert" className="mb-5 flex items-start gap-3 rounded-2xl border border-[#E4B9AE] bg-[#FFF2EE] px-4 py-3 text-[12px] leading-6 text-[#823628]"><CircleHelp className="mt-0.5 h-4 w-4 shrink-0" />{error}</div> : null}
+            {secretError ? <div role="alert" aria-live="assertive" className="mb-5 flex items-start gap-3 rounded-2xl border border-[#E4B9AE] bg-[#FFF2EE] px-4 py-3 text-[12px] leading-6 text-[#823628]"><CircleHelp className="mt-0.5 h-4 w-4 shrink-0" /><span className="flex-1">{secretError}</span><button type="button" onClick={clearSecretError} className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-[#E4B9AE] bg-white/70" aria-label="Close"><X className="h-3.5 w-3.5" /></button></div> : null}
             <PlatformRoute route={route} navigate={navigate} />
           </div>
         </main>
@@ -554,13 +580,22 @@ function ProjectDetailPage({ projectId, navigate }: { projectId: string; navigat
   const { state, refresh, setSelectedProjectId } = usePlatform();
   const project = state.projects.find((item) => item.id === projectId);
   const [working, setWorking] = useState(false);
+  const [localError, setLocalError] = useState("");
   const base = platformHost() ? "" : "/platform";
   useEffect(() => { if (project) setSelectedProjectId(project.id); }, [project?.id]);
   if (!project) return <NotFoundPage />;
   const accounts = state.serviceAccounts.filter((item) => item.api_project_id === project.id);
   const keys = state.keys.filter((item) => item.api_project_id === project.id);
-  const reset = async () => { setWorking(true); try { await apiClient.platformDeveloper.resetSandbox(project.id); await refresh(); } finally { setWorking(false); } };
+  const reset = async () => {
+    if (!window.confirm(`Reset the deterministic sandbox for ${project.name}? Existing synthetic fields, observations, recommendations, reports, and jobs for this test project will be replaced.`)) return;
+    setWorking(true);
+    setLocalError("");
+    try { await apiClient.platformDeveloper.resetSandbox(project.id); await refresh(); }
+    catch (cause) { setLocalError(actionMessage(cause, "Sandbox reset failed.")); }
+    finally { setWorking(false); }
+  };
   return <div className="space-y-6"><PageHeader eyebrow={`${project.environment} project`} title={project.name} body="Project-scoped credentials, resources, usage, and safety controls." action={<div className="flex gap-3"><SecondaryButton onClick={() => navigate(`${base}/projects`)}>All projects</SecondaryButton>{project.environment === "test" ? <PrimaryButton onClick={() => void reset()} disabled={working}>{working ? <Loader2 className="h-4 w-4 animate-spin" /> : <RotateCw className="h-4 w-4" />} Reset sandbox</PrimaryButton> : null}</div>} />
+    <ActionError message={localError} />
     <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">{[["Environment", project.environment, Globe2], ["Status", project.status, ShieldCheck], ["Service accounts", accounts.length, ServerCog], ["API keys", keys.length, KeyRound]].map(([label, value, Icon]) => <Surface key={String(label)} className="p-5"><div className="flex items-center justify-between"><div className="text-[10px] font-bold uppercase tracking-[0.15em] text-[#718078]">{String(label)}</div><Icon className="h-4 w-4 text-[#50705C]" /></div><div className="mt-5 text-[23px] font-semibold capitalize">{String(value)}</div></Surface>)}</div>
     <div className="grid gap-5 xl:grid-cols-2"><Surface className="p-6"><div className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#5A7461]">Project identity</div><dl className="mt-5 space-y-4 text-[12px]"><div className="flex items-start justify-between gap-6"><dt className="text-[#75827A]">Project ID</dt><dd className="max-w-[65%] break-all font-mono text-right text-[#234433]">{project.id}</dd></div><div className="flex items-start justify-between gap-6"><dt className="text-[#75827A]">Slug</dt><dd className="font-mono text-[#234433]">{project.slug}</dd></div><div className="flex items-start justify-between gap-6"><dt className="text-[#75827A]">Created</dt><dd>{formatDate(project.created_at)}</dd></div><div className="flex items-start justify-between gap-6"><dt className="text-[#75827A]">Rate policy</dt><dd className="max-w-[65%] break-all font-mono text-right text-[10px] text-[#234433]">{JSON.stringify(project.default_rate_limit_policy || {})}</dd></div></dl></Surface><Surface className="p-6"><div className="text-[11px] font-bold uppercase tracking-[0.15em] text-[#5A7461]">Safety boundary</div><div className="mt-5 space-y-3">{[["Synthetic data", project.environment === "test"], ["Provider credentials", false], ["Physical execution", false], ["Automatic live approval", false]].map(([label, enabled]) => <div key={String(label)} className="flex items-center justify-between rounded-xl border border-[#E1E6DE] bg-white px-4 py-3"><span className="text-[12px] font-medium">{String(label)}</span><span className={`text-[11px] font-semibold ${enabled ? "text-[#315D46]" : "text-[#8A5D2D]"}`}>{enabled ? "Enabled" : "Disabled"}</span></div>)}</div></Surface></div>
   </div>;
@@ -570,10 +605,18 @@ function ServiceAccountsPage() {
   const { state, selectedProjectId, setSelectedProjectId, refresh } = usePlatform();
   const [name, setName] = useState("");
   const [working, setWorking] = useState(false);
-  const create = async () => { if (!selectedProjectId || !name.trim()) return; setWorking(true); try { await apiClient.platformDeveloper.createServiceAccount(selectedProjectId, { name: name.trim(), description: "Platform console service account", scopes: DEFAULT_SCOPES }); setName(""); await refresh(); } finally { setWorking(false); } };
+  const [localError, setLocalError] = useState("");
+  const create = async () => {
+    if (!selectedProjectId || !name.trim()) return;
+    setWorking(true);
+    setLocalError("");
+    try { await apiClient.platformDeveloper.createServiceAccount(selectedProjectId, { name: name.trim(), description: "Platform console service account", scopes: DEFAULT_SCOPES }); setName(""); await refresh(); }
+    catch (cause) { setLocalError(actionMessage(cause, "Service account creation failed.")); }
+    finally { setWorking(false); }
+  };
   const visible = state.serviceAccounts.filter((item) => !selectedProjectId || item.api_project_id === selectedProjectId);
   return <div className="space-y-6"><PageHeader eyebrow="Machine identities" title="Service accounts" body="Create narrow, project-bound identities before issuing keys. Key scopes can never exceed the parent service account." />
-    <Surface className="p-5"><div className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end"><Field label="Project"><select className={inputClass} value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)}><option value="">Select a project</option>{state.projects.map((project) => <option key={project.id} value={project.id}>{project.name} · {project.environment}</option>)}</select></Field><Field label="Service account name"><input className={inputClass} value={name} onChange={(event) => setName(event.target.value)} placeholder="backend-production" /></Field><PrimaryButton onClick={() => void create()} disabled={working || !selectedProjectId || !name.trim()}>{working ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Create</PrimaryButton></div></Surface>
+    <Surface className="p-5"><div className="grid gap-4 md:grid-cols-[1fr_1fr_auto] md:items-end"><Field label="Project"><select className={inputClass} value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)}><option value="">Select a project</option>{state.projects.map((project) => <option key={project.id} value={project.id}>{project.name} · {project.environment}</option>)}</select></Field><Field label="Service account name"><input className={inputClass} value={name} onChange={(event) => setName(event.target.value)} placeholder="backend-production" /></Field><PrimaryButton onClick={() => void create()} disabled={working || !selectedProjectId || !name.trim()}>{working ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Create</PrimaryButton></div><div className="mt-4"><ActionError message={localError} /></div></Surface>
     <div className="grid gap-4 lg:grid-cols-2">{visible.map((account) => <Surface key={account.id} className="p-5"><div className="flex items-start justify-between"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#EEF4E9] text-[#315D46]"><ServerCog className="h-5 w-5" /></div><StatusPill status={account.status} /></div><h3 className="mt-5 text-[17px] font-semibold">{account.name}</h3><p className="mt-1 font-mono text-[10px] text-[#819087]">{account.id}</p><div className="mt-4 flex flex-wrap gap-1.5">{(account.scopes || []).slice(0, 8).map((scope) => <span key={scope} className="rounded-md border border-[#D8E1D4] bg-[#F5F8F2] px-2 py-1 font-mono text-[9px] text-[#3B5B48]">{scope}</span>)}{(account.scopes || []).length > 8 ? <span className="rounded-md border border-[#D8E1D4] px-2 py-1 text-[9px] text-[#6B7A71]">+{account.scopes.length - 8}</span> : null}</div><div className="mt-5 border-t border-[#E3E7DF] pt-4 text-[10px] text-[#7A877F]">Created {formatDate(account.created_at)}</div></Surface>)}{!visible.length ? <Surface className="lg:col-span-2"><EmptyState icon={ServerCog} title="No service accounts" body="Select a project and create a scoped machine identity before issuing an API key." /></Surface> : null}</div>
   </div>;
 }
@@ -584,13 +627,34 @@ function ApiKeysPage() {
   const [accountId, setAccountId] = useState("");
   const [name, setName] = useState("");
   const [working, setWorking] = useState("");
+  const [localError, setLocalError] = useState("");
   useEffect(() => { if (!accounts.some((item) => item.id === accountId)) setAccountId(accounts[0]?.id || ""); }, [selectedProjectId, state.serviceAccounts.length]);
-  const create = async () => { if (!accountId || !name.trim()) return; setWorking("create"); try { const result = record(await apiClient.platformDeveloper.createKey(accountId, { name: name.trim(), scopes: DEFAULT_SCOPES, expires_days: 90 })); revealSecret("Store this API key now", String(result.plaintext_key || "")); setName(""); await refresh(); } finally { setWorking(""); } };
-  const rotate = async (key: ApiKey) => { setWorking(key.id); try { const result = record(await apiClient.platformDeveloper.rotateKey(key.id)); revealSecret(`Rotated key · ${key.name}`, String(result.plaintext_key || "")); await refresh(); } finally { setWorking(""); } };
-  const revoke = async (key: ApiKey) => { if (!window.confirm(`Revoke ${key.name}? Existing integrations using it will stop authenticating.`)) return; setWorking(key.id); try { await apiClient.platformDeveloper.revokeKey(key.id); await refresh(); } finally { setWorking(""); } };
+  const create = async () => {
+    if (!accountId || !name.trim()) return;
+    setWorking("create");
+    setLocalError("");
+    try { const result = record(await apiClient.platformDeveloper.createKey(accountId, { name: name.trim(), scopes: DEFAULT_SCOPES, expires_days: 90 })); revealSecret("Store this API key now", String(result.plaintext_key || "")); setName(""); await refresh(); }
+    catch (cause) { setLocalError(actionMessage(cause, "API key creation failed.")); }
+    finally { setWorking(""); }
+  };
+  const rotate = async (key: ApiKey) => {
+    setWorking(key.id);
+    setLocalError("");
+    try { const result = record(await apiClient.platformDeveloper.rotateKey(key.id)); revealSecret(`Rotated key · ${key.name}`, String(result.plaintext_key || "")); await refresh(); }
+    catch (cause) { setLocalError(actionMessage(cause, "API key rotation failed.")); }
+    finally { setWorking(""); }
+  };
+  const revoke = async (key: ApiKey) => {
+    if (!window.confirm(`Revoke ${key.name}? Existing integrations using it will stop authenticating.`)) return;
+    setWorking(key.id);
+    setLocalError("");
+    try { await apiClient.platformDeveloper.revokeKey(key.id); await refresh(); }
+    catch (cause) { setLocalError(actionMessage(cause, "API key revocation failed.")); }
+    finally { setWorking(""); }
+  };
   const visible = state.keys.filter((item) => !selectedProjectId || item.api_project_id === selectedProjectId);
   return <div className="space-y-6"><PageHeader eyebrow="Credentials" title="API keys" body="Issue one-time machine credentials from bounded service accounts. Only prefixes and fingerprints remain visible after creation." />
-    <Surface className="p-5"><div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end"><Field label="Project"><select className={inputClass} value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)}><option value="">Select a project</option>{state.projects.map((project) => <option key={project.id} value={project.id}>{project.name} · {project.environment}</option>)}</select></Field><Field label="Service account"><select className={inputClass} value={accountId} onChange={(event) => setAccountId(event.target.value)}><option value="">Select an identity</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></Field><Field label="Key name"><input className={inputClass} value={name} onChange={(event) => setName(event.target.value)} placeholder="production-backend" /></Field><PrimaryButton onClick={() => void create()} disabled={working === "create" || !accountId || !name.trim()}>{working === "create" ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} Create key</PrimaryButton></div></Surface>
+    <Surface className="p-5"><div className="grid gap-4 xl:grid-cols-[1fr_1fr_1fr_auto] xl:items-end"><Field label="Project"><select className={inputClass} value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)}><option value="">Select a project</option>{state.projects.map((project) => <option key={project.id} value={project.id}>{project.name} · {project.environment}</option>)}</select></Field><Field label="Service account"><select className={inputClass} value={accountId} onChange={(event) => setAccountId(event.target.value)}><option value="">Select an identity</option>{accounts.map((account) => <option key={account.id} value={account.id}>{account.name}</option>)}</select></Field><Field label="Key name"><input className={inputClass} value={name} onChange={(event) => setName(event.target.value)} placeholder="production-backend" /></Field><PrimaryButton onClick={() => void create()} disabled={working === "create" || !accountId || !name.trim()}>{working === "create" ? <Loader2 className="h-4 w-4 animate-spin" /> : <KeyRound className="h-4 w-4" />} Create key</PrimaryButton></div><div className="mt-4"><ActionError message={localError} /></div></Surface>
     <Surface className="overflow-hidden">{visible.length ? <div className="overflow-x-auto"><table className="min-w-full text-left text-[11px]"><thead className="bg-[#F5F7F3] text-[#68766D]"><tr><th className="px-5 py-3 font-semibold">Key</th><th className="px-4 py-3 font-semibold">Environment</th><th className="px-4 py-3 font-semibold">Fingerprint</th><th className="px-4 py-3 font-semibold">Last used</th><th className="px-4 py-3 font-semibold">Expires</th><th className="px-5 py-3 text-right font-semibold">Actions</th></tr></thead><tbody>{visible.map((key) => <tr key={key.id} className="border-t border-[#E2E7DF]"><td className="px-5 py-4"><div className="font-semibold text-[#183427]">{key.name}</div><div className="mt-1 font-mono text-[9px] text-[#89958E]">{key.key_prefix}</div></td><td className="px-4 py-4"><StatusPill status={key.environment} /></td><td className="px-4 py-4 font-mono text-[10px] text-[#45604F]">{key.fingerprint}</td><td className="px-4 py-4 text-[#65736A]">{formatDate(key.last_used_at)}</td><td className="px-4 py-4 text-[#65736A]">{formatDate(key.expires_at)}</td><td className="px-5 py-4"><div className="flex justify-end gap-2"><button onClick={() => void rotate(key)} disabled={working === key.id || key.status !== "active"} className="flex h-8 items-center gap-1.5 rounded-lg border border-[#D5DDD1] px-2.5 text-[10px] font-semibold text-[#3D5848] disabled:opacity-40"><RotateCw className="h-3 w-3" /> Rotate</button><button onClick={() => void revoke(key)} disabled={working === key.id || key.status !== "active"} className="flex h-8 items-center gap-1.5 rounded-lg border border-[#E4C2B9] px-2.5 text-[10px] font-semibold text-[#8A3D30] disabled:opacity-40"><Trash2 className="h-3 w-3" /> Revoke</button></div></td></tr>)}</tbody></table></div> : <EmptyState icon={KeyRound} title="No API keys" body="Create a service account, then issue a test key. The plaintext secret is shown exactly once." />}</Surface>
   </div>;
 }
@@ -634,10 +698,32 @@ function WebhooksPage() {
   const enabled = state.overview?.sections?.webhooks !== false;
   const [url, setUrl] = useState("");
   const [working, setWorking] = useState("");
-  const create = async () => { if (!selectedProjectId || !url.trim()) return; setWorking("create"); try { const result = record(await apiClient.platformDeveloper.createWebhook({ api_project_id: selectedProjectId, url: url.trim(), description: "Platform console endpoint", subscribed_event_types: ["recommendation.created", "source.created", "sync.completed"] })); revealSecret("Store this webhook signing secret", String(result.signing_secret || "")); setUrl(""); await refresh(); } finally { setWorking(""); } };
-  const rotate = async (endpoint: UnknownRecord) => { setWorking(String(endpoint.id)); try { const result = record(await apiClient.platformDeveloper.rotateWebhookSecret(String(endpoint.id))); revealSecret("Rotated webhook signing secret", String(result.signing_secret || "")); await refresh(); } finally { setWorking(""); } };
-  const disable = async (endpoint: UnknownRecord) => { setWorking(String(endpoint.id)); try { await apiClient.platformDeveloper.disableWebhook(String(endpoint.id)); await refresh(); } finally { setWorking(""); } };
-  return <div className="space-y-6"><PageHeader eyebrow="Event delivery" title="Webhooks" body="Signed endpoints, bounded subscriptions, delivery custody, rotation, and safe redelivery controls." />{!enabled ? <Surface><EmptyState icon={Webhook} title="Webhook delivery is not active for this program" body="The interface is staged, but production delivery remains disabled until the reviewed queue, keyring, and launch flags are enabled." /></Surface> : <><Surface className="p-5"><div className="grid gap-4 md:grid-cols-[1fr_1.4fr_auto] md:items-end"><Field label="Project"><select className={inputClass} value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)}>{state.projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></Field><Field label="HTTPS endpoint"><input className={inputClass} value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com/agroai/events" /></Field><PrimaryButton onClick={() => void create()} disabled={working === "create" || !url.trim()}>{working === "create" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add endpoint</PrimaryButton></div></Surface><div className="grid gap-4 lg:grid-cols-2">{state.webhooks.map((endpoint, index) => <Surface key={String(endpoint.id || index)} className="p-5"><div className="flex items-start justify-between"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#EEF4E9] text-[#315D46]"><Webhook className="h-5 w-5" /></div><StatusPill status={String(endpoint.status || "active")} /></div><div className="mt-5 break-all font-mono text-[11px] text-[#244835]">{String(endpoint.url || endpoint.endpoint_url || "Webhook endpoint")}</div><div className="mt-4 flex flex-wrap gap-1.5">{(endpoint.subscribed_event_types || endpoint.events || []).map((event: string) => <span key={event} className="rounded-md border border-[#D8E1D4] bg-[#F5F8F2] px-2 py-1 font-mono text-[9px] text-[#3B5B48]">{event}</span>)}</div><div className="mt-5 flex gap-2 border-t border-[#E3E7DF] pt-4"><SecondaryButton onClick={() => void rotate(endpoint)} disabled={working === String(endpoint.id)}><RotateCw className="h-3.5 w-3.5" /> Rotate secret</SecondaryButton><SecondaryButton onClick={() => void disable(endpoint)} disabled={working === String(endpoint.id)}><X className="h-3.5 w-3.5" /> Disable</SecondaryButton></div></Surface>)}{!state.webhooks.length ? <Surface className="lg:col-span-2"><EmptyState icon={Webhook} title="No webhook endpoints" body="Add an HTTPS endpoint to receive selected Platform API events after delivery is enabled for your program." /></Surface> : null}</div></>}</div>;
+  const [localError, setLocalError] = useState("");
+  const create = async () => {
+    if (!selectedProjectId || !url.trim()) return;
+    setWorking("create");
+    setLocalError("");
+    try { const result = record(await apiClient.platformDeveloper.createWebhook({ api_project_id: selectedProjectId, url: url.trim(), description: "Platform console endpoint", subscribed_event_types: ["recommendation.created", "source.created", "sync.completed"] })); revealSecret("Store this webhook signing secret", String(result.signing_secret || "")); setUrl(""); await refresh(); }
+    catch (cause) { setLocalError(actionMessage(cause, "Webhook creation failed.")); }
+    finally { setWorking(""); }
+  };
+  const rotate = async (endpoint: UnknownRecord) => {
+    setWorking(String(endpoint.id));
+    setLocalError("");
+    try { const result = record(await apiClient.platformDeveloper.rotateWebhookSecret(String(endpoint.id))); revealSecret("Rotated webhook signing secret", String(result.signing_secret || "")); await refresh(); }
+    catch (cause) { setLocalError(actionMessage(cause, "Webhook secret rotation failed.")); }
+    finally { setWorking(""); }
+  };
+  const disable = async (endpoint: UnknownRecord) => {
+    const endpointUrl = String(endpoint.url || endpoint.endpoint_url || "this endpoint");
+    if (!window.confirm(`Disable ${endpointUrl}? Event delivery will stop until the endpoint is explicitly re-enabled.`)) return;
+    setWorking(String(endpoint.id));
+    setLocalError("");
+    try { await apiClient.platformDeveloper.disableWebhook(String(endpoint.id)); await refresh(); }
+    catch (cause) { setLocalError(actionMessage(cause, "Webhook disablement failed.")); }
+    finally { setWorking(""); }
+  };
+  return <div className="space-y-6"><PageHeader eyebrow="Event delivery" title="Webhooks" body="Signed endpoints, bounded subscriptions, delivery custody, rotation, and safe redelivery controls." />{!enabled ? <Surface><EmptyState icon={Webhook} title="Webhook delivery is not active for this program" body="The interface is staged, but production delivery remains disabled until the reviewed queue, keyring, and launch flags are enabled." /></Surface> : <><Surface className="p-5"><div className="grid gap-4 md:grid-cols-[1fr_1.4fr_auto] md:items-end"><Field label="Project"><select className={inputClass} value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)}>{state.projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}</select></Field><Field label="HTTPS endpoint"><input className={inputClass} value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://example.com/agroai/events" /></Field><PrimaryButton onClick={() => void create()} disabled={working === "create" || !url.trim()}>{working === "create" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Plus className="h-4 w-4" />} Add endpoint</PrimaryButton></div><div className="mt-4"><ActionError message={localError} /></div></Surface><div className="grid gap-4 lg:grid-cols-2">{state.webhooks.map((endpoint, index) => <Surface key={String(endpoint.id || index)} className="p-5"><div className="flex items-start justify-between"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#EEF4E9] text-[#315D46]"><Webhook className="h-5 w-5" /></div><StatusPill status={String(endpoint.status || "active")} /></div><div className="mt-5 break-all font-mono text-[11px] text-[#244835]">{String(endpoint.url || endpoint.endpoint_url || "Webhook endpoint")}</div><div className="mt-4 flex flex-wrap gap-1.5">{(endpoint.subscribed_event_types || endpoint.events || []).map((event: string) => <span key={event} className="rounded-md border border-[#D8E1D4] bg-[#F5F8F2] px-2 py-1 font-mono text-[9px] text-[#3B5B48]">{event}</span>)}</div><div className="mt-5 flex gap-2 border-t border-[#E3E7DF] pt-4"><SecondaryButton onClick={() => void rotate(endpoint)} disabled={working === String(endpoint.id)}><RotateCw className="h-3.5 w-3.5" /> Rotate secret</SecondaryButton><SecondaryButton onClick={() => void disable(endpoint)} disabled={working === String(endpoint.id)}><X className="h-3.5 w-3.5" /> Disable</SecondaryButton></div></Surface>)}{!state.webhooks.length ? <Surface className="lg:col-span-2"><EmptyState icon={Webhook} title="No webhook endpoints" body="Add an HTTPS endpoint to receive selected Platform API events after delivery is enabled for your program." /></Surface> : null}</div></>}</div>;
 }
 
 function BillingPage() {
