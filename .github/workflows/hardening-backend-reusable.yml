@@ -67,4 +67,22 @@ jobs:
           PLATFORM_API_POSTGRES_TEST_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
         run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests/integration/test_platform_api_product_concurrency_postgres.py
       - name: Run complete backend unit suite
-        run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short tests/unit
+        id: backend_unit_suite
+        shell: bash
+        run: |
+          set +e
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short tests/unit 2>&1 | tee backend-unit-output.txt
+          suite_status=${PIPESTATUS[0]}
+          echo "status=${suite_status}" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Preserve backend unit diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-unit-output
+          path: agroai_api/backend-unit-output.txt
+          if-no-files-found: error
+          retention-days: 7
+      - name: Enforce backend unit result
+        if: steps.backend_unit_suite.outputs.status != '0'
+        run: exit 1

@@ -1,0 +1,130 @@
+name: Deploy Field Intelligence Launch Article
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "client/public/news/introducing-agro-ai-field-intelligence/**"
+      - "cloudflare/field-intelligence-launch-worker/**"
+      - ".github/workflows/deploy-field-intelligence-launch-article.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: field-intelligence-launch-article-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    name: Deploy and prove live launch article
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      NEWSROOM_URL: https://agroai-pilot.com/news
+      NEWSROOM_SCRIPT_URL: https://agroai-pilot.com/news/field-intelligence-newsroom.js
+      NEWSROOM_STYLE_URL: https://agroai-pilot.com/news/field-intelligence-newsroom.css
+      ARTICLE_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence
+      COVER_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence/cover.webp
+      LOGO_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence/agro-ai-logo.png
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail closed on missing Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+
+      - name: Validate launch source, newsroom and branding
+        shell: bash
+        run: |
+          set -euo pipefail
+          article="client/public/news/introducing-agro-ai-field-intelligence/index.html"
+          worker="cloudflare/field-intelligence-launch-worker/src/index.ts"
+          routes="cloudflare/field-intelligence-launch-worker/wrangler.toml"
+          test -s "$article"
+          test -s "$worker"
+          test -s "$routes"
+          grep -F "From field evidence to enterprise action" "$article" >/dev/null
+          grep -F "Glacial Indifference" "$article" >/dev/null
+          grep -F '/news/introducing-agro-ai-field-intelligence/agro-ai-logo.png' "$article" >/dev/null
+          ! grep -F '/attached_assets/' "$article" >/dev/null
+          grep -F 'LOGO_PATH = `${ARTICLE_PATH}/agro-ai-logo.png`' "$worker" >/dev/null
+          grep -F 'customer-portal/assets/agro-ai-logo.png' "$worker" >/dev/null
+          grep -F "San Francisco, California" "$article" >/dev/null
+          grep -F "GiM6WZY0HG0" "$article" >/dev/null
+          ! grep -F "IMLVblFeW3s" "$article" >/dev/null
+          grep -F 'CURRENT_VIDEO_ID = "GiM6WZY0HG0"' "$worker" >/dev/null
+          grep -F 'MARKETING_ORIGIN = "https://agroai-343.pages.dev"' "$worker" >/dev/null
+          grep -F "Introducing AGRO-AI Field Intelligence" "$worker" >/dev/null
+          grep -F "San Francisco, California" "$worker" >/dev/null
+          grep -F 'pattern = "agroai-pilot.com/news"' "$routes" >/dev/null
+          grep -F "3840" "$article" >/dev/null
+          grep -F "Field Intelligence record is one saved field observation" "$article" >/dev/null
+          grep -F '<td class="quota">2</td>' "$article" >/dev/null
+          grep -F '<td class="quota">100</td>' "$article" >/dev/null
+          grep -F '<td class="quota">500</td>' "$article" >/dev/null
+          grep -F '<td class="quota">2,500</td>' "$article" >/dev/null
+          grep -F "does not guarantee a specific yield increase" "$article" >/dev/null
+
+      - name: Validate Worker bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 deploy --dry-run --config cloudflare/field-intelligence-launch-worker/wrangler.toml
+
+      - name: Deploy narrow production routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 deploy --config cloudflare/field-intelligence-launch-worker/wrangler.toml
+
+      - name: Prove live newsroom, article, branding, video and cover
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 36); do
+            newsroom_status="$(curl -sS -L -D newsroom.headers -o newsroom.html -w '%{http_code}' --max-time 25 "${NEWSROOM_URL}" || true)"
+            script_status="$(curl -sS -L -o newsroom.js -w '%{http_code}' --max-time 25 "${NEWSROOM_SCRIPT_URL}" || true)"
+            style_status="$(curl -sS -L -o newsroom.css -w '%{http_code}' --max-time 25 "${NEWSROOM_STYLE_URL}" || true)"
+            article_status="$(curl -sS -L -o article.html -w '%{http_code}' --max-time 25 "${ARTICLE_URL}" || true)"
+            cover_status="$(curl -sS -L -D cover.headers -o cover.bin -w '%{http_code}' --max-time 25 "${COVER_URL}" || true)"
+            logo_status="$(curl -sS -L -D logo.headers -o logo.bin -w '%{http_code}' --max-time 25 "${LOGO_URL}" || true)"
+            if [ "$newsroom_status" = "200" ] && [ "$script_status" = "200" ] && [ "$style_status" = "200" ] && [ "$article_status" = "200" ] && [ "$cover_status" = "200" ] && [ "$logo_status" = "200" ] && \
+               grep -F "field-intelligence-newsroom.js" newsroom.html >/dev/null && \
+               grep -Fi "x-agroai-newsroom-field-intelligence: visible" newsroom.headers >/dev/null && \
+               grep -F "Introducing AGRO-AI Field Intelligence" newsroom.js >/dev/null && \
+               grep -F "San Francisco, California" newsroom.js >/dev/null && \
+               grep -F "Glacial Indifference" newsroom.css >/dev/null && \
+               grep -F "Introducing AGRO-AI Field Intelligence" article.html >/dev/null && \
+               grep -F "Glacial Indifference" article.html >/dev/null && \
+               grep -F "/news/introducing-agro-ai-field-intelligence/agro-ai-logo.png" article.html >/dev/null && \
+               ! grep -F "/attached_assets/" article.html >/dev/null && \
+               grep -F "San Francisco, California" article.html >/dev/null && \
+               grep -F "GiM6WZY0HG0" article.html >/dev/null && \
+               ! grep -F "IMLVblFeW3s" article.html >/dev/null && \
+               grep -F '<td class="quota">2</td>' article.html >/dev/null && \
+               grep -F '<td class="quota">2,500</td>' article.html >/dev/null && \
+               grep -Fi "content-type: image/" logo.headers >/dev/null && \
+               grep -Fi "x-agroai-logo-source: official-repository-asset" logo.headers >/dev/null && \
+               test "$(wc -c < logo.bin)" -gt 1000 && \
+               grep -Fi "x-agroai-cover-target: 3840x2160" cover.headers >/dev/null && \
+               test "$(wc -c < cover.bin)" -gt 50000; then
+              echo "newsroom_url=${NEWSROOM_URL}"
+              echo "article_url=${ARTICLE_URL}"
+              echo "logo_url=${LOGO_URL}"
+              echo "cover_url=${COVER_URL}"
+              echo "field_intelligence_newsroom=verified_live"
+              echo "field_intelligence_article_logo=verified_live"
+              echo "field_intelligence_launch_article=verified_live"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Field Intelligence newsroom/article release did not become healthy"
+          exit 1
