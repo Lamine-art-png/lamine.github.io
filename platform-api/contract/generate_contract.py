@@ -18,6 +18,7 @@ Exit non-zero if:
     reviewed snapshot (agroai_api/tests/contracts/platform_api_openapi.sha256)
   * any private / admin / portal (developer control-plane) route leaks
   * any documented path is not under /platform/
+  * the Platform API bearer scheme or operation security is weakened
   * the committed snapshot differs from a fresh generation (--check)
 """
 from __future__ import annotations
@@ -38,6 +39,7 @@ BACKEND_DIGEST = API_DIR / "tests" / "contracts" / "platform_api_openapi.sha256"
 # advertise anything the backend gates behind a feature flag.
 EXPECTED_KEY_PREFIXES = ("agro_test_", "agro_live_")
 FORBIDDEN_PATH_MARKERS = ("/developer", "/admin", "/internal", "/portal")
+HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
 
 
 def generate_contract() -> dict:
@@ -60,25 +62,65 @@ def canonical_digest(contract: dict) -> str:
     return hashlib.sha256(canonical).hexdigest()
 
 
+def _uses_platform_api_key(operation: object) -> bool:
+    if not isinstance(operation, dict):
+        return False
+    security = operation.get("security")
+    if not isinstance(security, list):
+        return False
+    return any(
+        isinstance(requirement, dict)
+        and "PlatformApiKey" in requirement
+        and requirement.get("PlatformApiKey") == []
+        for requirement in security
+    )
+
+
 def audit(contract: dict) -> list[str]:
     problems: list[str] = []
     paths = contract.get("paths", {})
 
-    if not paths:
+    if not isinstance(paths, dict) or not paths:
         problems.append("contract has no paths")
+        paths = {}
 
-    for path in paths:
+    for path, path_item in paths.items():
         if not path.startswith("/platform/"):
             problems.append(f"path outside /platform/: {path}")
         for marker in FORBIDDEN_PATH_MARKERS:
             if marker in path:
                 problems.append(f"private/control-plane route leaked into public contract: {path}")
 
-    # Every authenticated operation must reference the PlatformApiKey scheme,
-    # whose prefixes are the first-party agro_ prefixes.
+        if not isinstance(path_item, dict):
+            problems.append(f"path item is not an object: {path}")
+            continue
+        for method, operation in path_item.items():
+            if method.lower() not in HTTP_METHODS:
+                continue
+            if not isinstance(operation, dict):
+                problems.append(f"operation is not an object: {method.upper()} {path}")
+                continue
+            if operation.get("x-agroai-authentication") != "platform_api_key":
+                problems.append(f"public operation lacks platform_api_key marker: {method.upper()} {path}")
+            if not _uses_platform_api_key(operation):
+                problems.append(f"public operation lacks PlatformApiKey security: {method.upper()} {path}")
+
     schemes = contract.get("components", {}).get("securitySchemes", {})
-    if "PlatformApiKey" not in schemes:
+    scheme = schemes.get("PlatformApiKey") if isinstance(schemes, dict) else None
+    if not isinstance(scheme, dict):
         problems.append("PlatformApiKey security scheme missing from contract")
+    else:
+        if scheme.get("type") != "http":
+            problems.append("PlatformApiKey security scheme must use type=http")
+        if str(scheme.get("scheme", "")).lower() != "bearer":
+            problems.append("PlatformApiKey security scheme must use scheme=bearer")
+        bearer_format = str(scheme.get("bearerFormat", ""))
+        missing_prefixes = [prefix for prefix in EXPECTED_KEY_PREFIXES if prefix not in bearer_format]
+        if missing_prefixes:
+            problems.append(
+                "PlatformApiKey bearerFormat is missing reviewed key prefixes: "
+                + ", ".join(missing_prefixes)
+            )
 
     # Digest must match the backend's reviewed snapshot exactly.
     if BACKEND_DIGEST.exists():
@@ -126,8 +168,8 @@ def main() -> int:
 
     if problems:
         print(f"\nContract audit failed ({len(problems)} problem(s)):", file=sys.stderr)
-        for p in problems:
-            print(f"  ✗ {p}", file=sys.stderr)
+        for problem in problems:
+            print(f"  ✗ {problem}", file=sys.stderr)
         return 1
     print("Contract audit passed: docs snapshot matches the real backend contract.")
     return 0
