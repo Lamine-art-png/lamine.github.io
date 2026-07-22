@@ -12,7 +12,9 @@ Runtime: Cloudflare Pages.
 
 The marketing site is independent from the authenticated products and API
 release pipeline. Its Platform API landing page and documentation live under
-`/platform-api` and remain guarded by server-side Pages Function flags.
+`/platform-api` and remain guarded by separate server-side Pages Function
+availability flags. Search indexing is a third explicit gate and remains off
+during private beta.
 
 ## B. Enterprise Portal
 
@@ -226,6 +228,12 @@ The initial private-beta configuration may enable:
 - `PLATFORM_API_PRIVATE_BETA_ENABLED`
 - `PLATFORM_API_PARTNER_PROGRAM_ENABLED`
 - `PLATFORM_API_SUPPORT_ENABLED`
+- `PLATFORM_API_MARKETING_ENABLED`
+- `PLATFORM_API_PUBLIC_DOCS_ENABLED`
+
+`PLATFORM_API_INDEXING_ENABLED` must remain false or unset during private beta.
+Allowed HTML therefore remains `noindex, nofollow` until the later reviewed
+public launch.
 
 The following remain disabled until their separate launch gates are satisfied:
 
@@ -324,6 +332,7 @@ evidence.
 - Do not expose queue tokens or permanent Platform API keys to browser bundles.
 - Do not duplicate authentication or Platform API persistence for the standalone product.
 - Do not let an application submission create a project, key, live enrollment, billing subscription, provider connection, or physical action.
+- Do not enable public indexing during private beta.
 - Do not enable the in-process API scheduler in production.
 - Do not configure durable object storage without a durable task queue, or vice versa; upload routes fail closed on a split-brain configuration.
 - Do not register a second customer `/v1/evidence/upload-stream` implementation; the hardened secure route is authoritative.
@@ -337,7 +346,13 @@ evidence.
 The authoritative public marketing source is the root Cloudflare Pages project.
 `/platform-api` and its documentation/reference assets are guarded by Pages
 Functions using server-side `PLATFORM_API_MARKETING_ENABLED` and
-`PLATFORM_API_PUBLIC_DOCS_ENABLED`.
+`PLATFORM_API_PUBLIC_DOCS_ENABLED`. Shared CSS, JavaScript, and logo assets are
+available when either allowed surface is enabled.
+
+Allowed HTML stays `noindex, nofollow` unless the independent
+`PLATFORM_API_INDEXING_ENABLED` flag is deliberately enabled for the reviewed
+public launch. Enabling indexing alone does not expose marketing, docs, contracts,
+or unknown routes.
 
 Disabled or unknown routes return a genuine 404 with `noindex`; they do not
 collapse into the landing page. Public documentation is generated from the
