@@ -5,7 +5,7 @@ async function invoke(pathname, flags = {}, options = {}) {
   const fetched = [];
   const response = await onRequest({
     request: new Request(`https://agroai-pilot.com${pathname}`, {
-      method: "GET",
+      method: options.method || "GET",
       headers: { "user-agent": "platform-route-contract" },
     }),
     env: {
@@ -17,9 +17,14 @@ async function invoke(pathname, flags = {}, options = {}) {
           const url = new URL(request.url);
           fetched.push(url.pathname);
           if (options.assetFailure) return new Response("missing", { status: 404 });
-          return new Response(url.pathname.endsWith(".html") ? "<html></html>" : "asset", {
+          const html = '<html><head><meta name="robots" content="noindex" /></head><body>private beta</body></html>';
+          return new Response(url.pathname.endsWith(".html") ? html : "asset", {
             status: 200,
-            headers: { "content-type": url.pathname.endsWith(".html") ? "text/html" : "text/plain" },
+            headers: {
+              "content-type": url.pathname.endsWith(".html") ? "text/html" : "text/plain",
+              etag: '"private-static-representation"',
+              "content-encoding": "identity",
+            },
           });
         },
       },
@@ -45,6 +50,7 @@ for (const pathname of [
   assert.deepEqual(marketing.fetched, ["/platform-api/index.html"]);
   assert.equal(marketing.response.headers.get("x-robots-tag"), "noindex, nofollow");
   assert.equal(marketing.response.headers.get("x-frame-options"), "DENY");
+  assert.match(await marketing.response.text(), /<meta\s+name="robots"\s+content="noindex"/i, "private beta HTML must retain its static noindex marker");
 
   const shared = await invoke("/platform-api/assets/platform.css", { marketing: true });
   assert.equal(shared.response.status, 200, "marketing must retain its shared CSS/JS/logo assets while docs stay private");
@@ -70,10 +76,18 @@ for (const pathname of [
   const publicMarketing = await invoke("/platform-api", { marketing: true, indexing: true });
   assert.equal(publicMarketing.response.status, 200);
   assert.equal(publicMarketing.response.headers.get("x-robots-tag"), null, "public indexing must require its own explicit gate");
+  assert.doesNotMatch(await publicMarketing.response.text(), /<meta\b[^>]*\bname=["']robots["'][^>]*\bnoindex\b/i, "public HTML must not retain a private noindex meta tag");
+  assert.equal(publicMarketing.response.headers.get("etag"), null, "transformed public HTML must not reuse the private static ETag");
+  assert.equal(publicMarketing.response.headers.get("content-encoding"), null, "transformed public HTML must not retain stale encoding metadata");
 
   const publicDocs = await invoke("/platform-api/docs/", { docs: true, indexing: true });
   assert.equal(publicDocs.response.status, 200);
   assert.equal(publicDocs.response.headers.get("x-robots-tag"), null);
+  assert.doesNotMatch(await publicDocs.response.text(), /<meta\b[^>]*\bname=["']robots["'][^>]*\bnoindex\b/i);
+
+  const publicHead = await invoke("/platform-api", { marketing: true, indexing: true }, { method: "HEAD" });
+  assert.equal(publicHead.response.status, 200);
+  assert.equal(publicHead.response.headers.get("x-robots-tag"), null);
 
   const disabled = await invoke("/platform-api/private", { marketing: true, docs: true, indexing: true });
   assert.equal(disabled.response.status, 404);
@@ -98,4 +112,4 @@ for (const pathname of [
   assert.equal(response.headers.get("cache-control"), "no-store");
 }
 
-console.log("Platform API Pages flag matrix passed: marketing, docs, shared assets, explicit public indexing, contracts, traversal rejection, and fail-closed storage errors.");
+console.log("Platform API Pages flag matrix passed: marketing, docs, shared assets, private and public indexing bodies, contracts, traversal rejection, and fail-closed storage errors.");
