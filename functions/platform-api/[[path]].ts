@@ -31,6 +31,8 @@ const STATIC_ROUTES: Record<string, StaticRoute> = {
   "/platform-api/docs/support.html": { asset: "/platform-api/docs/support.html", surface: "docs" },
 };
 
+const PRIVATE_ROBOTS_META = /<meta\b(?=[^>]*\bname=["']robots["'])(?=[^>]*\bcontent=["'][^"']*\bnoindex\b[^"']*["'])[^>]*>\s*/gi;
+
 function enabled(value: string | undefined): boolean {
   return String(value || "").trim().toLowerCase() === "true";
 }
@@ -66,6 +68,19 @@ function surfaceEnabled(surface: Surface, options: { marketing: boolean; docs: b
   return options.marketing || options.docs;
 }
 
+function publicHtmlResponse(response: Response, html: string, headers: Headers): Response {
+  const body = html.replace(PRIVATE_ROBOTS_META, "");
+  headers.delete("content-length");
+  headers.delete("content-encoding");
+  headers.delete("etag");
+  headers.delete("x-robots-tag");
+  return new Response(body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 export const onRequest: PagesFunction<Env> = async (context) => {
   const url = new URL(context.request.url);
   const mapping = staticAsset(url.pathname);
@@ -87,6 +102,9 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   headers.set("x-frame-options", "DENY");
   if (mapping.asset.endsWith(".html")) {
     headers.set("cache-control", "private, no-cache, must-revalidate");
+    if (indexingEnabled && context.request.method !== "HEAD") {
+      return publicHtmlResponse(response, await response.text(), headers);
+    }
     if (indexingEnabled) headers.delete("x-robots-tag");
     else headers.set("x-robots-tag", "noindex, nofollow");
   } else {
