@@ -100,13 +100,14 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   headers.set("x-content-type-options", "nosniff");
   headers.set("referrer-policy", "strict-origin-when-cross-origin");
   headers.set("x-frame-options", "DENY");
+  if (indexingEnabled) headers.delete("x-robots-tag");
+  else headers.set("x-robots-tag", "noindex, nofollow");
+
   if (mapping.asset.endsWith(".html")) {
     headers.set("cache-control", "private, no-cache, must-revalidate");
     if (indexingEnabled && context.request.method !== "HEAD") {
       return publicHtmlResponse(response, await response.text(), headers);
     }
-    if (indexingEnabled) headers.delete("x-robots-tag");
-    else headers.set("x-robots-tag", "noindex, nofollow");
   } else {
     headers.set("cache-control", "public, max-age=300, must-revalidate");
   }
