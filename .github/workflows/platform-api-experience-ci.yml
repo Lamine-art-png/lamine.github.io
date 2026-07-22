@@ -161,6 +161,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
+      - name: Platform API Pages launch-flag matrix
+        run: node --experimental-strip-types functions/platform-api/platform-api-routing.test.mjs
       - name: Public Pages route contract
         run: |
           python3 - <<'PY'
@@ -170,6 +172,7 @@ jobs:
               "PLATFORM_API_MARKETING_ENABLED",
               "PLATFORM_API_PUBLIC_DOCS_ENABLED",
               "STATIC_ROUTES",
+              'surface: "shared"',
               "noindex, nofollow",
               "Not found",
               "/platform-api/index.html",
@@ -179,6 +182,7 @@ jobs:
               assert item in source, item
           assert 'url.pathname = "/platform-api/index.html"' not in source
           assert "mapping.asset" in source
+          assert "options.marketing || options.docs" in source
           print("Cloudflare Platform API Pages route contract passed")
           PY
       - name: Production API edge contract
