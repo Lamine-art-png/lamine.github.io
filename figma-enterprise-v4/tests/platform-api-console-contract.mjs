@@ -14,7 +14,7 @@ const requiredRoutes = [
   "/usage", "/logs", "/webhooks", "/billing", "/docs", "/live-access",
   "/support", "/settings",
 ];
-for (const route of requiredRoutes) assert.ok(consoleSource.includes(`\"${route}\"`), `missing Platform console route ${route}`);
+for (const route of requiredRoutes) assert.ok(consoleSource.includes(`"${route}"`), `missing Platform console route ${route}`);
 
 assert.ok(routesSource.includes('path: "/platform/*"'), "Enterprise Portal must expose the controlled /platform/* surface");
 assert.ok(routesSource.includes('path: "/*", Component: PlatformProduct'), "platform.agroai-pilot.com must receive the standalone product shell");
@@ -57,6 +57,24 @@ assert.ok(!/agro_(?:test|live)_[A-Za-z0-9_-]{16,}/.test(consoleSource), "Platfor
 assert.ok(!/Authorization:\s*Bearer\s+agro_(?:test|live)_/i.test(consoleSource), "Platform console must not embed a concrete API credential in an Authorization header");
 assert.ok(consoleSource.includes("agro_test_") && consoleSource.includes("agro_live_"), "documentation may truthfully name the reviewed key prefixes");
 
+assert.ok(consoleSource.includes("Reset the deterministic sandbox for"), "sandbox reset must require explicit confirmation");
+assert.ok(consoleSource.includes("Event delivery will stop until the endpoint is explicitly re-enabled."), "webhook disablement must require explicit confirmation");
+assert.ok(consoleSource.includes("The server did not return the one-time secret."), "empty one-time-secret responses must fail visibly");
+assert.ok(consoleSource.includes('aria-live="assertive"'), "one-time-secret failures must be announced accessibly");
+assert.ok(consoleSource.includes("function ActionError"), "write operations must expose a consistent inline error surface");
+for (const fallback of [
+  "Sandbox reset failed.",
+  "Service account creation failed.",
+  "API key creation failed.",
+  "API key rotation failed.",
+  "API key revocation failed.",
+  "Webhook creation failed.",
+  "Webhook secret rotation failed.",
+  "Webhook disablement failed.",
+]) {
+  assert.ok(consoleSource.includes(fallback), `missing visible write failure contract: ${fallback}`);
+}
+
 for (const capability of ["projects()", "serviceAccounts()", "keys()", "usage()", "requestLogs()", "webhooks()"]) {
   assert.ok(consoleSource.includes(`apiClient.platformDeveloper.${capability}`), `console must use existing control-plane capability ${capability}`);
 }
@@ -67,4 +85,4 @@ assert.ok(safetySource.includes("Physical execution disabled"), "physical-action
 assert.ok(safetySource.includes("Automatic live approval disabled"), "automatic live approval must remain visibly disabled");
 assert.ok(safetySource.includes("Test data isolated"), "test-data isolation must remain visibly stated");
 
-console.log(`Platform API product contract passed: ${requiredRoutes.length} console routes, host-specific auth, redirect-safe verification, reviewed application gate, keyless Playground, and visible controlled-launch boundaries.`);
+console.log(`Platform API product contract passed: ${requiredRoutes.length} console routes, host-specific auth, redirect-safe verification, reviewed application gate, keyless Playground, visible write failures, destructive-action confirmations, and controlled-launch boundaries.`);
