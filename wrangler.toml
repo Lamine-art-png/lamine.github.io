@@ -15,8 +15,8 @@ binding = "AI"
 required = [ "QUEUE_PUBLISH_TOKEN", "QUEUE_CONSUMER_TOKEN" ]
 
 [[routes]]
-pattern = "app.agroai-pilot.com/v1/*"
-zone_name = "agroai-pilot.com"
+pattern = "api.agroai-pilot.com"
+custom_domain = true
 
 # Preserve the established API hostname used by Stripe live webhooks and older
 # API clients while routing it through the same validated production edge.
