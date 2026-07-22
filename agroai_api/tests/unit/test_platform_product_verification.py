@@ -9,6 +9,7 @@ from app.core.config import settings
 from app.services.email_verification import (
     _product_copy,
     normalize_product_surface,
+    verification_base_url,
     verification_url,
 )
 
@@ -89,6 +90,7 @@ def test_verification_product_classification_rejects_lookalikes_and_untrusted_re
 
 
 def test_verification_url_uses_only_the_trusted_app_origin(monkeypatch):
+    monkeypatch.setattr(settings, "APP_ENV", "production")
     monkeypatch.setattr(settings, "RESEND_APP_URL", "https://app.agroai-pilot.com")
     monkeypatch.setattr(settings, "APP_URL", "https://app.agroai-pilot.com")
 
@@ -104,7 +106,36 @@ def test_verification_url_uses_only_the_trusted_app_origin(monkeypatch):
     assert "next" not in query
 
 
+def test_production_verification_origin_fails_closed_on_external_or_lookalike_configuration(monkeypatch):
+    monkeypatch.setattr(settings, "APP_ENV", "production")
+    monkeypatch.setattr(settings, "APP_URL", "https://app.agroai-pilot.com")
+
+    for candidate in (
+        "https://evil.test",
+        "https://app.agroai-pilot.com.evil.test",
+        "https://user@app.agroai-pilot.com",
+        "https://app.agroai-pilot.com/redirect",
+        "javascript:alert(1)",
+    ):
+        monkeypatch.setattr(settings, "RESEND_APP_URL", candidate)
+        assert verification_base_url() == "https://app.agroai-pilot.com"
+        parsed = urlsplit(verification_url("single-use-token", product_surface="platform_api"))
+        assert parsed.scheme == "https"
+        assert parsed.netloc == "app.agroai-pilot.com"
+        assert parsed.path == "/verify-email"
+
+
+def test_loopback_verification_origin_is_allowed_only_for_local_environments(monkeypatch):
+    monkeypatch.setattr(settings, "APP_ENV", "development")
+    monkeypatch.setattr(settings, "RESEND_APP_URL", "http://localhost:5173/")
+    assert verification_base_url() == "http://localhost:5173"
+
+    monkeypatch.setattr(settings, "APP_ENV", "production")
+    assert verification_base_url() == "https://app.agroai-pilot.com"
+
+
 def test_invalid_product_marker_falls_back_to_enterprise_without_redirect_surface(monkeypatch):
+    monkeypatch.setattr(settings, "APP_ENV", "production")
     monkeypatch.setattr(settings, "RESEND_APP_URL", "https://app.agroai-pilot.com")
 
     assert normalize_product_surface("https://evil.test/platform") == "enterprise_portal"
