@@ -79,6 +79,12 @@ The initial private-beta configuration may enable:
 - `PLATFORM_API_PRIVATE_BETA_ENABLED`
 - `PLATFORM_API_PARTNER_PROGRAM_ENABLED`
 - `PLATFORM_API_SUPPORT_ENABLED`
+- `PLATFORM_API_MARKETING_ENABLED`
+- `PLATFORM_API_PUBLIC_DOCS_ENABLED`
+
+`PLATFORM_API_INDEXING_ENABLED` must remain false or unset during private beta.
+HTML responses remain `noindex, nofollow` even when marketing or docs are
+available to approved users and reviewers.
 
 The following remain disabled until their separate gates are satisfied:
 
@@ -95,16 +101,44 @@ The following remain disabled until their separate gates are satisfied:
 EarthDaily and Valley remain `awaiting_partner_contract`. Their presence in
 readiness or application forms is not a claim that either integration is live.
 
-## Public documentation boundary
+## Public documentation and indexing boundary
 
 `functions/platform-api/[[path]].ts` serves an explicit static allowlist.
-Marketing and public docs have separate server-side feature flags. Disabled or
-unknown routes return a genuine 404 with `noindex`; they never collapse into the
-landing page.
+Marketing and public docs have separate server-side availability flags. Shared
+CSS, JavaScript, and logo assets are available when either surface is enabled,
+so a marketing-only preview cannot render as a broken page. Disabled or unknown
+routes return a genuine 404 with `noindex`; they never collapse into the landing
+page.
+
+Search indexing is a third, independent gate:
+
+- `PLATFORM_API_MARKETING_ENABLED` controls the landing page.
+- `PLATFORM_API_PUBLIC_DOCS_ENABLED` controls docs, reference, changelog, and the
+  curated OpenAPI contract.
+- `PLATFORM_API_INDEXING_ENABLED` removes `X-Robots-Tag: noindex, nofollow` from
+  allowed HTML only after a deliberate public-launch decision.
+
+Enabling indexing alone never exposes a disabled or unknown route. Those routes
+continue to return `404`, `Cache-Control: no-store`, and
+`X-Robots-Tag: noindex, nofollow`.
 
 The reference is generated from the curated `/v1/platform/*` OpenAPI contract.
 It may document reviewed paths and key prefixes, but must not invent endpoints,
 pricing, provider readiness, certifications, uptime, latency, or live access.
+
+## Activation order
+
+1. Prove exact-head backend, PostgreSQL, Redis, edge, Portal, localization,
+   browser, OpenAPI, SDK, and secret-scan checks.
+2. Attach and validate the `platform.agroai-pilot.com` Pages custom domain without
+   advertising it.
+3. Enable private-beta backend and developer-control-plane gates for selected
+   organizations only.
+4. Enable marketing and documentation availability as required for the selected
+   cohort while keeping indexing disabled.
+5. Run production smoke tests against the exact deployed SHA and verify rollback.
+6. Enable `PLATFORM_API_INDEXING_ENABLED` only for the later reviewed public
+   launch, after legal, commercial, support, and observability approval.
 
 ## Release requirements
 
@@ -118,6 +152,7 @@ Before the product can be activated externally, exact-head CI must prove:
 - projects, service accounts, key lifecycle, usage, logs, webhooks, and billing
   state through the existing backend;
 - exact origin policy and standalone hostname Worker route;
+- private-versus-public indexing behavior;
 - PostgreSQL migration and concurrency contracts;
 - no recognizable production credentials in the repository.
 
