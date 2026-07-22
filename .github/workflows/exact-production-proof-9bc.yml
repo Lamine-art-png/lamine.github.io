@@ -1,0 +1,28 @@
+name: Exact Production Proof 9bc
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/exact-production-proof-9bc.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      TARGET_SHA: 9bcde32d754e376d75e30d4f4ca5e74617d88066
+    steps:
+      - name: Inspect exact production workflows
+        shell: bash
+        run: |
+          curl -fsS 'https://api.github.com/repos/Lamine-art-png/lamine.github.io/actions/runs?event=push&branch=main&per_page=100' -o runs.json
+          jq --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha == $sha) | {id,name,status,conclusion,head_sha,created_at,updated_at}]' runs.json
+      - name: Inspect production endpoints
+        shell: bash
+        run: |
+          curl -fsS https://app.agroai-pilot.com/v1/edge-health | jq .
+          curl -fsS https://app.agroai-pilot.com/v1/health | jq .
+          curl -fsS https://app.agroai-pilot.com/v1/readiness | jq .
+          curl -fsS https://app.agroai-pilot.com/v1/i18n/languages | jq '{status,count}'
