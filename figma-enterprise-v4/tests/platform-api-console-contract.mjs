@@ -46,6 +46,12 @@ assert.ok(!applicationSource.includes("createProject("), "the application gate m
 assert.ok(!applicationSource.includes("createKey("), "the application gate must not issue a key");
 assert.ok(applicationSource.includes("Submission creates a review record only."), "application non-approval semantics must be visible");
 assert.ok(applicationSource.includes("Application approval never grants automatic live access or physical execution."), "live and physical boundaries must be visible before submission");
+assert.ok(applicationSource.includes("/additional-information"), "needs-information responses must use the audited backend application lifecycle");
+assert.ok(applicationSource.includes("document_references: []"), "additional information must not invent unverified document references");
+assert.ok(applicationSource.includes("encodeURIComponent(application.id)"), "application identifiers must be encoded before entering a URL path");
+assert.ok(applicationSource.includes("TERMINAL_STATUSES"), "terminal applications must be distinguished from active review records");
+assert.ok(applicationSource.includes("You can submit a new corrected application."), "terminal decisions must not permanently block reapplication");
+assert.ok(!applicationSource.includes("mailto:support@agroai-pilot.com?subject=Platform%20API%20application%20information"), "needs-information responses must not leave the audited workflow for email");
 
 assert.ok(consoleSource.includes("Permanent API keys never enter browser JavaScript."), "Playground must state the browser-secret boundary");
 assert.ok(consoleSource.includes("/v1/platform/developer/playground/execute"), "Playground must use the authenticated server-mediated endpoint");
@@ -85,4 +91,4 @@ assert.ok(safetySource.includes("Physical execution disabled"), "physical-action
 assert.ok(safetySource.includes("Automatic live approval disabled"), "automatic live approval must remain visibly disabled");
 assert.ok(safetySource.includes("Test data isolated"), "test-data isolation must remain visibly stated");
 
-console.log(`Platform API product contract passed: ${requiredRoutes.length} console routes, host-specific auth, redirect-safe verification, reviewed application gate, keyless Playground, visible write failures, destructive-action confirmations, and controlled-launch boundaries.`);
+console.log(`Platform API product contract passed: ${requiredRoutes.length} console routes, host-specific auth, redirect-safe verification, reviewed application and reapplication lifecycle, keyless Playground, visible write failures, destructive-action confirmations, and controlled-launch boundaries.`);
