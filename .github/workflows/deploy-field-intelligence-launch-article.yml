@@ -29,6 +29,7 @@ jobs:
       NEWSROOM_STYLE_URL: https://agroai-pilot.com/news/field-intelligence-newsroom.css
       ARTICLE_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence
       COVER_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence/cover.webp
+      LOGO_URL: https://agroai-pilot.com/agro-ai-logo.jpg
     steps:
       - uses: actions/checkout@v4
 
@@ -51,7 +52,8 @@ jobs:
           test -s "$routes"
           grep -F "From field evidence to enterprise action" "$article" >/dev/null
           grep -F "Glacial Indifference" "$article" >/dev/null
-          grep -F "Copy%20of%20AGRO-AI%20(1)_1763408301972.png" "$article" >/dev/null
+          grep -F '/agro-ai-logo.jpg' "$article" >/dev/null
+          ! grep -F '/attached_assets/' "$article" >/dev/null
           grep -F "San Francisco, California" "$article" >/dev/null
           grep -F "GiM6WZY0HG0" "$article" >/dev/null
           ! grep -F "IMLVblFeW3s" "$article" >/dev/null
@@ -90,7 +92,8 @@ jobs:
             style_status="$(curl -sS -L -o newsroom.css -w '%{http_code}' --max-time 25 "${NEWSROOM_STYLE_URL}" || true)"
             article_status="$(curl -sS -L -o article.html -w '%{http_code}' --max-time 25 "${ARTICLE_URL}" || true)"
             cover_status="$(curl -sS -L -D cover.headers -o cover.bin -w '%{http_code}' --max-time 25 "${COVER_URL}" || true)"
-            if [ "$newsroom_status" = "200" ] && [ "$script_status" = "200" ] && [ "$style_status" = "200" ] && [ "$article_status" = "200" ] && [ "$cover_status" = "200" ] && \
+            logo_status="$(curl -sS -L -D logo.headers -o logo.bin -w '%{http_code}' --max-time 25 "${LOGO_URL}" || true)"
+            if [ "$newsroom_status" = "200" ] && [ "$script_status" = "200" ] && [ "$style_status" = "200" ] && [ "$article_status" = "200" ] && [ "$cover_status" = "200" ] && [ "$logo_status" = "200" ] && \
                grep -F "field-intelligence-newsroom.js" newsroom.html >/dev/null && \
                grep -Fi "x-agroai-newsroom-field-intelligence: visible" newsroom.headers >/dev/null && \
                grep -F "Introducing AGRO-AI Field Intelligence" newsroom.js >/dev/null && \
@@ -98,18 +101,23 @@ jobs:
                grep -F "Glacial Indifference" newsroom.css >/dev/null && \
                grep -F "Introducing AGRO-AI Field Intelligence" article.html >/dev/null && \
                grep -F "Glacial Indifference" article.html >/dev/null && \
-               grep -F "Copy%20of%20AGRO-AI%20(1)_1763408301972.png" article.html >/dev/null && \
+               grep -F "/agro-ai-logo.jpg" article.html >/dev/null && \
+               ! grep -F "/attached_assets/" article.html >/dev/null && \
                grep -F "San Francisco, California" article.html >/dev/null && \
                grep -F "GiM6WZY0HG0" article.html >/dev/null && \
                ! grep -F "IMLVblFeW3s" article.html >/dev/null && \
                grep -F '<td class="quota">2</td>' article.html >/dev/null && \
                grep -F '<td class="quota">2,500</td>' article.html >/dev/null && \
+               grep -Fi "content-type: image/" logo.headers >/dev/null && \
+               test "$(wc -c < logo.bin)" -gt 1000 && \
                grep -Fi "x-agroai-cover-target: 3840x2160" cover.headers >/dev/null && \
                test "$(wc -c < cover.bin)" -gt 50000; then
               echo "newsroom_url=${NEWSROOM_URL}"
               echo "article_url=${ARTICLE_URL}"
+              echo "logo_url=${LOGO_URL}"
               echo "cover_url=${COVER_URL}"
               echo "field_intelligence_newsroom=verified_live"
+              echo "field_intelligence_article_logo=verified_live"
               echo "field_intelligence_launch_article=verified_live"
               exit 0
             fi
