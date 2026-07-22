@@ -59,10 +59,10 @@ function staticAsset(pathname: string): StaticRoute | null {
   return null;
 }
 
-function surfaceEnabled(surface: Surface, *, marketing: boolean, docs: boolean): boolean {
-  if (surface === "marketing") return marketing;
-  if (surface === "docs") return docs;
-  return marketing || docs;
+function surfaceEnabled(surface: Surface, options: { marketing: boolean; docs: boolean }): boolean {
+  if (surface === "marketing") return options.marketing;
+  if (surface === "docs") return options.docs;
+  return options.marketing || options.docs;
 }
 
 export const onRequest: PagesFunction<Env> = async (context) => {
