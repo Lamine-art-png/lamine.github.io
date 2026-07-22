@@ -2,9 +2,13 @@ import type { ComponentType } from "react";
 import { createBrowserRouter, Navigate } from "react-router";
 import { MainLayout } from "./components/MainLayout";
 import { OperationRouteBoundary } from "./components/OperationRouteBoundary";
+import { PlatformApplicationGate } from "./components/PlatformApplicationGate";
+import { PlatformConsoleApp } from "./components/PlatformConsole";
+import { PlatformSafetyNotice } from "./components/PlatformSafetyNotice";
 import { RouteRecovery } from "./components/RouteRecovery";
 import { VerifyEmailPage } from "./components/VerifyEmail";
 import { AccessAppealPage } from "./components/AccessAppeal";
+import { useAuth } from "./auth/AuthProvider";
 import { useLocale } from "./hooks/useLocale";
 
 function PortalHome() {
@@ -20,6 +24,12 @@ function PortalHome() {
 function PortalRouteError() {
   const { t } = useLocale();
   return <div className="min-h-screen bg-[#F6F4EE] px-6 py-12 text-[#10231B]"><div className="mx-auto max-w-[720px] rounded-2xl border border-[#D6DDD0] bg-[#FFFDF8] p-8 shadow-[0_20px_60px_rgba(16,35,27,0.08)]"><div className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#2D6A4F]">{t("app.recoveryEyebrow")}</div><h1 className="mt-3 text-[30px] font-semibold tracking-tight">{t("routeRecovery.title")}</h1><p className="mt-3 text-[14px] leading-7 text-[#65736A]">{t("routeRecovery.body")}</p><div className="mt-6 flex gap-3"><a href="/" className="rounded-lg bg-[#10231B] px-4 py-2 text-[13px] font-medium text-white">{t("routeRecovery.continue")}</a><a href="/intelligence" className="rounded-lg border border-[#D6DDD0] bg-white px-4 py-2 text-[13px] font-medium text-[#10231B]">{t("routeRecovery.openAsk")}</a><a href="/settings" className="rounded-lg border border-[#D6DDD0] bg-white px-4 py-2 text-[13px] font-medium text-[#10231B]">{t("routeRecovery.settings")}</a></div></div></div>;
+}
+
+function PlatformProduct() {
+  const { platformDeveloper } = useAuth();
+  if (!platformDeveloper) return <PlatformApplicationGate />;
+  return <><PlatformConsoleApp /><PlatformSafetyNotice /></>;
 }
 
 const lazyComponent = (loader: () => Promise<Record<string, unknown>>, exportName: string) => async () => {
@@ -65,9 +75,18 @@ const operationRoutes = [
   { path: "*", Component: RouteRecovery },
 ];
 
-export const router = createBrowserRouter([
+const isPlatformHostname = window.location.hostname.toLowerCase() === "platform.agroai-pilot.com";
+
+const platformRouter = createBrowserRouter([
   { path: "/verify-email", Component: VerifyEmailPage, errorElement: <PortalRouteError /> },
   { path: "/appeal", Component: AccessAppealPage, errorElement: <PortalRouteError /> },
+  { path: "/*", Component: PlatformProduct, errorElement: <PortalRouteError /> },
+]);
+
+const enterpriseRouter = createBrowserRouter([
+  { path: "/verify-email", Component: VerifyEmailPage, errorElement: <PortalRouteError /> },
+  { path: "/appeal", Component: AccessAppealPage, errorElement: <PortalRouteError /> },
+  { path: "/platform/*", Component: PlatformProduct, errorElement: <PortalRouteError /> },
   {
     path: "/",
     Component: MainLayout,
@@ -81,3 +100,5 @@ export const router = createBrowserRouter([
   },
   { path: "*", element: <PortalRouteError /> },
 ]);
+
+export const router = isPlatformHostname ? platformRouter : enterpriseRouter;

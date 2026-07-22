@@ -1,7 +1,7 @@
-
 import logging
 import re
 from datetime import datetime, timedelta
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from passlib.context import CryptContext
@@ -51,6 +51,8 @@ REGISTER_RATE_LIMIT = "5/minute" if _PRODUCTION_RATE_LIMITS else "1000/minute"
 LOGIN_RATE_LIMIT = "10/minute" if _PRODUCTION_RATE_LIMITS else "1000/minute"
 VERIFICATION_REQUEST_RATE_LIMIT = "3/minute" if _PRODUCTION_RATE_LIMITS else "1000/minute"
 VERIFICATION_CONFIRM_RATE_LIMIT = "10/minute" if _PRODUCTION_RATE_LIMITS else "1000/minute"
+_ENTERPRISE_ORIGIN = "https://app.agroai-pilot.com"
+_PLATFORM_ORIGIN = "https://platform.agroai-pilot.com"
 
 
 class RegisterRequest(BaseModel):
@@ -146,6 +148,32 @@ def _request_metadata(request: Request) -> tuple[str | None, str | None]:
     return ip_address, request.headers.get("user-agent")
 
 
+def _verification_product_surface(request: Request) -> str:
+    """Resolve email UX from fixed first-party request surfaces only.
+
+    This value changes copy and the fixed post-verification product path. It has
+    no authorization meaning and never accepts a caller-supplied return URL.
+    """
+
+    origin = str(request.headers.get("origin") or "").strip().lower().rstrip("/")
+    if origin == _PLATFORM_ORIGIN:
+        return "platform_api"
+    if origin != _ENTERPRISE_ORIGIN:
+        return "enterprise_portal"
+
+    referer = str(request.headers.get("referer") or "").strip()
+    if not referer:
+        return "enterprise_portal"
+    try:
+        parsed = urlsplit(referer)
+    except ValueError:
+        return "enterprise_portal"
+    referer_origin = f"{parsed.scheme.lower()}://{parsed.netloc.lower()}"
+    if referer_origin == _ENTERPRISE_ORIGIN and (parsed.path == "/platform" or parsed.path.startswith("/platform/")):
+        return "platform_api"
+    return "enterprise_portal"
+
+
 def _organization_verification_payload(org: Organization) -> dict:
     profile = getattr(org, "verification_profile", None)
     return {
@@ -199,12 +227,12 @@ def _verification_payload(user: User) -> dict:
     }
 
 
-def _best_effort_send_verification(db: Session, user: User) -> dict:
+def _best_effort_send_verification(db: Session, user: User, *, product_surface: str = "enterprise_portal") -> dict:
     """Create/send a verification token without letting delivery issues break auth UX."""
 
     try:
         token = create_verification_token(db, user)
-        delivery = send_or_log_verification(db, user, token)
+        delivery = send_or_log_verification(db, user, token, product_surface=product_surface)
         db.commit()
         return delivery
     except Exception:
@@ -429,7 +457,11 @@ def register(payload: RegisterRequest, request: Request, db: Session = Depends(g
     db.refresh(user)
     db.refresh(org)
     db.refresh(membership)
-    delivery = _best_effort_send_verification(db, user)
+    delivery = _best_effort_send_verification(
+        db,
+        user,
+        product_surface=_verification_product_surface(request),
+    )
     db.refresh(user)
     db.refresh(org)
     return {
@@ -597,7 +629,11 @@ def request_email_verification(
         if not target and payload.email:
             target = db.query(User).filter(User.email == payload.email.lower()).first()
         if target and (target.email_verification_status != "verified" or not target.email_verified_at):
-            _best_effort_send_verification(db, target)
+            _best_effort_send_verification(
+                db,
+                target,
+                product_surface=_verification_product_surface(request),
+            )
     except (SQLAlchemyError, Exception):
         db.rollback()
         logger.exception("Email verification resend failed")

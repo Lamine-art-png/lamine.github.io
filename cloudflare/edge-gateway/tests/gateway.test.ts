@@ -5,6 +5,8 @@ describe("edge origin policy", () => {
   it("allows exact production origins and approved Pages projects", () => {
     const env = { ALLOWED_ORIGINS: "https://extra.agroai-pilot.com" };
     expect(configuredOrigins(env).has("https://app.agroai-pilot.com")).toBe(true);
+    expect(configuredOrigins(env).has("https://platform.agroai-pilot.com")).toBe(true);
+    expect(originAllowed("https://platform.agroai-pilot.com", env)).toBe(true);
     expect(originAllowed("https://extra.agroai-pilot.com", env)).toBe(true);
     expect(originAllowed("https://agroai-portal.pages.dev", env)).toBe(true);
     expect(originAllowed("https://preview.agroai-command-center-v2-preview.pages.dev", env)).toBe(true);
@@ -13,6 +15,8 @@ describe("edge origin policy", () => {
   it("rejects lookalike and arbitrary origins", () => {
     const env = { ALLOWED_ORIGINS: "" };
     expect(originAllowed("https://app.agroai-pilot.com.evil.test", env)).toBe(false);
+    expect(originAllowed("https://platform.agroai-pilot.com.evil.test", env)).toBe(false);
+    expect(originAllowed("https://platform-agroai-pilot.com", env)).toBe(false);
     expect(originAllowed("https://random.pages.dev", env)).toBe(false);
     expect(originAllowed(null, env)).toBe(false);
   });

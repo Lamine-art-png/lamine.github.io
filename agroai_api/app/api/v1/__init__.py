@@ -140,3 +140,11 @@ product_shell_module.router.include_router(ask_agro_ai_paywall_module.router)
 product_shell_module.router.include_router(outreach_router)
 
 _hide_compat_schema_shadows()
+
+# Mount the authenticated, test-only Playground into the existing Platform API
+# router without creating a second API or authentication surface.
+from . import platform_api as platform_api_module  # noqa: E402
+from . import platform_playground as platform_playground_module  # noqa: E402
+
+platform_api_module.router.include_router(platform_playground_module.router)
+materialize_included_routes(platform_api_module.router)

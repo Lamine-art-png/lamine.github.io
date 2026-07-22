@@ -1,0 +1,15 @@
+{
+  "name": "AGRO-AI Platform API",
+  "short_name": "AGRO-AI API",
+  "description": "Developer platform for agricultural intelligence APIs, isolated test projects, scoped machine identities, usage, logs, and controlled live access.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F6F4EE",
+  "theme_color": "#0D2B1E",
+  "icons": [
+    { "src": "/pwa-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/pwa-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
