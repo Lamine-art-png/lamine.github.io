@@ -15,11 +15,13 @@ from .router_compat import materialize_included_routes  # noqa: E402
 from app.services.ask_agro_ai_commercial_policy import install_ask_agro_ai_commercial_policy  # noqa: E402
 from app.services.commercial_billing_lifecycle import install_commercial_billing_lifecycle  # noqa: E402
 from app.services.i18n_translation_resilience import install_i18n_translation_resilience  # noqa: E402
+from app.services.field_intelligence_plan_access import install_field_intelligence_plan_access  # noqa: E402
 from . import i18n as i18n_module  # noqa: E402
 
 install_ask_agro_ai_commercial_policy()
 install_commercial_billing_lifecycle()
 install_i18n_translation_resilience(i18n_module)
+install_field_intelligence_plan_access()
 
 from . import brain as brain_module  # noqa: E402
 from . import brain_safety as brain_safety_module  # noqa: E402
