@@ -1,0 +1,56 @@
+name: Telugu Model Probe
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/telugu-model-probe.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Probe candidate fallback models
+        shell: bash
+        run: |
+          set +e
+          mkdir -p probe
+          for model in '@cf/meta/llama-3.1-8b-instruct-fast' '@cf/meta/llama-3.2-3b-instruct' '@cf/qwen/qwen1.5-14b-chat-awq'; do
+            safe="$(echo "$model" | tr '/@.' '____')"
+            cat > request.json <<'JSON'
+          {
+            "messages": [
+              {"role":"system","content":"Translate every JSON string value from English into Telugu. Return one JSON object only. Preserve every key exactly."},
+              {"role":"user","content":"{\"language\":\"Language\",\"settings\":\"Settings\",\"save\":\"Save\",\"support\":\"Support\"}"}
+            ],
+            "temperature": 0,
+            "max_tokens": 512
+          }
+          JSON
+            started="$(date +%s%3N)"
+            curl --silent --show-error --max-time 25 \
+              -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+              -H 'Content-Type: application/json' \
+              --data @request.json \
+              "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/ai/run/${model}" \
+              -o "probe/${safe}.json" \
+              -w '%{http_code}\n%{time_total}\n' > "probe/${safe}.meta" 2> "probe/${safe}.err"
+            echo "$?" > "probe/${safe}.exit"
+            echo "model=${model} elapsed_ms=$(( $(date +%s%3N) - started ))"
+            cat "probe/${safe}.meta"
+            cat "probe/${safe}.err"
+            jq '{success,result,errors}' "probe/${safe}.json" 2>/dev/null || cat "probe/${safe}.json"
+          done
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: telugu-model-probe
+          path: probe
+          if-no-files-found: error
+          retention-days: 1
