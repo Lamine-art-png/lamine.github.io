@@ -5,7 +5,7 @@ import logging
 import secrets
 from datetime import datetime, timedelta
 from html import escape
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlsplit
 
 from sqlalchemy.orm import Session
 
@@ -15,6 +15,9 @@ from app.services.email_delivery import delivery_status, send_email
 
 logger = logging.getLogger(__name__)
 _PRODUCT_SURFACES = {"enterprise_portal", "platform_api"}
+_TRUSTED_VERIFICATION_ORIGIN = "https://app.agroai-pilot.com"
+_LOCAL_VERIFICATION_HOSTS = {"localhost", "127.0.0.1", "::1"}
+_LOCAL_ENVIRONMENTS = {"development", "dev", "test", "testing", "local"}
 
 
 def hash_token(token: str) -> str:
@@ -34,9 +37,53 @@ def create_verification_token(db: Session, user: User) -> str:
 
 
 def verification_base_url() -> str:
-    """Return the fixed trusted AGRO-AI app origin used in verification links."""
+    """Return a fail-closed first-party origin for single-use verification links.
 
-    return (settings.RESEND_APP_URL or settings.APP_URL or "https://app.agroai-pilot.com").strip().rstrip("/")
+    Production verification tokens must never be sent to a configurable third-party
+    origin. Local loopback origins remain available only in explicit development or
+    test environments.
+    """
+
+    candidate = str(settings.RESEND_APP_URL or settings.APP_URL or _TRUSTED_VERIFICATION_ORIGIN).strip().rstrip("/")
+    try:
+        parsed = urlsplit(candidate)
+        hostname = (parsed.hostname or "").lower()
+        port = parsed.port
+    except (TypeError, ValueError):
+        logger.error("Rejected malformed verification app origin")
+        return _TRUSTED_VERIFICATION_ORIGIN
+
+    if (
+        parsed.scheme.lower() == "https"
+        and hostname == "app.agroai-pilot.com"
+        and port in {None, 443}
+        and not parsed.username
+        and not parsed.password
+        and parsed.path in {"", "/"}
+        and not parsed.query
+        and not parsed.fragment
+    ):
+        return _TRUSTED_VERIFICATION_ORIGIN
+
+    environment = str(getattr(settings, "APP_ENV", "development") or "development").strip().lower()
+    if (
+        environment in _LOCAL_ENVIRONMENTS
+        and parsed.scheme.lower() in {"http", "https"}
+        and hostname in _LOCAL_VERIFICATION_HOSTS
+        and not parsed.username
+        and not parsed.password
+        and parsed.path in {"", "/"}
+        and not parsed.query
+        and not parsed.fragment
+    ):
+        return f"{parsed.scheme.lower()}://{parsed.netloc}"
+
+    logger.error(
+        "Rejected untrusted verification app origin host=%s environment=%s",
+        hostname or "missing",
+        environment,
+    )
+    return _TRUSTED_VERIFICATION_ORIGIN
 
 
 def normalize_product_surface(value: str | None) -> str:
