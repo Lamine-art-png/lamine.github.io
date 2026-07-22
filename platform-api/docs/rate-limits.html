@@ -65,8 +65,8 @@
         <p>Rate-limited responses carry your current budget so you can throttle proactively:</p>
         <div class="code"><div class="code-head"><span class="code-lang">http</span></div><pre><code data-lang="http">RateLimit-Limit: 60
 RateLimit-Remaining: 54
-RateLimit-Reset: 1752710460</code></pre></div>
-        <p><code>RateLimit-Reset</code> is the Unix timestamp when the limiting window resets. Effective limits depend on your plan and the endpoint's policy; the metadata endpoints are not rate limited.</p>
+RateLimit-Reset: 1792710460</code></pre></div>
+        <p><code>RateLimit-Reset</code> is the Unix timestamp when the limiting window resets. Effective limits depend on your program and the endpoint's policy. Only anonymous public metadata routes such as health and OpenAPI are exempt; authenticated identity, usage, log, provider, and resource routes remain rate limited.</p>
 
         <h2 id="exceeding">When you exceed a limit</h2>
         <p>You receive <code>429</code> with the same headers. Back off and retry after the reset, adding jitter so retrying clients don't synchronise:</p>
