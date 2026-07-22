@@ -2,6 +2,7 @@ interface Env {
   ASSETS: { fetch(request: Request): Promise<Response> };
   PLATFORM_API_MARKETING_ENABLED?: string;
   PLATFORM_API_PUBLIC_DOCS_ENABLED?: string;
+  PLATFORM_API_INDEXING_ENABLED?: string;
 }
 
 type Surface = "marketing" | "docs" | "shared";
@@ -72,6 +73,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   const marketingEnabled = enabled(context.env.PLATFORM_API_MARKETING_ENABLED);
   const docsEnabled = enabled(context.env.PLATFORM_API_PUBLIC_DOCS_ENABLED);
+  const indexingEnabled = enabled(context.env.PLATFORM_API_INDEXING_ENABLED);
   if (!surfaceEnabled(mapping.surface, { marketing: marketingEnabled, docs: docsEnabled })) return notFound();
 
   const assetUrl = new URL(context.request.url);
@@ -85,7 +87,8 @@ export const onRequest: PagesFunction<Env> = async (context) => {
   headers.set("x-frame-options", "DENY");
   if (mapping.asset.endsWith(".html")) {
     headers.set("cache-control", "private, no-cache, must-revalidate");
-    headers.set("x-robots-tag", "noindex, nofollow");
+    if (indexingEnabled) headers.delete("x-robots-tag");
+    else headers.set("x-robots-tag", "noindex, nofollow");
   } else {
     headers.set("cache-control", "public, max-age=300, must-revalidate");
   }
