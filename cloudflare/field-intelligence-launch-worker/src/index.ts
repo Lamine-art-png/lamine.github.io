@@ -3,8 +3,10 @@ const NEWSROOM_SCRIPT_PATH = "/news/field-intelligence-newsroom.js";
 const NEWSROOM_STYLE_PATH = "/news/field-intelligence-newsroom.css";
 const ARTICLE_PATH = "/news/introducing-agro-ai-field-intelligence";
 const COVER_PATH = `${ARTICLE_PATH}/cover.webp`;
+const LOGO_PATH = `${ARTICLE_PATH}/agro-ai-logo.png`;
 const MARKETING_ORIGIN = "https://agroai-343.pages.dev";
 const ARTICLE_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/client/public/news/introducing-agro-ai-field-intelligence/index.html";
+const LOGO_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.github.io/main/customer-portal/assets/agro-ai-logo.png";
 const CURRENT_VIDEO_ID = "GiM6WZY0HG0";
 const OBSOLETE_VIDEO_ID = "IMLVblFeW3s";
 const YOUTUBE_COVER = `https://img.youtube.com/vi/${CURRENT_VIDEO_ID}/maxresdefault.jpg`;
@@ -175,6 +177,22 @@ async function articleResponse(request: Request): Promise<Response> {
   return new Response(request.method === "HEAD" ? null : html, { status: 200, headers: articleHeaders() });
 }
 
+async function logoResponse(request: Request): Promise<Response> {
+  const upstream = await fetch(LOGO_SOURCE, {
+    cf: { cacheEverything: true, cacheTtl: 86400 },
+    headers: { "user-agent": "AGRO-AI-Official-Logo/1.0" },
+  } as RequestInit & { cf: { cacheEverything: boolean; cacheTtl: number } });
+  if (!upstream.ok) return new Response("Logo unavailable", { status: 503 });
+
+  const headers = new Headers();
+  headers.set("content-type", upstream.headers.get("content-type") || "image/png");
+  headers.set("cache-control", "public, max-age=86400, s-maxage=86400, immutable");
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("cross-origin-resource-policy", "same-origin");
+  headers.set("x-agroai-logo-source", "official-repository-asset");
+  return new Response(request.method === "HEAD" ? null : upstream.body, { status: 200, headers });
+}
+
 async function coverResponse(request: Request): Promise<Response> {
   const transformed = await fetch(YOUTUBE_COVER, {
     cf: {
@@ -210,6 +228,7 @@ export default {
       return new Response(request.method === "HEAD" ? null : NEWSROOM_STYLE, { status: 200, headers: assetHeaders("text/css; charset=utf-8") });
     }
     if (normalized === ARTICLE_PATH) return articleResponse(request);
+    if (normalized === LOGO_PATH) return logoResponse(request);
     if (normalized === COVER_PATH) return coverResponse(request);
     return new Response("Not found", { status: 404 });
   },
