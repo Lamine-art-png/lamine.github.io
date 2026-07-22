@@ -2,6 +2,7 @@ const NEWSROOM_PATH = "/news";
 const NEWSROOM_SCRIPT_PATH = "/news/field-intelligence-newsroom.js";
 const NEWSROOM_STYLE_PATH = "/news/field-intelligence-newsroom.css";
 const ARTICLE_PATH = "/news/introducing-agro-ai-field-intelligence";
+const DELETED_ARTICLE_PATH = "/news/john-deere-api-access";
 const COVER_PATH = `${ARTICLE_PATH}/cover.webp`;
 const LOGO_PATH = `${ARTICLE_PATH}/agro-ai-logo.png`;
 const MARKETING_ORIGIN = "https://agroai-343.pages.dev";
@@ -31,6 +32,7 @@ const NEWSROOM_STYLE = `
 const NEWSROOM_SCRIPT = `
 (function () {
   var ARTICLE_PATH = "/news/introducing-agro-ai-field-intelligence";
+  var DELETED_ARTICLE_PATH = "/news/john-deere-api-access";
   var CARD_ID = "agroai-field-intelligence-newsroom-card";
 
   function isReadArticleLink(link) {
@@ -64,6 +66,31 @@ const NEWSROOM_SCRIPT = `
     return best;
   }
 
+  function removeDeletedArticle() {
+    var grid = findNewsroomGrid();
+    Array.prototype.forEach.call(document.querySelectorAll("a[href]"), function (link) {
+      var pathname;
+      try {
+        pathname = new URL(link.getAttribute("href"), window.location.origin).pathname.replace(/\\/$/, "");
+      } catch (_error) {
+        return;
+      }
+      if (pathname !== DELETED_ARTICLE_PATH) return;
+
+      var entry = link;
+      if (grid) {
+        while (entry.parentElement && entry.parentElement !== grid) entry = entry.parentElement;
+      }
+      if (grid && entry.parentElement === grid) {
+        entry.remove();
+        return;
+      }
+      var article = link.closest("article");
+      if (article) article.remove();
+      else link.remove();
+    });
+  }
+
   function renderCard() {
     if (document.getElementById(CARD_ID) || document.querySelector('a[href*="introducing-agro-ai-field-intelligence"]')) return true;
     var grid = findNewsroomGrid();
@@ -90,14 +117,20 @@ const NEWSROOM_SCRIPT = `
     return true;
   }
 
-  var observer = new MutationObserver(function () {
-    if (renderCard()) observer.disconnect();
-  });
+  function reconcileNewsroom() {
+    removeDeletedArticle();
+    renderCard();
+  }
+
+  var observer = new MutationObserver(reconcileNewsroom);
   observer.observe(document.documentElement, { childList: true, subtree: true });
-  renderCard();
-  window.setTimeout(renderCard, 250);
-  window.setTimeout(renderCard, 1000);
-  window.setTimeout(renderCard, 2500);
+  reconcileNewsroom();
+  window.setTimeout(reconcileNewsroom, 250);
+  window.setTimeout(reconcileNewsroom, 1000);
+  window.setTimeout(function () {
+    reconcileNewsroom();
+    observer.disconnect();
+  }, 5000);
 })();
 `;
 
@@ -213,6 +246,14 @@ async function coverResponse(request: Request): Promise<Response> {
   return new Response(request.method === "HEAD" ? null : transformed.body, { status: 200, headers });
 }
 
+function deletedArticleResponse(): Response {
+  const headers = new Headers();
+  headers.set("cache-control", "no-store");
+  headers.set("x-content-type-options", "nosniff");
+  headers.set("x-robots-tag", "noindex, nofollow");
+  return new Response(null, { status: 404, headers });
+}
+
 export default {
   async fetch(request: Request): Promise<Response> {
     if (!["GET", "HEAD"].includes(request.method)) {
@@ -227,6 +268,7 @@ export default {
     if (normalized === NEWSROOM_STYLE_PATH) {
       return new Response(request.method === "HEAD" ? null : NEWSROOM_STYLE, { status: 200, headers: assetHeaders("text/css; charset=utf-8") });
     }
+    if (normalized === DELETED_ARTICLE_PATH || normalized.startsWith(`${DELETED_ARTICLE_PATH}/`)) return deletedArticleResponse();
     if (normalized === ARTICLE_PATH) return articleResponse(request);
     if (normalized === LOGO_PATH) return logoResponse(request);
     if (normalized === COVER_PATH) return coverResponse(request);
