@@ -8,5 +8,6 @@ routes = [
   { pattern = "agroai-pilot.com/news/", zone_name = "agroai-pilot.com" },
   { pattern = "agroai-pilot.com/news/field-intelligence-newsroom.js", zone_name = "agroai-pilot.com" },
   { pattern = "agroai-pilot.com/news/field-intelligence-newsroom.css", zone_name = "agroai-pilot.com" },
-  { pattern = "agroai-pilot.com/news/introducing-agro-ai-field-intelligence*", zone_name = "agroai-pilot.com" }
+  { pattern = "agroai-pilot.com/news/introducing-agro-ai-field-intelligence*", zone_name = "agroai-pilot.com" },
+  { pattern = "agroai-pilot.com/news/john-deere-api-access*", zone_name = "agroai-pilot.com" }
 ]
