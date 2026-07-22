@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
+const mainSource = readFileSync(new URL("../src/main.tsx", import.meta.url), "utf8");
 const authSource = readFileSync(new URL("../src/app/components/AuthScreen.tsx", import.meta.url), "utf8");
 const verificationSource = readFileSync(new URL("../src/app/components/VerifyEmail.tsx", import.meta.url), "utf8");
 const consoleSource = readFileSync(new URL("../src/app/components/PlatformConsole.tsx", import.meta.url), "utf8");
@@ -8,6 +9,8 @@ const applicationSource = readFileSync(new URL("../src/app/components/PlatformAp
 const safetySource = readFileSync(new URL("../src/app/components/PlatformSafetyNotice.tsx", import.meta.url), "utf8");
 const routesSource = readFileSync(new URL("../src/app/routes.tsx", import.meta.url), "utf8");
 const clientSource = readFileSync(new URL("../src/app/api/client.ts", import.meta.url), "utf8");
+const portalManifest = JSON.parse(readFileSync(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"));
+const platformManifest = JSON.parse(readFileSync(new URL("../public/platform.webmanifest", import.meta.url), "utf8"));
 
 const requiredRoutes = [
   "/home", "/projects", "/service-accounts", "/api-keys", "/playground",
@@ -21,6 +24,16 @@ assert.ok(routesSource.includes('path: "/*", Component: PlatformProduct'), "plat
 assert.ok(routesSource.includes('window.location.hostname.toLowerCase() === "platform.agroai-pilot.com"'), "router must select the product by hostname");
 assert.ok(routesSource.includes("if (!platformDeveloper) return <PlatformApplicationGate />"), "unenrolled organizations must enter the application gate");
 assert.ok(routesSource.includes("<PlatformSafetyNotice />"), "enrolled developers must see the controlled-launch state");
+
+assert.ok(mainSource.includes('window.location.hostname.toLowerCase() === "platform.agroai-pilot.com"'), "runtime product identity must use the exact standalone hostname");
+assert.ok(mainSource.includes('standalonePlatformHost ? "AGRO-AI Platform API" : "AGRO-AI Enterprise Portal"'), "browser and recovery identity must distinguish the two products");
+assert.ok(mainSource.includes("document.title = runtimeProductName"), "the standalone browser tab must not retain the Portal title");
+assert.ok(mainSource.includes('manifestLink.href = "/platform.webmanifest"'), "the standalone product must use its own install manifest");
+assert.equal(portalManifest.name, "AGRO-AI Enterprise Portal", "the existing Portal manifest must remain intact");
+assert.equal(platformManifest.name, "AGRO-AI Platform API", "the standalone product must have a distinct manifest identity");
+assert.equal(platformManifest.start_url, "/");
+assert.equal(platformManifest.scope, "/");
+assert.notEqual(platformManifest.short_name, portalManifest.short_name, "installed products must not have identical labels");
 
 assert.ok(authSource.includes('window.location.hostname.toLowerCase() === "platform.agroai-pilot.com"'), "authentication must identify the standalone hostname exactly");
 assert.ok(authSource.includes("Build on AGRO-AI."), "the standalone hostname must present Platform product positioning");
@@ -91,4 +104,4 @@ assert.ok(safetySource.includes("Physical execution disabled"), "physical-action
 assert.ok(safetySource.includes("Automatic live approval disabled"), "automatic live approval must remain visibly disabled");
 assert.ok(safetySource.includes("Test data isolated"), "test-data isolation must remain visibly stated");
 
-console.log(`Platform API product contract passed: ${requiredRoutes.length} console routes, host-specific auth, redirect-safe verification, reviewed application and reapplication lifecycle, keyless Playground, visible write failures, destructive-action confirmations, and controlled-launch boundaries.`);
+console.log(`Platform API product contract passed: ${requiredRoutes.length} console routes, distinct runtime product identity, host-specific auth, redirect-safe verification, reviewed application and reapplication lifecycle, keyless Playground, visible write failures, destructive-action confirmations, and controlled-launch boundaries.`);
