@@ -3,6 +3,14 @@ import "./app/commercialBoundaryConversionLabels";
 import { CommercialBoundaryHost } from "./app/components/CommercialBoundaryHost";
 import "./styles/index.css";
 
+const standalonePlatformHost = window.location.hostname.toLowerCase() === "platform.agroai-pilot.com";
+const runtimeProductName = standalonePlatformHost ? "AGRO-AI Platform API" : "AGRO-AI Enterprise Portal";
+const runtimeSurfaceName = standalonePlatformHost ? "developer platform" : "portal";
+
+document.title = runtimeProductName;
+const manifestLink = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
+if (standalonePlatformHost && manifestLink) manifestLink.href = "/platform.webmanifest";
+
 function bootFailure(error: unknown) {
   const root = document.getElementById("root");
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error || "Unknown frontend boot error");
@@ -10,9 +18,9 @@ function bootFailure(error: unknown) {
   root.innerHTML = `
     <div style="min-height:100vh;background:#F6F4EE;color:#10231B;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;padding:48px 24px;box-sizing:border-box;">
       <div style="max-width:760px;margin:0 auto;background:#FFFDF8;border:1px solid #D6DDD0;border-radius:24px;padding:32px;box-shadow:0 20px 60px rgba(16,35,27,.08);">
-        <div style="font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#2D6A4F;">AGRO-AI Enterprise Portal</div>
+        <div style="font-size:12px;font-weight:700;letter-spacing:.18em;text-transform:uppercase;color:#2D6A4F;">${runtimeProductName}</div>
         <h1 style="margin:12px 0 0;font-size:30px;line-height:1.15;">Frontend recovery mode</h1>
-        <p style="margin:12px 0 0;color:#65736A;font-size:14px;line-height:1.7;">The portal JavaScript failed during boot, so AGRO-AI displayed this recovery screen instead of a blank page.</p>
+        <p style="margin:12px 0 0;color:#65736A;font-size:14px;line-height:1.7;">The ${runtimeSurfaceName} JavaScript failed during boot, so AGRO-AI displayed this recovery screen instead of a blank page.</p>
         <pre style="margin-top:18px;white-space:pre-wrap;word-break:break-word;background:#F6F4EE;border:1px solid #E2D8C8;border-radius:14px;padding:14px;color:#7A2E0E;font-size:12px;line-height:1.5;">${message.replace(/[&<>'"]/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" }[ch] || ch))}</pre>
         <button id="agroai-clear-session" style="margin-top:20px;background:#10231B;color:white;border:0;border-radius:10px;padding:10px 14px;font-size:13px;font-weight:600;cursor:pointer;">Clear session and reload</button>
       </div>
@@ -28,7 +36,8 @@ function bootFailure(error: unknown) {
 // responses or cross-origin requests (see public/sw.js + launch contract test).
 // Registration requires an explicitly declared deployment environment
 // (production | staging): local dev, tests and ad-hoc previews never register,
-// and each environment gets its own cache namespace.
+// and each environment gets its own cache namespace. Browser storage and
+// service-worker caches remain origin-scoped between app and Platform hosts.
 const deploymentEnvironment = String(import.meta.env.VITE_DEPLOYMENT_ENVIRONMENT || "").trim();
 if ("serviceWorker" in navigator && !import.meta.env.DEV
     && ["production", "staging"].includes(deploymentEnvironment)) {
