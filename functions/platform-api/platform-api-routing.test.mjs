@@ -56,6 +56,7 @@ for (const pathname of [
   assert.equal(shared.response.status, 200, "marketing must retain its shared CSS/JS/logo assets while docs stay private");
   assert.deepEqual(shared.fetched, ["/platform-api/assets/platform.css"]);
   assert.match(shared.response.headers.get("cache-control") || "", /^public,/);
+  assert.equal(shared.response.headers.get("x-robots-tag"), "noindex, nofollow", "private shared assets must inherit the indexing boundary");
 
   assert.equal((await invoke("/platform-api/docs/", { marketing: true })).response.status, 404);
   assert.equal((await invoke("/platform-api/contract/platform_api_openapi.json", { marketing: true })).response.status, 404);
@@ -68,8 +69,13 @@ for (const pathname of [
   assert.deepEqual(docs.fetched, ["/platform-api/docs/authentication.html"]);
   assert.equal(docs.response.headers.get("x-robots-tag"), "noindex, nofollow");
 
-  assert.equal((await invoke("/platform-api/assets/reference.js", { docs: true })).response.status, 200);
-  assert.equal((await invoke("/platform-api/contract/platform_api_openapi.json", { docs: true })).response.status, 200);
+  const privateReferenceAsset = await invoke("/platform-api/assets/reference.js", { docs: true });
+  assert.equal(privateReferenceAsset.response.status, 200);
+  assert.equal(privateReferenceAsset.response.headers.get("x-robots-tag"), "noindex, nofollow");
+
+  const privateContract = await invoke("/platform-api/contract/platform_api_openapi.json", { docs: true });
+  assert.equal(privateContract.response.status, 200);
+  assert.equal(privateContract.response.headers.get("x-robots-tag"), "noindex, nofollow", "private OpenAPI must not be independently indexed");
 }
 
 {
@@ -84,6 +90,10 @@ for (const pathname of [
   assert.equal(publicDocs.response.status, 200);
   assert.equal(publicDocs.response.headers.get("x-robots-tag"), null);
   assert.doesNotMatch(await publicDocs.response.text(), /<meta\b[^>]*\bname=["']robots["'][^>]*\bnoindex\b/i);
+
+  const publicContract = await invoke("/platform-api/contract/platform_api_openapi.json", { docs: true, indexing: true });
+  assert.equal(publicContract.response.status, 200);
+  assert.equal(publicContract.response.headers.get("x-robots-tag"), null, "public indexing must explicitly release the OpenAPI contract too");
 
   const publicHead = await invoke("/platform-api", { marketing: true, indexing: true }, { method: "HEAD" });
   assert.equal(publicHead.response.status, 200);
@@ -112,4 +122,4 @@ for (const pathname of [
   assert.equal(response.headers.get("cache-control"), "no-store");
 }
 
-console.log("Platform API Pages flag matrix passed: marketing, docs, shared assets, private and public indexing bodies, contracts, traversal rejection, and fail-closed storage errors.");
+console.log("Platform API Pages flag matrix passed: marketing, docs, shared assets, private and public HTML/OpenAPI indexing, contracts, traversal rejection, and fail-closed storage errors.");
