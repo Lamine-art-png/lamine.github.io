@@ -1,0 +1,24 @@
+name: Platform Console Source Export
+
+on:
+  push:
+    branches: ["feat/api-platform-experience-v2"]
+    paths:
+      - ".github/workflows/platform-console-source-export.yml"
+      - "figma-enterprise-v4/src/app/components/PlatformConsole.tsx"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/upload-artifact@v4
+        with:
+          name: platform-console-source-${{ github.sha }}
+          path: figma-enterprise-v4/src/app/components/PlatformConsole.tsx
+          if-no-files-found: error
+          retention-days: 1
