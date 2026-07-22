@@ -75,6 +75,8 @@ jobs:
             echo "node --check $f"
             node --check "$f"
           done
+      - name: API reference renderer XSS contract
+        run: node platform-api/tests/reference-renderer-contract.mjs
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
@@ -171,8 +173,10 @@ jobs:
           required = [
               "PLATFORM_API_MARKETING_ENABLED",
               "PLATFORM_API_PUBLIC_DOCS_ENABLED",
+              "PLATFORM_API_INDEXING_ENABLED",
               "STATIC_ROUTES",
               'surface: "shared"',
+              "PRIVATE_ROBOTS_META",
               "noindex, nofollow",
               "Not found",
               "/platform-api/index.html",
@@ -183,6 +187,7 @@ jobs:
           assert 'url.pathname = "/platform-api/index.html"' not in source
           assert "mapping.asset" in source
           assert "options.marketing || options.docs" in source
+          assert 'headers.set("x-robots-tag", "noindex, nofollow")' in source
           print("Cloudflare Platform API Pages route contract passed")
           PY
       - name: Production API edge contract
