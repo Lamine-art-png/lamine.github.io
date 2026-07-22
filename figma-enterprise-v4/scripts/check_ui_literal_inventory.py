@@ -145,7 +145,8 @@ def main() -> int:
 
     if args.check:
         if current != expected:
-            missing = sorted(set(expected) - set(current))[:8]
+            missing_keys = sorted(set(expected) - set(current))[:8]
+            missing = {key: expected[key] for key in missing_keys}
             extra = sorted(set(current) - set(expected))[:8]
             changed = sorted(key for key in set(current).intersection(expected) if current[key] != expected[key])[:8]
             raise SystemExit(
