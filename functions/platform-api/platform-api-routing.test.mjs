@@ -67,8 +67,8 @@ for (const pathname of [
 
 for (const pathname of [
   "/platform-api/private",
-  "/platform-api/assets/../index.html",
-  "/platform-api/assets/%2e%2e/index.html",
+  "/platform-api/assets/..evil/index.html",
+  "/platform-api/assets/%252e%252e/index.html",
   "/platform-api/contract/private.json",
 ]) {
   const { response, fetched } = await invoke(pathname, { marketing: true, docs: true });
