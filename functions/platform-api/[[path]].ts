@@ -4,7 +4,10 @@ interface Env {
   PLATFORM_API_PUBLIC_DOCS_ENABLED?: string;
 }
 
-const STATIC_ROUTES: Record<string, { asset: string; surface: "marketing" | "docs" }> = {
+type Surface = "marketing" | "docs" | "shared";
+type StaticRoute = { asset: string; surface: Surface };
+
+const STATIC_ROUTES: Record<string, StaticRoute> = {
   "/platform-api": { asset: "/platform-api/index.html", surface: "marketing" },
   "/platform-api/": { asset: "/platform-api/index.html", surface: "marketing" },
   "/platform-api/index.html": { asset: "/platform-api/index.html", surface: "marketing" },
@@ -43,17 +46,23 @@ function notFound(): Response {
   });
 }
 
-function staticAsset(pathname: string): { asset: string; surface: "marketing" | "docs" } | null {
+function staticAsset(pathname: string): StaticRoute | null {
   const route = STATIC_ROUTES[pathname];
   if (route) return route;
 
   if (/^\/platform-api\/assets\/[A-Za-z0-9._/-]+$/.test(pathname) && !pathname.includes("..")) {
-    return { asset: pathname, surface: "docs" };
+    return { asset: pathname, surface: "shared" };
   }
   if (/^\/platform-api\/contract\/(platform_api_openapi\.json|platform_api_openapi\.sha256)$/.test(pathname)) {
     return { asset: pathname, surface: "docs" };
   }
   return null;
+}
+
+function surfaceEnabled(surface: Surface, *, marketing: boolean, docs: boolean): boolean {
+  if (surface === "marketing") return marketing;
+  if (surface === "docs") return docs;
+  return marketing || docs;
 }
 
 export const onRequest: PagesFunction<Env> = async (context) => {
@@ -63,7 +72,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
 
   const marketingEnabled = enabled(context.env.PLATFORM_API_MARKETING_ENABLED);
   const docsEnabled = enabled(context.env.PLATFORM_API_PUBLIC_DOCS_ENABLED);
-  if (mapping.surface === "marketing" ? !marketingEnabled : !docsEnabled) return notFound();
+  if (!surfaceEnabled(mapping.surface, { marketing: marketingEnabled, docs: docsEnabled })) return notFound();
 
   const assetUrl = new URL(context.request.url);
   assetUrl.pathname = mapping.asset;
