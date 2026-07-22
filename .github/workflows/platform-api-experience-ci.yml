@@ -20,6 +20,7 @@ on:
       - "figma-enterprise-v4/src/app/routes.tsx"
       - "figma-enterprise-v4/src/app/api/client.ts"
       - "figma-enterprise-v4/tests/platform-api-console-contract.mjs"
+      - "figma-enterprise-v4/tests/platform-application-gate-contract.mjs"
       - "agroai_api/app/api/v1/auth.py"
       - "agroai_api/app/api/v1/platform_playground.py"
       - "agroai_api/app/api/v1/__init__.py"
@@ -50,6 +51,7 @@ on:
       - "figma-enterprise-v4/src/app/routes.tsx"
       - "figma-enterprise-v4/src/app/api/client.ts"
       - "figma-enterprise-v4/tests/platform-api-console-contract.mjs"
+      - "figma-enterprise-v4/tests/platform-application-gate-contract.mjs"
       - "agroai_api/app/api/v1/auth.py"
       - "agroai_api/app/api/v1/platform_playground.py"
       - "agroai_api/app/api/v1/__init__.py"
@@ -127,6 +129,8 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - name: Platform product architecture contract
         run: node tests/platform-api-console-contract.mjs
+      - name: Platform application authorization contract
+        run: node tests/platform-application-gate-contract.mjs
       - name: Portal localization preservation
         run: npm run test:i18n
       - name: Production build
@@ -170,7 +174,7 @@ jobs:
         with:
           node-version: "22"
       - name: Platform API Pages launch-flag matrix
-        run: node --experimental-strip-types functions/platform-api/platform-api-routing.test.mjs
+        run: node --experimental-strip-types platform-api/tests/pages-routing-contract.mjs
       - name: Public Pages route contract
         run: |
           python3 - <<'PY'
