@@ -11,6 +11,7 @@ const LOGO_SOURCE = "https://raw.githubusercontent.com/Lamine-art-png/lamine.git
 const CURRENT_VIDEO_ID = "GiM6WZY0HG0";
 const OBSOLETE_VIDEO_ID = "IMLVblFeW3s";
 const YOUTUBE_COVER = `https://img.youtube.com/vi/${CURRENT_VIDEO_ID}/maxresdefault.jpg`;
+const DELETED_ARTICLE_HREF = /href\s*=\s*["'](?:https:\/\/(?:agroai-pilot\.com|agroai-343\.pages\.dev))?\/news\/john-deere-api-access\/?(?:[?#][^"']*)?["']/i;
 
 const NEWSROOM_STYLE = `
 .agroai-fi-news-card-shell{display:block;min-width:0;height:100%;font-family:"Glacial Indifference",system-ui,sans-serif}
@@ -170,6 +171,15 @@ function newsroomHeaders(upstream: Response): Headers {
   return headers;
 }
 
+function removeDeletedArticleMarkup(html: string): string {
+  const withoutArticleBlocks = html.replace(/<article\b[^>]*>[\s\S]*?<\/article>/gi, (article) =>
+    DELETED_ARTICLE_HREF.test(article) ? "" : article,
+  );
+  return withoutArticleBlocks.replace(/<a\b[^>]*>[\s\S]*?<\/a>/gi, (anchor) =>
+    DELETED_ARTICLE_HREF.test(anchor) ? "" : anchor,
+  );
+}
+
 async function newsroomResponse(request: Request): Promise<Response> {
   const incoming = new URL(request.url);
   const upstreamUrl = new URL(NEWSROOM_PATH + incoming.search, MARKETING_ORIGIN);
@@ -184,7 +194,7 @@ async function newsroomResponse(request: Request): Promise<Response> {
     });
   }
 
-  let html = await upstream.text();
+  let html = removeDeletedArticleMarkup(await upstream.text());
   const injection = `<link rel="stylesheet" href="${NEWSROOM_STYLE_PATH}" data-agroai-field-intelligence-newsroom="style" /><script defer src="${NEWSROOM_SCRIPT_PATH}" data-agroai-field-intelligence-newsroom="script"></script>`;
   if (!html.includes("data-agroai-field-intelligence-newsroom")) {
     html = html.includes("</body>") ? html.replace("</body>", `${injection}</body>`) : `${html}${injection}`;
