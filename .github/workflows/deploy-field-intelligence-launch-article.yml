@@ -29,7 +29,7 @@ jobs:
       NEWSROOM_STYLE_URL: https://agroai-pilot.com/news/field-intelligence-newsroom.css
       ARTICLE_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence
       COVER_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence/cover.webp
-      LOGO_URL: https://agroai-pilot.com/agro-ai-logo.jpg
+      LOGO_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence/agro-ai-logo.png
     steps:
       - uses: actions/checkout@v4
 
@@ -52,8 +52,10 @@ jobs:
           test -s "$routes"
           grep -F "From field evidence to enterprise action" "$article" >/dev/null
           grep -F "Glacial Indifference" "$article" >/dev/null
-          grep -F '/agro-ai-logo.jpg' "$article" >/dev/null
+          grep -F '/news/introducing-agro-ai-field-intelligence/agro-ai-logo.png' "$article" >/dev/null
           ! grep -F '/attached_assets/' "$article" >/dev/null
+          grep -F 'LOGO_PATH = `${ARTICLE_PATH}/agro-ai-logo.png`' "$worker" >/dev/null
+          grep -F 'customer-portal/assets/agro-ai-logo.png' "$worker" >/dev/null
           grep -F "San Francisco, California" "$article" >/dev/null
           grep -F "GiM6WZY0HG0" "$article" >/dev/null
           ! grep -F "IMLVblFeW3s" "$article" >/dev/null
@@ -101,7 +103,7 @@ jobs:
                grep -F "Glacial Indifference" newsroom.css >/dev/null && \
                grep -F "Introducing AGRO-AI Field Intelligence" article.html >/dev/null && \
                grep -F "Glacial Indifference" article.html >/dev/null && \
-               grep -F "/agro-ai-logo.jpg" article.html >/dev/null && \
+               grep -F "/news/introducing-agro-ai-field-intelligence/agro-ai-logo.png" article.html >/dev/null && \
                ! grep -F "/attached_assets/" article.html >/dev/null && \
                grep -F "San Francisco, California" article.html >/dev/null && \
                grep -F "GiM6WZY0HG0" article.html >/dev/null && \
@@ -109,6 +111,7 @@ jobs:
                grep -F '<td class="quota">2</td>' article.html >/dev/null && \
                grep -F '<td class="quota">2,500</td>' article.html >/dev/null && \
                grep -Fi "content-type: image/" logo.headers >/dev/null && \
+               grep -Fi "x-agroai-logo-source: official-repository-asset" logo.headers >/dev/null && \
                test "$(wc -c < logo.bin)" -gt 1000 && \
                grep -Fi "x-agroai-cover-target: 3840x2160" cover.headers >/dev/null && \
                test "$(wc -c < cover.bin)" -gt 50000; then
