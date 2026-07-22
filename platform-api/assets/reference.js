@@ -56,10 +56,10 @@
     var extra = [];
     if (schema.enum) extra.push("enum");
     if (schema.format) extra.push(esc(schema.format));
-    if (schema.minimum !== undefined) extra.push("min " + schema.minimum);
-    if (schema.maximum !== undefined) extra.push("max " + schema.maximum);
-    if (schema.maxLength !== undefined) extra.push("≤" + schema.maxLength + " chars");
-    if (schema.default !== undefined) extra.push("default " + JSON.stringify(schema.default));
+    if (schema.minimum !== undefined) extra.push("min " + esc(schema.minimum));
+    if (schema.maximum !== undefined) extra.push("max " + esc(schema.maximum));
+    if (schema.maxLength !== undefined) extra.push("≤" + esc(schema.maxLength) + " chars");
+    if (schema.default !== undefined) extra.push("default " + esc(JSON.stringify(schema.default)));
     return "<code>" + esc(t) + "</code>" + (extra.length ? ' <span class="text-faint">(' + extra.join(", ") + ")</span>" : "");
   }
 
