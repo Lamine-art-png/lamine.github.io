@@ -65,6 +65,16 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve immutable backend deployment commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          backend_sha="$(bash .github/scripts/resolve-backend-release-sha.sh)"
+          echo "BACKEND_RELEASE_SHA=${backend_sha}" >> "$GITHUB_ENV"
+          echo "Expected backend deployment SHA: ${backend_sha}"
 
       - name: Fail closed on missing Cloudflare credentials
         shell: bash
@@ -144,7 +154,7 @@ jobs:
             edge_ready="$(bool_jq '.status == "ok"' proof/edge.body)"
             runtime_ready="$(bool_jq '.status == "ready" and .platform_api_enabled == true and .developer_control_plane_enabled == true and .rate_limiter.ready == true and .rate_limiter.backend == "redis" and .production_vault_keyring_ready == true and .cidr_trusted_proxy_ready == true and .webhook_delivery.enabled == false and .webhook_delivery.ready == true and .earthdaily_status == "awaiting_partner_contract" and .valley_irrigation_status == "awaiting_partner_contract" and .physical_irrigation_commands == "disabled"' proof/runtime.body)"
             health_exact_sha=false
-            if [ -f proof/health.body ] && jq -e --arg sha "$GITHUB_SHA" '.status == "ok" and .build_sha == $sha' proof/health.body >/dev/null 2>&1; then health_exact_sha=true; fi
+            if [ -f proof/health.body ] && jq -e --arg sha "$BACKEND_RELEASE_SHA" '.status == "ok" and .build_sha == $sha' proof/health.body >/dev/null 2>&1; then health_exact_sha=true; fi
 
             preflight=false
             if [ "$landing_code" = "200" ] && [ "$docs_code" = "200" ] && [ "$asset_code" = "200" ] && [ "$unknown_code" = "404" ] && \
@@ -195,7 +205,7 @@ jobs:
           done
 
           jq -n \
-            --arg release_sha "$GITHUB_SHA" --argjson attempt "$attempt" --argjson ready "$ready" \
+            --arg release_sha "$GITHUB_SHA" --arg expected_backend_sha "$BACKEND_RELEASE_SHA" --argjson attempt "$attempt" --argjson ready "$ready" \
             --arg landing_http "${landing_code:-000}" --arg docs_http "${docs_code:-000}" --arg asset_http "${asset_code:-000}" \
             --arg unknown_http "${unknown_code:-000}" --arg platform_http "${platform_code:-000}" --arg edge_http "${edge_code:-000}" \
             --arg health_http "${health_code:-000}" --arg runtime_http "${runtime_code:-000}" \
@@ -207,11 +217,12 @@ jobs:
             --argjson unknown_noindex "${unknown_noindex:-false}" --argjson edge_ready "${edge_ready:-false}" \
             --argjson health_exact_sha "${health_exact_sha:-false}" --argjson runtime_ready "${runtime_ready:-false}" \
             --argjson platform_identity "${platform_identity:-false}" \
-            '{release_sha:$release_sha,attempts:$attempt,ready:($ready==1),http:{marketing:$landing_http,docs:$docs_http,asset:$asset_http,unknown:$unknown_http,standalone_platform:$platform_http,standalone_edge:$edge_http,standalone_health:$health_http,platform_runtime:$runtime_http},checks:{landing_title:$landing_title,docs_title:$docs_title,console_link:$console_link,landing_noindex:$landing_noindex,docs_noindex:$docs_noindex,landing_private_cache:$landing_private_cache,docs_private_cache:$docs_private_cache,landing_surface:$landing_surface,docs_surface:$docs_surface,unknown_closed:$unknown_closed,unknown_noindex:$unknown_noindex,edge_ready:$edge_ready,health_exact_sha:$health_exact_sha,runtime_ready:$runtime_ready,platform_identity:$platform_identity}}' \
+            '{release_sha:$release_sha,expected_backend_sha:$expected_backend_sha,attempts:$attempt,ready:($ready==1),http:{marketing:$landing_http,docs:$docs_http,asset:$asset_http,unknown:$unknown_http,standalone_platform:$platform_http,standalone_edge:$edge_http,standalone_health:$health_http,platform_runtime:$runtime_http},checks:{landing_title:$landing_title,docs_title:$docs_title,console_link:$console_link,landing_noindex:$landing_noindex,docs_noindex:$docs_noindex,landing_private_cache:$landing_private_cache,docs_private_cache:$docs_private_cache,landing_surface:$landing_surface,docs_surface:$docs_surface,unknown_closed:$unknown_closed,unknown_noindex:$unknown_noindex,edge_ready:$edge_ready,health_exact_backend_sha:$health_exact_sha,runtime_ready:$runtime_ready,platform_identity:$platform_identity}}' \
             > platform-api-final-diagnostics.json
 
           {
             echo "release_sha=${GITHUB_SHA}"
+            echo "backend_release_sha=${BACKEND_RELEASE_SHA}"
             echo "ready=${ready}"
             echo "attempts=${attempt}"
             echo "marketing_http=${landing_code:-000}"
@@ -246,7 +257,8 @@ jobs:
             {
               echo '## Platform API final production proof'
               echo
-              echo "- exact SHA: \`${GITHUB_SHA}\`"
+              echo "- release SHA: \`${GITHUB_SHA}\`"
+              echo "- backend deployment SHA: \`${BACKEND_RELEASE_SHA}\`"
               echo "- run: \`${GITHUB_RUN_ID}\`"
               echo '- backend: exact SHA, schema and production runtime ready'
               echo '- standalone product: HTTP 200 with Platform-specific product identity'
@@ -263,7 +275,8 @@ jobs:
             {
               echo '## Platform API final production proof failed'
               echo
-              echo "- exact SHA: \`${GITHUB_SHA}\`"
+              echo "- release SHA: \`${GITHUB_SHA}\`"
+              echo "- backend deployment SHA: \`${BACKEND_RELEASE_SHA}\`"
               echo "- run: \`${GITHUB_RUN_ID}\`"
               echo '- mode: redacted diagnostics; no credential values included'
               echo
