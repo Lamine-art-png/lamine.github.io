@@ -8,6 +8,7 @@ const consoleSource = readFileSync(new URL("../src/app/components/PlatformConsol
 const applicationSource = readFileSync(new URL("../src/app/components/PlatformApplicationGate.tsx", import.meta.url), "utf8");
 const safetySource = readFileSync(new URL("../src/app/components/PlatformSafetyNotice.tsx", import.meta.url), "utf8");
 const routesSource = readFileSync(new URL("../src/app/routes.tsx", import.meta.url), "utf8");
+const layoutSource = readFileSync(new URL("../src/app/components/MainLayout.tsx", import.meta.url), "utf8");
 const clientSource = readFileSync(new URL("../src/app/api/client.ts", import.meta.url), "utf8");
 const portalManifest = JSON.parse(readFileSync(new URL("../public/manifest.webmanifest", import.meta.url), "utf8"));
 const platformManifest = JSON.parse(readFileSync(new URL("../public/platform.webmanifest", import.meta.url), "utf8"));
@@ -24,6 +25,11 @@ assert.ok(routesSource.includes('path: "/*", Component: PlatformProduct'), "plat
 assert.ok(routesSource.includes('window.location.hostname.toLowerCase() === "platform.agroai-pilot.com"'), "router must select the product by hostname");
 assert.ok(routesSource.includes("if (!platformDeveloper) return <PlatformApplicationGate />"), "unenrolled organizations must enter the application gate");
 assert.ok(routesSource.includes("<PlatformSafetyNotice />"), "enrolled developers must see the controlled-launch state");
+assert.ok(layoutSource.includes('{ name: "Platform API", path: "/platform", icon: Code2 }'), "the Enterprise Portal must expose the unified Platform product to every verified organization");
+assert.ok(layoutSource.includes('<NavSection title="Products" items={productItems}'), "Platform API must be presented as a first-class product, not an account utility");
+assert.ok(layoutSource.includes('{ name: "API access reviews", path: "/admin/platform-api"'), "internal approval operations must be visibly distinct from the developer console");
+assert.ok(!layoutSource.includes('name: "Developers/API"'), "the duplicate legacy developer navigation must be removed");
+assert.ok(routesSource.includes('path: "developers/api", element: <Navigate to="/platform" replace />'), "legacy deep links must converge on the unified Platform console");
 
 assert.ok(mainSource.includes('window.location.hostname.toLowerCase() === "platform.agroai-pilot.com"'), "runtime product identity must use the exact standalone hostname");
 assert.ok(mainSource.includes('standalonePlatformHost ? "AGRO-AI Platform API" : "AGRO-AI Enterprise Portal"'), "browser and recovery identity must distinguish the two products");

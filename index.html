@@ -78,7 +78,7 @@
             if (!hasDemoLink) return;
             const apiLink = aboutLink.cloneNode(true);
             apiLink.href = "/platform-api";
-            apiLink.textContent = "API";
+            apiLink.textContent = "API Platform";
             apiLink.setAttribute("aria-label", "AGRO-AI Platform API");
             const careersLink = parent.querySelector('a[href="/careers"]');
             (careersLink || aboutLink).insertAdjacentElement("afterend", apiLink);
