@@ -15,6 +15,7 @@ from urllib.parse import urlparse
 import httpx
 
 from app.core.config import settings
+from app.services.whatsapp_runtime import floating, integer, value
 from app.models.operational_records import ConnectorConnection
 from app.services.connector_vault import load_connector_credentials
 
@@ -30,7 +31,7 @@ class WhatsAppCloudError(RuntimeError):
 
 
 def verify_webhook_signature(raw_body: bytes, signature_header: str | None) -> bool:
-    secret = str(getattr(settings, "WHATSAPP_APP_SECRET", "") or "")
+    secret = str(value("WHATSAPP_APP_SECRET", "") or "")
     if not secret or not signature_header or not signature_header.startswith("sha256="):
         return False
     expected = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
@@ -39,12 +40,12 @@ def verify_webhook_signature(raw_body: bytes, signature_header: str | None) -> b
 
 
 def verify_challenge_token(supplied: str | None) -> bool:
-    expected = str(getattr(settings, "WHATSAPP_VERIFY_TOKEN", "") or "")
+    expected = str(value("WHATSAPP_VERIFY_TOKEN", "") or "")
     return bool(expected and supplied and hmac.compare_digest(expected.encode(), supplied.encode()))
 
 
 def _api_version() -> str:
-    version = str(getattr(settings, "WHATSAPP_GRAPH_API_VERSION", "") or "").strip()
+    version = str(value("WHATSAPP_GRAPH_API_VERSION", "") or "").strip()
     if not version:
         raise WhatsAppCloudError("WHATSAPP_GRAPH_API_VERSION is not configured")
     if not version.startswith("v") or not version[1:].replace(".", "").isdigit():
@@ -53,7 +54,7 @@ def _api_version() -> str:
 
 
 def _graph_url(path: str) -> str:
-    base = str(getattr(settings, "WHATSAPP_GRAPH_API_BASE_URL", "https://graph.facebook.com") or "").rstrip("/")
+    base = str(value("WHATSAPP_GRAPH_API_BASE_URL", "https://graph.facebook.com") or "").rstrip("/")
     parsed = urlparse(base)
     if parsed.scheme != "https" or parsed.hostname != "graph.facebook.com":
         if str(getattr(settings, "APP_ENV", "development")).lower() not in {"test", "development"}:
@@ -72,7 +73,7 @@ def _token(db, connection: ConnectorConnection) -> str:
 
 
 def _timeout() -> httpx.Timeout:
-    seconds = float(getattr(settings, "WHATSAPP_HTTP_TIMEOUT_SECONDS", 20.0))
+    seconds = floating("WHATSAPP_HTTP_TIMEOUT_SECONDS", 20.0)
     return httpx.Timeout(seconds, connect=min(seconds, 10.0))
 
 
@@ -125,7 +126,7 @@ def retrieve_media_to_temp(db, connection: ConnectorConnection, media_id: str) -
         if parsed.scheme != "https" or not allowed:
             raise WhatsAppCloudError("Meta returned an untrusted media URL")
 
-        max_bytes = int(getattr(settings, "WHATSAPP_MEDIA_MAX_BYTES", 50 * 1024 * 1024))
+        max_bytes = integer("WHATSAPP_MEDIA_MAX_BYTES", 50 * 1024 * 1024)
         if expected_size and expected_size > max_bytes:
             raise WhatsAppCloudError("WhatsApp media exceeds the configured size limit")
 
