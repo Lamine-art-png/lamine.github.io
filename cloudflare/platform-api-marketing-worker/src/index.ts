@@ -9,6 +9,7 @@ type Surface = "marketing" | "docs" | "shared";
 type Route = { upstreamPath: string; surface: Surface; html: boolean };
 
 const DEFAULT_MARKETING_ORIGIN = "https://agroai-343.pages.dev";
+const PLATFORM_CONSOLE = "https://platform.agroai-pilot.com";
 const PRIVATE_ROBOTS_META = /<meta\b(?=[^>]*\bname=["']robots["'])(?=[^>]*\bcontent=["'][^"']*\bnoindex\b[^"']*["'])[^>]*>\s*/gi;
 
 const STATIC_ROUTES: Record<string, Route> = {
@@ -112,6 +113,20 @@ function responseHeaders(upstream: Response, route: Route, indexing: boolean): H
   return headers;
 }
 
+function normalizeHtml(html: string, route: Route): string {
+  let normalized = html
+    .replaceAll("https://app.agroai-pilot.com/developers/api/apply?type=developer_beta", PLATFORM_CONSOLE)
+    .replaceAll("https://app.agroai-pilot.com/developers/api/apply?type=strategic_partner", PLATFORM_CONSOLE)
+    .replaceAll('href="https://app.agroai-pilot.com"', `href="${PLATFORM_CONSOLE}"`);
+  if (route.surface === "marketing" && route.upstreamPath.endsWith("index.html")) {
+    normalized = normalized.replace(/<title>[\s\S]*?<\/title>/i, "<title>AGRO-AI Platform API</title>");
+  }
+  if (route.surface === "docs" && route.upstreamPath === "/platform-api/docs/index.html") {
+    normalized = normalized.replace(/<title>[\s\S]*?<\/title>/i, "<title>AGRO-AI Platform API Documentation</title>");
+  }
+  return normalized;
+}
+
 async function proxy(request: Request, env: Env, route: Route, indexing: boolean): Promise<Response> {
   let origin: URL;
   try {
@@ -145,7 +160,7 @@ async function proxy(request: Request, env: Env, route: Route, indexing: boolean
     });
   }
 
-  let html = await upstream.text();
+  let html = normalizeHtml(await upstream.text(), route);
   if (indexing) html = html.replace(PRIVATE_ROBOTS_META, "");
   return new Response(html, { status: upstream.status, statusText: upstream.statusText, headers });
 }
