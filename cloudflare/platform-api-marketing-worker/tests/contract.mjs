@@ -36,6 +36,8 @@ for (const required of [
   'Enterprise Portal',
   'API Platform',
   'Open API Platform',
+  'const loginLabels=new Set([\"open portal\",\"log in\",\"login\"])',
+  'href===PORTAL',
 ]) {
   assert.ok(source.includes(required), `missing worker contract: ${required}`);
 }
