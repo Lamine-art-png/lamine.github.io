@@ -48,6 +48,7 @@ _MESSAGE_TYPES = {"text", "audio", "image", "video", "document", "location", "st
 _MEDIA_TYPES = {"audio", "image", "video", "document", "sticker"}
 _EVENT_LEASE_SECONDS = 120
 _OUTBOUND_LEASE_SECONDS = 120
+_CONTROL_OUTBOUND_PREFIXES = ("wa-stop-", "wa-start-", "wa-help-", "wa-context-")
 _CONTEXT_TOKEN = re.compile(r"(?P<key>field|field_id|block|block_id|crop)=(?P<value>[^,;]+)", re.I)
 _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 
@@ -173,7 +174,9 @@ def _redacted_message_payload(message: dict, phone_number_id: str) -> dict:
 def ingest_webhook_payload(db: Session, payload: dict) -> dict:
     """Persist a Meta webhook delivery without running external I/O.
 
-    Exact payload deliveries are deduplicated. Raw webhook bodies, contact names,
+    Each message/status is isolated in a database savepoint. A concurrent
+    duplicate can therefore lose its insert race without rolling back other
+    unique events in the same Meta delivery. Raw webhook bodies, contact names,
     and sender phone identifiers are never persisted.
     """
     accepted = duplicates = unknown_connections = statuses = 0
@@ -189,99 +192,105 @@ def ingest_webhook_payload(db: Session, payload: dict) -> dict:
                 continue
 
             for message in value.get("messages") or []:
-                sender = str((message or {}).get("from") or "")
                 try:
-                    binding = _find_or_create_binding(db, connection, sender)
+                    with db.begin_nested():
+                        sender = str((message or {}).get("from") or "")
+                        binding = _find_or_create_binding(db, connection, sender)
+                        message_type = str((message or {}).get("type") or "unknown")[:32]
+                        media_id, media_mime, media_filename = _media_fields(message or {})
+                        location = (message or {}).get("location") or {}
+                        minimal = _redacted_message_payload(message or {}, phone_number_id)
+                        payload_hash = _canonical_hash({
+                            "connection": connection.id,
+                            "event": "message",
+                            "message_id": minimal.get("message_id"),
+                            "type": message_type,
+                        })
+                        exists = (
+                            db.query(WhatsAppInboundEvent)
+                            .filter(WhatsAppInboundEvent.connector_connection_id == connection.id)
+                            .filter(WhatsAppInboundEvent.payload_hash == payload_hash)
+                            .first()
+                        )
+                        if exists:
+                            duplicates += 1
+                            continue
+                        supported = message_type in _MESSAGE_TYPES
+                        db.add(WhatsAppInboundEvent(
+                            id=str(uuid.uuid4()),
+                            tenant_id=connection.tenant_id,
+                            workspace_id=binding.workspace_id or connection.workspace_id,
+                            connector_connection_id=connection.id,
+                            contact_binding_id=binding.id,
+                            meta_message_id=_safe_text((message or {}).get("id"), 240),
+                            payload_hash=payload_hash,
+                            event_type="message",
+                            message_type=message_type,
+                            text_content=_message_text(message or {}),
+                            media_id=media_id,
+                            media_mime_type=media_mime,
+                            media_filename=media_filename,
+                            latitude=_float_or_none(location.get("latitude")),
+                            longitude=_float_or_none(location.get("longitude")),
+                            occurred_at=_parse_timestamp((message or {}).get("timestamp")),
+                            status="queued" if supported else "ignored",
+                            max_attempts=int(getattr(settings, "WHATSAPP_MAX_ATTEMPTS", 5)),
+                            next_attempt_at=datetime.utcnow(),
+                            redacted_payload_json=minimal,
+                            completed_at=None if supported else datetime.utcnow(),
+                        ))
+                        binding.last_inbound_at = datetime.utcnow()
+                        db.flush()
+                    accepted += 1
                 except ValueError:
                     logger.warning("Rejected malformed WhatsApp sender identifier")
-                    continue
-                message_type = str((message or {}).get("type") or "unknown")[:32]
-                media_id, media_mime, media_filename = _media_fields(message or {})
-                location = (message or {}).get("location") or {}
-                minimal = _redacted_message_payload(message or {}, phone_number_id)
-                payload_hash = _canonical_hash({
-                    "connection": connection.id,
-                    "event": "message",
-                    "message_id": minimal.get("message_id"),
-                    "type": message_type,
-                })
-                exists = (
-                    db.query(WhatsAppInboundEvent)
-                    .filter(WhatsAppInboundEvent.connector_connection_id == connection.id)
-                    .filter(WhatsAppInboundEvent.payload_hash == payload_hash)
-                    .first()
-                )
-                if exists:
+                except IntegrityError:
                     duplicates += 1
-                    continue
-                supported = message_type in _MESSAGE_TYPES
-                row = WhatsAppInboundEvent(
-                    id=str(uuid.uuid4()),
-                    tenant_id=connection.tenant_id,
-                    workspace_id=binding.workspace_id or connection.workspace_id,
-                    connector_connection_id=connection.id,
-                    contact_binding_id=binding.id,
-                    meta_message_id=_safe_text((message or {}).get("id"), 240),
-                    payload_hash=payload_hash,
-                    event_type="message",
-                    message_type=message_type,
-                    text_content=_message_text(message or {}),
-                    media_id=media_id,
-                    media_mime_type=media_mime,
-                    media_filename=media_filename,
-                    latitude=_float_or_none(location.get("latitude")),
-                    longitude=_float_or_none(location.get("longitude")),
-                    occurred_at=_parse_timestamp((message or {}).get("timestamp")),
-                    status="queued" if supported else "ignored",
-                    max_attempts=int(getattr(settings, "WHATSAPP_MAX_ATTEMPTS", 5)),
-                    next_attempt_at=datetime.utcnow(),
-                    redacted_payload_json=minimal,
-                    completed_at=None if supported else datetime.utcnow(),
-                )
-                db.add(row)
-                binding.last_inbound_at = datetime.utcnow()
-                accepted += 1
 
             for delivery in value.get("statuses") or []:
-                message_id = _safe_text((delivery or {}).get("id"), 240)
-                delivery_status = _safe_text((delivery or {}).get("status"), 32)
-                minimal = {
-                    "phone_number_id": phone_number_id[:120],
-                    "message_id": message_id,
-                    "delivery_status": delivery_status,
-                }
-                payload_hash = _canonical_hash({
-                    "connection": connection.id,
-                    "event": "status",
-                    **minimal,
-                    "timestamp": (delivery or {}).get("timestamp"),
-                })
-                if not db.query(WhatsAppInboundEvent).filter(
-                    WhatsAppInboundEvent.connector_connection_id == connection.id,
-                    WhatsAppInboundEvent.payload_hash == payload_hash,
-                ).first():
-                    db.add(WhatsAppInboundEvent(
-                        id=str(uuid.uuid4()),
-                        tenant_id=connection.tenant_id,
-                        workspace_id=connection.workspace_id,
-                        connector_connection_id=connection.id,
-                        meta_message_id=message_id,
-                        payload_hash=payload_hash,
-                        event_type="status",
-                        delivery_status=delivery_status,
-                        status="completed",
-                        occurred_at=_parse_timestamp((delivery or {}).get("timestamp")),
-                        redacted_payload_json=minimal,
-                        completed_at=datetime.utcnow(),
-                    ))
+                try:
+                    with db.begin_nested():
+                        message_id = _safe_text((delivery or {}).get("id"), 240)
+                        delivery_status = _safe_text((delivery or {}).get("status"), 32)
+                        minimal = {
+                            "phone_number_id": phone_number_id[:120],
+                            "message_id": message_id,
+                            "delivery_status": delivery_status,
+                        }
+                        payload_hash = _canonical_hash({
+                            "connection": connection.id,
+                            "event": "status",
+                            **minimal,
+                            "timestamp": (delivery or {}).get("timestamp"),
+                        })
+                        exists = db.query(WhatsAppInboundEvent).filter(
+                            WhatsAppInboundEvent.connector_connection_id == connection.id,
+                            WhatsAppInboundEvent.payload_hash == payload_hash,
+                        ).first()
+                        if exists:
+                            duplicates += 1
+                            continue
+                        db.add(WhatsAppInboundEvent(
+                            id=str(uuid.uuid4()),
+                            tenant_id=connection.tenant_id,
+                            workspace_id=connection.workspace_id,
+                            connector_connection_id=connection.id,
+                            meta_message_id=message_id,
+                            payload_hash=payload_hash,
+                            event_type="status",
+                            delivery_status=delivery_status,
+                            status="completed",
+                            occurred_at=_parse_timestamp((delivery or {}).get("timestamp")),
+                            redacted_payload_json=minimal,
+                            completed_at=datetime.utcnow(),
+                        ))
+                        _apply_delivery_status(db, connection.id, message_id, delivery_status)
+                        db.flush()
                     statuses += 1
-                _apply_delivery_status(db, connection.id, message_id, delivery_status)
+                except IntegrityError:
+                    duplicates += 1
 
-    try:
-        db.commit()
-    except IntegrityError:
-        db.rollback()
-        duplicates += 1
+    db.commit()
     return {
         "accepted": accepted,
         "duplicates": duplicates,
@@ -445,8 +454,9 @@ def _process_command(
         binding.consent_revoked_at = datetime.utcnow()
         binding.status = "disabled"
         queue_outbound_text(
-            db, binding,
-            "WhatsApp capture is disabled for this number. Send START after your administrator re-enables access.",
+            db,
+            binding,
+            "WhatsApp capture is disabled for this number. Send START to opt in again.",
             idempotency_key=f"wa-stop-{event.id}",
         )
         return True
@@ -462,26 +472,29 @@ def _process_command(
         queue_outbound_text(db, binding, body, idempotency_key=f"wa-start-{event.id}")
         return True
     if upper in {"HELP", "/HELP"}:
-        queue_outbound_text(
-            db, binding,
-            "Send a field update, voice note, photo, document, or location. Use /context field=NAME, block=NAME, crop=NAME to set context. Send STOP to disable capture.",
-            idempotency_key=f"wa-help-{event.id}",
-        )
+        if binding.status == "active" and binding.consent_status == "granted" and binding.user_id:
+            body = "Send a field update, voice note, photo, document, or location. Use /context field=NAME, block=NAME, crop=NAME to set context. Send STOP to disable capture."
+        else:
+            body = "This number is awaiting authorization. Ask your AGRO-AI workspace administrator to bind it, then send START."
+        queue_outbound_text(db, binding, body, idempotency_key=f"wa-help-{event.id}")
         return True
     if command.lower().startswith("/context"):
-        updates = _parse_context_command(command)
-        if updates:
-            context = dict(binding.context_json or {})
-            context.update(updates)
-            binding.context_json = context
-            summary = ", ".join(f"{key.replace('_', ' ')}: {value}" for key, value in updates.items())
-            body = f"Context updated — {summary}."
+        if binding.status != "active" or binding.consent_status != "granted" or not binding.user_id:
+            body = "Context cannot be changed until this number is authorized and consent is active."
         else:
-            context = dict(binding.context_json or {})
-            body = "Current context: " + (
-                ", ".join(f"{key.replace('_', ' ')}: {value}" for key, value in context.items())
-                if context else "not set"
-            )
+            updates = _parse_context_command(command)
+            if updates:
+                context = dict(binding.context_json or {})
+                context.update(updates)
+                binding.context_json = context
+                summary = ", ".join(f"{key.replace('_', ' ')}: {value}" for key, value in updates.items())
+                body = f"Context updated — {summary}."
+            else:
+                context = dict(binding.context_json or {})
+                body = "Current context: " + (
+                    ", ".join(f"{key.replace('_', ' ')}: {value}" for key, value in context.items())
+                    if context else "not set"
+                )
         queue_outbound_text(db, binding, body, idempotency_key=f"wa-context-{event.id}")
         return True
     return False
@@ -573,7 +586,7 @@ def _process_message(db: Session, event: WhatsAppInboundEvent) -> None:
             )
             asset_kind = _media_kind(str(event.message_type))
             duration = _verified_media(spool_path, kind=asset_kind, content_type=content_type)
-            filename = _safe_text(event.media_filename, 200) or f"whatsapp-{event.id[:8]}"
+            filename = (_safe_text(event.media_filename, 200) or f"whatsapp-{event.id[:8]}").replace("/", "_").replace("\\", "_")
             manifest = [{
                 "client_asset_id": f"wa-asset-{event.meta_message_id or event.id}"[:200],
                 "kind": asset_kind,
@@ -770,7 +783,8 @@ def run_whatsapp_outbox(
             connection = db.get(ConnectorConnection, row.connector_connection_id)
             if binding is None or connection is None:
                 raise WhatsAppCloudError("WhatsApp outbound ownership is unavailable")
-            if binding.consent_status != "granted":
+            is_control_reply = row.message_kind == "text" and row.idempotency_key.startswith(_CONTROL_OUTBOUND_PREFIXES)
+            if binding.consent_status != "granted" and not is_control_reply:
                 raise WhatsAppCloudError("WhatsApp contact has not granted consent")
             recipient = decrypt_wa_id(
                 binding.wa_id_ciphertext_b64,
@@ -781,7 +795,9 @@ def run_whatsapp_outbox(
             )
             if row.message_kind == "template":
                 message_id = send_template(
-                    db, connection, to=recipient,
+                    db,
+                    connection,
+                    to=recipient,
                     name=str(row.template_name or ""),
                     language_code=str(row.language_code or "en_US"),
                     parameters=list(row.parameters_json or []),
