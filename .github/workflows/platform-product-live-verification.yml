@@ -1,0 +1,123 @@
+name: Platform Product Live Verification
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/platform-product-live-verification.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-live-product:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify website, docs, Platform product and Portal discovery
+        shell: bash
+        run: |
+          set -uo pipefail
+          ready=0
+          mkdir -p proof/portal-assets proof/platform-assets
+
+          fetch() {
+            local name="$1" url="$2"
+            curl -sS -L --connect-timeout 6 --max-time 25 -D "proof/${name}.headers" -o "proof/${name}.body" -w '%{http_code}' "$url" > "proof/${name}.code" || printf '000' > "proof/${name}.code"
+          }
+
+          crawl_bundle() {
+            local origin="$1" html="$2" target="$3"
+            rm -rf "$target"
+            mkdir -p "$target/assets"
+            grep -oE '/assets/[A-Za-z0-9._/-]+\.js' "$html" | sed 's#^/##' > "$target/queue.txt" || true
+            : > "$target/seen.txt"
+            for pass in 1 2 3 4; do
+              sort -u "$target/queue.txt" -o "$target/queue.txt"
+              while IFS= read -r script; do
+                [ -n "$script" ] || continue
+                grep -Fx "$script" "$target/seen.txt" >/dev/null 2>&1 && continue
+                echo "$script" >> "$target/seen.txt"
+                file="$target/assets/$(basename "$script")"
+                curl -fsS --connect-timeout 5 --max-time 20 "$origin/$script" -o "$file" || true
+                [ -s "$file" ] || continue
+                grep -oE 'assets/[A-Za-z0-9._/-]+\.js' "$file" >> "$target/queue.txt" || true
+                grep -oE '\./[A-Za-z0-9._/-]+\.js' "$file" | sed 's#^\./#assets/#' >> "$target/queue.txt" || true
+              done < "$target/queue.txt"
+            done
+            cat "$target"/assets/*.js > "$target/all-js.txt" 2>/dev/null || true
+          }
+
+          for attempt in $(seq 1 45); do
+            fetch homepage https://agroai-pilot.com/
+            fetch landing https://agroai-pilot.com/platform-api
+            fetch docs https://agroai-pilot.com/platform-api/docs/
+            fetch unknown https://agroai-pilot.com/platform-api/not-a-real-route
+            fetch portal https://app.agroai-pilot.com/
+            fetch portal_platform https://app.agroai-pilot.com/platform
+            fetch standalone https://platform.agroai-pilot.com/
+            fetch edge https://platform.agroai-pilot.com/v1/edge-health
+            fetch backend https://platform.agroai-pilot.com/v1/health
+            fetch runtime https://api.agroai-pilot.com/v1/platform/health
+
+            crawl_bundle https://app.agroai-pilot.com proof/portal.body proof/portal-assets
+            crawl_bundle https://platform.agroai-pilot.com proof/standalone.body proof/platform-assets
+
+            if [ "$(cat proof/homepage.code)" = "200" ] && \
+               grep -Fi 'x-agroai-product-entry: portal-and-api' proof/homepage.headers >/dev/null && \
+               grep -F 'id="agroai-product-entry-script"' proof/homepage.body >/dev/null && \
+               grep -F 'Open API Platform' proof/homepage.body >/dev/null && \
+               grep -F 'Enterprise Portal' proof/homepage.body >/dev/null && \
+               grep -F 'API Platform' proof/homepage.body >/dev/null && \
+               grep -F 'const loginLabels=new Set(["open portal","log in","login"])' proof/homepage.body >/dev/null && \
+               [ "$(cat proof/landing.code)" = "200" ] && \
+               grep -F 'data-agroai-platform-page="landing"' proof/landing.body >/dev/null && \
+               grep -F '<title>AGRO-AI Platform API</title>' proof/landing.body >/dev/null && \
+               ! grep -Eiq 'This page doesn.t exist|>404<' proof/landing.body && \
+               [ "$(cat proof/docs.code)" = "200" ] && \
+               grep -F 'data-agroai-platform-page="docs"' proof/docs.body >/dev/null && \
+               grep -F '<title>AGRO-AI Platform API Documentation</title>' proof/docs.body >/dev/null && \
+               ! grep -Eiq 'This page doesn.t exist|>404<' proof/docs.body && \
+               grep -Fi 'x-robots-tag: noindex, nofollow' proof/landing.headers >/dev/null && \
+               grep -Fi 'x-robots-tag: noindex, nofollow' proof/docs.headers >/dev/null && \
+               [ "$(cat proof/unknown.code)" = "404" ] && \
+               grep -Fi 'x-agroai-platform-api-surface: closed' proof/unknown.headers >/dev/null && \
+               [ "$(cat proof/portal.code)" = "200" ] && \
+               [ "$(cat proof/portal_platform.code)" = "200" ] && \
+               [ "$(cat proof/standalone.code)" = "200" ] && \
+               grep -F 'Build on AGRO-AI.' proof/platform-assets/all-js.txt >/dev/null && \
+               grep -F 'Platform API enrollment remains a separate reviewed step after sign-in.' proof/platform-assets/all-js.txt >/dev/null && \
+               grep -F 'Platform API' proof/portal-assets/all-js.txt >/dev/null && \
+               grep -F 'API access reviews' proof/portal-assets/all-js.txt >/dev/null && \
+               ! grep -F 'Developers/API' proof/portal-assets/all-js.txt >/dev/null && \
+               jq -e '.status == "ok"' proof/edge.body >/dev/null && \
+               jq -e '.status == "ok"' proof/backend.body >/dev/null && \
+               jq -e '.status == "ready" and .platform_api_enabled == true and .developer_control_plane_enabled == true and .rate_limiter.ready == true and .production_vault_keyring_ready == true and .webhook_delivery.enabled == false and .earthdaily_status == "awaiting_partner_contract" and .valley_irrigation_status == "awaiting_partner_contract" and .physical_irrigation_commands == "disabled"' proof/runtime.body >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 10
+          done
+
+          jq -n \
+            --argjson ready "$ready" \
+            --arg homepage "$(cat proof/homepage.code)" \
+            --arg landing "$(cat proof/landing.code)" \
+            --arg docs "$(cat proof/docs.code)" \
+            --arg unknown "$(cat proof/unknown.code)" \
+            --arg portal "$(cat proof/portal.code)" \
+            --arg portal_platform "$(cat proof/portal_platform.code)" \
+            --arg standalone "$(cat proof/standalone.code)" \
+            --arg edge "$(cat proof/edge.code)" \
+            --arg backend "$(cat proof/backend.code)" \
+            --arg runtime "$(cat proof/runtime.code)" \
+            '{ready:($ready==1),http:{homepage:$homepage,landing:$landing,docs:$docs,unknown:$unknown,portal:$portal,portal_platform:$portal_platform,standalone:$standalone,edge:$edge,backend:$backend,runtime:$runtime}}' | tee live-product-verification.json
+          test "$ready" -eq 1
+
+      - name: Upload redacted live verification
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-product-live-verification-${{ github.sha }}
+          path: live-product-verification.json
+          retention-days: 7
