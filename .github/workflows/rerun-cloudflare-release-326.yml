@@ -1,0 +1,132 @@
+name: Rerun Cloudflare Production Release 326
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/rerun-cloudflare-release-326.yml"
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+
+concurrency:
+  group: rerun-cloudflare-production-release-326
+  cancel-in-progress: false
+
+env:
+  EXPECTED_SHA: f7f9e47f4ad57948210f4842a9bf183491bc760a
+  RELEASE_RUN_NUMBER: "326"
+  CUSTOM_UPSTREAM: https://api-preview.agroai-pilot.com
+  DIRECT_RENDER_UPSTREAM: https://agroai-api-preview.onrender.com
+  OPS_ISSUE: "262"
+
+jobs:
+  verify-and-rerun:
+    name: Verify readiness and rerun failed release jobs
+    if: github.event.pull_request.head.ref == 'ops/rerun-cloudflare-release-326'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Fail closed on missing protected credential
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QUEUE_CONSUMER_TOKEN:-}" || {
+            echo "QUEUE_CONSUMER_TOKEN is unavailable"
+            exit 1
+          }
+
+      - name: Verify exact protected release contract
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          probe() {
+            local upstream="$1"
+            local body code
+            body="$(mktemp)"
+            code="$(curl -sS -o "$body" -w '%{http_code}' --connect-timeout 10 --max-time 60 \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+              "${upstream}/v1/internal/release/health" 2>/dev/null || printf '000')"
+
+            jq -e --arg expected "${EXPECTED_SHA}" '
+              (.detail // .) as $r |
+              ($r.status == "ok") and
+              ($r.contract == "agroai-release-v1") and
+              ($r.build_sha == $expected) and
+              ($r.schema_current == true) and
+              ($r.queue_configured == true) and
+              ($r.object_storage_configured == true) and
+              ($r.object_storage_reachable == true) and
+              ($r.production_ready == true) and
+              (($r.production_blocker_codes // []) | length == 0) and
+              ($r.platform_api_enabled == true)
+            ' "$body" >/dev/null || {
+              echo "Protected release contract is not ready at ${upstream}; HTTP ${code}"
+              jq '(.detail // .) | {status,contract,build_sha,schema_current,queue_configured,object_storage_configured,object_storage_reachable,production_ready,production_blocker_codes,platform_api_enabled}' "$body" || true
+              rm -f "$body"
+              exit 1
+            }
+            rm -f "$body"
+          }
+
+          probe "${CUSTOM_UPSTREAM}"
+          probe "${DIRECT_RENDER_UPSTREAM}"
+          echo "Both protected upstreams are exact-SHA ready."
+
+      - name: Locate failed workflow-dispatch run 326
+        id: locate
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_json="$(gh api --paginate \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yml/runs?event=workflow_dispatch&per_page=100" \
+            --jq ".workflow_runs[] | select(.run_number == ${RELEASE_RUN_NUMBER})")"
+
+          test -n "$run_json" || {
+            echo "Cloudflare Production Release #${RELEASE_RUN_NUMBER} was not found"
+            exit 1
+          }
+
+          run_id="$(jq -r '.id' <<<"$run_json")"
+          head_sha="$(jq -r '.head_sha' <<<"$run_json")"
+          conclusion="$(jq -r '.conclusion' <<<"$run_json")"
+          event="$(jq -r '.event' <<<"$run_json")"
+
+          test "$head_sha" = "$EXPECTED_SHA" || {
+            echo "Refusing rerun: run head ${head_sha} != expected ${EXPECTED_SHA}"
+            exit 1
+          }
+          test "$event" = "workflow_dispatch" || {
+            echo "Refusing rerun: unexpected event ${event}"
+            exit 1
+          }
+          test "$conclusion" = "failure" || {
+            echo "Refusing rerun: current conclusion is ${conclusion}, not failure"
+            exit 1
+          }
+
+          echo "run_id=${run_id}" >> "$GITHUB_OUTPUT"
+          echo "Located release run ID ${run_id}."
+
+      - name: Rerun only failed jobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method POST \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/runs/${{ steps.locate.outputs.run_id }}/rerun-failed-jobs"
+          echo "Rerun dispatched for failed jobs in release #${RELEASE_RUN_NUMBER}."
+
+      - name: Record rerun dispatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh issue comment "${OPS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body \
+            "Rerun dispatched for failed jobs in Cloudflare Production Release #${RELEASE_RUN_NUMBER} (run ID \`${{ steps.locate.outputs.run_id }}\`) after exact-SHA protected readiness passed on both custom and direct Render upstreams."
