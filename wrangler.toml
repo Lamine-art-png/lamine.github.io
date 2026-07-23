@@ -44,8 +44,13 @@ retry_delay = 30
 max_concurrency = 4
 dead_letter_queue = "agroai-connector-tasks-dlq"
 
+# Recovery polling must remain comfortably longer than Neon's five-minute
+# scale-to-zero window. A one-minute database poll kept the production compute
+# continuously awake and exhausted the Free-plan monthly compute allowance.
+# Normal task delivery remains event-driven through Cloudflare Queues; this
+# schedule is only the bounded recovery path for stranded outbox rows.
 [triggers]
-crons = ["* * * * *"]
+crons = ["*/15 * * * *"]
 
 [observability]
 enabled = true
