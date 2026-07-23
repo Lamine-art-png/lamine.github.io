@@ -16,6 +16,8 @@ def write(path: str, text: str) -> None:
 def replace_once(path: str, old: str, new: str, label: str) -> None:
     text = read(path)
     count = text.count(old)
+    if count == 0 and new in text:
+        return
     if count != 1:
         raise RuntimeError(f"{label}: expected one match in {path}, found {count}")
     write(path, text.replace(old, new, 1))
@@ -24,13 +26,13 @@ def replace_once(path: str, old: str, new: str, label: str) -> None:
 def replace_all(path: str, old: str, new: str, label: str, minimum: int = 1) -> None:
     text = read(path)
     count = text.count(old)
+    if count == 0 and new in text:
+        return
     if count < minimum:
         raise RuntimeError(f"{label}: expected at least {minimum} matches in {path}, found {count}")
     write(path, text.replace(old, new))
 
 
-# Canonical public product identity. These markers are validated by the Worker
-# before HTML is returned, so a generic SPA 404 can never pass as the API page.
 replace_once(
     "platform-api/index.html",
     '<html lang="en">',
@@ -69,8 +71,6 @@ for html_path in sorted((ROOT / "platform-api").rglob("*.html")):
     text = text.replace('href="https://app.agroai-pilot.com"', 'href="https://platform.agroai-pilot.com"')
     html_path.write_text(text, encoding="utf-8")
 
-# The marketing shell's guarded navigation should use the product name, not a
-# generic acronym. The root homepage Worker adds the login switcher and hero CTA.
 replace_once(
     "index.html",
     'apiLink.textContent = "API";',
@@ -78,9 +78,6 @@ replace_once(
     "website API navigation label",
 )
 
-# Expose the unified developer product as a first-class Portal product for every
-# verified organization. Unenrolled organizations see the reviewed application
-# gate; enrolled organizations enter PlatformConsoleApp.
 replace_once(
     "figma-enterprise-v4/src/app/components/MainLayout.tsx",
     "  BrainCircuit,\n",
@@ -170,8 +167,6 @@ replace_once(
     "render first-class product section",
 )
 
-# Retire the duplicate legacy console route. There is one product shell and one
-# application/enrollment decision path.
 replace_once(
     "figma-enterprise-v4/src/app/routes.tsx",
     '{ path: "developers/api", lazy: lazyComponent(() => import("./components/DevelopersApi"), "DevelopersApi") },',
@@ -179,24 +174,28 @@ replace_once(
     "legacy developer console redirect",
 )
 
-# Update the product contract to make visibility and admin separation permanent.
 contract_path = "figma-enterprise-v4/tests/platform-api-console-contract.mjs"
 contract = read(contract_path)
-contract = contract.replace(
-    'const routesSource = readFileSync(new URL("../src/app/routes.tsx", import.meta.url), "utf8");',
-    'const routesSource = readFileSync(new URL("../src/app/routes.tsx", import.meta.url), "utf8");\nconst layoutSource = readFileSync(new URL("../src/app/components/MainLayout.tsx", import.meta.url), "utf8");',
-)
+routes_import = 'const routesSource = readFileSync(new URL("../src/app/routes.tsx", import.meta.url), "utf8");'
+layout_import = 'const layoutSource = readFileSync(new URL("../src/app/components/MainLayout.tsx", import.meta.url), "utf8");'
+if layout_import not in contract:
+    if routes_import not in contract:
+        raise RuntimeError("Platform console route source import missing")
+    contract = contract.replace(routes_import, routes_import + "\n" + layout_import, 1)
+
 needle = 'assert.ok(routesSource.includes("<PlatformSafetyNotice />"), "enrolled developers must see the controlled-launch state");\n'
-insert = '''assert.ok(routesSource.includes("<PlatformSafetyNotice />"), "enrolled developers must see the controlled-launch state");
+assertion = 'assert.ok(layoutSource.includes(\'{ name: "Platform API", path: "/platform", icon: Code2 }\'), "the Enterprise Portal must expose the unified Platform product to every verified organization");'
+if assertion not in contract:
+    if needle not in contract:
+        raise RuntimeError("Platform console contract insertion point missing")
+    insert = '''assert.ok(routesSource.includes("<PlatformSafetyNotice />"), "enrolled developers must see the controlled-launch state");
 assert.ok(layoutSource.includes('{ name: "Platform API", path: "/platform", icon: Code2 }'), "the Enterprise Portal must expose the unified Platform product to every verified organization");
 assert.ok(layoutSource.includes('<NavSection title="Products" items={productItems}'), "Platform API must be presented as a first-class product, not an account utility");
 assert.ok(layoutSource.includes('{ name: "API access reviews", path: "/admin/platform-api"'), "internal approval operations must be visibly distinct from the developer console");
 assert.ok(!layoutSource.includes('name: "Developers/API"'), "the duplicate legacy developer navigation must be removed");
 assert.ok(routesSource.includes('path: "developers/api", element: <Navigate to="/platform" replace />'), "legacy deep links must converge on the unified Platform console");
 '''
-if needle not in contract:
-    raise RuntimeError("Platform console contract insertion point missing")
-contract = contract.replace(needle, insert, 1)
+    contract = contract.replace(needle, insert, 1)
 write(contract_path, contract)
 
 print("Platform product discovery and console patch applied")
