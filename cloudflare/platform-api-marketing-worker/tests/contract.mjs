@@ -8,12 +8,19 @@ const docs = readFileSync(new URL("../../../platform-api/docs/index.html", impor
 
 assert.match(config, /name = "agroai-platform-api-marketing"/);
 assert.match(config, /pattern = "agroai-pilot\.com\/platform-api\*"/);
+assert.match(config, /pattern = "agroai-pilot\.com\/"/);
+assert.match(config, /\[assets\]/);
+assert.match(config, /directory = "\.\.\/\.\.\/platform-api"/);
+assert.match(config, /binding = "ASSETS"/);
+assert.match(config, /run_worker_first = true/);
 assert.match(config, /PLATFORM_API_MARKETING_ENABLED = "true"/);
 assert.match(config, /PLATFORM_API_PUBLIC_DOCS_ENABLED = "true"/);
 assert.match(config, /PLATFORM_API_INDEXING_ENABLED = "false"/);
 assert.match(config, /MARKETING_ORIGIN = "https:\/\/agroai-343\.pages\.dev"/);
 
 for (const required of [
+  'ASSETS: Fetcher',
+  'env.ASSETS.fetch',
   '"x-robots-tag": "noindex, nofollow"',
   'headers.set("x-robots-tag", "noindex, nofollow")',
   'headers.set("cache-control", "private, no-cache, must-revalidate")',
@@ -21,21 +28,30 @@ for (const required of [
   'const PLATFORM_CONSOLE = "https://platform.agroai-pilot.com"',
   'if (!route) return notFound()',
   'if (!surfaceEnabled(route.surface, marketing, docs)) return notFound()',
-  '"/platform-api/docs/": { upstreamPath: "/platform-api/docs/index.html"',
+  'identity: \'data-agroai-platform-page="landing"\'',
+  'identity: \'data-agroai-platform-page="docs"\'',
+  'return unavailable("identity-mismatch")',
+  'This page doesn',
+  'x-agroai-product-entry',
+  'Enterprise Portal',
+  'API Platform',
+  'Open API Platform',
 ]) {
   assert.ok(source.includes(required), `missing worker contract: ${required}`);
 }
 
 assert.match(source, /\^\\\/platform-api\\\/contract\\\/\(platform_api_openapi\\\.json\|platform_api_openapi\\\.sha256\)\$/);
-assert.match(source, /<title>AGRO-AI Platform API<\/title>/);
-assert.match(source, /<title>AGRO-AI Platform API Documentation<\/title>/);
 assert.match(source, /request\.method === "HEAD"/);
 assert.match(source, /status: 405/);
 assert.match(source, /status: 503/);
 assert.match(source, /status: 404/);
-assert.doesNotMatch(source, /fetch\(request\)/);
+assert.doesNotMatch(source, /new URL\(route\.upstreamPath, origin\)/);
 
+assert.match(landing, /<html lang="en" data-agroai-platform-page="landing">/);
+assert.match(landing, /<title>AGRO-AI Platform API<\/title>/);
 assert.match(landing, /<meta name="robots" content="noindex,nofollow"/);
+assert.match(docs, /<html lang="en" data-agroai-platform-page="docs">/);
+assert.match(docs, /<title>AGRO-AI Platform API Documentation<\/title>/);
 assert.match(docs, /<meta name="robots" content="noindex"/);
 
-console.log("Platform API marketing overlay contract: ok");
+console.log("Platform API bundled marketing, product-entry, and fail-closed identity contract: ok");
