@@ -31,7 +31,8 @@ env:
   PUBLIC_API: "https://api.agroai-pilot.com"
   PORTAL_URL: "https://app.agroai-pilot.com"
   MARKETING_URL: "https://agroai-pilot.com/platform-api"
-  DOCS_URL: "https://agroai-pilot.com/developers"
+  DOCS_URL: "https://agroai-pilot.com/platform-api/docs/"
+  PLATFORM_URL: "https://platform.agroai-pilot.com"
 
 jobs:
   public-surfaces:
@@ -73,8 +74,9 @@ jobs:
           {
             probe custom_upstream_health "${CUSTOM_UPSTREAM}/v1/health"
             probe direct_render_health "${DIRECT_RENDER_UPSTREAM}/v1/health"
-            probe public_edge_health "${PUBLIC_API}/v1/edge-health"
             probe public_api_health "${PUBLIC_API}/v1/health"
+            probe standalone_edge_health "${PLATFORM_URL}/v1/edge-health"
+            probe standalone_api_health "${PLATFORM_URL}/v1/health"
             probe enterprise_portal "${PORTAL_URL}/"
             probe_page platform_api_marketing "${MARKETING_URL}" '<title>AGRO-AI Platform API</title>'
             probe_page developer_documentation "${DOCS_URL}" '<title>AGRO-AI Platform API Documentation</title>'
@@ -102,7 +104,18 @@ jobs:
     env:
       QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
     steps:
-      - name: Probe redacted exact-SHA readiness
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve immutable backend deployment commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          backend_sha="$(bash .github/scripts/resolve-backend-release-sha.sh)"
+          echo "BACKEND_RELEASE_SHA=${backend_sha}" >> "$GITHUB_ENV"
+
+      - name: Probe redacted backend deployment readiness
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -116,7 +129,7 @@ jobs:
               -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN:-}" \
               "$url" 2>/dev/null || printf '000')"
             if jq -e . "$payload" >/dev/null 2>&1; then
-              jq -c --arg required_sha "$GITHUB_SHA" '{status,contract,build_sha,exact_sha_current:(.build_sha == $required_sha),schema_current,queue_configured,object_storage_configured,object_storage_reachable,production_ready,production_blocker_codes,platform_api_enabled}' "$payload"
+              jq -c --arg required_sha "$BACKEND_RELEASE_SHA" '{status,contract,build_sha,exact_sha_current:(.build_sha == $required_sha),schema_current,queue_configured,object_storage_configured,object_storage_reachable,production_ready,production_blocker_codes,platform_api_enabled}' "$payload"
             else
               printf '{"status":"unavailable","http":"%s","exact_sha_current":false}' "$code"
             fi
@@ -130,7 +143,7 @@ jobs:
             echo "## Platform API private-beta authenticated readiness"
             echo
             echo "- workflow SHA: \`${GITHUB_SHA}\`"
-            echo "- required exact SHA: \`${GITHUB_SHA}\`"
+            echo "- required backend deployment SHA: \`${BACKEND_RELEASE_SHA}\`"
             echo
             echo "### Custom upstream"
             echo '```json'

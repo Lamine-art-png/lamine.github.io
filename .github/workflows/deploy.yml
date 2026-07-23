@@ -87,6 +87,8 @@ jobs:
   deploy-edge:
     name: Deploy API edge and queues
     needs: validate
+    outputs:
+      backend-release-sha: ${{ steps.backend-sha.outputs.sha }}
     runs-on: ubuntu-latest
     environment: production
     env:
@@ -97,6 +99,20 @@ jobs:
       EDGE_ORIGIN_AUTH_TOKEN: ${{ secrets.EDGE_ORIGIN_AUTH_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve immutable backend deployment commit
+        id: backend-sha
+        shell: bash
+        run: |
+          set -euo pipefail
+          backend_sha="$(bash .github/scripts/resolve-backend-release-sha.sh)"
+          echo "sha=${backend_sha}" >> "$GITHUB_OUTPUT"
+          echo "BACKEND_RELEASE_SHA=${backend_sha}" >> "$GITHUB_ENV"
+          echo "Release SHA: ${GITHUB_SHA}"
+          echo "Expected backend deployment SHA: ${backend_sha}"
+
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
@@ -132,7 +148,7 @@ jobs:
             payload="$(curl --fail --silent --show-error --max-time 20 \
               -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
               "${UPSTREAM_RELEASE_CONTRACT_URL}" 2>/dev/null || true)"
-            if printf '%s' "$payload" | jq -e --arg sha "$GITHUB_SHA" \
+            if printf '%s' "$payload" | jq -e --arg sha "$BACKEND_RELEASE_SHA" \
               '.status == "ok" and .contract == "agroai-release-v1" and .build_sha == $sha and .schema_current == true and .queue_configured == true and .object_storage_configured == true and .object_storage_reachable == true and .production_ready == true' \
               >/dev/null 2>&1; then
               platform_api_enabled="$(printf '%s' "$payload" | jq -r '.platform_api_enabled == true')"
@@ -140,8 +156,12 @@ jobs:
                 echo "Missing required production secret for enabled Platform API: EDGE_ORIGIN_AUTH_TOKEN"
                 exit 1
               fi
-              printf '%s' "$payload" > upstream-release-contract.json
-              echo "Exact backend build, schema, storage, and Queue contract is ready"
+              printf '%s' "$payload" | jq \
+                --arg release_sha "$GITHUB_SHA" \
+                --arg expected_backend_sha "$BACKEND_RELEASE_SHA" \
+                '. + {release_sha: $release_sha, expected_backend_sha: $expected_backend_sha}' \
+                > upstream-release-contract.json
+              echo "Backend deployment commit, schema, storage, and Queue contract are ready"
               exit 0
             fi
             sleep 10
@@ -208,7 +228,7 @@ jobs:
           curl --fail --silent --show-error --max-time 30 \
             -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
             "${API_URL}/v1/internal/release/health" | \
-            jq -e --arg sha "$GITHUB_SHA" '.status == "ok" and .contract == "agroai-release-v1" and .build_sha == $sha and .schema_current == true and .queue_configured == true and .object_storage_configured == true and .object_storage_reachable == true and .production_ready == true' >/dev/null
+            jq -e --arg sha "$BACKEND_RELEASE_SHA" '.status == "ok" and .contract == "agroai-release-v1" and .build_sha == $sha and .schema_current == true and .queue_configured == true and .object_storage_configured == true and .object_storage_reachable == true and .production_ready == true' >/dev/null
 
   deploy-portal:
     name: Deploy enterprise portal and Platform product
@@ -339,9 +359,11 @@ jobs:
         env:
           EDGE_RESULT: ${{ needs.deploy-edge.result }}
           PORTAL_RESULT: ${{ needs.deploy-portal.result }}
+          BACKEND_RELEASE_SHA: ${{ needs.deploy-edge.outputs.backend-release-sha }}
         run: |
           {
             echo "release_sha=${GITHUB_SHA}"
+            echo "backend_release_sha=${BACKEND_RELEASE_SHA}"
             echo "edge_result=${EDGE_RESULT}"
             echo "portal_result=${PORTAL_RESULT}"
             echo "api_url=${API_URL}"
