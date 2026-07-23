@@ -97,20 +97,42 @@ jobs:
             local expression="$1" file="$2"
             if [ -f "$file" ] && jq -e "$expression" "$file" >/dev/null 2>&1; then printf 'true'; else printf 'false'; fi
           }
+          probe() {
+            local name="$1" url="$2"
+            (
+              code="$(curl -sS -L --connect-timeout 5 --max-time 12 -D "proof/${name}.headers" -o "proof/${name}.body" -w '%{http_code}' "$url" || true)"
+              printf '%s' "${code:-000}" > "proof/${name}.code"
+            ) &
+          }
+          read_code() {
+            local name="$1"
+            if [ -s "proof/${name}.code" ]; then cat "proof/${name}.code"; else printf '000'; fi
+          }
 
-          for attempt in $(seq 1 36); do
-            landing_code="$(curl -sS -L -D proof/landing.headers -o proof/landing.html -w '%{http_code}' --max-time 20 "${MARKETING_URL}" || true)"
-            docs_code="$(curl -sS -L -D proof/docs.headers -o proof/docs.html -w '%{http_code}' --max-time 20 "${DOCS_URL}" || true)"
-            asset_code="$(curl -sS -L -D proof/asset.headers -o proof/asset.css -w '%{http_code}' --max-time 20 "${ASSET_URL}" || true)"
-            unknown_code="$(curl -sS -L -D proof/unknown.headers -o proof/unknown.txt -w '%{http_code}' --max-time 20 "${UNKNOWN_URL}" || true)"
-            platform_code="$(curl -sS -L -o proof/platform.html -w '%{http_code}' --max-time 20 "${PLATFORM_URL}/" || true)"
-            edge_code="$(curl -sS -L -o proof/platform-edge.json -w '%{http_code}' --max-time 20 "${PLATFORM_EDGE_URL}" || true)"
-            health_code="$(curl -sS -L -o proof/platform-health.json -w '%{http_code}' --max-time 20 "${PLATFORM_HEALTH_URL}" || true)"
-            runtime_code="$(curl -sS -L -o proof/platform-runtime.json -w '%{http_code}' --max-time 20 "${PLATFORM_RUNTIME_URL}" || true)"
+          for attempt in $(seq 1 24); do
+            rm -f proof/*.code proof/*.headers proof/*.body
+            probe landing "${MARKETING_URL}"
+            probe docs "${DOCS_URL}"
+            probe asset "${ASSET_URL}"
+            probe unknown "${UNKNOWN_URL}"
+            probe platform "${PLATFORM_URL}/"
+            probe edge "${PLATFORM_EDGE_URL}"
+            probe health "${PLATFORM_HEALTH_URL}"
+            probe runtime "${PLATFORM_RUNTIME_URL}"
+            wait || true
 
-            landing_title="$(bool_grep '<title>AGRO-AI Platform API</title>' proof/landing.html)"
-            docs_title="$(bool_grep '<title>AGRO-AI Platform API Documentation</title>' proof/docs.html)"
-            console_link="$(bool_grep 'https://platform.agroai-pilot.com' proof/landing.html)"
+            landing_code="$(read_code landing)"
+            docs_code="$(read_code docs)"
+            asset_code="$(read_code asset)"
+            unknown_code="$(read_code unknown)"
+            platform_code="$(read_code platform)"
+            edge_code="$(read_code edge)"
+            health_code="$(read_code health)"
+            runtime_code="$(read_code runtime)"
+
+            landing_title="$(bool_grep '<title>AGRO-AI Platform API</title>' proof/landing.body)"
+            docs_title="$(bool_grep '<title>AGRO-AI Platform API Documentation</title>' proof/docs.body)"
+            console_link="$(bool_grep 'https://platform.agroai-pilot.com' proof/landing.body)"
             landing_noindex="$(bool_grep_i 'x-robots-tag: noindex, nofollow' proof/landing.headers)"
             docs_noindex="$(bool_grep_i 'x-robots-tag: noindex, nofollow' proof/docs.headers)"
             landing_private_cache="$(bool_grep_i 'cache-control: private, no-cache, must-revalidate' proof/landing.headers)"
@@ -119,10 +141,10 @@ jobs:
             docs_surface="$(bool_grep_i 'x-agroai-platform-api-surface: docs' proof/docs.headers)"
             unknown_closed="$(bool_grep_i 'x-agroai-platform-api-surface: closed' proof/unknown.headers)"
             unknown_noindex="$(bool_grep_i 'x-robots-tag: noindex, nofollow' proof/unknown.headers)"
-            edge_ready="$(bool_jq '.status == "ok"' proof/platform-edge.json)"
-            runtime_ready="$(bool_jq '.status == "ready" and .platform_api_enabled == true and .developer_control_plane_enabled == true and .rate_limiter.ready == true and .rate_limiter.backend == "redis" and .production_vault_keyring_ready == true and .cidr_trusted_proxy_ready == true and .webhook_delivery.enabled == false and .webhook_delivery.ready == true and .earthdaily_status == "awaiting_partner_contract" and .valley_irrigation_status == "awaiting_partner_contract" and .physical_irrigation_commands == "disabled"' proof/platform-runtime.json)"
+            edge_ready="$(bool_jq '.status == "ok"' proof/edge.body)"
+            runtime_ready="$(bool_jq '.status == "ready" and .platform_api_enabled == true and .developer_control_plane_enabled == true and .rate_limiter.ready == true and .rate_limiter.backend == "redis" and .production_vault_keyring_ready == true and .cidr_trusted_proxy_ready == true and .webhook_delivery.enabled == false and .webhook_delivery.ready == true and .earthdaily_status == "awaiting_partner_contract" and .valley_irrigation_status == "awaiting_partner_contract" and .physical_irrigation_commands == "disabled"' proof/runtime.body)"
             health_exact_sha=false
-            if [ -f proof/platform-health.json ] && jq -e --arg sha "$GITHUB_SHA" '.status == "ok" and .build_sha == $sha' proof/platform-health.json >/dev/null 2>&1; then health_exact_sha=true; fi
+            if [ -f proof/health.body ] && jq -e --arg sha "$GITHUB_SHA" '.status == "ok" and .build_sha == $sha' proof/health.body >/dev/null 2>&1; then health_exact_sha=true; fi
 
             preflight=false
             if [ "$landing_code" = "200" ] && [ "$docs_code" = "200" ] && [ "$asset_code" = "200" ] && [ "$unknown_code" = "404" ] && \
@@ -140,7 +162,7 @@ jobs:
             if [ "$preflight" = true ]; then
               rm -rf proof/platform-smoke
               mkdir -p proof/platform-smoke/assets
-              cp proof/platform.html proof/platform-smoke/index.html
+              cp proof/platform.body proof/platform-smoke/index.html
               grep -oE '/assets/[A-Za-z0-9._/-]+\.js' proof/platform-smoke/index.html | sed 's#^/##' > proof/platform-smoke/queue.txt || true
               : > proof/platform-smoke/seen.txt
               for pass in 1 2 3 4; do
@@ -150,7 +172,7 @@ jobs:
                   grep -Fx "$script" proof/platform-smoke/seen.txt >/dev/null 2>&1 && continue
                   echo "$script" >> proof/platform-smoke/seen.txt
                   target="proof/platform-smoke/assets/$(basename "$script")"
-                  curl -fsS --max-time 15 "${PLATFORM_URL}/${script}" -o "$target" || true
+                  curl -fsS --connect-timeout 5 --max-time 12 "${PLATFORM_URL}/${script}" -o "$target" || true
                   [ -s "$target" ] || continue
                   grep -oE 'assets/[A-Za-z0-9._/-]+\.js' "$target" >> proof/platform-smoke/queue.txt || true
                   grep -oE '\./[A-Za-z0-9._/-]+\.js' "$target" | sed 's#^\./#assets/#' >> proof/platform-smoke/queue.txt || true
@@ -169,7 +191,7 @@ jobs:
               ready=1
               break
             fi
-            sleep 10
+            sleep 8
           done
 
           jq -n \
