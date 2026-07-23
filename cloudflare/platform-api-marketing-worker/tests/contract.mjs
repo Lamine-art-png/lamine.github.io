@@ -22,11 +22,11 @@ for (const required of [
   'if (!route) return notFound()',
   'if (!surfaceEnabled(route.surface, marketing, docs)) return notFound()',
   '"/platform-api/docs/": { upstreamPath: "/platform-api/docs/index.html"',
-  '"/platform-api/contract/(platform_api_openapi.json|platform_api_openapi.sha256)"',
 ]) {
   assert.ok(source.includes(required), `missing worker contract: ${required}`);
 }
 
+assert.match(source, /\^\\\/platform-api\\\/contract\\\/\(platform_api_openapi\\\.json\|platform_api_openapi\\\.sha256\)\$/);
 assert.match(source, /<title>AGRO-AI Platform API<\/title>/);
 assert.match(source, /<title>AGRO-AI Platform API Documentation<\/title>/);
 assert.match(source, /request\.method === "HEAD"/);
