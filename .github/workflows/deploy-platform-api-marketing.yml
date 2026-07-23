@@ -1,0 +1,135 @@
+name: Platform API Marketing Production
+
+on:
+  pull_request:
+    paths:
+      - "cloudflare/platform-api-marketing-worker/**"
+      - "platform-api/**"
+      - ".github/workflows/deploy-platform-api-marketing.yml"
+  push:
+    branches: ["main"]
+    paths:
+      - "cloudflare/platform-api-marketing-worker/**"
+      - "platform-api/**"
+      - ".github/workflows/deploy-platform-api-marketing.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: platform-api-marketing-production-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  WORKER_CONFIG: cloudflare/platform-api-marketing-worker/wrangler.toml
+  MARKETING_URL: https://agroai-pilot.com/platform-api
+  DOCS_URL: https://agroai-pilot.com/platform-api/docs/
+  ASSET_URL: https://agroai-pilot.com/platform-api/assets/platform.css
+  UNKNOWN_URL: https://agroai-pilot.com/platform-api/not-a-real-route
+  OPS_ISSUE: "262"
+
+jobs:
+  validate:
+    name: Validate narrow marketing overlay
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Validate route, security and product identity contracts
+        run: node cloudflare/platform-api-marketing-worker/tests/contract.mjs
+
+      - name: Validate Worker bundle
+        run: npx --yes wrangler@4.107.0 deploy --dry-run --config "${WORKER_CONFIG}"
+
+  deploy:
+    name: Deploy and prove private-beta marketing
+    needs: validate
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail closed on missing Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+
+      - name: Deploy narrow production route
+        run: npx --yes wrangler@4.107.0 deploy --config "${WORKER_CONFIG}"
+
+      - name: Prove landing, docs, assets, headers and closed unknown routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 36); do
+            landing_code="$(curl -sS -L -D landing.headers -o landing.html -w '%{http_code}' --max-time 25 "${MARKETING_URL}" || true)"
+            docs_code="$(curl -sS -L -D docs.headers -o docs.html -w '%{http_code}' --max-time 25 "${DOCS_URL}" || true)"
+            asset_code="$(curl -sS -L -D asset.headers -o asset.css -w '%{http_code}' --max-time 25 "${ASSET_URL}" || true)"
+            unknown_code="$(curl -sS -L -D unknown.headers -o unknown.txt -w '%{http_code}' --max-time 25 "${UNKNOWN_URL}" || true)"
+            if [ "$landing_code" = "200" ] && [ "$docs_code" = "200" ] && [ "$asset_code" = "200" ] && [ "$unknown_code" = "404" ] && \
+               grep -F '<title>AGRO-AI Platform API</title>' landing.html >/dev/null && \
+               grep -F '<title>AGRO-AI Platform API Documentation</title>' docs.html >/dev/null && \
+               grep -F 'https://platform.agroai-pilot.com' landing.html >/dev/null && \
+               grep -Fi 'x-robots-tag: noindex, nofollow' landing.headers >/dev/null && \
+               grep -Fi 'x-robots-tag: noindex, nofollow' docs.headers >/dev/null && \
+               grep -Fi 'cache-control: private, no-cache, must-revalidate' landing.headers >/dev/null && \
+               grep -Fi 'cache-control: private, no-cache, must-revalidate' docs.headers >/dev/null && \
+               grep -Fi 'x-agroai-platform-api-surface: marketing' landing.headers >/dev/null && \
+               grep -Fi 'x-agroai-platform-api-surface: docs' docs.headers >/dev/null && \
+               grep -Fi 'x-agroai-platform-api-surface: closed' unknown.headers >/dev/null && \
+               grep -Fi 'x-robots-tag: noindex, nofollow' unknown.headers >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 5
+          done
+          test "$ready" -eq 1
+          {
+            echo "release_sha=${GITHUB_SHA}"
+            echo "marketing_http=${landing_code}"
+            echo "docs_http=${docs_code}"
+            echo "asset_http=${asset_code}"
+            echo "unknown_http=${unknown_code}"
+            echo "marketing_private_beta_headers=ok"
+            echo "platform_console_link=ok"
+          } | tee platform-api-marketing-evidence.txt
+
+      - name: Upload immutable marketing evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-api-marketing-production-${{ github.sha }}
+          path: platform-api-marketing-evidence.txt
+          retention-days: 30
+
+      - name: Record activation evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          {
+            echo '## Platform API marketing production proof'
+            echo
+            echo "- exact SHA: \`${GITHUB_SHA}\`"
+            echo "- run: \`${GITHUB_RUN_ID}\`"
+            echo '- landing: HTTP 200 with canonical Platform identity'
+            echo '- documentation: HTTP 200 with canonical documentation identity'
+            echo '- private-beta headers: `X-Robots-Tag: noindex, nofollow`'
+            echo '- HTML caching: `private, no-cache, must-revalidate`'
+            echo '- unknown Platform routes: genuine HTTP 404 with `noindex`'
+            echo '- authenticated CTA: `platform.agroai-pilot.com`'
+            echo '- scope: narrow Worker route `agroai-pilot.com/platform-api*`; no other marketing route changed'
+          } > issue-comment.md
+          gh issue comment "${OPS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body-file issue-comment.md
