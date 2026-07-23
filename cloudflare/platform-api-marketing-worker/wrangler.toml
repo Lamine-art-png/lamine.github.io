@@ -15,11 +15,15 @@ binding = "ASSETS"
 run_worker_first = true
 
 [[routes]]
-pattern = "agroai-pilot.com/platform-api*"
+pattern = "agroai-pilot.com/"
 zone_name = "agroai-pilot.com"
 
 [[routes]]
-pattern = "agroai-pilot.com/"
+pattern = "agroai-pilot.com/platform-api"
+zone_name = "agroai-pilot.com"
+
+[[routes]]
+pattern = "agroai-pilot.com/platform-api/*"
 zone_name = "agroai-pilot.com"
 
 [observability]
