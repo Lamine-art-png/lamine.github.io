@@ -110,51 +110,56 @@ def probe_phone_number(db, connection: ConnectorConnection) -> dict:
 def retrieve_media_to_temp(db, connection: ConnectorConnection, media_id: str) -> tuple[str, str, str, int]:
     token = _token(db, connection)
     headers = {"Authorization": f"Bearer {token}"}
-    with httpx.Client(timeout=_timeout(), follow_redirects=False) as client:
-        metadata_response = client.get(_graph_url(media_id), headers=headers)
-        if metadata_response.status_code >= 400:
-            raise WhatsAppCloudError(_safe_error(metadata_response))
-        metadata = metadata_response.json()
-        media_url = str(metadata.get("url") or "")
-        mime_type = str(metadata.get("mime_type") or "application/octet-stream")[:200]
-        expected_hash = str(metadata.get("sha256") or "")
-        expected_size = int(metadata.get("file_size") or 0)
+    temp_path: str | None = None
+    try:
+        with httpx.Client(timeout=_timeout(), follow_redirects=False) as client:
+            metadata_response = client.get(_graph_url(media_id), headers=headers)
+            if metadata_response.status_code >= 400:
+                raise WhatsAppCloudError(_safe_error(metadata_response))
+            metadata = metadata_response.json()
+            media_url = str(metadata.get("url") or "")
+            mime_type = str(metadata.get("mime_type") or "application/octet-stream")[:200]
+            expected_hash = str(metadata.get("sha256") or "")
+            expected_size = int(metadata.get("file_size") or 0)
 
-        parsed = urlparse(media_url)
-        hostname = (parsed.hostname or "").lower()
-        allowed = hostname in _ALLOWED_MEDIA_HOSTS or hostname.endswith(".facebook.com")
-        if parsed.scheme != "https" or not allowed:
-            raise WhatsAppCloudError("Meta returned an untrusted media URL")
+            parsed = urlparse(media_url)
+            hostname = (parsed.hostname or "").lower()
+            allowed = hostname in _ALLOWED_MEDIA_HOSTS or hostname.endswith(".facebook.com")
+            if parsed.scheme != "https" or not allowed:
+                raise WhatsAppCloudError("Meta returned an untrusted media URL")
 
-        max_bytes = integer("WHATSAPP_MEDIA_MAX_BYTES", 50 * 1024 * 1024)
-        if expected_size and expected_size > max_bytes:
-            raise WhatsAppCloudError("WhatsApp media exceeds the configured size limit")
+            max_bytes = integer("WHATSAPP_MEDIA_MAX_BYTES", 50 * 1024 * 1024)
+            if expected_size and expected_size > max_bytes:
+                raise WhatsAppCloudError("WhatsApp media exceeds the configured size limit")
 
-        with client.stream("GET", media_url, headers=headers) as response:
-            if response.status_code >= 400:
-                raise WhatsAppCloudError(_safe_error(response))
-            handle = tempfile.NamedTemporaryFile(prefix="agroai-wa-", delete=False)
-            digest = hashlib.sha256()
-            total = 0
-            try:
-                for chunk in response.iter_bytes(256 * 1024):
-                    total += len(chunk)
-                    if total > max_bytes:
-                        raise WhatsAppCloudError("WhatsApp media exceeds the configured size limit")
-                    digest.update(chunk)
-                    handle.write(chunk)
-                handle.flush()
-            finally:
-                handle.close()
+            with client.stream("GET", media_url, headers=headers) as response:
+                if response.status_code >= 400:
+                    raise WhatsAppCloudError(_safe_error(response))
+                handle = tempfile.NamedTemporaryFile(prefix="agroai-wa-", delete=False)
+                temp_path = handle.name
+                digest = hashlib.sha256()
+                total = 0
+                try:
+                    for chunk in response.iter_bytes(256 * 1024):
+                        total += len(chunk)
+                        if total > max_bytes:
+                            raise WhatsAppCloudError("WhatsApp media exceeds the configured size limit")
+                        digest.update(chunk)
+                        handle.write(chunk)
+                    handle.flush()
+                finally:
+                    handle.close()
 
-    actual_hash = digest.hexdigest()
-    if expected_hash and not hmac.compare_digest(expected_hash.lower(), actual_hash):
-        Path(handle.name).unlink(missing_ok=True)
-        raise WhatsAppCloudError("WhatsApp media checksum verification failed")
-    if expected_size and total != expected_size:
-        Path(handle.name).unlink(missing_ok=True)
-        raise WhatsAppCloudError("WhatsApp media length verification failed")
-    return handle.name, mime_type, actual_hash, total
+        actual_hash = digest.hexdigest()
+        if expected_hash and not hmac.compare_digest(expected_hash.lower(), actual_hash):
+            raise WhatsAppCloudError("WhatsApp media checksum verification failed")
+        if expected_size and total != expected_size:
+            raise WhatsAppCloudError("WhatsApp media length verification failed")
+        return temp_path, mime_type, actual_hash, total
+    except Exception:
+        if temp_path:
+            Path(temp_path).unlink(missing_ok=True)
+        raise
 
 
 def send_text(db, connection: ConnectorConnection, *, to: str, body: str) -> str:
