@@ -81,4 +81,5 @@ jobs:
         with:
           name: validated-backend-release-contract-${{ github.sha }}
           path: validated
+          include-hidden-files: true
           retention-days: 7
