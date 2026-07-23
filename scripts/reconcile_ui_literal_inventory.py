@@ -16,10 +16,16 @@ module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
 
 expected: dict[str, str] = module.build_catalog()
-parts = sorted(SHARED.glob("ui-literals.en.*.json"))
+parts = sorted(
+    SHARED.glob("ui-literals.en.*.json"),
+    key=lambda path: int(re.fullmatch(r"ui-literals\.en\.(\d+)\.json", path.name).group(1))
+    if re.fullmatch(r"ui-literals\.en\.(\d+)\.json", path.name)
+    else -1,
+)
 if not parts:
     raise SystemExit("No literal catalog parts found")
 
+target = parts[-1]
 seen: set[str] = set()
 removed = 0
 for path in parts:
@@ -33,12 +39,13 @@ for path in parts:
     path.write_text(json.dumps(cleaned, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 missing = {key: expected[key] for key in sorted(set(expected) - seen)}
-indices = [int(match.group(1)) for path in parts if (match := re.fullmatch(r"ui-literals\.en\.(\d+)\.json", path.name))]
-target = SHARED / f"ui-literals.en.{max(indices, default=0) + 1}.json"
-target.write_text(json.dumps(missing, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+if missing:
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    payload.update(missing)
+    target.write_text(json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
 
 combined: dict[str, str] = {}
-for path in sorted(SHARED.glob("ui-literals.en.*.json")):
+for path in parts:
     payload = json.loads(path.read_text(encoding="utf-8"))
     overlap = set(combined).intersection(payload)
     if overlap:
