@@ -29,7 +29,26 @@ jobs:
           token: ${{ github.token }}
 
       - name: Apply deterministic patch
-        run: python3 scripts/apply_backend_release_contract_patch.py
+        id: patch
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -o pipefail
+          python3 scripts/apply_backend_release_contract_patch.py 2>&1 | tee patch-output.log
+
+      - name: Upload patch diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-release-contract-patch-${{ github.sha }}
+          path: patch-output.log
+          retention-days: 3
+
+      - name: Enforce patch result
+        if: steps.patch.outcome != 'success'
+        run: |
+          cat patch-output.log
+          exit 1
 
       - name: Validate generated contract
         run: |
