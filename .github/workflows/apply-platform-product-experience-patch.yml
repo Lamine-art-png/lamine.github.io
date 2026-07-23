@@ -1,0 +1,74 @@
+name: Apply Platform Product Experience Patch
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "scripts/apply_platform_product_experience_patch.py"
+      - "scripts/reconcile_ui_literal_inventory.py"
+      - ".github/workflows/apply-platform-product-experience-patch.yml"
+  push:
+    branches: ["feat/platform-product-discovery-console-v2"]
+    paths:
+      - "scripts/apply_platform_product_experience_patch.py"
+      - "scripts/reconcile_ui_literal_inventory.py"
+      - ".github/workflows/apply-platform-product-experience-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: feat/platform-product-discovery-console-v2
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+
+      - name: Apply deterministic product patch
+        run: |
+          python3 scripts/apply_platform_product_experience_patch.py
+          python3 scripts/reconcile_ui_literal_inventory.py
+
+      - name: Validate bundled marketing Worker
+        run: |
+          node cloudflare/platform-api-marketing-worker/tests/contract.mjs
+          npx --yes wrangler@4.107.0 deploy --dry-run --config cloudflare/platform-api-marketing-worker/wrangler.toml
+
+      - name: Validate unified Portal developer product
+        working-directory: figma-enterprise-v4
+        run: |
+          npm ci
+          npm run test:i18n
+          node tests/platform-api-console-contract.mjs
+          npm run build
+
+      - name: Validate clean diff
+        run: git diff --check
+
+      - name: Commit validated product experience
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            index.html \
+            platform-api \
+            figma-enterprise-v4/src/app/components/MainLayout.tsx \
+            figma-enterprise-v4/src/app/routes.tsx \
+            figma-enterprise-v4/tests/platform-api-console-contract.mjs \
+            shared/ui-literals.en.*.json
+          if git diff --cached --quiet; then
+            echo "Validated Platform product experience already applied"
+          else
+            git commit -m "Expose the unified Platform API product experience"
+            git push origin HEAD:feat/platform-product-discovery-console-v2
+          fi
