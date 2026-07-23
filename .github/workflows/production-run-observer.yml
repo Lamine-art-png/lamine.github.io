@@ -41,18 +41,21 @@ jobs:
           done
 
           gh run view "$run_id" --repo "$GITHUB_REPOSITORY" --json databaseId,status,conclusion,url,jobs > run.json
+          run_database_id="$(jq -r '.databaseId' run.json)"
+          run_status="$(jq -r '.status' run.json)"
+          run_conclusion="$(jq -r '.conclusion // ""' run.json)"
           {
             echo "# Production workflow status"
             echo
             echo "- SHA: \`${GITHUB_SHA}\`"
-            echo "- run ID: \`$(jq -r '.databaseId' run.json)\`"
-            echo "- status: \`$(jq -r '.status' run.json)\`"
-            echo "- conclusion: \`$(jq -r '.conclusion // "")\`"
+            echo "- run ID: \`${run_database_id}\`"
+            echo "- status: \`${run_status}\`"
+            echo "- conclusion: \`${run_conclusion}\`"
             echo
             echo '| Job | Status | Conclusion | First failed step |'
             echo '|---|---|---|---|'
             jq -r '.jobs[] | [.name,.status,(.conclusion // ""),([.steps[]? | select(.conclusion == "failure") | .name][0] // "")] | @tsv' run.json | while IFS=$'\t' read -r name jstatus conclusion failed; do
-              echo "| ${name} | ${jstatus} | ${conclusion} | ${failed} |"
+              printf '| %s | %s | %s | %s |\n' "$name" "$jstatus" "$conclusion" "$failed"
             done
           } > status.md
 
