@@ -1,0 +1,63 @@
+name: Platform Release Final State Diagnostic
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/platform-release-final-state-diagnostic.yml"
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+  issues: read
+
+env:
+  EXPECTED_SHA: 3cd5b378bdf133263a8037487cc3f4d0e4bee138
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Resolve authoritative production release and exact Phase 6 comment
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          repo="${GITHUB_REPOSITORY}"
+
+          gh run list --repo "$repo" --workflow deploy.yml --commit "$EXPECTED_SHA" --limit 1 \
+            --json databaseId,status,conclusion,url,headSha,name > release-list.json
+          run_id="$(jq -r '.[0].databaseId // empty' release-list.json)"
+          if [ -n "$run_id" ]; then
+            gh run view "$run_id" --repo "$repo" --json databaseId,status,conclusion,url,headSha,jobs > release-run.json
+          else
+            printf '%s\n' '{"error":"release_run_not_found"}' > release-run.json
+          fi
+
+          gh api --paginate --slurp "repos/${repo}/issues/262/comments?per_page=100" \
+            | jq --arg sha "$EXPECTED_SHA" 'add | map(select(.body | contains($sha))) | last | {id,html_url,body}' \
+            > phase6-comment.json
+
+          gh api --paginate --slurp "repos/${repo}/issues/128/comments?per_page=100" \
+            | jq --arg sha "$EXPECTED_SHA" 'add | map(select(.body | contains($sha))) | map({id,html_url,body})' \
+            > production-probe-comments.json
+
+          echo '=== AUTHORITATIVE RELEASE ==='
+          jq . release-run.json
+          echo '=== PHASE 6 EXACT-SHA COMMENT ==='
+          jq . phase6-comment.json
+          echo '=== PRODUCTION PROBE EXACT-SHA COMMENTS ==='
+          jq . production-probe-comments.json
+
+      - name: Upload diagnostic evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-release-final-state-${{ env.EXPECTED_SHA }}
+          path: |
+            release-list.json
+            release-run.json
+            phase6-comment.json
+            production-probe-comments.json
+          retention-days: 7
