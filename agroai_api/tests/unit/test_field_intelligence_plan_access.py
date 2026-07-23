@@ -3,6 +3,7 @@ from __future__ import annotations
 from app.models.saas import EntitlementOverride
 from app.services.commercial_control import customer_safe_entitlement_payload
 from app.services.field_intelligence_plan_access import ENTITLEMENT_KEY
+from app.services.field_intelligence_rollout import ROLLOUT_FEATURE_KEY
 from app.services.quota import committed_usage
 from tests.unit.test_field_intelligence import _auth, _complete, _initiate
 
@@ -17,6 +18,23 @@ def _new_capture(client, headers, index: int):
     )
     assert initiated.status_code == 200, initiated.text
     return initiated.json()["capture"]["id"]
+
+
+def _enable_canary_rollout(db, organization) -> None:
+    """Keep quota tests independent from the exact-SHA general-release gate.
+
+    Production intentionally downgrades an unaligned general release to canary.
+    These tests exercise plan quotas, not release alignment, so their fixture must
+    explicitly enroll its own organization in the canary cohort.
+    """
+
+    db.add(
+        EntitlementOverride(
+            organization_id=organization.id,
+            feature_key=ROLLOUT_FEATURE_KEY,
+            value_json={"value": "canary"},
+        )
+    )
 
 
 def test_plan_record_limits_are_customer_visible(db, monkeypatch):
@@ -76,6 +94,7 @@ def test_free_plan_allows_two_completed_records_and_blocks_third(client, db, mon
     org, _, headers = _auth(db, org_id="org-free-fi", workspace_id="ws-free-fi")
     org.plan = "free"
     org.subscription_status = "inactive"
+    _enable_canary_rollout(db, org)
     db.commit()
 
     first = _new_capture(client, headers, 1)
@@ -102,6 +121,7 @@ def test_corrections_and_reprocessing_do_not_consume_another_record(client, db, 
     monkeypatch.setattr("app.core.config.settings.APP_ENV", "production")
     org, _, headers = _auth(db, org_id="org-idem-fi", workspace_id="ws-idem-fi")
     org.plan = "free"
+    _enable_canary_rollout(db, org)
     db.commit()
 
     capture_id = _new_capture(client, headers, 1)
