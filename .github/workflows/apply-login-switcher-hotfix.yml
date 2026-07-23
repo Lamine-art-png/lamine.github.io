@@ -1,0 +1,39 @@
+name: Apply Login Switcher Hotfix
+
+on:
+  push:
+    branches: ["fix/platform-login-switcher-selector"]
+    paths:
+      - "scripts/apply_login_switcher_hotfix.py"
+      - ".github/workflows/apply-login-switcher-hotfix.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/platform-login-switcher-selector
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Apply selector hotfix
+        run: python3 scripts/apply_login_switcher_hotfix.py
+      - name: Validate Worker contract and bundle
+        run: |
+          node cloudflare/platform-api-marketing-worker/tests/contract.mjs
+          npx --yes wrangler@4.107.0 deploy --dry-run --config cloudflare/platform-api-marketing-worker/wrangler.toml
+      - name: Commit validated hotfix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add cloudflare/platform-api-marketing-worker/src/index.ts cloudflare/platform-api-marketing-worker/tests/contract.mjs
+          if git diff --cached --quiet; then
+            echo "Hotfix already applied"
+          else
+            git commit -m "Harden the website product login switcher"
+            git push origin HEAD:fix/platform-login-switcher-selector
+          fi
