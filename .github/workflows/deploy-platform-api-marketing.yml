@@ -1,4 +1,4 @@
-name: Platform API Marketing Production
+name: Platform API Final Production Proof
 
 on:
   pull_request:
@@ -19,7 +19,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: platform-api-marketing-production-${{ github.ref }}
+  group: platform-api-final-production-${{ github.ref }}
   cancel-in-progress: true
 
 env:
@@ -28,11 +28,15 @@ env:
   DOCS_URL: https://agroai-pilot.com/platform-api/docs/
   ASSET_URL: https://agroai-pilot.com/platform-api/assets/platform.css
   UNKNOWN_URL: https://agroai-pilot.com/platform-api/not-a-real-route
+  PLATFORM_URL: https://platform.agroai-pilot.com
+  PLATFORM_EDGE_URL: https://platform.agroai-pilot.com/v1/edge-health
+  PLATFORM_HEALTH_URL: https://platform.agroai-pilot.com/v1/health
+  PLATFORM_RUNTIME_URL: https://api.agroai-pilot.com/v1/platform/health
   OPS_ISSUE: "262"
 
 jobs:
   validate:
-    name: Validate narrow marketing overlay
+    name: Validate final Platform production proof
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -48,7 +52,7 @@ jobs:
         run: npx --yes wrangler@4.107.0 deploy --dry-run --config "${WORKER_CONFIG}"
 
   deploy:
-    name: Deploy and prove private-beta marketing
+    name: Deploy and prove complete Platform private beta
     needs: validate
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -70,17 +74,45 @@ jobs:
       - name: Deploy narrow production route
         run: npx --yes wrangler@4.107.0 deploy --config "${WORKER_CONFIG}"
 
-      - name: Prove landing, docs, assets, headers and closed unknown routes
+      - name: Prove marketing, standalone product, exact backend and safety gates
         shell: bash
         run: |
           set -euo pipefail
           ready=0
-          for attempt in $(seq 1 36); do
+          for attempt in $(seq 1 90); do
             landing_code="$(curl -sS -L -D landing.headers -o landing.html -w '%{http_code}' --max-time 25 "${MARKETING_URL}" || true)"
             docs_code="$(curl -sS -L -D docs.headers -o docs.html -w '%{http_code}' --max-time 25 "${DOCS_URL}" || true)"
             asset_code="$(curl -sS -L -D asset.headers -o asset.css -w '%{http_code}' --max-time 25 "${ASSET_URL}" || true)"
             unknown_code="$(curl -sS -L -D unknown.headers -o unknown.txt -w '%{http_code}' --max-time 25 "${UNKNOWN_URL}" || true)"
+            platform_code="$(curl -sS -L -o platform.html -w '%{http_code}' --max-time 25 "${PLATFORM_URL}/" || true)"
+            edge_code="$(curl -sS -L -o platform-edge.json -w '%{http_code}' --max-time 25 "${PLATFORM_EDGE_URL}" || true)"
+            health_code="$(curl -sS -L -o platform-health.json -w '%{http_code}' --max-time 25 "${PLATFORM_HEALTH_URL}" || true)"
+            runtime_code="$(curl -sS -L -o platform-runtime.json -w '%{http_code}' --max-time 25 "${PLATFORM_RUNTIME_URL}" || true)"
+
+            rm -rf platform-smoke
+            mkdir -p platform-smoke/assets
+            if [ "$platform_code" = "200" ]; then
+              cp platform.html platform-smoke/index.html
+              grep -oE '/assets/[A-Za-z0-9._/-]+\.js' platform-smoke/index.html | sed 's#^/##' > platform-smoke/queue.txt || true
+              : > platform-smoke/seen.txt
+              for pass in 1 2 3 4; do
+                sort -u platform-smoke/queue.txt -o platform-smoke/queue.txt
+                while IFS= read -r script; do
+                  [ -n "$script" ] || continue
+                  grep -Fx "$script" platform-smoke/seen.txt >/dev/null 2>&1 && continue
+                  echo "$script" >> platform-smoke/seen.txt
+                  target="platform-smoke/assets/$(basename "$script")"
+                  curl -fsS --max-time 25 "${PLATFORM_URL}/${script}" -o "$target" || true
+                  [ -s "$target" ] || continue
+                  grep -oE 'assets/[A-Za-z0-9._/-]+\.js' "$target" >> platform-smoke/queue.txt || true
+                  grep -oE '\./[A-Za-z0-9._/-]+\.js' "$target" | sed 's#^\./#assets/#' >> platform-smoke/queue.txt || true
+                done < platform-smoke/queue.txt
+              done
+              cat platform-smoke/assets/*.js > platform-smoke/all-js.txt 2>/dev/null || true
+            fi
+
             if [ "$landing_code" = "200" ] && [ "$docs_code" = "200" ] && [ "$asset_code" = "200" ] && [ "$unknown_code" = "404" ] && \
+               [ "$platform_code" = "200" ] && [ "$edge_code" = "200" ] && [ "$health_code" = "200" ] && [ "$runtime_code" = "200" ] && \
                grep -F '<title>AGRO-AI Platform API</title>' landing.html >/dev/null && \
                grep -F '<title>AGRO-AI Platform API Documentation</title>' docs.html >/dev/null && \
                grep -F 'https://platform.agroai-pilot.com' landing.html >/dev/null && \
@@ -91,11 +123,17 @@ jobs:
                grep -Fi 'x-agroai-platform-api-surface: marketing' landing.headers >/dev/null && \
                grep -Fi 'x-agroai-platform-api-surface: docs' docs.headers >/dev/null && \
                grep -Fi 'x-agroai-platform-api-surface: closed' unknown.headers >/dev/null && \
-               grep -Fi 'x-robots-tag: noindex, nofollow' unknown.headers >/dev/null; then
+               grep -Fi 'x-robots-tag: noindex, nofollow' unknown.headers >/dev/null && \
+               grep -F 'Build on AGRO-AI.' platform-smoke/all-js.txt >/dev/null && \
+               grep -F 'Platform API enrollment remains a separate reviewed step after sign-in.' platform-smoke/all-js.txt >/dev/null && \
+               grep -F 'Permanent API keys never enter browser JavaScript.' platform-smoke/all-js.txt >/dev/null && \
+               jq -e '.status == "ok"' platform-edge.json >/dev/null && \
+               jq -e --arg sha "$GITHUB_SHA" '.status == "ok" and .build_sha == $sha' platform-health.json >/dev/null && \
+               jq -e '.status == "ready" and .platform_api_enabled == true and .developer_control_plane_enabled == true and .rate_limiter.ready == true and .rate_limiter.backend == "redis" and .production_vault_keyring_ready == true and .cidr_trusted_proxy_ready == true and .webhook_delivery.enabled == false and .webhook_delivery.ready == true and .earthdaily_status == "awaiting_partner_contract" and .valley_irrigation_status == "awaiting_partner_contract" and .physical_irrigation_commands == "disabled"' platform-runtime.json >/dev/null; then
               ready=1
               break
             fi
-            sleep 5
+            sleep 10
           done
           test "$ready" -eq 1
           {
@@ -104,32 +142,41 @@ jobs:
             echo "docs_http=${docs_code}"
             echo "asset_http=${asset_code}"
             echo "unknown_http=${unknown_code}"
+            echo "standalone_platform_http=${platform_code}"
+            echo "standalone_edge_http=${edge_code}"
+            echo "standalone_health_http=${health_code}"
+            echo "platform_runtime_http=${runtime_code}"
+            echo "exact_backend_sha=ok"
             echo "marketing_private_beta_headers=ok"
-            echo "platform_console_link=ok"
-          } | tee platform-api-marketing-evidence.txt
+            echo "standalone_platform_identity=ok"
+            echo "platform_runtime_safety_gates=ok"
+          } | tee platform-api-final-production-evidence.txt
 
-      - name: Upload immutable marketing evidence
+      - name: Upload immutable final evidence
         uses: actions/upload-artifact@v4
         with:
-          name: platform-api-marketing-production-${{ github.sha }}
-          path: platform-api-marketing-evidence.txt
+          name: platform-api-final-production-${{ github.sha }}
+          path: platform-api-final-production-evidence.txt
           retention-days: 30
 
-      - name: Record activation evidence
+      - name: Record final activation evidence
         shell: bash
         run: |
           set -euo pipefail
           {
-            echo '## Platform API marketing production proof'
+            echo '## Platform API final production proof'
             echo
             echo "- exact SHA: \`${GITHUB_SHA}\`"
             echo "- run: \`${GITHUB_RUN_ID}\`"
-            echo '- landing: HTTP 200 with canonical Platform identity'
-            echo '- documentation: HTTP 200 with canonical documentation identity'
+            echo '- backend: exact SHA, schema and production runtime ready'
+            echo '- standalone product: HTTP 200 with Platform-specific product identity'
+            echo '- standalone same-origin API: edge and backend health HTTP 200'
+            echo '- landing and documentation: HTTP 200 with canonical identities'
             echo '- private-beta headers: `X-Robots-Tag: noindex, nofollow`'
             echo '- HTML caching: `private, no-cache, must-revalidate`'
             echo '- unknown Platform routes: genuine HTTP 404 with `noindex`'
-            echo '- authenticated CTA: `platform.agroai-pilot.com`'
+            echo '- Redis limiter, credential vault and trusted edge context: ready'
+            echo '- webhook delivery, EarthDaily, Valley and physical commands: disabled or awaiting contract as required'
             echo '- scope: narrow Worker route `agroai-pilot.com/platform-api*`; no other marketing route changed'
           } > issue-comment.md
           gh issue comment "${OPS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body-file issue-comment.md
