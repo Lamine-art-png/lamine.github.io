@@ -15,7 +15,7 @@ on:
       - ".github/workflows/apply-backend-release-contract-patch.yml"
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   apply:
@@ -26,7 +26,6 @@ jobs:
         with:
           ref: diagnose/platform-release-final-state
           fetch-depth: 0
-          token: ${{ github.token }}
 
       - name: Apply deterministic patch
         id: patch
@@ -46,14 +45,6 @@ jobs:
           PY
           python3 scripts/apply_backend_release_contract_patch.py 2>&1 | tee patch-output.log
 
-      - name: Upload patch diagnostics
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: backend-release-contract-patch-${{ github.sha }}
-          path: patch-output.log
-          retention-days: 3
-
       - name: Enforce patch result
         if: steps.patch.outcome != 'success'
         run: |
@@ -64,14 +55,30 @@ jobs:
         run: |
           python3 scripts/check_backend_release_identity_contract.py
           test -n "$(bash .github/scripts/resolve-backend-release-sha.sh)"
+          git diff --check
 
-      - name: Commit repaired workflows
+      - name: Stage validated output bundle
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git diff --cached --quiet && exit 0
-          git commit -m "Use backend deployment identity for release gates"
-          git push origin HEAD:diagnose/platform-release-final-state
+          mkdir -p validated/.github/workflows validated/.github/scripts validated/scripts
+          cp .github/workflows/deploy.yml validated/.github/workflows/deploy.yml
+          cp .github/workflows/deploy-platform-api-marketing.yml validated/.github/workflows/deploy-platform-api-marketing.yml
+          cp .github/workflows/platform-api-private-beta-diagnostics.yml validated/.github/workflows/platform-api-private-beta-diagnostics.yml
+          cp .github/workflows/production-readiness-snapshot.yml validated/.github/workflows/production-readiness-snapshot.yml
+          cp .github/workflows/ci.yml validated/.github/workflows/ci.yml
+          cp .github/scripts/resolve-backend-release-sha.sh validated/.github/scripts/resolve-backend-release-sha.sh
+          cp scripts/check_backend_release_identity_contract.py validated/scripts/check_backend_release_identity_contract.py
+          git diff -- .github/workflows/deploy.yml \
+            .github/workflows/deploy-platform-api-marketing.yml \
+            .github/workflows/platform-api-private-beta-diagnostics.yml \
+            .github/workflows/production-readiness-snapshot.yml \
+            .github/workflows/ci.yml > validated/backend-release-contract.patch
+          cp patch-output.log validated/patch-output.log
+
+      - name: Upload validated release contract bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: validated-backend-release-contract-${{ github.sha }}
+          path: validated
+          retention-days: 7
