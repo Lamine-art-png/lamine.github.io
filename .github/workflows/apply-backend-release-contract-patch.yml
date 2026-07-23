@@ -1,0 +1,41 @@
+name: Apply Backend Release Contract Patch
+
+on:
+  push:
+    branches:
+      - diagnose/platform-release-final-state
+    paths:
+      - "scripts/apply_backend_release_contract_patch.py"
+      - ".github/workflows/apply-backend-release-contract-patch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: diagnose/platform-release-final-state
+          fetch-depth: 0
+          token: ${{ github.token }}
+
+      - name: Apply deterministic patch
+        run: python3 scripts/apply_backend_release_contract_patch.py
+
+      - name: Validate generated contract
+        run: |
+          python3 scripts/check_backend_release_identity_contract.py
+          test -n "$(bash .github/scripts/resolve-backend-release-sha.sh)"
+
+      - name: Commit repaired workflows
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git diff --cached --quiet && exit 0
+          git commit -m "Use backend deployment identity for release gates"
+          git push origin HEAD:diagnose/platform-release-final-state
