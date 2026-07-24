@@ -55,6 +55,7 @@ const operationRoutes = [
   { path: "agents", lazy: lazyComponent(() => import("./components/Agents"), "Agents") },
   { path: "intelligence", lazy: lazyComponent(() => import("./components/MonetizedIntelligenceV2"), "MonetizedIntelligenceV2") },
   { path: "integrations", lazy: lazyComponent(() => import("./components/IntegrationsV3"), "IntegrationsV3") },
+  { path: "integrations/whatsapp", lazy: lazyComponent(() => import("./components/WhatsAppFieldChannel"), "WhatsAppFieldChannel") },
   { path: "sources", lazy: lazyComponent(() => import("./components/Sources"), "Sources") },
   { path: "audit", lazy: lazyComponent(() => import("./components/Audit"), "Audit") },
   { path: "admin", lazy: lazyComponent(() => import("./components/Admin"), "Admin") },

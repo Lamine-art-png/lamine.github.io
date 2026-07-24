@@ -1,7 +1,6 @@
 """Webhook management endpoints."""
 import logging
 import uuid
-from datetime import datetime
 from typing import List
 from fastapi import APIRouter, Depends, status, HTTPException
 from sqlalchemy.orm import Session
@@ -15,8 +14,12 @@ from app.schemas.webhook import (
 )
 from app.models.webhook import Webhook
 from app.services.webhook import WebhookService
+from app.api.v1.whatsapp import management_router as whatsapp_management_router
+from app.api.v1.whatsapp import public_router as whatsapp_public_router
 
 router = APIRouter()
+router.include_router(whatsapp_public_router)
+router.include_router(whatsapp_management_router)
 logger = logging.getLogger(__name__)
 
 
