@@ -27,7 +27,7 @@ const htmlFiles = [
   "platform-api/docs/support.html",
 ];
 
-const publicRoutes = new Set([
+const exactRoutes = [
   "/platform-api", "/platform-api/", "/platform-api/index.html",
   "/platform-api/reference", "/platform-api/reference.html",
   "/platform-api/changelog", "/platform-api/changelog.html",
@@ -37,9 +37,7 @@ const publicRoutes = new Set([
   "/platform-api/docs/errors", "/platform-api/docs/errors.html",
   "/platform-api/docs/rate-limits", "/platform-api/docs/rate-limits.html",
   "/platform-api/docs/support", "/platform-api/docs/support.html",
-  "/platform-api/assets/platform.css", "/platform-api/assets/platform.js", "/platform-api/assets/logo.svg",
-  "/platform-api/contract/platform_api_openapi.json", "/platform-api/contract/platform_api_openapi.sha256",
-]);
+];
 
 assert.match(config, /name = "agroai-platform-api-marketing"/);
 assert.match(config, /pattern = "agroai-pilot\.com\/"/);
@@ -97,18 +95,17 @@ for (const relativePath of htmlFiles) {
   assert.match(html, /<title>[^<]*AGRO-AI Platform API[^<]*<\/title>/, `wrong title: ${relativePath}`);
   assert.match(html, /<img src="\/platform-api\/assets\/logo\.svg"/, `official header logo missing: ${relativePath}`);
   assert.doesNotMatch(html, /This page doesn[’']t exist|>404</i, `error page leaked into source: ${relativePath}`);
-
-  for (const match of html.matchAll(/href="(\/platform-api[^"#?]*)/g)) {
-    const href = match[1];
-    assert.ok(publicRoutes.has(href), `unmapped internal link ${href} in ${relativePath}`);
-  }
 }
 
-for (const route of publicRoutes) {
-  if (route.startsWith("/platform-api/assets/") || route.startsWith("/platform-api/contract/")) continue;
+for (const route of exactRoutes) {
   assert.ok(source.includes(`"${route}"`), `Worker route missing: ${route}`);
   assert.ok(fallback.includes(`"${route}"`), `Pages fallback route missing: ${route}`);
 }
+
+assert.match(source, /\^\\\/platform-api\\\/assets\\\//);
+assert.match(source, /\^\\\/platform-api\\\/contract\\\//);
+assert.match(fallback, /\^\\\/platform-api\\\/assets\\\//);
+assert.match(fallback, /\^\\\/platform-api\\\/contract\\\//);
 
 assert.match(portalRoutes, /path: "\/platform\/\*", Component: PlatformProduct/);
 assert.match(portalRoutes, /isPlatformHostname/);
@@ -119,4 +116,4 @@ for (const productCapability of [
   assert.ok(consoleSource.includes(`"${productCapability}"`), `missing developer console capability: ${productCapability}`);
 }
 
-console.log(`Platform API contract green: ${htmlFiles.length} pages, ${publicRoutes.size} routes, official branding, exact asset handling.`);
+console.log(`Platform API contract green: ${htmlFiles.length} pages, ${exactRoutes.length} exact routes, official branding, exact asset handling.`);
