@@ -13,6 +13,8 @@ PLATFORM_API_INDEXING_ENABLED = "false"
 directory = "../../platform-api"
 binding = "ASSETS"
 run_worker_first = true
+html_handling = "none"
+not_found_handling = "none"
 
 [[routes]]
 pattern = "agroai-pilot.com/"
