@@ -8,12 +8,13 @@ interface Env {
 type Surface = "marketing" | "docs" | "shared";
 type StaticRoute = { asset: string; surface: Surface; html?: boolean; identity?: string };
 
+const OFFICIAL_LOGO = "/platform-api/assets/logo.svg";
 const STATIC_ROUTES: Record<string, StaticRoute> = {
   "/platform-api": { asset: "/platform-api/index.html", surface: "marketing", html: true, identity: 'data-agroai-platform-page="landing"' },
   "/platform-api/": { asset: "/platform-api/index.html", surface: "marketing", html: true, identity: 'data-agroai-platform-page="landing"' },
   "/platform-api/index.html": { asset: "/platform-api/index.html", surface: "marketing", html: true, identity: 'data-agroai-platform-page="landing"' },
-  "/platform-api/reference": { asset: "/platform-api/reference.html", surface: "docs", html: true, identity: "<title>API Reference" },
-  "/platform-api/reference.html": { asset: "/platform-api/reference.html", surface: "docs", html: true, identity: "<title>API Reference" },
+  "/platform-api/reference": { asset: "/platform-api/reference.html", surface: "docs", html: true, identity: "<title>API reference" },
+  "/platform-api/reference.html": { asset: "/platform-api/reference.html", surface: "docs", html: true, identity: "<title>API reference" },
   "/platform-api/changelog": { asset: "/platform-api/changelog.html", surface: "docs", html: true, identity: "<title>Changelog" },
   "/platform-api/changelog.html": { asset: "/platform-api/changelog.html", surface: "docs", html: true, identity: "<title>Changelog" },
   "/platform-api/docs": { asset: "/platform-api/docs/index.html", surface: "docs", html: true, identity: 'data-agroai-platform-page="docs"' },
@@ -104,6 +105,12 @@ function applyHeaders(response: Response, mapping: StaticRoute, indexingEnabled:
   return headers;
 }
 
+function normalizePlatformHtml(html: string): string {
+  return html
+    .replaceAll('/attached_assets/Copy of AGRO-AI (1)_1763408301972.png', OFFICIAL_LOGO)
+    .replaceAll('href="https://app.agroai-pilot.com"', 'href="https://platform.agroai-pilot.com"');
+}
+
 export const onRequest: PagesFunction<Env> = async (context) => {
   if (!["GET", "HEAD"].includes(context.request.method)) {
     return new Response("Method not allowed", { status: 405, headers: { allow: "GET, HEAD", "cache-control": "no-store" } });
@@ -137,7 +144,7 @@ export const onRequest: PagesFunction<Env> = async (context) => {
     });
   }
 
-  let html = await response.text();
+  let html = normalizePlatformHtml(await response.text());
   if ((mapping.identity && !html.includes(mapping.identity)) || HTML_FAILURE_MARKERS.test(html)) {
     return unavailable("identity-mismatch");
   }
