@@ -33,7 +33,7 @@ const STATIC_ROUTES: Record<string, StaticRoute> = {
 };
 
 const PRIVATE_ROBOTS_META = /<meta\b(?=[^>]*\bname=["']robots["'])(?=[^>]*\bcontent=["'][^"']*\bnoindex\b[^"']*["'])[^>]*>\s*/gi;
-const HTML_FAILURE_MARKERS = /This page doesn[’']t exist|>404<|application\/json|"detail"\s*:|"error"\s*:/i;
+const HTML_FAILURE_MARKERS = /This page doesn[’']t exist|<title>\s*(?:404|Not found)\b|<h1[^>]*>\s*(?:404|Not found)\s*<\/h1>/i;
 
 function enabled(value: string | undefined): boolean {
   return String(value || "").trim().toLowerCase() === "true";
