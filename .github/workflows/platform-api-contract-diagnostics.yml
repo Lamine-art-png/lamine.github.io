@@ -1,0 +1,41 @@
+name: Platform API Contract Diagnostics
+
+on:
+  pull_request:
+    paths:
+      - "platform-api/**"
+      - "functions/platform-api/**"
+      - "cloudflare/platform-api-marketing-worker/**"
+      - ".github/workflows/platform-api-contract-diagnostics.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    name: Capture exact Platform contract result
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Run contract and preserve output
+        id: contract
+        shell: bash
+        run: |
+          set +e
+          node cloudflare/platform-api-marketing-worker/tests/contract.mjs > platform-api-contract-output.txt 2>&1
+          status=$?
+          cat platform-api-contract-output.txt
+          echo "status=${status}" >> "$GITHUB_OUTPUT"
+          exit "$status"
+      - name: Upload exact diagnostic output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-api-contract-output
+          path: platform-api-contract-output.txt
+          if-no-files-found: error
+          retention-days: 7
