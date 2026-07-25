@@ -85,8 +85,10 @@ for (const required of [
 }
 
 assert.match(officialLogo, /aria-label="AGRO-AI official logo"/);
+assert.match(officialLogo, /viewBox="0 0 256 256"/);
+assert.match(officialLogo, /width="256" height="256" preserveAspectRatio="xMidYMid meet"/);
 assert.match(officialLogo, /data:image\/webp;base64,/);
-assert.doesNotMatch(officialLogo, /id="agLeaf"|<rect x="1" y="1"/);
+assert.doesNotMatch(officialLogo, /viewBox="0 0 96 96"|id="agLeaf"|<rect x="1" y="1"/);
 
 const genericErrorPage = /This page doesn[’']t exist|<title>\s*(?:404|Not found)\b|<h1[^>]*>\s*(?:404|Not found)\s*<\/h1>/i;
 for (const relativePath of htmlFiles) {
