@@ -64,7 +64,7 @@ for (const required of [
   'identity: \'data-agroai-platform-page="landing"\'',
   'identity: \'data-agroai-platform-page="docs"\'',
   'return unavailable("identity-mismatch")',
-  "This page doesn",
+  "looksLikeGenericErrorPage",
   "x-agroai-product-entry",
   "Enterprise Portal",
   "API Platform",
@@ -88,13 +88,14 @@ assert.match(officialLogo, /aria-label="AGRO-AI official logo"/);
 assert.match(officialLogo, /data:image\/webp;base64,/);
 assert.doesNotMatch(officialLogo, /id="agLeaf"|<rect x="1" y="1"/);
 
+const genericErrorPage = /This page doesn[’']t exist|<title>\s*(?:404|Not found)\b|<h1[^>]*>\s*(?:404|Not found)\s*<\/h1>/i;
 for (const relativePath of htmlFiles) {
   const absolutePath = resolve(root, relativePath);
   assert.ok(existsSync(absolutePath), `missing Platform page: ${relativePath}`);
   const html = read(relativePath);
   assert.match(html, /<title>[^<]*AGRO-AI Platform API[^<]*<\/title>/, `wrong title: ${relativePath}`);
   assert.match(html, /<img src="\/platform-api\/assets\/logo\.svg"/, `official header logo missing: ${relativePath}`);
-  assert.doesNotMatch(html, /This page doesn[’']t exist|>404</i, `error page leaked into source: ${relativePath}`);
+  assert.doesNotMatch(html, genericErrorPage, `generic error page leaked into source: ${relativePath}`);
 }
 
 for (const route of exactRoutes) {
