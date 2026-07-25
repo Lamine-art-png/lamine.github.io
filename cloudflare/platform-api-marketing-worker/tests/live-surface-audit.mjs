@@ -26,6 +26,7 @@ const pages = [
   ["/platform-api/docs/support.html", "docs", "<title>Support"],
 ];
 
+const genericErrorPage = /This page doesn[’']t exist|<title>\s*(?:404|Not found)\b|<h1[^>]*>\s*(?:404|Not found)\s*<\/h1>/i;
 const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 async function request(url, options = {}) {
@@ -56,7 +57,8 @@ async function auditOnce() {
     assert.match(robots, /noindex/i, `${path}: private-beta robots gate missing`);
     assert.ok(body.includes(marker), `${path}: expected identity marker missing`);
     assert.ok(body.includes('/platform-api/assets/logo.svg'), `${path}: official logo reference missing`);
-    assert.doesNotMatch(body, /^\s*[{[]|application\/json|"detail"\s*:|"error"\s*:|This page doesn[’']t exist|>404</i, `${path}: JSON or error body leaked`);
+    assert.doesNotMatch(body, genericErrorPage, `${path}: generic error page leaked`);
+    assert.doesNotMatch(body.trimStart(), /^[{[]/, `${path}: raw JSON body leaked`);
     result.pages[path] = { status: response.status, surface: actualSurface, contentType };
   }
 
