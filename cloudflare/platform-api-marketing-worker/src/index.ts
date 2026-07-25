@@ -12,29 +12,30 @@ type Route = { assetPath: string; surface: Surface; html: boolean; identity?: st
 const DEFAULT_MARKETING_ORIGIN = "https://agroai-343.pages.dev";
 const PLATFORM_CONSOLE = "https://platform.agroai-pilot.com";
 const ENTERPRISE_PORTAL = "https://app.agroai-pilot.com";
+const OFFICIAL_LOGO = "/platform-api/assets/logo.svg";
 const PRIVATE_ROBOTS_META = /<meta\b(?=[^>]*\bname=["']robots["'])(?=[^>]*\bcontent=["'][^"']*\bnoindex\b[^"']*["'])[^>]*>\s*/gi;
 
 const STATIC_ROUTES: Record<string, Route> = {
   "/platform-api": { assetPath: "/index.html", surface: "marketing", html: true, identity: 'data-agroai-platform-page="landing"' },
   "/platform-api/": { assetPath: "/index.html", surface: "marketing", html: true, identity: 'data-agroai-platform-page="landing"' },
   "/platform-api/index.html": { assetPath: "/index.html", surface: "marketing", html: true, identity: 'data-agroai-platform-page="landing"' },
-  "/platform-api/reference": { assetPath: "/reference.html", surface: "docs", html: true },
-  "/platform-api/reference.html": { assetPath: "/reference.html", surface: "docs", html: true },
-  "/platform-api/changelog": { assetPath: "/changelog.html", surface: "docs", html: true },
-  "/platform-api/changelog.html": { assetPath: "/changelog.html", surface: "docs", html: true },
+  "/platform-api/reference": { assetPath: "/reference.html", surface: "docs", html: true, identity: "<title>API reference" },
+  "/platform-api/reference.html": { assetPath: "/reference.html", surface: "docs", html: true, identity: "<title>API reference" },
+  "/platform-api/changelog": { assetPath: "/changelog.html", surface: "docs", html: true, identity: "<title>Changelog" },
+  "/platform-api/changelog.html": { assetPath: "/changelog.html", surface: "docs", html: true, identity: "<title>Changelog" },
   "/platform-api/docs": { assetPath: "/docs/index.html", surface: "docs", html: true, identity: 'data-agroai-platform-page="docs"' },
   "/platform-api/docs/": { assetPath: "/docs/index.html", surface: "docs", html: true, identity: 'data-agroai-platform-page="docs"' },
   "/platform-api/docs/index.html": { assetPath: "/docs/index.html", surface: "docs", html: true, identity: 'data-agroai-platform-page="docs"' },
-  "/platform-api/docs/authentication": { assetPath: "/docs/authentication.html", surface: "docs", html: true },
-  "/platform-api/docs/authentication.html": { assetPath: "/docs/authentication.html", surface: "docs", html: true },
-  "/platform-api/docs/pagination": { assetPath: "/docs/pagination.html", surface: "docs", html: true },
-  "/platform-api/docs/pagination.html": { assetPath: "/docs/pagination.html", surface: "docs", html: true },
-  "/platform-api/docs/errors": { assetPath: "/docs/errors.html", surface: "docs", html: true },
-  "/platform-api/docs/errors.html": { assetPath: "/docs/errors.html", surface: "docs", html: true },
-  "/platform-api/docs/rate-limits": { assetPath: "/docs/rate-limits.html", surface: "docs", html: true },
-  "/platform-api/docs/rate-limits.html": { assetPath: "/docs/rate-limits.html", surface: "docs", html: true },
-  "/platform-api/docs/support": { assetPath: "/docs/support.html", surface: "docs", html: true },
-  "/platform-api/docs/support.html": { assetPath: "/docs/support.html", surface: "docs", html: true },
+  "/platform-api/docs/authentication": { assetPath: "/docs/authentication.html", surface: "docs", html: true, identity: "<title>Authentication" },
+  "/platform-api/docs/authentication.html": { assetPath: "/docs/authentication.html", surface: "docs", html: true, identity: "<title>Authentication" },
+  "/platform-api/docs/pagination": { assetPath: "/docs/pagination.html", surface: "docs", html: true, identity: "<title>Pagination" },
+  "/platform-api/docs/pagination.html": { assetPath: "/docs/pagination.html", surface: "docs", html: true, identity: "<title>Pagination" },
+  "/platform-api/docs/errors": { assetPath: "/docs/errors.html", surface: "docs", html: true, identity: "<title>Errors" },
+  "/platform-api/docs/errors.html": { assetPath: "/docs/errors.html", surface: "docs", html: true, identity: "<title>Errors" },
+  "/platform-api/docs/rate-limits": { assetPath: "/docs/rate-limits.html", surface: "docs", html: true, identity: "<title>Rate limits" },
+  "/platform-api/docs/rate-limits.html": { assetPath: "/docs/rate-limits.html", surface: "docs", html: true, identity: "<title>Rate limits" },
+  "/platform-api/docs/support": { assetPath: "/docs/support.html", surface: "docs", html: true, identity: "<title>Support" },
+  "/platform-api/docs/support.html": { assetPath: "/docs/support.html", surface: "docs", html: true, identity: "<title>Support" },
 };
 
 function enabled(value: string | undefined): boolean {
@@ -115,18 +116,24 @@ function responseHeaders(upstream: Response, route: Route, indexing: boolean): H
   return headers;
 }
 
+function looksLikeGenericErrorPage(html: string): boolean {
+  return /This page doesn[’']t exist|<title>\s*(?:404|Not found)\b|<h1[^>]*>\s*(?:404|Not found)\s*<\/h1>/i.test(html);
+}
+
 function normalizePlatformHtml(html: string): string {
   return html
     .replaceAll("https://app.agroai-pilot.com/developers/api/apply?type=developer_beta", PLATFORM_CONSOLE)
     .replaceAll("https://app.agroai-pilot.com/developers/api/apply?type=strategic_partner", PLATFORM_CONSOLE)
-    .replaceAll('href="https://app.agroai-pilot.com"', `href="${PLATFORM_CONSOLE}"`);
+    .replaceAll('href="https://app.agroai-pilot.com"', `href="${PLATFORM_CONSOLE}"`)
+    .replaceAll('/attached_assets/Copy of AGRO-AI (1)_1763408301972.png', OFFICIAL_LOGO);
 }
 
 async function platformAsset(request: Request, env: Env, route: Route, indexing: boolean): Promise<Response> {
-  const assetUrl = new URL(route.assetPath, request.url);
+  const assetUrl = new URL(route.assetPath, "https://agroai-assets.invalid");
   const upstream = await env.ASSETS.fetch(new Request(assetUrl, {
     method: request.method,
-    headers: { accept: request.headers.get("accept") || "*/*" },
+    headers: { accept: route.html ? "text/html" : (request.headers.get("accept") || "*/*") },
+    redirect: "manual",
   }));
 
   if (upstream.status === 404) return notFound();
@@ -142,8 +149,9 @@ async function platformAsset(request: Request, env: Env, route: Route, indexing:
   }
 
   let html = normalizePlatformHtml(await upstream.text());
-  if (route.identity && !html.includes(route.identity)) return unavailable("identity-mismatch");
-  if (/This page doesn[’']t exist|>404</i.test(html)) return unavailable("identity-mismatch");
+  if ((route.identity && !html.includes(route.identity)) || looksLikeGenericErrorPage(html)) {
+    return unavailable("identity-mismatch");
+  }
   if (indexing) html = html.replace(PRIVATE_ROBOTS_META, "");
   return new Response(html, { status: 200, headers });
 }
@@ -178,7 +186,7 @@ async function homepage(request: Request, env: Env): Promise<Response> {
   if (request.method === "HEAD") return new Response(null, { status: 200, headers });
 
   let html = await upstream.text();
-  if (!html.includes('<div id="root"></div>') || /This page doesn[’']t exist|>404</i.test(html)) return unavailable("homepage-identity-mismatch");
+  if (!html.includes('<div id="root"></div>') || looksLikeGenericErrorPage(html)) return unavailable("homepage-identity-mismatch");
   html = html.replace("</head>", `${HOMEPAGE_STYLE}</head>`).replace("</body>", `${HOMEPAGE_SCRIPT}</body>`);
   return new Response(html, { status: 200, headers });
 }
