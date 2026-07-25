@@ -1,0 +1,43 @@
+name: Platform API Complete Surface Audit
+
+on:
+  workflow_run:
+    workflows: ["Platform API Final Production Proof"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-api-complete-surface-audit
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Audit every public page, asset, console and backend gate
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run complete live Platform audit
+        shell: bash
+        run: |
+          set -o pipefail
+          node cloudflare/platform-api-marketing-worker/tests/live-surface-audit.mjs | tee platform-api-complete-surface-audit.json
+
+      - name: Upload immutable audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-api-complete-surface-audit-${{ github.run_id }}
+          path: platform-api-complete-surface-audit.json
+          if-no-files-found: warn
+          retention-days: 30
