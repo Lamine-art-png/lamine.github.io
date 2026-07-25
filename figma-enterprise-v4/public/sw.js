@@ -6,6 +6,7 @@
  *    API host) always goes to the network untouched, so authenticated
  *    responses and signed media never enter Cache Storage;
  *  - static hashed build assets (/assets/*) are cache-first (immutable);
+ *  - JavaScript requests are never allowed to receive an HTML fallback;
  *  - the navigation shell ("/", index.html, manifest, icons) is
  *    network-first with cache fallback so the capture UI cold-starts
  *    offline while updates still land when online;
@@ -15,7 +16,7 @@
  */
 const SW_ENV = new URL(self.location.href).searchParams.get("env") || "production";
 const CACHE_FAMILY = `agroai-shell-${SW_ENV}-`;
-const CACHE_VERSION = `${CACHE_FAMILY}v1`;
+const CACHE_VERSION = `${CACHE_FAMILY}v2`;
 const SHELL_PATHS = ["/", "/index.html", "/manifest.webmanifest", "/pwa-icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -53,6 +54,29 @@ function isStaticAsset(url) {
     || url.pathname === "/manifest.webmanifest";
 }
 
+function isJavaScriptRequest(request, url) {
+  return request.destination === "script" || /\.(?:m?js)(?:$|\?)/i.test(url.pathname);
+}
+
+function isJavaScriptResponse(response) {
+  const contentType = response.headers.get("content-type") || "";
+  return /(?:application|text)\/javascript|application\/ecmascript/i.test(contentType);
+}
+
+function invalidJavaScriptAsset(url) {
+  return new Response(
+    `throw new Error(${JSON.stringify(`AGRO-AI frontend asset unavailable: ${url.pathname}`)});`,
+    {
+      status: 502,
+      headers: {
+        "content-type": "application/javascript; charset=utf-8",
+        "cache-control": "no-store",
+        "x-content-type-options": "nosniff",
+      },
+    },
+  );
+}
+
 self.addEventListener("fetch", (event) => {
   const request = event.request;
   if (request.method !== "GET") return;
@@ -65,8 +89,12 @@ self.addEventListener("fetch", (event) => {
       caches.open(CACHE_VERSION).then(async (cache) => {
         const cached = await cache.match(request);
         if (cached) return cached;
-        const response = await fetch(request);
-        if (response.ok) cache.put(request, response.clone());
+
+        const response = await fetch(request, { cache: "no-store" });
+        if (isJavaScriptRequest(request, url) && !isJavaScriptResponse(response)) {
+          return invalidJavaScriptAsset(url);
+        }
+        if (response.ok) await cache.put(request, response.clone());
         return response;
       }),
     );
@@ -78,8 +106,8 @@ self.addEventListener("fetch", (event) => {
       (async () => {
         const cache = await caches.open(CACHE_VERSION);
         try {
-          const response = await fetch(request);
-          if (response.ok) cache.put("/index.html", response.clone());
+          const response = await fetch(request, { cache: "no-store" });
+          if (response.ok) await cache.put("/index.html", response.clone());
           return response;
         } catch {
           return (await cache.match("/index.html")) || (await cache.match("/")) || Response.error();
