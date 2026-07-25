@@ -13,9 +13,12 @@ const manifestLink = document.querySelector<HTMLLinkElement>('link[rel="manifest
 if (standalonePlatformHost && manifestLink) manifestLink.href = "/platform.webmanifest";
 
 function isStaleFrontendAssetError(message: string): boolean {
-  return /text\/html/i.test(message)
+  const htmlAsJavaScript = /text\/html/i.test(message)
     && /(javascript|module)/i.test(message)
     && /(mime|expected)/i.test(message);
+  const retiredAsset = /AGRO-AI frontend asset unavailable/i.test(message)
+    || /Failed to fetch dynamically imported module/i.test(message);
+  return htmlAsJavaScript || retiredAsset;
 }
 
 async function repairFrontendRuntime(clearSession = false) {
