@@ -124,7 +124,7 @@ def _set_env(service_id: str, token: str, key: str, value: str) -> None:
 
 
 def _deploy(service_id: str, token: str, commit_id: str | None) -> dict[str, Any]:
-    payload: dict[str, Any] = {"deployMode": "deploy_only"}
+    payload: dict[str, Any] = {}
     if commit_id:
         payload["commitId"] = commit_id
     return _request(
