@@ -37,7 +37,7 @@ jobs:
         shell: bash
         run: npx --yes wrangler@4.107.0 deploy --config "$CONFIG"
 
-      - name: Verify live website
+      - name: Verify live website and contact intake
         shell: bash
         run: |
           set -euo pipefail
@@ -58,8 +58,18 @@ jobs:
             echo "Emergency continuity surface failed smoke verification."
             exit 1
           fi
+
+          intake_code="$(curl -sS --connect-timeout 5 --max-time 25 \
+            -o proof/intake.json -w '%{http_code}' \
+            -X POST https://api.agroai-pilot.com/v1/sales/contact \
+            -H 'content-type: application/json' \
+            -H 'accept: application/json' \
+            --data "{\"type\":\"sales\",\"priority\":\"low\",\"name\":\"AGRO-AI Production Smoke\",\"email\":\"daabolaamiine@gmail.com\",\"company\":\"AGRO-AI Inc.\",\"subject\":\"Emergency contact intake production smoke\",\"message\":\"Automated production verification. No follow-up required.\",\"source_page\":\"emergency-continuity-smoke\",\"metadata\":{\"automated_smoke\":true}}" || true)"
+          test "$intake_code" = "200"
+          jq -e '.status == "received" and (.request_id | length > 0)' proof/intake.json >/dev/null
+
           if [ "${GITHUB_EVENT_NAME}" = "issues" ]; then
-            gh issue comment "$ISSUE_NUMBER" --body "✅ Emergency communications continuity is live. The homepage banner and **https://agroai-pilot.com/contact** passed production smoke verification."
+            gh issue comment "$ISSUE_NUMBER" --body "✅ Emergency communications continuity is live. The homepage banner, **https://agroai-pilot.com/contact**, and the production contact-intake endpoint all passed smoke verification."
           fi
 
       - name: Report failure
