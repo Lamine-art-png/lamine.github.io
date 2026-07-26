@@ -13,6 +13,10 @@ The first commercial activation is monthly only. Annual Checkout is intentionall
 
 This boundary is deliberate. The provisional database rows contain annual prices, but the complete annual entitlement and metered-overage lifecycle has not yet been promoted as a separate catalog version. Public pricing stays disabled at the API level so those provisional annual values are not presented as purchasable offers. The authenticated billing page displays only the approved monthly catalog.
 
+## Stripe schema boundary
+
+Provisioning requests use Stripe API version `2026-02-25.clover`. The dedicated webhook endpoint is pinned separately to `2024-10-28.acacia` because the current backend reconciler reads subscription-level billing-period fields that Stripe moved to subscription items in later schemas. Reusing a webhook with a different schema version fails activation. The webhook may move to Clover only after the backend period reconciler and its tests are upgraded together.
+
 ## What the workflow provisions
 
 The `Platform API Stripe Activation` workflow creates or safely reuses:
@@ -81,6 +85,8 @@ The workflow must prove all of the following:
 Complete the test Checkout with a Stripe test card, then confirm:
 
 - the webhook marks the API subscription active;
+- an expired Checkout releases the local subscription slot for a clean retry;
+- a canceled customer can resubscribe without retaining the old Stripe subscription mapping;
 - the customer can open the Stripe Customer Portal;
 - an API request creates durable usage;
 - usage below the included allowance is not exported as an overage;
@@ -144,11 +150,13 @@ Rollback must stop new purchases without corrupting existing Stripe subscription
 
 - Stripe key mode must match the selected workflow mode.
 - Live mutation requires exact confirmation.
-- The provisioning client pins Stripe API version `2026-02-25.clover`.
+- Stripe resource provisioning is pinned to API version `2026-02-25.clover`.
+- The webhook endpoint is pinned to backend-compatible API version `2024-10-28.acacia`.
 - Stripe Prices are immutable and server-controlled.
 - Browser-supplied Price IDs are rejected.
 - Annual Price IDs are cleared and annual Checkout is proven closed.
 - Checkout creation is organization-scoped and idempotent.
+- Expired Checkout sessions and canceled subscriptions can recover without duplicate local state.
 - Stripe webhook signatures and live/test mode are verified.
 - Duplicate and out-of-order webhook events cannot regress subscription state.
 - Usage exports use durable outbox identifiers and cannot be exported twice.
