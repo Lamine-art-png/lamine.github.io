@@ -41,6 +41,7 @@ def test_approved_monthly_catalog_is_exact():
     assert base.CATALOG_VERSION == "2026-07-provisional"
     assert base.METER_EVENT_NAME == "agroai_api_credits"
     assert monthly.STRIPE_API_VERSION == "2026-02-25.clover"
+    assert monthly.WEBHOOK_API_VERSION == "2024-10-28.acacia"
     assert monthly.CONTRACT == "agroai-platform-api-stripe-monthly-provisioning-v1"
     plans = {plan.identifier: plan for plan in base.PLANS}
     assert set(plans) == {"developer", "scale"}
@@ -81,6 +82,8 @@ def test_planning_mode_performs_no_stripe_network_calls(tmp_path, monkeypatch):
     ) == 0
     payload = json.loads(public.read_text())
     assert payload["applied"] is False
+    assert payload["stripe_api_version"] == "2026-02-25.clover"
+    assert payload["webhook_api_version"] == "2024-10-28.acacia"
     assert payload["billing_intervals_enabled"] == ["monthly"]
     assert payload["annual_checkout_enabled"] is False
     assert payload["render_env"]["PLATFORM_API_PRICING_ENABLED"] == "false"
@@ -268,6 +271,10 @@ def test_customer_surface_and_workflow_keep_annual_checkout_closed():
         REPOSITORY_ROOT
         / ".github/workflows/platform-api-stripe-activation.yml"
     ).read_text()
+    configurator = (
+        REPOSITORY_ROOT
+        / "agroai_api/scripts/configure_platform_billing_render_monthly.py"
+    ).read_text()
     assert 'billing_interval: "monthly"' in page
     assert "monthlyPriceCents: 14_900" in page
     assert "monthlyPriceCents: 74_900" in page
@@ -277,6 +284,7 @@ def test_customer_surface_and_workflow_keep_annual_checkout_closed():
     assert 'billing_interval\":\"monthly' in workflow
     assert 'billing_interval\":\"annual' in workflow
     assert "Prove annual Checkout is denied" in workflow
+    assert "deployMode" not in configurator
 
 
 def test_render_mutation_allowlist_is_narrow():
