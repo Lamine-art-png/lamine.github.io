@@ -9,7 +9,7 @@ interface Env {
 }
 
 const CONTACT_API = "https://api.agroai-pilot.com/v1/sales/contact";
-const TEMPORARY_DIRECT_EMAIL = "daabolaamiine@gmail.com";
+const OFFICIAL_CONTACT_EMAIL = "contact@agroai-pilot.com";
 const LINKEDIN_URL = "https://www.linkedin.com/company/agro-ai-inc";
 const OFFICIAL_LOGO = "/platform-api/assets/logo.svg";
 
@@ -86,7 +86,7 @@ function contactPage(): Response {
   <main>
     <div class="eyebrow">Business continuity contact</div>
     <h1>AGRO-AI remains operational.</h1>
-    <p class="lede">Our primary Gmail account is temporarily unavailable. Customers, partners, investors, media, and collaborators can reach the AGRO-AI team through this secure contact page.</p>
+    <p class="lede">Our primary Gmail account is temporarily unavailable. Customers, partners, investors, media, and collaborators can reach the AGRO-AI team through this secure contact page or our official domain email.</p>
     <div class="grid">
       <section class="card">
         <form id="contact-form" novalidate>
@@ -105,9 +105,9 @@ function contactPage(): Response {
         </form>
       </section>
       <aside class="card side">
-        <h2>Urgent communication</h2>
-        <p>For a time-sensitive customer, partner, investor, or operational matter, use the temporary direct channel below or message AGRO-AI on LinkedIn.</p>
-        <a class="action primary" href="mailto:${TEMPORARY_DIRECT_EMAIL}?subject=Urgent%20AGRO-AI%20business%20communication">Email the temporary inbox</a>
+        <h2>Direct email</h2>
+        <p>For customer, partner, investor, media, or operational communication, use AGRO-AI's official domain email or message us on LinkedIn.</p>
+        <a class="action primary" href="mailto:${OFFICIAL_CONTACT_EMAIL}?subject=AGRO-AI%20business%20communication">${OFFICIAL_CONTACT_EMAIL}</a>
         <a class="action" href="${LINKEDIN_URL}" rel="noopener noreferrer">Message AGRO-AI on LinkedIn</a>
         <div class="note">Do not send passwords, access codes, API keys, financial credentials, or other secrets through this page.</div>
       </aside>
@@ -156,7 +156,7 @@ function contactPage(): Response {
       status.textContent = 'Message received. AGRO-AI will follow up through the email you provided.';
     } catch {
       status.className = 'status error';
-      status.innerHTML = 'The secure form could not complete. Use the <a href="mailto:${TEMPORARY_DIRECT_EMAIL}?subject=Urgent%20AGRO-AI%20business%20communication">temporary direct inbox</a>.';
+      status.innerHTML = 'The secure form could not complete. Email <a href="mailto:${OFFICIAL_CONTACT_EMAIL}?subject=AGRO-AI%20business%20communication">${OFFICIAL_CONTACT_EMAIL}</a>.';
     } finally {
       button.disabled = false;
       button.textContent = 'Send to AGRO-AI';
