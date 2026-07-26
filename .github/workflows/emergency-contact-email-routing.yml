@@ -7,7 +7,7 @@ on:
     paths:
       - ".github/workflows/emergency-contact-email-routing.yml"
   issues:
-    types: [opened]
+    types: [opened, reopened]
 
 permissions:
   contents: read
@@ -29,8 +29,10 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      ISSUE_NUMBER: ${{ github.event.issue.number || '323' }}
     steps:
+      - uses: actions/checkout@v4
+
       - name: Validate Cloudflare credentials
         shell: bash
         run: |
@@ -44,7 +46,7 @@ jobs:
           set -Eeuo pipefail
 
           comment_issue() {
-            if [ "${GITHUB_EVENT_NAME}" = "issues" ] && [ -n "${ISSUE_NUMBER:-}" ]; then
+            if [ -n "${ISSUE_NUMBER:-}" ]; then
               gh issue comment "$ISSUE_NUMBER" --body "$1"
             fi
           }
@@ -124,7 +126,7 @@ jobs:
 
           if [ "$verified" != "true" ]; then
             echo "DESTINATION_VERIFICATION_REQUIRED"
-            comment_issue "Cloudflare destination address created for **${DESTINATION}**. Open the verification email from Cloudflare and click **Verify email address**. After verification, close this issue and open a new issue with the same title to finish activation."
+            comment_issue "Cloudflare destination address created for **${DESTINATION}**. Open the verification email from Cloudflare and click **Verify email address**. Reopen this issue after verification to finish activation."
             exit 0
           fi
 
@@ -152,7 +154,7 @@ jobs:
           comment_issue "✅ **Email routing is active.** Messages sent to **${ALIAS}** now forward to **${DESTINATION}**."
 
       - name: Report setup failure
-        if: ${{ failure() && github.event_name == 'issues' }}
+        if: ${{ failure() }}
         shell: bash
         run: |
           gh issue comment "$ISSUE_NUMBER" --body "The automated setup stopped safely. No existing non-Cloudflare mail routing was overwritten."
