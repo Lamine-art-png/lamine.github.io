@@ -4,6 +4,7 @@ import importlib.util
 import json
 import os
 import stat
+import sys
 from pathlib import Path
 
 import pytest
@@ -16,6 +17,7 @@ def _load(name: str, relative: str):
     spec = importlib.util.spec_from_file_location(name, ROOT / relative)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
+    sys.modules[name] = module
     spec.loader.exec_module(module)
     return module
 
