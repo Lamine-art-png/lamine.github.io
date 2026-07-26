@@ -41,7 +41,7 @@ jobs:
       - name: Create destination and route contact email safely
         shell: bash
         run: |
-          set -euo pipefail
+          set -Eeuo pipefail
 
           comment_issue() {
             if [ "${GITHUB_EVENT_NAME}" = "issues" ] && [ -n "${ISSUE_NUMBER:-}" ]; then
@@ -53,26 +53,40 @@ jobs:
             local method="$1"
             local path="$2"
             local body="${3:-}"
+            local response_file
+            local http_code
+            response_file="$(mktemp)"
             local args=(
-              --fail-with-body
               --silent
               --show-error
               --request "$method"
               --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
               --header "Content-Type: application/json"
+              --output "$response_file"
+              --write-out "%{http_code}"
               "https://api.cloudflare.com/client/v4${path}"
             )
             if [ -n "$body" ]; then
               args+=(--data "$body")
             fi
-            curl "${args[@]}"
+            http_code="$(curl "${args[@]}")"
+            if ! [[ "$http_code" =~ ^2 ]]; then
+              local diagnostic
+              diagnostic="$(jq -c '{success,errors,messages}' "$response_file" 2>/dev/null || cat "$response_file")"
+              comment_issue "❌ Cloudflare API request failed: \`${method} ${path}\` returned HTTP ${http_code}. Diagnostic: \`${diagnostic}\`"
+              cat "$response_file" >&2
+              rm -f "$response_file"
+              return 1
+            fi
+            cat "$response_file"
+            rm -f "$response_file"
           }
 
           zone_payload="$(cf GET "/zones?name=${DOMAIN}&account.id=${CLOUDFLARE_ACCOUNT_ID}&status=active&per_page=1")"
           zone_id="$(printf '%s' "$zone_payload" | jq -r '.result[0].id // empty')"
           if [ -z "$zone_id" ]; then
-            echo "Could not resolve an active Cloudflare zone for ${DOMAIN}."
-            printf '%s\n' "$zone_payload" | jq '{success, errors, messages}'
+            diagnostic="$(printf '%s' "$zone_payload" | jq -c '{success,errors,messages,result_count:(.result|length)}')"
+            comment_issue "❌ Could not resolve an active Cloudflare zone for **${DOMAIN}**. Diagnostic: \`${diagnostic}\`"
             exit 1
           fi
           echo "Resolved Cloudflare zone for ${DOMAIN}."
@@ -81,8 +95,8 @@ jobs:
           mx_payload="$(cf GET "/zones/${zone_id}/dns_records?type=MX&per_page=100")"
           conflicting_mx="$(printf '%s' "$mx_payload" | jq -r '[.result[]? | select((.content | ascii_downcase | endswith(".mx.cloudflare.net")) | not)] | length')"
           if [ "$conflicting_mx" -gt 0 ]; then
-            echo "Existing non-Cloudflare MX records were found. Refusing to alter mail routing."
-            printf '%s\n' "$mx_payload" | jq -r '.result[]? | "MX priority=\(.priority // 0) content=\(.content)"'
+            mx_summary="$(printf '%s' "$mx_payload" | jq -r '[.result[]? | {priority:(.priority // 0),content}] | @json')"
+            comment_issue "🛑 Existing non-Cloudflare MX records were found, so the workflow refused to modify mail routing. Records: \`${mx_summary}\`"
             exit 1
           fi
 
@@ -130,4 +144,4 @@ jobs:
         if: ${{ failure() && github.event_name == 'issues' }}
         shell: bash
         run: |
-          gh issue comment "$ISSUE_NUMBER" --body "❌ The automated setup failed safely without changing existing non-Cloudflare mail routing. Review the failed workflow run before retrying."
+          gh issue comment "$ISSUE_NUMBER" --body "The automated setup stopped safely. No existing non-Cloudflare mail routing was overwritten."
