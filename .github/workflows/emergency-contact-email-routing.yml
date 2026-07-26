@@ -37,8 +37,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "${CLOUDFLARE_API_TOKEN:-}"
-          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            gh issue comment "$ISSUE_NUMBER" --body "❌ The production environment secret **CLOUDFLARE_EMAIL_ROUTING_API_TOKEN** is missing or unavailable to this workflow. Add it under Repository Settings → Environments → production → Environment secrets."
+            exit 1
+          fi
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            gh issue comment "$ISSUE_NUMBER" --body "❌ The production environment secret **CLOUDFLARE_ACCOUNT_ID** is missing or unavailable to this workflow."
+            exit 1
+          fi
 
       - name: Create destination and route contact email safely
         shell: bash
@@ -93,8 +99,6 @@ jobs:
           fi
           echo "Resolved Cloudflare zone for ${DOMAIN}."
 
-          # Public DNS fail-closed check. This avoids requiring DNS Edit/Read permissions
-          # while ensuring another mail provider is never overwritten.
           doh_payload="$(curl --fail --silent --show-error --get 'https://cloudflare-dns.com/dns-query' \
             --header 'accept: application/dns-json' \
             --data-urlencode "name=${DOMAIN}" \
