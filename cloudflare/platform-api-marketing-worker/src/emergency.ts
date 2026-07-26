@@ -10,26 +10,39 @@ interface Env {
 
 const CONTACT_API = "https://api.agroai-pilot.com/v1/sales/contact";
 const OFFICIAL_CONTACT_EMAIL = "contact@agroai-pilot.com";
-const LINKEDIN_URL = "https://www.linkedin.com/company/agro-ai-inc";
+const LINKEDIN_URL = "https://www.linkedin.com/company/agro-ai-inc/";
+const INSTAGRAM_URL = "https://www.instagram.com/agroai.inc/";
+const YOUTUBE_URL = "https://www.youtube.com/channel/UCd3tQLAOtMmjFhRNVdU08tA";
 const OFFICIAL_LOGO = "/platform-api/assets/logo.svg";
 
-const emergencyBanner = `<div id="agroai-continuity-banner" role="status" aria-label="AGRO-AI communications update">
-  <div class="agroai-continuity-inner">
-    <strong>AGRO-AI communications update</strong>
-    <span>Our primary Gmail account is temporarily unavailable. AGRO-AI remains fully operational.</span>
-    <a href="/contact">Contact AGRO-AI</a>
-  </div>
-</div>`;
-
-const emergencyBannerStyle = `<style id="agroai-continuity-style">
-  #agroai-continuity-banner{position:relative;z-index:1000;background:#102b1d;color:#fff;border-bottom:1px solid rgba(255,255,255,.18);font-family:Arial,sans-serif}
-  .agroai-continuity-inner{max-width:1200px;margin:0 auto;padding:11px 22px;display:flex;align-items:center;justify-content:center;gap:12px;font-size:13px;line-height:1.45;text-align:center;flex-wrap:wrap}
-  .agroai-continuity-inner strong{font-size:13px;letter-spacing:.01em}
-  .agroai-continuity-inner span{color:#e7eee9}
-  .agroai-continuity-inner a{display:inline-flex;align-items:center;justify-content:center;padding:6px 11px;border-radius:999px;background:#e6f18d;color:#102b1d;text-decoration:none;font-weight:700;white-space:nowrap}
-  .agroai-continuity-inner a:hover,.agroai-continuity-inner a:focus-visible{background:#f2f8bd;outline:2px solid #fff;outline-offset:2px}
-  @media(max-width:680px){.agroai-continuity-inner{padding:10px 14px;gap:7px}.agroai-continuity-inner span{width:100%}}
+const socialFooterStyle = `<style id="agroai-social-footer-style">
+  #agroai-social-footer{background:#050505;color:#fff;font-family:"Glacial Indifference","Avenir Next",Avenir,Arial,sans-serif;border-top:1px solid rgba(255,255,255,.12)}
+  #agroai-social-footer .agroai-social-inner{width:min(1240px,calc(100% - 40px));margin:0 auto;min-height:132px;display:flex;align-items:center;justify-content:space-between;gap:28px;padding:32px 0}
+  #agroai-social-footer .agroai-social-email{color:#fff;text-decoration:none;font-size:16px;font-weight:700;letter-spacing:.01em}
+  #agroai-social-footer .agroai-social-email:hover,#agroai-social-footer .agroai-social-email:focus-visible{text-decoration:underline;text-underline-offset:5px}
+  #agroai-social-footer .agroai-social-links{display:flex;align-items:center;gap:30px}
+  #agroai-social-footer .agroai-social-link{display:inline-flex;width:40px;height:40px;align-items:center;justify-content:center;color:#fff;text-decoration:none;border-radius:50%;transition:transform .18s ease,opacity .18s ease}
+  #agroai-social-footer .agroai-social-link:hover,#agroai-social-footer .agroai-social-link:focus-visible{transform:translateY(-2px);opacity:.72;outline:none}
+  #agroai-social-footer svg{width:25px;height:25px;display:block}
+  @media(max-width:680px){#agroai-social-footer .agroai-social-inner{min-height:150px;flex-direction:column;align-items:flex-start;justify-content:center}.agroai-social-links{gap:22px}}
 </style>`;
+
+const socialFooter = `<footer id="agroai-social-footer" aria-label="AGRO-AI social links">
+  <div class="agroai-social-inner">
+    <a class="agroai-social-email" href="mailto:${OFFICIAL_CONTACT_EMAIL}">${OFFICIAL_CONTACT_EMAIL}</a>
+    <nav class="agroai-social-links" aria-label="Follow AGRO-AI">
+      <a class="agroai-social-link" href="${LINKEDIN_URL}" target="_blank" rel="noopener noreferrer" aria-label="AGRO-AI on LinkedIn" title="LinkedIn">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M5.36 7.78A2.14 2.14 0 1 0 5.36 3.5a2.14 2.14 0 0 0 0 4.28ZM3.52 20.5h3.69V9.12H3.52V20.5ZM9.46 9.12h3.54v1.56h.05c.49-.93 1.7-1.91 3.5-1.91 3.74 0 4.43 2.46 4.43 5.66v6.07h-3.69v-5.38c0-1.28-.02-2.94-1.79-2.94-1.8 0-2.08 1.4-2.08 2.85v5.47H9.46V9.12Z"/></svg>
+      </a>
+      <a class="agroai-social-link" href="${INSTAGRAM_URL}" target="_blank" rel="noopener noreferrer" aria-label="AGRO-AI on Instagram" title="Instagram">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.7" r="1" fill="currentColor" stroke="none"/></svg>
+      </a>
+      <a class="agroai-social-link" href="${YOUTUBE_URL}" target="_blank" rel="noopener noreferrer" aria-label="AGRO-AI on YouTube" title="YouTube">
+        <svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M23.2 7.1a3 3 0 0 0-2.1-2.12C19.23 4.5 12 4.5 12 4.5s-7.23 0-9.1.48A3 3 0 0 0 .8 7.1 31.3 31.3 0 0 0 .32 12c0 1.65.16 3.3.48 4.9a3 3 0 0 0 2.1 2.12c1.87.48 9.1.48 9.1.48s7.23 0 9.1-.48a3 3 0 0 0 2.1-2.12c.32-1.6.48-3.25.48-4.9s-.16-3.3-.48-4.9ZM9.67 15.21V8.79L15.73 12l-6.06 3.21Z"/></svg>
+      </a>
+    </nav>
+  </div>
+</footer>`;
 
 function securityHeaders(contentType: string): Headers {
   return new Headers({
@@ -60,22 +73,23 @@ function contactPage(): Response {
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="robots" content="index,follow">
   <title>Contact AGRO-AI</title>
-  <meta name="description" content="Contact AGRO-AI during the temporary interruption affecting its primary Gmail account.">
+  <meta name="description" content="Contact AGRO-AI for customer, investor, partner, media, and collaboration inquiries.">
   <style>
-    :root{color-scheme:light;--ink:#10231b;--muted:#5b6961;--line:#d9e1dc;--paper:#f7f8f4;--green:#173c29;--lime:#e6f18d}
-    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:Arial,sans-serif;line-height:1.5}
+    :root{color-scheme:light;--ink:#0b1711;--muted:#5d6962;--line:#dde4df;--paper:#f8faf8;--green:#173c29;--lime:#e6f18d}
+    *{box-sizing:border-box}body{margin:0;background:var(--paper);color:var(--ink);font-family:"Glacial Indifference","Avenir Next",Avenir,Arial,sans-serif;line-height:1.5}
     a{color:inherit}.shell{min-height:100vh;display:flex;flex-direction:column}.top{display:flex;align-items:center;justify-content:space-between;padding:20px clamp(20px,5vw,64px);border-bottom:1px solid var(--line);background:#fff}
-    .brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:800;letter-spacing:.02em}.brand img{width:38px;height:38px;object-fit:contain}.back{font-size:14px;font-weight:700;text-decoration:none}.back:hover{text-decoration:underline}
-    main{width:min(1120px,calc(100% - 36px));margin:0 auto;padding:clamp(44px,8vw,90px) 0 70px}.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.12em;font-weight:800;color:#466153}
-    h1{font-family:Georgia,serif;font-size:clamp(42px,7vw,78px);line-height:.98;letter-spacing:-.045em;max-width:850px;margin:14px 0 22px}.lede{max-width:730px;font-size:clamp(17px,2vw,21px);color:var(--muted);margin:0 0 42px}
-    .grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(280px,.65fr);gap:26px;align-items:start}.card{background:#fff;border:1px solid var(--line);border-radius:22px;padding:clamp(22px,4vw,38px);box-shadow:0 20px 60px rgba(16,35,27,.07)}
+    .brand{display:flex;align-items:center;gap:10px;text-decoration:none;font-weight:800;letter-spacing:.02em}.brand img{width:38px;height:38px;object-fit:contain}.back{font-size:14px;font-weight:700;text-decoration:none}.back:hover{text-decoration:underline;text-underline-offset:4px}
+    main{width:min(1120px,calc(100% - 36px));margin:0 auto;padding:clamp(52px,8vw,96px) 0 78px}.eyebrow{font-size:12px;text-transform:uppercase;letter-spacing:.16em;font-weight:800;color:#466153}
+    h1{font-size:clamp(46px,7vw,82px);line-height:.98;letter-spacing:-.045em;max-width:850px;margin:14px 0 22px;font-weight:700}.lede{max-width:760px;font-size:clamp(17px,2vw,21px);color:var(--muted);margin:0 0 42px}
+    .grid{display:grid;grid-template-columns:minmax(0,1.35fr) minmax(300px,.65fr);gap:24px;align-items:start}.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:clamp(22px,4vw,38px)}
     form{display:grid;gap:18px}.two{display:grid;grid-template-columns:1fr 1fr;gap:16px}label{display:grid;gap:7px;font-size:13px;font-weight:800}.optional{font-weight:400;color:var(--muted)}
-    input,textarea{width:100%;border:1px solid #bcc9c1;border-radius:12px;background:#fff;padding:13px 14px;font:inherit;color:var(--ink);outline:none}textarea{min-height:150px;resize:vertical}input:focus,textarea:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(23,60,41,.12)}
-    .honeypot{position:absolute!important;left:-10000px!important;width:1px!important;height:1px!important;overflow:hidden!important}.submit{border:0;border-radius:12px;padding:14px 18px;background:var(--green);color:#fff;font:inherit;font-weight:800;cursor:pointer}.submit:hover{background:#0d2b1e}.submit:disabled{opacity:.6;cursor:wait}
-    .status{min-height:24px;font-size:14px;font-weight:700}.status.ok{color:#176b3a}.status.error{color:#9b241c}.side h2{margin:0 0 12px;font-size:20px}.side p{margin:0 0 22px;color:var(--muted)}.action{display:flex;align-items:center;justify-content:center;width:100%;padding:13px 16px;border-radius:12px;border:1px solid var(--line);background:#fff;text-decoration:none;font-weight:800;margin-top:10px}.action.primary{background:var(--lime);border-color:var(--lime)}.note{margin-top:22px;padding-top:20px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
-    footer{margin-top:auto;padding:24px clamp(20px,5vw,64px);border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+    input,textarea{width:100%;border:1px solid #bcc9c1;border-radius:10px;background:#fff;padding:13px 14px;font:inherit;color:var(--ink);outline:none}textarea{min-height:150px;resize:vertical}input:focus,textarea:focus{border-color:var(--green);box-shadow:0 0 0 3px rgba(23,60,41,.12)}
+    .honeypot{position:absolute!important;left:-10000px!important;width:1px!important;height:1px!important;overflow:hidden!important}.submit{border:0;border-radius:10px;padding:14px 18px;background:var(--green);color:#fff;font:inherit;font-weight:800;cursor:pointer}.submit:hover{background:#0d2b1e}.submit:disabled{opacity:.6;cursor:wait}
+    .status{min-height:24px;font-size:14px;font-weight:700}.status.ok{color:#176b3a}.status.error{color:#9b241c}.side h2{margin:0 0 12px;font-size:22px}.side p{margin:0 0 22px;color:var(--muted)}.action{display:flex;align-items:center;justify-content:center;width:100%;padding:14px 16px;border-radius:10px;border:1px solid var(--line);background:#fff;text-decoration:none;font-weight:800;margin-top:10px}.action.primary{background:var(--lime);border-color:var(--lime)}.action:hover{transform:translateY(-1px)}.note{margin-top:22px;padding-top:20px;border-top:1px solid var(--line);font-size:13px;color:var(--muted)}
+    .mini-socials{display:flex;align-items:center;gap:12px;margin-top:22px}.mini-socials a{display:inline-flex;align-items:center;justify-content:center;width:42px;height:42px;border:1px solid var(--line);border-radius:50%;text-decoration:none}.mini-socials a:hover{background:#f1f4f2}.mini-socials svg{width:21px;height:21px}
     @media(max-width:800px){.grid{grid-template-columns:1fr}.two{grid-template-columns:1fr}.top{padding:15px 18px}}
   </style>
+  ${socialFooterStyle}
 </head>
 <body>
 <div class="shell">
@@ -84,9 +98,9 @@ function contactPage(): Response {
     <a class="back" href="/">Back to AGRO-AI</a>
   </header>
   <main>
-    <div class="eyebrow">Business continuity contact</div>
-    <h1>AGRO-AI remains operational.</h1>
-    <p class="lede">Our primary Gmail account is temporarily unavailable. Customers, partners, investors, media, and collaborators can reach the AGRO-AI team through this secure contact page or our official domain email.</p>
+    <div class="eyebrow">Contact</div>
+    <h1>Contact AGRO-AI.</h1>
+    <p class="lede">For customer support, partnerships, investment, media, collaborations, and general inquiries, reach our team through the form or our official email.</p>
     <div class="grid">
       <section class="card">
         <form id="contact-form" novalidate>
@@ -96,24 +110,28 @@ function contactPage(): Response {
           </div>
           <div class="two">
             <label>Company <span class="optional">optional</span><input name="company" autocomplete="organization" maxlength="160"></label>
-            <label>Subject<input name="subject" maxlength="180" required value="AGRO-AI business communication"></label>
+            <label>Subject<input name="subject" maxlength="180" required value="AGRO-AI inquiry"></label>
           </div>
-          <label>Message<textarea name="message" maxlength="4000" required placeholder="Tell us how we can help and include any time-sensitive details."></textarea></label>
+          <label>Message<textarea name="message" maxlength="4000" required placeholder="Tell us how we can help."></textarea></label>
           <label class="honeypot" aria-hidden="true">Website<input name="website" tabindex="-1" autocomplete="off"></label>
-          <button class="submit" type="submit">Send to AGRO-AI</button>
+          <button class="submit" type="submit">Send message</button>
           <div id="form-status" class="status" role="status" aria-live="polite"></div>
         </form>
       </section>
       <aside class="card side">
-        <h2>Direct email</h2>
-        <p>For customer, partner, investor, media, or operational communication, use AGRO-AI's official domain email or message us on LinkedIn.</p>
-        <a class="action primary" href="mailto:${OFFICIAL_CONTACT_EMAIL}?subject=AGRO-AI%20business%20communication">${OFFICIAL_CONTACT_EMAIL}</a>
-        <a class="action" href="${LINKEDIN_URL}" rel="noopener noreferrer">Message AGRO-AI on LinkedIn</a>
+        <h2>Official email</h2>
+        <p>Use our official domain address for customers, investors, partners, collaborators, media, and general communication.</p>
+        <a class="action primary" href="mailto:${OFFICIAL_CONTACT_EMAIL}?subject=AGRO-AI%20inquiry">${OFFICIAL_CONTACT_EMAIL}</a>
+        <div class="mini-socials" aria-label="AGRO-AI social profiles">
+          <a href="${LINKEDIN_URL}" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M5.36 7.78A2.14 2.14 0 1 0 5.36 3.5a2.14 2.14 0 0 0 0 4.28ZM3.52 20.5h3.69V9.12H3.52V20.5ZM9.46 9.12h3.54v1.56h.05c.49-.93 1.7-1.91 3.5-1.91 3.74 0 4.43 2.46 4.43 5.66v6.07h-3.69v-5.38c0-1.28-.02-2.94-1.79-2.94-1.8 0-2.08 1.4-2.08 2.85v5.47H9.46V9.12Z"/></svg></a>
+          <a href="${INSTAGRAM_URL}" target="_blank" rel="noopener noreferrer" aria-label="Instagram"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="5"/><circle cx="12" cy="12" r="4.2"/><circle cx="17.4" cy="6.7" r="1" fill="currentColor" stroke="none"/></svg></a>
+          <a href="${YOUTUBE_URL}" target="_blank" rel="noopener noreferrer" aria-label="YouTube"><svg viewBox="0 0 24 24" aria-hidden="true" fill="currentColor"><path d="M23.2 7.1a3 3 0 0 0-2.1-2.12C19.23 4.5 12 4.5 12 4.5s-7.23 0-9.1.48A3 3 0 0 0 .8 7.1 31.3 31.3 0 0 0 .32 12c0 1.65.16 3.3.48 4.9a3 3 0 0 0 2.1 2.12c1.87.48 9.1.48 9.1.48s7.23 0 9.1-.48a3 3 0 0 0 2.1-2.12c.32-1.6.48-3.25.48-4.9s-.16-3.3-.48-4.9ZM9.67 15.21V8.79L15.73 12l-6.06 3.21Z"/></svg></a>
+        </div>
         <div class="note">Do not send passwords, access codes, API keys, financial credentials, or other secrets through this page.</div>
       </aside>
     </div>
   </main>
-  <footer>© AGRO-AI Inc. Communications continuity page.</footer>
+  ${socialFooter}
 </div>
 <script>
 (() => {
@@ -128,14 +146,14 @@ function contactPage(): Response {
     if (String(data.get('website') || '').trim()) return;
     const payload = {
       type: 'sales',
-      priority: 'urgent',
+      priority: 'normal',
       name: String(data.get('name') || '').trim(),
       email: String(data.get('email') || '').trim(),
       company: String(data.get('company') || '').trim() || null,
       subject: String(data.get('subject') || '').trim(),
       message: String(data.get('message') || '').trim(),
-      source_page: 'emergency-business-continuity-contact',
-      metadata: { channel: 'website', continuity_incident: 'primary_gmail_unavailable' }
+      source_page: 'contact-page',
+      metadata: { channel: 'website', official_contact_email: '${OFFICIAL_CONTACT_EMAIL}' }
     };
     if (!payload.name || !payload.email || !payload.subject || !payload.message) {
       status.className = 'status error';
@@ -156,10 +174,10 @@ function contactPage(): Response {
       status.textContent = 'Message received. AGRO-AI will follow up through the email you provided.';
     } catch {
       status.className = 'status error';
-      status.innerHTML = 'The secure form could not complete. Email <a href="mailto:${OFFICIAL_CONTACT_EMAIL}?subject=AGRO-AI%20business%20communication">${OFFICIAL_CONTACT_EMAIL}</a>.';
+      status.innerHTML = 'The form could not complete. Email <a href="mailto:${OFFICIAL_CONTACT_EMAIL}?subject=AGRO-AI%20inquiry">${OFFICIAL_CONTACT_EMAIL}</a>.';
     } finally {
       button.disabled = false;
-      button.textContent = 'Send to AGRO-AI';
+      button.textContent = 'Send message';
     }
   });
 })();
@@ -169,7 +187,7 @@ function contactPage(): Response {
   return new Response(html, { status: 200, headers: securityHeaders("text/html; charset=utf-8") });
 }
 
-async function homepageWithContinuityBanner(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+async function homepageWithSocialFooter(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
   const upstream = await (productEntryHandler as ExportedHandler<Env>).fetch!(request, env, ctx);
   if (request.method === "HEAD" || !upstream.ok || !String(upstream.headers.get("content-type") || "").includes("text/html")) {
     return upstream;
@@ -180,8 +198,8 @@ async function homepageWithContinuityBanner(request: Request, env: Env, ctx: Exe
   headers.delete("etag");
   headers.set("cache-control", "public, max-age=0, must-revalidate");
   let html = await upstream.text();
-  if (!html.includes('id="agroai-continuity-banner"')) {
-    html = html.replace("</head>", `${emergencyBannerStyle}</head>`).replace(/<body([^>]*)>/i, `<body$1>${emergencyBanner}`);
+  if (!html.includes('id="agroai-social-footer"')) {
+    html = html.replace("</head>", `${socialFooterStyle}</head>`).replace("</body>", `${socialFooter}</body>`);
   }
   return new Response(html, { status: upstream.status, statusText: upstream.statusText, headers });
 }
@@ -193,7 +211,7 @@ export default {
       if (request.method === "HEAD") return new Response(null, { status: 200, headers: securityHeaders("text/html; charset=utf-8") });
       return contactPage();
     }
-    if (url.pathname === "/") return homepageWithContinuityBanner(request, env, ctx);
+    if (url.pathname === "/") return homepageWithSocialFooter(request, env, ctx);
     return (productEntryHandler as ExportedHandler<Env>).fetch!(request, env, ctx);
   },
 } satisfies ExportedHandler<Env>;
