@@ -1,4 +1,4 @@
-name: Emergency website communications continuity
+name: AGRO-AI contact and social surfaces
 
 on:
   workflow_dispatch:
@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   deploy:
-    if: ${{ github.event_name != 'issues' || (github.actor == github.repository_owner && github.event.issue.title == '[ops] Deploy emergency website continuity') }}
+    if: ${{ github.event_name != 'issues' || (github.actor == github.repository_owner && github.event.issue.title == '[ops] Deploy AGRO-AI contact and socials') }}
     runs-on: ubuntu-latest
     environment: production
     env:
@@ -30,7 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate emergency release
+      - name: Validate contact release
         shell: bash
         run: |
           set -euo pipefail
@@ -39,7 +39,7 @@ jobs:
           node cloudflare/platform-api-marketing-worker/tests/contract.mjs
           npx --yes wrangler@4.107.0 deploy --dry-run --config "$CONFIG"
 
-      - name: Deploy emergency contact surface
+      - name: Deploy contact and social surfaces
         shell: bash
         run: npx --yes wrangler@4.107.0 deploy --config "$CONFIG"
 
@@ -53,16 +53,20 @@ jobs:
             contact_code="$(curl -sS -L --connect-timeout 5 --max-time 20 -o proof/contact.html -w '%{http_code}' https://agroai-pilot.com/contact || true)"
             home_code="$(curl -sS -L --connect-timeout 5 --max-time 20 -o proof/home.html -w '%{http_code}' https://agroai-pilot.com/ || true)"
             if [ "$contact_code" = "200" ] && [ "$home_code" = "200" ] && \
-               grep -F 'AGRO-AI remains operational.' proof/contact.html >/dev/null && \
+               grep -F 'Contact AGRO-AI' proof/contact.html >/dev/null && \
                grep -F 'contact@agroai-pilot.com' proof/contact.html >/dev/null && \
-               grep -F 'agroai-continuity-banner' proof/home.html >/dev/null; then
+               grep -F 'https://www.linkedin.com/company/agro-ai-inc/' proof/contact.html >/dev/null && \
+               grep -F 'https://www.instagram.com/agroai.inc/' proof/contact.html >/dev/null && \
+               grep -F 'https://www.youtube.com/channel/UCd3tQLAOtMmjFhRNVdU08tA' proof/contact.html >/dev/null && \
+               grep -F 'agroai-social-footer' proof/home.html >/dev/null && \
+               ! grep -F 'agroai-continuity-banner' proof/home.html >/dev/null; then
               ready=1
               break
             fi
             sleep 5
           done
           if [ "$ready" -ne 1 ]; then
-            echo "Emergency continuity surface failed smoke verification."
+            echo "AGRO-AI contact and social surfaces failed smoke verification."
             exit 1
           fi
 
@@ -71,13 +75,15 @@ jobs:
             -X POST https://api.agroai-pilot.com/v1/sales/contact \
             -H 'content-type: application/json' \
             -H 'accept: application/json' \
-            --data "{\"type\":\"sales\",\"priority\":\"low\",\"name\":\"AGRO-AI Production Smoke\",\"email\":\"daabolaamiine@gmail.com\",\"company\":\"AGRO-AI Inc.\",\"subject\":\"Emergency contact intake production smoke\",\"message\":\"Automated production verification. No follow-up required.\",\"source_page\":\"emergency-continuity-smoke\",\"metadata\":{\"automated_smoke\":true}}" || true)"
+            --data "{\"type\":\"sales\",\"priority\":\"low\",\"name\":\"AGRO-AI Production Smoke\",\"email\":\"daabolaamiine@gmail.com\",\"company\":\"AGRO-AI Inc.\",\"subject\":\"Contact page production smoke\",\"message\":\"Automated production verification. No follow-up required.\",\"source_page\":\"contact-page-smoke\",\"metadata\":{\"automated_smoke\":true}}" || true)"
           test "$intake_code" = "200"
           jq -e '.status == "received" and (.request_id | length > 0)' proof/intake.json >/dev/null
 
-          gh issue comment "$ISSUE_NUMBER" --body "✅ AGRO-AI business continuity is live. The homepage banner, **https://agroai-pilot.com/contact**, official email **contact@agroai-pilot.com**, and the production contact-intake endpoint all passed smoke verification."
+          if [ "${GITHUB_EVENT_NAME}" = "issues" ]; then
+            gh issue comment "$ISSUE_NUMBER" --body "✅ AGRO-AI contact and social surfaces are live. The interruption banner is removed, **contact@agroai-pilot.com** is published, LinkedIn/Instagram/YouTube links are active, and the production contact intake passed smoke verification."
+          fi
 
       - name: Report failure
-        if: ${{ failure() }}
+        if: ${{ failure() && github.event_name == 'issues' }}
         shell: bash
-        run: gh issue comment "$ISSUE_NUMBER" --body "❌ Emergency website continuity deployment failed. Review this workflow run before publishing the contact URL."
+        run: gh issue comment "$ISSUE_NUMBER" --body "❌ AGRO-AI contact and social deployment failed. Review this workflow run before announcing completion."
