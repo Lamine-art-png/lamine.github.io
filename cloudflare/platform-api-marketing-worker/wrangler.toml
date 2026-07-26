@@ -1,5 +1,5 @@
 name = "agroai-platform-api-marketing"
-main = "src/index.ts"
+main = "src/emergency.ts"
 compatibility_date = "2026-07-23"
 workers_dev = false
 
@@ -18,6 +18,14 @@ not_found_handling = "none"
 
 [[routes]]
 pattern = "agroai-pilot.com/"
+zone_name = "agroai-pilot.com"
+
+[[routes]]
+pattern = "agroai-pilot.com/contact"
+zone_name = "agroai-pilot.com"
+
+[[routes]]
+pattern = "agroai-pilot.com/contact/*"
 zone_name = "agroai-pilot.com"
 
 [[routes]]
