@@ -1,5 +1,6 @@
 name: Emergency AGRO-AI contact email routing
 
+# Emergency business-continuity workflow. The second commit activates the push trigger.
 on:
   workflow_dispatch:
   push:
