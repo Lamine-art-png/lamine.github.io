@@ -1,0 +1,68 @@
+name: Emergency website communications continuity
+
+on:
+  workflow_dispatch:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  deploy:
+    if: ${{ github.event_name != 'issues' || (github.actor == github.repository_owner && github.event.issue.title == '[ops] Deploy emergency website continuity') }}
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+      CONFIG: cloudflare/platform-api-marketing-worker/wrangler.toml
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate emergency release
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          node cloudflare/platform-api-marketing-worker/tests/contract.mjs
+          npx --yes wrangler@4.107.0 deploy --dry-run --config "$CONFIG"
+
+      - name: Deploy emergency contact surface
+        shell: bash
+        run: npx --yes wrangler@4.107.0 deploy --config "$CONFIG"
+
+      - name: Verify live website
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p proof
+          ready=0
+          for attempt in $(seq 1 30); do
+            contact_code="$(curl -sS -L --connect-timeout 5 --max-time 20 -o proof/contact.html -w '%{http_code}' https://agroai-pilot.com/contact || true)"
+            home_code="$(curl -sS -L --connect-timeout 5 --max-time 20 -o proof/home.html -w '%{http_code}' https://agroai-pilot.com/ || true)"
+            if [ "$contact_code" = "200" ] && [ "$home_code" = "200" ] && \
+               grep -F 'AGRO-AI remains operational.' proof/contact.html >/dev/null && \
+               grep -F 'agroai-continuity-banner' proof/home.html >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "Emergency continuity surface failed smoke verification."
+            exit 1
+          fi
+          if [ "${GITHUB_EVENT_NAME}" = "issues" ]; then
+            gh issue comment "$ISSUE_NUMBER" --body "✅ Emergency communications continuity is live. The homepage banner and **https://agroai-pilot.com/contact** passed production smoke verification."
+          fi
+
+      - name: Report failure
+        if: ${{ failure() && github.event_name == 'issues' }}
+        shell: bash
+        run: gh issue comment "$ISSUE_NUMBER" --body "❌ Emergency website continuity deployment failed. Review this workflow run before publishing the contact URL."
