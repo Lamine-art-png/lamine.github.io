@@ -1,10 +1,11 @@
 """Apply the monthly Platform API Stripe catalog to one Render service.
 
-Only Platform API billing variables are mutable. The Stripe webhook secret is updated
-when Stripe returns a newly-created endpoint secret. When an existing endpoint is
-reused, the secret is intentionally absent and the activation workflow proves that the
-runtime already has a valid signing secret by expecting signature denial instead of a
-configuration error.
+Only Platform API billing variables are mutable. Annual Price IDs are explicitly
+cleared so direct callers cannot bypass the monthly-only commercial launch. The Stripe
+webhook secret is updated when Stripe returns a newly-created endpoint secret. When an
+existing endpoint is reused, the activation workflow proves that the runtime already
+has a valid signing secret by expecting signature denial instead of a configuration
+error.
 """
 from __future__ import annotations
 
@@ -42,6 +43,10 @@ PUBLIC_KEYS = {
     "PLATFORM_API_STRIPE_METER_EXPORT_ENABLED",
     "PLATFORM_API_PRICING_ENABLED",
     "PLATFORM_API_USAGE_METERING_ENFORCEMENT_ENABLED",
+}
+CLEAR_KEYS = {
+    "PLATFORM_API_STRIPE_DEVELOPER_ANNUAL_PRICE_ID",
+    "PLATFORM_API_STRIPE_SCALE_ANNUAL_PRICE_ID",
 }
 REQUIRED_PUBLIC_KEYS = PUBLIC_KEYS - {
     "PLATFORM_API_STRIPE_CUSTOMER_PORTAL_CONFIGURATION",
@@ -108,7 +113,7 @@ def _request(
 
 
 def _set_env(service_id: str, token: str, key: str, value: str) -> None:
-    if key not in PUBLIC_KEYS | SECRET_KEYS:
+    if key not in PUBLIC_KEYS | CLEAR_KEYS | SECRET_KEYS:
         raise RuntimeError(f"Refusing non-billing environment mutation: {key}")
     _request(
         "PUT",
@@ -201,6 +206,9 @@ def main(argv: Iterable[str] | None = None) -> int:
     mutations = sorted(values)
     deploy_id: str | None = None
     if args.apply:
+        for key in sorted(CLEAR_KEYS):
+            _set_env(service_id, token, key, "")
+            time.sleep(0.1)
         for key in mutations:
             _set_env(service_id, token, key, values[key])
             time.sleep(0.1)
@@ -222,6 +230,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         "applied": bool(args.apply),
         "service_id": service_id or None,
         "environment_variables_updated": mutations,
+        "environment_variables_cleared": sorted(CLEAR_KEYS),
         "secrets_updated": sorted(secret_values),
         "webhook_secret_updated": "PLATFORM_API_STRIPE_WEBHOOK_SECRET" in secret_values,
         "deploy_requested": bool(args.apply and args.deploy),
