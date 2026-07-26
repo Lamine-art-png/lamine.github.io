@@ -71,6 +71,7 @@ const operationRoutes = [
   { path: "settings", lazy: lazyComponent(() => import("./components/SettingsPage"), "SettingsPage") },
   { path: "team", lazy: lazyComponent(() => import("./components/MonetizedTeamV2"), "MonetizedTeamV2") },
   { path: "developers/api", element: <Navigate to="/platform" replace /> },
+  { path: "developers/api/billing", element: <Navigate to="/platform/billing" replace /> },
   { path: "onboarding", lazy: lazyComponent(() => import("./components/ProductShell"), "OnboardingPage") },
   { path: "*", Component: RouteRecovery },
 ];
