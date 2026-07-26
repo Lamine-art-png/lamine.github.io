@@ -18,7 +18,7 @@ from typing import Any, Iterable
 
 import stripe
 
-import provision_platform_stripe as base
+import _platform_stripe_resources as base
 
 
 STRIPE_API_VERSION = "2026-02-25.clover"
@@ -85,7 +85,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     if args.apply:
         if not secret_key:
             raise RuntimeError("PLATFORM_API_STRIPE_SECRET_KEY is required with --apply")
-        base._assert_secret_mode(secret_key, args.mode)
+        base.assert_secret_mode(secret_key, args.mode)
         stripe.api_key = secret_key
         stripe.api_version = STRIPE_API_VERSION
 
@@ -104,10 +104,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         "render_env": {},
     }
 
-    if args.apply:
-        meter_id, meter_action = base._create_or_reuse_meter(True)
-    else:
-        meter_id, meter_action = None, "planned"
+    meter_id, meter_action = base.create_or_reuse_meter(args.apply)
     report["resources"]["meter"] = {"id": meter_id, "action": meter_action}
 
     render_env: dict[str, str] = {
@@ -125,8 +122,8 @@ def main(argv: Iterable[str] | None = None) -> int:
         render_env["PLATFORM_API_STRIPE_METER_ID"] = meter_id
 
     for plan in base.PLANS:
-        product_id, product_action = base._create_or_reuse_product(plan, args.apply)
-        monthly_id, monthly_action = base._create_or_reuse_price(
+        product_id, product_action = base.create_or_reuse_product(plan, args.apply)
+        monthly_id, monthly_action = base.create_or_reuse_price(
             plan=plan,
             product_id=product_id,
             component="monthly",
@@ -142,7 +139,7 @@ def main(argv: Iterable[str] | None = None) -> int:
             .rstrip("0")
             .rstrip(".")
         )
-        overage_id, overage_action = base._create_or_reuse_price(
+        overage_id, overage_action = base.create_or_reuse_price(
             plan=plan,
             product_id=product_id,
             component="monthly_overage",
@@ -170,7 +167,7 @@ def main(argv: Iterable[str] | None = None) -> int:
             # key. It is safe because only monthly Checkout is exposed or proven.
             render_env[f"PLATFORM_API_STRIPE_{prefix}_OVERAGE_PRICE_ID"] = overage_id
 
-    portal_id, portal_action = base._create_or_reuse_portal_configuration(args.apply)
+    portal_id, portal_action = base.create_or_reuse_portal_configuration(args.apply)
     report["resources"]["customer_portal"] = {
         "id": portal_id,
         "action": portal_action,
@@ -178,9 +175,10 @@ def main(argv: Iterable[str] | None = None) -> int:
     if portal_id:
         render_env["PLATFORM_API_STRIPE_CUSTOMER_PORTAL_CONFIGURATION"] = portal_id
 
-    webhook_id, webhook_secret, webhook_action = base._create_or_reuse_webhook(
+    webhook_id, webhook_secret, webhook_action = base.create_or_reuse_webhook(
         args.webhook_url,
         args.apply,
+        api_version=STRIPE_API_VERSION,
     )
     report["resources"]["webhook"] = {
         "id": webhook_id,
@@ -188,9 +186,12 @@ def main(argv: Iterable[str] | None = None) -> int:
         "secret_returned": bool(webhook_secret),
     }
     report["render_env"] = dict(sorted(render_env.items()))
+    report["public_report_digest"] = base.digest_public_report(
+        {key: value for key, value in report.items() if key != "public_report_digest"}
+    )
 
     public_path = Path(args.public_output)
-    base._write_json(public_path, report)
+    base.write_json(public_path, report)
 
     secret_values: dict[str, str] = {}
     if secret_key:
@@ -198,7 +199,7 @@ def main(argv: Iterable[str] | None = None) -> int:
     if webhook_secret:
         secret_values["PLATFORM_API_STRIPE_WEBHOOK_SECRET"] = webhook_secret
     if secret_values:
-        base._write_secrets(Path(args.secrets_output), secret_values)
+        base.write_secrets(Path(args.secrets_output), secret_values)
 
     print(
         json.dumps(
