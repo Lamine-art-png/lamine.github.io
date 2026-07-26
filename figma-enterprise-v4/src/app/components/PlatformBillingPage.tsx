@@ -31,7 +31,6 @@ type Plan = {
 };
 
 type Subscription = {
-  id?: string;
   status?: string;
   plan?: string | null;
   billing_interval?: string | null;
@@ -45,8 +44,7 @@ type BillingPayload = {
   portal_billing_is_separate?: boolean;
 };
 
-const tokenKey = "agroai_access_token";
-
+const TOKEN_KEY = "agroai_access_token";
 const PLANS: Plan[] = [
   {
     identifier: "developer",
@@ -82,12 +80,12 @@ function platformPath(path: string) {
 
 function money(cents: number) {
   const amount = cents / 100;
-  const fractions = Number.isInteger(amount) ? 0 : 2;
+  const fractionDigits = Number.isInteger(amount) ? 0 : 2;
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
-    minimumFractionDigits: fractions,
-    maximumFractionDigits: fractions,
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
   }).format(amount);
 }
 
@@ -95,7 +93,7 @@ function count(value: number) {
   return new Intl.NumberFormat("en-US").format(value);
 }
 
-function date(value?: string | null) {
+function displayDate(value?: string | null) {
   if (!value) return "Not available";
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
@@ -121,9 +119,9 @@ async function authenticatedPost(
   path: string,
   payload?: unknown,
   idempotencyKey?: string,
-) {
-  const token = localStorage.getItem(tokenKey);
+): Promise<Record<string, unknown>> {
   const headers = new Headers({ "Content-Type": "application/json" });
+  const token = localStorage.getItem(TOKEN_KEY);
   if (token) headers.set("Authorization", `Bearer ${token}`);
   if (idempotencyKey) headers.set("Idempotency-Key", idempotencyKey);
   const response = await fetch(`${API_BASE_URL}${path}`, {
@@ -132,10 +130,14 @@ async function authenticatedPost(
     body: payload === undefined ? undefined : JSON.stringify(payload),
   });
   const body = await parseResponse(response);
+  const record = body && typeof body === "object"
+    ? body as Record<string, unknown>
+    : {};
   if (!response.ok) {
-    const record = body && typeof body === "object" ? body as Record<string, unknown> : {};
     const detail = record.detail;
-    const nested = detail && typeof detail === "object" ? detail as Record<string, unknown> : {};
+    const nested = detail && typeof detail === "object"
+      ? detail as Record<string, unknown>
+      : {};
     const message = typeof nested.code === "string"
       ? nested.code.replaceAll("_", " ")
       : typeof detail === "string"
@@ -145,10 +147,10 @@ async function authenticatedPost(
           : `Billing request failed with status ${response.status}`;
     throw new Error(message);
   }
-  return body && typeof body === "object" ? body as Record<string, unknown> : {};
+  return record;
 }
 
-function planFeatures(plan: Plan) {
+function features(plan: Plan) {
   return [
     `${count(plan.includedCredits)} API credits included each month`,
     `${count(plan.projects)} projects`,
@@ -177,28 +179,33 @@ export function PlatformBillingPage() {
   const [working, setWorking] = useState("");
   const [error, setError] = useState("");
 
-  const load = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const result = await apiClient.get<BillingPayload>("/v1/platform/developer/billing");
-      setBilling(result);
-    } catch (cause) {
-      setError(errorMessage(cause, "Platform API billing is not available yet."));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    let active = true;
+    apiClient.get<BillingPayload>("/v1/platform/developer/billing")
+      .then((result) => {
+        if (active) setBilling(result);
+      })
+      .catch((cause) => {
+        if (active) {
+          setBilling(null);
+          setError(errorMessage(cause, "Platform API billing is not available yet."));
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => { active = false; };
+  }, []);
 
   const subscription = billing?.subscription;
+  const billingAvailable = billing !== null;
   const hasSubscription = Boolean(
     subscription?.status && subscription.status !== "none",
   );
   const activePlan = String(subscription?.plan || "");
 
-  const checkout = async (plan: Plan) => {
+  async function checkout(plan: Plan) {
+    if (!billingAvailable) return;
     setWorking(plan.identifier);
     setError("");
     try {
@@ -219,9 +226,10 @@ export function PlatformBillingPage() {
       setError(errorMessage(cause, "Stripe Checkout could not be opened."));
       setWorking("");
     }
-  };
+  }
 
-  const manage = async () => {
+  async function manageBilling() {
+    if (!billingAvailable) return;
     setWorking("portal");
     setError("");
     try {
@@ -237,7 +245,7 @@ export function PlatformBillingPage() {
       setError(errorMessage(cause, "The Stripe billing portal could not be opened."));
       setWorking("");
     }
-  };
+  }
 
   return (
     <div className="min-h-screen bg-[#F3F1E9] text-[#10231B]">
@@ -271,10 +279,17 @@ export function PlatformBillingPage() {
         </div>
 
         {error ? <div role="alert" className="mt-6 rounded-xl border border-[#E4B9AE] bg-[#FFF2EE] px-4 py-3 text-[12px] leading-6 text-[#823628]">{error}</div> : null}
-
         {loading ? <div className="mt-8 flex min-h-[320px] items-center justify-center rounded-2xl border border-[#D8DED3] bg-[#FFFDF8]"><Loader2 className="h-6 w-6 animate-spin text-[#315D46]" /></div> : null}
 
-        {!loading && hasSubscription ? (
+        {!loading && !billingAvailable ? (
+          <section className="mt-8 rounded-[24px] border border-[#D8DED3] bg-[#FFFDF8] p-8 text-center shadow-[0_20px_60px_rgba(16,47,34,.06)]">
+            <ShieldCheck className="mx-auto h-6 w-6 text-[#315D46]" />
+            <h2 className="mt-4 text-[22px] font-semibold">Billing remains closed for this organization.</h2>
+            <p className="mx-auto mt-3 max-w-xl text-[13px] leading-7 text-[#65736A]">No plan can be purchased until the billing runtime, Stripe catalog, and your Platform API enrollment are all active.</p>
+          </section>
+        ) : null}
+
+        {!loading && billingAvailable && hasSubscription ? (
           <section className="mt-8 overflow-hidden rounded-[24px] border border-[#CAD8C5] bg-[#FFFDF8] shadow-[0_24px_70px_rgba(16,47,34,.08)]">
             <div className="grid lg:grid-cols-[1.1fr_.9fr]">
               <div className="p-7 md:p-9">
@@ -285,22 +300,22 @@ export function PlatformBillingPage() {
                 <h2 className="mt-5 text-[30px] font-semibold tracking-[-0.035em]">{activePlan ? `${activePlan[0].toUpperCase()}${activePlan.slice(1)} plan` : "Platform API subscription"}</h2>
                 <p className="mt-3 text-[13px] leading-7 text-[#65736A]">Your API subscription is separate from the Enterprise Portal. Stripe manages the payment method, invoices, tax details, and cancellation controls.</p>
                 <div className="mt-7 flex flex-wrap gap-3">
-                  <button onClick={() => void manage()} disabled={working === "portal"} className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#102F22] px-4 text-[12px] font-semibold text-white disabled:opacity-50">{working === "portal" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />} Manage billing</button>
+                  <button onClick={() => void manageBilling()} disabled={working === "portal"} className="inline-flex h-11 items-center gap-2 rounded-xl bg-[#102F22] px-4 text-[12px] font-semibold text-white disabled:opacity-50">{working === "portal" ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />} Manage billing</button>
                   <a href={platformPath("/usage")} className="inline-flex h-11 items-center gap-2 rounded-xl border border-[#D3DBD1] bg-white px-4 text-[12px] font-semibold text-[#183427]">Review usage <ArrowRight className="h-4 w-4" /></a>
                 </div>
               </div>
               <div className="border-t border-[#DDE3D9] bg-[#F6F7F3] p-7 lg:border-l lg:border-t-0 md:p-9">
                 <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-1">
-                  <div><div className="text-[10px] font-bold uppercase tracking-[.15em] text-[#708078]">Current period ends</div><div className="mt-2 text-[17px] font-semibold">{date(subscription?.current_period_end)}</div></div>
+                  <div><div className="text-[10px] font-bold uppercase tracking-[.15em] text-[#708078]">Current period ends</div><div className="mt-2 text-[17px] font-semibold">{displayDate(subscription?.current_period_end)}</div></div>
                   <div><div className="text-[10px] font-bold uppercase tracking-[.15em] text-[#708078]">Renewal</div><div className="mt-2 text-[17px] font-semibold">{subscription?.cancel_at_period_end ? "Cancels at period end" : "Automatic"}</div></div>
-                  {subscription?.grace_ends_at ? <div><div className="text-[10px] font-bold uppercase tracking-[.15em] text-[#9A6518]">Payment grace ends</div><div className="mt-2 text-[17px] font-semibold text-[#765615]">{date(subscription.grace_ends_at)}</div></div> : null}
+                  {subscription?.grace_ends_at ? <div><div className="text-[10px] font-bold uppercase tracking-[.15em] text-[#9A6518]">Payment grace ends</div><div className="mt-2 text-[17px] font-semibold text-[#765615]">{displayDate(subscription.grace_ends_at)}</div></div> : null}
                 </div>
               </div>
             </div>
           </section>
         ) : null}
 
-        {!loading && !hasSubscription ? (
+        {!loading && billingAvailable && !hasSubscription ? (
           <div className="mt-8 grid gap-5 lg:grid-cols-2">
             {PLANS.map((plan) => {
               const featured = plan.identifier === "scale";
@@ -311,7 +326,7 @@ export function PlatformBillingPage() {
                   <h2 className="mt-6 text-[26px] font-semibold tracking-[-0.035em]">{plan.name}</h2>
                   <div className="mt-4 flex items-end gap-2"><div className="text-[40px] font-semibold tracking-[-0.05em]">{money(plan.monthlyPriceCents)}</div><div className="pb-2 text-[11px] text-[#75827A]">/ month</div></div>
                   <div className="mt-4 rounded-xl border border-[#DCE4D7] bg-[#F7F9F5] px-4 py-3 text-[11px] leading-6 text-[#5D6D63]"><span className="font-semibold text-[#315D46]">{count(plan.includedCredits)} credits included.</span> {money(plan.overagePricePerThousandCents)} per 1,000 additional credits.</div>
-                  <ul className="mt-6 space-y-3">{planFeatures(plan).map((feature) => <li key={feature} className="flex gap-3 text-[12px] leading-6 text-[#52635A]"><span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#DDEBCF] text-[#315D46]"><Check className="h-2.5 w-2.5" /></span>{feature}</li>)}</ul>
+                  <ul className="mt-6 space-y-3">{features(plan).map((feature) => <li key={feature} className="flex gap-3 text-[12px] leading-6 text-[#52635A]"><span className="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-[#DDEBCF] text-[#315D46]"><Check className="h-2.5 w-2.5" /></span>{feature}</li>)}</ul>
                   <button onClick={() => void checkout(plan)} disabled={Boolean(working)} className={`mt-7 inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl text-[12px] font-semibold transition disabled:opacity-50 ${featured ? "bg-[#102F22] text-white hover:bg-[#17432F]" : "border border-[#B9CAB5] bg-white text-[#183427] hover:bg-[#F4F8F0]"}`}>{working === plan.identifier ? <Loader2 className="h-4 w-4 animate-spin" /> : <CreditCard className="h-4 w-4" />} Continue to secure checkout</button>
                 </section>
               );
@@ -320,7 +335,7 @@ export function PlatformBillingPage() {
         ) : null}
 
         <section className="mt-8 grid gap-4 md:grid-cols-3">
-          <div className="rounded-2xl border border-[#D8DED3] bg-[#FFFDF8] p-5"><ShieldCheck className="h-5 w-5 text-[#315D46]" /><h3 className="mt-4 text-[14px] font-semibold">Server-authoritative pricing</h3><p className="mt-2 text-[11px] leading-6 text-[#6A776F]">Price IDs and usage records never come from browser input.</p></div>
+          <div className="rounded-2xl border border-[#D8DED3] bg-[#FFFDF8] p-5"><ShieldCheck className="h-5 w-5 text-[#315D46]" /><h3 className="mt-4 text-[14px] font-semibold">Server-authoritative checkout</h3><p className="mt-2 text-[11px] leading-6 text-[#6A776F]">Stripe Price IDs and usage records never come from browser input.</p></div>
           <div className="rounded-2xl border border-[#D8DED3] bg-[#FFFDF8] p-5"><CreditCard className="h-5 w-5 text-[#315D46]" /><h3 className="mt-4 text-[14px] font-semibold">Payments handled by Stripe</h3><p className="mt-2 text-[11px] leading-6 text-[#6A776F]">Payment details are entered on Stripe-hosted Checkout and managed in Stripe’s portal.</p></div>
           <div className="rounded-2xl border border-[#D8DED3] bg-[#FFFDF8] p-5"><ReceiptText className="h-5 w-5 text-[#315D46]" /><h3 className="mt-4 text-[14px] font-semibold">Durable usage ledger</h3><p className="mt-2 text-[11px] leading-6 text-[#6A776F]">Meter exports are idempotent and reconciled against Stripe before invoicing.</p></div>
         </section>
