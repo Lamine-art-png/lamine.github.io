@@ -1,15 +1,17 @@
 name: Emergency AGRO-AI contact email routing
 
-# Emergency business-continuity workflow. The second commit activates the push trigger.
 on:
   workflow_dispatch:
   push:
     branches: ["main"]
     paths:
       - ".github/workflows/emergency-contact-email-routing.yml"
+  issues:
+    types: [opened]
 
 permissions:
   contents: read
+  issues: write
 
 env:
   DOMAIN: agroai-pilot.com
@@ -18,12 +20,16 @@ env:
 
 jobs:
   configure:
+    if: ${{ github.event_name != 'issues' || (github.actor == github.repository_owner && github.event.issue.title == '[ops] Configure emergency contact email') }}
     name: Configure safe contact email forwarding
     runs-on: ubuntu-latest
     environment: production
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
     steps:
       - name: Validate Cloudflare credentials
         shell: bash
@@ -36,6 +42,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          comment_issue() {
+            if [ "${GITHUB_EVENT_NAME}" = "issues" ] && [ -n "${ISSUE_NUMBER:-}" ]; then
+              gh issue comment "$ISSUE_NUMBER" --body "$1"
+            fi
+          }
 
           cf() {
             local method="$1"
@@ -87,7 +99,7 @@ jobs:
 
           if [ "$verified" != "true" ]; then
             echo "DESTINATION_VERIFICATION_REQUIRED"
-            echo "Cloudflare sent a verification email to ${DESTINATION}. Open it and verify the address, then re-run this workflow."
+            comment_issue "Cloudflare destination address created for **${DESTINATION}**. Open the verification email from Cloudflare and click **Verify email address**. After verification, close this issue and open a new issue with the same title to finish activation."
             exit 0
           fi
 
@@ -112,4 +124,10 @@ jobs:
           fi
 
           echo "EMAIL_ROUTING_READY"
-          echo "Incoming mail to ${ALIAS} will forward to ${DESTINATION}."
+          comment_issue "✅ **Email routing is active.** Messages sent to **${ALIAS}** now forward to **${DESTINATION}**."
+
+      - name: Report setup failure
+        if: ${{ failure() && github.event_name == 'issues' }}
+        shell: bash
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body "❌ The automated setup failed safely without changing existing non-Cloudflare mail routing. Review the failed workflow run before retrying."
