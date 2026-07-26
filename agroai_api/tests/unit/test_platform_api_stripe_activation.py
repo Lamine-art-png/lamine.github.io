@@ -11,6 +11,7 @@ import pytest
 
 
 ROOT = Path(__file__).resolve().parents[2]
+REPOSITORY_ROOT = ROOT.parent
 
 
 def _load(name: str, relative: str):
@@ -22,28 +23,28 @@ def _load(name: str, relative: str):
     return module
 
 
-provision = _load("platform_stripe_provision", "scripts/provision_platform_stripe.py")
-configure = _load("platform_render_configure", "scripts/configure_platform_billing_render.py")
+base = _load("provision_platform_stripe", "scripts/provision_platform_stripe.py")
+monthly = _load(
+    "provision_platform_stripe_monthly",
+    "scripts/provision_platform_stripe_monthly.py",
+)
+configure = _load(
+    "configure_platform_billing_render_monthly",
+    "scripts/configure_platform_billing_render_monthly.py",
+)
 
 
-def test_approved_catalog_is_exact_and_server_authoritative():
-    assert provision.CATALOG_VERSION == "2026-07-provisional"
-    assert provision.METER_EVENT_NAME == "agroai_api_credits"
-    assert provision.WEBHOOK_URL == (
-        "https://api.agroai-pilot.com/v1/platform/billing/stripe-webhook"
-    )
-    plans = {plan.identifier: plan for plan in provision.PLANS}
+def test_approved_monthly_catalog_is_exact():
+    assert base.CATALOG_VERSION == "2026-07-provisional"
+    assert base.METER_EVENT_NAME == "agroai_api_credits"
+    assert monthly.STRIPE_API_VERSION == "2026-02-25.clover"
+    assert monthly.CONTRACT == "agroai-platform-api-stripe-monthly-provisioning-v1"
+    plans = {plan.identifier: plan for plan in base.PLANS}
     assert set(plans) == {"developer", "scale"}
-    assert (plans["developer"].monthly_cents, plans["developer"].annual_cents) == (
-        14_900,
-        143_000,
-    )
+    assert plans["developer"].monthly_cents == 14_900
     assert plans["developer"].included_credits == 250_000
     assert plans["developer"].overage_cents_per_1000 == 75
-    assert (plans["scale"].monthly_cents, plans["scale"].annual_cents) == (
-        74_900,
-        719_000,
-    )
+    assert plans["scale"].monthly_cents == 74_900
     assert plans["scale"].included_credits == 2_000_000
     assert plans["scale"].overage_cents_per_1000 == 35
 
@@ -54,42 +55,42 @@ def test_planning_mode_performs_no_stripe_network_calls(tmp_path, monkeypatch):
 
     monkeypatch.delenv("PLATFORM_API_STRIPE_SECRET_KEY", raising=False)
     for target in (
-        provision.stripe.Product,
-        provision.stripe.Price,
-        provision.stripe.WebhookEndpoint,
-        provision.stripe.billing.Meter,
-        provision.stripe.billing_portal.Configuration,
+        base.stripe.Product,
+        base.stripe.Price,
+        base.stripe.WebhookEndpoint,
+        base.stripe.billing.Meter,
+        base.stripe.billing_portal.Configuration,
     ):
         monkeypatch.setattr(target, "list", denied, raising=False)
         monkeypatch.setattr(target, "create", denied, raising=False)
 
     public = tmp_path / "plan.json"
     secrets = tmp_path / "secrets.env"
-    assert (
-        provision.main(
-            [
-                "--mode",
-                "live",
-                "--public-output",
-                str(public),
-                "--secrets-output",
-                str(secrets),
-            ]
-        )
-        == 0
-    )
+    assert monthly.main(
+        [
+            "--mode",
+            "live",
+            "--public-output",
+            str(public),
+            "--secrets-output",
+            str(secrets),
+        ]
+    ) == 0
     payload = json.loads(public.read_text())
     assert payload["applied"] is False
+    assert payload["billing_intervals_enabled"] == ["monthly"]
+    assert payload["annual_checkout_enabled"] is False
+    assert payload["render_env"]["PLATFORM_API_PRICING_ENABLED"] == "false"
+    assert "PLATFORM_API_STRIPE_DEVELOPER_ANNUAL_PRICE_ID" not in payload["render_env"]
+    assert "PLATFORM_API_STRIPE_SCALE_ANNUAL_PRICE_ID" not in payload["render_env"]
     assert payload["resources"]["meter"]["action"] == "planned"
-    assert payload["resources"]["developer"]["product"]["action"] == "planned"
-    assert payload["resources"]["scale"]["overage_price"]["action"] == "planned"
     assert not secrets.exists()
 
 
 def test_live_apply_requires_exact_operator_approval(monkeypatch, tmp_path):
     monkeypatch.setenv("PLATFORM_API_STRIPE_SECRET_KEY", "sk_live_example")
     with pytest.raises(RuntimeError, match="Exact confirmation"):
-        provision.main(
+        monthly.main(
             [
                 "--mode",
                 "live",
@@ -100,13 +101,13 @@ def test_live_apply_requires_exact_operator_approval(monkeypatch, tmp_path):
             ]
         )
     with pytest.raises(RuntimeError, match="approve-current-catalog"):
-        provision.main(
+        monthly.main(
             [
                 "--mode",
                 "live",
                 "--apply",
                 "--confirmation",
-                provision.CONFIRMATIONS["live"],
+                monthly.CONFIRMATIONS["live"],
                 "--public-output",
                 str(tmp_path / "report.json"),
             ]
@@ -116,33 +117,33 @@ def test_live_apply_requires_exact_operator_approval(monkeypatch, tmp_path):
 def test_key_mode_mismatch_fails_before_stripe_call(monkeypatch, tmp_path):
     monkeypatch.setenv("PLATFORM_API_STRIPE_SECRET_KEY", "sk_test_example")
     with pytest.raises(RuntimeError, match="mode mismatch"):
-        provision.main(
+        monthly.main(
             [
                 "--mode",
                 "live",
                 "--apply",
                 "--approve-current-catalog",
                 "--confirmation",
-                provision.CONFIRMATIONS["live"],
+                monthly.CONFIRMATIONS["live"],
                 "--public-output",
                 str(tmp_path / "report.json"),
             ]
         )
 
 
-def test_overage_decimal_is_per_credit_and_exact(monkeypatch):
+def test_monthly_overage_decimal_is_exact(monkeypatch):
     calls: list[dict] = []
-    monkeypatch.setattr(provision, "_list_prices", lambda _product: [])
+    monkeypatch.setattr(base, "_list_prices", lambda _product: [])
     monkeypatch.setattr(
-        provision.stripe.Price,
+        base.stripe.Price,
         "create",
         lambda **kwargs: calls.append(kwargs) or {"id": "price_overage"},
     )
-    plan = next(plan for plan in provision.PLANS if plan.identifier == "developer")
-    price_id, action = provision._create_or_reuse_price(
+    plan = next(plan for plan in base.PLANS if plan.identifier == "developer")
+    price_id, action = base._create_or_reuse_price(
         plan=plan,
         product_id="prod_developer",
-        component="overage",
+        component="monthly_overage",
         interval="month",
         amount_cents=None,
         amount_decimal_cents="0.075",
@@ -151,40 +152,36 @@ def test_overage_decimal_is_per_credit_and_exact(monkeypatch):
         apply=True,
     )
     assert (price_id, action) == ("price_overage", "created")
-    assert calls == [
-        {
-            "currency": "usd",
-            "product": "prod_developer",
-            "recurring": {
-                "interval": "month",
-                "usage_type": "metered",
-                "meter": "mtr_credits",
-            },
-            "metadata": {
-                "agroai_product": "platform_api",
-                "catalog_version": "2026-07-provisional",
-                "plan_identifier": "developer",
-                "billing_component": "overage",
-            },
-            "nickname": "Developer overage",
-            "lookup_key": "agroai_platform_developer_overage_2026_07_provisional",
-            "unit_amount_decimal": "0.075",
-        }
-    ]
-
-
-def test_render_configuration_requires_complete_applied_report(tmp_path):
-    report = tmp_path / "report.json"
-    report.write_text(
-        json.dumps(
-            {
-                "contract": "agroai-platform-api-stripe-provisioning-v1",
-                "mode": "live",
-                "applied": False,
-                "render_env": {},
-            }
-        )
+    assert calls[0]["unit_amount_decimal"] == "0.075"
+    assert calls[0]["recurring"] == {
+        "interval": "month",
+        "usage_type": "metered",
+        "meter": "mtr_credits",
+    }
+    assert calls[0]["lookup_key"] == (
+        "agroai_platform_developer_monthly_overage_2026_07_provisional"
     )
+
+
+def _complete_report() -> dict:
+    return {
+        "contract": monthly.CONTRACT,
+        "mode": "live",
+        "applied": True,
+        "billing_intervals_enabled": ["monthly"],
+        "annual_checkout_enabled": False,
+        "render_env": {
+            key: "false" if key == "PLATFORM_API_PRICING_ENABLED" else "configured"
+            for key in configure.REQUIRED_PUBLIC_KEYS
+        },
+    }
+
+
+def test_render_configuration_requires_applied_monthly_report(tmp_path):
+    report = tmp_path / "report.json"
+    payload = _complete_report()
+    payload["applied"] = False
+    report.write_text(json.dumps(payload))
     secrets = tmp_path / "secrets.env"
     secrets.write_text("PLATFORM_API_STRIPE_SECRET_KEY=sk_live_example\n")
     os.chmod(secrets, stat.S_IRUSR | stat.S_IWUSR)
@@ -201,18 +198,45 @@ def test_render_configuration_requires_complete_applied_report(tmp_path):
         )
 
 
+def test_render_configuration_rejects_annual_or_public_pricing(tmp_path):
+    report = tmp_path / "report.json"
+    payload = _complete_report()
+    payload["annual_checkout_enabled"] = True
+    report.write_text(json.dumps(payload))
+    secrets = tmp_path / "secrets.env"
+    secrets.write_text("PLATFORM_API_STRIPE_SECRET_KEY=sk_live_example\n")
+    os.chmod(secrets, stat.S_IRUSR | stat.S_IWUSR)
+    with pytest.raises(RuntimeError, match="Annual Checkout"):
+        configure.main(
+            [
+                "--mode",
+                "live",
+                "--provisioning-report",
+                str(report),
+                "--secrets-file",
+                str(secrets),
+            ]
+        )
+
+    payload = _complete_report()
+    payload["render_env"]["PLATFORM_API_PRICING_ENABLED"] = "true"
+    report.write_text(json.dumps(payload))
+    with pytest.raises(RuntimeError, match="non-public"):
+        configure.main(
+            [
+                "--mode",
+                "live",
+                "--provisioning-report",
+                str(report),
+                "--secrets-file",
+                str(secrets),
+            ]
+        )
+
+
 def test_render_configuration_never_accepts_broad_secret_permissions(tmp_path):
     report = tmp_path / "report.json"
-    report.write_text(
-        json.dumps(
-            {
-                "contract": "agroai-platform-api-stripe-provisioning-v1",
-                "mode": "live",
-                "applied": True,
-                "render_env": {key: "configured" for key in configure.REQUIRED_ENV_KEYS},
-            }
-        )
-    )
+    report.write_text(json.dumps(_complete_report()))
     secrets = tmp_path / "secrets.env"
     secrets.write_text(
         "PLATFORM_API_STRIPE_SECRET_KEY=sk_live_example\n"
@@ -232,11 +256,31 @@ def test_render_configuration_never_accepts_broad_secret_permissions(tmp_path):
         )
 
 
+def test_customer_surface_and_workflow_keep_annual_checkout_closed():
+    page = (
+        REPOSITORY_ROOT
+        / "figma-enterprise-v4/src/app/components/PlatformBillingPage.tsx"
+    ).read_text()
+    workflow = (
+        REPOSITORY_ROOT
+        / ".github/workflows/platform-api-stripe-activation.yml"
+    ).read_text()
+    assert 'billing_interval: "monthly"' in page
+    assert "monthlyPriceCents: 14_900" in page
+    assert "monthlyPriceCents: 74_900" in page
+    assert "Annual" not in page
+    assert "provision_platform_stripe_monthly.py" in workflow
+    assert "configure_platform_billing_render_monthly.py" in workflow
+    assert 'billing_interval\":\"monthly' in workflow
+    assert 'billing_interval\":\"annual' not in workflow
+
+
 def test_render_mutation_allowlist_is_narrow():
-    assert configure.ALLOWED_ENV_KEYS
-    assert configure.SECRET_ENV_KEYS == {
+    assert configure.PUBLIC_KEYS
+    assert configure.SECRET_KEYS == {
         "PLATFORM_API_STRIPE_SECRET_KEY",
         "PLATFORM_API_STRIPE_WEBHOOK_SECRET",
     }
-    assert all(key.startswith("PLATFORM_API_") for key in configure.ALLOWED_ENV_KEYS)
-    assert all(key.startswith("PLATFORM_API_") for key in configure.SECRET_ENV_KEYS)
+    assert all(key.startswith("PLATFORM_API_") for key in configure.PUBLIC_KEYS)
+    assert all(key.startswith("PLATFORM_API_") for key in configure.SECRET_KEYS)
+    assert not any("ANNUAL" in key for key in configure.PUBLIC_KEYS)
