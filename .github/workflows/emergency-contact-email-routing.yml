@@ -1,0 +1,114 @@
+name: Emergency AGRO-AI contact email routing
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/emergency-contact-email-routing.yml"
+
+permissions:
+  contents: read
+
+env:
+  DOMAIN: agroai-pilot.com
+  ALIAS: contact@agroai-pilot.com
+  DESTINATION: daabolaamiine@gmail.com
+
+jobs:
+  configure:
+    name: Configure safe contact email forwarding
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Validate Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+
+      - name: Create destination and route contact email safely
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          cf() {
+            local method="$1"
+            local path="$2"
+            local body="${3:-}"
+            local args=(
+              --fail-with-body
+              --silent
+              --show-error
+              --request "$method"
+              --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+              --header "Content-Type: application/json"
+              "https://api.cloudflare.com/client/v4${path}"
+            )
+            if [ -n "$body" ]; then
+              args+=(--data "$body")
+            fi
+            curl "${args[@]}"
+          }
+
+          zone_payload="$(cf GET "/zones?name=${DOMAIN}&account.id=${CLOUDFLARE_ACCOUNT_ID}&status=active&per_page=1")"
+          zone_id="$(printf '%s' "$zone_payload" | jq -r '.result[0].id // empty')"
+          if [ -z "$zone_id" ]; then
+            echo "Could not resolve an active Cloudflare zone for ${DOMAIN}."
+            printf '%s\n' "$zone_payload" | jq '{success, errors, messages}'
+            exit 1
+          fi
+          echo "Resolved Cloudflare zone for ${DOMAIN}."
+
+          # Fail closed if another mail provider already owns the domain MX records.
+          mx_payload="$(cf GET "/zones/${zone_id}/dns_records?type=MX&per_page=100")"
+          conflicting_mx="$(printf '%s' "$mx_payload" | jq -r '[.result[]? | select((.content | ascii_downcase | endswith(".mx.cloudflare.net")) | not)] | length')"
+          if [ "$conflicting_mx" -gt 0 ]; then
+            echo "Existing non-Cloudflare MX records were found. Refusing to alter mail routing."
+            printf '%s\n' "$mx_payload" | jq -r '.result[]? | "MX priority=\(.priority // 0) content=\(.content)"'
+            exit 1
+          fi
+
+          addresses="$(cf GET "/accounts/${CLOUDFLARE_ACCOUNT_ID}/email/routing/addresses?per_page=50")"
+          address_id="$(printf '%s' "$addresses" | jq -r --arg email "$DESTINATION" '.result[]? | select((.email | ascii_downcase) == ($email | ascii_downcase)) | .id' | head -1)"
+          verified="$(printf '%s' "$addresses" | jq -r --arg email "$DESTINATION" '.result[]? | select((.email | ascii_downcase) == ($email | ascii_downcase)) | (.verified != null)' | head -1)"
+
+          if [ -z "$address_id" ]; then
+            echo "Creating Cloudflare destination address ${DESTINATION}."
+            created="$(cf POST "/accounts/${CLOUDFLARE_ACCOUNT_ID}/email/routing/addresses" "$(jq -nc --arg email "$DESTINATION" '{email:$email}')")"
+            address_id="$(printf '%s' "$created" | jq -r '.result.id // empty')"
+            verified="$(printf '%s' "$created" | jq -r '(.result.verified != null)')"
+          fi
+
+          if [ "$verified" != "true" ]; then
+            echo "DESTINATION_VERIFICATION_REQUIRED"
+            echo "Cloudflare sent a verification email to ${DESTINATION}. Open it and verify the address, then re-run this workflow."
+            exit 0
+          fi
+
+          routing_dns="$(cf GET "/zones/${zone_id}/email/routing/dns")"
+          routing_status="$(printf '%s' "$routing_dns" | jq -r '.result.status // .result.enabled // "unknown"')"
+          if [ "$routing_status" != "ready" ] && [ "$routing_status" != "true" ]; then
+            echo "Enabling Cloudflare Email Routing DNS for ${DOMAIN}."
+            cf POST "/zones/${zone_id}/email/routing/dns" '{}' | jq -e '.success == true' >/dev/null
+          fi
+
+          rules="$(cf GET "/zones/${zone_id}/email/routing/rules?per_page=100")"
+          existing_rule_id="$(printf '%s' "$rules" | jq -r --arg alias "$ALIAS" '.result[]? | select(any(.matchers[]?; (.type == "literal" and (.value | ascii_downcase) == ($alias | ascii_downcase)))) | .id' | head -1)"
+
+          rule_body="$(jq -nc --arg alias "$ALIAS" --arg destination "$DESTINATION" '{name:"AGRO-AI emergency business continuity contact", enabled:true, priority:0, matchers:[{type:"literal",field:"to",value:$alias}], actions:[{type:"forward",value:[$destination]}], source:"api"}')"
+
+          if [ -n "$existing_rule_id" ]; then
+            echo "Updating existing route for ${ALIAS}."
+            cf PUT "/zones/${zone_id}/email/routing/rules/${existing_rule_id}" "$rule_body" | jq -e '.success == true' >/dev/null
+          else
+            echo "Creating route for ${ALIAS}."
+            cf POST "/zones/${zone_id}/email/routing/rules" "$rule_body" | jq -e '.success == true' >/dev/null
+          fi
+
+          echo "EMAIL_ROUTING_READY"
+          echo "Incoming mail to ${ALIAS} will forward to ${DESTINATION}."
