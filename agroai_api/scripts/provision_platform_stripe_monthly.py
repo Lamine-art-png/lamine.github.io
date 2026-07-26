@@ -22,6 +22,10 @@ import _platform_stripe_resources as base
 
 
 STRIPE_API_VERSION = "2026-02-25.clover"
+# The current backend reconciler reads subscription-level current_period_start/end.
+# Stripe removed those fields beginning with Basil, so webhook events stay pinned to
+# the last compatible GA schema until the reconciler is upgraded to item periods.
+WEBHOOK_API_VERSION = "2024-10-28.acacia"
 CONTRACT = "agroai-platform-api-stripe-monthly-provisioning-v1"
 CONFIRMATIONS = {
     "test": "PROVISION AGROAI PLATFORM TEST MONTHLY BILLING",
@@ -77,6 +81,20 @@ def _public_plan(plan: base.Plan) -> dict[str, Any]:
     }
 
 
+def _verify_reused_webhook_version(webhook_id: str | None, action: str) -> None:
+    if action != "reused":
+        return
+    if not webhook_id:
+        raise RuntimeError("Reused Stripe webhook is missing its endpoint ID")
+    endpoint = stripe.WebhookEndpoint.retrieve(webhook_id)
+    observed = str(getattr(endpoint, "api_version", "") or endpoint.get("api_version") or "")
+    if observed != WEBHOOK_API_VERSION:
+        raise RuntimeError(
+            f"Existing Stripe webhook API version is {observed or 'account-default'}, "
+            f"expected {WEBHOOK_API_VERSION}."
+        )
+
+
 def main(argv: Iterable[str] | None = None) -> int:
     args = _parser().parse_args(list(argv) if argv is not None else None)
     _confirm(args)
@@ -94,6 +112,7 @@ def main(argv: Iterable[str] | None = None) -> int:
         "mode": args.mode,
         "applied": bool(args.apply),
         "stripe_api_version": STRIPE_API_VERSION,
+        "webhook_api_version": WEBHOOK_API_VERSION,
         "catalog_version": base.CATALOG_VERSION,
         "billing_intervals_enabled": ["monthly"],
         "annual_checkout_enabled": False,
@@ -178,11 +197,14 @@ def main(argv: Iterable[str] | None = None) -> int:
     webhook_id, webhook_secret, webhook_action = base.create_or_reuse_webhook(
         args.webhook_url,
         args.apply,
-        api_version=STRIPE_API_VERSION,
+        api_version=WEBHOOK_API_VERSION,
     )
+    if args.apply:
+        _verify_reused_webhook_version(webhook_id, webhook_action)
     report["resources"]["webhook"] = {
         "id": webhook_id,
         "action": webhook_action,
+        "api_version": WEBHOOK_API_VERSION,
         "secret_returned": bool(webhook_secret),
     }
     report["render_env"] = dict(sorted(render_env.items()))
@@ -209,6 +231,7 @@ def main(argv: Iterable[str] | None = None) -> int:
                 "catalog_version": base.CATALOG_VERSION,
                 "billing_intervals_enabled": ["monthly"],
                 "annual_checkout_enabled": False,
+                "webhook_api_version": WEBHOOK_API_VERSION,
                 "public_output": str(public_path),
                 "secrets_output_written": bool(secret_values),
                 "resources": {
