@@ -91,13 +91,24 @@ jobs:
           fi
           echo "Resolved Cloudflare zone for ${DOMAIN}."
 
-          # Fail closed if another mail provider already owns the domain MX records.
-          mx_payload="$(cf GET "/zones/${zone_id}/dns_records?type=MX&per_page=100")"
-          conflicting_mx="$(printf '%s' "$mx_payload" | jq -r '[.result[]? | select((.content | ascii_downcase | endswith(".mx.cloudflare.net")) | not)] | length')"
-          if [ "$conflicting_mx" -gt 0 ]; then
-            mx_summary="$(printf '%s' "$mx_payload" | jq -r '[.result[]? | {priority:(.priority // 0),content}] | @json')"
-            comment_issue "🛑 Existing non-Cloudflare MX records were found, so the workflow refused to modify mail routing. Records: \`${mx_summary}\`"
+          # Public DNS fail-closed check. This avoids requiring DNS Edit/Read permissions
+          # while ensuring another mail provider is never overwritten.
+          doh_payload="$(curl --fail --silent --show-error --get 'https://cloudflare-dns.com/dns-query' \
+            --header 'accept: application/dns-json' \
+            --data-urlencode "name=${DOMAIN}" \
+            --data-urlencode 'type=MX')"
+          if [ "$(printf '%s' "$doh_payload" | jq -r '.Status')" != "0" ]; then
+            comment_issue "❌ Public MX lookup failed for **${DOMAIN}**. The workflow stopped before making changes."
             exit 1
+          fi
+          mx_hosts="$(printf '%s' "$doh_payload" | jq -r '.Answer[]? | select(.type == 15) | .data | sub("^[0-9]+ "; "") | sub("\\.$"; "")')"
+          if [ -n "$mx_hosts" ]; then
+            conflicting_mx="$(printf '%s\n' "$mx_hosts" | awk 'NF && $0 !~ /\.mx\.cloudflare\.net$/ {count++} END {print count+0}')"
+            if [ "$conflicting_mx" -gt 0 ]; then
+              mx_json="$(printf '%s\n' "$mx_hosts" | jq -Rsc 'split("\n") | map(select(length>0))')"
+              comment_issue "🛑 Existing non-Cloudflare MX records were found, so the workflow refused to modify mail routing. Records: \`${mx_json}\`"
+              exit 1
+            fi
           fi
 
           addresses="$(cf GET "/accounts/${CLOUDFLARE_ACCOUNT_ID}/email/routing/addresses?per_page=50")"
