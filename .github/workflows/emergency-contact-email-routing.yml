@@ -57,6 +57,8 @@ jobs:
             fi
           }
 
+          trap 'comment_issue "❌ Email-routing activation encountered an internal workflow error near shell line ${LINENO}. No existing mail routing was overwritten."' ERR
+
           cf() {
             local method="$1"
             local path="$2"
@@ -81,7 +83,7 @@ jobs:
             if ! [[ "$http_code" =~ ^2 ]]; then
               local diagnostic
               diagnostic="$(jq -c '{success,errors,messages}' "$response_file" 2>/dev/null || cat "$response_file")"
-              comment_issue "❌ Cloudflare API request failed: \`${method} ${path}\` returned HTTP ${http_code}. Diagnostic: \`${diagnostic}\`"
+              comment_issue "❌ Cloudflare API request failed: ${method} ${path} returned HTTP ${http_code}. Diagnostic: ${diagnostic}"
               cat "$response_file" >&2
               rm -f "$response_file"
               return 1
@@ -94,7 +96,7 @@ jobs:
           zone_id="$(printf '%s' "$zone_payload" | jq -r '.result[0].id // empty')"
           if [ -z "$zone_id" ]; then
             diagnostic="$(printf '%s' "$zone_payload" | jq -c '{success,errors,messages,result_count:(.result|length)}')"
-            comment_issue "❌ Could not resolve an active Cloudflare zone for **${DOMAIN}**. Diagnostic: \`${diagnostic}\`"
+            comment_issue "❌ Could not resolve an active Cloudflare zone for ${DOMAIN}. Diagnostic: ${diagnostic}"
             exit 1
           fi
           echo "Resolved Cloudflare zone for ${DOMAIN}."
@@ -104,7 +106,7 @@ jobs:
             --data-urlencode "name=${DOMAIN}" \
             --data-urlencode 'type=MX')"
           if [ "$(printf '%s' "$doh_payload" | jq -r '.Status')" != "0" ]; then
-            comment_issue "❌ Public MX lookup failed for **${DOMAIN}**. The workflow stopped before making changes."
+            comment_issue "❌ Public MX lookup failed for ${DOMAIN}. The workflow stopped before making changes."
             exit 1
           fi
           mx_hosts="$(printf '%s' "$doh_payload" | jq -r '.Answer[]? | select(.type == 15) | .data | sub("^[0-9]+ "; "") | sub("\\.$"; "")')"
@@ -112,7 +114,7 @@ jobs:
             conflicting_mx="$(printf '%s\n' "$mx_hosts" | awk 'NF && $0 !~ /\.mx\.cloudflare\.net$/ {count++} END {print count+0}')"
             if [ "$conflicting_mx" -gt 0 ]; then
               mx_json="$(printf '%s\n' "$mx_hosts" | jq -Rsc 'split("\n") | map(select(length>0))')"
-              comment_issue "🛑 Existing non-Cloudflare MX records were found, so the workflow refused to modify mail routing. Records: \`${mx_json}\`"
+              comment_issue "🛑 Existing non-Cloudflare MX records were found, so the workflow refused to modify mail routing. Records: ${mx_json}"
               exit 1
             fi
           fi
@@ -130,13 +132,14 @@ jobs:
 
           if [ "$verified" != "true" ]; then
             echo "DESTINATION_VERIFICATION_REQUIRED"
-            comment_issue "Cloudflare destination address created for **${DESTINATION}**. Open the verification email from Cloudflare and click **Verify email address**. Reopen this issue after verification to finish activation."
+            comment_issue "Cloudflare destination address created for ${DESTINATION}. Open the verification email from Cloudflare and click Verify email address. Reopen this issue after verification to finish activation."
             exit 0
           fi
 
-          routing_dns="$(cf GET "/zones/${zone_id}/email/routing/dns")"
-          routing_status="$(printf '%s' "$routing_dns" | jq -r '.result.status // .result.enabled // "unknown"')"
-          if [ "$routing_status" != "ready" ] && [ "$routing_status" != "true" ]; then
+          comment_issue "✅ Destination verification confirmed. Finishing domain onboarding and the contact forwarding rule now."
+          routing_settings="$(cf GET "/zones/${zone_id}/email/routing")"
+          routing_enabled="$(printf '%s' "$routing_settings" | jq -r '.result.enabled // false')"
+          if [ "$routing_enabled" != "true" ]; then
             echo "Enabling Cloudflare Email Routing DNS for ${DOMAIN}."
             cf POST "/zones/${zone_id}/email/routing/dns" '{}' | jq -e '.success == true' >/dev/null
           fi
@@ -154,8 +157,9 @@ jobs:
             cf POST "/zones/${zone_id}/email/routing/rules" "$rule_body" | jq -e '.success == true' >/dev/null
           fi
 
+          trap - ERR
           echo "EMAIL_ROUTING_READY"
-          comment_issue "✅ **Email routing is active.** Messages sent to **${ALIAS}** now forward to **${DESTINATION}**."
+          comment_issue "✅ Email routing is active. Messages sent to ${ALIAS} now forward to ${DESTINATION}."
 
       - name: Report setup failure
         if: ${{ failure() }}
