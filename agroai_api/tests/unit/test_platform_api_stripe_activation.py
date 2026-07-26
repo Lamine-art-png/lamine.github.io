@@ -23,7 +23,10 @@ def _load(name: str, relative: str):
     return module
 
 
-base = _load("provision_platform_stripe", "scripts/provision_platform_stripe.py")
+base = _load(
+    "_platform_stripe_resources",
+    "scripts/_platform_stripe_resources.py",
+)
 monthly = _load(
     "provision_platform_stripe_monthly",
     "scripts/provision_platform_stripe_monthly.py",
@@ -140,7 +143,7 @@ def test_monthly_overage_decimal_is_exact(monkeypatch):
         lambda **kwargs: calls.append(kwargs) or {"id": "price_overage"},
     )
     plan = next(plan for plan in base.PLANS if plan.identifier == "developer")
-    price_id, action = base._create_or_reuse_price(
+    price_id, action = base.create_or_reuse_price(
         plan=plan,
         product_id="prod_developer",
         component="monthly_overage",
@@ -272,7 +275,8 @@ def test_customer_surface_and_workflow_keep_annual_checkout_closed():
     assert "provision_platform_stripe_monthly.py" in workflow
     assert "configure_platform_billing_render_monthly.py" in workflow
     assert 'billing_interval\":\"monthly' in workflow
-    assert 'billing_interval\":\"annual' not in workflow
+    assert 'billing_interval\":\"annual' in workflow
+    assert "Prove annual Checkout is denied" in workflow
 
 
 def test_render_mutation_allowlist_is_narrow():
@@ -281,6 +285,10 @@ def test_render_mutation_allowlist_is_narrow():
         "PLATFORM_API_STRIPE_SECRET_KEY",
         "PLATFORM_API_STRIPE_WEBHOOK_SECRET",
     }
+    assert configure.CLEAR_KEYS == {
+        "PLATFORM_API_STRIPE_DEVELOPER_ANNUAL_PRICE_ID",
+        "PLATFORM_API_STRIPE_SCALE_ANNUAL_PRICE_ID",
+    }
     assert all(key.startswith("PLATFORM_API_") for key in configure.PUBLIC_KEYS)
     assert all(key.startswith("PLATFORM_API_") for key in configure.SECRET_KEYS)
-    assert not any("ANNUAL" in key for key in configure.PUBLIC_KEYS)
+    assert all(key.startswith("PLATFORM_API_") for key in configure.CLEAR_KEYS)
