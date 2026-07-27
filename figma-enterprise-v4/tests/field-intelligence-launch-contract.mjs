@@ -20,7 +20,7 @@ function ok(name, condition, detail = "") {
 const sw = readFileSync(join(root, "public", "sw.js"), "utf8");
 ok("sw exists and has an environment-scoped version family",
    sw.includes("const CACHE_FAMILY = `agroai-shell-${SW_ENV}-`")
-   && sw.includes("const CACHE_VERSION = `${CACHE_FAMILY}v1`"));
+   && /const CACHE_VERSION = `\$\{CACHE_FAMILY\}v\d+`;/.test(sw));
 ok("sw never touches non-GET requests", sw.includes('request.method !== "GET"'));
 ok("sw never touches cross-origin requests", sw.includes("url.origin !== self.location.origin"));
 ok("sw never caches API paths", sw.includes('url.pathname.startsWith("/v1/")'));
