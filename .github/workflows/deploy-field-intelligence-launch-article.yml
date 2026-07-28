@@ -1,4 +1,4 @@
-name: Deploy Field Intelligence Launch Article
+name: Deploy News Articles
 
 on:
   push:
@@ -14,25 +14,21 @@ permissions:
   contents: read
 
 concurrency:
-  group: field-intelligence-launch-article-production
+  group: agroai-news-article-production
   cancel-in-progress: true
 
 jobs:
   deploy:
-    name: Deploy and prove live newsroom articles
+    name: Deploy isolated article routes
     runs-on: ubuntu-latest
     environment: production
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-      NEWSROOM_URL: https://agroai-pilot.com/news
-      NEWSROOM_SCRIPT_URL: https://agroai-pilot.com/news/field-intelligence-newsroom.js
-      NEWSROOM_STYLE_URL: https://agroai-pilot.com/news/field-intelligence-newsroom.css
-      ARTICLE_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence
-      COVER_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence/cover.webp
-      LOGO_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence/agro-ai-logo.png
+      FIELD_ARTICLE_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence
+      FIELD_COVER_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence/cover.webp
+      FIELD_LOGO_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence/agro-ai-logo.png
       JOHN_DEERE_ARTICLE_URL: https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center
-      JOHN_DEERE_LOGO_URL: https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center/agro-ai-logo.png
       JOHN_DEERE_PUBLISH_AT: 2026-07-28T08:00:00-07:00
     steps:
       - uses: actions/checkout@v4
@@ -44,59 +40,40 @@ jobs:
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
 
-      - name: Validate launch sources, newsroom and branding
+      - name: Validate isolated article sources and routes
         shell: bash
         run: |
           set -euo pipefail
-          article="client/public/news/introducing-agro-ai-field-intelligence/index.html"
+          field_article="client/public/news/introducing-agro-ai-field-intelligence/index.html"
           john_deere_article="client/public/news/agro-ai-connected-john-deere-operations-center/index.html"
           worker="cloudflare/field-intelligence-launch-worker/src/index.ts"
           routes="cloudflare/field-intelligence-launch-worker/wrangler.toml"
-          test -s "$article"
+
+          test -s "$field_article"
           test -s "$john_deere_article"
           test -s "$worker"
           test -s "$routes"
 
-          grep -F "From field evidence to enterprise action" "$article" >/dev/null
-          grep -F "Glacial Indifference" "$article" >/dev/null
-          grep -F '/news/introducing-agro-ai-field-intelligence/agro-ai-logo.png' "$article" >/dev/null
-          ! grep -F '/attached_assets/' "$article" >/dev/null
-          grep -F 'LOGO_PATH = `${ARTICLE_PATH}/agro-ai-logo.png`' "$worker" >/dev/null
-          grep -F 'customer-portal/assets/agro-ai-logo.png' "$worker" >/dev/null
-          grep -F "San Francisco, California" "$article" >/dev/null
-          grep -F "GiM6WZY0HG0" "$article" >/dev/null
-          ! grep -F "IMLVblFeW3s" "$article" >/dev/null
-          grep -F 'CURRENT_VIDEO_ID = "GiM6WZY0HG0"' "$worker" >/dev/null
-          grep -F 'MARKETING_ORIGIN = "https://agroai-343.pages.dev"' "$worker" >/dev/null
-          grep -F "Introducing AGRO-AI Field Intelligence" "$worker" >/dev/null
-          grep -F "San Francisco, California" "$worker" >/dev/null
-          grep -F 'pattern = "agroai-pilot.com/news"' "$routes" >/dev/null
-          grep -F "3840" "$article" >/dev/null
-          grep -F "Field Intelligence record is one saved field observation" "$article" >/dev/null
-          grep -F '<td class="quota">2</td>' "$article" >/dev/null
-          grep -F '<td class="quota">100</td>' "$article" >/dev/null
-          grep -F '<td class="quota">500</td>' "$article" >/dev/null
-          grep -F '<td class="quota">2,500</td>' "$article" >/dev/null
-          grep -F "does not guarantee a specific yield increase" "$article" >/dev/null
-
+          grep -F "Introducing AGRO-AI Field Intelligence" "$field_article" >/dev/null
+          grep -F "Glacial Indifference" "$field_article" >/dev/null
+          grep -F "GiM6WZY0HG0" "$field_article" >/dev/null
           grep -F "AGRO-AI is now connected with John Deere Operations Center™." "$john_deere_article" >/dev/null
           grep -F '<meta name="author" content="AGRO-AI"' "$john_deere_article" >/dev/null
           grep -F "2026-07-28T08:00:00-07:00" "$john_deere_article" >/dev/null
-          grep -F "San Francisco, California" "$john_deere_article" >/dev/null
-          grep -F "Glacial Indifference" "$john_deere_article" >/dev/null
           grep -F "Access is initiated through the user's Operations Center connection." "$john_deere_article" >/dev/null
           grep -F "AGRO-AI is now visible within Connections in John Deere Operations Center™." "$john_deere_article" >/dev/null
           grep -F "eligible AGRO-AI users can initiate the connection from the AGRO-AI integrations experience." "$john_deere_article" >/dev/null
-          grep -F "https://app.agroai-pilot.com/integrations" "$john_deere_article" >/dev/null
-          grep -F "https://agroai-pilot.com/book-a-demo" "$john_deere_article" >/dev/null
-          grep -F "https://agroai-pilot.com/platform-api/" "$john_deere_article" >/dev/null
-          grep -F "https://www.linkedin.com/company/agro-ai-inc/" "$john_deere_article" >/dev/null
-          grep -F "https://www.instagram.com/agroai.inc/" "$john_deere_article" >/dev/null
-          grep -F "https://www.youtube.com/channel/UCd3tQLAOtMmjFhRNVdU08tA" "$john_deere_article" >/dev/null
           ! grep -Eiq "through John Deere API|partnered with John Deere|partnership with John Deere|endorsed by John Deere" "$john_deere_article"
+
           grep -F 'JOHN_DEERE_PUBLISH_AT = "2026-07-28T08:00:00-07:00"' "$worker" >/dev/null
-          grep -F "agro-ai-connected-john-deere-operations-center" "$worker" >/dev/null
+          grep -F 'pattern = "agroai-pilot.com/news/introducing-agro-ai-field-intelligence*"' "$routes" >/dev/null
           grep -F 'pattern = "agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center"' "$routes" >/dev/null
+
+          ! grep -F 'pattern = "agroai-pilot.com/news"' "$routes"
+          ! grep -F 'pattern = "agroai-pilot.com/news/"' "$routes"
+          ! grep -F "MARKETING_ORIGIN" "$worker"
+          ! grep -F "newsroomResponse" "$worker"
+          ! grep -F "NEWSROOM_SCRIPT" "$worker"
 
       - name: Validate Worker bundle
         shell: bash
@@ -104,7 +81,7 @@ jobs:
           set -euo pipefail
           npx --yes wrangler@4.107.0 deploy --dry-run --config cloudflare/field-intelligence-launch-worker/wrangler.toml
 
-      - name: Deploy narrow production routes
+      - name: Deploy isolated production article routes
         shell: bash
         run: |
           set -euo pipefail
@@ -125,54 +102,26 @@ jobs:
             test "$status" = "200"
             grep -F "AGRO-AI is now connected with John Deere Operations Center™." john-deere.html >/dev/null
             grep -F '<meta name="author" content="AGRO-AI"' john-deere.html >/dev/null
-            grep -F "Glacial Indifference" john-deere.html >/dev/null
           fi
 
-      - name: Prove live newsroom, articles, branding, video and cover
+      - name: Prove existing Field Intelligence article remains healthy
         shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 36); do
-            newsroom_status="$(curl -sS -L -D newsroom.headers -o newsroom.html -w '%{http_code}' --max-time 25 "${NEWSROOM_URL}" || true)"
-            script_status="$(curl -sS -L -o newsroom.js -w '%{http_code}' --max-time 25 "${NEWSROOM_SCRIPT_URL}" || true)"
-            style_status="$(curl -sS -L -o newsroom.css -w '%{http_code}' --max-time 25 "${NEWSROOM_STYLE_URL}" || true)"
-            article_status="$(curl -sS -L -o article.html -w '%{http_code}' --max-time 25 "${ARTICLE_URL}" || true)"
-            cover_status="$(curl -sS -L -D cover.headers -o cover.bin -w '%{http_code}' --max-time 25 "${COVER_URL}" || true)"
-            logo_status="$(curl -sS -L -D logo.headers -o logo.bin -w '%{http_code}' --max-time 25 "${LOGO_URL}" || true)"
-            if [ "$newsroom_status" = "200" ] && [ "$script_status" = "200" ] && [ "$style_status" = "200" ] && [ "$article_status" = "200" ] && [ "$cover_status" = "200" ] && [ "$logo_status" = "200" ] && \
-               grep -F "field-intelligence-newsroom.js" newsroom.html >/dev/null && \
-               grep -Fi "x-agroai-newsroom-field-intelligence: visible" newsroom.headers >/dev/null && \
-               grep -F "Introducing AGRO-AI Field Intelligence" newsroom.js >/dev/null && \
-               grep -F "AGRO-AI is now connected with John Deere Operations Center™" newsroom.js >/dev/null && \
-               grep -F "2026-07-28T08:00:00-07:00" newsroom.js >/dev/null && \
-               grep -F "San Francisco, California" newsroom.js >/dev/null && \
-               grep -F "Glacial Indifference" newsroom.css >/dev/null && \
-               grep -F "Introducing AGRO-AI Field Intelligence" article.html >/dev/null && \
-               grep -F "Glacial Indifference" article.html >/dev/null && \
-               grep -F "/news/introducing-agro-ai-field-intelligence/agro-ai-logo.png" article.html >/dev/null && \
-               ! grep -F "/attached_assets/" article.html >/dev/null && \
-               grep -F "San Francisco, California" article.html >/dev/null && \
-               grep -F "GiM6WZY0HG0" article.html >/dev/null && \
-               ! grep -F "IMLVblFeW3s" article.html >/dev/null && \
-               grep -F '<td class="quota">2</td>' article.html >/dev/null && \
-               grep -F '<td class="quota">2,500</td>' article.html >/dev/null && \
-               grep -Fi "content-type: image/" logo.headers >/dev/null && \
-               grep -Fi "x-agroai-logo-source: official-repository-asset" logo.headers >/dev/null && \
-               test "$(wc -c < logo.bin)" -gt 1000 && \
-               grep -Fi "x-agroai-cover-target: 3840x2160" cover.headers >/dev/null && \
-               test "$(wc -c < cover.bin)" -gt 50000; then
-              echo "newsroom_url=${NEWSROOM_URL}"
-              echo "field_intelligence_article_url=${ARTICLE_URL}"
-              echo "john_deere_article_url=${JOHN_DEERE_ARTICLE_URL}"
-              echo "logo_url=${LOGO_URL}"
-              echo "cover_url=${COVER_URL}"
-              echo "field_intelligence_newsroom=verified_live"
-              echo "field_intelligence_article_logo=verified_live"
-              echo "field_intelligence_launch_article=verified_live"
-              echo "john_deere_article_schedule=verified"
+            article_status="$(curl -sS -L -o field-article.html -w '%{http_code}' --max-time 25 "${FIELD_ARTICLE_URL}" || true)"
+            cover_status="$(curl -sS -L -D field-cover.headers -o field-cover.bin -w '%{http_code}' --max-time 25 "${FIELD_COVER_URL}" || true)"
+            logo_status="$(curl -sS -L -D field-logo.headers -o field-logo.bin -w '%{http_code}' --max-time 25 "${FIELD_LOGO_URL}" || true)"
+            if [ "$article_status" = "200" ] && [ "$cover_status" = "200" ] && [ "$logo_status" = "200" ] && \
+               grep -F "Introducing AGRO-AI Field Intelligence" field-article.html >/dev/null && \
+               grep -F "GiM6WZY0HG0" field-article.html >/dev/null && \
+               grep -Fi "x-agroai-cover-target: 3840x2160" field-cover.headers >/dev/null && \
+               grep -Fi "x-agroai-logo-source: official-repository-asset" field-logo.headers >/dev/null; then
+              echo "isolated_article_routes=verified_live"
+              echo "native_newsroom_route=unmodified"
               exit 0
             fi
             sleep 5
           done
-          echo "Newsroom/article release did not become healthy"
+          echo "Article routes did not become healthy"
           exit 1
