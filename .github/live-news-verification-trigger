@@ -3,3 +3,4 @@ Emergency publication now runs through owner-only issue workflow.
 Owner check corrected and deployment retriggered.
 Issue event reset at 2026-07-28T17:35Z.
 Awaiting live production proof.
+Do not announce until issue #332 reports success.
