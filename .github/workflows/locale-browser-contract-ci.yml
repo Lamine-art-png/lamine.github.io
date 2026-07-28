@@ -90,6 +90,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       GH_TOKEN: ${{ github.token }}
       PR_NUMBER: ${{ github.event.pull_request.number }}
+      WORKER_SCRIPT: agroai-field-intelligence-launch
     steps:
       - name: Check out trusted main
         uses: actions/checkout@v4
@@ -101,7 +102,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr comment "$PR_NUMBER" --body '⏳ Production publication started from trusted `main` on the isolated ARM runner.'
+          gh pr comment "$PR_NUMBER" --body '⏳ Production publication started from trusted `main`. Deploying the Worker and enforcing only the exact AGRO-AI news routes.'
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
 
@@ -111,13 +112,66 @@ jobs:
           set -euo pipefail
           npx --yes wrangler@4.107.0 deploy --config cloudflare/field-intelligence-launch-worker/wrangler.toml
 
+      - name: Enforce exact Cloudflare news routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+          api="https://api.cloudflare.com/client/v4"
+          zone_payload="$(curl -fsS -H "$auth" -H 'Content-Type: application/json' "${api}/zones?name=agroai-pilot.com&account.id=${CLOUDFLARE_ACCOUNT_ID}")"
+          zone_id="$(jq -r '.result[0].id // empty' <<<"$zone_payload")"
+          test -n "$zone_id"
+
+          desired=(
+            'agroai-pilot.com/news'
+            'agroai-pilot.com/news/'
+            'agroai-pilot.com/news/agroai-news-card-restore.js'
+            'agroai-pilot.com/news/introducing-agro-ai-field-intelligence*'
+            'agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center'
+            'agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center/*'
+            'agroai-pilot.com/news/john-deere-api-access'
+            'agroai-pilot.com/news/john-deere-api-access/*'
+          )
+          obsolete=(
+            'agroai-pilot.com/news*'
+            'agroai-pilot.com/news/*'
+            'agroai-pilot.com/news/field-intelligence-newsroom.js'
+            'agroai-pilot.com/news/field-intelligence-newsroom.css'
+          )
+
+          routes="$(curl -fsS -H "$auth" -H 'Content-Type: application/json' "${api}/zones/${zone_id}/workers/routes")"
+          for pattern in "${obsolete[@]}"; do
+            route_id="$(jq -r --arg p "$pattern" '.result[] | select(.pattern == $p) | .id' <<<"$routes" | head -n1)"
+            if [ -n "$route_id" ]; then
+              curl -fsS -X DELETE -H "$auth" -H 'Content-Type: application/json' "${api}/zones/${zone_id}/workers/routes/${route_id}" | jq -e '.success == true' >/dev/null
+            fi
+          done
+
+          for pattern in "${desired[@]}"; do
+            routes="$(curl -fsS -H "$auth" -H 'Content-Type: application/json' "${api}/zones/${zone_id}/workers/routes")"
+            route_id="$(jq -r --arg p "$pattern" '.result[] | select(.pattern == $p) | .id' <<<"$routes" | head -n1)"
+            payload="$(jq -nc --arg p "$pattern" --arg s "$WORKER_SCRIPT" '{pattern:$p,script:$s}')"
+            if [ -n "$route_id" ]; then
+              response="$(curl -fsS -X PUT -H "$auth" -H 'Content-Type: application/json' --data "$payload" "${api}/zones/${zone_id}/workers/routes/${route_id}")"
+            else
+              response="$(curl -fsS -X POST -H "$auth" -H 'Content-Type: application/json' --data "$payload" "${api}/zones/${zone_id}/workers/routes")"
+            fi
+            jq -e '.success == true' <<<"$response" >/dev/null
+          done
+
+          final_routes="$(curl -fsS -H "$auth" -H 'Content-Type: application/json' "${api}/zones/${zone_id}/workers/routes")"
+          for pattern in "${desired[@]}"; do
+            jq -e --arg p "$pattern" --arg s "$WORKER_SCRIPT" '.result[] | select(.pattern == $p and .script == $s)' <<<"$final_routes" >/dev/null
+          done
+          printf '%s' "$final_routes" > cloudflare-routes.json
+
       - name: Verify newsroom and both articles live
         shell: bash
         run: |
           set -u
           : > diagnostics.txt
           ok=0
-          for attempt in $(seq 1 3); do
+          for attempt in $(seq 1 8); do
             bust="$(date +%s)-${attempt}"
             news_code="$(curl -sS -L -D news.headers -o news.html -w '%{http_code}' --max-time 25 "https://agroai-pilot.com/news?verify=${bust}" || true)"
             script_code="$(curl -sS -L -o cards.js -w '%{http_code}' --max-time 25 "https://agroai-pilot.com/news/agroai-news-card-restore.js?verify=${bust}" || true)"
