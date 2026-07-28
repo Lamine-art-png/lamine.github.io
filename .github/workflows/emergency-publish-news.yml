@@ -13,6 +13,7 @@ concurrency:
   group: agroai-emergency-news-publish-macos
   cancel-in-progress: true
 
+# Production retry requested after the John Deere article and Field Intelligence newsroom card remained unavailable.
 jobs:
   publish:
     name: Publish and prove live news
