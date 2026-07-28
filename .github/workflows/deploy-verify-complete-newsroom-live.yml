@@ -1,0 +1,164 @@
+name: Deploy and Verify Complete Newsroom Live
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  deploy-and-verify:
+    if: ${{ github.event.pull_request.title == '[ops] Deploy and verify complete newsroom live' }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 15
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Confirm narrow merged production source
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -s cloudflare/field-intelligence-launch-worker/src/index.ts
+          grep -F 'const JOHN_DEERE_ARTICLE_PATH = "/news/agro-ai-connected-john-deere-operations-center";' cloudflare/field-intelligence-launch-worker/src/index.ts >/dev/null
+          grep -F 'preserve-four-native-cards-add-two-remove-one-obsolete' cloudflare/field-intelligence-launch-worker/src/index.ts >/dev/null
+          grep -F 'cards.length===6' cloudflare/field-intelligence-launch-worker/src/index.ts >/dev/null
+          ! grep -F "[class*='item']" cloudflare/field-intelligence-launch-worker/src/index.ts
+          gh pr comment "$PR_NUMBER" --body '⏳ Deploying the merged one-file newsroom correction and verifying the exact public URLs.'
+      - name: Deploy merged Worker
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 deploy --config cloudflare/field-intelligence-launch-worker/wrangler.toml
+      - name: Install production browser
+        run: |
+          mkdir -p /tmp/agroai-live-newsroom
+          cd /tmp/agroai-live-newsroom
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Audit complete production newsroom and unchanged Deere URL
+        run: |
+          set -euo pipefail
+          cd /tmp/agroai-live-newsroom
+          cat > verify.cjs <<'NODE'
+          const { chromium } = require('playwright');
+          const newsroomUrl = 'https://agroai-pilot.com/news';
+          const publishedUrl = 'https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center';
+          const expectedGrid = [
+            '/news/agro-ai-connected-john-deere-operations-center',
+            '/news/introducing-agro-ai-field-intelligence',
+            '/news/agro-ai-enterprise-portal-global-launch',
+            '/news/agro-ai-submits-contribution-european-commission-water-sector-digitalisation',
+            '/news/agro-ai-wiseconn-api-integration',
+            '/news/agro-ai-talgil-dream-2-integration',
+          ];
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage({ viewport: { width: 1440, height: 1200 } });
+            const pageErrors = [];
+            page.on('pageerror', (error) => pageErrors.push(String(error)));
+            const newsroomResponse = await page.goto(newsroomUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            if (!newsroomResponse || newsroomResponse.status() !== 200) throw new Error(`Newsroom status is ${newsroomResponse?.status()}`);
+            await page.waitForFunction(() => document.documentElement.getAttribute('data-agroai-news-cards-restored') === 'true', null, { timeout: 25000 });
+            await page.waitForTimeout(1200);
+
+            const result = await page.evaluate(({ expectedGrid }) => {
+              const normalize = (value) => new URL(value, location.origin).pathname.replace(/\/$/, '');
+              const grid = document.querySelector('[data-agroai-newsroom-grid="complete"]');
+              const cards = grid ? [...grid.children].filter((child) => child.tagName === 'A') : [];
+              const gridPaths = cards.map((card) => normalize(card.getAttribute('href') || card.href));
+              const allNewsLinks = [...document.querySelectorAll('a[href]')]
+                .map((link) => normalize(link.getAttribute('href') || link.href))
+                .filter((path) => path.startsWith('/news/'));
+              return {
+                rootMarker: document.documentElement.getAttribute('data-agroai-news-cards-restored'),
+                gridMarker: grid?.getAttribute('data-agroai-newsroom-grid') || null,
+                gridPaths,
+                allNewsLinks,
+                cardButtonCounts: cards.map((card) => ((card.textContent || '').match(/Read article/g) || []).length),
+                exactReadArticleNodes: [...document.querySelectorAll('a,button,span')].filter((node) => (node.textContent || '').trim() === 'Read article').length,
+                obsoletePath: allNewsLinks.includes('/news/john-deere-api-access'),
+                obsoleteTitle: (document.body.innerText || '').includes('AGRO-AI moves forward through John Deere API access process'),
+                bodyHeight: document.documentElement.scrollHeight,
+                titles: cards.map((card) => (card.querySelector('h3')?.textContent || '').trim()),
+                expectedGrid,
+              };
+            }, { expectedGrid });
+
+            console.log(JSON.stringify({ pageErrors, result }, null, 2));
+            if (pageErrors.length) throw new Error(`Newsroom browser errors: ${JSON.stringify(pageErrors)}`);
+            if (result.rootMarker !== 'true' || result.gridMarker !== 'complete') throw new Error(`Newsroom completion markers missing: ${JSON.stringify(result)}`);
+            if (JSON.stringify(result.gridPaths) !== JSON.stringify(expectedGrid)) throw new Error(`Production grid differs: ${JSON.stringify(result)}`);
+            if (result.gridPaths.length !== 6 || new Set(result.gridPaths).size !== 6) throw new Error(`Production grid is not six unique cards: ${JSON.stringify(result)}`);
+            if (result.cardButtonCounts.some((count) => count !== 1)) throw new Error(`A card has duplicate/missing controls: ${JSON.stringify(result)}`);
+            if (result.exactReadArticleNodes !== 7) throw new Error(`Expected seven Read article controls including the featured card: ${JSON.stringify(result)}`);
+            if (result.obsoletePath || result.obsoleteTitle) throw new Error(`Obsolete Deere content remains: ${JSON.stringify(result)}`);
+            if (result.allNewsLinks.length !== 7) throw new Error(`Expected seven total article links: ${JSON.stringify(result)}`);
+            if (result.allNewsLinks.filter((path) => path === '/news/agro-ai-enterprise-portal-global-launch').length !== 2) throw new Error('Featured Enterprise Portal card/link changed');
+            for (const path of expectedGrid.filter((path) => path !== '/news/agro-ai-enterprise-portal-global-launch')) {
+              if (result.allNewsLinks.filter((candidate) => candidate === path).length !== 1) throw new Error(`Unexpected production count for ${path}: ${JSON.stringify(result)}`);
+            }
+            if (result.bodyHeight < 2500) throw new Error(`Newsroom is visually too short and may still be collapsed: ${result.bodyHeight}`);
+
+            const uniquePaths = [...new Set(result.allNewsLinks)];
+            for (const path of uniquePaths) {
+              const response = await page.request.get(`https://agroai-pilot.com${path}`, { maxRedirects: 5, timeout: 45000 });
+              if (response.status() !== 200) throw new Error(`Article link failed: ${path} -> ${response.status()}`);
+            }
+            await page.screenshot({ path: 'complete-live-newsroom.png', fullPage: true });
+
+            const article = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+            const articleErrors = [];
+            article.on('pageerror', (error) => articleErrors.push(String(error)));
+            const articleResponse = await article.goto(publishedUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
+            await article.waitForTimeout(600);
+            const finalUrl = article.url().replace(/\/$/, '');
+            const canonical = await article.locator('link[rel="canonical"]').getAttribute('href');
+            const h1 = (await article.locator('h1').first().innerText()).trim();
+            const reviewedLead = await article.locator('body').innerText();
+            const socialCount = await article.locator('header .socials a.social').count();
+            const logo = await article.locator('header img.logo').first().boundingBox();
+            console.log(JSON.stringify({ articleStatus: articleResponse?.status(), finalUrl, canonical, h1, socialCount, logo, articleErrors }, null, 2));
+            if (!articleResponse || articleResponse.status() !== 200) throw new Error(`Published Deere article status changed: ${articleResponse?.status()}`);
+            if (finalUrl !== publishedUrl) throw new Error(`Published Deere URL changed or redirected: ${finalUrl}`);
+            if (canonical !== publishedUrl) throw new Error(`Published Deere canonical changed: ${canonical}`);
+            if (h1 !== 'AGRO-AI connects with John Deere Operations Center™') throw new Error(`Published Deere title changed: ${h1}`);
+            if (!reviewedLead.includes('AGRO-AI is now connected with John Deere Operations Center™.')) throw new Error('Reviewed Deere article lead is missing');
+            if (socialCount !== 3) throw new Error(`Expected three header social links, found ${socialCount}`);
+            if (!logo || logo.width < 28 || logo.width > 40 || logo.height < 28 || logo.height > 40) throw new Error(`Article logo sizing changed: ${JSON.stringify(logo)}`);
+            if (articleErrors.length) throw new Error(`Article browser errors: ${JSON.stringify(articleErrors)}`);
+            await article.screenshot({ path: 'unchanged-published-deere-url.png', fullPage: true });
+            await browser.close();
+          })().catch((error) => { console.error(error); process.exit(1); });
+          NODE
+          node verify.cjs | tee production-verification.log
+      - name: Report verified production success
+        run: |
+          gh pr comment "$PR_NUMBER" --body $'✅ **Production newsroom verified live.**\n\n- The complete native newsroom is visible with six unique grid cards plus the unchanged featured Enterprise Portal card.\n- Enterprise Portal, EU consultation, WiseConn, and Talgil remain present.\n- John Deere and Field Intelligence are each present once.\n- The obsolete John Deere API-access card/title is absent.\n- Every newsroom article link returned HTTP 200.\n- The already-published John Deere URL, canonical, title, reviewed lead, header socials, and miniature logo remain unchanged.'
+      - name: Report production failure
+        if: ${{ failure() }}
+        run: |
+          gh pr comment "$PR_NUMBER" --body '❌ Production deployment or the complete live newsroom audit failed. Do not report completion.'
+      - name: Upload live evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: complete-live-newsroom-proof
+          path: |
+            /tmp/agroai-live-newsroom/production-verification.log
+            /tmp/agroai-live-newsroom/complete-live-newsroom.png
+            /tmp/agroai-live-newsroom/unchanged-published-deere-url.png
+          retention-days: 2
