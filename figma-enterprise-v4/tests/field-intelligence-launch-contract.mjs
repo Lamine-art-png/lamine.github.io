@@ -1,7 +1,8 @@
 // Field Intelligence launch portal contract.
 //
 // Enforces the safety properties of the PWA shell, MapLibre map fallback,
-// authorized media, sync recovery, draft review, and staging behavior.
+// authorized media, sync recovery, draft review, staging behavior, and the
+// current public launch surfaces.
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -106,6 +107,95 @@ ok("staging banner shows the exact build SHA", banner.includes("VITE_BUILD_SHA")
 ok("staging pages are noindexed", banner.includes('"noindex, nofollow"'));
 ok("staging banner is mounted in the shell", layout.includes("<StagingBanner />"));
 ok("staging banner exposes no secrets or origins", !/https?:\/\//.test(banner));
+
+// --- Live newsroom and announcement verification ---------------------------
+const liveUrls = {
+  newsroom: "https://agroai-pilot.com/news",
+  restoreScript: "https://agroai-pilot.com/news/agroai-news-card-restore.js",
+  deere: "https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center",
+  deereCover: "https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center/cover.webp",
+  field: "https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence",
+  fieldCover: "https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence/cover.webp",
+};
+
+async function fetchLive(url, attempts = 24) {
+  let lastResponse = null;
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      const target = new URL(url);
+      target.searchParams.set("verify", `${Date.now()}-${attempt}`);
+      lastResponse = await fetch(target, {
+        redirect: "follow",
+        headers: { "cache-control": "no-cache", "user-agent": "AGRO-AI-Live-News-Contract/1.0" },
+      });
+      if (lastResponse.ok) return lastResponse;
+    } catch (error) {
+      lastError = error;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+  }
+  if (lastError && !lastResponse) throw lastError;
+  return lastResponse;
+}
+
+try {
+  const newsroomResponse = await fetchLive(liveUrls.newsroom);
+  const newsroomHtml = newsroomResponse ? await newsroomResponse.text() : "";
+  ok("live newsroom returns native HTML", Boolean(newsroomResponse?.ok && /<!doctype html|<html/i.test(newsroomHtml)), `status=${newsroomResponse?.status ?? "network-error"}`);
+  ok("live newsroom comes from the native Pages origin", newsroomResponse?.headers.get("x-agroai-newsroom-source") === "native-pages-origin", newsroomResponse?.headers.get("x-agroai-newsroom-source") || "missing header");
+  ok("live newsroom loads only the restoration script", newsroomHtml.includes("/news/agroai-news-card-restore.js") && !newsroomHtml.includes("field-intelligence-newsroom.css"));
+
+  const scriptResponse = await fetchLive(liveUrls.restoreScript);
+  const script = scriptResponse ? await scriptResponse.text() : "";
+  ok("newsroom restoration script is live", Boolean(scriptResponse?.ok), `status=${scriptResponse?.status ?? "network-error"}`);
+  ok("restoration script restores Field Intelligence card", script.includes("Introducing AGRO-AI Field Intelligence") && script.includes("/news/introducing-agro-ai-field-intelligence"));
+  ok("restoration script publishes John Deere card", script.includes("AGRO-AI connects with John Deere Operations Center™") && script.includes("/news/agro-ai-connected-john-deere-operations-center"));
+  ok("restoration script does not inject CSS", !/createElement\(["']style["']\)|\.style\.|insertRule|stylesheet/i.test(script));
+
+  const deereResponse = await fetchLive(liveUrls.deere);
+  const deereHtml = deereResponse ? await deereResponse.text() : "";
+  ok("reviewed John Deere article is publicly live", Boolean(deereResponse?.ok), `status=${deereResponse?.status ?? "network-error"}`);
+  ok("John Deere article contains reviewed website copy",
+     deereHtml.includes("AGRO-AI connects with John Deere Operations Center™")
+     && deereHtml.includes("Agricultural operations do not suffer from a shortage of data.")
+     && deereHtml.includes("Access is initiated through the user's Operations Center connection."));
+  ok("John Deere article retains author and publication metadata",
+     deereHtml.includes('<meta name="author" content="AGRO-AI"')
+     && deereHtml.includes("Tuesday, July 28, 2026 at 8:00 AM PDT")
+     && deereHtml.includes("San Francisco, California"));
+  ok("John Deere article retains customer and social links",
+     [
+       "https://app.agroai-pilot.com/integrations",
+       "https://agroai-pilot.com/enterprise-portal",
+       "https://agroai-pilot.com/book-a-demo",
+       "https://agroai-pilot.com/platform-api/",
+       "https://www.linkedin.com/company/agro-ai-inc/",
+       "https://www.instagram.com/agroai.inc/",
+       "https://www.youtube.com/channel/UCd3tQLAOtMmjFhRNVdU08tA",
+     ].every((link) => deereHtml.includes(link)));
+
+  const deereCoverResponse = await fetchLive(liveUrls.deereCover);
+  const deereCoverBytes = deereCoverResponse ? (await deereCoverResponse.arrayBuffer()).byteLength : 0;
+  ok("supplied John Deere cover is publicly live",
+     Boolean(deereCoverResponse?.ok
+       && (deereCoverResponse.headers.get("content-type") || "").includes("image/webp")
+       && deereCoverResponse.headers.get("x-agroai-asset-source") === "reviewed-john-deere-cover"
+       && deereCoverBytes > 10000),
+     `status=${deereCoverResponse?.status ?? "network-error"}, bytes=${deereCoverBytes}`);
+
+  const fieldResponse = await fetchLive(liveUrls.field);
+  const fieldHtml = fieldResponse ? await fieldResponse.text() : "";
+  ok("Field Intelligence announcement article remains publicly live", Boolean(fieldResponse?.ok), `status=${fieldResponse?.status ?? "network-error"}`);
+  ok("Field Intelligence announcement retains its launch content", fieldHtml.includes("Introducing AGRO-AI Field Intelligence") && fieldHtml.includes("GiM6WZY0HG0"));
+
+  const fieldCoverResponse = await fetchLive(liveUrls.fieldCover);
+  ok("Field Intelligence cover remains publicly live",
+     Boolean(fieldCoverResponse?.ok && fieldCoverResponse.headers.get("x-agroai-cover-target") === "3840x2160"),
+     `status=${fieldCoverResponse?.status ?? "network-error"}`);
+} catch (error) {
+  ok("live newsroom verification completed", false, error instanceof Error ? error.message : String(error));
+}
 
 if (failures > 0) {
   console.error(`Field Intelligence launch portal contract FAILED (${failures})`);
