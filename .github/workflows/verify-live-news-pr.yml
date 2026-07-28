@@ -16,7 +16,7 @@ concurrency:
 jobs:
   verify:
     name: Deploy and verify live newsroom
-    runs-on: ubuntu-latest
+    runs-on: macos-14
     environment: production
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
