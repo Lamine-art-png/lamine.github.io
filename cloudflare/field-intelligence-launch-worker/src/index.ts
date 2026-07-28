@@ -28,6 +28,7 @@ const NEWSROOM_CARD_SCRIPT = `(()=>{
       title:"AGRO-AI connects with John Deere Operations Center™",
       description:"Customer-authorized operational data can support AGRO-AI intelligence, reporting, recommendations, and verification workflows.",
       date:"July 28, 2026",
+      datetime:"2026-07-28",
       category:"Integration",
       image:"/news/agro-ai-connected-john-deere-operations-center/cover.webp"
     },
@@ -36,54 +37,146 @@ const NEWSROOM_CARD_SCRIPT = `(()=>{
       title:"Introducing AGRO-AI Field Intelligence",
       description:"A voice-first field intelligence experience that turns observations into structured operational context, evidence, and action.",
       date:"July 21, 2026",
+      datetime:"2026-07-21",
       category:"Product",
       image:"/news/introducing-agro-ai-field-intelligence/cover.webp"
     }
   ];
+  const legacyPaths=["/news/john-deere-api-access"];
+  const legacyTitles=[
+    "agro-ai moves forward through john deere api access process",
+    "john deere api access process"
+  ];
   const normalize=(value)=>{try{return new URL(value,location.origin).pathname.replace(/\\/$/,"")}catch{return ""}};
-  const articleLinks=()=>[...document.querySelectorAll("a[href]")].filter(a=>normalize(a.getAttribute("href")||a.href).startsWith("/news/")&&!normalize(a.getAttribute("href")||a.href).includes("agroai-news-card-restore.js"));
-  const closestCard=(a)=>a.closest("article,li,[class*='card'],[class*='Card'],[class*='item'],[class*='Item']")||a.parentElement;
-  const locateTemplate=()=>{
-    for(const link of articleLinks()){
-      const card=closestCard(link);
-      if(card&&card.parentElement)return {card,container:card.parentElement};
+  const isNewsPath=(value)=>normalize(value).startsWith("/news/");
+  const newsLinks=()=>[...document.querySelectorAll("a[href]")].filter((anchor)=>isNewsPath(anchor.getAttribute("href")||anchor.href));
+  const text=(node)=>((node&&node.textContent)||"").replace(/\\s+/g," ").trim().toLowerCase();
+  const setText=(node,value)=>{if(node&&node.textContent!==value)node.textContent=value};
+  const setAttr=(node,name,value)=>{if(node&&node.getAttribute(name)!==value)node.setAttribute(name,value)};
+  const cardFor=(node)=>{
+    let element=node instanceof Element?node:null;
+    while(element&&element!==document.body){
+      if(element.matches("article,li,[class*='card'],[class*='Card'],[class*='item'],[class*='Item'],[class*='post'],[class*='Post']"))return element;
+      const links=[...element.querySelectorAll("a[href]")].filter((anchor)=>isNewsPath(anchor.getAttribute("href")||anchor.href));
+      if(links.length===1&&(element.querySelector("img")||element.querySelector("h1,h2,h3,h4,h5")))return element;
+      element=element.parentElement;
     }
-    return null;
+    return node instanceof Element?node.parentElement:null;
+  };
+  const locateTemplate=()=>{
+    let fallback=null;
+    for(const link of newsLinks()){
+      const path=normalize(link.getAttribute("href")||link.href);
+      const card=cardFor(link);
+      if(!card||!card.parentElement)continue;
+      const candidate={card,container:card.parentElement};
+      if(!fallback)fallback=candidate;
+      if(!legacyPaths.includes(path)&&!cards.some((item)=>item.path===path))return candidate;
+    }
+    return fallback;
+  };
+  const removeLegacyCards=()=>{
+    const remove=new Set();
+    for(const link of newsLinks()){
+      if(legacyPaths.includes(normalize(link.getAttribute("href")||link.href))){
+        const card=cardFor(link);
+        if(card)remove.add(card);
+      }
+    }
+    for(const node of document.querySelectorAll("h1,h2,h3,h4,h5,a[href]")){
+      const value=text(node);
+      if(legacyTitles.some((title)=>value.includes(title))){
+        const card=cardFor(node);
+        if(card)remove.add(card);
+      }
+    }
+    for(const card of remove){
+      if(card&&card.isConnected)card.remove();
+    }
   };
   const setCard=(card,item)=>{
-    card.setAttribute("data-agroai-restored-news-card",item.path);
+    setAttr(card,"data-agroai-managed-news-card",item.path);
+    if(card.hidden)card.hidden=false;
+    if(card.getAttribute("aria-hidden")==="true")card.removeAttribute("aria-hidden");
     const anchors=[...(card.matches("a[href]")?[card]:[]),...card.querySelectorAll("a[href]")];
     for(const anchor of anchors){
       const current=normalize(anchor.getAttribute("href")||anchor.href);
-      if(!current||current.startsWith("/news/"))anchor.setAttribute("href",item.path);
+      if(!current||current.startsWith("/news/"))setAttr(anchor,"href",item.path);
     }
     const heading=card.querySelector("h1,h2,h3,h4,h5,[class*='title'],[class*='Title']");
-    if(heading)heading.textContent=item.title;
+    setText(heading,item.title);
     const paragraphs=[...card.querySelectorAll("p")];
-    const description=paragraphs.find(p=>p.textContent&&p.textContent.trim().length>24)||paragraphs[0];
-    if(description)description.textContent=item.description;
+    const description=paragraphs.find((paragraph)=>text(paragraph).length>24)||paragraphs[0];
+    setText(description,item.description);
     const time=card.querySelector("time");
-    if(time){time.textContent=item.date;time.setAttribute("datetime",item.date==="July 28, 2026"?"2026-07-28":"2026-07-21")}
-    const dateNode=[...card.querySelectorAll("span,div")].find(el=>el.children.length===0&&/20\\d{2}/.test(el.textContent||""));
-    if(!time&&dateNode)dateNode.textContent=item.date;
+    if(time){
+      setText(time,item.date);
+      setAttr(time,"datetime",item.datetime);
+    }else{
+      const dateNode=[...card.querySelectorAll("span,div")].find((element)=>element.children.length===0&&/20\\d{2}/.test(element.textContent||""));
+      setText(dateNode,item.date);
+    }
     const image=card.querySelector("img");
-    if(image){image.setAttribute("src",item.image);image.setAttribute("alt",item.title);image.removeAttribute("srcset")}
+    if(image){
+      setAttr(image,"src",item.image);
+      setAttr(image,"alt",item.title);
+      if(image.hasAttribute("srcset"))image.removeAttribute("srcset");
+      if(image.hasAttribute("sizes"))image.removeAttribute("sizes");
+    }
     const badge=card.querySelector("[class*='category'],[class*='Category'],[class*='badge'],[class*='Badge'],[class*='tag'],[class*='Tag']");
-    if(badge&&badge.children.length===0)badge.textContent=item.category;
+    if(badge&&badge.children.length===0)setText(badge,item.category);
   };
   const install=()=>{
     const template=locateTemplate();
-    if(!template)return;
+    if(!template)return false;
+    removeLegacyCards();
     for(const item of [...cards].reverse()){
-      const existing=articleLinks().find(a=>normalize(a.getAttribute("href")||a.href)===item.path);
-      if(existing){const card=closestCard(existing);if(card){card.hidden=false;card.removeAttribute("aria-hidden");setCard(card,item)}continue}
+      const matches=new Set();
+      for(const link of newsLinks()){
+        if(normalize(link.getAttribute("href")||link.href)===item.path){
+          const card=cardFor(link);
+          if(card)matches.add(card);
+        }
+      }
+      const existing=[...matches];
+      if(existing.length){
+        setCard(existing[0],item);
+        for(const duplicate of existing.slice(1))duplicate.remove();
+        const first=template.container.firstElementChild;
+        if(existing[0].parentElement===template.container&&existing[0]!==first)template.container.insertBefore(existing[0],first);
+        continue;
+      }
       const clone=template.card.cloneNode(true);
       setCard(clone,item);
-      template.container.insertBefore(clone,template.container.firstChild);
+      template.container.insertBefore(clone,template.container.firstElementChild);
     }
-    document.documentElement.setAttribute("data-agroai-news-cards-restored","true");
+    removeLegacyCards();
+    const ready=cards.every((item)=>newsLinks().some((link)=>normalize(link.getAttribute("href")||link.href)===item.path))&&!document.body.textContent.toLowerCase().includes("agro-ai moves forward through john deere api access process");
+    if(ready)document.documentElement.setAttribute("data-agroai-news-cards-restored","true");
+    return ready;
   };
-  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",install,{once:true});else install();
+  let running=false;
+  let timer=0;
+  const run=()=>{
+    if(running)return;
+    running=true;
+    try{install()}finally{running=false}
+  };
+  const schedule=()=>{
+    clearTimeout(timer);
+    timer=setTimeout(run,80);
+  };
+  const start=()=>{
+    run();
+    [250,750,1500,3000,6000].forEach((delay)=>setTimeout(run,delay));
+    if(document.body){
+      const observer=new MutationObserver(schedule);
+      observer.observe(document.body,{childList:true,subtree:true});
+      setTimeout(()=>observer.disconnect(),12000);
+    }
+  };
+  if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",start,{once:true});else start();
+  window.addEventListener("load",run,{once:true});
 })();`;
 
 function johnDeerePublished(now = Date.now()): boolean {
@@ -178,7 +271,7 @@ async function fieldIntelligenceCoverResponse(request: Request): Promise<Respons
 function newsroomScriptResponse(request: Request): Response {
   const headers = new Headers({
     "content-type": "application/javascript; charset=utf-8",
-    "cache-control": "public, max-age=60, s-maxage=60, must-revalidate",
+    "cache-control": "no-store",
     "x-content-type-options": "nosniff",
   });
   return new Response(request.method === "HEAD" ? null : NEWSROOM_CARD_SCRIPT, { status: 200, headers });
@@ -207,7 +300,7 @@ async function newsroomResponse(request: Request): Promise<Response> {
   headers.set("cache-control", "private, no-cache, must-revalidate");
   headers.set("x-content-type-options", "nosniff");
   headers.set("x-agroai-newsroom-source", "native-pages-origin");
-  headers.set("x-agroai-newsroom-change", "restore-two-existing-article-cards-only");
+  headers.set("x-agroai-newsroom-change", "add-two-native-cards-remove-one-obsolete-card");
   return new Response(request.method === "HEAD" ? null : body, { status: 200, headers });
 }
 
