@@ -1,0 +1,1 @@
+Owner-triggered direct publication workflow installed before issue dispatch on 2026-07-28.
