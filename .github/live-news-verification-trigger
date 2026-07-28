@@ -1,6 +1,2 @@
-Verify the live AGRO-AI newsroom, reviewed John Deere article, supplied cover, and Field Intelligence article on 2026-07-28.
-Emergency publication now runs through owner-only issue workflow.
-Owner check corrected and deployment retriggered.
-Issue event reset at 2026-07-28T17:35Z.
-Awaiting live production proof.
-Do not announce until issue #332 reports success.
+Force exact Cloudflare route publication for the reviewed John Deere article, supplied cover, and Field Intelligence newsroom restoration.
+Triggered at 2026-07-28T18:55:00Z from trusted main.
