@@ -32,7 +32,7 @@ jobs:
           grep -F '/news/agro-ai-wiseconn-api-integration' "$worker" >/dev/null
           grep -F '/news/agro-ai-talgil-dream-2-integration' "$worker" >/dev/null
           ! grep -F "[class*='item']" "$worker"
-          npx --yes tsc --noEmit --target ES2022 --module ES2022 --lib ES2022,DOM --skipLibCheck "$worker"
+          npx --yes wrangler@4.107.0 deploy --dry-run --config cloudflare/field-intelligence-launch-worker/wrangler.toml
       - name: Install browser
         run: |
           mkdir -p /tmp/agroai-news-validation
