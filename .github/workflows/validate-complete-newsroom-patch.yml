@@ -1,0 +1,147 @@
+name: Validate Complete Newsroom Patch
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    if: ${{ github.event.pull_request.title == '[ops] Validate complete newsroom patch' }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: hotfix/restore-complete-native-newsroom
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate Worker source boundary
+        run: |
+          set -euo pipefail
+          worker='cloudflare/field-intelligence-launch-worker/src/index.ts'
+          test -s "$worker"
+          grep -F 'const JOHN_DEERE_ARTICLE_PATH = "/news/agro-ai-connected-john-deere-operations-center";' "$worker" >/dev/null
+          grep -F 'data-agroai-newsroom-grid' "$worker" >/dev/null
+          grep -F 'cards.length===6' "$worker" >/dev/null
+          grep -F '/news/agro-ai-enterprise-portal-global-launch' "$worker" >/dev/null
+          grep -F '/news/agro-ai-submits-contribution-european-commission-water-sector-digitalisation' "$worker" >/dev/null
+          grep -F '/news/agro-ai-wiseconn-api-integration' "$worker" >/dev/null
+          grep -F '/news/agro-ai-talgil-dream-2-integration' "$worker" >/dev/null
+          ! grep -F "[class*='item']" "$worker"
+          npx --yes tsc --noEmit --target ES2022 --module ES2022 --lib ES2022,DOM --skipLibCheck "$worker"
+      - name: Install browser
+        run: |
+          mkdir -p /tmp/agroai-news-validation
+          cd /tmp/agroai-news-validation
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Execute candidate script against untouched native newsroom
+        run: |
+          set -euo pipefail
+          cp cloudflare/field-intelligence-launch-worker/src/index.ts /tmp/agroai-news-validation/worker.ts
+          cd /tmp/agroai-news-validation
+          cat > validate.cjs <<'NODE'
+          const fs = require('fs');
+          const { chromium } = require('playwright');
+
+          const source = fs.readFileSync('worker.ts', 'utf8');
+          const prefix = 'const NEWSROOM_CARD_SCRIPT = `';
+          const suffix = '`;\n\nfunction johnDeerePublished';
+          const start = source.indexOf(prefix);
+          const end = source.indexOf(suffix, start + prefix.length);
+          if (start < 0 || end < 0) throw new Error('Could not extract NEWSROOM_CARD_SCRIPT');
+          const script = source.slice(start + prefix.length, end);
+
+          const expectedGridPaths = [
+            '/news/agro-ai-connected-john-deere-operations-center',
+            '/news/introducing-agro-ai-field-intelligence',
+            '/news/agro-ai-enterprise-portal-global-launch',
+            '/news/agro-ai-submits-contribution-european-commission-water-sector-digitalisation',
+            '/news/agro-ai-wiseconn-api-integration',
+            '/news/agro-ai-talgil-dream-2-integration',
+          ];
+          const obsoletePath = '/news/john-deere-api-access';
+          const obsoleteTitle = 'AGRO-AI moves forward through John Deere API access process';
+          const publishedUrl = 'https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center';
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage({ viewport: { width: 1440, height: 1200 } });
+            await page.goto('https://agroai-343.pages.dev/news', { waitUntil: 'networkidle', timeout: 60000 });
+            const nativeBefore = await page.locator('div.grid.gap-8').evaluateAll((grids) => grids.map((grid) => [...grid.children].filter((child) => child.tagName === 'A').length));
+            if (!nativeBefore.includes(5)) throw new Error(`Untouched native newsroom did not expose its five-card grid: ${JSON.stringify(nativeBefore)}`);
+
+            await page.addScriptTag({ content: script });
+            await page.waitForFunction(() => document.documentElement.getAttribute('data-agroai-news-cards-restored') === 'true', null, { timeout: 15000 });
+
+            const result = await page.evaluate(({ expectedGridPaths, obsoletePath, obsoleteTitle }) => {
+              const normalize = (value) => new URL(value, location.origin).pathname.replace(/\/$/, '');
+              const grid = document.querySelector('[data-agroai-newsroom-grid="complete"]');
+              if (!grid) return { error: 'managed grid missing' };
+              const cards = [...grid.children].filter((child) => child.tagName === 'A');
+              const gridPaths = cards.map((card) => normalize(card.getAttribute('href') || card.href));
+              const allNewsLinks = [...document.querySelectorAll('a[href]')]
+                .map((link) => normalize(link.getAttribute('href') || link.href))
+                .filter((path) => path.startsWith('/news/'));
+              const buttonCounts = cards.map((card) => ((card.textContent || '').match(/Read article/g) || []).length);
+              return {
+                gridPaths,
+                allNewsLinks,
+                buttonCounts,
+                gridCardCount: cards.length,
+                uniqueGridCount: new Set(gridPaths).size,
+                totalReadArticle: [...document.querySelectorAll('a,button,span')].filter((node) => (node.textContent || '').trim() === 'Read article').length,
+                obsoletePathPresent: allNewsLinks.includes(obsoletePath),
+                obsoleteTitlePresent: (document.body.innerText || '').includes(obsoleteTitle),
+                titles: cards.map((card) => (card.querySelector('h3')?.textContent || '').trim()),
+                expectedGridPaths,
+              };
+            }, { expectedGridPaths, obsoletePath, obsoleteTitle });
+
+            if (result.error) throw new Error(result.error);
+            if (JSON.stringify(result.gridPaths) !== JSON.stringify(expectedGridPaths)) throw new Error(`Unexpected grid paths/order: ${JSON.stringify(result)}`);
+            if (result.gridCardCount !== 6 || result.uniqueGridCount !== 6) throw new Error(`Grid is not six unique cards: ${JSON.stringify(result)}`);
+            if (result.buttonCounts.some((count) => count !== 1)) throw new Error(`A grid card has duplicate/missing Read article controls: ${JSON.stringify(result)}`);
+            if (result.totalReadArticle !== 7) throw new Error(`Expected seven total Read article controls including featured card, found ${result.totalReadArticle}`);
+            if (result.obsoletePathPresent || result.obsoleteTitlePresent) throw new Error(`Obsolete Deere content remains: ${JSON.stringify(result)}`);
+            if (result.allNewsLinks.length !== 7) throw new Error(`Expected seven total newsroom links, found ${JSON.stringify(result.allNewsLinks)}`);
+            if (result.allNewsLinks.filter((path) => path === '/news/agro-ai-enterprise-portal-global-launch').length !== 2) throw new Error('Featured Enterprise Portal link was altered');
+            for (const path of expectedGridPaths.filter((path) => path !== '/news/agro-ai-enterprise-portal-global-launch')) {
+              if (result.allNewsLinks.filter((candidate) => candidate === path).length !== 1) throw new Error(`Unexpected count for ${path}: ${JSON.stringify(result.allNewsLinks)}`);
+            }
+
+            await page.screenshot({ path: 'candidate-native-newsroom.png', fullPage: true });
+
+            const article = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+            const response = await article.goto(publishedUrl, { waitUntil: 'networkidle', timeout: 60000 });
+            if (!response || response.status() !== 200) throw new Error(`Published Deere URL is not 200: ${response?.status()}`);
+            if (article.url().replace(/\/$/, '') !== publishedUrl) throw new Error(`Published Deere URL changed or redirected: ${article.url()}`);
+            const canonical = await article.locator('link[rel="canonical"]').getAttribute('href');
+            if (canonical !== publishedUrl) throw new Error(`Canonical changed: ${canonical}`);
+            const h1 = (await article.locator('h1').first().innerText()).trim();
+            if (h1 !== 'AGRO-AI connects with John Deere Operations Center™') throw new Error(`Published article title changed: ${h1}`);
+            await article.screenshot({ path: 'published-deere-url.png', fullPage: true });
+            await browser.close();
+
+            console.log(JSON.stringify({ nativeBefore, result, publishedUrl, canonical, h1 }, null, 2));
+          })().catch((error) => {
+            console.error(error);
+            process.exit(1);
+          });
+          NODE
+          node validate.cjs | tee candidate-validation.log
+      - name: Upload validation evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: complete-newsroom-patch-validation
+          path: |
+            /tmp/agroai-news-validation/candidate-validation.log
+            /tmp/agroai-news-validation/candidate-native-newsroom.png
+            /tmp/agroai-news-validation/published-deere-url.png
+          retention-days: 2
