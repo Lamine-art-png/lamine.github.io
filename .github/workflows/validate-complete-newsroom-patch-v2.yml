@@ -1,0 +1,126 @@
+name: Validate Complete Newsroom Patch V2
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    if: ${{ github.event.pull_request.title == '[ops] Validate complete newsroom patch v2' }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: hotfix/restore-complete-native-newsroom
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Validate Worker bundle and install browser
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 deploy --dry-run --config cloudflare/field-intelligence-launch-worker/wrangler.toml
+          mkdir -p /tmp/agroai-news-validation
+          cd /tmp/agroai-news-validation
+          npm init -y >/dev/null
+          npm install --no-audit --no-fund playwright@1.55.0 >/dev/null
+          npx playwright install --with-deps chromium >/dev/null
+      - name: Validate decoded runtime script and published URL
+        run: |
+          set -euo pipefail
+          cp cloudflare/field-intelligence-launch-worker/src/index.ts /tmp/agroai-news-validation/worker.ts
+          cd /tmp/agroai-news-validation
+          cat > validate.cjs <<'NODE'
+          const fs = require('fs');
+          const { chromium } = require('playwright');
+          const source = fs.readFileSync('worker.ts', 'utf8');
+          const prefix = 'const NEWSROOM_CARD_SCRIPT = `';
+          const suffix = '`;\n\nfunction johnDeerePublished';
+          const start = source.indexOf(prefix);
+          const end = source.indexOf(suffix, start + prefix.length);
+          if (start < 0 || end < 0) throw new Error('Could not extract NEWSROOM_CARD_SCRIPT');
+          const raw = source.slice(start + prefix.length, end);
+          const script = Function('return `' + raw.replace(/`/g, '\\`') + '`;')();
+
+          const expected = [
+            '/news/agro-ai-connected-john-deere-operations-center',
+            '/news/introducing-agro-ai-field-intelligence',
+            '/news/agro-ai-enterprise-portal-global-launch',
+            '/news/agro-ai-submits-contribution-european-commission-water-sector-digitalisation',
+            '/news/agro-ai-wiseconn-api-integration',
+            '/news/agro-ai-talgil-dream-2-integration',
+          ];
+          const publishedUrl = 'https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center';
+
+          (async () => {
+            const browser = await chromium.launch({ headless: true });
+            const page = await browser.newPage({ viewport: { width: 1440, height: 1200 } });
+            const pageErrors = [];
+            page.on('pageerror', (error) => pageErrors.push(String(error)));
+            await page.goto('https://agroai-343.pages.dev/news', { waitUntil: 'networkidle', timeout: 60000 });
+            await page.addScriptTag({ content: script });
+            await page.waitForTimeout(2500);
+
+            const result = await page.evaluate(({ expected }) => {
+              const normalize = (value) => new URL(value, location.origin).pathname.replace(/\/$/, '');
+              const grid = document.querySelector('div.grid.gap-8.md\\:grid-cols-2');
+              const cards = grid ? [...grid.children].filter((child) => child.tagName === 'A') : [];
+              const gridPaths = cards.map((card) => normalize(card.getAttribute('href') || card.href));
+              const allNewsLinks = [...document.querySelectorAll('a[href]')]
+                .map((link) => normalize(link.getAttribute('href') || link.href))
+                .filter((path) => path.startsWith('/news/'));
+              return {
+                marker: document.documentElement.getAttribute('data-agroai-news-cards-restored'),
+                gridMarker: grid?.getAttribute('data-agroai-newsroom-grid') || null,
+                gridPaths,
+                allNewsLinks,
+                cardButtonCounts: cards.map((card) => ((card.textContent || '').match(/Read article/g) || []).length),
+                exactReadArticleNodes: [...document.querySelectorAll('a,button,span')].filter((node) => (node.textContent || '').trim() === 'Read article').length,
+                obsoletePath: allNewsLinks.includes('/news/john-deere-api-access'),
+                obsoleteTitle: (document.body.innerText || '').includes('AGRO-AI moves forward through John Deere API access process'),
+                expected,
+              };
+            }, { expected });
+
+            console.log(JSON.stringify({ pageErrors, result }, null, 2));
+            if (pageErrors.length) throw new Error(`Browser script errors: ${JSON.stringify(pageErrors)}`);
+            if (result.marker !== 'true' || result.gridMarker !== 'complete') throw new Error(`Completion markers missing: ${JSON.stringify(result)}`);
+            if (JSON.stringify(result.gridPaths) !== JSON.stringify(expected)) throw new Error(`Grid paths differ: ${JSON.stringify(result)}`);
+            if (new Set(result.gridPaths).size !== 6) throw new Error(`Grid paths are not unique: ${JSON.stringify(result)}`);
+            if (result.cardButtonCounts.some((count) => count !== 1)) throw new Error(`Duplicate/missing card controls: ${JSON.stringify(result)}`);
+            if (result.exactReadArticleNodes !== 7) throw new Error(`Expected seven Read article controls: ${JSON.stringify(result)}`);
+            if (result.obsoletePath || result.obsoleteTitle) throw new Error(`Obsolete Deere card remains: ${JSON.stringify(result)}`);
+            if (result.allNewsLinks.length !== 7) throw new Error(`Expected seven total article links: ${JSON.stringify(result)}`);
+            if (result.allNewsLinks.filter((path) => path === '/news/agro-ai-enterprise-portal-global-launch').length !== 2) throw new Error('Featured Enterprise Portal link changed');
+            for (const path of expected.filter((path) => path !== '/news/agro-ai-enterprise-portal-global-launch')) {
+              if (result.allNewsLinks.filter((candidate) => candidate === path).length !== 1) throw new Error(`Unexpected link count for ${path}: ${JSON.stringify(result)}`);
+            }
+            await page.screenshot({ path: 'candidate-native-newsroom.png', fullPage: true });
+
+            const article = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+            const response = await article.goto(publishedUrl, { waitUntil: 'networkidle', timeout: 60000 });
+            const canonical = await article.locator('link[rel="canonical"]').getAttribute('href');
+            const h1 = (await article.locator('h1').first().innerText()).trim();
+            const finalUrl = article.url().replace(/\/$/, '');
+            console.log(JSON.stringify({ status: response?.status(), finalUrl, canonical, h1 }, null, 2));
+            if (!response || response.status() !== 200 || finalUrl !== publishedUrl || canonical !== publishedUrl || h1 !== 'AGRO-AI connects with John Deere Operations Center™') {
+              throw new Error('Published Deere URL, canonical, status, or title changed');
+            }
+            await article.screenshot({ path: 'published-deere-url.png', fullPage: true });
+            await browser.close();
+          })().catch((error) => { console.error(error); process.exit(1); });
+          NODE
+          node validate.cjs | tee candidate-validation.log
+      - name: Upload evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: complete-newsroom-patch-v2
+          path: |
+            /tmp/agroai-news-validation/candidate-validation.log
+            /tmp/agroai-news-validation/candidate-native-newsroom.png
+            /tmp/agroai-news-validation/published-deere-url.png
+          retention-days: 2
