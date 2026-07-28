@@ -184,3 +184,84 @@ jobs:
       - run: npm run test:field-intelligence-launch
       - run: npm run test:i18n
       - run: npm run build
+
+  live-news-production:
+    name: Deploy and verify newsroom production
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Require production credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+      - name: Deploy current news Worker and exact routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 deploy --config cloudflare/field-intelligence-launch-worker/wrangler.toml
+      - name: Remove obsolete broad newsroom routes only
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth_header="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+          api="https://api.cloudflare.com/client/v4"
+          zone_response="$(curl -fsS -H "$auth_header" -H 'Content-Type: application/json' "${api}/zones?name=agroai-pilot.com&account.id=${CLOUDFLARE_ACCOUNT_ID}")"
+          zone_id="$(jq -r '.result[0].id // empty' <<<"$zone_response")"
+          test -n "$zone_id"
+          route_response="$(curl -fsS -H "$auth_header" -H 'Content-Type: application/json' "${api}/zones/${zone_id}/workers/routes")"
+          jq -r '.result[] | select(
+              .pattern == "agroai-pilot.com/news*" or
+              .pattern == "agroai-pilot.com/news/*" or
+              .pattern == "agroai-pilot.com/news/field-intelligence-newsroom.js" or
+              .pattern == "agroai-pilot.com/news/field-intelligence-newsroom.css"
+            ) | [.id, .pattern] | @tsv' <<<"$route_response" > obsolete-newsroom-routes.tsv
+          while IFS=$'\t' read -r route_id route_pattern; do
+            [ -n "${route_id:-}" ] || continue
+            echo "Deleting obsolete broad route: ${route_pattern}"
+            result="$(curl -fsS -X DELETE -H "$auth_header" -H 'Content-Type: application/json' "${api}/zones/${zone_id}/workers/routes/${route_id}")"
+            test "$(jq -r '.success' <<<"$result")" = "true"
+          done < obsolete-newsroom-routes.tsv
+      - name: Verify live newsroom and both articles
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 36); do
+            bust="$(date +%s)-${attempt}"
+            news_status="$(curl -sS -L -H 'Cache-Control: no-cache' -D news.headers -o news.html -w '%{http_code}' --max-time 25 "https://agroai-pilot.com/news?verify=${bust}" || true)"
+            script_status="$(curl -sS -L -H 'Cache-Control: no-cache' -o restore.js -w '%{http_code}' --max-time 25 "https://agroai-pilot.com/news/agroai-news-card-restore.js?verify=${bust}" || true)"
+            jd_status="$(curl -sS -L -H 'Cache-Control: no-cache' -o jd.html -w '%{http_code}' --max-time 25 "https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center?verify=${bust}" || true)"
+            jd_cover_status="$(curl -sS -L -H 'Cache-Control: no-cache' -D jd-cover.headers -o jd-cover.webp -w '%{http_code}' --max-time 25 "https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center/cover.webp?verify=${bust}" || true)"
+            field_status="$(curl -sS -L -o field.html -w '%{http_code}' --max-time 25 "https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence?verify=${bust}" || true)"
+            field_cover_status="$(curl -sS -L -D field-cover.headers -o field-cover.bin -w '%{http_code}' --max-time 25 "https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence/cover.webp?verify=${bust}" || true)"
+            if [ "$news_status" = "200" ] && [ "$script_status" = "200" ] && [ "$jd_status" = "200" ] && [ "$jd_cover_status" = "200" ] && [ "$field_status" = "200" ] && [ "$field_cover_status" = "200" ] && \
+               grep -Fi 'x-agroai-newsroom-source: native-pages-origin' news.headers >/dev/null && \
+               grep -F 'agroai-news-card-restore.js' news.html >/dev/null && \
+               grep -F 'Introducing AGRO-AI Field Intelligence' restore.js >/dev/null && \
+               grep -F 'AGRO-AI connects with John Deere Operations Center™' restore.js >/dev/null && \
+               grep -F 'AGRO-AI connects with John Deere Operations Center™' jd.html >/dev/null && \
+               grep -F 'Agricultural operations do not suffer from a shortage of data.' jd.html >/dev/null && \
+               grep -F "Access is initiated through the user's Operations Center connection." jd.html >/dev/null && \
+               grep -Fi 'x-agroai-asset-source: reviewed-john-deere-cover' jd-cover.headers >/dev/null && \
+               grep -F 'Introducing AGRO-AI Field Intelligence' field.html >/dev/null && \
+               grep -F 'GiM6WZY0HG0' field.html >/dev/null && \
+               grep -Fi 'x-agroai-cover-target: 3840x2160' field-cover.headers >/dev/null; then
+              test "$(wc -c < jd-cover.webp)" -gt 10000
+              echo "NEWSROOM_PRODUCTION_OK"
+              echo "JOHN_DEERE_PRODUCTION_OK"
+              echo "FIELD_INTELLIGENCE_PRODUCTION_OK"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Production verification failed"
+          echo "news=${news_status:-unknown} script=${script_status:-unknown} jd=${jd_status:-unknown} jd_cover=${jd_cover_status:-unknown} field=${field_status:-unknown} field_cover=${field_cover_status:-unknown}"
+          cat news.headers || true
+          cat jd-cover.headers || true
+          cat field-cover.headers || true
+          exit 1
