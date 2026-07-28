@@ -184,3 +184,73 @@ jobs:
       - run: npm run test:field-intelligence-launch
       - run: npm run test:i18n
       - run: npm run build
+
+  deploy-live-newsroom:
+    name: Deploy and verify live newsroom production
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.ref == 'ops/live-newsroom-deploy-verified' }}
+    runs-on: macos-14
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - name: Check out merged main only
+        uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Require production credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+      - name: Deploy reviewed articles and exact routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 deploy --config cloudflare/field-intelligence-launch-worker/wrangler.toml
+      - name: Verify newsroom and both announcements live
+        shell: bash
+        run: |
+          set -euo pipefail
+          verified=0
+          for attempt in $(seq 1 48); do
+            bust="$(date +%s)-${attempt}"
+            origin_status="$(curl -sS -L -o origin.html -w '%{http_code}' --max-time 25 "https://agroai-343.pages.dev/news?verify=${bust}" || true)"
+            news_status="$(curl -sS -L -D news.headers -o news.html -w '%{http_code}' --max-time 25 "https://agroai-pilot.com/news?verify=${bust}" || true)"
+            script_status="$(curl -sS -L -o restore.js -w '%{http_code}' --max-time 25 "https://agroai-pilot.com/news/agroai-news-card-restore.js?verify=${bust}" || true)"
+            jd_status="$(curl -sS -L -o jd.html -w '%{http_code}' --max-time 25 "https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center?verify=${bust}" || true)"
+            jd_cover_status="$(curl -sS -L -D jd-cover.headers -o jd-cover.webp -w '%{http_code}' --max-time 25 "https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center/cover.webp?verify=${bust}" || true)"
+            field_status="$(curl -sS -L -o field.html -w '%{http_code}' --max-time 25 "https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence?verify=${bust}" || true)"
+            field_cover_status="$(curl -sS -L -D field-cover.headers -o field-cover.bin -w '%{http_code}' --max-time 25 "https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence/cover.webp?verify=${bust}" || true)"
+            if [ "$origin_status" = "200" ] && [ "$news_status" = "200" ] && [ "$script_status" = "200" ] && [ "$jd_status" = "200" ] && [ "$jd_cover_status" = "200" ] && [ "$field_status" = "200" ] && [ "$field_cover_status" = "200" ] && \
+               grep -Fi 'x-agroai-newsroom-source: native-pages-origin' news.headers >/dev/null && \
+               grep -F 'agroai-news-card-restore.js' news.html >/dev/null && \
+               grep -F 'Introducing AGRO-AI Field Intelligence' restore.js >/dev/null && \
+               grep -F '/news/introducing-agro-ai-field-intelligence' restore.js >/dev/null && \
+               grep -F 'AGRO-AI connects with John Deere Operations Center™' restore.js >/dev/null && \
+               grep -F '/news/agro-ai-connected-john-deere-operations-center' restore.js >/dev/null && \
+               grep -F 'AGRO-AI connects with John Deere Operations Center™' jd.html >/dev/null && \
+               grep -F 'Agricultural operations do not suffer from a shortage of data.' jd.html >/dev/null && \
+               grep -F "Access is initiated through the user's Operations Center connection." jd.html >/dev/null && \
+               grep -F '<meta name="author" content="AGRO-AI"' jd.html >/dev/null && \
+               grep -Fi 'content-type: image/webp' jd-cover.headers >/dev/null && \
+               grep -Fi 'x-agroai-asset-source: reviewed-john-deere-cover' jd-cover.headers >/dev/null && \
+               grep -F 'Introducing AGRO-AI Field Intelligence' field.html >/dev/null && \
+               grep -F 'GiM6WZY0HG0' field.html >/dev/null && \
+               grep -Fi 'x-agroai-cover-target: 3840x2160' field-cover.headers >/dev/null; then
+              test "$(wc -c < jd-cover.webp)" -gt 10000
+              python3 - <<'PY'
+from pathlib import Path
+import re
+origin = Path('origin.html').read_text()
+live = Path('news.html').read_text()
+clean = re.sub(r'<script src="/news/agroai-news-card-restore\.js" defer data-agroai-news-card-restoration="true"></script>', '', live, count=1)
+assert clean == origin, 'native newsroom markup changed beyond the restoration script tag'
+PY
+              verified=1
+              break
+            fi
+            sleep 5
+          done
+          test "$verified" = "1"
