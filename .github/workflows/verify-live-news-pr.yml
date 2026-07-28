@@ -16,8 +16,8 @@ concurrency:
 jobs:
   verify:
     name: Deploy and verify live newsroom
-    runs-on: macos-14
-    environment: production
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
@@ -30,6 +30,9 @@ jobs:
       JOHN_DEERE_COVER_URL: https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center/cover.webp
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
 
       - name: Require production credentials
         shell: bash
