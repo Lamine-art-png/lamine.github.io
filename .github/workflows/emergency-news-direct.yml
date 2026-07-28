@@ -1,0 +1,91 @@
+name: Emergency News Direct Publish
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/emergency-news-direct.yml"
+
+permissions:
+  contents: write
+
+concurrency:
+  group: agroai-emergency-news-direct
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - name: Require production credentials
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+
+      - name: Deploy reviewed news surfaces
+        run: |
+          set -euo pipefail
+          test -s client/public/news/agro-ai-connected-john-deere-operations-center/index.html
+          test -s client/public/news/agro-ai-connected-john-deere-operations-center/cover.webp
+          test -s client/public/news/introducing-agro-ai-field-intelligence/index.html
+          grep -F 'AGRO-AI connects with John Deere Operations Center™' client/public/news/agro-ai-connected-john-deere-operations-center/index.html >/dev/null
+          grep -F 'Agricultural operations do not suffer from a shortage of data.' client/public/news/agro-ai-connected-john-deere-operations-center/index.html >/dev/null
+          grep -F 'Introducing AGRO-AI Field Intelligence' client/public/news/introducing-agro-ai-field-intelligence/index.html >/dev/null
+          npx --yes wrangler@4.107.0 deploy --config cloudflare/field-intelligence-launch-worker/wrangler.toml
+
+      - name: Verify production publication
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 60); do
+            bust="$(date +%s)-${attempt}"
+            news_code="$(curl -sS -L --connect-timeout 5 --max-time 25 -D news.headers -o news.html -w '%{http_code}' "https://agroai-pilot.com/news?verify=${bust}" || true)"
+            script_code="$(curl -sS -L --connect-timeout 5 --max-time 25 -o restore.js -w '%{http_code}' "https://agroai-pilot.com/news/agroai-news-card-restore.js?verify=${bust}" || true)"
+            jd_code="$(curl -sS -L --connect-timeout 5 --max-time 25 -o jd.html -w '%{http_code}' "https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center?verify=${bust}" || true)"
+            jd_cover_code="$(curl -sS -L --connect-timeout 5 --max-time 25 -D jd-cover.headers -o jd-cover.webp -w '%{http_code}' "https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center/cover.webp?verify=${bust}" || true)"
+            field_code="$(curl -sS -L --connect-timeout 5 --max-time 25 -o field.html -w '%{http_code}' "https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence?verify=${bust}" || true)"
+            if [ "$news_code" = "200" ] && [ "$script_code" = "200" ] && [ "$jd_code" = "200" ] && [ "$jd_cover_code" = "200" ] && [ "$field_code" = "200" ] && \
+               grep -F 'Introducing AGRO-AI Field Intelligence' restore.js >/dev/null && \
+               grep -F '/news/introducing-agro-ai-field-intelligence' restore.js >/dev/null && \
+               grep -F 'AGRO-AI connects with John Deere Operations Center™' restore.js >/dev/null && \
+               grep -F '/news/agro-ai-connected-john-deere-operations-center' restore.js >/dev/null && \
+               grep -F 'AGRO-AI connects with John Deere Operations Center™' jd.html >/dev/null && \
+               grep -F 'Agricultural operations do not suffer from a shortage of data.' jd.html >/dev/null && \
+               grep -F "Access is initiated through the user's Operations Center connection." jd.html >/dev/null && \
+               grep -F '<meta name="author" content="AGRO-AI"' jd.html >/dev/null && \
+               grep -F 'Tuesday, July 28, 2026 at 8:00 AM PDT' jd.html >/dev/null && \
+               grep -F 'San Francisco, California' jd.html >/dev/null && \
+               grep -Fi 'content-type: image/webp' jd-cover.headers >/dev/null && \
+               grep -F 'Introducing AGRO-AI Field Intelligence' field.html >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 5
+          done
+          test "$ready" = "1"
+
+      - name: Record verified production state
+        run: |
+          set -euo pipefail
+          cat > .github/news-production-verification.txt <<EOF
+          VERIFIED_AT_UTC=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+          NEWSROOM_PRODUCTION_OK
+          JOHN_DEERE_PRODUCTION_OK
+          FIELD_INTELLIGENCE_PRODUCTION_OK
+          MAIN_SHA=$(git rev-parse HEAD)
+          EOF
+          git config user.name "AGRO-AI Production Verification"
+          git config user.email "actions@users.noreply.github.com"
+          git add .github/news-production-verification.txt
+          git commit -m "Record verified live newsroom publication"
+          git pull --rebase origin main
+          git push origin HEAD:main
