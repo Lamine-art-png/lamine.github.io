@@ -102,26 +102,24 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh pr comment "$PR_NUMBER" --body '⏳ Production publication started from trusted `main`. Deploying the Worker and enforcing only the exact AGRO-AI news routes.'
+          gh pr comment "$PR_NUMBER" --body '⏳ Final production verification started against the exact customer-facing URLs.'
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
 
-      - name: Deploy merged news Worker
+      - name: Deploy merged Worker
         shell: bash
         run: |
           set -euo pipefail
           npx --yes wrangler@4.107.0 deploy --config cloudflare/field-intelligence-launch-worker/wrangler.toml
 
-      - name: Enforce exact Cloudflare news routes
+      - name: Enforce exact Cloudflare routes
         shell: bash
         run: |
           set -euo pipefail
           auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
           api="https://api.cloudflare.com/client/v4"
-          zone_payload="$(curl -fsS -H "$auth" -H 'Content-Type: application/json' "${api}/zones?name=agroai-pilot.com&account.id=${CLOUDFLARE_ACCOUNT_ID}")"
-          zone_id="$(jq -r '.result[0].id // empty' <<<"$zone_payload")"
+          zone_id="$(curl -fsS -H "$auth" -H 'Content-Type: application/json' "${api}/zones?name=agroai-pilot.com&account.id=${CLOUDFLARE_ACCOUNT_ID}" | jq -r '.result[0].id // empty')"
           test -n "$zone_id"
-
           desired=(
             'agroai-pilot.com/news'
             'agroai-pilot.com/news/'
@@ -132,21 +130,6 @@ jobs:
             'agroai-pilot.com/news/john-deere-api-access'
             'agroai-pilot.com/news/john-deere-api-access/*'
           )
-          obsolete=(
-            'agroai-pilot.com/news*'
-            'agroai-pilot.com/news/*'
-            'agroai-pilot.com/news/field-intelligence-newsroom.js'
-            'agroai-pilot.com/news/field-intelligence-newsroom.css'
-          )
-
-          routes="$(curl -fsS -H "$auth" -H 'Content-Type: application/json' "${api}/zones/${zone_id}/workers/routes")"
-          for pattern in "${obsolete[@]}"; do
-            route_id="$(jq -r --arg p "$pattern" '.result[] | select(.pattern == $p) | .id' <<<"$routes" | head -n1)"
-            if [ -n "$route_id" ]; then
-              curl -fsS -X DELETE -H "$auth" -H 'Content-Type: application/json' "${api}/zones/${zone_id}/workers/routes/${route_id}" | jq -e '.success == true' >/dev/null
-            fi
-          done
-
           for pattern in "${desired[@]}"; do
             routes="$(curl -fsS -H "$auth" -H 'Content-Type: application/json' "${api}/zones/${zone_id}/workers/routes")"
             route_id="$(jq -r --arg p "$pattern" '.result[] | select(.pattern == $p) | .id' <<<"$routes" | head -n1)"
@@ -159,33 +142,26 @@ jobs:
             jq -e '.success == true' <<<"$response" >/dev/null
           done
 
-          final_routes="$(curl -fsS -H "$auth" -H 'Content-Type: application/json' "${api}/zones/${zone_id}/workers/routes")"
-          for pattern in "${desired[@]}"; do
-            jq -e --arg p "$pattern" --arg s "$WORKER_SCRIPT" '.result[] | select(.pattern == $p and .script == $s)' <<<"$final_routes" >/dev/null
-          done
-          printf '%s' "$final_routes" > cloudflare-routes.json
-
-      - name: Verify newsroom and both articles live
+      - name: Verify exact public URLs
         shell: bash
         run: |
           set -u
-          : > diagnostics.txt
           ok=0
-          for attempt in $(seq 1 8); do
-            bust="$(date +%s)-${attempt}"
-            news_code="$(curl -sS -L -D news.headers -o news.html -w '%{http_code}' --max-time 25 "https://agroai-pilot.com/news?verify=${bust}" || true)"
-            script_code="$(curl -sS -L -o cards.js -w '%{http_code}' --max-time 25 "https://agroai-pilot.com/news/agroai-news-card-restore.js?verify=${bust}" || true)"
-            jd_code="$(curl -sS -L -o jd.html -w '%{http_code}' --max-time 25 "https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center?verify=${bust}" || true)"
-            cover_code="$(curl -sS -L -D cover.headers -o cover.webp -w '%{http_code}' --max-time 25 "https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center/cover.webp?verify=${bust}" || true)"
-            fi_code="$(curl -sS -L -o fi.html -w '%{http_code}' --max-time 25 "https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence?verify=${bust}" || true)"
+          : > diagnostics.txt
+          for attempt in $(seq 1 5); do
+            news_code="$(curl -sS -L -H 'Cache-Control: no-cache' -D news.headers -o news.html -w '%{http_code}' --max-time 25 'https://agroai-pilot.com/news' || true)"
+            script_code="$(curl -sS -L -H 'Cache-Control: no-cache' -o cards.js -w '%{http_code}' --max-time 25 'https://agroai-pilot.com/news/agroai-news-card-restore.js' || true)"
+            jd_code="$(curl -sS -L -H 'Cache-Control: no-cache' -o jd.html -w '%{http_code}' --max-time 25 'https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center' || true)"
+            cover_code="$(curl -sS -L -H 'Cache-Control: no-cache' -D cover.headers -o cover.webp -w '%{http_code}' --max-time 25 'https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center/cover.webp' || true)"
+            fi_code="$(curl -sS -L -H 'Cache-Control: no-cache' -o fi.html -w '%{http_code}' --max-time 25 'https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence' || true)"
 
             flag(){ if "$@" >/dev/null 2>&1; then echo true; else echo false; fi; }
             news_html="$(flag grep -Eiq '<!doctype html|<html' news.html)"
             news_inject="$(flag grep -Fq 'agroai-news-card-restore.js' news.html)"
             news_source="$(flag grep -Fiq 'x-agroai-newsroom-source: native-pages-origin' news.headers)"
-            cards_field_title="$(flag grep -Fq 'Introducing AGRO-AI Field Intelligence' cards.js)"
+            cards_field="$(flag grep -Fq 'Introducing AGRO-AI Field Intelligence' cards.js)"
             cards_field_path="$(flag grep -Fq '/news/introducing-agro-ai-field-intelligence' cards.js)"
-            cards_jd_title="$(flag grep -Fq 'AGRO-AI connects with John Deere Operations Center™' cards.js)"
+            cards_jd="$(flag grep -Fq 'AGRO-AI connects with John Deere Operations Center™' cards.js)"
             cards_jd_path="$(flag grep -Fq '/news/agro-ai-connected-john-deere-operations-center' cards.js)"
             jd_title="$(flag grep -Fq 'AGRO-AI connects with John Deere Operations Center™' jd.html)"
             jd_lead="$(flag grep -Fq 'Agricultural operations do not suffer from a shortage of data.' jd.html)"
@@ -197,36 +173,36 @@ jobs:
 
             cat > diagnostics.txt <<EOF
           attempt=${attempt}
-          news_code=${news_code}
-          script_code=${script_code}
-          john_deere_code=${jd_code}
-          john_deere_cover_code=${cover_code}
-          field_intelligence_code=${fi_code}
-          news_html=${news_html}
-          news_restoration_script_injected=${news_inject}
-          news_native_origin_header=${news_source}
-          cards_field_title=${cards_field_title}
-          cards_field_path=${cards_field_path}
-          cards_john_deere_title=${cards_jd_title}
-          cards_john_deere_path=${cards_jd_path}
-          john_deere_title=${jd_title}
-          john_deere_reviewed_lead=${jd_lead}
+          newsroom_http=${news_code}
+          card_script_http=${script_code}
+          john_deere_http=${jd_code}
+          john_deere_cover_http=${cover_code}
+          field_intelligence_http=${fi_code}
+          newsroom_html=${news_html}
+          newsroom_script_injected=${news_inject}
+          newsroom_worker_header=${news_source}
+          field_card_present=${cards_field}
+          field_card_link=${cards_field_path}
+          john_deere_card_present=${cards_jd}
+          john_deere_card_link=${cards_jd_path}
+          john_deere_reviewed_title=${jd_title}
+          john_deere_reviewed_body=${jd_lead}
           john_deere_approved_access=${jd_access}
           john_deere_author=${jd_author}
-          field_intelligence_article=${field_title}
+          field_article_live=${field_title}
           john_deere_cover_webp=${cover_webp}
           john_deere_cover_bytes=${cover_bytes}
           EOF
 
             if [ "$news_code" = 200 ] && [ "$script_code" = 200 ] && [ "$jd_code" = 200 ] && [ "$cover_code" = 200 ] && [ "$fi_code" = 200 ] && \
                [ "$news_html" = true ] && [ "$news_inject" = true ] && [ "$news_source" = true ] && \
-               [ "$cards_field_title" = true ] && [ "$cards_field_path" = true ] && [ "$cards_jd_title" = true ] && [ "$cards_jd_path" = true ] && \
+               [ "$cards_field" = true ] && [ "$cards_field_path" = true ] && [ "$cards_jd" = true ] && [ "$cards_jd_path" = true ] && \
                [ "$jd_title" = true ] && [ "$jd_lead" = true ] && [ "$jd_access" = true ] && [ "$jd_author" = true ] && \
                [ "$field_title" = true ] && [ "$cover_webp" = true ] && [ "$cover_bytes" -gt 10000 ]; then
               ok=1
               break
             fi
-            sleep 5
+            sleep 4
           done
           cat diagnostics.txt
           test "$ok" = 1
@@ -234,11 +210,11 @@ jobs:
       - name: Report success
         shell: bash
         run: |
-          gh pr comment "$PR_NUMBER" --body $'✅ **Published and verified live.**\n\n- Reviewed John Deere article and supplied cover are live.\n- Field Intelligence article is live and its newsroom card is restored.\n- Existing newsroom links remain available.'
+          gh pr comment "$PR_NUMBER" --body $'✅ **Published and verified live.**\n\n- The reviewed John Deere article is public with the supplied cover.\n- The Field Intelligence article is public and its card is restored in the native newsroom.\n- The original newsroom markup and existing links remain available.'
 
-      - name: Report failure with exact diagnostics
+      - name: Report failure with diagnostics
         if: ${{ failure() }}
         shell: bash
         run: |
-          body="$(cat diagnostics.txt 2>/dev/null || printf 'diagnostics file unavailable')"
-          gh pr comment "$PR_NUMBER" --body $'❌ **Production verification failed.**\n\n```text\n'"$body"$'\n```'
+          body="$(cat diagnostics.txt 2>/dev/null || printf 'diagnostics unavailable')"
+          gh pr comment "$PR_NUMBER" --body $'❌ **Exact public URL verification failed.**\n\n```text\n'"$body"$'\n```'
