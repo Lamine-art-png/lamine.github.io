@@ -60,10 +60,15 @@ jobs:
                       chain,
                     };
                   });
+                const grid = [...document.querySelectorAll('div.grid')].find((candidate) =>
+                  [...candidate.children].filter((child) => child.tagName === 'A' && normalize(child.getAttribute('href') || child.href).startsWith('/news/')).length >= 4,
+                );
                 return {
                   title: document.title,
                   bodyText: document.body.innerText.replace(/\s+/g, ' ').trim().slice(0, 7000),
                   links,
+                  gridClass: grid?.className || '',
+                  gridCards: grid ? [...grid.children].map((child) => child.outerHTML) : [],
                   articleCount: document.querySelectorAll('article').length,
                   listItemCount: document.querySelectorAll('li').length,
                   readArticleCount: [...document.querySelectorAll('a,button')].filter(el => /read article/i.test(el.textContent || '')).length,
