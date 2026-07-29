@@ -277,7 +277,7 @@ def create_api_checkout(
             )
             .first()
         )
-        if existing and existing.status not in {"canceled"}:
+        if existing and existing.status not in {"canceled", "checkout_expired"}:
             raise HTTPException(status_code=409, detail={"code": "api_subscription_already_exists"})
         _stripe()
         customer_id = ctx.organization.stripe_customer_id
@@ -303,10 +303,19 @@ def create_api_checkout(
             db.add(existing)
             db.flush()
         else:
+            # A canceled subscription or expired Checkout may be retried on the same
+            # organization slot. Clear the prior Stripe lifecycle so events from the
+            # new subscription can map to this local row without an ID conflict.
             existing.plan_id = plan.id
             existing.status = "checkout_pending"
             existing.billing_interval = payload.billing_interval
             existing.stripe_customer_id = customer_id
+            existing.stripe_subscription_id = None
+            existing.current_period_start = None
+            existing.current_period_end = None
+            existing.grace_ends_at = None
+            existing.cancel_at_period_end = False
+            existing.stripe_state_updated_at = None
         existing.stripe_price_id = price_id
         metadata = {
             "organization_id": ctx.organization.id,
@@ -603,6 +612,13 @@ async def api_stripe_webhook(
         subscription.stripe_subscription_id = obj.get("subscription") or subscription.stripe_subscription_id
         subscription.stripe_customer_id = obj.get("customer") or subscription.stripe_customer_id
         subscription.status = "active" if obj.get("payment_status") in {"paid", "no_payment_required"} else "trialing"
+    elif event_type == "checkout.session.expired":
+        # An abandoned Stripe Checkout must release the local active slot so the
+        # organization can start a fresh idempotent Checkout. It was never a paid
+        # subscription, so do not emit a subscription-canceled notification.
+        subscription.status = "checkout_expired"
+        subscription.grace_ends_at = None
+        subscription.cancel_at_period_end = False
     elif event_type.startswith("customer.subscription."):
         subscription.stripe_subscription_id = obj.get("id") or subscription.stripe_subscription_id
         subscription.stripe_customer_id = obj.get("customer") or subscription.stripe_customer_id

@@ -3,6 +3,7 @@ import { createBrowserRouter, Navigate } from "react-router";
 import { MainLayout } from "./components/MainLayout";
 import { OperationRouteBoundary } from "./components/OperationRouteBoundary";
 import { PlatformApplicationGate } from "./components/PlatformApplicationGate";
+import { PlatformBillingPage } from "./components/PlatformBillingPage";
 import { PlatformConsoleApp } from "./components/PlatformConsole";
 import { PlatformSafetyNotice } from "./components/PlatformSafetyNotice";
 import { RouteRecovery } from "./components/RouteRecovery";
@@ -29,6 +30,9 @@ function PortalRouteError() {
 function PlatformProduct() {
   const { platformDeveloper } = useAuth();
   if (!platformDeveloper) return <PlatformApplicationGate />;
+  const path = window.location.pathname.replace(/\/+$/, "") || "/";
+  const billingPath = window.location.hostname.toLowerCase() === "platform.agroai-pilot.com" ? "/billing" : "/platform/billing";
+  if (path === billingPath || path === "/developers/api/billing") return <PlatformBillingPage />;
   return <><PlatformConsoleApp /><PlatformSafetyNotice /></>;
 }
 
@@ -71,6 +75,7 @@ const operationRoutes = [
   { path: "settings", lazy: lazyComponent(() => import("./components/SettingsPage"), "SettingsPage") },
   { path: "team", lazy: lazyComponent(() => import("./components/MonetizedTeamV2"), "MonetizedTeamV2") },
   { path: "developers/api", element: <Navigate to="/platform" replace /> },
+  { path: "developers/api/billing", element: <Navigate to="/platform/billing" replace /> },
   { path: "onboarding", lazy: lazyComponent(() => import("./components/ProductShell"), "OnboardingPage") },
   { path: "*", Component: RouteRecovery },
 ];

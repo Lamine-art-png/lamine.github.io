@@ -1,6 +1,27 @@
 import assert from "node:assert/strict";
 import { onRequest } from "../../functions/platform-api/[[path]].ts";
 
+function htmlFor(pathname) {
+  const head = '<meta name="robots" content="noindex" />';
+  if (pathname === "/platform-api/index.html") {
+    return `<html data-agroai-platform-page="landing"><head>${head}<title>AGRO-AI Platform API</title></head><body>private beta</body></html>`;
+  }
+  if (pathname === "/platform-api/docs/index.html") {
+    return `<html data-agroai-platform-page="docs"><head>${head}<title>AGRO-AI Platform API Documentation</title></head><body>private beta</body></html>`;
+  }
+  const titles = new Map([
+    ["/platform-api/reference.html", "API reference"],
+    ["/platform-api/changelog.html", "Changelog"],
+    ["/platform-api/docs/authentication.html", "Authentication"],
+    ["/platform-api/docs/pagination.html", "Pagination"],
+    ["/platform-api/docs/errors.html", "Errors"],
+    ["/platform-api/docs/rate-limits.html", "Rate limits"],
+    ["/platform-api/docs/support.html", "Support"],
+  ]);
+  const title = titles.get(pathname) || "AGRO-AI Platform API";
+  return `<html><head>${head}<title>${title} — AGRO-AI Platform API</title></head><body>private beta</body></html>`;
+}
+
 async function invoke(pathname, flags = {}, options = {}) {
   const fetched = [];
   const response = await onRequest({
@@ -17,11 +38,11 @@ async function invoke(pathname, flags = {}, options = {}) {
           const url = new URL(request.url);
           fetched.push(url.pathname);
           if (options.assetFailure) return new Response("missing", { status: 404 });
-          const html = '<html><head><meta name="robots" content="noindex" /></head><body>private beta</body></html>';
-          return new Response(url.pathname.endsWith(".html") ? html : "asset", {
+          const isHtml = url.pathname.endsWith(".html");
+          return new Response(isHtml ? htmlFor(url.pathname) : "asset", {
             status: 200,
             headers: {
-              "content-type": url.pathname.endsWith(".html") ? "text/html" : "text/plain",
+              "content-type": isHtml ? "text/html" : "text/plain",
               etag: '"private-static-representation"',
               "content-encoding": "identity",
             },

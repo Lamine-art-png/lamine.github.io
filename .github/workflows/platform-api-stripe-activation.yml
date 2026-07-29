@@ -1,0 +1,290 @@
+name: Platform API Stripe Activation
+
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: Stripe and deployment mode
+        required: true
+        type: choice
+        options:
+          - test
+          - live
+      action:
+        description: Plan only or provision Stripe resources
+        required: true
+        type: choice
+        options:
+          - plan
+          - provision
+        default: plan
+      configure_render:
+        description: Apply monthly billing configuration to the selected Render service
+        required: true
+        type: boolean
+        default: false
+      deploy:
+        description: Deploy the configured Render service
+        required: true
+        type: boolean
+        default: false
+      activate_catalog:
+        description: Activate the approved API plan and operation-cost catalog
+        required: true
+        type: boolean
+        default: false
+      prove_checkout:
+        description: Prove annual denial and create one monthly Checkout session
+        required: true
+        type: boolean
+        default: false
+      confirmation:
+        description: Exact activation phrase documented in the runbook
+        required: false
+        type: string
+      reason:
+        description: Auditable commercial activation reason
+        required: false
+        type: string
+        default: Controlled monthly Platform API Stripe activation
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-api-stripe-${{ inputs.mode }}
+  cancel-in-progress: false
+
+jobs:
+  activate:
+    name: ${{ inputs.mode == 'live' && 'Activate live monthly Platform billing' || 'Activate test monthly Platform billing' }}
+    runs-on: ubuntu-latest
+    environment: ${{ inputs.mode == 'live' && 'production' || 'staging' }}
+    env:
+      PLATFORM_API_STRIPE_SECRET_KEY: ${{ inputs.mode == 'live' && secrets.PLATFORM_API_STRIPE_LIVE_SECRET_KEY || secrets.PLATFORM_API_STRIPE_TEST_SECRET_KEY }}
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      RENDER_SERVICE_ID: ${{ inputs.mode == 'live' && secrets.PRODUCTION_API_SERVICE_ID || secrets.STAGING_API_SERVICE_ID }}
+      API_BASE_URL: ${{ inputs.mode == 'live' && 'https://api.agroai-pilot.com' || secrets.STAGING_API_URL }}
+      PLATFORM_API_ADMIN_BEARER_TOKEN: ${{ inputs.mode == 'live' && secrets.PLATFORM_API_ADMIN_BEARER_TOKEN || secrets.STAGING_PLATFORM_API_ADMIN_BEARER_TOKEN }}
+      PLATFORM_API_BILLING_SMOKE_BEARER_TOKEN: ${{ inputs.mode == 'live' && secrets.PLATFORM_API_BILLING_SMOKE_BEARER_TOKEN || secrets.STAGING_PLATFORM_API_BILLING_SMOKE_BEARER_TOKEN }}
+      PUBLIC_REPORT: ${{ runner.temp }}/platform-api-stripe-monthly-provisioning.json
+      SECRET_REPORT: ${{ runner.temp }}/platform-api-stripe-monthly-secrets.env
+      RENDER_REPORT: ${{ runner.temp }}/platform-api-render-monthly-configuration.json
+      ACTIVATION_REPORT: ${{ runner.temp }}/platform-api-billing-catalog-activation.json
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Validate requested activation boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.action }}" == "plan" ]]; then
+            [[ "${{ inputs.configure_render }}" == "false" ]]
+            [[ "${{ inputs.deploy }}" == "false" ]]
+            [[ "${{ inputs.activate_catalog }}" == "false" ]]
+            [[ "${{ inputs.prove_checkout }}" == "false" ]]
+            exit 0
+          fi
+
+          if [[ "${{ inputs.mode }}" == "live" ]]; then
+            required="PROVISION AND ACTIVATE AGROAI PLATFORM LIVE MONTHLY BILLING"
+          else
+            required="PROVISION AND ACTIVATE AGROAI PLATFORM TEST MONTHLY BILLING"
+          fi
+          [[ "${{ inputs.confirmation }}" == "$required" ]]
+          [[ -n "${PLATFORM_API_STRIPE_SECRET_KEY:-}" ]]
+
+          if [[ "${{ inputs.deploy }}" == "true" ]]; then
+            [[ "${{ inputs.configure_render }}" == "true" ]]
+          fi
+          if [[ "${{ inputs.activate_catalog }}" == "true" ]]; then
+            [[ "${{ inputs.deploy }}" == "true" ]]
+            [[ -n "${PLATFORM_API_ADMIN_BEARER_TOKEN:-}" ]]
+          fi
+          if [[ "${{ inputs.prove_checkout }}" == "true" ]]; then
+            [[ "${{ inputs.activate_catalog }}" == "true" ]]
+            [[ -n "${PLATFORM_API_BILLING_SMOKE_BEARER_TOKEN:-}" ]]
+          fi
+
+      - name: Install activation dependencies
+        run: python -m pip install --disable-pip-version-check stripe==15.3.1 pytest==8.2.2
+
+      - name: Run monthly activation contract tests
+        working-directory: agroai_api
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: python -m pytest -p no:debugging -q --tb=short tests/unit/test_platform_api_stripe_activation.py
+
+      - name: Build redacted monthly provisioning plan
+        working-directory: agroai_api
+        run: |
+          python scripts/provision_platform_stripe_monthly.py \
+            --mode "${{ inputs.mode }}" \
+            --public-output "$PUBLIC_REPORT" \
+            --secrets-output "$SECRET_REPORT"
+
+      - name: Provision Stripe monthly products, meter, portal and webhook
+        if: inputs.action == 'provision'
+        working-directory: agroai_api
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.mode }}" == "live" ]]; then
+            confirmation="PROVISION AGROAI PLATFORM LIVE MONTHLY BILLING"
+          else
+            confirmation="PROVISION AGROAI PLATFORM TEST MONTHLY BILLING"
+          fi
+          python scripts/provision_platform_stripe_monthly.py \
+            --mode "${{ inputs.mode }}" \
+            --apply \
+            --approve-current-catalog \
+            --confirmation "$confirmation" \
+            --public-output "$PUBLIC_REPORT" \
+            --secrets-output "$SECRET_REPORT"
+          chmod 600 "$SECRET_REPORT"
+          jq -e '
+            .billing_intervals_enabled == ["monthly"] and
+            .annual_checkout_enabled == false and
+            .render_env.PLATFORM_API_PRICING_ENABLED == "false" and
+            ([.approved_plans[] | select(.identifier == "developer" and .monthly_price_cents == 14900 and .included_credits_per_month == 250000 and .overage_price_per_1000_cents == 75)] | length) == 1 and
+            ([.approved_plans[] | select(.identifier == "scale" and .monthly_price_cents == 74900 and .included_credits_per_month == 2000000 and .overage_price_per_1000_cents == 35)] | length) == 1
+          ' "$PUBLIC_REPORT"
+
+      - name: Configure the selected Render service
+        if: inputs.action == 'provision' && inputs.configure_render
+        working-directory: agroai_api
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ inputs.mode }}" == "live" ]]; then
+            confirmation="CONFIGURE AGROAI PLATFORM LIVE MONTHLY BILLING"
+          else
+            confirmation="CONFIGURE AGROAI PLATFORM TEST MONTHLY BILLING"
+          fi
+          deploy_args=()
+          if [[ "${{ inputs.deploy }}" == "true" ]]; then
+            deploy_args+=(--deploy)
+          fi
+          python scripts/configure_platform_billing_render_monthly.py \
+            --mode "${{ inputs.mode }}" \
+            --apply \
+            "${deploy_args[@]}" \
+            --commit-id "$GITHUB_SHA" \
+            --confirmation "$confirmation" \
+            --provisioning-report "$PUBLIC_REPORT" \
+            --secrets-file "$SECRET_REPORT" \
+            --service-id "$RENDER_SERVICE_ID" \
+            --report-output "$RENDER_REPORT"
+
+      - name: Wait for billing runtime deployment
+        if: inputs.action == 'provision' && inputs.deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "${API_BASE_URL:-}" ]]
+          ready=0
+          for attempt in $(seq 1 45); do
+            code="$(curl -sS --connect-timeout 5 --max-time 15 -o "$RUNNER_TEMP/platform-health.json" -w '%{http_code}' "$API_BASE_URL/v1/platform/health" || true)"
+            if [[ "$code" == "200" ]] && jq -e '.status == "ready" and .platform_api_enabled == true and .developer_control_plane_enabled == true' "$RUNNER_TEMP/platform-health.json" >/dev/null 2>&1; then
+              ready=1
+              break
+            fi
+            sleep 10
+          done
+          [[ "$ready" == "1" ]]
+
+      - name: Prove Stripe webhook signing is configured
+        if: inputs.action == 'provision' && inputs.deploy
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS --connect-timeout 5 --max-time 20 \
+            -o "$RUNNER_TEMP/platform-webhook-denial.json" \
+            -w '%{http_code}' \
+            -X POST "$API_BASE_URL/v1/platform/billing/stripe-webhook" \
+            -H 'Stripe-Signature: t=0,v1=invalid' \
+            -H 'Content-Type: application/json' \
+            --data '{}')"
+          [[ "$code" == "400" ]]
+
+      - name: Activate the approved database catalog
+        if: inputs.action == 'provision' && inputs.activate_catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          response_code="$(curl -sS --connect-timeout 5 --max-time 30 \
+            -o "$ACTIVATION_REPORT" \
+            -w '%{http_code}' \
+            -X POST "$API_BASE_URL/v1/platform/admin/billing/catalog/activation" \
+            -H "Authorization: Bearer $PLATFORM_API_ADMIN_BEARER_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data "$(jq -nc --arg reason '${{ inputs.reason }}' '{catalog_version:"2026-07-provisional",active:true,reason:$reason}')")"
+          [[ "$response_code" == "200" ]]
+          jq -e '.catalog_version == "2026-07-provisional" and .active == true and .plans == 4 and .operation_costs > 0' "$ACTIVATION_REPORT"
+
+      - name: Prove provisional public pricing remains closed
+        if: inputs.action == 'provision' && inputs.activate_catalog
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS --connect-timeout 5 --max-time 20 -o "$RUNNER_TEMP/platform-pricing-closed.json" -w '%{http_code}' "$API_BASE_URL/v1/platform/pricing")"
+          [[ "$code" == "404" ]]
+
+      - name: Prove annual Checkout is denied
+        if: inputs.action == 'provision' && inputs.prove_checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl -sS --connect-timeout 5 --max-time 30 \
+            -o "$RUNNER_TEMP/platform-annual-denial.json" \
+            -w '%{http_code}' \
+            -X POST "$API_BASE_URL/v1/platform/developer/billing/checkout" \
+            -H "Authorization: Bearer $PLATFORM_API_BILLING_SMOKE_BEARER_TOKEN" \
+            -H "Idempotency-Key: platform-annual-denial-$GITHUB_SHA" \
+            -H 'Content-Type: application/json' \
+            --data '{"plan":"developer","billing_interval":"annual"}')"
+          [[ "$code" == "503" ]]
+          jq -e '(.code // .detail.code) == "api_plan_price_not_configured"' "$RUNNER_TEMP/platform-annual-denial.json"
+
+      - name: Prove authenticated monthly Stripe Checkout creation
+        if: inputs.action == 'provision' && inputs.prove_checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          checkout_code="$(curl -sS --connect-timeout 5 --max-time 30 \
+            -o "$RUNNER_TEMP/platform-checkout.json" \
+            -w '%{http_code}' \
+            -X POST "$API_BASE_URL/v1/platform/developer/billing/checkout" \
+            -H "Authorization: Bearer $PLATFORM_API_BILLING_SMOKE_BEARER_TOKEN" \
+            -H "Idempotency-Key: platform-monthly-activation-$GITHUB_SHA" \
+            -H 'Content-Type: application/json' \
+            --data '{"plan":"developer","billing_interval":"monthly"}')"
+          [[ "$checkout_code" == "200" ]]
+          jq -e '.checkout_url | startswith("https://checkout.stripe.com/")' "$RUNNER_TEMP/platform-checkout.json"
+          jq '{checkout_created:true,subscription_status:.subscription.status,plan:.subscription.plan,billing_interval:.subscription.billing_interval}' "$RUNNER_TEMP/platform-checkout.json" > "$RUNNER_TEMP/platform-checkout-proof.json"
+
+      - name: Publish redacted activation evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/platform-billing-evidence"
+          [[ -f "$PUBLIC_REPORT" ]] && cp "$PUBLIC_REPORT" "$RUNNER_TEMP/platform-billing-evidence/stripe-provisioning.json" || true
+          [[ -f "$RENDER_REPORT" ]] && cp "$RENDER_REPORT" "$RUNNER_TEMP/platform-billing-evidence/render-configuration.json" || true
+          [[ -f "$ACTIVATION_REPORT" ]] && cp "$ACTIVATION_REPORT" "$RUNNER_TEMP/platform-billing-evidence/catalog-activation.json" || true
+          [[ -f "$RUNNER_TEMP/platform-annual-denial.json" ]] && cp "$RUNNER_TEMP/platform-annual-denial.json" "$RUNNER_TEMP/platform-billing-evidence/annual-denial.json" || true
+          [[ -f "$RUNNER_TEMP/platform-checkout-proof.json" ]] && cp "$RUNNER_TEMP/platform-checkout-proof.json" "$RUNNER_TEMP/platform-billing-evidence/checkout-proof.json" || true
+          rm -f "$SECRET_REPORT"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: platform-api-stripe-${{ inputs.mode }}-${{ github.sha }}
+          path: ${{ runner.temp }}/platform-billing-evidence
+          if-no-files-found: error
+          retention-days: 30

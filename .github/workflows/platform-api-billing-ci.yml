@@ -1,0 +1,143 @@
+name: Platform API Billing CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "agroai_api/scripts/_platform_stripe_resources.py"
+      - "agroai_api/scripts/provision_platform_stripe_monthly.py"
+      - "agroai_api/scripts/configure_platform_billing_render_monthly.py"
+      - "agroai_api/tests/unit/test_platform_api_stripe_activation.py"
+      - "figma-enterprise-v4/src/app/components/PlatformBillingPage.tsx"
+      - "figma-enterprise-v4/src/app/routes.tsx"
+      - ".github/workflows/platform-api-stripe-activation.yml"
+      - ".github/workflows/platform-api-billing-ci.yml"
+      - "docs/PLATFORM_API_STRIPE_ACTIVATION.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-api-billing-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  billing-contract:
+    name: Monthly billing and Stripe activation contract
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install isolated activation dependencies
+        run: python -m pip install --disable-pip-version-check stripe==15.3.1 pytest==8.2.2 pyyaml==6.0.2
+
+      - name: Compile activation modules
+        run: >-
+          python -m compileall -q
+          scripts/_platform_stripe_resources.py
+          scripts/provision_platform_stripe_monthly.py
+          scripts/configure_platform_billing_render_monthly.py
+          tests/unit/test_platform_api_stripe_activation.py
+
+      - name: Execute monthly billing safety suite
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: python -m pytest -p no:debugging -q --tb=short tests/unit/test_platform_api_stripe_activation.py
+
+      - name: Parse activation workflows
+        working-directory: .
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+
+          for path in (
+              Path('.github/workflows/platform-api-billing-ci.yml'),
+              Path('.github/workflows/platform-api-stripe-activation.yml'),
+          ):
+              payload = yaml.safe_load(path.read_text())
+              assert isinstance(payload, dict), path
+              assert payload.get('jobs'), path
+              print(f'{path}: valid YAML')
+          PY
+
+      - name: Verify no activation secret material is committed
+        working-directory: .
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          paths = [
+              Path('agroai_api/scripts/_platform_stripe_resources.py'),
+              Path('agroai_api/scripts/provision_platform_stripe_monthly.py'),
+              Path('agroai_api/scripts/configure_platform_billing_render_monthly.py'),
+              Path('.github/workflows/platform-api-stripe-activation.yml'),
+              Path('docs/PLATFORM_API_STRIPE_ACTIVATION.md'),
+          ]
+          patterns = {
+              'live Stripe secret': re.compile(r'sk_live_[A-Za-z0-9]{12,}'),
+              'test Stripe secret': re.compile(r'sk_test_[A-Za-z0-9]{12,}'),
+              'webhook secret': re.compile(r'whsec_[A-Za-z0-9]{12,}'),
+          }
+          for path in paths:
+              text = path.read_text()
+              for name, pattern in patterns.items():
+                  assert not pattern.search(text), f'{name} found in {path}'
+          print('No committed Stripe secret material found')
+          PY
+
+  portal-contract:
+    name: Billing UI production build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: figma-enterprise-v4
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+
+      - run: npm ci --no-audit --no-fund
+
+      - name: Production build
+        env:
+          VITE_DEPLOYMENT_ENVIRONMENT: production
+          VITE_BUILD_SHA: ${{ github.sha }}
+          VITE_API_BASE_URL: https://api.agroai-pilot.com
+        run: npm run build
+
+      - name: Assert customer billing identity and monthly boundary
+        run: |
+          node - <<'NODE'
+          const fs = require('node:fs');
+          const page = fs.readFileSync('src/app/components/PlatformBillingPage.tsx', 'utf8');
+          const routes = fs.readFileSync('src/app/routes.tsx', 'utf8');
+
+          for (const required of [
+            'agro-ai-logo-1.png',
+            'monthlyPriceCents: 14_900',
+            'monthlyPriceCents: 74_900',
+            'billing_interval: "monthly"',
+            'https://checkout.stripe.com/',
+            'https://billing.stripe.com/',
+          ]) {
+            if (!page.includes(required)) throw new Error(`missing billing UI contract: ${required}`);
+          }
+          if (/billing_interval:\s*"annual"/.test(page)) throw new Error('annual Checkout is exposed in the customer UI');
+          if (!routes.includes('PlatformBillingPage')) throw new Error('Platform billing route missing');
+          if (!routes.includes('/developers/api/billing')) throw new Error('Stripe return alias missing');
+          console.log('Platform billing UI contract passed');
+          NODE
