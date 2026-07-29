@@ -1,10 +1,8 @@
 """Always-on background worker for Field Intelligence.
 
-Drains the durable processing and asset-deletion job queues on an interval so a
-50-item batch is fully processed without any additional user traffic. Integrates
-with the existing lease/heartbeat/retry semantics on ``IngestionJob`` and shuts
-down cleanly. It is intentionally independent of the WiseConn sync scheduler so
-field capture works even when connectors are disabled.
+Drains durable Field Intelligence processing, WhatsApp ingress/outbox, and
+asset-deletion queues. Every queue uses independent idempotency and lease
+semantics; one provider failure cannot crash the scheduler.
 """
 from __future__ import annotations
 
@@ -20,7 +18,9 @@ from app.core.config import settings
 from app.db.base import SessionLocal
 from app.models.field_intelligence import FieldWorkerHeartbeat
 from app.models.operational_records import IngestionJob
+from app.models.whatsapp import WhatsAppInboundEvent, WhatsAppOutboundMessage
 from app.services import field_intelligence as svc
+from app.services import whatsapp_field_intelligence as whatsapp_svc
 from app.services.field_intelligence_vision_extension import install_field_vision_extension
 from app.services.release_contract import runtime_build_sha
 
@@ -65,7 +65,7 @@ def queue_health(db) -> dict:
 
     stale_after = timedelta(seconds=int(getattr(settings, "FIELD_STALE_JOB_ALERT_SECONDS", 900)))
     cutoff = datetime.utcnow() - stale_after
-    report: dict = {"depth": {}, "stale": {}}
+    report: dict = {"depth": {}, "stale": {}, "whatsapp": {}}
     for job_type in _FIELD_JOB_TYPES:
         depths: dict[str, int] = {}
         for job_status in ("queued", "running", "failed"):
@@ -87,6 +87,21 @@ def queue_health(db) -> dict:
         stale_jobs.labels(job_type=job_type).set(stale)
         report["depth"][job_type] = depths
         report["stale"][job_type] = stale
+
+    report["whatsapp"] = {
+        "inbound_queued": db.query(WhatsAppInboundEvent).filter(
+            WhatsAppInboundEvent.status.in_(["queued", "processing"])
+        ).count(),
+        "inbound_failed": db.query(WhatsAppInboundEvent).filter(
+            WhatsAppInboundEvent.status == "failed"
+        ).count(),
+        "outbound_queued": db.query(WhatsAppOutboundMessage).filter(
+            WhatsAppOutboundMessage.status.in_(["queued", "sending"])
+        ).count(),
+        "outbound_failed": db.query(WhatsAppOutboundMessage).filter(
+            WhatsAppOutboundMessage.status == "failed"
+        ).count(),
+    }
     return report
 
 
@@ -109,12 +124,7 @@ def worker_status(db) -> dict:
 
 
 def drain_once(*, worker_id: str | None = None) -> dict:
-    """Process a bounded slice of queued jobs on a fresh session.
-
-    The emergency kill switch pauses *processing* (no new transcription /
-    extraction work) while deletion and orphan cleanup — data-protection
-    obligations — keep running.
-    """
+    """Process a bounded slice of every durable Field Intelligence queue."""
     from app.services.field_intelligence_rollout import kill_switch_active
 
     worker_id = worker_id or _WORKER_INSTANCE_ID
@@ -124,12 +134,21 @@ def drain_once(*, worker_id: str | None = None) -> dict:
         paused = kill_switch_active(db)
         if paused:
             processed = {"skipped": "kill_switch"}
+            whatsapp_ingress = {"skipped": "kill_switch"}
         else:
             processed = svc.run_field_intelligence_jobs(db, limit=batch, worker_id=worker_id)
+            whatsapp_ingress = whatsapp_svc.run_whatsapp_ingress_jobs(
+                db, limit=batch, worker_id=worker_id
+            )
+        whatsapp_outbound = whatsapp_svc.run_whatsapp_outbox(
+            db, limit=batch, worker_id=worker_id
+        )
         deletions = svc.run_field_intelligence_deletions(db, limit=batch, worker_id=worker_id)
         orphans = svc.run_field_intelligence_orphan_cleanup(db, limit=batch, worker_id=worker_id)
         tick = {
             "processing": processed,
+            "whatsapp_ingress": whatsapp_ingress,
+            "whatsapp_outbound": whatsapp_outbound,
             "deletions": deletions,
             "orphan_cleanup": orphans,
             "paused": paused,
@@ -150,21 +169,37 @@ def drain_until_empty(db, *, max_rounds: int = 100) -> dict:
     total_processed = 0
     total_deleted = 0
     total_cleaned = 0
+    total_whatsapp_ingress = 0
+    total_whatsapp_outbound = 0
     for _ in range(max_rounds):
+        wa_in = whatsapp_svc.run_whatsapp_ingress_jobs(db, limit=50)
         proc = svc.run_field_intelligence_jobs(db, limit=50)
+        wa_out = whatsapp_svc.run_whatsapp_outbox(db, limit=50)
         dele = svc.run_field_intelligence_deletions(db, limit=50)
         orph = svc.run_field_intelligence_orphan_cleanup(db, limit=50)
+        total_whatsapp_ingress += wa_in.get("processed", 0)
         total_processed += proc.get("processed", 0)
+        total_whatsapp_outbound += wa_out.get("sent", 0)
         total_deleted += dele.get("deleted", 0)
         total_cleaned += orph.get("cleaned", 0)
         if (
-            proc.get("processed", 0) == 0
+            wa_in.get("processed", 0) == 0
+            and wa_in.get("failed", 0) == 0
+            and proc.get("processed", 0) == 0
             and proc.get("failed", 0) == 0
+            and wa_out.get("sent", 0) == 0
+            and wa_out.get("failed", 0) == 0
             and dele.get("deleted", 0) == 0
             and orph.get("cleaned", 0) == 0
         ):
             break
-    return {"processed": total_processed, "deleted": total_deleted, "cleaned": total_cleaned}
+    return {
+        "processed": total_processed,
+        "whatsapp_ingress": total_whatsapp_ingress,
+        "whatsapp_outbound": total_whatsapp_outbound,
+        "deleted": total_deleted,
+        "cleaned": total_cleaned,
+    }
 
 
 def reconcile_once() -> dict:

@@ -23,7 +23,7 @@ OBJECT_NAMES = {
 }
 CODE_TOKENS = (
     "const ", "let ", "var ", "function ", "return ", "useState", "Array.",
-    "Record<", "React.", "=>", "?.", ");", "};", "import ", "export ",
+    "Record<", "React.", "apiClient.", "=>", "?.", ");", "};", "import ", "export ",
     "className=", "style=", "setState", "setMessage", "localStorage.",
 )
 

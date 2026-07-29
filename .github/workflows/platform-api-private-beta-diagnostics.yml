@@ -51,7 +51,7 @@ jobs:
             code="$(curl -L -sS -o "$body" -w '%{http_code}' --connect-timeout 10 --max-time 60 "$url" 2>/dev/null || printf '000')"
             result="closed"
             if [[ "$code" =~ ^2 ]]; then result="open"; fi
-            summary="$(tr '\n' ' ' < "$body" | head -c 180 | sed 's/`/\\`/g')"
+            summary="$(tr '\n' ' ' < "$body" | head -c 180 | sed 's/`/\`/g')"
             rm -f "$body"
             printf '%s|%s|%s|%s\n' "$name" "$result" "$code" "$summary"
           }
@@ -66,7 +66,7 @@ jobs:
               result="fallback"
               if grep -Fq "$marker" "$body"; then result="open"; fi
             fi
-            summary="$(tr '\n' ' ' < "$body" | head -c 180 | sed 's/`/\\`/g')"
+            summary="$(tr '\n' ' ' < "$body" | head -c 180 | sed 's/`/\`/g')"
             rm -f "$body"
             printf '%s|%s|%s|%s\n' "$name" "$result" "$code" "$summary"
           }

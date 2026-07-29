@@ -32,6 +32,9 @@ from app.models.field_intelligence import (
     FieldObservationProcessingRun, FieldObservationAuditEvent, FieldStorageReservation,
     FieldRuntimeFlag, FieldWorkerHeartbeat,
 )
+from app.models.whatsapp import (
+    WhatsAppContactBinding, WhatsAppInboundEvent, WhatsAppOutboundMessage,
+)
 from app.models.compliance import (
     ComplianceJurisdiction, ComplianceOrganizationRole, ComplianceParcel,
     ComplianceWell, ComplianceMeter, ComplianceMeasurement, ComplianceExecutionLedger,
@@ -82,7 +85,9 @@ __all__ = [
     "DataSource", "IngestionJob", "EvidenceRecord", "IntelligenceRun",
     "GeneratedArtifact", "ChatConversation", "ChatMessage",
     "FieldCaptureSession", "FieldObservation", "FieldObservationAsset",
-    "FieldObservationProcessingRun", "FieldObservationAuditEvent", "ComplianceJurisdiction",
+    "FieldObservationProcessingRun", "FieldObservationAuditEvent",
+    "WhatsAppContactBinding", "WhatsAppInboundEvent", "WhatsAppOutboundMessage",
+    "ComplianceJurisdiction",
     "ComplianceOrganizationRole", "ComplianceParcel", "ComplianceWell",
     "ComplianceMeter", "ComplianceMeasurement", "ComplianceExecutionLedger",
     "ComplianceWaterBudget", "ComplianceEvidence", "ComplianceRulePack",

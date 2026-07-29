@@ -5,7 +5,7 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "027_field_intelligence_launch"
+HEAD_ALEMBIC_REVISION = "028_whatsapp_field_intelligence"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
@@ -13,13 +13,8 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "assurance_passports": {"id"},
     "agent_workflow_runs": {"id"},
     "users": {
-        "id",
-        "email",
-        "credentials_changed_at",
-        "account_status",
-        "failed_login_attempts",
-        "locked_until",
-        "access_restriction_reason",
+        "id", "email", "credentials_changed_at", "account_status",
+        "failed_login_attempts", "locked_until", "access_restriction_reason",
         "access_restricted_at",
     },
     "organizations": {"id", "owner_user_id", "verification_status", "verification_score", "verification_engine_version"},
@@ -28,14 +23,8 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "organization_verification_profiles": {"id", "organization_id", "decision", "score", "phone_ciphertext_b64", "evidence_digest"},
     "security_audit_events": {"id", "event_type", "outcome", "subject_hash", "ip_hash", "created_at"},
     "account_access_appeals": {
-        "id",
-        "user_id",
-        "token_hash",
-        "token_expires_at",
-        "status",
-        "submitted_at",
-        "reviewed_at",
-        "created_at",
+        "id", "user_id", "token_hash", "token_expires_at", "status",
+        "submitted_at", "reviewed_at", "created_at",
     },
     "conversations": {"id", "organization_id", "user_id"},
     "conversation_messages": {"id", "conversation_id", "organization_id"},
@@ -61,13 +50,8 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "platform_api_keys": {"id", "organization_id", "api_project_id", "service_account_id", "workspace_id", "cidr_allowlist_json"},
     "platform_idempotency_records": {"id", "organization_id", "api_project_id", "operation", "idempotency_key", "request_hash", "status"},
     "platform_webhook_endpoints": {
-        "id",
-        "organization_id",
-        "api_project_id",
-        "signing_secret_key_version",
-        "signing_secret_nonce_b64",
-        "signing_secret_ciphertext_b64",
-        "revoked_at",
+        "id", "organization_id", "api_project_id", "signing_secret_key_version",
+        "signing_secret_nonce_b64", "signing_secret_ciphertext_b64", "revoked_at",
     },
     "platform_webhook_events": {"id", "organization_id", "api_project_id", "event_type", "version"},
     "platform_webhook_delivery_attempts": {"id", "event_id", "endpoint_id", "attempt_number", "status"},
@@ -94,6 +78,21 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "field_storage_reservations": {
         "id", "tenant_id", "capture_session_id", "size_bytes", "expires_at",
     },
+    "whatsapp_contact_bindings": {
+        "id", "tenant_id", "workspace_id", "connector_connection_id", "user_id",
+        "wa_id_hash", "wa_id_ciphertext_b64", "wa_id_nonce_b64", "status",
+        "consent_status", "context_json", "created_at", "updated_at",
+    },
+    "whatsapp_inbound_events": {
+        "id", "tenant_id", "workspace_id", "connector_connection_id",
+        "contact_binding_id", "payload_hash", "event_type", "message_type",
+        "status", "attempt_count", "redacted_payload_json", "created_at",
+    },
+    "whatsapp_outbound_messages": {
+        "id", "tenant_id", "workspace_id", "connector_connection_id",
+        "contact_binding_id", "idempotency_key", "message_kind", "status",
+        "attempt_count", "created_at",
+    },
     "platform_api_applications": {"id", "organization_id", "applicant_user_id", "application_type", "status"},
     "platform_program_enrollments": {"id", "organization_id", "program", "status", "allowed_environments_json"},
     "platform_live_access_requests": {"id", "organization_id", "requested_by_user_id", "status"},
@@ -105,23 +104,14 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "platform_api_operation_costs": {"id", "catalog_version", "operation_id", "environment", "credits"},
     "platform_api_subscriptions": {"id", "organization_id", "plan_id", "status", "status_slot"},
     "platform_checkout_idempotency": {
-        "id",
-        "organization_id",
-        "operation",
-        "client_key",
-        "request_hash",
-        "status",
+        "id", "organization_id", "operation", "client_key", "request_hash", "status",
     },
     "platform_credit_reservations": {"id", "organization_id", "api_project_id", "logical_operation_id", "state"},
     "platform_stripe_meter_outbox": {"id", "organization_id", "usage_event_id", "meter_event_identifier", "status"},
     "platform_stripe_events": {"id", "stripe_event_id", "event_type", "status"},
     "platform_request_logs": {
-        "id",
-        "organization_id",
-        "api_project_id",
-        "request_id",
-        "client_correlation_id",
-        "operation_id",
+        "id", "organization_id", "api_project_id", "request_id",
+        "client_correlation_id", "operation_id",
     },
     "platform_notifications": {"id", "organization_id", "notification_type", "dedupe_key", "status"},
     "platform_sandbox_states": {"id", "organization_id", "api_project_id", "fixture_version", "reset_counter"},

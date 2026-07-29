@@ -3,12 +3,12 @@ name: Field Intelligence CI
 on:
   pull_request:
   push:
-    branches: [feature/field-intelligence, feature/field-intelligence-launch]
+    branches: [feature/field-intelligence, feature/field-intelligence-launch, feature/whatsapp-field-intelligence]
   workflow_dispatch:
 
 jobs:
   postgres-migration-roundtrip:
-    name: PostgreSQL migration 026→027→026→027 and concurrency
+    name: PostgreSQL migration 027→028→027→028 and concurrency
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -36,12 +36,12 @@ jobs:
           python-version: "3.11"
       - run: python -m pip install -q -r requirements.txt pytest
       - name: Upgrade current-main baseline
-        run: alembic upgrade 026_platform_api_operations
+        run: alembic upgrade 027_field_intelligence_launch
       - name: Upgrade baseline to repository head
         run: alembic upgrade head
-      - name: Downgrade only the Field Intelligence launch revision
-        run: alembic downgrade 026_platform_api_operations
-      - name: Prove launch tables are gone and foundation/current-main schemas survive
+      - name: Downgrade only the WhatsApp Field Intelligence revision
+        run: alembic downgrade 027_field_intelligence_launch
+      - name: Prove WhatsApp tables are gone and protected schemas survive
         run: |
           python - <<'PY'
           import os
@@ -49,14 +49,19 @@ jobs:
           engine = sa.create_engine(os.environ["DATABASE_URL"])
           inspector = sa.inspect(engine)
           tables = set(inspector.get_table_names())
-          removed = {"field_runtime_flags", "field_worker_heartbeats"}
+          removed = {
+              "whatsapp_contact_bindings",
+              "whatsapp_inbound_events",
+              "whatsapp_outbound_messages",
+          }
           assert not (removed & tables), sorted(removed & tables)
           preserved = {
               "field_capture_sessions", "field_observations", "field_observation_assets",
               "field_observation_processing_runs", "field_observation_audit_events",
-              "field_storage_reservations", "organization_verification_profiles",
-              "security_audit_events", "account_access_appeals", "api_projects",
-              "platform_api_keys", "platform_webhook_outbox", "platform_webhook_audit_events",
+              "field_storage_reservations", "field_runtime_flags", "field_worker_heartbeats",
+              "organization_verification_profiles", "security_audit_events",
+              "account_access_appeals", "api_projects", "platform_api_keys",
+              "platform_webhook_outbox", "platform_webhook_audit_events",
               "platform_api_applications", "platform_program_enrollments",
               "platform_live_access_requests", "platform_partner_dossiers",
               "platform_terms_documents", "platform_terms_acceptances",
@@ -68,7 +73,7 @@ jobs:
           assert not missing, f"downgrade removed protected tables: {sorted(missing)}"
           user_columns = {c["name"] for c in inspector.get_columns("users")}
           assert {"account_status", "access_restriction_reason", "access_restricted_at"} <= user_columns
-          print({"removed_launch_tables": sorted(removed), "preserved_tables": sorted(preserved)})
+          print({"removed_whatsapp_tables": sorted(removed), "preserved_tables": sorted(preserved)})
           PY
       - name: Re-upgrade to repository head
         run: alembic upgrade head
@@ -81,7 +86,7 @@ jobs:
           from alembic.script import ScriptDirectory
           cfg = Config("alembic.ini")
           heads = sorted(ScriptDirectory.from_config(cfg).get_heads())
-          assert heads == ["027_field_intelligence_launch"], heads
+          assert heads == ["028_whatsapp_field_intelligence"], heads
           engine = sa.create_engine(os.environ["DATABASE_URL"])
           with engine.connect() as connection:
               versions = sorted(row[0] for row in connection.execute(sa.text("SELECT version_num FROM alembic_version")))
@@ -102,7 +107,7 @@ jobs:
             tests/unit/test_field_intelligence_postgres.py
 
   backend-field-intelligence:
-    name: Backend Field Intelligence, launch, worker, staging, and R2 tests
+    name: Backend Field Intelligence, WhatsApp, worker, staging, and R2 tests
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -131,7 +136,8 @@ jobs:
             tests/unit/test_field_operating_loop.py \
             tests/unit/test_live_field_context.py \
             tests/unit/test_object_storage.py \
-            tests/unit/test_production_readiness.py 2>&1 | tee field-intelligence-test-output.txt
+            tests/unit/test_production_readiness.py \
+            tests/unit/test_whatsapp_field_intelligence.py 2>&1 | tee field-intelligence-test-output.txt
           suite_status=${PIPESTATUS[0]}
           echo "status=${suite_status}" >> "$GITHUB_OUTPUT"
           exit 0

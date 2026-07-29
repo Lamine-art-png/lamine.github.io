@@ -72,3 +72,28 @@ def test_professional_live_connector_capacity_is_enforced(db):
     assert exc.value.detail["metric"] == "active_connector"
     assert exc.value.detail["limit"] == 3
     db.rollback()
+
+
+def test_professional_org_and_connector_can_be_created_in_one_transaction(db):
+    user = User(
+        id="user-same-transaction",
+        email="same-transaction@example.com",
+        password_hash="test",
+        is_active=True,
+        email_verification_status="verified",
+    )
+    org = Organization(
+        id="org-same-transaction",
+        name="Same Transaction Farms",
+        slug="org-same-transaction",
+        owner_user_id=user.id,
+        plan="professional",
+        subscription_status="active",
+    )
+    connection = _connection(org, "whatsapp")
+
+    db.add_all([user, org, connection])
+    db.commit()
+
+    assert connection.id is not None
+    assert connection.tenant_id == org.id

@@ -43,7 +43,7 @@ def test_alembic_revision_ids_fit_existing_version_table_and_are_unique():
     assert not violations, "\n".join(violations)
 
 
-def test_account_verification_platform_api_and_appeal_revisions_form_one_linear_tail():
+def test_account_verification_platform_api_appeal_and_whatsapp_revisions_form_one_linear_tail():
     expected_tail = {
         "019_account_verification": "018_outreach_engagement",
         "020_platform_api_private_beta": "019_account_verification",
@@ -54,6 +54,7 @@ def test_account_verification_platform_api_and_appeal_revisions_form_one_linear_
         "025_platform_api_commerce": "024_platform_api_programs",
         "026_platform_api_operations": "025_platform_api_commerce",
         "027_field_intelligence_launch": "026_platform_api_operations",
+        "028_whatsapp_field_intelligence": "027_field_intelligence_launch",
     }
     actual_tail = {}
 

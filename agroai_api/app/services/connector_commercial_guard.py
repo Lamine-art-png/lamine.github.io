@@ -47,8 +47,31 @@ def _pending_nonmanual_count(session: Session, organization_id: str) -> int:
     )
 
 
-def enforce_connector_write(session: Session, connection: ConnectorConnection, *, check_capacity: bool) -> None:
+def _organization_for_connection(
+    session: Session,
+    connection: ConnectorConnection,
+) -> Organization | None:
+    """Resolve persisted or same-transaction tenant ownership.
+
+    Organization onboarding and connector creation may legitimately occur in one
+    unit of work. The commercial guard must still evaluate the real pending
+    Organization object rather than treating it as a missing tenant.
+    """
     org = session.get(Organization, connection.tenant_id)
+    if org is not None:
+        return org
+    return next(
+        (
+            item
+            for item in session.new
+            if isinstance(item, Organization) and item.id == connection.tenant_id
+        ),
+        None,
+    )
+
+
+def enforce_connector_write(session: Session, connection: ConnectorConnection, *, check_capacity: bool) -> None:
+    org = _organization_for_connection(session, connection)
     if org is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Organization not found")
 
