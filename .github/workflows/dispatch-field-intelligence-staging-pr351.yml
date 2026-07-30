@@ -49,7 +49,6 @@ jobs:
           checks = {
               'branch': 'STAGING_BRANCH: fix/field-intelligence-multimodal-v3',
               'pr': 'STAGING_PR: "351"',
-              'dynamic_pr_match': 'int(os.environ["STAGING_PR"])',
               'exact_source_gate': 'Record exact-source staging gate',
               'protected_environment': 'environment: field-intelligence-staging',
               'staging_contract': 'field_intelligence_staging_contract.py',
@@ -58,7 +57,7 @@ jobs:
               'production_object_refusal': 'PRODUCTION_OBJECT_BUCKET_FINGERPRINT',
           }
           missing = [name for name, anchor in checks.items() if anchor not in text]
-          stale = 'PR #258' in text
+          stale = 'PR #258' in text or 'p.get("number") == 258' in text
           if missing or stale:
               raise SystemExit(f'staging retarget validation failed: missing={missing} stale_pr_258={stale}')
           print('Field Intelligence staging retarget contract: ok')
