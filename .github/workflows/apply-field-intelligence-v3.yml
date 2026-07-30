@@ -1,0 +1,63 @@
+name: Apply Field Intelligence multimodal v3
+
+on:
+  push:
+    branches:
+      - fix/field-intelligence-multimodal-v3
+    paths:
+      - scripts/apply_field_intelligence_v3_patch.py
+      - .github/workflows/apply-field-intelligence-v3.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/field-intelligence-multimodal-v3
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Apply guarded source patch
+        run: python scripts/apply_field_intelligence_v3_patch.py
+
+      - name: Compile changed Python modules
+        run: |
+          python -m py_compile \
+            agroai_api/app/services/field_video.py \
+            agroai_api/app/services/field_vision.py \
+            agroai_api/app/services/field_intelligence_vision_extension.py \
+            agroai_api/tests/test_field_intelligence_multimodal_v3.py
+
+      - name: Run backend source contract
+        run: |
+          python -m pip install --disable-pip-version-check pytest
+          python -m pytest -q agroai_api/tests/test_field_intelligence_multimodal_v3.py
+
+      - name: Run frontend Field Intelligence contracts
+        working-directory: figma-enterprise-v4
+        run: npm run test:field-intelligence
+
+      - name: Remove one-off patch machinery
+        run: |
+          rm scripts/apply_field_intelligence_v3_patch.py
+          rm .github/workflows/apply-field-intelligence-v3.yml
+
+      - name: Commit verified changes
+        run: |
+          git config user.name "AGRO-AI Engineering"
+          git config user.email "contact@agroai-pilot.com"
+          git add -A
+          git commit -m "Upgrade Field Intelligence to walk-and-talk multimodal analysis"
+          git push origin HEAD:fix/field-intelligence-multimodal-v3
