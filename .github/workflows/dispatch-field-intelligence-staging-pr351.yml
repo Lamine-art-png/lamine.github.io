@@ -46,16 +46,21 @@ jobs:
           from pathlib import Path
           path = Path('.github/workflows/field-intelligence-staging.yml')
           text = path.read_text()
-          assert 'STAGING_BRANCH: fix/field-intelligence-multimodal-v3' in text
-          assert 'STAGING_PR: "351"' in text
-          assert 'PR #258' not in text
-          assert 'p.get("number") == int(os.environ["STAGING_PR"])' in text
-          assert 'Record exact-source staging gate' in text
-          assert 'environment: field-intelligence-staging' in text
-          assert 'field_intelligence_staging_contract.py' in text
-          assert 'FIELD_STAGING_DATABASE_URL' in text
-          assert 'PRODUCTION_DATABASE_RESOURCE_FINGERPRINT' in text
-          assert 'PRODUCTION_OBJECT_BUCKET_FINGERPRINT' in text
+          checks = {
+              'branch': 'STAGING_BRANCH: fix/field-intelligence-multimodal-v3',
+              'pr': 'STAGING_PR: "351"',
+              'dynamic_pr_match': 'int(os.environ["STAGING_PR"])',
+              'exact_source_gate': 'Record exact-source staging gate',
+              'protected_environment': 'environment: field-intelligence-staging',
+              'staging_contract': 'field_intelligence_staging_contract.py',
+              'staging_database': 'FIELD_STAGING_DATABASE_URL',
+              'production_db_refusal': 'PRODUCTION_DATABASE_RESOURCE_FINGERPRINT',
+              'production_object_refusal': 'PRODUCTION_OBJECT_BUCKET_FINGERPRINT',
+          }
+          missing = [name for name, anchor in checks.items() if anchor not in text]
+          stale = 'PR #258' in text
+          if missing or stale:
+              raise SystemExit(f'staging retarget validation failed: missing={missing} stale_pr_258={stale}')
           print('Field Intelligence staging retarget contract: ok')
           PY
 
