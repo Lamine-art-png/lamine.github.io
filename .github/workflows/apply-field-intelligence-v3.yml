@@ -8,6 +8,12 @@ on:
     paths:
       - scripts/apply_field_intelligence_v3_patch.py
       - .github/workflows/apply-field-intelligence-v3.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - scripts/apply_field_intelligence_v3_patch.py
+      - .github/workflows/apply-field-intelligence-v3.yml
 
 permissions:
   contents: write
