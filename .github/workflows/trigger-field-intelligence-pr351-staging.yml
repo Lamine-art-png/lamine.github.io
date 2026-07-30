@@ -1,0 +1,30 @@
+name: Trigger Field Intelligence PR 351 staging
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/trigger-field-intelligence-pr351-staging.yml
+
+permissions:
+  contents: read
+  actions: write
+  pull-requests: read
+
+jobs:
+  dispatch:
+    if: github.event.pull_request.number == 351 && github.event.pull_request.draft == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dispatch exact-branch isolated staging
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run field-intelligence-pr351-staging.yml \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref fix/field-intelligence-multimodal-v3 \
+            -f confirm=STAGE_FIELD_INTELLIGENCE_351 \
+            -f run_smoke=true
+          echo "Dispatched clean isolated staging for PR #351."
