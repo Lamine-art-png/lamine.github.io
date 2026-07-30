@@ -1,0 +1,52 @@
+name: Repair Field Intelligence provenance sync
+
+on:
+  push:
+    branches:
+      - fix/field-intelligence-multimodal-v3
+    paths:
+      - scripts/repair_field_intelligence_provenance_sync.py
+      - .github/workflows/repair-field-intelligence-provenance-sync.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - scripts/repair_field_intelligence_provenance_sync.py
+      - .github/workflows/repair-field-intelligence-provenance-sync.yml
+
+permissions:
+  contents: write
+
+jobs:
+  repair-and-test:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/field-intelligence-multimodal-v3
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Apply guarded provenance repair
+        run: python scripts/repair_field_intelligence_provenance_sync.py
+      - name: Compile repaired extension
+        run: python -m py_compile agroai_api/app/services/field_intelligence_vision_extension.py
+      - name: Install backend test dependencies
+        working-directory: agroai_api
+        run: python -m pip install -q -r requirements.txt pytest
+      - name: Re-run evidence and multimodal contracts
+        working-directory: agroai_api
+        run: |
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short \
+            tests/unit/test_field_intelligence_hardening.py::test_transcript_correction_fully_refreshes_evidence \
+            tests/unit/test_field_intelligence_hardening.py::test_non_transcript_patch_refreshes_evidence_metadata \
+            tests/test_field_intelligence_multimodal_v3.py
+      - name: Commit only the verified product repair
+        run: |
+          git config user.name "AGRO-AI Engineering"
+          git config user.email "contact@agroai-pilot.com"
+          git add agroai_api/app/services/field_intelligence_vision_extension.py
+          git commit -m "Keep Field Intelligence evidence provenance synchronized"
+          git push origin HEAD:fix/field-intelligence-multimodal-v3
