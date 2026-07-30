@@ -1,5 +1,6 @@
 name: Apply Field Intelligence multimodal v3
 
+# One-off guarded branch transformation. The workflow deletes itself after success.
 on:
   push:
     branches:
