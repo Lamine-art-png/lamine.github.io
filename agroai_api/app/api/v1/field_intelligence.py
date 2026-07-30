@@ -226,7 +226,7 @@ async def live_field_analysis(
     field_name: str | None = Form(default=None, max_length=_MAX_NAME),
     crop: str | None = Form(default=None, max_length=_MAX_NAME),
     note_text: str | None = Form(default=None, max_length=1600),
-    frame_timestamp_seconds: float | None = Form(default=None, ge=0, le=MAX_RECORDING_SECONDS if "MAX_RECORDING_SECONDS" in globals() else 900),
+    frame_timestamp_seconds: float | None = Form(default=None, ge=0, le=900),
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict:

@@ -23,6 +23,8 @@ def test_field_intelligence_multimodal_v3_source_contract():
     assert "pesticide concentration" in vision
     assert "@cf/meta/llama-3.2-11b-vision-instruct" in edge
     assert "degraded" in edge
+    assert "imageDataUri" in edge
+    assert "temperature: 0.1" in edge
     assert '@router.post("/live-analysis")' in routes
     assert "_LIVE_FRAME_MAX_BYTES = 1_500_000" in routes
     assert "check_field_live_analysis_limit" in routes

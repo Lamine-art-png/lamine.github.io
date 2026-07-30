@@ -937,10 +937,32 @@ function ObservationDrawer({ t, observation, onClose, onReload }: any) {
         <div className="rounded-xl border border-[#BFD8C9] bg-[#F1F8F4] p-3">
           <div className="flex items-center gap-2 text-[12px] font-semibold text-[#1B5E3F]"><Camera className="h-4 w-4" />{t("fieldIntel.photoEvidence")} + {t("askAgroAi")}</div>
           <p className="mt-2 text-[13px] leading-6 text-[#3B4A41]">{vision.summary || "—"}</p>
-          {Array.isArray(vision.observations) && <ul className="mt-2 space-y-1 text-[12px] text-[#3B4A41]">
+          <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+            {vision.crop_condition && vision.crop_condition !== "unknown" && <span className="rounded-full bg-white px-2 py-1">{t("fieldIntel.cropCondition")}: {String(vision.crop_condition).replaceAll("_", " ")}</span>}
+            {vision.coverage_assessment && vision.coverage_assessment !== "unknown" && <span className="rounded-full bg-white px-2 py-1">{t("fieldIntel.coverageAssessment")}: {String(vision.coverage_assessment).replaceAll("_", " ")}</span>}
+            {vision.equipment_condition && !["unknown", "not_visible"].includes(vision.equipment_condition) && <span className="rounded-full bg-white px-2 py-1">{t("fieldIntel.equipmentCondition")}: {String(vision.equipment_condition).replaceAll("_", " ")}</span>}
+          </div>
+          {Array.isArray(vision.visible_facts) && vision.visible_facts.length > 0 && <div className="mt-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#2D6A4F]">{t("fieldIntel.visibleFacts")}</div>
+            <ul className="mt-1 space-y-2 text-[12px] text-[#3B4A41]">
+              {vision.visible_facts.map((item: any, index: number) => <li key={index} className="rounded-lg bg-white/80 p-2"><span className="font-semibold">{item?.label || "—"}</span>{item?.evidence && <span> · {item.evidence}</span>}{Number.isFinite(Number(item?.confidence)) && <span className="ml-1 text-[#65736A]">({Math.round(Number(item.confidence) * 100)}%)</span>}</li>)}
+            </ul>
+          </div>}
+          {Array.isArray(vision.hypotheses) && vision.hypotheses.length > 0 && <div className="mt-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#B26B00]">{t("fieldIntel.hypotheses")}</div>
+            <ul className="mt-1 space-y-2 text-[12px] text-[#3B4A41]">
+              {vision.hypotheses.map((item: any, index: number) => <li key={index} className="rounded-lg border border-[#EAD8AF] bg-[#FFF9EA] p-2"><span className="font-semibold">{item?.label || "—"}</span>{item?.evidence && <span> · {item.evidence}</span>}{item?.verification && <div className="mt-1 text-[11px] text-[#65736A]">{t("fieldIntel.verifyBy")}: {item.verification}</div>}</li>)}
+            </ul>
+          </div>}
+          {Array.isArray(vision.observations) && vision.observations.length > 0 && <ul className="mt-2 space-y-1 text-[12px] text-[#3B4A41]">
             {vision.observations.map((item: string, index: number) => <li key={index}>• {item}</li>)}
           </ul>}
+          {Array.isArray(vision.media_moments) && vision.media_moments.length > 0 && <div className="mt-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#2D6A4F]">{t("fieldIntel.videoMoments")}</div>
+            <ul className="mt-1 space-y-1 text-[12px] text-[#3B4A41]">{vision.media_moments.map((item: any, index: number) => <li key={index}>• {Number.isFinite(Number(item?.frame_timestamp_seconds)) ? `${Math.floor(Number(item.frame_timestamp_seconds) / 60)}:${String(Math.round(Number(item.frame_timestamp_seconds)) % 60).padStart(2, "0")} · ` : ""}{item?.summary || (item?.possible_issues || []).join(", ") || "—"}</li>)}</ul>
+          </div>}
           {Array.isArray(vision.uncertainties) && vision.uncertainties.length > 0 && <p className="mt-2 flex gap-1 text-[11px] text-[#B26B00]"><AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />{vision.uncertainties.join(", ")}</p>}
+          {vision.human_review_required && <p className="mt-2 text-[11px] font-medium text-[#B26B00]">{t("fieldIntel.humanReviewRequired")}</p>}
         </div>
       </DrawerSection>}
 

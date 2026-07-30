@@ -126,13 +126,16 @@ export async function handleFieldVision(request: Request, env: I18nFastpathEnv):
     return json({ success: false, error: "invalid_prompt" }, 400);
   }
 
-  const image = Array.from(decodeBase64(payload.image));
+  const imageBytes = Array.from(decodeBase64(payload.image));
+  const imageDataUri = `data:${contentType};base64,${payload.image}`;
   const candidates = model === FIELD_VISION_PRIMARY_MODEL
     ? [FIELD_VISION_PRIMARY_MODEL, FIELD_VISION_FALLBACK_MODEL]
     : [model];
   for (const candidate of candidates) {
     try {
-      const result = await env.AI.run(candidate, { image, prompt, max_tokens: 1400 });
+      const result = candidate === FIELD_VISION_PRIMARY_MODEL
+        ? await env.AI.run(FIELD_VISION_PRIMARY_MODEL, { image: imageDataUri, prompt, max_tokens: 1400, temperature: 0.1 })
+        : await env.AI.run(FIELD_VISION_FALLBACK_MODEL, { image: imageBytes, prompt, max_tokens: 1400 });
       return json({
         success: true,
         result,
