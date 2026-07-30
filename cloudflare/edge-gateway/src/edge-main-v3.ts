@@ -9,10 +9,12 @@ const FIELD_TRANSCRIPTION_MODEL = "@cf/openai/whisper-large-v3-turbo";
 const FIELD_TRANSCRIPTION_MAX_BYTES = 25 * 1024 * 1024;
 const FIELD_TRANSCRIPTION_MAX_BASE64 = Math.ceil(FIELD_TRANSCRIPTION_MAX_BYTES / 3) * 4 + 4;
 const FIELD_VISION_PATH = "/v1/internal/edge/field-vision";
-const FIELD_VISION_MODEL = "@cf/llava-hf/llava-1.5-7b-hf";
+const FIELD_VISION_PRIMARY_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct";
+const FIELD_VISION_FALLBACK_MODEL = "@cf/llava-hf/llava-1.5-7b-hf";
+const FIELD_VISION_MODELS = new Set([FIELD_VISION_PRIMARY_MODEL, FIELD_VISION_FALLBACK_MODEL]);
 const FIELD_VISION_MAX_BYTES = 8 * 1024 * 1024;
 const FIELD_VISION_MAX_BASE64 = Math.ceil(FIELD_VISION_MAX_BYTES / 3) * 4 + 4;
-const FIELD_VISION_MAX_PROMPT = 6000;
+const FIELD_VISION_MAX_PROMPT = 8000;
 const SAFE_IMAGE_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
 const SAFE_LANGUAGE = /^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/;
 
@@ -112,10 +114,10 @@ export async function handleFieldVision(request: Request, env: I18nFastpathEnv):
     return json({ success: false, error: "invalid_json" }, 400);
   }
 
-  const model = String(payload.model || FIELD_VISION_MODEL).trim();
+  const model = String(payload.model || FIELD_VISION_PRIMARY_MODEL).trim();
   const contentType = String(payload.content_type || "").toLowerCase().split(";")[0].trim();
   const prompt = typeof payload.prompt === "string" ? payload.prompt.trim() : "";
-  if (model !== FIELD_VISION_MODEL) return json({ success: false, error: "unsupported_model" }, 400);
+  if (!FIELD_VISION_MODELS.has(model)) return json({ success: false, error: "unsupported_model" }, 400);
   if (!SAFE_IMAGE_TYPES.has(contentType)) return json({ success: false, error: "unsupported_image_type" }, 400);
   if (!validBase64(payload.image, FIELD_VISION_MAX_BASE64, FIELD_VISION_MAX_BYTES)) {
     return json({ success: false, error: "invalid_image" }, 400);
@@ -124,13 +126,24 @@ export async function handleFieldVision(request: Request, env: I18nFastpathEnv):
     return json({ success: false, error: "invalid_prompt" }, 400);
   }
 
-  try {
-    const image = Array.from(decodeBase64(payload.image));
-    const result = await env.AI.run(FIELD_VISION_MODEL, { image, prompt, max_tokens: 900 });
-    return json({ success: true, result });
-  } catch {
-    return json({ success: false, error: "workers_ai_unavailable" }, 502);
+  const image = Array.from(decodeBase64(payload.image));
+  const candidates = model === FIELD_VISION_PRIMARY_MODEL
+    ? [FIELD_VISION_PRIMARY_MODEL, FIELD_VISION_FALLBACK_MODEL]
+    : [model];
+  for (const candidate of candidates) {
+    try {
+      const result = await env.AI.run(candidate, { image, prompt, max_tokens: 1400 });
+      return json({
+        success: true,
+        result,
+        model: candidate,
+        degraded: candidate !== FIELD_VISION_PRIMARY_MODEL,
+      });
+    } catch {
+      // Try the bounded fallback only when the stronger primary is unavailable.
+    }
   }
+  return json({ success: false, error: "workers_ai_unavailable" }, 502);
 }
 
 function mergeFastpathHeaders(response: Response, request: Request, env: I18nFastpathEnv): Response {

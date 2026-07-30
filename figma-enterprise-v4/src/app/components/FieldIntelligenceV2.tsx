@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   Activity, AlertTriangle, Camera, CheckCircle2, Cloud, CloudOff, ImagePlus,
   Loader2, MapPin, Mic, Navigation, Paperclip, RefreshCw, Search, Sparkles,
-  Square, Trash2, X,
+  Square, Trash2, Video, X,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 import { useLocale } from "../hooks/useLocale";
@@ -286,6 +286,10 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
   const [micError, setMicError] = useState<string | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [walkVideoFile, setWalkVideoFile] = useState<File | null>(null);
+  const [walkVideoUrl, setWalkVideoUrl] = useState<string | null>(null);
+  const [videoRecording, setVideoRecording] = useState(false);
+  const [videoElapsed, setVideoElapsed] = useState(0);
   const [liveTranscript, setLiveTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
   const [reviewing, setReviewing] = useState(false);
@@ -296,6 +300,13 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
   const stopWaitersRef = useRef<Array<() => void>>([]);
   const timerRef = useRef<number | null>(null);
   const elapsedRef = useRef(0);
+  const videoRecorderRef = useRef<MediaRecorder | null>(null);
+  const videoStreamRef = useRef<MediaStream | null>(null);
+  const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
+  const videoChunksRef = useRef<Blob[]>([]);
+  const videoStopWaitersRef = useRef<Array<() => void>>([]);
+  const videoTimerRef = useRef<number | null>(null);
+  const videoElapsedRef = useRef(0);
 
   const imagePreviews = useMemo(() => attachments.filter((file) => file.type.startsWith("image/"))
     .map((file) => ({ file, url: URL.createObjectURL(file) })), [attachments]);
@@ -317,12 +328,34 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
     timerRef.current = null;
   }, []);
 
+  const releaseVideoStream = useCallback(() => {
+    videoStreamRef.current?.getTracks().forEach((track) => track.stop());
+    videoStreamRef.current = null;
+    if (videoPreviewRef.current) videoPreviewRef.current.srcObject = null;
+  }, []);
+
+  const clearVideoTimer = useCallback(() => {
+    if (videoTimerRef.current !== null) window.clearInterval(videoTimerRef.current);
+    videoTimerRef.current = null;
+  }, []);
+
+  const setRecordedVideo = useCallback((file: File | null) => {
+    setWalkVideoFile(file);
+    setWalkVideoUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return file ? URL.createObjectURL(file) : null;
+    });
+  }, []);
+
   useEffect(() => () => {
     clearTimer();
+    clearVideoTimer();
     stopRecognition();
     releaseStream();
+    releaseVideoStream();
     if (audioUrl) URL.revokeObjectURL(audioUrl);
-  }, [audioUrl, clearTimer, releaseStream, stopRecognition]);
+    if (walkVideoUrl) URL.revokeObjectURL(walkVideoUrl);
+  }, [audioUrl, clearTimer, clearVideoTimer, releaseStream, releaseVideoStream, stopRecognition, walkVideoUrl]);
 
   const captureLocation = useCallback((silent = false) => {
     if (!navigator.geolocation) {
@@ -430,6 +463,74 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
     }
   }, [captureLocation, clearTimer, releaseStream, setRecordedAudio, startRecognition, stopRecognition, stopRecording, t]);
 
+
+
+  const stopWalkVideo = useCallback(async () => {
+    const recorder = videoRecorderRef.current;
+    if (!recorder || recorder.state === "inactive") {
+      clearVideoTimer(); stopRecognition(); releaseVideoStream(); setVideoRecording(false); return;
+    }
+    await new Promise<void>((resolve) => {
+      videoStopWaitersRef.current.push(resolve);
+      try { recorder.stop(); } catch { resolve(); }
+    });
+  }, [clearVideoTimer, releaseVideoStream, stopRecognition]);
+
+  const startWalkVideo = useCallback(async () => {
+    setMicError(null);
+    setReviewing(false);
+    setLiveTranscript("");
+    setInterimTranscript("");
+    setRecordedVideo(null);
+    captureLocation(true);
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setMicError(t("fieldIntel.videoUnsupported"));
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      });
+      releaseVideoStream();
+      videoStreamRef.current = stream;
+      if (videoPreviewRef.current) {
+        videoPreviewRef.current.srcObject = stream;
+        await videoPreviewRef.current.play().catch(() => undefined);
+      }
+      const preferred = [
+        "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4",
+      ].find((kind) => MediaRecorder.isTypeSupported(kind));
+      const recorder = new MediaRecorder(stream, preferred ? { mimeType: preferred } : undefined);
+      videoRecorderRef.current = recorder;
+      videoChunksRef.current = [];
+      recorder.ondataavailable = (event) => { if (event.data.size > 0) videoChunksRef.current.push(event.data); };
+      recorder.onstop = () => {
+        const blob = new Blob(videoChunksRef.current, { type: recorder.mimeType || "video/webm" });
+        const extension = (recorder.mimeType || "").includes("mp4") ? "mp4" : "webm";
+        if (blob.size > 0) setRecordedVideo(new File([blob], `field-walk-${Date.now()}.${extension}`, { type: blob.type }));
+        clearVideoTimer();
+        stopRecognition();
+        releaseVideoStream();
+        setVideoRecording(false);
+        videoStopWaitersRef.current.splice(0).forEach((resolve) => resolve());
+      };
+      recorder.start(1000);
+      startRecognition();
+      setVideoRecording(true);
+      videoElapsedRef.current = 0;
+      setVideoElapsed(0);
+      videoTimerRef.current = window.setInterval(() => {
+        videoElapsedRef.current += 1;
+        setVideoElapsed(videoElapsedRef.current);
+        if (videoElapsedRef.current >= MAX_RECORDING_SECONDS) void stopWalkVideo();
+      }, 1000);
+    } catch (error: any) {
+      releaseVideoStream();
+      setMicError(error?.name === "NotAllowedError" ? t("fieldIntel.videoDenied") : t("fieldIntel.videoUnsupported"));
+    }
+  }, [captureLocation, clearVideoTimer, releaseVideoStream, setRecordedVideo, startRecognition, stopRecognition, stopWalkVideo, t]);
+
   const addFiles = useCallback(async (files: File[]) => {
     if (!files.length) return;
     captureLocation(true);
@@ -440,8 +541,9 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
   const reset = useCallback(() => {
     setNote(""); setFieldName(""); setBlockName(""); setCrop(""); setEventType("observation");
     setSeverity("info"); setAssignee(""); setAttachments([]); setLocation(null); setLocError(null);
-    setLiveTranscript(""); setInterimTranscript(""); setReviewing(false); setRecordedAudio(null); setElapsed(0);
-  }, [setRecordedAudio]);
+    setLiveTranscript(""); setInterimTranscript(""); setReviewing(false); setRecordedAudio(null); setRecordedVideo(null);
+    setElapsed(0); setVideoElapsed(0);
+  }, [setRecordedAudio, setRecordedVideo]);
 
   const queueCapture = useCallback(async () => {
     const clientCaptureId = newCaptureId();
@@ -450,7 +552,8 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
       contentType: audioFile.type || "audio/webm", filename: audioFile.name,
       durationSeconds: elapsed, blob: audioFile, uploaded: false,
     } : null;
-    const fileAssets = attachments.map((file, index) => ({
+    const queuedFiles = walkVideoFile ? [...attachments, walkVideoFile] : attachments;
+    const fileAssets = queuedFiles.map((file, index) => ({
       id: `${clientCaptureId}-asset-${index}`, clientCaptureId,
       kind: (file.type.startsWith("image/") ? "photo" : file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "audio" : "file") as "photo" | "video" | "audio" | "file",
       contentType: file.type || "application/octet-stream", filename: file.name, blob: file, uploaded: false,
@@ -462,11 +565,13 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
       idempotencyKey: `fi-${clientCaptureId}`,
       createdAt: Date.now(),
       workspaceId,
-      captureSource: audioFile ? "voice" : "typed",
+      captureSource: audioFile || walkVideoFile ? "voice" : "typed",
       // Browser live captions are an operator aid. The durable audio remains the
       // authoritative source; captions also provide useful context if the device
       // is offline or server transcription is delayed.
       noteText: note.trim() || transcriptPreview || undefined,
+      transcriptPreview: transcriptPreview || undefined,
+      language: document.documentElement.lang || navigator.language || "en",
       fieldName: fieldName.trim() || undefined,
       blockName: blockName.trim() || undefined,
       crop: crop.trim() || undefined,
@@ -485,7 +590,7 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
     for (const asset of assets) await putAsset(asset);
     reset();
     await onSaved(t("fieldIntel.saved"));
-  }, [assignee, attachments, audioFile, blockName, crop, elapsed, eventType, fieldName, liveTranscript, location, note, onSaved, reset, severity, t, workspaceId]);
+  }, [assignee, attachments, audioFile, blockName, crop, elapsed, eventType, fieldName, liveTranscript, location, note, onSaved, reset, severity, t, walkVideoFile, workspaceId]);
 
   if (reviewing) {
     return (
@@ -498,6 +603,7 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
           <button type="button" onClick={() => setReviewing(false)} className="rounded-lg border border-[#D6DDD0] p-2"><X className="h-4 w-4" /></button>
         </div>
         {audioUrl && <audio controls src={audioUrl} className="mt-4 w-full" aria-label={t("fieldIntel.audioPlayer")} />}
+        {walkVideoUrl && <video controls playsInline src={walkVideoUrl} className="mt-4 max-h-[360px] w-full rounded-xl bg-black" aria-label={t("fieldIntel.videoPlayer")} />}
         {liveTranscript && <div className="mt-3 rounded-xl border border-[#BFD8C9] bg-[#F1F8F4] p-3">
           <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2D6A4F]">{t("fieldIntel.transcript")}</div>
           <textarea value={liveTranscript} onChange={(event) => setLiveTranscript(event.target.value)} rows={4}
@@ -539,6 +645,23 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
           {liveTranscript} <span className="text-[#819188]">{interimTranscript}</span>
         </p>
       </div>}
+      {videoRecording && <div className="mt-3 overflow-hidden rounded-xl border border-[#BFD8C9] bg-black">
+        <video ref={videoPreviewRef} muted playsInline autoPlay className="max-h-[420px] w-full object-cover" />
+        <div className="flex items-center justify-between bg-[#10231B] px-3 py-2 text-[12px] font-semibold text-white">
+          <span>{t("fieldIntel.walkRecording")} {Math.floor(videoElapsed / 60)}:{String(videoElapsed % 60).padStart(2, "0")}</span>
+          <span>{location ? t("fieldIntel.locationCaptured") : t("fieldIntel.captureLocation")}</span>
+        </div>
+      </div>}
+      {walkVideoUrl && !videoRecording && <div className="mt-3 rounded-xl border border-[#D6DDD0] p-2">
+        <video controls playsInline src={walkVideoUrl} className="max-h-[360px] w-full rounded-lg bg-black" aria-label={t("fieldIntel.videoPlayer")} />
+        <button type="button" onClick={() => setRecordedVideo(null)} className="mt-2 inline-flex items-center gap-1 rounded-lg border border-[#D6DDD0] px-3 py-2 text-[12px] font-semibold text-[#B23B2E]"><Trash2 className="h-4 w-4" />{t("fieldIntel.removeAttachment")}</button>
+      </div>}
+      <button type="button" disabled={recording} onClick={() => videoRecording ? void stopWalkVideo() : void startWalkVideo()}
+        className="mt-3 inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-xl px-4 text-[14px] font-semibold text-white disabled:opacity-40"
+        style={{ background: videoRecording ? "#B23B2E" : "#1B5E3F" }}>
+        {videoRecording ? <Square className="h-4 w-4 fill-current" /> : <Video className="h-5 w-5" />}
+        {videoRecording ? t("fieldIntel.stopWalkVideo") : t("fieldIntel.startWalkVideo")}
+      </button>
       {audioUrl && !recording && <div className="mt-3 flex items-center gap-2 rounded-xl border border-[#D6DDD0] p-2">
         <audio controls src={audioUrl} className="min-w-0 flex-1" />
         <button type="button" onClick={() => setRecordedAudio(null)} className="rounded-lg border border-[#D6DDD0] p-2 text-[#B23B2E]"><Trash2 className="h-4 w-4" /></button>
@@ -592,8 +715,9 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
 
       <button type="button" onClick={async () => {
         if (recording) await stopRecording();
+        if (videoRecording) await stopWalkVideo();
         setReviewing(true);
-      }} disabled={!note.trim() && !audioFile && attachments.length === 0}
+      }} disabled={!note.trim() && !audioFile && !walkVideoFile && attachments.length === 0}
         className="mt-4 inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-xl bg-[#0D2B1E] px-4 text-[14px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">
         <Sparkles className="h-4 w-4" /> {t("fieldIntel.reviewAndSave")}
       </button>
