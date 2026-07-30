@@ -7,6 +7,12 @@ on:
     paths:
       - scripts/retarget_field_intelligence_staging_pr351.py
       - .github/workflows/dispatch-field-intelligence-staging-pr351.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - scripts/retarget_field_intelligence_staging_pr351.py
+      - .github/workflows/dispatch-field-intelligence-staging-pr351.yml
 
 permissions:
   contents: write
