@@ -117,6 +117,10 @@ def install_field_vision_extension(svc: Any) -> None:
             return
         session = db.get(FieldCaptureSession, observation.capture_session_id)
         _repair_text_inference(svc, observation)
+        # The original text pipeline may already have mirrored evidence before
+        # the extension repairs provider/model provenance. Refresh immediately so
+        # text-only captures and transcript corrections remain audit-consistent.
+        svc._refresh_linked_evidence(db, observation)
 
         assets = (
             db.query(FieldObservationAsset)
@@ -186,6 +190,8 @@ def install_field_vision_extension(svc: Any) -> None:
                 actor="system",
                 details={"asset_ids": asset_ids, "read_errors": read_errors, "frame_errors": frame_errors},
             )
+            # The failure provenance is also part of the evidence audit trail.
+            svc._refresh_linked_evidence(db, observation)
             db.flush()
             return
 
