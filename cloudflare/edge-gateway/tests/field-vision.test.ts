@@ -5,7 +5,7 @@ const URL = "https://api.agroai-pilot.com/v1/internal/edge/field-vision";
 const PRIMARY_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct";
 const FALLBACK_MODEL = "@cf/llava-hf/llava-1.5-7b-hf";
 
-function env(run = vi.fn(async () => ({ description: '{"summary":"Dry leaf edge","observations":["brown edge"],"possible_issue":"possible stress","severity":"medium","confidence":0.6,"recommended_follow_up":"inspect plants","uncertainties":["photo only"]}' }))) {
+function env(run: any = vi.fn(async () => ({ description: '{"summary":"Dry leaf edge","observations":["brown edge"],"possible_issue":"possible stress","severity":"medium","confidence":0.6,"recommended_follow_up":"inspect plants","uncertainties":["photo only"]}' }))) {
   return {
     QUEUE_CONSUMER_TOKEN: "consumer-secret",
     QUEUE_PUBLISH_TOKEN: "publish-secret",
