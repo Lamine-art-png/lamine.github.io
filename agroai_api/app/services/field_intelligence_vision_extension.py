@@ -299,6 +299,9 @@ def install_field_vision_extension(svc: Any) -> None:
                 },
             )
         else:
+            if result.retryable:
+                observation.status = "processing"
+                raise RuntimeError(f"vision_retryable_failure:{result.error or 'provider'}")
             observation.status = "needs_review"
             svc._audit(
                 observation,

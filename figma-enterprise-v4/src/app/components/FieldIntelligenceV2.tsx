@@ -23,6 +23,9 @@ const EVENT_TYPES = [
 ] as const;
 const SYNC_STATES: SyncState[] = ["draft", "queued", "syncing", "processing", "synced", "failed", "conflict", "manual_recovery"];
 const MAX_RECORDING_SECONDS = 900;
+const LIVE_VISION_INTERVAL_MS = 20_000;
+const LIVE_VISION_FIRST_SAMPLE_MS = 3_500;
+const LIVE_VISION_MAX_SIDE = 768;
 type Observation = Record<string, any>;
 type LocationFix = { lat: number; lon: number; acc: number };
 
@@ -290,6 +293,8 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
   const [walkVideoUrl, setWalkVideoUrl] = useState<string | null>(null);
   const [videoRecording, setVideoRecording] = useState(false);
   const [videoElapsed, setVideoElapsed] = useState(0);
+  const [liveVision, setLiveVision] = useState<Record<string, any> | null>(null);
+  const [liveVisionState, setLiveVisionState] = useState<"idle" | "sampling" | "ready" | "unavailable">("idle");
   const [liveTranscript, setLiveTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
   const [reviewing, setReviewing] = useState(false);
@@ -307,6 +312,13 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
   const videoStopWaitersRef = useRef<Array<() => void>>([]);
   const videoTimerRef = useRef<number | null>(null);
   const videoElapsedRef = useRef(0);
+  const liveVisionTimerRef = useRef<number | null>(null);
+  const liveVisionFirstTimerRef = useRef<number | null>(null);
+  const liveVisionBusyRef = useRef(false);
+  const liveVisionAbortRef = useRef<AbortController | null>(null);
+  const liveVisionSessionRef = useRef(0);
+  const liveTranscriptRef = useRef("");
+  const liveVisionContextRef = useRef({ workspaceId: workspaceId as string | undefined, fieldName: "", crop: "", note: "" });
 
   const imagePreviews = useMemo(() => attachments.filter((file) => file.type.startsWith("image/"))
     .map((file) => ({ file, url: URL.createObjectURL(file) })), [attachments]);
@@ -339,6 +351,17 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
     videoTimerRef.current = null;
   }, []);
 
+  const clearLiveVisionSampling = useCallback(() => {
+    liveVisionSessionRef.current += 1;
+    if (liveVisionTimerRef.current !== null) window.clearInterval(liveVisionTimerRef.current);
+    if (liveVisionFirstTimerRef.current !== null) window.clearTimeout(liveVisionFirstTimerRef.current);
+    liveVisionTimerRef.current = null;
+    liveVisionFirstTimerRef.current = null;
+    liveVisionAbortRef.current?.abort();
+    liveVisionAbortRef.current = null;
+    liveVisionBusyRef.current = false;
+  }, []);
+
   const setRecordedVideo = useCallback((file: File | null) => {
     setWalkVideoFile(file);
     setWalkVideoUrl((current) => {
@@ -347,15 +370,24 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
     });
   }, []);
 
+  useEffect(() => {
+    liveTranscriptRef.current = `${liveTranscript} ${interimTranscript}`.trim();
+  }, [interimTranscript, liveTranscript]);
+
+  useEffect(() => {
+    liveVisionContextRef.current = { workspaceId, fieldName, crop, note };
+  }, [crop, fieldName, note, workspaceId]);
+
   useEffect(() => () => {
     clearTimer();
     clearVideoTimer();
+    clearLiveVisionSampling();
     stopRecognition();
     releaseStream();
     releaseVideoStream();
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     if (walkVideoUrl) URL.revokeObjectURL(walkVideoUrl);
-  }, [audioUrl, clearTimer, clearVideoTimer, releaseStream, releaseVideoStream, stopRecognition, walkVideoUrl]);
+  }, [audioUrl, clearLiveVisionSampling, clearTimer, clearVideoTimer, releaseStream, releaseVideoStream, stopRecognition, walkVideoUrl]);
 
   const captureLocation = useCallback((silent = false) => {
     if (!navigator.geolocation) {
@@ -464,9 +496,64 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
   }, [captureLocation, clearTimer, releaseStream, setRecordedAudio, startRecognition, stopRecognition, stopRecording, t]);
 
 
+  const captureLiveVisionFrame = useCallback(async () => {
+    if (liveVisionBusyRef.current || !navigator.onLine) return;
+    const video = videoPreviewRef.current;
+    if (!video || video.readyState < 2 || video.videoWidth < 1 || video.videoHeight < 1) return;
+    const session = liveVisionSessionRef.current;
+    const scale = Math.min(1, LIVE_VISION_MAX_SIDE / Math.max(video.videoWidth, video.videoHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) return;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.68));
+    if (!blob || blob.size > 1_500_000 || session !== liveVisionSessionRef.current) return;
+
+    liveVisionBusyRef.current = true;
+    setLiveVisionState("sampling");
+    const controller = new AbortController();
+    liveVisionAbortRef.current = controller;
+    const current = liveVisionContextRef.current;
+    const spokenContext = [current.note, liveTranscriptRef.current].filter(Boolean).join(" ").slice(0, 1600);
+    try {
+      const response: any = await apiClient.fieldIntelligence.liveAnalyze({
+        workspace_id: current.workspaceId || "",
+        field_name: current.fieldName.trim(),
+        crop: current.crop.trim(),
+        note_text: spokenContext,
+        frame_timestamp_seconds: String(videoElapsedRef.current),
+      }, new File([blob], `live-field-${Date.now()}.jpg`, { type: "image/jpeg" }), controller.signal);
+      if (session !== liveVisionSessionRef.current) return;
+      if (response?.status === "ok" && response?.analysis) {
+        setLiveVision(response.analysis);
+        setLiveVisionState("ready");
+      } else {
+        setLiveVisionState("unavailable");
+      }
+    } catch (error: any) {
+      if (error?.name !== "AbortError" && session === liveVisionSessionRef.current) setLiveVisionState("unavailable");
+    } finally {
+      if (session === liveVisionSessionRef.current) {
+        liveVisionBusyRef.current = false;
+        liveVisionAbortRef.current = null;
+      }
+    }
+  }, []);
+
+  const startLiveVisionSampling = useCallback(() => {
+    clearLiveVisionSampling();
+    setLiveVision(null);
+    setLiveVisionState("sampling");
+    liveVisionFirstTimerRef.current = window.setTimeout(() => void captureLiveVisionFrame(), LIVE_VISION_FIRST_SAMPLE_MS);
+    liveVisionTimerRef.current = window.setInterval(() => void captureLiveVisionFrame(), LIVE_VISION_INTERVAL_MS);
+  }, [captureLiveVisionFrame, clearLiveVisionSampling]);
+
 
   const stopWalkVideo = useCallback(async () => {
     const recorder = videoRecorderRef.current;
+    clearLiveVisionSampling();
     if (!recorder || recorder.state === "inactive") {
       clearVideoTimer(); stopRecognition(); releaseVideoStream(); setVideoRecording(false); return;
     }
@@ -474,14 +561,17 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
       videoStopWaitersRef.current.push(resolve);
       try { recorder.stop(); } catch { resolve(); }
     });
-  }, [clearVideoTimer, releaseVideoStream, stopRecognition]);
+  }, [clearLiveVisionSampling, clearVideoTimer, releaseVideoStream, stopRecognition]);
 
   const startWalkVideo = useCallback(async () => {
     setMicError(null);
     setReviewing(false);
     setLiveTranscript("");
     setInterimTranscript("");
+    liveTranscriptRef.current = "";
     setRecordedVideo(null);
+    setLiveVision(null);
+    setLiveVisionState("sampling");
     captureLocation(true);
     if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
       setMicError(t("fieldIntel.videoUnsupported"));
@@ -509,6 +599,7 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
         const blob = new Blob(videoChunksRef.current, { type: recorder.mimeType || "video/webm" });
         const extension = (recorder.mimeType || "").includes("mp4") ? "mp4" : "webm";
         if (blob.size > 0) setRecordedVideo(new File([blob], `field-walk-${Date.now()}.${extension}`, { type: blob.type }));
+        clearLiveVisionSampling();
         clearVideoTimer();
         stopRecognition();
         releaseVideoStream();
@@ -520,6 +611,7 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
       setVideoRecording(true);
       videoElapsedRef.current = 0;
       setVideoElapsed(0);
+      startLiveVisionSampling();
       videoTimerRef.current = window.setInterval(() => {
         videoElapsedRef.current += 1;
         setVideoElapsed(videoElapsedRef.current);
@@ -529,7 +621,7 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
       releaseVideoStream();
       setMicError(error?.name === "NotAllowedError" ? t("fieldIntel.videoDenied") : t("fieldIntel.videoUnsupported"));
     }
-  }, [captureLocation, clearVideoTimer, releaseVideoStream, setRecordedVideo, startRecognition, stopRecognition, stopWalkVideo, t]);
+  }, [captureLocation, clearLiveVisionSampling, clearVideoTimer, releaseVideoStream, setRecordedVideo, startLiveVisionSampling, startRecognition, stopRecognition, stopWalkVideo, t]);
 
   const addFiles = useCallback(async (files: File[]) => {
     if (!files.length) return;
@@ -541,9 +633,11 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
   const reset = useCallback(() => {
     setNote(""); setFieldName(""); setBlockName(""); setCrop(""); setEventType("observation");
     setSeverity("info"); setAssignee(""); setAttachments([]); setLocation(null); setLocError(null);
+    clearLiveVisionSampling();
+    liveTranscriptRef.current = "";
     setLiveTranscript(""); setInterimTranscript(""); setReviewing(false); setRecordedAudio(null); setRecordedVideo(null);
-    setElapsed(0); setVideoElapsed(0);
-  }, [setRecordedAudio, setRecordedVideo]);
+    setLiveVision(null); setLiveVisionState("idle"); setElapsed(0); setVideoElapsed(0);
+  }, [clearLiveVisionSampling, setRecordedAudio, setRecordedVideo]);
 
   const queueCapture = useCallback(async () => {
     const clientCaptureId = newCaptureId();
@@ -629,8 +723,8 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
             <Activity className="h-4 w-4 text-[#2D6A4F]" /> {recording ? `${t("fieldIntel.recording")} ${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}` : t("fieldIntel.recordingReady")}
           </div>
         </div>
-        <button type="button" onClick={() => recording ? void stopRecording() : void startRecording()}
-          className="inline-flex min-h-[48px] items-center gap-2 rounded-xl px-4 text-[14px] font-semibold text-white"
+        <button type="button" disabled={videoRecording} onClick={() => recording ? void stopRecording() : void startRecording()}
+          className="inline-flex min-h-[48px] items-center gap-2 rounded-xl px-4 text-[14px] font-semibold text-white disabled:opacity-40"
           style={{ background: recording ? "#B23B2E" : "#0D2B1E" }}>
           {recording ? <Square className="h-4 w-4 fill-current" /> : <Mic className="h-4 w-4" />}
           {recording ? t("fieldIntel.stop") : t("fieldIntel.record")}
@@ -650,6 +744,19 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
         <div className="flex items-center justify-between bg-[#10231B] px-3 py-2 text-[12px] font-semibold text-white">
           <span>{t("fieldIntel.walkRecording")} {Math.floor(videoElapsed / 60)}:{String(videoElapsed % 60).padStart(2, "0")}</span>
           <span>{location ? t("fieldIntel.locationCaptured") : t("fieldIntel.captureLocation")}</span>
+        </div>
+        <div className="border-t border-white/10 bg-[#F1F8F4] p-3 text-[#10231B]">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2D6A4F]"><Sparkles className="h-4 w-4" />{t("fieldIntel.liveVisionTitle")}</div>
+            <div className="flex items-center gap-1 text-[11px] text-[#65736A]">
+              {liveVisionState === "sampling" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {liveVisionState === "sampling" ? t("fieldIntel.liveVisionAnalyzing") : liveVisionState === "unavailable" ? t("fieldIntel.liveVisionUnavailable") : t("fieldIntel.liveVisionPreliminary")}
+            </div>
+          </div>
+          {liveVision?.summary && <p className="mt-2 text-[13px] font-medium leading-5">{liveVision.summary}</p>}
+          {Array.isArray(liveVision?.visible_facts) && liveVision.visible_facts.length > 0 && <div className="mt-2 text-[12px]"><span className="font-semibold">{t("fieldIntel.visibleFacts")}:</span> {liveVision.visible_facts.slice(0, 3).map((item: any) => item?.label).filter(Boolean).join(" · ")}</div>}
+          {Array.isArray(liveVision?.hypotheses) && liveVision.hypotheses.length > 0 && <div className="mt-1 text-[12px]"><span className="font-semibold">{t("fieldIntel.hypotheses")}:</span> {liveVision.hypotheses.slice(0, 2).map((item: any) => item?.label).filter(Boolean).join(" · ")}</div>}
+          <p className="mt-2 text-[11px] leading-4 text-[#65736A]">{t("fieldIntel.liveVisionVerify")}</p>
         </div>
       </div>}
       {walkVideoUrl && !videoRecording && <div className="mt-3 rounded-xl border border-[#D6DDD0] p-2">
