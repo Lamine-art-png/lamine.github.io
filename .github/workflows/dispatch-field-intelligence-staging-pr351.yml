@@ -1,0 +1,103 @@
+name: Dispatch Field Intelligence staging PR 351
+
+on:
+  push:
+    branches:
+      - fix/field-intelligence-multimodal-v3
+    paths:
+      - scripts/retarget_field_intelligence_staging_pr351.py
+      - .github/workflows/dispatch-field-intelligence-staging-pr351.yml
+
+permissions:
+  contents: write
+  actions: write
+  pull-requests: read
+
+concurrency:
+  group: dispatch-field-intelligence-staging-pr351
+  cancel-in-progress: false
+
+jobs:
+  retarget-and-dispatch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/field-intelligence-multimodal-v3
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Retarget the fail-closed staging workflow
+        run: python scripts/retarget_field_intelligence_staging_pr351.py
+
+      - name: Validate workflow retarget
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('.github/workflows/field-intelligence-staging.yml')
+          text = path.read_text()
+          assert 'STAGING_BRANCH: fix/field-intelligence-multimodal-v3' in text
+          assert 'STAGING_PR: "351"' in text
+          assert 'PR #258' not in text
+          assert 'p.get("number") == int(os.environ["STAGING_PR"])' in text
+          assert 'Record exact-source staging gate' in text
+          assert 'environment: field-intelligence-staging' in text
+          assert 'field_intelligence_staging_contract.py' in text
+          assert 'FIELD_STAGING_DATABASE_URL' in text
+          assert 'PRODUCTION_DATABASE_RESOURCE_FINGERPRINT' in text
+          assert 'PRODUCTION_OBJECT_BUCKET_FINGERPRINT' in text
+          print('Field Intelligence staging retarget contract: ok')
+          PY
+
+      - name: Remove one-off dispatcher machinery
+        run: |
+          rm scripts/retarget_field_intelligence_staging_pr351.py
+          rm .github/workflows/dispatch-field-intelligence-staging-pr351.yml
+
+      - name: Commit staging workflow retarget
+        run: |
+          git config user.name "AGRO-AI Engineering"
+          git config user.email "contact@agroai-pilot.com"
+          git add -A
+          git commit -m "Retarget isolated Field Intelligence staging to PR 351"
+          git push origin HEAD:fix/field-intelligence-multimodal-v3
+
+      - name: Resolve current PR identities
+        id: identities
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            head_sha="$(git rev-parse HEAD)"
+            pr_json="$(gh api repos/${GITHUB_REPOSITORY}/pulls/351)"
+            pr_head="$(printf '%s' "$pr_json" | python -c 'import json,sys; print(json.load(sys.stdin)["head"]["sha"])')"
+            merge_sha="$(printf '%s' "$pr_json" | python -c 'import json,sys; print(json.load(sys.stdin).get("merge_commit_sha") or "")')"
+            if [ "$pr_head" = "$head_sha" ] && [ -n "$merge_sha" ]; then
+              echo "head_sha=$head_sha" >> "$GITHUB_OUTPUT"
+              echo "merge_sha=$merge_sha" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "PR identities did not converge to the committed staging head."
+          exit 1
+
+      - name: Dispatch isolated staging and full smoke
+        env:
+          GH_TOKEN: ${{ github.token }}
+          STAGE_SHA: ${{ steps.identities.outputs.head_sha }}
+          MERGE_SHA: ${{ steps.identities.outputs.merge_sha }}
+        run: |
+          gh workflow run field-intelligence-staging.yml \
+            --ref fix/field-intelligence-multimodal-v3 \
+            -f confirm=STAGE_FIELD_INTELLIGENCE \
+            -f sha="$STAGE_SHA" \
+            -f merge_sha="$MERGE_SHA" \
+            -f run_smoke=true \
+            -f confirm_canary=''
+          echo "Dispatched isolated Field Intelligence staging for $STAGE_SHA"
