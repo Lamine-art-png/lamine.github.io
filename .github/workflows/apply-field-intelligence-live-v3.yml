@@ -1,0 +1,85 @@
+name: Apply Field Intelligence near-real-time v3
+
+on:
+  push:
+    branches:
+      - fix/field-intelligence-multimodal-v3
+    paths:
+      - scripts/apply_field_intelligence_live_v3_patch.py
+      - .github/workflows/apply-field-intelligence-live-v3.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - scripts/apply_field_intelligence_live_v3_patch.py
+      - .github/workflows/apply-field-intelligence-live-v3.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/field-intelligence-multimodal-v3
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+
+      - name: Apply guarded source patch
+        run: python scripts/apply_field_intelligence_live_v3_patch.py
+
+      - name: Compile changed Python modules
+        run: |
+          python -m py_compile \
+            agroai_api/app/api/v1/field_intelligence.py \
+            agroai_api/app/services/field_live_rate_limit.py \
+            agroai_api/app/services/field_intelligence_vision_extension.py \
+            agroai_api/app/services/field_video.py \
+            agroai_api/app/services/field_vision.py \
+            agroai_api/tests/test_field_intelligence_multimodal_v3.py
+
+      - name: Run isolated backend source contract
+        run: |
+          python - <<'PY'
+          import runpy
+          namespace = runpy.run_path("agroai_api/tests/test_field_intelligence_multimodal_v3.py")
+          namespace["test_field_intelligence_multimodal_v3_source_contract"]()
+          print("field-intelligence-live-v3 backend source contract: ok")
+          PY
+
+      - name: Install portal dependencies
+        working-directory: figma-enterprise-v4
+        run: npm ci
+
+      - name: Run frontend Field Intelligence contracts
+        working-directory: figma-enterprise-v4
+        run: npm run test:field-intelligence
+
+      - name: Build portal
+        working-directory: figma-enterprise-v4
+        run: npm run build
+
+      - name: Remove one-off patch machinery
+        run: |
+          rm scripts/apply_field_intelligence_live_v3_patch.py
+          rm .github/workflows/apply-field-intelligence-live-v3.yml
+
+      - name: Commit verified changes
+        run: |
+          git config user.name "AGRO-AI Engineering"
+          git config user.email "contact@agroai-pilot.com"
+          git add -A
+          git commit -m "Add bounded near-real-time Field Intelligence analysis"
+          git push origin HEAD:fix/field-intelligence-multimodal-v3
