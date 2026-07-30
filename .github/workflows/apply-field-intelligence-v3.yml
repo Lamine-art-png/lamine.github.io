@@ -36,7 +36,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
 
       - name: Repair catalog anchor in guarded patch
         run: python scripts/repair_field_intelligence_v3_patch.py
@@ -60,6 +62,10 @@ jobs:
           namespace["test_field_intelligence_multimodal_v3_source_contract"]()
           print("field-intelligence-multimodal-v3 backend source contract: ok")
           PY
+
+      - name: Install portal dependencies
+        working-directory: figma-enterprise-v4
+        run: npm ci
 
       - name: Run frontend Field Intelligence contracts
         working-directory: figma-enterprise-v4
