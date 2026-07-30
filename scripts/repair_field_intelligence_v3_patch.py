@@ -5,7 +5,8 @@ text = path.read_text(encoding="utf-8")
 old = '"fieldIntel.recordingReady": "Prêt à enregistrer"'
 new = '"fieldIntel.recordingReady": "Enregistrement prêt"'
 count = text.count(old)
-if count != 1:
-    raise RuntimeError(f"Expected one French catalog anchor in codemod, found {count}")
+if count != 2:
+    raise RuntimeError(f"Expected the guarded old/new French anchors, found {count}")
+# The first occurrence is the exact source anchor; the second is replacement output.
 path.write_text(text.replace(old, new, 1), encoding="utf-8")
-print("Repaired French Field Intelligence catalog anchor")
+print("Repaired French Field Intelligence catalog source anchor")
