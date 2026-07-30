@@ -7,12 +7,14 @@ on:
       - fix/field-intelligence-multimodal-v3
     paths:
       - scripts/apply_field_intelligence_v3_patch.py
+      - scripts/repair_field_intelligence_v3_patch.py
       - .github/workflows/apply-field-intelligence-v3.yml
   pull_request:
     branches:
       - main
     paths:
       - scripts/apply_field_intelligence_v3_patch.py
+      - scripts/repair_field_intelligence_v3_patch.py
       - .github/workflows/apply-field-intelligence-v3.yml
 
 permissions:
@@ -35,6 +37,9 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
+
+      - name: Repair catalog anchor in guarded patch
+        run: python scripts/repair_field_intelligence_v3_patch.py
 
       - name: Apply guarded source patch
         run: python scripts/apply_field_intelligence_v3_patch.py
@@ -59,6 +64,7 @@ jobs:
       - name: Remove one-off patch machinery
         run: |
           rm scripts/apply_field_intelligence_v3_patch.py
+          rm scripts/repair_field_intelligence_v3_patch.py
           rm .github/workflows/apply-field-intelligence-v3.yml
 
       - name: Commit verified changes
