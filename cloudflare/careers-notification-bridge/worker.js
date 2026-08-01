@@ -96,6 +96,18 @@ function proxyRequest(request) {
   });
 }
 
+function bridged(response, notificationStatus = null) {
+  const headers = new Headers(response.headers);
+  headers.set("x-agroai-careers-bridge", "active");
+  headers.set("cache-control", "no-store");
+  if (notificationStatus) headers.set("x-agroai-careers-notification", notificationStatus);
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers,
+  });
+}
+
 export default {
   async fetch(request) {
     const url = new URL(request.url);
@@ -108,21 +120,20 @@ export default {
 
     const formCopy = request.method === "POST" ? request.clone() : null;
     const upstream = await fetch(proxyRequest(request));
-    if (request.method !== "POST" || !upstream.ok || !formCopy) return upstream;
+    if (request.method !== "POST" || !upstream.ok || !formCopy) return bridged(upstream);
 
-    const upstreamCopy = upstream.clone();
-    const applicationResult = await upstreamCopy.json().catch(() => null);
-    if (!applicationResult || applicationResult.ok !== true) return upstream;
+    const applicationResult = await upstream.clone().json().catch(() => null);
+    if (!applicationResult || applicationResult.ok !== true) return bridged(upstream);
 
     let form;
     try {
       form = await formCopy.formData();
     } catch {
-      return upstream;
+      return bridged(upstream);
     }
 
     const notification = await sendNotification(form);
-    if (notification.ok) return upstream;
+    if (notification.ok) return bridged(upstream, "delivered");
 
     return new Response(
       JSON.stringify({
@@ -141,6 +152,7 @@ export default {
         headers: {
           "content-type": "application/json; charset=utf-8",
           "cache-control": "no-store",
+          "x-agroai-careers-bridge": "active",
           "x-agroai-careers-notification": "failed",
         },
       },
