@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   inspect:
-    name: Inspect Direct Upload deployment safely
+    name: Inspect Direct Upload file manifest
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -20,47 +20,47 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Inspect project and deployment structure without values
+      - name: Inspect current production file inventory without downloading assets
         shell: bash
         run: |
           set -euo pipefail
           api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PAGES_PROJECT}"
           auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
-          curl -fsS -H "$auth" "$api" > project.json
           curl -fsS -H "$auth" "${api}/deployments?env=production&per_page=1" > deployments.json
           deployment_id="$(jq -r '.result[0].id // empty' deployments.json)"
           test -n "$deployment_id"
           curl -fsS -H "$auth" "${api}/deployments/${deployment_id}" > deployment.json
 
-          echo '=== PROJECT KEYS ==='
-          jq -r '.result | keys[]' project.json
-          echo '=== PRODUCTION CONFIG KEYS ==='
-          jq -r '.result.deployment_configs.production | keys[]' project.json
-          echo '=== PRODUCTION BINDING MAPS ==='
+          echo '=== DEPLOYMENT ==='
+          jq -r '[.result.id, .result.uses_functions, (.result.files | type), (.result.files | length)] | @tsv' deployment.json
+          echo '=== FILES SHAPE ==='
           jq -r '
-            .result.deployment_configs.production
-            | to_entries[]
-            | select(.value | type == "object")
-            | [.key, ((.value | keys | length) | tostring), (.value | keys | join(","))]
-            | @tsv
-          ' project.json
-          echo '=== DEPLOYMENT KEYS ==='
-          jq -r '.result | keys[]' deployment.json
-          echo '=== DEPLOYMENT SUMMARY ==='
-          jq -r '[.result.id, .result.environment, .result.deployment_trigger.type, .result.deployment_trigger.metadata.branch, .result.deployment_trigger.metadata.commit_hash] | @tsv' deployment.json
-          echo '=== MANIFEST PRESENCE ==='
-          jq -r '[has("manifest"), ((.manifest // {}) | type), ((.manifest // {}) | length)] | @tsv' deployment.json
-          echo '=== DEPLOYMENT RESULT MANIFEST PRESENCE ==='
-          jq -r '[.result | has("manifest"), ((.result.manifest // {}) | type), ((.result.manifest // {}) | length)] | @tsv' deployment.json
-          echo '=== DEPLOYMENT ENV VAR NAMES/TYPES ==='
-          jq -r '(.result.env_vars // {}) | to_entries[] | [.key, (.value.type // "unknown")] | @tsv' deployment.json
+            if (.result.files | type) == "object" then
+              .result.files | to_entries[:25][] | [.key, (.value | type), (.value | tostring)] | @tsv
+            elif (.result.files | type) == "array" then
+              .result.files[:25][] | [(. | type), (. | tostring)] | @tsv
+            else
+              [.result.files | type, (.result.files | tostring)] | @tsv
+            end
+          ' deployment.json
+          echo '=== FUNCTION-RELATED FILES ==='
+          jq -r '
+            if (.result.files | type) == "object" then
+              .result.files | to_entries[] | select(.key | test("_worker|functions|routes|apply|manifest"; "i")) | [.key, (.value | tostring)] | @tsv
+            elif (.result.files | type) == "array" then
+              .result.files[] | select((. | tostring) | test("_worker|functions|routes|apply|manifest"; "i")) | tostring
+            else empty end
+          ' deployment.json
+          echo '=== PROJECT SCRIPT/FUNCTION FLAGS ==='
+          curl -fsS -H "$auth" "$api" > project.json
+          jq -r '[.result.uses_functions, (.result.production_script_name // ""), (.result.preview_script_name // "")] | @tsv' project.json
 
-      - name: Confirm live surfaces remain unchanged
+      - name: Confirm exact live endpoints remain available
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS https://agroai-pilot.com/ -o home.html
-          curl -fsS https://agroai-pilot.com/careers -o careers.html
-          curl -fsS https://agroai-pilot.com/api/apply | jq -e '.ok == true' >/dev/null
+          curl -fsS -L https://agroai-pilot.com/ -o home.html
+          curl -fsS -L https://agroai-pilot.com/careers -o careers.html
+          curl -fsS https://agroai-pilot.com/api/apply | jq -e '.ok == true and .endpoint == "/api/apply"' >/dev/null
           test -s home.html
           test -s careers.html
