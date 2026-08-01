@@ -10,54 +10,150 @@ permissions:
   contents: read
 
 jobs:
-  diagnose:
-    name: Inspect Careers production recipient
+  repair:
+    name: Repair Careers production recipient
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PAGES_PROJECT: agroai
+      TARGET_EMAIL: contact@agroai-pilot.com
     steps:
       - uses: actions/checkout@v4
 
-      - name: Read Cloudflare Pages project without exposing values
+      - name: Update only the Careers recipient binding
         shell: bash
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
-          curl -fsS \
-            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
-            -H 'Content-Type: application/json' \
-            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/agroai" \
-            > project.json
-          jq -e '.success == true' project.json >/dev/null
-          echo '=== PRODUCTION BINDING NAMES AND TYPES ==='
-          jq -r '
-            (.result.deployment_configs.production.env_vars // {})
-            | to_entries[]
-            | [.key, (.value.type // "unknown"), (if (.value.value // "") == "contact@agroai-pilot.com" then "TARGET_MATCH=true" else "TARGET_MATCH=false" end)]
-            | @tsv
-          ' project.json
-          echo '=== PREVIEW BINDING NAMES AND TYPES ==='
-          jq -r '
-            (.result.deployment_configs.preview.env_vars // {})
-            | to_entries[]
-            | [.key, (.value.type // "unknown"), (if (.value.value // "") == "contact@agroai-pilot.com" then "TARGET_MATCH=true" else "TARGET_MATCH=false" end)]
-            | @tsv
-          ' project.json
-          echo '=== LIKELY RECIPIENT BINDINGS ==='
-          jq -r '
-            ["production", "preview"][] as $scope
-            | (.result.deployment_configs[$scope].env_vars // {})
-            | to_entries[]
-            | select(.key | test("EMAIL|RECIPIENT|APPLICATION|CAREER|TO"; "i"))
-            | [$scope, .key, (.value.type // "unknown"), (if (.value.value // "") == "contact@agroai-pilot.com" then "TARGET_MATCH=true" else "TARGET_MATCH=false" end)]
-            | @tsv
-          ' project.json
+          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PAGES_PROJECT}"
+          auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
 
-      - name: Confirm live endpoints remain healthy
+          curl -fsS -H "$auth" -H 'Content-Type: application/json' "$api" > before.json
+          jq -e '.success == true' before.json >/dev/null
+          jq -e '.result.deployment_configs.production.env_vars.APPLICATION_TO_EMAIL.type == "plain_text"' before.json >/dev/null
+
+          jq -n --arg target "$TARGET_EMAIL" '{
+            deployment_configs: {
+              production: {
+                env_vars: {
+                  APPLICATION_TO_EMAIL: {type: "plain_text", value: $target}
+                }
+              }
+            }
+          }' > patch.json
+
+          curl -fsS -X PATCH \
+            -H "$auth" \
+            -H 'Content-Type: application/json' \
+            --data @patch.json \
+            "$api" > patched.json
+          jq -e '.success == true' patched.json >/dev/null
+
+          curl -fsS -H "$auth" -H 'Content-Type: application/json' "$api" > after.json
+          jq -e --arg target "$TARGET_EMAIL" '
+            .success == true and
+            .result.deployment_configs.production.env_vars.APPLICATION_TO_EMAIL.type == "plain_text" and
+            .result.deployment_configs.production.env_vars.APPLICATION_TO_EMAIL.value == $target and
+            .result.deployment_configs.production.env_vars.RESEND_API_KEY.type == "secret_text"
+          ' after.json >/dev/null
+
+          jq -S '.result.deployment_configs.production.env_vars | map_values(.type)' before.json > before-shape.json
+          jq -S '.result.deployment_configs.production.env_vars | map_values(.type)' after.json > after-shape.json
+          cmp before-shape.json after-shape.json
+          echo 'APPLICATION_TO_EMAIL=contact@agroai-pilot.com verified in production configuration.'
+
+      - name: Redeploy the same approved production deployment
         shell: bash
         run: |
           set -euo pipefail
-          curl -fsS https://agroai-pilot.com/api/apply | jq -e '.ok == true and .endpoint == "/api/apply"' >/dev/null
+          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PAGES_PROJECT}"
+          auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+
+          curl -fsS -H "$auth" -H 'Content-Type: application/json' \
+            "${api}/deployments?env=production&per_page=1" > deployments.json
+          deployment_id="$(jq -r '.result[0].id // empty' deployments.json)"
+          test -n "$deployment_id"
+
+          curl -fsS -X POST -H "$auth" -H 'Content-Type: application/json' \
+            "${api}/deployments/${deployment_id}/retry" > retry.json
+          jq -e '.success == true and (.result.id | length > 0)' retry.json >/dev/null
+          new_deployment_id="$(jq -r '.result.id' retry.json)"
+          echo "Reissued production deployment ${new_deployment_id} from approved deployment ${deployment_id}."
+
+          for attempt in $(seq 1 90); do
+            curl -fsS -H "$auth" -H 'Content-Type: application/json' \
+              "${api}/deployments/${new_deployment_id}" > deployment-status.json
+            stage_status="$(jq -r '.result.latest_stage.status // empty' deployment-status.json)"
+            stage_name="$(jq -r '.result.latest_stage.name // empty' deployment-status.json)"
+            echo "Attempt ${attempt}: ${stage_name:-unknown}/${stage_status:-unknown}"
+            if [ "$stage_status" = "success" ]; then
+              exit 0
+            fi
+            if [ "$stage_status" = "failure" ]; then
+              jq '{errors, messages, result: {id: .result.id, latest_stage: .result.latest_stage}}' deployment-status.json
+              exit 1
+            fi
+            sleep 5
+          done
+          echo 'Timed out waiting for Careers production deployment.'
+          exit 1
+
+      - name: Submit an exact live Careers application
+        shell: bash
+        run: |
+          set -euo pipefail
+          marker="careers-recipient-repair-${GITHUB_RUN_ID}"
+          printf '%s\n' \
+            '%PDF-1.4' \
+            '1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj' \
+            '2 0 obj<< /Type /Pages /Kids [3 0 R] /Count 1 >>endobj' \
+            '3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>endobj' \
+            '4 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj' \
+            '5 0 obj<< /Length 98 >>stream' \
+            'BT /F1 12 Tf 72 720 Td (AGRO-AI internal Careers notification diagnostic. No follow-up required.) Tj ET' \
+            'endstream endobj' \
+            'trailer<< /Root 1 0 R /Size 6 >>' \
+            '%%EOF' > diagnostic-resume.pdf
+
+          for attempt in $(seq 1 30); do
+            code="$(curl -sS --connect-timeout 10 --max-time 45 \
+              -o careers-response.json -w '%{http_code}' \
+              -X POST https://agroai-pilot.com/api/apply \
+              -H 'accept: application/json' \
+              -F 'name=AGRO-AI Careers recipient repair' \
+              -F 'fullName=AGRO-AI Careers recipient repair' \
+              -F 'email=contact@agroai-pilot.com' \
+              -F 'role=Internal diagnostic' \
+              -F 'position=Internal diagnostic' \
+              -F 'location=San Francisco, California' \
+              -F 'availability=Immediate' \
+              -F 'eligibility=Authorized to work in the United States' \
+              -F 'linkedin=https://www.linkedin.com/company/agro-ai-inc/' \
+              -F 'roleContribution=Verify the production Careers application notification path end to end.' \
+              -F 'proofOfWork=https://agroai-pilot.com' \
+              -F "aiWorkflow=Automated internal production verification. No follow-up required. ${marker}" \
+              -F 'toolsUsed=GitHub Actions and curl' \
+              -F 'proudestWork=Reliable production notification delivery' \
+              -F 'workingStyle=Fast, clear, reliable, and evidence driven' \
+              -F 'agroAiImprovement=Ensure every application reaches contact@agroai-pilot.com' \
+              -F 'whyAgroAi=Internal production verification only' \
+              -F 'relevantExperience=Production delivery verification' \
+              -F 'resume=@diagnostic-resume.pdf;type=application/pdf' || true)"
+            if [ "$code" = "200" ] && jq -e '.ok == true and .emailNotification.sent == true' careers-response.json >/dev/null 2>&1; then
+              cat careers-response.json
+              echo "CAREERS_NOTIFICATION_MARKER=${marker}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo 'Live Careers application did not confirm email delivery.'
+          cat careers-response.json || true
+          exit 1
+
+      - name: Confirm Book a Demo remains healthy
+        shell: bash
+        run: |
+          set -euo pipefail
           curl -fsS https://api.agroai-pilot.com/v1/health | jq -e '.status == "ok"' >/dev/null
