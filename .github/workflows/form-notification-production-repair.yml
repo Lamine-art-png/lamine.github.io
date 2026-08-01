@@ -11,7 +11,7 @@ permissions:
 
 jobs:
   verify:
-    name: Verify Careers production recipient
+    name: Activate and verify Careers recipient
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
@@ -27,7 +27,7 @@ jobs:
           set -euo pipefail
           api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PAGES_PROJECT}"
           auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
-          curl -fsS -H "$auth" -H 'Content-Type: application/json' "$api" > project.json
+          curl -fsS -H "$auth" "$api" > project.json
           jq -e --arg target "$TARGET_EMAIL" '
             .success == true and
             .result.deployment_configs.production.env_vars.APPLICATION_TO_EMAIL.type == "plain_text" and
@@ -35,6 +35,46 @@ jobs:
             .result.deployment_configs.production.env_vars.RESEND_API_KEY.type == "secret_text"
           ' project.json >/dev/null
           echo 'Correct Careers recipient binding is present.'
+
+      - name: Retry the current production deployment with updated bindings
+        shell: bash
+        run: |
+          set -euo pipefail
+          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PAGES_PROJECT}"
+          auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+          curl -fsS -H "$auth" "${api}/deployments?env=production&per_page=1" > deployments.json
+          deployment_id="$(jq -r '.result[0].id // empty' deployments.json)"
+          test -n "$deployment_id"
+
+          retry_code="$(curl -sS -X POST \
+            -H "$auth" \
+            -o retry.json -w '%{http_code}' \
+            "${api}/deployments/${deployment_id}/retry")"
+          echo "Retry request HTTP ${retry_code}"
+          if [ "$retry_code" != "200" ]; then
+            jq '{success, errors, messages}' retry.json || cat retry.json
+            exit 1
+          fi
+          jq -e '.success == true and (.result.id | length > 0)' retry.json >/dev/null
+          new_deployment_id="$(jq -r '.result.id' retry.json)"
+          echo "New production deployment: ${new_deployment_id}"
+
+          for attempt in $(seq 1 90); do
+            curl -fsS -H "$auth" "${api}/deployments/${new_deployment_id}" > status.json
+            stage_name="$(jq -r '.result.latest_stage.name // empty' status.json)"
+            stage_status="$(jq -r '.result.latest_stage.status // empty' status.json)"
+            echo "Attempt ${attempt}: ${stage_name:-unknown}/${stage_status:-unknown}"
+            if [ "$stage_status" = "success" ]; then
+              exit 0
+            fi
+            if [ "$stage_status" = "failure" ]; then
+              jq '{success, errors, messages, result: {id: .result.id, latest_stage: .result.latest_stage}}' status.json
+              exit 1
+            fi
+            sleep 5
+          done
+          echo 'Timed out waiting for the corrected Pages deployment.'
+          exit 1
 
       - name: Submit an exact live Careers application
         shell: bash
