@@ -1,6 +1,7 @@
 const APPLICATION_ORIGIN = "__APPLICATION_ORIGIN__";
 const SALES_NOTIFICATION_URL = "https://api.agroai-pilot.com/v1/sales/contact";
 const MAX_TEXT_LENGTH = 4000;
+const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 
 function bounded(value, limit = MAX_TEXT_LENGTH) {
   return String(value ?? "").replace(/\u0000/g, "").trim().slice(0, limit);
@@ -82,16 +83,17 @@ async function sendNotification(form) {
   return { ok: false, reason: lastReason };
 }
 
-function proxyRequest(request) {
+function proxyRequest(request, bodyBytes = null) {
   const incoming = new URL(request.url);
   const target = new URL(`${incoming.pathname}${incoming.search}`, APPLICATION_ORIGIN);
   const headers = new Headers(request.headers);
   headers.delete("host");
+  headers.delete("content-length");
   headers.set("x-agroai-careers-bridge", "1");
   return new Request(target, {
     method: request.method,
     headers,
-    body: request.method === "GET" || request.method === "HEAD" ? undefined : request.body,
+    body: bodyBytes ? bodyBytes.slice(0) : undefined,
     redirect: "manual",
   });
 }
@@ -108,6 +110,17 @@ function bridged(response, notificationStatus = null) {
   });
 }
 
+function bodyTooLarge() {
+  return new Response(JSON.stringify({ ok: false, error: "application_too_large" }), {
+    status: 413,
+    headers: {
+      "content-type": "application/json; charset=utf-8",
+      "cache-control": "no-store",
+      "x-agroai-careers-bridge": "active",
+    },
+  });
+}
+
 export default {
   async fetch(request) {
     const url = new URL(request.url);
@@ -118,16 +131,29 @@ export default {
       });
     }
 
-    const formCopy = request.method === "POST" ? request.clone() : null;
-    const upstream = await fetch(proxyRequest(request));
-    if (request.method !== "POST" || !upstream.ok || !formCopy) return bridged(upstream);
+    let bodyBytes = null;
+    if (request.method === "POST") {
+      const declaredLength = Number(request.headers.get("content-length") || 0);
+      if (Number.isFinite(declaredLength) && declaredLength > MAX_REQUEST_BYTES) return bodyTooLarge();
+      bodyBytes = await request.arrayBuffer();
+      if (bodyBytes.byteLength > MAX_REQUEST_BYTES) return bodyTooLarge();
+    }
+
+    const upstream = await fetch(proxyRequest(request, bodyBytes));
+    if (request.method !== "POST" || !upstream.ok || !bodyBytes) return bridged(upstream);
 
     const applicationResult = await upstream.clone().json().catch(() => null);
     if (!applicationResult || applicationResult.ok !== true) return bridged(upstream);
 
     let form;
     try {
-      form = await formCopy.formData();
+      const contentType = request.headers.get("content-type") || "";
+      const formRequest = new Request("https://careers-bridge.invalid/api/apply", {
+        method: "POST",
+        headers: { "content-type": contentType },
+        body: bodyBytes.slice(0),
+      });
+      form = await formRequest.formData();
     } catch {
       return bridged(upstream);
     }
