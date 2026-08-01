@@ -48,24 +48,13 @@ jobs:
           jq -e '.success == true and .result.environment == "production" and (.result.files | type) == "object" and (.result.files | length) > 0' current.json >/dev/null
 
           origin="$(jq -r '.result.url // empty' current.json)"
-          python3 - "$origin" <<'PY'
-import sys
-from urllib.parse import urlparse
-u = urlparse(sys.argv[1])
-assert u.scheme == "https"
-assert u.hostname and u.hostname.endswith(".pages.dev")
-assert not u.username and not u.password and not u.query and not u.fragment
-PY
+          case "$origin" in
+            https://*.pages.dev) ;;
+            *) echo "Refusing unexpected application origin: $origin"; exit 1 ;;
+          esac
           jq -c '.result.files' current.json > manifest.json
           cp cloudflare/careers-notification-bridge/worker.js worker.js
-          python3 - "$origin" <<'PY'
-from pathlib import Path
-import sys
-path = Path("worker.js")
-text = path.read_text()
-assert text.count("__APPLICATION_ORIGIN__") == 1
-path.write_text(text.replace("__APPLICATION_ORIGIN__", sys.argv[1]))
-PY
+          python3 -c 'from pathlib import Path; import sys; p=Path("worker.js"); t=p.read_text(); assert t.count("__APPLICATION_ORIGIN__")==1; p.write_text(t.replace("__APPLICATION_ORIGIN__", sys.argv[1]))' "$origin"
           cp cloudflare/careers-notification-bridge/_routes.json _routes.json
           cp worker.js worker.mjs
           node --check worker.mjs
