@@ -1,0 +1,76 @@
+name: Form notification production repair
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/form-notification-production-repair.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    name: Diagnose exact production paths
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Inspect repository deployment inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo '=== TOP LEVEL ==='
+          git ls-tree --name-only HEAD | sort
+          echo '=== BUILD AND FORM INPUTS ==='
+          for path in \
+            index.html \
+            assets \
+            attached_assets \
+            careers \
+            functions \
+            functions/api/apply.ts \
+            client \
+            client/src/pages/apply.tsx \
+            package.json \
+            package-lock.json \
+            dist/public \
+            dist/public/index.html; do
+            if [ -e "$path" ]; then
+              echo "PRESENT $path"
+            else
+              echo "ABSENT  $path"
+            fi
+          done
+          echo '=== PACKAGE FILES ==='
+          find . -maxdepth 4 -name package.json -not -path './node_modules/*' -print | sort
+          echo '=== DEPLOY REFERENCES ==='
+          grep -RIn --exclude-dir=.git --exclude='*.map' -E 'project-name[ =]+.?agroai|dist/public|wrangler pages deploy|/api/apply' .github scripts docs 2>/dev/null | head -250 || true
+
+      - name: Inspect live Careers endpoint
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -sS -L --connect-timeout 10 --max-time 30 \
+            -D careers-headers.txt \
+            -o careers-body.txt \
+            https://agroai-pilot.com/api/apply
+          echo '=== /api/apply HEADERS ==='
+          sed -n '1,40p' careers-headers.txt
+          echo '=== /api/apply BODY ==='
+          head -c 1000 careers-body.txt; echo
+
+      - name: Inspect live demo notification response
+        shell: bash
+        run: |
+          set -euo pipefail
+          marker="github-production-diagnostic-${GITHUB_RUN_ID}"
+          code="$(curl -sS --connect-timeout 10 --max-time 30 \
+            -o demo-response.json -w '%{http_code}' \
+            -X POST https://api.agroai-pilot.com/v1/sales/contact \
+            -H 'content-type: application/json' \
+            -H 'accept: application/json' \
+            --data "{\"type\":\"sales\",\"priority\":\"low\",\"name\":\"AGRO-AI production diagnostic\",\"email\":\"contact@agroai-pilot.com\",\"company\":\"AGRO-AI Inc.\",\"subject\":\"Form notification production diagnostic\",\"message\":\"Automated internal diagnostic. No follow-up required. Marker: ${marker}\",\"source_page\":\"form-notification-diagnostic\",\"metadata\":{\"automated_diagnostic\":true,\"marker\":\"${marker}\"}}")"
+          echo "HTTP ${code}"
+          cat demo-response.json; echo
+          test "$code" = "200"
