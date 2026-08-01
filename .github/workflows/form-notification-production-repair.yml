@@ -16,37 +16,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Inspect repository deployment inputs
-        shell: bash
-        run: |
-          set -euo pipefail
-          echo '=== TOP LEVEL ==='
-          git ls-tree --name-only HEAD | sort
-          echo '=== BUILD AND FORM INPUTS ==='
-          for path in \
-            index.html \
-            assets \
-            attached_assets \
-            careers \
-            functions \
-            functions/api/apply.ts \
-            client \
-            client/src/pages/apply.tsx \
-            package.json \
-            package-lock.json \
-            dist/public \
-            dist/public/index.html; do
-            if [ -e "$path" ]; then
-              echo "PRESENT $path"
-            else
-              echo "ABSENT  $path"
-            fi
-          done
-          echo '=== PACKAGE FILES ==='
-          find . -maxdepth 4 -name package.json -not -path './node_modules/*' -print | sort
-          echo '=== FORM REFERENCES ==='
-          grep -RIn --exclude-dir=.git --exclude='*.map' -E '/api/apply|Application received|Submit application' index.html assets careers client 2>/dev/null | head -250 || true
-
       - name: Inspect live Careers endpoint
         shell: bash
         run: |
@@ -60,12 +29,11 @@ jobs:
           echo '=== /api/apply BODY ==='
           head -c 1000 careers-body.txt; echo
 
-      - name: Test live Careers notification response
+      - name: Test exact live Careers notification path
         shell: bash
         run: |
           set -euo pipefail
           marker="careers-production-diagnostic-${GITHUB_RUN_ID}"
-          printf 'Internal AGRO-AI Careers diagnostic. No follow-up required.\n%s\n' "$marker" > diagnostic-resume.txt
           code="$(curl -sS --connect-timeout 10 --max-time 45 \
             -o careers-post-response.json -w '%{http_code}' \
             -X POST https://agroai-pilot.com/api/apply \
@@ -77,21 +45,26 @@ jobs:
             -F 'position=Internal diagnostic' \
             -F 'location=San Francisco, California' \
             -F 'availability=Immediate' \
+            -F 'eligibility=Authorized to work in the United States' \
             -F 'linkedin=https://www.linkedin.com/company/agro-ai-inc/' \
-            -F "whyAgroAi=Automated internal diagnostic. No follow-up required. ${marker}" \
-            -F 'relevantExperience=Internal production verification' \
-            -F 'workingStyle=Fast, clear, reliable' \
-            -F 'improvement=Verify Careers notification delivery' \
-            -F 'resume=@diagnostic-resume.txt;type=text/plain')"
+            -F 'roleContribution=Verify the production Careers application notification path end to end.' \
+            -F 'proofOfWork=https://agroai-pilot.com' \
+            -F "aiWorkflow=Automated internal production verification. No follow-up required. ${marker}" \
+            -F 'toolsUsed=GitHub Actions and curl' \
+            -F 'proudestWork=Reliable production notification delivery' \
+            -F 'workingStyle=Fast, clear, reliable, and evidence driven' \
+            -F 'agroAiImprovement=Ensure every application reaches contact@agroai-pilot.com' \
+            -F 'whyAgroAi=Internal production verification only' \
+            -F 'relevantExperience=Production delivery verification')"
           echo "HTTP ${code}"
           cat careers-post-response.json; echo
           test "$code" = "200"
 
-      - name: Inspect live demo notification response
+      - name: Confirm live demo notification response
         shell: bash
         run: |
           set -euo pipefail
-          marker="github-production-diagnostic-${GITHUB_RUN_ID}"
+          marker="demo-production-diagnostic-${GITHUB_RUN_ID}"
           code="$(curl -sS --connect-timeout 10 --max-time 30 \
             -o demo-response.json -w '%{http_code}' \
             -X POST https://api.agroai-pilot.com/v1/sales/contact \
@@ -101,3 +74,4 @@ jobs:
           echo "HTTP ${code}"
           cat demo-response.json; echo
           test "$code" = "200"
+          jq -e '.notification_status == "emailed:contact@agroai-pilot.com"' demo-response.json >/dev/null
