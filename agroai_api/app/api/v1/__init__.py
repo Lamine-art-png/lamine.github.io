@@ -45,6 +45,7 @@ from . import connector_launch_secure as launch_secure_module  # noqa: E402
 from . import connector_oauth_completion as oauth_completion_module  # noqa: E402
 from . import connectors as connector_compat_module  # noqa: E402
 from . import product_shell as product_shell_module  # noqa: E402
+from . import sales_contact_notifications as sales_contact_notifications_module  # noqa: E402
 from . import monetization_convergence as monetization_module  # noqa: E402
 from . import non_customer_access as non_customer_access_module  # noqa: E402
 from . import ask_agro_ai_paywall as ask_agro_ai_paywall_module  # noqa: E402
@@ -93,6 +94,18 @@ def _remove_duplicate_product_checkout() -> None:
     ]
 
 
+def _replace_sales_contact_route() -> None:
+    product_shell_module.router.routes[:] = [
+        route
+        for route in product_shell_module.router.routes
+        if not (
+            getattr(route, "path", "") == "/sales/contact"
+            and "POST" in set(getattr(route, "methods", None) or ())
+        )
+    ]
+    product_shell_module.router.include_router(sales_contact_notifications_module.router)
+
+
 def _remove_shadow_ask_execution_routes() -> None:
     """Keep one mounted route per paid inference path.
 
@@ -133,6 +146,7 @@ apply_catalog_packaging(connector_compat_module.CATALOG)
 install_commercial_upload_metering((connector_module.router, connector_compat_module.router))
 
 _remove_duplicate_product_checkout()
+_replace_sales_contact_route()
 _remove_shadow_ask_execution_routes()
 product_shell_module.router.include_router(monetization_module.router)
 product_shell_module.router.include_router(non_customer_access_module.router)
