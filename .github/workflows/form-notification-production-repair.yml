@@ -11,79 +11,54 @@ permissions:
 
 jobs:
   diagnose:
-    name: Diagnose exact production paths
+    name: Inspect Careers production recipient
     runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Inspect live Careers endpoint
+      - name: Read Cloudflare Pages project without exposing values
         shell: bash
         run: |
           set -euo pipefail
-          curl -sS -L --connect-timeout 10 --max-time 30 \
-            -D careers-headers.txt \
-            -o careers-body.txt \
-            https://agroai-pilot.com/api/apply
-          echo '=== /api/apply HEADERS ==='
-          sed -n '1,40p' careers-headers.txt
-          echo '=== /api/apply BODY ==='
-          head -c 1000 careers-body.txt; echo
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          curl -fsS \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/agroai" \
+            > project.json
+          jq -e '.success == true' project.json >/dev/null
+          echo '=== PRODUCTION BINDING NAMES AND TYPES ==='
+          jq -r '
+            (.result.deployment_configs.production.env_vars // {})
+            | to_entries[]
+            | [.key, (.value.type // "unknown"), (if (.value.value // "") == "contact@agroai-pilot.com" then "TARGET_MATCH=true" else "TARGET_MATCH=false" end)]
+            | @tsv
+          ' project.json
+          echo '=== PREVIEW BINDING NAMES AND TYPES ==='
+          jq -r '
+            (.result.deployment_configs.preview.env_vars // {})
+            | to_entries[]
+            | [.key, (.value.type // "unknown"), (if (.value.value // "") == "contact@agroai-pilot.com" then "TARGET_MATCH=true" else "TARGET_MATCH=false" end)]
+            | @tsv
+          ' project.json
+          echo '=== LIKELY RECIPIENT BINDINGS ==='
+          jq -r '
+            ["production", "preview"][] as $scope
+            | (.result.deployment_configs[$scope].env_vars // {})
+            | to_entries[]
+            | select(.key | test("EMAIL|RECIPIENT|APPLICATION|CAREER|TO"; "i"))
+            | [$scope, .key, (.value.type // "unknown"), (if (.value.value // "") == "contact@agroai-pilot.com" then "TARGET_MATCH=true" else "TARGET_MATCH=false" end)]
+            | @tsv
+          ' project.json
 
-      - name: Test exact live Careers notification path
+      - name: Confirm live endpoints remain healthy
         shell: bash
         run: |
           set -euo pipefail
-          marker="careers-production-diagnostic-${GITHUB_RUN_ID}"
-          printf '%s\n' \
-            '%PDF-1.4' \
-            '1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj' \
-            '2 0 obj<< /Type /Pages /Kids [3 0 R] /Count 1 >>endobj' \
-            '3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>endobj' \
-            '4 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj' \
-            '5 0 obj<< /Length 98 >>stream' \
-            'BT /F1 12 Tf 72 720 Td (AGRO-AI internal Careers notification diagnostic. No follow-up required.) Tj ET' \
-            'endstream endobj' \
-            'trailer<< /Root 1 0 R /Size 6 >>' \
-            '%%EOF' > diagnostic-resume.pdf
-          code="$(curl -sS --connect-timeout 10 --max-time 45 \
-            -o careers-post-response.json -w '%{http_code}' \
-            -X POST https://agroai-pilot.com/api/apply \
-            -H 'accept: application/json' \
-            -F 'name=AGRO-AI Careers production diagnostic' \
-            -F 'fullName=AGRO-AI Careers production diagnostic' \
-            -F 'email=contact@agroai-pilot.com' \
-            -F 'role=Internal diagnostic' \
-            -F 'position=Internal diagnostic' \
-            -F 'location=San Francisco, California' \
-            -F 'availability=Immediate' \
-            -F 'eligibility=Authorized to work in the United States' \
-            -F 'linkedin=https://www.linkedin.com/company/agro-ai-inc/' \
-            -F 'roleContribution=Verify the production Careers application notification path end to end.' \
-            -F 'proofOfWork=https://agroai-pilot.com' \
-            -F "aiWorkflow=Automated internal production verification. No follow-up required. ${marker}" \
-            -F 'toolsUsed=GitHub Actions and curl' \
-            -F 'proudestWork=Reliable production notification delivery' \
-            -F 'workingStyle=Fast, clear, reliable, and evidence driven' \
-            -F 'agroAiImprovement=Ensure every application reaches contact@agroai-pilot.com' \
-            -F 'whyAgroAi=Internal production verification only' \
-            -F 'relevantExperience=Production delivery verification' \
-            -F 'resume=@diagnostic-resume.pdf;type=application/pdf')"
-          echo "HTTP ${code}"
-          cat careers-post-response.json; echo
-          test "$code" = "200"
-
-      - name: Confirm live demo notification response
-        shell: bash
-        run: |
-          set -euo pipefail
-          marker="demo-production-diagnostic-${GITHUB_RUN_ID}"
-          code="$(curl -sS --connect-timeout 10 --max-time 30 \
-            -o demo-response.json -w '%{http_code}' \
-            -X POST https://api.agroai-pilot.com/v1/sales/contact \
-            -H 'content-type: application/json' \
-            -H 'accept: application/json' \
-            --data "{\"type\":\"sales\",\"priority\":\"low\",\"name\":\"AGRO-AI production diagnostic\",\"email\":\"contact@agroai-pilot.com\",\"company\":\"AGRO-AI Inc.\",\"subject\":\"Form notification production diagnostic\",\"message\":\"Automated internal diagnostic. No follow-up required. Marker: ${marker}\",\"source_page\":\"form-notification-diagnostic\",\"metadata\":{\"automated_diagnostic\":true,\"marker\":\"${marker}\"}}")"
-          echo "HTTP ${code}"
-          cat demo-response.json; echo
-          test "$code" = "200"
-          jq -e '.notification_status == "emailed:contact@agroai-pilot.com"' demo-response.json >/dev/null
+          curl -fsS https://agroai-pilot.com/api/apply | jq -e '.ok == true and .endpoint == "/api/apply"' >/dev/null
+          curl -fsS https://api.agroai-pilot.com/v1/health | jq -e '.status == "ok"' >/dev/null
