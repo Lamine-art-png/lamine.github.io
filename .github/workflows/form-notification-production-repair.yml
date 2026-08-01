@@ -10,120 +10,57 @@ permissions:
   contents: read
 
 jobs:
-  verify:
-    name: Activate and verify Careers recipient
+  inspect:
+    name: Inspect Direct Upload deployment safely
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       PAGES_PROJECT: agroai
-      TARGET_EMAIL: contact@agroai-pilot.com
     steps:
       - uses: actions/checkout@v4
 
-      - name: Verify corrected Cloudflare recipient binding
+      - name: Inspect project and deployment structure without values
         shell: bash
         run: |
           set -euo pipefail
           api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PAGES_PROJECT}"
           auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
           curl -fsS -H "$auth" "$api" > project.json
-          jq -e --arg target "$TARGET_EMAIL" '
-            .success == true and
-            .result.deployment_configs.production.env_vars.APPLICATION_TO_EMAIL.type == "plain_text" and
-            .result.deployment_configs.production.env_vars.APPLICATION_TO_EMAIL.value == $target and
-            .result.deployment_configs.production.env_vars.RESEND_API_KEY.type == "secret_text"
-          ' project.json >/dev/null
-          echo 'Correct Careers recipient binding is present.'
-
-      - name: Retry the current production deployment with updated bindings
-        shell: bash
-        run: |
-          set -euo pipefail
-          api="https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PAGES_PROJECT}"
-          auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
           curl -fsS -H "$auth" "${api}/deployments?env=production&per_page=1" > deployments.json
           deployment_id="$(jq -r '.result[0].id // empty' deployments.json)"
           test -n "$deployment_id"
+          curl -fsS -H "$auth" "${api}/deployments/${deployment_id}" > deployment.json
 
-          retry_code="$(curl -sS -X POST \
-            -H "$auth" \
-            -o retry.json -w '%{http_code}' \
-            "${api}/deployments/${deployment_id}/retry")"
-          echo "Retry request HTTP ${retry_code}"
-          if [ "$retry_code" != "200" ]; then
-            jq '{success, errors, messages}' retry.json || cat retry.json
-            exit 1
-          fi
-          jq -e '.success == true and (.result.id | length > 0)' retry.json >/dev/null
-          new_deployment_id="$(jq -r '.result.id' retry.json)"
-          echo "New production deployment: ${new_deployment_id}"
+          echo '=== PROJECT KEYS ==='
+          jq -r '.result | keys[]' project.json
+          echo '=== PRODUCTION CONFIG KEYS ==='
+          jq -r '.result.deployment_configs.production | keys[]' project.json
+          echo '=== PRODUCTION BINDING MAPS ==='
+          jq -r '
+            .result.deployment_configs.production
+            | to_entries[]
+            | select(.value | type == "object")
+            | [.key, ((.value | keys | length) | tostring), (.value | keys | join(","))]
+            | @tsv
+          ' project.json
+          echo '=== DEPLOYMENT KEYS ==='
+          jq -r '.result | keys[]' deployment.json
+          echo '=== DEPLOYMENT SUMMARY ==='
+          jq -r '[.result.id, .result.environment, .result.deployment_trigger.type, .result.deployment_trigger.metadata.branch, .result.deployment_trigger.metadata.commit_hash] | @tsv' deployment.json
+          echo '=== MANIFEST PRESENCE ==='
+          jq -r '[has("manifest"), ((.manifest // {}) | type), ((.manifest // {}) | length)] | @tsv' deployment.json
+          echo '=== DEPLOYMENT RESULT MANIFEST PRESENCE ==='
+          jq -r '[.result | has("manifest"), ((.result.manifest // {}) | type), ((.result.manifest // {}) | length)] | @tsv' deployment.json
+          echo '=== DEPLOYMENT ENV VAR NAMES/TYPES ==='
+          jq -r '(.result.env_vars // {}) | to_entries[] | [.key, (.value.type // "unknown")] | @tsv' deployment.json
 
-          for attempt in $(seq 1 90); do
-            curl -fsS -H "$auth" "${api}/deployments/${new_deployment_id}" > status.json
-            stage_name="$(jq -r '.result.latest_stage.name // empty' status.json)"
-            stage_status="$(jq -r '.result.latest_stage.status // empty' status.json)"
-            echo "Attempt ${attempt}: ${stage_name:-unknown}/${stage_status:-unknown}"
-            if [ "$stage_status" = "success" ]; then
-              exit 0
-            fi
-            if [ "$stage_status" = "failure" ]; then
-              jq '{success, errors, messages, result: {id: .result.id, latest_stage: .result.latest_stage}}' status.json
-              exit 1
-            fi
-            sleep 5
-          done
-          echo 'Timed out waiting for the corrected Pages deployment.'
-          exit 1
-
-      - name: Submit an exact live Careers application
+      - name: Confirm live surfaces remain unchanged
         shell: bash
         run: |
           set -euo pipefail
-          marker="careers-recipient-repair-${GITHUB_RUN_ID}"
-          printf '%s\n' \
-            '%PDF-1.4' \
-            '1 0 obj<< /Type /Catalog /Pages 2 0 R >>endobj' \
-            '2 0 obj<< /Type /Pages /Kids [3 0 R] /Count 1 >>endobj' \
-            '3 0 obj<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>endobj' \
-            '4 0 obj<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>endobj' \
-            '5 0 obj<< /Length 98 >>stream' \
-            'BT /F1 12 Tf 72 720 Td (AGRO-AI internal Careers notification diagnostic. No follow-up required.) Tj ET' \
-            'endstream endobj' \
-            'trailer<< /Root 1 0 R /Size 6 >>' \
-            '%%EOF' > diagnostic-resume.pdf
-
-          code="$(curl -sS --connect-timeout 10 --max-time 45 \
-            -o careers-response.json -w '%{http_code}' \
-            -X POST https://agroai-pilot.com/api/apply \
-            -H 'accept: application/json' \
-            -F 'name=AGRO-AI Careers recipient repair' \
-            -F 'fullName=AGRO-AI Careers recipient repair' \
-            -F 'email=contact@agroai-pilot.com' \
-            -F 'role=Internal diagnostic' \
-            -F 'position=Internal diagnostic' \
-            -F 'location=San Francisco, California' \
-            -F 'availability=Immediate' \
-            -F 'eligibility=Authorized to work in the United States' \
-            -F 'linkedin=https://www.linkedin.com/company/agro-ai-inc/' \
-            -F 'roleContribution=Verify the production Careers application notification path end to end.' \
-            -F 'proofOfWork=https://agroai-pilot.com' \
-            -F "aiWorkflow=Automated internal production verification. No follow-up required. ${marker}" \
-            -F 'toolsUsed=GitHub Actions and curl' \
-            -F 'proudestWork=Reliable production notification delivery' \
-            -F 'workingStyle=Fast, clear, reliable, and evidence driven' \
-            -F 'agroAiImprovement=Ensure every application reaches contact@agroai-pilot.com' \
-            -F 'whyAgroAi=Internal production verification only' \
-            -F 'relevantExperience=Production delivery verification' \
-            -F 'resume=@diagnostic-resume.pdf;type=application/pdf')"
-          echo "HTTP ${code}"
-          cat careers-response.json; echo
-          test "$code" = "200"
-          jq -e '.ok == true and .emailNotification.sent == true' careers-response.json >/dev/null
-          echo "CAREERS_NOTIFICATION_MARKER=${marker}"
-
-      - name: Confirm Book a Demo remains healthy
-        shell: bash
-        run: |
-          set -euo pipefail
-          curl -fsS https://api.agroai-pilot.com/v1/health | jq -e '.status == "ok"' >/dev/null
+          curl -fsS https://agroai-pilot.com/ -o home.html
+          curl -fsS https://agroai-pilot.com/careers -o careers.html
+          curl -fsS https://agroai-pilot.com/api/apply | jq -e '.ok == true' >/dev/null
+          test -s home.html
+          test -s careers.html
