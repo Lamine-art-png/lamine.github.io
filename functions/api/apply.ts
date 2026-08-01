@@ -3,6 +3,11 @@ interface Env {
   FROM_EMAIL?: string;
 }
 
+interface PagesContext {
+  request: Request;
+  env: Env;
+}
+
 const APPLICATION_NOTIFICATION_EMAIL = "contact@agroai-pilot.com";
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 
@@ -79,7 +84,7 @@ async function parseSubmission(request: Request): Promise<{
   return { fields, attachments };
 }
 
-export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
+export async function onRequestPost({ request, env }: PagesContext): Promise<Response> {
   if (!env.RESEND_API_KEY) {
     return json({ ok: false, error: "email_delivery_not_configured" }, 503);
   }
@@ -108,7 +113,7 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
     .join("");
 
   const payload: Record<string, unknown> = {
-    from: env.FROM_EMAIL || "AGRO-AI Careers <careers@agroai-pilot.com>",
+    from: env.FROM_EMAIL || "AGRO-AI Careers <contact@agroai-pilot.com>",
     to: [APPLICATION_NOTIFICATION_EMAIL],
     subject: `AGRO-AI career application: ${role} - ${applicantName}`,
     text: `New AGRO-AI career application\n\n${fieldLines}`,
@@ -138,11 +143,11 @@ export const onRequestPost: PagesFunction<Env> = async ({ request, env }) => {
   }
 
   return json({ ok: true, message: "Application received." });
-};
+}
 
-export const onRequest: PagesFunction<Env> = async (context) => {
+export async function onRequest(context: PagesContext): Promise<Response> {
   if (context.request.method === "POST") {
     return onRequestPost(context);
   }
   return json({ ok: false, error: "method_not_allowed" }, 405);
-};
+}
