@@ -25,11 +25,14 @@ zone_name = "agroai-pilot.com"
 pattern = "platform.agroai-pilot.com/v1/*"
 zone_name = "agroai-pilot.com"
 
-# Preserve the established API hostname used by Stripe live webhooks and older
-# API clients while routing it through the same validated production edge.
+# The machine API hostname is owned by this Worker. A Custom Domain makes the
+# Worker the deterministic origin for every request on api.agroai-pilot.com,
+# preventing legacy CNAME/origin routing from bypassing the security edge.
+# The Worker itself continues to proxy validated /v1 requests to the private
+# Render origin configured above and returns a closed 404 for every other path.
 [[routes]]
-pattern = "api.agroai-pilot.com/v1/*"
-zone_name = "agroai-pilot.com"
+pattern = "api.agroai-pilot.com"
+custom_domain = true
 
 [[queues.producers]]
 binding = "CONNECTOR_TASKS"
