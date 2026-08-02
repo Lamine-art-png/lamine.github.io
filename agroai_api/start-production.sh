@@ -60,8 +60,7 @@ if engine.dialect.name != "postgresql":
 with engine.connect() as connection:
     acquire_migration_lock(connection, 180)
     try:
-        run_almbic_result = run_alembic_upgrade(settings.DATABASE_URL, Path.cwd())
-        del run_almbic_result
+        run_alembic_upgrade(settings.DATABASE_URL, Path.cwd())
     finally:
         release_migration_lock(connection)
 PY
