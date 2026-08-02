@@ -30,9 +30,20 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       EVIDENCE_ISSUE: "359"
       EXPECTED_EDGE_VERSION: cloudflare-edge-v1
+      BACKEND_ORIGIN: https://api-preview.agroai-pilot.com
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve the exact Render release expected from this commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_sha="$(bash .github/scripts/resolve-backend-release-sha.sh)"
+          test -n "$expected_sha"
+          echo "EXPECTED_BACKEND_SHA=${expected_sha}" >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@v4
         with:
@@ -45,7 +56,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="Platform API production boundary verification started for release \`${GITHUB_SHA}\`. The app and developer console routes will deploy through \`agroai-api-edge\`; the public machine API will be proven on its proxied Render custom domain."
+            -f body="Platform API production boundary verification started for release \`${GITHUB_SHA}\`. Expected Render backend: \`${EXPECTED_BACKEND_SHA}\`. The canonical app, developer-console, and machine API Worker routes will be deployed before the exact backend release is proven."
 
       - name: Validate exact Worker bundle
         working-directory: cloudflare/edge-gateway
@@ -60,11 +71,34 @@ jobs:
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
 
-      - name: Deploy same-origin app and developer-console routes
+      - name: Deploy the canonical app, developer-console, and machine API routes
         working-directory: cloudflare/edge-gateway
         run: |
           set -euo pipefail
           npx wrangler deploy --config ../../wrangler.toml
+
+      - name: Wait for the exact Render backend release
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 120); do
+            code="$(curl --silent --show-error --max-time 40 -o backend-health.json -w '%{http_code}' \
+              "${BACKEND_ORIGIN}/v1/health" || true)"
+            if [ "$code" = "200" ] && EXPECTED="$EXPECTED_BACKEND_SHA" python3 - <<'PY'
+          import json
+          import os
+          value = json.load(open("backend-health.json", encoding="utf-8"))
+          assert value.get("status") == "ok", value
+          assert value.get("build_sha") == os.environ["EXPECTED"], value
+          PY
+            then
+              ready=1
+              break
+            fi
+            sleep 5
+          done
+          test "$ready" -eq 1
 
       - name: Prove Worker routes
         shell: bash
@@ -135,7 +169,7 @@ jobs:
             test "$ready" -eq 1
           done
 
-      - name: Prove public API release, readiness, and webhook boundary
+      - name: Prove public API exact release, readiness, and webhook boundary
         shell: bash
         run: |
           set -euo pipefail
@@ -146,12 +180,13 @@ jobs:
             readiness_code="$(curl --silent --show-error --max-time 40 -o public-readiness.json -w '%{http_code}' \
               'https://api.agroai-pilot.com/v1/readiness' || true)"
             if [ "$health_code" = "200" ] && [ "$readiness_code" = "200" ] \
-              && python3 - <<'PY'
+              && EXPECTED="$EXPECTED_BACKEND_SHA" python3 - <<'PY'
           import json
+          import os
           health = json.load(open("public-health.json", encoding="utf-8"))
           readiness = json.load(open("public-readiness.json", encoding="utf-8"))
           assert health.get("status") == "ok", health
-          assert health.get("build_sha"), health
+          assert health.get("build_sha") == os.environ["EXPECTED"], health
           assert readiness.get("status") == "ready", readiness
           assert (readiness.get("schema") or {}).get("ready") is True, readiness
           assert (readiness.get("production") or {}).get("ready") is True, readiness
@@ -176,7 +211,7 @@ jobs:
         run: |
           build_sha="$(jq -r '.build_sha' public-health.json)"
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="✅ **Platform API production boundary GREEN**\n\n- release commit: \`${GITHUB_SHA}\`\n- public Render backend: \`${build_sha}\`\n- \`api.agroai-pilot.com\`: health, readiness, Developer/Scale pricing, and webhook signature boundary green\n- \`app.agroai-pilot.com/v1/*\`: Cloudflare edge green\n- \`platform.agroai-pilot.com/v1/*\`: Cloudflare edge green\n- live pricing returned correctly through all three supported customer origins"
+            -f body="✅ **Platform API production boundary GREEN**\n\n- release commit: \`${GITHUB_SHA}\`\n- exact public backend: \`${build_sha}\`\n- \`api.agroai-pilot.com\`: health, readiness, Developer/Scale pricing, and webhook signature boundary green\n- \`app.agroai-pilot.com/v1/*\`: Cloudflare edge green\n- \`platform.agroai-pilot.com/v1/*\`: Cloudflare edge green\n- live pricing returned correctly through all three supported customer origins"
 
       - name: Record production boundary failure
         if: failure()
@@ -184,13 +219,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="❌ Platform API production boundary verification failed for release \`${GITHUB_SHA}\`. Review Actions run \`${GITHUB_RUN_ID}\`; do not declare the billing launch green until this proof passes."
+            -f body="❌ Platform API production boundary verification failed for release \`${GITHUB_SHA}\` with expected backend \`${EXPECTED_BACKEND_SHA}\`. Review Actions run \`${GITHUB_RUN_ID}\`; do not declare the billing launch green until this proof passes."
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: platform-api-production-boundary-${{ github.sha }}
           path: |
+            backend-health.json
             edge-hosts.jsonl
             pricing-hosts.jsonl
             public-health.json
