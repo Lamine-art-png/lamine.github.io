@@ -1,5 +1,6 @@
 name: Apply Platform Billing Cleanup
 
+# Forced production cleanup generation: 2
 on:
   push:
     branches:
