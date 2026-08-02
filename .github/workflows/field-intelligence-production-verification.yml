@@ -1,0 +1,172 @@
+name: Field Intelligence Production Verification
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - agroai_api/app/api/v1/field_intelligence.py
+      - agroai_api/app/services/field_intelligence_vision_extension.py
+      - agroai_api/app/services/field_live_rate_limit.py
+      - agroai_api/app/services/field_video.py
+      - agroai_api/app/services/field_vision.py
+      - cloudflare/edge-gateway/src/edge-main-v3.ts
+      - figma-enterprise-v4/src/app/api/client.ts
+      - figma-enterprise-v4/src/app/components/FieldIntelligenceV2.tsx
+      - figma-enterprise-v4/src/app/fieldIntelligence/offlineQueue.ts
+      - figma-enterprise-v4/src/app/i18n.ts
+      - .github/workflows/field-intelligence-production-verification.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: field-intelligence-production-verification
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      BACKEND_ORIGIN: https://api-preview.agroai-pilot.com
+      PUBLIC_ORIGIN: https://app.agroai-pilot.com
+      EVIDENCE_ISSUE: "352"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve exact backend release identity
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          backend_sha="$(bash .github/scripts/resolve-backend-release-sha.sh)"
+          echo "backend_sha=${backend_sha}" >> "$GITHUB_OUTPUT"
+          echo "EXPECTED_BACKEND_SHA=${backend_sha}" >> "$GITHUB_ENV"
+
+      - name: Record production verification start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
+            -f body="Production verification started for Field Intelligence release \`${GITHUB_SHA}\`. Expected Render backend identity: \`${EXPECTED_BACKEND_SHA}\`."
+
+      - name: Verify exact Render backend build and deployed route
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          ready=0
+          for attempt in $(seq 1 120); do
+            payload="$(curl --fail --silent --show-error --max-time 20 "${BACKEND_ORIGIN}/v1/health" 2>/dev/null || true)"
+            if PAYLOAD="$payload" python3 - <<'PY'
+          import json, os, sys
+          try:
+              value = json.loads(os.environ["PAYLOAD"])
+          except Exception:
+              sys.exit(1)
+          expected = os.environ["EXPECTED_BACKEND_SHA"]
+          sys.exit(0 if value.get("status") == "ok" and value.get("build_sha") == expected else 1)
+          PY
+            then
+              printf '%s\n' "$payload" > evidence/backend-health.json
+              ready=1
+              break
+            fi
+            sleep 10
+          done
+          test "$ready" -eq 1
+          curl --fail --silent --show-error --max-time 30 "${BACKEND_ORIGIN}/openapi.json" -o evidence/openapi.json
+          python3 - <<'PY'
+          import json
+          value = json.load(open("evidence/openapi.json", encoding="utf-8"))
+          paths = value.get("paths") or {}
+          route = paths.get("/v1/field-intelligence/live-analysis") or {}
+          assert "post" in route, "deployed backend does not expose POST /v1/field-intelligence/live-analysis"
+          print("exact_backend_and_live_route=ok")
+          PY
+
+      - name: Verify Cloudflare production edge
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 "${PUBLIC_ORIGIN}/v1/edge-health" -o evidence/edge-health.json
+          python3 - <<'PY'
+          import json
+          value = json.load(open("evidence/edge-health.json", encoding="utf-8"))
+          assert value.get("status") == "ok", value
+          print("edge_health=ok")
+          PY
+          code="$(curl --silent --show-error --output evidence/live-analysis-unauthenticated.txt --write-out '%{http_code}' \
+            --max-time 30 -X POST "${PUBLIC_ORIGIN}/v1/field-intelligence/live-analysis" || true)"
+          case "$code" in
+            401|403|422) ;;
+            *) echo "Unexpected unauthenticated live-analysis status: $code"; exit 1 ;;
+          esac
+          printf '%s\n' "$code" > evidence/live-analysis-status.txt
+
+      - name: Verify production portal bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence/portal-assets
+          ready=0
+          for attempt in $(seq 1 90); do
+            if curl --fail --silent --show-error --location --max-time 20 "${PUBLIC_ORIGIN}/" -o evidence/portal-index.html; then
+              title="$(sed -n 's:.*<title>\(.*\)</title>.*:\1:p' evidence/portal-index.html | head -1)"
+              if [ "$title" = "AGRO-AI Enterprise Portal" ]; then
+                ready=1
+                break
+              fi
+            fi
+            sleep 5
+          done
+          test "$ready" -eq 1
+          grep -oE '/assets/[A-Za-z0-9._/-]+\.js' evidence/portal-index.html | sed 's#^/##' > evidence/portal-queue.txt
+          : > evidence/portal-seen.txt
+          for pass in 1 2 3 4; do
+            sort -u evidence/portal-queue.txt -o evidence/portal-queue.txt
+            while IFS= read -r asset; do
+              [ -n "$asset" ] || continue
+              grep -Fx "$asset" evidence/portal-seen.txt >/dev/null 2>&1 && continue
+              echo "$asset" >> evidence/portal-seen.txt
+              target="evidence/portal-assets/$(basename "$asset")"
+              curl --fail --silent --show-error --max-time 30 "${PUBLIC_ORIGIN}/${asset}" -o "$target"
+              grep -oE 'assets/[A-Za-z0-9._/-]+\.js' "$target" >> evidence/portal-queue.txt || true
+              grep -oE '\./[A-Za-z0-9._/-]+\.js' "$target" | sed 's#^\./#assets/#' >> evidence/portal-queue.txt || true
+            done < evidence/portal-queue.txt
+          done
+          cat evidence/portal-assets/*.js > evidence/portal-all-js.txt
+          grep -F '/v1/field-intelligence/live-analysis' evidence/portal-all-js.txt >/dev/null
+          grep -F 'human_review_required' evidence/portal-all-js.txt >/dev/null
+          printf 'portal_multimodal_bundle=ok\n'
+
+      - name: Record production verification success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          backend_sha="$(python3 -c 'import json; print(json.load(open("evidence/backend-health.json"))["build_sha"])')"
+          edge_status="$(python3 -c 'import json; print(json.load(open("evidence/edge-health.json"))["status"])')"
+          route_status="$(cat evidence/live-analysis-status.txt)"
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
+            -f body="✅ **Field Intelligence production deployment verified**\n\n- release commit: \`${GITHUB_SHA}\`\n- exact Render backend build: \`${backend_sha}\`\n- deployed OpenAPI contains \`POST /v1/field-intelligence/live-analysis\`\n- Cloudflare edge health: \`${edge_status}\`\n- unauthenticated live-analysis rejected safely with HTTP \`${route_status}\`\n- production portal bundle contains the live-analysis client and human-review contract\n\nBackend, edge, and portal are deployed. Customer visibility remains controlled by the server-side Field Intelligence rollout state and organization entitlements."
+
+      - name: Record production verification failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
+            -f body="❌ Field Intelligence production verification failed for release \`${GITHUB_SHA}\` with expected backend \`${EXPECTED_BACKEND_SHA}\`. Review Actions run \`${GITHUB_RUN_ID}\`; do not represent every production layer as verified until this gate passes."
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: field-intelligence-production-verification-${{ github.sha }}
+          path: evidence/
+          if-no-files-found: ignore
+          retention-days: 30
