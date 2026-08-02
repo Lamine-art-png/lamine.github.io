@@ -1,0 +1,178 @@
+name: Deploy and Prove Platform API Edge
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - wrangler.toml
+      - cloudflare/edge-gateway/src/index.ts
+      - cloudflare/edge-gateway/src/edge-main-v3.ts
+      - cloudflare/edge-gateway/src/queue-policy.ts
+      - .github/workflows/deploy-platform-api-edge.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: platform-api-edge-production
+  cancel-in-progress: true
+
+jobs:
+  deploy-and-prove:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      EVIDENCE_ISSUE: "359"
+      EXPECTED_EDGE_VERSION: cloudflare-edge-v1
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: cloudflare/edge-gateway/package-lock.json
+
+      - name: Record edge deployment start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
+            -f body="Platform API edge deployment started for release \`${GITHUB_SHA}\`. Wrangler will reconcile all three production \`/v1/*\` custom-domain routes."
+
+      - name: Validate exact Worker bundle
+        working-directory: cloudflare/edge-gateway
+        run: |
+          set -euo pipefail
+          npm ci --no-audit --no-fund
+          npm run check
+
+      - name: Fail closed on missing Cloudflare credentials
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+
+      - name: Deploy Worker and reconcile custom-domain routes
+        working-directory: cloudflare/edge-gateway
+        run: |
+          set -euo pipefail
+          npx wrangler deploy --config ../../wrangler.toml
+
+      - name: Prove edge health on every production hostname
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > edge-hosts.jsonl
+          for host in api.agroai-pilot.com platform.agroai-pilot.com app.agroai-pilot.com; do
+            ready=0
+            for attempt in $(seq 1 60); do
+              status="$(curl --silent --show-error --max-time 25 -D headers.txt -o body.json -w '%{http_code}' \
+                "https://${host}/v1/edge-health" || true)"
+              marker="$(tr -d '\r' < headers.txt | sed -n 's/^x-agroai-edge:[[:space:]]*//Ip' | head -1)"
+              if [ "$status" = "200" ] \
+                && [ "$marker" = "$EXPECTED_EDGE_VERSION" ] \
+                && jq -e '.status == "ok" and .service == "agroai-api-edge"' body.json >/dev/null 2>&1; then
+                jq -nc --arg host "$host" --arg status "$status" --arg marker "$marker" \
+                  '{host:$host,edge_health_status:$status,edge_version:$marker}' >> edge-hosts.jsonl
+                ready=1
+                break
+              fi
+              sleep 3
+            done
+            if [ "$ready" -ne 1 ]; then
+              echo "Edge health did not converge for ${host}"
+              cat headers.txt || true
+              cat body.json || true
+              exit 1
+            fi
+          done
+
+      - name: Prove public Platform API pricing on every hostname
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > pricing-hosts.jsonl
+          for host in api.agroai-pilot.com platform.agroai-pilot.com app.agroai-pilot.com; do
+            status="$(curl --silent --show-error --max-time 30 -D headers.txt -o pricing.json -w '%{http_code}' \
+              "https://${host}/v1/platform/pricing" || true)"
+            marker="$(tr -d '\r' < headers.txt | sed -n 's/^x-agroai-edge:[[:space:]]*//Ip' | head -1)"
+            test "$status" = "200"
+            test "$marker" = "$EXPECTED_EDGE_VERSION"
+            HOST="$host" STATUS="$status" MARKER="$marker" python3 - <<'PY'
+          import json
+          import os
+          value = json.load(open("pricing.json", encoding="utf-8"))
+          assert value.get("catalog_version") == "2026-07-provisional", value
+          plans = {item.get("identifier"): item for item in value.get("plans", [])}
+          expected = {
+              "developer": (14900, 143000, 250000, 75),
+              "scale": (74900, 719000, 2000000, 35),
+          }
+          for identifier, contract in expected.items():
+              plan = plans.get(identifier)
+              assert plan, f"missing {identifier}"
+              actual = (
+                  plan.get("monthly_price_cents"),
+                  plan.get("annual_price_cents"),
+                  plan.get("included_credits"),
+                  plan.get("overage_price_per_1000_cents"),
+              )
+              assert actual == contract, (identifier, actual, contract)
+          with open("pricing-hosts.jsonl", "a", encoding="utf-8") as handle:
+              handle.write(json.dumps({
+                  "host": os.environ["HOST"],
+                  "pricing_status": os.environ["STATUS"],
+                  "edge_version": os.environ["MARKER"],
+                  "plans": sorted(plans),
+              }, sort_keys=True) + "\n")
+          PY
+          done
+
+      - name: Prove Stripe webhook route and signature boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(curl --silent --show-error --max-time 30 -D webhook-headers.txt -o webhook-body.json -w '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' --data '{}' \
+            'https://api.agroai-pilot.com/v1/platform/billing/stripe-webhook' || true)"
+          marker="$(tr -d '\r' < webhook-headers.txt | sed -n 's/^x-agroai-edge:[[:space:]]*//Ip' | head -1)"
+          test "$status" = "400"
+          test "$marker" = "$EXPECTED_EDGE_VERSION"
+
+      - name: Record edge deployment success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
+            -f body="✅ **Platform API production edge GREEN**\n\n- edge release: \`${GITHUB_SHA}\`\n- Worker deployed from the canonical \`wrangler.toml\`\n- \`api.agroai-pilot.com/v1/*\`: green\n- \`platform.agroai-pilot.com/v1/*\`: green\n- \`app.agroai-pilot.com/v1/*\`: green\n- Developer and Scale pricing returned correctly on all three hosts\n- Stripe webhook route reached the backend and rejected an unsigned request with HTTP 400"
+
+      - name: Record edge deployment failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
+            -f body="❌ Platform API edge deployment/proof failed for release \`${GITHUB_SHA}\`. Review Actions run \`${GITHUB_RUN_ID}\`; public billing must remain unconfirmed until this deployment passes."
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: platform-api-edge-proof-${{ github.sha }}
+          path: |
+            edge-hosts.jsonl
+            pricing-hosts.jsonl
+            headers.txt
+            body.json
+            pricing.json
+            webhook-headers.txt
+            webhook-body.json
+          if-no-files-found: ignore
+          retention-days: 30
