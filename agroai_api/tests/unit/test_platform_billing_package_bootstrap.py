@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 from pathlib import Path
+import site
 import subprocess
 import sys
 
@@ -61,6 +62,11 @@ def _import_application_package(extra: dict[str, str]) -> dict[str, str | None]:
     for name in ENVIRONMENT_KEYS:
         env.pop(name, None)
     env.update(extra)
+    # ``-S`` disables sitecustomize. Re-add only installed packages and the
+    # application root through PYTHONPATH so this test proves app/__init__.py is
+    # independently authoritative under a Uvicorn-style package import.
+    package_roots = [*site.getsitepackages(), str(ROOT)]
+    env["PYTHONPATH"] = os.pathsep.join(package_roots)
     code = (
         "import app, json, os; "
         f"names={CAPABILITIES!r}; "
