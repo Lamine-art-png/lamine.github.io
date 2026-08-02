@@ -9,11 +9,28 @@ if [ "$(git rev-parse --is-shallow-repository)" != "false" ]; then
   exit 1
 fi
 
-backend_sha="$(git log -1 --format=%H -- agroai_api)"
-if [ -z "$backend_sha" ]; then
-  echo "Unable to resolve the latest commit that owns the agroai_api deployment tree." >&2
-  exit 1
+# Render deploys the default branch commit, including merge commits. Plain
+# `git log -- <path>` applies history simplification and can skip a merge commit,
+# incorrectly returning an internal PR commit that Render can never report as
+# its build SHA. Walk the default branch's first-parent chain and select the
+# newest commit whose tree actually changes the backend deployment directory.
+candidate="$(git rev-parse HEAD)"
+while git rev-parse --verify --quiet "${candidate}^1" >/dev/null; do
+  if ! git diff --quiet "${candidate}^1" "$candidate" -- agroai_api; then
+    git cat-file -e "${candidate}^{commit}"
+    printf '%s\n' "$candidate"
+    exit 0
+  fi
+  candidate="$(git rev-parse "${candidate}^1")"
+done
+
+# Root-commit fallback for repositories whose first commit already contains the
+# backend tree.
+if git ls-tree -r --name-only "$candidate" -- agroai_api | grep -q .; then
+  git cat-file -e "${candidate}^{commit}"
+  printf '%s\n' "$candidate"
+  exit 0
 fi
 
-git cat-file -e "${backend_sha}^{commit}"
-printf '%s\n' "$backend_sha"
+echo "Unable to resolve the latest first-parent commit that owns the agroai_api deployment tree." >&2
+exit 1
