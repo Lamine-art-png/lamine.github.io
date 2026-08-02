@@ -50,6 +50,8 @@ def _enable_checkout(monkeypatch) -> None:
     monkeypatch.setattr(settings, "PLATFORM_API_STRIPE_DEVELOPER_MONTHLY_PRICE_ID", "price_server_monthly")
     monkeypatch.setattr(settings, "PLATFORM_API_STRIPE_DEVELOPER_ANNUAL_PRICE_ID", "price_server_annual")
     monkeypatch.setattr(settings, "PLATFORM_API_STRIPE_DEVELOPER_OVERAGE_PRICE_ID", "price_server_overage")
+    monkeypatch.setattr(settings, "PLATFORM_API_STRIPE_DEVELOPER_MONTHLY_OVERAGE_PRICE_ID", "price_server_overage_monthly")
+    monkeypatch.setattr(settings, "PLATFORM_API_STRIPE_DEVELOPER_ANNUAL_OVERAGE_PRICE_ID", "price_server_overage_annual")
 
 
 def test_checkout_uses_only_server_catalog_prices_and_includes_metered_overage(client, db, monkeypatch):
@@ -83,7 +85,7 @@ def test_checkout_uses_only_server_catalog_prices_and_includes_metered_overage(c
     assert response.status_code == 200
     assert captured["line_items"] == [
         {"price": "price_server_monthly", "quantity": 1},
-        {"price": "price_server_overage"},
+        {"price": "price_server_overage_monthly"},
     ]
     assert captured["metadata"]["organization_id"] == organization.id
     assert captured["metadata"]["api_plan_id"] == plan.id
@@ -96,6 +98,33 @@ def test_checkout_uses_only_server_catalog_prices_and_includes_metered_overage(c
     )
     assert manipulated.status_code == 422
 
+
+
+def test_annual_checkout_uses_annual_metered_overage_price(client, db, monkeypatch):
+    user, organization, *_ = _project_and_key(db)
+    organization.verification_status = "approved"
+    _developer_plan(db)
+    _enable_checkout(monkeypatch)
+    captured: dict = {}
+    monkeypatch.setattr(platform_billing.stripe.Customer, "create", lambda **_kwargs: {"id": "cus_annual"})
+    monkeypatch.setattr(
+        platform_billing.stripe.checkout.Session,
+        "create",
+        lambda **kwargs: captured.update(kwargs) or {"id": "cs_annual", "url": "https://checkout.stripe.test/annual"},
+    )
+    response = client.post(
+        "/v1/platform/developer/billing/checkout",
+        headers={
+            "Authorization": f"Bearer {create_access_token({'sub': user.id})}",
+            "Idempotency-Key": "checkout-annual-1",
+        },
+        json={"plan": "developer", "billing_interval": "annual"},
+    )
+    assert response.status_code == 200
+    assert captured["line_items"] == [
+        {"price": "price_server_annual", "quantity": 1},
+        {"price": "price_server_overage_annual"},
+    ]
 
 def test_checkout_idempotency_is_local_payload_bound_and_organization_scoped(
     client,
