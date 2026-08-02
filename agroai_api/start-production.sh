@@ -44,4 +44,9 @@ with engine.connect() as connection:
         release_migration_lock(connection)
 PY
 
+# Refuse to accept customer traffic when live Platform API billing points to
+# missing, test-mode, inactive, or mispriced Stripe resources. This is a
+# read-only check; it never creates or changes Stripe objects.
+python scripts/verify_platform_billing_config.py
+
 exec uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}"
