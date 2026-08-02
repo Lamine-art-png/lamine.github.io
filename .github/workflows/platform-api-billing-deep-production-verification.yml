@@ -10,6 +10,7 @@ on:
       - agroai_api/app/billing_bootstrap.py
       - agroai_api/app/api/v1/platform_billing.py
       - agroai_api/scripts/verify_platform_billing_config.py
+      - .github/scripts/resolve-backend-release-sha.sh
       - .github/workflows/platform-api-billing-deep-production-verification.yml
   workflow_dispatch:
 
@@ -102,6 +103,7 @@ jobs:
           assert value.get("complete_live_configuration") is True, value
           assert value.get("missing") == [], value
           assert value.get("invalid") == [], value
+          assert value.get("stripe_secret_source") in {"dedicated", "shared_live_server_key"}, value
           assert all((value.get("effective_flags") or {}).values()), value
           assert all((value.get("settings_flags") or {}).values()), value
           print("billing_bootstrap=green")
