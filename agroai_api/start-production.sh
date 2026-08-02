@@ -1,6 +1,8 @@
 #!/bin/sh
 set -eu
 
+# Release marker: the shared bootstrap now safely defaults the canonical
+# `agroai_api_credits` event name while preserving fail-closed Stripe checks.
 SCRIPT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 APP_ROOT=$(CDPATH= cd -- "$SCRIPT_DIR/.." && pwd)
 cd "$SCRIPT_DIR"
