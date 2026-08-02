@@ -6,6 +6,9 @@ on:
       - main
     paths:
       - agroai_api/start-production.sh
+      - agroai_api/app/__init__.py
+      - agroai_api/app/billing_bootstrap.py
+      - agroai_api/app/api/v1/platform_billing.py
       - agroai_api/scripts/verify_platform_billing_config.py
       - .github/workflows/platform-api-billing-deep-production-verification.yml
   workflow_dispatch:
@@ -84,6 +87,26 @@ jobs:
           print("api_readiness=green")
           PY
 
+      - name: Verify effective live billing bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 \
+            "${BACKEND_ORIGIN}/v1/platform/billing-readiness" -o billing-readiness.json
+          cat billing-readiness.json
+          python3 - <<'PY'
+          import json
+          value = json.load(open("billing-readiness.json", encoding="utf-8"))
+          assert value.get("status") == "ready", value
+          assert value.get("bootstrapped") is True, value
+          assert value.get("complete_live_configuration") is True, value
+          assert value.get("missing") == [], value
+          assert value.get("invalid") == [], value
+          assert all((value.get("effective_flags") or {}).values()), value
+          assert all((value.get("settings_flags") or {}).values()), value
+          print("billing_bootstrap=green")
+          PY
+
       - name: Verify active commercial pricing
         shell: bash
         run: |
@@ -146,6 +169,7 @@ jobs:
           import json
           paths = json.load(open("openapi.json", encoding="utf-8")).get("paths", {})
           required = {
+              "/v1/platform/billing-readiness": "get",
               "/v1/platform/pricing": "get",
               "/v1/platform/developer/billing": "get",
               "/v1/platform/developer/billing/checkout": "post",
@@ -167,7 +191,7 @@ jobs:
         run: |
           backend_sha="$(python3 -c 'import json; print(json.load(open("backend-health.json"))["build_sha"])')"
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="✅ **Platform API billing production verification GREEN**\n\n- release commit: \`${GITHUB_SHA}\`\n- exact Render backend: \`${backend_sha}\`\n- fail-closed Stripe startup preflight passed before Uvicorn accepted traffic\n- API and database readiness: green\n- Developer and Scale catalog: active with approved prices, credits, and overages\n- Platform runtime: green\n- unsigned Stripe webhook rejected with HTTP 400\n- Checkout, Portal, metering, reconciliation, and webhook routes deployed"
+            -f body="✅ **Platform API billing production verification GREEN**\n\n- release commit: \`${GITHUB_SHA}\`\n- exact Render backend: \`${backend_sha}\`\n- fail-closed Stripe startup preflight passed before Uvicorn accepted traffic\n- API and database readiness: green\n- non-secret billing bootstrap diagnostic: green\n- Developer and Scale catalog: active with approved prices, credits, and overages\n- Platform runtime: green\n- unsigned Stripe webhook rejected with HTTP 400\n- Checkout, Portal, metering, reconciliation, and webhook routes deployed"
 
       - name: Record verification failure
         if: failure()
@@ -184,6 +208,7 @@ jobs:
           path: |
             backend-health.json
             readiness.json
+            billing-readiness.json
             pricing.json
             platform-health.json
             webhook-response.json
