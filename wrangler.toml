@@ -18,21 +18,13 @@ required = [ "QUEUE_PUBLISH_TOKEN", "QUEUE_CONSUMER_TOKEN" ]
 pattern = "app.agroai-pilot.com/v1/*"
 zone_name = "agroai-pilot.com"
 
-# The standalone developer product shares the same authenticated backend and
-# production edge. This same-origin route also keeps a future relative /v1
-# client configuration possible without creating a second API deployment.
+# The standalone developer product uses the same authenticated backend through
+# a same-origin Worker route. The public machine hostname remains the proxied
+# Render custom domain because the production Cloudflare token deliberately has
+# no DNS mutation permission.
 [[routes]]
 pattern = "platform.agroai-pilot.com/v1/*"
 zone_name = "agroai-pilot.com"
-
-# The machine API hostname is owned by this Worker. A Custom Domain makes the
-# Worker the deterministic origin for every request on api.agroai-pilot.com,
-# preventing legacy CNAME/origin routing from bypassing the security edge.
-# The Worker itself continues to proxy validated /v1 requests to the private
-# Render origin configured above and returns a closed 404 for every other path.
-[[routes]]
-pattern = "api.agroai-pilot.com"
-custom_domain = true
 
 [[queues.producers]]
 binding = "CONNECTOR_TASKS"
