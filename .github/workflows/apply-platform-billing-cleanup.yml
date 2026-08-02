@@ -1,6 +1,6 @@
 name: Apply Platform Billing Cleanup
 
-# Forced production cleanup generation: 2
+# Forced production cleanup generation: 3
 on:
   push:
     branches:
@@ -45,7 +45,7 @@ jobs:
             tests/unit/test_platform_billing_cleanup.py \
             tests/unit/test_platform_billing_runtime_diagnostics.py
 
-      - name: Commit the cleanup to main
+      - name: Commit the backend cleanup to main
         id: commit
         shell: bash
         run: |
@@ -54,11 +54,10 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add \
             agroai_api/app/api/v1/platform_billing.py \
-            agroai_api/tests/unit/test_platform_billing_cleanup.py \
-            .github/workflows/platform-api-billing-deep-production-verification.yml
+            agroai_api/tests/unit/test_platform_billing_cleanup.py
           if git diff --cached --quiet; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
-            echo "Cleanup already applied"
+            echo "Backend cleanup already applied"
             exit 0
           fi
           git commit -m "Add billing readiness and abandoned Checkout recovery"
@@ -74,7 +73,7 @@ jobs:
           COMMIT_SHA: ${{ steps.commit.outputs.commit_sha }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="✅ Platform billing cleanup applied. Non-secret readiness diagnostics, abandoned/canceled Checkout retry recovery, secret-redaction tests, and deep production verification are committed. changed=\`${CHANGED:-false}\` commit=\`${COMMIT_SHA:-already-applied}\`."
+            -f body="✅ Platform billing backend cleanup applied. Non-secret readiness diagnostics, abandoned/canceled Checkout retry recovery, and secret-redaction tests are committed. changed=\`${CHANGED:-false}\` commit=\`${COMMIT_SHA:-already-applied}\`."
 
       - name: Record cleanup failure
         if: failure()
@@ -82,4 +81,4 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="❌ Platform billing cleanup workflow failed. Review Actions run \`${GITHUB_RUN_ID}\`; no green claim is permitted until the cleanup and production verification pass."
+            -f body="❌ Platform billing backend cleanup workflow failed. Review Actions run \`${GITHUB_RUN_ID}\`; no green claim is permitted until cleanup and production verification pass."
