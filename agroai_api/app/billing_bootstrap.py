@@ -9,10 +9,12 @@ closed and can be diagnosed through a safe production status payload.
 from __future__ import annotations
 
 import os
-from typing import Mapping
+from typing import Mapping, MutableMapping
 
 
 APPROVED_CATALOG = "2026-07-provisional"
+PLATFORM_STRIPE_SECRET = "PLATFORM_API_STRIPE_SECRET_KEY"
+SHARED_STRIPE_SECRET = "STRIPE_SECRET_KEY"
 LIVE_CAPABILITIES = (
     "PLATFORM_API_BILLING_ENABLED",
     "PLATFORM_API_STRIPE_CHECKOUT_ENABLED",
@@ -21,7 +23,7 @@ LIVE_CAPABILITIES = (
     "PLATFORM_API_USAGE_METERING_ENFORCEMENT_ENABLED",
 )
 REQUIRED_IDENTIFIERS: Mapping[str, str] = {
-    "PLATFORM_API_STRIPE_SECRET_KEY": "sk_live_",
+    PLATFORM_STRIPE_SECRET: "sk_live_",
     "PLATFORM_API_STRIPE_WEBHOOK_SECRET": "whsec_",
     "PLATFORM_API_STRIPE_METER_ID": "mtr_",
     "PLATFORM_API_STRIPE_DEVELOPER_MONTHLY_PRICE_ID": "price_",
@@ -35,12 +37,46 @@ REQUIRED_IDENTIFIERS: Mapping[str, str] = {
 }
 
 
+def _text(values: Mapping[str, str], name: str) -> str:
+    return str(values.get(name, "") or "").strip()
+
+
+def _resolved_platform_stripe_secret(values: Mapping[str, str]) -> tuple[str, str]:
+    """Resolve a live server key without ever returning it in diagnostics.
+
+    AGRO-AI already has one server-side Stripe integration for the Enterprise
+    Portal. Platform API billing can safely share that account credential when
+    the dedicated Platform variable is absent, but only when the shared key is
+    explicitly a live secret key. Test keys and malformed values never cross
+    this boundary.
+    """
+
+    dedicated = _text(values, PLATFORM_STRIPE_SECRET)
+    if dedicated:
+        return dedicated, "dedicated"
+    shared = _text(values, SHARED_STRIPE_SECRET)
+    if shared.startswith("sk_live_"):
+        return shared, "shared_live_server_key"
+    return "", "missing"
+
+
+def _adopt_shared_live_stripe_secret(values: MutableMapping[str, str]) -> bool:
+    dedicated = _text(values, PLATFORM_STRIPE_SECRET)
+    if dedicated:
+        return False
+    shared = _text(values, SHARED_STRIPE_SECRET)
+    if not shared.startswith("sk_live_"):
+        return False
+    values[PLATFORM_STRIPE_SECRET] = shared
+    return True
+
+
 def diagnose_live_billing_environment(environment: Mapping[str, str] | None = None) -> dict[str, object]:
     values = os.environ if environment is None else environment
     missing: list[str] = []
     invalid: list[str] = []
 
-    stripe_mode = str(values.get("PLATFORM_API_STRIPE_MODE", "") or "").strip().lower()
+    stripe_mode = _text(values, "PLATFORM_API_STRIPE_MODE").lower()
     if not stripe_mode:
         missing.append("PLATFORM_API_STRIPE_MODE")
     elif stripe_mode != "live":
@@ -70,8 +106,9 @@ def diagnose_live_billing_environment(environment: Mapping[str, str] | None = No
     if meter_event_name != "agroai_api_credits":
         invalid.append("PLATFORM_API_STRIPE_METER_EVENT_NAME")
 
+    secret_value, secret_source = _resolved_platform_stripe_secret(values)
     for name, prefix in REQUIRED_IDENTIFIERS.items():
-        raw = str(values.get(name, "") or "").strip()
+        raw = secret_value if name == PLATFORM_STRIPE_SECRET else _text(values, name)
         if not raw:
             missing.append(name)
         elif not raw.startswith(prefix):
@@ -85,6 +122,7 @@ def diagnose_live_billing_environment(environment: Mapping[str, str] | None = No
         "missing": missing,
         "invalid": invalid,
         "stripe_mode": stripe_mode or "missing",
+        "stripe_secret_source": secret_source,
         "catalog_version": catalog,
         "operation_cost_catalog_version": operation_catalog,
         "meter_event_name_valid": meter_event_name == "agroai_api_credits",
@@ -93,7 +131,9 @@ def diagnose_live_billing_environment(environment: Mapping[str, str] | None = No
 
 def apply_live_billing_bootstrap(environment: dict[str, str] | None = None) -> dict[str, object]:
     values = os.environ if environment is None else environment
+    inherited = _adopt_shared_live_stripe_secret(values)
     diagnosis = diagnose_live_billing_environment(values)
+    diagnosis["shared_live_secret_inherited"] = inherited
     if bool(diagnosis["complete_live_configuration"]):
         for capability in LIVE_CAPABILITIES:
             values[capability] = "true"
@@ -107,12 +147,10 @@ def safe_runtime_billing_status(environment: Mapping[str, str] | None = None) ->
     values = os.environ if environment is None else environment
     diagnosis = diagnose_live_billing_environment(values)
     flags = {
-        capability: str(values.get(capability, "") or "").strip().lower() == "true"
+        capability: _text(values, capability).lower() == "true"
         for capability in LIVE_CAPABILITIES
     }
-    bootstrapped = str(
-        values.get("PLATFORM_API_LIVE_BILLING_BOOTSTRAPPED", "") or ""
-    ).strip().lower() == "true"
+    bootstrapped = _text(values, "PLATFORM_API_LIVE_BILLING_BOOTSTRAPPED").lower() == "true"
     return {
         "status": "ready" if bool(diagnosis["complete_live_configuration"]) and bootstrapped and all(flags.values()) else "not_ready",
         "bootstrapped": bootstrapped,
@@ -120,6 +158,7 @@ def safe_runtime_billing_status(environment: Mapping[str, str] | None = None) ->
         "missing": diagnosis["missing"],
         "invalid": diagnosis["invalid"],
         "stripe_mode": diagnosis["stripe_mode"],
+        "stripe_secret_source": diagnosis["stripe_secret_source"],
         "catalog_version": diagnosis["catalog_version"],
         "operation_cost_catalog_version": diagnosis["operation_cost_catalog_version"],
         "meter_event_name_valid": diagnosis["meter_event_name_valid"],
