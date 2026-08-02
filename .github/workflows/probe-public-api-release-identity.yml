@@ -1,0 +1,109 @@
+name: Probe Public API Release Identity
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/probe-public-api-release-identity.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      EVIDENCE_ISSUE: "359"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Probe DNS and HTTP identities
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > probes.jsonl
+          for host in api.agroai-pilot.com api-preview.agroai-pilot.com app.agroai-pilot.com platform.agroai-pilot.com; do
+            cname="$(dig +short CNAME "$host" | head -1 | sed 's/\.$//' || true)"
+            addresses="$(dig +short A "$host" | paste -sd, - || true)"
+            for path in /v1/health /v1/readiness /v1/edge-health /v1/platform/health /v1/platform/pricing; do
+              name="$(printf '%s%s' "$host" "$path" | tr '/.' '__')"
+              code="$(curl --silent --show-error --max-time 50 -D "${name}.headers" -o "${name}.body" -w '%{http_code}' "https://${host}${path}" || true)"
+              edge="$(tr -d '\r' < "${name}.headers" | sed -n 's/^x-agroai-edge:[[:space:]]*//Ip' | head -1)"
+              runtime="$(tr -d '\r' < "${name}.headers" | sed -n 's/^x-agroai-runtime:[[:space:]]*//Ip' | head -1)"
+              render="$(tr -d '\r' < "${name}.headers" | sed -n 's/^x-render-origin-server:[[:space:]]*//Ip' | head -1)"
+              build="$(jq -r '.build_sha // empty' "${name}.body" 2>/dev/null || true)"
+              status="$(jq -r '.status // empty' "${name}.body" 2>/dev/null || true)"
+              detail="$(jq -c '.detail // empty' "${name}.body" 2>/dev/null || true)"
+              jq -nc \
+                --arg host "$host" --arg path "$path" --arg code "$code" \
+                --arg cname "$cname" --arg addresses "$addresses" \
+                --arg edge "$edge" --arg runtime "$runtime" --arg render "$render" \
+                --arg build "$build" --arg status "$status" --arg detail "$detail" \
+                '{host:$host,path:$path,http_status:$code,cname:$cname,a_records:$addresses,edge_version:$edge,runtime:$runtime,render_origin:$render,build_sha:$build,body_status:$status,detail:$detail}' \
+                >> probes.jsonl
+            done
+          done
+
+      - name: Classify public API identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          rows = [json.loads(line) for line in Path('probes.jsonl').read_text().splitlines() if line.strip()]
+          def row(host, path):
+              return next((r for r in rows if r['host'] == host and r['path'] == path), {})
+
+          public_health = row('api.agroai-pilot.com', '/v1/health')
+          preview_health = row('api-preview.agroai-pilot.com', '/v1/health')
+          public_pricing = row('api.agroai-pilot.com', '/v1/platform/pricing')
+          app_pricing = row('app.agroai-pilot.com', '/v1/platform/pricing')
+          platform_pricing = row('platform.agroai-pilot.com', '/v1/platform/pricing')
+
+          same_release = bool(public_health.get('build_sha')) and public_health.get('build_sha') == preview_health.get('build_sha')
+          result = {
+              'public_api_cname': public_health.get('cname'),
+              'public_api_build_sha': public_health.get('build_sha'),
+              'preview_build_sha': preview_health.get('build_sha'),
+              'same_render_release': same_release,
+              'public_api_health_http': public_health.get('http_status'),
+              'public_api_pricing_http': public_pricing.get('http_status'),
+              'app_pricing_http': app_pricing.get('http_status'),
+              'platform_pricing_http': platform_pricing.get('http_status'),
+              'public_api_edge_version': public_health.get('edge_version'),
+              'public_api_direct_render': bool(public_health.get('render_origin') or public_health.get('runtime')) and not bool(public_health.get('edge_version')),
+          }
+          Path('classification.json').write_text(json.dumps(result, indent=2, sort_keys=True) + '\n')
+          print(json.dumps(result, sort_keys=True))
+          PY
+
+      - name: Record release identity
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          public_sha="$(jq -r '.public_api_build_sha // "unknown"' classification.json 2>/dev/null || echo unknown)"
+          preview_sha="$(jq -r '.preview_build_sha // "unknown"' classification.json 2>/dev/null || echo unknown)"
+          same="$(jq -r '.same_render_release // false' classification.json 2>/dev/null || echo false)"
+          cname="$(jq -r '.public_api_cname // "none"' classification.json 2>/dev/null || echo none)"
+          public_pricing="$(jq -r '.public_api_pricing_http // "unknown"' classification.json 2>/dev/null || echo unknown)"
+          app_pricing="$(jq -r '.app_pricing_http // "unknown"' classification.json 2>/dev/null || echo unknown)"
+          platform_pricing="$(jq -r '.platform_pricing_http // "unknown"' classification.json 2>/dev/null || echo unknown)"
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
+            -f body="🧭 **Public API release identity**\n\n- API CNAME: \`${cname}\`\n- public API build: \`${public_sha}\`\n- private Render build: \`${preview_sha}\`\n- same Render release: \`${same}\`\n- public API pricing HTTP: \`${public_pricing}\`\n- app same-origin pricing HTTP: \`${app_pricing}\`\n- platform same-origin pricing HTTP: \`${platform_pricing}\`\n- probe release: \`${GITHUB_SHA}\`"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: public-api-release-identity-${{ github.sha }}
+          path: |
+            probes.jsonl
+            classification.json
+          if-no-files-found: error
+          retention-days: 30
