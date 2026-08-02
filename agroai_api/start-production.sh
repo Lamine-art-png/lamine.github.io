@@ -17,6 +17,11 @@ do
   fi
 done
 
+# Python's sitecustomize.py enforces the same complete-live-configuration
+# contract before app.core.config is imported, including when Render invokes
+# Uvicorn directly instead of this script. Keep this shell path aligned for
+# explicit production starts and for the Stripe preflight below.
+#
 # The founder approved the live Developer and Scale catalog and migration 028
 # activated it in the production database. Lock that launch decision into the
 # release process so stale or incorrectly saved Render booleans cannot silently
