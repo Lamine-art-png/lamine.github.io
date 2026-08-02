@@ -20,6 +20,8 @@ jobs:
           ref: fix/platform-billing-runtime-diagnostics-and-retry
           fetch-depth: 0
 
+      # This second push exists so GitHub recognizes the branch-local workflow
+      # before it applies the deterministic source transformation.
       - name: Apply deterministic source patch
         run: python .github/scripts/apply_platform_billing_runtime_patch.py
 
