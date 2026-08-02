@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   Activity, AlertTriangle, Camera, CheckCircle2, Cloud, CloudOff, ImagePlus,
   Loader2, MapPin, Mic, Navigation, Paperclip, RefreshCw, Search, Sparkles,
-  Square, Trash2, X,
+  Square, Trash2, Video, X,
 } from "lucide-react";
 import { useAuth } from "../auth/AuthProvider";
 import { useLocale } from "../hooks/useLocale";
@@ -23,6 +23,9 @@ const EVENT_TYPES = [
 ] as const;
 const SYNC_STATES: SyncState[] = ["draft", "queued", "syncing", "processing", "synced", "failed", "conflict", "manual_recovery"];
 const MAX_RECORDING_SECONDS = 900;
+const LIVE_VISION_INTERVAL_MS = 20_000;
+const LIVE_VISION_FIRST_SAMPLE_MS = 3_500;
+const LIVE_VISION_MAX_SIDE = 768;
 type Observation = Record<string, any>;
 type LocationFix = { lat: number; lon: number; acc: number };
 
@@ -286,6 +289,12 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
   const [micError, setMicError] = useState<string | null>(null);
   const [audioFile, setAudioFile] = useState<File | null>(null);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [walkVideoFile, setWalkVideoFile] = useState<File | null>(null);
+  const [walkVideoUrl, setWalkVideoUrl] = useState<string | null>(null);
+  const [videoRecording, setVideoRecording] = useState(false);
+  const [videoElapsed, setVideoElapsed] = useState(0);
+  const [liveVision, setLiveVision] = useState<Record<string, any> | null>(null);
+  const [liveVisionState, setLiveVisionState] = useState<"idle" | "sampling" | "ready" | "unavailable">("idle");
   const [liveTranscript, setLiveTranscript] = useState("");
   const [interimTranscript, setInterimTranscript] = useState("");
   const [reviewing, setReviewing] = useState(false);
@@ -296,6 +305,20 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
   const stopWaitersRef = useRef<Array<() => void>>([]);
   const timerRef = useRef<number | null>(null);
   const elapsedRef = useRef(0);
+  const videoRecorderRef = useRef<MediaRecorder | null>(null);
+  const videoStreamRef = useRef<MediaStream | null>(null);
+  const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
+  const videoChunksRef = useRef<Blob[]>([]);
+  const videoStopWaitersRef = useRef<Array<() => void>>([]);
+  const videoTimerRef = useRef<number | null>(null);
+  const videoElapsedRef = useRef(0);
+  const liveVisionTimerRef = useRef<number | null>(null);
+  const liveVisionFirstTimerRef = useRef<number | null>(null);
+  const liveVisionBusyRef = useRef(false);
+  const liveVisionAbortRef = useRef<AbortController | null>(null);
+  const liveVisionSessionRef = useRef(0);
+  const liveTranscriptRef = useRef("");
+  const liveVisionContextRef = useRef({ workspaceId: workspaceId as string | undefined, fieldName: "", crop: "", note: "" });
 
   const imagePreviews = useMemo(() => attachments.filter((file) => file.type.startsWith("image/"))
     .map((file) => ({ file, url: URL.createObjectURL(file) })), [attachments]);
@@ -317,12 +340,54 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
     timerRef.current = null;
   }, []);
 
+  const releaseVideoStream = useCallback(() => {
+    videoStreamRef.current?.getTracks().forEach((track) => track.stop());
+    videoStreamRef.current = null;
+    if (videoPreviewRef.current) videoPreviewRef.current.srcObject = null;
+  }, []);
+
+  const clearVideoTimer = useCallback(() => {
+    if (videoTimerRef.current !== null) window.clearInterval(videoTimerRef.current);
+    videoTimerRef.current = null;
+  }, []);
+
+  const clearLiveVisionSampling = useCallback(() => {
+    liveVisionSessionRef.current += 1;
+    if (liveVisionTimerRef.current !== null) window.clearInterval(liveVisionTimerRef.current);
+    if (liveVisionFirstTimerRef.current !== null) window.clearTimeout(liveVisionFirstTimerRef.current);
+    liveVisionTimerRef.current = null;
+    liveVisionFirstTimerRef.current = null;
+    liveVisionAbortRef.current?.abort();
+    liveVisionAbortRef.current = null;
+    liveVisionBusyRef.current = false;
+  }, []);
+
+  const setRecordedVideo = useCallback((file: File | null) => {
+    setWalkVideoFile(file);
+    setWalkVideoUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return file ? URL.createObjectURL(file) : null;
+    });
+  }, []);
+
+  useEffect(() => {
+    liveTranscriptRef.current = `${liveTranscript} ${interimTranscript}`.trim();
+  }, [interimTranscript, liveTranscript]);
+
+  useEffect(() => {
+    liveVisionContextRef.current = { workspaceId, fieldName, crop, note };
+  }, [crop, fieldName, note, workspaceId]);
+
   useEffect(() => () => {
     clearTimer();
+    clearVideoTimer();
+    clearLiveVisionSampling();
     stopRecognition();
     releaseStream();
+    releaseVideoStream();
     if (audioUrl) URL.revokeObjectURL(audioUrl);
-  }, [audioUrl, clearTimer, releaseStream, stopRecognition]);
+    if (walkVideoUrl) URL.revokeObjectURL(walkVideoUrl);
+  }, [audioUrl, clearLiveVisionSampling, clearTimer, clearVideoTimer, releaseStream, releaseVideoStream, stopRecognition, walkVideoUrl]);
 
   const captureLocation = useCallback((silent = false) => {
     if (!navigator.geolocation) {
@@ -430,6 +495,134 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
     }
   }, [captureLocation, clearTimer, releaseStream, setRecordedAudio, startRecognition, stopRecognition, stopRecording, t]);
 
+
+  const captureLiveVisionFrame = useCallback(async () => {
+    if (liveVisionBusyRef.current || !navigator.onLine) return;
+    const video = videoPreviewRef.current;
+    if (!video || video.readyState < 2 || video.videoWidth < 1 || video.videoHeight < 1) return;
+    const session = liveVisionSessionRef.current;
+    const scale = Math.min(1, LIVE_VISION_MAX_SIDE / Math.max(video.videoWidth, video.videoHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) return;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.68));
+    if (!blob || blob.size > 1_500_000 || session !== liveVisionSessionRef.current) return;
+
+    liveVisionBusyRef.current = true;
+    setLiveVisionState("sampling");
+    const controller = new AbortController();
+    liveVisionAbortRef.current = controller;
+    const current = liveVisionContextRef.current;
+    const spokenContext = [current.note, liveTranscriptRef.current].filter(Boolean).join(" ").slice(0, 1600);
+    try {
+      const response: any = await apiClient.fieldIntelligence.liveAnalyze({
+        workspace_id: current.workspaceId || "",
+        field_name: current.fieldName.trim(),
+        crop: current.crop.trim(),
+        note_text: spokenContext,
+        frame_timestamp_seconds: String(videoElapsedRef.current),
+      }, new File([blob], `live-field-${Date.now()}.jpg`, { type: "image/jpeg" }), controller.signal);
+      if (session !== liveVisionSessionRef.current) return;
+      if (response?.status === "ok" && response?.analysis) {
+        setLiveVision(response.analysis);
+        setLiveVisionState("ready");
+      } else {
+        setLiveVisionState("unavailable");
+      }
+    } catch (error: any) {
+      if (error?.name !== "AbortError" && session === liveVisionSessionRef.current) setLiveVisionState("unavailable");
+    } finally {
+      if (session === liveVisionSessionRef.current) {
+        liveVisionBusyRef.current = false;
+        liveVisionAbortRef.current = null;
+      }
+    }
+  }, []);
+
+  const startLiveVisionSampling = useCallback(() => {
+    clearLiveVisionSampling();
+    setLiveVision(null);
+    setLiveVisionState("sampling");
+    liveVisionFirstTimerRef.current = window.setTimeout(() => void captureLiveVisionFrame(), LIVE_VISION_FIRST_SAMPLE_MS);
+    liveVisionTimerRef.current = window.setInterval(() => void captureLiveVisionFrame(), LIVE_VISION_INTERVAL_MS);
+  }, [captureLiveVisionFrame, clearLiveVisionSampling]);
+
+
+  const stopWalkVideo = useCallback(async () => {
+    const recorder = videoRecorderRef.current;
+    clearLiveVisionSampling();
+    if (!recorder || recorder.state === "inactive") {
+      clearVideoTimer(); stopRecognition(); releaseVideoStream(); setVideoRecording(false); return;
+    }
+    await new Promise<void>((resolve) => {
+      videoStopWaitersRef.current.push(resolve);
+      try { recorder.stop(); } catch { resolve(); }
+    });
+  }, [clearLiveVisionSampling, clearVideoTimer, releaseVideoStream, stopRecognition]);
+
+  const startWalkVideo = useCallback(async () => {
+    setMicError(null);
+    setReviewing(false);
+    setLiveTranscript("");
+    setInterimTranscript("");
+    liveTranscriptRef.current = "";
+    setRecordedVideo(null);
+    setLiveVision(null);
+    setLiveVisionState("sampling");
+    captureLocation(true);
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setMicError(t("fieldIntel.videoUnsupported"));
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      });
+      releaseVideoStream();
+      videoStreamRef.current = stream;
+      if (videoPreviewRef.current) {
+        videoPreviewRef.current.srcObject = stream;
+        await videoPreviewRef.current.play().catch(() => undefined);
+      }
+      const preferred = [
+        "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4",
+      ].find((kind) => MediaRecorder.isTypeSupported(kind));
+      const recorder = new MediaRecorder(stream, preferred ? { mimeType: preferred } : undefined);
+      videoRecorderRef.current = recorder;
+      videoChunksRef.current = [];
+      recorder.ondataavailable = (event) => { if (event.data.size > 0) videoChunksRef.current.push(event.data); };
+      recorder.onstop = () => {
+        const blob = new Blob(videoChunksRef.current, { type: recorder.mimeType || "video/webm" });
+        const extension = (recorder.mimeType || "").includes("mp4") ? "mp4" : "webm";
+        if (blob.size > 0) setRecordedVideo(new File([blob], `field-walk-${Date.now()}.${extension}`, { type: blob.type }));
+        clearLiveVisionSampling();
+        clearVideoTimer();
+        stopRecognition();
+        releaseVideoStream();
+        setVideoRecording(false);
+        videoStopWaitersRef.current.splice(0).forEach((resolve) => resolve());
+      };
+      recorder.start(1000);
+      startRecognition();
+      setVideoRecording(true);
+      videoElapsedRef.current = 0;
+      setVideoElapsed(0);
+      startLiveVisionSampling();
+      videoTimerRef.current = window.setInterval(() => {
+        videoElapsedRef.current += 1;
+        setVideoElapsed(videoElapsedRef.current);
+        if (videoElapsedRef.current >= MAX_RECORDING_SECONDS) void stopWalkVideo();
+      }, 1000);
+    } catch (error: any) {
+      releaseVideoStream();
+      setMicError(error?.name === "NotAllowedError" ? t("fieldIntel.videoDenied") : t("fieldIntel.videoUnsupported"));
+    }
+  }, [captureLocation, clearLiveVisionSampling, clearVideoTimer, releaseVideoStream, setRecordedVideo, startLiveVisionSampling, startRecognition, stopRecognition, stopWalkVideo, t]);
+
   const addFiles = useCallback(async (files: File[]) => {
     if (!files.length) return;
     captureLocation(true);
@@ -440,8 +633,11 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
   const reset = useCallback(() => {
     setNote(""); setFieldName(""); setBlockName(""); setCrop(""); setEventType("observation");
     setSeverity("info"); setAssignee(""); setAttachments([]); setLocation(null); setLocError(null);
-    setLiveTranscript(""); setInterimTranscript(""); setReviewing(false); setRecordedAudio(null); setElapsed(0);
-  }, [setRecordedAudio]);
+    clearLiveVisionSampling();
+    liveTranscriptRef.current = "";
+    setLiveTranscript(""); setInterimTranscript(""); setReviewing(false); setRecordedAudio(null); setRecordedVideo(null);
+    setLiveVision(null); setLiveVisionState("idle"); setElapsed(0); setVideoElapsed(0);
+  }, [clearLiveVisionSampling, setRecordedAudio, setRecordedVideo]);
 
   const queueCapture = useCallback(async () => {
     const clientCaptureId = newCaptureId();
@@ -450,7 +646,8 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
       contentType: audioFile.type || "audio/webm", filename: audioFile.name,
       durationSeconds: elapsed, blob: audioFile, uploaded: false,
     } : null;
-    const fileAssets = attachments.map((file, index) => ({
+    const queuedFiles = walkVideoFile ? [...attachments, walkVideoFile] : attachments;
+    const fileAssets = queuedFiles.map((file, index) => ({
       id: `${clientCaptureId}-asset-${index}`, clientCaptureId,
       kind: (file.type.startsWith("image/") ? "photo" : file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "audio" : "file") as "photo" | "video" | "audio" | "file",
       contentType: file.type || "application/octet-stream", filename: file.name, blob: file, uploaded: false,
@@ -462,11 +659,13 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
       idempotencyKey: `fi-${clientCaptureId}`,
       createdAt: Date.now(),
       workspaceId,
-      captureSource: audioFile ? "voice" : "typed",
+      captureSource: audioFile || walkVideoFile ? "voice" : "typed",
       // Browser live captions are an operator aid. The durable audio remains the
       // authoritative source; captions also provide useful context if the device
       // is offline or server transcription is delayed.
       noteText: note.trim() || transcriptPreview || undefined,
+      transcriptPreview: transcriptPreview || undefined,
+      language: document.documentElement.lang || navigator.language || "en",
       fieldName: fieldName.trim() || undefined,
       blockName: blockName.trim() || undefined,
       crop: crop.trim() || undefined,
@@ -485,7 +684,7 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
     for (const asset of assets) await putAsset(asset);
     reset();
     await onSaved(t("fieldIntel.saved"));
-  }, [assignee, attachments, audioFile, blockName, crop, elapsed, eventType, fieldName, liveTranscript, location, note, onSaved, reset, severity, t, workspaceId]);
+  }, [assignee, attachments, audioFile, blockName, crop, elapsed, eventType, fieldName, liveTranscript, location, note, onSaved, reset, severity, t, walkVideoFile, workspaceId]);
 
   if (reviewing) {
     return (
@@ -498,6 +697,7 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
           <button type="button" onClick={() => setReviewing(false)} className="rounded-lg border border-[#D6DDD0] p-2"><X className="h-4 w-4" /></button>
         </div>
         {audioUrl && <audio controls src={audioUrl} className="mt-4 w-full" aria-label={t("fieldIntel.audioPlayer")} />}
+        {walkVideoUrl && <video controls playsInline src={walkVideoUrl} className="mt-4 max-h-[360px] w-full rounded-xl bg-black" aria-label={t("fieldIntel.videoPlayer")} />}
         {liveTranscript && <div className="mt-3 rounded-xl border border-[#BFD8C9] bg-[#F1F8F4] p-3">
           <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2D6A4F]">{t("fieldIntel.transcript")}</div>
           <textarea value={liveTranscript} onChange={(event) => setLiveTranscript(event.target.value)} rows={4}
@@ -523,8 +723,8 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
             <Activity className="h-4 w-4 text-[#2D6A4F]" /> {recording ? `${t("fieldIntel.recording")} ${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}` : t("fieldIntel.recordingReady")}
           </div>
         </div>
-        <button type="button" onClick={() => recording ? void stopRecording() : void startRecording()}
-          className="inline-flex min-h-[48px] items-center gap-2 rounded-xl px-4 text-[14px] font-semibold text-white"
+        <button type="button" disabled={videoRecording} onClick={() => recording ? void stopRecording() : void startRecording()}
+          className="inline-flex min-h-[48px] items-center gap-2 rounded-xl px-4 text-[14px] font-semibold text-white disabled:opacity-40"
           style={{ background: recording ? "#B23B2E" : "#0D2B1E" }}>
           {recording ? <Square className="h-4 w-4 fill-current" /> : <Mic className="h-4 w-4" />}
           {recording ? t("fieldIntel.stop") : t("fieldIntel.record")}
@@ -539,6 +739,36 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
           {liveTranscript} <span className="text-[#819188]">{interimTranscript}</span>
         </p>
       </div>}
+      {videoRecording && <div className="mt-3 overflow-hidden rounded-xl border border-[#BFD8C9] bg-black">
+        <video ref={videoPreviewRef} muted playsInline autoPlay className="max-h-[420px] w-full object-cover" />
+        <div className="flex items-center justify-between bg-[#10231B] px-3 py-2 text-[12px] font-semibold text-white">
+          <span>{t("fieldIntel.walkRecording")} {Math.floor(videoElapsed / 60)}:{String(videoElapsed % 60).padStart(2, "0")}</span>
+          <span>{location ? t("fieldIntel.locationCaptured") : t("fieldIntel.captureLocation")}</span>
+        </div>
+        <div className="border-t border-white/10 bg-[#F1F8F4] p-3 text-[#10231B]">
+          <div className="flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2D6A4F]"><Sparkles className="h-4 w-4" />{t("fieldIntel.liveVisionTitle")}</div>
+            <div className="flex items-center gap-1 text-[11px] text-[#65736A]">
+              {liveVisionState === "sampling" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              {liveVisionState === "sampling" ? t("fieldIntel.liveVisionAnalyzing") : liveVisionState === "unavailable" ? t("fieldIntel.liveVisionUnavailable") : t("fieldIntel.liveVisionPreliminary")}
+            </div>
+          </div>
+          {liveVision?.summary && <p className="mt-2 text-[13px] font-medium leading-5">{liveVision.summary}</p>}
+          {Array.isArray(liveVision?.visible_facts) && liveVision.visible_facts.length > 0 && <div className="mt-2 text-[12px]"><span className="font-semibold">{t("fieldIntel.visibleFacts")}:</span> {liveVision.visible_facts.slice(0, 3).map((item: any) => item?.label).filter(Boolean).join(" · ")}</div>}
+          {Array.isArray(liveVision?.hypotheses) && liveVision.hypotheses.length > 0 && <div className="mt-1 text-[12px]"><span className="font-semibold">{t("fieldIntel.hypotheses")}:</span> {liveVision.hypotheses.slice(0, 2).map((item: any) => item?.label).filter(Boolean).join(" · ")}</div>}
+          <p className="mt-2 text-[11px] leading-4 text-[#65736A]">{t("fieldIntel.liveVisionVerify")}</p>
+        </div>
+      </div>}
+      {walkVideoUrl && !videoRecording && <div className="mt-3 rounded-xl border border-[#D6DDD0] p-2">
+        <video controls playsInline src={walkVideoUrl} className="max-h-[360px] w-full rounded-lg bg-black" aria-label={t("fieldIntel.videoPlayer")} />
+        <button type="button" onClick={() => setRecordedVideo(null)} className="mt-2 inline-flex items-center gap-1 rounded-lg border border-[#D6DDD0] px-3 py-2 text-[12px] font-semibold text-[#B23B2E]"><Trash2 className="h-4 w-4" />{t("fieldIntel.removeAttachment")}</button>
+      </div>}
+      <button type="button" disabled={recording} onClick={() => videoRecording ? void stopWalkVideo() : void startWalkVideo()}
+        className="mt-3 inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-xl px-4 text-[14px] font-semibold text-white disabled:opacity-40"
+        style={{ background: videoRecording ? "#B23B2E" : "#1B5E3F" }}>
+        {videoRecording ? <Square className="h-4 w-4 fill-current" /> : <Video className="h-5 w-5" />}
+        {videoRecording ? t("fieldIntel.stopWalkVideo") : t("fieldIntel.startWalkVideo")}
+      </button>
       {audioUrl && !recording && <div className="mt-3 flex items-center gap-2 rounded-xl border border-[#D6DDD0] p-2">
         <audio controls src={audioUrl} className="min-w-0 flex-1" />
         <button type="button" onClick={() => setRecordedAudio(null)} className="rounded-lg border border-[#D6DDD0] p-2 text-[#B23B2E]"><Trash2 className="h-4 w-4" /></button>
@@ -592,8 +822,9 @@ function SmartComposer({ t, workspaceId, onSaved }: any) {
 
       <button type="button" onClick={async () => {
         if (recording) await stopRecording();
+        if (videoRecording) await stopWalkVideo();
         setReviewing(true);
-      }} disabled={!note.trim() && !audioFile && attachments.length === 0}
+      }} disabled={!note.trim() && !audioFile && !walkVideoFile && attachments.length === 0}
         className="mt-4 inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-xl bg-[#0D2B1E] px-4 text-[14px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">
         <Sparkles className="h-4 w-4" /> {t("fieldIntel.reviewAndSave")}
       </button>
@@ -706,10 +937,32 @@ function ObservationDrawer({ t, observation, onClose, onReload }: any) {
         <div className="rounded-xl border border-[#BFD8C9] bg-[#F1F8F4] p-3">
           <div className="flex items-center gap-2 text-[12px] font-semibold text-[#1B5E3F]"><Camera className="h-4 w-4" />{t("fieldIntel.photoEvidence")} + {t("askAgroAi")}</div>
           <p className="mt-2 text-[13px] leading-6 text-[#3B4A41]">{vision.summary || "—"}</p>
-          {Array.isArray(vision.observations) && <ul className="mt-2 space-y-1 text-[12px] text-[#3B4A41]">
+          <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+            {vision.crop_condition && vision.crop_condition !== "unknown" && <span className="rounded-full bg-white px-2 py-1">{t("fieldIntel.cropCondition")}: {String(vision.crop_condition).replaceAll("_", " ")}</span>}
+            {vision.coverage_assessment && vision.coverage_assessment !== "unknown" && <span className="rounded-full bg-white px-2 py-1">{t("fieldIntel.coverageAssessment")}: {String(vision.coverage_assessment).replaceAll("_", " ")}</span>}
+            {vision.equipment_condition && !["unknown", "not_visible"].includes(vision.equipment_condition) && <span className="rounded-full bg-white px-2 py-1">{t("fieldIntel.equipmentCondition")}: {String(vision.equipment_condition).replaceAll("_", " ")}</span>}
+          </div>
+          {Array.isArray(vision.visible_facts) && vision.visible_facts.length > 0 && <div className="mt-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#2D6A4F]">{t("fieldIntel.visibleFacts")}</div>
+            <ul className="mt-1 space-y-2 text-[12px] text-[#3B4A41]">
+              {vision.visible_facts.map((item: any, index: number) => <li key={index} className="rounded-lg bg-white/80 p-2"><span className="font-semibold">{item?.label || "—"}</span>{item?.evidence && <span> · {item.evidence}</span>}{Number.isFinite(Number(item?.confidence)) && <span className="ml-1 text-[#65736A]">({Math.round(Number(item.confidence) * 100)}%)</span>}</li>)}
+            </ul>
+          </div>}
+          {Array.isArray(vision.hypotheses) && vision.hypotheses.length > 0 && <div className="mt-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#B26B00]">{t("fieldIntel.hypotheses")}</div>
+            <ul className="mt-1 space-y-2 text-[12px] text-[#3B4A41]">
+              {vision.hypotheses.map((item: any, index: number) => <li key={index} className="rounded-lg border border-[#EAD8AF] bg-[#FFF9EA] p-2"><span className="font-semibold">{item?.label || "—"}</span>{item?.evidence && <span> · {item.evidence}</span>}{item?.verification && <div className="mt-1 text-[11px] text-[#65736A]">{t("fieldIntel.verifyBy")}: {item.verification}</div>}</li>)}
+            </ul>
+          </div>}
+          {Array.isArray(vision.observations) && vision.observations.length > 0 && <ul className="mt-2 space-y-1 text-[12px] text-[#3B4A41]">
             {vision.observations.map((item: string, index: number) => <li key={index}>• {item}</li>)}
           </ul>}
+          {Array.isArray(vision.media_moments) && vision.media_moments.length > 0 && <div className="mt-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#2D6A4F]">{t("fieldIntel.videoMoments")}</div>
+            <ul className="mt-1 space-y-1 text-[12px] text-[#3B4A41]">{vision.media_moments.map((item: any, index: number) => <li key={index}>• {Number.isFinite(Number(item?.frame_timestamp_seconds)) ? `${Math.floor(Number(item.frame_timestamp_seconds) / 60)}:${String(Math.round(Number(item.frame_timestamp_seconds)) % 60).padStart(2, "0")} · ` : ""}{item?.summary || (item?.possible_issues || []).join(", ") || "—"}</li>)}</ul>
+          </div>}
           {Array.isArray(vision.uncertainties) && vision.uncertainties.length > 0 && <p className="mt-2 flex gap-1 text-[11px] text-[#B26B00]"><AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />{vision.uncertainties.join(", ")}</p>}
+          {vision.human_review_required && <p className="mt-2 text-[11px] font-medium text-[#B26B00]">{t("fieldIntel.humanReviewRequired")}</p>}
         </div>
       </DrawerSection>}
 

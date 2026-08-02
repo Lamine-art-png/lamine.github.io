@@ -10,7 +10,7 @@ from __future__ import annotations
 import hashlib
 import os
 import tempfile
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Literal
 
 import json
@@ -22,11 +22,14 @@ from fastapi import (
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.api.deps import AuthContext, get_auth_context
 from app.core.config import settings
 from app.db.base import SessionLocal, get_db
 from app.services import field_intelligence as svc
+from app.services.field_live_rate_limit import check_field_live_analysis_limit
+from app.services.field_vision import analyze_field_images
 from app.services.media_inspection import (
     inspect_media_file,
     validate_media_for_kind,
@@ -199,6 +202,97 @@ class CaptureCompleteRequest(BaseModel):
 
 class SyncBatchRequest(BaseModel):
     captures: list[SyncCaptureItem] = Field(min_length=1)
+
+
+_LIVE_FRAME_MAX_BYTES = 1_500_000
+_LIVE_FRAME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+
+
+def _valid_live_frame(payload: bytes, content_type: str) -> bool:
+    if content_type == "image/jpeg":
+        return payload.startswith(b"\xff\xd8\xff")
+    if content_type == "image/png":
+        return payload.startswith(b"\x89PNG\r\n\x1a\n")
+    if content_type == "image/webp":
+        return len(payload) >= 12 and payload[:4] == b"RIFF" and payload[8:12] == b"WEBP"
+    return False
+
+
+@router.post("/live-analysis")
+async def live_field_analysis(
+    request: Request,
+    file: UploadFile = File(...),
+    workspace_id: str | None = Form(default=None, max_length=_MAX_NAME),
+    field_name: str | None = Form(default=None, max_length=_MAX_NAME),
+    crop: str | None = Form(default=None, max_length=_MAX_NAME),
+    note_text: str | None = Form(default=None, max_length=1600),
+    frame_timestamp_seconds: float | None = Form(default=None, ge=0, le=900),
+    ctx: AuthContext = Depends(get_auth_context),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Analyze one sampled video frame without persisting it.
+
+    This is deliberately near-real-time rather than continuous video inference:
+    the durable uploaded recording remains the authoritative evidence, while the
+    sampled response is preliminary guidance that always requires review.
+    """
+    organization_id = svc.require_org(ctx)
+    if workspace_id:
+        svc.authorize_workspace_action(db, ctx, workspace_id)
+
+    decision = check_field_live_analysis_limit(organization_id, ctx.user.id)
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "field_live_analysis_rate_limited",
+                "message": "Live analysis is temporarily rate limited. The recording continues and will be fully analyzed after upload.",
+            },
+            headers={"Retry-After": str(decision.retry_after)},
+        )
+
+    declared = (request.headers.get("content-length") or "").strip()
+    if declared.isdigit() and int(declared) > _LIVE_FRAME_MAX_BYTES + 100_000:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Live frame exceeds size limit")
+
+    content_type = str(file.content_type or "").lower().split(";")[0].strip()
+    if content_type not in _LIVE_FRAME_TYPES:
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Unsupported live frame type")
+    payload = await file.read(_LIVE_FRAME_MAX_BYTES + 1)
+    await file.close()
+    if not payload or len(payload) > _LIVE_FRAME_MAX_BYTES:
+        raise HTTPException(status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail="Live frame exceeds size limit")
+    if not _valid_live_frame(payload, content_type):
+        raise HTTPException(status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE, detail="Live frame content is invalid")
+
+    context = {
+        "field_name": field_name,
+        "crop": crop,
+        "note_text": note_text,
+        "media_kind": "live_video_frame",
+        "frame_timestamp_seconds": frame_timestamp_seconds,
+    }
+    result = await run_in_threadpool(analyze_field_images, [(payload, content_type, context)], context)
+    if not result.succeeded:
+        return {
+            "status": "unavailable",
+            "preliminary": True,
+            "durable": False,
+            "error": result.error or "live_vision_unavailable",
+            "retryable": bool(result.retryable),
+            "rate_limit_remaining": decision.remaining,
+        }
+    return {
+        "status": "ok",
+        "preliminary": True,
+        "durable": False,
+        "sampled_at": datetime.now(timezone.utc).isoformat(),
+        "provider": result.provider,
+        "model": result.model,
+        "analysis": result.analysis,
+        "human_review_required": True,
+        "rate_limit_remaining": decision.remaining,
+    }
 
 
 PATCH_STATUSES = ("needs_review", "acknowledged", "completed")

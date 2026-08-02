@@ -19,8 +19,8 @@ import httpx
 
 from app.core.config import settings
 
-DEFAULT_MODEL = "@cf/llava-hf/llava-1.5-7b-hf"
-MAX_IMAGES = 4
+DEFAULT_MODEL = "@cf/meta/llama-3.2-11b-vision-instruct"
+MAX_IMAGES = 8
 MAX_IMAGE_BYTES = 8 * 1024 * 1024
 RETRYABLE_HTTP = {408, 425, 429, 500, 502, 503, 504}
 SEVERITY_ORDER = {"info": 0, "low": 1, "medium": 2, "high": 3, "critical": 4}
@@ -95,29 +95,42 @@ def _endpoint_valid(endpoint: str, model: str) -> bool:
 def _prompt(context: dict[str, Any]) -> str:
     field = str(context.get("field_name") or "unknown field")[:200]
     crop = str(context.get("crop") or "unknown crop")[:200]
-    note = str(context.get("note_text") or "")[:1200]
+    note = str(context.get("note_text") or "")[:1600]
+    media_kind = str(context.get("media_kind") or "photo")[:80]
+    frame_time = context.get("frame_timestamp_seconds")
+    frame_label = f"; frame_time_seconds={frame_time}" if frame_time is not None else ""
     return f"""
-You are AGRO-AI Field Vision. Analyze one field photo as operational evidence.
-Context: field={field}; crop={crop}; operator_note={note or "none"}.
+You are AGRO-AI Field Vision, an evidence-analysis system for agricultural operations.
+Analyze this {media_kind} as one piece of evidence, using the operator note only as context.
+Context: field={field}; crop={crop}; operator_note={note or "none"}{frame_label}.
 
 Return JSON only with this exact shape:
 {{
-  "summary": "one concise visual summary",
-  "observations": ["visible fact or cautious visual hypothesis"],
-  "possible_issue": "none or a cautious category",
+  "summary": "concise operational summary",
+  "visible_facts": [{{"label": "visible fact", "evidence": "what in the image supports it", "confidence": 0.0}}],
+  "hypotheses": [{{"label": "possible condition", "evidence": "visible pattern", "confidence": 0.0, "verification": "how to confirm"}}],
+  "observations": ["backward-compatible concise visible observation"],
+  "possible_issues": ["cautious issue category"],
+  "crop_condition": "healthy|mostly_healthy|stressed|damaged|unknown",
+  "coverage_assessment": "adequate|uneven|incomplete|not_visible|unknown",
+  "equipment_condition": "normal|attention_needed|unsafe|not_visible|unknown",
   "severity": "info|low|medium|high|critical",
   "confidence": 0.0,
-  "recommended_follow_up": "safe next inspection or verification step",
-  "uncertainties": ["what cannot be confirmed from the image"]
+  "recommended_follow_up": "specific safe next inspection or verification step",
+  "verification_required": true,
+  "uncertainties": ["what cannot be established from this evidence"]
 }}
 
 Rules:
-- Describe only visible evidence. Never invent field identity, crop, disease, pest,
-  chemical, moisture level, irrigation status, yield, or measurement.
-- A photo alone cannot confirm a diagnosis. Use "possible" and request verification.
-- Do not recommend pesticide, fertilizer, chemical dosage, autonomous actuation,
-  or safety-critical equipment commands.
-- Confidence must reflect image quality and ambiguity.
+- Separate visible facts from hypotheses. Never present a hypothesis as a confirmed diagnosis.
+- You may identify visible patterns consistent with crop stress, pest/disease symptoms, weed pressure,
+  irrigation/application coverage, equipment problems, completion quality, or unsafe practice.
+- Ordinary RGB imagery cannot measure pesticide concentration, residue, active ingredient, dosage,
+  soil chemistry, internal plant chemistry, or exact moisture. State that these require records, sensors,
+  calibrated equipment data, spectroscopy, or laboratory verification.
+- Do not invent field identity, crop, chemical, measurement, treatment, or completion status.
+- Do not recommend a pesticide/fertilizer product or dosage. Recommend verification and escalation.
+- Confidence must reflect image quality, occlusion, distance, crop context, and ambiguity.
 """.strip()
 
 
@@ -178,18 +191,61 @@ def _bounded_analysis(raw: dict[str, Any]) -> dict[str, Any]:
     except (TypeError, ValueError):
         confidence = 0.0
 
-    def strings(value: Any, *, limit: int = 8) -> list[str]:
+    def strings(value: Any, *, limit: int = 12) -> list[str]:
         if not isinstance(value, list):
             return []
         return [str(item).strip()[:500] for item in value if str(item).strip()][:limit]
 
+    def findings(value: Any, *, limit: int = 12, hypothesis: bool = False) -> list[dict[str, Any]]:
+        if not isinstance(value, list):
+            return []
+        rows: list[dict[str, Any]] = []
+        for item in value[:limit]:
+            if isinstance(item, str):
+                item = {"label": item}
+            if not isinstance(item, dict):
+                continue
+            label = str(item.get("label") or "").strip()[:300]
+            if not label:
+                continue
+            try:
+                item_confidence = max(0.0, min(float(item.get("confidence") or 0.0), 1.0))
+            except (TypeError, ValueError):
+                item_confidence = 0.0
+            row: dict[str, Any] = {
+                "label": label,
+                "evidence": str(item.get("evidence") or "").strip()[:700],
+                "confidence": item_confidence,
+            }
+            if hypothesis:
+                row["verification"] = str(item.get("verification") or "").strip()[:700]
+            rows.append(row)
+        return rows
+
+    allowed_condition = {"healthy", "mostly_healthy", "stressed", "damaged", "unknown"}
+    allowed_coverage = {"adequate", "uneven", "incomplete", "not_visible", "unknown"}
+    allowed_equipment = {"normal", "attention_needed", "unsafe", "not_visible", "unknown"}
+    crop_condition = str(raw.get("crop_condition") or "unknown").lower()
+    coverage = str(raw.get("coverage_assessment") or "unknown").lower()
+    equipment = str(raw.get("equipment_condition") or "unknown").lower()
+    possible_issues = strings(raw.get("possible_issues"))
+    legacy_issue = str(raw.get("possible_issue") or "").strip()
+    if legacy_issue and legacy_issue.lower() != "none" and legacy_issue not in possible_issues:
+        possible_issues.append(legacy_issue[:500])
+
     return {
-        "summary": str(raw.get("summary") or "").strip()[:1200],
+        "summary": str(raw.get("summary") or "").strip()[:1600],
+        "visible_facts": findings(raw.get("visible_facts")),
+        "hypotheses": findings(raw.get("hypotheses"), hypothesis=True),
         "observations": strings(raw.get("observations")),
-        "possible_issue": str(raw.get("possible_issue") or "none").strip()[:200],
+        "possible_issues": possible_issues[:12],
+        "crop_condition": crop_condition if crop_condition in allowed_condition else "unknown",
+        "coverage_assessment": coverage if coverage in allowed_coverage else "unknown",
+        "equipment_condition": equipment if equipment in allowed_equipment else "unknown",
         "severity": severity,
         "confidence": confidence,
-        "recommended_follow_up": str(raw.get("recommended_follow_up") or "").strip()[:1200],
+        "recommended_follow_up": str(raw.get("recommended_follow_up") or "").strip()[:1600],
+        "verification_required": bool(raw.get("verification_required", True)),
         "uncertainties": strings(raw.get("uncertainties")),
     }
 
@@ -238,6 +294,7 @@ def _analyze_one(image: bytes, content_type: str | None, context: dict[str, Any]
                 retryable=response.status_code in RETRYABLE_HTTP,
             )
         payload = response.json()
+        actual_model = str(payload.get("model") or model) if isinstance(payload, dict) else model
         text = _extract_text(payload)
         if not text:
             return FieldVisionResult(
@@ -245,7 +302,7 @@ def _analyze_one(image: bytes, content_type: str | None, context: dict[str, Any]
                 latency_ms=latency, error="provider_returned_empty_visual_analysis",
             )
         return FieldVisionResult(
-            provider="cloudflare_workers_ai", status="completed", model=model,
+            provider="cloudflare_workers_ai", status="completed", model=actual_model,
             latency_ms=latency, analysis=_bounded_analysis(_json_from_text(text)),
         )
     except Exception as exc:  # noqa: BLE001 - provider failures are surfaced, not hidden
@@ -259,7 +316,7 @@ def _analyze_one(image: bytes, content_type: str | None, context: dict[str, Any]
         )
 
 
-def analyze_field_images(images: list[tuple[bytes, str | None]], context: dict[str, Any]) -> FieldVisionResult:
+def analyze_field_images(images: list[tuple], context: dict[str, Any]) -> FieldVisionResult:
     if not images:
         return FieldVisionResult(provider="none", status="skipped", error="no_photo_assets")
 
@@ -268,8 +325,14 @@ def analyze_field_images(images: list[tuple[bytes, str | None]], context: dict[s
     failures: list[str] = []
     model: str | None = None
     provider = "cloudflare_workers_ai"
-    for image, content_type in images[:MAX_IMAGES]:
-        result = _analyze_one(image, content_type, context)
+    for item in images[:MAX_IMAGES]:
+        image, content_type = item[0], item[1]
+        item_context = dict(context)
+        if len(item) > 2 and isinstance(item[2], dict):
+            item_context.update(item[2])
+        result = _analyze_one(image, content_type, item_context)
+        if result.succeeded and len(item) > 2 and isinstance(item[2], dict):
+            result.analysis["media_context"] = dict(item[2])
         model = result.model or model
         provider = result.provider or provider
         if result.succeeded:
@@ -293,26 +356,58 @@ def analyze_field_images(images: list[tuple[bytes, str | None]], context: dict[s
     issues: list[str] = []
     severities: list[str] = []
     confidences: list[float] = []
+    visible_facts: list[dict[str, Any]] = []
+    hypotheses: list[dict[str, Any]] = []
+    media_moments: list[dict[str, Any]] = []
+    crop_conditions: list[str] = []
+    coverage_assessments: list[str] = []
+    equipment_conditions: list[str] = []
     for item in completed:
         summaries.extend([item.get("summary")] if item.get("summary") else [])
         observations.extend(item.get("observations") or [])
         uncertainties.extend(item.get("uncertainties") or [])
+        visible_facts.extend(item.get("visible_facts") or [])
+        hypotheses.extend(item.get("hypotheses") or [])
         if item.get("recommended_follow_up"):
             follow_ups.append(item["recommended_follow_up"])
-        if item.get("possible_issue") and item.get("possible_issue") != "none":
-            issues.append(item["possible_issue"])
+        issues.extend(item.get("possible_issues") or [])
         severities.append(item.get("severity") or "info")
         confidences.append(float(item.get("confidence") or 0.0))
+        crop_conditions.append(item.get("crop_condition") or "unknown")
+        coverage_assessments.append(item.get("coverage_assessment") or "unknown")
+        equipment_conditions.append(item.get("equipment_condition") or "unknown")
+        media_context = item.get("media_context") or {}
+        if media_context:
+            media_moments.append({
+                "media_kind": media_context.get("media_kind"),
+                "frame_timestamp_seconds": media_context.get("frame_timestamp_seconds"),
+                "summary": item.get("summary"),
+                "severity": item.get("severity"),
+                "confidence": item.get("confidence"),
+                "possible_issues": item.get("possible_issues") or [],
+            })
 
     severity = max(severities or ["info"], key=lambda value: SEVERITY_ORDER.get(value, 0))
+
+    def dominant(values: list[str], default: str = "unknown") -> str:
+        useful = [value for value in values if value and value not in {"unknown", "not_visible"}]
+        return max(set(useful), key=useful.count) if useful else default
+
     analysis = {
-        "summary": " ".join(dict.fromkeys(summaries))[:1800],
-        "observations": list(dict.fromkeys(observations))[:16],
-        "possible_issues": list(dict.fromkeys(issues))[:8],
+        "summary": " ".join(dict.fromkeys(summaries))[:2400],
+        "visible_facts": visible_facts[:24],
+        "hypotheses": hypotheses[:16],
+        "observations": list(dict.fromkeys(observations))[:24],
+        "possible_issues": list(dict.fromkeys(issues))[:16],
+        "crop_condition": dominant(crop_conditions),
+        "coverage_assessment": dominant(coverage_assessments),
+        "equipment_condition": dominant(equipment_conditions),
         "severity": severity,
         "confidence": round(sum(confidences) / max(len(confidences), 1), 3),
-        "recommended_follow_up": " ".join(dict.fromkeys(follow_ups))[:1600],
-        "uncertainties": list(dict.fromkeys(uncertainties))[:16],
+        "recommended_follow_up": " ".join(dict.fromkeys(follow_ups))[:2200],
+        "verification_required": True,
+        "uncertainties": list(dict.fromkeys(uncertainties))[:24],
+        "media_moments": media_moments[:MAX_IMAGES],
         "images_analyzed": len(completed),
         "images_received": min(len(images), MAX_IMAGES),
         "human_review_required": True,

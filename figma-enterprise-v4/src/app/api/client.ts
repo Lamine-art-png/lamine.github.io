@@ -87,6 +87,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   try {
     response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
   } catch (cause) {
+    if (cause && typeof cause === "object" && "name" in cause && cause.name === "AbortError") throw cause;
     const error = new Error("Backend unavailable. Retry.") as ApiError;
     error.code = "network_unavailable";
     error.details = cause;
@@ -291,6 +292,13 @@ function uploadFieldAsset<T>(captureId: string, fields: Record<string, string>, 
   return request<T>(`/v1/field-intelligence/captures/${encodeURIComponent(captureId)}/assets`, { method: "POST", body: form });
 }
 
+function analyzeLiveFieldFrame<T>(fields: Record<string, string>, file: File, signal?: AbortSignal): Promise<T> {
+  const form = new FormData();
+  Object.entries(fields).forEach(([key, value]) => { if (value) form.append(key, value); });
+  form.append("file", file);
+  return request<T>("/v1/field-intelligence/live-analysis", { method: "POST", body: form, signal });
+}
+
 export const apiClient = {
   get, post, patch, remove, request, download,
   auth: { register: (payload: RegisterPayload) => post("/v1/auth/register", payload), login: (payload: LoginPayload) => post("/v1/auth/login", payload), logout: () => post("/v1/auth/logout"), me: () => get("/v1/auth/me"), requestEmailVerification: (payload?: EmailVerificationRequestPayload) => post("/v1/auth/email-verification/request", payload), confirmEmailVerification: (payload: EmailVerificationConfirmPayload) => post("/v1/auth/email-verification/confirm", payload) },
@@ -391,6 +399,7 @@ export const apiClient = {
     getCapture: (captureId: string) => get(`/v1/field-intelligence/captures/${encodeURIComponent(captureId)}`),
     syncBatch: (captures: unknown[]) => post("/v1/field-intelligence/sync/batch", { captures }),
     uploadAsset: (captureId: string, fields: Record<string, string>, file: File) => uploadFieldAsset(captureId, fields, file),
+    liveAnalyze: (fields: Record<string, string>, file: File, signal?: AbortSignal) => analyzeLiveFieldFrame(fields, file, signal),
     observations: (query?: string) => get(`/v1/field-intelligence/observations${query ? `?${query}` : ""}`),
     observation: (observationId: string) => get(`/v1/field-intelligence/observations/${encodeURIComponent(observationId)}`),
     patchObservation: (observationId: string, payload: unknown) => patch(`/v1/field-intelligence/observations/${encodeURIComponent(observationId)}`, payload),
