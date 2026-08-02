@@ -25,14 +25,12 @@ zone_name = "agroai-pilot.com"
 pattern = "platform.agroai-pilot.com/v1/*"
 zone_name = "agroai-pilot.com"
 
-# The machine API hostname is owned by this Worker. A Custom Domain makes the
-# Worker the deterministic origin for every request on api.agroai-pilot.com,
-# preventing legacy CNAME/origin routing from bypassing the security edge.
-# The Worker itself continues to proxy validated /v1 requests to the private
-# Render origin configured above and returns a closed 404 for every other path.
+# Keep the machine API route in the canonical Worker contract. It is required
+# by the protected Field Intelligence Workers AI bridges and by signed
+# authoritative client-IP forwarding for CIDR-bound Platform API keys.
 [[routes]]
-pattern = "api.agroai-pilot.com"
-custom_domain = true
+pattern = "api.agroai-pilot.com/v1/*"
+zone_name = "agroai-pilot.com"
 
 [[queues.producers]]
 binding = "CONNECTOR_TASKS"

@@ -17,6 +17,27 @@ do
   fi
 done
 
+# The founder approved the live Developer and Scale catalog and migration 028
+# activated it in the production database. Lock that launch decision into the
+# release process so stale or incorrectly saved Render booleans cannot silently
+# return live pricing, Checkout, overage export, or quota enforcement to 404 or
+# disabled behavior. Non-production and non-live Stripe environments retain
+# their explicit feature flags.
+case "${APP_ENV:-development}" in
+  production|prod)
+    if [ "${PLATFORM_API_STRIPE_MODE:-test}" = "live" ] \
+      && [ "${PLATFORM_API_PLAN_CATALOG_VERSION:-2026-07-provisional}" = "2026-07-provisional" ] \
+      && [ "${PLATFORM_API_OPERATION_COST_CATALOG_VERSION:-2026-07-provisional}" = "2026-07-provisional" ]; then
+      export PLATFORM_API_BILLING_ENABLED=true
+      export PLATFORM_API_STRIPE_CHECKOUT_ENABLED=true
+      export PLATFORM_API_STRIPE_METER_EXPORT_ENABLED=true
+      export PLATFORM_API_PRICING_ENABLED=true
+      export PLATFORM_API_USAGE_METERING_ENFORCEMENT_ENABLED=true
+      echo "Platform API live billing launch contract: enabled"
+    fi
+    ;;
+esac
+
 python - <<'PY'
 from app.main import app
 

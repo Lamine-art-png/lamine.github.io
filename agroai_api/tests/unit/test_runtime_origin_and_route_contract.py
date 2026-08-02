@@ -49,12 +49,15 @@ def test_streamed_upload_path_is_registered_once():
     assert counts["/v1/evidence/upload-stream"] == 1
 
 
-def test_production_edge_owns_enterprise_platform_and_legacy_api_hostnames():
+def test_production_edge_owns_enterprise_platform_and_machine_api_routes():
+    """Protect every route that depends on Worker-only security or AI bridges."""
+
     wrangler = Path(__file__).resolve().parents[3] / "wrangler.toml"
     text = wrangler.read_text(encoding="utf-8")
     assert 'pattern = "app.agroai-pilot.com/v1/*"' in text
     assert 'pattern = "platform.agroai-pilot.com/v1/*"' in text
     assert 'pattern = "api.agroai-pilot.com/v1/*"' in text
+    assert 'UPSTREAM_API_ORIGIN = "https://api-preview.agroai-pilot.com"' in text
     allowed = next(line for line in text.splitlines() if line.startswith("ALLOWED_ORIGINS ="))
     assert "https://platform.agroai-pilot.com" in allowed
 
@@ -93,7 +96,7 @@ def test_platform_custom_domain_smoke_is_explicitly_gated_and_recorded():
     assert 'curl --fail --silent --show-error --max-time 30 "${PLATFORM_URL}/v1/health"' in deploy
     assert "Build on AGRO-AI." in deploy
     assert "Permanent API keys never enter browser JavaScript." in deploy
-    assert 'echo "platform_custom_domain_enabled=${PLATFORM_CUSTOM_DOMAIN_ENABLED}"' in deploy
+    assert 'echo "platform_custom_domain_enabled=${PLATFORM_API_CUSTOM_DOMAIN_ENABLED}"' in deploy
 
 
 def test_platform_verification_release_contract_uses_only_first_party_surfaces(monkeypatch):
