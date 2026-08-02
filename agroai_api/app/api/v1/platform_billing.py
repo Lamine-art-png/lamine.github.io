@@ -108,14 +108,31 @@ def _price_for(plan: PlatformApiPlan, interval: str) -> str:
     return value
 
 
-def _overage_price_for(plan: PlatformApiPlan) -> str | None:
+def _overage_price_for(plan: PlatformApiPlan, interval: str) -> str | None:
     if not plan.overages_allowed:
         return None
+    interval_config_keys = {
+        ("developer", "monthly"): "PLATFORM_API_STRIPE_DEVELOPER_MONTHLY_OVERAGE_PRICE_ID",
+        ("developer", "annual"): "PLATFORM_API_STRIPE_DEVELOPER_ANNUAL_OVERAGE_PRICE_ID",
+        ("scale", "monthly"): "PLATFORM_API_STRIPE_SCALE_MONTHLY_OVERAGE_PRICE_ID",
+        ("scale", "annual"): "PLATFORM_API_STRIPE_SCALE_ANNUAL_OVERAGE_PRICE_ID",
+    }
+    interval_key = interval_config_keys.get((plan.plan_identifier, interval))
+    interval_value = str(getattr(settings, interval_key, "") or "").strip() if interval_key else ""
+    if interval_value:
+        return interval_value
+    # Never permit a single mixed-interval overage Price in live mode. Checkout
+    # requires the metered Price interval to match the selected base interval.
+    if settings.PLATFORM_API_STRIPE_MODE == "live":
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "api_plan_interval_overage_price_not_configured", "interval": interval},
+        )
     config_key = plan.stripe_overage_price_config_key
-    value = str(getattr(settings, config_key, "") or "").strip() if config_key else ""
-    if not value:
+    legacy_value = str(getattr(settings, config_key, "") or "").strip() if config_key else ""
+    if not legacy_value:
         raise HTTPException(status_code=503, detail={"code": "api_plan_overage_price_not_configured"})
-    return value
+    return legacy_value
 
 
 def _subscription_public(row: PlatformApiSubscription | None, plan: PlatformApiPlan | None) -> dict:
@@ -268,7 +285,7 @@ def create_api_checkout(
     try:
         plan = _active_plan(db, payload.plan)
         price_id = _price_for(plan, payload.billing_interval)
-        overage_price_id = _overage_price_for(plan)
+        overage_price_id = _overage_price_for(plan, payload.billing_interval)
         existing = (
             db.query(PlatformApiSubscription)
             .filter(
