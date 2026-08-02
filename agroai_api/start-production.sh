@@ -17,10 +17,10 @@ do
   fi
 done
 
-# Python's sitecustomize.py enforces the same complete-live-configuration
-# contract before app.core.config is imported, including when Render invokes
-# Uvicorn directly instead of this script. Keep this shell path aligned for
-# explicit production starts and for the Stripe preflight below.
+# app/__init__.py now enforces the complete-live-configuration contract before
+# app.core.config is imported under every valid app.main:app start path. The
+# project-local sitecustomize.py and this explicit shell path remain aligned as
+# defense in depth, but package import is the authoritative Render boundary.
 #
 # The founder approved the live Developer and Scale catalog and migration 028
 # activated it in the production database. Lock that launch decision into the
