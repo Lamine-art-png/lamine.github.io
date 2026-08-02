@@ -49,22 +49,14 @@ def test_streamed_upload_path_is_registered_once():
     assert counts["/v1/evidence/upload-stream"] == 1
 
 
-def test_production_edge_owns_same_origin_app_and_platform_routes_only():
-    """Keep the deployed topology explicit and non-contradictory.
-
-    App and developer-console browser traffic uses the authenticated Cloudflare
-    Worker. The machine API hostname is the proxied Render custom domain and is
-    verified separately by exact build SHA, readiness, pricing, and webhook
-    checks. It must not be claimed as a Worker route while the production token
-    deliberately lacks DNS mutation permission.
-    """
+def test_production_edge_owns_enterprise_platform_and_machine_api_routes():
+    """Protect every route that depends on Worker-only security or AI bridges."""
 
     wrangler = Path(__file__).resolve().parents[3] / "wrangler.toml"
     text = wrangler.read_text(encoding="utf-8")
     assert 'pattern = "app.agroai-pilot.com/v1/*"' in text
     assert 'pattern = "platform.agroai-pilot.com/v1/*"' in text
-    assert 'pattern = "api.agroai-pilot.com/v1/*"' not in text
-    assert 'pattern = "api.agroai-pilot.com"' not in text
+    assert 'pattern = "api.agroai-pilot.com/v1/*"' in text
     assert 'UPSTREAM_API_ORIGIN = "https://api-preview.agroai-pilot.com"' in text
     allowed = next(line for line in text.splitlines() if line.startswith("ALLOWED_ORIGINS ="))
     assert "https://platform.agroai-pilot.com" in allowed
