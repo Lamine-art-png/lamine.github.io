@@ -1,6 +1,22 @@
 import assert from "node:assert/strict";
 import { onRequest } from "../../functions/platform-api/[[path]].ts";
 
+function htmlForAsset(pathname) {
+  const robots = '<meta name="robots" content="noindex" />';
+  const bodies = {
+    "/platform-api/index.html": `<html data-agroai-platform-page="landing"><head>${robots}<title>AGRO-AI Platform API</title></head><body>private beta</body></html>`,
+    "/platform-api/reference.html": `<html><head>${robots}<title>API reference</title></head><body>reference</body></html>`,
+    "/platform-api/changelog.html": `<html><head>${robots}<title>Changelog</title></head><body>changelog</body></html>`,
+    "/platform-api/docs/index.html": `<html data-agroai-platform-page="docs"><head>${robots}<title>Platform API docs</title></head><body>docs</body></html>`,
+    "/platform-api/docs/authentication.html": `<html><head>${robots}<title>Authentication</title></head><body>authentication</body></html>`,
+    "/platform-api/docs/pagination.html": `<html><head>${robots}<title>Pagination</title></head><body>pagination</body></html>`,
+    "/platform-api/docs/errors.html": `<html><head>${robots}<title>Errors</title></head><body>errors</body></html>`,
+    "/platform-api/docs/rate-limits.html": `<html><head>${robots}<title>Rate limits</title></head><body>rate limits</body></html>`,
+    "/platform-api/docs/support.html": `<html><head>${robots}<title>Support</title></head><body>support</body></html>`,
+  };
+  return bodies[pathname] || `<html><head>${robots}</head><body>private beta</body></html>`;
+}
+
 async function invoke(pathname, flags = {}, options = {}) {
   const fetched = [];
   const response = await onRequest({
@@ -17,11 +33,11 @@ async function invoke(pathname, flags = {}, options = {}) {
           const url = new URL(request.url);
           fetched.push(url.pathname);
           if (options.assetFailure) return new Response("missing", { status: 404 });
-          const html = '<html><head><meta name="robots" content="noindex" /></head><body>private beta</body></html>';
-          return new Response(url.pathname.endsWith(".html") ? html : "asset", {
+          const isHtml = url.pathname.endsWith(".html");
+          return new Response(isHtml ? htmlForAsset(url.pathname) : "asset", {
             status: 200,
             headers: {
-              "content-type": url.pathname.endsWith(".html") ? "text/html" : "text/plain",
+              "content-type": isHtml ? "text/html" : "text/plain",
               etag: '"private-static-representation"',
               "content-encoding": "identity",
             },
