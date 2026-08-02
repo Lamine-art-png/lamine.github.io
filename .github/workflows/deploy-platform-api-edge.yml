@@ -29,6 +29,10 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       EVIDENCE_ISSUE: "359"
       EXPECTED_EDGE_VERSION: cloudflare-edge-v1
+      CF_API: https://api.cloudflare.com/client/v4
+      ZONE_NAME: agroai-pilot.com
+      API_HOST: api.agroai-pilot.com
+      WORKER_SERVICE: agroai-api-edge
 
     steps:
       - uses: actions/checkout@v4
@@ -39,12 +43,12 @@ jobs:
           cache: npm
           cache-dependency-path: cloudflare/edge-gateway/package-lock.json
 
-      - name: Record edge deployment start
+      - name: Record edge migration start
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="Platform API edge deployment started for release \`${GITHUB_SHA}\`. Wrangler will reconcile all three production \`/v1/*\` custom-domain routes."
+            -f body="Platform API edge migration started for release \`${GITHUB_SHA}\`. The API hostname will move from the legacy origin CNAME boundary to the \`agroai-api-edge\` Worker Custom Domain with automatic rollback protection."
 
       - name: Validate exact Worker bundle
         working-directory: cloudflare/edge-gateway
@@ -59,7 +63,61 @@ jobs:
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
 
-      - name: Deploy Worker and reconcile custom-domain routes
+      - name: Back up and remove only the legacy API DNS record
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json')
+
+          curl --fail --silent --show-error "${auth[@]}" \
+            "${CF_API}/zones?name=${ZONE_NAME}&account.id=${CLOUDFLARE_ACCOUNT_ID}&status=active" \
+            -o zones.json
+          zone_id="$(jq -er '.result | map(select(.name == env.ZONE_NAME and .status == "active")) | first | .id' zones.json)"
+          echo "ZONE_ID=${zone_id}" >> "$GITHUB_ENV"
+
+          curl --fail --silent --show-error "${auth[@]}" \
+            "${CF_API}/zones/${zone_id}/dns_records?name=${API_HOST}&per_page=100" \
+            -o api-dns-backup.json
+          curl --fail --silent --show-error "${auth[@]}" \
+            "${CF_API}/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/domains" \
+            -o worker-domains-before.json
+
+          domain_owner="$(jq -r --arg host "$API_HOST" '.result[]? | select(.hostname == $host) | .service // empty' worker-domains-before.json | head -1)"
+          if [ -n "$domain_owner" ] && [ "$domain_owner" != "$WORKER_SERVICE" ]; then
+            echo "Refusing migration: ${API_HOST} is already attached to Worker service ${domain_owner}" >&2
+            exit 78
+          fi
+
+          dns_count="$(jq -r '.result | length' api-dns-backup.json)"
+          if [ "$dns_count" -gt 1 ]; then
+            echo "Refusing migration: multiple DNS records exist at ${API_HOST}" >&2
+            jq '{result:[.result[]|{id,type,name,content,proxied}]}' api-dns-backup.json
+            exit 78
+          fi
+
+          if [ "$domain_owner" = "$WORKER_SERVICE" ]; then
+            echo "API Custom Domain already belongs to ${WORKER_SERVICE}; no DNS deletion required."
+            echo "API_DNS_REMOVED=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          if [ "$dns_count" -eq 1 ]; then
+            record_id="$(jq -er '.result[0].id' api-dns-backup.json)"
+            record_type="$(jq -er '.result[0].type' api-dns-backup.json)"
+            case "$record_type" in
+              CNAME|A|AAAA) ;;
+              *) echo "Refusing migration: unsupported API DNS type ${record_type}" >&2; exit 78 ;;
+            esac
+            curl --fail --silent --show-error "${auth[@]}" -X DELETE \
+              "${CF_API}/zones/${zone_id}/dns_records/${record_id}" \
+              -o dns-delete-result.json
+            jq -e '.success == true' dns-delete-result.json >/dev/null
+            echo "API_DNS_REMOVED=true" >> "$GITHUB_ENV"
+          else
+            echo "API_DNS_REMOVED=false" >> "$GITHUB_ENV"
+          fi
+
+      - name: Deploy Worker and establish the API Custom Domain
         working-directory: cloudflare/edge-gateway
         run: |
           set -euo pipefail
@@ -72,7 +130,7 @@ jobs:
           : > edge-hosts.jsonl
           for host in api.agroai-pilot.com platform.agroai-pilot.com app.agroai-pilot.com; do
             ready=0
-            for attempt in $(seq 1 60); do
+            for attempt in $(seq 1 100); do
               status="$(curl --silent --show-error --max-time 25 -D headers.txt -o body.json -w '%{http_code}' \
                 "https://${host}/v1/edge-health" || true)"
               marker="$(tr -d '\r' < headers.txt | sed -n 's/^x-agroai-edge:[[:space:]]*//Ip' | head -1)"
@@ -146,13 +204,71 @@ jobs:
           test "$status" = "400"
           test "$marker" = "$EXPECTED_EDGE_VERSION"
 
+      - name: Prove API Custom Domain ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H 'Content-Type: application/json' \
+            "${CF_API}/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/domains" \
+            -o worker-domains-after.json
+          jq -e --arg host "$API_HOST" --arg service "$WORKER_SERVICE" \
+            '.result[] | select(.hostname == $host and .service == $service)' \
+            worker-domains-after.json >/dev/null
+
+      - name: Roll back the legacy DNS only if the API Custom Domain is not healthy
+        if: failure()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          status="$(curl --silent --show-error --max-time 20 -D rollback-probe.headers -o rollback-probe.body -w '%{http_code}' \
+            "https://${API_HOST}/v1/edge-health" || true)"
+          marker="$(tr -d '\r' < rollback-probe.headers | sed -n 's/^x-agroai-edge:[[:space:]]*//Ip' | head -1)"
+          if [ "$status" = "200" ] && [ "$marker" = "$EXPECTED_EDGE_VERSION" ]; then
+            echo "API Custom Domain is healthy; preserving it despite a later proof failure."
+            exit 0
+          fi
+
+          if [ "${API_DNS_REMOVED:-false}" != "true" ] || [ ! -s api-dns-backup.json ]; then
+            echo "No legacy DNS record was removed; nothing to restore."
+            exit 0
+          fi
+
+          auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json')
+          curl --silent --show-error "${auth[@]}" \
+            "${CF_API}/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/domains" \
+            -o rollback-domains.json
+          domain_id="$(jq -r --arg host "$API_HOST" --arg service "$WORKER_SERVICE" \
+            '.result[]? | select(.hostname == $host and .service == $service) | .id // empty' \
+            rollback-domains.json | head -1)"
+          if [ -n "$domain_id" ]; then
+            curl --fail --silent --show-error "${auth[@]}" -X DELETE \
+              "${CF_API}/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/domains/${domain_id}" \
+              -o rollback-domain-delete.json
+          fi
+
+          current_count="$(curl --fail --silent --show-error "${auth[@]}" \
+            "${CF_API}/zones/${ZONE_ID}/dns_records?name=${API_HOST}&per_page=100" | jq -r '.result | length')"
+          if [ "$current_count" -eq 0 ]; then
+            jq '.result[0] | {type,name,content,ttl,proxied,comment} | with_entries(select(.value != null))' \
+              api-dns-backup.json > rollback-dns-payload.json
+            curl --fail --silent --show-error "${auth[@]}" -X POST \
+              --data @rollback-dns-payload.json \
+              "${CF_API}/zones/${ZONE_ID}/dns_records" \
+              -o rollback-dns-create.json
+            jq -e '.success == true' rollback-dns-create.json >/dev/null
+            echo "Legacy API DNS record restored after failed migration."
+          fi
+
       - name: Record edge deployment success
         if: success()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="✅ **Platform API production edge GREEN**\n\n- edge release: \`${GITHUB_SHA}\`\n- Worker deployed from the canonical \`wrangler.toml\`\n- \`api.agroai-pilot.com/v1/*\`: green\n- \`platform.agroai-pilot.com/v1/*\`: green\n- \`app.agroai-pilot.com/v1/*\`: green\n- Developer and Scale pricing returned correctly on all three hosts\n- Stripe webhook route reached the backend and rejected an unsigned request with HTTP 400"
+            -f body="✅ **Platform API production edge GREEN**\n\n- edge release: \`${GITHUB_SHA}\`\n- \`api.agroai-pilot.com\` is owned by the \`agroai-api-edge\` Worker Custom Domain\n- \`api.agroai-pilot.com/v1/*\`: green\n- \`platform.agroai-pilot.com/v1/*\`: green\n- \`app.agroai-pilot.com/v1/*\`: green\n- Developer and Scale pricing returned correctly on all three hosts\n- Stripe webhook reached the backend and rejected an unsigned request with HTTP 400\n- legacy direct-to-Render API routing is removed"
 
       - name: Record edge deployment failure
         if: failure()
@@ -160,13 +276,18 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="❌ Platform API edge deployment/proof failed for release \`${GITHUB_SHA}\`. Review Actions run \`${GITHUB_RUN_ID}\`; public billing must remain unconfirmed until this deployment passes."
+            -f body="❌ Platform API API-host Custom Domain migration/proof failed for release \`${GITHUB_SHA}\`. Automatic rollback protection ran. Review Actions run \`${GITHUB_RUN_ID}\`; public billing remains unconfirmed until the proof passes."
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: platform-api-edge-proof-${{ github.sha }}
           path: |
+            zones.json
+            api-dns-backup.json
+            worker-domains-before.json
+            worker-domains-after.json
+            dns-delete-result.json
             edge-hosts.jsonl
             pricing-hosts.jsonl
             headers.txt
@@ -174,5 +295,11 @@ jobs:
             pricing.json
             webhook-headers.txt
             webhook-body.json
+            rollback-probe.headers
+            rollback-probe.body
+            rollback-domains.json
+            rollback-domain-delete.json
+            rollback-dns-payload.json
+            rollback-dns-create.json
           if-no-files-found: ignore
           retention-days: 30
