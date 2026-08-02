@@ -18,12 +18,18 @@ required = [ "QUEUE_PUBLISH_TOKEN", "QUEUE_CONSUMER_TOKEN" ]
 pattern = "app.agroai-pilot.com/v1/*"
 zone_name = "agroai-pilot.com"
 
-# The standalone developer product uses the same authenticated backend through
-# a same-origin Worker route. The public machine hostname remains the proxied
-# Render custom domain because the production Cloudflare token deliberately has
-# no DNS mutation permission.
+# The standalone developer product shares the same authenticated backend and
+# production edge. This same-origin route also keeps a future relative /v1
+# client configuration possible without creating a second API deployment.
 [[routes]]
 pattern = "platform.agroai-pilot.com/v1/*"
+zone_name = "agroai-pilot.com"
+
+# Keep the machine API route in the canonical Worker contract. It is required
+# by the protected Field Intelligence Workers AI bridges and by signed
+# authoritative client-IP forwarding for CIDR-bound Platform API keys.
+[[routes]]
+pattern = "api.agroai-pilot.com/v1/*"
 zone_name = "agroai-pilot.com"
 
 [[queues.producers]]
