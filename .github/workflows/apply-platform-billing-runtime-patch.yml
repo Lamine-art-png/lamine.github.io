@@ -1,0 +1,52 @@
+name: Apply Platform Billing Runtime Patch
+
+on:
+  push:
+    branches:
+      - fix/platform-billing-runtime-diagnostics-and-retry
+    paths:
+      - .github/scripts/apply_platform_billing_runtime_patch.py
+      - .github/workflows/apply-platform-billing-runtime-patch.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/platform-billing-runtime-diagnostics-and-retry
+          fetch-depth: 0
+
+      - name: Apply deterministic source patch
+        run: python .github/scripts/apply_platform_billing_runtime_patch.py
+
+      - name: Validate patched Python and workflow
+        run: |
+          python -m py_compile \
+            agroai_api/app/billing_bootstrap.py \
+            agroai_api/app/api/v1/platform_billing.py \
+            .github/scripts/apply_platform_billing_runtime_patch.py
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          yaml.safe_load(Path('.github/workflows/platform-api-billing-deep-production-verification.yml').read_text())
+          PY
+
+      - name: Commit patched production files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add \
+            agroai_api/app/api/v1/platform_billing.py \
+            .github/workflows/platform-api-billing-deep-production-verification.yml
+          if git diff --cached --quiet; then
+            echo "Patch already applied"
+            exit 0
+          fi
+          git commit -m "Add safe billing readiness and Checkout retry recovery"
+          git push origin HEAD:fix/platform-billing-runtime-diagnostics-and-retry
