@@ -1,0 +1,181 @@
+name: Diagnose Platform API Cloudflare Routing
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/diagnose-platform-api-cloudflare-routing.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: platform-api-cloudflare-routing-diagnostic
+  cancel-in-progress: true
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      EVIDENCE_ISSUE: "359"
+      API_HOST: api.agroai-pilot.com
+      PLATFORM_HOST: platform.agroai-pilot.com
+      APP_HOST: app.agroai-pilot.com
+      ZONE_NAME: agroai-pilot.com
+      CF_API: https://api.cloudflare.com/client/v4
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fail closed on missing Cloudflare credentials
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+
+      - name: Inspect live Cloudflare DNS, Worker routes, and Worker domains
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth=(-H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" -H 'Content-Type: application/json')
+
+          curl --fail --silent --show-error "${auth[@]}" \
+            "${CF_API}/zones?name=${ZONE_NAME}&account.id=${CLOUDFLARE_ACCOUNT_ID}&status=active" \
+            -o zones.raw.json
+          zone_id="$(jq -er '.result | map(select(.name == env.ZONE_NAME and .status == "active")) | first | .id' zones.raw.json)"
+          echo "ZONE_ID=${zone_id}" >> "$GITHUB_ENV"
+
+          curl --fail --silent --show-error "${auth[@]}" \
+            "${CF_API}/zones/${zone_id}/workers/routes" -o routes.raw.json
+          curl --fail --silent --show-error "${auth[@]}" \
+            "${CF_API}/zones/${zone_id}/dns_records?name=${API_HOST}&per_page=100" -o api-dns.raw.json
+          curl --fail --silent --show-error "${auth[@]}" \
+            "${CF_API}/zones/${zone_id}/dns_records?name=${PLATFORM_HOST}&per_page=100" -o platform-dns.raw.json
+          curl --fail --silent --show-error "${auth[@]}" \
+            "${CF_API}/zones/${zone_id}/dns_records?name=${APP_HOST}&per_page=100" -o app-dns.raw.json
+
+          # The Worker custom-domain endpoint may not be included in every token.
+          # Preserve the response without making the diagnostic itself depend on it.
+          curl --silent --show-error "${auth[@]}" \
+            "${CF_API}/accounts/${CLOUDFLARE_ACCOUNT_ID}/workers/domains" \
+            -o worker-domains.raw.json || printf '{"success":false,"result":[]}' > worker-domains.raw.json
+
+          jq '{success, result: [.result[] | {id, pattern, script}]}' routes.raw.json > routes.safe.json
+          jq '{success, result: [.result[] | {id, type, name, content, proxied, ttl}]}' api-dns.raw.json > api-dns.safe.json
+          jq '{success, result: [.result[] | {id, type, name, content, proxied, ttl}]}' platform-dns.raw.json > platform-dns.safe.json
+          jq '{success, result: [.result[] | {id, type, name, content, proxied, ttl}]}' app-dns.raw.json > app-dns.safe.json
+          jq '{success, result: [(.result // [])[] | {id, hostname, service, zone_id, environment}]}' worker-domains.raw.json > worker-domains.safe.json 2>/dev/null \
+            || printf '{"success":false,"result":[]}' > worker-domains.safe.json
+
+      - name: Probe every public and origin route
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > probes.jsonl
+          for host in "${API_HOST}" "${PLATFORM_HOST}" "${APP_HOST}" api-preview.agroai-pilot.com; do
+            for path in /v1/edge-health /v1/health /v1/platform/health /v1/platform/pricing; do
+              safe_name="$(printf '%s%s' "$host" "$path" | tr '/.' '__')"
+              status="$(curl --silent --show-error --max-time 35 -D "${safe_name}.headers" -o "${safe_name}.body" -w '%{http_code}' \
+                "https://${host}${path}" || true)"
+              edge="$(tr -d '\r' < "${safe_name}.headers" | sed -n 's/^x-agroai-edge:[[:space:]]*//Ip' | head -1)"
+              runtime="$(tr -d '\r' < "${safe_name}.headers" | sed -n 's/^x-agroai-runtime:[[:space:]]*//Ip' | head -1)"
+              render="$(tr -d '\r' < "${safe_name}.headers" | sed -n 's/^x-render-origin-server:[[:space:]]*//Ip' | head -1)"
+              build_sha="$(jq -r '.build_sha // empty' "${safe_name}.body" 2>/dev/null || true)"
+              service="$(jq -r '.service // empty' "${safe_name}.body" 2>/dev/null || true)"
+              jq -nc \
+                --arg host "$host" --arg path "$path" --arg status "$status" \
+                --arg edge "$edge" --arg runtime "$runtime" --arg render "$render" \
+                --arg build_sha "$build_sha" --arg service "$service" \
+                '{host:$host,path:$path,http_status:$status,edge_version:($edge//""),runtime:($runtime//""),render_origin:($render//""),build_sha:($build_sha//""),service:($service//"")}' \
+                >> probes.jsonl
+            done
+          done
+
+      - name: Classify routing state
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          api_host = os.environ["API_HOST"]
+          routes = json.load(open("routes.safe.json", encoding="utf-8")).get("result", [])
+          dns = json.load(open("api-dns.safe.json", encoding="utf-8")).get("result", [])
+          domains = json.load(open("worker-domains.safe.json", encoding="utf-8")).get("result", [])
+          probes = [json.loads(line) for line in Path("probes.jsonl").read_text(encoding="utf-8").splitlines() if line.strip()]
+
+          desired_pattern = f"{api_host}/v1/*"
+          exact_routes = [row for row in routes if row.get("pattern") == desired_pattern]
+          api_routes = [row for row in routes if api_host in str(row.get("pattern") or "")]
+          api_dns = [row for row in dns if row.get("name") == api_host]
+          api_domains = [row for row in domains if row.get("hostname") == api_host]
+          edge_health = next((row for row in probes if row["host"] == api_host and row["path"] == "/v1/edge-health"), {})
+          pricing = next((row for row in probes if row["host"] == api_host and row["path"] == "/v1/platform/pricing"), {})
+
+          classification = "unknown"
+          if not exact_routes:
+              classification = "missing_worker_route"
+          elif any(not row.get("proxied") for row in api_dns):
+              classification = "dns_not_proxied"
+          elif edge_health.get("edge_version") == "cloudflare-edge-v1" and pricing.get("http_status") == "200":
+              classification = "healthy"
+          elif edge_health.get("render_origin") or edge_health.get("runtime"):
+              classification = "worker_route_bypassed_to_render"
+          elif api_domains:
+              classification = "custom_domain_present_but_unhealthy"
+          else:
+              classification = "route_registered_but_not_executing"
+
+          result = {
+              "classification": classification,
+              "desired_route_count": len(exact_routes),
+              "api_route_count": len(api_routes),
+              "api_dns_count": len(api_dns),
+              "api_dns_types": sorted({str(row.get("type") or "") for row in api_dns}),
+              "api_dns_all_proxied": bool(api_dns) and all(bool(row.get("proxied")) for row in api_dns),
+              "api_worker_custom_domain_count": len(api_domains),
+              "edge_health_status": edge_health.get("http_status"),
+              "edge_header": edge_health.get("edge_version"),
+              "backend_runtime_header": edge_health.get("runtime"),
+              "render_origin_header": edge_health.get("render_origin"),
+              "pricing_status": pricing.get("http_status"),
+          }
+          Path("classification.json").write_text(json.dumps(result, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          print(json.dumps(result, sort_keys=True))
+          PY
+
+      - name: Record sanitized routing diagnosis
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          classification="$(jq -r '.classification // "diagnostic_failed"' classification.json 2>/dev/null || echo diagnostic_failed)"
+          route_count="$(jq -r '.desired_route_count // 0' classification.json 2>/dev/null || echo 0)"
+          proxied="$(jq -r '.api_dns_all_proxied // false' classification.json 2>/dev/null || echo false)"
+          edge_status="$(jq -r '.edge_health_status // "unknown"' classification.json 2>/dev/null || echo unknown)"
+          pricing_status="$(jq -r '.pricing_status // "unknown"' classification.json 2>/dev/null || echo unknown)"
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
+            -f body="🔎 **Platform API Cloudflare routing diagnosis**\n\n- classification: \`${classification}\`\n- exact \`api.agroai-pilot.com/v1/*\` Worker routes: \`${route_count}\`\n- API DNS proxied: \`${proxied}\`\n- API edge-health HTTP: \`${edge_status}\`\n- API public pricing HTTP: \`${pricing_status}\`\n- diagnostic release: \`${GITHUB_SHA}\`\n\nSanitized DNS, Worker-route, Worker-domain, and host-probe evidence is attached to Actions run \`${GITHUB_RUN_ID}\`."
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: platform-api-cloudflare-routing-diagnostic-${{ github.sha }}
+          path: |
+            routes.safe.json
+            api-dns.safe.json
+            platform-dns.safe.json
+            app-dns.safe.json
+            worker-domains.safe.json
+            probes.jsonl
+            classification.json
+          if-no-files-found: error
+          retention-days: 30
