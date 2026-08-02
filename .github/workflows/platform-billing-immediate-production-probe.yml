@@ -1,5 +1,6 @@
 name: Platform Billing Immediate Production Probe
 
+# Forced production probe generation: 2
 on:
   push:
     branches:
