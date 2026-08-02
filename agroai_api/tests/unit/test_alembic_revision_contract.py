@@ -54,6 +54,7 @@ def test_account_verification_platform_api_and_appeal_revisions_form_one_linear_
         "025_platform_api_commerce": "024_platform_api_programs",
         "026_platform_api_operations": "025_platform_api_commerce",
         "027_field_intelligence_launch": "026_platform_api_operations",
+        "028_platform_api_live_catalog": "027_field_intelligence_launch",
     }
     actual_tail = {}
 
