@@ -1,0 +1,85 @@
+name: Verify portal auth deployment
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    if: github.head_ref == 'diag/verify-auth-deploy-20260802'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      EXPECTED_BUILD_SHA: 06389617875d781bd51b3db0a5c4650748262484
+      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
+    steps:
+      - name: Verify deployed release and auth routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/agroai-auth-proof
+
+          release_probe() {
+            local name="$1"
+            local base="$2"
+            local body="/tmp/agroai-auth-proof/${name}.json"
+            local timing
+            timing="$(curl -sS -o "$body" \
+              --connect-timeout 15 --max-time 60 \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+              -w 'http=%{http_code} dns=%{time_namelookup} connect=%{time_connect} tls=%{time_appconnect} ttfb=%{time_starttransfer} total=%{time_total}' \
+              "${base}/v1/internal/release/health")"
+            echo "${name}_timing ${timing}"
+            jq '{status,contract,build_sha,schema_current,production_ready,production_blocker_codes}' "$body"
+            jq -e --arg expected "$EXPECTED_BUILD_SHA" '
+              .status == "ok" and
+              .build_sha == $expected and
+              .schema_current == true and
+              .production_ready == true and
+              (.production_blocker_codes | length == 0)
+            ' "$body" >/dev/null
+          }
+
+          release_probe custom_upstream https://api-preview.agroai-pilot.com
+          release_probe direct_render https://agroai-api-preview.onrender.com
+
+          echo 'public_health'
+          curl -sS -o /tmp/agroai-auth-proof/public-health.json \
+            --connect-timeout 15 --max-time 60 \
+            -w 'http=%{http_code} dns=%{time_namelookup} connect=%{time_connect} tls=%{time_appconnect} ttfb=%{time_starttransfer} total=%{time_total}\n' \
+            https://api.agroai-pilot.com/v1/health
+          jq . /tmp/agroai-auth-proof/public-health.json
+
+          echo 'portal_root'
+          curl -sS -L -o /tmp/agroai-auth-proof/portal.html \
+            --connect-timeout 15 --max-time 60 \
+            -w 'http=%{http_code} dns=%{time_namelookup} connect=%{time_connect} tls=%{time_appconnect} ttfb=%{time_starttransfer} total=%{time_total} bytes=%{size_download}\n' \
+            https://app.agroai-pilot.com/
+          grep -q 'AGRO-AI' /tmp/agroai-auth-proof/portal.html
+
+          echo 'auth_preflight'
+          curl -sS -o /tmp/agroai-auth-proof/preflight.txt -X OPTIONS \
+            --connect-timeout 15 --max-time 60 \
+            -H 'Origin: https://app.agroai-pilot.com' \
+            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Headers: content-type' \
+            -w 'http=%{http_code} dns=%{time_namelookup} connect=%{time_connect} tls=%{time_appconnect} ttfb=%{time_starttransfer} total=%{time_total}\n' \
+            https://api.agroai-pilot.com/v1/auth/login
+
+          echo 'invalid_auth_db_path_sequential'
+          payload='{"email":"deployment-proof-20260802@agroai-pilot.com","password":"NotARealPassword-20260802"}'
+          for i in 1 2 3 4 5; do
+            curl -sS -o "/tmp/agroai-auth-proof/login-${i}.json" -X POST \
+              --connect-timeout 15 --max-time 60 \
+              -H 'Origin: https://app.agroai-pilot.com' \
+              -H 'Content-Type: application/json' \
+              --data "$payload" \
+              -w "run=${i} http=%{http_code} dns=%{time_namelookup} connect=%{time_connect} tls=%{time_appconnect} ttfb=%{time_starttransfer} total=%{time_total}\n" \
+              https://api.agroai-pilot.com/v1/auth/login
+            sleep 1
+          done
