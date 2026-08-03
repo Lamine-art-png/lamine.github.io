@@ -24,13 +24,15 @@ text = replace_once(
     "    user = (\n"
     "        db.query(User)\n"
     "        .options(\n"
-    "            joinedload(User.memberships).joinedload(OrganizationMembership.organization)\n"
+    "            joinedload(User.memberships)\n"
+    "            .joinedload(OrganizationMembership.organization)\n"
+    "            .joinedload(Organization.verification_profile)\n"
     "        )\n"
     "        .filter(User.email == email)\n"
     "        .first()\n"
     "    )\n"
     "    membership = (\n"
-    "        min(user.memberships, key=lambda item: item.created_at)\n"
+    "        min(user.memberships, key=lambda item: item.created_at or datetime.min)\n"
     "        if user and user.memberships\n"
     "        else None\n"
     "    )\n"
@@ -73,6 +75,73 @@ text = replace_once(
     "def me(ctx: AuthContext = Depends(get_auth_context)) -> dict:\n",
 )
 auth_path.write_text(text)
+
+
+deps_path = Path("agroai_api/app/api/deps.py")
+deps = deps_path.read_text()
+deps = replace_once(
+    deps,
+    "from sqlalchemy.orm import Session\n",
+    "from sqlalchemy.orm import Session, joinedload\n",
+)
+deps = replace_once(
+    deps,
+    "def _assert_token_organization_access(payload: dict, user: User, db: Session) -> None:\n"
+    "    org_id = payload.get(\"org_id\") or payload.get(\"tenant_id\")\n"
+    "    if not org_id:\n"
+    "        return\n"
+    "    membership = (\n"
+    "        db.query(OrganizationMembership)\n"
+    "        .filter(OrganizationMembership.organization_id == str(org_id), OrganizationMembership.user_id == user.id)\n"
+    "        .first()\n"
+    "    )\n",
+    "def _assert_token_organization_access(payload: dict, user: User, _db: Session) -> None:\n"
+    "    org_id = payload.get(\"org_id\") or payload.get(\"tenant_id\")\n"
+    "    if not org_id:\n"
+    "        return\n"
+    "    membership = next(\n"
+    "        (item for item in user.memberships if item.organization_id == str(org_id)),\n"
+    "        None,\n"
+    "    )\n",
+)
+deps = replace_once(
+    deps,
+    "    user = db.get(User, user_id)\n",
+    "    user = (\n"
+    "        db.query(User)\n"
+    "        .options(\n"
+    "            joinedload(User.memberships)\n"
+    "            .joinedload(OrganizationMembership.organization)\n"
+    "            .joinedload(Organization.verification_profile)\n"
+    "        )\n"
+    "        .filter(User.id == user_id)\n"
+    "        .first()\n"
+    "    )\n",
+)
+deps = replace_once(
+    deps,
+    "def get_auth_context(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> AuthContext:\n"
+    "    require_verified_user(user)\n"
+    "    membership = (\n"
+    "        db.query(OrganizationMembership)\n"
+    "        .filter(\n"
+    "            OrganizationMembership.user_id == user.id,\n"
+    "            OrganizationMembership.status == \"active\",\n"
+    "        )\n"
+    "        .order_by(OrganizationMembership.created_at.asc())\n"
+    "        .first()\n"
+    "    )\n",
+    "def get_auth_context(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> AuthContext:\n"
+    "    require_verified_user(user)\n"
+    "    active_memberships = [item for item in user.memberships if item.status == \"active\"]\n"
+    "    membership = (\n"
+    "        min(active_memberships, key=lambda item: item.created_at or datetime.min)\n"
+    "        if active_memberships\n"
+    "        else None\n"
+    "    )\n",
+)
+deps_path.write_text(deps)
+
 
 test_path = Path("agroai_api/tests/unit/test_auth_hot_path.py")
 test_path.write_text(
