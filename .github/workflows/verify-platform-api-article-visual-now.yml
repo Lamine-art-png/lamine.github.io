@@ -1,0 +1,121 @@
+name: Verify Platform API Article Visual Now
+
+on:
+  issues:
+    types: [opened, reopened]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: verify-platform-api-article-visual-now
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Prove article font and cover containment now
+    if: ${{ github.event.issue.user.login == github.repository_owner && github.event.issue.title == '[ops] Verify Platform API article visual fix' }}
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Chromium harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright@1.54.1
+          npx playwright install --with-deps chromium
+
+      - name: Measure live typography and cover geometry
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > /tmp/verify.mjs <<'JS'
+          import { chromium } from 'playwright';
+
+          const browser = await chromium.launch({ headless: true });
+          const context = await browser.newContext({ viewport: { width: 1536, height: 1100 } });
+          try {
+            const article = await context.newPage();
+            const articleResponse = await article.goto('https://agroai-pilot.com/news/agro-ai-platform-api-launch', { waitUntil: 'networkidle', timeout: 45000 });
+            await article.evaluate(() => document.fonts.ready);
+            const typography = await article.evaluate(() => {
+              const h1 = document.querySelector('h1');
+              const dek = document.querySelector('.dek');
+              return {
+                body: getComputedStyle(document.body).fontFamily,
+                h1: h1 ? getComputedStyle(h1).fontFamily : '',
+                h1Weight: h1 ? getComputedStyle(h1).fontWeight : '',
+                dek: dek ? getComputedStyle(dek).fontFamily : '',
+                regularLoaded: document.fonts.check('16px "Glacial Indifference"'),
+                boldLoaded: document.fonts.check('700 16px "Glacial Indifference"'),
+                hero: h1?.textContent?.trim() || '',
+                notFound: document.body.innerText.includes('Article not found'),
+              };
+            });
+
+            if (
+              articleResponse?.status() !== 200 ||
+              typography.hero !== 'Build agricultural products on the AGRO-AI intelligence layer.' ||
+              typography.notFound ||
+              !typography.regularLoaded ||
+              !typography.boldLoaded ||
+              !typography.body.includes('Glacial Indifference') ||
+              !typography.h1.includes('Glacial Indifference') ||
+              !typography.dek.includes('Glacial Indifference') ||
+              typography.h1Weight !== '700'
+            ) throw new Error(`Typography proof failed: ${JSON.stringify(typography)}`);
+
+            const cover = await context.newPage();
+            const coverResponse = await cover.goto('https://agroai-pilot.com/news/agro-ai-platform-api-launch/cover.svg', { waitUntil: 'networkidle', timeout: 45000 });
+            const geometry = await cover.evaluate(() => {
+              const label = [...document.querySelectorAll('text')].find((node) => node.textContent?.trim() === 'FIELDS · DATA · INTELLIGENCE');
+              const pill = [...document.querySelectorAll('rect')].find((node) => node.getAttribute('fill')?.toLowerCase() === '#d7ff63');
+              if (!label || !pill) return null;
+              const text = label.getBBox();
+              const box = pill.getBBox();
+              const margins = {
+                left: text.x - box.x,
+                right: box.x + box.width - text.x - text.width,
+                top: text.y - box.y,
+                bottom: box.y + box.height - text.y - text.height,
+              };
+              return {
+                text: { x: text.x, y: text.y, width: text.width, height: text.height },
+                pill: { x: box.x, y: box.y, width: box.width, height: box.height },
+                margins,
+                centered: Math.abs(text.x + text.width / 2 - (box.x + box.width / 2)) <= 2,
+                contained: margins.left >= 20 && margins.right >= 20 && margins.top >= 8 && margins.bottom >= 8,
+              };
+            });
+
+            if (coverResponse?.status() !== 200 || !geometry?.centered || !geometry?.contained) {
+              throw new Error(`Cover geometry proof failed: ${JSON.stringify(geometry)}`);
+            }
+
+            console.log(JSON.stringify({ typography, geometry }, null, 2));
+          } finally {
+            await browser.close();
+          }
+          JS
+          node /tmp/verify.mjs
+
+      - name: Report verified fix
+        shell: bash
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body $'✅ **Platform API article visual fix verified in Chromium.**\n\n- Glacial Indifference is loaded and applied to the body, hero heading, and article description.\n- The hero uses the supported 700 weight.\n- “FIELDS · DATA · INTELLIGENCE” is centered and fully contained inside the lime pill.\n- The live article and cover both returned HTTP 200.'
+
+      - name: Report failure
+        if: ${{ failure() }}
+        shell: bash
+        run: gh issue comment "$ISSUE_NUMBER" --body '❌ Platform API article visual verification failed. Review the workflow logs before calling the formatting fix complete.'
