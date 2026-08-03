@@ -47,7 +47,7 @@ jobs:
         id: audit
         shell: bash
         run: |
-          set -uo pipefail
+          set +e
           npm audit --omit=dev --json > audit-production.json
           production_exit=$?
           npm audit --json > audit-complete.json
