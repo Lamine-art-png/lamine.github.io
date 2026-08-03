@@ -19,9 +19,11 @@ async function fillForm(form, marker) {
     if (await field.isDisabled().catch(() => true)) continue;
 
     const name = (await field.getAttribute("name")) || "";
+    const id = (await field.getAttribute("id")) || "";
+    const key = name || id;
     const type = ((await field.getAttribute("type")) || "").toLowerCase();
     const tag = await field.evaluate((node) => node.tagName.toLowerCase());
-    if (!name || ["hidden", "button", "submit", "reset"].includes(type)) continue;
+    if (!key || ["hidden", "button", "submit", "reset"].includes(type)) continue;
 
     if (type === "file") {
       await field.setInputFiles(resumePath);
@@ -29,8 +31,9 @@ async function fillForm(form, marker) {
     }
 
     if (type === "radio") {
-      if (!radioGroups.has(name)) {
-        radioGroups.add(name);
+      const group = name || id;
+      if (!radioGroups.has(group)) {
+        radioGroups.add(group);
         await field.check().catch(() => {});
       }
       continue;
@@ -51,7 +54,7 @@ async function fillForm(form, marker) {
       continue;
     }
 
-    const lower = name.toLowerCase();
+    const lower = key.toLowerCase();
     let text = marker;
     if (type === "email" || lower.includes("email")) text = proofEmail;
     else if (type === "tel" || lower.includes("phone")) text = "4155550100";
@@ -65,6 +68,8 @@ async function fillForm(form, marker) {
       lower.includes("firstname")
     ) {
       text = "AGRO-AI production browser verification";
+    } else if (lower.includes("company") || lower.includes("farmname")) {
+      text = "AGRO-AI Inc.";
     } else if (lower.includes("location") || lower.includes("city")) {
       text = "San Francisco, California";
     } else if (lower.includes("linkedin")) {
@@ -247,6 +252,10 @@ async function verifyDemo() {
     noValidate: node.noValidate,
     valid: node.checkValidity(),
     fieldCount: node.querySelectorAll("input,textarea,select").length,
+    values: Array.from(node.querySelectorAll("input,textarea,select")).map((field) => ({
+      key: field.name || field.id || "",
+      value: field.value || "",
+    })),
     submitText: Array.from(node.querySelectorAll('button,input[type="submit"]'))
       .map((control) => (control.textContent || control.value || "").trim())
       .join(" | "),
