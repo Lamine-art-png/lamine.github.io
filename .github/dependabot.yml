@@ -1,0 +1,38 @@
+version: 2
+updates:
+  - package-ecosystem: pip
+    directory: /agroai_api
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels: [dependencies, security]
+  - package-ecosystem: pip
+    directory: /sdk/python
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, sdk]
+  - package-ecosystem: npm
+    directory: /figma-enterprise-v4
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels: [dependencies, portal]
+  - package-ecosystem: npm
+    directory: /cloudflare/edge-gateway
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels: [dependencies, edge]
+  - package-ecosystem: npm
+    directory: /sdk/typescript
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    labels: [dependencies, sdk]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    labels: [dependencies, ci]
