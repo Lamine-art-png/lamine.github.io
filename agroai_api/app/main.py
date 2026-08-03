@@ -157,7 +157,14 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["Authorization", "Content-Type", "Accept", "X-API-Key", "Idempotency-Key"],
-    expose_headers=["x-agroai-runtime", "x-agroai-error"],
+    expose_headers=[
+        "x-agroai-runtime",
+        "X-Request-Id",
+        "RateLimit-Limit",
+        "RateLimit-Remaining",
+        "RateLimit-Reset",
+        "Retry-After",
+    ],
 )
 
 
@@ -186,7 +193,13 @@ async def security_response_headers(request: Request, call_next):
     response.headers.setdefault("Content-Security-Policy", "default-src 'none'; frame-ancestors 'none'; base-uri 'none'")
     if str(getattr(settings, "APP_ENV", "development") or "development").lower() in {"production", "prod"}:
         response.headers.setdefault("Strict-Transport-Security", "max-age=63072000; includeSubDomains; preload")
-    if request.url.path.startswith("/v1/auth/") or request.url.path.startswith("/v1/account/"):
+    sensitive_prefixes = ("/v1/auth/", "/v1/account/", "/v1/platform/", "/v1/admin/")
+    sensitive_exact_paths = {
+        "/v1/readiness",
+        "/v1/runtime/ai-status",
+        "/v1/auth/email-delivery/status",
+    }
+    if request.url.path.startswith(sensitive_prefixes) or request.url.path in sensitive_exact_paths:
         response.headers.setdefault("Cache-Control", "no-store, max-age=0")
         response.headers.setdefault("Pragma", "no-cache")
     return response
@@ -227,17 +240,18 @@ async def runtime_error_boundary(request: Request, call_next):
         request.state.billing_operation_id = new_billing_operation_id()
     try:
         response = await call_next(request)
-    except Exception as exc:  # pragma: no cover
+    except Exception:  # pragma: no cover
         logger.exception("Unhandled API error path=%s", request.url.path)
+        request_id = str(getattr(request.state, "request_id", "") or "")
         payload = {
             "status": "error",
             "error": "backend_runtime_error",
-            "path": request.url.path,
-            "reason": exc.__class__.__name__,
+            "request_id": request_id,
             "checked_at": datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z",
         }
         response = JSONResponse(payload, status_code=500)
-        response.headers["x-agroai-error"] = exc.__class__.__name__
+        response.headers["Cache-Control"] = "no-store, max-age=0"
+        response.headers["Pragma"] = "no-cache"
         return _add_runtime_cors_headers(response, origin)
     if origin and _origin_allowed(origin):
         response.headers.setdefault("Access-Control-Allow-Origin", origin)
@@ -344,8 +358,13 @@ async def readiness_v1() -> Dict[str, Any]:
         "status": "ready" if report.ready and schema_status["ready"] else "not_ready",
         "service": "agroai-api",
         "version": VERSION,
-        "schema": schema_status,
-        "production": report.to_dict(),
+        "schema": {"ready": bool(schema_status["ready"])},
+        "production": {
+            "ready": bool(report.ready),
+            "target_scale": report.target_scale,
+            "blocker_count": len(report.blockers),
+            "warning_count": len(report.warnings),
+        },
         "checked_at": datetime.datetime.utcnow().isoformat(timespec="seconds") + "Z",
     }
 
@@ -366,17 +385,11 @@ async def ai_runtime_status() -> Dict[str, Any]:
 
     router = ModelRouter()
     status_payload = router.status()
+    configured = bool(status_payload.get("configured"))
     return {
-        "status": "ok",
+        "status": "ok" if configured else "degraded",
         "runtime": VERSION,
-        "configured": status_payload.get("configured"),
-        "provider": status_payload.get("provider"),
-        "mode": status_payload.get("mode"),
-        "base_url_present": status_payload.get("base_url_present"),
-        "selected_model": status_payload.get("model"),
-        "missing_env": status_payload.get("missing_env", []),
-        "fallback_active": status_payload.get("fallback_active"),
-        "profiles": status_payload.get("profiles", {}),
+        "configured": configured,
         "checked_at": datetime.datetime.utcnow().isoformat() + "Z",
     }
 
@@ -386,17 +399,10 @@ async def email_delivery_runtime_status() -> Dict[str, Any]:
     from app.services.email_delivery import delivery_status
 
     current = delivery_status()
+    configured = bool(current.get("configured"))
     return {
-        "configured": current.get("configured"),
-        "provider": current.get("provider"),
-        "missing_env": current.get("missing_env", []),
-        "from_email_configured": current.get("from_email_configured"),
-        "from_email_domain": current.get("from_email_domain"),
-        "resend_configured": current.get("resend_configured"),
-        "sendgrid_configured": current.get("sendgrid_configured"),
-        "smtp_configured": current.get("smtp_configured"),
-        "resend_app_url_configured": current.get("resend_app_url_configured"),
-        "verification_base_url": current.get("verification_base_url"),
+        "status": "ok" if configured else "degraded",
+        "configured": configured,
     }
 
 
