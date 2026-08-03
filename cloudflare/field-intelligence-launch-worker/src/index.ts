@@ -34,7 +34,7 @@ const NEWSROOM_CARD_SCRIPT = `(()=>{
       category:"Product News",
       title:"AGRO-AI launches the Platform API",
       description:"Agricultural enterprises, agtech teams and integrators can build with fields, observations, recommendations, reports, connectors and webhooks.",
-      date:"San Francisco, California — August 2, 2026"
+      date:"San Francisco, California — August 3, 2026"
     },
     {
       path:"/news/agro-ai-connected-john-deere-operations-center",
