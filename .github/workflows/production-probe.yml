@@ -1,0 +1,15 @@
+name: Production endpoint probe
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check API health
+        run: curl -I -L --max-time 30 https://api.agroai-pilot.com/v1/health

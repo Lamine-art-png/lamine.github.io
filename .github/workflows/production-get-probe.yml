@@ -1,0 +1,19 @@
+name: Production GET probe
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Health
+        run: curl --fail --silent --show-error https://api.agroai-pilot.com/v1/health
+      - name: AI status
+        run: curl --fail --silent --show-error https://api.agroai-pilot.com/v1/runtime/ai-status
+      - name: Model smoke
+        run: curl --fail --silent --show-error --max-time 90 https://api.agroai-pilot.com/v1/intelligence/brain/model-smoke
