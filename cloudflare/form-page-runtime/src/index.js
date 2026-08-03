@@ -6,8 +6,8 @@ const runtimeSource = String.raw`(() => {
   window.__AGROAI_FORMS_RUNTIME__ = true;
 
   const normalizedPath = window.location.pathname.replace(/\/+$/, "") || "/";
-  const isCareers = normalizedPath === "/careers";
-  const isDemo = normalizedPath === "/book-a-demo";
+  const isCareers = normalizedPath === "/careers" || normalizedPath.startsWith("/careers/");
+  const isDemo = normalizedPath === "/book-a-demo" || normalizedPath.startsWith("/book-a-demo/");
   if (!isCareers && !isDemo) return;
 
   const clean = (value) => String(value == null ? "" : value).trim();
@@ -219,7 +219,9 @@ export default {
     if (url.pathname === RUNTIME_PATH) return runtimeResponse();
 
     const normalized = url.pathname.replace(/\/+$/, "") || "/";
-    if (normalized !== "/careers" && normalized !== "/book-a-demo") {
+    const isCareersPage = normalized === "/careers" || normalized.startsWith("/careers/");
+    const isDemoPage = normalized === "/book-a-demo" || normalized.startsWith("/book-a-demo/");
+    if (!isCareersPage && !isDemoPage) {
       return new Response("Not found", { status: 404 });
     }
 
