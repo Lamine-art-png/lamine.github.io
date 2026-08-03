@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">AGRO-AI Platform API</title>
+  <desc id="desc">A minimal green launch cover for the AGRO-AI Platform API.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0b2b20"/>
+      <stop offset="0.58" stop-color="#164a35"/>
+      <stop offset="1" stop-color="#2b6c4b"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="78%" cy="18%" r="75%">
+      <stop offset="0" stop-color="#d7ff63" stop-opacity="0.34"/>
+      <stop offset="1" stop-color="#d7ff63" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="80" height="80" patternUnits="userSpaceOnUse">
+      <path d="M 80 0 L 0 0 0 80" fill="none" stroke="#ffffff" stroke-opacity="0.08" stroke-width="1"/>
+    </pattern>
+  </defs>
+  <rect width="1600" height="900" fill="url(#bg)"/>
+  <rect width="1600" height="900" fill="url(#glow)"/>
+  <rect width="1600" height="900" fill="url(#grid)"/>
+  <g fill="none" stroke="#d7ff63" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" opacity="0.9">
+    <path d="M1090 270h180c55 0 100 45 100 100v160c0 55-45 100-100 100h-180c-55 0-100-45-100-100V370c0-55 45-100 100-100Z"/>
+    <circle cx="1080" cy="365" r="16" fill="#d7ff63"/>
+    <circle cx="1280" cy="365" r="16" fill="#d7ff63"/>
+    <circle cx="1080" cy="535" r="16" fill="#d7ff63"/>
+    <circle cx="1280" cy="535" r="16" fill="#d7ff63"/>
+    <path d="M1080 365h200M1080 535h200M1180 365v170"/>
+    <path d="M1040 450H920M1440 450h-120M1180 230V120M1180 780V670"/>
+  </g>
+  <g font-family="Arial, Helvetica, sans-serif" fill="#ffffff">
+    <text x="120" y="165" font-size="34" font-weight="700" letter-spacing="7">AGRO-AI</text>
+    <text x="120" y="370" font-size="96" font-weight="700" letter-spacing="-4">Platform API</text>
+    <text x="120" y="455" font-size="38" fill="#dfe9e2">Build agricultural products on the</text>
+    <text x="120" y="505" font-size="38" fill="#dfe9e2">AGRO-AI intelligence layer.</text>
+    <rect x="120" y="610" width="390" height="72" rx="36" fill="#d7ff63"/>
+    <text x="162" y="658" font-size="25" font-weight="700" fill="#10231b">FIELDS · DATA · INTELLIGENCE</text>
+  </g>
+</svg>
