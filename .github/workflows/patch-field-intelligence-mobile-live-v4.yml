@@ -8,7 +8,7 @@ on:
       - .github/field-intelligence-mobile-live-v4.trigger
   pull_request:
     branches:
-      - main
+      - ops/fi-mobile-live-v4-base
     paths:
       - scripts/patch_field_intelligence_mobile_live_v4.py
       - .github/workflows/patch-field-intelligence-mobile-live-v4.yml
