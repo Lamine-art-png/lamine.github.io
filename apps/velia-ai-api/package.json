@@ -5,10 +5,15 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
-    "test": "node --test src/tests/*.test.js"
+    "test": "node --test src/tests/*.test.js",
+    "eval": "node src/scripts/runEvaluation.js",
+    "smoke:llm": "node src/scripts/smoke/smokeLLM.js",
+    "smoke:embedding": "node src/scripts/smoke/smokeEmbedding.js",
+    "smoke:weather": "node src/scripts/smoke/smokeWeather.js"
   },
   "dependencies": {
     "cors": "^2.8.5",
+    "dotenv": "^17.4.2",
     "express": "^4.19.2"
   }
 }
