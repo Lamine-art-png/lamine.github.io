@@ -23,21 +23,30 @@ const runtimeSource = String.raw`(() => {
     if (field instanceof HTMLInputElement && field.type === "checkbox") {
       return field.checked ? clean(field.value || "yes") : "";
     }
+    if (field instanceof HTMLInputElement && field.type === "radio") {
+      return field.checked ? clean(field.value) : "";
+    }
     return clean(field.value);
   };
 
-  const value = (form, names) => {
-    for (const name of names) {
-      const candidate = fieldValue(form.elements.namedItem(name));
+  const fieldByKey = (form, key) => {
+    const named = form.elements.namedItem(key);
+    if (named) return named;
+    for (const field of form.querySelectorAll("input,textarea,select")) {
+      if (field.id === key) return field;
+    }
+    return null;
+  };
+
+  const value = (form, keys) => {
+    for (const key of keys) {
+      const candidate = fieldValue(fieldByKey(form, key));
       if (candidate) return candidate;
     }
     return "";
   };
 
-  const selectorValue = (form, selector) => {
-    const field = form.querySelector(selector);
-    return fieldValue(field);
-  };
+  const selectorValue = (form, selector) => fieldValue(form.querySelector(selector));
 
   const firstTextValue = (form) => {
     const fields = form.querySelectorAll(
@@ -48,6 +57,31 @@ const runtimeSource = String.raw`(() => {
       if (candidate) return candidate;
     }
     return "";
+  };
+
+  const collectFields = (form) => {
+    const output = {};
+    const fields = form.querySelectorAll("input,textarea,select");
+    fields.forEach((field, index) => {
+      if (
+        field instanceof HTMLInputElement &&
+        (field.type === "submit" || field.type === "button" || field.type === "reset" || field.type === "file")
+      ) {
+        return;
+      }
+      if (
+        field instanceof HTMLInputElement &&
+        (field.type === "checkbox" || field.type === "radio") &&
+        !field.checked
+      ) {
+        return;
+      }
+      const key = clean(field.name || field.id || `field_${index + 1}`);
+      const next = fieldValue(field);
+      if (!key || !next) return;
+      output[key] = output[key] ? output[key] + "; " + next : next;
+    });
+    return output;
   };
 
   const setBusy = (form, busy) => {
@@ -121,7 +155,7 @@ const runtimeSource = String.raw`(() => {
 
   const hasEmailField = (form) =>
     !!form.querySelector(
-      'input[type="email"], input[name="email"], input[name="emailAddress"], input[name="email_address"]',
+      'input[type="email"], input[name="email"], input[name="emailAddress"], input[name="email_address"], #email',
     );
 
   const isTargetForm = (form) => {
@@ -186,15 +220,7 @@ const runtimeSource = String.raw`(() => {
           return;
         }
 
-        const formData = new FormData(form);
-        const originalFields = {};
-        for (const [key, entry] of formData.entries()) {
-          if (typeof entry !== "string") continue;
-          const current = originalFields[key];
-          const next = clean(entry);
-          originalFields[key] = current ? current + "; " + next : next;
-        }
-
+        const originalFields = collectFields(form);
         const email =
           value(form, ["email", "emailAddress", "email_address", "workEmail"]) ||
           selectorValue(form, 'input[type="email"]');
@@ -273,7 +299,7 @@ const runtimeSource = String.raw`(() => {
           status: "pending",
           source: "book-a-demo-browser-runtime",
           originalFields,
-          runtimeVersion: "2026-08-03.2",
+          runtimeVersion: "2026-08-03.3",
         };
 
         const response = await fetch("/api/demo-request", {
