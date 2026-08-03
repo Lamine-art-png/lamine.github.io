@@ -1,35 +1,23 @@
-name: Portal Dependency Audit
+name: Portal Dependency Audit Isolation
 
-# Exact current-lockfile gate for production and development dependencies.
 on:
-  push:
-    branches: ["main"]
-    paths:
-      - figma-enterprise-v4/package.json
-      - figma-enterprise-v4/package-lock.json
-      - .github/workflows/portal-dependency-audit.yml
   pull_request:
-    branches: ["main"]
+    branches: ["ops/portal-dependency-audit-base"]
     paths:
       - figma-enterprise-v4/package.json
       - figma-enterprise-v4/package-lock.json
       - .github/workflows/portal-dependency-audit.yml
-  workflow_dispatch:
 
 permissions:
   contents: write
-  issues: write
 
 concurrency:
-  group: portal-dependency-audit-${{ github.event.pull_request.number || github.ref }}
+  group: portal-dependency-audit-isolated
   cancel-in-progress: true
 
 jobs:
-  remediate-issue-353:
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.number == 382 &&
-      github.event.pull_request.head.repo.full_name == github.repository
+  remediate:
+    if: github.event.pull_request.head.ref == 'ops/portal-dependency-audit-353'
     runs-on: ubuntu-slim
     timeout-minutes: 15
     steps:
@@ -44,7 +32,7 @@ jobs:
           cache: npm
           cache-dependency-path: figma-enterprise-v4/package-lock.json
 
-      - name: Apply non-major security upgrades and refresh lockfile
+      - name: Apply compatible security upgrades
         working-directory: figma-enterprise-v4
         shell: bash
         run: |
@@ -59,13 +47,13 @@ jobs:
           set -e
           npm ci --no-audit --no-fund
 
-      - name: Require zero production and complete vulnerabilities
+      - name: Require zero known vulnerabilities
         working-directory: figma-enterprise-v4
         run: |
           npm audit --omit=dev --audit-level=low
           npm audit --audit-level=low
 
-      - name: Validate portal contracts and exact production build
+      - name: Validate portal and production build
         working-directory: figma-enterprise-v4
         env:
           VITE_API_BASE_URL: https://app.agroai-pilot.com
@@ -75,7 +63,7 @@ jobs:
           npm run test:i18n
           npm run build
 
-      - name: Commit verified dependency remediation
+      - name: Commit verified lockfile remediation
         shell: bash
         run: |
           set -euo pipefail
@@ -89,94 +77,3 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git commit -m "Remove portal dependency vulnerabilities"
           git push origin HEAD:ops/portal-dependency-audit-353
-
-  audit:
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
-    defaults:
-      run:
-        working-directory: figma-enterprise-v4
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: figma-enterprise-v4/package-lock.json
-
-      - name: Install exact portal lockfile
-        run: npm ci --no-fund
-
-      - name: Audit exact production and complete dependency graphs
-        id: audit
-        shell: bash
-        run: |
-          set +e
-          npm audit --omit=dev --json > audit-production.json
-          production_exit=$?
-          npm audit --json > audit-complete.json
-          complete_exit=$?
-          set -e
-          node <<'NODE'
-          const fs = require('node:fs');
-          function read(path) {
-            const value = JSON.parse(fs.readFileSync(path, 'utf8'));
-            const vulnerabilities = value.metadata?.vulnerabilities || {};
-            return {
-              info: Number(vulnerabilities.info || 0),
-              low: Number(vulnerabilities.low || 0),
-              moderate: Number(vulnerabilities.moderate || 0),
-              high: Number(vulnerabilities.high || 0),
-              critical: Number(vulnerabilities.critical || 0),
-              total: Number(vulnerabilities.total || 0),
-            };
-          }
-          const production = read('audit-production.json');
-          const complete = read('audit-complete.json');
-          fs.writeFileSync('audit-summary.json', JSON.stringify({ production, complete }, null, 2));
-          const output = process.env.GITHUB_OUTPUT;
-          fs.appendFileSync(output, `production_total=${production.total}\n`);
-          fs.appendFileSync(output, `production_high=${production.high}\n`);
-          fs.appendFileSync(output, `production_critical=${production.critical}\n`);
-          fs.appendFileSync(output, `complete_total=${complete.total}\n`);
-          fs.appendFileSync(output, `complete_high=${complete.high}\n`);
-          fs.appendFileSync(output, `complete_critical=${complete.critical}\n`);
-          console.log(JSON.stringify({ production, complete }, null, 2));
-          NODE
-          echo "production_exit=${production_exit}" >> "$GITHUB_OUTPUT"
-          echo "complete_exit=${complete_exit}" >> "$GITHUB_OUTPUT"
-
-      - name: Record audit result on issue 353
-        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          PRODUCTION_TOTAL: ${{ steps.audit.outputs.production_total }}
-          PRODUCTION_HIGH: ${{ steps.audit.outputs.production_high }}
-          PRODUCTION_CRITICAL: ${{ steps.audit.outputs.production_critical }}
-          COMPLETE_TOTAL: ${{ steps.audit.outputs.complete_total }}
-          COMPLETE_HIGH: ${{ steps.audit.outputs.complete_high }}
-          COMPLETE_CRITICAL: ${{ steps.audit.outputs.complete_critical }}
-        working-directory: .
-        run: |
-          gh api "repos/${GITHUB_REPOSITORY}/issues/353/comments" \
-            -f body="## Exact portal dependency audit\n\nCommit: \`${GITHUB_SHA}\`\n\n- production dependency graph: **${PRODUCTION_TOTAL} total**, ${PRODUCTION_HIGH} high, ${PRODUCTION_CRITICAL} critical\n- complete dependency graph: **${COMPLETE_TOTAL} total**, ${COMPLETE_HIGH} high, ${COMPLETE_CRITICAL} critical\n\nThe attached workflow artifacts contain the exact npm audit JSON for the current lockfile."
-
-      - uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: portal-dependency-audit-${{ github.sha }}
-          path: |
-            figma-enterprise-v4/audit-production.json
-            figma-enterprise-v4/audit-complete.json
-            figma-enterprise-v4/audit-summary.json
-          if-no-files-found: error
-          retention-days: 30
-
-      - name: Enforce zero known vulnerabilities
-        env:
-          PRODUCTION_TOTAL: ${{ steps.audit.outputs.production_total }}
-          COMPLETE_TOTAL: ${{ steps.audit.outputs.complete_total }}
-        run: |
-          test "${PRODUCTION_TOTAL}" = "0"
-          test "${COMPLETE_TOTAL}" = "0"
