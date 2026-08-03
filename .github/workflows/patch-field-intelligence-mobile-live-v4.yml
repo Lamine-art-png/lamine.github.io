@@ -76,7 +76,7 @@ jobs:
             tests/unit/test_field_live_rate_limit_channels.py \
             tests/unit/test_field_intelligence.py \
             tests/unit/test_field_intelligence_launch.py \
-            tests/unit/test_field_transcription.py
+            tests/unit/test_field_intelligence_hardening.py
 
       - name: Test and build production portal
         working-directory: figma-enterprise-v4
