@@ -1,5 +1,6 @@
 name: Portal Dependency Audit
 
+# Exact current-lockfile gate for production and development dependencies.
 on:
   push:
     branches: ["main"]
