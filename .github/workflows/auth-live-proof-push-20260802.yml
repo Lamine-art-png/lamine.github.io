@@ -1,0 +1,95 @@
+name: Portal auth live proof
+
+on:
+  push:
+    branches:
+      - diag/auth-live-proof-push-20260802
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      EXPECTED_BUILD_SHA: 06389617875d781bd51b3db0a5c4650748262484
+      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
+      PROOF_ISSUE: '376'
+    steps:
+      - name: Probe production and post redacted proof
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -u
+          mkdir -p /tmp/agroai-live-proof
+          report=/tmp/agroai-live-proof/report.md
+          {
+            echo '## Portal authentication live proof'
+            echo
+            echo "- diagnostic workflow SHA: \`${GITHUB_SHA}\`"
+            echo "- expected production build: \`${EXPECTED_BUILD_SHA}\`"
+            echo
+          } > "$report"
+
+          timed_get() {
+            local label="$1" url="$2" output="$3"
+            local timing
+            timing="$(curl -sS -L -o "$output" --connect-timeout 15 --max-time 60 \
+              -w 'http=%{http_code} dns=%{time_namelookup} connect=%{time_connect} tls=%{time_appconnect} ttfb=%{time_starttransfer} total=%{time_total} bytes=%{size_download}' \
+              "$url" 2>&1 || true)"
+            echo "- ${label}: \`${timing}\`" >> "$report"
+          }
+
+          timed_get public_api_health https://api.agroai-pilot.com/v1/health /tmp/agroai-live-proof/health.json
+          timed_get portal_root https://app.agroai-pilot.com/ /tmp/agroai-live-proof/portal.html
+
+          preflight="$(curl -sS -o /tmp/agroai-live-proof/preflight.txt -X OPTIONS \
+            --connect-timeout 15 --max-time 60 \
+            -H 'Origin: https://app.agroai-pilot.com' \
+            -H 'Access-Control-Request-Method: POST' \
+            -H 'Access-Control-Request-Headers: content-type' \
+            -w 'http=%{http_code} dns=%{time_namelookup} connect=%{time_connect} tls=%{time_appconnect} ttfb=%{time_starttransfer} total=%{time_total}' \
+            https://api.agroai-pilot.com/v1/auth/login 2>&1 || true)"
+          echo "- auth_preflight: \`${preflight}\`" >> "$report"
+
+          echo >> "$report"
+          echo '### Invalid-credential database path' >> "$report"
+          payload='{"email":"deployment-proof-20260802@agroai-pilot.com","password":"NotARealPassword-20260802"}'
+          for i in 1 2 3 4 5; do
+            timing="$(curl -sS -o "/tmp/agroai-live-proof/login-${i}.json" -X POST \
+              --connect-timeout 15 --max-time 60 \
+              -H 'Origin: https://app.agroai-pilot.com' \
+              -H 'Content-Type: application/json' \
+              --data "$payload" \
+              -w 'http=%{http_code} dns=%{time_namelookup} connect=%{time_connect} tls=%{time_appconnect} ttfb=%{time_starttransfer} total=%{time_total}' \
+              https://api.agroai-pilot.com/v1/auth/login 2>&1 || true)"
+            echo "- run ${i}: \`${timing}\`" >> "$report"
+            sleep 1
+          done
+
+          echo >> "$report"
+          echo '### Release identity' >> "$report"
+          if [[ -n "${QUEUE_CONSUMER_TOKEN:-}" ]]; then
+            for pair in 'custom|https://api-preview.agroai-pilot.com' 'direct_render|https://agroai-api-preview.onrender.com'; do
+              name="${pair%%|*}"
+              base="${pair#*|}"
+              body="/tmp/agroai-live-proof/${name}.json"
+              timing="$(curl -sS -o "$body" --connect-timeout 15 --max-time 60 \
+                -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+                -w 'http=%{http_code} ttfb=%{time_starttransfer} total=%{time_total}' \
+                "${base}/v1/internal/release/health" 2>&1 || true)"
+              echo "- ${name}: \`${timing}\`" >> "$report"
+              if jq -e . "$body" >/dev/null 2>&1; then
+                echo '```json' >> "$report"
+                jq -c '{status,contract,build_sha,schema_current,production_ready,production_blocker_codes}' "$body" >> "$report"
+                echo '```' >> "$report"
+              fi
+            done
+          else
+            echo '- release token unavailable outside protected production environment' >> "$report"
+          fi
+
+          gh issue comment "$PROOF_ISSUE" --repo "$GITHUB_REPOSITORY" --body-file "$report"
