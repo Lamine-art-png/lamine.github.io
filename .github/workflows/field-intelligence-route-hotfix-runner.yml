@@ -1,0 +1,112 @@
+name: Field Intelligence Route Hotfix Runner
+
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/field-intelligence-route-hotfix.trigger
+      - .github/workflows/field-intelligence-route-hotfix.yml
+      - figma-enterprise-v4/src/app/routes.tsx
+      - figma-enterprise-v4/src/app/components/FieldIntelligenceV2.tsx
+      - figma-enterprise-v4/tests/field-intelligence-multimodal-contract.mjs
+
+permissions:
+  contents: write
+
+concurrency:
+  group: field-intelligence-route-hotfix-runner
+  cancel-in-progress: true
+
+jobs:
+  patch-test-commit:
+    if: >-
+      github.event.pull_request.number == 392 &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: hotfix/field-intelligence-route-availability
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+
+      - name: Fix live-speech callback initialization order
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 <<'PY'
+          from pathlib import Path
+
+          component_path = Path("figma-enterprise-v4/src/app/components/FieldIntelligenceV2.tsx")
+          source = component_path.read_text(encoding="utf-8")
+
+          append_marker = "  const appendTranscriptSegment = useCallback"
+          live_marker = "  const startLiveSpeechSampling = useCallback"
+          if source.index(append_marker) > source.index(live_marker):
+              block_start = source.index(append_marker)
+              block_end_marker = "\n\n  const startRecognition = useCallback"
+              block_end = source.index(block_end_marker, block_start)
+              block = source[block_start:block_end]
+              source = source[:block_start] + source[block_end:]
+              insertion = source.index(live_marker)
+              source = source[:insertion] + block + "\n\n" + source[insertion:]
+
+          assert source.index(append_marker) < source.index(live_marker)
+          assert source.count(append_marker) == 1
+          component_path.write_text(source, encoding="utf-8")
+
+          test_path = Path("figma-enterprise-v4/tests/field-intelligence-multimodal-contract.mjs")
+          test_source = test_path.read_text(encoding="utf-8")
+          marker = 'assert.doesNotMatch(routes, /path: "field-intelligence"[^\\n]+lazy:/);\n'
+          assertion = (
+              'const appendTranscriptDefinition = component.indexOf("const appendTranscriptSegment = useCallback");\n'
+              'const liveSpeechDefinition = component.indexOf("const startLiveSpeechSampling = useCallback");\n'
+              'assert.ok(appendTranscriptDefinition >= 0 && appendTranscriptDefinition < liveSpeechDefinition, '
+              '"live speech must not read appendTranscriptSegment before initialization");\n'
+          )
+          if assertion not in test_source:
+              if marker not in test_source:
+                  raise SystemExit("route assertion marker missing")
+              test_source = test_source.replace(marker, marker + assertion, 1)
+          test_path.write_text(test_source, encoding="utf-8")
+          PY
+
+      - name: Install exact portal dependencies
+        working-directory: figma-enterprise-v4
+        run: npm ci --no-audit --no-fund
+
+      - name: Run Field Intelligence route and multimodal contracts
+        working-directory: figma-enterprise-v4
+        run: npm run test:field-intelligence
+
+      - name: Build exact production portal
+        working-directory: figma-enterprise-v4
+        env:
+          VITE_API_BASE_URL: https://api.agroai-pilot.com
+          VITE_DEPLOYMENT_ENVIRONMENT: production
+          VITE_BUILD_SHA: ${{ github.sha }}
+        run: npm run build
+
+      - name: Remove temporary machinery and commit verified hotfix
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/field-intelligence-route-hotfix.yml
+          rm -f .github/field-intelligence-route-hotfix.trigger
+          git add figma-enterprise-v4/src/app/routes.tsx \
+                  figma-enterprise-v4/src/app/components/FieldIntelligenceV2.tsx \
+                  figma-enterprise-v4/tests/field-intelligence-multimodal-contract.mjs \
+                  .github/workflows/field-intelligence-route-hotfix.yml \
+                  .github/field-intelligence-route-hotfix.trigger
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Fix Field Intelligence route runtime crash"
+          git push origin HEAD:hotfix/field-intelligence-route-availability
