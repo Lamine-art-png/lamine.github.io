@@ -1,0 +1,111 @@
+name: Platform API Security CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '23 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  security-events: write
+  actions: read
+
+jobs:
+  codeql:
+    name: CodeQL (${{ matrix.language }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [python, javascript-typescript]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+      - uses: github/codeql-action/analyze@v3
+
+  python-dependencies:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: pip
+          cache-dependency-path: |
+            agroai_api/requirements.txt
+            sdk/python/pyproject.toml
+      - name: Audit production Python dependencies
+        run: |
+          python -m pip install --upgrade pip pip-audit
+          pip-audit -r agroai_api/requirements.txt --strict
+      - name: Build Python SDK
+        run: |
+          python -m pip install build
+          python -m build sdk/python
+
+  javascript-dependencies:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: [cloudflare/edge-gateway, sdk/typescript]
+    defaults:
+      run:
+        working-directory: ${{ matrix.directory }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: ${{ matrix.directory }}/package-lock.json
+      - run: npm ci --ignore-scripts --no-fund
+      - run: npm audit --omit=dev --audit-level=high
+      - run: npm test
+
+  credential-pattern-gate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Refuse recognizable production credential material
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import pathlib, re, sys
+          roots = [pathlib.Path('agroai_api'), pathlib.Path('cloudflare'), pathlib.Path('figma-enterprise-v4'), pathlib.Path('sdk')]
+          patterns = {
+              'stripe_live_secret': re.compile(r'sk_live_[A-Za-z0-9]{24,}'),
+              'stripe_webhook_secret': re.compile(r'whsec_[A-Za-z0-9]{24,}'),
+              'platform_live_key': re.compile(r'agro_live_[A-Za-z0-9]{24,}'),
+          }
+          excluded_parts = {'.git', 'node_modules', 'dist', 'build', '__pycache__'}
+          findings = []
+          for root in roots:
+              if not root.exists():
+                  continue
+              for path in root.rglob('*'):
+                  if not path.is_file() or any(part in excluded_parts for part in path.parts):
+                      continue
+                  if path.suffix.lower() in {'.png', '.jpg', '.jpeg', '.gif', '.webp', '.pdf', '.zip', '.lock'}:
+                      continue
+                  try:
+                      text = path.read_text(encoding='utf-8')
+                  except UnicodeDecodeError:
+                      continue
+                  for name, pattern in patterns.items():
+                      if pattern.search(text):
+                          findings.append(f'{path}:{name}')
+          if findings:
+              print('\n'.join(findings))
+              sys.exit('recognizable production credential material found')
+          print('credential_pattern_gate=green')
+          PY
