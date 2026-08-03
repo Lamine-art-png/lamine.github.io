@@ -8,6 +8,7 @@ import { PlatformSafetyNotice } from "./components/PlatformSafetyNotice";
 import { RouteRecovery } from "./components/RouteRecovery";
 import { VerifyEmailPage } from "./components/VerifyEmail";
 import { AccessAppealPage } from "./components/AccessAppeal";
+import { FieldIntelligenceV2 } from "./components/FieldIntelligenceV2";
 import { useAuth } from "./auth/AuthProvider";
 import { useLocale } from "./hooks/useLocale";
 
@@ -40,7 +41,7 @@ const lazyComponent = (loader: () => Promise<Record<string, unknown>>, exportNam
 const operationRoutes = [
   { index: true, lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
   { path: "field-queue", lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
-  { path: "field-intelligence", lazy: lazyComponent(() => import("./components/FieldIntelligenceV2"), "FieldIntelligenceV2") },
+  { path: "field-intelligence", Component: FieldIntelligenceV2 },
   { path: "tasks", lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
   { path: "readiness", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "Readiness") },
   { path: "fields", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "Fields") },
