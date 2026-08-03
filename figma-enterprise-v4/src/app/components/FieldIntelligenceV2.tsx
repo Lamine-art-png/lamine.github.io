@@ -401,6 +401,24 @@ function SmartComposer({ t, workspaceId, language, onSaved }: any) {
     setLiveSpeechState("idle");
   }, []);
 
+  const appendTranscriptSegment = useCallback((segment: string) => {
+    const clean = String(segment || "").replace(/\s+/g, " ").trim();
+    if (!clean) return;
+    setLiveTranscript((current) => {
+      const existing = current.replace(/\s+/g, " ").trim();
+      if (!existing) return clean;
+      const lowerExisting = existing.toLocaleLowerCase();
+      const lowerClean = clean.toLocaleLowerCase();
+      if (lowerExisting.endsWith(lowerClean) || lowerExisting.includes(lowerClean)) return existing;
+      const tail = existing.split(/\s+/).slice(-10).join(" ").toLocaleLowerCase();
+      if (tail && lowerClean.startsWith(tail)) {
+        const tailWords = tail.split(/\s+/).length;
+        return `${existing} ${clean.split(/\s+/).slice(tailWords).join(" ")}`.trim();
+      }
+      return `${existing} ${clean}`.trim();
+    });
+  }, []);
+
   const startLiveSpeechSampling = useCallback((sourceStream: MediaStream) => {
     stopLiveSpeechSampling();
     const session = liveSpeechSessionRef.current;
@@ -543,23 +561,7 @@ function SmartComposer({ t, workspaceId, language, onSaved }: any) {
     );
   }, [t]);
 
-  const appendTranscriptSegment = useCallback((segment: string) => {
-    const clean = String(segment || "").replace(/\s+/g, " ").trim();
-    if (!clean) return;
-    setLiveTranscript((current) => {
-      const existing = current.replace(/\s+/g, " ").trim();
-      if (!existing) return clean;
-      const lowerExisting = existing.toLocaleLowerCase();
-      const lowerClean = clean.toLocaleLowerCase();
-      if (lowerExisting.endsWith(lowerClean) || lowerExisting.includes(lowerClean)) return existing;
-      const tail = existing.split(/\s+/).slice(-10).join(" ").toLocaleLowerCase();
-      if (tail && lowerClean.startsWith(tail)) {
-        const tailWords = tail.split(/\s+/).length;
-        return `${existing} ${clean.split(/\s+/).slice(tailWords).join(" ")}`.trim();
-      }
-      return `${existing} ${clean}`.trim();
-    });
-  }, []);
+
 
   const startRecognition = useCallback((requestedLanguage?: string) => {
     const Recognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
