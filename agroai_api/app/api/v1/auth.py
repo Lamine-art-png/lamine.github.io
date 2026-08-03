@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, status
 from passlib.context import CryptContext
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.api.deps import (
     AuthContext,
@@ -518,7 +518,19 @@ def _reset_failed_login(user: User) -> None:
 def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)) -> dict:
     now = datetime.utcnow()
     email = payload.email.lower()
-    user = db.query(User).filter(User.email == email).first()
+    user = (
+        db.query(User)
+        .options(
+            joinedload(User.memberships).joinedload(OrganizationMembership.organization)
+        )
+        .filter(User.email == email)
+        .first()
+    )
+    membership = (
+        min(user.memberships, key=lambda item: item.created_at)
+        if user and user.memberships
+        else None
+    )
     ip_address, user_agent = _request_metadata(request)
 
     if user and _lockout_active(user, now):
@@ -526,7 +538,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
             db,
             event_type="login",
             outcome="locked",
-            organization_id=user.memberships[0].organization_id if user.memberships else None,
+            organization_id=membership.organization_id if membership else None,
             user_id=user.id,
             subject=email,
             ip_address=ip_address,
@@ -548,7 +560,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
             db,
             event_type="login",
             outcome="locked" if locked else "invalid_credentials",
-            organization_id=user.memberships[0].organization_id if user and user.memberships else None,
+            organization_id=membership.organization_id if membership else None,
             user_id=user.id if user else None,
             subject=email,
             ip_address=ip_address,
@@ -562,7 +574,7 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
             db,
             event_type="login",
             outcome="email_verification_required",
-            organization_id=user.memberships[0].organization_id if user.memberships else None,
+            organization_id=membership.organization_id if membership else None,
             user_id=user.id,
             subject=email,
             ip_address=ip_address,
@@ -577,12 +589,6 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
             },
         )
 
-    membership = (
-        db.query(OrganizationMembership)
-        .filter(OrganizationMembership.user_id == user.id)
-        .order_by(OrganizationMembership.created_at.asc())
-        .first()
-    )
     if not membership:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User has no organization membership")
 
@@ -596,7 +602,6 @@ def login(payload: LoginRequest, request: Request, db: Session = Depends(get_db)
 
     _reset_failed_login(user)
     user.last_login_at = now
-    ensure_evaluation_context(db, membership.organization, _first_workspace(db, membership.organization_id))
     record_security_event(
         db,
         event_type="login",
@@ -652,18 +657,11 @@ def email_verification_confirm(
     if not user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification link is invalid or expired")
 
-    membership = (
-        db.query(OrganizationMembership)
-        .filter(OrganizationMembership.user_id == user.id)
-        .order_by(OrganizationMembership.created_at.asc())
-        .first()
-    )
     if not membership:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User has no organization membership")
 
     _promote_verified_organization(user, membership.organization)
     require_approved_organization(membership.organization)
-    ensure_evaluation_context(db, membership.organization, _first_workspace(db, membership.organization_id))
     user.last_login_at = datetime.utcnow()
     ip_address, user_agent = _request_metadata(request)
     record_security_event(
@@ -690,11 +688,7 @@ def email_verification_confirm(
 
 
 @router.get("/me")
-def me(ctx: AuthContext = Depends(get_auth_context), db: Session = Depends(get_db)) -> dict:
-    if ctx.organization:
-        ensure_evaluation_context(db, ctx.organization, _first_workspace(db, ctx.organization.id))
-        db.commit()
-
+def me(ctx: AuthContext = Depends(get_auth_context)) -> dict:
     orgs = [_organization_payload(membership.organization, membership.role) for membership in ctx.user.memberships]
     current = orgs[0] if orgs else None
     return {
