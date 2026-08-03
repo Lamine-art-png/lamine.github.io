@@ -4,3 +4,4 @@ Owner check corrected and deployment retriggered.
 Issue event reset at 2026-07-28T17:35Z.
 Awaiting live production proof.
 Do not announce until issue #332 reports success.
+Verify the literal Platform API article URL without query parameters after the exact Cloudflare route deployment.
