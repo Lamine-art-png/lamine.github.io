@@ -42,7 +42,19 @@ jobs:
             cloudflare/edge-gateway/package-lock.json
 
       - name: Apply guarded product patch
-        run: python scripts/patch_field_intelligence_mobile_live_v4.py
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path("scripts/patch_field_intelligence_mobile_live_v4.py")
+          text = path.read_text(encoding="utf-8")
+          old = "    updated, count = re.subn(pattern, replacement, text, count=1, flags=flags)"
+          new = "    compiled = re.compile(pattern, flags)\n    updated, count = compiled.subn(lambda _match: replacement, text, count=1)"
+          if text.count(old) != 1:
+              raise SystemExit("guarded regex helper did not match exactly once")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+          python scripts/patch_field_intelligence_mobile_live_v4.py
 
       - name: Compile and test backend multilingual live pipeline
         working-directory: agroai_api
