@@ -1,1 +1,1 @@
-apply-isolated-final-2
+apply-default-registered
