@@ -27,18 +27,22 @@ jobs:
           auth="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
           curl -fsS -H "$auth" "$api" > project.json
           curl -fsS -H "$auth" "${api}/deployments?env=production&per_page=3" > deployments.json
+          echo '=== DEPLOYMENTS ==='
           jq -r '.result[] | [.id,.created_on,.modified_on,.deployment_trigger.type,.deployment_trigger.metadata.commit_hash,.uses_functions,.latest_stage.status] | @tsv' deployments.json
-          jq -r --arg target 'contact@agroai-pilot.com' '[.result.deployment_configs.production.env_vars.APPLICATION_TO_EMAIL.type, (.result.deployment_configs.production.env_vars.APPLICATION_TO_EMAIL.value == $target), .result.production_script_name] | @tsv' project.json
+          echo '=== PROJECT ==='
+          jq -r --arg target 'contact@agroai-pilot.com' '[.result.name,.result.subdomain, (.result.domains|join(",")),.result.deployment_configs.production.env_vars.APPLICATION_TO_EMAIL.type, (.result.deployment_configs.production.env_vars.APPLICATION_TO_EMAIL.value == $target), .result.production_script_name] | @tsv' project.json
 
-      - name: Inspect exact live application route
+      - name: Inspect exact live application routes
         shell: bash
         run: |
           set -euo pipefail
-          curl -sS -D apply.headers https://agroai-pilot.com/api/apply -o apply.json
-          echo '=== HEADERS ==='
-          grep -Ei '^(HTTP/|x-agroai|cf-ray|content-type|server|date):' apply.headers || true
-          echo '=== BODY ==='
-          cat apply.json
+          for path in /api/apply /api/apply/; do
+            safe="$(printf '%s' "$path" | tr '/?' '__')"
+            code="$(curl -sS -D "${safe}.headers" -o "${safe}.body" -w '%{http_code}' "https://agroai-pilot.com${path}")"
+            echo "=== ${path} HTTP ${code} ==="
+            grep -Ei '^(HTTP/|x-agroai|cf-ray|content-type|server|date):' "${safe}.headers" || true
+            cat "${safe}.body"; echo
+          done
 
       - name: Inspect browser form submission targets
         shell: bash
@@ -50,9 +54,8 @@ jobs:
           python3 - <<'PY'
           from html.parser import HTMLParser
           from pathlib import Path
-          from urllib.parse import urljoin
-          from urllib.request import urlopen
-          import re
+          from urllib.parse import urljoin, urlparse
+          import re, subprocess
 
           class P(HTMLParser):
               def __init__(self):
@@ -68,16 +71,23 @@ jobs:
               print(f'=== {name} scripts ===', p.src)
               chunks=[html]
               for i,src in enumerate(p.src):
-                  data=urlopen(urljoin(base,src),timeout=30).read().decode('utf-8','replace')
-                  Path(f'live/{name}-{i}.js').write_text(data)
-                  chunks.append(data)
+                  full=urljoin(base,src)
+                  if urlparse(full).hostname != 'agroai-pilot.com':
+                      continue
+                  out=f'live/{name}-{i}.js'
+                  subprocess.run(['curl','-fsSL',full,'-o',out],check=True)
+                  chunks.append(Path(out).read_text(errors='replace'))
               text='\n'.join(chunks)
-              patterns=[r'/api/apply/?',r'/v1/sales/contact',r'api\.agroai-pilot\.com[^"\']*',r'application received',r'demo request received']
+              patterns=[r'/api/apply/?',r'/v1/sales/contact',r'https://api\.agroai-pilot\.com[^"\']*',r'application received',r'demo request received']
               for pat in patterns:
                   found=sorted(set(re.findall(pat,text,re.I)))
                   print(pat,found[:20])
               for needle in ['/api/apply','/v1/sales/contact','Application received','demo request']:
-                  at=text.lower().find(needle.lower())
-                  if at>=0:
-                      print(f'CONTEXT {needle}:',text[max(0,at-240):at+500])
+                  start=0
+                  shown=0
+                  while shown<5:
+                      at=text.lower().find(needle.lower(),start)
+                      if at<0: break
+                      print(f'CONTEXT {needle}:',text[max(0,at-260):at+620])
+                      start=at+len(needle); shown+=1
           PY
