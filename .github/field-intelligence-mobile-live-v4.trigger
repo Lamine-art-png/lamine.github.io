@@ -1,1 +1,1 @@
-apply-default-registered
+apply-single-event-final
