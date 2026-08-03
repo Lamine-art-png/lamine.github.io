@@ -1,4 +1,4 @@
-const UPSTREAM_ORIGIN = "https://agroai-343.pages.dev";
+const UPSTREAM_ORIGIN = "https://402f33dd.agroai-343.pages.dev";
 const NOTIFICATION_URL = "https://api.agroai-pilot.com/v1/sales/contact";
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_MESSAGE_CHARS = 7000;
