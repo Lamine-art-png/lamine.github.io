@@ -8,6 +8,12 @@ on:
       - figma-enterprise-v4/package.json
       - figma-enterprise-v4/package-lock.json
       - .github/workflows/portal-dependency-audit.yml
+  pull_request:
+    branches: ["main"]
+    paths:
+      - figma-enterprise-v4/package.json
+      - figma-enterprise-v4/package-lock.json
+      - .github/workflows/portal-dependency-audit.yml
   workflow_dispatch:
 
 permissions:
@@ -15,7 +21,7 @@ permissions:
   issues: write
 
 concurrency:
-  group: portal-dependency-audit
+  group: portal-dependency-audit-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -77,6 +83,7 @@ jobs:
           echo "complete_exit=${complete_exit}" >> "$GITHUB_OUTPUT"
 
       - name: Record audit result on issue 353
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
         env:
           GH_TOKEN: ${{ github.token }}
           PRODUCTION_TOTAL: ${{ steps.audit.outputs.production_total }}
