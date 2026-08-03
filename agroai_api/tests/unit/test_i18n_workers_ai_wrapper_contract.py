@@ -21,7 +21,7 @@ def test_workers_ai_fastpath_preserves_local_source_validation_and_internal_cana
     assert 'validCatalog(source, output)' in chunked_engine
     assert 'validCatalog(source, output)' in dedicated_engine
     assert 'translateWithPublicFallback' in handler
-    assert 'public_translation_provider_chain_v4' in public_fallback
+    assert 'public_translation_provider_chain_v5' in public_fallback
     assert 'providers: [translated.provider]' in handler
     assert 'source: translated.provider' in handler
     assert 'changed.length < 2' in handler
