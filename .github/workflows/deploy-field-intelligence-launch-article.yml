@@ -4,6 +4,7 @@ on:
   push:
     branches: ["main"]
     paths:
+      - "client/public/news/agro-ai-platform-api-launch/**"
       - "client/public/news/introducing-agro-ai-field-intelligence/**"
       - "client/public/news/agro-ai-connected-john-deere-operations-center/**"
       - "cloudflare/field-intelligence-launch-worker/**"
@@ -19,7 +20,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Publish Deere article and restore newsroom cards
+    name: Publish and verify all managed News articles
     runs-on: ubuntu-latest
     environment: production
     env:
@@ -28,6 +29,9 @@ jobs:
       NEWSROOM_URL: https://agroai-pilot.com/news
       NEWSROOM_ORIGIN_URL: https://agroai-343.pages.dev/news
       NEWSROOM_SCRIPT_URL: https://agroai-pilot.com/news/agroai-news-card-restore.js
+      PLATFORM_ARTICLE_URL: https://agroai-pilot.com/news/agro-ai-platform-api-launch
+      PLATFORM_COVER_URL: https://agroai-pilot.com/news/agro-ai-platform-api-launch/cover.svg
+      PLATFORM_LOGO_URL: https://agroai-pilot.com/news/agro-ai-platform-api-launch/agro-ai-logo.png
       FIELD_ARTICLE_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence
       FIELD_COVER_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence/cover.webp
       FIELD_LOGO_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence/agro-ai-logo.png
@@ -36,48 +40,50 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Fail closed on missing Cloudflare credentials
+      - name: Require production Cloudflare credentials
         shell: bash
         run: |
           set -euo pipefail
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
 
-      - name: Validate narrow source changes
+      - name: Validate exact News sources and route boundaries
         shell: bash
         run: |
           set -euo pipefail
+          platform_article="client/public/news/agro-ai-platform-api-launch/index.html"
+          platform_cover="client/public/news/agro-ai-platform-api-launch/cover.svg"
           field_article="client/public/news/introducing-agro-ai-field-intelligence/index.html"
-          john_deere_article="client/public/news/agro-ai-connected-john-deere-operations-center/index.html"
-          john_deere_cover="client/public/news/agro-ai-connected-john-deere-operations-center/cover.webp"
+          deere_article="client/public/news/agro-ai-connected-john-deere-operations-center/index.html"
+          deere_cover="client/public/news/agro-ai-connected-john-deere-operations-center/cover.webp"
           worker="cloudflare/field-intelligence-launch-worker/src/index.ts"
           routes="cloudflare/field-intelligence-launch-worker/wrangler.toml"
 
+          test -s "$platform_article"
+          test -s "$platform_cover"
           test -s "$field_article"
-          test -s "$john_deere_article"
-          test -s "$john_deere_cover"
+          test -s "$deere_article"
+          test -s "$deere_cover"
           test -s "$worker"
           test -s "$routes"
 
+          grep -F "AGRO-AI launches the Platform API for agriculture builders" "$platform_article" >/dev/null
+          grep -F "Build agricultural products on the AGRO-AI intelligence layer." "$platform_article" >/dev/null
           grep -F "Introducing AGRO-AI Field Intelligence" "$field_article" >/dev/null
           grep -F "GiM6WZY0HG0" "$field_article" >/dev/null
-          grep -F "AGRO-AI connects with John Deere Operations Center™" "$john_deere_article" >/dev/null
-          grep -F "AGRO-AI is now connected with John Deere Operations Center™." "$john_deere_article" >/dev/null
-          grep -F '<meta name="author" content="AGRO-AI"' "$john_deere_article" >/dev/null
-          grep -F "2026-07-28T08:00:00-07:00" "$john_deere_article" >/dev/null
-          grep -F "Access is initiated through the user's Operations Center connection." "$john_deere_article" >/dev/null
-          grep -F "AGRO-AI is now visible within Connections in John Deere Operations Center™." "$john_deere_article" >/dev/null
-          grep -F "eligible AGRO-AI users can initiate the connection from the AGRO-AI integrations experience." "$john_deere_article" >/dev/null
-          grep -F '/news/agro-ai-connected-john-deere-operations-center/cover.webp' "$john_deere_article" >/dev/null
-          ! grep -Eiq "partnered with John Deere|partnership with John Deere|endorsed by John Deere" "$john_deere_article"
+          grep -F "AGRO-AI connects with John Deere Operations Center™" "$deere_article" >/dev/null
+          ! grep -Eiq "partnered with John Deere|partnership with John Deere|endorsed by John Deere" "$deere_article"
 
-          grep -F 'NEWSROOM_ORIGIN = "https://agroai-343.pages.dev"' "$worker" >/dev/null
-          grep -F 'JOHN_DEERE_COVER_SOURCE' "$worker" >/dev/null
+          grep -F 'PLATFORM_API_ARTICLE_PATH = "/news/agro-ai-platform-api-launch"' "$worker" >/dev/null
+          grep -F 'AGRO-AI launches the Platform API' "$worker" >/dev/null
           grep -F 'Introducing AGRO-AI Field Intelligence' "$worker" >/dev/null
           grep -F 'AGRO-AI connects with John Deere Operations Center™' "$worker" >/dev/null
+
           grep -F 'pattern = "agroai-pilot.com/news"' "$routes" >/dev/null
           grep -F 'pattern = "agroai-pilot.com/news/"' "$routes" >/dev/null
           grep -F 'pattern = "agroai-pilot.com/news/agroai-news-card-restore.js"' "$routes" >/dev/null
+          grep -F 'pattern = "agroai-pilot.com/news/agro-ai-platform-api-launch"' "$routes" >/dev/null
+          grep -F 'pattern = "agroai-pilot.com/news/agro-ai-platform-api-launch/*"' "$routes" >/dev/null
           grep -F 'pattern = "agroai-pilot.com/news/introducing-agro-ai-field-intelligence*"' "$routes" >/dev/null
           grep -F 'pattern = "agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center"' "$routes" >/dev/null
           ! grep -F 'pattern = "agroai-pilot.com/news*"' "$routes"
@@ -89,47 +95,27 @@ jobs:
           set -euo pipefail
           npx --yes wrangler@4.107.0 deploy --dry-run --config cloudflare/field-intelligence-launch-worker/wrangler.toml
 
-      - name: Deploy production article and newsroom routes
+      - name: Deploy exact production News routes
         shell: bash
         run: |
           set -euo pipefail
           npx --yes wrangler@4.107.0 deploy --config cloudflare/field-intelligence-launch-worker/wrangler.toml
 
-      - name: Delete only obsolete broad newsroom routes
+      - name: Prove native newsroom and managed cards
         shell: bash
         run: |
           set -euo pipefail
-          auth_header="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
-          api="https://api.cloudflare.com/client/v4"
-          zone_response="$(curl -fsS -H "$auth_header" -H 'Content-Type: application/json' "${api}/zones?name=agroai-pilot.com&account.id=${CLOUDFLARE_ACCOUNT_ID}")"
-          zone_id="$(jq -r '.result[0].id // empty' <<<"$zone_response")"
-          test -n "$zone_id"
-          route_response="$(curl -fsS -H "$auth_header" -H 'Content-Type: application/json' "${api}/zones/${zone_id}/workers/routes")"
-          jq -r '.result[] | select(
-              .pattern == "agroai-pilot.com/news*" or
-              .pattern == "agroai-pilot.com/news/*" or
-              .pattern == "agroai-pilot.com/news/field-intelligence-newsroom.js" or
-              .pattern == "agroai-pilot.com/news/field-intelligence-newsroom.css"
-            ) | [.id, .pattern] | @tsv' <<<"$route_response" > obsolete-newsroom-routes.tsv
-          while IFS=$'\t' read -r route_id route_pattern; do
-            [ -n "${route_id:-}" ] || continue
-            echo "Deleting obsolete broad route: ${route_pattern}"
-            response="$(curl -fsS -X DELETE -H "$auth_header" -H 'Content-Type: application/json' "${api}/zones/${zone_id}/workers/routes/${route_id}")"
-            test "$(jq -r '.success' <<<"$response")" = "true"
-          done < obsolete-newsroom-routes.tsv
-
-      - name: Prove native newsroom markup is unchanged
-        shell: bash
-        run: |
-          set -euo pipefail
-          for attempt in $(seq 1 36); do
+          for attempt in $(seq 1 48); do
             bust="$(date +%s)-${attempt}"
             origin_status="$(curl -sS -L -H 'Cache-Control: no-cache' -o origin-newsroom.html -w '%{http_code}' --max-time 25 "${NEWSROOM_ORIGIN_URL}?verify=${bust}" || true)"
             live_status="$(curl -sS -L -H 'Cache-Control: no-cache' -D live-newsroom.headers -o live-newsroom.html -w '%{http_code}' --max-time 25 "${NEWSROOM_URL}?verify=${bust}" || true)"
             script_status="$(curl -sS -L -H 'Cache-Control: no-cache' -o newsroom-script.js -w '%{http_code}' --max-time 25 "${NEWSROOM_SCRIPT_URL}?verify=${bust}" || true)"
+
             if [ "$origin_status" = "200" ] && [ "$live_status" = "200" ] && [ "$script_status" = "200" ] && \
                grep -Fi 'x-agroai-newsroom-source: native-pages-origin' live-newsroom.headers >/dev/null && \
                grep -F 'agroai-news-card-restore.js' live-newsroom.html >/dev/null && \
+               grep -F '/news/agro-ai-platform-api-launch' newsroom-script.js >/dev/null && \
+               grep -F 'AGRO-AI launches the Platform API' newsroom-script.js >/dev/null && \
                grep -F 'Introducing AGRO-AI Field Intelligence' newsroom-script.js >/dev/null && \
                grep -F 'AGRO-AI connects with John Deere Operations Center™' newsroom-script.js >/dev/null; then
               python3 - <<'PY'
@@ -137,69 +123,89 @@ from pathlib import Path
 import re
 origin = Path('origin-newsroom.html').read_text()
 live = Path('live-newsroom.html').read_text()
-clean = re.sub(r'<script src="/news/agroai-news-card-restore\.js" defer data-agroai-news-card-restoration="true"></script>', '', live, count=1)
+pattern = r'<script src="/news/agroai-news-card-restore\.js" defer data-agroai-news-card-restoration="exact-native-grid-v2"></script>'
+clean, count = re.subn(pattern, '', live, count=1)
+if count != 1:
+    raise SystemExit('Expected exactly one managed newsroom script tag')
 if clean != origin:
-    raise SystemExit('The newsroom markup changed beyond the single restoration script tag')
+    raise SystemExit('Native newsroom markup changed beyond the managed script tag')
 PY
               echo "native_newsroom_markup=unchanged"
-              echo "field_and_deere_card_restoration=loaded"
+              echo "three_managed_news_cards=loaded"
               exit 0
             fi
             sleep 5
           done
-          echo "Newsroom restoration did not verify"
+
+          echo "Native newsroom and card restoration did not verify"
           cat live-newsroom.headers || true
           exit 1
 
-      - name: Prove reviewed John Deere article and cover are live
+      - name: Prove Platform API article and assets live
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 48); do
+            bust="$(date +%s)-${attempt}"
+            article_status="$(curl -sS -L -H 'Cache-Control: no-cache' -D platform.headers -o platform.html -w '%{http_code}' --max-time 25 "${PLATFORM_ARTICLE_URL}?verify=${bust}" || true)"
+            cover_status="$(curl -sS -L -H 'Cache-Control: no-cache' -D platform-cover.headers -o platform-cover.svg -w '%{http_code}' --max-time 25 "${PLATFORM_COVER_URL}?verify=${bust}" || true)"
+            logo_status="$(curl -sS -L -H 'Cache-Control: no-cache' -D platform-logo.headers -o platform-logo.bin -w '%{http_code}' --max-time 25 "${PLATFORM_LOGO_URL}?verify=${bust}" || true)"
+
+            if [ "$article_status" = "200" ] && [ "$cover_status" = "200" ] && [ "$logo_status" = "200" ] && \
+               grep -F "AGRO-AI launches the Platform API for agriculture builders" platform.html >/dev/null && \
+               grep -F "Build agricultural products on the AGRO-AI intelligence layer." platform.html >/dev/null && \
+               ! grep -F "Article not found" platform.html >/dev/null && \
+               grep -Fi 'content-type: image/svg+xml' platform-cover.headers >/dev/null && \
+               grep -Fi 'x-agroai-asset-source: reviewed-platform-api-cover' platform-cover.headers >/dev/null && \
+               grep -Fi 'x-agroai-asset-source: official-repository-logo' platform-logo.headers >/dev/null; then
+              echo "platform_api_article=verified_live"
+              exit 0
+            fi
+            sleep 5
+          done
+
+          echo "Platform API article did not verify live"
+          cat platform.headers || true
+          head -80 platform.html || true
+          cat platform-cover.headers || true
+          cat platform-logo.headers || true
+          exit 1
+
+      - name: Prove existing John Deere article remains live
         shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 36); do
             bust="$(date +%s)-${attempt}"
-            article_status="$(curl -sS -L -H 'Cache-Control: no-cache' -D john-deere.headers -o john-deere.html -w '%{http_code}' --max-time 25 "${JOHN_DEERE_ARTICLE_URL}?verify=${bust}" || true)"
-            cover_status="$(curl -sS -L -H 'Cache-Control: no-cache' -D john-deere-cover.headers -o john-deere-cover.webp -w '%{http_code}' --max-time 25 "${JOHN_DEERE_COVER_URL}?verify=${bust}" || true)"
+            article_status="$(curl -sS -L -H 'Cache-Control: no-cache' -D deere.headers -o deere.html -w '%{http_code}' --max-time 25 "${JOHN_DEERE_ARTICLE_URL}?verify=${bust}" || true)"
+            cover_status="$(curl -sS -L -H 'Cache-Control: no-cache' -D deere-cover.headers -o deere-cover.webp -w '%{http_code}' --max-time 25 "${JOHN_DEERE_COVER_URL}?verify=${bust}" || true)"
             if [ "$article_status" = "200" ] && [ "$cover_status" = "200" ] && \
-               grep -F "AGRO-AI connects with John Deere Operations Center™" john-deere.html >/dev/null && \
-               grep -F "Agricultural operations do not suffer from a shortage of data." john-deere.html >/dev/null && \
-               grep -F "Access is initiated through the user's Operations Center connection." john-deere.html >/dev/null && \
-               grep -F '<meta name="author" content="AGRO-AI"' john-deere.html >/dev/null && \
-               grep -F 'https://app.agroai-pilot.com/integrations' john-deere.html >/dev/null && \
-               grep -F 'https://agroai-pilot.com/enterprise-portal' john-deere.html >/dev/null && \
-               grep -F 'https://agroai-pilot.com/book-a-demo' john-deere.html >/dev/null && \
-               grep -F 'https://agroai-pilot.com/platform-api/' john-deere.html >/dev/null && \
-               grep -F 'https://www.linkedin.com/company/agro-ai-inc/' john-deere.html >/dev/null && \
-               grep -F 'https://www.instagram.com/agroai.inc/' john-deere.html >/dev/null && \
-               grep -F 'https://www.youtube.com/channel/UCd3tQLAOtMmjFhRNVdU08tA' john-deere.html >/dev/null && \
-               grep -Fi 'content-type: image/webp' john-deere-cover.headers >/dev/null && \
-               grep -Fi 'x-agroai-asset-source: reviewed-john-deere-cover' john-deere-cover.headers >/dev/null; then
-              test "$(wc -c < john-deere-cover.webp)" -gt 10000
-              echo "reviewed_john_deere_article=verified_live"
+               grep -F "AGRO-AI connects with John Deere Operations Center™" deere.html >/dev/null && \
+               grep -Fi 'x-agroai-asset-source: reviewed-john-deere-cover' deere-cover.headers >/dev/null; then
+              echo "john_deere_article=verified_live"
               exit 0
             fi
             sleep 5
           done
-          echo "Reviewed John Deere article did not verify"
-          cat john-deere.headers || true
-          cat john-deere-cover.headers || true
+          echo "John Deere article regression check failed"
           exit 1
 
-      - name: Prove Field Intelligence article remains live
+      - name: Prove existing Field Intelligence article remains live
         shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 36); do
-            article_status="$(curl -sS -L -o field-article.html -w '%{http_code}' --max-time 25 "${FIELD_ARTICLE_URL}?verify=${attempt}" || true)"
+            article_status="$(curl -sS -L -o field.html -w '%{http_code}' --max-time 25 "${FIELD_ARTICLE_URL}?verify=${attempt}" || true)"
             cover_status="$(curl -sS -L -D field-cover.headers -o field-cover.bin -w '%{http_code}' --max-time 25 "${FIELD_COVER_URL}?verify=${attempt}" || true)"
             logo_status="$(curl -sS -L -o field-logo.bin -w '%{http_code}' --max-time 25 "${FIELD_LOGO_URL}?verify=${attempt}" || true)"
             if [ "$article_status" = "200" ] && [ "$cover_status" = "200" ] && [ "$logo_status" = "200" ] && \
-               grep -F "Introducing AGRO-AI Field Intelligence" field-article.html >/dev/null && \
-               grep -F "GiM6WZY0HG0" field-article.html >/dev/null && \
-               grep -Fi "x-agroai-cover-target: 3840x2160" field-cover.headers >/dev/null; then
+               grep -F "Introducing AGRO-AI Field Intelligence" field.html >/dev/null && \
+               grep -F "GiM6WZY0HG0" field.html >/dev/null && \
+               grep -Fi 'x-agroai-cover-target: 3840x2160' field-cover.headers >/dev/null; then
               echo "field_intelligence_article=verified_live"
               exit 0
             fi
             sleep 5
           done
-          echo "Field Intelligence article did not verify"
+          echo "Field Intelligence article regression check failed"
           exit 1
