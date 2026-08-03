@@ -1,7 +1,7 @@
 name: Portal Dependency Audit
 
 # Exact current-lockfile gate for production and development dependencies.
-# Issue 353 verification branch: the workflow must prove the current lockfile.
+# Issue 353 verification branch: capture the full graph before remediation.
 on:
   push:
     branches: ["main"]
@@ -48,7 +48,7 @@ jobs:
         id: audit
         shell: bash
         run: |
-          set -uo pipefail
+          set +e
           npm audit --omit=dev --json > audit-production.json
           production_exit=$?
           npm audit --json > audit-complete.json
