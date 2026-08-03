@@ -9,7 +9,10 @@ from typing import Any
 
 from app.core.config import settings
 
-_WINDOWS = (("minute", 4, 60), ("hour", 60, 3600))
+_CHANNEL_WINDOWS = {
+    "vision": (("minute", 8, 60), ("hour", 240, 3600)),
+    "speech": (("minute", 6, 60), ("hour", 180, 3600)),
+}
 _MEMORY: dict[str, tuple[int, int]] = {}
 _MEMORY_LOCK = threading.Lock()
 
@@ -64,13 +67,13 @@ def _subject(organization_id: str, user_id: str) -> str:
     return raw.replace(" ", "_").replace("/", "_")[:240]
 
 
-def _memory_check(subject: str) -> FieldLiveRateDecision:
+def _memory_check(subject: str, windows: tuple[tuple[str, int, int], ...]) -> FieldLiveRateDecision:
     now = int(time.time())
     allowed = True
     remaining: int | None = None
     retry_after = 0
     with _MEMORY_LOCK:
-        for name, limit, seconds in _WINDOWS:
+        for name, limit, seconds in windows:
             window_start = now - (now % seconds)
             reset = window_start + seconds
             key = f"{subject}:{name}:{window_start}"
@@ -89,14 +92,18 @@ def _memory_check(subject: str) -> FieldLiveRateDecision:
     return FieldLiveRateDecision(allowed, max(0, remaining or 0), max(1, retry_after) if not allowed else 0, "memory")
 
 
-def check_field_live_analysis_limit(organization_id: str, user_id: str) -> FieldLiveRateDecision:
-    subject = _subject(str(organization_id), str(user_id))
+def check_field_live_analysis_limit(
+    organization_id: str, user_id: str, *, channel: str = "vision"
+) -> FieldLiveRateDecision:
+    normalized_channel = channel if channel in _CHANNEL_WINDOWS else "vision"
+    windows = _CHANNEL_WINDOWS[normalized_channel]
+    subject = f"{normalized_channel}:{_subject(str(organization_id), str(user_id))}"
     url = str(getattr(settings, "REDIS_URL", "") or "").strip()
     if url:
         now = int(time.time())
         keys: list[str] = []
         args: list[int] = [now]
-        for name, limit, seconds in _WINDOWS:
+        for name, limit, seconds in windows:
             window_start = now - (now % seconds)
             keys.append(f"agroai:field-live:v1:{subject}:{name}:{window_start}")
             args.extend([limit, seconds + 5])
@@ -110,4 +117,4 @@ def check_field_live_analysis_limit(organization_id: str, user_id: str) -> Field
             )
         except Exception:  # noqa: BLE001 - bounded in-process fallback remains protective
             pass
-    return _memory_check(subject)
+    return _memory_check(subject, windows)
