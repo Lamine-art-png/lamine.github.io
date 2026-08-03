@@ -23,8 +23,8 @@ jobs:
     if: >-
       github.event.pull_request.number == 392 &&
       github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-slim
-    timeout-minutes: 15
+    runs-on: macos-14
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
