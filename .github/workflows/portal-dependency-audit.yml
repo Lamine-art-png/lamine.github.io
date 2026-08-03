@@ -1,6 +1,7 @@
 name: Portal Dependency Audit
 
 # Exact current-lockfile gate for production and development dependencies.
+# Issue 353 verification branch: the workflow must prove the current lockfile.
 on:
   push:
     branches: ["main"]
