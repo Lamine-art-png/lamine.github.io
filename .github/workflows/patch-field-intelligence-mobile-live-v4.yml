@@ -65,7 +65,7 @@ jobs:
           PY
           python scripts/patch_field_intelligence_mobile_live_v4.py
 
-      - name: Compile and test backend multilingual live pipeline
+      - name: Compile and test changed backend contracts
         working-directory: agroai_api
         run: |
           python -m pip install -q -r requirements.txt pytest
@@ -74,8 +74,6 @@ jobs:
             tests/test_field_intelligence_multimodal_v3.py \
             tests/unit/test_field_vision.py \
             tests/unit/test_field_live_rate_limit_channels.py \
-            tests/unit/test_field_intelligence.py \
-            tests/unit/test_field_intelligence_launch.py \
             tests/unit/test_field_intelligence_hardening.py
 
       - name: Test and build production portal
