@@ -1,13 +1,13 @@
 from datetime import datetime
 
-from app.models.saas import EmailVerificationToken, OrganizationMembership
+from app.models.saas import OrganizationMembership, User
 
 
-def _verified_account(client, db):
+def _register_account(client, email):
     response = client.post(
         "/v1/auth/register",
         json={
-            "email": "auth-hot-path@example.com",
+            "email": email,
             "password": "strong-password",
             "name": "Auth Hot Path",
             "organization_name": "Auth Hot Path Farms",
@@ -17,10 +17,14 @@ def _verified_account(client, db):
         },
     )
     assert response.status_code == 201, response.text
-    org_id = response.json()["current_organization"]["id"]
+    return response.json()
+
+
+def _verified_account(client, db):
+    body = _register_account(client, "auth-hot-path@example.com")
     membership = (
         db.query(OrganizationMembership)
-        .filter(OrganizationMembership.organization_id == org_id)
+        .filter(OrganizationMembership.organization_id == body["current_organization"]["id"])
         .first()
     )
     membership.user.email_verification_status = "verified"
@@ -56,3 +60,31 @@ def test_repeat_login_and_me_never_reseed_evaluation_context(client, db, monkeyp
     )
     assert me.status_code == 200, me.text
     assert me.json()["user"]["email"] == email
+
+
+def test_email_verification_confirm_keeps_one_time_activation_seed(client, db, monkeypatch):
+    email = "verification-activation@example.com"
+    _register_account(client, email)
+    user = db.query(User).filter(User.email == email).one()
+    seed_calls = []
+
+    def fake_confirm(active_db, _token):
+        user.email_verification_status = "verified"
+        user.email_verified_at = datetime.utcnow()
+        active_db.flush()
+        return user
+
+    def capture_seed(*args, **kwargs):
+        seed_calls.append((args, kwargs))
+        return {}
+
+    monkeypatch.setattr("app.api.v1.auth.confirm_verification", fake_confirm)
+    monkeypatch.setattr("app.api.v1.auth.ensure_evaluation_context", capture_seed)
+
+    response = client.post(
+        "/v1/auth/email-verification/confirm",
+        json={"token": "verification-test-token-20260802"},
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["status"] == "verified"
+    assert len(seed_calls) == 1

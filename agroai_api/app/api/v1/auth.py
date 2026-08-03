@@ -657,11 +657,18 @@ def email_verification_confirm(
     if not user:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Verification link is invalid or expired")
 
+    membership = (
+        db.query(OrganizationMembership)
+        .filter(OrganizationMembership.user_id == user.id)
+        .order_by(OrganizationMembership.created_at.asc())
+        .first()
+    )
     if not membership:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="User has no organization membership")
 
     _promote_verified_organization(user, membership.organization)
     require_approved_organization(membership.organization)
+    ensure_evaluation_context(db, membership.organization, _first_workspace(db, membership.organization_id))
     user.last_login_at = datetime.utcnow()
     ip_address, user_agent = _request_metadata(request)
     record_security_event(
