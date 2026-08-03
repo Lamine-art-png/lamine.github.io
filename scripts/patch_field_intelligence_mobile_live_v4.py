@@ -389,7 +389,7 @@ component = replace_once(
 component = replace_once(
     component,
     '  }, [audioUrl, clearLiveVisionSampling, clearTimer, clearVideoTimer, releaseStream, releaseVideoStream, stopRecognition, walkVideoUrl]);',
-    '  }, [audioUrl, clearLiveSpeechSampling, clearLiveVisionSampling, clearTimer, clearVideoTimer, releaseStream, releaseVideoStream, stopRecognition, walkVideoUrl]);',
+    '  }, [audioUrl, clearLiveVisionSampling, clearTimer, clearVideoTimer, releaseStream, releaseVideoStream, stopLiveSpeechSampling, stopRecognition, walkVideoUrl]);',
     label="cleanup dependencies",
 )
 
@@ -421,7 +421,7 @@ component = replace_once(
 component = replace_once(
     component,
     '  }, [clearLiveVisionSampling, clearVideoTimer, releaseVideoStream, stopRecognition]);',
-    '  }, [clearLiveSpeechSampling, clearLiveVisionSampling, clearVideoTimer, releaseVideoStream, stopRecognition]);',
+    '  }, [clearLiveVisionSampling, clearVideoTimer, releaseVideoStream, stopLiveSpeechSampling, stopRecognition]);',
     label="stop walk dependencies",
 )
 
