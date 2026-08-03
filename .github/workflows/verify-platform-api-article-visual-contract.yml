@@ -45,6 +45,7 @@ jobs:
           mkdir -p visual-proof
           cat > visual-proof/verify.mjs <<'JS'
           import { chromium } from 'playwright';
+          import { writeFile } from 'node:fs/promises';
 
           const articleUrl = 'https://agroai-pilot.com/news/agro-ai-platform-api-launch';
           const coverUrl = 'https://agroai-pilot.com/news/agro-ai-platform-api-launch/cover.svg';
@@ -54,9 +55,13 @@ jobs:
             deviceScaleFactor: 1,
           });
 
+          let articleProof = null;
+          let articleLast = null;
+          let coverProof = null;
+          let coverLast = null;
+
           try {
             const page = await context.newPage();
-            let articleProof = null;
             for (let attempt = 1; attempt <= 24; attempt += 1) {
               const response = await page.goto(articleUrl, { waitUntil: 'networkidle', timeout: 45000 });
               await page.evaluate(() => document.fonts.ready);
@@ -77,6 +82,7 @@ jobs:
                   hero: h1?.textContent?.trim() || '',
                 };
               });
+              articleLast = { attempt, httpStatus: response?.status() ?? null, ...proof };
               if (
                 response?.status() === 200 &&
                 proof.hero === 'Build agricultural products on the AGRO-AI intelligence layer.' &&
@@ -88,20 +94,17 @@ jobs:
                 proof.paragraphFamily.includes('Glacial Indifference') &&
                 proof.h1Weight === '700'
               ) {
-                articleProof = { httpStatus: response.status(), ...proof };
+                articleProof = articleLast;
                 break;
               }
               await page.waitForTimeout(5000);
             }
 
             if (!articleProof) {
-              throw new Error('Production article did not prove loaded Glacial Indifference on body, heading, and paragraph');
+              throw new Error(`Production typography proof failed: ${JSON.stringify(articleLast)}`);
             }
 
-            await page.screenshot({ path: 'visual-proof/article.png', fullPage: true });
-
             const coverPage = await context.newPage();
-            let coverProof = null;
             for (let attempt = 1; attempt <= 24; attempt += 1) {
               const response = await coverPage.goto(coverUrl, { waitUntil: 'networkidle', timeout: 45000 });
               const proof = await coverPage.evaluate(() => {
@@ -133,24 +136,48 @@ jobs:
                     margin.bottom >= 8,
                 };
               });
+              coverLast = { attempt, httpStatus: response?.status() ?? null, ...(proof || {}) };
               if (response?.status() === 200 && proof?.contained && proof?.centered) {
-                coverProof = { httpStatus: response.status(), ...proof };
+                coverProof = coverLast;
                 break;
               }
               await coverPage.waitForTimeout(5000);
             }
 
             if (!coverProof) {
-              throw new Error('Production cover label is not fully contained and centered inside the lime pill');
+              throw new Error(`Production cover containment proof failed: ${JSON.stringify(coverLast)}`);
             }
 
-            await coverPage.screenshot({ path: 'visual-proof/cover.png', fullPage: true });
-            console.log(JSON.stringify({ articleProof, coverProof }, null, 2));
+            const result = {
+              verified: true,
+              articleUrl,
+              coverUrl,
+              articleProof,
+              coverProof,
+            };
+            const serialized = `${JSON.stringify(result, null, 2)}\n`;
+            await writeFile('visual-proof/result.json', serialized, 'utf8');
+            process.stdout.write(serialized);
+          } catch (error) {
+            const failure = {
+              verified: false,
+              articleUrl,
+              coverUrl,
+              articleProof,
+              articleLast,
+              coverProof,
+              coverLast,
+              error: error instanceof Error ? error.message : String(error),
+            };
+            const serialized = `${JSON.stringify(failure, null, 2)}\n`;
+            await writeFile('visual-proof/result.json', serialized, 'utf8');
+            process.stderr.write(serialized);
+            throw error;
           } finally {
             await browser.close();
           }
           JS
-          node visual-proof/verify.mjs | tee visual-proof/result.json
+          node visual-proof/verify.mjs
 
       - name: Upload browser proof
         if: ${{ always() }}
