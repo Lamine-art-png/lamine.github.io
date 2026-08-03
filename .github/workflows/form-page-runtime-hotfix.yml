@@ -38,7 +38,7 @@ jobs:
             grep -F '/agroai-forms-runtime.js' "${path}.html" >/dev/null
           done
           curl -fsS https://agroai-pilot.com/agroai-forms-runtime.js -o runtime.js
-          grep -F 'runtimeVersion: "2026-08-03.2"' runtime.js >/dev/null
+          grep -F 'runtimeVersion: "2026-08-03.3"' runtime.js >/dev/null
 
       - name: Install Chromium
         shell: bash
