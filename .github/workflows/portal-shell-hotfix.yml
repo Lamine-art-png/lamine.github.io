@@ -1,0 +1,46 @@
+name: Portal Shell Hotfix Verification
+
+on:
+  push:
+    branches:
+      - hotfix/restore-portal-shell
+
+permissions:
+  contents: read
+
+jobs:
+  verify-portal-shell:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - name: Install exact portal dependencies
+        working-directory: figma-enterprise-v4
+        run: npm ci --no-audit --no-fund
+      - name: Verify Field Intelligence isolation and runtime order
+        working-directory: figma-enterprise-v4
+        run: npm run test:field-intelligence
+      - name: Verify localization runtime
+        working-directory: figma-enterprise-v4
+        run: npm run test:i18n
+      - name: Build production portal
+        working-directory: figma-enterprise-v4
+        env:
+          VITE_API_BASE_URL: https://app.agroai-pilot.com
+          VITE_DEPLOYMENT_ENVIRONMENT: production
+          VITE_BUILD_SHA: ${{ github.sha }}
+        run: npm run build
+      - name: Prove Field Intelligence is not in the startup entry
+        working-directory: figma-enterprise-v4
+        shell: bash
+        run: |
+          set -euo pipefail
+          entry="$(grep -oE '/assets/[A-Za-z0-9._/-]+\.js' dist/index.html | head -1 | sed 's#^/##')"
+          test -n "$entry"
+          ! grep -F 'LIVE_SPEECH_CHUNK_MS' "dist/$entry"
+          find dist/assets -type f -name '*.js' -print0 | xargs -0 grep -l 'LIVE_SPEECH_CHUNK_MS' | grep -q .
