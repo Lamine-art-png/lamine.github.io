@@ -76,7 +76,7 @@ const runtimeSource = String.raw`(() => {
       ) {
         return;
       }
-      const key = clean(field.name || field.id || `field_${index + 1}`);
+      const key = clean(field.name || field.id || ("field_" + (index + 1)));
       const next = fieldValue(field);
       if (!key || !next) return;
       output[key] = output[key] ? output[key] + "; " + next : next;
