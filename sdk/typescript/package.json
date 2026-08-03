@@ -1,18 +1,30 @@
 {
   "name": "@agro-ai/platform",
-  "version": "0.2.0",
-  "private": true,
+  "version": "0.3.0",
   "type": "module",
-  "description": "Unpublished server SDK for the AGRO-AI Platform API",
+  "description": "Typed server-side client for the AGRO-AI Platform API",
+  "license": "UNLICENSED",
+  "engines": {
+    "node": ">=20"
+  },
   "exports": {
     ".": "./dist/index.js",
     "./browser": "./dist/browser.js"
   },
   "types": "./dist/index.d.ts",
-  "files": ["dist", "README.md", "CHANGELOG.md"],
+  "files": [
+    "dist",
+    "README.md",
+    "CHANGELOG.md"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "npm run build && node --test tests/*.test.mjs"
+    "test": "npm run build && node --test tests/*.test.mjs",
+    "pack:verify": "npm pack --dry-run"
   },
   "devDependencies": {
     "typescript": "5.8.3"
