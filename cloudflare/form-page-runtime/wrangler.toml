@@ -1,0 +1,14 @@
+name = "agroai-form-page-runtime"
+main = "src/index.js"
+compatibility_date = "2026-08-01"
+workers_dev = false
+
+routes = [
+  { pattern = "agroai-pilot.com/careers", zone_name = "agroai-pilot.com" },
+  { pattern = "agroai-pilot.com/careers/*", zone_name = "agroai-pilot.com" },
+  { pattern = "agroai-pilot.com/apply", zone_name = "agroai-pilot.com" },
+  { pattern = "agroai-pilot.com/apply/*", zone_name = "agroai-pilot.com" },
+  { pattern = "agroai-pilot.com/book-a-demo", zone_name = "agroai-pilot.com" },
+  { pattern = "agroai-pilot.com/book-a-demo/*", zone_name = "agroai-pilot.com" },
+  { pattern = "agroai-pilot.com/agroai-forms-runtime.js", zone_name = "agroai-pilot.com" }
+]

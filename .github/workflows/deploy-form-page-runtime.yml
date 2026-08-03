@@ -1,0 +1,79 @@
+name: Deploy Form Page Runtime
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "cloudflare/form-page-runtime/**"
+      - ".github/workflows/deploy-form-page-runtime.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: form-page-runtime-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate runtime source and route ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/form-page-runtime/src/index.js
+          grep -F 'agroai-pilot.com/apply"' cloudflare/form-page-runtime/wrangler.toml >/dev/null
+          grep -F 'agroai-pilot.com/book-a-demo"' cloudflare/form-page-runtime/wrangler.toml >/dev/null
+          grep -F 'agroai-pilot.com/agroai-forms-runtime.js"' cloudflare/form-page-runtime/wrangler.toml >/dev/null
+          grep -F 'runtimeVersion: "2026-08-03.3"' cloudflare/form-page-runtime/src/index.js >/dev/null
+
+      - name: Deploy authoritative form pages
+        shell: bash
+        run: npx --yes wrangler@4.107.0 deploy --config cloudflare/form-page-runtime/wrangler.toml
+
+      - name: Verify production route injection
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 30); do
+            all_ready=1
+            for path in careers apply book-a-demo; do
+              code="$(curl -sS --max-time 20 -D "${path}.headers" -o "${path}.html" -w '%{http_code}' "https://agroai-pilot.com/${path}" || true)"
+              if [ "$code" != "200" ] || \
+                 ! grep -Fi 'x-agroai-forms-runtime: active' "${path}.headers" >/dev/null || \
+                 ! grep -F '/agroai-forms-runtime.js' "${path}.html" >/dev/null; then
+                all_ready=0
+              fi
+            done
+            runtime_code="$(curl -sS --max-time 20 -D runtime.headers -o runtime.js -w '%{http_code}' https://agroai-pilot.com/agroai-forms-runtime.js || true)"
+            if [ "$runtime_code" != "200" ] || \
+               ! grep -Fi 'x-agroai-forms-runtime: active' runtime.headers >/dev/null || \
+               ! grep -F 'runtimeVersion: "2026-08-03.3"' runtime.js >/dev/null || \
+               ! grep -F 'fetch("/api/apply"' runtime.js >/dev/null || \
+               ! grep -F 'fetch("/api/demo-request"' runtime.js >/dev/null; then
+              all_ready=0
+            fi
+            if [ "$all_ready" = "1" ]; then
+              ready=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$ready" != "1" ]; then
+            for path in careers apply book-a-demo; do
+              echo "=== ${path} ==="
+              cat "${path}.headers" || true
+            done
+            echo "=== runtime ==="
+            cat runtime.headers || true
+            exit 1
+          fi
