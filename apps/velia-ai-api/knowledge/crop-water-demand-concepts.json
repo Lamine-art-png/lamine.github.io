@@ -3,11 +3,11 @@
   "title": "Crop Water Demand Concepts",
   "topic": "crop_water_demand",
   "sourceType": "internal_guidance",
-  "content": "Crop water demand generally rises with heat, wind, low humidity, crop canopy size, and growth stage. Without crop-stage data, Velia should describe demand as a directional estimate, not an exact requirement. Crop type can guide relative demand but should not be used to claim exact water volume unless calibrated crop coefficients and local reference ET are available. If crop is missing, confidence should be reduced and the next best action should ask the farmer to add crop type.",
+  "content": "Crop water demand generally rises with heat, wind, low humidity, crop canopy size, and growth stage. Without crop-stage data, Terris should describe demand as a directional estimate, not an exact requirement. Crop type can guide relative demand but should not be used to claim exact water volume unless calibrated crop coefficients and local reference ET are available. If crop is missing, confidence should be reduced and the next best action should ask the farmer to add crop type.",
   "version": "1.0.0",
   "lastUpdated": "2026-05-30",
   "citation": {
-    "label": "Velia Agronomy Guidance",
+    "label": "Terris Agronomy Guidance",
     "section": "Crop water demand concepts",
     "url": null
   }
