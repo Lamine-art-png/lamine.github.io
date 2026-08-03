@@ -6,6 +6,13 @@ on:
       - fix/field-intelligence-mobile-live-v4
     paths:
       - .github/field-intelligence-mobile-live-v4.trigger
+  pull_request:
+    branches:
+      - main
+    paths:
+      - scripts/patch_field_intelligence_mobile_live_v4.py
+      - .github/workflows/patch-field-intelligence-mobile-live-v4.yml
+      - .github/field-intelligence-mobile-live-v4.trigger
 
 permissions:
   contents: write
@@ -16,6 +23,7 @@ concurrency:
 
 jobs:
   patch-test-commit:
+    if: github.event_name == 'push' || github.event.pull_request.head.ref == 'fix/field-intelligence-mobile-live-v4'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
