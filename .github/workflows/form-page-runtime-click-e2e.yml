@@ -1,0 +1,151 @@
+name: Form Page Runtime Click E2E
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "cloudflare/form-page-runtime/**"
+      - ".github/workflows/form-page-runtime-click-e2e.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  browser-click-proof:
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy runtime
+        run: |
+          set -euo pipefail
+          node --check cloudflare/form-page-runtime/src/index.js
+          npx --yes wrangler@4.107.0 deploy --config cloudflare/form-page-runtime/wrangler.toml
+
+      - name: Install Playwright
+        run: |
+          set -euo pipefail
+          npm --silent --no-save install playwright@1.55.0
+          npx playwright install --with-deps chromium
+
+      - name: Submit through actual live UI
+        run: |
+          set -euo pipefail
+          printf '%s\n' '%PDF-1.4' 'AGRO-AI actual UI proof' '%%EOF' > resume.pdf
+          cat > ui-proof.mjs <<'JS'
+          import { chromium } from 'playwright';
+          import path from 'node:path';
+
+          const browser = await chromium.launch({ headless: true });
+          const context = await browser.newContext({ userAgent: 'Mozilla/5.0 AGROAIActualUIProof' });
+
+          async function fillForm(form, marker) {
+            const fields = form.locator('input,textarea,select');
+            for (let i = 0; i < await fields.count(); i += 1) {
+              const field = fields.nth(i);
+              if (await field.isDisabled().catch(() => true)) continue;
+              const name = (await field.getAttribute('name')) || '';
+              const type = ((await field.getAttribute('type')) || '').toLowerCase();
+              const tag = await field.evaluate(node => node.tagName.toLowerCase());
+              if (!name || ['hidden','button','submit'].includes(type)) continue;
+              if (type === 'file') {
+                await field.setInputFiles(path.resolve('resume.pdf'));
+                continue;
+              }
+              if (type === 'checkbox' || type === 'radio') {
+                await field.check().catch(() => {});
+                continue;
+              }
+              if (tag === 'select') {
+                const values = await field.locator('option').evaluateAll(nodes => nodes.filter(node => node.value && !node.disabled).map(node => node.value));
+                if (values[0]) await field.selectOption(values[0]);
+                continue;
+              }
+              const lower = name.toLowerCase();
+              let text = marker;
+              if (lower.includes('email')) text = 'contact@agroai-pilot.com';
+              else if (lower.includes('name')) text = 'AGRO-AI actual UI verification';
+              else if (lower.includes('location')) text = 'San Francisco, California';
+              else if (lower.includes('phone')) text = '4155550100';
+              else if (lower.includes('acre') || type === 'number') text = '1';
+              else if (lower.includes('linkedin')) text = 'https://www.linkedin.com/company/agro-ai-inc/';
+              else if (lower.includes('portfolio') || lower.includes('proof')) text = 'https://agroai-pilot.com';
+              await field.fill(text);
+            }
+          }
+
+          async function careersProof() {
+            const page = await context.newPage();
+            const leaks = [];
+            page.on('request', request => {
+              if (request.method() === 'POST' && /formspree\.io|workers\.dev/.test(request.url())) leaks.push(request.url());
+            });
+            await page.goto('https://agroai-pilot.com/careers', { waitUntil: 'networkidle', timeout: 60000 });
+            const applyLinks = page.getByRole('link', { name: /apply now|apply for this role/i });
+            const count = await applyLinks.count();
+            if (!count) {
+              const links = await page.locator('a').evaluateAll(nodes => nodes.map(node => ({ text: (node.textContent || '').trim(), href: node.href })).filter(item => /apply/i.test(item.text)));
+              throw new Error(`No Apply link found. Candidates=${JSON.stringify(links)}`);
+            }
+            await applyLinks.first().click();
+            await page.waitForLoadState('networkidle').catch(() => {});
+            const form = page.locator('form').first();
+            await form.waitFor({ state: 'visible', timeout: 45000 });
+            const currentPath = new URL(page.url()).pathname;
+            if (!currentPath.startsWith('/careers/')) throw new Error(`Unexpected careers application path ${currentPath}`);
+            const runtimeActive = await page.evaluate(() => window.__AGROAI_FORMS_RUNTIME__ === true);
+            if (!runtimeActive) throw new Error('Careers runtime inactive on real application route.');
+            const marker = `careers-actual-ui-${Date.now()}`;
+            await fillForm(form, marker);
+            const responsePromise = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/apply', { timeout: 45000 });
+            await form.locator('button[type="submit"],input[type="submit"]').first().click();
+            const response = await responsePromise;
+            if (response.status() !== 200 || response.headers()['x-agroai-notification'] !== 'delivered') {
+              throw new Error(`Careers delivery failed HTTP ${response.status()}: ${await response.text()}`);
+            }
+            await page.getByText('Application received', { exact: true }).waitFor({ timeout: 20000 });
+            if (leaks.length) throw new Error(`Careers leaked to ${leaks.join(', ')}`);
+            console.log(`CAREERS_PATH=${currentPath}`);
+            console.log(`CAREERS_MARKER=${marker}`);
+            await page.close();
+          }
+
+          async function demoProof() {
+            const page = await context.newPage();
+            const leaks = [];
+            page.on('request', request => {
+              if (request.method() === 'POST' && /formspree\.io|workers\.dev/.test(request.url())) leaks.push(request.url());
+            });
+            await page.goto('https://agroai-pilot.com/book-a-demo', { waitUntil: 'networkidle', timeout: 60000 });
+            const form = page.locator('form').first();
+            await form.waitFor({ state: 'visible', timeout: 45000 });
+            const runtimeActive = await page.evaluate(() => window.__AGROAI_FORMS_RUNTIME__ === true);
+            if (!runtimeActive) throw new Error('Demo runtime inactive.');
+            const marker = `demo-actual-ui-${Date.now()}`;
+            await fillForm(form, marker);
+            const responsePromise = page.waitForResponse(response => response.request().method() === 'POST' && new URL(response.url()).pathname === '/api/demo-request', { timeout: 45000 });
+            await form.locator('button[type="submit"],input[type="submit"]').first().click();
+            const response = await responsePromise;
+            if (response.status() !== 201 || response.headers()['x-agroai-notification'] !== 'delivered') {
+              throw new Error(`Demo delivery failed HTTP ${response.status()}: ${await response.text()}`);
+            }
+            await page.getByText('Demo request received', { exact: true }).waitFor({ timeout: 20000 });
+            if (leaks.length) throw new Error(`Demo leaked to ${leaks.join(', ')}`);
+            console.log(`DEMO_MARKER=${marker}`);
+            await page.close();
+          }
+
+          try {
+            await careersProof();
+            await demoProof();
+          } finally {
+            await browser.close();
+          }
+          JS
+          node ui-proof.mjs | tee ui-proof.log
+          grep -F 'CAREERS_PATH=' ui-proof.log
+          grep -F 'CAREERS_MARKER=' ui-proof.log
+          grep -F 'DEMO_MARKER=' ui-proof.log
