@@ -26,25 +26,28 @@ jobs:
     env:
       ARTICLE_URL: https://agroai-pilot.com/news/agro-ai-platform-api-launch
       NEWS_URL: https://agroai-pilot.com/news
+      SCRIPT_URL: https://agroai-pilot.com/news/agroai-news-card-restore.js
       FIELD_URL: https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence
       DEERE_URL: https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center
     steps:
-      - name: Verify literal article URL and existing News routes
+      - name: Verify literal article URL, newsroom card, and existing News routes
         shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 18); do
             article_status="$(curl -sS -L -H 'Cache-Control: no-cache' -D article.headers -o article.html -w '%{http_code}' --max-time 25 "${ARTICLE_URL}" || true)"
             news_status="$(curl -sS -L -H 'Cache-Control: no-cache' -o news.html -w '%{http_code}' --max-time 25 "${NEWS_URL}" || true)"
+            script_status="$(curl -sS -L -H 'Cache-Control: no-cache' -o newsroom.js -w '%{http_code}' --max-time 25 "${SCRIPT_URL}" || true)"
             field_status="$(curl -sS -L -H 'Cache-Control: no-cache' -o field.html -w '%{http_code}' --max-time 25 "${FIELD_URL}" || true)"
             deere_status="$(curl -sS -L -H 'Cache-Control: no-cache' -o deere.html -w '%{http_code}' --max-time 25 "${DEERE_URL}" || true)"
 
-            if [ "$article_status" = "200" ] && [ "$news_status" = "200" ] && [ "$field_status" = "200" ] && [ "$deere_status" = "200" ] && \
+            if [ "$article_status" = "200" ] && [ "$news_status" = "200" ] && [ "$script_status" = "200" ] && [ "$field_status" = "200" ] && [ "$deere_status" = "200" ] && \
                grep -F '<time datetime="2026-08-03">August 3, 2026</time>' article.html >/dev/null && \
                grep -F 'href="https://app.agroai-pilot.com">Open Enterprise Portal</a>' article.html >/dev/null && \
                grep -F 'href="https://agroai-pilot.com/book-a-demo">Book a Demo</a>' article.html >/dev/null && \
                grep -F '<section class="enterprise-portal">' article.html >/dev/null && \
                grep -F 'Run your operation through the AGRO-AI Enterprise Portal.' article.html >/dev/null && \
+               grep -F 'date:"San Francisco, California — August 3, 2026"' newsroom.js >/dev/null && \
                ! grep -F 'Article not found' article.html >/dev/null && \
                grep -F 'Introducing AGRO-AI Field Intelligence' field.html >/dev/null && \
                grep -F 'AGRO-AI connects with John Deere Operations Center™' deere.html >/dev/null; then
@@ -57,16 +60,18 @@ if enterprise <= closing:
     raise SystemExit('Enterprise Portal section is not separate and after the builder CTA')
 PY
               echo "platform_api_article_refinements=verified_live"
+              echo "platform_api_newsroom_card_date=verified_live"
               exit 0
             fi
 
-            echo "Attempt ${attempt}: article=${article_status} news=${news_status} field=${field_status} deere=${deere_status}"
+            echo "Attempt ${attempt}: article=${article_status} news=${news_status} script=${script_status} field=${field_status} deere=${deere_status}"
             sleep 5
           done
 
           echo "Live article refinements did not verify"
           cat article.headers || true
           head -160 article.html || true
+          head -120 newsroom.js || true
           exit 1
 
       - name: Record verified production proof
@@ -76,4 +81,4 @@ PY
         run: |
           verified_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           gh api "repos/${GITHUB_REPOSITORY}/issues/385/comments" \
-            -f body="LIVE PROOF — ${verified_at}: the literal Platform API article URL returned HTTP 200 with the August 3, 2026 date; Open Enterprise Portal and Book a Demo in the header; and a separate Enterprise Portal section after Start building with AGRO-AI. The newsroom, Field Intelligence article, and John Deere article also returned successfully. Run ${GITHUB_RUN_ID}."
+            -f body="LIVE PROOF — ${verified_at}: the literal Platform API article URL returned HTTP 200 with the August 3, 2026 date; Open Enterprise Portal and Book a Demo in the header; and a separate Enterprise Portal section after Start building with AGRO-AI. The newsroom card also shows August 3, 2026, and the newsroom, Field Intelligence article, and John Deere article returned successfully. Run ${GITHUB_RUN_ID}."
