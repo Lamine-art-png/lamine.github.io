@@ -57,11 +57,19 @@ async function fillForm(form, marker) {
     else if (type === "tel" || lower.includes("phone")) text = "4155550100";
     else if (type === "url") text = baseUrl;
     else if (type === "number" || lower.includes("acre")) text = "1";
-    else if (lower.includes("fullname") || lower === "name" || lower.includes("contactname")) {
-      text = "AGRO-AI production browser verification";
-    } else if (lower.includes("location")) text = "San Francisco, California";
-    else if (lower.includes("linkedin")) text = "https://www.linkedin.com/company/agro-ai-inc/";
     else if (
+      lower.includes("fullname") ||
+      lower === "name" ||
+      lower.includes("contactname") ||
+      lower.includes("first_name") ||
+      lower.includes("firstname")
+    ) {
+      text = "AGRO-AI production browser verification";
+    } else if (lower.includes("location") || lower.includes("city")) {
+      text = "San Francisco, California";
+    } else if (lower.includes("linkedin")) {
+      text = "https://www.linkedin.com/company/agro-ai-inc/";
+    } else if (
       lower.includes("portfolio") ||
       lower.includes("proof") ||
       lower.includes("github") ||
@@ -73,30 +81,97 @@ async function fillForm(form, marker) {
   }
 }
 
-function captureLegacyLeaks(page) {
-  const leaks = [];
+function captureTraffic(page) {
+  const legacyLeaks = [];
+  const posts = [];
   page.on("request", (request) => {
-    if (
-      request.method() === "POST" &&
-      /formspree\.io|agroai-demo-request\..*workers\.dev/i.test(request.url())
-    ) {
-      leaks.push(request.url());
+    if (request.method() !== "POST") return;
+    posts.push(request.url());
+    if (/formspree\.io|agroai-demo-request\..*workers\.dev/i.test(request.url())) {
+      legacyLeaks.push(request.url());
     }
   });
-  return leaks;
+  return { legacyLeaks, posts };
+}
+
+async function describeForms(page) {
+  return page.locator("form").evaluateAll((forms) =>
+    forms.map((form, index) => ({
+      index,
+      visible: !!(form.offsetWidth || form.offsetHeight || form.getClientRects().length),
+      authoritative: form.dataset.agroaiAuthoritativeForm || "",
+      action: form.action,
+      method: form.method,
+      noValidate: form.noValidate,
+      fieldCount: form.querySelectorAll("input,textarea,select").length,
+      fields: Array.from(form.querySelectorAll("input,textarea,select")).map((field) => ({
+        tag: field.tagName.toLowerCase(),
+        type: field.type || "",
+        name: field.name || "",
+        id: field.id || "",
+        required: !!field.required,
+        value: field.value || "",
+      })),
+      submitControls: Array.from(
+        form.querySelectorAll('button, input[type="submit"]'),
+      ).map((control) => ({
+        type: control.type || "",
+        text: (control.textContent || control.value || "").trim(),
+        disabled: !!control.disabled,
+      })),
+    })),
+  );
+}
+
+async function chooseDemoForm(page) {
+  await page.waitForFunction(
+    () =>
+      Array.from(document.querySelectorAll("form")).some(
+        (form) => form.dataset.agroaiAuthoritativeForm === "demo",
+      ),
+    null,
+    { timeout: 30_000 },
+  );
+
+  const forms = page.locator('form[data-agroai-authoritative-form="demo"]');
+  const count = await forms.count();
+  if (!count) throw new Error("No form was marked as the authoritative demo form.");
+
+  let selectedIndex = 0;
+  let selectedScore = -1;
+  for (let index = 0; index < count; index += 1) {
+    const form = forms.nth(index);
+    if (!(await form.isVisible())) continue;
+    const score = await form.evaluate((node) => {
+      const fields = node.querySelectorAll("input,textarea,select").length;
+      const submitText = Array.from(
+        node.querySelectorAll('button, input[type="submit"]'),
+      )
+        .map((control) => (control.textContent || control.value || "").toLowerCase())
+        .join(" ");
+      const intentScore = /demo|consultation|request|submit/.test(submitText) ? 100 : 0;
+      return intentScore + fields;
+    });
+    if (score > selectedScore) {
+      selectedScore = score;
+      selectedIndex = index;
+    }
+  }
+
+  return forms.nth(selectedIndex);
 }
 
 async function verifyCareers() {
   const page = await context.newPage();
-  const leaks = captureLegacyLeaks(page);
+  const traffic = captureTraffic(page);
   await page.goto(`${baseUrl}/careers`, {
     waitUntil: "networkidle",
     timeout: 60_000,
   });
 
-  const applyLink = page.getByRole("link", {
-    name: /apply now|apply for this role/i,
-  }).first();
+  const applyLink = page
+    .getByRole("link", { name: /apply now|apply for this role/i })
+    .first();
   await applyLink.waitFor({ state: "visible", timeout: 30_000 });
   await applyLink.click();
   await page.waitForLoadState("networkidle").catch(() => {});
@@ -106,7 +181,7 @@ async function verifyCareers() {
     throw new Error(`Unexpected Careers application path: ${currentPath}`);
   }
 
-  const form = page.locator("form").first();
+  const form = page.locator('form[data-agroai-authoritative-form="careers"]').first();
   await form.waitFor({ state: "visible", timeout: 45_000 });
   const runtimeActive = await page.evaluate(
     () => window.__AGROAI_FORMS_RUNTIME__ === true,
@@ -134,7 +209,9 @@ async function verifyCareers() {
   await page
     .getByText("Application received", { exact: true })
     .waitFor({ timeout: 20_000 });
-  if (leaks.length) throw new Error(`Careers leaked to: ${leaks.join(", ")}`);
+  if (traffic.legacyLeaks.length) {
+    throw new Error(`Careers leaked to: ${traffic.legacyLeaks.join(", ")}`);
+  }
 
   console.log(`CAREERS_PATH=${currentPath}`);
   console.log(`CAREERS_MARKER=${marker}`);
@@ -143,30 +220,67 @@ async function verifyCareers() {
 
 async function verifyDemo() {
   const page = await context.newPage();
-  const leaks = captureLegacyLeaks(page);
+  const traffic = captureTraffic(page);
+  const consoleErrors = [];
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+  page.on("pageerror", (error) => consoleErrors.push(error.message));
+
   await page.goto(`${baseUrl}/book-a-demo`, {
     waitUntil: "networkidle",
     timeout: 60_000,
   });
 
-  const form = page.locator("form").first();
-  await form.waitFor({ state: "visible", timeout: 45_000 });
   const runtimeActive = await page.evaluate(
     () => window.__AGROAI_FORMS_RUNTIME__ === true,
   );
   if (!runtimeActive) throw new Error("Book a Demo runtime is inactive.");
 
+  const form = await chooseDemoForm(page);
+  await form.waitFor({ state: "visible", timeout: 45_000 });
   const marker = `demo-real-ui-${Date.now()}`;
   await fillForm(form, marker);
+
+  const formState = await form.evaluate((node) => ({
+    authoritative: node.dataset.agroaiAuthoritativeForm || "",
+    noValidate: node.noValidate,
+    valid: node.checkValidity(),
+    fieldCount: node.querySelectorAll("input,textarea,select").length,
+    submitText: Array.from(node.querySelectorAll('button,input[type="submit"]'))
+      .map((control) => (control.textContent || control.value || "").trim())
+      .join(" | "),
+  }));
+  console.log(`DEMO_FORM_STATE=${JSON.stringify(formState)}`);
 
   const responsePromise = page.waitForResponse(
     (response) =>
       response.request().method() === "POST" &&
       new URL(response.url()).pathname === "/api/demo-request",
-    { timeout: 60_000 },
+    { timeout: 30_000 },
   );
-  await form.locator('button[type="submit"],input[type="submit"]').first().click();
-  const response = await responsePromise;
+
+  const submit = form.locator('button[type="submit"],input[type="submit"]').first();
+  if (!(await submit.count())) {
+    throw new Error(
+      `Demo form has no submit control. Forms=${JSON.stringify(await describeForms(page))}`,
+    );
+  }
+  await submit.click();
+
+  let response;
+  try {
+    response = await responsePromise;
+  } catch (error) {
+    throw new Error(
+      `Demo click produced no /api/demo-request response. ` +
+        `Posts=${JSON.stringify(traffic.posts)} ` +
+        `Console=${JSON.stringify(consoleErrors)} ` +
+        `Forms=${JSON.stringify(await describeForms(page))} ` +
+        `Original=${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+
   const body = await response.text();
   if (
     response.status() !== 201 ||
@@ -177,7 +291,9 @@ async function verifyDemo() {
   await page
     .getByText("Demo request received", { exact: true })
     .waitFor({ timeout: 20_000 });
-  if (leaks.length) throw new Error(`Demo leaked to: ${leaks.join(", ")}`);
+  if (traffic.legacyLeaks.length) {
+    throw new Error(`Demo leaked to: ${traffic.legacyLeaks.join(", ")}`);
+  }
 
   console.log(`DEMO_MARKER=${marker}`);
   await page.close();
