@@ -5,6 +5,7 @@ on:
     branches: ["main"]
     paths:
       - "cloudflare/form-page-runtime/**"
+      - "scripts/forms-ui-proof.mjs"
       - ".github/workflows/form-page-runtime-hotfix.yml"
 
 permissions:
@@ -19,183 +20,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Validate runtime source
+      - name: Deploy authoritative form pages
         shell: bash
         run: |
           set -euo pipefail
           node --check cloudflare/form-page-runtime/src/index.js
+          npx --yes wrangler@4.107.0 deploy --config cloudflare/form-page-runtime/wrangler.toml
 
-      - name: Deploy authoritative form pages
-        shell: bash
-        run: npx --yes wrangler@4.107.0 deploy --config cloudflare/form-page-runtime/wrangler.toml
-
-      - name: Verify runtime injection
+      - name: Verify route injection
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 30); do
-            careers_code="$(curl -sS --max-time 20 -D careers.headers -o careers.html -w '%{http_code}' https://agroai-pilot.com/careers || true)"
-            demo_code="$(curl -sS --max-time 20 -D demo.headers -o demo.html -w '%{http_code}' https://agroai-pilot.com/book-a-demo || true)"
-            runtime_code="$(curl -sS --max-time 20 -D runtime.headers -o runtime.js -w '%{http_code}' https://agroai-pilot.com/agroai-forms-runtime.js || true)"
-            if [ "$careers_code" = "200" ] && [ "$demo_code" = "200" ] && [ "$runtime_code" = "200" ] && \
-               grep -Fi 'x-agroai-forms-runtime: active' careers.headers >/dev/null && \
-               grep -Fi 'x-agroai-forms-runtime: active' demo.headers >/dev/null && \
-               grep -F '/agroai-forms-runtime.js' careers.html >/dev/null && \
-               grep -F '/agroai-forms-runtime.js' demo.html >/dev/null && \
-               grep -F 'book-a-demo-browser-runtime' runtime.js >/dev/null; then
-              exit 0
-            fi
-            sleep 5
+          for path in careers apply book-a-demo; do
+            code="$(curl -sS --max-time 30 -D "${path}.headers" -o "${path}.html" -w '%{http_code}' "https://agroai-pilot.com/${path}")"
+            test "$code" = "200"
+            grep -Fi 'x-agroai-forms-runtime: active' "${path}.headers" >/dev/null
+            grep -F '/agroai-forms-runtime.js' "${path}.html" >/dev/null
           done
-          echo "Careers ${careers_code:-unknown}"; cat careers.headers || true
-          echo "Demo ${demo_code:-unknown}"; cat demo.headers || true
-          echo "Runtime ${runtime_code:-unknown}"; cat runtime.headers || true
-          exit 1
+          curl -fsS https://agroai-pilot.com/agroai-forms-runtime.js -o runtime.js
+          grep -F 'runtimeVersion: "2026-08-03.2"' runtime.js >/dev/null
 
-      - name: Install browser runtime
+      - name: Install Chromium
         shell: bash
         run: |
           set -euo pipefail
           npm --silent --no-save install playwright@1.55.0
           npx playwright install chromium
 
-      - name: Run actual browser submissions
+      - name: Submit through actual live UI
         shell: bash
         run: |
           set -euo pipefail
-          printf '%s\n' '%PDF-1.4' 'AGRO-AI real browser careers verification' '%%EOF' > runtime-resume.pdf
-          cat > forms-e2e.mjs <<'JS'
-          import { chromium } from 'playwright';
-          import path from 'node:path';
-
-          const browser = await chromium.launch({ headless: true });
-          const context = await browser.newContext({
-            userAgent: 'Mozilla/5.0 AGRO-AI RealBrowserVerification',
-          });
-
-          async function fillNamed(form, name, value) {
-            const locator = form.locator(`[name="${name}"]`);
-            if (await locator.count() === 0) return false;
-            const element = locator.first();
-            const tag = await element.evaluate((node) => node.tagName.toLowerCase());
-            const type = (await element.getAttribute('type')) || '';
-            if (tag === 'select') {
-              const options = await element.locator('option').evaluateAll((nodes) => nodes.map((n) => ({ value: n.value, disabled: n.disabled })));
-              const choice = options.find((o) => o.value && !o.disabled)?.value;
-              if (choice) await element.selectOption(choice);
-            } else if (type === 'file') {
-              await element.setInputFiles(path.resolve('runtime-resume.pdf'));
-            } else if (type === 'checkbox' || type === 'radio') {
-              await element.check().catch(() => {});
-            } else {
-              await element.fill(String(value));
-            }
-            return true;
-          }
-
-          async function fillGeneric(form, marker) {
-            const fields = form.locator('input, textarea, select');
-            const count = await fields.count();
-            for (let i = 0; i < count; i += 1) {
-              const field = fields.nth(i);
-              const disabled = await field.isDisabled().catch(() => true);
-              if (disabled) continue;
-              const name = (await field.getAttribute('name')) || '';
-              const type = ((await field.getAttribute('type')) || '').toLowerCase();
-              const tag = await field.evaluate((node) => node.tagName.toLowerCase());
-              if (!name || ['hidden','submit','button'].includes(type)) continue;
-              if (type === 'file') {
-                await field.setInputFiles(path.resolve('runtime-resume.pdf'));
-                continue;
-              }
-              if (type === 'checkbox' || type === 'radio') {
-                await field.check().catch(() => {});
-                continue;
-              }
-              if (tag === 'select') {
-                const options = await field.locator('option').evaluateAll((nodes) => nodes.map((n) => ({ value: n.value, disabled: n.disabled })));
-                const choice = options.find((o) => o.value && !o.disabled)?.value;
-                if (choice) await field.selectOption(choice);
-                continue;
-              }
-              const existing = await field.inputValue().catch(() => '');
-              if (existing) continue;
-              const lower = name.toLowerCase();
-              let value = marker;
-              if (lower.includes('email')) value = 'contact@agroai-pilot.com';
-              else if (lower.includes('name')) value = 'AGRO-AI real browser verification';
-              else if (lower.includes('location')) value = 'San Francisco, California';
-              else if (lower.includes('phone')) value = '4155550100';
-              else if (lower.includes('acre')) value = '1';
-              else if (lower.includes('linkedin')) value = 'https://www.linkedin.com/company/agro-ai-inc/';
-              else if (lower.includes('portfolio') || lower.includes('proof')) value = 'https://agroai-pilot.com';
-              else if (type === 'number') value = '1';
-              await field.fill(value);
-            }
-          }
-
-          async function verifyCareers() {
-            const page = await context.newPage();
-            const externalPosts = [];
-            page.on('request', (request) => {
-              if (request.method() === 'POST' && /formspree\.io|workers\.dev/.test(request.url())) externalPosts.push(request.url());
-            });
-            await page.goto('https://agroai-pilot.com/careers', { waitUntil: 'networkidle' });
-            const form = page.locator('form').first();
-            await form.waitFor({ state: 'visible' });
-            const marker = `careers-real-browser-${Date.now()}`;
-            await fillGeneric(form, marker);
-            await fillNamed(form, 'fullName', 'AGRO-AI real browser careers verification');
-            await fillNamed(form, 'email', 'contact@agroai-pilot.com');
-            await fillNamed(form, 'location', 'San Francisco, California');
-            await fillNamed(form, 'whyAgroAi', marker);
-            await fillNamed(form, 'resume', marker);
-            const responsePromise = page.waitForResponse((response) => response.url().includes('/api/apply') && response.request().method() === 'POST', { timeout: 30000 });
-            await form.locator('button[type="submit"], input[type="submit"]').first().click();
-            const response = await responsePromise;
-            if (response.status() !== 200) throw new Error(`Careers returned ${response.status()}: ${await response.text()}`);
-            if (response.headers()['x-agroai-notification'] !== 'delivered') throw new Error('Careers notification delivery header missing.');
-            await page.getByText('Application received', { exact: true }).waitFor({ timeout: 15000 });
-            if (externalPosts.length) throw new Error(`Careers leaked to external form endpoints: ${externalPosts.join(', ')}`);
-            console.log(`CAREERS_MARKER=${marker}`);
-            await page.close();
-          }
-
-          async function verifyDemo() {
-            const page = await context.newPage();
-            const externalPosts = [];
-            page.on('request', (request) => {
-              if (request.method() === 'POST' && /formspree\.io|workers\.dev/.test(request.url())) externalPosts.push(request.url());
-            });
-            await page.goto('https://agroai-pilot.com/book-a-demo', { waitUntil: 'networkidle' });
-            const form = page.locator('form').first();
-            await form.waitFor({ state: 'visible' });
-            const marker = `demo-real-browser-${Date.now()}`;
-            await fillGeneric(form, marker);
-            await fillNamed(form, 'name', 'AGRO-AI real browser demo verification');
-            await fillNamed(form, 'fullName', 'AGRO-AI real browser demo verification');
-            await fillNamed(form, 'email', 'contact@agroai-pilot.com');
-            await fillNamed(form, 'location', 'San Francisco, California');
-            await fillNamed(form, 'notes', marker);
-            await fillNamed(form, 'mainChallenges', marker);
-            const responsePromise = page.waitForResponse((response) => response.url().includes('/api/demo-request') && response.request().method() === 'POST', { timeout: 30000 });
-            await form.locator('button[type="submit"], input[type="submit"]').first().click();
-            const response = await responsePromise;
-            if (response.status() !== 201) throw new Error(`Demo returned ${response.status()}: ${await response.text()}`);
-            if (response.headers()['x-agroai-notification'] !== 'delivered') throw new Error('Demo notification delivery header missing.');
-            await page.getByText('Demo request received', { exact: true }).waitFor({ timeout: 15000 });
-            if (externalPosts.length) throw new Error(`Demo leaked to external form endpoints: ${externalPosts.join(', ')}`);
-            console.log(`DEMO_MARKER=${marker}`);
-            await page.close();
-          }
-
-          try {
-            await verifyCareers();
-            await verifyDemo();
-          } finally {
-            await browser.close();
-          }
-          JS
-          node forms-e2e.mjs | tee forms-e2e.log
-          grep -F 'CAREERS_MARKER=' forms-e2e.log
-          grep -F 'DEMO_MARKER=' forms-e2e.log
+          printf '%s\n' '%PDF-1.4' 'AGRO-AI production form verification' '%%EOF' > resume.pdf
+          node scripts/forms-ui-proof.mjs | tee forms-ui-proof.log
+          grep -F 'CAREERS_PATH=/apply' forms-ui-proof.log
+          grep -F 'CAREERS_MARKER=' forms-ui-proof.log
+          grep -F 'DEMO_MARKER=' forms-ui-proof.log
