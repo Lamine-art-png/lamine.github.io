@@ -6,8 +6,10 @@ on:
       - main
     paths:
       - agroai_api/app/api/v1/field_intelligence.py
+      - agroai_api/app/services/field_intelligence.py
       - agroai_api/app/services/field_intelligence_vision_extension.py
       - agroai_api/app/services/field_live_rate_limit.py
+      - agroai_api/app/services/field_observation_extraction.py
       - agroai_api/app/services/field_video.py
       - agroai_api/app/services/field_vision.py
       - cloudflare/edge-gateway/src/edge-main-v3.ts
@@ -52,9 +54,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="Production verification started for Field Intelligence release \`${GITHUB_SHA}\`. Expected Render backend identity: \`${EXPECTED_BACKEND_SHA}\`."
+            -f body="Production verification started for Field Intelligence release \`${GITHUB_SHA}\`. Expected Render backend identity: \`${EXPECTED_BACKEND_SHA}\`. Verifying live camera, multilingual speech, visual analysis, edge routing, and the deployed portal bundle."
 
-      - name: Verify exact Render backend build and deployed route
+      - name: Verify exact Render backend build and deployed routes
         shell: bash
         run: |
           set -euo pipefail
@@ -84,9 +86,14 @@ jobs:
           import json
           value = json.load(open("evidence/openapi.json", encoding="utf-8"))
           paths = value.get("paths") or {}
-          route = paths.get("/v1/field-intelligence/live-analysis") or {}
-          assert "post" in route, "deployed backend does not expose POST /v1/field-intelligence/live-analysis"
-          print("exact_backend_and_live_route=ok")
+          required = [
+              "/v1/field-intelligence/live-analysis",
+              "/v1/field-intelligence/live-transcription",
+          ]
+          for route_name in required:
+              route = paths.get(route_name) or {}
+              assert "post" in route, f"deployed backend does not expose POST {route_name}"
+          print("exact_backend_and_live_routes=ok")
           PY
 
       - name: Verify Cloudflare production edge
@@ -100,13 +107,15 @@ jobs:
           assert value.get("status") == "ok", value
           print("edge_health=ok")
           PY
-          code="$(curl --silent --show-error --output evidence/live-analysis-unauthenticated.txt --write-out '%{http_code}' \
-            --max-time 30 -X POST "${PUBLIC_ORIGIN}/v1/field-intelligence/live-analysis" || true)"
-          case "$code" in
-            401|403|422) ;;
-            *) echo "Unexpected unauthenticated live-analysis status: $code"; exit 1 ;;
-          esac
-          printf '%s\n' "$code" > evidence/live-analysis-status.txt
+          for route in live-analysis live-transcription; do
+            code="$(curl --silent --show-error --output "evidence/${route}-unauthenticated.txt" --write-out '%{http_code}' \
+              --max-time 30 -X POST "${PUBLIC_ORIGIN}/v1/field-intelligence/${route}" || true)"
+            case "$code" in
+              401|403|422) ;;
+              *) echo "Unexpected unauthenticated ${route} status: $code"; exit 1 ;;
+            esac
+            printf '%s\n' "$code" > "evidence/${route}-status.txt"
+          done
 
       - name: Verify production portal bundle
         shell: bash
@@ -141,8 +150,11 @@ jobs:
           done
           cat evidence/portal-assets/*.js > evidence/portal-all-js.txt
           grep -F '/v1/field-intelligence/live-analysis' evidence/portal-all-js.txt >/dev/null
+          grep -F '/v1/field-intelligence/live-transcription' evidence/portal-all-js.txt >/dev/null
           grep -F 'human_review_required' evidence/portal-all-js.txt >/dev/null
-          printf 'portal_multimodal_bundle=ok\n'
+          grep -F 'Starting live camera' evidence/portal-all-js.txt >/dev/null
+          grep -F 'Live multilingual captions active' evidence/portal-all-js.txt >/dev/null
+          printf 'portal_live_camera_multilingual_bundle=ok\n'
 
       - name: Record production verification success
         if: success()
@@ -151,9 +163,10 @@ jobs:
         run: |
           backend_sha="$(python3 -c 'import json; print(json.load(open("evidence/backend-health.json"))["build_sha"])')"
           edge_status="$(python3 -c 'import json; print(json.load(open("evidence/edge-health.json"))["status"])')"
-          route_status="$(cat evidence/live-analysis-status.txt)"
+          analysis_status="$(cat evidence/live-analysis-status.txt)"
+          speech_status="$(cat evidence/live-transcription-status.txt)"
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="✅ **Field Intelligence production deployment verified**\n\n- release commit: \`${GITHUB_SHA}\`\n- exact Render backend build: \`${backend_sha}\`\n- deployed OpenAPI contains \`POST /v1/field-intelligence/live-analysis\`\n- Cloudflare edge health: \`${edge_status}\`\n- unauthenticated live-analysis rejected safely with HTTP \`${route_status}\`\n- production portal bundle contains the live-analysis client and human-review contract\n\nBackend, edge, and portal are deployed. Customer visibility remains controlled by the server-side Field Intelligence rollout state and organization entitlements."
+            -f body="✅ **Field Intelligence mobile live production deployment verified**\n\n- release commit: \`${GITHUB_SHA}\`\n- exact Render backend build: \`${backend_sha}\`\n- deployed OpenAPI contains both \`POST /v1/field-intelligence/live-analysis\` and \`POST /v1/field-intelligence/live-transcription\`\n- Cloudflare edge health: \`${edge_status}\`\n- unauthenticated live-analysis rejected safely with HTTP \`${analysis_status}\`\n- unauthenticated live-transcription rejected safely with HTTP \`${speech_status}\`\n- production portal bundle contains the live camera preview, multilingual caption client, live visual-analysis client, and human-review contract\n\nThe smooth mobile recording and multilingual Field Intelligence release is deployed across backend, edge, and portal."
 
       - name: Record production verification failure
         if: failure()
@@ -161,7 +174,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="❌ Field Intelligence production verification failed for release \`${GITHUB_SHA}\` with expected backend \`${EXPECTED_BACKEND_SHA}\`. Review Actions run \`${GITHUB_RUN_ID}\`; do not represent every production layer as verified until this gate passes."
+            -f body="❌ Field Intelligence mobile live production verification failed for release \`${GITHUB_SHA}\` with expected backend \`${EXPECTED_BACKEND_SHA}\`. Review Actions run \`${GITHUB_RUN_ID}\`; do not represent every production layer as verified until this gate passes."
 
       - uses: actions/upload-artifact@v4
         if: always()
