@@ -12,9 +12,8 @@ const queue = fs.readFileSync(path.join(root, "src/app/fieldIntelligence/offline
 const client = fs.readFileSync(path.join(root, "src/app/api/client.ts"), "utf8");
 const locales = JSON.parse(fs.readFileSync(path.resolve(root, "../shared/supported-locales.json"), "utf8"));
 
-assert.match(routes, /import \{ FieldIntelligenceV2 \} from "\.\/components\/FieldIntelligenceV2";/);
-assert.match(routes, /\{ path: "field-intelligence", Component: FieldIntelligenceV2 \}/);
-assert.doesNotMatch(routes, /path: "field-intelligence"[^\n]+lazy:/);
+assert.doesNotMatch(routes, /import \{ FieldIntelligenceV2 \} from "\.\/components\/FieldIntelligenceV2";/);
+assert.match(routes, /\{ path: "field-intelligence", lazy: lazyComponent\(\(\) => import\("\.\/components\/FieldIntelligenceV2"\), "FieldIntelligenceV2"\) \}/);
 const appendTranscriptDefinition = component.indexOf("const appendTranscriptSegment = useCallback");
 const liveSpeechDefinition = component.indexOf("const startLiveSpeechSampling = useCallback");
 assert.ok(appendTranscriptDefinition >= 0 && appendTranscriptDefinition < liveSpeechDefinition, "live speech must not read appendTranscriptSegment before initialization");
