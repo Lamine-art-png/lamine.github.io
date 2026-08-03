@@ -107,3 +107,16 @@ def test_unconfigured_provider_is_truthful(monkeypatch):
     result = vision._analyze_one(b"image", "image/jpeg", {})
     assert result.status == "unavailable"
     assert result.error == "vision_provider_not_configured"
+
+
+
+def test_prompt_localizes_human_strings_but_preserves_contract():
+    prompt = vision._prompt({
+        "field_name": "Talhão Norte",
+        "crop": "milho",
+        "note_text": "As folhas parecem secas",
+        "language": "pt",
+    })
+    assert "Output language: pt" in prompt
+    assert "human-readable string value" in prompt
+    assert '"severity": "info|low|medium|high|critical"' in prompt

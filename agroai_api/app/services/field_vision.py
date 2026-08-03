@@ -97,12 +97,17 @@ def _prompt(context: dict[str, Any]) -> str:
     crop = str(context.get("crop") or "unknown crop")[:200]
     note = str(context.get("note_text") or "")[:1600]
     media_kind = str(context.get("media_kind") or "photo")[:80]
+    target_language = str(context.get("language") or "en").strip()[:16] or "en"
     frame_time = context.get("frame_timestamp_seconds")
     frame_label = f"; frame_time_seconds={frame_time}" if frame_time is not None else ""
     return f"""
 You are AGRO-AI Field Vision, an evidence-analysis system for agricultural operations.
 Analyze this {media_kind} as one piece of evidence, using the operator note only as context.
 Context: field={field}; crop={crop}; operator_note={note or "none"}{frame_label}.
+Output language: {target_language}. Write every human-readable string value
+(summary, labels, evidence, verification, observations, possible issues,
+recommended follow-up, and uncertainties) in that language. Keep JSON keys and
+the documented enum values exactly as written so the application contract stays stable.
 
 Return JSON only with this exact shape:
 {{
@@ -301,9 +306,11 @@ def _analyze_one(image: bytes, content_type: str | None, context: dict[str, Any]
                 provider="cloudflare_workers_ai", status="failed", model=model,
                 latency_ms=latency, error="provider_returned_empty_visual_analysis",
             )
+        analysis = _bounded_analysis(_json_from_text(text))
+        analysis["language"] = str(context.get("language") or "en").strip()[:16] or "en"
         return FieldVisionResult(
             provider="cloudflare_workers_ai", status="completed", model=actual_model,
-            latency_ms=latency, analysis=_bounded_analysis(_json_from_text(text)),
+            latency_ms=latency, analysis=analysis,
         )
     except Exception as exc:  # noqa: BLE001 - provider failures are surfaced, not hidden
         name = exc.__class__.__name__
@@ -411,5 +418,6 @@ def analyze_field_images(images: list[tuple], context: dict[str, Any]) -> FieldV
         "images_analyzed": len(completed),
         "images_received": min(len(images), MAX_IMAGES),
         "human_review_required": True,
+        "language": str(context.get("language") or "en").strip()[:16] or "en",
     }
     return FieldVisionResult(provider=provider, status="completed", model=model, latency_ms=latency, analysis=analysis)

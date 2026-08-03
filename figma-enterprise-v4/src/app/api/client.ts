@@ -299,6 +299,13 @@ function analyzeLiveFieldFrame<T>(fields: Record<string, string>, file: File, si
   return request<T>("/v1/field-intelligence/live-analysis", { method: "POST", body: form, signal });
 }
 
+function transcribeLiveFieldSpeech<T>(fields: Record<string, string>, file: File, signal?: AbortSignal): Promise<T> {
+  const form = new FormData();
+  Object.entries(fields).forEach(([key, value]) => { if (value) form.append(key, value); });
+  form.append("file", file);
+  return request<T>("/v1/field-intelligence/live-transcription", { method: "POST", body: form, signal });
+}
+
 export const apiClient = {
   get, post, patch, remove, request, download,
   auth: { register: (payload: RegisterPayload) => post("/v1/auth/register", payload), login: (payload: LoginPayload) => post("/v1/auth/login", payload), logout: () => post("/v1/auth/logout"), me: () => get("/v1/auth/me"), requestEmailVerification: (payload?: EmailVerificationRequestPayload) => post("/v1/auth/email-verification/request", payload), confirmEmailVerification: (payload: EmailVerificationConfirmPayload) => post("/v1/auth/email-verification/confirm", payload) },
@@ -400,6 +407,7 @@ export const apiClient = {
     syncBatch: (captures: unknown[]) => post("/v1/field-intelligence/sync/batch", { captures }),
     uploadAsset: (captureId: string, fields: Record<string, string>, file: File) => uploadFieldAsset(captureId, fields, file),
     liveAnalyze: (fields: Record<string, string>, file: File, signal?: AbortSignal) => analyzeLiveFieldFrame(fields, file, signal),
+    liveTranscribe: (fields: Record<string, string>, file: File, signal?: AbortSignal) => transcribeLiveFieldSpeech(fields, file, signal),
     observations: (query?: string) => get(`/v1/field-intelligence/observations${query ? `?${query}` : ""}`),
     observation: (observationId: string) => get(`/v1/field-intelligence/observations/${encodeURIComponent(observationId)}`),
     patchObservation: (observationId: string, payload: unknown) => patch(`/v1/field-intelligence/observations/${encodeURIComponent(observationId)}`, payload),

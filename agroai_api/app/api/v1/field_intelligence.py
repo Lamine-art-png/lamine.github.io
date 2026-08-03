@@ -29,6 +29,7 @@ from app.core.config import settings
 from app.db.base import SessionLocal, get_db
 from app.services import field_intelligence as svc
 from app.services.field_live_rate_limit import check_field_live_analysis_limit
+from app.services.field_transcription import transcribe_audio
 from app.services.field_vision import analyze_field_images
 from app.services.media_inspection import (
     inspect_media_file,
@@ -206,6 +207,17 @@ class SyncBatchRequest(BaseModel):
 
 _LIVE_FRAME_MAX_BYTES = 1_500_000
 _LIVE_FRAME_TYPES = {"image/jpeg", "image/png", "image/webp"}
+_LIVE_AUDIO_MAX_BYTES = 4_000_000
+_LIVE_AUDIO_TYPES = {
+    "audio/webm", "audio/ogg", "audio/mpeg", "audio/mp4", "audio/wav",
+    "audio/x-wav", "audio/flac", "video/webm", "video/mp4",
+}
+_LANGUAGE_HINT = re.compile(r"^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})?$")
+
+
+def _normalized_language(value: str | None) -> str | None:
+    candidate = str(value or "").strip()[:16]
+    return candidate if candidate and _LANGUAGE_HINT.fullmatch(candidate) else None
 
 
 def _valid_live_frame(payload: bytes, content_type: str) -> bool:
@@ -226,6 +238,7 @@ async def live_field_analysis(
     field_name: str | None = Form(default=None, max_length=_MAX_NAME),
     crop: str | None = Form(default=None, max_length=_MAX_NAME),
     note_text: str | None = Form(default=None, max_length=1600),
+    language: str | None = Form(default=None, max_length=16),
     frame_timestamp_seconds: float | None = Form(default=None, ge=0, le=900),
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
@@ -240,7 +253,7 @@ async def live_field_analysis(
     if workspace_id:
         svc.authorize_workspace_action(db, ctx, workspace_id)
 
-    decision = check_field_live_analysis_limit(organization_id, ctx.user.id)
+    decision = check_field_live_analysis_limit(organization_id, ctx.user.id, channel="vision")
     if not decision.allowed:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
@@ -269,6 +282,7 @@ async def live_field_analysis(
         "field_name": field_name,
         "crop": crop,
         "note_text": note_text,
+        "language": _normalized_language(language) or "en",
         "media_kind": "live_video_frame",
         "frame_timestamp_seconds": frame_timestamp_seconds,
     }
@@ -291,6 +305,83 @@ async def live_field_analysis(
         "model": result.model,
         "analysis": result.analysis,
         "human_review_required": True,
+        "rate_limit_remaining": decision.remaining,
+    }
+
+
+@router.post("/live-transcription")
+async def live_field_transcription(
+    request: Request,
+    file: UploadFile = File(...),
+    language: str | None = Form(default=None, max_length=16),
+    ctx: AuthContext = Depends(get_auth_context),
+    db: Session = Depends(get_db),
+) -> dict:
+    # Transcribe one short, non-persisted audio segment during recording.
+    # Browser speech recognition remains the lowest-latency caption source when
+    # available. This endpoint provides a multilingual server fallback and
+    # correction lane. The chunk is bounded, processed in memory, and discarded.
+    # The durable uploaded recording remains the authoritative evidence.
+    organization_id = svc.require_org(ctx)
+    decision = check_field_live_analysis_limit(
+        organization_id, ctx.user.id, channel="speech"
+    )
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail={
+                "code": "field_live_transcription_rate_limited",
+                "message": "Live captions are temporarily rate limited. Recording continues and the full upload will still be transcribed.",
+            },
+            headers={"Retry-After": str(decision.retry_after)},
+        )
+
+    declared = (request.headers.get("content-length") or "").strip()
+    if declared.isdigit() and int(declared) > _LIVE_AUDIO_MAX_BYTES + 100_000:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Live speech segment exceeds size limit",
+        )
+    content_type = str(file.content_type or "").lower().split(";")[0].strip()
+    if content_type not in _LIVE_AUDIO_TYPES:
+        raise HTTPException(
+            status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+            detail="Unsupported live speech media type",
+        )
+    payload = await file.read(_LIVE_AUDIO_MAX_BYTES + 1)
+    await file.close()
+    if not payload or len(payload) > _LIVE_AUDIO_MAX_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            detail="Live speech segment exceeds size limit",
+        )
+
+    result = await run_in_threadpool(
+        transcribe_audio,
+        audio=payload,
+        content_type=content_type,
+        language=_normalized_language(language),
+        note_text=None,
+    )
+    if not result.succeeded:
+        return {
+            "status": "unavailable",
+            "preliminary": True,
+            "durable": False,
+            "error": result.error or "live_transcription_unavailable",
+            "retryable": bool(result.retryable),
+            "language": result.language or _normalized_language(language),
+            "rate_limit_remaining": decision.remaining,
+        }
+    return {
+        "status": "ok",
+        "preliminary": True,
+        "durable": False,
+        "transcript": result.transcript,
+        "language": result.language or _normalized_language(language),
+        "provider": result.provider,
+        "model": result.model,
+        "latency_ms": result.latency_ms,
         "rate_limit_remaining": decision.remaining,
     }
 

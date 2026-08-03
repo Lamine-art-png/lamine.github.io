@@ -102,6 +102,7 @@ def install_field_vision_extension(svc: Any) -> None:
 
     def process_with_vision(db, job, *, heartbeat=None):
         job_input = dict(job.input_json or {})
+        output_language = str(job_input.get("language") or "en").strip()[:16] or "en"
         pre_observation = db.get(FieldObservation, job_input.get("observation_id"))
         if pre_observation is not None:
             pre_session = db.get(FieldCaptureSession, pre_observation.capture_session_id)
@@ -201,6 +202,7 @@ def install_field_vision_extension(svc: Any) -> None:
                 "field_name": observation.field_name,
                 "crop": observation.crop,
                 "note_text": _source_text(observation, session),
+                "language": output_language,
                 "media_kind": "mixed_field_evidence",
             },
         )
@@ -212,6 +214,7 @@ def install_field_vision_extension(svc: Any) -> None:
             provider=result.provider,
             stage_status=result.status,
             model=result.model,
+            language=output_language,
             latency_ms=result.latency_ms,
             error=result.error,
             attempt_count=int(job.attempt_count or 1),
@@ -234,6 +237,7 @@ def install_field_vision_extension(svc: Any) -> None:
             "vision_media_analyzed": int(result.analysis.get("images_analyzed") or 0),
             "vision_video_frames_analyzed": video_frame_count,
             "vision_human_review_required": True,
+            "vision_language": output_language,
         })
         observation.provenance_json = provenance
 

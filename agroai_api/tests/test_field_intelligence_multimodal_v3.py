@@ -26,8 +26,14 @@ def test_field_intelligence_multimodal_v3_source_contract():
     assert "imageDataUri" in edge
     assert "temperature: 0.1" in edge
     assert '@router.post("/live-analysis")' in routes
+    assert '@router.post("/live-transcription")' in routes
     assert "_LIVE_FRAME_MAX_BYTES = 1_500_000" in routes
-    assert "check_field_live_analysis_limit" in routes
-    assert '("minute", 4, 60)' in live_limiter
-    assert '("hour", 60, 3600)' in live_limiter
+    assert "_LIVE_AUDIO_MAX_BYTES = 4_000_000" in routes
+    assert "transcribe_audio" in routes
+    assert 'channel="vision"' in routes
+    assert 'channel="speech"' in routes
+    assert '"vision": (("minute", 8, 60), ("hour", 240, 3600))' in live_limiter
+    assert '"speech": (("minute", 6, 60), ("hour", 180, 3600))' in live_limiter
+    assert "output_language" in extension
+    assert "vision_language" in extension
     assert "vision_retryable_failure" in extension
