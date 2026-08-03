@@ -1,0 +1,117 @@
+name: All Language Live Proof
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/all-language-live-proof.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  prove-all:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: production
+    env:
+      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
+    steps:
+      - name: Prove every enabled non-English locale in live production
+        shell: bash
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import concurrent.futures
+          import hashlib
+          import json
+          import os
+          import time
+          import urllib.request
+          from pathlib import Path
+
+          base = "https://app.agroai-pilot.com"
+          token = os.environ["QUEUE_CONSUMER_TOKEN"]
+
+          with urllib.request.urlopen(f"{base}/v1/i18n/languages", timeout=20) as response:
+              registry = json.load(response)
+
+          languages = registry.get("languages") or []
+          locales = [item["code"] for item in languages if item.get("code") not in {"auto", "en"}]
+          if len(locales) != 59:
+              raise SystemExit(f"expected 59 enabled non-English locales, got {len(locales)}: {locales}")
+
+          def prove(locale: str) -> dict:
+              started = time.monotonic()
+              payload = json.dumps({"locale": locale}).encode()
+              request = urllib.request.Request(
+                  f"{base}/v1/i18n/internal/canary",
+                  data=payload,
+                  method="POST",
+                  headers={
+                      "Authorization": f"Bearer {token}",
+                      "Content-Type": "application/json",
+                      "Accept": "application/json",
+                      "User-Agent": "AGRO-AI-59-Language-Proof/1.0",
+                  },
+              )
+              try:
+                  with urllib.request.urlopen(request, timeout=35) as response:
+                      body = json.load(response)
+                  ok = (
+                      body.get("status") == "ok"
+                      and body.get("locale") == locale
+                      and body.get("key_count") == 4
+                      and int(body.get("changed_count") or 0) >= 2
+                      and isinstance(body.get("providers"), list)
+                      and len(body.get("providers")) > 0
+                      and isinstance(body.get("models"), list)
+                      and len(body.get("models")) > 0
+                      and isinstance(body.get("catalog_sha256"), str)
+                      and len(body.get("catalog_sha256")) == 64
+                  )
+                  return {
+                      "locale": locale,
+                      "ok": ok,
+                      "elapsed_ms": round((time.monotonic() - started) * 1000),
+                      "changed_count": body.get("changed_count"),
+                      "providers": body.get("providers"),
+                      "models": body.get("models"),
+                      "catalog_sha256": body.get("catalog_sha256"),
+                      "error": None if ok else "invalid_contract",
+                  }
+              except Exception as exc:
+                  return {
+                      "locale": locale,
+                      "ok": False,
+                      "elapsed_ms": round((time.monotonic() - started) * 1000),
+                      "error": f"{type(exc).__name__}: {exc}",
+                  }
+
+          with concurrent.futures.ThreadPoolExecutor(max_workers=12) as pool:
+              results = list(pool.map(prove, locales))
+
+          results.sort(key=lambda item: item["locale"])
+          failures = [item for item in results if not item["ok"]]
+          matrix_json = json.dumps(results, sort_keys=True, separators=(",", ":")).encode()
+          summary = {
+              "status": "ok" if not failures else "failed",
+              "locale_count": len(results),
+              "passed": len(results) - len(failures),
+              "failed": len(failures),
+              "matrix_sha256": hashlib.sha256(matrix_json).hexdigest(),
+              "failures": failures,
+              "results": results,
+          }
+          Path("all-language-proof.json").write_text(json.dumps(summary, indent=2, ensure_ascii=False))
+          print(json.dumps({k: v for k, v in summary.items() if k != "results"}, indent=2, ensure_ascii=False))
+          if failures:
+              raise SystemExit(1)
+          PY
+      - name: Upload immutable 59-language evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-language-live-proof-${{ github.sha }}
+          path: all-language-proof.json
+          if-no-files-found: error
+          retention-days: 30
