@@ -13,7 +13,6 @@ on:
 
 permissions:
   contents: read
-  issues: write
 
 concurrency:
   group: agroai-platform-api-news-direct-repair
@@ -21,7 +20,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: Deploy exact News Worker without environment gate
+    name: Deploy and verify exact Platform API News route
     if: >-
       github.event_name != 'pull_request' ||
       (github.event.pull_request.head.repo.full_name == github.repository &&
@@ -39,13 +38,6 @@ jobs:
       DEERE_URL: https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center
     steps:
       - uses: actions/checkout@v4
-
-      - name: Record direct repair start
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api "repos/${GITHUB_REPOSITORY}/issues/384/comments" \
-            -f body="DIRECT REPAIR STARTED: Platform API News production run ${GITHUB_RUN_ID}, commit ${GITHUB_SHA}."
 
       - name: Require repository Cloudflare credentials
         run: |
@@ -95,23 +87,19 @@ jobs:
                grep -F '/news/agro-ai-platform-api-launch' newsroom.js >/dev/null && \
                grep -F "Introducing AGRO-AI Field Intelligence" field.html >/dev/null && \
                grep -F "AGRO-AI connects with John Deere Operations Center™" deere.html >/dev/null; then
+              echo "platform_api_article=verified_live"
+              echo "existing_news_routes=verified_live"
               exit 0
             fi
+
+            echo "Attempt ${attempt}: article=${article_status} cover=${cover_status} logo=${logo_status} news=${news_status} script=${script_status} field=${field_status} deere=${deere_status}"
             sleep 5
           done
+
+          echo "Platform API News live verification failed"
+          cat article.headers || true
+          head -80 article.html || true
+          cat cover.headers || true
+          cat logo.headers || true
+          cat news.headers || true
           exit 1
-
-      - name: Record direct verified proof
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api "repos/${GITHUB_REPOSITORY}/issues/384/comments" \
-            -f body="LIVE PROOF: direct production repair returned HTTP 200 for the Platform API article with the reviewed title/body. Its cover, official logo, newsroom card, Field Intelligence article, and John Deere article also passed. Run ${GITHUB_RUN_ID}; commit ${GITHUB_SHA}."
-
-      - name: Record direct repair failure
-        if: ${{ failure() }}
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh api "repos/${GITHUB_REPOSITORY}/issues/384/comments" \
-            -f body="DIRECT REPAIR FAILURE: run ${GITHUB_RUN_ID}, commit ${GITHUB_SHA}. The Platform API article remains unverified and must not be called published."
