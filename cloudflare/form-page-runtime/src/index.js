@@ -1,4 +1,4 @@
-const MARKETING_ORIGIN = "https://402f33dd.agroai-343.pages.dev";
+const MARKETING_ORIGIN = "https://agroai-343.pages.dev";
 const RUNTIME_PATH = "/agroai-forms-runtime.js";
 
 const runtimeSource = String.raw`(() => {
