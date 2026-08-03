@@ -1,0 +1,28 @@
+name: Exact Production I18n Proof 724e
+
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/exact-production-i18n-proof-724e.yml']
+
+permissions:
+  contents: read
+
+jobs:
+  prove:
+    runs-on: ubuntu-latest
+    env:
+      TARGET_SHA: 724eab5d87a2383d3fc87e4245b59e6dcb669bbe
+    steps:
+      - name: Inspect exact production runs
+        shell: bash
+        run: |
+          curl -fsS 'https://api.github.com/repos/Lamine-art-png/lamine.github.io/actions/runs?event=push&branch=main&per_page=100' -o runs.json
+          jq --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha == $sha) | {id,name,status,conclusion,head_sha,created_at,updated_at}]' runs.json
+      - name: Inspect live production health
+        shell: bash
+        run: |
+          curl -fsS https://app.agroai-pilot.com/v1/edge-health | jq .
+          curl -fsS https://app.agroai-pilot.com/v1/health | jq .
+          curl -fsS https://app.agroai-pilot.com/v1/readiness | jq .
+          curl -fsS https://app.agroai-pilot.com/v1/i18n/languages | jq '{status,count}'
