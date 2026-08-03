@@ -399,6 +399,39 @@ if component.count('startRecognition(String(language || "en"));') != 2:
 
 component = replace_once(
     component,
+    '''  const stopRecording = useCallback(async () => {
+    const recorder = recorderRef.current;''',
+    '''  const stopRecording = useCallback(async () => {
+    const recorder = recorderRef.current;
+    stopLiveSpeechSampling();''',
+    label="stop audio live speech",
+)
+component = replace_once(
+    component,
+    '  }, [clearTimer, releaseStream, stopRecognition]);',
+    '  }, [clearTimer, releaseStream, stopLiveSpeechSampling, stopRecognition]);',
+    label="stop audio dependencies",
+)
+component = replace_once(
+    component,
+    '''      recorder.start(1000);
+      startRecognition(String(language || "en"));
+      setRecording(true);''',
+    '''      recorder.start(750);
+      startRecognition(String(language || "en"));
+      startLiveSpeechSampling(stream);
+      setRecording(true);''',
+    label="start audio speech fallback",
+)
+component = replace_once(
+    component,
+    '  }, [captureLocation, clearTimer, releaseStream, setRecordedAudio, startRecognition, stopRecognition, stopRecording, t]);',
+    '  }, [captureLocation, clearTimer, language, releaseStream, setRecordedAudio, startLiveSpeechSampling, startRecognition, stopRecognition, stopRecording, t]);',
+    label="start audio dependencies",
+)
+
+component = replace_once(
+    component,
     '''        note_text: spokenContext,
         frame_timestamp_seconds: String(videoElapsedRef.current),''',
     '''        note_text: spokenContext,
