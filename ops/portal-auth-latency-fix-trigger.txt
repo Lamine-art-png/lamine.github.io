@@ -1,1 +1,0 @@
-Portal authentication latency remediation triggered 2026-08-02.
