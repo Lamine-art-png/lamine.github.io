@@ -1,0 +1,55 @@
+name: Deploy Form Notification Gateway
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "cloudflare/form-notification-gateway/**"
+      - ".github/workflows/deploy-form-notification-gateway.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: form-notification-gateway-production
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate gateway source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check cloudflare/form-notification-gateway/src/index.js
+          grep -F 'agroai-pilot.com/api/apply*' cloudflare/form-notification-gateway/wrangler.toml >/dev/null
+          grep -F 'agroai-pilot.com/api/consultation-requests*' cloudflare/form-notification-gateway/wrangler.toml >/dev/null
+
+      - name: Deploy dedicated form routes
+        shell: bash
+        run: npx --yes wrangler@4.107.0 deploy --config cloudflare/form-notification-gateway/wrangler.toml
+
+      - name: Smoke Careers gateway
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            code="$(curl -sS --max-time 20 -D headers.txt -o body.json -w '%{http_code}' https://agroai-pilot.com/api/apply || true)"
+            if [ "$code" = "200" ] && \
+               grep -Fi 'x-agroai-form-gateway: active' headers.txt >/dev/null && \
+               jq -e '.ok == true and .notification_recipient == "contact@agroai-pilot.com"' body.json >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 5
+          done
+          cat headers.txt || true
+          cat body.json || true
+          exit 1
