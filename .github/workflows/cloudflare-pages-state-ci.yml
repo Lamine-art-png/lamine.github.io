@@ -1,0 +1,66 @@
+name: Cloudflare Pages State
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/cloudflare-pages-state-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      PROJECT: agroai-portal
+    steps:
+      - name: Query recent Pages deployments
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          mkdir -p pages-state
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "https://api.cloudflare.com/client/v4/accounts/${CLOUDFLARE_ACCOUNT_ID}/pages/projects/${PROJECT}/deployments?per_page=20" \
+            > pages-state/raw.json
+          jq -e '.success == true' pages-state/raw.json >/dev/null
+          jq '[.result[] | {id, url, environment, created_on, modified_on, latest_stage, deployment_trigger, source}]' pages-state/raw.json \
+            | tee pages-state/deployments.json
+
+      - name: Probe recent deployment URLs
+        shell: bash
+        run: |
+          set -euo pipefail
+          : > pages-state/probes.jsonl
+          jq -r '.[0:12][] | [.id, .url, .environment, .created_on] | @tsv' pages-state/deployments.json \
+          | while IFS=$'\t' read -r id url environment created_on; do
+              html="pages-state/${id}.html"
+              if curl --fail --silent --show-error --max-time 20 "$url/" -o "$html"; then
+                title="$(sed -n 's:.*<title>\(.*\)</title>.*:\1:p' "$html" | head -1)"
+                js="pages-state/${id}.js"
+                asset="$(grep -oE 'assets/[A-Za-z0-9._/-]+\.js' "$html" | head -1 || true)"
+                markers=false
+                if [ -n "$asset" ] && curl --fail --silent --show-error --max-time 20 "$url/$asset" -o "$js"; then
+                  if grep -F 'Kiswahili' "$js" >/dev/null 2>&1 && grep -F 'agroai_ui_catalog_v3:' "$js" >/dev/null 2>&1; then markers=true; fi
+                fi
+                jq -nc --arg id "$id" --arg url "$url" --arg environment "$environment" --arg created_on "$created_on" --arg title "$title" --argjson global_markers "$markers" \
+                  '{id:$id,url:$url,environment:$environment,created_on:$created_on,title:$title,global_markers:$global_markers}' \
+                  >> pages-state/probes.jsonl
+              fi
+            done
+          jq -s '.' pages-state/probes.jsonl | tee pages-state/probes.json
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: cloudflare-pages-state
+          path: pages-state
+          retention-days: 2
