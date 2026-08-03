@@ -30,26 +30,34 @@ jobs:
         run: |
           set -euo pipefail
           node --check cloudflare/form-notification-gateway/src/index.js
-          grep -F 'agroai-pilot.com/api/apply*' cloudflare/form-notification-gateway/wrangler.toml >/dev/null
-          grep -F 'agroai-pilot.com/api/consultation-requests*' cloudflare/form-notification-gateway/wrangler.toml >/dev/null
+          grep -F 'agroai-pilot.com/api/apply"' cloudflare/form-notification-gateway/wrangler.toml >/dev/null
+          grep -F 'agroai-pilot.com/api/consultation-requests"' cloudflare/form-notification-gateway/wrangler.toml >/dev/null
+          grep -F 'agroai-pilot.com/api/demo-request"' cloudflare/form-notification-gateway/wrangler.toml >/dev/null
 
       - name: Deploy dedicated form routes
         shell: bash
         run: npx --yes wrangler@4.107.0 deploy --config cloudflare/form-notification-gateway/wrangler.toml
 
-      - name: Smoke Careers gateway
+      - name: Smoke exact production routes
         shell: bash
         run: |
           set -euo pipefail
           for attempt in $(seq 1 30); do
-            code="$(curl -sS --max-time 20 -D headers.txt -o body.json -w '%{http_code}' https://agroai-pilot.com/api/apply || true)"
-            if [ "$code" = "200" ] && \
-               grep -Fi 'x-agroai-form-gateway: active' headers.txt >/dev/null && \
-               jq -e '.ok == true and .notification_recipient == "contact@agroai-pilot.com"' body.json >/dev/null 2>&1; then
+            careers_code="$(curl -sS --max-time 20 -D careers.headers -o careers.json -w '%{http_code}' https://agroai-pilot.com/api/apply || true)"
+            demo_code="$(curl -sS --max-time 20 -D demo.headers -o demo.json -w '%{http_code}' https://agroai-pilot.com/api/consultation-requests || true)"
+            if [ "$careers_code" = "200" ] && \
+               grep -Fi 'x-agroai-form-gateway: active' careers.headers >/dev/null && \
+               jq -e '.ok == true and .notification_recipient == "contact@agroai-pilot.com"' careers.json >/dev/null 2>&1 && \
+               [ "$demo_code" = "405" ] && \
+               grep -Fi 'x-agroai-form-gateway: active' demo.headers >/dev/null; then
               exit 0
             fi
             sleep 5
           done
-          cat headers.txt || true
-          cat body.json || true
+          echo "Careers HTTP ${careers_code:-unknown}"
+          cat careers.headers || true
+          cat careers.json || true
+          echo "Demo HTTP ${demo_code:-unknown}"
+          cat demo.headers || true
+          cat demo.json || true
           exit 1
