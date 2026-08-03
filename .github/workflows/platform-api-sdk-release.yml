@@ -1,0 +1,62 @@
+name: Platform API SDK Release Artifacts
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'platform-sdk-v*'
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
+
+jobs:
+  python-sdk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -q build twine
+      - run: python -m build sdk/python
+      - run: python -m twine check sdk/python/dist/*
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: sdk/python/dist/*
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agroai-platform-python-${{ github.sha }}
+          path: sdk/python/dist/*
+          if-no-files-found: error
+          retention-days: 365
+
+  typescript-sdk:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: sdk/typescript
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: sdk/typescript/package-lock.json
+      - run: npm ci --ignore-scripts --no-audit --no-fund
+      - run: npm test
+      - run: npm pack
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: sdk/typescript/*.tgz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: agroai-platform-typescript-${{ github.sha }}
+          path: sdk/typescript/*.tgz
+          if-no-files-found: error
+          retention-days: 365
+
+# Registry publication is intentionally separate. PyPI and npm credentials,
+# ownership, support policy, and legal approval must exist before a publish job
+# is enabled. A build artifact is not evidence that a package is supported.

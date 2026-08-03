@@ -4,11 +4,28 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "agroai-platform"
-version = "0.2.0"
+version = "0.3.0"
 description = "Typed server-side client for the AGRO-AI Platform API"
 readme = "README.md"
 requires-python = ">=3.10"
+license = {text = "Proprietary"}
+authors = [{name = "AGRO-AI Inc."}]
+keywords = ["agriculture", "api", "agtech", "enterprise"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Typing :: Typed",
+]
 dependencies = ["requests>=2.31,<3", "httpx>=0.26,<1"]
+
+[project.urls]
+Documentation = "https://agroai-pilot.com/platform-api/docs/"
+Homepage = "https://agroai-pilot.com/platform-api"
+Issues = "https://agroai-pilot.com/platform-api/support"
 
 [tool.setuptools.packages.find]
 where = ["."]
