@@ -15,8 +15,8 @@ binding = "AI"
 required = [ "QUEUE_PUBLISH_TOKEN", "QUEUE_CONSUMER_TOKEN" ]
 
 [[routes]]
-pattern = "app.agroai-pilot.com/v1/*"
-zone_name = "agroai-pilot.com"
+pattern = "api.agroai-pilot.com"
+custom_domain = true
 
 # The standalone developer product shares the same authenticated backend and
 # production edge. This same-origin route also keeps a future relative /v1
