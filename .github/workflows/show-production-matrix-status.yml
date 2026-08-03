@@ -1,0 +1,17 @@
+name: Show Production Matrix Status
+on:
+  pull_request:
+    branches: [main]
+    paths: ['.github/workflows/show-production-matrix-status.yml']
+permissions:
+  actions: read
+  contents: read
+jobs:
+  show:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - run: |
+          gh run list --repo "$GITHUB_REPOSITORY" --workflow production-i18n-matrix.yml --branch main --limit 50 --json databaseId,headSha,status,conclusion,createdAt,updatedAt > runs.json
+          jq '[.[] | select(.headSha == "b7732f889836c0f23bd09e1fc1acf91c15047ad5") | {id:.databaseId,status,conclusion,head_sha:.headSha,created_at:.createdAt,updated_at:.updatedAt}] | .[0] // null' runs.json
