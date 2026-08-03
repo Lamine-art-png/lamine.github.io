@@ -45,12 +45,26 @@ jobs:
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
 
-      - name: Validate only exact News routes
+      - name: Validate only exact News routes and requested article refinements
         run: |
           set -euo pipefail
-          test -s client/public/news/agro-ai-platform-api-launch/index.html
+          article="client/public/news/agro-ai-platform-api-launch/index.html"
+          test -s "$article"
           test -s client/public/news/agro-ai-platform-api-launch/cover.svg
-          grep -F "AGRO-AI launches the Platform API for agriculture builders" client/public/news/agro-ai-platform-api-launch/index.html >/dev/null
+          grep -F "AGRO-AI launches the Platform API for agriculture builders" "$article" >/dev/null
+          grep -F '<time datetime="2026-08-03">August 3, 2026</time>' "$article" >/dev/null
+          grep -F 'href="https://app.agroai-pilot.com">Open Enterprise Portal</a>' "$article" >/dev/null
+          grep -F 'href="https://agroai-pilot.com/book-a-demo">Book a Demo</a>' "$article" >/dev/null
+          grep -F '<section class="enterprise-portal">' "$article" >/dev/null
+          grep -F 'Run your operation through the AGRO-AI Enterprise Portal.' "$article" >/dev/null
+          python3 - <<'PY'
+from pathlib import Path
+html = Path('client/public/news/agro-ai-platform-api-launch/index.html').read_text()
+closing = html.index('<section class="closing">')
+enterprise = html.index('<section class="enterprise-portal">')
+if enterprise <= closing:
+    raise SystemExit('Enterprise Portal section must follow the Start building section')
+PY
           grep -F 'PLATFORM_API_ARTICLE_PATH = "/news/agro-ai-platform-api-launch"' cloudflare/field-intelligence-launch-worker/src/index.ts >/dev/null
           grep -F 'pattern = "agroai-pilot.com/news/agro-ai-platform-api-launch"' cloudflare/field-intelligence-launch-worker/wrangler.toml >/dev/null
           grep -F 'pattern = "agroai-pilot.com/news/agro-ai-platform-api-launch/*"' cloudflare/field-intelligence-launch-worker/wrangler.toml >/dev/null
@@ -63,7 +77,7 @@ jobs:
       - name: Deploy exact Worker routes
         run: npx --yes wrangler@4.107.0 deploy --config cloudflare/field-intelligence-launch-worker/wrangler.toml
 
-      - name: Verify literal public URLs without query parameters
+      - name: Verify literal public URLs and requested article refinements
         run: |
           set -euo pipefail
           for attempt in $(seq 1 12); do
@@ -77,7 +91,19 @@ jobs:
 
             article_title=false; grep -F "AGRO-AI launches the Platform API for agriculture builders" article.html >/dev/null && article_title=true
             article_hero=false; grep -F "Build agricultural products on the AGRO-AI intelligence layer." article.html >/dev/null && article_hero=true
+            article_date=false; grep -F '<time datetime="2026-08-03">August 3, 2026</time>' article.html >/dev/null && article_date=true
+            enterprise_header=false; grep -F 'href="https://app.agroai-pilot.com">Open Enterprise Portal</a>' article.html >/dev/null && enterprise_header=true
+            demo_header=false; grep -F 'href="https://agroai-pilot.com/book-a-demo">Book a Demo</a>' article.html >/dev/null && demo_header=true
+            enterprise_section=false; grep -F '<section class="enterprise-portal">' article.html >/dev/null && grep -F 'Run your operation through the AGRO-AI Enterprise Portal.' article.html >/dev/null && enterprise_section=true
             article_not_found=false; grep -F "Article not found" article.html >/dev/null && article_not_found=true
+            section_order=false
+            python3 - <<'PY' && section_order=true || true
+from pathlib import Path
+html = Path('article.html').read_text()
+closing = html.index('<section class="closing">')
+enterprise = html.index('<section class="enterprise-portal">')
+raise SystemExit(0 if enterprise > closing else 1)
+PY
             cover_marker=false; grep -Fi 'x-agroai-asset-source: reviewed-platform-api-cover' cover.headers >/dev/null && cover_marker=true
             logo_marker=false; grep -Fi 'x-agroai-asset-source: official-repository-logo' logo.headers >/dev/null && logo_marker=true
             newsroom_marker=false; grep -Fi 'x-agroai-newsroom-source: native-pages-origin' news.headers >/dev/null && newsroom_marker=true
@@ -85,22 +111,24 @@ jobs:
             field_marker=false; grep -F "Introducing AGRO-AI Field Intelligence" field.html >/dev/null && field_marker=true
             deere_marker=false; grep -F "AGRO-AI connects with John Deere Operations Center™" deere.html >/dev/null && deere_marker=true
 
-            echo "Attempt ${attempt}: statuses article=${article_status} cover=${cover_status} logo=${logo_status} news=${news_status} script=${script_status} field=${field_status} deere=${deere_status}; markers title=${article_title} hero=${article_hero} not_found=${article_not_found} cover=${cover_marker} logo=${logo_marker} news=${newsroom_marker} card=${card_marker} field=${field_marker} deere=${deere_marker}"
+            echo "Attempt ${attempt}: statuses article=${article_status} cover=${cover_status} logo=${logo_status} news=${news_status} script=${script_status} field=${field_status} deere=${deere_status}; markers title=${article_title} hero=${article_hero} date=${article_date} enterprise_header=${enterprise_header} demo_header=${demo_header} enterprise_section=${enterprise_section} section_order=${section_order} not_found=${article_not_found} cover=${cover_marker} logo=${logo_marker} news=${newsroom_marker} card=${card_marker} field=${field_marker} deere=${deere_marker}"
 
             if [ "$article_status" = 200 ] && [ "$cover_status" = 200 ] && [ "$logo_status" = 200 ] && \
                [ "$news_status" = 200 ] && [ "$script_status" = 200 ] && [ "$field_status" = 200 ] && [ "$deere_status" = 200 ] && \
-               [ "$article_title" = true ] && [ "$article_hero" = true ] && [ "$article_not_found" = false ] && \
+               [ "$article_title" = true ] && [ "$article_hero" = true ] && [ "$article_date" = true ] && \
+               [ "$enterprise_header" = true ] && [ "$demo_header" = true ] && [ "$enterprise_section" = true ] && \
+               [ "$section_order" = true ] && [ "$article_not_found" = false ] && \
                [ "$cover_marker" = true ] && [ "$logo_marker" = true ] && [ "$newsroom_marker" = true ] && \
                [ "$card_marker" = true ] && [ "$field_marker" = true ] && [ "$deere_marker" = true ]; then
-              echo "platform_api_article=verified_live_at_literal_url"
+              echo "platform_api_article_refinements=verified_live"
               echo "existing_news_routes=verified_live"
               exit 0
             fi
             sleep 5
           done
 
-          echo "Literal Platform API News URL verification failed"
+          echo "Literal Platform API News refinement verification failed"
           cat article.headers || true
-          head -100 article.html || true
+          head -140 article.html || true
           cat news.headers || true
           exit 1
