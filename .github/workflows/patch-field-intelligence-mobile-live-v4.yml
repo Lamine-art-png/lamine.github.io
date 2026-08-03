@@ -1,6 +1,11 @@
 name: Patch Field Intelligence mobile live v4
 
 on:
+  push:
+    branches:
+      - fix/field-intelligence-mobile-live-v4
+    paths:
+      - .github/field-intelligence-mobile-live-v4.trigger
   pull_request:
     branches:
       - ops/fi-mobile-live-v4-base
@@ -18,7 +23,7 @@ concurrency:
 
 jobs:
   patch-test-commit:
-    if: github.event.pull_request.head.ref == 'fix/field-intelligence-mobile-live-v4'
+    if: github.event_name == 'push' || github.event.pull_request.head.ref == 'fix/field-intelligence-mobile-live-v4'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
