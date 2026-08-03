@@ -1,4 +1,4 @@
-const UPSTREAM_ORIGIN = "https://402f33dd.agroai-343.pages.dev";
+const CAREERS_STORAGE_ORIGIN = "https://402f33dd.agroai-343.pages.dev";
 const NOTIFICATION_URL = "https://api.agroai-pilot.com/v1/sales/contact";
 const MAX_REQUEST_BYTES = 12 * 1024 * 1024;
 const MAX_MESSAGE_CHARS = 7000;
@@ -43,11 +43,9 @@ async function parseSubmission(request, bytes) {
     const payload = JSON.parse(text || "{}");
     for (const [key, value] of Object.entries(payload)) {
       if (value === null || value === undefined) continue;
-      if (typeof value === "object") {
-        fields[key] = bounded(JSON.stringify(value), 2500);
-      } else {
-        fields[key] = bounded(value, 2500);
-      }
+      fields[key] = typeof value === "object"
+        ? bounded(JSON.stringify(value), 2500)
+        : bounded(value, 2500);
     }
     return { fields, files };
   }
@@ -156,9 +154,9 @@ async function notify(payload) {
   }
 }
 
-function upstreamRequest(request, bytes) {
+function careersStorageRequest(request, bytes) {
   const incoming = new URL(request.url);
-  const target = new URL(`${incoming.pathname}${incoming.search}`, UPSTREAM_ORIGIN);
+  const target = new URL(`${incoming.pathname}${incoming.search}`, CAREERS_STORAGE_ORIGIN);
   const headers = new Headers(request.headers);
   headers.delete("host");
   headers.delete("content-length");
@@ -169,7 +167,7 @@ function upstreamRequest(request, bytes) {
   return new Request(target, {
     method: request.method,
     headers,
-    body: request.method === "GET" || request.method === "HEAD" ? undefined : bytes.slice(0),
+    body: bytes.slice(0),
     redirect: "manual",
   });
 }
@@ -185,6 +183,21 @@ function withGatewayHeaders(response, notification, requestId = "") {
     statusText: response.statusText,
     headers,
   });
+}
+
+function notificationFailure(saved, reason) {
+  return json(
+    {
+      ok: false,
+      saved,
+      error: "notification_delivery_failed",
+      message:
+        "AGRO-AI did not receive the inbox notification. Please email contact@agroai-pilot.com.",
+      reason,
+    },
+    502,
+    { "x-agroai-notification": "failed" },
+  );
 }
 
 export default {
@@ -233,9 +246,30 @@ export default {
       return json({ ok: false, error: "name_and_valid_email_required" }, 400);
     }
 
+    const payload = notificationPayload(kind, url.pathname, parsed.fields, parsed.files);
+
+    if (kind === "demo_request") {
+      const notification = await notify(payload);
+      if (!notification.delivered) return notificationFailure(false, notification.reason);
+      return json(
+        {
+          id: notification.requestId,
+          ok: true,
+          status: "received",
+          message: "Demo request received.",
+          notification_status: "delivered",
+        },
+        201,
+        {
+          "x-agroai-notification": "delivered",
+          "x-agroai-notification-request-id": notification.requestId,
+        },
+      );
+    }
+
     let upstream;
     try {
-      upstream = await fetch(upstreamRequest(request, bytes));
+      upstream = await fetch(careersStorageRequest(request, bytes));
     } catch (error) {
       return json(
         {
@@ -248,26 +282,10 @@ export default {
       );
     }
 
-    if (!upstream.ok) {
-      return withGatewayHeaders(upstream, "not_attempted");
-    }
+    if (!upstream.ok) return withGatewayHeaders(upstream, "not_attempted");
 
-    const payload = notificationPayload(kind, url.pathname, parsed.fields, parsed.files);
     const notification = await notify(payload);
-    if (!notification.delivered) {
-      return json(
-        {
-          ok: false,
-          saved: true,
-          error: "notification_delivery_failed",
-          message:
-            "Your submission was saved, but AGRO-AI did not receive the inbox notification. Please email contact@agroai-pilot.com.",
-          reason: notification.reason,
-        },
-        502,
-        { "x-agroai-notification": "failed" },
-      );
-    }
+    if (!notification.delivered) return notificationFailure(true, notification.reason);
 
     return withGatewayHeaders(upstream, "delivered", notification.requestId);
   },
