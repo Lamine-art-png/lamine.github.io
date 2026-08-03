@@ -15,20 +15,36 @@ const runtimeSource = String.raw`(() => {
   if (!isCareers && !isDemo) return;
 
   const clean = (value) => String(value == null ? "" : value).trim();
+  const validEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clean(value));
+
+  const fieldValue = (field) => {
+    if (!field) return "";
+    if (field instanceof RadioNodeList) return clean(field.value);
+    if (field instanceof HTMLInputElement && field.type === "checkbox") {
+      return field.checked ? clean(field.value || "yes") : "";
+    }
+    return clean(field.value);
+  };
+
   const value = (form, names) => {
     for (const name of names) {
-      const field = form.elements.namedItem(name);
-      if (!field) continue;
-      if (field instanceof RadioNodeList) {
-        const selected = clean(field.value);
-        if (selected) return selected;
-        continue;
-      }
-      if (field instanceof HTMLInputElement && field.type === "checkbox") {
-        if (field.checked) return clean(field.value || "yes");
-        continue;
-      }
-      const candidate = clean(field.value);
+      const candidate = fieldValue(form.elements.namedItem(name));
+      if (candidate) return candidate;
+    }
+    return "";
+  };
+
+  const selectorValue = (form, selector) => {
+    const field = form.querySelector(selector);
+    return fieldValue(field);
+  };
+
+  const firstTextValue = (form) => {
+    const fields = form.querySelectorAll(
+      'input:not([type]), input[type="text"], input[type="search"], textarea',
+    );
+    for (const field of fields) {
+      const candidate = fieldValue(field);
       if (candidate) return candidate;
     }
     return "";
@@ -39,7 +55,9 @@ const runtimeSource = String.raw`(() => {
     buttons.forEach((button) => {
       button.disabled = busy;
       if (button instanceof HTMLButtonElement) {
-        if (!button.dataset.agroaiOriginalText) button.dataset.agroaiOriginalText = button.textContent || "Submit";
+        if (!button.dataset.agroaiOriginalText) {
+          button.dataset.agroaiOriginalText = button.textContent || "Submit";
+        }
         button.textContent = busy ? "Submitting..." : button.dataset.agroaiOriginalText;
       }
     });
@@ -79,9 +97,14 @@ const runtimeSource = String.raw`(() => {
     wrapper.style.borderRadius = "20px";
     wrapper.style.background = "#f0fdf4";
     wrapper.style.textAlign = "center";
-    wrapper.innerHTML = '<div style="font-size:36px;margin-bottom:12px">✓</div>' +
-      '<h2 style="font-size:26px;font-weight:800;color:#14532d;margin:0 0 12px">' + heading + '</h2>' +
-      '<p style="font-size:16px;line-height:1.6;color:#365314;margin:0">' + detail + '</p>';
+    wrapper.innerHTML =
+      '<div style="font-size:36px;margin-bottom:12px">✓</div>' +
+      '<h2 style="font-size:26px;font-weight:800;color:#14532d;margin:0 0 12px">' +
+      heading +
+      '</h2>' +
+      '<p style="font-size:16px;line-height:1.6;color:#365314;margin:0">' +
+      detail +
+      '</p>';
     form.replaceWith(wrapper);
     wrapper.scrollIntoView({ behavior: "smooth", block: "center" });
   };
@@ -89,101 +112,205 @@ const runtimeSource = String.raw`(() => {
   const parseJson = async (response) => {
     const text = await response.text();
     if (!text) return {};
-    try { return JSON.parse(text); }
-    catch { return { message: text }; }
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { message: text };
+    }
   };
+
+  const hasEmailField = (form) =>
+    !!form.querySelector(
+      'input[type="email"], input[name="email"], input[name="emailAddress"], input[name="email_address"]',
+    );
 
   const isTargetForm = (form) => {
-    if (!(form instanceof HTMLFormElement)) return false;
-    const hasEmail = !!form.querySelector('input[type="email"], input[name="email"]');
-    if (!hasEmail) return false;
-    if (isCareers) return !!form.querySelector('input[type="file"], select[name="role"], [name="whyAgroAi"]');
-    return !!form.querySelector('[name="location"], [name="company"], [name="farmName"], [name="primaryGoal"], [name="mainChallenges"]');
+    if (!(form instanceof HTMLFormElement) || !hasEmailField(form)) return false;
+    if (isDemo) return true;
+    return !!form.querySelector(
+      'input[type="file"], select[name="role"], [name="whyAgroAi"]',
+    );
   };
 
-  document.addEventListener("submit", async (event) => {
-    const form = event.target;
-    if (!isTargetForm(form)) return;
+  const prepareForms = () => {
+    document.querySelectorAll("form").forEach((form) => {
+      if (isTargetForm(form)) {
+        form.noValidate = true;
+        form.setAttribute("data-agroai-authoritative-form", isDemo ? "demo" : "careers");
+      }
+    });
+  };
 
-    event.preventDefault();
-    event.stopPropagation();
-    if (typeof event.stopImmediatePropagation === "function") event.stopImmediatePropagation();
+  prepareForms();
+  const observer = new MutationObserver(prepareForms);
+  observer.observe(document.documentElement, { childList: true, subtree: true });
 
-    setBusy(form, true);
-    showStatus(form, "Securely submitting your information...", true);
+  document.addEventListener(
+    "submit",
+    async (event) => {
+      const form = event.target;
+      if (!isTargetForm(form)) return;
 
-    try {
-      if (isCareers) {
-        const data = new FormData(form);
-        const response = await fetch("/api/apply", {
+      event.preventDefault();
+      event.stopPropagation();
+      if (typeof event.stopImmediatePropagation === "function") {
+        event.stopImmediatePropagation();
+      }
+
+      if (form.dataset.agroaiSubmitting === "true") return;
+      form.dataset.agroaiSubmitting = "true";
+      setBusy(form, true);
+      showStatus(form, "Securely submitting your information...", true);
+
+      try {
+        if (isCareers) {
+          const data = new FormData(form);
+          const response = await fetch("/api/apply", {
+            method: "POST",
+            body: data,
+            headers: { "X-AGROAI-Form-Source": "careers-browser-runtime" },
+            credentials: "same-origin",
+          });
+          const result = await parseJson(response);
+          if (!response.ok || response.headers.get("x-agroai-notification") !== "delivered") {
+            throw new Error(
+              clean(result.message || result.error) ||
+                "Application delivery could not be confirmed.",
+            );
+          }
+          showSuccess(
+            form,
+            "Application received",
+            "Your application and résumé were received, and the AGRO-AI team notification was confirmed.",
+          );
+          return;
+        }
+
+        const formData = new FormData(form);
+        const originalFields = {};
+        for (const [key, entry] of formData.entries()) {
+          if (typeof entry !== "string") continue;
+          const current = originalFields[key];
+          const next = clean(entry);
+          originalFields[key] = current ? current + "; " + next : next;
+        }
+
+        const email =
+          value(form, ["email", "emailAddress", "email_address", "workEmail"]) ||
+          selectorValue(form, 'input[type="email"]');
+        const fullName =
+          value(form, [
+            "fullName",
+            "full_name",
+            "name",
+            "contactName",
+            "contact_name",
+            "firstName",
+          ]) ||
+          firstTextValue(form) ||
+          "Website demo request";
+        const acreageText = value(form, ["acreage", "acres", "farmSize", "farm_size"]);
+        const acreageNumber = Number(String(acreageText).replace(/[^0-9.]/g, ""));
+
+        if (!validEmail(email)) {
+          throw new Error("Please enter a valid email address.");
+        }
+
+        const payload = {
+          fullName,
+          email,
+          phone:
+            value(form, ["phone", "phoneNumber", "phone_number"]) ||
+            selectorValue(form, 'input[type="tel"]'),
+          farmName: value(form, [
+            "farmName",
+            "farm_name",
+            "company",
+            "organization",
+            "businessName",
+            "business_name",
+          ]),
+          location: value(form, [
+            "location",
+            "region",
+            "city",
+            "state",
+            "country",
+          ]),
+          acreage: Number.isFinite(acreageNumber) ? acreageNumber : 0,
+          cropTypes: value(form, [
+            "cropTypes",
+            "crop_types",
+            "crops",
+            "system",
+            "currentSystems",
+            "current_systems",
+          ]),
+          currentIrrigation: value(form, [
+            "currentIrrigation",
+            "current_irrigation",
+            "irrigationSystem",
+            "irrigation_system",
+            "system",
+          ]),
+          mainChallenges: value(form, [
+            "mainChallenges",
+            "main_challenges",
+            "primaryGoal",
+            "primary_goal",
+            "goal",
+            "notes",
+            "message",
+            "challenge",
+          ]),
+          preferredCallTime: value(form, [
+            "preferredCallTime",
+            "preferred_call_time",
+            "preferredTime",
+            "preferred_time",
+            "timing",
+          ]),
+          status: "pending",
+          source: "book-a-demo-browser-runtime",
+          originalFields,
+          runtimeVersion: "2026-08-03.2",
+        };
+
+        const response = await fetch("/api/demo-request", {
           method: "POST",
-          body: data,
-          headers: { "X-AGROAI-Form-Source": "careers-browser-runtime" },
+          headers: {
+            "Content-Type": "application/json",
+            Accept: "application/json",
+            "X-AGROAI-Form-Source": "book-a-demo-browser-runtime",
+          },
+          body: JSON.stringify(payload),
           credentials: "same-origin",
         });
         const result = await parseJson(response);
         if (!response.ok || response.headers.get("x-agroai-notification") !== "delivered") {
-          throw new Error(clean(result.message || result.error) || "Application delivery could not be confirmed.");
+          throw new Error(
+            clean(result.message || result.error) ||
+              "Demo request delivery could not be confirmed.",
+          );
         }
         showSuccess(
           form,
-          "Application received",
-          "Your application and résumé were received, and the AGRO-AI team notification was confirmed."
+          "Demo request received",
+          "Your request was received, and the AGRO-AI team notification was confirmed. We will follow up directly.",
         );
-        return;
+      } catch (error) {
+        delete form.dataset.agroaiSubmitting;
+        setBusy(form, false);
+        const message = error instanceof Error ? error.message : "Submission failed.";
+        showStatus(
+          form,
+          message + " Please email contact@agroai-pilot.com if the problem continues.",
+          false,
+        );
       }
-
-      const acreageText = value(form, ["acreage", "acres"]);
-      const acreageNumber = Number(String(acreageText).replace(/[^0-9.]/g, ""));
-      const payload = {
-        fullName: value(form, ["fullName", "name", "contactName"]),
-        email: value(form, ["email"]),
-        phone: value(form, ["phone"]),
-        farmName: value(form, ["farmName", "company", "organization"]),
-        location: value(form, ["location"]),
-        acreage: Number.isFinite(acreageNumber) ? acreageNumber : 0,
-        cropTypes: value(form, ["cropTypes", "system", "currentSystems"]),
-        currentIrrigation: value(form, ["currentIrrigation", "system"]),
-        mainChallenges: value(form, ["mainChallenges", "primaryGoal", "notes"]),
-        preferredCallTime: value(form, ["preferredCallTime", "timing"]),
-        status: "pending",
-        source: "book-a-demo-browser-runtime",
-        originalFields: Object.fromEntries(
-          Array.from(new FormData(form).entries())
-            .filter(([, entry]) => typeof entry === "string")
-            .map(([key, entry]) => [key, clean(entry)])
-        ),
-      };
-
-      if (!payload.fullName || !payload.email || !payload.location) {
-        throw new Error("Name, email, and location are required.");
-      }
-
-      const response = await fetch("/api/demo-request", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-          "X-AGROAI-Form-Source": "book-a-demo-browser-runtime",
-        },
-        body: JSON.stringify(payload),
-        credentials: "same-origin",
-      });
-      const result = await parseJson(response);
-      if (!response.ok || response.headers.get("x-agroai-notification") !== "delivered") {
-        throw new Error(clean(result.message || result.error) || "Demo request delivery could not be confirmed.");
-      }
-      showSuccess(
-        form,
-        "Demo request received",
-        "Your request was received, and the AGRO-AI team notification was confirmed. We will follow up directly."
-      );
-    } catch (error) {
-      setBusy(form, false);
-      const message = error instanceof Error ? error.message : "Submission failed.";
-      showStatus(form, message + " Please email contact@agroai-pilot.com if the problem continues.", false);
-    }
-  }, true);
+    },
+    true,
+  );
 })();`;
 
 function runtimeResponse() {
@@ -203,18 +330,19 @@ function injectRuntime(response) {
   headers.delete("content-length");
   headers.set("cache-control", "no-store, max-age=0");
   headers.set("x-agroai-forms-runtime", "active");
-  const transformed = new HTMLRewriter()
+  return new HTMLRewriter()
     .on("head", {
       element(element) {
         element.append(`<script src="${RUNTIME_PATH}" defer></script>`, { html: true });
       },
     })
-    .transform(new Response(response.body, {
-      status: response.status,
-      statusText: response.statusText,
-      headers,
-    }));
-  return transformed;
+    .transform(
+      new Response(response.body, {
+        status: response.status,
+        statusText: response.statusText,
+        headers,
+      }),
+    );
 }
 
 export default {
@@ -228,7 +356,8 @@ export default {
       normalized.startsWith("/careers/") ||
       normalized === "/apply" ||
       normalized.startsWith("/apply/");
-    const isDemoPage = normalized === "/book-a-demo" || normalized.startsWith("/book-a-demo/");
+    const isDemoPage =
+      normalized === "/book-a-demo" || normalized.startsWith("/book-a-demo/");
     if (!isCareersPage && !isDemoPage) {
       return new Response("Not found", { status: 404 });
     }
@@ -240,11 +369,13 @@ export default {
     originHeaders.delete("cf-ipcountry");
     originHeaders.delete("cf-ray");
 
-    const response = await fetch(new Request(originUrl, {
-      method: request.method,
-      headers: originHeaders,
-      redirect: "follow",
-    }));
+    const response = await fetch(
+      new Request(originUrl, {
+        method: request.method,
+        headers: originHeaders,
+        redirect: "follow",
+      }),
+    );
 
     const contentType = response.headers.get("content-type") || "";
     if (!response.ok || !contentType.includes("text/html")) return response;
