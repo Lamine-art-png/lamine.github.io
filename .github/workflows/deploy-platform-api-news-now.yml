@@ -33,6 +33,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Record deployment start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/${GITHUB_REPOSITORY}/issues/384/comments" \
+            -f body="DEPLOY STARTED: production Platform API News publication run ${GITHUB_RUN_ID}, commit ${GITHUB_SHA}. No live claim will be made until the HTTP and regression proofs pass."
+
       - name: Require production Cloudflare credentials
         shell: bash
         run: |
@@ -127,4 +136,13 @@ jobs:
           set -euo pipefail
           verified_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
           gh api "repos/${GITHUB_REPOSITORY}/issues/384/comments" \
-            -f body="LIVE PROOF: Platform API News article returned HTTP 200 with the reviewed title and body; cover, official logo, newsroom card script, Field Intelligence article, and John Deere article also passed live checks at ${verified_at}. Deployment commit: ${GITHUB_SHA}."
+            -f body="LIVE PROOF: Platform API News article returned HTTP 200 with the reviewed title and body; cover, official logo, newsroom card script, Field Intelligence article, and John Deere article also passed live checks at ${verified_at}. Deployment commit: ${GITHUB_SHA}. Run: ${GITHUB_RUN_ID}."
+
+      - name: Record deployment failure
+        if: ${{ failure() }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/issues/384/comments" \
+            -f body="DEPLOY FAILURE: production Platform API News publication run ${GITHUB_RUN_ID} failed at commit ${GITHUB_SHA}. The article must still be treated as not published until a later LIVE PROOF comment is recorded."
