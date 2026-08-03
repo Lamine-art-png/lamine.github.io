@@ -17,7 +17,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   issues: write
 
 concurrency:
@@ -25,6 +25,71 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  remediate-issue-353:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.number == 382 &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-slim
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ops/portal-dependency-audit-353
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+
+      - name: Apply non-major security upgrades and refresh lockfile
+        working-directory: figma-enterprise-v4
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm pkg set \
+            dependencies.react-router=7.18.2 \
+            devDependencies.vite=6.4.3 \
+            pnpm.overrides.vite=6.4.3
+          npm install --package-lock-only --ignore-scripts --no-audit --no-fund
+          set +e
+          npm audit fix --package-lock-only --ignore-scripts --no-fund
+          set -e
+          npm ci --no-audit --no-fund
+
+      - name: Require zero production and complete vulnerabilities
+        working-directory: figma-enterprise-v4
+        run: |
+          npm audit --omit=dev --audit-level=low
+          npm audit --audit-level=low
+
+      - name: Validate portal contracts and exact production build
+        working-directory: figma-enterprise-v4
+        env:
+          VITE_API_BASE_URL: https://app.agroai-pilot.com
+          VITE_DEPLOYMENT_ENVIRONMENT: production
+          VITE_BUILD_SHA: ${{ github.sha }}
+        run: |
+          npm run test:i18n
+          npm run build
+
+      - name: Commit verified dependency remediation
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add figma-enterprise-v4/package.json figma-enterprise-v4/package-lock.json
+          git diff --cached --check
+          if git diff --cached --quiet; then
+            echo "Dependency remediation is already current."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Remove portal dependency vulnerabilities"
+          git push origin HEAD:ops/portal-dependency-audit-353
+
   audit:
     runs-on: ubuntu-slim
     timeout-minutes: 15
