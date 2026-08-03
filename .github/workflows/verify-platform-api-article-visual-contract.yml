@@ -1,0 +1,162 @@
+name: Verify Platform API Article Visual Contract
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/live-news-verification-trigger"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-platform-api-article-visual-contract
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Prove font and cover geometry in production
+    if: >-
+      github.event_name != 'pull_request' ||
+      (github.event.pull_request.head.repo.full_name == github.repository &&
+       github.head_ref == 'ops/live-newsroom-deploy-verified')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Install Chromium browser harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm install --no-save playwright@1.54.1
+          npx playwright install --with-deps chromium
+
+      - name: Verify production typography and cover containment
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p visual-proof
+          cat > visual-proof/verify.mjs <<'JS'
+          import { chromium } from 'playwright';
+
+          const articleUrl = 'https://agroai-pilot.com/news/agro-ai-platform-api-launch';
+          const coverUrl = 'https://agroai-pilot.com/news/agro-ai-platform-api-launch/cover.svg';
+          const browser = await chromium.launch({ headless: true });
+          const context = await browser.newContext({
+            viewport: { width: 1536, height: 1100 },
+            deviceScaleFactor: 1,
+          });
+
+          try {
+            const page = await context.newPage();
+            let articleProof = null;
+            for (let attempt = 1; attempt <= 24; attempt += 1) {
+              const response = await page.goto(articleUrl, { waitUntil: 'networkidle', timeout: 45000 });
+              await page.evaluate(() => document.fonts.ready);
+              const proof = await page.evaluate(() => {
+                const bodyStyle = getComputedStyle(document.body);
+                const h1 = document.querySelector('h1');
+                const paragraph = document.querySelector('.dek');
+                return {
+                  statusTitle: document.title,
+                  bodyFamily: bodyStyle.fontFamily,
+                  bodyWeight: bodyStyle.fontWeight,
+                  h1Family: h1 ? getComputedStyle(h1).fontFamily : '',
+                  h1Weight: h1 ? getComputedStyle(h1).fontWeight : '',
+                  paragraphFamily: paragraph ? getComputedStyle(paragraph).fontFamily : '',
+                  regularLoaded: document.fonts.check('16px "Glacial Indifference"'),
+                  boldLoaded: document.fonts.check('700 16px "Glacial Indifference"'),
+                  notFound: document.body.innerText.includes('Article not found'),
+                  hero: h1?.textContent?.trim() || '',
+                };
+              });
+              if (
+                response?.status() === 200 &&
+                proof.hero === 'Build agricultural products on the AGRO-AI intelligence layer.' &&
+                !proof.notFound &&
+                proof.regularLoaded &&
+                proof.boldLoaded &&
+                proof.bodyFamily.includes('Glacial Indifference') &&
+                proof.h1Family.includes('Glacial Indifference') &&
+                proof.paragraphFamily.includes('Glacial Indifference') &&
+                proof.h1Weight === '700'
+              ) {
+                articleProof = { httpStatus: response.status(), ...proof };
+                break;
+              }
+              await page.waitForTimeout(5000);
+            }
+
+            if (!articleProof) {
+              throw new Error('Production article did not prove loaded Glacial Indifference on body, heading, and paragraph');
+            }
+
+            await page.screenshot({ path: 'visual-proof/article.png', fullPage: true });
+
+            const coverPage = await context.newPage();
+            let coverProof = null;
+            for (let attempt = 1; attempt <= 24; attempt += 1) {
+              const response = await coverPage.goto(coverUrl, { waitUntil: 'networkidle', timeout: 45000 });
+              const proof = await coverPage.evaluate(() => {
+                const labels = [...document.querySelectorAll('text')];
+                const label = labels.find((node) => node.textContent?.trim() === 'FIELDS · DATA · INTELLIGENCE');
+                const pill = [...document.querySelectorAll('rect')].find(
+                  (node) => node.getAttribute('fill')?.toLowerCase() === '#d7ff63'
+                );
+                if (!label || !pill) return null;
+                const textBox = label.getBBox();
+                const pillBox = pill.getBBox();
+                const margin = {
+                  left: textBox.x - pillBox.x,
+                  right: pillBox.x + pillBox.width - (textBox.x + textBox.width),
+                  top: textBox.y - pillBox.y,
+                  bottom: pillBox.y + pillBox.height - (textBox.y + textBox.height),
+                };
+                return {
+                  text: { x: textBox.x, y: textBox.y, width: textBox.width, height: textBox.height },
+                  pill: { x: pillBox.x, y: pillBox.y, width: pillBox.width, height: pillBox.height },
+                  margin,
+                  centered: Math.abs(
+                    textBox.x + textBox.width / 2 - (pillBox.x + pillBox.width / 2)
+                  ) <= 2,
+                  contained:
+                    margin.left >= 20 &&
+                    margin.right >= 20 &&
+                    margin.top >= 8 &&
+                    margin.bottom >= 8,
+                };
+              });
+              if (response?.status() === 200 && proof?.contained && proof?.centered) {
+                coverProof = { httpStatus: response.status(), ...proof };
+                break;
+              }
+              await coverPage.waitForTimeout(5000);
+            }
+
+            if (!coverProof) {
+              throw new Error('Production cover label is not fully contained and centered inside the lime pill');
+            }
+
+            await coverPage.screenshot({ path: 'visual-proof/cover.png', fullPage: true });
+            console.log(JSON.stringify({ articleProof, coverProof }, null, 2));
+          } finally {
+            await browser.close();
+          }
+          JS
+          node visual-proof/verify.mjs | tee visual-proof/result.json
+
+      - name: Upload browser proof
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-api-article-visual-proof
+          path: visual-proof/
+          if-no-files-found: error
+          retention-days: 14
