@@ -4,7 +4,10 @@ compatibility_date = "2026-08-01"
 workers_dev = false
 
 routes = [
-  { pattern = "agroai-pilot.com/api/apply*", zone_name = "agroai-pilot.com" },
-  { pattern = "agroai-pilot.com/api/consultation-requests*", zone_name = "agroai-pilot.com" },
-  { pattern = "agroai-pilot.com/api/demo-request*", zone_name = "agroai-pilot.com" }
+  { pattern = "agroai-pilot.com/api/apply", zone_name = "agroai-pilot.com" },
+  { pattern = "agroai-pilot.com/api/apply/*", zone_name = "agroai-pilot.com" },
+  { pattern = "agroai-pilot.com/api/consultation-requests", zone_name = "agroai-pilot.com" },
+  { pattern = "agroai-pilot.com/api/consultation-requests/*", zone_name = "agroai-pilot.com" },
+  { pattern = "agroai-pilot.com/api/demo-request", zone_name = "agroai-pilot.com" },
+  { pattern = "agroai-pilot.com/api/demo-request/*", zone_name = "agroai-pilot.com" }
 ]
