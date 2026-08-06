@@ -219,4 +219,4 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-# Base-branch trigger for production verification only.
+# Trusted target-trigger execution marker.
