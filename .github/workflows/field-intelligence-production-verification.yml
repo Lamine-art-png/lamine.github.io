@@ -214,4 +214,4 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-# Synchronization commit for the temporary production-proof pull request.
+# Production-gate execution marker.
