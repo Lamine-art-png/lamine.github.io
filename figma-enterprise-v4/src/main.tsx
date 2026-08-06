@@ -117,6 +117,11 @@ if (!rootEl) {
     .then(({ default: App }) => {
       window.sessionStorage.removeItem(automaticRecoveryKey);
       createRoot(rootEl).render(<CommercialBoundaryHost><App /></CommercialBoundaryHost>);
+      // These modules are deliberately loaded after the portal has rendered.
+      // A failure can disable the enhancement, but can never blank the portal.
+      void import("./app/fieldIntelligence/operatingLoopRuntime")
+        .then(() => import("./app/fieldIntelligence/operatingLoopContextGuard"))
+        .catch((error) => console.error("AGRO-AI Field Intelligence operating loop failed to load", error));
     })
     .catch(bootFailure);
 }
