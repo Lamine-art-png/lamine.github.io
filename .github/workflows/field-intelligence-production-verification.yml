@@ -5,18 +5,27 @@ on:
     branches:
       - main
     paths:
+      - agroai_api/app/api/v1/__init__.py
       - agroai_api/app/api/v1/field_intelligence.py
       - agroai_api/app/services/field_intelligence.py
+      - agroai_api/app/services/field_intelligence_operating_loop_runtime.py
       - agroai_api/app/services/field_intelligence_vision_extension.py
       - agroai_api/app/services/field_live_rate_limit.py
       - agroai_api/app/services/field_observation_extraction.py
       - agroai_api/app/services/field_video.py
       - agroai_api/app/services/field_vision.py
       - cloudflare/edge-gateway/src/edge-main-v3.ts
+      - figma-enterprise-v4/package.json
       - figma-enterprise-v4/src/app/api/client.ts
       - figma-enterprise-v4/src/app/components/FieldIntelligenceV2.tsx
       - figma-enterprise-v4/src/app/fieldIntelligence/offlineQueue.ts
+      - figma-enterprise-v4/src/app/fieldIntelligence/operatingLoopContextGuard.ts
+      - figma-enterprise-v4/src/app/fieldIntelligence/operatingLoopRuntime.ts
       - figma-enterprise-v4/src/app/i18n.ts
+      - figma-enterprise-v4/src/app/portalLiteralCatalog.ts
+      - figma-enterprise-v4/src/main.tsx
+      - figma-enterprise-v4/tests/field-intelligence-operating-loop-contract.mjs
+      - shared/ui-dynamic-copy-field-intelligence.en.json
       - .github/workflows/field-intelligence-production-verification.yml
   workflow_dispatch:
 
@@ -54,7 +63,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="Production verification started for Field Intelligence release \`${GITHUB_SHA}\`. Expected Render backend identity: \`${EXPECTED_BACKEND_SHA}\`. Verifying live camera, multilingual speech, visual analysis, edge routing, and the deployed portal bundle."
+            -f body="Production verification started for Field Intelligence release \`${GITHUB_SHA}\`. Expected Render backend identity: \`${EXPECTED_BACKEND_SHA}\`. Verifying the observation-to-action operating loop, contextual Ask AGRO-AI, durable source-linked tasks, live capture, edge routing, and the deployed portal bundle."
 
       - name: Verify exact Render backend build and deployed routes
         shell: bash
@@ -89,11 +98,12 @@ jobs:
           required = [
               "/v1/field-intelligence/live-analysis",
               "/v1/field-intelligence/live-transcription",
+              "/v1/field-intelligence/observations/{observation_id}/tasks",
           ]
           for route_name in required:
               route = paths.get(route_name) or {}
               assert "post" in route, f"deployed backend does not expose POST {route_name}"
-          print("exact_backend_and_live_routes=ok")
+          print("exact_backend_and_operating_loop_routes=ok")
           PY
 
       - name: Verify Cloudflare production edge
@@ -116,6 +126,14 @@ jobs:
             esac
             printf '%s\n' "$code" > "evidence/${route}-status.txt"
           done
+          task_code="$(curl --silent --show-error --output evidence/task-create-unauthenticated.txt --write-out '%{http_code}' \
+            --max-time 30 -X POST "${PUBLIC_ORIGIN}/v1/field-intelligence/observations/production-proof/tasks" \
+            -H 'content-type: application/json' -d '{}' || true)"
+          case "$task_code" in
+            401|403|404|422) ;;
+            *) echo "Unexpected unauthenticated observation-task status: $task_code"; exit 1 ;;
+          esac
+          printf '%s\n' "$task_code" > evidence/task-create-status.txt
 
       - name: Verify production portal bundle
         shell: bash
@@ -154,7 +172,13 @@ jobs:
           grep -F 'human_review_required' evidence/portal-all-js.txt >/dev/null
           grep -F 'Starting live camera' evidence/portal-all-js.txt >/dev/null
           grep -F 'Live multilingual captions active' evidence/portal-all-js.txt >/dev/null
-          printf 'portal_live_camera_multilingual_bundle=ok\n'
+          grep -F 'One observation. One operating loop.' evidence/portal-all-js.txt >/dev/null
+          grep -F 'Task created and linked' evidence/portal-all-js.txt >/dev/null
+          grep -F 'field_observation_id' evidence/portal-all-js.txt >/dev/null
+          grep -F 'source_observation_id' evidence/portal-all-js.txt >/dev/null
+          grep -F '/tasks?task_id=' evidence/portal-all-js.txt >/dev/null
+          grep -F 'The transcript, media analysis, evidence, uncertainty, AGRO-AI discussion, and task stay linked.' evidence/portal-all-js.txt >/dev/null
+          printf 'portal_capture_context_task_operating_loop_bundle=ok\n'
 
       - name: Record production verification success
         if: success()
@@ -165,8 +189,9 @@ jobs:
           edge_status="$(python3 -c 'import json; print(json.load(open("evidence/edge-health.json"))["status"])')"
           analysis_status="$(cat evidence/live-analysis-status.txt)"
           speech_status="$(cat evidence/live-transcription-status.txt)"
+          task_status="$(cat evidence/task-create-status.txt)"
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="✅ **Field Intelligence mobile live production deployment verified**\n\n- release commit: \`${GITHUB_SHA}\`\n- exact Render backend build: \`${backend_sha}\`\n- deployed OpenAPI contains both \`POST /v1/field-intelligence/live-analysis\` and \`POST /v1/field-intelligence/live-transcription\`\n- Cloudflare edge health: \`${edge_status}\`\n- unauthenticated live-analysis rejected safely with HTTP \`${analysis_status}\`\n- unauthenticated live-transcription rejected safely with HTTP \`${speech_status}\`\n- production portal bundle contains the live camera preview, multilingual caption client, live visual-analysis client, and human-review contract\n\nThe smooth mobile recording and multilingual Field Intelligence release is deployed across backend, edge, and portal."
+            -f body="✅ **Field Intelligence observation-to-action production deployment verified**\n\n- verification release: \`${GITHUB_SHA}\`\n- exact Render backend build: \`${backend_sha}\`\n- deployed OpenAPI contains live analysis, live transcription, and observation task creation routes\n- Cloudflare edge health: \`${edge_status}\`\n- unauthenticated live-analysis rejected safely with HTTP \`${analysis_status}\`\n- unauthenticated live-transcription rejected safely with HTTP \`${speech_status}\`\n- unauthenticated observation-task creation rejected safely with HTTP \`${task_status}\`\n- production portal bundle contains the linked-observation Ask context, source-linked task workflow, task deep links, operating-loop navigation, live camera, multilingual captions, and human-review contract\n\nField Intelligence is deployed as one coherent loop: Capture → Understand → Decide → Act, with the originating observation preserved through AGRO-AI and Tasks."
 
       - name: Record production verification failure
         if: failure()
@@ -174,7 +199,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="❌ Field Intelligence mobile live production verification failed for release \`${GITHUB_SHA}\` with expected backend \`${EXPECTED_BACKEND_SHA}\`. Review Actions run \`${GITHUB_RUN_ID}\`; do not represent every production layer as verified until this gate passes."
+            -f body="❌ Field Intelligence observation-to-action production verification failed for release \`${GITHUB_SHA}\` with expected backend \`${EXPECTED_BACKEND_SHA}\`. Review Actions run \`${GITHUB_RUN_ID}\`; do not represent every production layer as verified until this gate passes."
 
       - uses: actions/upload-artifact@v4
         if: always()
