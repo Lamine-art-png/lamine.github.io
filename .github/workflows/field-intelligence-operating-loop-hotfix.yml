@@ -1,9 +1,6 @@
 name: Field Intelligence Operating Loop Hotfix
 
 on:
-  push:
-    branches:
-      - fix/field-intelligence-operating-loop
   pull_request:
     branches:
       - main
@@ -12,12 +9,12 @@ permissions:
   contents: write
 
 concurrency:
-  group: field-intelligence-operating-loop-hotfix
+  group: field-intelligence-operating-loop-hotfix-${{ github.event.pull_request.number }}
   cancel-in-progress: true
 
 jobs:
   patch-test-commit:
-    if: github.event_name == 'push' || github.event.pull_request.head.ref == 'fix/field-intelligence-operating-loop'
+    if: github.event.pull_request.head.ref == 'fix/field-intelligence-operating-loop'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
