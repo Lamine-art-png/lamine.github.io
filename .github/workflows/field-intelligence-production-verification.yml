@@ -27,6 +27,11 @@ on:
       - figma-enterprise-v4/tests/field-intelligence-operating-loop-contract.mjs
       - shared/ui-dynamic-copy-field-intelligence.en.json
       - .github/workflows/field-intelligence-production-verification.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/field-intelligence-production-verification.yml
   workflow_dispatch:
 
 permissions:
