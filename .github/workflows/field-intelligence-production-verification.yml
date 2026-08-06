@@ -219,4 +219,4 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-# Trusted target-trigger execution marker.
+# Trusted target-trigger synchronization marker.
