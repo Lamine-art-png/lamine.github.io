@@ -8,6 +8,7 @@ import literalCatalogPart7 from "../../../shared/ui-literals.en.7.json";
 import literalCatalogPart8 from "../../../shared/ui-literals.en.8.json";
 import dynamicCopyCatalog from "../../../shared/ui-dynamic-copy.en.json";
 import dynamicCopyExtraCatalog from "../../../shared/ui-dynamic-copy-extra.en.json";
+import dynamicFieldIntelligenceCatalog from "../../../shared/ui-dynamic-copy-field-intelligence.en.json";
 import { formatTranslation, getStoredLocale, t, TRANSLATIONS } from "./i18n";
 
 export const STATIC_PORTAL_LITERAL_CATALOG: Record<string, string> = Object.assign(
@@ -25,6 +26,7 @@ export const STATIC_PORTAL_LITERAL_CATALOG: Record<string, string> = Object.assi
 export const DYNAMIC_UI_COPY_CATALOG: Record<string, string> = {
   ...dynamicCopyCatalog,
   ...dynamicCopyExtraCatalog,
+  ...dynamicFieldIntelligenceCatalog,
 };
 
 // Lookup/template matching sees both static and dynamic UI copy. Dynamic copy is
