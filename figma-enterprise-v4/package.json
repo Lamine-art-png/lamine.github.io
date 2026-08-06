@@ -4,7 +4,7 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "node scripts/verify-fi-operating-loop-production.mjs && vite build",
     "dev": "vite",
     "test:i18n": "python3 scripts/check_ui_literal_inventory.py --check && node tests/i18n-contract.mjs && node tests/commercial-boundary-i18n-contract.mjs && node tests/paywall-refinements-v4-contract.mjs && node tests/dynamic-ui-i18n-coverage-contract.mjs && node tests/product-tour-source-library-contract.mjs && node tests/mobile-portal-responsive-contract.mjs && node tests/frontend-runtime-recovery-contract.mjs && node tests/field-intelligence-offline-contract.mjs && node tests/field-intelligence-multimodal-contract.mjs && node tests/field-intelligence-operating-loop-contract.mjs",
     "test:field-intelligence": "node tests/field-intelligence-offline-contract.mjs && node tests/field-intelligence-multimodal-contract.mjs && node tests/field-intelligence-operating-loop-contract.mjs",
@@ -55,7 +55,7 @@
     "motion": "12.23.24",
     "next-themes": "0.4.6",
     "react-day-picker": "8.10.1",
-    "react-dnd": "16.0.1",
+    "react-dnd": "16.1.0",
     "react-dnd-html5-backend": "16.0.1",
     "react-hook-form": "7.55.0",
     "react-popper": "2.3.0",
