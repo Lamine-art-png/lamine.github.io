@@ -32,6 +32,11 @@ on:
       - main
     paths:
       - .github/workflows/field-intelligence-production-verification.yml
+  pull_request_target:
+    branches:
+      - main
+    paths:
+      - .github/workflows/field-intelligence-production-verification.yml
   workflow_dispatch:
 
 permissions:
@@ -214,4 +219,4 @@ jobs:
           if-no-files-found: ignore
           retention-days: 30
 
-# Synchronization commit for the temporary production-proof pull request.
+# Base-branch trigger for production verification only.
