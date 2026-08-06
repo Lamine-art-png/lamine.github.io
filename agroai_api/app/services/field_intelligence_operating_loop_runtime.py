@@ -1,13 +1,13 @@
 """Connect Field Intelligence observations to durable operator work.
 
 The Field Intelligence capture pipeline already produces rich observations, but
-its downstream actions historically behaved like disconnected buttons.  This
+its downstream actions historically behaved like disconnected buttons. This
 installer keeps the existing, proven capture and processing services intact and
 adds one production invariant: every observation can own one durable operator
 task whose provenance points back to the exact observation, media, and evidence.
 
 The repository uses small install_* integrations for cross-cutting product
-contracts.  Keeping this integration here avoids importing the heavy Field
+contracts. Keeping this integration here avoids importing the heavy Field
 Intelligence frontend into the portal shell and keeps the change server-side,
 tenant-scoped, and transactionally durable.
 """
@@ -21,7 +21,6 @@ from fastapi import HTTPException, status
 
 from app.models.field_intelligence import FieldObservation, FieldObservationAsset
 from app.models.operational_records import IngestionJob
-from app.models.saas import Workspace
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +92,7 @@ def install_field_intelligence_operating_loop() -> None:
         )
         organization_id = field_service.require_org(ctx)
 
-        # Lock the observation while checking and writing task_ids_json.  This
+        # Lock the observation while checking and writing task_ids_json. This
         # makes double taps and slow mobile retries converge on one task.
         observation = (
             db.query(FieldObservation)
@@ -124,16 +123,17 @@ def install_field_intelligence_operating_loop() -> None:
                 task["already_existed"] = True
                 return task
 
-        workspace = (
-            db.query(Workspace)
-            .filter(
-                Workspace.id == observation.workspace_id,
-                Workspace.organization_id == organization_id,
-            )
-            .first()
+        # Field Intelligence permits observations without an explicit workspace.
+        # The canonical resolver maps those records to the organization's normal
+        # default workspace, exactly as the original task path did.
+        workspace = field_service.resolve_workspace(
+            db,
+            organization_id,
+            observation.workspace_id,
         )
         if workspace is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
+        task_workspace_id = workspace.id
 
         structured = dict(observation.structured_json or {})
         vision = dict(structured.get("vision") or {})
@@ -214,12 +214,12 @@ def install_field_intelligence_operating_loop() -> None:
             "source_asset_ids": source_asset_ids,
             "created_from": "field_intelligence",
             "customer_safe": True,
-            "workspace_id": observation.workspace_id,
+            "workspace_id": task_workspace_id,
         }
         job = IngestionJob(
             id=task_id,
             tenant_id=organization_id,
-            workspace_id=observation.workspace_id,
+            workspace_id=task_workspace_id,
             job_type=operating_loop.TASK_JOB_TYPE,
             status="open",
             input_json=task_payload,
