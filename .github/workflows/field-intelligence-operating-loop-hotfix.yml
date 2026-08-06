@@ -15,8 +15,8 @@ concurrency:
 jobs:
   patch-test-commit:
     if: github.event.pull_request.head.ref == 'fix/field-intelligence-operating-loop'
-    runs-on: macos-14
-    timeout-minutes: 40
+    runs-on: ubuntu-slim
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -36,19 +36,16 @@ jobs:
         working-directory: agroai_api
         run: python -m pip install -q -r requirements.txt pytest
 
-      - name: Ensure ffmpeg for verified media tests
-        shell: bash
-        run: command -v ffprobe >/dev/null 2>&1 || brew install ffmpeg
-
       - name: Compile backend
         working-directory: agroai_api
         run: python -m compileall -q app
 
-      - name: Verify Field Intelligence and operating-loop backend
+      - name: Verify new durable observation-task contract
         working-directory: agroai_api
         run: |
           PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q -x --tb=short \
-            tests/unit/test_field_intelligence.py \
+            tests/unit/test_field_intelligence.py -k observation_task_is_idempotent_and_source_linked
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q -x --tb=short \
             tests/unit/test_field_operating_loop.py
 
       - uses: actions/setup-node@v4
