@@ -1,0 +1,20 @@
+{
+  "dynamic.fiOperatingLoop.taskFailedTitle": "Task could not be created",
+  "dynamic.fiOperatingLoop.taskFailedBody": "Please retry from the observation.",
+  "dynamic.fiOperatingLoop.taskCreatedTitle": "Task created and linked",
+  "dynamic.fiOperatingLoop.taskCreatedBody": "The observation is now accountable work in Tasks.",
+  "dynamic.fiOperatingLoop.openTask": "Open task",
+  "dynamic.fiOperatingLoop.loopTitle": "One observation. One operating loop.",
+  "dynamic.fiOperatingLoop.loopBody": "The transcript, media analysis, evidence, uncertainty, AGRO-AI discussion, and task stay linked.",
+  "dynamic.fiOperatingLoop.capture": "Capture",
+  "dynamic.fiOperatingLoop.understand": "Understand",
+  "dynamic.fiOperatingLoop.decide": "Decide",
+  "dynamic.fiOperatingLoop.act": "Act",
+  "dynamic.fiOperatingLoop.linkedContext": "linked context",
+  "dynamic.fiOperatingLoop.fieldObservation": "Field observation",
+  "dynamic.fiOperatingLoop.contextAttached": "The exact observation is attached to this AGRO-AI thread.",
+  "dynamic.fiOperatingLoop.openObservation": "Open observation",
+  "dynamic.fiOperatingLoop.reviewObservation": "Review observation",
+  "dynamic.fiOperatingLoop.sourceObservation": "source observation",
+  "dynamic.fiOperatingLoop.contextPromptTemplate": "Analyze this linked Field Intelligence observation as one operational case.\n\nUse its transcript, media analysis, visible facts, hypotheses, evidence, and uncertainty. Separate confirmed facts from hypotheses, explain what matters, state what must be verified, and recommend the best next accountable action. Do not invent measurements or diagnoses.\n\n{summary}"
+}
