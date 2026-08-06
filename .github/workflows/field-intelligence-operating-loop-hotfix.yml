@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - fix/field-intelligence-operating-loop
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -14,6 +17,7 @@ concurrency:
 
 jobs:
   patch-test-commit:
+    if: github.event_name == 'push' || github.event.pull_request.head.ref == 'fix/field-intelligence-operating-loop'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
