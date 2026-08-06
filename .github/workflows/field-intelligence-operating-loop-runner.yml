@@ -1,40 +1,40 @@
-name: Field Intelligence Operating Loop Runner
+name: Field Intelligence Operating Loop Verification
 
 on:
   issue_comment:
     types: [created]
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
   issues: write
-  pull-requests: write
+  pull-requests: read
 
 concurrency:
-  group: field-intelligence-operating-loop-runner
-  cancel-in-progress: false
+  group: field-intelligence-operating-loop-verification
+  cancel-in-progress: true
 
 jobs:
-  patch-test-commit:
+  verify:
     if: >-
-      github.event.issue.pull_request &&
-      github.event.issue.number == 399 &&
-      github.event.comment.user.login == 'Lamine-art-png' &&
-      contains(github.event.comment.body, '/run-fi-operating-loop')
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.issue.pull_request &&
+       github.event.issue.number == 399 &&
+       github.event.comment.user.login == 'Lamine-art-png' &&
+       contains(github.event.comment.body, '/verify-fi-operating-loop'))
     runs-on: macos-14
-    timeout-minutes: 35
+    timeout-minutes: 40
     steps:
-      - name: Announce guarded run
+      - name: Announce verification
+        if: github.event_name == 'issue_comment'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api repos/${{ github.repository }}/issues/399/comments -f body="Field Intelligence operating-loop verification started. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        run: gh api repos/${{ github.repository }}/issues/399/comments -f body="Field Intelligence operating-loop verification started on exact head d97702907cf0d85f807a5f3a6db76becc196296f. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
 
       - uses: actions/checkout@v4
         with:
-          ref: fix/field-intelligence-operating-loop
-          fetch-depth: 0
-
-      - name: Apply deterministic operating-loop patch
-        run: python3 scripts/apply_field_intelligence_operating_loop.py
+          ref: d97702907cf0d85f807a5f3a6db76becc196296f
+          fetch-depth: 1
 
       - uses: actions/setup-python@v5
         with:
@@ -46,17 +46,17 @@ jobs:
         working-directory: agroai_api
         run: python -m pip install -q -r requirements.txt pytest
 
-      - name: Compile backend
+      - name: Compile and import backend
         working-directory: agroai_api
-        run: python -m compileall -q app
+        run: |
+          python -m compileall -q app
+          python -c "from app.api.v1 import api_router; assert api_router is not None"
 
-      - name: Verify durable observation-task contract
+      - name: Verify durable observation-to-task contract
         working-directory: agroai_api
         run: |
           PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q -x --tb=short \
-            tests/unit/test_field_intelligence.py -k observation_task_is_idempotent_and_source_linked
-          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q -x --tb=short \
-            tests/unit/test_field_operating_loop.py
+            tests/unit/test_field_intelligence_operating_loop_runtime.py
 
       - uses: actions/setup-node@v4
         with:
@@ -68,7 +68,7 @@ jobs:
         working-directory: figma-enterprise-v4
         run: npm ci --no-audit --no-fund
 
-      - name: Verify Field Intelligence, contextual Ask, and portal localization
+      - name: Verify Field Intelligence and localization contracts
         working-directory: figma-enterprise-v4
         run: |
           npm run test:field-intelligence
@@ -81,41 +81,14 @@ jobs:
           VITE_DEPLOYMENT_ENVIRONMENT: production
         run: npm run build
 
-      - name: Remove temporary branch machinery and commit verified product changes
-        shell: bash
-        run: |
-          set -euo pipefail
-          rm -f scripts/apply_field_intelligence_operating_loop.py
-          rm -f .github/workflows/field-intelligence-operating-loop-hotfix.yml
-          git add agroai_api/app/api/v1/field_intelligence.py \
-                  agroai_api/app/services/field_intelligence.py \
-                  agroai_api/app/services/field_operating_loop.py \
-                  agroai_api/tests/unit/test_field_intelligence.py \
-                  figma-enterprise-v4/src/app/api/client.ts \
-                  figma-enterprise-v4/src/app/components/FieldIntelligenceV2.tsx \
-                  figma-enterprise-v4/src/app/components/Intelligence.tsx \
-                  figma-enterprise-v4/src/app/components/Overview.tsx \
-                  figma-enterprise-v4/src/app/components/intelligence/IntelligenceView.tsx \
-                  figma-enterprise-v4/src/app/components/intelligence/useIntelligenceController.ts \
-                  figma-enterprise-v4/src/app/i18n.ts \
-                  figma-enterprise-v4/tests/field-intelligence-multimodal-contract.mjs \
-                  scripts/apply_field_intelligence_operating_loop.py \
-                  .github/workflows/field-intelligence-operating-loop-hotfix.yml
-          git diff --cached --check
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -m "Unify Field Intelligence observation-to-action workflow"
-          git push origin HEAD:fix/field-intelligence-operating-loop
-
       - name: Report success
+        if: success() && github.event_name == 'issue_comment'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          head_sha="$(git rev-parse HEAD)"
-          gh api repos/${{ github.repository }}/issues/399/comments -f body="✅ Field Intelligence operating-loop gates passed and the verified product patch was committed at \`${head_sha}\`."
+        run: gh api repos/${{ github.repository }}/issues/399/comments -f body="✅ Exact head d97702907cf0d85f807a5f3a6db76becc196296f passed backend compile/import, durable task contract, Field Intelligence contracts, localization inventory, and the production portal build."
 
       - name: Report failure
-        if: failure()
+        if: failure() && github.event_name == 'issue_comment'
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh api repos/${{ github.repository }}/issues/399/comments -f body="❌ Field Intelligence operating-loop verification failed. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        run: gh api repos/${{ github.repository }}/issues/399/comments -f body="❌ Exact-head verification failed. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
