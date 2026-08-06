@@ -1,0 +1,121 @@
+name: Field Intelligence Operating Loop Runner
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: field-intelligence-operating-loop-runner
+  cancel-in-progress: false
+
+jobs:
+  patch-test-commit:
+    if: >-
+      github.event.issue.pull_request &&
+      github.event.issue.number == 399 &&
+      github.event.comment.user.login == 'Lamine-art-png' &&
+      contains(github.event.comment.body, '/run-fi-operating-loop')
+    runs-on: macos-14
+    timeout-minutes: 35
+    steps:
+      - name: Announce guarded run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api repos/${{ github.repository }}/issues/399/comments -f body="Field Intelligence operating-loop verification started. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/field-intelligence-operating-loop
+          fetch-depth: 0
+
+      - name: Apply deterministic operating-loop patch
+        run: python3 scripts/apply_field_intelligence_operating_loop.py
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+          cache-dependency-path: agroai_api/requirements.txt
+
+      - name: Install backend dependencies
+        working-directory: agroai_api
+        run: python -m pip install -q -r requirements.txt pytest
+
+      - name: Compile backend
+        working-directory: agroai_api
+        run: python -m compileall -q app
+
+      - name: Verify durable observation-task contract
+        working-directory: agroai_api
+        run: |
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q -x --tb=short \
+            tests/unit/test_field_intelligence.py -k observation_task_is_idempotent_and_source_linked
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q -x --tb=short \
+            tests/unit/test_field_operating_loop.py
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+
+      - name: Install exact portal dependencies
+        working-directory: figma-enterprise-v4
+        run: npm ci --no-audit --no-fund
+
+      - name: Verify Field Intelligence, contextual Ask, and portal localization
+        working-directory: figma-enterprise-v4
+        run: |
+          npm run test:field-intelligence
+          npm run test:i18n
+
+      - name: Build exact production portal
+        working-directory: figma-enterprise-v4
+        env:
+          VITE_API_BASE_URL: https://api.agroai-pilot.com
+          VITE_DEPLOYMENT_ENVIRONMENT: production
+        run: npm run build
+
+      - name: Remove temporary branch machinery and commit verified product changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f scripts/apply_field_intelligence_operating_loop.py
+          rm -f .github/workflows/field-intelligence-operating-loop-hotfix.yml
+          git add agroai_api/app/api/v1/field_intelligence.py \
+                  agroai_api/app/services/field_intelligence.py \
+                  agroai_api/app/services/field_operating_loop.py \
+                  agroai_api/tests/unit/test_field_intelligence.py \
+                  figma-enterprise-v4/src/app/api/client.ts \
+                  figma-enterprise-v4/src/app/components/FieldIntelligenceV2.tsx \
+                  figma-enterprise-v4/src/app/components/Intelligence.tsx \
+                  figma-enterprise-v4/src/app/components/Overview.tsx \
+                  figma-enterprise-v4/src/app/components/intelligence/IntelligenceView.tsx \
+                  figma-enterprise-v4/src/app/components/intelligence/useIntelligenceController.ts \
+                  figma-enterprise-v4/src/app/i18n.ts \
+                  figma-enterprise-v4/tests/field-intelligence-multimodal-contract.mjs \
+                  scripts/apply_field_intelligence_operating_loop.py \
+                  .github/workflows/field-intelligence-operating-loop-hotfix.yml
+          git diff --cached --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -m "Unify Field Intelligence observation-to-action workflow"
+          git push origin HEAD:fix/field-intelligence-operating-loop
+
+      - name: Report success
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          head_sha="$(git rev-parse HEAD)"
+          gh api repos/${{ github.repository }}/issues/399/comments -f body="✅ Field Intelligence operating-loop gates passed and the verified product patch was committed at \`${head_sha}\`."
+
+      - name: Report failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh api repos/${{ github.repository }}/issues/399/comments -f body="❌ Field Intelligence operating-loop verification failed. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
