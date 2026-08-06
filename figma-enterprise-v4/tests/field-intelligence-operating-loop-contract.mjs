@@ -6,9 +6,11 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
 const runtime = fs.readFileSync(path.join(root, "src/app/fieldIntelligence/operatingLoopRuntime.ts"), "utf8");
+const guard = fs.readFileSync(path.join(root, "src/app/fieldIntelligence/operatingLoopContextGuard.ts"), "utf8");
 const main = fs.readFileSync(path.join(root, "src/main.tsx"), "utf8");
 
 assert.match(main, /import\("\.\/app\/fieldIntelligence\/operatingLoopRuntime"\)/);
+assert.match(main, /import\("\.\/app\/fieldIntelligence\/operatingLoopContextGuard"\)/);
 assert.match(main, /after the portal has rendered/);
 assert.doesNotMatch(runtime, /FieldIntelligenceV2/);
 assert.match(runtime, /field_observation_id/);
@@ -25,5 +27,10 @@ assert.match(runtime, /Decide/);
 assert.match(runtime, /Act/);
 assert.match(runtime, /MutationObserver/);
 assert.match(runtime, /catch \(error\)[\s\S]+never be capable of taking down the portal shell/);
+assert.match(guard, /event\.isTrusted/);
+assert.match(guard, /isImportButton/);
+assert.match(guard, /footer textarea/);
+assert.match(guard, /button\.title/);
+assert.match(guard, /sendButton\.click\(\)/);
 
 console.log("field-intelligence-operating-loop-contract: ok");
