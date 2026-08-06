@@ -28,6 +28,8 @@ def test_field_intelligence_task_contract_keeps_observation_provenance():
     serializer_source = inspect.getsource(operating_loop._task_from_job)
 
     assert "with_for_update" in create_source
+    assert "resolve_workspace" in create_source
+    assert "task_workspace_id" in create_source
     assert "source_observation_id" in create_source
     assert "source_evidence_ids" in create_source
     assert "source_asset_ids" in create_source
