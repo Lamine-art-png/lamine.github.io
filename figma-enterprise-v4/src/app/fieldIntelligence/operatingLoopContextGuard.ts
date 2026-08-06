@@ -9,7 +9,10 @@ import {
   translatePortalLiteral,
 } from "../portalLiteralCatalog";
 
+type AnyRecord = Record<string, any>;
+
 const CONTEXT_PARAM = "field_observation_id";
+const ACTIVE_OBSERVATION_PARAM = "observation_id";
 const COPY_SOURCE = dynamicCopySourceForNamespaces(["fiOperatingLoop"]);
 const sent = new Set<string>();
 let localeReady: Promise<boolean> | null = null;
@@ -83,6 +86,65 @@ function isImportButton(button: HTMLButtonElement): boolean {
   return label.includes("import") || label.includes("upload") || (translated && label.includes(translated));
 }
 
+function linkedObservationEvidence(observation: AnyRecord): AnyRecord {
+  const vision = observation?.structured?.vision || observation?.structured_json?.vision || {};
+  return {
+    filename: `Field Intelligence observation ${String(observation.id || "").slice(0, 8)}`,
+    source_type: "field_observation",
+    import_status: "linked",
+    observation_id: observation.id,
+    parsed_preview: JSON.stringify({
+      observation_id: observation.id,
+      field_name: observation.field_name,
+      block_name: observation.block_name,
+      crop: observation.crop,
+      event_type: observation.event_type,
+      severity: observation.severity,
+      occurred_at: observation.occurred_at,
+      summary: observation.summary,
+      transcript: observation.corrected_transcript || observation.transcript,
+      recommended_action: observation.recommended_action || vision.recommended_follow_up,
+      visible_facts: Array.isArray(vision.visible_facts) ? vision.visible_facts.slice(0, 10) : [],
+      hypotheses: Array.isArray(vision.hypotheses) ? vision.hypotheses.slice(0, 10) : [],
+      uncertainties: Array.isArray(vision.uncertainties) ? vision.uncertainties.slice(0, 10) : [],
+      media_moments: Array.isArray(vision.media_moments) ? vision.media_moments.slice(0, 10) : [],
+      correlation: observation.correlation || observation.correlation_json,
+      confidence: observation.confidence,
+      evidence_ids: observation.evidence_ids || observation.evidence_ids_json || [],
+      asset_count: Array.isArray(observation.assets) ? observation.assets.length : 0,
+    }).slice(0, 12000),
+  };
+}
+
+async function enrichLegacyIntelligencePayload(payload: AnyRecord): Promise<AnyRecord> {
+  const observationId = contextualObservationId();
+  if (!observationId || payload?.field_observation_id === observationId) return payload;
+  const response = await (apiClient as any).fieldIntelligence.observation(observationId);
+  const observation = response?.observation || response;
+  if (!observation?.id) return payload;
+  const existing = Array.isArray(payload?.uploaded_evidence) ? payload.uploaded_evidence : [];
+  return {
+    ...(payload || {}),
+    field_id: payload?.field_id || observation.field_id,
+    field_observation_id: observationId,
+    uploaded_evidence: [
+      linkedObservationEvidence(observation),
+      ...existing.filter((item: AnyRecord) => String(item?.observation_id || "") !== observationId),
+    ],
+  };
+}
+
+function installLegacyIntelligenceContext(): void {
+  const intelligence = (apiClient as any).intelligence;
+  for (const methodName of ["brainRun", "run"] as const) {
+    const original = intelligence?.[methodName];
+    if (typeof original !== "function" || original.__agroAiObservationContext) continue;
+    const wrapped = async (payload: AnyRecord) => original(await enrichLegacyIntelligencePayload(payload));
+    wrapped.__agroAiObservationContext = true;
+    intelligence[methodName] = wrapped;
+  }
+}
+
 // The core runtime prepares the contextual prompt before attempting to send it.
 // Its fallback selector must never be allowed to treat an import control as the
 // send action. Programmatic clicks are untrusted; real customer clicks remain
@@ -122,12 +184,20 @@ async function sendPreparedContext(): Promise<void> {
   }
 }
 
-// A fresh-tab direct load can finish the page's initial observations request
-// before this post-render enhancement is installed. Calling the already-wrapped
-// client once warms the runtime cache without duplicating captures or writes.
+installLegacyIntelligenceContext();
+
+// Fresh-tab routes can finish their initial React requests before this
+// post-render enhancement is installed. These read-only calls warm the already-
+// wrapped runtime caches; they never create observations, tasks, or messages.
 if (window.location.pathname === "/field-intelligence") {
-  void (apiClient as any).fieldIntelligence.observations("limit=100")
-    .catch(() => undefined);
+  const observationId = new URLSearchParams(window.location.search || "").get(ACTIVE_OBSERVATION_PARAM) || "";
+  if (observationId) {
+    void (apiClient as any).fieldIntelligence.observation(observationId).catch(() => undefined);
+  }
+  void (apiClient as any).fieldIntelligence.observations("limit=100").catch(() => undefined);
+}
+if (["/", "/field-queue", "/tasks"].includes(window.location.pathname)) {
+  void (apiClient as any).fieldOps.tasks().catch(() => undefined);
 }
 
 const observer = new MutationObserver(() => {
