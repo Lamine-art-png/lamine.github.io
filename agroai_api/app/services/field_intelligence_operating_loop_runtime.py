@@ -83,7 +83,8 @@ def _priority_from_severity(value: Any) -> str:
 def _clean_observation_payload(payload: dict[str, Any]) -> dict[str, Any]:
     """Harden the serialized contract without changing the persisted evidence."""
     cleaned = dict(payload or {})
-    structured = dict(cleaned.get("structured") or {})
+    raw_structured = cleaned.get("structured")
+    structured = dict(raw_structured) if isinstance(raw_structured, dict) else {}
     vision = dict(structured.get("vision") or {}) if isinstance(structured.get("vision"), dict) else {}
     correlation = dict(cleaned.get("correlation") or {}) if isinstance(cleaned.get("correlation"), dict) else {}
 
@@ -204,9 +205,9 @@ def install_field_intelligence_operating_loop() -> None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
         task_workspace_id = workspace.id
 
-        structured = dict(observation.structured_json or {})
+        structured = dict(observation.structured_json) if isinstance(observation.structured_json, dict) else {}
         vision = dict(structured.get("vision") or {}) if isinstance(structured.get("vision"), dict) else {}
-        correlation = dict(observation.correlation_json or {})
+        correlation = dict(observation.correlation_json) if isinstance(observation.correlation_json, dict) else {}
         recommendation = (
             _safe_text(observation.recommended_action, limit=2000)
             or _safe_text(vision.get("recommended_follow_up"), limit=2000)
