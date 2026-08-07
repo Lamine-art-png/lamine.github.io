@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import { API_BASE_URL, apiClient } from "../api/client";
 import { IntelligencePlanControls, REASONING_MODE_STORAGE_KEY } from "./intelligence/IntelligencePlanControls";
 import { IntelligenceView } from "./intelligence/IntelligenceView";
@@ -7,6 +8,59 @@ import {
 } from "./intelligence/useIntelligenceController";
 
 type AnyRecord = Record<string, any>;
+
+function contextualFieldObservationId(): string {
+  if (typeof window === "undefined" || window.location.pathname !== "/intelligence") return "";
+  return new URLSearchParams(window.location.search || "").get("field_observation_id") || "";
+}
+
+function linkedFieldObservationEvidence(observation: AnyRecord): AnyRecord {
+  const vision = observation?.structured?.vision || observation?.structured_json?.vision || {};
+  return {
+    filename: `Field Intelligence observation ${String(observation.id || "").slice(0, 8)}`,
+    source_type: "field_observation",
+    import_status: "linked",
+    observation_id: observation.id,
+    parsed_preview: JSON.stringify({
+      observation_id: observation.id,
+      field_name: observation.field_name,
+      block_name: observation.block_name,
+      crop: observation.crop,
+      event_type: observation.event_type,
+      severity: observation.severity,
+      occurred_at: observation.occurred_at,
+      summary: observation.summary,
+      transcript: observation.corrected_transcript || observation.transcript,
+      recommended_action: observation.recommended_action || vision.recommended_follow_up,
+      visible_facts: Array.isArray(vision.visible_facts) ? vision.visible_facts.slice(0, 10) : [],
+      hypotheses: Array.isArray(vision.hypotheses) ? vision.hypotheses.slice(0, 10) : [],
+      uncertainties: Array.isArray(vision.uncertainties) ? vision.uncertainties.slice(0, 10) : [],
+      media_moments: Array.isArray(vision.media_moments) ? vision.media_moments.slice(0, 10) : [],
+      correlation: observation.correlation || observation.correlation_json,
+      confidence: observation.confidence,
+      evidence_ids: observation.evidence_ids || observation.evidence_ids_json || [],
+      asset_count: Array.isArray(observation.assets) ? observation.assets.length : 0,
+    }).slice(0, 12000),
+  };
+}
+
+async function withFieldObservationContext(request: AnyRecord): Promise<AnyRecord> {
+  const observationId = contextualFieldObservationId();
+  if (!observationId) return request;
+  const response = await apiClient.fieldIntelligence.observation(observationId) as AnyRecord;
+  const observation = response?.observation || response;
+  if (!observation?.id) return request;
+  const existing = Array.isArray(request?.uploaded_evidence) ? request.uploaded_evidence : [];
+  return {
+    ...(request || {}),
+    field_id: request?.field_id || observation.field_id,
+    field_observation_id: observationId,
+    uploaded_evidence: [
+      linkedFieldObservationEvidence(observation),
+      ...existing.filter((item: AnyRecord) => String(item?.observation_id || "") !== observationId),
+    ],
+  };
+}
 
 const RESPONSE_LANGUAGE_STORAGE_KEY = "agroai_response_language_v1";
 
@@ -107,7 +161,8 @@ const intelligenceDependencies: IntelligenceDependencies = {
     ) as Promise<AnyRecord>;
   },
   async runIntelligence(request: AnyRecord) {
-    const languageAwareRequest = withIndependentResponseLanguage(request);
+    const contextualRequest = await withFieldObservationContext(request);
+    const languageAwareRequest = withIndependentResponseLanguage(contextualRequest);
 
     // Production route: normal hybrid router plus independent edge and free-hosted
     // recovery lanes. This protects Ask AGRO-AI from a broken provider/base-url
@@ -171,10 +226,76 @@ const intelligenceDependencies: IntelligenceDependencies = {
   },
 };
 
+type IntelligenceController = ReturnType<typeof useIntelligenceController>;
+
+function contextualPrompt(observation: AnyRecord): string {
+  const summary = String(
+    observation.summary ||
+    observation.corrected_transcript ||
+    observation.transcript ||
+    "Review the linked field observation.",
+  ).trim();
+  return [
+    "Analyze this linked Field Intelligence observation as one operational case.",
+    "Use its transcript, media analysis, visible facts, hypotheses, evidence, and uncertainty. Separate confirmed facts from hypotheses, explain what matters, state what must be verified, and recommend the best next accountable action. Do not invent measurements or diagnoses.",
+    summary,
+  ].join("\n\n");
+}
+
+function FieldObservationContext({ controller }: { controller: IntelligenceController }) {
+  const observationId = contextualFieldObservationId();
+  const [observation, setObservation] = useState<AnyRecord | null>(null);
+  const [loadError, setLoadError] = useState("");
+  const sentObservationRef = useRef("");
+
+  useEffect(() => {
+    let cancelled = false;
+    setObservation(null);
+    setLoadError("");
+    if (!observationId) return () => { cancelled = true; };
+
+    void apiClient.fieldIntelligence.observation(observationId)
+      .then((response: any) => {
+        if (cancelled) return;
+        const row = response?.observation || response;
+        if (!row?.id) throw new Error("The linked field observation could not be loaded.");
+        setObservation(row);
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) {
+          setLoadError(error instanceof Error ? error.message : "The linked field observation could not be loaded.");
+        }
+      });
+
+    return () => { cancelled = true; };
+  }, [observationId]);
+
+  useEffect(() => {
+    if (!observation?.id || sentObservationRef.current === String(observation.id)) return;
+    sentObservationRef.current = String(observation.id);
+    void controller.send(contextualPrompt(observation));
+  }, [controller.send, observation]);
+
+  if (!observationId) return null;
+  return <section className="border-b border-[#BFD8C9] bg-[#EDF7F1] px-4 py-3 sm:px-8">
+    <div className="mx-auto flex max-w-[1100px] flex-wrap items-start justify-between gap-3">
+      <div className="min-w-0 flex-1">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#2D6A4F]">Field Intelligence · linked observation</div>
+        <div className="mt-1 text-[14px] font-semibold text-[#10231B]">{observation?.field_name || observation?.block_name || "Field observation"}</div>
+        <div className="mt-1 line-clamp-2 text-[12px] leading-5 text-[#536158]">
+          {loadError || observation?.summary || observation?.corrected_transcript || observation?.transcript || "Loading the exact field observation…"}
+        </div>
+      </div>
+      <a href={`/field-intelligence?observation_id=${encodeURIComponent(observationId)}`} className="inline-flex min-h-[38px] items-center rounded-lg border border-[#8FC3A6] bg-white px-3 text-[12px] font-semibold text-[#1B5E3F]">Open observation</a>
+    </div>
+  </section>;
+}
+
 export function Intelligence() {
   const controller = useIntelligenceController(intelligenceDependencies);
   return <>
     <IntelligencePlanControls />
+    <FieldObservationContext controller={controller} />
     <IntelligenceView controller={controller} />
   </>;
 }
