@@ -9,14 +9,16 @@ const runtime = fs.readFileSync(path.join(root, "src/app/fieldIntelligence/opera
 const directRuntime = fs.readFileSync(path.join(root, "src/app/fieldIntelligence/directWorkflowRuntime.ts"), "utf8");
 const map = fs.readFileSync(path.join(root, "src/app/fieldIntelligence/FieldMapV2.tsx"), "utf8");
 const guard = fs.readFileSync(path.join(root, "src/app/fieldIntelligence/operatingLoopContextGuard.ts"), "utf8");
+const intelligence = fs.readFileSync(path.join(root, "src/app/components/Intelligence.tsx"), "utf8");
 const main = fs.readFileSync(path.join(root, "src/main.tsx"), "utf8");
 const portalCatalog = fs.readFileSync(path.join(root, "src/app/portalLiteralCatalog.ts"), "utf8");
 const workflowCopy = JSON.parse(fs.readFileSync(path.resolve(root, "../shared/ui-dynamic-copy-field-intelligence.en.json"), "utf8"));
 
+assert.match(main, /import\("\.\/app\/fieldIntelligence\/directWorkflowRuntime"\)/);
 assert.match(main, /import\("\.\/app\/fieldIntelligence\/operatingLoopRuntime"\)/);
 assert.match(main, /import\("\.\/app\/fieldIntelligence\/operatingLoopContextGuard"\)/);
-assert.match(main, /import\("\.\/app\/fieldIntelligence\/directWorkflowRuntime"\)/);
-assert.match(main, /after the portal has rendered/);
+assert.match(main, /Field Intelligence remains isolated from portal startup/);
+assert.doesNotMatch(main, /^import "\.\/app\/fieldIntelligence\/directWorkflowRuntime"/m);
 assert.doesNotMatch(runtime, /FieldIntelligenceV2/);
 assert.match(runtime, /field_observation_id/);
 assert.match(runtime, /source_observation_id/);
@@ -37,6 +39,15 @@ assert.match(directRuntime, /\/tasks\?task_id=/);
 assert.match(directRuntime, /source=field-intelligence/);
 assert.match(directRuntime, /\[object object\]/i);
 assert.match(directRuntime, /data-fi-direct-workflow/i);
+
+assert.match(intelligence, /function contextualFieldObservationId\(\)/);
+assert.match(intelligence, /field_observation_id: observationId/);
+assert.match(intelligence, /linkedFieldObservationEvidence/);
+assert.match(intelligence, /const contextualRequest = await withFieldObservationContext\(request\)/);
+assert.match(intelligence, /Field Intelligence · linked observation/);
+assert.match(intelligence, /data-field-observation-context/);
+assert.match(intelligence, /void controller\.send\(contextualPrompt\(observation\)\)/);
+assert.match(intelligence, /Open observation/);
 
 assert.doesNotMatch(map, /-98\.5795/);
 assert.match(map, /zoom: 16/);
