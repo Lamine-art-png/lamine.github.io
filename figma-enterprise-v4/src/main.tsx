@@ -83,12 +83,6 @@ function bootFailure(error: unknown) {
   renderBootFailure(message);
 }
 
-// Installable PWA shell: static assets only — the worker never caches /v1/
-// responses or cross-origin requests (see public/sw.js + launch contract test).
-// Registration requires an explicitly declared deployment environment
-// (production | staging): local dev, tests and ad-hoc previews never register,
-// and each environment gets its own cache namespace. Browser storage and
-// service-worker caches remain origin-scoped between app and Platform hosts.
 const deploymentEnvironment = String(import.meta.env.VITE_DEPLOYMENT_ENVIRONMENT || "").trim();
 if ("serviceWorker" in navigator && !import.meta.env.DEV
     && ["production", "staging"].includes(deploymentEnvironment)) {
@@ -117,12 +111,19 @@ if (!rootEl) {
     .then(({ default: App }) => {
       window.sessionStorage.removeItem(automaticRecoveryKey);
       createRoot(rootEl).render(<CommercialBoundaryHost><App /></CommercialBoundaryHost>);
-      // These modules are deliberately loaded after the portal has rendered.
-      // A failure can disable the enhancement, but can never blank the portal.
-      void import("./app/fieldIntelligence/operatingLoopRuntime")
-        .then(() => import("./app/fieldIntelligence/operatingLoopContextGuard"))
-        .then(() => import("./app/fieldIntelligence/directWorkflowRuntime"))
-        .catch((error) => console.error("AGRO-AI Field Intelligence operating loop failed to load", error));
+
+      const fieldContextIsNative = window.location.pathname === "/intelligence"
+        && new URLSearchParams(window.location.search || "").has("field_observation_id");
+
+      // Field Intelligence remains isolated from portal startup. On the native
+      // contextual Intelligence route, React owns the entire linked-observation
+      // flow so the older auto-send bridges stay out and cannot double-submit.
+      if (!fieldContextIsNative) {
+        void import("./app/fieldIntelligence/directWorkflowRuntime")
+          .then(() => import("./app/fieldIntelligence/operatingLoopRuntime"))
+          .then(() => import("./app/fieldIntelligence/operatingLoopContextGuard"))
+          .catch((error) => console.error("AGRO-AI Field Intelligence operating loop failed to load", error));
+      }
     })
     .catch(bootFailure);
 }
