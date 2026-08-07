@@ -1,6 +1,5 @@
 import { createRoot } from "react-dom/client";
 import "./app/commercialBoundaryConversionLabels";
-import "./app/fieldIntelligence/directWorkflowRuntime";
 import { CommercialBoundaryHost } from "./app/components/CommercialBoundaryHost";
 import "./styles/index.css";
 
@@ -112,10 +111,11 @@ if (!rootEl) {
     .then(({ default: App }) => {
       window.sessionStorage.removeItem(automaticRecoveryKey);
       createRoot(rootEl).render(<CommercialBoundaryHost><App /></CommercialBoundaryHost>);
-      // Non-critical localization/legacy enhancements stay post-render. The
-      // direct Field Intelligence workflow is already installed above, so a
-      // customer can never click the old generic Ask path before it is ready.
-      void import("./app/fieldIntelligence/operatingLoopRuntime")
+      // Field Intelligence remains isolated from portal startup. Load the direct
+      // observation workflow first after render, then the optional legacy and
+      // localization bridges. A failure in any of them cannot blank the shell.
+      void import("./app/fieldIntelligence/directWorkflowRuntime")
+        .then(() => import("./app/fieldIntelligence/operatingLoopRuntime"))
         .then(() => import("./app/fieldIntelligence/operatingLoopContextGuard"))
         .catch((error) => console.error("AGRO-AI Field Intelligence operating loop failed to load", error));
     })
