@@ -269,3 +269,4 @@ jobs:
           retention-days: 30
 
 # Base-branch trigger for production verification only.
+# Verification-only PR trigger for the final Field Intelligence workflow/map release.
