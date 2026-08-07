@@ -18,6 +18,8 @@ on:
       - figma-enterprise-v4/package.json
       - figma-enterprise-v4/src/app/api/client.ts
       - figma-enterprise-v4/src/app/components/FieldIntelligenceV2.tsx
+      - figma-enterprise-v4/src/app/fieldIntelligence/FieldMapV2.tsx
+      - figma-enterprise-v4/src/app/fieldIntelligence/directWorkflowRuntime.ts
       - figma-enterprise-v4/src/app/fieldIntelligence/offlineQueue.ts
       - figma-enterprise-v4/src/app/fieldIntelligence/operatingLoopContextGuard.ts
       - figma-enterprise-v4/src/app/fieldIntelligence/operatingLoopRuntime.ts
@@ -73,7 +75,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="Production verification started for Field Intelligence release \`${GITHUB_SHA}\`. Expected Render backend identity: \`${EXPECTED_BACKEND_SHA}\`. Verifying the observation-to-action operating loop, contextual Ask AGRO-AI, durable source-linked tasks, live capture, edge routing, and the deployed portal bundle."
+            -f body="Production verification started for Field Intelligence release \`${GITHUB_SHA}\`. Expected Render backend identity: \`${EXPECTED_BACKEND_SHA}\`. Verifying exact backend identity, edge routing, the contextual observation workflow, the field-scale spatial workspace, and the deployed portal bundle."
 
       - name: Verify exact Render backend build and deployed routes
         shell: bash
@@ -145,50 +147,96 @@ jobs:
           esac
           printf '%s\n' "$task_code" > evidence/task-create-status.txt
 
-      - name: Verify production portal bundle
+      - name: Verify exact production portal bundle after deployment convergence
         shell: bash
         run: |
           set -euo pipefail
-          mkdir -p evidence/portal-assets
           ready=0
           for attempt in $(seq 1 90); do
-            if curl --fail --silent --show-error --location --max-time 20 "${PUBLIC_ORIGIN}/" -o evidence/portal-index.html; then
-              title="$(sed -n 's:.*<title>\(.*\)</title>.*:\1:p' evidence/portal-index.html | head -1)"
-              if [ "$title" = "AGRO-AI Enterprise Portal" ]; then
-                ready=1
+            rm -rf evidence/portal-assets
+            mkdir -p evidence/portal-assets
+            : > evidence/portal-queue.txt
+            : > evidence/portal-seen.txt
+            cache_key="${GITHUB_SHA}-${attempt}-$(date +%s)"
+
+            if ! curl --fail --silent --show-error --location --max-time 20 \
+              "${PUBLIC_ORIGIN}/?fi_release=${cache_key}" -o evidence/portal-index.html; then
+              sleep 5
+              continue
+            fi
+
+            title="$(sed -n 's:.*<title>\(.*\)</title>.*:\1:p' evidence/portal-index.html | head -1)"
+            if [ "$title" != "AGRO-AI Enterprise Portal" ]; then
+              sleep 5
+              continue
+            fi
+
+            grep -oE '/assets/[A-Za-z0-9._/-]+\.js' evidence/portal-index.html | sed 's#^/##' > evidence/portal-queue.txt || true
+            if [ ! -s evidence/portal-queue.txt ]; then
+              sleep 5
+              continue
+            fi
+
+            fetch_failed=0
+            for pass in 1 2 3 4; do
+              sort -u evidence/portal-queue.txt -o evidence/portal-queue.txt
+              cp evidence/portal-queue.txt evidence/portal-pass-queue.txt
+              while IFS= read -r asset; do
+                [ -n "$asset" ] || continue
+                grep -Fx "$asset" evidence/portal-seen.txt >/dev/null 2>&1 && continue
+                echo "$asset" >> evidence/portal-seen.txt
+                target="evidence/portal-assets/$(printf '%s' "$asset" | tr '/' '_')"
+                if ! curl --fail --silent --show-error --max-time 30 \
+                  "${PUBLIC_ORIGIN}/${asset}?fi_release=${cache_key}" -o "$target"; then
+                  fetch_failed=1
+                  break
+                fi
+                grep -oE 'assets/[A-Za-z0-9._/-]+\.js' "$target" >> evidence/portal-queue.txt || true
+                grep -oE '\./[A-Za-z0-9._/-]+\.js' "$target" | sed 's#^\./#assets/#' >> evidence/portal-queue.txt || true
+              done < evidence/portal-pass-queue.txt
+              [ "$fetch_failed" -eq 0 ] || break
+            done
+            [ "$fetch_failed" -eq 0 ] || { sleep 5; continue; }
+
+            if ! compgen -G 'evidence/portal-assets/*' >/dev/null; then
+              sleep 5
+              continue
+            fi
+            cat evidence/portal-assets/* > evidence/portal-all-js.txt
+
+            markers_ok=1
+            for marker in \
+              '/v1/field-intelligence/live-analysis' \
+              '/v1/field-intelligence/live-transcription' \
+              'human_review_required' \
+              'Starting live camera' \
+              'Live multilingual captions active' \
+              'One observation. One operating loop.' \
+              'Observation to action' \
+              'Recommended next action' \
+              'Task created and linked' \
+              'field_observation_id' \
+              'source_observation_id' \
+              '/tasks?task_id=' \
+              'field-intelligence-map' \
+              'The transcript, media analysis, evidence, uncertainty, AGRO-AI discussion, and task stay linked.'; do
+              if ! grep -F "$marker" evidence/portal-all-js.txt >/dev/null; then
+                printf 'missing marker on attempt %s: %s\n' "$attempt" "$marker" > evidence/portal-last-missing-marker.txt
+                markers_ok=0
                 break
               fi
+            done
+
+            if [ "$markers_ok" -eq 1 ]; then
+              ready=1
+              printf '%s\n' "$cache_key" > evidence/portal-release-cache-key.txt
+              break
             fi
             sleep 5
           done
+
           test "$ready" -eq 1
-          grep -oE '/assets/[A-Za-z0-9._/-]+\.js' evidence/portal-index.html | sed 's#^/##' > evidence/portal-queue.txt
-          : > evidence/portal-seen.txt
-          for pass in 1 2 3 4; do
-            sort -u evidence/portal-queue.txt -o evidence/portal-queue.txt
-            while IFS= read -r asset; do
-              [ -n "$asset" ] || continue
-              grep -Fx "$asset" evidence/portal-seen.txt >/dev/null 2>&1 && continue
-              echo "$asset" >> evidence/portal-seen.txt
-              target="evidence/portal-assets/$(basename "$asset")"
-              curl --fail --silent --show-error --max-time 30 "${PUBLIC_ORIGIN}/${asset}" -o "$target"
-              grep -oE 'assets/[A-Za-z0-9._/-]+\.js' "$target" >> evidence/portal-queue.txt || true
-              grep -oE '\./[A-Za-z0-9._/-]+\.js' "$target" | sed 's#^\./#assets/#' >> evidence/portal-queue.txt || true
-            done < evidence/portal-queue.txt
-          done
-          cat evidence/portal-assets/*.js > evidence/portal-all-js.txt
-          grep -F '/v1/field-intelligence/live-analysis' evidence/portal-all-js.txt >/dev/null
-          grep -F '/v1/field-intelligence/live-transcription' evidence/portal-all-js.txt >/dev/null
-          grep -F 'human_review_required' evidence/portal-all-js.txt >/dev/null
-          grep -F 'Starting live camera' evidence/portal-all-js.txt >/dev/null
-          grep -F 'Live multilingual captions active' evidence/portal-all-js.txt >/dev/null
-          grep -F 'One observation. One operating loop.' evidence/portal-all-js.txt >/dev/null
-          grep -F 'Task created and linked' evidence/portal-all-js.txt >/dev/null
-          grep -F 'field_observation_id' evidence/portal-all-js.txt >/dev/null
-          grep -F 'source_observation_id' evidence/portal-all-js.txt >/dev/null
-          grep -F '/tasks?task_id=' evidence/portal-all-js.txt >/dev/null
-          grep -F 'The transcript, media analysis, evidence, uncertainty, AGRO-AI discussion, and task stay linked.' evidence/portal-all-js.txt >/dev/null
-          printf 'portal_capture_context_task_operating_loop_bundle=ok\n'
+          printf 'portal_capture_understand_decide_act_verify_map_bundle=ok\n'
 
       - name: Record production verification success
         if: success()
@@ -201,15 +249,16 @@ jobs:
           speech_status="$(cat evidence/live-transcription-status.txt)"
           task_status="$(cat evidence/task-create-status.txt)"
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="✅ **Field Intelligence observation-to-action production deployment verified**\n\n- verification release: \`${GITHUB_SHA}\`\n- exact Render backend build: \`${backend_sha}\`\n- deployed OpenAPI contains live analysis, live transcription, and observation task creation routes\n- Cloudflare edge health: \`${edge_status}\`\n- unauthenticated live-analysis rejected safely with HTTP \`${analysis_status}\`\n- unauthenticated live-transcription rejected safely with HTTP \`${speech_status}\`\n- unauthenticated observation-task creation rejected safely with HTTP \`${task_status}\`\n- production portal bundle contains the linked-observation Ask context, source-linked task workflow, task deep links, operating-loop navigation, live camera, multilingual captions, and human-review contract\n\nField Intelligence is deployed as one coherent loop: Capture → Understand → Decide → Act, with the originating observation preserved through AGRO-AI and Tasks."
+            -f body="✅ **Field Intelligence coherent workflow + spatial workspace verified in production**\n\n- verification release: \`${GITHUB_SHA}\`\n- exact Render backend build: \`${backend_sha}\`\n- deployed OpenAPI contains live analysis, live transcription, and observation task creation routes\n- Cloudflare edge health: \`${edge_status}\`\n- unauthenticated live-analysis rejected safely with HTTP \`${analysis_status}\`\n- unauthenticated live-transcription rejected safely with HTTP \`${speech_status}\`\n- unauthenticated observation-task creation rejected safely with HTTP \`${task_status}\`\n- production portal bundle contains the exact linked-observation Ask context, durable source-linked task flow, task deep links, the five-stage operating loop, and the field-scale observation map actions\n\nThe deployed product loop is now Capture → Understand → Decide → Act → Verify. The map is part of that loop rather than a standalone geography view."
 
       - name: Record production verification failure
         if: failure()
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          missing="$(cat evidence/portal-last-missing-marker.txt 2>/dev/null || true)"
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="❌ Field Intelligence observation-to-action production verification failed for release \`${GITHUB_SHA}\` with expected backend \`${EXPECTED_BACKEND_SHA}\`. Review Actions run \`${GITHUB_RUN_ID}\`; do not represent every production layer as verified until this gate passes."
+            -f body="❌ Field Intelligence production verification failed for release \`${GITHUB_SHA}\` with expected backend \`${EXPECTED_BACKEND_SHA}\`. ${missing} Review Actions run \`${GITHUB_RUN_ID}\`; do not represent the coherent workflow/map as production-verified until this gate passes."
 
       - uses: actions/upload-artifact@v4
         if: always()
