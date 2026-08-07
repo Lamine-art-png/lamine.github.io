@@ -137,20 +137,26 @@ function scoreObservation(observation: AnyRecord, sourceText: string): number {
 }
 
 function observationForElement(element: Element | null, preferActive = false): AnyRecord | null {
+  if (element) {
+    const sourceText = (element as HTMLElement).innerText || element.textContent || "";
+    let winner: AnyRecord | null = null;
+    let score = 0;
+    for (const observation of observations.values()) {
+      const next = scoreObservation(observation, sourceText);
+      if (next > score) {
+        score = next;
+        winner = observation;
+      }
+    }
+    if (score >= 5) return winner;
+  }
   const directId = currentObservationId();
   if (preferActive && directId && observations.has(directId)) return observations.get(directId) || null;
-  if (!element) return null;
-  const sourceText = (element as HTMLElement).innerText || element.textContent || "";
-  let winner: AnyRecord | null = null;
-  let score = 0;
-  for (const observation of observations.values()) {
-    const next = scoreObservation(observation, sourceText);
-    if (next > score) {
-      score = next;
-      winner = observation;
-    }
-  }
-  return score >= 5 ? winner : null;
+  return null;
+}
+
+function isProcessingObservation(observation: AnyRecord): boolean {
+  return ["staged", "processing"].includes(normalize(observation?.status));
 }
 
 function element<K extends keyof HTMLElementTagNameMap>(tag: K, styles?: Partial<CSSStyleDeclaration>) {
@@ -362,7 +368,7 @@ function cleanTimeline(): void {
         .filter((node) => normalize(node.textContent).includes("[object object]"))
         .forEach((node) => { node.textContent = summary; });
     }
-    if (observation.confidence == null && ["staged", "processing"].includes(normalize(observation.status))) {
+    if (isProcessingObservation(observation) && Number(observation.confidence || 0) <= 0) {
       Array.from(button.querySelectorAll<HTMLElement>("span"))
         .filter((node) => /confidence\s*:\s*0%/i.test(node.textContent || ""))
         .forEach((node) => { node.textContent = t("fieldIntel.state.processing"); });
@@ -378,6 +384,11 @@ function enhanceDrawer(): void {
   const observation = observationForElement(drawer, true);
   if (!observation) return;
   setActiveObservation(observation);
+  if (isProcessingObservation(observation) && Number(observation.confidence || 0) <= 0) {
+    Array.from(drawer.querySelectorAll<HTMLElement>("span"))
+      .filter((node) => /confidence\s*:\s*0%/i.test(node.textContent || ""))
+      .forEach((node) => { node.textContent = t("fieldIntel.state.processing"); });
+  }
   const existing = drawer.querySelector<HTMLElement>(`[data-fi-direct-workflow='${CSS.escape(String(observation.id))}']`);
   if (!existing) renderWorkflowPanel(drawer, observation);
 }
