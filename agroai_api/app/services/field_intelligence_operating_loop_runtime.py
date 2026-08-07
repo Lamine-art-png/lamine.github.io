@@ -5,11 +5,6 @@ its downstream actions historically behaved like disconnected buttons. This
 installer keeps the existing, proven capture and processing services intact and
 adds one production invariant: every observation can own one durable operator
 task whose provenance points back to the exact observation, media, and evidence.
-
-The repository uses small install_* integrations for cross-cutting product
-contracts. Keeping this integration here avoids importing the heavy Field
-Intelligence frontend into the portal shell and keeps the change server-side,
-tenant-scoped, and transactionally durable.
 """
 from __future__ import annotations
 
@@ -50,6 +45,43 @@ def _priority_from_severity(value: Any) -> str:
     return "low"
 
 
+def _summary_is_invalid(value: Any) -> bool:
+    text = str(value or "").strip()
+    lowered = text.casefold()
+    return (
+        not text
+        or "[object object]" in lowered
+        or lowered in {"{}", "[]", "null", "undefined"}
+        or (text.startswith("{") and text.endswith("}"))
+    )
+
+
+def _repair_observation_summary(observation: FieldObservation | None) -> FieldObservation | None:
+    """Keep malformed model payloads out of every customer-facing summary.
+
+    A historical model response was stringified by a browser-facing path as
+    ``[object Object]``. Existing rows self-heal on read, and new extraction
+    results are repaired before they can be persisted or used to create tasks.
+    """
+    if observation is None or not _summary_is_invalid(observation.summary):
+        return observation
+    structured = dict(observation.structured_json or {})
+    vision = structured.get("vision") if isinstance(structured.get("vision"), dict) else {}
+    candidates = [
+        observation.corrected_transcript,
+        observation.transcript,
+        structured.get("summary"),
+        vision.get("summary") if isinstance(vision, dict) else None,
+        observation.recommended_action,
+    ]
+    for candidate in candidates:
+        if isinstance(candidate, str) and candidate.strip() and not _summary_is_invalid(candidate):
+            observation.summary = candidate.strip()[:4000]
+            return observation
+    observation.summary = "Field observation awaiting analysis."
+    return observation
+
+
 def install_field_intelligence_operating_loop() -> None:
     """Install the observation-to-task contract exactly once per process."""
     from app.services import field_intelligence as field_service
@@ -57,6 +89,37 @@ def install_field_intelligence_operating_loop() -> None:
 
     if getattr(field_service, _INSTALL_MARKER, False):
         return
+
+    # Repair both historical rows at read time and future malformed model
+    # summaries before they reach persistence. These wrappers preserve the
+    # canonical tenant/workspace authorization functions underneath them.
+    original_get_observation = field_service.get_observation
+    original_list_observations = field_service.list_observations
+    original_extract_observation = field_service.extract_observation
+
+    def get_observation_with_valid_summary(db: Any, ctx: Any, observation_id: str):
+        return _repair_observation_summary(original_get_observation(db, ctx, observation_id))
+
+    def list_observations_with_valid_summaries(db: Any, ctx: Any, filters: dict):
+        rows, total = original_list_observations(db, ctx, filters)
+        for row in rows:
+            _repair_observation_summary(row)
+        return rows, total
+
+    def extract_observation_with_valid_summary(*args: Any, **kwargs: Any):
+        extraction = original_extract_observation(*args, **kwargs)
+        summary = getattr(extraction, "summary", "")
+        if _summary_is_invalid(summary):
+            source_text = str(args[0] if args else kwargs.get("text") or "").strip()
+            extraction.summary = source_text[:280] if source_text else "Field observation awaiting analysis."
+        return extraction
+
+    setattr(get_observation_with_valid_summary, "__agroai_summary_repair__", True)
+    setattr(list_observations_with_valid_summaries, "__agroai_summary_repair__", True)
+    setattr(extract_observation_with_valid_summary, "__agroai_summary_repair__", True)
+    field_service.get_observation = get_observation_with_valid_summary
+    field_service.list_observations = list_observations_with_valid_summaries
+    field_service.extract_observation = extract_observation_with_valid_summary
 
     original_task_from_job = operating_loop._task_from_job
 
@@ -81,19 +144,10 @@ def install_field_intelligence_operating_loop() -> None:
         observation_id: str,
         payload: dict[str, Any],
     ) -> dict[str, Any]:
-        # Resolve through the canonical service first so tenant and existence
-        # boundaries remain identical to every other Field Intelligence route.
         resolved = field_service.get_observation(db, ctx, observation_id)
-        field_service.authorize_workspace_action(
-            db,
-            ctx,
-            resolved.workspace_id,
-            write=True,
-        )
+        field_service.authorize_workspace_action(db, ctx, resolved.workspace_id, write=True)
         organization_id = field_service.require_org(ctx)
 
-        # Lock the observation while checking and writing task_ids_json. This
-        # makes double taps and slow mobile retries converge on one task.
         observation = (
             db.query(FieldObservation)
             .filter(
@@ -105,6 +159,7 @@ def install_field_intelligence_operating_loop() -> None:
         )
         if observation is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Observation not found")
+        _repair_observation_summary(observation)
 
         existing_ids = [str(value) for value in (observation.task_ids_json or []) if value]
         if existing_ids:
@@ -123,14 +178,7 @@ def install_field_intelligence_operating_loop() -> None:
                 task["already_existed"] = True
                 return task
 
-        # Field Intelligence permits observations without an explicit workspace.
-        # The canonical resolver maps those records to the organization's normal
-        # default workspace, exactly as the original task path did.
-        workspace = field_service.resolve_workspace(
-            db,
-            organization_id,
-            observation.workspace_id,
-        )
+        workspace = field_service.resolve_workspace(db, organization_id, observation.workspace_id)
         if workspace is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Workspace not found")
         task_workspace_id = workspace.id
@@ -183,17 +231,10 @@ def install_field_intelligence_operating_loop() -> None:
                 .all()
             )
         ]
-        source_evidence_ids = [
-            str(value) for value in (observation.evidence_ids_json or []) if value
-        ]
+        source_evidence_ids = [str(value) for value in (observation.evidence_ids_json or []) if value]
 
         task_id = f"task_{uuid.uuid4().hex[:12]}"
-        title = str(
-            payload.get("title")
-            or recommendation
-            or summary
-            or "Field observation follow-up"
-        )[:120]
+        title = str(payload.get("title") or recommendation or summary or "Field observation follow-up")[:120]
         why = str(
             payload.get("why")
             or f"Field Intelligence observation {observation.id[:8]} requires follow-through: {summary}"
@@ -246,7 +287,7 @@ def install_field_intelligence_operating_loop() -> None:
             from app.services.field_intelligence_metrics import tasks_created
 
             tasks_created.inc()
-        except Exception:  # Metrics must never roll back customer work.
+        except Exception:
             logger.debug("Field Intelligence task metric unavailable", exc_info=True)
         return task
 
