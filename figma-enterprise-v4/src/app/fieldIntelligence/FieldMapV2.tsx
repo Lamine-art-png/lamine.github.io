@@ -203,6 +203,12 @@ export function FieldMapV2({ t, observations, selectedId, onSelect, workspaceId 
         });
         mapRef.current = map;
         map.addControl(new maplibre.NavigationControl({ showCompass: false }), "top-right");
+        map.addControl(new maplibre.GeolocateControl({
+          positionOptions: { enableHighAccuracy: true },
+          trackUserLocation: true,
+          showUserHeading: true,
+          showAccuracyCircle: true,
+        }), "top-right");
         map.on("load", () => {
           if (disposed) return;
           map.addSource("fi-observations", { type: "geojson", data: geojson, cluster: true, clusterMaxZoom: 14, clusterRadius: 44 });
