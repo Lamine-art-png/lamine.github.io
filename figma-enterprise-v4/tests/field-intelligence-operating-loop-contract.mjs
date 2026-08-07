@@ -6,6 +6,8 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
 const runtime = fs.readFileSync(path.join(root, "src/app/fieldIntelligence/operatingLoopRuntime.ts"), "utf8");
+const directRuntime = fs.readFileSync(path.join(root, "src/app/fieldIntelligence/directWorkflowRuntime.ts"), "utf8");
+const map = fs.readFileSync(path.join(root, "src/app/fieldIntelligence/FieldMapV2.tsx"), "utf8");
 const guard = fs.readFileSync(path.join(root, "src/app/fieldIntelligence/operatingLoopContextGuard.ts"), "utf8");
 const main = fs.readFileSync(path.join(root, "src/main.tsx"), "utf8");
 const portalCatalog = fs.readFileSync(path.join(root, "src/app/portalLiteralCatalog.ts"), "utf8");
@@ -13,6 +15,7 @@ const workflowCopy = JSON.parse(fs.readFileSync(path.resolve(root, "../shared/ui
 
 assert.match(main, /import\("\.\/app\/fieldIntelligence\/operatingLoopRuntime"\)/);
 assert.match(main, /import\("\.\/app\/fieldIntelligence\/operatingLoopContextGuard"\)/);
+assert.match(main, /import\("\.\/app\/fieldIntelligence\/directWorkflowRuntime"\)/);
 assert.match(main, /after the portal has rendered/);
 assert.doesNotMatch(runtime, /FieldIntelligenceV2/);
 assert.match(runtime, /field_observation_id/);
@@ -23,12 +26,26 @@ assert.match(runtime, /TASK_READY_EVENT/);
 assert.match(runtime, /\/tasks\?task_id=/);
 assert.match(runtime, /\/intelligence\?field_observation_id=/);
 assert.match(runtime, /One observation\. One operating loop\./);
-assert.match(runtime, /Capture/);
-assert.match(runtime, /Understand/);
-assert.match(runtime, /Decide/);
-assert.match(runtime, /Act/);
 assert.match(runtime, /MutationObserver/);
 assert.match(runtime, /catch \(error\)[\s\S]+never be capable of taking down the portal shell/);
+
+assert.match(directRuntime, /field_observation_id/);
+assert.match(directRuntime, /Observation to action/);
+assert.match(directRuntime, /"Capture", "Understand", "Decide", "Act", "Verify"/);
+assert.match(directRuntime, /fieldIntelligence\.createTask\(observationId/);
+assert.match(directRuntime, /\/tasks\?task_id=/);
+assert.match(directRuntime, /source=field-intelligence/);
+assert.match(directRuntime, /\[object object\]/i);
+assert.match(directRuntime, /data-fi-direct-workflow/i);
+
+assert.doesNotMatch(map, /-98\.5795/);
+assert.match(map, /zoom: 16/);
+assert.match(map, /field_observation_id=/);
+assert.match(map, /fieldIntelligence\.createTask/);
+assert.match(map, /fi-selected/);
+assert.match(map, /noGeolocated/);
+assert.match(map, /currentLocation/);
+
 assert.match(guard, /event\.isTrusted/);
 assert.match(guard, /isImportButton/);
 assert.match(guard, /footer textarea/);
@@ -45,8 +62,9 @@ assert.match(guard, /dynamicCopySourceForNamespaces\(\["fiOperatingLoop"\]\)/);
 assert.match(guard, /translatePortalLiteral\(textarea\.value/);
 assert.match(guard, /agroai:locale-change/);
 assert.match(portalCatalog, /ui-dynamic-copy-field-intelligence\.en\.json/);
-assert.ok(Object.keys(workflowCopy).length >= 15);
+assert.ok(Object.keys(workflowCopy).length >= 20);
 assert.equal(workflowCopy["dynamic.fiOperatingLoop.capture"], "Capture");
+assert.equal(workflowCopy["dynamic.fiOperatingLoop.verify"], "Verify");
 assert.match(workflowCopy["dynamic.fiOperatingLoop.contextPromptTemplate"], /\{summary\}/);
 
 console.log("field-intelligence-operating-loop-contract: ok");

@@ -121,6 +121,7 @@ if (!rootEl) {
       // A failure can disable the enhancement, but can never blank the portal.
       void import("./app/fieldIntelligence/operatingLoopRuntime")
         .then(() => import("./app/fieldIntelligence/operatingLoopContextGuard"))
+        .then(() => import("./app/fieldIntelligence/directWorkflowRuntime"))
         .catch((error) => console.error("AGRO-AI Field Intelligence operating loop failed to load", error));
     })
     .catch(bootFailure);
