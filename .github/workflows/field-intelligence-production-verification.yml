@@ -18,6 +18,8 @@ on:
       - figma-enterprise-v4/package.json
       - figma-enterprise-v4/src/app/api/client.ts
       - figma-enterprise-v4/src/app/components/FieldIntelligenceV2.tsx
+      - figma-enterprise-v4/src/app/components/Intelligence.tsx
+      - figma-enterprise-v4/src/app/fieldIntelligence/canonicalObservationBridge.ts
       - figma-enterprise-v4/src/app/fieldIntelligence/offlineQueue.ts
       - figma-enterprise-v4/src/app/fieldIntelligence/operatingLoopContextGuard.ts
       - figma-enterprise-v4/src/app/fieldIntelligence/operatingLoopRuntime.ts
@@ -73,7 +75,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="Production verification started for Field Intelligence release \`${GITHUB_SHA}\`. Expected Render backend identity: \`${EXPECTED_BACKEND_SHA}\`. Verifying the observation-to-action operating loop, contextual Ask AGRO-AI, durable source-linked tasks, live capture, edge routing, and the deployed portal bundle."
+            -f body="Production verification started for Field Intelligence release \`${GITHUB_SHA}\`. Expected Render backend identity: \`${EXPECTED_BACKEND_SHA}\`. Verifying canonical observation context, summary repair, durable source-linked tasks, live capture, edge routing, and the deployed portal bundle."
 
       - name: Verify exact Render backend build and deployed routes
         shell: bash
@@ -187,8 +189,11 @@ jobs:
           grep -F 'field_observation_id' evidence/portal-all-js.txt >/dev/null
           grep -F 'source_observation_id' evidence/portal-all-js.txt >/dev/null
           grep -F '/tasks?task_id=' evidence/portal-all-js.txt >/dev/null
-          grep -F 'The transcript, media analysis, evidence, uncertainty, AGRO-AI discussion, and task stay linked.' evidence/portal-all-js.txt >/dev/null
-          printf 'portal_capture_context_task_operating_loop_bundle=ok\n'
+          grep -F 'Field Intelligence · linked observation' evidence/portal-all-js.txt >/dev/null
+          grep -F 'The selected field observation could not be resolved.' evidence/portal-all-js.txt >/dev/null
+          grep -F 'Field observation awaiting analysis.' evidence/portal-all-js.txt >/dev/null
+          grep -F 'source=field-intelligence' evidence/portal-all-js.txt >/dev/null
+          printf 'portal_canonical_observation_context_and_task_bundle=ok\n'
 
       - name: Record production verification success
         if: success()
@@ -201,7 +206,7 @@ jobs:
           speech_status="$(cat evidence/live-transcription-status.txt)"
           task_status="$(cat evidence/task-create-status.txt)"
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="✅ **Field Intelligence observation-to-action production deployment verified**\n\n- verification release: \`${GITHUB_SHA}\`\n- exact Render backend build: \`${backend_sha}\`\n- deployed OpenAPI contains live analysis, live transcription, and observation task creation routes\n- Cloudflare edge health: \`${edge_status}\`\n- unauthenticated live-analysis rejected safely with HTTP \`${analysis_status}\`\n- unauthenticated live-transcription rejected safely with HTTP \`${speech_status}\`\n- unauthenticated observation-task creation rejected safely with HTTP \`${task_status}\`\n- production portal bundle contains the linked-observation Ask context, source-linked task workflow, task deep links, operating-loop navigation, live camera, multilingual captions, and human-review contract\n\nField Intelligence is deployed as one coherent loop: Capture → Understand → Decide → Act, with the originating observation preserved through AGRO-AI and Tasks."
+            -f body="✅ **Field Intelligence canonical observation-to-action production deployment verified**\n\n- verification release: \`${GITHUB_SHA}\`\n- exact Render backend build: \`${backend_sha}\`\n- deployed OpenAPI contains live analysis, live transcription, and observation task creation routes\n- Cloudflare edge health: \`${edge_status}\`\n- unauthenticated live-analysis rejected safely with HTTP \`${analysis_status}\`\n- unauthenticated live-transcription rejected safely with HTTP \`${speech_status}\`\n- unauthenticated observation-task creation rejected safely with HTTP \`${task_status}\`\n- production portal bundle contains the canonical linked-observation banner, exact observation evidence injection, contextual Ask route, source-linked task deep link, summary-repair fallback, live camera, multilingual captions, and human-review contract\n\nThe screen-recording failure path is replaced: Field Intelligence now preserves the originating observation through Ask AGRO-AI and Tasks instead of opening a generic thread."
 
       - name: Record production verification failure
         if: failure()
@@ -209,7 +214,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
-            -f body="❌ Field Intelligence observation-to-action production verification failed for release \`${GITHUB_SHA}\` with expected backend \`${EXPECTED_BACKEND_SHA}\`. Review Actions run \`${GITHUB_RUN_ID}\`; do not represent every production layer as verified until this gate passes."
+            -f body="❌ Field Intelligence canonical production verification failed for release \`${GITHUB_SHA}\` with expected backend \`${EXPECTED_BACKEND_SHA}\`. Review Actions run \`${GITHUB_RUN_ID}\`; do not represent the screen-recording failure path as fixed until this gate passes."
 
       - uses: actions/upload-artifact@v4
         if: always()
@@ -218,5 +223,3 @@ jobs:
           path: evidence/
           if-no-files-found: ignore
           retention-days: 30
-
-# Base-branch trigger for production verification only.
