@@ -15,11 +15,62 @@ function normalize(value: unknown): string {
   return String(value || "").replace(/\s+/g, " ").trim().toLocaleLowerCase();
 }
 
+function usefulText(value: unknown): string {
+  if (typeof value === "string") {
+    const clean = value.replace(/\s+/g, " ").trim();
+    return normalize(clean) === "[object object]" ? "" : clean;
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "";
+  const record = value as AnyRecord;
+  for (const key of ["summary", "text", "description", "message", "label", "content"]) {
+    const candidate = usefulText(record[key]);
+    if (candidate) return candidate;
+  }
+  return "";
+}
+
+function normalizeObservation(observation: AnyRecord): AnyRecord {
+  if (!observation || typeof observation !== "object") return observation;
+  const fallback = usefulText(observation.corrected_transcript)
+    || usefulText(observation.transcript)
+    || usefulText(observation.recommended_action)
+    || "Field observation awaiting analysis.";
+  const summary = usefulText(observation.summary) || fallback;
+  return summary === observation.summary ? observation : { ...observation, summary };
+}
+
+function normalizeObservationResponse(response: AnyRecord): AnyRecord {
+  if (Array.isArray(response)) return response.map((row) => normalizeObservation(row)) as unknown as AnyRecord;
+  if (!response || typeof response !== "object") return response;
+  if (Array.isArray(response.observations)) {
+    return { ...response, observations: response.observations.map((row: AnyRecord) => normalizeObservation(row)) };
+  }
+  if (Array.isArray(response.items)) {
+    return { ...response, items: response.items.map((row: AnyRecord) => normalizeObservation(row)) };
+  }
+  if (response.observation && typeof response.observation === "object") {
+    return { ...response, observation: normalizeObservation(response.observation) };
+  }
+  return response.id ? normalizeObservation(response) : response;
+}
+
 function rowsFromResponse(response: AnyRecord): AnyRecord[] {
   if (Array.isArray(response?.observations)) return response.observations;
   if (Array.isArray(response?.items)) return response.items;
   if (Array.isArray(response)) return response;
   return [];
+}
+
+function installObservationNormalization() {
+  const fieldIntelligence = (apiClient as any).fieldIntelligence;
+  for (const methodName of ["observations", "observation"] as const) {
+    const current = fieldIntelligence?.[methodName];
+    if (typeof current !== "function" || current.__agroAiObservationNormalized) continue;
+    const original = current.bind(fieldIntelligence);
+    const wrapped = async (...args: any[]) => normalizeObservationResponse(await original(...args));
+    wrapped.__agroAiObservationNormalized = true;
+    fieldIntelligence[methodName] = wrapped;
+  }
 }
 
 function scoreObservation(observation: AnyRecord, drawerText: string): number {
@@ -30,7 +81,7 @@ function scoreObservation(observation: AnyRecord, drawerText: string): number {
     [observation.block_name, 4, 48],
     [observation.corrected_transcript, 10, 140],
     [observation.transcript, 10, 140],
-    [typeof observation.summary === "string" ? observation.summary : "", 8, 100],
+    [usefulText(observation.summary), 8, 100],
   ];
   for (const [value, weight, maxLength] of candidates) {
     const candidate = normalize(value);
@@ -182,6 +233,7 @@ function installAskBridge() {
 export function installCanonicalObservationBridge() {
   if (window.__agroAiCanonicalObservationBridge) return;
   window.__agroAiCanonicalObservationBridge = true;
+  installObservationNormalization();
   installTaskBridge();
   installAskBridge();
 }
