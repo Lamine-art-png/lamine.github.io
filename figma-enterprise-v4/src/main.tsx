@@ -111,13 +111,19 @@ if (!rootEl) {
     .then(({ default: App }) => {
       window.sessionStorage.removeItem(automaticRecoveryKey);
       createRoot(rootEl).render(<CommercialBoundaryHost><App /></CommercialBoundaryHost>);
-      // Field Intelligence remains isolated from portal startup. Load the direct
-      // observation workflow first after render, then the optional legacy and
-      // localization bridges. A failure in any of them cannot blank the shell.
-      void import("./app/fieldIntelligence/directWorkflowRuntime")
-        .then(() => import("./app/fieldIntelligence/operatingLoopRuntime"))
-        .then(() => import("./app/fieldIntelligence/operatingLoopContextGuard"))
-        .catch((error) => console.error("AGRO-AI Field Intelligence operating loop failed to load", error));
+
+      const fieldContextIsNative = window.location.pathname === "/intelligence"
+        && new URLSearchParams(window.location.search || "").has("field_observation_id");
+
+      // Field Intelligence remains isolated from portal startup. On the native
+      // contextual Intelligence route, React owns the entire linked-observation
+      // flow so the older auto-send bridges stay out and cannot double-submit.
+      if (!fieldContextIsNative) {
+        void import("./app/fieldIntelligence/directWorkflowRuntime")
+          .then(() => import("./app/fieldIntelligence/operatingLoopRuntime"))
+          .then(() => import("./app/fieldIntelligence/operatingLoopContextGuard"))
+          .catch((error) => console.error("AGRO-AI Field Intelligence operating loop failed to load", error));
+      }
     })
     .catch(bootFailure);
 }
