@@ -40,7 +40,7 @@ assert.match(directRuntime, /data-fi-direct-workflow/i);
 assert.match(directRuntime, /if \(score >= 5\) return winner/);
 assert.match(directRuntime, /isProcessingObservation/);
 assert.match(directRuntime, /Number\(observation\.confidence \|\| 0\) <= 0/);
-assert.match(directRuntime, /confidence\\s\*:\\s\*0%/);
+assert.match(directRuntime, /confidence\\s\*:\\s\*0%/i);
 
 assert.doesNotMatch(map, /-98\.5795/);
 assert.match(map, /zoom: 16/);
