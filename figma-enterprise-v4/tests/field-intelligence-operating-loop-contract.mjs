@@ -37,6 +37,10 @@ assert.match(directRuntime, /\/tasks\?task_id=/);
 assert.match(directRuntime, /source=field-intelligence/);
 assert.match(directRuntime, /\[object object\]/i);
 assert.match(directRuntime, /data-fi-direct-workflow/i);
+assert.match(directRuntime, /if \(score >= 5\) return winner/);
+assert.match(directRuntime, /isProcessingObservation/);
+assert.match(directRuntime, /Number\(observation\.confidence \|\| 0\) <= 0/);
+assert.match(directRuntime, /confidence\\s\*:\\s\*0%/);
 
 assert.doesNotMatch(map, /-98\.5795/);
 assert.match(map, /zoom: 16/);
@@ -45,6 +49,7 @@ assert.match(map, /fieldIntelligence\.createTask/);
 assert.match(map, /fi-selected/);
 assert.match(map, /noGeolocated/);
 assert.match(map, /currentLocation/);
+assert.match(map, /GeolocateControl/);
 
 assert.match(guard, /event\.isTrusted/);
 assert.match(guard, /isImportButton/);
