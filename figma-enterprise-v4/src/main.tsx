@@ -1,5 +1,6 @@
 import { createRoot } from "react-dom/client";
 import "./app/commercialBoundaryConversionLabels";
+import "./app/fieldIntelligence/directWorkflowRuntime";
 import { CommercialBoundaryHost } from "./app/components/CommercialBoundaryHost";
 import "./styles/index.css";
 
@@ -83,12 +84,6 @@ function bootFailure(error: unknown) {
   renderBootFailure(message);
 }
 
-// Installable PWA shell: static assets only — the worker never caches /v1/
-// responses or cross-origin requests (see public/sw.js + launch contract test).
-// Registration requires an explicitly declared deployment environment
-// (production | staging): local dev, tests and ad-hoc previews never register,
-// and each environment gets its own cache namespace. Browser storage and
-// service-worker caches remain origin-scoped between app and Platform hosts.
 const deploymentEnvironment = String(import.meta.env.VITE_DEPLOYMENT_ENVIRONMENT || "").trim();
 if ("serviceWorker" in navigator && !import.meta.env.DEV
     && ["production", "staging"].includes(deploymentEnvironment)) {
@@ -117,11 +112,11 @@ if (!rootEl) {
     .then(({ default: App }) => {
       window.sessionStorage.removeItem(automaticRecoveryKey);
       createRoot(rootEl).render(<CommercialBoundaryHost><App /></CommercialBoundaryHost>);
-      // These modules are deliberately loaded after the portal has rendered.
-      // A failure can disable the enhancement, but can never blank the portal.
+      // Non-critical localization/legacy enhancements stay post-render. The
+      // direct Field Intelligence workflow is already installed above, so a
+      // customer can never click the old generic Ask path before it is ready.
       void import("./app/fieldIntelligence/operatingLoopRuntime")
         .then(() => import("./app/fieldIntelligence/operatingLoopContextGuard"))
-        .then(() => import("./app/fieldIntelligence/directWorkflowRuntime"))
         .catch((error) => console.error("AGRO-AI Field Intelligence operating loop failed to load", error));
     })
     .catch(bootFailure);
