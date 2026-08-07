@@ -288,8 +288,14 @@ function renderWorkflowPanel(drawer: HTMLElement, observation: AnyRecord): void 
     panel.append(next);
   }
 
-  const status = element("div", { display: "none", fontSize: "11px", lineHeight: "1.5", marginTop: "10px", padding: "9px 10px", borderRadius: "9px" });
+  const status = element("div", { display: explicitTaskId ? "block" : "none", fontSize: "11px", lineHeight: "1.5", marginTop: "10px", padding: "9px 10px", borderRadius: "9px" });
   status.dataset.fiDirectStatus = "true";
+  if (explicitTaskId) {
+    status.style.background = "#EDF7F1";
+    status.style.border = "1px solid #BFD8C9";
+    status.style.color = "#1B5E3F";
+    status.textContent = "Task created and linked to this observation.";
+  }
   panel.append(status);
 
   const actions = element("div", { display: "grid", gap: "8px", gridTemplateColumns: "repeat(2,minmax(0,1fr))", marginTop: "11px" });
