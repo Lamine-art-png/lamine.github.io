@@ -14,10 +14,11 @@ const main = fs.readFileSync(path.join(root, "src/main.tsx"), "utf8");
 const portalCatalog = fs.readFileSync(path.join(root, "src/app/portalLiteralCatalog.ts"), "utf8");
 const workflowCopy = JSON.parse(fs.readFileSync(path.resolve(root, "../shared/ui-dynamic-copy-field-intelligence.en.json"), "utf8"));
 
-assert.match(main, /import "\.\/app\/fieldIntelligence\/directWorkflowRuntime"/);
+assert.match(main, /import\("\.\/app\/fieldIntelligence\/directWorkflowRuntime"\)/);
 assert.match(main, /import\("\.\/app\/fieldIntelligence\/operatingLoopRuntime"\)/);
 assert.match(main, /import\("\.\/app\/fieldIntelligence\/operatingLoopContextGuard"\)/);
-assert.match(main, /direct Field Intelligence workflow is already installed above/);
+assert.match(main, /Field Intelligence remains isolated from portal startup/);
+assert.doesNotMatch(main, /^import "\.\/app\/fieldIntelligence\/directWorkflowRuntime"/m);
 assert.doesNotMatch(runtime, /FieldIntelligenceV2/);
 assert.match(runtime, /field_observation_id/);
 assert.match(runtime, /source_observation_id/);
