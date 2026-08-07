@@ -145,7 +145,8 @@ export function FieldMapV2({ t, observations, selectedId, onSelect, workspaceId 
   const linkedTaskCount = useMemo(() => points.filter((point) => taskIds(point.observation).length > 0).length, [points]);
   const mediaCount = useMemo(() => points.filter((point) => Array.isArray(point.observation.assets) && point.observation.assets.length > 0).length, [points]);
   const focused = focusedId ? pointById.get(focusedId)?.observation || null : null;
-  const anchor = currentLocation || points[0]?.coordinates || null;
+  const anchor = points[0]?.coordinates || currentLocation || null;
+  const anchorKey = anchor ? `${anchor[0].toFixed(6)},${anchor[1].toFixed(6)}` : "";
 
   const requestCurrentLocation = () => {
     if (!navigator.geolocation) {
@@ -305,7 +306,7 @@ export function FieldMapV2({ t, observations, selectedId, onSelect, workspaceId 
       mapRef.current = null;
       setReady(false);
     };
-  }, [style, anchor]);
+  }, [style, anchorKey]);
 
   useEffect(() => {
     const map = mapRef.current;
