@@ -118,8 +118,11 @@ if (!rootEl) {
       window.sessionStorage.removeItem(automaticRecoveryKey);
       createRoot(rootEl).render(<CommercialBoundaryHost><App /></CommercialBoundaryHost>);
       // These modules are deliberately loaded after the portal has rendered.
-      // A failure can disable the enhancement, but can never blank the portal.
-      void import("./app/fieldIntelligence/operatingLoopRuntime")
+      // A failure can disable an enhancement, but can never blank the portal.
+      // The canonical bridge owns the two critical customer actions even if the
+      // richer operating-loop enhancement cannot match a drawer after render.
+      void import("./app/fieldIntelligence/canonicalObservationBridge")
+        .then(() => import("./app/fieldIntelligence/operatingLoopRuntime"))
         .then(() => import("./app/fieldIntelligence/operatingLoopContextGuard"))
         .catch((error) => console.error("AGRO-AI Field Intelligence operating loop failed to load", error));
     })
