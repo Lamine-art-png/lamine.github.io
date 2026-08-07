@@ -7,14 +7,33 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const root = path.resolve(here, "..");
 const runtime = fs.readFileSync(path.join(root, "src/app/fieldIntelligence/operatingLoopRuntime.ts"), "utf8");
 const guard = fs.readFileSync(path.join(root, "src/app/fieldIntelligence/operatingLoopContextGuard.ts"), "utf8");
+const canonical = fs.readFileSync(path.join(root, "src/app/fieldIntelligence/canonicalObservationBridge.ts"), "utf8");
+const intelligence = fs.readFileSync(path.join(root, "src/app/components/Intelligence.tsx"), "utf8");
 const main = fs.readFileSync(path.join(root, "src/main.tsx"), "utf8");
 const portalCatalog = fs.readFileSync(path.join(root, "src/app/portalLiteralCatalog.ts"), "utf8");
 const workflowCopy = JSON.parse(fs.readFileSync(path.resolve(root, "../shared/ui-dynamic-copy-field-intelligence.en.json"), "utf8"));
 
+assert.match(main, /import "\.\/app\/fieldIntelligence\/canonicalObservationBridge"/);
 assert.match(main, /import\("\.\/app\/fieldIntelligence\/operatingLoopRuntime"\)/);
 assert.match(main, /import\("\.\/app\/fieldIntelligence\/operatingLoopContextGuard"\)/);
-assert.match(main, /after the portal has rendered/);
+assert.match(main, /already installed before App render/);
 assert.doesNotMatch(runtime, /FieldIntelligenceV2/);
+
+assert.match(canonical, /installObservationNormalization/);
+assert.match(canonical, /\[object object\]/i);
+assert.match(canonical, /field_observation_id=/);
+assert.match(canonical, /source=field-intelligence/);
+assert.match(canonical, /Task created and linked/);
+assert.match(canonical, /\/tasks\?task_id=/);
+assert.match(canonical, /a\[href="\/intelligence"\]/);
+
+assert.match(intelligence, /contextualFieldObservationId/);
+assert.match(intelligence, /withFieldObservationContext/);
+assert.match(intelligence, /field_observation_id: observationId/);
+assert.match(intelligence, /linkedFieldObservationEvidence/);
+assert.match(intelligence, /Field Intelligence · linked observation/);
+assert.match(intelligence, /controller\.send\(contextualPrompt\(observation\)\)/);
+
 assert.match(runtime, /field_observation_id/);
 assert.match(runtime, /source_observation_id/);
 assert.match(runtime, /uploaded_evidence/);
