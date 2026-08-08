@@ -1,0 +1,77 @@
+name: Platform API Load Verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      base_url:
+        description: HTTPS API origin
+        required: true
+        default: https://api-preview.agroai-pilot.com
+        type: string
+      path:
+        description: Read-only endpoint
+        required: true
+        default: /v1/health
+        type: choice
+        options:
+          - /v1/health
+          - /v1/readiness
+          - /v1/platform/health
+          - /v1/platform/me
+      requests:
+        description: Total requests (1-10000)
+        required: true
+        default: '200'
+        type: string
+      concurrency:
+        description: Concurrent workers (1-200)
+        required: true
+        default: '10'
+        type: string
+      max_p95_ms:
+        description: p95 threshold in milliseconds
+        required: true
+        default: '500'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: platform-api-load-${{ inputs.base_url }}
+  cancel-in-progress: false
+
+jobs:
+  bounded-read-probe:
+    runs-on: ubuntu-latest
+    environment: platform-api-load-test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: python -m pip install -q httpx
+      - name: Run read-only load probe
+        env:
+          AGROAI_PLATFORM_LOAD_TEST_KEY: ${{ secrets.AGROAI_PLATFORM_LOAD_TEST_KEY }}
+        run: |
+          args=(
+            --base-url '${{ inputs.base_url }}'
+            --path '${{ inputs.path }}'
+            --requests '${{ inputs.requests }}'
+            --concurrency '${{ inputs.concurrency }}'
+            --max-p95-ms '${{ inputs.max_p95_ms }}'
+            --max-error-rate '0.01'
+            --output platform-api-load-result.json
+          )
+          if [[ '${{ inputs.base_url }}' == 'https://api.agroai-pilot.com' ]]; then
+            args+=(--confirm-production)
+          fi
+          python agroai_api/scripts/platform_api_load_probe.py "${args[@]}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: platform-api-load-${{ github.run_id }}
+          path: platform-api-load-result.json
+          if-no-files-found: error
+          retention-days: 90
