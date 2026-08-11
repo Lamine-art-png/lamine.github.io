@@ -123,13 +123,24 @@ Genuine documentation gaps to fill (additive, no duplication):
 ## 6. Verified-good (evidence in hand)
 
 - Single Alembic head; 28-revision connected chain to base.
-- **Real-PostgreSQL migration roundtrip (PG 16):** `alembic upgrade head`
-  applies through `027 (mergepoint)` → 127 public tables, `alembic_version`
-  holds **exactly one row** (`027_merge_fi_and_platform_api`); downgrade to an
-  explicit revision (`022`) walks back through the branch point cleanly and
-  re-upgrade returns to `027`. Note: `alembic downgrade -1` at a mergepoint
-  reports "Ambiguous walk" — this is standard Alembic semantics (relative
-  downgrade must name an explicit target at a merge), **not** a defect.
+- **Real-PostgreSQL migration roundtrip (PG 16.14):** `alembic upgrade head`
+  applies through `027 (mergepoint)` → **127 public tables**, `alembic_version`
+  holds **exactly one row** (`027_merge_fi_and_platform_api`). Proven **twice**
+  on a live cluster (fresh DB and a second isolated `agroai_roundtrip` DB).
+  Downgrade to an explicit revision (`022`) walks back through the branch point
+  cleanly and re-upgrade returns to `027`. Note: `alembic downgrade -1` at a
+  mergepoint reports "Ambiguous walk" — standard Alembic semantics, **not** a
+  defect.
+- **Downgrade-to-base finding (pre-existing, forward-deploy unaffected):** a
+  full `alembic downgrade base` **fails** at `011_operational_records →
+  010_account_recovery` with
+  `DependentObjectsStillExist: cannot drop table connector_connections because
+  constraint connector_sync_cursors_connection_id_fkey on connector_sync_cursors
+  depends on it`. This is a reversibility defect in the **early (010–014)**
+  migration chain — far below the 020+ Platform-API / Field-Intelligence work
+  and untouched by this branch's commits. Production deploys are **forward-only**
+  (`upgrade head`), which is unaffected; but the chain is **not fully reversible
+  to base**. Logged to the backlog (§7.9), not concealed.
 - App imports; 443 routes register.
 - 39 CI-critical contract tests pass post-merge.
 - Platform-focused suite: **134 passed, 0 failed**.
@@ -147,10 +158,45 @@ Genuine documentation gaps to fill (additive, no duplication):
 - `027_merge_fi_and_platform_api` merge revision + graph/head regression tests.
 - Forensic audit (this document) and `docs/platform-api-cli.md`.
 
+### Real-infrastructure verification (session 2026-08-10)
+
+Run against a locally-provisioned **PostgreSQL 16.14** cluster and **Redis
+8.8.0** (isolated ports, throwaway data). Work preserved on pushed branch
+`preserve/field-intelligence-launch-20260810` (no merge).
+
+| Proof | Result | How |
+|-------|--------|-----|
+| Backend import / collection | **1014 tests collected, clean** | `pytest --collect-only` |
+| Real PG + Redis integration | **8 passed** | `tests/integration` with `PLATFORM_API_POSTGRES_TEST_URL` + `PLATFORM_API_REDIS_INTEGRATION_URL` set — atomic idempotency across two independent sessions; credit reservations cannot oversubscribe; checkout idempotency atomic; meter + webhook-outbox claims publish **once**; real-Redis shared atomic rate-limit counters + weighted/dimensioned costs + sustained-window enforcement |
+| Migration → head (real PG) | **127 tables, 1 head** | `alembic upgrade head` (twice) |
+| Key lifecycle (real PG, real service fns) | **PASS** | mint `agro_test_` → `verify` accepts → `rotate_platform_key(overlap=0)` → **old key REJECTED**, new key accepted (`app/platform_api/keys.py`) |
+| Live API boot + CLI over HTTP | **PASS** | `uvicorn app.main:app` on real PG; `agroai` CLI (`--base-url`): `doctor` all-PASS, `me` (env=test principal), `usage` (real envelope), `fields list` (real field data w/ GeoJSON boundary). Scope enforcement confirmed (providers/`me` denied without scope). |
+| `/v1/platform/health` truthfulness | **PASS** | reports `physical_irrigation_commands: disabled`, EarthDaily/Valley `awaiting_partner_contract`, limiter `redis_backend_required` |
+| Python SDK | **17 passed** + wheel built | `pytest sdk/python/tests`; `agroai_platform-0.2.0-py3-none-any.whl` |
+| TypeScript SDK | **6 passed** + tarball built | `tsc` build + `node --test` (incl. webhook signature verify + replay/tamper rejection); `agro-ai-platform-0.2.0.tgz` (`private:true` — publish correctly impossible) |
+| Frontend command-center | **23 passed** | `vitest run` (`apps/agroai-command-center-v2`) |
+| Full `tests/unit` gate | **verification in progress** | parallel `pytest tests/unit -n 4 --timeout=120`; all executed tests passing, **0 failures observed**; slow (per-test FastAPI+DB fixture boot), final count pending |
+
+**Honest non-green observations (not concealed):**
+- `tests/acceptance/test_acceptance.py`: **5 failures** — legacy suite from the
+  first commit (`37c8d666d`) posting to `/v1/blocks/*` with fixtures that no
+  longer persist under the evolved SaaS/isolation schema ("SaaS Portal schema is
+  not ready" at setup → block-not-found 404). **Not** part of the merge-gating
+  CI (`ci.yml` runs `tests/unit`, not `tests/acceptance`); untouched by this
+  branch. Left failing rather than weakened/deleted.
+- Full `downgrade base` reversibility defect at 011→010 (see §6).
+- Container build **not** verified — `docker` absent in this environment.
+- PR not opened programmatically — `gh` absent and the available PAT lacks
+  Pull-requests:write. Branch is pushed; PR must be opened in the GitHub UI.
+
 ## 7. Open verification/hardening backlog (honest — not yet done)
 
-1. **Full slow unit suite** (119 files, DB-fixture heavy) — long-running verification in progress; must reach green.
-2. **Real-PostgreSQL + real-Redis integration**: idempotency single-effect under concurrency; rate-limit distribution.
+1. **Full slow unit suite** (119 files, DB-fixture heavy) — parallel run
+   in progress (0 failures observed); must reach confirmed green.
+2. ~~**Real-PostgreSQL + real-Redis integration**~~ — **DONE (2026-08-10):** 8
+   integration tests pass on live PG 16.14 + Redis 8.8.0 (atomic idempotency
+   under two-session concurrency, no-oversubscribe credit reservations,
+   webhook-outbox publish-once, distributed Redis rate limiting). See §6.
 3. **BOLA/IDOR matrix** across every resource (fields, sources, observations, recommendations, reports, jobs, webhooks, keys, service accounts, billing).
 4. **Secret-in-logs sweep**: assert no full key / provider token / webhook secret / Stripe secret reaches any log/metric/trace sink.
 5. **OpenAPI ↔ SDK ↔ CLI contract drift** checks in CI.
@@ -162,9 +208,9 @@ Genuine documentation gaps to fill (additive, no duplication):
 
 | Gate | State | Basis |
 |------|-------|-------|
-| Safe to merge (this reconciliation) | **YES** | conflicts resolved additively; contracts pass; nothing destroyed |
-| Safe for TEST self-service | **NOT YET** | full suite + integration verification pending; flags off |
-| Safe for LIVE API use | **NO** | live flags off; Stripe/provider IDs unverified |
-| Safe to enable webhook delivery | **NO** | must prove chain in staging first |
-| Safe for physical execution | **NO** | fail-closed by design; separate approval required |
-| Safe for enterprise SLA / compliance claim | **NO** | requires elapsed evidence + independent assessment (issues #378–#380) |
+| Safe to merge | **YES, pending full-`tests/unit` green** | reconciliation additive; SDK/CLI/frontend green; real-PG+Redis integration green; nothing destroyed. Full `tests/unit` verification in progress (0 failures observed); the 5 `tests/acceptance` failures are pre-existing legacy fixtures outside the merge-gating CI. |
+| Safe for TEST self-service | **CORE PROVEN, activation NOT YET** | key mint→verify→rotate→old-rejected and CLI-over-HTTP proven on real PG; but `PLATFORM_API_*` self-service flags remain **off** in prod and full-suite green + BOLA/IDOR matrix (§7.3) pending |
+| Safe for LIVE API use | **NO** | live flags off; Stripe/provider IDs unverified; providers `awaiting_partner_contract` |
+| Safe to enable webhook delivery | **NO** | outbox publish-once proven on real PG, but end-to-end **network** delivery not proven in isolated staging; delivery flag stays off |
+| Safe for physical execution | **NO** | fail-closed by design (`physical_action_disabled`); confirmed via live `/health`; separate approval required |
+| Safe for enterprise SLA / compliance claim | **NO** | requires elapsed SLO history + independent pen-test/assessment (external blockers; cannot be fabricated) |
