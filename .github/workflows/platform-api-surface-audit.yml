@@ -1,0 +1,135 @@
+name: Platform API Complete Surface Audit
+
+on:
+  workflow_run:
+    workflows: ["Platform API Final Production Proof"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: platform-api-complete-surface-audit
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    name: Audit every public page, asset, console and backend gate
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    env:
+      HEALTH_LEDGER_ISSUE: "312"
+      AUDITED_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.AUDITED_SHA }}
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Run complete live Platform audit
+        id: audit
+        shell: bash
+        run: |
+          set +e
+          node cloudflare/platform-api-marketing-worker/tests/live-surface-audit.mjs > platform-api-complete-surface-audit.json 2>&1
+          status=$?
+          cat platform-api-complete-surface-audit.json
+          echo "status=${status}" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Build production health ledger entry
+        if: always()
+        shell: bash
+        env:
+          AUDIT_STATUS: ${{ steps.audit.outputs.status }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+
+          path = Path("platform-api-complete-surface-audit.json")
+          raw = path.read_text(encoding="utf-8", errors="replace") if path.exists() else "Audit output was not created."
+          ok = os.environ.get("AUDIT_STATUS") == "0"
+          sha = os.environ.get("AUDITED_SHA", "unknown")
+          run_url = os.environ.get("RUN_URL", "")
+
+          lines = [
+              "# Platform API production health ledger",
+              "",
+              f"Current status: **{'GREEN' if ok else 'RED'}**",
+              "",
+              f"- Audited release SHA: `{sha}`",
+              f"- Audit run: {run_url}",
+          ]
+
+          if ok:
+              try:
+                  data = json.loads(raw)
+                  pages = data.get("pages", {})
+                  assets = data.get("assets", {})
+                  runtime = data.get("backend", {}).get("runtime", {})
+                  health = data.get("backend", {}).get("health", {})
+                  edge = data.get("platform", {}).get("edge", {})
+                  lines += [
+                      f"- Audited at: `{data.get('auditedAt', 'unknown')}`",
+                      f"- Public Platform pages: **{len(pages)}/{len(pages)} green**",
+                      f"- Shared assets: **{len(assets)}/{len(assets)} green**",
+                      f"- Standalone edge: **{edge.get('status', 'unknown')}**",
+                      f"- Same-origin backend: **{health.get('status', 'unknown')}**",
+                      f"- Platform runtime: **{runtime.get('status', 'unknown')}**",
+                      f"- Redis rate limiter: **{'ready' if runtime.get('rate_limiter', {}).get('ready') else 'not ready'}** (`{runtime.get('rate_limiter', {}).get('backend', 'unknown')}`)",
+                      f"- Production vault: **{'ready' if runtime.get('production_vault_keyring_ready') else 'not ready'}**",
+                      f"- Trusted proxy boundary: **{'ready' if runtime.get('cidr_trusted_proxy_ready') else 'not ready'}**",
+                      f"- Outbound webhooks: **{'safely disabled' if runtime.get('webhook_delivery', {}).get('enabled') is False else 'unexpected state'}**",
+                      f"- Physical irrigation commands: **{runtime.get('physical_irrigation_commands', 'unknown')}**",
+                      "",
+                      "The audit verifies every landing, reference, changelog, authentication, pagination, errors, rate-limits, and support route in both canonical forms; the official AGRO-AI logo asset; closed unknown routes; the standalone developer console; edge and backend health; and production safety gates.",
+                  ]
+              except Exception as exc:
+                  ok = False
+                  lines[2] = "Current status: **RED**"
+                  lines += ["", f"Audit returned success but its evidence could not be parsed: `{exc}`."]
+          if not ok:
+              excerpt = raw[-6000:].replace("```", "` ` `")
+              lines += [
+                  "",
+                  "## Failure evidence",
+                  "",
+                  "```text",
+                  excerpt,
+                  "```",
+              ]
+
+          Path("platform-api-health-ledger.md").write_text("\n".join(lines) + "\n", encoding="utf-8")
+          PY
+
+      - name: Publish production health ledger
+        if: always()
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue edit "$HEALTH_LEDGER_ISSUE" --body-file platform-api-health-ledger.md
+
+      - name: Upload immutable audit evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-api-complete-surface-audit-${{ github.run_id }}
+          path: |
+            platform-api-complete-surface-audit.json
+            platform-api-health-ledger.md
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Enforce audit result
+        if: always()
+        shell: bash
+        env:
+          AUDIT_STATUS: ${{ steps.audit.outputs.status }}
+        run: test "${AUDIT_STATUS:-1}" = "0"

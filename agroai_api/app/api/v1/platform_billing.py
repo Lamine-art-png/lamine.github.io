@@ -11,6 +11,7 @@ from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.api.deps import AuthContext, require_platform_admin
+from app.billing_bootstrap import safe_runtime_billing_status
 from app.core.config import settings
 from app.core.metrics import platform_billing_events
 from app.db.base import get_db
@@ -108,14 +109,31 @@ def _price_for(plan: PlatformApiPlan, interval: str) -> str:
     return value
 
 
-def _overage_price_for(plan: PlatformApiPlan) -> str | None:
+def _overage_price_for(plan: PlatformApiPlan, interval: str) -> str | None:
     if not plan.overages_allowed:
         return None
+    interval_config_keys = {
+        ("developer", "monthly"): "PLATFORM_API_STRIPE_DEVELOPER_MONTHLY_OVERAGE_PRICE_ID",
+        ("developer", "annual"): "PLATFORM_API_STRIPE_DEVELOPER_ANNUAL_OVERAGE_PRICE_ID",
+        ("scale", "monthly"): "PLATFORM_API_STRIPE_SCALE_MONTHLY_OVERAGE_PRICE_ID",
+        ("scale", "annual"): "PLATFORM_API_STRIPE_SCALE_ANNUAL_OVERAGE_PRICE_ID",
+    }
+    interval_key = interval_config_keys.get((plan.plan_identifier, interval))
+    interval_value = str(getattr(settings, interval_key, "") or "").strip() if interval_key else ""
+    if interval_value:
+        return interval_value
+    # Never permit a single mixed-interval overage Price in live mode. Checkout
+    # requires the metered Price interval to match the selected base interval.
+    if settings.PLATFORM_API_STRIPE_MODE == "live":
+        raise HTTPException(
+            status_code=503,
+            detail={"code": "api_plan_interval_overage_price_not_configured", "interval": interval},
+        )
     config_key = plan.stripe_overage_price_config_key
-    value = str(getattr(settings, config_key, "") or "").strip() if config_key else ""
-    if not value:
+    legacy_value = str(getattr(settings, config_key, "") or "").strip() if config_key else ""
+    if not legacy_value:
         raise HTTPException(status_code=503, detail={"code": "api_plan_overage_price_not_configured"})
-    return value
+    return legacy_value
 
 
 def _subscription_public(row: PlatformApiSubscription | None, plan: PlatformApiPlan | None) -> dict:
@@ -133,6 +151,40 @@ def _subscription_public(row: PlatformApiSubscription | None, plan: PlatformApiP
         "grace_ends_at": row.grace_ends_at.isoformat() if row.grace_ends_at else None,
         "cancel_at_period_end": bool(row.cancel_at_period_end),
     }
+
+
+def _checkout_subscription_reusable(row: PlatformApiSubscription | None) -> bool:
+    """Allow another Checkout only before Stripe created a subscription.
+
+    Closing or canceling Stripe Checkout can leave AGRO-AI with a local
+    `checkout_pending` row. That row is safe to reuse only while it has no
+    Stripe subscription identity. Every Stripe-mapped or active lifecycle row
+    remains protected by the one-subscription invariant.
+    """
+
+    return bool(
+        row is not None
+        and not str(row.stripe_subscription_id or "").strip()
+        and row.status in {"checkout_pending", "canceled"}
+    )
+
+
+@router.get("/billing-readiness")
+def billing_readiness() -> dict:
+    """Return non-secret billing launch diagnostics even while pricing is closed."""
+
+    payload = safe_runtime_billing_status()
+    payload["settings_flags"] = {
+        name: bool(getattr(settings, name, False))
+        for name in (
+            "PLATFORM_API_BILLING_ENABLED",
+            "PLATFORM_API_STRIPE_CHECKOUT_ENABLED",
+            "PLATFORM_API_STRIPE_METER_EXPORT_ENABLED",
+            "PLATFORM_API_PRICING_ENABLED",
+            "PLATFORM_API_USAGE_METERING_ENFORCEMENT_ENABLED",
+        )
+    }
+    return payload
 
 
 @router.get("/pricing")
@@ -268,7 +320,7 @@ def create_api_checkout(
     try:
         plan = _active_plan(db, payload.plan)
         price_id = _price_for(plan, payload.billing_interval)
-        overage_price_id = _overage_price_for(plan)
+        overage_price_id = _overage_price_for(plan, payload.billing_interval)
         existing = (
             db.query(PlatformApiSubscription)
             .filter(
@@ -277,7 +329,7 @@ def create_api_checkout(
             )
             .first()
         )
-        if existing and existing.status not in {"canceled"}:
+        if existing and not _checkout_subscription_reusable(existing):
             raise HTTPException(status_code=409, detail={"code": "api_subscription_already_exists"})
         _stripe()
         customer_id = ctx.organization.stripe_customer_id

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -21,6 +21,7 @@ from app.db.base import get_db
 from app.models.field_intelligence import (
     FieldObservation,
     FieldObservationAsset,
+    FieldObservationAuditEvent,
     FieldStorageReservation,
 )
 from app.models.operational_records import IngestionJob
@@ -82,6 +83,37 @@ def get_workers(
     db: Session = Depends(get_db),
 ) -> dict:
     return {"status": "ok", "workers": worker_status(db)}
+
+
+@router.get("/audit")
+def get_observation_audit(
+    observation_id: str = Query(..., min_length=1, max_length=128),
+    limit: int = Query(default=100, ge=1, le=200),
+    ctx: AuthContext = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+) -> dict:
+    """Return bounded, metadata-only append-only audit events for one observation."""
+    rows = (
+        db.query(FieldObservationAuditEvent)
+        .filter(FieldObservationAuditEvent.observation_id == observation_id)
+        .order_by(FieldObservationAuditEvent.created_at.asc())
+        .limit(limit)
+        .all()
+    )
+    return {
+        "status": "ok",
+        "observation_id": observation_id,
+        "count": len(rows),
+        "events": [
+            {
+                "id": row.id,
+                "action": row.action,
+                "actor_type": row.actor_type,
+                "created_at": row.created_at.isoformat() if row.created_at else None,
+            }
+            for row in rows
+        ],
+    }
 
 
 @router.get("/operations")

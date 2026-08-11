@@ -6,11 +6,11 @@ given; every check prints a JSON report and exits nonzero on failure):
     preflight        — safe pre-migration validation (no writes)
     upgrade          — advisory-locked upgrade to the repository head
     verify           — full post-migration integrity validation
-    downgrade        — advisory-locked rollback to 022_account_access_appeals
+    downgrade        — advisory-locked rollback to 026_platform_api_operations
     verify-rollback  — prove only Field Intelligence schema was removed
 
-The rollback floor is ``022_account_access_appeals``: rolling back removes
-Field Intelligence schema only and must preserve every Platform API,
+The rollback floor is ``026_platform_api_operations``: rolling back removes
+only the Field Intelligence launch-control schema and must preserve every Platform API,
 verification, suspension and appeal table and column.
 """
 from __future__ import annotations
@@ -29,18 +29,22 @@ from alembic.script import ScriptDirectory
 API_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(API_ROOT))
 
-ROLLBACK_FLOOR = "022_account_access_appeals"
+ROLLBACK_FLOOR = "026_platform_api_operations"
 
-FIELD_TABLES = {
+FIELD_FOUNDATION_TABLES = {
     "field_capture_sessions",
     "field_observations",
     "field_observation_assets",
     "field_observation_processing_runs",
     "field_observation_audit_events",
     "field_storage_reservations",
+}
+FIELD_LAUNCH_TABLES = {
     "field_runtime_flags",
     "field_worker_heartbeats",
 }
+FIELD_TABLES = FIELD_FOUNDATION_TABLES | FIELD_LAUNCH_TABLES
+
 PRESERVED_TABLES = {
     "organization_verification_profiles",
     "security_audit_events",
@@ -53,6 +57,24 @@ PRESERVED_TABLES = {
     "users",
     "organizations",
     "workspaces",
+    "field_capture_sessions",
+    "field_observations",
+    "field_observation_assets",
+    "field_observation_processing_runs",
+    "field_observation_audit_events",
+    "field_storage_reservations",
+    "platform_api_applications",
+    "platform_program_enrollments",
+    "platform_live_access_requests",
+    "platform_partner_dossiers",
+    "platform_terms_documents",
+    "platform_terms_acceptances",
+    "platform_api_plans",
+    "platform_api_operation_costs",
+    "platform_api_subscriptions",
+    "platform_credit_reservations",
+    "platform_status_components",
+    "platform_abuse_events",
 }
 PRESERVED_USER_COLUMNS = {
     "account_status", "failed_login_attempts", "locked_until",
@@ -262,9 +284,12 @@ def cmd_verify_rollback(engine: sa.Engine) -> int:
     report: dict = {"command": "verify-rollback"}
     inspector = sa.inspect(engine)
     tables = set(inspector.get_table_names())
-    leftover = FIELD_TABLES & tables
+    leftover = FIELD_LAUNCH_TABLES & tables
     if leftover:
-        _fail(report, f"rollback left Field Intelligence tables behind: {sorted(leftover)}")
+        _fail(report, f"rollback left Field Intelligence launch tables behind: {sorted(leftover)}")
+    missing_foundation = FIELD_FOUNDATION_TABLES - tables
+    if missing_foundation:
+        _fail(report, f"rollback removed Field Intelligence foundation tables: {sorted(missing_foundation)}")
     missing = PRESERVED_TABLES - tables
     if missing:
         _fail(report, f"rollback removed protected current-main tables: {sorted(missing)}")

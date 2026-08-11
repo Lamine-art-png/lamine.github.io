@@ -91,24 +91,62 @@ def build_catalog() -> dict[str, str]:
     }
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser()
-    parser.add_argument("--check", action="store_true")
-    args = parser.parse_args()
-
-    expected = build_catalog()
+def load_parts(*, exclude: Path | None = None) -> tuple[dict[str, str], list[Path]]:
     current: dict[str, str] = {}
     paths = sorted((REPO_ROOT / "shared").glob(LITERAL_CATALOG_GLOB))
     for path in paths:
+        if exclude is not None and path.resolve() == exclude.resolve():
+            continue
         part = json.loads(path.read_text(encoding="utf-8"))
         overlap = set(current).intersection(part)
         if overlap:
             raise SystemExit(f"Duplicate literal keys across catalog parts: {sorted(overlap)[:5]}")
         current.update(part)
+    return current, paths
+
+
+def write_delta(target: Path) -> int:
+    expected = build_catalog()
+    current, _paths = load_parts(exclude=target)
+    changed = sorted(key for key in set(current).intersection(expected) if current[key] != expected[key])
+    extra = sorted(set(current) - set(expected))
+    if changed or extra:
+        raise SystemExit(
+            "Existing literal catalog parts conflict with source. "
+            f"extra={extra[:8]} changed={changed[:8]}"
+        )
+    delta = {key: expected[key] for key in sorted(set(expected) - set(current))}
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text(json.dumps(delta, ensure_ascii=False, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    combined = {**current, **delta}
+    if combined != expected:
+        raise SystemExit("Generated literal catalog delta does not reproduce the expected inventory")
+    print(f"Wrote {len(delta)} deterministic literals to {target.relative_to(REPO_ROOT)}")
+    return 0
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--check", action="store_true")
+    parser.add_argument("--write-delta", type=Path)
+    args = parser.parse_args()
+
+    if args.write_delta:
+        target = args.write_delta
+        if not target.is_absolute():
+            target = (REPO_ROOT / target).resolve()
+        shared = (REPO_ROOT / "shared").resolve()
+        if target.parent != shared or not re.fullmatch(r"ui-literals\.en\.\d+\.json", target.name):
+            raise SystemExit("Generated literal catalogs must be a numbered shared/ui-literals.en.N.json part")
+        return write_delta(target)
+
+    expected = build_catalog()
+    current, paths = load_parts()
 
     if args.check:
         if current != expected:
-            missing = sorted(set(expected) - set(current))[:8]
+            missing_keys = sorted(set(expected) - set(current))[:8]
+            missing = {key: expected[key] for key in missing_keys}
             extra = sorted(set(current) - set(expected))[:8]
             changed = sorted(key for key in set(current).intersection(expected) if current[key] != expected[key])[:8]
             raise SystemExit(
@@ -118,7 +156,7 @@ def main() -> int:
         print(f"UI literal inventory is current: {len(expected)} literals across {len(paths)} parts")
         return 0
 
-    raise SystemExit("Use --check. Catalog parts are generated deterministically by the localization release workflow.")
+    raise SystemExit("Use --check or --write-delta shared/ui-literals.en.N.json.")
 
 
 if __name__ == "__main__":

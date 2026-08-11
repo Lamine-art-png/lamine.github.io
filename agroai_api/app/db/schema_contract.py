@@ -5,7 +5,7 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "027_merge_fi_and_platform_api"
+HEAD_ALEMBIC_REVISION = "027_field_intelligence_launch"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
@@ -94,8 +94,6 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "field_storage_reservations": {
         "id", "tenant_id", "capture_session_id", "size_bytes", "expires_at",
     },
-    "field_runtime_flags": {"key", "value_json", "updated_at"},
-    "field_worker_heartbeats": {"worker_id", "git_sha", "last_heartbeat_at"},
     "platform_api_applications": {"id", "organization_id", "applicant_user_id", "application_type", "status"},
     "platform_program_enrollments": {"id", "organization_id", "program", "status", "allowed_environments_json"},
     "platform_live_access_requests": {"id", "organization_id", "requested_by_user_id", "status"},
@@ -133,6 +131,8 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "platform_status_incidents": {"id", "status", "severity", "public_summary"},
     "platform_status_incident_updates": {"id", "incident_id", "status", "public_message"},
     "platform_abuse_events": {"id", "organization_id", "signal_type", "status"},
+    "field_runtime_flags": {"key", "value_json", "updated_at"},
+    "field_worker_heartbeats": {"worker_id", "git_sha", "last_heartbeat_at"},
 }
 
 

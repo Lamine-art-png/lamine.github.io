@@ -3,6 +3,7 @@ import { NavLink, Outlet, useLocation } from "react-router";
 import {
   AlertTriangle,
   BrainCircuit,
+  Code2,
   ChevronLeft,
   ChevronRight,
   ClipboardCheck,
@@ -100,7 +101,6 @@ export function MainLayout() {
     selectWorkspace,
     entitlements,
     platformAdmin,
-    platformDeveloper,
     logout,
   } = useAuth();
   const { t } = useLocale();
@@ -140,6 +140,10 @@ export function MainLayout() {
     { name: t("exceptions"), path: "/exceptions", icon: AlertTriangle },
   ];
 
+  const productItems: NavItem[] = [
+    { name: "Platform API", path: "/platform", icon: Code2 },
+  ];
+
   const workspaceItems: NavItem[] = [
     { name: t("sources"), path: "/sources", icon: FolderOpen },
     { name: t("team"), path: "/team", icon: Users, locked: !canInviteTeam, upgradeTo: "team" },
@@ -153,16 +157,13 @@ export function MainLayout() {
     { name: t("support"), path: "/support", icon: HelpCircle },
     { name: t("requests"), path: "/admin/requests", icon: HelpCircle, locked: !canAccessAdminRequests, upgradeTo: "team" },
     { name: t("admin"), path: "/admin", icon: Settings },
-    ...(platformDeveloper ? [
-      { name: "Developers/API", path: "/developers/api", icon: Shield },
-    ] : []),
     ...(platformAdmin ? [
       { name: "Customer accounts", path: "/admin/customers", icon: Users },
-      { name: "Platform API review", path: "/admin/platform-api", icon: Shield },
+      { name: "API access reviews", path: "/admin/platform-api", icon: Shield },
     ] : []),
   ];
 
-  const allPrimaryItems = [...operateItems, ...intelligenceItems, ...workspaceItems, ...accountItems];
+  const allPrimaryItems = [...operateItems, ...intelligenceItems, ...productItems, ...workspaceItems, ...accountItems];
   const activeLabel = location.pathname === "/operations/new"
     ? t("newOperation")
     : allPrimaryItems.find((item) => item.path === location.pathname)?.name || "AGRO-AI";
@@ -196,6 +197,7 @@ export function MainLayout() {
     workspaceLimit,
     operateItems,
     intelligenceItems,
+    productItems,
     workspaceItems,
     accountItems,
     onSelectWorkspace: selectWorkspace,
@@ -299,6 +301,7 @@ function SidebarContent({
   workspaceLimit,
   operateItems,
   intelligenceItems,
+  productItems,
   workspaceItems,
   accountItems,
   onSelectWorkspace,
@@ -316,6 +319,7 @@ function SidebarContent({
   workspaceLimit: string;
   operateItems: NavItem[];
   intelligenceItems: NavItem[];
+  productItems: NavItem[];
   workspaceItems: NavItem[];
   accountItems: NavItem[];
   onSelectWorkspace: (workspaceId: string) => void;
@@ -404,6 +408,7 @@ function SidebarContent({
       <nav className={isCollapsed ? "flex-1 space-y-4 overflow-y-auto px-2 py-4" : "flex-1 space-y-5 overflow-y-auto px-3 py-4"} style={{ WebkitOverflowScrolling: "touch" }}>
         <NavSection title={t("operate")} items={operateItems} onNavigate={onNavigate} collapsed={isCollapsed} />
         <NavSection title={t("intelligence")} items={intelligenceItems} onNavigate={onNavigate} collapsed={isCollapsed} />
+        <NavSection title="Products" items={productItems} onNavigate={onNavigate} collapsed={isCollapsed} />
         <NavSection title={t("workspace")} items={workspaceItems} onNavigate={onNavigate} collapsed={isCollapsed} />
       </nav>
 

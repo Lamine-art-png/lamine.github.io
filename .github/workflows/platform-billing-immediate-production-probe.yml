@@ -1,0 +1,125 @@
+name: Platform Billing Immediate Production Probe
+
+# Forced production probe generation: 2
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - .github/workflows/platform-billing-immediate-production-probe.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: platform-billing-immediate-production-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    env:
+      BACKEND_ORIGIN: https://api-preview.agroai-pilot.com
+      PUBLIC_API_ORIGIN: https://api.agroai-pilot.com
+      EVIDENCE_ISSUE: "359"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve exact backend release
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="$(bash .github/scripts/resolve-backend-release-sha.sh)"
+          test -n "$expected"
+          echo "EXPECTED_BACKEND_SHA=${expected}" >> "$GITHUB_ENV"
+
+      - name: Wait for exact Render release
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 180); do
+            code="$(curl --silent --show-error --max-time 40 -o health.json -w '%{http_code}' \
+              "${BACKEND_ORIGIN}/v1/health" || true)"
+            if [ "$code" = "200" ] && EXPECTED="$EXPECTED_BACKEND_SHA" python3 - <<'PY'
+          import json, os
+          value = json.load(open('health.json', encoding='utf-8'))
+          assert value.get('status') == 'ok', value
+          assert value.get('build_sha') == os.environ['EXPECTED'], value
+          PY
+            then
+              ready=1
+              break
+            fi
+            sleep 5
+          done
+          test "$ready" -eq 1
+
+      - name: Probe pricing and billing routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          backend_pricing_code="$(curl --silent --show-error --max-time 40 -o backend-pricing.json -w '%{http_code}' \
+            "${BACKEND_ORIGIN}/v1/platform/pricing" || true)"
+          public_pricing_code="$(curl --silent --show-error --max-time 40 -o public-pricing.json -w '%{http_code}' \
+            "${PUBLIC_API_ORIGIN}/v1/platform/pricing" || true)"
+          webhook_code="$(curl --silent --show-error --max-time 40 -o webhook.json -w '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' --data '{}' \
+            "${PUBLIC_API_ORIGIN}/v1/platform/billing/stripe-webhook" || true)"
+          echo "BACKEND_PRICING_CODE=${backend_pricing_code}" >> "$GITHUB_ENV"
+          echo "PUBLIC_PRICING_CODE=${public_pricing_code}" >> "$GITHUB_ENV"
+          echo "WEBHOOK_CODE=${webhook_code}" >> "$GITHUB_ENV"
+
+          if [ "$backend_pricing_code" = "200" ]; then
+            python3 - <<'PY'
+          import json
+          value = json.load(open('backend-pricing.json', encoding='utf-8'))
+          plans = {row.get('identifier'): row for row in value.get('plans', [])}
+          assert value.get('catalog_version') == '2026-07-provisional', value
+          assert plans['developer']['monthly_price_cents'] == 14900, plans
+          assert plans['developer']['annual_price_cents'] == 143000, plans
+          assert plans['developer']['overage_price_per_1000_cents'] == 75, plans
+          assert plans['scale']['monthly_price_cents'] == 74900, plans
+          assert plans['scale']['annual_price_cents'] == 719000, plans
+          assert plans['scale']['overage_price_per_1000_cents'] == 35, plans
+          PY
+          fi
+
+      - name: Record exact production result
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          backend_sha="$(jq -r '.build_sha // "unknown"' health.json 2>/dev/null || echo unknown)"
+          if [ "${BACKEND_PRICING_CODE:-unknown}" = "200" ] \
+            && [ "${PUBLIC_PRICING_CODE:-unknown}" = "200" ] \
+            && [ "${WEBHOOK_CODE:-unknown}" = "400" ]; then
+            outcome='✅ **Immediate Platform billing probe GREEN**'
+          else
+            outcome='❌ **Immediate Platform billing probe NOT GREEN**'
+          fi
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
+            -f body="${outcome}\n\n- probe release: \`${GITHUB_SHA}\`\n- exact Render build: \`${backend_sha}\`\n- private pricing HTTP: \`${BACKEND_PRICING_CODE:-unknown}\`\n- public pricing HTTP: \`${PUBLIC_PRICING_CODE:-unknown}\`\n- unsigned webhook HTTP: \`${WEBHOOK_CODE:-unknown}\`\n- Actions run: \`${GITHUB_RUN_ID}\`"
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: platform-billing-immediate-probe-${{ github.sha }}
+          path: |
+            health.json
+            backend-pricing.json
+            public-pricing.json
+            webhook.json
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Enforce green result
+        run: |
+          test "${BACKEND_PRICING_CODE}" = "200"
+          test "${PUBLIC_PRICING_CODE}" = "200"
+          test "${WEBHOOK_CODE}" = "400"

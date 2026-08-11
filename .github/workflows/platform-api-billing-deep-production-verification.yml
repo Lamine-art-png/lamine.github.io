@@ -1,0 +1,219 @@
+name: Platform API Billing Deep Production Verification
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - agroai_api/start-production.sh
+      - agroai_api/app/__init__.py
+      - agroai_api/app/billing_bootstrap.py
+      - agroai_api/app/api/v1/platform_billing.py
+      - agroai_api/scripts/verify_platform_billing_config.py
+      - .github/scripts/resolve-backend-release-sha.sh
+      - .github/workflows/platform-api-billing-deep-production-verification.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: platform-api-billing-deep-production-verification
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      BACKEND_ORIGIN: https://api-preview.agroai-pilot.com
+      PUBLIC_API_ORIGIN: https://api.agroai-pilot.com
+      EVIDENCE_ISSUE: "359"
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve exact backend release
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected_sha="$(bash .github/scripts/resolve-backend-release-sha.sh)"
+          echo "EXPECTED_BACKEND_SHA=${expected_sha}" >> "$GITHUB_ENV"
+
+      - name: Record verification start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
+            -f body="Platform API billing deep verification started for release \`${GITHUB_SHA}\`. Expected Render backend identity: \`${EXPECTED_BACKEND_SHA}\`."
+
+      - name: Wait for exact Render release
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 120); do
+            payload="$(curl --fail --silent --show-error --max-time 25 "${BACKEND_ORIGIN}/v1/health" 2>/dev/null || true)"
+            if PAYLOAD="$payload" python3 - <<'PY'
+          import json, os, sys
+          try:
+              value = json.loads(os.environ["PAYLOAD"])
+          except Exception:
+              sys.exit(1)
+          sys.exit(0 if value.get("status") == "ok" and value.get("build_sha") == os.environ["EXPECTED_BACKEND_SHA"] else 1)
+          PY
+            then
+              printf '%s\n' "$payload" > backend-health.json
+              ready=1
+              break
+            fi
+            sleep 10
+          done
+          test "$ready" -eq 1
+
+      - name: Verify full API readiness
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 \
+            "${BACKEND_ORIGIN}/v1/readiness" -o readiness.json
+          python3 - <<'PY'
+          import json
+          value = json.load(open("readiness.json", encoding="utf-8"))
+          assert value.get("status") == "ready", value
+          assert (value.get("schema") or {}).get("ready") is True, value
+          assert (value.get("production") or {}).get("ready") is True, value
+          print("api_readiness=green")
+          PY
+
+      - name: Verify effective live billing bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 \
+            "${BACKEND_ORIGIN}/v1/platform/billing-readiness" -o billing-readiness.json
+          cat billing-readiness.json
+          python3 - <<'PY'
+          import json
+          value = json.load(open("billing-readiness.json", encoding="utf-8"))
+          assert value.get("status") == "ready", value
+          assert value.get("bootstrapped") is True, value
+          assert value.get("complete_live_configuration") is True, value
+          assert value.get("missing") == [], value
+          assert value.get("invalid") == [], value
+          assert value.get("stripe_secret_source") in {"dedicated", "shared_live_server_key"}, value
+          assert all((value.get("effective_flags") or {}).values()), value
+          assert all((value.get("settings_flags") or {}).values()), value
+          print("billing_bootstrap=green")
+          PY
+
+      - name: Verify active commercial pricing
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 \
+            "${PUBLIC_API_ORIGIN}/v1/platform/pricing" -o pricing.json
+          python3 - <<'PY'
+          import json
+          value = json.load(open("pricing.json", encoding="utf-8"))
+          assert value.get("catalog_version") == "2026-07-provisional", value
+          plans = {item.get("identifier"): item for item in value.get("plans", [])}
+          expected = {
+              "developer": (14900, 143000, 250000, 75),
+              "scale": (74900, 719000, 2000000, 35),
+          }
+          for identifier, values in expected.items():
+              plan = plans.get(identifier)
+              assert plan, f"missing {identifier}"
+              assert plan.get("status") == "private_preview", plan
+              assert plan.get("overages_allowed") is True, plan
+              actual = (
+                  plan.get("monthly_price_cents"),
+                  plan.get("annual_price_cents"),
+                  plan.get("included_credits"),
+                  plan.get("overage_price_per_1000_cents"),
+              )
+              assert actual == values, (identifier, actual, values)
+          print("commercial_pricing=green")
+          PY
+
+      - name: Verify Platform runtime health
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 \
+            "${PUBLIC_API_ORIGIN}/v1/platform/health" -o platform-health.json
+          python3 - <<'PY'
+          import json
+          value = json.load(open("platform-health.json", encoding="utf-8"))
+          assert value.get("status") in {"ready", "ok"}, value
+          print("platform_runtime=green")
+          PY
+
+      - name: Verify webhook signature boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          code="$(curl --silent --show-error --output webhook-response.json --write-out '%{http_code}' \
+            --max-time 30 -X POST -H 'Content-Type: application/json' --data '{}' \
+            "${PUBLIC_API_ORIGIN}/v1/platform/billing/stripe-webhook" || true)"
+          test "$code" = "400"
+
+      - name: Verify deployed billing route contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 \
+            "${BACKEND_ORIGIN}/openapi.json" -o openapi.json
+          python3 - <<'PY'
+          import json
+          paths = json.load(open("openapi.json", encoding="utf-8")).get("paths", {})
+          required = {
+              "/v1/platform/billing-readiness": "get",
+              "/v1/platform/pricing": "get",
+              "/v1/platform/developer/billing": "get",
+              "/v1/platform/developer/billing/checkout": "post",
+              "/v1/platform/developer/billing/portal": "post",
+              "/v1/platform/billing/stripe-webhook": "post",
+              "/v1/platform/admin/billing/reconciliation": "get",
+              "/v1/platform/admin/billing/meter-outbox/drain": "post",
+              "/v1/platform/admin/billing/meter-outbox/reconcile": "post",
+          }
+          for path, method in required.items():
+              assert method in (paths.get(path) or {}), f"missing {method.upper()} {path}"
+          print("billing_route_contract=green")
+          PY
+
+      - name: Record verification success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          backend_sha="$(python3 -c 'import json; print(json.load(open("backend-health.json"))["build_sha"])')"
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
+            -f body="✅ **Platform API billing production verification GREEN**\n\n- release commit: \`${GITHUB_SHA}\`\n- exact Render backend: \`${backend_sha}\`\n- fail-closed Stripe startup preflight passed before Uvicorn accepted traffic\n- API and database readiness: green\n- non-secret billing bootstrap diagnostic: green\n- Developer and Scale catalog: active with approved prices, credits, and overages\n- Platform runtime: green\n- unsigned Stripe webhook rejected with HTTP 400\n- Checkout, Portal, metering, reconciliation, and webhook routes deployed"
+
+      - name: Record verification failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
+            -f body="❌ Platform API billing production verification failed for release \`${GITHUB_SHA}\` (expected backend \`${EXPECTED_BACKEND_SHA}\`). Do not represent live billing as green until this workflow passes. Review Actions run \`${GITHUB_RUN_ID}\`."
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: platform-api-billing-deep-verification-${{ github.sha }}
+          path: |
+            backend-health.json
+            readiness.json
+            billing-readiness.json
+            pricing.json
+            platform-health.json
+            webhook-response.json
+            openapi.json
+          if-no-files-found: ignore
+          retention-days: 30

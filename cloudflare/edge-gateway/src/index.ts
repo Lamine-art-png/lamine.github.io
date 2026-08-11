@@ -23,6 +23,7 @@ export interface ConnectorTaskEnvelope {
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "https://app.agroai-pilot.com",
+  "https://platform.agroai-pilot.com",
   "https://agroai-pilot.com",
   "https://www.agroai-pilot.com",
 ];

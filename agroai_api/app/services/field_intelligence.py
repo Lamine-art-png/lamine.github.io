@@ -1027,7 +1027,14 @@ def _process_observation(db: Session, job: IngestionJob, *, heartbeat: _JobLease
     from app.services.commercial_control import resolve_effective_entitlements as _resolve_ents
 
     _org = db.get(_Organization, observation.tenant_id)
-    _allow_model = bool(_org) and _resolve_ents(db, _org).enabled("field_intelligence.model_extraction")
+    language_family = str(language or "en").split("-", 1)[0].lower()
+    # Multilingual parity is part of Field Intelligence itself, not an English-
+    # only premium. Non-English captures may use the configured model path even
+    # when the optional model-extraction entitlement is absent.
+    _allow_model = bool(_org) and (
+        _resolve_ents(db, _org).enabled("field_intelligence.model_extraction")
+        or language_family != "en"
+    )
     extraction = extract_observation(
         source_text,
         field_hint=observation.field_name,
@@ -1039,6 +1046,7 @@ def _process_observation(db: Session, job: IngestionJob, *, heartbeat: _JobLease
         workspace_blocks=workspace_blocks,
         workspace_crops=workspace_crops,
         allow_model=_allow_model,
+        output_language=language,
     )
     extraction_dict = extraction.model_dump(mode="json")
     observation.structured_json = extraction_dict
@@ -1069,6 +1077,7 @@ def _process_observation(db: Session, job: IngestionJob, *, heartbeat: _JobLease
         "extraction_method": extraction.method,
         "transcription_provider": tr.provider,
         "transcription_status": tr.status,
+        "language": tr.language or language,
         "correlation_schema_version": correlation.get("schema_version"),
     }
     if not observation.recommended_action:

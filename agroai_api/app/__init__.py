@@ -3,7 +3,17 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from app.billing_bootstrap import apply_live_billing_bootstrap
+
+
+# This package is imported before ``app.main`` and therefore before
+# ``app.core.config`` constructs the immutable Settings snapshot. The helper is
+# deliberately fail-closed and records only non-secret diagnostics when the
+# live wiring is incomplete.
+apply_live_billing_bootstrap()
+
+
+from pydantic import BaseModel, Field  # noqa: E402
 
 __version__ = "1.1.0"
 

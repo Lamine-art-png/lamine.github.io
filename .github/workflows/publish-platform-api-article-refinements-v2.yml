@@ -1,0 +1,98 @@
+name: Publish Platform API Article Refinements V2
+
+on:
+  issues:
+    types: [opened]
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: publish-platform-api-article-refinements
+  cancel-in-progress: true
+
+jobs:
+  publish:
+    if: ${{ github.event.issue.user.login == github.repository_owner && github.event.issue.title == '[ops] Publish Platform API article refinements v2' }}
+    runs-on: ubuntu-latest
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Validate merged source and exact routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          article='client/public/news/agro-ai-platform-api-launch/index.html'
+          worker='cloudflare/field-intelligence-launch-worker/src/index.ts'
+          routes='cloudflare/field-intelligence-launch-worker/wrangler.toml'
+          grep -F '<time datetime="2026-08-03">August 3, 2026</time>' "$article" >/dev/null
+          grep -F 'href="https://app.agroai-pilot.com">Open Enterprise Portal</a>' "$article" >/dev/null
+          grep -F 'href="https://agroai-pilot.com/book-a-demo">Book a Demo</a>' "$article" >/dev/null
+          grep -F '<section class="enterprise-portal">' "$article" >/dev/null
+          grep -F 'Run your operation through the AGRO-AI Enterprise Portal.' "$article" >/dev/null
+          grep -F 'date:"San Francisco, California — August 3, 2026"' "$worker" >/dev/null
+          grep -F 'pattern = "agroai-pilot.com/news/agro-ai-platform-api-launch"' "$routes" >/dev/null
+          grep -F 'pattern = "agroai-pilot.com/news/agro-ai-platform-api-launch/*"' "$routes" >/dev/null
+          ! grep -F 'pattern = "agroai-pilot.com/news*"' "$routes"
+          ! grep -F 'pattern = "agroai-pilot.com/news/*"' "$routes"
+          python3 - <<'PY'
+from pathlib import Path
+html=Path('client/public/news/agro-ai-platform-api-launch/index.html').read_text()
+assert html.index('<section class="enterprise-portal">') > html.index('<section class="closing">')
+PY
+          npx --yes wrangler@4.107.0 deploy --dry-run --config "$routes"
+
+      - name: Deploy narrow News Worker
+        run: npx --yes wrangler@4.107.0 deploy --config cloudflare/field-intelligence-launch-worker/wrangler.toml
+
+      - name: Prove live article, card, and regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 24); do
+            a="$(curl -sS -L -H 'Cache-Control: no-cache' -o article.html -w '%{http_code}' --max-time 25 https://agroai-pilot.com/news/agro-ai-platform-api-launch || true)"
+            n="$(curl -sS -L -H 'Cache-Control: no-cache' -o news.html -w '%{http_code}' --max-time 25 https://agroai-pilot.com/news || true)"
+            s="$(curl -sS -L -H 'Cache-Control: no-cache' -o newsroom.js -w '%{http_code}' --max-time 25 https://agroai-pilot.com/news/agroai-news-card-restore.js || true)"
+            f="$(curl -sS -L -H 'Cache-Control: no-cache' -o field.html -w '%{http_code}' --max-time 25 https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence || true)"
+            d="$(curl -sS -L -H 'Cache-Control: no-cache' -o deere.html -w '%{http_code}' --max-time 25 https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center || true)"
+            if [ "$a" = 200 ] && [ "$n" = 200 ] && [ "$s" = 200 ] && [ "$f" = 200 ] && [ "$d" = 200 ] && \
+               grep -F '<time datetime="2026-08-03">August 3, 2026</time>' article.html >/dev/null && \
+               grep -F 'href="https://app.agroai-pilot.com">Open Enterprise Portal</a>' article.html >/dev/null && \
+               grep -F 'href="https://agroai-pilot.com/book-a-demo">Book a Demo</a>' article.html >/dev/null && \
+               grep -F '<section class="enterprise-portal">' article.html >/dev/null && \
+               grep -F 'Run your operation through the AGRO-AI Enterprise Portal.' article.html >/dev/null && \
+               grep -F 'date:"San Francisco, California — August 3, 2026"' newsroom.js >/dev/null && \
+               ! grep -F 'Article not found' article.html >/dev/null && \
+               grep -F 'Introducing AGRO-AI Field Intelligence' field.html >/dev/null && \
+               grep -F 'AGRO-AI connects with John Deere Operations Center™' deere.html >/dev/null; then
+              python3 - <<'PY'
+from pathlib import Path
+html=Path('article.html').read_text()
+assert html.index('<section class="enterprise-portal">') > html.index('<section class="closing">')
+PY
+              exit 0
+            fi
+            echo "attempt=$attempt article=$a news=$n script=$s field=$f deere=$d"
+            sleep 5
+          done
+          exit 1
+
+      - name: Report verified publication
+        shell: bash
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body $'✅ **Platform API article refinements verified live.**\n\n- Article and News card show August 3, 2026.\n- Open Enterprise Portal and Book a Demo are present in the header.\n- The Enterprise Portal CTA is a separate section after Start building with AGRO-AI.\n- Existing News routes passed regression checks.\n- No backend, billing, authentication, database, or application routes were changed.'
+
+      - name: Report failure
+        if: ${{ failure() }}
+        shell: bash
+        run: gh issue comment "$ISSUE_NUMBER" --body '❌ Platform API article refinement production verification failed. Do not mark complete.'

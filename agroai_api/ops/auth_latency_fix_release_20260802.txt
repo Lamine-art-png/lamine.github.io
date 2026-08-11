@@ -1,0 +1,3 @@
+AGRO-AI Enterprise Portal authentication latency fix release marker.
+
+This file intentionally changes the backend deployment tree to force Render to deploy the tested authentication hot-path fix merged on 2026-08-02.

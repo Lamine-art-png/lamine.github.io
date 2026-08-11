@@ -1,0 +1,1242 @@
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import {
+  Activity, AlertTriangle, Camera, CheckCircle2, Cloud, CloudOff, ImagePlus,
+  Loader2, MapPin, Mic, Navigation, Paperclip, RefreshCw, Search, Sparkles,
+  Square, Trash2, Video, X,
+} from "lucide-react";
+import { useAuth } from "../auth/AuthProvider";
+import { useLocale } from "../hooks/useLocale";
+import { apiClient } from "../api/client";
+import { fieldApi } from "../fieldIntelligence/fieldApi";
+import {
+  allCaptures, configureIdentity, deleteUnsyncedRecord, flushQueue, getLastSyncedAt,
+  indexedDbAvailable, newCaptureId, pendingCount, putAsset, putCapture, retryRecord,
+  subscribe, type CaptureRecord, type SyncState,
+} from "../fieldIntelligence/offlineQueue";
+import { FieldMapV2 } from "../fieldIntelligence/FieldMapV2";
+import { MediaViewer } from "../fieldIntelligence/MediaViewer";
+
+const SEVERITIES = ["info", "low", "medium", "high", "critical"] as const;
+const EVENT_TYPES = [
+  "observation", "irrigation_event", "issue", "meter_reading",
+  "pest_disease", "equipment", "compliance_note", "operator_note",
+] as const;
+const SYNC_STATES: SyncState[] = ["draft", "queued", "syncing", "processing", "synced", "failed", "conflict", "manual_recovery"];
+const MAX_RECORDING_SECONDS = 900;
+const LIVE_VISION_INTERVAL_MS = 8_000;
+const LIVE_VISION_FIRST_SAMPLE_MS = 2_000;
+const LIVE_VISION_MAX_SIDE = 768;
+const LIVE_SPEECH_CHUNK_MS = 11_000;
+const LIVE_SPEECH_RESTART_MS = 250;
+type Observation = Record<string, any>;
+type LocationFix = { lat: number; lon: number; acc: number };
+
+const MAX_VISION_UPLOAD_BYTES = 7_500_000;
+
+async function optimizeFieldImage(file: File): Promise<File> {
+  if (!file.type.startsWith("image/") || file.size <= MAX_VISION_UPLOAD_BYTES) return file;
+  try {
+    const bitmap = await createImageBitmap(file);
+    const maxSide = 2200;
+    const scale = Math.min(1, maxSide / Math.max(bitmap.width, bitmap.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(bitmap.width * scale));
+    canvas.height = Math.max(1, Math.round(bitmap.height * scale));
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) { bitmap.close(); return file; }
+    context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
+    bitmap.close();
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.86));
+    if (!blob || blob.size >= file.size) return file;
+    const base = file.name.replace(/\.[^.]+$/, "") || "field-photo";
+    return new File([blob], `${base}-optimized.jpg`, { type: "image/jpeg", lastModified: file.lastModified });
+  } catch {
+    return file;
+  }
+}
+
+function stateLabel(t: (key: string) => string, status?: string) {
+  if (!status) return t("fieldIntel.state.processing");
+  if (status === "staged") return t("fieldIntel.state.queued");
+  if (status === "completed" || status === "acknowledged") return t("fieldIntel.state.synced");
+  if (status === "needs_review") return t("fieldIntel.needsReview");
+  return t(`fieldIntel.state.${status}`);
+}
+
+function pipelineStep(status: string | undefined, hasTranscript: boolean, hasVision: boolean) {
+  if (status === "failed") return 0;
+  if (status === "staged") return 1;
+  if (status === "processing" && !hasTranscript) return 2;
+  if (status === "processing" && hasTranscript && !hasVision) return 3;
+  return 4;
+}
+
+export function FieldIntelligenceV2() {
+  const { t, effectiveLocale } = useLocale();
+  const { entitlements, currentWorkspace, workspaces, currentOrganization, user } = useAuth() as any;
+  const workspaceId: string | undefined = currentWorkspace?.id || workspaces?.[0]?.id;
+  const [online, setOnline] = useState(typeof navigator === "undefined" ? true : navigator.onLine);
+  const [pending, setPending] = useState(0);
+  const [lastSync, setLastSync] = useState<number | null>(null);
+  const [locals, setLocals] = useState<CaptureRecord[]>([]);
+  const [observations, setObservations] = useState<Observation[]>([]);
+  const [view, setView] = useState<"timeline" | "map">("timeline");
+  const [selected, setSelected] = useState<Observation | null>(null);
+  const [query, setQuery] = useState("");
+  const [severityFilter, setSeverityFilter] = useState("");
+  const [stateFilter, setStateFilter] = useState("");
+  const [banner, setBanner] = useState<string | null>(null);
+
+  useEffect(() => {
+    configureIdentity(currentOrganization?.id || null, user?.id || null);
+  }, [currentOrganization?.id, user?.id]);
+
+  const capabilityEnabled = useMemo(() => {
+    const caps = (entitlements?.capabilities || {}) as Record<string, unknown>;
+    const value = caps["field_intelligence.capture"];
+    return value === undefined || value === true || value === "enabled" || value === "preview";
+  }, [entitlements]);
+
+  const refreshLocal = useCallback(async () => {
+    if (!indexedDbAvailable()) return;
+    setLocals(await allCaptures());
+    setPending(await pendingCount());
+    setLastSync(await getLastSyncedAt());
+  }, []);
+
+  const loadObservations = useCallback(async () => {
+    try {
+      const response: any = await apiClient.fieldIntelligence.observations(
+        workspaceId ? `workspace_id=${encodeURIComponent(workspaceId)}` : undefined,
+      );
+      const next = response?.observations || [];
+      setObservations(next);
+      setSelected((current) => current ? next.find((item: Observation) => item.id === current.id) || current : null);
+    } catch {
+      // Local queue remains usable while offline.
+    }
+  }, [workspaceId]);
+
+  const doFlush = useCallback(async () => {
+    if (!indexedDbAvailable()) return;
+    await flushQueue(fieldApi);
+    await Promise.all([refreshLocal(), loadObservations()]);
+  }, [refreshLocal, loadObservations]);
+
+  useEffect(() => { void refreshLocal(); void loadObservations(); }, [refreshLocal, loadObservations]);
+  useEffect(() => subscribe(() => { void refreshLocal(); }), [refreshLocal]);
+
+  useEffect(() => {
+    const goOnline = () => { setOnline(true); void doFlush(); };
+    const goOffline = () => setOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    return () => {
+      window.removeEventListener("online", goOnline);
+      window.removeEventListener("offline", goOffline);
+    };
+  }, [doFlush]);
+
+  const processingActive = pending > 0 || observations.some((obs) => ["staged", "processing"].includes(String(obs.status || "")));
+  useEffect(() => {
+    if (!online) return;
+    const interval = window.setInterval(() => {
+      if (processingActive) {
+        void doFlush();
+      } else {
+        void loadObservations();
+      }
+    }, processingActive ? 2200 : 12000);
+    return () => window.clearInterval(interval);
+  }, [online, processingActive, doFlush, loadObservations]);
+
+  if (!capabilityEnabled) {
+    return (
+      <div className="min-h-full bg-[#F6F4EE] px-5 py-8">
+        <div className="mx-auto max-w-xl rounded-2xl border border-[#D6DDD0] bg-white p-8 text-center">
+          <Sparkles className="mx-auto h-9 w-9 text-[#2D6A4F]" />
+          <h1 className="mt-3 text-[22px] font-semibold text-[#10231B]">{t("fieldIntel.title")}</h1>
+          <p className="mt-2 text-[14px] text-[#65736A]">{t("fieldIntel.locked")}</p>
+          <a href="/pricing" className="mt-5 inline-flex rounded-lg bg-[#0D2B1E] px-4 py-2 text-[13px] font-semibold text-white">{t("fieldIntel.upgrade")}</a>
+        </div>
+      </div>
+    );
+  }
+
+  const filteredObservations = observations.filter((obs) => {
+    if (severityFilter && obs.severity !== severityFilter) return false;
+    if (!query) return true;
+    const haystack = `${obs.summary || ""} ${obs.transcript || ""} ${obs.field_name || ""} ${JSON.stringify(obs.structured || {})}`.toLowerCase();
+    return haystack.includes(query.toLowerCase());
+  });
+  const filteredLocals = locals.filter((record) => !stateFilter || record.syncState === stateFilter);
+
+  return (
+    <div className="min-h-full bg-[#F6F4EE] px-4 py-5 md:px-6 md:py-6">
+      <header className="rounded-2xl border border-[#D6DDD0] bg-[#10231B] p-5 text-white shadow-[0_20px_60px_rgba(16,35,27,0.16)]">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.2em] text-[#92C7A9]">{t("fieldIntel.eyebrow")}</div>
+            <h1 className="mt-1 text-[28px] font-semibold tracking-tight">{t("fieldIntel.title")}</h1>
+            <p className="mt-2 max-w-3xl text-[13px] leading-6 text-[#D8E4DD]">{t("fieldIntel.subtitle")}</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1 text-[12px] font-semibold">
+              {online ? <Cloud className="h-4 w-4" /> : <CloudOff className="h-4 w-4" />}
+              {online ? t("fieldIntel.online") : t("fieldIntel.offline")}
+            </span>
+            <span className="rounded-full bg-white/10 px-3 py-1 text-[12px]">{t("fieldIntel.pending")}: {pending}</span>
+            <button type="button" onClick={() => void doFlush()} className="inline-flex min-h-[40px] items-center gap-2 rounded-lg bg-white px-3 text-[13px] font-semibold text-[#10231B]">
+              <RefreshCw className={`h-4 w-4 ${processingActive ? "animate-spin" : ""}`} /> {t("fieldIntel.syncNow")}
+            </button>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-2 sm:grid-cols-4">
+          <Capability icon={<Mic className="h-4 w-4" />} title={t("fieldIntel.record")} detail={t("fieldIntel.transcript")} />
+          <Capability icon={<Camera className="h-4 w-4" />} title={t("fieldIntel.photoEvidence")} detail={t("fieldIntel.correlation")} />
+          <Capability icon={<Navigation className="h-4 w-4" />} title={t("fieldIntel.captureLocation")} detail={t("fieldIntel.map")} />
+          <Capability icon={<Sparkles className="h-4 w-4" />} title={t("askAgroAi")} detail={t("fieldIntel.recommended")} />
+        </div>
+      </header>
+
+      {banner && <div role="status" className="mt-3 rounded-xl border border-[#BFD8C9] bg-[#EDF7F1] px-4 py-3 text-[13px] font-medium text-[#1B5E3F]">{banner}</div>}
+
+      <div className="mt-4 grid gap-4 xl:grid-cols-[430px_minmax(0,1fr)]">
+        <SmartComposer
+          t={t}
+          workspaceId={workspaceId}
+          language={effectiveLocale}
+          onSaved={async (message: string) => {
+            setBanner(message);
+            setView("timeline");
+            await refreshLocal();
+            if (navigator.onLine) await doFlush();
+          }}
+        />
+
+        <section className="min-w-0 rounded-2xl border border-[#D6DDD0] bg-white p-4 shadow-[0_14px_40px_rgba(16,35,27,0.06)]">
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <div className="relative min-w-[180px] flex-1">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#9AA79E]" />
+              <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={t("fieldIntel.searchPlaceholder")}
+                className="w-full rounded-lg border border-[#D6DDD0] py-2 pl-9 pr-3 text-[13px]" />
+            </div>
+            <select value={severityFilter} onChange={(event) => setSeverityFilter(event.target.value)}
+              className="rounded-lg border border-[#D6DDD0] px-2 py-2 text-[13px]" aria-label={t("fieldIntel.filterSeverity")}>
+              <option value="">{t("fieldIntel.all")}</option>
+              {SEVERITIES.map((value) => <option key={value} value={value}>{t(`fieldIntel.sev.${value}`)}</option>)}
+            </select>
+            <select value={stateFilter} onChange={(event) => setStateFilter(event.target.value)}
+              className="rounded-lg border border-[#D6DDD0] px-2 py-2 text-[13px]" aria-label={t("fieldIntel.filterState")}>
+              <option value="">{t("fieldIntel.all")}</option>
+              {SYNC_STATES.map((value) => <option key={value} value={value}>{t(`fieldIntel.state.${value}`)}</option>)}
+            </select>
+            <div className="inline-flex overflow-hidden rounded-lg border border-[#D6DDD0]">
+              {(["timeline", "map"] as const).map((mode) => (
+                <button key={mode} type="button" onClick={() => setView(mode)}
+                  className="min-h-[40px] px-3 text-[13px] font-semibold"
+                  style={{ background: view === mode ? "#0D2B1E" : "#FFFFFF", color: view === mode ? "#FFFFFF" : "#10231B" }}>
+                  {mode === "timeline" ? t("fieldIntel.timeline") : t("fieldIntel.map")}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {view === "map" ? (
+            <FieldMapV2 t={t} observations={filteredObservations} workspaceId={workspaceId}
+              selectedId={selected?.id || null} onSelect={(observation: Observation) => setSelected(observation)} />
+          ) : (
+            <ObservationTimeline
+              t={t}
+              locals={filteredLocals}
+              observations={filteredObservations}
+              onSelect={setSelected}
+              onRetry={async (id: string) => { await retryRecord(fieldApi, id); await doFlush(); }}
+              onDelete={async (id: string) => {
+                if (window.confirm(t("fieldIntel.confirmDelete"))) {
+                  await deleteUnsyncedRecord(id);
+                  await refreshLocal();
+                }
+              }}
+            />
+          )}
+        </section>
+      </div>
+
+      {selected && <ObservationDrawer t={t} observation={selected} onClose={() => setSelected(null)}
+        onReload={async () => { await loadObservations(); }} />}
+    </div>
+  );
+}
+
+function Capability({ icon, title, detail }: { icon: ReactNode; title: string; detail: string }) {
+  return <div className="rounded-xl border border-white/10 bg-white/5 px-3 py-2">
+    <div className="flex items-center gap-2 text-[12px] font-semibold">{icon}{title}</div>
+    <div className="mt-1 text-[11px] text-[#BFD0C7]">{detail}</div>
+  </div>;
+}
+
+function SmartComposer({ t, workspaceId, language, onSaved }: any) {
+  const [note, setNote] = useState("");
+  const [fieldName, setFieldName] = useState("");
+  const [blockName, setBlockName] = useState("");
+  const [crop, setCrop] = useState("");
+  const [eventType, setEventType] = useState("observation");
+  const [severity, setSeverity] = useState("info");
+  const [assignee, setAssignee] = useState("");
+  const [attachments, setAttachments] = useState<File[]>([]);
+  const [location, setLocation] = useState<LocationFix | null>(null);
+  const [locError, setLocError] = useState<string | null>(null);
+  const [recording, setRecording] = useState(false);
+  const [elapsed, setElapsed] = useState(0);
+  const [micError, setMicError] = useState<string | null>(null);
+  const [audioFile, setAudioFile] = useState<File | null>(null);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [walkVideoFile, setWalkVideoFile] = useState<File | null>(null);
+  const [walkVideoUrl, setWalkVideoUrl] = useState<string | null>(null);
+  const [videoRecording, setVideoRecording] = useState(false);
+  const [videoPreparing, setVideoPreparing] = useState(false);
+  const [videoPreviewReady, setVideoPreviewReady] = useState(false);
+  const [videoPreviewError, setVideoPreviewError] = useState<string | null>(null);
+  const [videoElapsed, setVideoElapsed] = useState(0);
+  const [liveSpeechState, setLiveSpeechState] = useState<"idle" | "listening" | "transcribing" | "ready" | "unavailable">("idle");
+  const [liveVision, setLiveVision] = useState<Record<string, any> | null>(null);
+  const [liveVisionState, setLiveVisionState] = useState<"idle" | "sampling" | "ready" | "unavailable">("idle");
+  const [liveTranscript, setLiveTranscript] = useState("");
+  const [interimTranscript, setInterimTranscript] = useState("");
+  const [reviewing, setReviewing] = useState(false);
+  const recorderRef = useRef<MediaRecorder | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const recognitionRef = useRef<any>(null);
+  const chunksRef = useRef<Blob[]>([]);
+  const stopWaitersRef = useRef<Array<() => void>>([]);
+  const timerRef = useRef<number | null>(null);
+  const elapsedRef = useRef(0);
+  const videoRecorderRef = useRef<MediaRecorder | null>(null);
+  const videoStreamRef = useRef<MediaStream | null>(null);
+  const videoPreviewRef = useRef<HTMLVideoElement | null>(null);
+  const videoChunksRef = useRef<Blob[]>([]);
+  const recognitionShouldRunRef = useRef(false);
+  const liveSpeechRecorderRef = useRef<MediaRecorder | null>(null);
+  const liveSpeechStreamRef = useRef<MediaStream | null>(null);
+  const liveSpeechChunksRef = useRef<Blob[]>([]);
+  const liveSpeechTimerRef = useRef<number | null>(null);
+  const liveSpeechRestartRef = useRef<number | null>(null);
+  const liveSpeechBusyRef = useRef(false);
+  const liveSpeechSessionRef = useRef(0);
+  const videoStopWaitersRef = useRef<Array<() => void>>([]);
+  const videoTimerRef = useRef<number | null>(null);
+  const videoElapsedRef = useRef(0);
+  const liveVisionTimerRef = useRef<number | null>(null);
+  const liveVisionFirstTimerRef = useRef<number | null>(null);
+  const liveVisionBusyRef = useRef(false);
+  const liveVisionAbortRef = useRef<AbortController | null>(null);
+  const liveVisionSessionRef = useRef(0);
+  const liveTranscriptRef = useRef("");
+  const liveVisionContextRef = useRef({ workspaceId: workspaceId as string | undefined, fieldName: "", crop: "", note: "", language: String(language || "en") });
+
+  const imagePreviews = useMemo(() => attachments.filter((file) => file.type.startsWith("image/"))
+    .map((file) => ({ file, url: URL.createObjectURL(file) })), [attachments]);
+  useEffect(() => () => { imagePreviews.forEach((preview) => URL.revokeObjectURL(preview.url)); }, [imagePreviews]);
+
+  const releaseStream = useCallback(() => {
+    streamRef.current?.getTracks().forEach((track) => track.stop());
+    streamRef.current = null;
+  }, []);
+
+  const stopRecognition = useCallback(() => {
+    recognitionShouldRunRef.current = false;
+    const recognition = recognitionRef.current;
+    recognitionRef.current = null;
+    try { recognition?.stop(); } catch { /* already stopped */ }
+    setInterimTranscript("");
+  }, []);
+
+  const clearTimer = useCallback(() => {
+    if (timerRef.current !== null) window.clearInterval(timerRef.current);
+    timerRef.current = null;
+  }, []);
+
+  const releaseVideoStream = useCallback(() => {
+    videoStreamRef.current?.getTracks().forEach((track) => track.stop());
+    videoStreamRef.current = null;
+    if (videoPreviewRef.current) {
+      try { videoPreviewRef.current.pause(); } catch { /* no-op */ }
+      videoPreviewRef.current.srcObject = null;
+    }
+    setVideoPreviewReady(false);
+  }, []);
+
+  const clearVideoTimer = useCallback(() => {
+    if (videoTimerRef.current !== null) window.clearInterval(videoTimerRef.current);
+    videoTimerRef.current = null;
+  }, []);
+
+  const clearLiveVisionSampling = useCallback(() => {
+    liveVisionSessionRef.current += 1;
+    if (liveVisionTimerRef.current !== null) window.clearInterval(liveVisionTimerRef.current);
+    if (liveVisionFirstTimerRef.current !== null) window.clearTimeout(liveVisionFirstTimerRef.current);
+    liveVisionTimerRef.current = null;
+    liveVisionFirstTimerRef.current = null;
+    liveVisionAbortRef.current?.abort();
+    liveVisionAbortRef.current = null;
+    liveVisionBusyRef.current = false;
+  }, []);
+
+  const stopLiveSpeechSampling = useCallback(() => {
+    liveSpeechSessionRef.current += 1;
+    if (liveSpeechTimerRef.current !== null) window.clearTimeout(liveSpeechTimerRef.current);
+    if (liveSpeechRestartRef.current !== null) window.clearTimeout(liveSpeechRestartRef.current);
+    liveSpeechTimerRef.current = null;
+    liveSpeechRestartRef.current = null;
+    const recorder = liveSpeechRecorderRef.current;
+    liveSpeechRecorderRef.current = null;
+    try {
+      if (recorder && recorder.state !== "inactive") recorder.stop();
+    } catch { /* recorder already stopped */ }
+    liveSpeechStreamRef.current?.getTracks().forEach((track) => track.stop());
+    liveSpeechStreamRef.current = null;
+    liveSpeechChunksRef.current = [];
+    liveSpeechBusyRef.current = false;
+    setLiveSpeechState("idle");
+  }, []);
+
+  const appendTranscriptSegment = useCallback((segment: string) => {
+    const clean = String(segment || "").replace(/\s+/g, " ").trim();
+    if (!clean) return;
+    setLiveTranscript((current) => {
+      const existing = current.replace(/\s+/g, " ").trim();
+      if (!existing) return clean;
+      const lowerExisting = existing.toLocaleLowerCase();
+      const lowerClean = clean.toLocaleLowerCase();
+      if (lowerExisting.endsWith(lowerClean) || lowerExisting.includes(lowerClean)) return existing;
+      const tail = existing.split(/\s+/).slice(-10).join(" ").toLocaleLowerCase();
+      if (tail && lowerClean.startsWith(tail)) {
+        const tailWords = tail.split(/\s+/).length;
+        return `${existing} ${clean.split(/\s+/).slice(tailWords).join(" ")}`.trim();
+      }
+      return `${existing} ${clean}`.trim();
+    });
+  }, []);
+
+  const startLiveSpeechSampling = useCallback((sourceStream: MediaStream) => {
+    stopLiveSpeechSampling();
+    const session = liveSpeechSessionRef.current;
+    const tracks = sourceStream.getAudioTracks().map((track) => track.clone());
+    if (!tracks.length || typeof MediaRecorder === "undefined") {
+      setLiveSpeechState("unavailable");
+      return;
+    }
+    const speechStream = new MediaStream(tracks);
+    liveSpeechStreamRef.current = speechStream;
+
+    const beginCycle = () => {
+      if (session !== liveSpeechSessionRef.current || !speechStream.active) return;
+      try {
+        const preferred = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"]
+          .find((kind) => MediaRecorder.isTypeSupported(kind));
+        const recorder = new MediaRecorder(speechStream, preferred ? { mimeType: preferred } : undefined);
+        liveSpeechRecorderRef.current = recorder;
+        liveSpeechChunksRef.current = [];
+        recorder.ondataavailable = (event) => {
+          if (event.data.size > 0) liveSpeechChunksRef.current.push(event.data);
+        };
+        recorder.onstop = () => {
+          if (session !== liveSpeechSessionRef.current) return;
+          const blob = new Blob(liveSpeechChunksRef.current, { type: recorder.mimeType || "audio/webm" });
+          liveSpeechChunksRef.current = [];
+          if (blob.size > 0 && navigator.onLine && !liveSpeechBusyRef.current) {
+            liveSpeechBusyRef.current = true;
+            setLiveSpeechState("transcribing");
+            const extension = (recorder.mimeType || "").includes("mp4") ? "m4a" : "webm";
+            void apiClient.fieldIntelligence.liveTranscribe(
+              { language: String(language || "en") },
+              new File([blob], `live-speech-${Date.now()}.${extension}`, { type: blob.type }),
+            ).then((response: any) => {
+              if (session !== liveSpeechSessionRef.current) return;
+              if (response?.status === "ok" && response?.transcript) {
+                appendTranscriptSegment(String(response.transcript));
+                setLiveSpeechState("ready");
+              } else {
+                setLiveSpeechState("unavailable");
+              }
+            }).catch(() => {
+              if (session === liveSpeechSessionRef.current) setLiveSpeechState("unavailable");
+            }).finally(() => {
+              liveSpeechBusyRef.current = false;
+            });
+          }
+          if (session === liveSpeechSessionRef.current) {
+            liveSpeechRestartRef.current = window.setTimeout(beginCycle, LIVE_SPEECH_RESTART_MS);
+          }
+        };
+        recorder.start(750);
+        setLiveSpeechState("listening");
+        liveSpeechTimerRef.current = window.setTimeout(() => {
+          try {
+            if (recorder.state !== "inactive") recorder.stop();
+          } catch { /* recorder already stopped */ }
+        }, LIVE_SPEECH_CHUNK_MS);
+      } catch {
+        setLiveSpeechState("unavailable");
+      }
+    };
+    beginCycle();
+  }, [appendTranscriptSegment, language, stopLiveSpeechSampling]);
+
+  const resumeVideoPreview = useCallback(async () => {
+    const video = videoPreviewRef.current;
+    const stream = videoStreamRef.current;
+    if (!video || !stream) return;
+    try {
+      if (video.srcObject !== stream) video.srcObject = stream;
+      await video.play();
+      setVideoPreviewReady(true);
+      setVideoPreviewError(null);
+    } catch {
+      setVideoPreviewReady(false);
+      setVideoPreviewError(t("fieldIntel.previewTap"));
+    }
+  }, [t]);
+
+  useEffect(() => {
+    if (!(videoPreparing || videoRecording)) return;
+    const video = videoPreviewRef.current;
+    const stream = videoStreamRef.current;
+    if (!video || !stream) return;
+    if (video.srcObject !== stream) video.srcObject = stream;
+    const ready = () => {
+      setVideoPreviewReady(video.videoWidth > 0 && video.videoHeight > 0);
+      setVideoPreviewError(null);
+    };
+    video.addEventListener("loadedmetadata", ready);
+    video.addEventListener("playing", ready);
+    void video.play().then(ready).catch(() => setVideoPreviewError(t("fieldIntel.previewTap")));
+    return () => {
+      video.removeEventListener("loadedmetadata", ready);
+      video.removeEventListener("playing", ready);
+    };
+  }, [t, videoPreparing, videoRecording]);
+
+  const setRecordedVideo = useCallback((file: File | null) => {
+    setWalkVideoFile(file);
+    setWalkVideoUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return file ? URL.createObjectURL(file) : null;
+    });
+  }, []);
+
+  useEffect(() => {
+    liveTranscriptRef.current = `${liveTranscript} ${interimTranscript}`.trim();
+  }, [interimTranscript, liveTranscript]);
+
+  useEffect(() => {
+    liveVisionContextRef.current = { workspaceId, fieldName, crop, note, language: String(language || "en") };
+  }, [crop, fieldName, language, note, workspaceId]);
+
+  useEffect(() => () => {
+    clearTimer();
+    clearVideoTimer();
+    clearLiveVisionSampling();
+    stopLiveSpeechSampling();
+    stopRecognition();
+    releaseStream();
+    releaseVideoStream();
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    if (walkVideoUrl) URL.revokeObjectURL(walkVideoUrl);
+  }, [audioUrl, clearLiveVisionSampling, clearTimer, clearVideoTimer, releaseStream, releaseVideoStream, stopLiveSpeechSampling, stopRecognition, walkVideoUrl]);
+
+  const captureLocation = useCallback((silent = false) => {
+    if (!navigator.geolocation) {
+      if (!silent) setLocError(t("fieldIntel.locationDenied"));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocation({ lat: position.coords.latitude, lon: position.coords.longitude, acc: position.coords.accuracy });
+        setLocError(null);
+      },
+      () => { if (!silent) setLocError(t("fieldIntel.locationDenied")); },
+      { enableHighAccuracy: true, timeout: 12000, maximumAge: 15000 },
+    );
+  }, [t]);
+
+
+
+  const startRecognition = useCallback((requestedLanguage?: string) => {
+    const Recognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!Recognition) {
+      setLiveSpeechState("listening");
+      return;
+    }
+    recognitionShouldRunRef.current = true;
+    const launch = () => {
+      if (!recognitionShouldRunRef.current || recognitionRef.current) return;
+      try {
+        const recognition = new Recognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.maxAlternatives = 1;
+        recognition.lang = requestedLanguage || document.documentElement.lang || navigator.language || "en-US";
+        recognition.onresult = (event: any) => {
+          let interim = "";
+          let finalText = "";
+          for (let index = event.resultIndex; index < event.results.length; index += 1) {
+            const text = String(event.results[index][0]?.transcript || "");
+            if (event.results[index].isFinal) finalText += text;
+            else interim += text;
+          }
+          if (finalText.trim()) appendTranscriptSegment(finalText);
+          setInterimTranscript(interim);
+          setLiveSpeechState("ready");
+        };
+        recognition.onerror = (event: any) => {
+          setInterimTranscript("");
+          const code = String(event?.error || "");
+          if (["not-allowed", "service-not-allowed", "audio-capture"].includes(code)) {
+            recognitionShouldRunRef.current = false;
+          }
+        };
+        recognition.onend = () => {
+          recognitionRef.current = null;
+          setInterimTranscript("");
+          if (recognitionShouldRunRef.current) window.setTimeout(launch, 300);
+        };
+        recognitionRef.current = recognition;
+        recognition.start();
+        setLiveSpeechState("listening");
+      } catch {
+        recognitionRef.current = null;
+      }
+    };
+    launch();
+  }, [appendTranscriptSegment]);
+
+  const setRecordedAudio = useCallback((file: File | null) => {
+    setAudioFile(file);
+    setAudioUrl((current) => {
+      if (current) URL.revokeObjectURL(current);
+      return file ? URL.createObjectURL(file) : null;
+    });
+  }, []);
+
+  const stopRecording = useCallback(async () => {
+    const recorder = recorderRef.current;
+    stopLiveSpeechSampling();
+    if (!recorder || recorder.state === "inactive") {
+      clearTimer(); stopRecognition(); releaseStream(); setRecording(false); return;
+    }
+    await new Promise<void>((resolve) => {
+      stopWaitersRef.current.push(resolve);
+      try { recorder.stop(); } catch { resolve(); }
+    });
+  }, [clearTimer, releaseStream, stopLiveSpeechSampling, stopRecognition]);
+
+  const startRecording = useCallback(async () => {
+    setMicError(null);
+    setReviewing(false);
+    setLiveTranscript("");
+    setInterimTranscript("");
+    captureLocation(true);
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setMicError(t("fieldIntel.micUnsupported"));
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      releaseStream();
+      streamRef.current = stream;
+      const preferred = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"].find((kind) => MediaRecorder.isTypeSupported(kind));
+      const recorder = new MediaRecorder(stream, preferred ? { mimeType: preferred } : undefined);
+      recorderRef.current = recorder;
+      chunksRef.current = [];
+      recorder.ondataavailable = (event) => { if (event.data.size > 0) chunksRef.current.push(event.data); };
+      recorder.onstop = () => {
+        const blob = new Blob(chunksRef.current, { type: recorder.mimeType || "audio/webm" });
+        const extension = (recorder.mimeType || "").includes("mp4") ? "m4a" : "webm";
+        if (blob.size > 0) setRecordedAudio(new File([blob], `field-note-${Date.now()}.${extension}`, { type: blob.type }));
+        clearTimer();
+        stopRecognition();
+        releaseStream();
+        setRecording(false);
+        stopWaitersRef.current.splice(0).forEach((resolve) => resolve());
+      };
+      recorder.start(750);
+      startRecognition(String(language || "en"));
+      startLiveSpeechSampling(stream);
+      setRecording(true);
+      elapsedRef.current = 0;
+      setElapsed(0);
+      timerRef.current = window.setInterval(() => {
+        elapsedRef.current += 1;
+        setElapsed(elapsedRef.current);
+        if (elapsedRef.current >= MAX_RECORDING_SECONDS) void stopRecording();
+      }, 1000);
+    } catch (error: any) {
+      releaseStream();
+      setMicError(error?.name === "NotAllowedError" ? t("fieldIntel.micDenied") : t("fieldIntel.micUnsupported"));
+    }
+  }, [captureLocation, clearTimer, language, releaseStream, setRecordedAudio, startLiveSpeechSampling, startRecognition, stopRecognition, stopRecording, t]);
+
+
+  const captureLiveVisionFrame = useCallback(async () => {
+    if (liveVisionBusyRef.current || !navigator.onLine) return;
+    const video = videoPreviewRef.current;
+    if (!video || video.readyState < 2 || video.videoWidth < 1 || video.videoHeight < 1) return;
+    const session = liveVisionSessionRef.current;
+    const scale = Math.min(1, LIVE_VISION_MAX_SIDE / Math.max(video.videoWidth, video.videoHeight));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(video.videoWidth * scale));
+    canvas.height = Math.max(1, Math.round(video.videoHeight * scale));
+    const context = canvas.getContext("2d", { alpha: false });
+    if (!context) return;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.68));
+    if (!blob || blob.size > 1_500_000 || session !== liveVisionSessionRef.current) return;
+
+    liveVisionBusyRef.current = true;
+    setLiveVisionState("sampling");
+    const controller = new AbortController();
+    liveVisionAbortRef.current = controller;
+    const current = liveVisionContextRef.current;
+    const spokenContext = [current.note, liveTranscriptRef.current].filter(Boolean).join(" ").slice(0, 1600);
+    try {
+      const response: any = await apiClient.fieldIntelligence.liveAnalyze({
+        workspace_id: current.workspaceId || "",
+        field_name: current.fieldName.trim(),
+        crop: current.crop.trim(),
+        note_text: spokenContext,
+        language: current.language,
+        frame_timestamp_seconds: String(videoElapsedRef.current),
+      }, new File([blob], `live-field-${Date.now()}.jpg`, { type: "image/jpeg" }), controller.signal);
+      if (session !== liveVisionSessionRef.current) return;
+      if (response?.status === "ok" && response?.analysis) {
+        setLiveVision(response.analysis);
+        setLiveVisionState("ready");
+      } else {
+        setLiveVisionState("unavailable");
+      }
+    } catch (error: any) {
+      if (error?.name !== "AbortError" && session === liveVisionSessionRef.current) setLiveVisionState("unavailable");
+    } finally {
+      if (session === liveVisionSessionRef.current) {
+        liveVisionBusyRef.current = false;
+        liveVisionAbortRef.current = null;
+      }
+    }
+  }, []);
+
+  const startLiveVisionSampling = useCallback(() => {
+    clearLiveVisionSampling();
+    setLiveVision(null);
+    setLiveVisionState("sampling");
+    liveVisionFirstTimerRef.current = window.setTimeout(() => void captureLiveVisionFrame(), LIVE_VISION_FIRST_SAMPLE_MS);
+    liveVisionTimerRef.current = window.setInterval(() => void captureLiveVisionFrame(), LIVE_VISION_INTERVAL_MS);
+  }, [captureLiveVisionFrame, clearLiveVisionSampling]);
+
+
+  const stopWalkVideo = useCallback(async () => {
+    const recorder = videoRecorderRef.current;
+    clearLiveVisionSampling();
+    stopLiveSpeechSampling();
+    if (!recorder || recorder.state === "inactive") {
+      clearVideoTimer(); stopRecognition(); releaseVideoStream(); setVideoRecording(false); return;
+    }
+    await new Promise<void>((resolve) => {
+      videoStopWaitersRef.current.push(resolve);
+      try { recorder.stop(); } catch { resolve(); }
+    });
+  }, [clearLiveVisionSampling, clearVideoTimer, releaseVideoStream, stopLiveSpeechSampling, stopRecognition]);
+
+  const startWalkVideo = useCallback(async () => {
+    setMicError(null);
+    setVideoPreparing(true);
+    setVideoPreviewReady(false);
+    setVideoPreviewError(null);
+    setReviewing(false);
+    setLiveTranscript("");
+    setInterimTranscript("");
+    liveTranscriptRef.current = "";
+    setRecordedVideo(null);
+    setLiveVision(null);
+    setLiveVisionState("sampling");
+    captureLocation(true);
+    if (!navigator.mediaDevices?.getUserMedia || typeof MediaRecorder === "undefined") {
+      setMicError(t("fieldIntel.videoUnsupported"));
+      return;
+    }
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: true,
+        video: { facingMode: { ideal: "environment" }, width: { ideal: 1280 }, height: { ideal: 720 } },
+      });
+      releaseVideoStream();
+      videoStreamRef.current = stream;
+      const preferred = [
+        "video/webm;codecs=vp9,opus", "video/webm;codecs=vp8,opus", "video/webm", "video/mp4",
+      ].find((kind) => MediaRecorder.isTypeSupported(kind));
+      const recorder = new MediaRecorder(stream, preferred ? { mimeType: preferred } : undefined);
+      videoRecorderRef.current = recorder;
+      videoChunksRef.current = [];
+      recorder.ondataavailable = (event) => { if (event.data.size > 0) videoChunksRef.current.push(event.data); };
+      recorder.onstop = () => {
+        const blob = new Blob(videoChunksRef.current, { type: recorder.mimeType || "video/webm" });
+        const extension = (recorder.mimeType || "").includes("mp4") ? "mp4" : "webm";
+        if (blob.size > 0) setRecordedVideo(new File([blob], `field-walk-${Date.now()}.${extension}`, { type: blob.type }));
+        clearLiveVisionSampling();
+        clearVideoTimer();
+        stopRecognition();
+        releaseVideoStream();
+        setVideoRecording(false);
+        setVideoPreparing(false);
+        setVideoPreviewError(null);
+        videoStopWaitersRef.current.splice(0).forEach((resolve) => resolve());
+      };
+      recorder.start(750);
+      setVideoRecording(true);
+      setVideoPreparing(false);
+      startRecognition(String(language || "en"));
+      startLiveSpeechSampling(stream);
+      videoElapsedRef.current = 0;
+      setVideoElapsed(0);
+      startLiveVisionSampling();
+      videoTimerRef.current = window.setInterval(() => {
+        videoElapsedRef.current += 1;
+        setVideoElapsed(videoElapsedRef.current);
+        if (videoElapsedRef.current >= MAX_RECORDING_SECONDS) void stopWalkVideo();
+      }, 1000);
+    } catch (error: any) {
+      releaseVideoStream();
+      setVideoPreparing(false);
+      setVideoPreviewReady(false);
+      setMicError(error?.name === "NotAllowedError" ? t("fieldIntel.videoDenied") : t("fieldIntel.videoUnsupported"));
+    }
+  }, [captureLocation, clearLiveVisionSampling, clearVideoTimer, language, releaseVideoStream, setRecordedVideo, startLiveSpeechSampling, startLiveVisionSampling, startRecognition, stopRecognition, stopWalkVideo, t]);
+
+  const addFiles = useCallback(async (files: File[]) => {
+    if (!files.length) return;
+    captureLocation(true);
+    const optimized = await Promise.all(files.slice(0, 24).map(optimizeFieldImage));
+    setAttachments((current) => [...current, ...optimized].slice(0, 24));
+  }, [captureLocation]);
+
+  const reset = useCallback(() => {
+    setNote(""); setFieldName(""); setBlockName(""); setCrop(""); setEventType("observation");
+    setSeverity("info"); setAssignee(""); setAttachments([]); setLocation(null); setLocError(null);
+    clearLiveVisionSampling();
+    liveTranscriptRef.current = "";
+    setLiveTranscript(""); setInterimTranscript(""); setReviewing(false); setRecordedAudio(null); setRecordedVideo(null);
+    setLiveVision(null); setLiveVisionState("idle"); setLiveSpeechState("idle");
+    setVideoPreparing(false); setVideoPreviewReady(false); setVideoPreviewError(null);
+    setElapsed(0); setVideoElapsed(0);
+  }, [clearLiveVisionSampling, setRecordedAudio, setRecordedVideo]);
+
+  const queueCapture = useCallback(async () => {
+    const clientCaptureId = newCaptureId();
+    const audioAsset = audioFile ? {
+      id: `${clientCaptureId}-audio`, clientCaptureId, kind: "audio" as const,
+      contentType: audioFile.type || "audio/webm", filename: audioFile.name,
+      durationSeconds: elapsed, blob: audioFile, uploaded: false,
+    } : null;
+    const queuedFiles = walkVideoFile ? [...attachments, walkVideoFile] : attachments;
+    const fileAssets = queuedFiles.map((file, index) => ({
+      id: `${clientCaptureId}-asset-${index}`, clientCaptureId,
+      kind: (file.type.startsWith("image/") ? "photo" : file.type.startsWith("video/") ? "video" : file.type.startsWith("audio/") ? "audio" : "file") as "photo" | "video" | "audio" | "file",
+      contentType: file.type || "application/octet-stream", filename: file.name, blob: file, uploaded: false,
+    }));
+    const assets = [...(audioAsset ? [audioAsset] : []), ...fileAssets];
+    const transcriptPreview = liveTranscript.trim();
+    const record: CaptureRecord = {
+      clientCaptureId,
+      idempotencyKey: `fi-${clientCaptureId}`,
+      createdAt: Date.now(),
+      workspaceId,
+      captureSource: audioFile || walkVideoFile ? "voice" : "typed",
+      // Browser live captions are an operator aid. The durable audio remains the
+      // authoritative source; captions also provide useful context if the device
+      // is offline or server transcription is delayed.
+      noteText: note.trim() || transcriptPreview || undefined,
+      transcriptPreview: transcriptPreview || undefined,
+      language: String(language || document.documentElement.lang || navigator.language || "en"),
+      fieldName: fieldName.trim() || undefined,
+      blockName: blockName.trim() || undefined,
+      crop: crop.trim() || undefined,
+      eventType,
+      severity,
+      assignee: assignee.trim() || undefined,
+      occurredAt: new Date().toISOString(),
+      latitude: location?.lat ?? null,
+      longitude: location?.lon ?? null,
+      locationAccuracyM: location?.acc ?? null,
+      assetManifest: assets.map((asset) => ({ client_asset_id: asset.id, kind: asset.kind, content_type: asset.contentType })),
+      syncState: "queued",
+      retryCount: 0,
+    };
+    await putCapture(record);
+    for (const asset of assets) await putAsset(asset);
+    reset();
+    await onSaved(t("fieldIntel.saved"));
+  }, [assignee, attachments, audioFile, blockName, crop, elapsed, eventType, fieldName, language, liveTranscript, location, note, onSaved, reset, severity, t, walkVideoFile, workspaceId]);
+
+  if (reviewing) {
+    return (
+      <section className="rounded-2xl border border-[#D6DDD0] bg-white p-4 shadow-[0_14px_40px_rgba(16,35,27,0.06)]">
+        <div className="flex items-center justify-between">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#2D6A4F]">{t("fieldIntel.reviewTitle")}</div>
+            <p className="mt-1 text-[12px] text-[#65736A]">{t("fieldIntel.reviewHint")}</p>
+          </div>
+          <button type="button" onClick={() => setReviewing(false)} className="rounded-lg border border-[#D6DDD0] p-2"><X className="h-4 w-4" /></button>
+        </div>
+        {audioUrl && <audio controls src={audioUrl} className="mt-4 w-full" aria-label={t("fieldIntel.audioPlayer")} />}
+        {walkVideoUrl && <video controls playsInline src={walkVideoUrl} className="mt-4 max-h-[360px] w-full rounded-xl bg-black" aria-label={t("fieldIntel.videoPlayer")} />}
+        {liveTranscript && <div className="mt-3 rounded-xl border border-[#BFD8C9] bg-[#F1F8F4] p-3">
+          <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2D6A4F]">{t("fieldIntel.transcript")}</div>
+          <textarea value={liveTranscript} onChange={(event) => setLiveTranscript(event.target.value)} rows={4}
+            className="mt-2 w-full resize-none rounded-lg border border-[#D6DDD0] bg-white px-3 py-2 text-[13px]" />
+        </div>}
+        {imagePreviews.length > 0 && <div className="mt-3 grid grid-cols-3 gap-2">
+          {imagePreviews.map((preview) => <img key={preview.url} src={preview.url} alt={t("fieldIntel.photoEvidence")} className="aspect-square w-full rounded-lg object-cover" />)}
+        </div>}
+        <div className="mt-4 grid grid-cols-2 gap-2">
+          <button type="button" onClick={() => setReviewing(false)} className="min-h-[44px] rounded-lg border border-[#D6DDD0] text-[13px] font-semibold">{t("fieldIntel.backToEdit")}</button>
+          <button type="button" onClick={() => void queueCapture()} className="min-h-[44px] rounded-lg bg-[#0D2B1E] text-[13px] font-semibold text-white">{t("fieldIntel.confirmQueue")}</button>
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="rounded-2xl border border-[#D6DDD0] bg-white p-4 shadow-[0_14px_40px_rgba(16,35,27,0.06)]">
+      <div className="flex items-center justify-between">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#2D6A4F]">{t("fieldIntel.compose")}</div>
+          <div className="mt-1 flex items-center gap-2 text-[12px] text-[#65736A]">
+            <Activity className="h-4 w-4 text-[#2D6A4F]" /> {recording ? `${t("fieldIntel.recording")} ${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}` : t("fieldIntel.recordingReady")}
+          </div>
+        </div>
+        <button type="button" disabled={videoRecording} onClick={() => recording ? void stopRecording() : void startRecording()}
+          className="inline-flex min-h-[48px] items-center gap-2 rounded-xl px-4 text-[14px] font-semibold text-white disabled:opacity-40"
+          style={{ background: recording ? "#B23B2E" : "#0D2B1E" }}>
+          {recording ? <Square className="h-4 w-4 fill-current" /> : <Mic className="h-4 w-4" />}
+          {recording ? t("fieldIntel.stop") : t("fieldIntel.record")}
+        </button>
+      </div>
+
+      {(recording || liveTranscript || interimTranscript) && <div className="mt-3 rounded-xl border border-[#BFD8C9] bg-[#F1F8F4] p-3">
+        <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#2D6A4F]">
+          <Sparkles className="h-4 w-4" /> {t("fieldIntel.transcript")}
+        </div>
+        <p className="mt-2 min-h-[44px] text-[13px] leading-6 text-[#10231B]">
+          {liveTranscript} <span className="text-[#819188]">{interimTranscript}</span>
+        </p>
+      </div>}
+      {(videoPreparing || videoRecording) && <div className="fixed inset-0 z-[80] flex flex-col bg-black md:static md:mt-3 md:overflow-hidden md:rounded-xl md:border md:border-[#BFD8C9]">
+        <div className="relative min-h-0 flex-1 overflow-hidden bg-black md:aspect-video md:max-h-[540px]">
+          <video
+            ref={videoPreviewRef}
+            muted
+            playsInline
+            autoPlay
+            onLoadedMetadata={() => void resumeVideoPreview()}
+            onPlaying={() => { setVideoPreviewReady(true); setVideoPreviewError(null); }}
+            className={`h-full w-full object-cover transition-opacity duration-200 ${videoPreviewReady ? "opacity-100" : "opacity-0"}`}
+          />
+          {!videoPreviewReady && <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[#07110D] px-6 text-center text-white">
+            <Loader2 className="h-8 w-8 animate-spin text-[#92C7A9]" />
+            <div className="text-[14px] font-semibold">{t("fieldIntel.cameraStarting")}</div>
+            {videoPreviewError && <button type="button" onClick={() => void resumeVideoPreview()} className="rounded-full border border-white/30 bg-white/10 px-4 py-2 text-[12px] font-semibold">{t("fieldIntel.previewTap")}</button>}
+          </div>}
+          <div className="pointer-events-none absolute inset-x-0 top-0 flex items-center justify-between bg-gradient-to-b from-black/70 to-transparent p-4 text-white">
+            <div className="flex items-center gap-2">
+              <span className="h-2.5 w-2.5 animate-pulse rounded-full bg-red-500" />
+              <span className="text-[12px] font-bold uppercase tracking-[0.14em]">{t("fieldIntel.live")}</span>
+            </div>
+            <div className="rounded-full bg-black/45 px-3 py-1 text-[12px] font-semibold">
+              {Math.floor(videoElapsed / 60)}:{String(videoElapsed % 60).padStart(2, "0")} · {String(language || "en").toUpperCase()}
+            </div>
+          </div>
+          {(liveTranscript || interimTranscript) && <div className="pointer-events-none absolute inset-x-3 bottom-24 rounded-2xl bg-black/65 px-4 py-3 text-center text-[15px] font-medium leading-6 text-white backdrop-blur-sm md:bottom-5">
+            {liveTranscript.split(/\s+/).slice(-28).join(" ")} <span className="text-white/65">{interimTranscript}</span>
+          </div>}
+          {liveVision?.summary && <div className="pointer-events-none absolute inset-x-3 bottom-3 hidden rounded-2xl border border-white/15 bg-[#10231B]/88 p-3 text-white backdrop-blur-md md:block">
+            <div className="text-[10px] font-bold uppercase tracking-[0.14em] text-[#92C7A9]">{t("fieldIntel.liveVisionTitle")}</div>
+            <p className="mt-1 line-clamp-2 text-[12px] leading-5">{liveVision.summary}</p>
+          </div>}
+        </div>
+        <div className="border-t border-white/10 bg-[#10231B] px-4 pb-[max(16px,env(safe-area-inset-bottom))] pt-3 text-white">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.12em] text-[#92C7A9]">
+                <Sparkles className="h-4 w-4" /> {t("fieldIntel.liveVisionTitle")}
+                {liveVisionState === "sampling" && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
+              </div>
+              {liveVision?.summary
+                ? <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-white/90">{liveVision.summary}</p>
+                : <p className="mt-1 text-[12px] text-white/65">{liveVisionState === "unavailable" ? t("fieldIntel.liveVisionUnavailable") : t("fieldIntel.liveVisionAnalyzing")}</p>}
+              <div className="mt-1 text-[10px] text-white/50">{t("fieldIntel.transcript")}: {liveSpeechState === "transcribing" ? t("fieldIntel.liveSpeechChecking") : t("fieldIntel.liveSpeechActive")}</div>
+            </div>
+            <button type="button" onClick={() => void stopWalkVideo()} className="flex h-16 w-16 shrink-0 items-center justify-center rounded-full border-4 border-white bg-red-600 shadow-lg" aria-label={t("fieldIntel.stopWalkVideo")}>
+              <Square className="h-5 w-5 fill-current text-white" />
+            </button>
+          </div>
+          {Array.isArray(liveVision?.visible_facts) && liveVision.visible_facts.length > 0 && <div className="mt-2 text-[11px] text-white/80"><span className="font-semibold text-white">{t("fieldIntel.visibleFacts")}:</span> {liveVision.visible_facts.slice(0, 2).map((item: any) => item?.label).filter(Boolean).join(" · ")}</div>}
+          {Array.isArray(liveVision?.hypotheses) && liveVision.hypotheses.length > 0 && <div className="mt-1 text-[11px] text-white/70"><span className="font-semibold text-white">{t("fieldIntel.hypotheses")}:</span> {liveVision.hypotheses.slice(0, 2).map((item: any) => item?.label).filter(Boolean).join(" · ")}</div>}
+        </div>
+      </div>}
+      {walkVideoUrl && !videoRecording && <div className="mt-3 rounded-xl border border-[#D6DDD0] p-2">
+        <video controls playsInline src={walkVideoUrl} className="max-h-[360px] w-full rounded-lg bg-black" aria-label={t("fieldIntel.videoPlayer")} />
+        <button type="button" onClick={() => setRecordedVideo(null)} className="mt-2 inline-flex items-center gap-1 rounded-lg border border-[#D6DDD0] px-3 py-2 text-[12px] font-semibold text-[#B23B2E]"><Trash2 className="h-4 w-4" />{t("fieldIntel.removeAttachment")}</button>
+      </div>}
+      <button type="button" disabled={recording || videoPreparing} onClick={() => videoRecording ? void stopWalkVideo() : void startWalkVideo()}
+        className="mt-3 inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-xl px-4 text-[14px] font-semibold text-white disabled:opacity-40"
+        style={{ background: videoRecording ? "#B23B2E" : "#1B5E3F" }}>
+        {videoRecording ? <Square className="h-4 w-4 fill-current" /> : <Video className="h-5 w-5" />}
+        {videoRecording ? t("fieldIntel.stopWalkVideo") : t("fieldIntel.startWalkVideo")}
+      </button>
+      {audioUrl && !recording && <div className="mt-3 flex items-center gap-2 rounded-xl border border-[#D6DDD0] p-2">
+        <audio controls src={audioUrl} className="min-w-0 flex-1" />
+        <button type="button" onClick={() => setRecordedAudio(null)} className="rounded-lg border border-[#D6DDD0] p-2 text-[#B23B2E]"><Trash2 className="h-4 w-4" /></button>
+      </div>}
+      {micError && <p className="mt-2 flex items-center gap-1 text-[12px] text-[#B23B2E]"><AlertTriangle className="h-4 w-4" />{micError}</p>}
+
+      <textarea value={note} onChange={(event) => setNote(event.target.value)} rows={4}
+        placeholder={t("fieldIntel.notePlaceholder")} className="mt-3 w-full resize-none rounded-xl border border-[#D6DDD0] px-3 py-3 text-[13px]" />
+
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <Field value={fieldName} onChange={setFieldName} label={t("fieldIntel.field")} />
+        <Field value={blockName} onChange={setBlockName} label={t("fieldIntel.block")} />
+        <Field value={crop} onChange={setCrop} label={t("fieldIntel.crop")} />
+        <Field value={assignee} onChange={setAssignee} label={t("fieldIntel.assignee")} />
+        <select value={eventType} onChange={(event) => setEventType(event.target.value)} className="rounded-lg border border-[#D6DDD0] px-3 py-2 text-[13px]">
+          {EVENT_TYPES.map((value) => <option key={value} value={value}>{t(`fieldIntel.evt.${value}`)}</option>)}
+        </select>
+        <select value={severity} onChange={(event) => setSeverity(event.target.value)} className="rounded-lg border border-[#D6DDD0] px-3 py-2 text-[13px]">
+          {SEVERITIES.map((value) => <option key={value} value={value}>{t(`fieldIntel.sev.${value}`)}</option>)}
+        </select>
+      </div>
+
+      <div className="mt-3 grid grid-cols-3 gap-2">
+        <label className="flex min-h-[74px] cursor-pointer flex-col items-center justify-center rounded-xl border border-[#D6DDD0] bg-[#FBFAF6] text-[12px] font-semibold text-[#10231B]">
+          <Camera className="mb-1 h-5 w-5 text-[#2D6A4F]" /> {t("fieldIntel.photoEvidence")}
+          <input type="file" accept="image/*" capture="environment" className="hidden"
+            onChange={(event) => { void addFiles(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} />
+        </label>
+        <label className="flex min-h-[74px] cursor-pointer flex-col items-center justify-center rounded-xl border border-[#D6DDD0] bg-[#FBFAF6] text-[12px] font-semibold text-[#10231B]">
+          <ImagePlus className="mb-1 h-5 w-5 text-[#2D6A4F]" /> {t("fieldIntel.attach")}
+          <input type="file" multiple accept="image/*,video/*,audio/*,application/pdf" className="hidden"
+            onChange={(event) => { void addFiles(Array.from(event.target.files || [])); event.currentTarget.value = ""; }} />
+        </label>
+        <button type="button" onClick={() => captureLocation(false)}
+          className="flex min-h-[74px] flex-col items-center justify-center rounded-xl border border-[#D6DDD0] bg-[#FBFAF6] text-[12px] font-semibold text-[#10231B]">
+          <MapPin className="mb-1 h-5 w-5 text-[#2D6A4F]" /> {location ? t("fieldIntel.locationCaptured") : t("fieldIntel.captureLocation")}
+        </button>
+      </div>
+
+      {location && <p className="mt-2 flex items-center gap-1 text-[12px] text-[#1B5E3F]"><Navigation className="h-4 w-4" />{location.lat.toFixed(5)}, {location.lon.toFixed(5)} · {t("fieldIntel.accuracy")}: {Math.round(location.acc)}m</p>}
+      {locError && <p className="mt-2 text-[12px] text-[#B23B2E]">{locError}</p>}
+
+      {imagePreviews.length > 0 && <div className="mt-3 grid grid-cols-3 gap-2">
+        {imagePreviews.map((preview, index) => <div key={preview.url} className="relative">
+          <img src={preview.url} alt={t("fieldIntel.photoEvidence")} className="aspect-square w-full rounded-lg object-cover" />
+          <button type="button" onClick={() => setAttachments((current) => current.filter((_, itemIndex) => itemIndex !== attachments.indexOf(preview.file)))}
+            className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white"><X className="h-3 w-3" /></button>
+          {index === 0 && <span className="absolute bottom-1 left-1 rounded bg-[#10231B]/85 px-2 py-0.5 text-[10px] font-semibold text-white">{t("askAgroAi")}</span>}
+        </div>)}
+      </div>}
+
+      <button type="button" onClick={async () => {
+        if (recording) await stopRecording();
+        if (videoRecording) await stopWalkVideo();
+        setReviewing(true);
+      }} disabled={!note.trim() && !audioFile && !walkVideoFile && attachments.length === 0}
+        className="mt-4 inline-flex min-h-[50px] w-full items-center justify-center gap-2 rounded-xl bg-[#0D2B1E] px-4 text-[14px] font-semibold text-white disabled:cursor-not-allowed disabled:opacity-40">
+        <Sparkles className="h-4 w-4" /> {t("fieldIntel.reviewAndSave")}
+      </button>
+    </section>
+  );
+}
+
+function Field({ value, onChange, label }: { value: string; onChange: (value: string) => void; label: string }) {
+  return <input value={value} onChange={(event) => onChange(event.target.value)} placeholder={label}
+    aria-label={label} className="rounded-lg border border-[#D6DDD0] px-3 py-2 text-[13px]" />;
+}
+
+function ObservationTimeline({ t, locals, observations, onSelect, onRetry, onDelete }: any) {
+  if (!locals.length && !observations.length) return <p className="py-12 text-center text-[13px] text-[#65736A]">{t("fieldIntel.noObservations")}</p>;
+  return <div className="space-y-2">
+    {locals.filter((record: CaptureRecord) => record.syncState !== "synced").map((record: CaptureRecord) => (
+      <div key={record.clientCaptureId} className="rounded-xl border border-dashed border-[#BFD0C7] bg-[#F7FAF8] p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="inline-flex items-center gap-2 rounded-full bg-[#E7F3EC] px-2 py-1 text-[11px] font-semibold text-[#1B5E3F]">
+              <Loader2 className="h-3 w-3 animate-spin" /> {stateLabel(t, record.syncState)}
+            </div>
+            <p className="mt-2 truncate text-[13px] text-[#10231B]">{record.noteText || t("fieldIntel.voiceCapture")}</p>
+            {record.lastError && <p className="mt-1 text-[11px] text-[#B23B2E]">{record.lastError}</p>}
+          </div>
+          <div className="flex gap-1">
+            <button type="button" onClick={() => onRetry(record.clientCaptureId)} className="rounded-lg border border-[#D6DDD0] p-2"><RefreshCw className="h-4 w-4" /></button>
+            <button type="button" onClick={() => onDelete(record.clientCaptureId)} className="rounded-lg border border-[#D6DDD0] p-2 text-[#B23B2E]"><Trash2 className="h-4 w-4" /></button>
+          </div>
+        </div>
+      </div>
+    ))}
+    {observations.map((observation: Observation) => {
+      const structured = observation.structured || {};
+      const vision = structured.vision || {};
+      const hasVision = Boolean(vision.summary || vision.observations?.length);
+      const step = pipelineStep(observation.status, Boolean(observation.transcript), hasVision);
+      return <button key={observation.id} type="button" onClick={() => onSelect(observation)}
+        className="w-full rounded-xl border border-[#D6DDD0] bg-white p-4 text-left transition hover:border-[#2D6A4F] hover:shadow-[0_10px_30px_rgba(16,35,27,0.08)]">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full" style={{ background: severityColor(observation.severity) }} />
+              <span className="text-[13px] font-semibold text-[#10231B]">{observation.field_name || t("fieldIntel.unassignedField")}</span>
+              <span className="rounded-full bg-[#F1F4F0] px-2 py-0.5 text-[10px] font-semibold text-[#65736A]">{stateLabel(t, observation.status)}</span>
+              {hasVision && <span className="inline-flex items-center gap-1 rounded-full bg-[#E9F1FF] px-2 py-0.5 text-[10px] font-semibold text-[#315C9B]"><Camera className="h-3 w-3" />{t("askAgroAi")}</span>}
+            </div>
+            <p className="mt-2 line-clamp-2 text-[13px] leading-6 text-[#3B4A41]">{observation.summary || observation.transcript || "—"}</p>
+          </div>
+          <span className="shrink-0 text-[11px] text-[#9AA79E]">{observation.occurred_at ? new Date(observation.occurred_at).toLocaleString() : ""}</span>
+        </div>
+        <div className="mt-3 grid grid-cols-4 gap-1">
+          {[1, 2, 3, 4].map((value) => <span key={value} className="h-1.5 rounded-full" style={{ background: value <= step ? "#2D6A4F" : "#E2E7E1" }} />)}
+        </div>
+        <div className="mt-2 flex items-center justify-between text-[11px] text-[#65736A]">
+          <span>{t("fieldIntel.confidence")}: {Math.round((observation.confidence || 0) * 100)}%</span>
+          <span>{(observation.assets || []).length} {t("fieldIntel.attachments")}</span>
+        </div>
+      </button>;
+    })}
+  </div>;
+}
+
+function ObservationDrawer({ t, observation, onClose, onReload }: any) {
+  const [busy, setBusy] = useState(false);
+  const [corrected, setCorrected] = useState(observation.corrected_transcript || observation.transcript || "");
+  const [editing, setEditing] = useState(false);
+  const structured = observation.structured || {};
+  const vision = structured.vision || {};
+  const correlation = observation.correlation || {};
+
+  const saveCorrection = async () => {
+    setBusy(true);
+    try {
+      await apiClient.fieldIntelligence.patchObservation(observation.id, { corrected_transcript: corrected });
+      setEditing(false);
+      await onReload();
+    } finally { setBusy(false); }
+  };
+
+  const createTask = async () => {
+    setBusy(true);
+    try { await apiClient.fieldIntelligence.createTask(observation.id, {}); await onReload(); }
+    finally { setBusy(false); }
+  };
+
+  return <div className="fixed inset-0 z-[120] flex justify-end bg-black/35" role="dialog" aria-modal="true" onClick={onClose}>
+    <aside className="h-full w-full max-w-xl overflow-y-auto bg-white p-5 shadow-2xl" onClick={(event) => event.stopPropagation()}>
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-[#2D6A4F]">{t("fieldIntel.title")}</div>
+          <h2 className="mt-1 text-[22px] font-semibold text-[#10231B]">{observation.field_name || t("fieldIntel.unassignedField")}</h2>
+        </div>
+        <button type="button" onClick={onClose} className="rounded-lg border border-[#D6DDD0] p-2"><X className="h-4 w-4" /></button>
+      </div>
+
+      <DrawerSection title={t("fieldIntel.summary")}>
+        <p className="text-[14px] leading-7 text-[#3B4A41]">{observation.summary || "—"}</p>
+        <div className="mt-2 flex flex-wrap gap-2 text-[11px]">
+          <span className="rounded-full bg-[#F1F4F0] px-2 py-1">{t("fieldIntel.confidence")}: {Math.round((observation.confidence || 0) * 100)}%</span>
+          <span className="rounded-full bg-[#F1F4F0] px-2 py-1">{stateLabel(t, observation.status)}</span>
+        </div>
+      </DrawerSection>
+
+      {Array.isArray(observation.assets) && observation.assets.length > 0 && <DrawerSection title={t("fieldIntel.media")}>
+        <MediaViewer t={t} assets={observation.assets} transcript={observation.corrected_transcript || observation.transcript || null} />
+      </DrawerSection>}
+
+      {(vision.summary || vision.observations?.length) && <DrawerSection title={t("fieldIntel.correlation")}>
+        <div className="rounded-xl border border-[#BFD8C9] bg-[#F1F8F4] p-3">
+          <div className="flex items-center gap-2 text-[12px] font-semibold text-[#1B5E3F]"><Camera className="h-4 w-4" />{t("fieldIntel.photoEvidence")} + {t("askAgroAi")}</div>
+          <p className="mt-2 text-[13px] leading-6 text-[#3B4A41]">{vision.summary || "—"}</p>
+          <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
+            {vision.crop_condition && vision.crop_condition !== "unknown" && <span className="rounded-full bg-white px-2 py-1">{t("fieldIntel.cropCondition")}: {String(vision.crop_condition).replaceAll("_", " ")}</span>}
+            {vision.coverage_assessment && vision.coverage_assessment !== "unknown" && <span className="rounded-full bg-white px-2 py-1">{t("fieldIntel.coverageAssessment")}: {String(vision.coverage_assessment).replaceAll("_", " ")}</span>}
+            {vision.equipment_condition && !["unknown", "not_visible"].includes(vision.equipment_condition) && <span className="rounded-full bg-white px-2 py-1">{t("fieldIntel.equipmentCondition")}: {String(vision.equipment_condition).replaceAll("_", " ")}</span>}
+          </div>
+          {Array.isArray(vision.visible_facts) && vision.visible_facts.length > 0 && <div className="mt-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#2D6A4F]">{t("fieldIntel.visibleFacts")}</div>
+            <ul className="mt-1 space-y-2 text-[12px] text-[#3B4A41]">
+              {vision.visible_facts.map((item: any, index: number) => <li key={index} className="rounded-lg bg-white/80 p-2"><span className="font-semibold">{item?.label || "—"}</span>{item?.evidence && <span> · {item.evidence}</span>}{Number.isFinite(Number(item?.confidence)) && <span className="ml-1 text-[#65736A]">({Math.round(Number(item.confidence) * 100)}%)</span>}</li>)}
+            </ul>
+          </div>}
+          {Array.isArray(vision.hypotheses) && vision.hypotheses.length > 0 && <div className="mt-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#B26B00]">{t("fieldIntel.hypotheses")}</div>
+            <ul className="mt-1 space-y-2 text-[12px] text-[#3B4A41]">
+              {vision.hypotheses.map((item: any, index: number) => <li key={index} className="rounded-lg border border-[#EAD8AF] bg-[#FFF9EA] p-2"><span className="font-semibold">{item?.label || "—"}</span>{item?.evidence && <span> · {item.evidence}</span>}{item?.verification && <div className="mt-1 text-[11px] text-[#65736A]">{t("fieldIntel.verifyBy")}: {item.verification}</div>}</li>)}
+            </ul>
+          </div>}
+          {Array.isArray(vision.observations) && vision.observations.length > 0 && <ul className="mt-2 space-y-1 text-[12px] text-[#3B4A41]">
+            {vision.observations.map((item: string, index: number) => <li key={index}>• {item}</li>)}
+          </ul>}
+          {Array.isArray(vision.media_moments) && vision.media_moments.length > 0 && <div className="mt-3">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-[#2D6A4F]">{t("fieldIntel.videoMoments")}</div>
+            <ul className="mt-1 space-y-1 text-[12px] text-[#3B4A41]">{vision.media_moments.map((item: any, index: number) => <li key={index}>• {Number.isFinite(Number(item?.frame_timestamp_seconds)) ? `${Math.floor(Number(item.frame_timestamp_seconds) / 60)}:${String(Math.round(Number(item.frame_timestamp_seconds)) % 60).padStart(2, "0")} · ` : ""}{item?.summary || (item?.possible_issues || []).join(", ") || "—"}</li>)}</ul>
+          </div>}
+          {Array.isArray(vision.uncertainties) && vision.uncertainties.length > 0 && <p className="mt-2 flex gap-1 text-[11px] text-[#B26B00]"><AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />{vision.uncertainties.join(", ")}</p>}
+          {vision.human_review_required && <p className="mt-2 text-[11px] font-medium text-[#B26B00]">{t("fieldIntel.humanReviewRequired")}</p>}
+        </div>
+      </DrawerSection>}
+
+      <DrawerSection title={t("fieldIntel.transcript")}>
+        {editing ? <>
+          <textarea value={corrected} onChange={(event) => setCorrected(event.target.value)} rows={5}
+            className="w-full rounded-lg border border-[#D6DDD0] px-3 py-2 text-[13px]" />
+          <div className="mt-2 flex gap-2">
+            <button type="button" disabled={busy} onClick={() => void saveCorrection()} className="rounded-lg bg-[#0D2B1E] px-3 py-2 text-[12px] font-semibold text-white">{t("fieldIntel.save")}</button>
+            <button type="button" onClick={() => setEditing(false)} className="rounded-lg border border-[#D6DDD0] px-3 py-2 text-[12px]">{t("fieldIntel.cancel")}</button>
+          </div>
+        </> : <>
+          <p className="text-[13px] leading-6 text-[#3B4A41]">{observation.corrected_transcript || observation.transcript || "—"}</p>
+          <button type="button" onClick={() => setEditing(true)} className="mt-2 text-[12px] font-semibold text-[#2D6A4F]">{t("fieldIntel.correctTranscript")}</button>
+        </>}
+      </DrawerSection>
+
+      <DrawerSection title={t("fieldIntel.recommended")}>
+        <p className="text-[13px] leading-6 text-[#3B4A41]">{observation.recommended_action || vision.recommended_follow_up || "—"}</p>
+        <div className="mt-3 grid grid-cols-2 gap-2">
+          <button type="button" disabled={busy} onClick={() => void createTask()} className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-lg bg-[#0D2B1E] px-3 text-[12px] font-semibold text-white">
+            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}{t("fieldIntel.createTask")}
+          </button>
+          <a href="/intelligence" className="inline-flex min-h-[42px] items-center justify-center gap-2 rounded-lg border border-[#D6DDD0] px-3 text-[12px] font-semibold text-[#10231B]">
+            <Sparkles className="h-4 w-4" />{t("askAgroAi")}
+          </a>
+        </div>
+      </DrawerSection>
+
+      <DrawerSection title={t("fieldIntel.correlation")}>
+        <p className="text-[13px] leading-6 text-[#3B4A41]">{correlation.explanation || t("fieldIntel.noCorrelation")}</p>
+      </DrawerSection>
+
+      {observation.location?.latitude != null && observation.location?.longitude != null && <DrawerSection title={t("fieldIntel.map")}>
+        <div className="flex items-center gap-2 rounded-xl border border-[#D6DDD0] bg-[#FBFAF6] p-3 text-[13px] text-[#10231B]">
+          <MapPin className="h-4 w-4 text-[#2D6A4F]" />{Number(observation.location.latitude).toFixed(5)}, {Number(observation.location.longitude).toFixed(5)}
+        </div>
+      </DrawerSection>}
+    </aside>
+  </div>;
+}
+
+function DrawerSection({ title, children }: { title: string; children: ReactNode }) {
+  return <section className="mt-5 border-t border-[#EEE9DE] pt-4">
+    <h3 className="text-[11px] font-semibold uppercase tracking-[0.15em] text-[#2D6A4F]">{title}</h3>
+    <div className="mt-2">{children}</div>
+  </section>;
+}
+
+function severityColor(severity?: string) {
+  return ({ info: "#5B7FA3", low: "#4F8A68", medium: "#B8872D", high: "#C45D35", critical: "#A33232" } as Record<string, string>)[severity || "info"] || "#5B7FA3";
+}

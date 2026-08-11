@@ -13,18 +13,31 @@ jobs:
   snapshot:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - name: Capture public readiness report
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -u
+          backend_release_sha="$(bash .github/scripts/resolve-backend-release-sha.sh)"
           curl -sS --connect-timeout 10 --max-time 60 \
             "https://api-preview.agroai-pilot.com/v1/readiness" > readiness.json || printf '{}' > readiness.json
+          curl -sS --connect-timeout 10 --max-time 60 \
+            "https://api-preview.agroai-pilot.com/v1/health" > health.json || printf '{}' > health.json
+          observed_backend_sha="$(jq -r '.build_sha // ""' health.json 2>/dev/null)"
+          backend_exact=false
+          if [ -n "$observed_backend_sha" ] && [ "$observed_backend_sha" = "$backend_release_sha" ]; then backend_exact=true; fi
           {
             echo "# Production readiness snapshot"
             echo
-            echo "- SHA: \`${GITHUB_SHA}\`"
+            echo "- Release SHA: \`${GITHUB_SHA}\`"
+            echo "- Expected backend deployment SHA: \`${backend_release_sha}\`"
+            echo "- Observed backend build SHA: \`${observed_backend_sha}\`"
+            echo "- Backend deployment exact: \`${backend_exact}\`"
             echo "- run: \`${GITHUB_RUN_ID}\`"
             echo
             echo '```json'

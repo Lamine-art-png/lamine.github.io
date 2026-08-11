@@ -6,7 +6,7 @@ workers_dev = false
 [vars]
 EDGE_ENVIRONMENT = "production"
 UPSTREAM_API_ORIGIN = "https://api-preview.agroai-pilot.com"
-ALLOWED_ORIGINS = "https://app.agroai-pilot.com,https://agroai-pilot.com,https://www.agroai-pilot.com"
+ALLOWED_ORIGINS = "https://app.agroai-pilot.com,https://platform.agroai-pilot.com,https://agroai-pilot.com,https://www.agroai-pilot.com"
 
 [ai]
 binding = "AI"
@@ -18,8 +18,16 @@ required = [ "QUEUE_PUBLISH_TOKEN", "QUEUE_CONSUMER_TOKEN" ]
 pattern = "app.agroai-pilot.com/v1/*"
 zone_name = "agroai-pilot.com"
 
-# Preserve the established API hostname used by Stripe live webhooks and older
-# API clients while routing it through the same validated production edge.
+# The standalone developer product shares the same authenticated backend and
+# production edge. This same-origin route also keeps a future relative /v1
+# client configuration possible without creating a second API deployment.
+[[routes]]
+pattern = "platform.agroai-pilot.com/v1/*"
+zone_name = "agroai-pilot.com"
+
+# Keep the machine API route in the canonical Worker contract. It is required
+# by the protected Field Intelligence Workers AI bridges and by signed
+# authoritative client-IP forwarding for CIDR-bound Platform API keys.
 [[routes]]
 pattern = "api.agroai-pilot.com/v1/*"
 zone_name = "agroai-pilot.com"
@@ -37,8 +45,11 @@ retry_delay = 30
 max_concurrency = 4
 dead_letter_queue = "agroai-connector-tasks-dlq"
 
+# Recovery polling must leave enough idle time for Neon Free to suspend.
+# Normal task delivery remains event-driven through Cloudflare Queues; this
+# hourly schedule is only the bounded recovery path for stranded outbox rows.
 [triggers]
-crons = ["* * * * *"]
+crons = ["0 * * * *"]
 
 [observability]
 enabled = true

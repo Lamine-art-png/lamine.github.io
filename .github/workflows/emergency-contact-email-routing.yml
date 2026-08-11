@@ -1,0 +1,168 @@
+name: Emergency AGRO-AI contact email routing
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/emergency-contact-email-routing.yml"
+  issues:
+    types: [opened, reopened]
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  DOMAIN: agroai-pilot.com
+  ALIAS: contact@agroai-pilot.com
+  DESTINATION: daabolaamiine@gmail.com
+
+jobs:
+  configure:
+    if: ${{ github.event_name != 'issues' || (github.actor == github.repository_owner && github.event.issue.title == '[ops] Configure emergency contact email') }}
+    name: Configure safe contact email forwarding
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_EMAIL_ROUTING_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      ISSUE_NUMBER: ${{ github.event.issue.number || '323' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate Cloudflare credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -z "${CLOUDFLARE_API_TOKEN:-}" ]; then
+            gh issue comment "$ISSUE_NUMBER" --body "❌ The production environment secret **CLOUDFLARE_EMAIL_ROUTING_API_TOKEN** is missing or unavailable to this workflow. Add it under Repository Settings → Environments → production → Environment secrets."
+            exit 1
+          fi
+          if [ -z "${CLOUDFLARE_ACCOUNT_ID:-}" ]; then
+            gh issue comment "$ISSUE_NUMBER" --body "❌ The production environment secret **CLOUDFLARE_ACCOUNT_ID** is missing or unavailable to this workflow."
+            exit 1
+          fi
+
+      - name: Create destination and route contact email safely
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+
+          comment_issue() {
+            if [ -n "${ISSUE_NUMBER:-}" ]; then
+              gh issue comment "$ISSUE_NUMBER" --body "$1"
+            fi
+          }
+
+          trap 'comment_issue "❌ Email-routing activation encountered an internal workflow error near shell line ${LINENO}. No existing mail routing was overwritten."' ERR
+
+          cf() {
+            local method="$1"
+            local path="$2"
+            local body="${3:-}"
+            local response_file
+            local http_code
+            response_file="$(mktemp)"
+            local args=(
+              --silent
+              --show-error
+              --request "$method"
+              --header "Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+              --header "Content-Type: application/json"
+              --output "$response_file"
+              --write-out "%{http_code}"
+              "https://api.cloudflare.com/client/v4${path}"
+            )
+            if [ -n "$body" ]; then
+              args+=(--data "$body")
+            fi
+            http_code="$(curl "${args[@]}")"
+            if ! [[ "$http_code" =~ ^2 ]]; then
+              local diagnostic
+              diagnostic="$(jq -c '{success,errors,messages}' "$response_file" 2>/dev/null || cat "$response_file")"
+              comment_issue "❌ Cloudflare API request failed: ${method} ${path} returned HTTP ${http_code}. Diagnostic: ${diagnostic}"
+              cat "$response_file" >&2
+              rm -f "$response_file"
+              return 1
+            fi
+            cat "$response_file"
+            rm -f "$response_file"
+          }
+
+          zone_payload="$(cf GET "/zones?name=${DOMAIN}&account.id=${CLOUDFLARE_ACCOUNT_ID}&status=active&per_page=1")"
+          zone_id="$(printf '%s' "$zone_payload" | jq -r '.result[0].id // empty')"
+          if [ -z "$zone_id" ]; then
+            diagnostic="$(printf '%s' "$zone_payload" | jq -c '{success,errors,messages,result_count:(.result|length)}')"
+            comment_issue "❌ Could not resolve an active Cloudflare zone for ${DOMAIN}. Diagnostic: ${diagnostic}"
+            exit 1
+          fi
+          echo "Resolved Cloudflare zone for ${DOMAIN}."
+
+          doh_payload="$(curl --fail --silent --show-error --get 'https://cloudflare-dns.com/dns-query' \
+            --header 'accept: application/dns-json' \
+            --data-urlencode "name=${DOMAIN}" \
+            --data-urlencode 'type=MX')"
+          if [ "$(printf '%s' "$doh_payload" | jq -r '.Status')" != "0" ]; then
+            comment_issue "❌ Public MX lookup failed for ${DOMAIN}. The workflow stopped before making changes."
+            exit 1
+          fi
+          mx_hosts="$(printf '%s' "$doh_payload" | jq -r '.Answer[]? | select(.type == 15) | .data | sub("^[0-9]+ "; "") | sub("\\.$"; "")')"
+          if [ -n "$mx_hosts" ]; then
+            conflicting_mx="$(printf '%s\n' "$mx_hosts" | awk 'NF && $0 !~ /\.mx\.cloudflare\.net$/ {count++} END {print count+0}')"
+            if [ "$conflicting_mx" -gt 0 ]; then
+              mx_json="$(printf '%s\n' "$mx_hosts" | jq -Rsc 'split("\n") | map(select(length>0))')"
+              comment_issue "🛑 Existing non-Cloudflare MX records were found, so the workflow refused to modify mail routing. Records: ${mx_json}"
+              exit 1
+            fi
+          fi
+
+          addresses="$(cf GET "/accounts/${CLOUDFLARE_ACCOUNT_ID}/email/routing/addresses?per_page=50")"
+          address_id="$(printf '%s' "$addresses" | jq -r --arg email "$DESTINATION" '.result[]? | select((.email | ascii_downcase) == ($email | ascii_downcase)) | .id' | head -1)"
+          verified="$(printf '%s' "$addresses" | jq -r --arg email "$DESTINATION" '.result[]? | select((.email | ascii_downcase) == ($email | ascii_downcase)) | (.verified != null)' | head -1)"
+
+          if [ -z "$address_id" ]; then
+            echo "Creating Cloudflare destination address ${DESTINATION}."
+            created="$(cf POST "/accounts/${CLOUDFLARE_ACCOUNT_ID}/email/routing/addresses" "$(jq -nc --arg email "$DESTINATION" '{email:$email}')")"
+            address_id="$(printf '%s' "$created" | jq -r '.result.id // empty')"
+            verified="$(printf '%s' "$created" | jq -r '(.result.verified != null)')"
+          fi
+
+          if [ "$verified" != "true" ]; then
+            echo "DESTINATION_VERIFICATION_REQUIRED"
+            comment_issue "Cloudflare destination address created for ${DESTINATION}. Open the verification email from Cloudflare and click Verify email address. Reopen this issue after verification to finish activation."
+            exit 0
+          fi
+
+          comment_issue "✅ Destination verification confirmed. Finishing domain onboarding and the contact forwarding rule now."
+          routing_settings="$(cf GET "/zones/${zone_id}/email/routing")"
+          routing_enabled="$(printf '%s' "$routing_settings" | jq -r '.result.enabled // false')"
+          if [ "$routing_enabled" != "true" ]; then
+            echo "Enabling Cloudflare Email Routing DNS for ${DOMAIN}."
+            cf POST "/zones/${zone_id}/email/routing/dns" '{}' | jq -e '.success == true' >/dev/null
+          fi
+
+          rules="$(cf GET "/zones/${zone_id}/email/routing/rules?per_page=100")"
+          existing_rule_id="$(printf '%s' "$rules" | jq -r --arg alias "$ALIAS" '.result[]? | select(any(.matchers[]?; (.type == "literal" and (.value | ascii_downcase) == ($alias | ascii_downcase)))) | .id' | head -1)"
+
+          rule_body="$(jq -nc --arg alias "$ALIAS" --arg destination "$DESTINATION" '{name:"AGRO-AI emergency business continuity contact", enabled:true, priority:0, matchers:[{type:"literal",field:"to",value:$alias}], actions:[{type:"forward",value:[$destination]}], source:"api"}')"
+
+          if [ -n "$existing_rule_id" ]; then
+            echo "Updating existing route for ${ALIAS}."
+            cf PUT "/zones/${zone_id}/email/routing/rules/${existing_rule_id}" "$rule_body" | jq -e '.success == true' >/dev/null
+          else
+            echo "Creating route for ${ALIAS}."
+            cf POST "/zones/${zone_id}/email/routing/rules" "$rule_body" | jq -e '.success == true' >/dev/null
+          fi
+
+          trap - ERR
+          echo "EMAIL_ROUTING_READY"
+          comment_issue "✅ Email routing is active. Messages sent to ${ALIAS} now forward to ${DESTINATION}."
+
+      - name: Report setup failure
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body "The automated setup stopped safely. No existing non-Cloudflare mail routing was overwritten."

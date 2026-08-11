@@ -8,14 +8,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends build-essential
 COPY agroai_api/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Copy your packages
 COPY agroai/ /app/agroai/
 COPY agroai_api/ /app/agroai_api/
+COPY shared/ /app/shared/
 
 ENV PYTHONUNBUFFERED=1
 ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app:/app/agroai_api
 
 EXPOSE 8000
-CMD ["uvicorn", "agroai_api.app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-
+CMD ["/bin/sh", "/app/agroai_api/start-production.sh"]

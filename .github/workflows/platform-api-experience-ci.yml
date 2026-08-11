@@ -1,0 +1,217 @@
+name: Platform API Experience CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "platform-api/**"
+      - "functions/platform-api/**"
+      - "docs/platform-api-product-topology.md"
+      - "shared/ui-literals.en.*.json"
+      - "figma-enterprise-v4/scripts/check_ui_literal_inventory.py"
+      - "figma-enterprise-v4/src/main.tsx"
+      - "figma-enterprise-v4/public/manifest.webmanifest"
+      - "figma-enterprise-v4/public/platform.webmanifest"
+      - "figma-enterprise-v4/src/app/components/AuthScreen.tsx"
+      - "figma-enterprise-v4/src/app/components/VerifyEmail.tsx"
+      - "figma-enterprise-v4/src/app/components/PlatformApplicationGate.tsx"
+      - "figma-enterprise-v4/src/app/components/PlatformConsole.tsx"
+      - "figma-enterprise-v4/src/app/components/PlatformSafetyNotice.tsx"
+      - "figma-enterprise-v4/src/app/routes.tsx"
+      - "figma-enterprise-v4/src/app/api/client.ts"
+      - "figma-enterprise-v4/tests/platform-api-console-contract.mjs"
+      - "figma-enterprise-v4/tests/platform-application-gate-contract.mjs"
+      - "agroai_api/app/api/v1/auth.py"
+      - "agroai_api/app/api/v1/platform_playground.py"
+      - "agroai_api/app/api/v1/__init__.py"
+      - "agroai_api/app/services/email_verification.py"
+      - "agroai_api/tests/unit/test_platform_product_verification.py"
+      - "agroai_api/tests/unit/test_platform_playground.py"
+      - "agroai_api/tests/unit/test_platform_api_product.py"
+      - "wrangler.toml"
+      - "cloudflare/edge-gateway/src/index.ts"
+      - "cloudflare/edge-gateway/tests/gateway.test.ts"
+      - ".github/workflows/platform-api-experience-ci.yml"
+  push:
+    branches: ["feat/api-platform-experience-v2"]
+    paths:
+      - "platform-api/**"
+      - "functions/platform-api/**"
+      - "docs/platform-api-product-topology.md"
+      - "shared/ui-literals.en.*.json"
+      - "figma-enterprise-v4/scripts/check_ui_literal_inventory.py"
+      - "figma-enterprise-v4/src/main.tsx"
+      - "figma-enterprise-v4/public/manifest.webmanifest"
+      - "figma-enterprise-v4/public/platform.webmanifest"
+      - "figma-enterprise-v4/src/app/components/AuthScreen.tsx"
+      - "figma-enterprise-v4/src/app/components/VerifyEmail.tsx"
+      - "figma-enterprise-v4/src/app/components/PlatformApplicationGate.tsx"
+      - "figma-enterprise-v4/src/app/components/PlatformConsole.tsx"
+      - "figma-enterprise-v4/src/app/components/PlatformSafetyNotice.tsx"
+      - "figma-enterprise-v4/src/app/routes.tsx"
+      - "figma-enterprise-v4/src/app/api/client.ts"
+      - "figma-enterprise-v4/tests/platform-api-console-contract.mjs"
+      - "figma-enterprise-v4/tests/platform-application-gate-contract.mjs"
+      - "agroai_api/app/api/v1/auth.py"
+      - "agroai_api/app/api/v1/platform_playground.py"
+      - "agroai_api/app/api/v1/__init__.py"
+      - "agroai_api/app/services/email_verification.py"
+      - "agroai_api/tests/unit/test_platform_product_verification.py"
+      - "agroai_api/tests/unit/test_platform_playground.py"
+      - "agroai_api/tests/unit/test_platform_api_product.py"
+      - "wrangler.toml"
+      - "cloudflare/edge-gateway/src/index.ts"
+      - "cloudflare/edge-gateway/tests/gateway.test.ts"
+      - ".github/workflows/platform-api-experience-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  public-surface:
+    name: Public docs, accessibility and truthfulness
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: JavaScript syntax check
+        run: |
+          for f in platform-api/assets/*.js; do
+            echo "node --check $f"
+            node --check "$f"
+          done
+      - name: API reference renderer XSS contract
+        run: node platform-api/tests/reference-renderer-contract.mjs
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Structural, accessibility, link, truthfulness and localization checks
+        run: python3 platform-api/tests/validate_platform.py
+      # The dependency-complete Platform API Contract CI owns OpenAPI regeneration.
+
+  localization-delta:
+    name: Generate deterministic Platform UI catalog delta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Generate exact missing catalog entries
+        working-directory: figma-enterprise-v4
+        run: python3 scripts/check_ui_literal_inventory.py --write-delta shared/ui-literals.en.9.json
+      - name: Verify generated catalog closes the complete inventory
+        working-directory: figma-enterprise-v4
+        run: python3 scripts/check_ui_literal_inventory.py --check
+      - uses: actions/upload-artifact@v4
+        with:
+          name: platform-api-ui-literals-${{ github.sha }}
+          path: shared/ui-literals.en.9.json
+          if-no-files-found: error
+          retention-days: 3
+
+  authenticated-console:
+    name: Authenticated console build and browser-secret boundary
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: figma-enterprise-v4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Platform product architecture contract
+        run: node tests/platform-api-console-contract.mjs
+      - name: Platform application authorization contract
+        run: node tests/platform-application-gate-contract.mjs
+      - name: Portal localization preservation
+        run: npm run test:i18n
+      - name: Production build
+        env:
+          VITE_DEPLOYMENT_ENVIRONMENT: production
+          VITE_BUILD_SHA: ${{ github.sha }}
+          VITE_API_BASE_URL: https://api.agroai-pilot.com
+        run: npm run build
+
+  application-and-playground:
+    name: Verification, application review and keyless Playground
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -q -r requirements.txt pytest
+      - name: Compile changed backend modules
+        run: python -m compileall -q app/api/v1/auth.py app/api/v1/platform_playground.py app/api/v1/__init__.py app/services/email_verification.py
+      - name: Execute focused safety suites
+        env:
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"
+        run: >-
+          python -m pytest -p no:debugging -q --tb=short
+          tests/unit/test_platform_product_verification.py
+          tests/unit/test_platform_playground.py
+          tests/unit/test_platform_api_product.py::test_application_submit_review_enrollment_email_dedupe_and_audit
+          tests/unit/test_platform_api_product.py::test_application_isolation_and_spam_limit
+          tests/unit/test_platform_api_product.py::test_live_access_is_review_gated_and_never_auto_approved
+
+  cloudflare-routing:
+    name: Fail-closed Platform API Pages and edge routing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Platform API Pages launch-flag matrix
+        run: node --experimental-strip-types platform-api/tests/pages-routing-contract.mjs
+      - name: Public Pages route contract
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path("functions/platform-api/[[path]].ts").read_text()
+          required = [
+              "PLATFORM_API_MARKETING_ENABLED",
+              "PLATFORM_API_PUBLIC_DOCS_ENABLED",
+              "PLATFORM_API_INDEXING_ENABLED",
+              "STATIC_ROUTES",
+              'surface: "shared"',
+              "PRIVATE_ROBOTS_META",
+              "noindex, nofollow",
+              "Not found",
+              "/platform-api/index.html",
+              "/platform-api/reference.html",
+          ]
+          for item in required:
+              assert item in source, item
+          assert 'url.pathname = "/platform-api/index.html"' not in source
+          assert "mapping.asset" in source
+          assert "options.marketing || options.docs" in source
+          assert 'headers.set("x-robots-tag", "noindex, nofollow")' in source
+          print("Cloudflare Platform API Pages route contract passed")
+          PY
+      - name: Production API edge contract
+        working-directory: cloudflare/edge-gateway
+        run: |
+          npm ci --no-audit --no-fund
+          npm run check
+      - name: Standalone Platform hostname contract
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          wrangler = Path("wrangler.toml").read_text()
+          assert 'pattern = "platform.agroai-pilot.com/v1/*"' in wrangler
+          allowed = next(line for line in wrangler.splitlines() if line.startswith("ALLOWED_ORIGINS ="))
+          assert "https://platform.agroai-pilot.com" in allowed
+          print("Standalone Platform hostname is owned by the production edge")
+          PY

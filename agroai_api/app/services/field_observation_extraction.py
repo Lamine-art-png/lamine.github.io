@@ -384,6 +384,7 @@ def _ground_model_output(
 def _model_extract(
     text: str,
     *,
+    output_language: str | None,
     field_hint: str | None,
     block_hint: str | None,
     crop_hint: str | None,
@@ -417,7 +418,8 @@ def _model_extract(
         "flow_rate_gpm: number|null, equipment: [string], people: [string], "
         "recommended_follow_up: string|null, evidence_requirements: [string], summary: string, "
         "confidence: number 0..1, uncertain_fields: [string]}. "
-        "The observation may be in any language; keep summary in the source language. "
+        f"The observation may be in any language. Write all human-readable output strings in "
+        f"{output_language or 'the source language'}, while keeping schema keys and enum values stable. "
         "NEVER invent numbers, names, fields, times or measurements that are not explicitly in the text. "
         "Prefer field/block/crop names from the authorized vocabulary. "
         "List anything you are unsure about in uncertain_fields."
@@ -477,6 +479,7 @@ def extract_observation(
     workspace_blocks: list[str] | None = None,
     workspace_crops: list[str] | None = None,
     allow_model: bool = True,
+    output_language: str | None = None,
 ) -> FieldObservationExtraction:
     """Public entrypoint: model-routed when configured, deterministic fallback.
 
@@ -495,6 +498,7 @@ def extract_observation(
     if mode in {"auto", "model"} and (text or "").strip():
         result = _model_extract(
             text,
+            output_language=output_language,
             field_hint=field_hint, block_hint=block_hint, crop_hint=crop_hint,
             occurred_at=occurred_at,
             workspace_fields=workspace_fields, workspace_blocks=workspace_blocks,

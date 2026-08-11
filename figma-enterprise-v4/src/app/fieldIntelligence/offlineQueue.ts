@@ -36,6 +36,8 @@ export type CaptureRecord = {
   workspaceId?: string | null;
   captureSource: "voice" | "typed";
   noteText?: string;
+  transcriptPreview?: string;
+  language?: string;
   fieldName?: string;
   blockName?: string;
   crop?: string;
@@ -281,6 +283,7 @@ function toInitiatePayload(record: CaptureRecord): Record<string, unknown> {
     workspace_id: record.workspaceId ?? undefined,
     capture_source: record.captureSource,
     note_text: record.noteText,
+    transcript_preview: record.transcriptPreview,
     field_name: record.fieldName,
     block_name: record.blockName,
     crop: record.crop,
@@ -443,7 +446,10 @@ async function flushRecord(api: FieldApi, clientCaptureId: string): Promise<bool
     record.syncState = "processing";
     assertOwned();
     if (!(await putCaptureOwned(record))) throw new LeaseLostError(clientCaptureId);
-    const completed = await api.complete(record.serverCaptureId || record.clientCaptureId, {});
+    const completed = await api.complete(record.serverCaptureId || record.clientCaptureId, {
+      corrected_transcript: record.transcriptPreview,
+      language: record.language || "en",
+    });
     assertOwned();
     record.observationId = completed?.observation?.id ?? null;
     record.syncState = "synced";

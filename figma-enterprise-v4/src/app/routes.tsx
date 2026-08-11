@@ -2,9 +2,13 @@ import type { ComponentType } from "react";
 import { createBrowserRouter, Navigate } from "react-router";
 import { MainLayout } from "./components/MainLayout";
 import { OperationRouteBoundary } from "./components/OperationRouteBoundary";
+import { PlatformApplicationGate } from "./components/PlatformApplicationGate";
+import { PlatformConsoleApp } from "./components/PlatformConsole";
+import { PlatformSafetyNotice } from "./components/PlatformSafetyNotice";
 import { RouteRecovery } from "./components/RouteRecovery";
 import { VerifyEmailPage } from "./components/VerifyEmail";
 import { AccessAppealPage } from "./components/AccessAppeal";
+import { useAuth } from "./auth/AuthProvider";
 import { useLocale } from "./hooks/useLocale";
 
 function PortalHome() {
@@ -22,6 +26,12 @@ function PortalRouteError() {
   return <div className="min-h-screen bg-[#F6F4EE] px-6 py-12 text-[#10231B]"><div className="mx-auto max-w-[720px] rounded-2xl border border-[#D6DDD0] bg-[#FFFDF8] p-8 shadow-[0_20px_60px_rgba(16,35,27,0.08)]"><div className="text-[12px] font-semibold uppercase tracking-[0.18em] text-[#2D6A4F]">{t("app.recoveryEyebrow")}</div><h1 className="mt-3 text-[30px] font-semibold tracking-tight">{t("routeRecovery.title")}</h1><p className="mt-3 text-[14px] leading-7 text-[#65736A]">{t("routeRecovery.body")}</p><div className="mt-6 flex gap-3"><a href="/" className="rounded-lg bg-[#10231B] px-4 py-2 text-[13px] font-medium text-white">{t("routeRecovery.continue")}</a><a href="/intelligence" className="rounded-lg border border-[#D6DDD0] bg-white px-4 py-2 text-[13px] font-medium text-[#10231B]">{t("routeRecovery.openAsk")}</a><a href="/settings" className="rounded-lg border border-[#D6DDD0] bg-white px-4 py-2 text-[13px] font-medium text-[#10231B]">{t("routeRecovery.settings")}</a></div></div></div>;
 }
 
+function PlatformProduct() {
+  const { platformDeveloper } = useAuth();
+  if (!platformDeveloper) return <PlatformApplicationGate />;
+  return <><PlatformConsoleApp /><PlatformSafetyNotice /></>;
+}
+
 const lazyComponent = (loader: () => Promise<Record<string, unknown>>, exportName: string) => async () => {
   const module = await loader();
   return { Component: module[exportName] as ComponentType };
@@ -30,7 +40,7 @@ const lazyComponent = (loader: () => Promise<Record<string, unknown>>, exportNam
 const operationRoutes = [
   { index: true, lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
   { path: "field-queue", lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
-  { path: "field-intelligence", lazy: lazyComponent(() => import("./components/FieldIntelligence"), "FieldIntelligence") },
+  { path: "field-intelligence", lazy: lazyComponent(() => import("./components/FieldIntelligenceV2"), "FieldIntelligenceV2") },
   { path: "tasks", lazy: lazyComponent(() => import("./components/Overview"), "Overview") },
   { path: "readiness", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "Readiness") },
   { path: "fields", lazy: lazyComponent(() => import("./components/OperatorCockpit"), "Fields") },
@@ -60,14 +70,24 @@ const operationRoutes = [
   { path: "support", lazy: lazyComponent(() => import("./components/SupportPage"), "SupportPage") },
   { path: "settings", lazy: lazyComponent(() => import("./components/SettingsPage"), "SettingsPage") },
   { path: "team", lazy: lazyComponent(() => import("./components/MonetizedTeamV2"), "MonetizedTeamV2") },
-  { path: "developers/api", lazy: lazyComponent(() => import("./components/DevelopersApi"), "DevelopersApi") },
+  { path: "developers/api/billing", element: <Navigate to={`/platform/billing${window.location.search}`} replace /> },
+  { path: "developers/api", element: <Navigate to="/platform" replace /> },
   { path: "onboarding", lazy: lazyComponent(() => import("./components/ProductShell"), "OnboardingPage") },
   { path: "*", Component: RouteRecovery },
 ];
 
-export const router = createBrowserRouter([
+const isPlatformHostname = window.location.hostname.toLowerCase() === "platform.agroai-pilot.com";
+
+const platformRouter = createBrowserRouter([
   { path: "/verify-email", Component: VerifyEmailPage, errorElement: <PortalRouteError /> },
   { path: "/appeal", Component: AccessAppealPage, errorElement: <PortalRouteError /> },
+  { path: "/*", Component: PlatformProduct, errorElement: <PortalRouteError /> },
+]);
+
+const enterpriseRouter = createBrowserRouter([
+  { path: "/verify-email", Component: VerifyEmailPage, errorElement: <PortalRouteError /> },
+  { path: "/appeal", Component: AccessAppealPage, errorElement: <PortalRouteError /> },
+  { path: "/platform/*", Component: PlatformProduct, errorElement: <PortalRouteError /> },
   {
     path: "/",
     Component: MainLayout,
@@ -81,3 +101,5 @@ export const router = createBrowserRouter([
   },
   { path: "*", element: <PortalRouteError /> },
 ]);
+
+export const router = isPlatformHostname ? platformRouter : enterpriseRouter;

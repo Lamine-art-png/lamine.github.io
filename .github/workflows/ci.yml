@@ -8,6 +8,11 @@ on:
       - 'wrangler.toml'
       - '.github/workflows/ci.yml'
       - '.github/workflows/deploy.yml'
+      - '.github/workflows/deploy-platform-api-marketing.yml'
+      - '.github/workflows/platform-api-private-beta-diagnostics.yml'
+      - '.github/workflows/production-readiness-snapshot.yml'
+      - '.github/scripts/resolve-backend-release-sha.sh'
+      - 'scripts/check_backend_release_identity_contract.py'
       - 'figma-enterprise-v4/**'
   push:
     branches:
@@ -62,7 +67,7 @@ jobs:
       - name: Verify single Alembic head
         run: |
           test "$(alembic heads | wc -l)" -eq 1
-          test "$(alembic heads)" = "027_merge_fi_and_platform_api (head)"
+          test "$(alembic heads)" = "027_field_intelligence_launch (head)"
       - name: Upgrade clean temporary database through head
         env:
           DATABASE_URL: sqlite:////tmp/agroai-commercial-control-plane.db
@@ -75,6 +80,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Validate backend release identity semantics
+        run: |
+          python3 scripts/check_backend_release_identity_contract.py
+          test -n "$(bash .github/scripts/resolve-backend-release-sha.sh)"
       - uses: actions/setup-node@v4
         with:
           node-version: '22'

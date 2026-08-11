@@ -1,0 +1,218 @@
+name: AGRO-AI emergency production controls
+
+on:
+  workflow_dispatch:
+  push:
+    branches: ["main"]
+    paths:
+      - "cloudflare/platform-api-marketing-worker/src/emergency.ts"
+      - "cloudflare/platform-api-marketing-worker/wrangler.toml"
+      - ".github/workflows/emergency-website-continuity.yml"
+  issues:
+    types: [opened, reopened]
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  deploy:
+    if: ${{ github.event_name != 'issues' || (github.actor == github.repository_owner && github.event.issue.title == '[ops] Deploy AGRO-AI contact and socials') }}
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      ISSUE_NUMBER: ${{ github.event.issue.number || '322' }}
+      CONFIG: cloudflare/platform-api-marketing-worker/wrangler.toml
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate contact release
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          node cloudflare/platform-api-marketing-worker/tests/contract.mjs
+          npx --yes wrangler@4.107.0 deploy --dry-run --config "$CONFIG"
+
+      - name: Deploy contact and social surfaces
+        shell: bash
+        run: npx --yes wrangler@4.107.0 deploy --config "$CONFIG"
+
+      - name: Verify live website and contact intake
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p proof
+          ready=0
+          for attempt in $(seq 1 30); do
+            contact_code="$(curl -sS -L --connect-timeout 5 --max-time 20 -o proof/contact.html -w '%{http_code}' https://agroai-pilot.com/contact || true)"
+            home_code="$(curl -sS -L --connect-timeout 5 --max-time 20 -o proof/home.html -w '%{http_code}' https://agroai-pilot.com/ || true)"
+            if [ "$contact_code" = "200" ] && [ "$home_code" = "200" ] && \
+               grep -F 'Contact AGRO-AI' proof/contact.html >/dev/null && \
+               grep -F 'contact@agroai-pilot.com' proof/contact.html >/dev/null && \
+               grep -F 'https://www.linkedin.com/company/agro-ai-inc/' proof/contact.html >/dev/null && \
+               grep -F 'https://www.instagram.com/agroai.inc/' proof/contact.html >/dev/null && \
+               grep -F 'https://www.youtube.com/channel/UCd3tQLAOtMmjFhRNVdU08tA' proof/contact.html >/dev/null && \
+               grep -F 'agroai-social-footer' proof/home.html >/dev/null && \
+               ! grep -F 'agroai-continuity-banner' proof/home.html >/dev/null; then
+              ready=1
+              break
+            fi
+            sleep 5
+          done
+          if [ "$ready" -ne 1 ]; then
+            echo "AGRO-AI contact and social surfaces failed smoke verification."
+            exit 1
+          fi
+
+          intake_code="$(curl -sS --connect-timeout 5 --max-time 25 \
+            -o proof/intake.json -w '%{http_code}' \
+            -X POST https://api.agroai-pilot.com/v1/sales/contact \
+            -H 'content-type: application/json' \
+            -H 'accept: application/json' \
+            --data "{\"type\":\"sales\",\"priority\":\"low\",\"name\":\"AGRO-AI Production Smoke\",\"email\":\"daabolaamiine@gmail.com\",\"company\":\"AGRO-AI Inc.\",\"subject\":\"Contact page production smoke\",\"message\":\"Automated production verification. No follow-up required.\",\"source_page\":\"contact-page-smoke\",\"metadata\":{\"automated_smoke\":true}}" || true)"
+          test "$intake_code" = "200"
+          jq -e '.status == "received" and (.request_id | length > 0)' proof/intake.json >/dev/null
+
+          if [ "${GITHUB_EVENT_NAME}" = "issues" ]; then
+            gh issue comment "$ISSUE_NUMBER" --body "✅ AGRO-AI contact and social surfaces are live. The interruption banner is removed, **contact@agroai-pilot.com** is published, LinkedIn/Instagram/YouTube links are active, and the production contact intake passed smoke verification."
+          fi
+
+      - name: Report failure
+        if: ${{ failure() && github.event_name == 'issues' }}
+        shell: bash
+        run: gh issue comment "$ISSUE_NUMBER" --body "❌ AGRO-AI contact and social deployment failed. Review this workflow run before announcing completion."
+
+  publish-news:
+    if: ${{ github.event_name == 'issues' && github.actor == github.repository_owner && github.event.issue.title == '[ops] Publish AGRO-AI newsroom announcements' }}
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      ISSUE_NUMBER: ${{ github.event.issue.number }}
+    steps:
+      - name: Check out merged main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Validate exact article sources and Worker bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${CLOUDFLARE_API_TOKEN:-}"
+          test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
+          test -s client/public/news/agro-ai-connected-john-deere-operations-center/index.html
+          test -s client/public/news/agro-ai-connected-john-deere-operations-center/cover.webp
+          test -s client/public/news/introducing-agro-ai-field-intelligence/index.html
+          grep -F 'AGRO-AI connects with John Deere Operations Center™' client/public/news/agro-ai-connected-john-deere-operations-center/index.html >/dev/null
+          grep -F 'Agricultural operations do not suffer from a shortage of data.' client/public/news/agro-ai-connected-john-deere-operations-center/index.html >/dev/null
+          grep -F "Access is initiated through the user's Operations Center connection." client/public/news/agro-ai-connected-john-deere-operations-center/index.html >/dev/null
+          grep -F '<meta name="author" content="AGRO-AI"' client/public/news/agro-ai-connected-john-deere-operations-center/index.html >/dev/null
+          grep -F 'Introducing AGRO-AI Field Intelligence' client/public/news/introducing-agro-ai-field-intelligence/index.html >/dev/null
+          npx --yes wrangler@4.107.0 deploy --dry-run --config cloudflare/field-intelligence-launch-worker/wrangler.toml
+
+      - name: Deploy exact newsroom and article routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 deploy --config cloudflare/field-intelligence-launch-worker/wrangler.toml
+
+      - name: Remove obsolete broad newsroom routes only
+        shell: bash
+        run: |
+          set -euo pipefail
+          auth_header="Authorization: Bearer ${CLOUDFLARE_API_TOKEN}"
+          api="https://api.cloudflare.com/client/v4"
+          zone_response="$(curl -fsS -H "$auth_header" -H 'Content-Type: application/json' "${api}/zones?name=agroai-pilot.com&account.id=${CLOUDFLARE_ACCOUNT_ID}")"
+          zone_id="$(jq -r '.result[0].id // empty' <<<"$zone_response")"
+          test -n "$zone_id"
+          route_response="$(curl -fsS -H "$auth_header" -H 'Content-Type: application/json' "${api}/zones/${zone_id}/workers/routes")"
+          jq -r '.result[] | select(
+              .pattern == "agroai-pilot.com/news*" or
+              .pattern == "agroai-pilot.com/news/*" or
+              .pattern == "agroai-pilot.com/news/field-intelligence-newsroom.js" or
+              .pattern == "agroai-pilot.com/news/field-intelligence-newsroom.css"
+            ) | [.id, .pattern] | @tsv' <<<"$route_response" > obsolete-newsroom-routes.tsv
+          while IFS=$'\t' read -r route_id route_pattern; do
+            [ -n "${route_id:-}" ] || continue
+            echo "Deleting obsolete broad route: ${route_pattern}"
+            delete_response="$(curl -fsS -X DELETE -H "$auth_header" -H 'Content-Type: application/json' "${api}/zones/${zone_id}/workers/routes/${route_id}")"
+            test "$(jq -r '.success' <<<"$delete_response")" = "true"
+          done < obsolete-newsroom-routes.tsv
+
+      - name: Verify native newsroom and both public announcements
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p proof
+          ready=0
+          for attempt in $(seq 1 48); do
+            bust="$(date +%s)-${attempt}"
+            origin_code="$(curl -sS -L --connect-timeout 5 --max-time 25 -o proof/origin.html -w '%{http_code}' "https://agroai-343.pages.dev/news?verify=${bust}" || true)"
+            news_code="$(curl -sS -L --connect-timeout 5 --max-time 25 -D proof/news.headers -o proof/news.html -w '%{http_code}' "https://agroai-pilot.com/news?verify=${bust}" || true)"
+            script_code="$(curl -sS -L --connect-timeout 5 --max-time 25 -o proof/restore.js -w '%{http_code}' "https://agroai-pilot.com/news/agroai-news-card-restore.js?verify=${bust}" || true)"
+            jd_code="$(curl -sS -L --connect-timeout 5 --max-time 25 -o proof/jd.html -w '%{http_code}' "https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center?verify=${bust}" || true)"
+            jd_cover_code="$(curl -sS -L --connect-timeout 5 --max-time 25 -D proof/jd-cover.headers -o proof/jd-cover.webp -w '%{http_code}' "https://agroai-pilot.com/news/agro-ai-connected-john-deere-operations-center/cover.webp?verify=${bust}" || true)"
+            field_code="$(curl -sS -L --connect-timeout 5 --max-time 25 -o proof/field.html -w '%{http_code}' "https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence?verify=${bust}" || true)"
+            field_cover_code="$(curl -sS -L --connect-timeout 5 --max-time 25 -D proof/field-cover.headers -o proof/field-cover.bin -w '%{http_code}' "https://agroai-pilot.com/news/introducing-agro-ai-field-intelligence/cover.webp?verify=${bust}" || true)"
+
+            if [ "$origin_code" = "200" ] && [ "$news_code" = "200" ] && [ "$script_code" = "200" ] && [ "$jd_code" = "200" ] && [ "$jd_cover_code" = "200" ] && [ "$field_code" = "200" ] && [ "$field_cover_code" = "200" ] && \
+               grep -Fi 'x-agroai-newsroom-source: native-pages-origin' proof/news.headers >/dev/null && \
+               grep -F 'agroai-news-card-restore.js' proof/news.html >/dev/null && \
+               grep -F 'Introducing AGRO-AI Field Intelligence' proof/restore.js >/dev/null && \
+               grep -F '/news/introducing-agro-ai-field-intelligence' proof/restore.js >/dev/null && \
+               grep -F 'AGRO-AI connects with John Deere Operations Center™' proof/restore.js >/dev/null && \
+               grep -F '/news/agro-ai-connected-john-deere-operations-center' proof/restore.js >/dev/null && \
+               grep -F 'AGRO-AI connects with John Deere Operations Center™' proof/jd.html >/dev/null && \
+               grep -F 'Agricultural operations do not suffer from a shortage of data.' proof/jd.html >/dev/null && \
+               grep -F "Access is initiated through the user's Operations Center connection." proof/jd.html >/dev/null && \
+               grep -F '<meta name="author" content="AGRO-AI"' proof/jd.html >/dev/null && \
+               grep -F 'Tuesday, July 28, 2026 at 8:00 AM PDT' proof/jd.html >/dev/null && \
+               grep -F 'San Francisco, California' proof/jd.html >/dev/null && \
+               grep -F 'https://app.agroai-pilot.com/integrations' proof/jd.html >/dev/null && \
+               grep -F 'https://agroai-pilot.com/enterprise-portal' proof/jd.html >/dev/null && \
+               grep -F 'https://agroai-pilot.com/book-a-demo' proof/jd.html >/dev/null && \
+               grep -F 'https://agroai-pilot.com/platform-api/' proof/jd.html >/dev/null && \
+               grep -F 'https://www.linkedin.com/company/agro-ai-inc/' proof/jd.html >/dev/null && \
+               grep -F 'https://www.instagram.com/agroai.inc/' proof/jd.html >/dev/null && \
+               grep -F 'https://www.youtube.com/channel/UCd3tQLAOtMmjFhRNVdU08tA' proof/jd.html >/dev/null && \
+               grep -Fi 'content-type: image/webp' proof/jd-cover.headers >/dev/null && \
+               grep -Fi 'x-agroai-asset-source: reviewed-john-deere-cover' proof/jd-cover.headers >/dev/null && \
+               grep -F 'Introducing AGRO-AI Field Intelligence' proof/field.html >/dev/null && \
+               grep -F 'GiM6WZY0HG0' proof/field.html >/dev/null && \
+               grep -Fi 'x-agroai-cover-target: 3840x2160' proof/field-cover.headers >/dev/null; then
+              test "$(wc -c < proof/jd-cover.webp)" -gt 10000
+              python3 - <<'PY'
+from pathlib import Path
+import re
+origin = Path('proof/origin.html').read_text()
+live = Path('proof/news.html').read_text()
+clean = re.sub(r'<script src="/news/agroai-news-card-restore\.js" defer data-agroai-news-card-restoration="true"></script>', '', live, count=1)
+assert clean == origin, 'native newsroom markup changed beyond the one deferred restoration script'
+PY
+              ready=1
+              break
+            fi
+            sleep 5
+          done
+          test "$ready" = "1"
+
+      - name: Report verified news publication
+        shell: bash
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body $'✅ **Production publication verified live.**\n\n- Native newsroom layout is intact.\n- The reviewed John Deere article is live with the supplied cover, AGRO-AI author metadata, approved wording, date/location, CTAs, and social links.\n- The Field Intelligence announcement article is live and its newsroom card is restored.\n- Existing newsroom markup is unchanged except for one deferred script that clones the native card structure for these two announcements.\n\nVerified against the actual public URLs after the Cloudflare deployment.'
+
+      - name: Report news publication failure
+        if: ${{ failure() }}
+        shell: bash
+        run: |
+          gh issue comment "$ISSUE_NUMBER" --body $'❌ **Production publication failed verification.**\n\nThe workflow did not prove all required live surfaces. Do not announce completion. Review the failed workflow step and correct it before closing this issue.'

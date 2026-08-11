@@ -33,11 +33,7 @@ secret is configured.
 
 ## Readiness Checks
 
-- The required Alembic tail branches at `023_field_intelligence` into two independent, additive feature tails that are reconciled by a single merge revision:
-  - `… → 023_field_intelligence → 024_field_intelligence_launch`
-  - `… → 023_field_intelligence → 024_platform_api_programs → 025_platform_api_commerce → 026_platform_api_operations`
-  - both are merged by `027_merge_fi_and_platform_api`.
-  `alembic heads` must return only `027_merge_fi_and_platform_api`.
+- The required linear Alembic tail is `019_account_verification` → `020_platform_api_private_beta` → `021_platform_api_hardening` → `022_account_access_appeals` → `023_field_intelligence` → `024_platform_api_programs` → `025_platform_api_commerce` → `026_platform_api_operations` → `027_field_intelligence_launch`; `alembic heads` must return only `027_field_intelligence_launch`.
 - Portal JWT and Platform API key access share the same server-authoritative organization policy. Only `approved` and `approved_legacy` organizations may authenticate; changing the persisted organization status invalidates existing keys on their next request.
 - Portal readiness remains `/v1/readiness`.
 - Platform API readiness is `/v1/platform/health`.

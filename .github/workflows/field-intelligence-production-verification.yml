@@ -1,0 +1,271 @@
+name: Field Intelligence Production Verification
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - agroai_api/app/api/v1/__init__.py
+      - agroai_api/app/api/v1/field_intelligence.py
+      - agroai_api/app/services/field_intelligence.py
+      - agroai_api/app/services/field_intelligence_operating_loop_runtime.py
+      - agroai_api/app/services/field_intelligence_vision_extension.py
+      - agroai_api/app/services/field_live_rate_limit.py
+      - agroai_api/app/services/field_observation_extraction.py
+      - agroai_api/app/services/field_video.py
+      - agroai_api/app/services/field_vision.py
+      - cloudflare/edge-gateway/src/edge-main-v3.ts
+      - figma-enterprise-v4/package.json
+      - figma-enterprise-v4/src/app/api/client.ts
+      - figma-enterprise-v4/src/app/components/FieldIntelligenceV2.tsx
+      - figma-enterprise-v4/src/app/fieldIntelligence/FieldMapV2.tsx
+      - figma-enterprise-v4/src/app/fieldIntelligence/directWorkflowRuntime.ts
+      - figma-enterprise-v4/src/app/fieldIntelligence/offlineQueue.ts
+      - figma-enterprise-v4/src/app/fieldIntelligence/operatingLoopContextGuard.ts
+      - figma-enterprise-v4/src/app/fieldIntelligence/operatingLoopRuntime.ts
+      - figma-enterprise-v4/src/app/i18n.ts
+      - figma-enterprise-v4/src/app/portalLiteralCatalog.ts
+      - figma-enterprise-v4/src/main.tsx
+      - figma-enterprise-v4/tests/field-intelligence-operating-loop-contract.mjs
+      - shared/ui-dynamic-copy-field-intelligence.en.json
+      - .github/workflows/field-intelligence-production-verification.yml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/field-intelligence-production-verification.yml
+  pull_request_target:
+    branches:
+      - main
+    paths:
+      - .github/workflows/field-intelligence-production-verification.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: field-intelligence-production-verification
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      BACKEND_ORIGIN: https://api-preview.agroai-pilot.com
+      PUBLIC_ORIGIN: https://app.agroai-pilot.com
+      EVIDENCE_ISSUE: "352"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve exact backend release identity
+        id: identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          backend_sha="$(bash .github/scripts/resolve-backend-release-sha.sh)"
+          echo "backend_sha=${backend_sha}" >> "$GITHUB_OUTPUT"
+          echo "EXPECTED_BACKEND_SHA=${backend_sha}" >> "$GITHUB_ENV"
+
+      - name: Record production verification start
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
+            -f body="Production verification started for Field Intelligence release \`${GITHUB_SHA}\`. Expected Render backend identity: \`${EXPECTED_BACKEND_SHA}\`. Verifying exact backend identity, edge routing, the contextual observation workflow, the field-scale spatial workspace, and the deployed portal bundle."
+
+      - name: Verify exact Render backend build and deployed routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          ready=0
+          for attempt in $(seq 1 120); do
+            payload="$(curl --fail --silent --show-error --max-time 20 "${BACKEND_ORIGIN}/v1/health" 2>/dev/null || true)"
+            if PAYLOAD="$payload" python3 - <<'PY'
+          import json, os, sys
+          try:
+              value = json.loads(os.environ["PAYLOAD"])
+          except Exception:
+              sys.exit(1)
+          expected = os.environ["EXPECTED_BACKEND_SHA"]
+          sys.exit(0 if value.get("status") == "ok" and value.get("build_sha") == expected else 1)
+          PY
+            then
+              printf '%s\n' "$payload" > evidence/backend-health.json
+              ready=1
+              break
+            fi
+            sleep 10
+          done
+          test "$ready" -eq 1
+          curl --fail --silent --show-error --max-time 30 "${BACKEND_ORIGIN}/openapi.json" -o evidence/openapi.json
+          python3 - <<'PY'
+          import json
+          value = json.load(open("evidence/openapi.json", encoding="utf-8"))
+          paths = value.get("paths") or {}
+          required = [
+              "/v1/field-intelligence/live-analysis",
+              "/v1/field-intelligence/live-transcription",
+              "/v1/field-intelligence/observations/{observation_id}/tasks",
+          ]
+          for route_name in required:
+              route = paths.get(route_name) or {}
+              assert "post" in route, f"deployed backend does not expose POST {route_name}"
+          print("exact_backend_and_operating_loop_routes=ok")
+          PY
+
+      - name: Verify Cloudflare production edge
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --max-time 30 "${PUBLIC_ORIGIN}/v1/edge-health" -o evidence/edge-health.json
+          python3 - <<'PY'
+          import json
+          value = json.load(open("evidence/edge-health.json", encoding="utf-8"))
+          assert value.get("status") == "ok", value
+          print("edge_health=ok")
+          PY
+          for route in live-analysis live-transcription; do
+            code="$(curl --silent --show-error --output "evidence/${route}-unauthenticated.txt" --write-out '%{http_code}' \
+              --max-time 30 -X POST "${PUBLIC_ORIGIN}/v1/field-intelligence/${route}" || true)"
+            case "$code" in
+              401|403|422) ;;
+              *) echo "Unexpected unauthenticated ${route} status: $code"; exit 1 ;;
+            esac
+            printf '%s\n' "$code" > "evidence/${route}-status.txt"
+          done
+          task_code="$(curl --silent --show-error --output evidence/task-create-unauthenticated.txt --write-out '%{http_code}' \
+            --max-time 30 -X POST "${PUBLIC_ORIGIN}/v1/field-intelligence/observations/production-proof/tasks" \
+            -H 'content-type: application/json' -d '{}' || true)"
+          case "$task_code" in
+            401|403|404|422) ;;
+            *) echo "Unexpected unauthenticated observation-task status: $task_code"; exit 1 ;;
+          esac
+          printf '%s\n' "$task_code" > evidence/task-create-status.txt
+
+      - name: Verify exact production portal bundle after deployment convergence
+        shell: bash
+        run: |
+          set -euo pipefail
+          ready=0
+          for attempt in $(seq 1 90); do
+            rm -rf evidence/portal-assets
+            mkdir -p evidence/portal-assets
+            : > evidence/portal-queue.txt
+            : > evidence/portal-seen.txt
+            cache_key="${GITHUB_SHA}-${attempt}-$(date +%s)"
+
+            if ! curl --fail --silent --show-error --location --max-time 20 \
+              "${PUBLIC_ORIGIN}/?fi_release=${cache_key}" -o evidence/portal-index.html; then
+              sleep 5
+              continue
+            fi
+
+            title="$(sed -n 's:.*<title>\(.*\)</title>.*:\1:p' evidence/portal-index.html | head -1)"
+            if [ "$title" != "AGRO-AI Enterprise Portal" ]; then
+              sleep 5
+              continue
+            fi
+
+            grep -oE '/assets/[A-Za-z0-9._/-]+\.js' evidence/portal-index.html | sed 's#^/##' > evidence/portal-queue.txt || true
+            if [ ! -s evidence/portal-queue.txt ]; then
+              sleep 5
+              continue
+            fi
+
+            fetch_failed=0
+            for pass in 1 2 3 4; do
+              sort -u evidence/portal-queue.txt -o evidence/portal-queue.txt
+              cp evidence/portal-queue.txt evidence/portal-pass-queue.txt
+              while IFS= read -r asset; do
+                [ -n "$asset" ] || continue
+                grep -Fx "$asset" evidence/portal-seen.txt >/dev/null 2>&1 && continue
+                echo "$asset" >> evidence/portal-seen.txt
+                target="evidence/portal-assets/$(printf '%s' "$asset" | tr '/' '_')"
+                if ! curl --fail --silent --show-error --max-time 30 \
+                  "${PUBLIC_ORIGIN}/${asset}?fi_release=${cache_key}" -o "$target"; then
+                  fetch_failed=1
+                  break
+                fi
+                grep -oE 'assets/[A-Za-z0-9._/-]+\.js' "$target" >> evidence/portal-queue.txt || true
+                grep -oE '\./[A-Za-z0-9._/-]+\.js' "$target" | sed 's#^\./#assets/#' >> evidence/portal-queue.txt || true
+              done < evidence/portal-pass-queue.txt
+              [ "$fetch_failed" -eq 0 ] || break
+            done
+            [ "$fetch_failed" -eq 0 ] || { sleep 5; continue; }
+
+            if ! compgen -G 'evidence/portal-assets/*' >/dev/null; then
+              sleep 5
+              continue
+            fi
+            cat evidence/portal-assets/* > evidence/portal-all-js.txt
+
+            markers_ok=1
+            for marker in \
+              '/v1/field-intelligence/live-analysis' \
+              '/v1/field-intelligence/live-transcription' \
+              'human_review_required' \
+              'Starting live camera' \
+              'Live multilingual captions active' \
+              'One observation. One operating loop.' \
+              'Observation to action' \
+              'Recommended next action' \
+              'Task created and linked' \
+              'field_observation_id' \
+              'source_observation_id' \
+              '/tasks?task_id=' \
+              'field-intelligence-map' \
+              'The transcript, media analysis, evidence, uncertainty, AGRO-AI discussion, and task stay linked.'; do
+              if ! grep -F "$marker" evidence/portal-all-js.txt >/dev/null; then
+                printf 'missing marker on attempt %s: %s\n' "$attempt" "$marker" > evidence/portal-last-missing-marker.txt
+                markers_ok=0
+                break
+              fi
+            done
+
+            if [ "$markers_ok" -eq 1 ]; then
+              ready=1
+              printf '%s\n' "$cache_key" > evidence/portal-release-cache-key.txt
+              break
+            fi
+            sleep 5
+          done
+
+          test "$ready" -eq 1
+          printf 'portal_capture_understand_decide_act_verify_map_bundle=ok\n'
+
+      - name: Record production verification success
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          backend_sha="$(python3 -c 'import json; print(json.load(open("evidence/backend-health.json"))["build_sha"])')"
+          edge_status="$(python3 -c 'import json; print(json.load(open("evidence/edge-health.json"))["status"])')"
+          analysis_status="$(cat evidence/live-analysis-status.txt)"
+          speech_status="$(cat evidence/live-transcription-status.txt)"
+          task_status="$(cat evidence/task-create-status.txt)"
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
+            -f body="✅ **Field Intelligence coherent workflow + spatial workspace verified in production**\n\n- verification release: \`${GITHUB_SHA}\`\n- exact Render backend build: \`${backend_sha}\`\n- deployed OpenAPI contains live analysis, live transcription, and observation task creation routes\n- Cloudflare edge health: \`${edge_status}\`\n- unauthenticated live-analysis rejected safely with HTTP \`${analysis_status}\`\n- unauthenticated live-transcription rejected safely with HTTP \`${speech_status}\`\n- unauthenticated observation-task creation rejected safely with HTTP \`${task_status}\`\n- production portal bundle contains the exact linked-observation Ask context, durable source-linked task flow, task deep links, the five-stage operating loop, and the field-scale observation map actions\n\nThe deployed product loop is now Capture → Understand → Decide → Act → Verify. The map is part of that loop rather than a standalone geography view."
+
+      - name: Record production verification failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          missing="$(cat evidence/portal-last-missing-marker.txt 2>/dev/null || true)"
+          gh api "repos/${GITHUB_REPOSITORY}/issues/${EVIDENCE_ISSUE}/comments" \
+            -f body="❌ Field Intelligence production verification failed for release \`${GITHUB_SHA}\` with expected backend \`${EXPECTED_BACKEND_SHA}\`. ${missing} Review Actions run \`${GITHUB_RUN_ID}\`; do not represent the coherent workflow/map as production-verified until this gate passes."
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: field-intelligence-production-verification-${{ github.sha }}
+          path: evidence/
+          if-no-files-found: ignore
+          retention-days: 30
+
+# Base-branch trigger for production verification only.

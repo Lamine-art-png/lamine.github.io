@@ -14,9 +14,16 @@ from . import billing as billing_module  # noqa: E402,F401
 from .router_compat import materialize_included_routes  # noqa: E402
 from app.services.ask_agro_ai_commercial_policy import install_ask_agro_ai_commercial_policy  # noqa: E402
 from app.services.commercial_billing_lifecycle import install_commercial_billing_lifecycle  # noqa: E402
+from app.services.i18n_translation_resilience import install_i18n_translation_resilience  # noqa: E402
+from app.services.field_intelligence_plan_access import install_field_intelligence_plan_access  # noqa: E402
+from app.services.field_intelligence_operating_loop_runtime import install_field_intelligence_operating_loop  # noqa: E402
+from . import i18n as i18n_module  # noqa: E402
 
 install_ask_agro_ai_commercial_policy()
 install_commercial_billing_lifecycle()
+install_i18n_translation_resilience(i18n_module)
+install_field_intelligence_plan_access()
+install_field_intelligence_operating_loop()
 
 from . import brain as brain_module  # noqa: E402
 from . import brain_safety as brain_safety_module  # noqa: E402
@@ -40,6 +47,7 @@ from . import connector_launch_secure as launch_secure_module  # noqa: E402
 from . import connector_oauth_completion as oauth_completion_module  # noqa: E402
 from . import connectors as connector_compat_module  # noqa: E402
 from . import product_shell as product_shell_module  # noqa: E402
+from . import sales_contact_notifications as sales_contact_notifications_module  # noqa: E402
 from . import monetization_convergence as monetization_module  # noqa: E402
 from . import non_customer_access as non_customer_access_module  # noqa: E402
 from . import ask_agro_ai_paywall as ask_agro_ai_paywall_module  # noqa: E402
@@ -88,6 +96,18 @@ def _remove_duplicate_product_checkout() -> None:
     ]
 
 
+def _replace_sales_contact_route() -> None:
+    product_shell_module.router.routes[:] = [
+        route
+        for route in product_shell_module.router.routes
+        if not (
+            getattr(route, "path", "") == "/sales/contact"
+            and "POST" in set(getattr(route, "methods", None) or ())
+        )
+    ]
+    product_shell_module.router.include_router(sales_contact_notifications_module.router)
+
+
 def _remove_shadow_ask_execution_routes() -> None:
     """Keep one mounted route per paid inference path.
 
@@ -128,6 +148,7 @@ apply_catalog_packaging(connector_compat_module.CATALOG)
 install_commercial_upload_metering((connector_module.router, connector_compat_module.router))
 
 _remove_duplicate_product_checkout()
+_replace_sales_contact_route()
 _remove_shadow_ask_execution_routes()
 product_shell_module.router.include_router(monetization_module.router)
 product_shell_module.router.include_router(non_customer_access_module.router)
@@ -135,3 +156,11 @@ product_shell_module.router.include_router(ask_agro_ai_paywall_module.router)
 product_shell_module.router.include_router(outreach_router)
 
 _hide_compat_schema_shadows()
+
+# Mount the authenticated, test-only Playground into the existing Platform API
+# router without creating a second API or authentication surface.
+from . import platform_api as platform_api_module  # noqa: E402
+from . import platform_playground as platform_playground_module  # noqa: E402
+
+platform_api_module.router.include_router(platform_playground_module.router)
+materialize_included_routes(platform_api_module.router)

@@ -1,0 +1,46 @@
+name: Platform API Contract CI
+
+# Guards the developer platform against contract drift. The docs/reference are
+# generated from platform-api/contract/platform_api_openapi.json, which must
+# always equal what the *real backend* produces. This job regenerates the
+# contract from the backend and fails when:
+#   * the committed docs snapshot is out of date,
+#   * the canonical digest does not match the backend's reviewed snapshot,
+#   * any private / admin / developer-control-plane route leaks publicly,
+#   * a documented path is not under /platform/.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "platform-api/contract/**"
+      - "agroai_api/app/api/v1/platform_api.py"
+      - "agroai_api/app/platform_api/route_manifest.py"
+      - "agroai_api/tests/contracts/**"
+      - ".github/workflows/platform-api-contract-ci.yml"
+  push:
+    branches:
+      - "feat/api-platform-experience-v2"
+    paths:
+      - "platform-api/**"
+      - "agroai_api/app/api/v1/platform_api.py"
+      - "agroai_api/app/platform_api/route_manifest.py"
+      - ".github/workflows/platform-api-contract-ci.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend dependencies
+        working-directory: agroai_api
+        run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
+      - name: Verify docs contract matches the real backend
+        run: python3 platform-api/contract/generate_contract.py --check

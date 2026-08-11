@@ -1,0 +1,4204 @@
+{
+  "components": {
+    "responses": {
+      "StandardError": {
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/StandardError"
+            }
+          }
+        },
+        "description": "Standard Platform API error",
+        "headers": {
+          "RateLimit-Limit": {
+            "description": "Effective request limit.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          "RateLimit-Remaining": {
+            "description": "Requests remaining in the limiting window.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          "RateLimit-Reset": {
+            "description": "Unix timestamp when the limiting window resets.",
+            "schema": {
+              "type": "integer"
+            }
+          },
+          "X-Request-Id": {
+            "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "ActionPlanRequest": {
+        "properties": {
+          "action_type": {
+            "type": "string"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "provider_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "resource_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "action_type"
+        ],
+        "type": "object"
+      },
+      "ActionPlanResponse": {
+        "properties": {
+          "action_type": {
+            "type": "string"
+          },
+          "execution_enabled": {
+            "const": false,
+            "type": "boolean"
+          },
+          "message": {
+            "type": "string"
+          },
+          "requires_customer_approval": {
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "planned"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "action_type",
+          "execution_enabled",
+          "requires_customer_approval"
+        ],
+        "type": "object"
+      },
+      "FieldPage": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Page"
+          }
+        ]
+      },
+      "FieldPatch": {
+        "additionalProperties": false,
+        "properties": {
+          "boundary": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/GeoJsonBoundary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "crop": {
+            "maxLength": 120,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 2,
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "FieldResponse": {
+        "properties": {
+          "field": {
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "required": [
+          "field"
+        ],
+        "type": "object"
+      },
+      "FieldWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "area_hectares": {
+            "exclusiveMinimum": 0,
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "boundary": {
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/GeoJsonBoundary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "crop": {
+            "maxLength": 120,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "external_id": {
+            "maxLength": 200,
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "name": {
+            "maxLength": 200,
+            "minLength": 2,
+            "type": "string"
+          },
+          "workspace_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "type": "object"
+      },
+      "GenericResponse": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "GeoJsonBoundary": {
+        "additionalProperties": false,
+        "properties": {
+          "coordinates": {
+            "items": {},
+            "type": "array"
+          },
+          "type": {
+            "enum": [
+              "Polygon",
+              "MultiPolygon"
+            ],
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "coordinates"
+        ],
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "developer_control_plane_enabled": {
+            "type": "boolean"
+          },
+          "earthdaily_status": {
+            "type": "string"
+          },
+          "physical_irrigation_commands": {
+            "enum": [
+              "disabled"
+            ],
+            "type": "string"
+          },
+          "platform_api_enabled": {
+            "type": "boolean"
+          },
+          "status": {
+            "enum": [
+              "ready",
+              "disabled",
+              "not_ready"
+            ],
+            "type": "string"
+          },
+          "valley_irrigation_status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "platform_api_enabled"
+        ],
+        "type": "object"
+      },
+      "JobPage": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Page"
+          }
+        ]
+      },
+      "JobResponse": {
+        "properties": {
+          "job": {
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "required": [
+          "job"
+        ],
+        "type": "object"
+      },
+      "ObservationBatch": {
+        "additionalProperties": false,
+        "properties": {
+          "observations": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "maxItems": 1000,
+            "minItems": 1,
+            "type": "array"
+          }
+        },
+        "required": [
+          "observations"
+        ],
+        "type": "object"
+      },
+      "ObservationPage": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Page"
+          }
+        ]
+      },
+      "Page": {
+        "properties": {
+          "has_more": {
+            "type": "boolean"
+          },
+          "items": {
+            "items": {},
+            "type": "array"
+          },
+          "next_cursor": {
+            "type": [
+              "string",
+              "null"
+            ]
+          }
+        },
+        "type": "object"
+      },
+      "PrincipalResponse": {
+        "properties": {
+          "principal": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "principal"
+        ],
+        "type": "object"
+      },
+      "ProviderCredentialProbe": {
+        "properties": {
+          "credentials": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "provider_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_id",
+          "credentials"
+        ],
+        "type": "object"
+      },
+      "ProviderListResponse": {
+        "properties": {
+          "providers": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "providers"
+        ],
+        "type": "object"
+      },
+      "ProviderResponse": {
+        "properties": {
+          "connections": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array"
+          },
+          "provider": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "status": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "status",
+          "provider",
+          "connections"
+        ],
+        "type": "object"
+      },
+      "ProviderSyncRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "connection_id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "connection_id"
+        ],
+        "type": "object"
+      },
+      "ProviderValidationResponse": {
+        "properties": {
+          "provider_id": {
+            "type": "string"
+          },
+          "status": {
+            "enum": [
+              "ok"
+            ],
+            "type": "string"
+          },
+          "validation": {
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "required": [
+          "status",
+          "provider_id",
+          "validation"
+        ],
+        "type": "object"
+      },
+      "RecommendationPage": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Page"
+          }
+        ]
+      },
+      "RecommendationRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "field_id": {
+            "type": "string"
+          },
+          "objective": {
+            "type": "string"
+          },
+          "parameters": {
+            "additionalProperties": true,
+            "type": "object"
+          }
+        },
+        "required": [
+          "field_id"
+        ],
+        "type": "object"
+      },
+      "ReportPage": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Page"
+          }
+        ]
+      },
+      "ReportRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "evidence_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "field_ids": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "report_type": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "type": "object"
+      },
+      "RequestLogPage": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Page"
+          }
+        ]
+      },
+      "SandboxResponse": {
+        "additionalProperties": true,
+        "properties": {
+          "synthetic": {
+            "const": true,
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "synthetic"
+        ],
+        "type": "object"
+      },
+      "SourcePage": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Page"
+          }
+        ]
+      },
+      "SourceResponse": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "SourceWrite": {
+        "additionalProperties": false,
+        "properties": {
+          "content_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "content_type": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "filename": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "metadata": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "provider": {
+            "default": "customer_upload",
+            "type": "string"
+          },
+          "source_type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "source_type"
+        ],
+        "type": "object"
+      },
+      "StandardError": {
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "request_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "type": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "code",
+          "type",
+          "message"
+        ],
+        "type": "object"
+      },
+      "UploadInitiate": {
+        "additionalProperties": false,
+        "properties": {
+          "content_sha256": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          },
+          "content_type": {
+            "type": "string"
+          },
+          "filename": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "filename",
+          "content_type",
+          "content_sha256"
+        ],
+        "type": "object"
+      },
+      "UsageResponse": {
+        "properties": {
+          "included_credits": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "overage_state": {
+            "type": "string"
+          },
+          "plan": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "remaining_credits": {
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "reserved_credits": {
+            "type": "integer"
+          },
+          "used_credits": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "used_credits",
+          "reserved_credits",
+          "overage_state"
+        ],
+        "type": "object"
+      }
+    },
+    "securitySchemes": {
+      "PlatformApiKey": {
+        "bearerFormat": "agro_test_... or agro_live_...",
+        "scheme": "bearer",
+        "type": "http"
+      }
+    }
+  },
+  "info": {
+    "description": "Disabled-by-default private beta. Test and live project creation require separate server flags. EarthDaily and Valley are readiness-only; Valley physical writes are disabled.",
+    "title": "AGRO-AI Platform API",
+    "version": "2026-07-private-beta"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/platform/actions/execute": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_partner POST /v1/platform/actions/execute",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "actions:execute"
+        ],
+        "x-agroai-surface": "platform_api_partner"
+      }
+    },
+    "/platform/actions/plan": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionPlanResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_partner POST /v1/platform/actions/plan",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "actions:plan"
+        ],
+        "x-agroai-surface": "platform_api_partner"
+      }
+    },
+    "/platform/fields": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldPage"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource GET /v1/platform/fields",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "fields:read"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      },
+      "post": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FieldWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource POST /v1/platform/fields",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "fields:write"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      }
+    },
+    "/platform/fields/{field_id}": {
+      "delete": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "field_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource DELETE /v1/platform/fields/{field_id}",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "fields:write"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      },
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "field_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource GET /v1/platform/fields/{field_id}",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "fields:read"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      },
+      "patch": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "field_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FieldPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FieldResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource PATCH /v1/platform/fields/{field_id}",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "fields:write"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      }
+    },
+    "/platform/health": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [],
+        "summary": "public_metadata GET /v1/platform/health",
+        "x-agroai-authentication": "anonymous",
+        "x-agroai-required-scopes": [],
+        "x-agroai-surface": "public_metadata"
+      }
+    },
+    "/platform/jobs": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource GET /v1/platform/jobs",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "jobs:read"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      }
+    },
+    "/platform/jobs/{job_id}": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource GET /v1/platform/jobs/{job_id}",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "jobs:read"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      }
+    },
+    "/platform/jobs/{job_id}/retry": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "job_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionPlanRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource POST /v1/platform/jobs/{job_id}/retry",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "jobs:read"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      }
+    },
+    "/platform/me": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PrincipalResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_partner GET /v1/platform/me",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "projects:read"
+        ],
+        "x-agroai-surface": "platform_api_partner"
+      }
+    },
+    "/platform/observations": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObservationPage"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource GET /v1/platform/observations",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "observations:read"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      },
+      "post": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ObservationBatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource POST /v1/platform/observations",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "observations:write"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      }
+    },
+    "/platform/openapi.json": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [],
+        "summary": "public_metadata GET /v1/platform/openapi.json",
+        "x-agroai-authentication": "anonymous",
+        "x-agroai-required-scopes": [],
+        "x-agroai-surface": "public_metadata"
+      }
+    },
+    "/platform/providers": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderListResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_partner GET /v1/platform/providers",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "connectors:read"
+        ],
+        "x-agroai-surface": "platform_api_partner"
+      }
+    },
+    "/platform/providers/{provider_id}": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_partner GET /v1/platform/providers/{provider_id}",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "connectors:read"
+        ],
+        "x-agroai-surface": "platform_api_partner"
+      }
+    },
+    "/platform/providers/{provider_id}/sync": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderSyncRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_partner POST /v1/platform/providers/{provider_id}/sync",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "connectors:sync"
+        ],
+        "x-agroai-surface": "platform_api_partner"
+      }
+    },
+    "/platform/providers/{provider_id}/sync-jobs": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/JobPage"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_partner GET /v1/platform/providers/{provider_id}/sync-jobs",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "connectors:read"
+        ],
+        "x-agroai-surface": "platform_api_partner"
+      }
+    },
+    "/platform/providers/{provider_id}/validate-credentials": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "provider_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderCredentialProbe"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProviderValidationResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_partner POST /v1/platform/providers/{provider_id}/validate-credentials",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "connectors:write"
+        ],
+        "x-agroai-surface": "platform_api_partner"
+      }
+    },
+    "/platform/recommendations": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RecommendationPage"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource GET /v1/platform/recommendations",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "recommendations:read"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      },
+      "post": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RecommendationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource POST /v1/platform/recommendations",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "recommendations:write"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      }
+    },
+    "/platform/recommendations/{recommendation_id}": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "recommendation_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource GET /v1/platform/recommendations/{recommendation_id}",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "recommendations:read"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      }
+    },
+    "/platform/reports": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportPage"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource GET /v1/platform/reports",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "reports:read"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      },
+      "post": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "202": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource POST /v1/platform/reports",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "reports:write"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      }
+    },
+    "/platform/reports/{report_id}": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource GET /v1/platform/reports/{report_id}",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "reports:read"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      }
+    },
+    "/platform/reports/{report_id}/download": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource GET /v1/platform/reports/{report_id}/download",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "reports:read"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      }
+    },
+    "/platform/request-logs": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RequestLogPage"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource GET /v1/platform/request-logs",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "request_logs:read"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      }
+    },
+    "/platform/sandbox": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SandboxResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource GET /v1/platform/sandbox",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "projects:read"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      }
+    },
+    "/platform/sources": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 50,
+              "maximum": 100,
+              "minimum": 1,
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourcePage"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource GET /v1/platform/sources",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "sources:read"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      },
+      "post": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SourceWrite"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource POST /v1/platform/sources",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "sources:write"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      }
+    },
+    "/platform/sources/uploads": {
+      "post": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "header",
+            "name": "Idempotency-Key",
+            "required": true,
+            "schema": {
+              "maxLength": 255,
+              "minLength": 1,
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UploadInitiate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource POST /v1/platform/sources/uploads",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "sources:write"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      }
+    },
+    "/platform/sources/{source_id}": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "source_id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SourceResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource GET /v1/platform/sources/{source_id}",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "sources:read"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      }
+    },
+    "/platform/usage": {
+      "get": {
+        "parameters": [
+          {
+            "description": "Optional client correlation identifier. The response X-Request-Id is independently generated by the server.",
+            "in": "header",
+            "name": "X-Request-Id",
+            "required": false,
+            "schema": {
+              "maxLength": 96,
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UsageResponse"
+                }
+              }
+            },
+            "description": "Success",
+            "headers": {
+              "RateLimit-Limit": {
+                "description": "Effective request limit.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Remaining": {
+                "description": "Requests remaining in the limiting window.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "RateLimit-Reset": {
+                "description": "Unix timestamp when the limiting window resets.",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              "X-Request-Id": {
+                "description": "Server-generated request identifier. A supplied request value is retained only as bounded client correlation metadata.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "401": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "402": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "403": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "404": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "409": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "422": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "429": {
+            "$ref": "#/components/responses/StandardError"
+          },
+          "503": {
+            "$ref": "#/components/responses/StandardError"
+          }
+        },
+        "security": [
+          {
+            "PlatformApiKey": []
+          }
+        ],
+        "summary": "platform_api_resource GET /v1/platform/usage",
+        "x-agroai-authentication": "platform_api_key",
+        "x-agroai-required-scopes": [
+          "usage:read"
+        ],
+        "x-agroai-surface": "platform_api_resource"
+      }
+    }
+  },
+  "servers": [
+    {
+      "description": "Platform API v1 base path",
+      "url": "/v1"
+    }
+  ],
+  "x-agroai-environments": {
+    "live": {
+      "semantics": "disabled unless PLATFORM_API_LIVE_PROJECTS_ENABLED=true"
+    },
+    "test": {
+      "semantics": "evaluation-only; creation disabled unless PLATFORM_API_TEST_PROJECTS_ENABLED=true"
+    }
+  },
+  "x-agroai-provider-readiness": {
+    "earthdaily": "awaiting_partner_contract",
+    "valley_irrigation": "awaiting_partner_contract; physical writes disabled"
+  }
+}
