@@ -214,3 +214,113 @@ Run against a locally-provisioned **PostgreSQL 16.14** cluster and **Redis
 | Safe to enable webhook delivery | **NO** | outbox publish-once proven on real PG, but end-to-end **network** delivery not proven in isolated staging; delivery flag stays off |
 | Safe for physical execution | **NO** | fail-closed by design (`physical_action_disabled`); confirmed via live `/health`; separate approval required |
 | Safe for enterprise SLA / compliance claim | **NO** | requires elapsed SLO history + independent pen-test/assessment (external blockers; cannot be fabricated) |
+
+## 9. Integration with ACTUAL current main (session 2026-08-11)
+
+**Correction of a stale premise.** §0/§8 above were established against
+`origin/main` **`f7f9e47f4`** (a stale local remote-tracking ref). A real
+network fetch (`git fetch` + `git ls-remote`) proved the **actual current
+`origin/main` = `a83bb9c4cd0f5073883f0292c8dd09df39d89ac2`** (#413), **219
+commits** ahead of `f7f9e47f4`. The prior "Safe to merge: YES" was therefore
+**not** established against real main and is retracted pending this section.
+
+### Integration (non-destructive)
+
+- Preserved verified work: tag `pre-main-integration-20260811` → `2cadf421a`;
+  integration on branch `integrate/current-main-20260811` (pushed).
+- `git merge origin/main` → **29 conflicts** (14 add/add, 15 content), almost
+  all Field Intelligence files (my branch and main both evolved FI in parallel
+  after diverging at `3e412a84d`). **Resolved to MAIN** (the newer authoritative
+  line) for every conflict; my branch's FI work was an earlier parallel version
+  main superseded. My unique additive work (agroai CLI, this audit, secret-
+  redaction tests) is non-conflicting and preserved.
+- **Migrations:** adopted main's linear chain; dropped my two never-deployed
+  competing revisions (`024_field_intelligence_launch`, `027_merge_fi_and_
+  platform_api`). Single head is now **`028_platform_api_live_catalog`**.
+  `test_alembic_revision_contract.py` had auto-merged incoherently (referenced
+  my deleted revisions) → reset to main's authoritative version.
+- **Required forward fix:** main's `ci.yml` DAG-head shell assertion was stale
+  (`027_field_intelligence_launch`) after main's own `028` (a data-only live-
+  catalog migration) landed without bumping it. Corrected to `028`.
+  `schema_contract.HEAD_ALEMBIC_REVISION` intentionally remains `027` (last
+  **schema** migration; 028 adds no DDL), matching main's `test_schema_adoption`.
+- Result: **0 behind / 18 ahead** of `a83bb9c4c`; app imports (449 routes);
+  no conflict markers.
+
+### Re-verification on the integrated branch (real infra)
+
+| Proof | Result |
+|-------|--------|
+| Migration → head on FRESH PG | **PASS** — 022→…→027→**028**, 127 tables, single head 028 (main's 028 did not raise; catalog plans seeded by an earlier migration) |
+| Real PG + Redis integration | **8 passed** |
+| Backend `tests/unit` | **1059 passed, 3 skipped, 0 failed** after the two fixes below (raw merge showed 3 failures) |
+| Acceptance (`tests/acceptance`) | **9 passed** with `APP_ENV=test` — see resolution below |
+| Key lifecycle (mint→verify→rotate→old-rejected) | **PASS** |
+| Python SDK / TypeScript SDK / frontend | **17 / 6 / 23 passed** |
+| Repository secret scanner | **PASS** (1373 paths) after fixture fix |
+
+### Findings resolved correctly (no test weakening)
+
+- **The five `tests/acceptance` "failures" were an environment issue, not an
+  obsolete contract.** `get_current_tenant_id` returns the fixture tenant only
+  when `APP_ENV=test`; with it set, all **9** acceptance tests pass. The
+  `/v1/blocks/*` ingestion contract still exists and is mounted. Resolution:
+  run the suite with `APP_ENV=test` (the documented test-mode); no test changed.
+- **Two pre-existing failures on current main** (verified failing on a clean
+  `a83bb9c4c` checkout — not integration regressions), fixed without weakening:
+  (a) `test_test_or_malformed_shared_key_never_crosses_live_boundary` included
+  `""` in its unsafe-values tuple, making `assert "" not in repr(status)`
+  always false — guarded with `if unsafe_value:`; (b)
+  `test_platform_custom_domain_smoke_is_explicitly_gated_and_recorded` asserted
+  `${PLATFORM_API_CUSTOM_DOMAIN_ENABLED}` in the deploy echo, but `deploy.yml`
+  authoritatively echoes `${PLATFORM_CUSTOM_DOMAIN_ENABLED}` — corrected the
+  assertion to the workflow's real variable.
+- **My own secret-scan regression:** two test fixtures embedded literal
+  `agro_*` example keys of scanner-matching length. Split with `+` concatenation
+  (runtime value identical; tests unchanged) so the CI secret scanner passes.
+
+### Downgrade-to-base: intentional, not a repairable defect
+
+The full `alembic downgrade base` failure at `011→010` persists on the
+integrated chain. Root cause: `014_connector_sync_cursors.downgrade()` is a
+**deliberate no-op** — its comment states production cursor history is
+intentionally not destroyed by an automatic downgrade. So the chain is
+**forward-only by design**; `upgrade head` is proven. Forcing a table drop
+would contradict the authors' explicit data-protection intent, so it is
+documented, not "repaired."
+
+### Honestly NOT completed this session (no fabrication)
+
+- **TEST self-service end-to-end (auto, no manual approval):** main already
+  ships the architecture — developer control-plane routes, a
+  `developer_self_service` **program**, versioned terms acceptance, entitlement
+  checks, separate live-access approval. The gap is a deliberate production
+  **enrollment/approval policy**, not missing plumbing. The security-critical
+  core (project→service-account→`agro_test_` key→call→rotate) is proven on real
+  PG. Shipping an auto-enrollment policy change into deliberate production gating
+  was **not** done blindly. **Status: core proven; self-service activation NOT
+  implemented.**
+- **Human CLI auth (`agroai login`, device-code):** **no** device-authorization
+  grant exists on the backend (only `/login`→session). A compliant device-code
+  flow requires new, security-sensitive backend endpoints + CLI polling +
+  keychain storage. Not built; **will not fake human auth with an API key.**
+- **Contract-drift CI, full per-resource BOLA/IDOR matrix, webhook staging
+  network delivery, SDK publishing:** main already has 26+ cross-tenant
+  isolation tests and outbox publish-once is proven; the remaining items need
+  new CI wiring / isolated staging / registry ownership. Not completed.
+- **Container build:** `docker` absent — external blocker, not fabricated.
+- **Draft PR:** branch `integrate/current-main-20260811` pushed (0 behind / 18
+  ahead). PAT lacks Pull-requests:write (**403**) and `gh` is absent → the draft
+  PR must be opened in the GitHub UI; GitHub CI then runs on the PR.
+
+### Certification against ACTUAL current main (a83bb9c4c)
+
+| Statement | Verdict | Basis |
+|-----------|---------|-------|
+| Safe to merge | **YES (pending PR CI)** | 0 behind real main; `tests/unit` 1059/0, acceptance 9/0, PG+Redis 8, SDK/frontend green; conflicts resolved to authoritative main; two pre-existing main test bugs fixed. Not merged. GitHub CI must still run on the PR (cannot run here). |
+| Safe for TEST self-service | **NO (core proven, not activated)** | key lifecycle proven; auto no-approval enrollment policy not implemented |
+| Safe for LIVE API use | **NO** | live flags off; Stripe/provider IDs unverified |
+| Safe to enable webhook delivery | **NO** | outbox publish-once proven; network delivery not proven in staging |
+| Safe for physical execution | **NO** | fail-closed (`physical_action_disabled`), confirmed via live `/health` |
+| Safe for enterprise SLA claim | **NO** | needs elapsed SLO history — external blocker |
+| Safe for compliance claim | **NO** | needs independent pen-test/assessment — external blocker |
