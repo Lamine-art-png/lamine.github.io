@@ -96,7 +96,7 @@ def test_platform_custom_domain_smoke_is_explicitly_gated_and_recorded():
     assert 'curl --fail --silent --show-error --max-time 30 "${PLATFORM_URL}/v1/health"' in deploy
     assert "Build on AGRO-AI." in deploy
     assert "Permanent API keys never enter browser JavaScript." in deploy
-    assert 'echo "platform_custom_domain_enabled=${PLATFORM_API_CUSTOM_DOMAIN_ENABLED}"' in deploy
+    assert 'echo "platform_custom_domain_enabled=${PLATFORM_CUSTOM_DOMAIN_ENABLED}"' in deploy
 
 
 def test_platform_verification_release_contract_uses_only_first_party_surfaces(monkeypatch):
