@@ -77,6 +77,30 @@ platform_rate_limit_latency = Histogram(
     buckets=[0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5]
 )
 
+platform_product_events = Counter(
+    'agroai_platform_product_events_total',
+    'Audited Platform API product events without customer identifiers',
+    ['subsystem', 'action', 'outcome']
+)
+
+platform_authentication = Counter(
+    'agroai_platform_authentication_total',
+    'Platform API authentication decisions without key or customer identifiers',
+    ['environment', 'outcome']
+)
+
+platform_quota_decisions = Counter(
+    'agroai_platform_quota_decisions_total',
+    'Platform API credit reservation and quota decisions',
+    ['environment', 'outcome']
+)
+
+platform_billing_events = Counter(
+    'agroai_platform_billing_events_total',
+    'Platform API billing lifecycle events',
+    ['event_class', 'outcome']
+)
+
 
 def metrics_endpoint():
     """Expose Prometheus metrics."""

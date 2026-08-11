@@ -1,0 +1,15 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "agroai-platform"
+version = "0.2.0"
+description = "Typed server-side client for the AGRO-AI Platform API"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = ["requests>=2.31,<3", "httpx>=0.26,<1"]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["agroai_platform*"]

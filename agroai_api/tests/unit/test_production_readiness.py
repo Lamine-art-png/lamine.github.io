@@ -181,3 +181,32 @@ def test_platform_api_enabled_rejects_fail_open_limiter_configuration():
     report = evaluate_production_readiness(settings)
 
     assert "platform_api.rate_limiter_fail_open" in _codes(report)
+
+
+def test_platform_api_billing_requires_explicit_matching_stripe_mode():
+    settings = _ready_settings()
+    settings.__dict__["PLATFORM_API_BILLING_ENABLED"] = True
+    settings.__dict__["PLATFORM_API_STRIPE_MODE"] = "test"
+    settings.__dict__["PLATFORM_API_STRIPE_SECRET_KEY"] = "sk_live_wrong_mode"
+
+    report = evaluate_production_readiness(settings, target_scale="test")
+
+    assert "platform_api.stripe_key_mode_mismatch" in _codes(report)
+
+
+def test_platform_api_billing_test_mode_is_rejected_for_production_readiness():
+    settings = _ready_settings()
+    settings.__dict__["PLATFORM_API_BILLING_ENABLED"] = True
+    settings.__dict__["PLATFORM_API_STRIPE_MODE"] = "test"
+    settings.__dict__["PLATFORM_API_STRIPE_SECRET_KEY"] = "sk_test_platform_api"
+
+    test_report = evaluate_production_readiness(settings, target_scale="test")
+    production_report = evaluate_production_readiness(
+        settings,
+        target_scale="production",
+    )
+
+    assert "platform_api.stripe_test_mode_in_production" not in _codes(test_report)
+    assert "platform_api.stripe_test_mode_in_production" in _codes(
+        production_report
+    )

@@ -282,3 +282,22 @@ edge routes to them) and are refused as staging targets.
   refusals; runbook: `docs/field-intelligence-staging-runbook.md`.
 - Future DNS (manual only): `api-staging.agroai-pilot.com` and a staging
   portal hostname.
+
+## J. Platform API product surfaces (disabled)
+
+The authoritative public marketing source is the root Cloudflare Pages project.
+`/platform-api` and `/developers` are static assets guarded by Pages Functions
+using server-side `PLATFORM_API_MARKETING_ENABLED` and
+`PLATFORM_API_PUBLIC_DOCS_ENABLED`. Both default false, return 404 with
+`noindex` while disabled, and are not present in navigation or sitemap.
+
+The customer developer console remains inside `figma-enterprise-v4` at
+`/developers/api`. Its navigation is granted only after the backend confirms
+the developer-control-plane flag, approved organization, active owner/admin
+membership, and active enrollment. Platform administrators use the separate
+`/admin/platform-api` route.
+
+API billing extends the existing backend but does not reinterpret Enterprise
+Portal subscriptions. Stripe configuration is server-only and all API billing,
+Checkout, meter export, pricing, Tax, support, status, applications, partner,
+self-service, and live-access flags default false.

@@ -23,6 +23,13 @@ ROUTE_COSTS: dict[str, int] = {
     "platform.provider.validate": 2,
     "platform.actions.plan": 2,
     "platform.actions.execute": 5,
+    "/v1/platform/providers/{provider_id}/validate-credentials": 2,
+    "/v1/platform/actions/plan": 2,
+    "/v1/platform/actions/execute": 5,
+    "/v1/platform/observations": 2,
+    "/v1/platform/recommendations": 3,
+    "/v1/platform/reports": 3,
+    "/v1/platform/sources/uploads": 2,
 }
 
 _REDIS_SCRIPT = """

@@ -1,10 +1,12 @@
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 import uuid
 from dataclasses import replace
 from datetime import datetime, timedelta
+from pathlib import Path
 
 import pytest
 
@@ -20,6 +22,7 @@ from app.models.platform_api import (
     PlatformWebhookEndpoint,
 )
 from app.models.platform_api import ActionSafetyConfiguration
+from app.models.platform_product import PlatformProgramEnrollment
 from app.models.operational_records import ConnectorConnection
 from app.models.saas import Organization, OrganizationMembership, User, Workspace
 from app.platform_api.action_safety import PhysicalActionSafetyInput, evaluate_physical_action_safety
@@ -128,6 +131,22 @@ def _org(db):
     db.add(workspace)
     db.flush()
     db.add(OrganizationMembership(organization_id=org.id, user_id=user.id, role="owner"))
+    db.add(
+        PlatformProgramEnrollment(
+            organization_id=org.id,
+            program="developer_private_beta",
+            status="active",
+            approved_by_user_id=user.id,
+            approved_at=datetime.utcnow(),
+            allowed_environments_json=["test", "live"],
+            maximum_projects=20,
+            maximum_live_projects=10,
+            maximum_service_accounts=50,
+            maximum_keys=100,
+            maximum_webhooks=50,
+            billing_mode="none",
+        )
+    )
     db.commit()
     return user, org, workspace
 
@@ -271,7 +290,9 @@ def test_platform_key_can_call_me_with_scope(client, db, monkeypatch):
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["principal"]["authentication_type"] == "platform_api_key"
-    assert body["principal"]["request_id"] == "req-test-1"
+    assert body["principal"]["request_id"].startswith("req_")
+    assert body["principal"]["request_id"] != "req-test-1"
+    assert response.headers["x-request-id"] == body["principal"]["request_id"]
 
 
 def test_platform_rate_limit_response_uses_standard_envelope_and_headers(client, db, monkeypatch):
@@ -336,6 +357,21 @@ def test_public_openapi_excludes_internal_admin_and_portal_routes(client, monkey
     assert "/internal/queue" not in text
     assert "/platform-admin" not in text
     assert "/auth/login" not in text
+
+
+def test_public_openapi_reviewed_snapshot_digest(client, monkeypatch):
+    """Any public contract change requires an explicit reviewed digest update."""
+
+    monkeypatch.setattr(settings, "PLATFORM_API_PUBLIC_DOCS_ENABLED", True)
+    response = client.get("/v1/platform/openapi.json")
+    assert response.status_code == 200
+    canonical = json.dumps(response.json(), sort_keys=True, separators=(",", ":")).encode()
+    expected = (
+        Path(__file__).resolve().parents[1]
+        / "contracts"
+        / "platform_api_openapi.sha256"
+    ).read_text(encoding="utf-8").strip()
+    assert hashlib.sha256(canonical).hexdigest() == expected
 
 
 def test_route_manifest_is_private_until_docs_enabled_and_remains_curated(client, monkeypatch):

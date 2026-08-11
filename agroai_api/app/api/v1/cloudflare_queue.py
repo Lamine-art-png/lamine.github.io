@@ -18,6 +18,9 @@ from app.services.redis_task_queue import queue_configured
 from app.services.release_contract import evaluate_release_contract
 from app.services.task_outbox_service import drain_pending_outbox
 from app.platform_api.webhook_delivery import WEBHOOK_TASK_TYPE, publish_pending_webhook_outbox
+from app.platform_api.stripe_metering import STRIPE_METER_TASK_TYPE, publish_pending_meter_outbox
+from app.platform_api.maintenance import enforce_request_log_retention, expire_payment_grace_periods
+from app.platform_api.notifications import process_key_expiration_notifications
 
 
 router = APIRouter(tags=["internal-connector-queue"])
@@ -122,7 +125,7 @@ async def deliver_connector_task(payload: ConnectorTaskDelivery) -> dict:
         ) from exc
     if status in _TERMINAL:
         return {"status": status, "job_id": payload.job_id, "terminal": True}
-    if payload.task_type == WEBHOOK_TASK_TYPE and status == "retrying":
+    if payload.task_type in {WEBHOOK_TASK_TYPE, STRIPE_METER_TASK_TYPE} and status == "retrying":
         return {"status": status, "job_id": payload.job_id, "terminal": True, "durable_retry_scheduled": True}
     if status in _TRANSIENT:
         raise HTTPException(
@@ -142,19 +145,58 @@ async def drain_task_outbox() -> dict:
     try:
         outbox = await asyncio.to_thread(drain_pending_outbox, limit=100)
         webhook_outbox = await asyncio.to_thread(_drain_webhook_outbox)
+        meter_outbox = await asyncio.to_thread(_drain_meter_outbox)
+        platform_maintenance = await asyncio.to_thread(_run_platform_api_maintenance)
         object_gc = await asyncio.to_thread(run_connector_object_gc, limit=50)
     except Exception as exc:
         raise HTTPException(
             status_code=503,
             detail={"error": "scheduled_maintenance_failed", "reason": exc.__class__.__name__},
         ) from exc
-    return {"status": "ok", "outbox": outbox, "webhook_outbox": webhook_outbox, "object_gc": object_gc}
+    return {
+        "status": "ok",
+        "outbox": outbox,
+        "webhook_outbox": webhook_outbox,
+        "meter_outbox": meter_outbox,
+        "platform_maintenance": platform_maintenance,
+        "object_gc": object_gc,
+    }
 
 
 def _drain_webhook_outbox() -> dict[str, int]:
     db = SessionLocal()
     try:
         return publish_pending_webhook_outbox(db, limit=100)
+    finally:
+        db.close()
+
+
+def _drain_meter_outbox() -> dict[str, int]:
+    db = SessionLocal()
+    try:
+        return publish_pending_meter_outbox(db, limit=100)
+    finally:
+        db.close()
+
+
+def _run_platform_api_maintenance() -> dict[str, object]:
+    db = SessionLocal()
+    try:
+        result: dict[str, object] = {
+            "payment_grace_expired": 0,
+            "request_logs_deleted": 0,
+            "key_expiration_notifications": {"eligible": 0, "created": 0},
+        }
+        if bool(getattr(settings, "PLATFORM_API_BILLING_ENABLED", False)):
+            result["payment_grace_expired"] = expire_payment_grace_periods(db)
+            result["request_logs_deleted"] = enforce_request_log_retention(db)
+        if bool(getattr(settings, "PLATFORM_API_DEVELOPER_CONTROL_PLANE_ENABLED", False)):
+            result["key_expiration_notifications"] = process_key_expiration_notifications(db)
+        db.commit()
+        return result
+    except Exception:
+        db.rollback()
+        raise
     finally:
         db.close()
 
