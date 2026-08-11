@@ -1,0 +1,45 @@
+name: Exact Main Release State
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/exact-main-release-state-ci.yml'
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      EXPECTED_MAIN_SHA: 0118ded8e94540da9981b0d8a2f148eeb8cfe8e0
+    steps:
+      - uses: actions/checkout@v4
+      - name: Query exact main production run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-state
+          api="https://api.github.com/repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yml/runs?event=push&branch=main&per_page=50"
+          curl --fail --silent --show-error \
+            -H "Authorization: Bearer ${GH_TOKEN}" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$api" > release-state/runs.json
+          jq --arg sha "$EXPECTED_MAIN_SHA" '
+            [.workflow_runs[] | select(.head_sha == $sha)]
+            | sort_by(.created_at) | reverse | .[0] // null
+            | if . == null then null else {id,name,event,status,conclusion,head_sha,created_at,updated_at,html_url} end
+          ' release-state/runs.json | tee release-state/exact-main-run.json
+          test "$(jq -r '.id // empty' release-state/exact-main-run.json)" != ""
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: exact-main-release-state
+          path: release-state
+          retention-days: 2
