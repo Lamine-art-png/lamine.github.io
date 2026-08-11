@@ -123,11 +123,29 @@ Genuine documentation gaps to fill (additive, no duplication):
 ## 6. Verified-good (evidence in hand)
 
 - Single Alembic head; 28-revision connected chain to base.
+- **Real-PostgreSQL migration roundtrip (PG 16):** `alembic upgrade head`
+  applies through `027 (mergepoint)` → 127 public tables, `alembic_version`
+  holds **exactly one row** (`027_merge_fi_and_platform_api`); downgrade to an
+  explicit revision (`022`) walks back through the branch point cleanly and
+  re-upgrade returns to `027`. Note: `alembic downgrade -1` at a mergepoint
+  reports "Ambiguous walk" — this is standard Alembic semantics (relative
+  downgrade must name an explicit target at a merge), **not** a defect.
 - App imports; 443 routes register.
 - 39 CI-critical contract tests pass post-merge.
+- Platform-focused suite: **134 passed, 0 failed**.
+- Secret-redaction guards: 4 passed. Python SDK + CLI: 17 passed.
+- Public OpenAPI (`/v1/platform/openapi.json`): 27 curated paths, OpenAPI 3.1.0,
+  **zero admin/console/webhook routes leak** into the public contract.
 - Fail-closed defaults across all customer capabilities.
 - No fabricated secrets/provider credentials/Stripe IDs.
 - Key + webhook cryptography uses constant-time comparison and separated secrets.
+
+### New this session (all committed, all tests green)
+
+- `feat(cli)`: first-class `agroai` CLI on the SDK core (10 offline tests).
+- `test`: fast secret-redaction regression guards (4 tests).
+- `027_merge_fi_and_platform_api` merge revision + graph/head regression tests.
+- Forensic audit (this document) and `docs/platform-api-cli.md`.
 
 ## 7. Open verification/hardening backlog (honest — not yet done)
 
