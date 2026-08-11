@@ -10,6 +10,9 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = ["requests>=2.31,<3", "httpx>=0.26,<1"]
 
+[project.scripts]
+agroai = "agroai_platform.cli:main"
+
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["agroai_platform*"]
