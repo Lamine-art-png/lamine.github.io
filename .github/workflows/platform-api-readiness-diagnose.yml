@@ -1,0 +1,107 @@
+name: Platform API Readiness Diagnosis
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/platform-api-readiness-diagnose.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: platform-api-readiness-diagnosis
+  cancel-in-progress: true
+
+env:
+  OPS_ISSUE: "262"
+  CUSTOM_UPSTREAM: "https://api-preview.agroai-pilot.com"
+  DIRECT_RENDER_UPSTREAM: "https://agroai-api-preview.onrender.com"
+
+jobs:
+  diagnose:
+    name: Diagnose protected production readiness
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      QUEUE_CONSUMER_TOKEN: ${{ secrets.QUEUE_CONSUMER_TOKEN }}
+    steps:
+      - name: Fail closed when the protected probe credential is unavailable
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "${QUEUE_CONSUMER_TOKEN:-}" || {
+            echo "QUEUE_CONSUMER_TOKEN is unavailable to the protected diagnostic job"
+            exit 1
+          }
+
+      - name: Read and publish redacted release-contract evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+
+          probe_contract() {
+            local name="$1" url="$2"
+            local payload code normalized
+            payload="$(mktemp)"
+            code="$(curl -sS -o "$payload" -w '%{http_code}' --connect-timeout 10 --max-time 60 \
+              -H "Authorization: Bearer ${QUEUE_CONSUMER_TOKEN}" \
+              "${url}/v1/internal/release/health" 2>/dev/null || printf '000')"
+
+            if jq -e . "$payload" >/dev/null 2>&1; then
+              normalized="$(jq -c --arg name "$name" --arg http "$code" '
+                (.detail // .) as $contract |
+                {
+                  upstream: $name,
+                  http: $http,
+                  status: ($contract.status // "unavailable"),
+                  contract: ($contract.contract // null),
+                  build_sha: ($contract.build_sha // null),
+                  schema_current: ($contract.schema_current // false),
+                  queue_configured: ($contract.queue_configured // false),
+                  object_storage_configured: ($contract.object_storage_configured // false),
+                  object_storage_reachable: ($contract.object_storage_reachable // false),
+                  production_ready: ($contract.production_ready // false),
+                  production_blocker_codes: ($contract.production_blocker_codes // []),
+                  platform_api_enabled: ($contract.platform_api_enabled // false)
+                }' "$payload")"
+            else
+              normalized="$(jq -cn --arg name "$name" --arg http "$code" '{upstream:$name,http:$http,status:"unavailable",production_blocker_codes:[]}')"
+            fi
+            rm -f "$payload"
+            printf '%s\n' "$normalized"
+          }
+
+          custom="$(probe_contract custom_upstream "${CUSTOM_UPSTREAM}")"
+          direct="$(probe_contract direct_render "${DIRECT_RENDER_UPSTREAM}")"
+
+          {
+            echo "## Platform API protected readiness diagnosis"
+            echo
+            echo "- diagnostic workflow SHA: \`${GITHUB_SHA}\`"
+            echo "- no secret values are included"
+            echo
+            echo "### Custom upstream"
+            echo '```json'
+            echo "$custom" | jq .
+            echo '```'
+            echo
+            echo "### Direct Render upstream"
+            echo '```json'
+            echo "$direct" | jq .
+            echo '```'
+          } > readiness-diagnosis.md
+
+          cat readiness-diagnosis.md
+          gh issue comment "${OPS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body-file readiness-diagnosis.md
+
+      - name: Upload redacted diagnosis
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-api-readiness-diagnosis-${{ github.sha }}
+          path: readiness-diagnosis.md
+          retention-days: 14
