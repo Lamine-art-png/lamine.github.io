@@ -175,7 +175,7 @@ Run against a locally-provisioned **PostgreSQL 16.14** cluster and **Redis
 | Python SDK | **17 passed** + wheel built | `pytest sdk/python/tests`; `agroai_platform-0.2.0-py3-none-any.whl` |
 | TypeScript SDK | **6 passed** + tarball built | `tsc` build + `node --test` (incl. webhook signature verify + replay/tamper rejection); `agro-ai-platform-0.2.0.tgz` (`private:true` — publish correctly impossible) |
 | Frontend command-center | **23 passed** | `vitest run` (`apps/agroai-command-center-v2`) |
-| Full `tests/unit` gate | **verification in progress** | parallel `pytest tests/unit -n 4 --timeout=120`; all executed tests passing, **0 failures observed**; slow (per-test FastAPI+DB fixture boot), final count pending |
+| Full `tests/unit` gate (merge-gating CI) | **991 passed, 3 skipped, 0 failed** | `pytest tests/unit -n 4 --timeout=120` (18m49s) — the exact suite `ci.yml` runs |
 
 **Honest non-green observations (not concealed):**
 - `tests/acceptance/test_acceptance.py`: **5 failures** — legacy suite from the
@@ -191,8 +191,8 @@ Run against a locally-provisioned **PostgreSQL 16.14** cluster and **Redis
 
 ## 7. Open verification/hardening backlog (honest — not yet done)
 
-1. **Full slow unit suite** (119 files, DB-fixture heavy) — parallel run
-   in progress (0 failures observed); must reach confirmed green.
+1. ~~**Full slow unit suite**~~ — **DONE (2026-08-10):** `tests/unit`
+   **991 passed, 3 skipped, 0 failed** (parallel, 18m49s).
 2. ~~**Real-PostgreSQL + real-Redis integration**~~ — **DONE (2026-08-10):** 8
    integration tests pass on live PG 16.14 + Redis 8.8.0 (atomic idempotency
    under two-session concurrency, no-oversubscribe credit reservations,
@@ -208,7 +208,7 @@ Run against a locally-provisioned **PostgreSQL 16.14** cluster and **Redis
 
 | Gate | State | Basis |
 |------|-------|-------|
-| Safe to merge | **YES, pending full-`tests/unit` green** | reconciliation additive; SDK/CLI/frontend green; real-PG+Redis integration green; nothing destroyed. Full `tests/unit` verification in progress (0 failures observed); the 5 `tests/acceptance` failures are pre-existing legacy fixtures outside the merge-gating CI. |
+| Safe to merge | **YES** | `tests/unit` **991 passed / 0 failed** (the merge-gating suite); SDK/CLI/frontend green; real-PG+Redis integration green; reconciliation additive; nothing destroyed. The 5 `tests/acceptance` failures are pre-existing legacy fixtures **outside** the merge-gating CI. |
 | Safe for TEST self-service | **CORE PROVEN, activation NOT YET** | key mint→verify→rotate→old-rejected and CLI-over-HTTP proven on real PG; but `PLATFORM_API_*` self-service flags remain **off** in prod and full-suite green + BOLA/IDOR matrix (§7.3) pending |
 | Safe for LIVE API use | **NO** | live flags off; Stripe/provider IDs unverified; providers `awaiting_partner_contract` |
 | Safe to enable webhook delivery | **NO** | outbox publish-once proven on real PG, but end-to-end **network** delivery not proven in isolated staging; delivery flag stays off |
