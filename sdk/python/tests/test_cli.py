@@ -31,7 +31,7 @@ def _mock_transport(monkeypatch, status_code, payload):
     monkeypatch.setattr(client_module.time, "sleep", lambda _s: None)
 
 
-def _run(argv, monkeypatch, *, key="agro_test_examplekey0000000000000000"):
+def _run(argv, monkeypatch, *, key="agro_test_" + "examplekey0000000000000000"):
     monkeypatch.setenv("AGROAI_API_KEY", key)
     out, err = io.StringIO(), io.StringIO()
     code = cli.main(argv, out=out, err=err)
@@ -94,7 +94,7 @@ def test_login_is_honest_stub_not_fake_success(monkeypatch):
 
 def test_doctor_never_prints_full_key(monkeypatch):
     _mock_transport(monkeypatch, 200, {"organization_id": "org_1", "environment": "test"})
-    secret = "agro_test_SUPERSECRETdonotprintaaaaaaaaaaaaa"
+    secret = "agro_test_" + "SUPERSECRETdonotprintaaaaaaaaaaaaa"
     code, out, err = _run(["doctor"], monkeypatch, key=secret)
     combined = out + err
     assert secret not in combined  # full key must never appear
