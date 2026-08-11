@@ -3,7 +3,8 @@ import path from "path";
 import { config } from "../config.js";
 import { MemoryProvider } from "../providers/MemoryProvider.js";
 
-const filePath = path.resolve(config.memoryFile);
+// Read at call time so MEMORY_FILE env-var overrides apply after dotenv loads.
+function getFilePath() { return path.resolve(config.memoryFile); }
 
 function emptyFieldMemory(fieldId) {
   return {
@@ -25,13 +26,14 @@ function emptyFieldMemory(fieldId) {
 
 function loadJson() {
   try {
-    return JSON.parse(fs.readFileSync(filePath, "utf8"));
+    return JSON.parse(fs.readFileSync(getFilePath(), "utf8"));
   } catch {
     return { farms: {}, fields: {} };
   }
 }
 
 function saveJson(data) {
+  const filePath = getFilePath();
   fs.mkdirSync(path.dirname(filePath), { recursive: true });
   fs.writeFileSync(filePath, JSON.stringify(data, null, 2));
 }
