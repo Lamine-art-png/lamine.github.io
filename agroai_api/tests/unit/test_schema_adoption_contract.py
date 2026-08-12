@@ -31,7 +31,10 @@ def test_column_contract_accepts_complete_shape():
 
 
 def test_head_contract_covers_security_queue_provenance_access_appeals_platform_api_and_field_launch():
-    assert HEAD_ALEMBIC_REVISION == "027_field_intelligence_launch"
+    assert HEAD_ALEMBIC_REVISION == "029_platform_cli_device_auth"
+    assert {"device_code_hash", "user_code", "status", "expires_at"}.issubset(
+        HEAD_SCHEMA_REQUIREMENTS["platform_cli_device_authorizations"]
+    )
     assert {"nonce_hash", "consumed_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["oauth_state_nonces"])
     assert {"key_version", "ciphertext_b64"}.issubset(HEAD_SCHEMA_REQUIREMENTS["connector_credentials"])
     assert {"status", "publish_attempts"}.issubset(HEAD_SCHEMA_REQUIREMENTS["task_outbox"])

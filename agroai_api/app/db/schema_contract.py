@@ -5,10 +5,11 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "027_field_intelligence_launch"
+HEAD_ALEMBIC_REVISION = "029_platform_cli_device_auth"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
+    "platform_cli_device_authorizations": {"device_code_hash", "user_code", "status", "expires_at", "consumed_at"},
     "compliance_export_metadata": {"id", "tenant_id"},
     "assurance_passports": {"id"},
     "agent_workflow_runs": {"id"},

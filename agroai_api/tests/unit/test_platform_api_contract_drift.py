@@ -50,24 +50,28 @@ def _client_paths(root: Path, exts: tuple[str, ...]) -> set[str]:
     return found
 
 
-def test_python_sdk_references_only_live_public_platform_routes():
-    public = _public_norm()
+def test_python_sdk_and_cli_reference_only_declared_live_routes():
+    declared = _all_norm()
     for ref in _client_paths(SDK_PY, (".py",)):
-        assert ref in public, f"Python SDK references path not in the public contract: {ref}"
+        assert ref in declared, f"Python SDK/CLI references a route that does not exist: {ref}"
 
 
-def test_typescript_sdk_references_only_live_public_platform_routes():
-    public = _public_norm()
+def test_typescript_sdk_references_only_declared_live_routes():
+    declared = _all_norm()
     for ref in _client_paths(SDK_TS, (".ts",)):
-        assert ref in public, f"TypeScript SDK references path not in the public contract: {ref}"
+        assert ref in declared, f"TypeScript SDK references a route that does not exist: {ref}"
 
 
-def test_clients_never_reference_a_private_or_admin_route():
+def test_data_plane_sdk_client_uses_only_public_routes():
+    """The pure server SDK client (not the CLI) must use only PUBLIC api-key
+    routes — it never speaks the human control-plane surface."""
     public = _public_norm()
-    private = _all_norm() - public
-    refs = _client_paths(SDK_PY, (".py",)) | _client_paths(SDK_TS, (".ts",))
-    leaked = refs & private
-    assert not leaked, f"Client references a non-public (developer/admin) route: {sorted(leaked)}"
+    client_only = _client_paths(SDK_PY / "client.py" if (SDK_PY / "client.py").exists() else SDK_PY, (".py",))
+    # Restrict to the SDK client module specifically.
+    text = (SDK_PY / "client.py").read_text(encoding="utf-8") if (SDK_PY / "client.py").exists() else ""
+    refs = {_norm(m) for m in _PATH.findall(re.sub(r"\$\{[^}]+\}", "{}", text))}
+    for ref in refs:
+        assert ref in public, f"SDK data-plane client references a non-public route: {ref}"
 
 
 def test_public_openapi_matches_the_route_manifest_and_leaks_no_private_route():

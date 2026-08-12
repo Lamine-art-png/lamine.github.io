@@ -69,6 +69,10 @@ class Settings(BaseSettings):
     # TEST-only and server-authoritative; LIVE always stays separately gated.
     # Default off so production behaviour is unchanged until deliberately enabled.
     PLATFORM_API_TEST_SELF_SERVICE_AUTO_ENROLL_ENABLED: bool = False
+    # RFC 8628-style browser-assisted device authorization for the `agroai` CLI
+    # (first-party account/session; no embedded client secret; no API key used
+    # as human identity). Default off so production is unchanged until enabled.
+    PLATFORM_API_CLI_DEVICE_AUTH_ENABLED: bool = False
     PLATFORM_API_LIVE_ACCESS_REQUESTS_ENABLED: bool = False
     PLATFORM_API_BILLING_ENABLED: bool = False
     PLATFORM_API_STRIPE_CHECKOUT_ENABLED: bool = False

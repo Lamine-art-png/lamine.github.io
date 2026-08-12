@@ -1725,3 +1725,78 @@ def redeliver_webhook(
         "event_id": replay_event_id,
         "delivery_enabled": bool(getattr(settings, "PLATFORM_API_WEBHOOK_DELIVERY_ENABLED", False)),
     }
+
+
+# ---------------------------------------------------------------------------
+# agroai CLI device authorization (RFC 8628-style, first-party browser handoff)
+# ---------------------------------------------------------------------------
+from app.api.deps import AuthContext, get_auth_context, require_approved_organization  # noqa: E402
+from app.platform_api import device_auth as _device_auth  # noqa: E402
+
+
+def _require_cli_device_auth_enabled() -> None:
+    if not bool(getattr(settings, "PLATFORM_API_CLI_DEVICE_AUTH_ENABLED", False)):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+
+
+class DeviceAuthorizationRequest(BaseModel):
+    scope: str | None = Field(default=None, max_length=500)
+    client_label: str | None = Field(default=None, max_length=120)
+
+
+class DeviceApproveRequest(BaseModel):
+    user_code: str = Field(min_length=4, max_length=32)
+
+
+class DeviceTokenRequest(BaseModel):
+    device_code: str = Field(min_length=8, max_length=200)
+
+
+@router.post("/platform/cli/device/authorization")
+def cli_device_authorization(payload: DeviceAuthorizationRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+    _require_cli_device_auth_enabled()
+    device_code, row = _device_auth.create_device_authorization(
+        db, requested_scope=payload.scope, client_label=payload.client_label
+    )
+    base = str(getattr(settings, "PLATFORM_CONSOLE_URL", "") or "https://app.agroai-pilot.com").rstrip("/")
+    verification_uri = f"{base}/cli"
+    return {
+        "device_code": device_code,
+        "user_code": row.user_code,
+        "verification_uri": verification_uri,
+        "verification_uri_complete": f"{verification_uri}?user_code={row.user_code}",
+        "interval": row.interval_seconds,
+        "expires_in": int((row.expires_at - row.created_at).total_seconds()),
+    }
+
+
+@router.post("/platform/cli/device/approve")
+def cli_device_approve(
+    payload: DeviceApproveRequest,
+    ctx: AuthContext = Depends(get_auth_context),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    _require_cli_device_auth_enabled()
+    if not ctx.organization or not ctx.membership:
+        raise HTTPException(status_code=403, detail="Organization membership required")
+    require_approved_organization(ctx.organization)
+    if getattr(ctx.membership, "status", "active") != "active" or ctx.membership.role not in {"owner", "admin"}:
+        raise HTTPException(status_code=403, detail="Organization administrator access required")
+    try:
+        _device_auth.approve_device_authorization(
+            db, user_code=payload.user_code, organization_id=ctx.organization.id, approved_by_user_id=ctx.user.id
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail={"code": str(exc)}) from exc
+    return {"status": "approved"}
+
+
+@router.post("/platform/cli/device/token")
+def cli_device_token(payload: DeviceTokenRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+    _require_cli_device_auth_enabled()
+    result = _device_auth.exchange_device_token(db, device_code=payload.device_code)
+    if "access_token" in result:
+        return {"status": "approved", **result}
+    # RFC 8628 poll states are returned as 200 with an explicit status so the
+    # platform error envelope does not mask them; the CLI polls on this field.
+    return {"status": result.get("error", "invalid_grant")}

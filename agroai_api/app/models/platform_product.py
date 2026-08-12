@@ -618,3 +618,33 @@ class PlatformAbuseEvent(Base):
     reviewed_by_user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+
+class PlatformCliDeviceAuthorization(Base):
+    """RFC 8628-style browser-assisted device authorization for the agroai CLI.
+
+    The CLI never embeds a client secret and never uses an API key as human
+    identity. It receives a high-entropy device_code (stored only as a hash) and
+    a short human-readable user_code; a first-party authenticated browser session
+    approves the user_code, binding the organization; the CLI then polls to
+    exchange the device_code for a short-lived, org-scoped human control-plane
+    token exactly once.
+    """
+
+    __tablename__ = "platform_cli_device_authorizations"
+
+    id = Column(String, primary_key=True, default=new_product_id)
+    device_code_hash = Column(String, nullable=False, unique=True, index=True)
+    user_code = Column(String, nullable=False, unique=True, index=True)
+    status = Column(String, default="pending", nullable=False, index=True)  # pending|approved|denied|consumed|expired
+    organization_id = Column(String, ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True, index=True)
+    approved_by_user_id = Column(String, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    requested_scope = Column(String, nullable=True)
+    interval_seconds = Column(Integer, default=5, nullable=False)
+    poll_count = Column(Integer, default=0, nullable=False)
+    client_label = Column(String(120), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    approved_at = Column(DateTime, nullable=True)
+    consumed_at = Column(DateTime, nullable=True)
+    expires_at = Column(DateTime, nullable=False, index=True)
+    last_polled_at = Column(DateTime, nullable=True)
