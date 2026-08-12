@@ -18,6 +18,7 @@ Exit non-zero if:
     reviewed snapshot (agroai_api/tests/contracts/platform_api_openapi.sha256)
   * any private / admin / portal (developer control-plane) route leaks
   * any documented path is not under /platform/
+  * anonymous access appears anywhere except the reviewed public metadata routes
   * the Platform API bearer scheme or operation security is weakened
   * the committed snapshot differs from a fresh generation (--check)
 """
@@ -40,6 +41,14 @@ BACKEND_DIGEST = API_DIR / "tests" / "contracts" / "platform_api_openapi.sha256"
 EXPECTED_KEY_PREFIXES = ("agro_test_", "agro_live_")
 FORBIDDEN_PATH_MARKERS = ("/developer", "/admin", "/internal", "/portal")
 HTTP_METHODS = {"get", "put", "post", "delete", "options", "head", "patch", "trace"}
+# These are deliberately anonymous public metadata endpoints. Keep this list
+# narrow so a future route cannot become anonymous through contract drift.
+ANONYMOUS_PUBLIC_OPERATIONS = frozenset(
+    {
+        ("GET", "/platform/health"),
+        ("GET", "/platform/openapi.json"),
+    }
+)
 
 
 def generate_contract() -> dict:
@@ -100,10 +109,49 @@ def audit(contract: dict) -> list[str]:
             if not isinstance(operation, dict):
                 problems.append(f"operation is not an object: {method.upper()} {path}")
                 continue
-            if operation.get("x-agroai-authentication") != "platform_api_key":
-                problems.append(f"public operation lacks platform_api_key marker: {method.upper()} {path}")
-            if not _uses_platform_api_key(operation):
-                problems.append(f"public operation lacks PlatformApiKey security: {method.upper()} {path}")
+
+            method_upper = method.upper()
+            auth = operation.get("x-agroai-authentication")
+            operation_key = (method_upper, path)
+
+            if auth == "platform_api_key":
+                if not _uses_platform_api_key(operation):
+                    problems.append(
+                        f"public operation lacks PlatformApiKey security: {method_upper} {path}"
+                    )
+            elif auth == "anonymous":
+                if operation_key not in ANONYMOUS_PUBLIC_OPERATIONS:
+                    problems.append(
+                        f"unreviewed anonymous operation in public contract: {method_upper} {path}"
+                    )
+                if operation.get("security") != []:
+                    problems.append(
+                        f"anonymous metadata operation must declare security=[]: {method_upper} {path}"
+                    )
+                scopes = operation.get("x-agroai-required-scopes")
+                if scopes not in ([], None):
+                    problems.append(
+                        f"anonymous metadata operation must not require scopes: {method_upper} {path}"
+                    )
+            else:
+                problems.append(
+                    f"public operation has unapproved authentication marker {auth!r}: "
+                    f"{method_upper} {path}"
+                )
+
+    # Also prove every intentionally anonymous metadata operation is present.
+    actual_anonymous = {
+        (method.upper(), path)
+        for path, path_item in paths.items()
+        if isinstance(path_item, dict)
+        for method, operation in path_item.items()
+        if method.lower() in HTTP_METHODS
+        and isinstance(operation, dict)
+        and operation.get("x-agroai-authentication") == "anonymous"
+    }
+    missing_anonymous = ANONYMOUS_PUBLIC_OPERATIONS - actual_anonymous
+    for method, path in sorted(missing_anonymous):
+        problems.append(f"reviewed anonymous metadata operation missing: {method} {path}")
 
     schemes = contract.get("components", {}).get("securitySchemes", {})
     scheme = schemes.get("PlatformApiKey") if isinstance(schemes, dict) else None
