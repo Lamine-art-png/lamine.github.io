@@ -71,6 +71,7 @@ ROUTE_MANIFEST: tuple[RouteSurface, ...] = (
     RouteSurface("POST", "/v1/platform/cli/device/authorization", "platform_cli_auth", "anonymous", (), False),
     RouteSurface("POST", "/v1/platform/cli/device/approve", "platform_cli_auth", "portal_jwt", (), False),
     RouteSurface("POST", "/v1/platform/cli/device/token", "platform_cli_auth", "anonymous", (), False),
+    RouteSurface("POST", "/v1/platform/cli/device/logout", "platform_cli_auth", "portal_jwt", (), False),
 )
 
 

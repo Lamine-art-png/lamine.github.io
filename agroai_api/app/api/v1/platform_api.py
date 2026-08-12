@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Response, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
@@ -233,11 +233,17 @@ def platform_health() -> dict[str, Any]:
     except RuntimeError:
         webhook_vault_ready = False
     webhook_delivery_ready = (not delivery_enabled) or (webhook_vault_ready and queue_configured())
-    runtime_ready = enabled and limiter["ready"] and production_vault_ready is not False and edge_auth_ready and webhook_delivery_ready
+    cli_device_auth_enabled = bool(getattr(settings, "PLATFORM_API_CLI_DEVICE_AUTH_ENABLED", False))
+    cli_device_auth_ready = _device_auth.device_auth_secret_ready()
+    runtime_ready = (
+        enabled and limiter["ready"] and production_vault_ready is not False
+        and edge_auth_ready and webhook_delivery_ready and cli_device_auth_ready
+    )
     return {
         "status": "ready" if runtime_ready else ("disabled" if not enabled else "not_ready"),
         "platform_api_enabled": enabled,
         "developer_control_plane_enabled": bool(getattr(settings, "PLATFORM_API_DEVELOPER_CONTROL_PLANE_ENABLED", False)),
+        "cli_device_auth": {"enabled": cli_device_auth_enabled, "secret_ready": cli_device_auth_ready},
         "rate_limiter": limiter,
         "production_vault_keyring_ready": production_vault_ready,
         "cidr_trusted_proxy_ready": edge_auth_ready,
@@ -1730,17 +1736,48 @@ def redeliver_webhook(
 # ---------------------------------------------------------------------------
 # agroai CLI device authorization (RFC 8628-style, first-party browser handoff)
 # ---------------------------------------------------------------------------
-from app.api.deps import AuthContext, get_auth_context, require_approved_organization  # noqa: E402
+from app.api.deps import AuthContext, get_auth_context, get_current_user, require_approved_organization  # noqa: E402
+from app.core.security import http_bearer, verify_token  # noqa: E402
+from app.core.rate_limiting import limiter as _limiter  # noqa: E402
 from app.platform_api import device_auth as _device_auth  # noqa: E402
+
+# Abuse controls for the anonymous device endpoints reuse the authoritative
+# slowapi IP limiter (same one that protects register/login). Generous outside
+# production so RFC 8628 polling stays usable; bounded in production.
+_DEVICE_PROD_LIMITS = str(getattr(settings, "APP_ENV", "development")).lower() == "production"
+DEVICE_AUTHZ_RATE_LIMIT = "20/minute" if _DEVICE_PROD_LIMITS else "1000/minute"
+DEVICE_TOKEN_RATE_LIMIT = "120/minute" if _DEVICE_PROD_LIMITS else "5000/minute"
+DEVICE_APPROVE_RATE_LIMIT = "30/minute" if _DEVICE_PROD_LIMITS else "1000/minute"
+
+
+def _authz_rate_limit():
+    return str(getattr(settings, "PLATFORM_API_CLI_DEVICE_AUTHZ_RATE_LIMIT", "") or DEVICE_AUTHZ_RATE_LIMIT)
+
+
+def _token_rate_limit():
+    return str(getattr(settings, "PLATFORM_API_CLI_DEVICE_TOKEN_RATE_LIMIT", "") or DEVICE_TOKEN_RATE_LIMIT)
+
+
+def _approve_rate_limit():
+    return str(getattr(settings, "PLATFORM_API_CLI_DEVICE_APPROVE_RATE_LIMIT", "") or DEVICE_APPROVE_RATE_LIMIT)
 
 
 def _require_cli_device_auth_enabled() -> None:
     if not bool(getattr(settings, "PLATFORM_API_CLI_DEVICE_AUTH_ENABLED", False)):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found")
+    if not _device_auth.device_auth_secret_ready():
+        # Enabled in production without a real hashing secret -> fail closed.
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={"code": "cli_device_auth_secret_not_configured"},
+        )
 
 
 class DeviceAuthorizationRequest(BaseModel):
-    scope: str | None = Field(default=None, max_length=500)
+    # No `scope` field: scoped human CLI sessions do not exist yet, so an
+    # OAuth-style requested scope with no authorization effect is intentionally
+    # NOT part of the contract (item 9). The minted token is a full human
+    # control-plane credential bound to the approved organization.
     client_label: str | None = Field(default=None, max_length=120)
 
 
@@ -1753,10 +1790,11 @@ class DeviceTokenRequest(BaseModel):
 
 
 @router.post("/platform/cli/device/authorization")
-def cli_device_authorization(payload: DeviceAuthorizationRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+@_limiter.limit(_authz_rate_limit)
+def cli_device_authorization(payload: DeviceAuthorizationRequest, request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
     _require_cli_device_auth_enabled()
     device_code, row = _device_auth.create_device_authorization(
-        db, requested_scope=payload.scope, client_label=payload.client_label
+        db, client_label=payload.client_label
     )
     base = str(getattr(settings, "PLATFORM_CONSOLE_URL", "") or "https://app.agroai-pilot.com").rstrip("/")
     verification_uri = f"{base}/cli"
@@ -1771,8 +1809,10 @@ def cli_device_authorization(payload: DeviceAuthorizationRequest, db: Session = 
 
 
 @router.post("/platform/cli/device/approve")
+@_limiter.limit(_approve_rate_limit)
 def cli_device_approve(
     payload: DeviceApproveRequest,
+    request: Request,
     ctx: AuthContext = Depends(get_auth_context),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
@@ -1792,7 +1832,8 @@ def cli_device_approve(
 
 
 @router.post("/platform/cli/device/token")
-def cli_device_token(payload: DeviceTokenRequest, db: Session = Depends(get_db)) -> dict[str, Any]:
+@_limiter.limit(_token_rate_limit)
+def cli_device_token(payload: DeviceTokenRequest, request: Request, db: Session = Depends(get_db)) -> dict[str, Any]:
     _require_cli_device_auth_enabled()
     result = _device_auth.exchange_device_token(db, device_code=payload.device_code)
     if "access_token" in result:
@@ -1800,3 +1841,24 @@ def cli_device_token(payload: DeviceTokenRequest, db: Session = Depends(get_db))
     # RFC 8628 poll states are returned as 200 with an explicit status so the
     # platform error envelope does not mask them; the CLI polls on this field.
     return {"status": result.get("error", "invalid_grant")}
+
+
+@router.post("/platform/cli/device/logout")
+def cli_device_logout(
+    user=Depends(get_current_user),
+    credentials=Depends(http_bearer),
+    db: Session = Depends(get_db),
+) -> dict[str, Any]:
+    """Server-side revocation of the CURRENT CLI human session (does not touch
+    the user's browser sessions). `agroai logout` calls this before deleting the
+    local credential; the revoked token fails immediately thereafter."""
+    _require_cli_device_auth_enabled()
+    session_id = None
+    try:
+        session_id = verify_token(credentials.credentials).get("cli_session") if credentials else None
+    except Exception:
+        session_id = None
+    if not session_id:
+        return {"status": "no_cli_session"}
+    revoked = _device_auth.revoke_cli_session(db, str(session_id))
+    return {"status": "revoked" if revoked else "already_revoked"}

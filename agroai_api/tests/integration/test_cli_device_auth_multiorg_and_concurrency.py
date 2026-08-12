@@ -169,3 +169,80 @@ def test_concurrent_token_exchange_has_exactly_one_winner(monkeypatch):
         assert row.status == "consumed" and row.consumed_at is not None
     finally:
         db.close()
+
+
+def test_cli_logout_revokes_the_session_server_side(monkeypatch):
+    from app.core.config import settings
+    from app.db.base import get_db
+    from app.main import app
+
+    for name in ("PLATFORM_API_ENABLED", "PLATFORM_API_DEVELOPER_CONTROL_PLANE_ENABLED",
+                 "PLATFORM_API_CLI_DEVICE_AUTH_ENABLED"):
+        monkeypatch.setattr(settings, name, True, raising=False)
+    Session = sessionmaker(bind=_engine(), expire_on_commit=False)
+
+    def override_get_db():
+        db = Session()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+    client = TestClient(app)
+    try:
+        from app.core.security import create_access_token
+        user_id, org_a, org_b = _seed_user_in_two_orgs(Session)
+        browser_b = {"Authorization": f"Bearer {create_access_token({'sub': user_id, 'org_id': org_b, 'tenant_id': org_b, 'role': 'owner'})}"}
+        auth = client.post("/v1/platform/cli/device/authorization", json={}).json()
+        client.post("/v1/platform/cli/device/approve", headers=browser_b, json={"user_code": auth["user_code"]})
+        cli_token = client.post("/v1/platform/cli/device/token", json={"device_code": auth["device_code"]}).json()["access_token"]
+        cli = {"Authorization": f"Bearer {cli_token}"}
+
+        # Works before logout.
+        assert client.get("/v1/platform/developer/overview", headers=cli).status_code == 200
+
+        # Server-side logout revokes the session.
+        out = client.post("/v1/platform/cli/device/logout", headers=cli)
+        assert out.status_code == 200 and out.json()["status"] == "revoked"
+
+        # The same token now fails immediately on any authenticated route.
+        assert client.get("/v1/platform/developer/overview", headers=cli).status_code == 401
+        # An already-revoked token cannot even re-invoke logout.
+        assert client.post("/v1/platform/cli/device/logout", headers=cli).status_code == 401
+
+        # An unknown/deleted CLI session id fails closed too.
+        forged = {"Authorization": f"Bearer {create_access_token({'sub': user_id, 'org_id': org_b, 'tenant_id': org_b, 'cli_session': 'does-not-exist'})}"}
+        assert client.get("/v1/platform/developer/overview", headers=forged).status_code == 401
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+
+def test_device_authorization_is_rate_limited_per_ip(monkeypatch):
+    from app.core.config import settings
+    from app.core.rate_limiting import limiter
+    from app.db.base import get_db
+    from app.main import app
+
+    monkeypatch.setattr(settings, "PLATFORM_API_CLI_DEVICE_AUTH_ENABLED", True, raising=False)
+    # Reuse the authoritative IP limiter; lower the bound for a deterministic test.
+    monkeypatch.setattr(settings, "PLATFORM_API_CLI_DEVICE_AUTHZ_RATE_LIMIT", "3/minute", raising=False)
+    limiter.reset()
+    Session = sessionmaker(bind=_engine(), expire_on_commit=False)
+
+    def override_get_db():
+        db = Session()
+        try:
+            yield db
+        finally:
+            db.close()
+
+    app.dependency_overrides[get_db] = override_get_db
+    client = TestClient(app)
+    try:
+        codes = [client.post("/v1/platform/cli/device/authorization", json={}).status_code for _ in range(5)]
+        assert codes[:3] == [200, 200, 200], codes
+        assert 429 in codes[3:], f"anonymous device authorization must be rate limited: {codes}"
+    finally:
+        limiter.reset()
+        app.dependency_overrides.pop(get_db, None)

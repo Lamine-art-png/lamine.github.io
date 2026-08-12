@@ -225,8 +225,8 @@ def _cmd_login(args, out, err) -> int:
 def _cmd_logout(args, out, err) -> int:
     from . import session as _session
 
-    removed = _session.clear_session()
-    _emit({"status": "logged_out" if removed else "no_session"}, as_json=args.json, out=out)
+    server_status = _session.logout()
+    _emit({"status": "logged_out", "server_revocation": server_status}, as_json=args.json, out=out)
     return EXIT_OK
 
 

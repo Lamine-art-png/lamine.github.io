@@ -73,6 +73,11 @@ class Settings(BaseSettings):
     # (first-party account/session; no embedded client secret; no API key used
     # as human identity). Default off so production is unchanged until enabled.
     PLATFORM_API_CLI_DEVICE_AUTH_ENABLED: bool = False
+    # Optional per-IP rate-limit overrides for the anonymous device endpoints
+    # (empty = use the built-in production/dev defaults). slowapi format, e.g. "20/minute".
+    PLATFORM_API_CLI_DEVICE_AUTHZ_RATE_LIMIT: str = ""
+    PLATFORM_API_CLI_DEVICE_TOKEN_RATE_LIMIT: str = ""
+    PLATFORM_API_CLI_DEVICE_APPROVE_RATE_LIMIT: str = ""
     PLATFORM_API_LIVE_ACCESS_REQUESTS_ENABLED: bool = False
     PLATFORM_API_BILLING_ENABLED: bool = False
     PLATFORM_API_STRIPE_CHECKOUT_ENABLED: bool = False

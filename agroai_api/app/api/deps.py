@@ -110,7 +110,25 @@ def get_current_user(
     _assert_credential_freshness(payload, user)
     _assert_account_access(user)
     _assert_token_organization_access(payload, user, db)
+    _assert_cli_session_active(payload, db)
     return user
+
+
+def _assert_cli_session_active(payload: dict, db: Session) -> None:
+    """Reject a revoked CLI human session (server-side `agroai logout`). Only
+    tokens carrying a `cli_session` claim incur this check, so browser sessions
+    are unaffected."""
+    session_id = payload.get("cli_session")
+    if not session_id:
+        return
+    from app.platform_api.device_auth import cli_session_is_revoked
+
+    if cli_session_is_revoked(db, str(session_id)):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="CLI session has been revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 def get_current_user_optional(

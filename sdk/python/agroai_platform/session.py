@@ -69,6 +69,28 @@ def load_session() -> dict[str, Any] | None:
     return None
 
 
+def logout(timeout: float = 15.0) -> str:
+    """Revoke the CLI session server-side, then remove the local credential.
+
+    Server revocation happens first so the token stops working immediately even
+    if local removal fails. Returns a short status string."""
+    session = load_session()
+    server_status = "no_session"
+    if session and session.get("access_token"):
+        base = str(session.get("base_url", DEFAULT_BASE_URL)).rstrip("/")
+        try:
+            with httpx.Client(timeout=timeout) as client:
+                resp = client.post(
+                    f"{base}/v1/platform/cli/device/logout",
+                    headers={"Authorization": f"Bearer {session['access_token']}"},
+                )
+            server_status = resp.json().get("status", "unknown") if resp.headers.get("content-type", "").startswith("application/json") else "unknown"
+        except Exception:
+            server_status = "server_unreachable"
+    clear_session()
+    return server_status
+
+
 def clear_session() -> bool:
     removed = False
     kr = _keyring()
