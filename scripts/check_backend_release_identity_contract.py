@@ -20,8 +20,21 @@ phase6 = read(".github/workflows/deploy-platform-api-marketing.yml")
 diagnostics = read(".github/workflows/platform-api-private-beta-diagnostics.yml")
 readiness = read(".github/workflows/production-readiness-snapshot.yml")
 
-require(resolver, 'git log -1 --format=%H -- agroai_api', "resolver")
-require(resolver, 'is-shallow-repository', "resolver")
+# The resolver deliberately walks the first-parent release chain. A historical
+# contract expected `git log -1 -- ...`, but path history simplification can
+# select an internal PR commit that was never the default-branch/Render release
+# identity. Keep the contract tied to the safer first-parent tree-diff semantics.
+require(resolver, 'git rev-parse --is-shallow-repository', "resolver")
+require(resolver, 'candidate="$(git rev-parse HEAD)"', "resolver")
+require(resolver, '"${candidate}^1"', "resolver")
+require(resolver, 'git diff --quiet "${candidate}^1" "$candidate" -- agroai_api', "resolver")
+require(resolver, 'candidate="$(git rev-parse "${candidate}^1")"', "resolver")
+require(resolver, 'git cat-file -e "${candidate}^{commit}"', "resolver")
+
+# Prevent regression to the old path-simplified lookup that cannot represent
+# the actual merge/default-branch release commit reliably.
+if 'git log -1 --format=%H -- agroai_api' in resolver:
+    raise AssertionError("resolver: path-simplified git log must not replace first-parent release resolution")
 
 for label, workflow in {
     "authoritative release": deploy,
