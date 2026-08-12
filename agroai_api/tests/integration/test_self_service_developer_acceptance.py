@@ -88,13 +88,9 @@ def _seed_effective_terms(Session) -> tuple[str, str]:
 
     db = Session()
     try:
-        existing = (
-            db.query(PlatformTermsDocument)
-            .filter(PlatformTermsDocument.document_type == "api_terms", PlatformTermsDocument.status == "approved_effective")
-            .first()
-        )
-        if existing:
-            return existing.document_type, existing.version
+        # Always publish a fresh CURRENT terms document (latest effective_at) so
+        # this test is robust to any older api_terms rows left by other tests in
+        # a shared database — the developer must accept the *current* terms.
         version = f"accept-{uuid.uuid4().hex[:8]}"
         db.add(
             PlatformTermsDocument(
@@ -102,7 +98,7 @@ def _seed_effective_terms(Session) -> tuple[str, str]:
                 version=version,
                 status="approved_effective",
                 content_digest="a" * 64,
-                effective_at=datetime.utcnow() - timedelta(days=1),
+                effective_at=datetime.utcnow(),
             )
         )
         db.commit()

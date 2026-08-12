@@ -275,6 +275,16 @@ def ensure_self_service_test_enrollment(
     if existing is not None and existing.status == "suspended":
         return None
 
+    # Terms are a HARD prerequisite for automatic enrollment, independent of the
+    # PLATFORM_API_TERMS_ENFORCEMENT_ENABLED flag: a developer is never silently
+    # auto-enrolled without having accepted the CURRENT developer terms. This
+    # raises (fail closed) when the current terms are unaccepted or superseded.
+    from app.platform_api.terms import require_user_acceptance
+
+    if actor_user_id is None:
+        return None
+    require_user_acceptance(db, organization_id=organization.id, user_id=actor_user_id)
+
     row = existing or PlatformProgramEnrollment(
         organization_id=organization.id,
         program="developer_self_service",

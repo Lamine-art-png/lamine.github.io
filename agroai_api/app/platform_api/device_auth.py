@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.security import create_access_token
 from app.models.platform_product import PlatformCliDeviceAuthorization
+from app.models.saas import OrganizationMembership
 
 DEVICE_CODE_TTL = timedelta(minutes=10)
 DEFAULT_INTERVAL_SECONDS = 5
@@ -97,24 +98,52 @@ def approve_device_authorization(
     return row.status
 
 
+def _mint_org_bound_token(db: Session, *, user_id: str, organization_id: str) -> str:
+    """Mint a short-lived human control-plane JWT bound to the approved
+    organization, mirroring the browser-login claim conventions so the auth
+    context resolves that exact organization (never the user's first membership)."""
+    membership = (
+        db.query(OrganizationMembership)
+        .filter(
+            OrganizationMembership.organization_id == organization_id,
+            OrganizationMembership.user_id == user_id,
+        )
+        .first()
+    )
+    role = getattr(membership, "role", None)
+    return create_access_token(
+        {"sub": user_id, "org_id": organization_id, "tenant_id": organization_id, "role": role},
+        expires_delta=HUMAN_TOKEN_TTL,
+    )
+
+
 def exchange_device_token(db: Session, *, device_code: str, now: datetime | None = None) -> dict:
-    """Poll/exchange. Returns a dict with either an OAuth-style pending status or
-    a minted short-lived human control-plane token (exactly once)."""
+    """Poll/exchange. Returns either an RFC 8628 poll status or a minted short-
+    lived, organization-bound human control-plane token — exactly once.
+
+    The approved -> consumed transition is an atomic PostgreSQL compare-and-swap
+    (``UPDATE ... WHERE status='approved'``), so under N concurrent exchanges
+    exactly one request updates a row and mints a credential; every other
+    request observes the already-consumed row and is rejected. No Python locks.
+    """
     moment = now or datetime.utcnow()
     row = _lookup(db, device_code)
     if row is None:
         return {"error": "invalid_grant"}
-    # Interval enforcement (slow_down) before any state transition.
+
+    # Advisory interval accounting (slow_down); not the authoritative guard.
     too_fast = row.last_polled_at is not None and (moment - row.last_polled_at).total_seconds() < row.interval_seconds
     row.poll_count = (row.poll_count or 0) + 1
     row.last_polled_at = moment
-    if row.expires_at <= moment and row.status not in {"consumed"}:
-        row.status = "expired"
-        db.commit()
-        return {"error": "expired_token"}
+
     if row.status == "consumed":
         db.commit()
         return {"error": "invalid_grant"}  # one-time only; replay rejected
+    if row.expires_at <= moment:
+        if row.status != "expired":
+            row.status = "expired"
+        db.commit()
+        return {"error": "expired_token"}
     if row.status == "denied":
         db.commit()
         return {"error": "access_denied"}
@@ -125,15 +154,28 @@ def exchange_device_token(db: Session, *, device_code: str, now: datetime | None
         if too_fast:
             db.commit()
             return {"error": "slow_down"}
-        token = create_access_token({"sub": row.approved_by_user_id}, expires_delta=HUMAN_TOKEN_TTL)
-        row.status = "consumed"
-        row.consumed_at = moment
+        user_id = row.approved_by_user_id
+        organization_id = row.organization_id
+        # Atomic single-winner: only the request whose UPDATE flips approved->
+        # consumed proceeds to mint. Also re-check expiry inside the predicate.
+        won = (
+            db.query(PlatformCliDeviceAuthorization)
+            .filter(
+                PlatformCliDeviceAuthorization.id == row.id,
+                PlatformCliDeviceAuthorization.status == "approved",
+                PlatformCliDeviceAuthorization.expires_at > moment,
+            )
+            .update({"status": "consumed", "consumed_at": moment}, synchronize_session=False)
+        )
         db.commit()
+        if won != 1:
+            return {"error": "invalid_grant"}  # another concurrent exchange won
+        token = _mint_org_bound_token(db, user_id=user_id, organization_id=organization_id)
         return {
             "access_token": token,
             "token_type": "Bearer",
             "expires_in": int(HUMAN_TOKEN_TTL.total_seconds()),
-            "organization_id": row.organization_id,
+            "organization_id": organization_id,
         }
     db.commit()
     return {"error": "invalid_grant"}
