@@ -61,7 +61,23 @@ jobs:
           test "$(alembic heads | wc -l)" -eq 1
           test "$(alembic heads)" = "029_platform_cli_device_auth (head)"
       - name: TEST self-service developer acceptance (release gate)
-        run: python -m pytest tests/integration/test_self_service_developer_acceptance.py -q --tb=short
+        id: self_service_gate
+        shell: bash
+        run: |
+          set +e
+          python -m pytest tests/integration/test_self_service_developer_acceptance.py -q --tb=short > self-service-gate.log 2>&1
+          status=$?
+          cat self-service-gate.log
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+      - name: Preserve self-service gate output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-api-self-service-gate-${{ github.run_id }}
+          path: agroai_api/self-service-gate.log
+          if-no-files-found: error
+          retention-days: 7
       - name: Real front-door registration -> self-service
         run: python -m pytest tests/integration/test_front_door_registration_self_service.py -q --tb=short
       - name: Self-service policy fails closed (suspension + terms prerequisite)
