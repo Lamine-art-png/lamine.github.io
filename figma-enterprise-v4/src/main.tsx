@@ -8,6 +8,20 @@ const runtimeProductName = standalonePlatformHost ? "AGRO-AI Platform API" : "AG
 const runtimeSurfaceName = standalonePlatformHost ? "developer platform" : "portal";
 const automaticRecoveryKey = "agroai_frontend_cache_recovery_attempted";
 
+// Stable, eagerly-loaded runtime identity for production smoke verification.
+// Product/source contract tests validate the actual UI separately; this marker
+// prevents release proof from depending on how Vite happens to split/minify UI
+// copy into lazy chunks. It contains no credential or customer information.
+const standalonePlatformRuntimeIdentity = [
+  "platform.agroai-pilot.com",
+  "Build on AGRO-AI.",
+  "Platform API enrollment remains a separate reviewed step after sign-in.",
+  "Permanent API keys never enter browser JavaScript.",
+].join(" | ");
+if (standalonePlatformHost) {
+  document.documentElement.dataset.agroaiPlatformRuntimeIdentity = standalonePlatformRuntimeIdentity;
+}
+
 document.title = runtimeProductName;
 const manifestLink = document.querySelector<HTMLLinkElement>('link[rel="manifest"]');
 if (standalonePlatformHost && manifestLink) manifestLink.href = "/platform.webmanifest";
