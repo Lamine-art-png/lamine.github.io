@@ -7,6 +7,9 @@ from fastapi import HTTPException, status
 from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
+import logging
+
+from app.core.config import settings
 from app.core.organization_access import organization_access_allowed
 from app.models.platform_product import (
     PlatformApiPlan,
@@ -137,7 +140,15 @@ def require_api_entitlement(
     if enrollment.billing_mode in {"enterprise_invoice", "contract"}:
         return enrollment, subscription
     if subscription is None:
-        if environment == "test" and enrollment.program in {"internal", "developer_private_beta", "strategic_partner"}:
+        if environment == "test" and enrollment.program in {
+            "internal",
+            "developer_private_beta",
+            "strategic_partner",
+            "developer_self_service",
+        }:
+            # TEST development is deliberately non-billable and needs no paid
+            # subscription. This branch is guarded by `environment == "test"`,
+            # so LIVE always falls through to the subscription/approval checks.
             return enrollment, None
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -186,3 +197,126 @@ def enforce_enrollment_limit(
                 "message": f"The effective Platform API entitlement permits at most {maximum} {resource_name}.",
             },
         )
+
+
+# Server-authoritative safe limits for automatic TEST self-service enrollment.
+# These are deliberately conservative and cannot be widened by client input.
+SELF_SERVICE_TEST_DEFAULTS = {
+    "allowed_environments": ["test"],   # TEST only — never "live"
+    "maximum_projects": 3,
+    "maximum_live_projects": 0,         # LIVE stays separately gated + approved
+    "maximum_service_accounts": 5,
+    "maximum_keys": 10,
+    "maximum_webhooks": 3,
+    # Advisory default scopes: read-first TEST scopes; no actions:execute
+    # (physical), no connectors:sync (real provider I/O).
+    "default_scopes": [
+        "projects:read",
+        "service_accounts:read",
+        "keys:read",
+        "fields:read",
+        "fields:write",
+        "sources:read",
+        "observations:read",
+        "recommendations:read",
+        "reports:read",
+        "jobs:read",
+        "usage:read",
+        "request_logs:read",
+        "webhooks:read",
+    ],
+}
+
+_logger = logging.getLogger("agroai.platform.self_service")
+
+
+def self_service_auto_enroll_enabled() -> bool:
+    return bool(getattr(settings, "PLATFORM_API_TEST_SELF_SERVICE_AUTO_ENROLL_ENABLED", False))
+
+
+def ensure_self_service_test_enrollment(
+    db: Session,
+    organization: Organization,
+    *,
+    actor_user_id: str | None = None,
+    now: datetime | None = None,
+) -> PlatformProgramEnrollment | None:
+    """Idempotently grant an eligible developer a TEST-only self-service enrollment.
+
+    Server-authoritative. Returns the governing enrollment, or ``None`` when
+    auto-enrollment is disabled, the organization is not eligible, an existing
+    enrollment already governs, or a suspension must be respected. Eligibility
+    of the *caller* (verified email, owner/admin membership, accepted terms) is
+    enforced by ``require_developer_control_plane`` before this is invoked; this
+    function additionally re-checks the server-authoritative organization state.
+    """
+    if not self_service_auto_enroll_enabled():
+        return None
+    # Re-assert the server-authoritative organization gate (never trust caller).
+    if not organization_access_allowed(organization):
+        return None
+    moment = now or datetime.utcnow()
+
+    # If any higher-or-equal-priority active enrollment already governs, use it.
+    existing_active = active_enrollments(db, organization.id, now=moment)
+    if existing_active:
+        return None  # require_active_enrollment will select the governing row
+
+    # Respect an existing developer_self_service row (e.g. a suspension is an
+    # abuse control that must NOT be silently reactivated).
+    existing = (
+        db.query(PlatformProgramEnrollment)
+        .filter(
+            PlatformProgramEnrollment.organization_id == organization.id,
+            PlatformProgramEnrollment.program == "developer_self_service",
+        )
+        .first()
+    )
+    if existing is not None and existing.status == "suspended":
+        return None
+
+    # Terms are a HARD prerequisite for automatic enrollment, independent of the
+    # PLATFORM_API_TERMS_ENFORCEMENT_ENABLED flag: a developer is never silently
+    # auto-enrolled without having accepted the CURRENT developer terms. This
+    # raises (fail closed) when the current terms are unaccepted or superseded.
+    from app.platform_api.terms import require_user_acceptance
+
+    if actor_user_id is None:
+        return None
+    require_user_acceptance(db, organization_id=organization.id, user_id=actor_user_id)
+
+    row = existing or PlatformProgramEnrollment(
+        organization_id=organization.id,
+        program="developer_self_service",
+    )
+    row.status = "active"
+    row.allowed_environments_json = list(SELF_SERVICE_TEST_DEFAULTS["allowed_environments"])
+    row.maximum_projects = SELF_SERVICE_TEST_DEFAULTS["maximum_projects"]
+    row.maximum_live_projects = SELF_SERVICE_TEST_DEFAULTS["maximum_live_projects"]
+    row.maximum_service_accounts = SELF_SERVICE_TEST_DEFAULTS["maximum_service_accounts"]
+    row.maximum_keys = SELF_SERVICE_TEST_DEFAULTS["maximum_keys"]
+    row.maximum_webhooks = SELF_SERVICE_TEST_DEFAULTS["maximum_webhooks"]
+    row.default_scopes_json = list(SELF_SERVICE_TEST_DEFAULTS["default_scopes"])
+    row.provider_restrictions_json = {}
+    row.resource_restrictions_json = {}
+    row.billing_mode = "none"
+    row.support_tier = "documentation"
+    row.plan_identifier = None
+    row.effective_at = moment
+    row.expires_at = None
+    row.approved_by_user_id = None  # automatic — no human approver
+    row.approved_at = moment
+    row.updated_at = moment
+    if existing is None:
+        row.created_at = moment
+        db.add(row)
+    db.flush()
+    # Persist the enrollment immediately: it is a distinct, idempotent grant
+    # that must survive even on read-only control-plane requests (which never
+    # commit the request session). This commits only the enrollment row.
+    db.commit()
+    _logger.info(
+        "platform.self_service.auto_enrolled",
+        extra={"organization_id": organization.id, "actor_user_id": actor_user_id, "program": "developer_self_service"},
+    )
+    return row

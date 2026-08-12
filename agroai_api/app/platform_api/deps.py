@@ -15,7 +15,12 @@ from app.platform_api.client_ip import client_ip_allowed
 from app.platform_api.abuse import record_abuse_signal
 from app.platform_api.keys import verify_platform_key
 from app.platform_api.principal import PlatformPrincipal
-from app.platform_api.programs import require_active_enrollment, require_api_entitlement
+from app.platform_api.programs import (
+    ensure_self_service_test_enrollment,
+    require_active_enrollment,
+    require_api_entitlement,
+    self_service_auto_enroll_enabled,
+)
 from app.platform_api.request_context import (
     bounded_client_correlation_id,
     new_billing_operation_id,
@@ -31,12 +36,17 @@ def _feature_enabled() -> bool:
 
 
 def _program_policy_enabled() -> bool:
+    # When any program surface — including TEST self-service auto-enrollment — is
+    # enabled, Platform API key authentication enforces the program/enrollment
+    # policy, so suspending or removing an enrollment fails the key on its next
+    # request even if the private-beta/partner flags are off.
     return any(
         bool(getattr(settings, name, False))
         for name in (
             "PLATFORM_API_PRIVATE_BETA_ENABLED",
             "PLATFORM_API_PARTNER_PROGRAM_ENABLED",
             "PLATFORM_API_SELF_SERVICE_SANDBOX_ENABLED",
+            "PLATFORM_API_TEST_SELF_SERVICE_AUTO_ENROLL_ENABLED",
         )
     )
 
@@ -54,6 +64,13 @@ def require_developer_control_plane(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Active organization membership required")
     if ctx.membership.role not in {"owner", "admin"}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization administrator access required")
+    if self_service_auto_enroll_enabled():
+        # Eligible developer (approved org + active owner/admin membership) is
+        # automatically granted a TEST-only self-service enrollment. Accepted
+        # CURRENT developer terms are enforced as a hard prerequisite inside
+        # ensure_self_service_test_enrollment (fail closed), regardless of the
+        # TERMS_ENFORCEMENT flag. Idempotent; LIVE stays separately gated.
+        ensure_self_service_test_enrollment(db, ctx.organization, actor_user_id=ctx.user.id)
     enrollment = require_active_enrollment(db, ctx.organization, operation="developer_control_plane")
     if bool(getattr(settings, "PLATFORM_API_TERMS_ENFORCEMENT_ENABLED", False)):
         require_user_acceptance(db, organization_id=ctx.organization.id, user_id=ctx.user.id)

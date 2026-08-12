@@ -1,0 +1,123 @@
+name: Platform API developer-platform gates
+
+# Release gates for the self-service developer platform: TEST self-service
+# acceptance, cross-org BOLA/IDOR, secret-leak sinks, CLI device authorization
+# (all on isolated PostgreSQL + Redis), the OpenAPI/SDK/CLI contract-drift gate,
+# and the Python/TypeScript SDK builds + tests. No live provider calls; no
+# production secrets; every capability under test is behind a default-off flag.
+
+on:
+  pull_request:
+    paths:
+      - "agroai_api/**"
+      - "sdk/**"
+      - ".github/workflows/platform-api-developer-platform-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  integration_gates:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: agroai_dev_platform_ci
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+      redis:
+        image: redis:7.2-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    defaults:
+      run:
+        working-directory: agroai_api
+    env:
+      DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agroai_dev_platform_ci
+      PLATFORM_API_POSTGRES_TEST_URL: postgresql://postgres@127.0.0.1:5432/agroai_dev_platform_ci
+      PLATFORM_API_REDIS_INTEGRATION_URL: redis://127.0.0.1:6379/0
+      PLATFORM_API_RATE_LIMIT_BACKEND: memory
+      SECRET_KEY: ci-developer-platform-secret-key-min-32-characters
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install backend + SDK (editable) + pytest
+        run: python -m pip install -q -r requirements.txt pytest -e ../sdk/python
+      - name: Migrate the isolated database to head
+        run: alembic upgrade head
+      - name: Assert a single migration head
+        run: |
+          test "$(alembic heads | wc -l)" -eq 1
+          test "$(alembic heads)" = "029_platform_cli_device_auth (head)"
+      - name: TEST self-service developer acceptance (release gate)
+        id: self_service_gate
+        shell: bash
+        run: |
+          set +e
+          python -m pytest tests/integration/test_self_service_developer_acceptance.py -q --tb=short > self-service-gate.log 2>&1
+          status=$?
+          cat self-service-gate.log
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+      - name: Preserve self-service gate output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-api-self-service-gate-${{ github.run_id }}
+          path: agroai_api/self-service-gate.log
+          if-no-files-found: error
+          retention-days: 7
+      - name: Real front-door registration -> self-service
+        run: python -m pytest tests/integration/test_front_door_registration_self_service.py -q --tb=short
+      - name: Self-service policy fails closed (suspension + terms prerequisite)
+        run: python -m pytest tests/integration/test_self_service_policy_fail_closed.py -q --tb=short
+      - name: Cross-org BOLA/IDOR matrix
+        run: python -m pytest tests/integration/test_platform_api_bola_idor_matrix.py -q --tb=short
+      - name: Secret-leak sink regression
+        run: python -m pytest tests/integration/test_platform_api_secret_sink_regression.py -q --tb=short
+      - name: CLI device authorization flow
+        run: python -m pytest tests/integration/test_cli_device_authorization_flow.py -q --tb=short
+      - name: CLI multi-org binding, atomic mint, logout revocation, rate limiting
+        run: python -m pytest tests/integration/test_cli_device_auth_multiorg_and_concurrency.py -q --tb=short
+      - name: CLI device-auth production secret readiness
+        run: python -m pytest tests/unit/test_cli_device_auth_secret_readiness.py -q --tb=short
+      - name: Real Postgres + Redis platform integration
+        run: python -m pytest tests/integration/test_platform_api_idempotency_postgres.py tests/integration/test_platform_api_product_concurrency_postgres.py tests/integration/test_platform_api_redis_limiter.py -q --tb=short
+      - name: OpenAPI / SDK / CLI contract-drift gate
+        run: python -m pytest tests/unit/test_platform_api_contract_drift.py -q --tb=short
+
+  sdk_build_and_test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Python SDK — test + build wheel/sdist
+        working-directory: sdk/python
+        run: |
+          python -m pip install -q pytest httpx requests build
+          python -m pytest tests -q
+          python -m build || python -m pip wheel . -w dist --no-deps
+          ls -l dist
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: TypeScript SDK — build + test + pack
+        working-directory: sdk/typescript
+        run: |
+          npm install
+          npm test
+          npm pack
+          ls -l *.tgz

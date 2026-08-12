@@ -8,6 +8,8 @@ name: Platform API Contract CI
 #   * the canonical digest does not match the backend's reviewed snapshot,
 #   * any private / admin / developer-control-plane route leaks publicly,
 #   * a documented path is not under /platform/.
+# The exact contract-check output is retained as a small artifact on every run
+# so CI failures can be diagnosed without weakening or bypassing the gate.
 
 on:
   pull_request:
@@ -43,4 +45,20 @@ jobs:
         working-directory: agroai_api
         run: python -m pip install --upgrade pip && python -m pip install -r requirements.txt
       - name: Verify docs contract matches the real backend
-        run: python3 platform-api/contract/generate_contract.py --check
+        id: contract_check
+        shell: bash
+        run: |
+          set +e
+          python3 platform-api/contract/generate_contract.py --check > platform-api-contract-check.log 2>&1
+          status=$?
+          cat platform-api-contract-check.log
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+      - name: Preserve exact contract-check output
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: platform-api-contract-check-${{ github.run_id }}
+          path: platform-api-contract-check.log
+          if-no-files-found: error
+          retention-days: 7

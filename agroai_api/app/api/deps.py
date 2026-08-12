@@ -110,7 +110,25 @@ def get_current_user(
     _assert_credential_freshness(payload, user)
     _assert_account_access(user)
     _assert_token_organization_access(payload, user, db)
+    _assert_cli_session_active(payload, db)
     return user
+
+
+def _assert_cli_session_active(payload: dict, db: Session) -> None:
+    """Reject a revoked CLI human session (server-side `agroai logout`). Only
+    tokens carrying a `cli_session` claim incur this check, so browser sessions
+    are unaffected."""
+    session_id = payload.get("cli_session")
+    if not session_id:
+        return
+    from app.platform_api.device_auth import cli_session_is_revoked
+
+    if cli_session_is_revoked(db, str(session_id)):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="CLI session has been revoked",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
 
 
 def get_current_user_optional(
@@ -173,17 +191,38 @@ def _activate_server_authorized_access_profile(db: Session, user: User, organiza
     db.refresh(organization)
 
 
-def get_auth_context(user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> AuthContext:
+def get_auth_context(
+    user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials | None = Depends(http_bearer),
+    db: Session = Depends(get_db),
+) -> AuthContext:
     require_verified_user(user)
-    membership = (
-        db.query(OrganizationMembership)
-        .filter(
-            OrganizationMembership.user_id == user.id,
-            OrganizationMembership.status == "active",
-        )
-        .order_by(OrganizationMembership.created_at.asc())
-        .first()
+    # Honor the organization the token was minted for (org_id/tenant_id claim,
+    # as set by browser login and the CLI device flow) so a multi-org user's
+    # session resolves the authoritative organization instead of blindly
+    # selecting their oldest membership. Fail closed if that membership is not
+    # active. Unscoped/legacy tokens fall back to the first active membership.
+    claimed_org_id: str | None = None
+    if credentials:
+        try:
+            payload = verify_token(credentials.credentials)
+            value = payload.get("org_id") or payload.get("tenant_id")
+            claimed_org_id = str(value) if value else None
+        except Exception:
+            claimed_org_id = None
+    query = db.query(OrganizationMembership).filter(
+        OrganizationMembership.user_id == user.id,
+        OrganizationMembership.status == "active",
     )
+    if claimed_org_id:
+        membership = query.filter(OrganizationMembership.organization_id == claimed_org_id).first()
+        if membership is None:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session organization is no longer available",
+            )
+    else:
+        membership = query.order_by(OrganizationMembership.created_at.asc()).first()
     organization = membership.organization if membership else None
     require_approved_organization(organization)
     _activate_server_authorized_access_profile(db, user, organization)

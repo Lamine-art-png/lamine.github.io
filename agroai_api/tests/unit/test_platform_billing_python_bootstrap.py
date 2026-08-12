@@ -40,6 +40,18 @@ def _run(extra: dict[str, str]) -> dict[str, str | None]:
     ):
         env.pop(name, None)
     env.update(extra)
+
+    # ``sitecustomize`` is imported during interpreter startup, before ``-c``
+    # executes. Make its application root an explicit startup import path rather
+    # than relying on incidental current-directory insertion rules, which vary
+    # with Python safe-path/runtime settings. This still tests Python's automatic
+    # sitecustomize hook (the child code never imports it explicitly) and mirrors
+    # the production requirement that the AGRO-AI application root is importable.
+    existing_pythonpath = env.get("PYTHONPATH", "").strip()
+    env["PYTHONPATH"] = os.pathsep.join(
+        part for part in (str(ROOT), existing_pythonpath) if part
+    )
+
     code = (
         "import json, os; "
         f"names={CAPABILITIES!r}; "

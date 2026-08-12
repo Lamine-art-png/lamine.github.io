@@ -99,7 +99,11 @@ def test_test_or_malformed_shared_key_never_crosses_live_boundary():
         assert "PLATFORM_API_STRIPE_SECRET_KEY" not in values
         assert status["status"] == "not_ready"
         assert status["missing"] == ["PLATFORM_API_STRIPE_SECRET_KEY"]
-        assert unsafe_value not in repr(status)
+        # The leak check is only meaningful for a non-empty secret; the empty
+        # string is a substring of every repr, so guard it (the not_ready /
+        # missing assertions above still exercise the empty-value case).
+        if unsafe_value:
+            assert unsafe_value not in repr(status)
 
 
 def test_dedicated_platform_key_takes_precedence_over_shared_key():
