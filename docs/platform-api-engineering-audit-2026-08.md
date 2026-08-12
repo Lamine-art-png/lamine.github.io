@@ -324,3 +324,71 @@ documented, not "repaired."
 | Safe for physical execution | **NO** | fail-closed (`physical_action_disabled`), confirmed via live `/health` |
 | Safe for enterprise SLA claim | **NO** | needs elapsed SLO history — external blocker |
 | Safe for compliance claim | **NO** | needs independent pen-test/assessment — external blocker |
+
+## 10. Developer-platform completion pass (session 2026-08-12)
+
+Fresh network fetch: current `origin/main` = **`a83bb9c4c`** (unchanged). Branch
+`integrate/current-main-20260811`; **0 behind / 26 ahead**; clean tree; no
+conflict markers; **Alembic head `029_platform_cli_device_auth`**; **452 routes**.
+
+This pass completes the self-service developer product and closes its remaining
+security/release gaps. Every new capability is behind a **default-off** feature
+flag, so production behaviour is unchanged until deliberately enabled.
+
+### What shipped (all tested)
+
+| Area | Result | Evidence |
+|------|--------|----------|
+| **TEST self-service (auto-enrollment)** | **implemented + proven** | Extends the existing program/entitlement model: `ensure_self_service_test_enrollment` grants an eligible developer (approved org + active owner/admin + accepted terms) a **TEST-only** `developer_self_service` enrollment with server-authoritative safe limits; `developer_self_service` added to the no-subscription **TEST** entitlement allowlist. Flag `PLATFORM_API_TEST_SELF_SERVICE_AUTO_ENROLL_ENABLED` (default off). |
+| **Self-service acceptance (release gate)** | **24/24 on real PG** | `test_self_service_developer_acceptance.py`: register→verify→approved org→accept terms→AUTOMATIC enrollment (no human approver)→TEST project→service account→`agro_test_` key (one-time plaintext)→me/fields/create/report-job/usage→rotate(overlap 0) old-fails/new-succeeds; and proves LIVE creation blocked, cross-org 404, providers `awaiting_partner_contract`, physical irrigation disabled, zero manual approval. |
+| **BOLA/IDOR matrix** | **PASS on real PG** | `test_platform_api_bola_idor_matrix.py`: two orgs; direct-id GET/PATCH/DELETE/retry of another org's field/source/job/report → 404; list endpoints never enumerate the other org; control-plane project GET/PATCH and key revoke/rotate across orgs → 404; positive + symmetric checks. |
+| **Secret-leak sinks** | **PASS on real PG** | `test_platform_api_secret_sink_regression.py`: Platform metrics use only low-cardinality labels (no customer/key ids); a full `agro_test_` key never reaches the persisted request log (only the ≤32-char fingerprint), `/metrics`, or error bodies. |
+| **Contract-drift gate** | **PASS** | `test_platform_api_contract_drift.py`: SDK/CLI reference only declared live routes; the data-plane SDK client stays public-only; the public OpenAPI documents only public routes and leaks no developer/admin route (still 27 curated paths — device routes correctly excluded). |
+| **CLI human login (device flow)** | **backend proven on real PG** | RFC 8628-style `device/{authorization,approve,token}` on the existing session system: high-entropy device_code stored only as a hash; short user_code; explicit human approval with org binding; slow_down; one-time mint (replay → `invalid_grant`); expiry; the minted token is a working control-plane credential. Flag `PLATFORM_API_CLI_DEVICE_AUTH_ENABLED` (default off). |
+| **CLI tool** | **login/logout + commands** | `agroai login`/`logout` (browser device flow; OS-keychain or 0600-file storage; never uses an API key as human identity, no embedded client secret); control-plane `projects`, `keys` (list/create/revoke/rotate), `webhooks list`; data-plane `fields create`; `--json`; secrets never printed except the one-time key response. |
+| **Python SDK** | **19 passed + wheel** | `sdk/python` tests; `agroai_platform-0.2.0-py3-none-any.whl`. |
+| **TypeScript SDK** | **6 passed + tarball** | `tsc` build + `node --test` (webhook signature verify/replay); `agro-ai-platform-0.2.0.tgz` (`private:true`). |
+| **Backend `tests/unit`** | **1064 passed / 3 skipped** | Two tests fail **only under parallel xdist** (shared global state) and pass in isolation and serially; CI runs `tests/unit` **serially**. Not regressions (areas untouched by this pass). |
+| **`tests/integration` (real PG+Redis)** | **14 passed together** | self-service acceptance, BOLA, secret-sink (2), device-auth (2), PG idempotency, PG concurrency (3), Redis limiter (4). |
+| **Acceptance (`tests/acceptance`)** | **9 passed** (`APP_ENV=test`) | unchanged from §9. |
+| **Cloudflare edge gateway** | **29 passed** | `cloudflare/edge-gateway` `npm run check` (typecheck + tests; trusted-proxy/identifier safety, queue custody). |
+| **Enterprise Portal** | **green, unchanged** | backend-only pass; §9 Portal suite (850 literals / 61 locales / FI contracts) + `vite build` remain valid. |
+| **Migration** | **head 029, fresh-PG upgrade clean** | `022→…→028→029`; single head; head cascade updated in `ci.yml`, `hardening-backend-reusable.yml`, `schema_contract`, `test_schema_adoption`. |
+| **New CI** | **wired** | `platform-api-developer-platform-ci.yml`: runs the self-service/BOLA/secret-sink/device-auth/PG+Redis/contract-drift gates on isolated postgres:16 + redis:7.2, plus Python+TS SDK build/test. |
+| **Repository secret scanner** | **PASS** | 1373 paths. |
+
+### External / environment blockers (not fabricated)
+
+- **Webhook network delivery in isolated staging** — *infrastructure blocker.*
+  Code-level is complete and proven: signed delivery records, SSRF port
+  allowlist, secret vault separated from the key pepper, and outbox
+  **publish-once** semantics (real-PG integration test); TS SDK proves signature
+  verification + replay/tamper rejection. A true event→HTTPS-receiver→retry
+  network proof needs an isolated staging environment with a controllable
+  receiver, which does not exist in this environment. Production delivery stays
+  disabled.
+- **SDK publishing** — *external-contract blocker.* Reproducible artifacts exist
+  (`agroai_platform-0.2.0-py3-none-any.whl`, `agro-ai-platform-0.2.0.tgz`) and a
+  build workflow is wired, but publishing is not performed: PyPI/npm **package-
+  name ownership and credentials are unverified**. Desired names: PyPI
+  `agroai-platform`, npm `@agro-ai/platform` (currently `private:true`).
+- **Container build** — *environment blocker.* `docker` is unavailable; no
+  container build was run (not fabricated).
+- **Full alembic downgrade-to-base** — remains **intentionally unsupported by
+  design** (see §9: `014_connector_sync_cursors.downgrade()` deliberate no-op).
+  Forward `upgrade head` is proven; not "repaired" so as not to contradict the
+  authors' data-protection intent.
+- **Draft PR** — *credential blocker.* PAT lacks Pull-requests:write (403) and
+  `gh` is absent → open the draft PR in the GitHub UI; CI then runs on the PR.
+
+### Final certification against ACTUAL current main (`a83bb9c4c`)
+
+| Statement | Verdict | Blocker class |
+|-----------|---------|---------------|
+| **Safe to merge** | **YES (pending PR CI)** | — 0 behind real main; unit 1064 (serial-green), integration 14/14, SDK/edge/portal green; new gates green. GitHub CI must still run on the PR. |
+| **Safe for TEST self-service** | **YES (code-complete + proven; activate default-off flags to enable)** | not a code blocker — production enablement is a deliberate ops toggle |
+| **Safe for LIVE API use** | **NO** | EXTERNAL CONTRACT — live flags off; Stripe/provider IDs unverified; providers `awaiting_partner_contract` |
+| **Safe to enable webhook delivery** | **NO** | INFRASTRUCTURE — code-level done + publish-once proven; network staging proof unavailable |
+| **Safe for physical execution** | **NO** | CODE (by design) — fail-closed `physical_action_disabled`; separate approval required |
+| **Safe for enterprise SLA claim** | **NO** | TIME-DEPENDENT EVIDENCE — needs elapsed SLO history |
+| **Safe for compliance claim** | **NO** | EXTERNAL CONTRACT — needs independent pen-test/assessment |
