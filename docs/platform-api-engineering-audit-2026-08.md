@@ -414,3 +414,31 @@ fixed with a dedicated real-PostgreSQL regression test:
 
 **No new migration** was required for these fixes (revocation reuses the row
 `status`; the device secret readiness is a config gate). Head stays `029`.
+
+### Final regression (session 2026-08-12b)
+
+| Gate | Result |
+|------|--------|
+| Backend `tests/unit` | **1069 passed, 3 skipped, 0 real failures** (1 xdist-parallelism-only flake in `test_platform_billing_python_bootstrap`, untouched by this pass, passes serially/in isolation; CI runs unit serially) |
+| Auth / control-plane targeted regression | **98 passed** (covers the `get_auth_context` org-claim change) |
+| `tests/integration` (real PG + Redis) | **22 passed** together; each file also green standalone (one BOLA run flaked only under extreme CPU contention from a concurrent unit suite — passes alone; CI runs integration per-file) |
+| Front-door registration, self-service policy, multi-org/atomic/logout/rate-limit, device secret readiness | **green** (new gates) |
+| Python SDK / CLI | **19 passed** + wheel; TypeScript SDK **6 passed** + tarball |
+| Migration head / fresh-PG upgrade | **029 single head; upgrade clean** |
+| OpenAPI/SDK/CLI contract-drift | **4 passed** |
+| Repository secret scanner | **PASS** (1386 paths) |
+| git diff --check | **clean** |
+| Cloudflare edge / Enterprise Portal | not re-run — this pass changed no edge/portal contract |
+
+### Certification after the correction pass (branch is 0 behind `a83bb9c4c`)
+
+| Statement | Verdict | Blocker class |
+|-----------|---------|---------------|
+| **Safe to open PR** | **YES** | branch 0 behind real main; all executable gates green; PAT lacks Pull-requests:write → open in GitHub UI |
+| **Safe to merge after green PR CI** | **YES** | pending GitHub CI on the PR (cannot run here) |
+| **Safe for TEST self-service** | **YES** | multi-org-bound, atomic, fail-closed on suspension + terms; real front-door journey proven; LIVE/physical still gated |
+| Safe for LIVE API use | **NO** | EXTERNAL CONTRACT — live flags off; provider/Stripe IDs unverified |
+| Safe to enable webhook delivery | **NO** | INFRASTRUCTURE — network staging proof unavailable |
+| Safe for physical execution | **NO** | CODE (by design) — fail-closed |
+| Safe for enterprise SLA claim | **NO** | TIME-DEPENDENT EVIDENCE |
+| Safe for compliance claim | **NO** | EXTERNAL CONTRACT — independent assessment required |
