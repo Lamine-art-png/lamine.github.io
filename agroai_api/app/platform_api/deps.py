@@ -15,7 +15,12 @@ from app.platform_api.client_ip import client_ip_allowed
 from app.platform_api.abuse import record_abuse_signal
 from app.platform_api.keys import verify_platform_key
 from app.platform_api.principal import PlatformPrincipal
-from app.platform_api.programs import require_active_enrollment, require_api_entitlement
+from app.platform_api.programs import (
+    ensure_self_service_test_enrollment,
+    require_active_enrollment,
+    require_api_entitlement,
+    self_service_auto_enroll_enabled,
+)
 from app.platform_api.request_context import (
     bounded_client_correlation_id,
     new_billing_operation_id,
@@ -54,6 +59,14 @@ def require_developer_control_plane(
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Active organization membership required")
     if ctx.membership.role not in {"owner", "admin"}:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Organization administrator access required")
+    if self_service_auto_enroll_enabled():
+        # Terms acceptance is a hard prerequisite for automatic enrollment.
+        if bool(getattr(settings, "PLATFORM_API_TERMS_ENFORCEMENT_ENABLED", False)):
+            require_user_acceptance(db, organization_id=ctx.organization.id, user_id=ctx.user.id)
+        # Eligible developer (approved org + active owner/admin membership +
+        # accepted terms) is automatically granted a TEST-only self-service
+        # enrollment. Idempotent; LIVE remains separately gated and approved.
+        ensure_self_service_test_enrollment(db, ctx.organization, actor_user_id=ctx.user.id)
     enrollment = require_active_enrollment(db, ctx.organization, operation="developer_control_plane")
     if bool(getattr(settings, "PLATFORM_API_TERMS_ENFORCEMENT_ENABLED", False)):
         require_user_acceptance(db, organization_id=ctx.organization.id, user_id=ctx.user.id)
