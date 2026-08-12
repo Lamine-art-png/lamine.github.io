@@ -392,3 +392,25 @@ flag, so production behaviour is unchanged until deliberately enabled.
 | **Safe for physical execution** | **NO** | CODE (by design) — fail-closed `physical_action_disabled`; separate approval required |
 | **Safe for enterprise SLA claim** | **NO** | TIME-DEPENDENT EVIDENCE — needs elapsed SLO history |
 | **Safe for compliance claim** | **NO** | EXTERNAL CONTRACT — needs independent pen-test/assessment |
+
+## 11. Security correction pass (session 2026-08-12b)
+
+Fresh network fetch: current `origin/main` = **`a83bb9c4c`** (unchanged). Branch
+`integrate/current-main-20260811`; **Alembic head `029_platform_cli_device_auth`**.
+Twelve concrete security/correctness gaps found on independent review, each
+fixed with a dedicated real-PostgreSQL regression test:
+
+| # | Fix | Proof |
+|---|-----|-------|
+| 1 | **Multi-org CLI binding** | The CLI device token now carries `org_id`/`tenant_id`/`role` of the browser-approved organization, and `get_auth_context` honors that claim (fail closed on inactive membership) instead of selecting the user's oldest membership. Test: authorize CLI for Org B → session resolves B; Org A resources 404; header/query/body cannot switch to A; inactive B membership invalidates the session. |
+| 2 | **Atomic device-token mint** | approved→consumed is a PostgreSQL compare-and-swap (`UPDATE … WHERE status='approved'`). Test: 12 concurrent exchanges over independent sessions → exactly ONE `access_token`, ONE consumed transition, all others `invalid_grant`. |
+| 3 | **Self-service fails closed by itself** | `_program_policy_enabled()` includes the auto-enroll flag, so key auth enforces the enrollment policy. Test: suspending the enrollment fails an `agro_test_` key on its next request with private-beta/partner/sandbox flags all OFF (`platform_api_entitlement_inactive`). |
+| 4 | **Terms a hard auto-enroll prerequisite** | Enforced inside `ensure_self_service_test_enrollment`, independent of the TERMS_ENFORCEMENT flag. Tests: flag ON + no acceptance → no enrollment; accepted current → enrollment; accepted only superseded version → no enrollment. |
+| 5 | **Real front-door registration** | New test drives POST `/auth/register` (STRONG evidence) → automated verification engine → email token captured via a safe fixture → POST `/auth/email-verification/confirm` → org `preapproved_pending_email`→`approved` → login → accept terms → AUTOMATIC enrollment → project → service account → `agro_test_` key → first `/platform/me`. NO DB seeding of verified/approved/enrollment state; asserts zero manual review events. |
+| 6 | **Server-side CLI logout/revocation** | Token carries a `cli_session` claim bound to its device-auth row; `POST /platform/cli/device/logout` revokes it; `get_current_user` rejects revoked/unknown sessions. Test: token works → logout → same token 401; already-revoked and unknown-session fail closed; browser sessions untouched. |
+| 7 | **Device-auth secret fails closed** | `device_auth_secret_ready()` is False when CLI device auth is enabled in production with a missing/default/weak secret (prefers `PLATFORM_API_KEY_PEPPER`, falls back to `SECRET_KEY`); endpoints 503 and `/platform/health` reports it. Unit tests cover disabled/dev/default-prod/real-pepper; secret never exposed. |
+| 8 | **Device-auth rate limiting** | Reuses the authoritative slowapi IP limiter (same one protecting register/login) on the anonymous authorization/token and approve endpoints; bounded in production, overridable for tests. Test: anonymous authorization is rate limited (429). No unbounded row creation. |
+| 9 | **Requested-scope truthfulness** | Removed the OAuth-theater `scope` field from the device authorization contract (no scoped human CLI sessions exist yet; it had no authorization effect). |
+
+**No new migration** was required for these fixes (revocation reuses the row
+`status`; the device secret readiness is a config gate). Head stays `029`.

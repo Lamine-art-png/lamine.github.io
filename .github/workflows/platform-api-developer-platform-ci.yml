@@ -62,12 +62,20 @@ jobs:
           test "$(alembic heads)" = "029_platform_cli_device_auth (head)"
       - name: TEST self-service developer acceptance (release gate)
         run: python -m pytest tests/integration/test_self_service_developer_acceptance.py -q --tb=short
+      - name: Real front-door registration -> self-service
+        run: python -m pytest tests/integration/test_front_door_registration_self_service.py -q --tb=short
+      - name: Self-service policy fails closed (suspension + terms prerequisite)
+        run: python -m pytest tests/integration/test_self_service_policy_fail_closed.py -q --tb=short
       - name: Cross-org BOLA/IDOR matrix
         run: python -m pytest tests/integration/test_platform_api_bola_idor_matrix.py -q --tb=short
       - name: Secret-leak sink regression
         run: python -m pytest tests/integration/test_platform_api_secret_sink_regression.py -q --tb=short
       - name: CLI device authorization flow
         run: python -m pytest tests/integration/test_cli_device_authorization_flow.py -q --tb=short
+      - name: CLI multi-org binding, atomic mint, logout revocation, rate limiting
+        run: python -m pytest tests/integration/test_cli_device_auth_multiorg_and_concurrency.py -q --tb=short
+      - name: CLI device-auth production secret readiness
+        run: python -m pytest tests/unit/test_cli_device_auth_secret_readiness.py -q --tb=short
       - name: Real Postgres + Redis platform integration
         run: python -m pytest tests/integration/test_platform_api_idempotency_postgres.py tests/integration/test_platform_api_product_concurrency_postgres.py tests/integration/test_platform_api_redis_limiter.py -q --tb=short
       - name: OpenAPI / SDK / CLI contract-drift gate
