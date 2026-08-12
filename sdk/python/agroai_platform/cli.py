@@ -212,14 +212,85 @@ def _cmd_jobs_get(args, out, err) -> int:
 
 
 def _cmd_login(args, out, err) -> int:
-    # Honest: do not fabricate a human session using a machine API key.
-    return _fail(
-        "Human control-plane sign-in (browser/device flow) is not yet available in the CLI. "
-        "Create projects and keys in the Developer Console, then export AGROAI_API_KEY for data operations.",
-        code=EXIT_ERROR,
-        as_json=args.json,
-        err=err,
-    )
+    from . import session as _session
+
+    try:
+        result = _session.login(args.base_url, printer=lambda m: print(m, file=err))
+    except Exception as exc:  # timeout / transport / denied
+        return _fail(f"login failed: {exc}", code=EXIT_ERROR, as_json=args.json, err=err)
+    _emit({"status": "logged_in", "organization_id": result.get("organization_id")}, as_json=args.json, out=out)
+    return EXIT_OK
+
+
+def _cmd_logout(args, out, err) -> int:
+    from . import session as _session
+
+    removed = _session.clear_session()
+    _emit({"status": "logged_out" if removed else "no_session"}, as_json=args.json, out=out)
+    return EXIT_OK
+
+
+def _cp(args, method: str, path: str, *, json_body=None, out=None, err=None) -> int:
+    """Execute a human control-plane request and emit the JSON result."""
+    from . import session as _session
+
+    try:
+        resp = _session.control_plane_request(method, path, json_body=json_body, timeout=args.timeout)
+    except RuntimeError as exc:  # not logged in
+        return _fail(str(exc), code=EXIT_ERROR, as_json=args.json, err=err)
+    if resp.status_code >= 400:
+        body = resp.json() if resp.headers.get("content-type", "").startswith("application/json") else {"message": resp.text}
+        return _fail(body.get("message", "request failed"), code=EXIT_ERROR, as_json=args.json,
+                     request_id=body.get("request_id"), err=err)
+    _emit(resp.json(), as_json=args.json, out=out)
+    return EXIT_OK
+
+
+def _cmd_projects_list(args, out, err) -> int:
+    return _cp(args, "GET", "/v1/platform/developer/projects", out=out, err=err)
+
+
+def _cmd_projects_create(args, out, err) -> int:
+    return _cp(args, "POST", "/v1/platform/developer/projects",
+               json_body={"name": args.name, "environment": args.environment}, out=out, err=err)
+
+
+def _cmd_keys_list(args, out, err) -> int:
+    return _cp(args, "GET", "/v1/platform/developer/keys", out=out, err=err)
+
+
+def _cmd_keys_create(args, out, err) -> int:
+    return _cp(args, "POST", f"/v1/platform/developer/service-accounts/{args.service_account_id}/keys",
+               json_body={"name": args.name, "scopes": args.scope or []}, out=out, err=err)
+
+
+def _cmd_keys_revoke(args, out, err) -> int:
+    return _cp(args, "POST", f"/v1/platform/developer/keys/{args.key_id}/revoke", json_body={}, out=out, err=err)
+
+
+def _cmd_keys_rotate(args, out, err) -> int:
+    return _cp(args, "POST", f"/v1/platform/developer/keys/{args.key_id}/rotate",
+               json_body={"overlap_minutes": args.overlap_minutes}, out=out, err=err)
+
+
+def _cmd_webhooks_list(args, out, err) -> int:
+    return _cp(args, "GET", "/v1/platform/developer/webhooks", out=out, err=err)
+
+
+def _cmd_fields_create(args, out, err) -> int:
+    """Data-plane resource creation with the project API key."""
+    client = _build_client(args)
+    payload = {"name": args.name}
+    if args.crop:
+        payload["crop"] = args.crop
+    if args.area_hectares is not None:
+        payload["area_hectares"] = args.area_hectares
+    try:
+        data = client.create_field(payload)
+    except AgroAIPlatformError as exc:
+        return _fail(str(exc), code=_exit_code_for(exc), as_json=args.json, request_id=exc.request_id, err=err)
+    _emit(data, as_json=args.json, out=out)
+    return EXIT_OK
 
 
 # --------------------------------------------------------------------------- #
@@ -237,8 +308,37 @@ def build_parser() -> argparse.ArgumentParser:
     sub.add_parser("doctor", help="Diagnose configuration and connectivity.").set_defaults(func=_cmd_doctor)
     sub.add_parser("me", help="Show the authenticated principal.").set_defaults(func=_cmd_me)
     sub.add_parser("usage", help="Show usage summary.").set_defaults(func=_cmd_usage)
-    sub.add_parser("login", help="(Not yet available) human control-plane sign-in.").set_defaults(func=_cmd_login)
-    sub.add_parser("logout", help="(Not yet available) clear stored human session.").set_defaults(func=_cmd_login)
+    sub.add_parser("login", help="Sign in via browser device authorization (human control plane).").set_defaults(func=_cmd_login)
+    sub.add_parser("logout", help="Clear the stored human session.").set_defaults(func=_cmd_logout)
+
+    # Human control-plane resources (require `agroai login`).
+    p_proj = sub.add_parser("projects", help="Platform API projects (control plane).")
+    projsub = p_proj.add_subparsers(dest="projects_command", required=True)
+    projsub.add_parser("list", help="List projects.").set_defaults(func=_cmd_projects_list)
+    p_pc = projsub.add_parser("create", help="Create a project.")
+    p_pc.add_argument("--name", required=True)
+    p_pc.add_argument("--environment", choices=["test", "live"], default="test")
+    p_pc.set_defaults(func=_cmd_projects_create)
+
+    p_keys = sub.add_parser("keys", help="Platform API keys (control plane).")
+    keysub = p_keys.add_subparsers(dest="keys_command", required=True)
+    keysub.add_parser("list", help="List API keys.").set_defaults(func=_cmd_keys_list)
+    p_kc = keysub.add_parser("create", help="Create a key under a service account.")
+    p_kc.add_argument("--service-account-id", dest="service_account_id", required=True)
+    p_kc.add_argument("--name", required=True)
+    p_kc.add_argument("--scope", action="append", help="Repeatable scope; subset of the service account.")
+    p_kc.set_defaults(func=_cmd_keys_create)
+    p_kr = keysub.add_parser("revoke", help="Revoke a key.")
+    p_kr.add_argument("key_id")
+    p_kr.set_defaults(func=_cmd_keys_revoke)
+    p_krt = keysub.add_parser("rotate", help="Rotate a key.")
+    p_krt.add_argument("key_id")
+    p_krt.add_argument("--overlap-minutes", dest="overlap_minutes", type=int, default=0)
+    p_krt.set_defaults(func=_cmd_keys_rotate)
+
+    p_wh = sub.add_parser("webhooks", help="Webhook endpoints (control plane).")
+    whsub = p_wh.add_subparsers(dest="webhooks_command", required=True)
+    whsub.add_parser("list", help="List webhook endpoints.").set_defaults(func=_cmd_webhooks_list)
 
     p_fields = sub.add_parser("fields", help="Field resources.")
     fsub = p_fields.add_subparsers(dest="fields_command", required=True)
@@ -250,6 +350,11 @@ def build_parser() -> argparse.ArgumentParser:
     p_fg = fsub.add_parser("get", help="Get a field by id.")
     p_fg.add_argument("field_id")
     p_fg.set_defaults(func=_cmd_fields_get)
+    p_fc = fsub.add_parser("create", help="Create a field (data plane; uses the API key).")
+    p_fc.add_argument("--name", required=True)
+    p_fc.add_argument("--crop", default=None)
+    p_fc.add_argument("--area-hectares", dest="area_hectares", type=float, default=None)
+    p_fc.set_defaults(func=_cmd_fields_create)
 
     p_prov = sub.add_parser("providers", help="Provider readiness.")
     psub = p_prov.add_subparsers(dest="providers_command", required=True)

@@ -86,10 +86,45 @@ def test_not_found_maps_to_exit_5(monkeypatch):
     assert code == cli.EXIT_NOT_FOUND
 
 
-def test_login_is_honest_stub_not_fake_success(monkeypatch):
-    code, _, err = _run(["login"], monkeypatch)
+def test_login_never_fabricates_a_session_and_uses_no_api_key(monkeypatch, tmp_path):
+    # Human login must never be faked from a machine API key. With no reachable
+    # device-authorization server, login fails cleanly instead of inventing a
+    # session, and it never reads AGROAI_API_KEY as a human identity.
+    monkeypatch.setenv("AGROAI_CONFIG_HOME", str(tmp_path))
+    monkeypatch.setenv("AGROAI_API_KEY", "agro_test_" + "x" * 30)
+    from agroai_platform import session as _session
+
+    def _boom(*a, **k):
+        raise RuntimeError("no server")
+
+    monkeypatch.setattr(_session, "login", _boom)
+    code, _out, err = _run(["login"], monkeypatch)
     assert code == cli.EXIT_ERROR
-    assert "not yet available" in err.lower()
+    assert "login failed" in err.lower()
+    assert _session.load_session() is None  # no session was fabricated
+
+
+def test_logout_reports_no_session_when_absent(monkeypatch, tmp_path):
+    monkeypatch.setenv("AGROAI_CONFIG_HOME", str(tmp_path))
+    code, out, _err = _run(["logout"], monkeypatch)
+    assert code == cli.EXIT_OK
+    assert "no_session" in out
+
+
+def test_session_storage_roundtrip_is_owner_only(monkeypatch, tmp_path):
+    import os, stat
+    monkeypatch.setenv("AGROAI_CONFIG_HOME", str(tmp_path))
+    from agroai_platform import session as _session
+
+    # Force the file fallback (no keyring) so we can assert 0600 permissions.
+    monkeypatch.setattr(_session, "_keyring", lambda: None)
+    _session.save_session({"access_token": "jwt.abc.def", "base_url": "https://api.example", "organization_id": "org_1"})
+    loaded = _session.load_session()
+    assert loaded and loaded["access_token"] == "jwt.abc.def"
+    mode = stat.S_IMODE(os.stat(_session._config_path()).st_mode)
+    assert mode == 0o600
+    assert _session.clear_session() is True
+    assert _session.load_session() is None
 
 
 def test_doctor_never_prints_full_key(monkeypatch):
