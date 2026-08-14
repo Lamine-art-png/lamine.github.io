@@ -2,6 +2,7 @@ import type { ComponentType } from "react";
 import { createBrowserRouter, Navigate } from "react-router";
 import { MainLayout } from "./components/MainLayout";
 import { OperationRouteBoundary } from "./components/OperationRouteBoundary";
+import { PlatformCliDeviceApproval } from "./components/PlatformCliDeviceApproval";
 import { PlatformSelfServiceGate } from "./components/PlatformSelfServiceGate";
 import { PlatformConsoleApp } from "./components/PlatformConsole";
 import { PlatformSafetyNotice } from "./components/PlatformSafetyNotice";
@@ -81,12 +82,14 @@ const isPlatformHostname = window.location.hostname.toLowerCase() === "platform.
 const platformRouter = createBrowserRouter([
   { path: "/verify-email", Component: VerifyEmailPage, errorElement: <PortalRouteError /> },
   { path: "/appeal", Component: AccessAppealPage, errorElement: <PortalRouteError /> },
+  { path: "/cli", Component: PlatformCliDeviceApproval, errorElement: <PortalRouteError /> },
   { path: "/*", Component: PlatformProduct, errorElement: <PortalRouteError /> },
 ]);
 
 const enterpriseRouter = createBrowserRouter([
   { path: "/verify-email", Component: VerifyEmailPage, errorElement: <PortalRouteError /> },
   { path: "/appeal", Component: AccessAppealPage, errorElement: <PortalRouteError /> },
+  { path: "/cli", Component: PlatformCliDeviceApproval, errorElement: <PortalRouteError /> },
   { path: "/platform/*", Component: PlatformProduct, errorElement: <PortalRouteError /> },
   {
     path: "/",
