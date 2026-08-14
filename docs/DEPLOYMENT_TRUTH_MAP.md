@@ -300,19 +300,19 @@ Platform marketing/public-state workflow:
 
 It deploys the narrow Platform marketing Worker and proves landing/docs/installers, genuine unknown-route 404 behavior, standalone product identity, exact backend release SHA, Redis/vault/edge readiness and the public/private product-state contract.
 
-The workflow reads the durable GitHub Actions variable `PLATFORM_API_PUBLIC_SELF_SERVICE_LAUNCHED`. When false/unset it deploys private-beta copy and noindex. When true it deploys public TEST self-service copy and indexing and requires effective legal terms plus ready CLI device auth.
+Normal Platform marketing releases derive public/private mode from production truth rather than a repository launch bit. They require read access to the production Render service configuration when the runtime shows any public-launch signal, and combine that with `/v1/platform/health` and `/v1/platform/terms`. Public mode is selected only when the TEST self-service flags are actually enabled in Render, CLI device authentication is enabled with a production-ready signing secret, and the required legal documents are `approved_effective`. If those signals are inconsistent or cannot be verified, deployment fails instead of guessing. When the backend auto-enrollment/device-auth flags are off, the Worker is deployed in private-beta/noindex mode.
 
 Protected public activation workflow:
 
 `.github/workflows/platform-api-public-self-service-activation.yml`
 
-It runs only from current `main`, requires the production GitHub environment, validates real counsel evidence, performs two-stage Render configuration/deployment, publishes exact effective legal records, enables only TEST self-service flags, explicitly disables LIVE/provider/webhook/physical/billing flags, deploys public marketing/indexing mode, persists the public-launch variable and stores activation evidence.
+It runs only from current `main`, requires the protected production environment, validates real counsel evidence, performs two-stage Render configuration/deployment, publishes exact effective legal records, enables only TEST self-service flags, explicitly disables LIVE/provider/webhook/physical/billing flags, deploys public TEST marketing/indexing mode, verifies the public surface and stores immutable activation evidence. It does not create or infer legal approval.
 
 Protected public rollback workflow:
 
 `.github/workflows/platform-api-public-self-service-rollback.yml`
 
-It disables new public auto-enrollment and CLI device acquisition, restores private-beta marketing/noindex, keeps dangerous capabilities off, and preserves existing projects/keys/enrollments for auditability.
+It disables new public auto-enrollment and CLI device acquisition in the production backend first, restores private-beta marketing/noindex, keeps dangerous capabilities off, and preserves existing projects/keys/enrollments for auditability. Subsequent normal marketing releases infer the private state from the rolled-back backend configuration.
 
 A successful branch build is not production activation. Public TEST self-service may be described as live only after the protected activation workflow and exact production smoke gates succeed.
 
