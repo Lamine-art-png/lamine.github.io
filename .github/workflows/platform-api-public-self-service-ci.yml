@@ -1,0 +1,111 @@
+name: Platform API Public Self-Service CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "figma-enterprise-v4/src/app/components/PlatformSelfServiceGate.tsx"
+      - "figma-enterprise-v4/src/app/routes.tsx"
+      - "figma-enterprise-v4/tests/platform-application-gate-contract.mjs"
+      - "platform-api/assets/install.sh"
+      - "docs/platform-api-cli.md"
+      - "docs/platform-api-public-self-service-launch.md"
+      - ".github/workflows/platform-api-public-self-service-ci.yml"
+      - ".github/workflows/platform-api-public-self-service-activation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portal-self-service:
+    name: Portal self-service and production build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: figma-enterprise-v4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - name: Self-service / private-beta fallback contract
+        run: node tests/platform-application-gate-contract.mjs
+      - name: Existing Platform console contract
+        run: node tests/platform-api-console-contract.mjs
+      - name: Production build
+        env:
+          VITE_DEPLOYMENT_ENVIRONMENT: production
+          VITE_BUILD_SHA: ${{ github.sha }}
+          VITE_API_BASE_URL: https://api.agroai-pilot.com
+        run: npm run build
+
+  terminal-installer:
+    name: Public CLI installer safety contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: POSIX shell syntax
+        run: sh -n platform-api/assets/install.sh
+      - name: Installer boundary checks
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path("platform-api/assets/install.sh").read_text()
+          required = [
+              "Python 3.10 or newer is required",
+              "AGROAI_CLI_REF",
+              "#subdirectory=sdk/python",
+              "pipx install --force",
+              "python\" -m venv",
+              "chmod" if False else "ln -sf",
+              "Next: agroai login",
+          ]
+          for item in required:
+              assert item in source, item
+          assert "sudo " not in source
+          assert "curl | sh" not in source
+          assert "AGROAI_API_KEY" not in source
+          print("Public CLI installer contract passed")
+          PY
+      - name: Python package entrypoint contract
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          pyproject = Path("sdk/python/pyproject.toml").read_text()
+          assert 'requires-python = ">=3.10"' in pyproject
+          assert 'agroai = "agroai_platform.cli:main"' in pyproject
+          cli = Path("sdk/python/agroai_platform/cli.py").read_text()
+          for command in ("login", "logout", "projects", "keys", "fields", "webhooks", "usage", "doctor"):
+              assert f'add_parser("{command}"' in cli, command
+          print("CLI entrypoint and command contract passed")
+          PY
+
+  launch-boundary:
+    name: TEST-only launch boundary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prove public self-service does not widen LIVE or physical capabilities
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          config = Path("agroai_api/app/core/config.py").read_text()
+          required_false = [
+              "PLATFORM_API_LIVE_PROJECTS_ENABLED: bool = False",
+              "PLATFORM_API_WEBHOOK_DELIVERY_ENABLED: bool = False",
+              "PLATFORM_API_LIVE_AUTO_APPROVAL_ENABLED: bool = False",
+              "EARTHDAILY_ADAPTER_ENABLED: bool = False",
+              "VALLEY_IRRIGATION_ADAPTER_ENABLED: bool = False",
+              "VALLEY_IRRIGATION_WRITE_CAPABILITY_ENABLED: bool = False",
+          ]
+          for contract in required_false:
+              assert contract in config, contract
+          gate = Path("figma-enterprise-v4/src/app/components/PlatformSelfServiceGate.tsx").read_text()
+          assert "TEST access never grants live provider credentials" in gate
+          assert "LIVE projects remain a separate reviewed process" in gate
+          print("Public launch remains TEST-only and fail-closed for LIVE/physical capabilities")
+          PY
