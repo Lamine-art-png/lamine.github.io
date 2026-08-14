@@ -29,12 +29,15 @@ env:
   MARKETING_URL: https://agroai-pilot.com/platform-api
   DOCS_URL: https://agroai-pilot.com/platform-api/docs/
   ASSET_URL: https://agroai-pilot.com/platform-api/assets/platform.css
+  INSTALLER_URL: https://agroai-pilot.com/platform-api/assets/install.sh
   UNKNOWN_URL: https://agroai-pilot.com/platform-api/not-a-real-route
   PLATFORM_URL: https://platform.agroai-pilot.com
   PLATFORM_EDGE_URL: https://platform.agroai-pilot.com/v1/edge-health
   PLATFORM_HEALTH_URL: https://platform.agroai-pilot.com/v1/health
   PLATFORM_RUNTIME_URL: https://api.agroai-pilot.com/v1/platform/health
+  PLATFORM_TERMS_URL: https://api.agroai-pilot.com/v1/platform/terms
   OPS_ISSUE: "262"
+  PUBLIC_SELF_SERVICE_LAUNCHED: ${{ vars.PLATFORM_API_PUBLIC_SELF_SERVICE_LAUNCHED }}
 
 jobs:
   validate:
@@ -54,7 +57,7 @@ jobs:
         run: npx --yes wrangler@4.107.0 deploy --dry-run --config "${WORKER_CONFIG}"
 
   deploy:
-    name: Deploy and prove complete Platform private beta
+    name: Deploy and prove Platform API product
     needs: validate
     if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
@@ -68,13 +71,20 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Resolve immutable backend deployment commit
+      - name: Resolve launch mode and immutable backend deployment commit
         shell: bash
         run: |
           set -euo pipefail
           backend_sha="$(bash .github/scripts/resolve-backend-release-sha.sh)"
           echo "BACKEND_RELEASE_SHA=${backend_sha}" >> "$GITHUB_ENV"
+          if [[ "${PUBLIC_SELF_SERVICE_LAUNCHED:-}" == "true" ]]; then
+            public_mode=true
+          else
+            public_mode=false
+          fi
+          echo "PUBLIC_SELF_SERVICE_MODE=${public_mode}" >> "$GITHUB_ENV"
           echo "Expected backend deployment SHA: ${backend_sha}"
+          echo "Public TEST self-service marketing mode: ${public_mode}"
 
       - name: Fail closed on missing Cloudflare credentials
         shell: bash
@@ -83,8 +93,16 @@ jobs:
           test -n "${CLOUDFLARE_API_TOKEN:-}"
           test -n "${CLOUDFLARE_ACCOUNT_ID:-}"
 
-      - name: Deploy narrow production route
-        run: npx --yes wrangler@4.107.0 deploy --config "${WORKER_CONFIG}"
+      - name: Deploy narrow production route with durable launch mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 deploy --config "${WORKER_CONFIG}" \
+            --var "MARKETING_ORIGIN:https://agroai-343.pages.dev" \
+            --var "PLATFORM_API_MARKETING_ENABLED:true" \
+            --var "PLATFORM_API_PUBLIC_DOCS_ENABLED:true" \
+            --var "PLATFORM_API_INDEXING_ENABLED:${PUBLIC_SELF_SERVICE_MODE}" \
+            --var "PLATFORM_API_PUBLIC_SELF_SERVICE_ENABLED:${PUBLIC_SELF_SERVICE_MODE}"
 
       - name: Probe marketing, standalone product, exact backend and safety gates
         id: smoke
@@ -124,25 +142,30 @@ jobs:
             probe landing "${MARKETING_URL}"
             probe docs "${DOCS_URL}"
             probe asset "${ASSET_URL}"
+            probe installer "${INSTALLER_URL}"
             probe unknown "${UNKNOWN_URL}"
             probe platform "${PLATFORM_URL}/"
             probe edge "${PLATFORM_EDGE_URL}"
             probe health "${PLATFORM_HEALTH_URL}"
             probe runtime "${PLATFORM_RUNTIME_URL}"
+            probe terms "${PLATFORM_TERMS_URL}"
             wait || true
 
             landing_code="$(read_code landing)"
             docs_code="$(read_code docs)"
             asset_code="$(read_code asset)"
+            installer_code="$(read_code installer)"
             unknown_code="$(read_code unknown)"
             platform_code="$(read_code platform)"
             edge_code="$(read_code edge)"
             health_code="$(read_code health)"
             runtime_code="$(read_code runtime)"
+            terms_code="$(read_code terms)"
 
             landing_title="$(bool_grep '<title>AGRO-AI Platform API</title>' proof/landing.body)"
             docs_title="$(bool_grep '<title>AGRO-AI Platform API Documentation</title>' proof/docs.body)"
             console_link="$(bool_grep 'https://platform.agroai-pilot.com' proof/landing.body)"
+            installer_identity="$(bool_grep 'Next: agroai login' proof/installer.body)"
             landing_noindex="$(bool_grep_i 'x-robots-tag: noindex, nofollow' proof/landing.headers)"
             docs_noindex="$(bool_grep_i 'x-robots-tag: noindex, nofollow' proof/docs.headers)"
             landing_private_cache="$(bool_grep_i 'cache-control: private, no-cache, must-revalidate' proof/landing.headers)"
@@ -156,15 +179,39 @@ jobs:
             health_exact_sha=false
             if [ -f proof/health.body ] && jq -e --arg sha "$BACKEND_RELEASE_SHA" '.status == "ok" and .build_sha == $sha' proof/health.body >/dev/null 2>&1; then health_exact_sha=true; fi
 
+            public_contract=false
+            if [ "${PUBLIC_SELF_SERVICE_MODE}" = "true" ]; then
+              access_header="$(bool_grep_i 'x-agroai-platform-api-access: public-test-self-service' proof/landing.headers)"
+              public_copy="$(bool_grep 'Self-service TEST access is open to eligible verified agricultural developers.' proof/landing.body)"
+              indexable=false
+              if [ "$landing_noindex" = false ] && [ "$docs_noindex" = false ]; then indexable=true; fi
+              terms_ready=false
+              if [ "$terms_code" = "200" ] && [ -f proof/terms.body ] && jq -e '
+                  (.documents | type == "array") and
+                  ([.documents[].document_type] | index("api_terms") != null) and
+                  ([.documents[].document_type] | index("acceptable_use") != null) and
+                  ([.documents[].document_type] | index("privacy") != null) and
+                  ([.documents[] | select(.legal_review_status != "approved_effective")] | length == 0)
+                ' proof/terms.body >/dev/null 2>&1; then terms_ready=true; fi
+              cli_ready="$(bool_jq '.cli_device_auth.enabled == true and .cli_device_auth.secret_ready == true' proof/runtime.body)"
+              if [ "$access_header" = true ] && [ "$public_copy" = true ] && [ "$indexable" = true ] && [ "$terms_ready" = true ] && [ "$cli_ready" = true ]; then
+                public_contract=true
+              fi
+            else
+              access_header="$(bool_grep_i 'x-agroai-platform-api-access: private-beta' proof/landing.headers)"
+              if [ "$access_header" = true ] && [ "$landing_noindex" = true ] && [ "$docs_noindex" = true ]; then
+                public_contract=true
+              fi
+            fi
+
             preflight=false
-            if [ "$landing_code" = "200" ] && [ "$docs_code" = "200" ] && [ "$asset_code" = "200" ] && [ "$unknown_code" = "404" ] && \
+            if [ "$landing_code" = "200" ] && [ "$docs_code" = "200" ] && [ "$asset_code" = "200" ] && [ "$installer_code" = "200" ] && [ "$unknown_code" = "404" ] && \
                [ "$platform_code" = "200" ] && [ "$edge_code" = "200" ] && [ "$health_code" = "200" ] && [ "$runtime_code" = "200" ] && \
-               [ "$landing_title" = true ] && [ "$docs_title" = true ] && [ "$console_link" = true ] && \
-               [ "$landing_noindex" = true ] && [ "$docs_noindex" = true ] && \
+               [ "$landing_title" = true ] && [ "$docs_title" = true ] && [ "$console_link" = true ] && [ "$installer_identity" = true ] && \
                [ "$landing_private_cache" = true ] && [ "$docs_private_cache" = true ] && \
                [ "$landing_surface" = true ] && [ "$docs_surface" = true ] && \
                [ "$unknown_closed" = true ] && [ "$unknown_noindex" = true ] && \
-               [ "$edge_ready" = true ] && [ "$health_exact_sha" = true ] && [ "$runtime_ready" = true ]; then
+               [ "$edge_ready" = true ] && [ "$health_exact_sha" = true ] && [ "$runtime_ready" = true ] && [ "$public_contract" = true ]; then
               preflight=true
             fi
 
@@ -205,33 +252,33 @@ jobs:
           done
 
           jq -n \
-            --arg release_sha "$GITHUB_SHA" --arg expected_backend_sha "$BACKEND_RELEASE_SHA" --argjson attempt "$attempt" --argjson ready "$ready" \
+            --arg release_sha "$GITHUB_SHA" --arg expected_backend_sha "$BACKEND_RELEASE_SHA" \
+            --arg public_self_service_mode "$PUBLIC_SELF_SERVICE_MODE" --argjson attempt "$attempt" --argjson ready "$ready" \
             --arg landing_http "${landing_code:-000}" --arg docs_http "${docs_code:-000}" --arg asset_http "${asset_code:-000}" \
-            --arg unknown_http "${unknown_code:-000}" --arg platform_http "${platform_code:-000}" --arg edge_http "${edge_code:-000}" \
-            --arg health_http "${health_code:-000}" --arg runtime_http "${runtime_code:-000}" \
+            --arg installer_http "${installer_code:-000}" --arg unknown_http "${unknown_code:-000}" --arg platform_http "${platform_code:-000}" \
+            --arg edge_http "${edge_code:-000}" --arg health_http "${health_code:-000}" --arg runtime_http "${runtime_code:-000}" --arg terms_http "${terms_code:-000}" \
             --argjson landing_title "${landing_title:-false}" --argjson docs_title "${docs_title:-false}" \
-            --argjson console_link "${console_link:-false}" --argjson landing_noindex "${landing_noindex:-false}" \
-            --argjson docs_noindex "${docs_noindex:-false}" --argjson landing_private_cache "${landing_private_cache:-false}" \
-            --argjson docs_private_cache "${docs_private_cache:-false}" --argjson landing_surface "${landing_surface:-false}" \
-            --argjson docs_surface "${docs_surface:-false}" --argjson unknown_closed "${unknown_closed:-false}" \
-            --argjson unknown_noindex "${unknown_noindex:-false}" --argjson edge_ready "${edge_ready:-false}" \
-            --argjson health_exact_sha "${health_exact_sha:-false}" --argjson runtime_ready "${runtime_ready:-false}" \
+            --argjson console_link "${console_link:-false}" --argjson installer_identity "${installer_identity:-false}" \
+            --argjson landing_noindex "${landing_noindex:-false}" --argjson docs_noindex "${docs_noindex:-false}" \
+            --argjson landing_private_cache "${landing_private_cache:-false}" --argjson docs_private_cache "${docs_private_cache:-false}" \
+            --argjson landing_surface "${landing_surface:-false}" --argjson docs_surface "${docs_surface:-false}" \
+            --argjson unknown_closed "${unknown_closed:-false}" --argjson unknown_noindex "${unknown_noindex:-false}" \
+            --argjson edge_ready "${edge_ready:-false}" --argjson health_exact_sha "${health_exact_sha:-false}" \
+            --argjson runtime_ready "${runtime_ready:-false}" --argjson public_contract "${public_contract:-false}" \
             --argjson platform_identity "${platform_identity:-false}" \
-            '{release_sha:$release_sha,expected_backend_sha:$expected_backend_sha,attempts:$attempt,ready:($ready==1),http:{marketing:$landing_http,docs:$docs_http,asset:$asset_http,unknown:$unknown_http,standalone_platform:$platform_http,standalone_edge:$edge_http,standalone_health:$health_http,platform_runtime:$runtime_http},checks:{landing_title:$landing_title,docs_title:$docs_title,console_link:$console_link,landing_noindex:$landing_noindex,docs_noindex:$docs_noindex,landing_private_cache:$landing_private_cache,docs_private_cache:$docs_private_cache,landing_surface:$landing_surface,docs_surface:$docs_surface,unknown_closed:$unknown_closed,unknown_noindex:$unknown_noindex,edge_ready:$edge_ready,health_exact_backend_sha:$health_exact_sha,runtime_ready:$runtime_ready,platform_identity:$platform_identity}}' \
+            '{release_sha:$release_sha,expected_backend_sha:$expected_backend_sha,public_self_service_mode:($public_self_service_mode=="true"),attempts:$attempt,ready:($ready==1),http:{marketing:$landing_http,docs:$docs_http,asset:$asset_http,installer:$installer_http,unknown:$unknown_http,standalone_platform:$platform_http,standalone_edge:$edge_http,standalone_health:$health_http,platform_runtime:$runtime_http,terms:$terms_http},checks:{landing_title:$landing_title,docs_title:$docs_title,console_link:$console_link,installer_identity:$installer_identity,landing_noindex:$landing_noindex,docs_noindex:$docs_noindex,landing_private_cache:$landing_private_cache,docs_private_cache:$docs_private_cache,landing_surface:$landing_surface,docs_surface:$docs_surface,unknown_closed:$unknown_closed,unknown_noindex:$unknown_noindex,edge_ready:$edge_ready,health_exact_backend_sha:$health_exact_sha,runtime_ready:$runtime_ready,public_contract:$public_contract,platform_identity:$platform_identity}}' \
             > platform-api-final-diagnostics.json
 
           {
             echo "release_sha=${GITHUB_SHA}"
             echo "backend_release_sha=${BACKEND_RELEASE_SHA}"
+            echo "public_self_service_mode=${PUBLIC_SELF_SERVICE_MODE}"
             echo "ready=${ready}"
             echo "attempts=${attempt}"
             echo "marketing_http=${landing_code:-000}"
             echo "docs_http=${docs_code:-000}"
-            echo "asset_http=${asset_code:-000}"
-            echo "unknown_http=${unknown_code:-000}"
+            echo "installer_http=${installer_code:-000}"
             echo "standalone_platform_http=${platform_code:-000}"
-            echo "standalone_edge_http=${edge_code:-000}"
-            echo "standalone_health_http=${health_code:-000}"
             echo "platform_runtime_http=${runtime_code:-000}"
           } > platform-api-final-production-evidence.txt
           echo "ready=${ready}" >> "$GITHUB_OUTPUT"
@@ -260,12 +307,16 @@ jobs:
               echo "- release SHA: \`${GITHUB_SHA}\`"
               echo "- backend deployment SHA: \`${BACKEND_RELEASE_SHA}\`"
               echo "- run: \`${GITHUB_RUN_ID}\`"
+              echo "- public TEST self-service mode: \`${PUBLIC_SELF_SERVICE_MODE}\`"
               echo '- backend: exact SHA, schema and production runtime ready'
               echo '- standalone product: HTTP 200 with Platform-specific product identity'
               echo '- standalone same-origin API: edge and backend health HTTP 200'
-              echo '- landing and documentation: HTTP 200 with canonical identities'
-              echo '- private-beta headers: `X-Robots-Tag: noindex, nofollow`'
-              echo '- HTML caching: `private, no-cache, must-revalidate`'
+              echo '- landing, documentation and public CLI installer: HTTP 200 with canonical identities'
+              if [ "$PUBLIC_SELF_SERVICE_MODE" = "true" ]; then
+                echo '- public launch: effective legal catalog present, CLI device auth ready, landing/docs indexable, TEST self-service copy active'
+              else
+                echo '- private-beta fallback: `X-Robots-Tag: noindex, nofollow` preserved and self-service marketing inactive'
+              fi
               echo '- unknown Platform routes: genuine HTTP 404 with `noindex`'
               echo '- Redis limiter, credential vault and trusted edge context: ready'
               echo '- webhook delivery, EarthDaily, Valley and physical commands: disabled or awaiting contract as required'
@@ -278,6 +329,7 @@ jobs:
               echo "- release SHA: \`${GITHUB_SHA}\`"
               echo "- backend deployment SHA: \`${BACKEND_RELEASE_SHA}\`"
               echo "- run: \`${GITHUB_RUN_ID}\`"
+              echo "- public TEST self-service mode: \`${PUBLIC_SELF_SERVICE_MODE}\`"
               echo '- mode: redacted diagnostics; no credential values included'
               echo
               echo '```json'
