@@ -99,6 +99,16 @@ def verification_url(token: str, *, product_surface: str = "enterprise_portal") 
 
 def _product_copy(product_surface: str) -> dict[str, str]:
     if normalize_product_surface(product_surface) == "platform_api":
+        public_test_self_service = bool(getattr(settings, "PLATFORM_API_TEST_SELF_SERVICE_AUTO_ENROLL_ENABLED", False))
+        if public_test_self_service:
+            return {
+                "product": "AGRO-AI Platform API",
+                "headline": "Confirm your developer account",
+                "intro": "Confirm your email to activate the verified AGRO-AI organization account used for the Platform API.",
+                "body": "After verification, sign in to review the current developer agreements and activate bounded TEST access. Eligible verified owners and admins do not need an API-access review. LIVE projects, production providers, billing, production webhooks, and physical actions remain separately controlled.",
+                "footer": "Verified account · versioned agreements · self-service TEST access",
+                "subject": "Confirm your AGRO-AI Platform API account",
+            }
         return {
             "product": "AGRO-AI Platform API",
             "headline": "Confirm your developer account",
