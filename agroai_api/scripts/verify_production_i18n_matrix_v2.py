@@ -93,6 +93,15 @@ def retry_get(path: str) -> dict[str, Any]:
 
 
 def valid(locale: str, result: dict[str, Any]) -> bool:
+    """Validate production canary quality and provenance.
+
+    Model attribution is optional by design: deterministic/public provider and
+    edge-cache translations legitimately return ``models: []``. Provider
+    attribution is authoritative and must always be present. When models are
+    reported, every entry must still be a non-empty string.
+    """
+    providers = result.get("providers")
+    models = result.get("models")
     return (
         result.get("status") == "ok"
         and result.get("locale") == locale
@@ -101,8 +110,11 @@ def valid(locale: str, result: dict[str, Any]) -> bool:
         and result["changed_count"] >= 2
         and isinstance(result.get("catalog_sha256"), str)
         and len(result["catalog_sha256"]) == 64
-        and bool(result.get("providers"))
-        and bool(result.get("models"))
+        and isinstance(providers, list)
+        and bool(providers)
+        and all(isinstance(provider, str) and bool(provider.strip()) for provider in providers)
+        and isinstance(models, list)
+        and all(isinstance(model, str) and bool(model.strip()) for model in models)
     )
 
 
