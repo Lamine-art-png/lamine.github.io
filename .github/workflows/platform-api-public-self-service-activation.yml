@@ -10,9 +10,13 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 env:
   API_BASE: https://api.agroai-pilot.com
+  PLATFORM_URL: https://platform.agroai-pilot.com
+  MARKETING_URL: https://agroai-pilot.com/platform-api
+  WORKER_CONFIG: cloudflare/platform-api-marketing-worker/wrangler.toml
 
 jobs:
   activate:
@@ -22,6 +26,10 @@ jobs:
     concurrency:
       group: platform-api-public-test-self-service-activation
       cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,6 +55,8 @@ jobs:
           [[ -n "$RENDER_API_KEY" ]] || { echo "RENDER_API_KEY is required" >&2; exit 1; }
           [[ -n "$SERVICE_ID" ]] || { echo "PRODUCTION_API_SERVICE_ID is required" >&2; exit 1; }
           [[ -n "$PLATFORM_ADMIN_TOKEN" ]] || { echo "PLATFORM_API_ACTIVATION_ADMIN_TOKEN is required" >&2; exit 1; }
+          [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] || { echo "CLOUDFLARE_API_TOKEN is required" >&2; exit 1; }
+          [[ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]] || { echo "CLOUDFLARE_ACCOUNT_ID is required" >&2; exit 1; }
 
       - name: Validate counsel-approved legal evidence and exact public digests
         shell: bash
@@ -86,7 +96,6 @@ jobs:
           }
           put_env PLATFORM_API_ENABLED true
           put_env PLATFORM_API_TERMS_ENFORCEMENT_ENABLED true
-          # Automatic enrollment remains explicitly off while legal records are published.
           put_env PLATFORM_API_TEST_SELF_SERVICE_AUTO_ENROLL_ENABLED false
           put_env PLATFORM_API_CLI_DEVICE_AUTH_ENABLED false
 
@@ -152,6 +161,27 @@ jobs:
               "/tmp/terms-$document_type.json" >/dev/null
           done
 
+      - name: Verify effective legal catalog before automatic enrollment
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error "$API_BASE/v1/platform/terms" > /tmp/effective-terms.json
+          jq -e '
+            (.documents | type == "array") and
+            ([.documents[].document_type] | index("api_terms") != null) and
+            ([.documents[].document_type] | index("acceptable_use") != null) and
+            ([.documents[].document_type] | index("privacy") != null) and
+            ([.documents[] | select(.legal_review_status != "approved_effective")] | length == 0)
+          ' /tmp/effective-terms.json >/dev/null
+          jq -c '.documents[]' /tmp/approved-legal.json | while read -r expected; do
+            type="$(jq -r '.document_type' <<<"$expected")"
+            version="$(jq -r '.version' <<<"$expected")"
+            digest="$(jq -r '.sha256' <<<"$expected")"
+            jq -e --arg type "$type" --arg version "$version" --arg digest "$digest" \
+              '.documents[] | select(.document_type == $type and .version == $version and .content_digest == $digest and .legal_review_status == "approved_effective")' \
+              /tmp/effective-terms.json >/dev/null
+          done
+
       - name: Stage 2 — enable only public TEST self-service capabilities
         shell: bash
         env:
@@ -169,7 +199,6 @@ jobs:
               "https://api.render.com/v1/services/$SERVICE_ID/env-vars/$key" >/dev/null
           }
 
-          # Public TEST developer path.
           put_env PLATFORM_API_ENABLED true
           put_env PLATFORM_API_DEVELOPER_CONTROL_PLANE_ENABLED true
           put_env PLATFORM_API_TEST_PROJECTS_ENABLED true
@@ -255,18 +284,19 @@ jobs:
           echo "Final backend did not reach exact SHA $GITHUB_SHA" >&2
           exit 1
 
-      - name: Verify TEST-only production safety boundaries
+      - name: Verify TEST-only backend safety boundaries
         shell: bash
         run: |
           set -euo pipefail
           health="$(curl --fail-with-body --silent --show-error "$API_BASE/v1/platform/health")"
           echo "$health" > /tmp/platform-health.json
+          jq -e '.platform_api_enabled == true' /tmp/platform-health.json >/dev/null
+          jq -e '.developer_control_plane_enabled == true' /tmp/platform-health.json >/dev/null
           jq -e '.physical_irrigation_commands == "disabled"' /tmp/platform-health.json >/dev/null
           jq -e '.earthdaily_status == "awaiting_partner_contract"' /tmp/platform-health.json >/dev/null
           jq -e '.valley_irrigation_status == "awaiting_partner_contract"' /tmp/platform-health.json >/dev/null
-          # Device authorization must be ready, not only requested by configuration.
-          jq -e '(.cli_device_auth.enabled // .cli_device_auth_enabled // false) == true' /tmp/platform-health.json >/dev/null
-          jq -e '(.cli_device_auth.secret_ready // .cli_device_auth_secret_ready // false) == true' /tmp/platform-health.json >/dev/null
+          jq -e '.webhook_delivery.enabled == false' /tmp/platform-health.json >/dev/null
+          jq -e '.cli_device_auth.enabled == true and .cli_device_auth.secret_ready == true' /tmp/platform-health.json >/dev/null
 
       - name: Verify published legal assets are public and immutable by digest
         shell: bash
@@ -275,14 +305,53 @@ jobs:
           jq -c '.documents[]' /tmp/approved-legal.json | while read -r document; do
             asset="$(jq -r '.asset' <<<"$document")"
             digest="$(jq -r '.sha256' <<<"$document")"
-            relative="${asset#platform-api/}"
-            url="https://agroai-pilot.com/platform-api/${relative#assets/}"
-            # The marketing worker exposes platform-api/assets/* under /platform-api/assets/*.
             url="https://agroai-pilot.com/platform-api/assets/legal/$(basename "$asset")"
             curl --fail-with-body --silent --show-error "$url" -o /tmp/legal-asset.html
             actual="$(sha256sum /tmp/legal-asset.html | awk '{print $1}')"
             [[ "$actual" == "$digest" ]] || { echo "Public digest mismatch: $url" >&2; exit 1; }
           done
+
+      - name: Deploy public TEST marketing and indexing mode
+        shell: bash
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 deploy --config "$WORKER_CONFIG" \
+            --var "MARKETING_ORIGIN:https://agroai-343.pages.dev" \
+            --var "PLATFORM_API_MARKETING_ENABLED:true" \
+            --var "PLATFORM_API_PUBLIC_DOCS_ENABLED:true" \
+            --var "PLATFORM_API_INDEXING_ENABLED:true" \
+            --var "PLATFORM_API_PUBLIC_SELF_SERVICE_ENABLED:true"
+
+      - name: Verify public marketing, installer and legal/runtime launch contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            rm -f /tmp/landing.headers /tmp/landing.html /tmp/installer.sh
+            landing_code="$(curl -sS -L -D /tmp/landing.headers -o /tmp/landing.html -w '%{http_code}' "$MARKETING_URL" || true)"
+            installer_code="$(curl -sS -L -o /tmp/installer.sh -w '%{http_code}' "$MARKETING_URL/assets/install.sh" || true)"
+            if [[ "$landing_code" == "200" && "$installer_code" == "200" ]] && \
+               grep -Fi 'x-agroai-platform-api-access: public-test-self-service' /tmp/landing.headers >/dev/null && \
+               ! grep -Fi 'x-robots-tag: noindex, nofollow' /tmp/landing.headers >/dev/null && \
+               grep -F 'Self-service TEST access is open to eligible verified agricultural developers.' /tmp/landing.html >/dev/null && \
+               grep -F 'Next: agroai login' /tmp/installer.sh >/dev/null; then
+              exit 0
+            fi
+            sleep 4
+          done
+          echo "Public Platform marketing did not reach the expected self-service state" >&2
+          exit 1
+
+      - name: Persist public launch mode for future Platform marketing deploys
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="/repos/${GITHUB_REPOSITORY}/actions/variables/PLATFORM_API_PUBLIC_SELF_SERVICE_LAUNCHED"
+          if ! gh api --method PATCH "$endpoint" -f name=PLATFORM_API_PUBLIC_SELF_SERVICE_LAUNCHED -f value=true >/dev/null 2>&1; then
+            gh api --method POST "/repos/${GITHUB_REPOSITORY}/actions/variables" -f name=PLATFORM_API_PUBLIC_SELF_SERVICE_LAUNCHED -f value=true >/dev/null
+          fi
+          value="$(gh api "$endpoint" --jq '.value')"
+          [[ "$value" == "true" ]] || { echo "Could not persist public launch variable" >&2; exit 1; }
 
       - name: Activation evidence
         shell: bash
@@ -290,12 +359,14 @@ jobs:
           set -euo pipefail
           mkdir -p activation-evidence
           cp /tmp/approved-legal.json activation-evidence/legal-catalog.json
+          cp /tmp/effective-terms.json activation-evidence/effective-terms.json
           cp /tmp/final-health.json activation-evidence/api-health.json
           cp /tmp/platform-health.json activation-evidence/platform-health.json
+          cp /tmp/landing.headers activation-evidence/marketing-headers.txt
           jq -n \
             --arg release_sha "$GITHUB_SHA" \
             --arg activated_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            '{status:"test_self_service_activated",release_sha:$release_sha,activated_at:$activated_at,live_projects:false,webhook_delivery:false,physical_execution:false,provider_writes:false}' \
+            '{status:"test_self_service_activated",release_sha:$release_sha,activated_at:$activated_at,indexing:true,live_projects:false,billing:false,webhook_delivery:false,physical_execution:false,provider_writes:false}' \
             > activation-evidence/activation.json
 
       - uses: actions/upload-artifact@v4
