@@ -2,7 +2,7 @@ import type { ComponentType } from "react";
 import { createBrowserRouter, Navigate } from "react-router";
 import { MainLayout } from "./components/MainLayout";
 import { OperationRouteBoundary } from "./components/OperationRouteBoundary";
-import { PlatformApplicationGate } from "./components/PlatformApplicationGate";
+import { PlatformSelfServiceGate } from "./components/PlatformSelfServiceGate";
 import { PlatformConsoleApp } from "./components/PlatformConsole";
 import { PlatformSafetyNotice } from "./components/PlatformSafetyNotice";
 import { RouteRecovery } from "./components/RouteRecovery";
@@ -28,7 +28,7 @@ function PortalRouteError() {
 
 function PlatformProduct() {
   const { platformDeveloper } = useAuth();
-  if (!platformDeveloper) return <PlatformApplicationGate />;
+  if (!platformDeveloper) return <PlatformSelfServiceGate />;
   return <><PlatformConsoleApp /><PlatformSafetyNotice /></>;
 }
 
