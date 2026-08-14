@@ -77,22 +77,24 @@ jobs:
           agroai --help | grep -q bootstrap
           agroai --help | grep -q service-accounts
 
-  terminal-installer:
-    name: Public CLI installer safety contract
+  terminal-installer-linux:
+    name: Public CLI installer — Linux
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: POSIX shell syntax
-        run: sh -n platform-api/assets/install.sh
-      - name: Installer boundary checks
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: POSIX shell and safety contract
         run: |
+          sh -n platform-api/assets/install.sh
           python3 - <<'PY'
           from pathlib import Path
           source = Path("platform-api/assets/install.sh").read_text()
           required = [
               "Python 3.10 or newer is required",
               "AGROAI_CLI_REF",
-              "#subdirectory=sdk/python",
+              "lamine.github.io/archive/${REF}.zip#subdirectory=sdk/python",
               "pipx install --force",
               '"$PYTHON" -m venv "$VENV_ROOT/venv"',
               "ln -sf",
@@ -102,8 +104,57 @@ jobs:
               assert item in source, item
           assert "sudo " not in source
           assert "AGROAI_API_KEY" not in source
+          assert "command -v git" not in source
           print("Public CLI installer contract passed")
           PY
+      - name: Real install from this exact GitHub commit
+        env:
+          AGROAI_CLI_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+          AGROAI_CLI_HOME: ${{ runner.temp }}/agroai-cli
+          AGROAI_BIN_DIR: ${{ runner.temp }}/agroai-bin
+        run: |
+          sh platform-api/assets/install.sh
+          "$AGROAI_BIN_DIR/agroai" --version
+          "$AGROAI_BIN_DIR/agroai" --help | grep -q bootstrap
+          "$AGROAI_BIN_DIR/agroai" --help | grep -q service-accounts
+
+  terminal-installer-windows:
+    name: Public CLI installer — Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: PowerShell parse and safety contract
+        shell: pwsh
+        run: |
+          $source = Get-Content -Raw platform-api/assets/install.ps1
+          [scriptblock]::Create($source) | Out-Null
+          if ($source -notmatch 'Python 3\.10 or newer is required') { throw 'missing Python version gate' }
+          if ($source -notmatch 'AGROAI_CLI_REF') { throw 'missing source pin' }
+          if ($source -notmatch '#subdirectory=sdk/python') { throw 'missing SDK subdirectory' }
+          if ($source -match 'Start-Process.+-Verb\s+RunAs') { throw 'installer must not require elevation' }
+          if ($source -match 'AGROAI_API_KEY') { throw 'installer must not request a data-plane secret' }
+      - name: Real install from this exact GitHub commit
+        shell: pwsh
+        env:
+          AGROAI_CLI_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+          AGROAI_CLI_HOME: ${{ runner.temp }}\agroai-cli
+          AGROAI_BIN_DIR: ${{ runner.temp }}\agroai-bin
+        run: |
+          & platform-api/assets/install.ps1
+          $cli = Join-Path $env:AGROAI_CLI_HOME 'venv\Scripts\agroai.exe'
+          & $cli --version
+          $help = (& $cli --help | Out-String)
+          if ($help -notmatch 'bootstrap') { throw 'bootstrap command missing' }
+          if ($help -notmatch 'service-accounts') { throw 'service-accounts command missing' }
+
+  cli-entrypoint-contract:
+    name: CLI command boundary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - name: Python package entrypoint contract
         run: |
           python3 - <<'PY'
@@ -115,7 +166,9 @@ jobs:
           for command in ("login", "logout", "bootstrap", "projects", "service-accounts", "keys", "fields", "webhooks", "usage", "doctor"):
               assert f'add_parser("{command}"' in cli, command
           assert '"environment": "test"' in cli
-          assert '"actions:execute"' not in cli.split("SAFE_BOOTSTRAP_SCOPES", 1)[1].split("]", 1)[0]
+          default_scopes = cli.split("SAFE_BOOTSTRAP_SCOPES", 1)[1].split("]", 1)[0]
+          assert '"actions:execute"' not in default_scopes
+          assert '"connectors:write"' not in default_scopes
           print("CLI entrypoint and TEST bootstrap contract passed")
           PY
 
