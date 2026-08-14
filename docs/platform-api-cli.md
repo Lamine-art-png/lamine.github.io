@@ -10,12 +10,26 @@ macOS / Linux:
 curl -fsSL https://agroai-pilot.com/platform-api/assets/install.sh | sh
 ```
 
-The installer requires Git and Python 3.10 or newer. It uses `pipx` when available. Otherwise it creates an isolated virtual environment under `~/.local/share/agroai-cli` and links the executable into `~/.local/bin`. It does not require `sudo`.
+Windows PowerShell:
 
-For a reproducible source pin:
+```powershell
+iwr https://agroai-pilot.com/platform-api/assets/install.ps1 -UseBasicParsing | iex
+```
+
+Both installers require Python 3.10 or newer. The macOS/Linux installer uses `pipx` when available; otherwise it creates an isolated virtual environment under `~/.local/share/agroai-cli` and links the executable into `~/.local/bin`. The Windows installer creates an isolated environment under `%LOCALAPPDATA%\AGRO-AI\cli` and a small command shim under `%LOCALAPPDATA%\AGRO-AI\bin`. Neither installer requires administrator/root privileges.
+
+The installers fetch a source archive directly from the public AGRO-AI GitHub repository, so Git is not required.
+
+For a reproducible source pin, set `AGROAI_CLI_REF` in the shell that executes the installer:
 
 ```bash
-AGROAI_CLI_REF=<commit-sha> curl -fsSL https://agroai-pilot.com/platform-api/assets/install.sh | sh
+export AGROAI_CLI_REF=<commit-sha>
+curl -fsSL https://agroai-pilot.com/platform-api/assets/install.sh | sh
+```
+
+```powershell
+$env:AGROAI_CLI_REF = "<commit-sha>"
+iwr https://agroai-pilot.com/platform-api/assets/install.ps1 -UseBasicParsing | iex
 ```
 
 PyPI, npm and Homebrew are separate distribution channels. Do not advertise a registry install until namespace ownership and release credentials are verified.
@@ -30,7 +44,7 @@ The CLI separates human control-plane credentials from machine API keys.
 agroai login
 ```
 
-The CLI starts a short-lived first-party browser/device authorization flow. After the user signs in and approves the device, the CLI receives an organization-bound human session. The session is stored in the operating-system keychain when available, with a `0600` local-file fallback. A machine API key is never treated as human identity.
+The CLI starts a short-lived first-party browser/device authorization flow. After the user signs in and approves the device, the CLI receives an organization-bound human session. The session is stored in the operating-system keychain when available, with a `0600` local-file fallback on platforms where keychain support is unavailable. A machine API key is never treated as human identity.
 
 ```bash
 agroai logout
@@ -72,7 +86,7 @@ agroai fields list --json
 agroai usage --json
 ```
 
-`bootstrap` never requests a LIVE project, provider-write permission, or physical-action scope. Its default scope set is limited to the normal TEST quickstart operations. The API key is printed once because the backend deliberately returns new key material once; the CLI does not save it to disk.
+`bootstrap` never requests a LIVE project, provider-write permission, or physical-action scope. Its default scope set is limited to normal TEST quickstart operations. The API key is printed once because the backend deliberately returns new key material once; the CLI does not save it to disk.
 
 ## Control-plane commands
 
