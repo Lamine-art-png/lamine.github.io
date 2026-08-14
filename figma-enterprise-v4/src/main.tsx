@@ -15,7 +15,7 @@ const automaticRecoveryKey = "agroai_frontend_cache_recovery_attempted";
 const standalonePlatformRuntimeIdentity = [
   "platform.agroai-pilot.com",
   "Build on AGRO-AI.",
-  "Platform API enrollment remains a separate reviewed step after sign-in.",
+  "Verified developers can activate bounded TEST access after accepting the current developer agreements.",
   "Permanent API keys never enter browser JavaScript.",
 ].join(" | ");
 if (standalonePlatformHost) {
