@@ -33,6 +33,23 @@ TRANSIENT = (
 )
 
 
+def release_identity() -> dict[str, str]:
+    """Return the workflow commit and the backend commit actually under test.
+
+    A main-branch workflow SHA can differ from the immutable Render backend SHA
+    when a merge or docs/frontend-only commit does not change ``agroai_api``.
+    ``release_sha`` intentionally aliases the backend SHA for backward-compatible
+    evidence consumers, while ``workflow_sha`` preserves the triggering commit.
+    """
+    workflow_sha = os.environ.get("GITHUB_SHA", "").strip()
+    backend_release_sha = os.environ.get("BACKEND_RELEASE_SHA", "").strip() or workflow_sha
+    return {
+        "release_sha": backend_release_sha,
+        "backend_release_sha": backend_release_sha,
+        "workflow_sha": workflow_sha,
+    }
+
+
 def describe_error(exc: Exception) -> str:
     if isinstance(exc, urllib.error.HTTPError):
         try:
@@ -109,8 +126,18 @@ def run() -> int:
     OUT.mkdir(parents=True, exist_ok=True)
     results_dir = OUT / "results"
     results_dir.mkdir(exist_ok=True)
+    identity = release_identity()
     (OUT / "started.json").write_text(
-        json.dumps({"status": "started", "api_url": API_URL, "workers": WORKERS, "attempts": ATTEMPTS, "release_sha": os.environ.get("GITHUB_SHA", "")}, indent=2),
+        json.dumps(
+            {
+                "status": "started",
+                "api_url": API_URL,
+                "workers": WORKERS,
+                "attempts": ATTEMPTS,
+                **identity,
+            },
+            indent=2,
+        ),
         encoding="utf-8",
     )
     if not TOKEN:
@@ -149,7 +176,13 @@ def run() -> int:
         raise RuntimeError(f"matrix_reconciliation_failed:{len(matrix)}/{len(locales)}")
 
     digest = hashlib.sha256(json.dumps(matrix, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
-    summary = {"status": "ok", "release_sha": os.environ.get("GITHUB_SHA", ""), "locale_count": len(matrix), "matrix_sha256": digest, "locales": [x["locale"] for x in matrix]}
+    summary = {
+        "status": "ok",
+        **identity,
+        "locale_count": len(matrix),
+        "matrix_sha256": digest,
+        "locales": [x["locale"] for x in matrix],
+    }
     (OUT / "summary.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")
     print(json.dumps(summary, ensure_ascii=False, sort_keys=True), flush=True)
     return 0
