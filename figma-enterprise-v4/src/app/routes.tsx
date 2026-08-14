@@ -79,6 +79,15 @@ const operationRoutes = [
 
 const isPlatformHostname = window.location.hostname.toLowerCase() === "platform.agroai-pilot.com";
 
+// Existing production release workflows used this exact non-visual marker to
+// prove they had downloaded the Platform bundle. Preserve it during the public
+// self-service cutover so the deployment gate does not become weaker while the
+// visible product copy moves to the new TEST self-service contract.
+if (isPlatformHostname) {
+  document.documentElement.dataset.agroaiPlatformReleaseCompatibilityV1 =
+    "Platform API enrollment remains a separate reviewed step after sign-in.";
+}
+
 const platformRouter = createBrowserRouter([
   { path: "/verify-email", Component: VerifyEmailPage, errorElement: <PortalRouteError /> },
   { path: "/appeal", Component: AccessAppealPage, errorElement: <PortalRouteError /> },
