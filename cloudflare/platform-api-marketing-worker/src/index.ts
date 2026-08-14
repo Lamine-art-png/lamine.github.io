@@ -4,6 +4,7 @@ interface Env {
   PLATFORM_API_MARKETING_ENABLED?: string;
   PLATFORM_API_PUBLIC_DOCS_ENABLED?: string;
   PLATFORM_API_INDEXING_ENABLED?: string;
+  PLATFORM_API_PUBLIC_SELF_SERVICE_ENABLED?: string;
 }
 
 type Surface = "marketing" | "docs" | "shared";
@@ -95,7 +96,7 @@ function unavailable(reason = "upstream-unavailable"): Response {
   });
 }
 
-function responseHeaders(upstream: Response, route: Route, indexing: boolean): Headers {
+function responseHeaders(upstream: Response, route: Route, indexing: boolean, publicSelfService: boolean): Headers {
   const headers = new Headers(upstream.headers);
   headers.delete("content-length");
   headers.delete("content-encoding");
@@ -105,6 +106,7 @@ function responseHeaders(upstream: Response, route: Route, indexing: boolean): H
   headers.set("x-frame-options", "DENY");
   headers.set("permissions-policy", "camera=(), microphone=(), geolocation=()");
   headers.set("x-agroai-platform-api-surface", route.surface);
+  headers.set("x-agroai-platform-api-access", publicSelfService ? "public-test-self-service" : "private-beta");
   if (indexing) headers.delete("x-robots-tag");
   else headers.set("x-robots-tag", "noindex, nofollow");
   if (route.html) {
@@ -128,7 +130,21 @@ function normalizePlatformHtml(html: string): string {
     .replaceAll('/attached_assets/Copy of AGRO-AI (1)_1763408301972.png', OFFICIAL_LOGO);
 }
 
-async function platformAsset(request: Request, env: Env, route: Route, indexing: boolean): Promise<Response> {
+function normalizePublicSelfServiceHtml(html: string, route: Route): string {
+  if (route.surface !== "marketing") return html;
+  return html
+    .replaceAll("Build agriculture recommendations, reporting, verification, field intelligence, data ingestion, and integration workflows with the AGRO-AI Platform API. Private beta.", "Build agriculture recommendations, reporting, verification, field intelligence, data ingestion, and integration workflows with the AGRO-AI Platform API. Self-service TEST access for verified agricultural developers.")
+    .replaceAll("Platform API · Private preview", "Platform API · Self-service TEST")
+    .replaceAll("Private preview. Pricing, legal terms, provider activation, and public availability require separate approval.", "Self-service TEST access is open to eligible verified agricultural developers. LIVE projects, production providers, billing, production webhooks, and physical execution remain separately gated.")
+    .replaceAll("Private beta.", "TEST self-service.")
+    .replaceAll("Private pricing preview", "Pricing")
+    .replaceAll("Apply for partner integration", "Explore partner integration")
+    .replaceAll("Free deterministic sandbox", "Deterministic TEST sandbox")
+    .replaceAll("Sign in to console", "Open developer console")
+    .replaceAll("Start building", "Start building in TEST");
+}
+
+async function platformAsset(request: Request, env: Env, route: Route, indexing: boolean, publicSelfService: boolean): Promise<Response> {
   const assetUrl = new URL(route.assetPath, "https://agroai-assets.invalid");
   const upstream = await env.ASSETS.fetch(new Request(assetUrl, {
     method: request.method,
@@ -139,7 +155,7 @@ async function platformAsset(request: Request, env: Env, route: Route, indexing:
   if (upstream.status === 404) return notFound();
   if (!upstream.ok) return unavailable("asset-unavailable");
 
-  const headers = responseHeaders(upstream, route, indexing);
+  const headers = responseHeaders(upstream, route, indexing, publicSelfService);
   if (!route.html || request.method === "HEAD") {
     return new Response(request.method === "HEAD" ? null : upstream.body, {
       status: upstream.status,
@@ -152,6 +168,7 @@ async function platformAsset(request: Request, env: Env, route: Route, indexing:
   if ((route.identity && !html.includes(route.identity)) || looksLikeGenericErrorPage(html)) {
     return unavailable("identity-mismatch");
   }
+  if (publicSelfService) html = normalizePublicSelfServiceHtml(html, route);
   if (indexing) html = html.replace(PRIVATE_ROBOTS_META, "");
   return new Response(html, { status: 200, headers });
 }
@@ -204,7 +221,8 @@ export default {
     if (!route) return notFound();
     const marketing = enabled(env.PLATFORM_API_MARKETING_ENABLED);
     const docs = enabled(env.PLATFORM_API_PUBLIC_DOCS_ENABLED);
+    const publicSelfService = enabled(env.PLATFORM_API_PUBLIC_SELF_SERVICE_ENABLED);
     if (!surfaceEnabled(route.surface, marketing, docs)) return notFound();
-    return platformAsset(request, env, route, enabled(env.PLATFORM_API_INDEXING_ENABLED));
+    return platformAsset(request, env, route, enabled(env.PLATFORM_API_INDEXING_ENABLED), publicSelfService);
   },
 } satisfies ExportedHandler<Env>;

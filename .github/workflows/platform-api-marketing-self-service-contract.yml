@@ -1,0 +1,28 @@
+name: Platform API Marketing Self-Service Contract
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "cloudflare/platform-api-marketing-worker/**"
+      - "platform-api/**"
+      - ".github/workflows/platform-api-marketing-self-service-contract.yml"
+      - ".github/workflows/deploy-platform-api-marketing.yml"
+      - ".github/workflows/platform-api-public-self-service-activation.yml"
+      - ".github/workflows/platform-api-public-self-service-rollback.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node cloudflare/platform-api-marketing-worker/tests/contract.mjs
+      - run: node cloudflare/platform-api-marketing-worker/tests/public-self-service-contract.mjs
+      - run: npx --yes wrangler@4.107.0 deploy --dry-run --config cloudflare/platform-api-marketing-worker/wrangler.toml

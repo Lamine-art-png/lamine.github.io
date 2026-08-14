@@ -1,0 +1,255 @@
+name: Platform API Public Self-Service CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "agroai_api/app/services/email_verification.py"
+      - "agroai_api/tests/unit/test_platform_api_public_email_copy.py"
+      - "figma-enterprise-v4/src/app/**"
+      - "figma-enterprise-v4/tests/platform-application-gate-contract.mjs"
+      - "figma-enterprise-v4/tests/platform-api-console-contract.mjs"
+      - "sdk/python/**"
+      - "platform-api/assets/**"
+      - "platform-api/legal/**"
+      - "cloudflare/platform-api-marketing-worker/**"
+      - "docs/platform-api-cli.md"
+      - "docs/platform-api-self-service.md"
+      - "docs/platform-api-product-topology.md"
+      - "docs/platform-api-public-self-service-launch.md"
+      - "docs/DEPLOYMENT_TRUTH_MAP.md"
+      - ".github/workflows/deploy-platform-api-marketing.yml"
+      - ".github/workflows/platform-api-public-self-service-ci.yml"
+      - ".github/workflows/platform-api-public-self-service-activation.yml"
+      - ".github/workflows/platform-api-public-self-service-rollback.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portal:
+    name: Public developer product build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: figma-enterprise-v4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - run: npm ci --no-audit --no-fund
+      - run: node tests/platform-application-gate-contract.mjs
+      - run: node tests/platform-api-console-contract.mjs
+      - name: Production build
+        env:
+          VITE_DEPLOYMENT_ENVIRONMENT: production
+          VITE_BUILD_SHA: ${{ github.sha }}
+          VITE_API_BASE_URL: https://api.agroai-pilot.com
+        run: npm run build
+
+  cli-sdk:
+    name: Python SDK and terminal self-service
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - working-directory: sdk/python
+        run: |
+          python -m pip install --upgrade pip build
+          python -m pip install -e . pytest
+      - run: python -m pytest -q sdk/python/tests
+      - working-directory: sdk/python
+        run: python -m build
+      - run: |
+          agroai --version
+          agroai --help | grep -q bootstrap
+          agroai --help | grep -q service-accounts
+
+  backend-copy:
+    name: Developer verification email state contract
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - working-directory: agroai_api
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt pytest
+          APP_ENV=test python -m pytest -q tests/unit/test_platform_api_public_email_copy.py
+
+  installer-linux:
+    name: Public CLI installer — Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Safety contract
+        run: |
+          sh -n platform-api/assets/install.sh
+          python3 - <<'PY'
+          from pathlib import Path
+          source = Path("platform-api/assets/install.sh").read_text()
+          for item in (
+              "Python 3.10 or newer is required",
+              "AGROAI_CLI_REF",
+              "lamine.github.io/archive/${REF}.zip#subdirectory=sdk/python",
+              '"$PYTHON" -m venv "$VENV_ROOT/venv"',
+              "ln -sf",
+              "Next: agroai login",
+          ):
+              assert item in source, item
+          assert "sudo " not in source
+          assert "AGROAI_API_KEY" not in source
+          assert "command -v git" not in source
+          PY
+      - name: Real exact-SHA install
+        env:
+          AGROAI_CLI_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+          AGROAI_CLI_HOME: ${{ runner.temp }}/agroai-cli
+          AGROAI_BIN_DIR: ${{ runner.temp }}/agroai-bin
+        run: |
+          sh platform-api/assets/install.sh
+          "$AGROAI_BIN_DIR/agroai" --version
+          "$AGROAI_BIN_DIR/agroai" --help | grep -q bootstrap
+          "$AGROAI_BIN_DIR/agroai" --help | grep -q service-accounts
+
+  installer-windows:
+    name: Public CLI installer — Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Parse and safety contract
+        shell: pwsh
+        run: |
+          $source = Get-Content -Raw platform-api/assets/install.ps1
+          [scriptblock]::Create($source) | Out-Null
+          if ($source -notmatch 'Python 3\.10 or newer is required') { throw 'missing Python version gate' }
+          if ($source -notmatch 'AGROAI_CLI_REF') { throw 'missing source pin' }
+          if ($source -notmatch '#subdirectory=sdk/python') { throw 'missing SDK subdirectory' }
+          if ($source -match 'Start-Process.+-Verb\s+RunAs') { throw 'installer must not require elevation' }
+          if ($source -match 'AGROAI_API_KEY') { throw 'installer must not request a data-plane secret' }
+      - name: Real exact-SHA install
+        shell: pwsh
+        env:
+          AGROAI_CLI_REF: ${{ github.event.pull_request.head.sha || github.sha }}
+          AGROAI_CLI_HOME: ${{ runner.temp }}\agroai-cli
+          AGROAI_BIN_DIR: ${{ runner.temp }}\agroai-bin
+        run: |
+          & platform-api/assets/install.ps1
+          $cli = Join-Path $env:AGROAI_CLI_HOME 'venv\Scripts\agroai.exe'
+          & $cli --version
+          $help = (& $cli --help | Out-String)
+          if ($help -notmatch 'bootstrap') { throw 'bootstrap command missing' }
+          if ($help -notmatch 'service-accounts') { throw 'service-accounts command missing' }
+
+  marketing-worker:
+    name: Public/private marketing state machine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - run: node cloudflare/platform-api-marketing-worker/tests/contract.mjs
+      - run: npx --yes wrangler@4.107.0 deploy --dry-run --config cloudflare/platform-api-marketing-worker/wrangler.toml
+      - name: Fail-closed committed state and public transform
+        run: |
+          grep -F 'PLATFORM_API_PUBLIC_SELF_SERVICE_ENABLED = "false"' cloudflare/platform-api-marketing-worker/wrangler.toml
+          grep -F 'PLATFORM_API_INDEXING_ENABLED = "false"' cloudflare/platform-api-marketing-worker/wrangler.toml
+          grep -F 'public-test-self-service' cloudflare/platform-api-marketing-worker/src/index.ts
+          grep -F 'Self-service TEST access is open to eligible verified agricultural developers.' cloudflare/platform-api-marketing-worker/src/index.ts
+
+  legal:
+    name: Legal approval boundary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Drafts cannot masquerade as approved evidence
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          drafts = list(Path("platform-api/legal/drafts").rglob("*.md"))
+          assert drafts
+          for path in drafts:
+              text = path.read_text()
+              assert "LEGAL REVIEW REQUIRED" in text, path
+              assert "NOT EFFECTIVE" in text, path
+          validator = Path("platform-api/legal/validate_approved_catalog.py").read_text()
+          assert 'catalog.get("status") != "counsel_approved"' in validator
+          assert "digest mismatch" in validator
+          assert "approved public asset still contains draft/non-effective marker" in validator
+          PY
+      - name: Validate real approval evidence only if supplied
+        run: |
+          if [[ -f platform-api/legal/approved-catalog.json ]]; then
+            python3 platform-api/legal/validate_approved_catalog.py
+          else
+            echo "No counsel-approved catalog committed: production public activation remains intentionally blocked."
+          fi
+
+  boundaries:
+    name: TEST-only activation / rollback boundary
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          config = Path("agroai_api/app/core/config.py").read_text()
+          activation = Path(".github/workflows/platform-api-public-self-service-activation.yml").read_text()
+          rollback = Path(".github/workflows/platform-api-public-self-service-rollback.yml").read_text()
+          deploy = Path(".github/workflows/deploy-platform-api-marketing.yml").read_text()
+          cli = Path("sdk/python/agroai_platform/cli.py").read_text()
+          gate = Path("figma-enterprise-v4/src/app/components/PlatformSelfServiceGate.tsx").read_text()
+
+          for contract in (
+              "PLATFORM_API_LIVE_PROJECTS_ENABLED: bool = False",
+              "PLATFORM_API_WEBHOOK_DELIVERY_ENABLED: bool = False",
+              "PLATFORM_API_LIVE_AUTO_APPROVAL_ENABLED: bool = False",
+              "EARTHDAILY_ADAPTER_ENABLED: bool = False",
+              "VALLEY_IRRIGATION_ADAPTER_ENABLED: bool = False",
+              "VALLEY_IRRIGATION_WRITE_CAPABILITY_ENABLED: bool = False",
+          ):
+              assert contract in config, contract
+          for contract in (
+              "PLATFORM_API_LIVE_PROJECTS_ENABLED",
+              "PLATFORM_API_WEBHOOK_DELIVERY_ENABLED",
+              "PLATFORM_API_LIVE_AUTO_APPROVAL_ENABLED",
+              "EARTHDAILY_ADAPTER_ENABLED",
+              "VALLEY_IRRIGATION_ADAPTER_ENABLED",
+              "VALLEY_IRRIGATION_WRITE_CAPABILITY_ENABLED",
+          ):
+              assert f"{contract} false" in activation, contract
+              assert f"{contract} false" in rollback, contract
+
+          assert '"environment": "test"' in cli
+          default_scopes = cli.split("SAFE_BOOTSTRAP_SCOPES", 1)[1].split("]", 1)[0]
+          assert '"actions:execute"' not in default_scopes
+          assert '"connectors:write"' not in default_scopes
+          assert "TEST access never grants live provider credentials" in gate
+          assert "LIVE projects remain a separate reviewed process" in gate
+
+          # Normal marketing releases must derive mode from production Render/backend truth,
+          # not a client input or manually mutable repository launch bit.
+          assert "Classify public/private mode from production backend truth" in deploy
+          assert "PLATFORM_API_TEST_SELF_SERVICE_AUTO_ENROLL_ENABLED" in deploy
+          assert "RENDER_API_KEY" in deploy
+          assert "PLATFORM_API_INDEXING_ENABLED:${PUBLIC_SELF_SERVICE_MODE}" in deploy
+          assert "PLATFORM_API_PUBLIC_SELF_SERVICE_ENABLED:${PUBLIC_SELF_SERVICE_MODE}" in deploy
+          assert "PLATFORM_API_PUBLIC_SELF_SERVICE_LAUNCHED" not in deploy
+          assert "PLATFORM_API_PUBLIC_SELF_SERVICE_LAUNCHED" not in activation
+          assert "PLATFORM_API_PUBLIC_SELF_SERVICE_LAUNCHED" not in rollback
+          PY

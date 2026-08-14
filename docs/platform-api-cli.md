@@ -1,83 +1,150 @@
 # AGRO-AI Platform API — CLI
 
-`agroai` is a first-class command-line interface built directly on the official
-Python SDK (`agroai_platform.client`). It is not a wrapper around `curl`.
+`agroai` is the first-class command-line interface for the AGRO-AI Platform API. It is built on the official Python SDK, not on shelling out to `curl`.
 
-## Status
+## Public installation
 
-- **Implemented and tested** (offline contract tests in `sdk/python/tests/test_cli.py`).
-- **Not yet published** to PyPI/Homebrew. Do not advertise `pipx install agroai`
-  or `brew install agroai` until the package is actually released (see
-  `docs/platform-api-production-readiness.md` release gates). Until then, run it
-  from a checkout:
+macOS / Linux:
 
-  ```bash
-  cd sdk/python
-  pip install -e .        # registers the `agroai` entry point
-  # or, without installing:
-  PYTHONPATH=. python -m agroai_platform.cli --help
-  ```
+```bash
+curl -fsSL https://agroai-pilot.com/platform-api/assets/install.sh | sh
+```
+
+Windows PowerShell:
+
+```powershell
+iwr https://agroai-pilot.com/platform-api/assets/install.ps1 -UseBasicParsing | iex
+```
+
+Both installers require Python 3.10 or newer. The macOS/Linux installer uses `pipx` when available; otherwise it creates an isolated virtual environment under `~/.local/share/agroai-cli` and links the executable into `~/.local/bin`. The Windows installer creates an isolated environment under `%LOCALAPPDATA%\AGRO-AI\cli` and a small command shim under `%LOCALAPPDATA%\AGRO-AI\bin`. Neither installer requires administrator/root privileges.
+
+The installers fetch a source archive directly from the public AGRO-AI GitHub repository, so Git is not required.
+
+For a reproducible source pin, set `AGROAI_CLI_REF` in the shell that executes the installer:
+
+```bash
+export AGROAI_CLI_REF=<commit-sha>
+curl -fsSL https://agroai-pilot.com/platform-api/assets/install.sh | sh
+```
+
+```powershell
+$env:AGROAI_CLI_REF = "<commit-sha>"
+iwr https://agroai-pilot.com/platform-api/assets/install.ps1 -UseBasicParsing | iex
+```
+
+PyPI, npm and Homebrew are separate distribution channels. Do not advertise a registry install until namespace ownership and release credentials are verified.
 
 ## Authentication model
 
-The CLI deliberately separates the two credential types the platform uses:
+The CLI separates human control-plane credentials from machine API keys.
 
-| Action type | Credential | How |
-|-------------|-----------|-----|
-| Data-plane (`me`, `fields`, `usage`, `providers`, `jobs`) | machine API key | `AGROAI_API_KEY=agro_test_…` (or `--api-key`) |
-| Human control-plane (create projects/keys) | human session | **Developer Console** — a browser/device sign-in flow for the CLI is a tracked follow-up |
-
-`agroai login` does **not** fake a human session using a machine key. It reports
-how to obtain access and exits non-zero. This preserves the security boundary in
-§6/§29 of the engineering brief.
-
-## Configuration
-
-| Variable / flag | Default | Meaning |
-|-----------------|---------|---------|
-| `AGROAI_API_KEY` / `--api-key` | (required for data ops) | `agro_test_` or `agro_live_` key |
-| `AGROAI_BASE_URL` / `--base-url` | `https://api.agroai-pilot.com` | API base |
-| `--timeout` | `20.0` | request timeout (seconds) |
-| `--json` | off | machine-readable JSON output |
-
-The CLI never prints the full API key. `doctor` shows only a short prefix and
-the derived environment (`test`/`live`).
-
-## Commands
+### Human control plane
 
 ```bash
-agroai --version
-agroai doctor                     # config + connectivity diagnostics
-agroai me                         # authenticated principal
-agroai usage                      # usage summary
+agroai login
+```
+
+The CLI starts a short-lived first-party browser/device authorization flow. After the user signs in and approves the device, the CLI receives an organization-bound human session. The session is stored in the operating-system keychain when available, with a `0600` local-file fallback on platforms where keychain support is unavailable. A machine API key is never treated as human identity.
+
+```bash
+agroai logout
+```
+
+Logout revokes the CLI session server-side before removing the local credential.
+
+### Machine data plane
+
+Project API calls use a scoped `agro_test_` or `agro_live_` key:
+
+```bash
+export AGROAI_API_KEY="agro_test_..."
+agroai doctor
+```
+
+Public self-service creates TEST credentials only. LIVE remains separately reviewed.
+
+## Fastest TEST quickstart
+
+Once public TEST activation is enabled, a new developer can go from installation to a working TEST key entirely from the terminal plus the browser sign-in/approval step:
+
+```bash
+# 1. Install.
+curl -fsSL https://agroai-pilot.com/platform-api/assets/install.sh | sh
+
+# 2. Sign in. The browser opens for first-party authentication and device approval.
+agroai login
+
+# 3. Create the complete safe TEST chain: project -> service account -> one-time key.
+agroai --json bootstrap --name "First AGRO-AI integration"
+
+# 4. Copy the one-time api_key value returned by bootstrap.
+export AGROAI_API_KEY="agro_test_..."
+
+# 5. Verify the data plane and use deterministic agricultural TEST resources.
+agroai doctor
+agroai fields list --json
+agroai usage --json
+```
+
+`bootstrap` never requests a LIVE project, provider-write permission, or physical-action scope. Its default scope set is limited to normal TEST quickstart operations. The API key is printed once because the backend deliberately returns new key material once; the CLI does not save it to disk.
+
+## Control-plane commands
+
+```bash
+agroai projects list
+agroai projects create --name "My integration" --environment test
+
+agroai service-accounts list [--project-id <id>]
+agroai service-accounts create \
+  --project-id <id> \
+  --name local-dev \
+  --scope fields:read \
+  --scope fields:write
+
+agroai keys list
+agroai keys create --service-account-id <id> --name primary --scope fields:read
+agroai keys rotate <key-id> --overlap-minutes 0
+agroai keys revoke <key-id>
+
+agroai webhooks list
+```
+
+These commands require the human session created by `agroai login`.
+
+## Data-plane commands
+
+```bash
+agroai doctor
+agroai me
+agroai usage
 agroai fields list [--limit N] [--cursor C] [--all]
 agroai fields get <field-id>
+agroai fields create --name "North block" --crop almond --area-hectares 12.5
 agroai providers list
 agroai providers status <provider>
 agroai jobs get <job-id>
 ```
 
-Add `--json` to any command for automation.
+These commands require the appropriate project API-key scopes. Add `--json` for machine-readable output.
 
 ## Exit codes
 
 | Code | Meaning |
-|------|---------|
+|---:|---|
 | 0 | success |
 | 1 | generic error |
-| 2 | usage error (argparse) |
-| 3 | authentication/authorization error (401/403) |
-| 4 | rate limited (429) |
-| 5 | not found (404) |
-| 6 | configuration or connectivity error (e.g. `AGROAI_API_KEY` unset) |
+| 2 | usage error |
+| 3 | authentication or authorization error |
+| 4 | rate limited |
+| 5 | not found |
+| 6 | configuration or connectivity error |
 
-## Terminal-first quickstart
+## Security notes
 
-```bash
-export AGROAI_API_KEY="agro_test_..."   # from the Developer Console (test project)
-agroai doctor                            # verify connectivity
-agroai fields list --json                # deterministic synthetic sandbox data
-```
-
-This path requires no salesperson, provider contract, or production farm
-connection (§20). Live keys (`agro_live_`) are gated separately (§4/§14).
+- The CLI never prints a stored human session token.
+- `doctor` displays only a short API-key prefix and derived TEST/LIVE environment.
+- API-key plaintext is returned only by deliberate key creation or rotation responses.
+- `bootstrap` deliberately prints the newly created TEST key once and never persists it.
+- Use the smallest scopes required for the integration.
+- Rotate or revoke a key immediately if it is exposed.
+- TEST access does not enable real provider credentials, production customer data, production webhooks, billing, LIVE projects, or physical execution.

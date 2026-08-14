@@ -1,0 +1,105 @@
+name: Roll Back Platform API Public TEST Self-Service
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirmation:
+        description: "Type ROLLBACK_TEST_SELF_SERVICE exactly. Existing projects/keys are not deleted."
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  API_BASE: https://api.agroai-pilot.com
+  MARKETING_URL: https://agroai-pilot.com/platform-api
+  WORKER_CONFIG: cloudflare/platform-api-marketing-worker/wrangler.toml
+
+jobs:
+  rollback:
+    name: Disable public acquisition and restore private-beta marketing
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency:
+      group: platform-api-public-test-self-service-activation
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      SERVICE_ID: ${{ vars.PRODUCTION_API_SERVICE_ID }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate rollback request and credentials
+        run: |
+          set -euo pipefail
+          [[ "$GITHUB_REF" == "refs/heads/main" ]] || { echo "Rollback must run from main" >&2; exit 1; }
+          [[ "${{ inputs.confirmation }}" == "ROLLBACK_TEST_SELF_SERVICE" ]] || { echo "Exact confirmation phrase missing" >&2; exit 1; }
+          [[ -n "${RENDER_API_KEY:-}" ]] || { echo "RENDER_API_KEY is required" >&2; exit 1; }
+          [[ -n "${SERVICE_ID:-}" ]] || { echo "PRODUCTION_API_SERVICE_ID is required" >&2; exit 1; }
+          [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] || { echo "CLOUDFLARE_API_TOKEN is required" >&2; exit 1; }
+          [[ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]] || { echo "CLOUDFLARE_ACCOUNT_ID is required" >&2; exit 1; }
+
+      - name: Disable new automatic enrollment and browser-assisted CLI acquisition
+        run: |
+          set -euo pipefail
+          put_env() {
+            local key="$1" value="$2"
+            curl --fail-with-body --silent --show-error -X PUT \
+              -H "Authorization: Bearer $RENDER_API_KEY" -H "Content-Type: application/json" \
+              --data "$(jq -nc --arg value "$value" '{value:$value}')" \
+              "https://api.render.com/v1/services/$SERVICE_ID/env-vars/$key" >/dev/null
+          }
+          put_env PLATFORM_API_TEST_SELF_SERVICE_AUTO_ENROLL_ENABLED false
+          put_env PLATFORM_API_CLI_DEVICE_AUTH_ENABLED false
+          # Preserve existing TEST projects/enrollments/keys but keep all dangerous capabilities closed.
+          for key in PLATFORM_API_LIVE_PROJECTS_ENABLED PLATFORM_API_LIVE_ACCESS_REQUESTS_ENABLED PLATFORM_API_WEBHOOK_DELIVERY_ENABLED PLATFORM_API_LIVE_AUTO_APPROVAL_ENABLED EARTHDAILY_ADAPTER_ENABLED VALLEY_IRRIGATION_ADAPTER_ENABLED VALLEY_IRRIGATION_WRITE_CAPABILITY_ENABLED; do put_env "$key" false; done
+
+      - name: Verify Render rollback contract
+        run: |
+          set -euo pipefail
+          get_env() { curl --fail-with-body --silent --show-error -H "Authorization: Bearer $RENDER_API_KEY" -H "Accept: application/json" "https://api.render.com/v1/services/$SERVICE_ID/env-vars/$1" | jq -r '.value // empty'; }
+          [[ "$(get_env PLATFORM_API_TEST_SELF_SERVICE_AUTO_ENROLL_ENABLED)" == "false" ]]
+          [[ "$(get_env PLATFORM_API_CLI_DEVICE_AUTH_ENABLED)" == "false" ]]
+          for key in PLATFORM_API_LIVE_PROJECTS_ENABLED PLATFORM_API_LIVE_ACCESS_REQUESTS_ENABLED PLATFORM_API_WEBHOOK_DELIVERY_ENABLED PLATFORM_API_LIVE_AUTO_APPROVAL_ENABLED EARTHDAILY_ADAPTER_ENABLED VALLEY_IRRIGATION_ADAPTER_ENABLED VALLEY_IRRIGATION_WRITE_CAPABILITY_ENABLED; do [[ "$(get_env "$key")" == "false" ]] || exit 1; done
+
+      - name: Deploy backend rollback configuration
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error -X POST \
+            -H "Authorization: Bearer $RENDER_API_KEY" -H "Content-Type: application/json" \
+            --data "$(jq -nc --arg commitId "$GITHUB_SHA" '{commitId:$commitId,clearCache:"do_not_clear"}')" \
+            "https://api.render.com/v1/services/$SERVICE_ID/deploys" | jq -e '.id != null' >/dev/null
+          for attempt in $(seq 1 120); do
+            body="$(curl -sS --max-time 15 "$API_BASE/v1/health" || true)"
+            [[ "$(jq -r '.build_sha // empty' <<<"$body" 2>/dev/null || true)" == "$GITHUB_SHA" ]] && exit 0
+            sleep 5
+          done
+          echo "Backend did not settle after rollback" >&2
+          exit 1
+
+      - name: Restore private-beta marketing and noindex
+        run: |
+          set -euo pipefail
+          npx --yes wrangler@4.107.0 deploy --config "$WORKER_CONFIG" \
+            --var "MARKETING_ORIGIN:https://agroai-343.pages.dev" \
+            --var "PLATFORM_API_MARKETING_ENABLED:true" \
+            --var "PLATFORM_API_PUBLIC_DOCS_ENABLED:true" \
+            --var "PLATFORM_API_INDEXING_ENABLED:false" \
+            --var "PLATFORM_API_PUBLIC_SELF_SERVICE_ENABLED:false"
+
+      - name: Verify rollback state
+        run: |
+          set -euo pipefail
+          for attempt in $(seq 1 30); do
+            code="$(curl -sS -L -D /tmp/landing.headers -o /tmp/landing.html -w '%{http_code}' "$MARKETING_URL" || true)"
+            runtime="$(curl -sS "$API_BASE/v1/platform/health" || true)"
+            if [[ "$code" == "200" ]] && grep -Fi 'x-agroai-platform-api-access: private-beta' /tmp/landing.headers >/dev/null && grep -Fi 'x-robots-tag: noindex, nofollow' /tmp/landing.headers >/dev/null && [[ "$(jq -r '.cli_device_auth.enabled // empty' <<<"$runtime" 2>/dev/null || true)" == "false" ]] && [[ "$(jq -r '.physical_irrigation_commands // empty' <<<"$runtime" 2>/dev/null || true)" == "disabled" ]]; then exit 0; fi
+            sleep 4
+          done
+          echo "Rollback verification failed" >&2
+          exit 1
