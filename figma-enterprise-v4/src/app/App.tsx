@@ -4,6 +4,7 @@ import { AuthProvider, useAuth } from "./auth/AuthProvider";
 import { OFFICIAL_AGRO_AI_LOADER_LOGO } from "./brand/officialAgroAiLoaderLogo";
 import { AccessRecoveryPage } from "./components/AccessRecovery";
 import { AuthScreen } from "./components/AuthScreen";
+import { PlatformAuthScreen } from "./components/PlatformAuthScreen";
 import { PricingPage } from "./components/PricingPage";
 import { VerifyEmailPage } from "./components/VerifyEmail";
 import { useLocale } from "./hooks/useLocale";
@@ -12,6 +13,7 @@ import { applyLocale, t } from "./i18n";
 type PortalRuntimeBoundaryState = { error: string };
 
 const MAX_LOCALE_TRANSITION_COVER_MS = 12_000;
+const standalonePlatformHost = window.location.hostname.toLowerCase() === "platform.agroai-pilot.com";
 
 function PortalBootFallback({ reason }: { reason?: string }) {
   return (
@@ -121,8 +123,6 @@ function AuthenticatedApp() {
     }
     setLocaleCoverVisible(true);
     const timer = window.setTimeout(() => {
-      // Translation is never allowed to make the authenticated product look gone.
-      // Hydration may continue in the background and can still roll back safely.
       setLocaleCoverVisible(false);
     }, MAX_LOCALE_TRANSITION_COVER_MS);
     return () => window.clearTimeout(timer);
@@ -131,7 +131,15 @@ function AuthenticatedApp() {
   useEffect(() => {
     if (!isAuthenticated) { setRouter(null); setRouterError(""); return; }
     let mounted = true;
-    import("./routes").then((module) => { if (mounted) { setRouter(() => module.router); setRouterError(""); } }).catch((error) => { console.error("AGRO-AI portal route boot failed", error); if (mounted) { setRouter(null); setRouterError(error instanceof Error ? `${error.name}: ${error.message}` : String(error)); } });
+    import("./routes")
+      .then((module) => { if (mounted) { setRouter(() => module.router); setRouterError(""); } })
+      .catch((error) => {
+        console.error("AGRO-AI portal route boot failed", error);
+        if (mounted) {
+          setRouter(null);
+          setRouterError(error instanceof Error ? `${error.name}: ${error.message}` : String(error));
+        }
+      });
     return () => { mounted = false; };
   }, [isAuthenticated]);
 
@@ -140,7 +148,7 @@ function AuthenticatedApp() {
   if (path === "/verify-email") return <VerifyEmailPage />;
   if (path === "/recover-account" || path === "/reset-password") return <AccessRecoveryPage />;
   if (path === "/pricing" && !isAuthenticated) return <PricingPage />;
-  if (!isAuthenticated) return <AuthScreen />;
+  if (!isAuthenticated) return standalonePlatformHost ? <PlatformAuthScreen /> : <AuthScreen />;
   if (routerError) return <PortalBootFallback reason={routerError} />;
   if (!router) return <BrandedPortalLoader />;
   return (
