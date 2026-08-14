@@ -1,16 +1,13 @@
 #!/bin/sh
 set -eu
 
-REPOSITORY="${AGROAI_CLI_REPOSITORY:-https://github.com/Lamine-art-png/lamine.github.io.git}"
 REF="${AGROAI_CLI_REF:-main}"
 VENV_ROOT="${AGROAI_CLI_HOME:-${HOME}/.local/share/agroai-cli}"
 BIN_DIR="${AGROAI_BIN_DIR:-${HOME}/.local/bin}"
-SPEC="git+${REPOSITORY}@${REF}#subdirectory=sdk/python"
+SPEC="https://github.com/Lamine-art-png/lamine.github.io/archive/${REF}.zip#subdirectory=sdk/python"
 
 say() { printf '%s\n' "$*"; }
 fail() { printf 'agroai installer: %s\n' "$*" >&2; exit 1; }
-
-command -v git >/dev/null 2>&1 || fail "git is required"
 
 PYTHON=""
 for candidate in python3.13 python3.12 python3.11 python3.10 python3; do
@@ -27,7 +24,7 @@ PY
 done
 [ -n "$PYTHON" ] || fail "Python 3.10 or newer is required"
 
-say "Installing AGRO-AI CLI from the official AGRO-AI repository (${REF})..."
+say "Installing AGRO-AI CLI from the official AGRO-AI source (${REF})..."
 
 if command -v pipx >/dev/null 2>&1; then
   pipx install --force "$SPEC"
