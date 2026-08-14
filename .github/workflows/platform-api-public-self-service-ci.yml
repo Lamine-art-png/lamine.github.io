@@ -4,6 +4,8 @@ on:
   pull_request:
     branches: [main]
     paths:
+      - "agroai_api/app/services/email_verification.py"
+      - "agroai_api/tests/unit/test_platform_api_public_email_copy.py"
       - "figma-enterprise-v4/src/app/App.tsx"
       - "figma-enterprise-v4/src/main.tsx"
       - "figma-enterprise-v4/src/app/components/PlatformAuthScreen.tsx"
@@ -18,10 +20,13 @@ on:
       - "sdk/python/pyproject.toml"
       - "platform-api/assets/**"
       - "platform-api/legal/**"
+      - "cloudflare/platform-api-marketing-worker/**"
       - "docs/platform-api-cli.md"
       - "docs/platform-api-public-self-service-launch.md"
+      - ".github/workflows/deploy-platform-api-marketing.yml"
       - ".github/workflows/platform-api-public-self-service-ci.yml"
       - ".github/workflows/platform-api-public-self-service-activation.yml"
+      - ".github/workflows/platform-api-public-self-service-rollback.yml"
   workflow_dispatch:
 
 permissions:
@@ -172,6 +177,25 @@ jobs:
           print("CLI entrypoint and TEST bootstrap contract passed")
           PY
 
+  marketing-worker:
+    name: Public/private marketing state machine
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Route and fail-closed product contract
+        run: node cloudflare/platform-api-marketing-worker/tests/contract.mjs
+      - name: Worker dry-run
+        run: npx --yes wrangler@4.107.0 deploy --dry-run --config cloudflare/platform-api-marketing-worker/wrangler.toml
+      - name: Public launch variable is fail-closed in committed config
+        run: |
+          grep -F 'PLATFORM_API_PUBLIC_SELF_SERVICE_ENABLED = "false"' cloudflare/platform-api-marketing-worker/wrangler.toml
+          grep -F 'PLATFORM_API_INDEXING_ENABLED = "false"' cloudflare/platform-api-marketing-worker/wrangler.toml
+          grep -F 'public-test-self-service' cloudflare/platform-api-marketing-worker/src/index.ts
+          grep -F 'Self-service TEST access is open to eligible verified agricultural developers.' cloudflare/platform-api-marketing-worker/src/index.ts
+
   legal-boundary:
     name: Legal evidence remains fail-closed
     runs-on: ubuntu-latest
@@ -202,7 +226,7 @@ jobs:
           fi
 
   launch-boundary:
-    name: TEST-only launch boundary
+    name: TEST-only activation and rollback boundary
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -224,6 +248,8 @@ jobs:
           gate = Path("figma-enterprise-v4/src/app/components/PlatformSelfServiceGate.tsx").read_text()
           cli = Path("sdk/python/agroai_platform/cli.py").read_text()
           activation = Path(".github/workflows/platform-api-public-self-service-activation.yml").read_text()
+          rollback = Path(".github/workflows/platform-api-public-self-service-rollback.yml").read_text()
+          deploy = Path(".github/workflows/deploy-platform-api-marketing.yml").read_text()
           assert "TEST access never grants live provider credentials" in gate
           assert "LIVE projects remain a separate reviewed process" in gate
           assert '"environment": "test"' in cli
@@ -236,5 +262,10 @@ jobs:
               "VALLEY_IRRIGATION_WRITE_CAPABILITY_ENABLED false",
           ):
               assert contract in activation, contract
-          print("Public launch remains TEST-only and fail-closed for LIVE/provider/physical capabilities")
+              assert contract in rollback, contract
+          assert "PLATFORM_API_PUBLIC_SELF_SERVICE_LAUNCHED" in activation
+          assert "PLATFORM_API_PUBLIC_SELF_SERVICE_LAUNCHED" in rollback
+          assert "PLATFORM_API_PUBLIC_SELF_SERVICE_LAUNCHED" in deploy
+          assert "PLATFORM_API_INDEXING_ENABLED:${PUBLIC_SELF_SERVICE_MODE}" in deploy
+          print("Activation and rollback remain TEST-only, persistent, and fail-closed for LIVE/provider/physical capabilities")
           PY
