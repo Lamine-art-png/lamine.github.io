@@ -8,6 +8,7 @@ MARKETING_ORIGIN = "https://agroai-343.pages.dev"
 PLATFORM_API_MARKETING_ENABLED = "true"
 PLATFORM_API_PUBLIC_DOCS_ENABLED = "true"
 PLATFORM_API_INDEXING_ENABLED = "false"
+PLATFORM_API_PUBLIC_SELF_SERVICE_ENABLED = "false"
 
 [assets]
 directory = "../../platform-api"
