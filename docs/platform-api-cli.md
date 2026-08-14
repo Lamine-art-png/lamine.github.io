@@ -1,83 +1,130 @@
 # AGRO-AI Platform API — CLI
 
-`agroai` is a first-class command-line interface built directly on the official
-Python SDK (`agroai_platform.client`). It is not a wrapper around `curl`.
+`agroai` is the first-class command-line interface for the AGRO-AI Platform API. It is built on the official Python SDK, not on shelling out to `curl`.
 
-## Status
+## Public installation
 
-- **Implemented and tested** (offline contract tests in `sdk/python/tests/test_cli.py`).
-- **Not yet published** to PyPI/Homebrew. Do not advertise `pipx install agroai`
-  or `brew install agroai` until the package is actually released (see
-  `docs/platform-api-production-readiness.md` release gates). Until then, run it
-  from a checkout:
+The CLI can be installed directly from the public AGRO-AI repository without waiting for a package-registry release.
 
-  ```bash
-  cd sdk/python
-  pip install -e .        # registers the `agroai` entry point
-  # or, without installing:
-  PYTHONPATH=. python -m agroai_platform.cli --help
-  ```
+macOS / Linux:
+
+```bash
+curl -fsSL https://agroai-pilot.com/platform-api/assets/install.sh | sh
+```
+
+The installer requires Git and Python 3.10 or newer. It uses `pipx` when available. Otherwise it creates an isolated virtual environment under `~/.local/share/agroai-cli` and links the executable into `~/.local/bin`. It does not require `sudo`.
+
+For a reproducible source pin, set `AGROAI_CLI_REF` to a Git commit SHA before running the installer:
+
+```bash
+AGROAI_CLI_REF=<commit-sha> curl -fsSL https://agroai-pilot.com/platform-api/assets/install.sh | sh
+```
+
+PyPI, npm and Homebrew publication remain separate distribution channels. Do not advertise registry installation until namespace ownership and release credentials are verified.
 
 ## Authentication model
 
-The CLI deliberately separates the two credential types the platform uses:
+The CLI deliberately separates human control-plane credentials from machine API keys.
 
-| Action type | Credential | How |
-|-------------|-----------|-----|
-| Data-plane (`me`, `fields`, `usage`, `providers`, `jobs`) | machine API key | `AGROAI_API_KEY=agro_test_…` (or `--api-key`) |
-| Human control-plane (create projects/keys) | human session | **Developer Console** — a browser/device sign-in flow for the CLI is a tracked follow-up |
+### Human control plane
 
-`agroai login` does **not** fake a human session using a machine key. It reports
-how to obtain access and exits non-zero. This preserves the security boundary in
-§6/§29 of the engineering brief.
+Run:
 
-## Configuration
+```bash
+agroai login
+```
 
-| Variable / flag | Default | Meaning |
-|-----------------|---------|---------|
-| `AGROAI_API_KEY` / `--api-key` | (required for data ops) | `agro_test_` or `agro_live_` key |
-| `AGROAI_BASE_URL` / `--base-url` | `https://api.agroai-pilot.com` | API base |
-| `--timeout` | `20.0` | request timeout (seconds) |
-| `--json` | off | machine-readable JSON output |
+The CLI starts a short-lived browser/device authorization flow against the first-party AGRO-AI account system. After the user signs in and approves the device, the CLI receives an organization-bound human session. The session is stored in the operating-system keychain when available, with a `0600` local-file fallback. No API key is used as human identity and no permanent client secret is embedded in the CLI.
 
-The CLI never prints the full API key. `doctor` shows only a short prefix and
-the derived environment (`test`/`live`).
+Run:
+
+```bash
+agroai logout
+```
+
+Logout revokes the CLI session server-side before removing the local credential.
+
+### Machine data plane
+
+Project API calls use a scoped `agro_test_` or `agro_live_` key:
+
+```bash
+export AGROAI_API_KEY="agro_test_..."
+agroai doctor
+```
+
+TEST and LIVE credentials remain separate. Public self-service creates TEST credentials only. LIVE remains a separately reviewed capability.
 
 ## Commands
 
 ```bash
 agroai --version
-agroai doctor                     # config + connectivity diagnostics
-agroai me                         # authenticated principal
-agroai usage                      # usage summary
+agroai login
+agroai logout
+
+agroai projects list
+agroai projects create --name "My integration" --environment test
+
+agroai keys list
+agroai keys create --service-account-id <id> --name primary --scope fields:read
+agroai keys rotate <key-id> --overlap-minutes 0
+agroai keys revoke <key-id>
+
+agroai doctor
+agroai me
+agroai usage
 agroai fields list [--limit N] [--cursor C] [--all]
 agroai fields get <field-id>
+agroai fields create --name "North block" --crop almond --area-hectares 12.5
 agroai providers list
 agroai providers status <provider>
 agroai jobs get <job-id>
+agroai webhooks list
 ```
 
-Add `--json` to any command for automation.
+Add `--json` for machine-readable output.
+
+## Terminal-first TEST journey
+
+After public TEST self-service is activated:
+
+```bash
+# 1. Install the CLI.
+curl -fsSL https://agroai-pilot.com/platform-api/assets/install.sh | sh
+
+# 2. Sign in with the verified AGRO-AI account in the browser.
+agroai login
+
+# 3. Create a TEST project from the terminal.
+agroai projects create --name "First AGRO-AI integration" --environment test
+
+# 4. Create a service account in the Developer Console or API, then mint a scoped key.
+agroai keys create --service-account-id <service-account-id> --name local-dev --scope fields:read --scope fields:write
+
+# 5. Export the one-time plaintext key and call the data plane.
+export AGROAI_API_KEY="agro_test_..."
+agroai doctor
+agroai fields list --json
+```
+
+The TEST path uses deterministic agricultural test data and does not require a salesperson, live provider contract, real farm connection, billing activation, production webhooks or physical execution.
 
 ## Exit codes
 
 | Code | Meaning |
-|------|---------|
+|---:|---|
 | 0 | success |
 | 1 | generic error |
-| 2 | usage error (argparse) |
-| 3 | authentication/authorization error (401/403) |
-| 4 | rate limited (429) |
-| 5 | not found (404) |
-| 6 | configuration or connectivity error (e.g. `AGROAI_API_KEY` unset) |
+| 2 | usage error |
+| 3 | authentication or authorization error |
+| 4 | rate limited |
+| 5 | not found |
+| 6 | configuration or connectivity error |
 
-## Terminal-first quickstart
+## Security notes
 
-```bash
-export AGROAI_API_KEY="agro_test_..."   # from the Developer Console (test project)
-agroai doctor                            # verify connectivity
-agroai fields list --json                # deterministic synthetic sandbox data
-```
-
-This path requires no salesperson, provider contract, or production farm
-connection (§20). Live keys (`agro_live_`) are gated separately (§4/§14).
+- The CLI never prints a stored human session token.
+- `doctor` displays only a short API-key prefix and derived TEST/LIVE environment.
+- API-key plaintext is returned only by deliberate key creation/rotation responses.
+- Use the smallest scopes required for the integration.
+- Rotate or revoke a key immediately if it is exposed.
