@@ -480,8 +480,9 @@ app.include_router(webhooks_router, prefix="/v1")
 from app.api.v1.saas import router as saas_router  # noqa: E402
 app.include_router(saas_router, prefix="/v1")
 
-from app.api.v1.assurance import router as assurance_router  # noqa: E402
+from app.api.v1.assurance import portal_router as assurance_portal_router, router as assurance_router  # noqa: E402
 app.include_router(assurance_router, prefix="/v1")
+app.include_router(assurance_portal_router, prefix="/v1")
 
 from app.api.v1.wiseconn import router as wiseconn_router  # noqa: E402
 app.include_router(wiseconn_router, prefix="/v1")
