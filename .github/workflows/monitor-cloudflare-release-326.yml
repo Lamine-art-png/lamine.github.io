@@ -1,0 +1,94 @@
+name: Monitor Cloudflare Production Release 326
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - ".github/workflows/monitor-cloudflare-release-326.yml"
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: monitor-cloudflare-production-release-326
+  cancel-in-progress: true
+
+env:
+  RELEASE_RUN_NUMBER: "326"
+  EXPECTED_SHA: f7f9e47f4ad57948210f4842a9bf183491bc760a
+  OPS_ISSUE: "262"
+
+jobs:
+  monitor:
+    name: Monitor release rerun to terminal state
+    if: github.event.pull_request.head.ref == 'ops/rerun-cloudflare-release-326'
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Locate exact release run
+        id: locate
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_json="$(gh api --paginate \
+            -H 'Accept: application/vnd.github+json' \
+            "/repos/${GITHUB_REPOSITORY}/actions/workflows/deploy.yml/runs?event=workflow_dispatch&per_page=100" \
+            --jq ".workflow_runs[] | select(.run_number == ${RELEASE_RUN_NUMBER})")"
+          test -n "$run_json" || { echo "Release #${RELEASE_RUN_NUMBER} not found"; exit 1; }
+          run_id="$(jq -r '.id' <<<"$run_json")"
+          head_sha="$(jq -r '.head_sha' <<<"$run_json")"
+          test "$head_sha" = "$EXPECTED_SHA" || { echo "Unexpected release SHA: $head_sha"; exit 1; }
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "Located release run ID $run_id at $head_sha."
+
+      - name: Wait for terminal result
+        id: wait
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id="${{ steps.locate.outputs.run_id }}"
+          for attempt in $(seq 1 120); do
+            run_json="$(gh api -H 'Accept: application/vnd.github+json' "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}")"
+            status="$(jq -r '.status' <<<"$run_json")"
+            conclusion="$(jq -r '.conclusion // ""' <<<"$run_json")"
+            echo "attempt=${attempt} status=${status} conclusion=${conclusion:-pending}"
+            if [ "$status" = "completed" ]; then
+              jobs_json="$(gh api --paginate -H 'Accept: application/vnd.github+json' "/repos/${GITHUB_REPOSITORY}/actions/runs/${run_id}/jobs?per_page=100")"
+              jq -r '.jobs[] | [.name,.status,(.conclusion // "pending")] | @tsv' <<<"$jobs_json" | tee release-jobs.tsv
+              echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+              {
+                echo "## Cloudflare Production Release #${RELEASE_RUN_NUMBER} rerun result"
+                echo
+                echo "- run ID: \`${run_id}\`"
+                echo "- exact SHA: \`${EXPECTED_SHA}\`"
+                echo "- conclusion: **${conclusion}**"
+                echo
+                echo '| Job | Status | Conclusion |'
+                echo '|---|---|---|'
+                while IFS=$'\t' read -r name job_status job_conclusion; do
+                  printf '| %s | %s | %s |\n' "$name" "$job_status" "$job_conclusion"
+                done < release-jobs.tsv
+              } > release-result.md
+              cat release-result.md
+              gh issue comment "${OPS_ISSUE}" --repo "${GITHUB_REPOSITORY}" --body-file release-result.md
+              test "$conclusion" = "success"
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "Release #${RELEASE_RUN_NUMBER} did not reach a terminal state within 30 minutes"
+          exit 1
+
+      - name: Upload release monitor result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cloudflare-release-326-monitor-${{ github.sha }}
+          path: |
+            release-result.md
+            release-jobs.tsv
+          if-no-files-found: ignore
+          retention-days: 14
