@@ -3,7 +3,8 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy.orm import Session
 
@@ -13,6 +14,7 @@ from app.assurance.rule_packs import CUSTOMER_RULE_PACK_IDS, DEFAULT_RULE_PACKS
 from app.db.base import get_db
 from app.models.saas import Organization, User, Workspace
 from app.services.assurance_rollout import assurance_access
+from app.services.assurance_artifacts import assurance_artifact_content
 from app.services.api_key_service import APIKeyService
 from app.services.commercial_control import require_feature
 
@@ -419,6 +421,71 @@ def portal_create_package(
     _feature(context, "assurance.exports")
     try:
         return context.repo.create_package(passport_id, payload.model_dump())
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Passport not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+
+@portal_router.get(
+    "/workspaces/{workspace_id}/assurance/passports/{passport_id}/packages/{package_id}/download"
+)
+def portal_download_package(
+    passport_id: str,
+    package_id: str,
+    context: PortalAssuranceContext = Depends(_portal_context),
+) -> Response:
+    _feature(context, "assurance.exports")
+    try:
+        package, artifact = context.repo.package_artifact(passport_id, package_id)
+        content, size_bytes, filename = assurance_artifact_content(
+            artifact,
+            organization_id=str(context.organization.id),
+            workspace_id=str(context.workspace.id),
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Proof package not found") from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    safe_filename = filename.replace('"', "").replace("\r", "").replace("\n", "")
+    headers = {
+        "Content-Disposition": f'attachment; filename="{safe_filename}"',
+        "Cache-Control": "private, no-store",
+        "X-Content-Type-Options": "nosniff",
+        "ETag": f'"{package.checksum}"',
+    }
+    if size_bytes > 0:
+        headers["Content-Length"] = str(size_bytes)
+    if isinstance(content, bytes):
+        return Response(content=content, media_type="application/pdf", headers=headers)
+    return StreamingResponse(content, media_type="application/pdf", headers=headers)
+
+
+@portal_router.get("/workspaces/{workspace_id}/assurance/passports/{passport_id}/agent/runs")
+def portal_list_agent_runs(
+    passport_id: str,
+    context: PortalAssuranceContext = Depends(_portal_context),
+) -> dict[str, Any]:
+    _feature(context, "assurance.agent")
+    try:
+        return {"runs": context.repo.list_agent_runs(passport_id)}
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail="Passport not found") from exc
+
+
+@portal_router.post(
+    "/workspaces/{workspace_id}/assurance/passports/{passport_id}/agent/runs",
+    status_code=201,
+)
+def portal_run_agent(
+    passport_id: str,
+    context: PortalAssuranceContext = Depends(_portal_context),
+) -> dict[str, Any]:
+    _feature(context, "assurance.agent")
+    try:
+        return context.repo.run_agent(passport_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Passport not found") from exc
     except ValueError as exc:

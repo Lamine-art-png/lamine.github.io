@@ -288,6 +288,12 @@ class AssuranceExport(Base):
     idempotency_key = Column(String, nullable=True, index=True)
     rule_pack_versions = Column(JSON, nullable=False, default=dict)
     evidence_references = Column(JSON, nullable=False, default=list)
+    generated_artifact_id = Column(
+        String,
+        ForeignKey("generated_artifacts.id", ondelete="RESTRICT"),
+        nullable=True,
+        index=True,
+    )
     storage_backend = Column(String, default="metadata_inline", nullable=False, index=True)
     storage_ref = Column(Text, nullable=True)
     checksum = Column(String, nullable=False, index=True)

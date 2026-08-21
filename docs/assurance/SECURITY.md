@@ -26,6 +26,26 @@ Assurance maps canonical evidence instead of accepting arbitrary object paths in
 
 Exports are workspace scoped, entitlement enforced, immutable, checksummed, versioned, and contain source references plus rule-pack versions. Their posture reports blocked or reviewer-evaluation states. They include the Assurance disclaimer and do not submit to an authority.
 
+Modern Portal exports are cataloged in `GeneratedArtifact` and downloaded only
+through the bearer-authenticated Organization/Workspace route. Production bytes
+live in the configured R2/S3-compatible store; private object URIs are never
+returned to the browser. Production fails closed if durable storage is absent.
+The historical API-key endpoint retains inline base64 solely for compatibility.
+
+## Assurance Agent boundary
+
+The modern Agent writes `IntelligenceRun` records in the current Organization
+and Workspace identity domain. Its deterministic input contains mapping IDs,
+types, statuses, quality/freshness flags, and rule-pack versions. Evidence
+titles, excerpts, transcripts, and third-party directives are not instructions
+and are not consumed by the triage engine. A run may classify, flag gaps or
+conflicts, recommend a task, and prepare a draft-package proposal. It cannot
+make review decisions, generate/send a package, certify, file, or execute field
+work. Each such action remains a separate authenticated human mutation.
+
+`execution_assurance.py` is not called by V2. Its legacy demo/default-tenant
+behavior remains outside the V2 trust boundary.
+
 ## Abuse cases covered by tests
 
 - unauthenticated access;

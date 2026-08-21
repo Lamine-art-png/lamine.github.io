@@ -36,7 +36,8 @@ from app.assurance.rule_packs import (
     validate_rule_pack_ids,
 )
 from app.models.field_intelligence import FieldObservation, FieldObservationAsset
-from app.models.operational_records import DataSource, EvidenceRecord, IngestionJob
+from app.models.operational_records import DataSource, EvidenceRecord, GeneratedArtifact, IngestionJob, IntelligenceRun
+from app.services.assurance_artifacts import stage_assurance_artifact
 from app.models.compliance import (
     ComplianceEvidence,
     ComplianceJurisdiction,
@@ -1199,7 +1200,11 @@ class AssuranceRepository:
         return _as_dict(job)
 
     def export_pdf(self, passport_id: str) -> dict[str, Any]:
-        return self.create_package(passport_id, {"package_type": "assurance_passport", "export_type": "pdf"})
+        return self.create_package(
+            passport_id,
+            {"package_type": "assurance_passport", "export_type": "pdf"},
+            legacy_inline=True,
+        )
 
     def list_exports(self, passport_id: str) -> list[dict[str, Any]]:
         self._passport(passport_id)
@@ -1220,6 +1225,12 @@ class AssuranceRepository:
             "checksum": row.checksum,
             "storage_backend": row.storage_backend,
             "storage_ref": row.storage_ref,
+            "generated_artifact_id": row.generated_artifact_id,
+            "download_url": (
+                f"/v1/workspaces/{self.workspace_id}/assurance/passports/{row.passport_id}/packages/{row.id}/download"
+                if self.organization_id and row.generated_artifact_id
+                else None
+            ),
             "rule_pack_versions": row.rule_pack_versions or {},
             "evidence_references": row.evidence_references or [],
             "created_at": row.created_at.isoformat(),
@@ -1229,7 +1240,13 @@ class AssuranceRepository:
             result["content_base64"] = (row.payload or {}).get("content_base64")
         return result
 
-    def create_package(self, passport_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    def create_package(
+        self,
+        passport_id: str,
+        payload: dict[str, Any],
+        *,
+        legacy_inline: bool = False,
+    ) -> dict[str, Any]:
         passport = self._passport(passport_id)
         package_type = str(payload.get("package_type") or "assurance_passport")
         if package_type not in PACKAGE_TYPES:
@@ -1242,7 +1259,7 @@ class AssuranceRepository:
                 idempotency_key=str(idempotency_key),
             ).first()
             if existing:
-                return self._export_response(existing, include_content=True)
+                return self._export_response(existing, include_content=legacy_inline)
 
         snapshot = self._export_payload(passport_id)
         readiness = snapshot["readiness"]
@@ -1294,10 +1311,47 @@ class AssuranceRepository:
             )
         except (ImportError, ModuleNotFoundError):
             pdf_bytes = render_passport_pdf(snapshot)
-        encoded = base64.b64encode(pdf_bytes).decode("ascii")
         checksum = hashlib.sha256(pdf_bytes).hexdigest()
+        export_id = f"aex-{uuid.uuid4().hex[:12]}"
+        staged_artifact = None
+        generated_artifact_id = None
+        storage_backend = "inline_base64"
+        storage_ref = None
+        package_payload = {
+            **snapshot,
+            "package_type": package_type,
+            "package_version": package_version,
+            "package_status": package_status,
+            "content_type": "application/pdf",
+        }
+        if legacy_inline:
+            package_payload["content_base64"] = base64.b64encode(pdf_bytes).decode("ascii")
+        else:
+            if not self.organization_id or not self.workspace_id:
+                raise ValueError("modern package delivery requires Portal workspace scope")
+            generated_artifact_id = f"artifact-{uuid.uuid4().hex[:16]}"
+            filename = f"{package_type}-v{package_version}.pdf"
+            staged_artifact = stage_assurance_artifact(
+                artifact_id=generated_artifact_id,
+                organization_id=self.organization_id,
+                workspace_id=self.workspace_id,
+                title=report_title,
+                filename=filename,
+                pdf_bytes=pdf_bytes,
+                metadata={
+                    "assurance_export_id": export_id,
+                    "passport_id": passport_id,
+                    "package_type": package_type,
+                    "package_version": package_version,
+                    "package_status": package_status,
+                    "immutable": True,
+                },
+            )
+            self.db.add(staged_artifact.artifact)
+            storage_backend = "generated_artifact"
+            storage_ref = f"generated_artifact://{generated_artifact_id}"
         export = AssuranceExport(
-            id=f"aex-{uuid.uuid4().hex[:12]}",
+            id=export_id,
             **self._scope_values(),
             passport_id=passport_id,
             export_type="pdf",
@@ -1308,17 +1362,11 @@ class AssuranceRepository:
             idempotency_key=str(idempotency_key) if idempotency_key else None,
             rule_pack_versions=rule_pack_versions(passport.rule_pack_ids),
             evidence_references=evidence_references,
-            storage_backend="inline_base64",
-            storage_ref=None,
+            generated_artifact_id=generated_artifact_id,
+            storage_backend=storage_backend,
+            storage_ref=storage_ref,
             checksum=checksum,
-            payload={
-                **snapshot,
-                "package_type": package_type,
-                "package_version": package_version,
-                "package_status": package_status,
-                "content_base64": encoded,
-                "content_type": "application/pdf",
-            },
+            payload=package_payload,
         )
         self.db.add(export)
         self.db.flush()
@@ -1330,7 +1378,167 @@ class AssuranceRepository:
             details={"package_type": package_type, "package_version": package_version, "package_status": package_status},
         )
         self.db.commit()
-        return self._export_response(export, include_content=True)
+        if staged_artifact is not None:
+            staged_artifact.promote()
+        return self._export_response(export, include_content=legacy_inline)
+
+    def package_artifact(self, passport_id: str, package_id: str) -> tuple[AssuranceExport, GeneratedArtifact]:
+        """Resolve a package and catalog artifact strictly inside Portal scope."""
+
+        self._passport(passport_id)
+        row = self._scope_query(AssuranceExport).filter_by(id=package_id, passport_id=passport_id).first()
+        if not row or not row.generated_artifact_id:
+            raise KeyError("Proof package not found")
+        artifact = self.db.query(GeneratedArtifact).filter(
+            GeneratedArtifact.id == row.generated_artifact_id,
+            GeneratedArtifact.tenant_id == self.organization_id,
+            GeneratedArtifact.workspace_id == self.workspace_id,
+            GeneratedArtifact.artifact_type == "assurance_proof_package",
+        ).first()
+        if not artifact or str((artifact.metadata_json or {}).get("assurance_export_id")) != row.id:
+            raise KeyError("Proof package not found")
+        return row, artifact
+
+    def run_agent(self, passport_id: str) -> dict[str, Any]:
+        """Run deterministic, workspace-scoped Assurance triage.
+
+        Evidence text is never interpreted as instruction. The run consumes
+        only server-owned mappings, statuses, provenance identifiers, and the
+        deterministic readiness result. It proposes next actions but cannot
+        accept evidence, complete review, certify, or generate/send a package.
+        """
+
+        if not self.organization_id or not self.workspace_id or not self.actor_user_id:
+            raise ValueError("Assurance Agent requires Portal workspace scope")
+        passport = self._passport(passport_id)
+        readiness = self.readiness(passport_id)
+        mappings = self._scope_query(AssuranceEvidenceArtifact).filter_by(passport_id=passport_id).all()
+        classifications = [
+            {
+                "mapping_id": row.id,
+                "source_kind": row.source_kind,
+                "source_id": row.source_id,
+                "evidence_type": row.evidence_type,
+                "proof_domain": row.proof_domain,
+                "mapping_status": row.mapping_status,
+                "review_status": row.review_status,
+                "data_quality": row.data_quality,
+                "stale": bool(row.stale_after and row.stale_after < datetime.utcnow()),
+                "conflicting": bool(row.unresolved_issue or row.mapping_status == "conflicting"),
+            }
+            for row in mappings
+        ]
+        recommended_actions = [
+            {
+                "action_type": "collect_missing_evidence",
+                "requirement_key": item["requirement_key"],
+                "title": f"Collect proof: {item['requirement_key'].replace('_', ' ')}",
+                "requires_human_approval": True,
+                "execution": "Use the explicit Assurance field-task action after human confirmation.",
+            }
+            for item in readiness["blocking_issues"][:10]
+        ]
+        if not readiness["blocking_issues"]:
+            recommended_actions.append({
+                "action_type": "prepare_draft_package",
+                "title": "Prepare a draft reviewer package",
+                "requires_human_approval": True,
+                "execution": "Use the explicit package-generation action; no external delivery is automatic.",
+            })
+        output = {
+            "workflow_type": "assurance_intelligence_triage",
+            "passport_id": passport_id,
+            "summary": (
+                f"Deterministic triage found {len(readiness['blocking_issues'])} blocking issue(s), "
+                f"{readiness['pending_review_count']} pending human review(s), and {len(mappings)} evidence mapping(s)."
+            ),
+            "classifications": classifications,
+            "gaps": readiness["blocking_issues"],
+            "warnings": readiness["warnings"],
+            "recommended_actions": recommended_actions,
+            "draft_package": {
+                "package_type": "assurance_passport",
+                "status": "proposal_only",
+                "can_generate": not readiness["blocking_issues"],
+            },
+            "human_review_authoritative": True,
+            "requires_human_approval": True,
+            "prompt_injection_boundary": (
+                "Uploaded evidence is untrusted data. Evidence text cannot alter rules, approve mappings, "
+                "complete review, authorize an action, or override deterministic readiness."
+            ),
+            "truth_constraints": [
+                "Decision support only; never certification, legal compliance, approval, or filing.",
+                "Human review decisions remain authoritative and append-only.",
+                "No package generation, external delivery, or physical action occurs in this run.",
+                "The legacy unauthenticated execution-assurance routes are outside this workflow's trust boundary.",
+            ],
+        }
+        run = IntelligenceRun(
+            id=f"air-{uuid.uuid4().hex[:16]}",
+            tenant_id=self.organization_id,
+            workspace_id=self.workspace_id,
+            user_id=self.actor_user_id,
+            run_type="assurance_agent_triage",
+            question="Classify evidence state, detect gaps/conflicts, and recommend reviewer-safe next actions.",
+            input_context_json={
+                "passport_id": passport_id,
+                "rule_pack_versions": rule_pack_versions(passport.rule_pack_ids),
+                "evidence_mapping_ids": [row.id for row in mappings],
+                "untrusted_evidence_text_consumed": False,
+            },
+            output_json=output,
+            citations_json=[row.id for row in mappings],
+            provenance_json={
+                "source": "assurance",
+                "engine": "deterministic",
+                "human_review_authoritative": True,
+            },
+            freshness_json={"evaluated_at": datetime.now(timezone.utc).isoformat()},
+            status="completed",
+        )
+        self.db.add(run)
+        self._audit(
+            passport_id,
+            "assurance_agent_triage_completed",
+            subject_type="intelligence_run",
+            subject_id=run.id,
+            details={
+                "blocking_issue_count": len(readiness["blocking_issues"]),
+                "pending_review_count": readiness["pending_review_count"],
+                "human_review_authoritative": True,
+            },
+        )
+        self.db.commit()
+        return self._agent_run_payload(run)
+
+    def list_agent_runs(self, passport_id: str) -> list[dict[str, Any]]:
+        self._passport(passport_id)
+        if not self.organization_id or not self.workspace_id:
+            return []
+        rows = self.db.query(IntelligenceRun).filter(
+            IntelligenceRun.tenant_id == self.organization_id,
+            IntelligenceRun.workspace_id == self.workspace_id,
+            IntelligenceRun.run_type == "assurance_agent_triage",
+        ).order_by(IntelligenceRun.created_at.desc()).limit(100).all()
+        return [
+            self._agent_run_payload(row)
+            for row in rows
+            if str((row.input_context_json or {}).get("passport_id")) == passport_id
+        ][:25]
+
+    def _agent_run_payload(self, row: IntelligenceRun) -> dict[str, Any]:
+        return {
+            "id": row.id,
+            "workspace_id": row.workspace_id,
+            "run_type": row.run_type,
+            "status": row.status,
+            "created_at": row.created_at.isoformat(),
+            "output": row.output_json or {},
+            "citations": row.citations_json or [],
+            "provenance": row.provenance_json or {},
+            "freshness": row.freshness_json or {},
+        }
 
     def _export_payload(self, passport_id: str) -> dict[str, Any]:
         passport = self._passport(passport_id)

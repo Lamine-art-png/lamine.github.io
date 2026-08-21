@@ -22,7 +22,8 @@ Exactly one mode is accepted. Every Passport lookup and child query is filtered 
 - `AssuranceEvidenceArtifact`: a mapping from a Passport to a canonical source, retained under its historical table name.
 - `AssuranceReviewEvent`: append-only human review decision.
 - `AssuranceAuditEvent`: append-only material-event and provenance ledger.
-- `AssuranceExport`: immutable, versioned package snapshot.
+- `AssuranceExport`: immutable, versioned package snapshot linked to a
+  `GeneratedArtifact` for modern delivery.
 
 ## Deterministic readiness
 
@@ -38,4 +39,10 @@ States include `missing`, `present`, `unreviewed`, `mapped`, `reviewer_required`
 - Field proof: `FieldObservation` and `FieldObservationAsset` references.
 - Field actions: durable `IngestionJob` with `job_type=field_ops_task`.
 - PDF output: the current branded `build_report_pdf_bytes` engine.
+- Package storage/delivery: `GeneratedArtifact`, configured R2/S3-compatible
+  object storage, and an authenticated workspace download route. Historical
+  API-key exports alone retain inline base64 compatibility.
+- Assurance Agent: deterministic workspace-scoped `IntelligenceRun` records.
+  Runs consume mapping/status/provenance fields, not evidence text, and only
+  propose human-confirmed actions or draft packages.
 - Localization: route-scoped `usePortalCopy` and edge-authorized canonical source catalogs.

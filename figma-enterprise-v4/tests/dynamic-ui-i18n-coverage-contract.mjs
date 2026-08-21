@@ -50,6 +50,8 @@ for (const key of [
   "dynamic.assurance.decisionSupportBody",
   "dynamic.assurance.reviewQueue",
   "dynamic.assurance.packageTitle",
+  "dynamic.assurance.agentTitle",
+  "dynamic.assurance.agentBoundary",
 ]) assert(typeof dynamicEntries[key] === "string" && dynamicEntries[key].length > 0, `missing ${key}`);
 
 assert(portalCatalog.includes("ui-dynamic-copy.en.json"), "portal catalog must import primary dynamic copy");

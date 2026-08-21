@@ -84,10 +84,25 @@ type ProofPackage = {
   package_status: string;
   created_at: string;
   checksum?: string;
-  content_base64?: string;
+  download_url?: string;
 };
 
-type Tab = "readiness" | "requirements" | "evidence" | "review" | "packages";
+type AgentRun = {
+  id: string;
+  status: string;
+  created_at: string;
+  output: {
+    summary?: string;
+    gaps?: Requirement[];
+    warnings?: Requirement[];
+    recommended_actions?: Array<{ action_type: string; title: string; requires_human_approval?: boolean }>;
+    human_review_authoritative?: boolean;
+    prompt_injection_boundary?: string;
+    truth_constraints?: string[];
+  };
+};
+
+type Tab = "readiness" | "requirements" | "evidence" | "review" | "agent" | "packages";
 
 function entitlementEnabled(entitlements: Record<string, unknown>, key: string, fallback = false) {
   if (entitlements.internal_testing === true || entitlements.all_features === true) return true;
@@ -129,6 +144,7 @@ export function Assurance() {
   const canReview = entitlementEnabled(entitlements, "assurance.review");
   const canExport = entitlementEnabled(entitlements, "assurance.exports");
   const canCreateTask = entitlementEnabled(entitlements, "assurance.agent");
+  const canRunAgent = entitlementEnabled(entitlements, "assurance.agent");
 
   const passports = usePortalResource<{ passports: PassportSummary[] }>(
     useCallback(async () => (await apiClient.assurance.passports(workspaceId)) as { passports: PassportSummary[] }, [workspaceId]),
@@ -153,6 +169,10 @@ export function Assurance() {
     useCallback(async () => (await apiClient.assurance.reviewQueue(workspaceId, selectedPassportId)) as { review_queue: EvidenceMapping[]; events: unknown[] }, [workspaceId, selectedPassportId]),
     { enabled: Boolean(workspaceId && selectedPassportId && canReview) },
   );
+  const agentRuns = usePortalResource<{ runs: AgentRun[] }>(
+    useCallback(async () => (await apiClient.assurance.agentRuns(workspaceId, selectedPassportId)) as { runs: AgentRun[] }, [workspaceId, selectedPassportId]),
+    { enabled: Boolean(workspaceId && selectedPassportId && canRunAgent) },
+  );
 
   const passportRows = passports.data?.passports || [];
   const readiness = detail.data?.latest_readiness || passportRows.find((row) => row.id === selectedPassportId)?.readiness;
@@ -176,6 +196,7 @@ export function Assurance() {
       selectedPassportId ? detail.refresh({ silent: true }) : Promise.resolve(),
       selectedPassportId ? reviewQueue.refresh({ silent: true }) : Promise.resolve(),
       selectedPassportId ? proofPackages.refresh({ silent: true }) : Promise.resolve(),
+      selectedPassportId && canRunAgent ? agentRuns.refresh({ silent: true }) : Promise.resolve(),
     ]);
   }
 
@@ -251,20 +272,48 @@ export function Assurance() {
         package_type: packageType,
         idempotency_key: `${selectedPassportId}:${packageType}:${Date.now()}`,
       }) as ProofPackage;
-      if (result.content_base64) {
-        const binary = window.atob(result.content_base64);
-        const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-        const href = URL.createObjectURL(new Blob([bytes], { type: "application/pdf" }));
-        const link = document.createElement("a");
-        link.href = href;
-        link.download = `${packageType}-v${result.package_version}.pdf`;
-        link.click();
-        URL.revokeObjectURL(href);
-      }
+      await savePackageBlob(result);
       setMessage(tx("Immutable proof package generated."));
       await proofPackages.refresh({ silent: true });
     } catch (error) {
       setMessage(error instanceof Error ? error.message : tx("Proof package could not be generated."));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function savePackageBlob(item: ProofPackage) {
+    const blob = await apiClient.assurance.downloadPackage(workspaceId, selectedPassportId, item.id);
+    const href = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = href;
+    link.download = `${item.package_type}-v${item.package_version}.pdf`;
+    link.click();
+    URL.revokeObjectURL(href);
+  }
+
+  async function downloadPackage(item: ProofPackage) {
+    setBusy(`download:${item.id}`);
+    setMessage("");
+    try {
+      await savePackageBlob(item);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : tx("Proof package could not be downloaded."));
+    } finally {
+      setBusy("");
+    }
+  }
+
+  async function runAgent() {
+    if (!selectedPassportId) return;
+    setBusy("agent");
+    setMessage("");
+    try {
+      await apiClient.assurance.runAgent(workspaceId, selectedPassportId);
+      setMessage(tx("Assurance Agent triage prepared for human review."));
+      await agentRuns.refresh({ silent: true });
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : tx("Assurance Agent triage could not be prepared."));
     } finally {
       setBusy("");
     }
@@ -293,6 +342,7 @@ export function Assurance() {
     { id: "requirements", label: tx("Requirements") },
     { id: "evidence", label: tx("Evidence") },
     { id: "review", label: tx("Review") },
+    { id: "agent", label: tx("Assurance Agent") },
     { id: "packages", label: tx("Proof packages") },
   ];
 
@@ -382,6 +432,15 @@ export function Assurance() {
                 onReview={submitReview}
               />
             ) : null}
+            {activeTab === "agent" ? (
+              <AgentPanel
+                runs={agentRuns.data?.runs || []}
+                canRun={canRunAgent}
+                busy={busy}
+                tx={tx}
+                onRun={runAgent}
+              />
+            ) : null}
             {activeTab === "packages" ? (
               <PackagesPanel
                 packages={proofPackages.data?.packages || []}
@@ -391,6 +450,7 @@ export function Assurance() {
                 tx={tx}
                 onPackageType={setPackageType}
                 onCreate={createPackage}
+                onDownload={downloadPackage}
               />
             ) : null}
           </>
@@ -426,6 +486,11 @@ function ReviewPanel({ queue, canReview, reviewNote, busy, tx, onNote, onReview 
   return <Panel eyebrow={tx("Human review workflow")} title={tx("Evidence mapping review queue")}><label className="block text-[11px] font-semibold" style={{ color: TEXT }}>{tx("Reviewer note")}<textarea value={reviewNote} onChange={(event) => onNote(event.target.value)} rows={3} className="mt-1.5 w-full rounded-lg px-3 py-2 font-normal" style={{ background: BG, border: `1px solid ${BORDER}` }} placeholder={tx("Explain a rejection or request for additional proof.")} /></label><div className="mt-5 space-y-3">{queue.length ? queue.map((item) => <article key={item.id} className="rounded-lg p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><div className="text-[12px] font-semibold" style={{ color: TEXT }}>{item.source?.title || readable(item.evidence_type)}</div><div className="mt-1 text-[11px] leading-5" style={{ color: MUTED }}>{item.source?.summary || item.unresolved_issue || tx("Review the mapping, provenance, timing, and data quality.")}</div></div><StatusBadge label={readable(item.queue_reason || item.mapping_status)} tone={toneForStatus(item.queue_reason || item.mapping_status)} /></div><div className="mt-4 flex flex-wrap gap-2"><PortalButton disabled={!canReview || busy === `review:${item.id}`} onClick={() => onReview(item.id, "accept_mapping")}>{tx("Accept mapping")}</PortalButton><PortalButton variant="secondary" disabled={!canReview || busy === `review:${item.id}`} onClick={() => onReview(item.id, "reject_mapping")}>{tx("Reject")}</PortalButton><PortalButton variant="secondary" disabled={!canReview || busy === `review:${item.id}`} onClick={() => onReview(item.id, "request_additional_proof")}>{tx("Request proof")}</PortalButton></div></article>) : <InlineState title={tx("Review queue is clear.")} detail={tx("Accepted decisions remain in append-only review history.")} />}</div>{!canReview ? <div className="mt-4"><InlineState title={tx("Team plan required for reviewer decisions.")} detail={tx("Readiness remains visible, but review mutations are enforced by the backend entitlement gate.")} /></div> : null}</Panel>;
 }
 
-function PackagesPanel({ packages, packageType, canExport, busy, tx, onPackageType, onCreate }: { packages: ProofPackage[]; packageType: string; canExport: boolean; busy: string; tx: (value: string) => string; onPackageType: (value: string) => void; onCreate: () => void }) {
-  return <Panel eyebrow={tx("Immutable outputs")} title={tx("Reviewer-safe proof packages")}><div className="flex flex-col gap-3 rounded-lg p-4 sm:flex-row sm:items-end" style={{ background: BG, border: `1px solid ${BORDER}` }}><label className="flex-1 text-[11px] font-semibold" style={{ color: TEXT }}>{tx("Package type")}<select value={packageType} onChange={(event) => onPackageType(event.target.value)} disabled={!canExport} className="mt-1.5 w-full rounded-lg px-3 py-2 font-normal" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}><option value="assurance_passport">{tx("Assurance Passport")}</option><option value="water_evidence_pack">{tx("Water evidence pack")}</option><option value="buyer_proof_pack">{tx("Buyer proof pack")}</option><option value="input_application_record_pack">{tx("Input application record pack")}</option><option value="operational_execution_pack">{tx("Operational execution pack")}</option></select></label><PortalButton disabled={!canExport || busy === "package"} onClick={onCreate}>{canExport ? (busy === "package" ? tx("Generating…") : tx("Generate PDF snapshot")) : tx("Professional plan required")}</PortalButton></div><div className="mt-5 space-y-3">{packages.length ? packages.map((item) => <div key={item.id} className="grid gap-3 rounded-lg p-4 sm:grid-cols-[1.2fr_0.5fr_0.8fr_auto] sm:items-center" style={{ border: `1px solid ${BORDER}` }}><div className="text-[12px] font-semibold" style={{ color: TEXT }}>{readable(item.package_type)}</div><div className="text-[11px]" style={{ color: MUTED }}>{tx("Version")} {item.package_version}</div><div className="text-[11px]" style={{ color: MUTED }}>{new Date(item.created_at).toLocaleString()}</div><StatusBadge label={readable(item.package_status)} tone={toneForStatus(item.package_status)} /></div>) : <InlineState title={tx("No proof packages generated yet.")} detail={tx("Each generated package preserves rule-pack versions, evidence references, checksum, and review posture.")} />}</div></Panel>;
+function AgentPanel({ runs, canRun, busy, tx, onRun }: { runs: AgentRun[]; canRun: boolean; busy: string; tx: (value: string) => string; onRun: () => void }) {
+  const latest = runs[0];
+  return <Panel eyebrow={tx("Controlled intelligence workflow")} title={tx("Assurance Agent triage")}><div className="flex flex-col gap-3 rounded-lg p-4 sm:flex-row sm:items-center sm:justify-between" style={{ background: BG, border: `1px solid ${BORDER}` }}><div><p className="text-[12px] font-semibold" style={{ color: TEXT }}>{tx("Classify mappings, detect gaps and conflicts, and propose reviewer-safe next actions.")}</p><p className="mt-1 text-[11px] leading-5" style={{ color: MUTED }}>{tx("Uploaded evidence is untrusted data. Human review remains authoritative; the Agent cannot certify, approve, send, or execute physical work.")}</p></div><PortalButton disabled={!canRun || busy === "agent"} onClick={onRun}>{canRun ? (busy === "agent" ? tx("Preparing triage…") : tx("Run deterministic triage")) : tx("Team plan required")}</PortalButton></div>{latest ? <div className="mt-5 space-y-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><div className="text-[12px] font-semibold" style={{ color: TEXT }}>{latest.output.summary}</div><div className="mt-1 text-[11px]" style={{ color: MUTED }}>{new Date(latest.created_at).toLocaleString()}</div></div><StatusBadge label={latest.output.human_review_authoritative ? tx("Human review authoritative") : readable(latest.status)} tone="neutral" /></div><div className="grid gap-3 lg:grid-cols-2"><div className="rounded-lg p-4" style={{ border: `1px solid ${BORDER}` }}><div className="text-[11px] font-semibold" style={{ color: TEXT }}>{tx("Detected gaps and conflicts")}</div><div className="mt-3 space-y-2">{latest.output.gaps?.length ? latest.output.gaps.map((item) => <div key={`${item.requirement_key}:${item.status}`} className="flex items-center justify-between gap-2 text-[11px]" style={{ color: MUTED }}><span>{item.title || readable(item.requirement_key)}</span><StatusBadge label={readable(item.status)} tone="warn" /></div>) : <span className="text-[11px]" style={{ color: MUTED }}>{tx("No blocking gaps detected in this run.")}</span>}</div></div><div className="rounded-lg p-4" style={{ border: `1px solid ${BORDER}` }}><div className="text-[11px] font-semibold" style={{ color: TEXT }}>{tx("Proposed next actions")}</div><div className="mt-3 space-y-2">{latest.output.recommended_actions?.map((item) => <div key={`${item.action_type}:${item.title}`} className="text-[11px] leading-5" style={{ color: MUTED }}>{item.title} · {tx("requires human confirmation")}</div>)}</div></div></div></div> : <div className="mt-5"><InlineState title={tx("No Assurance Agent runs yet.")} detail={tx("A run reads only server-owned mappings and deterministic readiness state; evidence text cannot change its rules.")} /></div>}</Panel>;
+}
+
+function PackagesPanel({ packages, packageType, canExport, busy, tx, onPackageType, onCreate, onDownload }: { packages: ProofPackage[]; packageType: string; canExport: boolean; busy: string; tx: (value: string) => string; onPackageType: (value: string) => void; onCreate: () => void; onDownload: (item: ProofPackage) => void }) {
+  return <Panel eyebrow={tx("Immutable outputs")} title={tx("Reviewer-safe proof packages")}><div className="flex flex-col gap-3 rounded-lg p-4 sm:flex-row sm:items-end" style={{ background: BG, border: `1px solid ${BORDER}` }}><label className="flex-1 text-[11px] font-semibold" style={{ color: TEXT }}>{tx("Package type")}<select value={packageType} onChange={(event) => onPackageType(event.target.value)} disabled={!canExport} className="mt-1.5 w-full rounded-lg px-3 py-2 font-normal" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}><option value="assurance_passport">{tx("Assurance Passport")}</option><option value="water_evidence_pack">{tx("Water evidence pack")}</option><option value="buyer_proof_pack">{tx("Buyer proof pack")}</option><option value="input_application_record_pack">{tx("Input application record pack")}</option><option value="operational_execution_pack">{tx("Operational execution pack")}</option></select></label><PortalButton disabled={!canExport || busy === "package"} onClick={onCreate}>{canExport ? (busy === "package" ? tx("Generating…") : tx("Generate PDF snapshot")) : tx("Professional plan required")}</PortalButton></div><div className="mt-5 space-y-3">{packages.length ? packages.map((item) => <div key={item.id} className="grid gap-3 rounded-lg p-4 sm:grid-cols-[1.2fr_0.5fr_0.8fr_auto_auto] sm:items-center" style={{ border: `1px solid ${BORDER}` }}><div className="text-[12px] font-semibold" style={{ color: TEXT }}>{readable(item.package_type)}</div><div className="text-[11px]" style={{ color: MUTED }}>{tx("Version")} {item.package_version}</div><div className="text-[11px]" style={{ color: MUTED }}>{new Date(item.created_at).toLocaleString()}</div><StatusBadge label={readable(item.package_status)} tone={toneForStatus(item.package_status)} /><PortalButton variant="secondary" disabled={busy === `download:${item.id}`} onClick={() => onDownload(item)}>{busy === `download:${item.id}` ? tx("Downloading…") : tx("Download")}</PortalButton></div>) : <InlineState title={tx("No proof packages generated yet.")} detail={tx("Each generated package preserves rule-pack versions, evidence references, checksum, and review posture.")} />}</div></Panel>;
 }

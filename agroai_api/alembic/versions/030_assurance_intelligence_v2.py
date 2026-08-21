@@ -183,9 +183,10 @@ def upgrade() -> None:
         sa.Column("idempotency_key", sa.String(), nullable=True),
         sa.Column("rule_pack_versions", sa.JSON(), nullable=False, server_default="{}"),
         sa.Column("evidence_references", sa.JSON(), nullable=False, server_default="[]"),
+        sa.Column("generated_artifact_id", sa.String(), sa.ForeignKey("generated_artifacts.id", ondelete="RESTRICT", name="fk_assurance_exports_generated_artifact_id"), nullable=True),
     ):
         _add_column("assurance_exports", column)
-    for name in ("package_type", "package_status", "generated_by_user_id", "idempotency_key"):
+    for name in ("package_type", "package_status", "generated_by_user_id", "idempotency_key", "generated_artifact_id"):
         _create_index(f"ix_assurance_exports_{name}", "assurance_exports", [name])
     _create_index(
         "uq_assurance_package_version",
@@ -244,7 +245,7 @@ def downgrade() -> None:
             op.drop_table(table)
 
     export_columns = (
-        "evidence_references", "rule_pack_versions", "idempotency_key", "generated_by_user_id",
+        "generated_artifact_id", "evidence_references", "rule_pack_versions", "idempotency_key", "generated_by_user_id",
         "package_status", "package_version", "package_type",
     )
     evidence_columns = (
@@ -255,7 +256,7 @@ def downgrade() -> None:
     checklist_columns = ("review_required", "explanation", "blocking")
 
     _drop_index("uq_assurance_package_version", "assurance_exports")
-    for name in ("package_type", "package_status", "generated_by_user_id", "idempotency_key"):
+    for name in ("package_type", "package_status", "generated_by_user_id", "idempotency_key", "generated_artifact_id"):
         _drop_index(f"ix_assurance_exports_{name}", "assurance_exports")
     for column in export_columns:
         _drop_column("assurance_exports", column)

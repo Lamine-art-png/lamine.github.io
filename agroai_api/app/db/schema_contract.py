@@ -18,7 +18,9 @@ HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     },
     "assurance_review_events": {"id", "passport_id", "action", "created_at"},
     "assurance_audit_events": {"id", "passport_id", "event_type", "created_at"},
-    "assurance_exports": {"id", "passport_id", "package_type", "package_version", "package_status"},
+    "assurance_exports": {
+        "id", "passport_id", "package_type", "package_version", "package_status", "generated_artifact_id",
+    },
     "agent_workflow_runs": {"id"},
     "users": {
         "id",

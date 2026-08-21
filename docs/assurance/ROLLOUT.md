@@ -18,9 +18,11 @@ Free accounts receive readiness preview only. Professional enables readiness, ma
 
 1. Apply migration `030_assurance_intelligence_v2` with release state `disabled`.
 2. Verify schema contract, historical Assurance smoke tests, and portal route isolation.
-3. Set `internal` and validate one server-configured Organization against real canonical evidence.
-4. Set `canary` for selected Organizations; monitor 404/402/422/5xx rates, package generation latency, and review/task audit rows.
-5. Set `general` only after backend and `figma-enterprise-v4` SHAs are deployed together and canary results are accepted.
+3. Verify production object storage before enabling package generation. Modern
+   package creation fails closed in production/staging without it.
+4. Set `internal` and validate one server-configured Organization against real canonical evidence.
+5. Set `canary` for selected Organizations; monitor 404/402/422/5xx rates, package generation/download latency, Agent runs, and review/task audit rows.
+6. Set `general` only after backend and `figma-enterprise-v4` SHAs are deployed together and canary results are accepted.
 
 ## Rollback
 

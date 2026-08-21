@@ -5,7 +5,7 @@ from typing import Any
 
 
 ASSURANCE_DISCLAIMER = (
-    "This package reflects evidence readiness decision support only. AGRO-AI organizes supporting records "
+    "This audit readiness evidence package reflects evidence readiness decision support only. AGRO-AI organizes supporting records "
     "for reviewer evaluation; it is not a certification, legal compliance determination, regulatory approval, "
     "or filing, and it does not claim live-source completeness unless a configured live source supplied the record."
 )
