@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import { AlertTriangle, CheckCircle2, ChevronDown, CircleHelp, FlaskConical, ShieldCheck } from "lucide-react";
 import { BG, BORDER, MUTED, TEXT } from "../portalUi";
 import { asArray, AnyRecord, safeText } from "./intelligenceSupport";
@@ -93,7 +94,7 @@ function Metric({ label, value, warning = false }: { label: string; value: strin
   );
 }
 
-function ReasoningSection({ icon, title, rows, warning = false }: { icon: React.ReactNode; title: string; rows: string[]; warning?: boolean }) {
+function ReasoningSection({ icon, title, rows, warning = false }: { icon: ReactNode; title: string; rows: string[]; warning?: boolean }) {
   const visible = rows.filter(Boolean).slice(0, 8);
   if (!visible.length) return null;
   return (
