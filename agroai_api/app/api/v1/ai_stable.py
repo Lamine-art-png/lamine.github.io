@@ -24,6 +24,7 @@ from app.services.ai_gateway import parse_model_json
 from app.services.gpt56_intelligence import run_gpt56_grounded_intelligence
 from app.services.intelligence_context import build_intelligence_context
 from app.services.intelligence_grounding import build_intelligence_grounding
+from app.services.intelligence_hardening import enrich_grounding_packet, postvalidate_decision
 from app.services.language import language_matches_target, resolve_language
 from app.services.live_intelligence import LiveIntelligence
 from app.services.model_router import ModelRouter
@@ -114,6 +115,7 @@ async def resilient_intelligence_run(
     try:
         try:
             packet = build_intelligence_grounding(context, field_id=payload.field_id)
+            packet = enrich_grounding_packet(packet, context)
             gpt56 = await run_gpt56_grounded_intelligence(
                 question=payload.question,
                 task=payload.task,
@@ -128,6 +130,11 @@ async def resilient_intelligence_run(
             gpt56 = None
 
         if gpt56 is not None and packet is not None:
+            gpt56.decision = postvalidate_decision(
+                gpt56.decision,
+                packet,
+                question=payload.question,
+            )
             response_language = resolve_language(payload.preferred_language, payload.question).response_code
             if language_matches_target(gpt56.decision.answer, response_language):
                 body = gpt56.decision.portal_body(packet)
