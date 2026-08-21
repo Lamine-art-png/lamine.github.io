@@ -66,6 +66,17 @@ class CanonicalFieldContext(BaseModel):
     controller_context: ControllerContext = Field(default_factory=ControllerContext)
     recent_irrigation_context: RecentIrrigationContext = Field(default_factory=RecentIrrigationContext)
     field_observations: List[str] = Field(default_factory=list)
+    # Explicit scientific/operating inputs.  These are intentionally not
+    # inferred from crop, soil, or method labels.
+    crop_coefficient: Optional[float] = None
+    effective_rainfall_mm: Optional[float] = None
+    root_zone_replenishment_mm: Optional[float] = None
+    net_irrigation_requirement_mm: Optional[float] = None
+    irrigation_efficiency: Optional[float] = None
+    validated_flow_m3h: Optional[float] = None
+    flow_validation_status: Literal["validated", "partial", "unavailable", "inconsistent"] = "unavailable"
+    recent_irrigation_credit_status: Literal["verified_recent", "verified_none", "stale", "partial", "unavailable"] = "unavailable"
+    operating_window: Optional[str] = None
     data_quality_score: Optional[int] = None
     missing_inputs: List[str] = Field(default_factory=list)
     confidence_inputs: List[str] = Field(default_factory=list)
@@ -157,6 +168,15 @@ _ALLOWED_TOP_LEVEL_FIELDS = {
     "controller_context",
     "recent_irrigation_context",
     "field_observations",
+    "crop_coefficient",
+    "effective_rainfall_mm",
+    "root_zone_replenishment_mm",
+    "net_irrigation_requirement_mm",
+    "irrigation_efficiency",
+    "validated_flow_m3h",
+    "flow_validation_status",
+    "recent_irrigation_credit_status",
+    "operating_window",
     "data_quality_score",
     "missing_inputs",
     "confidence_inputs",
@@ -438,12 +458,12 @@ class IntelligenceEngineV1:
             + (f" with target depth {depth_mm:.1f} mm." if depth_mm is not None else ".")
         )
         what_changes = [
-            "Higher rainfall forecast could shift decision to wait.",
-            "Low moisture verification could shift decision to irrigate sooner.",
+            "Verified crop coefficient and water-balance inputs could make the requirement computable.",
+            "Validated flow, efficiency, area, and an approved operating window could make a schedule computable.",
         ]
         verify = [
             "Confirm irrigation execution in controller or manual log.",
-            "Re-check soil condition within 12-24h.",
+            "Record a post-action field or sensor observation before marking the outcome verified.",
         ]
 
         return ExplainabilityResult(
@@ -455,83 +475,87 @@ class IntelligenceEngineV1:
         )
 
     def recommend(self, request: RecommendationRequest) -> RecommendationResponse:
+        from app.services.agronomic_decision_kernel import AgronomicDecisionInput, AgronomicDecisionKernelV02
+
         field = request.field_context
         quality = self.evaluate_data_quality(field)
+        # This compatibility endpoint receives a normalized context, not the
+        # source evidence needed to validate flow or recent applied water. Do
+        # not trust client-supplied "validated" labels. The Workbench/live
+        # orchestrator performs source, block, freshness, pressure, calibration,
+        # and confirmation checks before it calls the kernel directly.
+        untrusted_flow_claim = field.validated_flow_m3h is not None or field.flow_validation_status == "validated"
+        untrusted_recent_claim = field.recent_irrigation_credit_status in {"verified_recent", "verified_none"}
+        decision = AgronomicDecisionKernelV02().compute(
+            AgronomicDecisionInput(
+                eto_mm=field.weather_context.eto_mm,
+                crop_type=field.crop_type,
+                crop_coefficient=field.crop_coefficient,
+                effective_rainfall_mm=field.effective_rainfall_mm,
+                root_zone_replenishment_mm=field.root_zone_replenishment_mm,
+                net_irrigation_requirement_mm=field.net_irrigation_requirement_mm,
+                recent_irrigation_depth_mm=None,
+                recent_irrigation_credit_status="unavailable",
+                irrigation_method=field.irrigation_method,
+                irrigation_efficiency=field.irrigation_efficiency,
+                field_area_ha=field.area,
+                flow_rate_m3h=None,
+                flow_validation_status="unavailable",
+                operating_window=field.operating_window,
+                field_observations=field.field_observations,
+                missing_data_state=quality.missing_inputs,
+                recommendation_origin="intelligence_engine_v1_compatibility",
+            )
+        )
+        action: RecommendationAction = decision["action"]
+        duration = decision["duration_minutes"]
+        depth = decision["gross_irrigation_depth_mm"]
+        confidence_score = int(decision["confidence_score"])
+        confidence_label = "moderate" if decision["confidence"] == "moderate" else decision["confidence"]
+        missing = sorted(set(quality.missing_inputs + list(decision["missing_inputs"])))
+        limitations = list(dict.fromkeys(quality.recommendation_limitations + list(decision["limitations"])))
+        quality = quality.model_copy(update={"missing_inputs": missing, "recommendation_limitations": limitations})
 
-        eto = field.weather_context.eto_mm or 0.0
-        rain = field.weather_context.precipitation_forecast_mm or 0.0
-        moisture = field.sensor_context.moisture_percent
-
-        base_need_mm = max(0.0, eto * 1.15 - rain)
-        conservative_mm = min(base_need_mm, 8.0)
-        action: RecommendationAction = "wait"
-        duration: Optional[float] = None
-        depth: Optional[float] = None
         risk_flags: List[str] = []
-
-        if quality.data_quality_label == "insufficient":
-            action = "insufficient_data"
-            risk_flags.append("critical_data_missing")
-        elif moisture is not None and moisture < 24:
-            action = "irrigate"
-            depth = round(max(conservative_mm, 6.0), 1)
-        elif moisture is not None and moisture > 36:
-            action = "wait"
-        elif base_need_mm >= 5:
-            action = "irrigate" if quality.data_quality_score >= 60 else "inspect"
-            depth = round(conservative_mm, 1) if action == "irrigate" else None
-        elif rain >= 3:
-            action = "wait"
-        elif quality.data_quality_score < 55:
-            action = "inspect"
-        else:
-            action = "wait"
-
-        if action == "irrigate" and depth is not None:
-            method_factor = 1.0
-            if (field.irrigation_method or "").lower() in {"drip", "micro"}:
-                method_factor = 0.8
-            duration = round(depth * 12 * method_factor, 1)
-
-        confidence_score = max(20, min(98, quality.data_quality_score - (10 if action == "inspect" else 0)))
-        if action == "insufficient_data":
-            confidence_score = min(confidence_score, 35)
-        confidence_label = "high" if confidence_score >= 75 else "moderate" if confidence_score >= 50 else "low"
-
+        if untrusted_flow_claim:
+            risk_flags.append("client_flow_validation_claim_withheld")
+        if untrusted_recent_claim:
+            risk_flags.append("client_recent_water_verification_claim_withheld")
+        if action in {"inspect", "insufficient_data"}:
+            risk_flags.append("unsupported_operational_precision_withheld")
         if confidence_label == "low":
             risk_flags.append("low_confidence")
-        if "soil_type" in quality.missing_inputs:
-            risk_flags.append("soil_uncertainty")
-        if "crop_type" in quality.missing_inputs:
-            risk_flags.append("crop_demand_unknown")
+        if "crop_coefficient" in missing:
+            risk_flags.append("crop_coefficient_unverified")
+        if "irrigation_efficiency" in missing:
+            risk_flags.append("irrigation_efficiency_unverified")
+        if "validated_flow_or_application_rate" in missing:
+            risk_flags.append("validated_flow_missing")
 
         explain = self.build_explainability(field, quality, action, depth)
 
         language_status = "en_ready" if request.language == "en" else f"fallback_to_en:{request.language}"
 
-        timing = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
-        recommended_timing = timing.isoformat()
-        if action in {"wait", "insufficient_data"}:
-            recommended_timing = (timing + timedelta(hours=8)).isoformat()
+        recommended_timing = decision.get("timing_window")
 
         execution_task = ExecutionTask(
             task_title=(
-                "Apply conservative irrigation pulse" if action == "irrigate" else "Inspect field moisture and irrigation readiness"
+                "Review computed irrigation plan for approval" if action == "irrigate" else "Collect missing irrigation evidence"
             ),
             task_steps=(
                 [
-                    "Validate valve/line availability.",
-                    f"Run irrigation for {duration or 0} minutes.",
-                    "Record applied duration and estimated depth.",
+                    "Review every scientific input and its source provenance.",
+                    "Approve or reject the proposed plan before controller execution.",
+                    "After execution, record as-applied flow, runtime, and volume evidence.",
                 ]
                 if action == "irrigate"
                 else [
-                    "Visit field and inspect soil moisture at root depth.",
-                    "Check controller connectivity or manual readiness.",
-                    "Log observation before next recommendation cycle.",
+                    "Collect the missing items listed in the recommendation.",
+                    "Confirm field/block scope and source timestamps.",
+                    "Run the recommendation again only after evidence review.",
                 ]
             ),
-            due_window="within_6h" if action == "irrigate" else "today",
+            due_window=field.operating_window or "after_required_evidence_is_verified",
             assigned_role=request.user_role or "farm_manager",
             confirmation_needed=True,
             verification_method="controller_log_or_manual_confirmation",
@@ -539,9 +563,9 @@ class IntelligenceEngineV1:
 
         verification_plan = VerificationPlan(
             recommended_action=action,
-            schedule_to_apply=(f"{duration} min irrigation pulse" if duration is not None else "No irrigation schedule to apply"),
+            schedule_to_apply=("Human approval required for the computed plan" if duration is not None else "No irrigation schedule is authorized"),
             confirmation_to_collect="Execution confirmation from controller event or signed manual log.",
-            expected_field_outcome="Stable moisture trend and no visible stress over next 24h.",
+            expected_field_outcome="Outcome remains unknown until post-action evidence is collected.",
             warning_trigger="If moisture declines or stress signs persist, raise warning and re-evaluate.",
         )
 
@@ -562,7 +586,7 @@ class IntelligenceEngineV1:
             missing_data=quality.missing_inputs,
             verification_required=True,
             human_readable_explanation={
-                "en": f"Decision: {action}. Confidence {confidence_label} ({confidence_score}/100). Reason: {explain.why}"
+                "en": f"Decision: {action}. Evidence confidence is {confidence_label}. Reason: {explain.why}"
             },
             language_status=language_status,
             machine_readable_decision={
@@ -571,6 +595,9 @@ class IntelligenceEngineV1:
                 "duration_minutes": duration,
                 "depth_mm": depth,
                 "quality_score": quality.data_quality_score,
+                "decision_status": decision["decision_status"],
+                "limitations": decision["limitations"],
+                "scientific_tools": decision["calculation_trace"]["scientific_tools"],
             },
             source_trace={
                 "source": field.source,
@@ -579,10 +606,11 @@ class IntelligenceEngineV1:
                 "inputs_used": field.confidence_inputs,
                 "live_inputs_used": [],
                 "manual_overrides_used": [],
-                "missing_inputs": quality.missing_inputs,
+                "missing_inputs": missing,
                 "telemetry_used": quality.data_quality_label in {"full_telemetry", "partial_telemetry"},
                 "controller_provider": field.controller_context.provider,
-                "confidence_basis": confidence_label,
+                "confidence_basis": "explicit evidence completeness and deterministic tool availability",
+                "legacy_heuristics_used": False,
             },
             data_quality=quality,
             execution_task=execution_task,

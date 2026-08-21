@@ -108,14 +108,24 @@ class EvidenceSignal(BaseModel):
     evidence_id: str
     source_type: str
     classification: Literal["observed", "derived", "source", "unknown"]
+    information_class: Literal["OBSERVED", "DERIVED", "HYPOTHESIS", "UNKNOWN", "CONFLICT"] = "UNKNOWN"
     title: str
     statement: str
+    organization_id: str | None = None
+    workspace_id: str | None = None
     field_id: str | None = None
     block_id: str | None = None
+    provider: str | None = None
+    source_entity: str | None = None
     observed_at: str | None = None
+    ingested_at: str | None = None
     freshness_score: float = 0.5
     quality_score: float = 0.7
+    supplied_confidence: float | None = None
     confidence_score: float = 0.5
+    units: str | None = None
+    integration_status: str | None = None
+    verification_state: str | None = None
     provenance: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -137,6 +147,9 @@ class ScienceResult(BaseModel):
     evidence_ids: list[str] = Field(default_factory=list)
     formula: str
     assumptions: list[str] = Field(default_factory=list)
+    missing_requirements: list[str] = Field(default_factory=list)
+    limitations: list[str] = Field(default_factory=list)
+    provenance: list[dict[str, str]] = Field(default_factory=list)
     confidence_score: float = 0.0
 
 
@@ -282,7 +295,15 @@ def _observed_at(row: dict[str, Any]) -> Any:
     )
 
 
-def _signal(row: dict[str, Any], index: int, *, now: datetime) -> EvidenceSignal:
+def _signal(
+    row: dict[str, Any],
+    index: int,
+    *,
+    now: datetime,
+    organization_id: str,
+    workspace_id: str | None,
+) -> EvidenceSignal:
+    metadata = row.get("metadata_json") if isinstance(row.get("metadata_json"), dict) else {}
     source_type = _text(row.get("type") or row.get("source_type") or row.get("provider") or "unknown", 100)
     classification = _classification(source_type)
     observed_at = _observed_at(row)
@@ -309,18 +330,38 @@ def _signal(row: dict[str, Any], index: int, *, now: datetime) -> EvidenceSignal
         if value not in (None, "")
     }
     parsed_observed_at = _parse_datetime(observed_at)
+    ingested_at = _parse_datetime(row.get("ingested_at") or row.get("created_at") or metadata.get("ingested_at"))
+    supplied_confidence = row.get("confidence")
+    try:
+        supplied_confidence = float(supplied_confidence) if supplied_confidence is not None else None
+    except (TypeError, ValueError):
+        supplied_confidence = None
     return EvidenceSignal(
         evidence_id=evidence_id,
         source_type=source_type,
         classification=classification,
+        information_class=(
+            "OBSERVED" if classification in {"observed", "source"}
+            else "DERIVED" if classification == "derived"
+            else "UNKNOWN"
+        ),
         title=title,
         statement=_statement(row),
+        organization_id=organization_id,
+        workspace_id=_text(row.get("workspace_id"), 160) or workspace_id,
         field_id=_text(row.get("field_id"), 160) or None,
         block_id=_text(row.get("block_id"), 160) or None,
+        provider=_text(row.get("provider"), 120) or None,
+        source_entity=_text(row.get("source_entity") or row.get("source_entity_id") or row.get("data_source_id"), 180) or None,
         observed_at=parsed_observed_at.isoformat() if parsed_observed_at else None,
+        ingested_at=ingested_at.isoformat() if ingested_at else None,
         freshness_score=freshness,
         quality_score=quality,
+        supplied_confidence=supplied_confidence,
         confidence_score=confidence,
+        units=_text(row.get("units") or metadata.get("units"), 80) or None,
+        integration_status=_text(row.get("integration_status") or row.get("status"), 100) or None,
+        verification_state=_text(row.get("verification_state") or row.get("review_status") or quality_value, 100) or None,
         provenance=provenance,
     )
 
@@ -552,22 +593,79 @@ def build_intelligence_grounding(
     now: datetime | None = None,
 ) -> IntelligenceGroundingPacket:
     current = now.astimezone(timezone.utc) if now and now.tzinfo else (now.replace(tzinfo=timezone.utc) if now else _now())
-    rows = [row for row in context.evidence if isinstance(row, dict)]
-    signals = [_signal(row, index, now=current) for index, row in enumerate(rows)]
-    observed = [signal for signal in signals if signal.classification in {"observed", "source"}]
-    derived = [signal for signal in signals if signal.classification in {"derived", "unknown"}]
-    conflicts = _detect_conflicts(rows, signals)
-    checks = _science_checks(rows, signals)
+    raw_rows = [row for row in context.evidence if isinstance(row, dict)]
+    rows: list[dict[str, Any]] = []
+    seen_evidence_ids: set[str] = set()
+    duplicate_count = 0
+    for index, row in enumerate(raw_rows):
+        evidence_id = _evidence_id(row, index)
+        if evidence_id in seen_evidence_ids:
+            duplicate_count += 1
+            continue
+        seen_evidence_ids.add(evidence_id)
+        rows.append(row)
+    signals = [
+        _signal(
+            row,
+            index,
+            now=current,
+            organization_id=context.organization_id,
+            workspace_id=context.workspace_id,
+        )
+        for index, row in enumerate(rows)
+    ]
+    target_field_id = field_id or context.block_id
+    out_of_scope_count = 0
+    out_of_tenant_count = 0
+    scoped_pairs: list[tuple[dict[str, Any], EvidenceSignal]] = []
+    for row, signal in zip(rows, signals):
+        metadata = row.get("metadata_json") if isinstance(row.get("metadata_json"), dict) else {}
+        row_organization = (
+            row.get("organization_id")
+            or row.get("tenant_id")
+            or metadata.get("organization_id")
+            or metadata.get("tenant_id")
+        )
+        row_workspace = row.get("workspace_id") or metadata.get("workspace_id")
+        if row_organization and str(row_organization).casefold() != str(context.organization_id).casefold():
+            out_of_tenant_count += 1
+            continue
+        if (
+            row_workspace
+            and context.workspace_id
+            and str(row_workspace).casefold() != str(context.workspace_id).casefold()
+        ):
+            out_of_tenant_count += 1
+            continue
+        signal_scope = signal.block_id or signal.field_id
+        if (
+            target_field_id
+            and signal_scope
+            and signal.classification in {"observed", "source"}
+            and str(signal_scope).casefold() != str(target_field_id).casefold()
+        ):
+            out_of_scope_count += 1
+            continue
+        scoped_pairs.append((row, signal))
+    scoped_rows = [row for row, _signal_item in scoped_pairs]
+    scoped_signals = [signal for _row, signal in scoped_pairs]
+    observed = [signal for signal in scoped_signals if signal.classification in {"observed", "source"}]
+    derived = [signal for signal in scoped_signals if signal.classification in {"derived", "unknown"}]
+    conflicts = _detect_conflicts(scoped_rows, scoped_signals)
+    checks = _science_checks(scoped_rows, scoped_signals)
 
     scores = [signal.confidence_score for signal in observed if signal.statement]
     source_score = sum(scores) / len(scores) if scores else 0.35
     conflict_penalty = min(0.35, 0.12 * len(conflicts))
-    missing_penalty = min(0.25, 0.03 * len(context.missing_data))
-    grounding_confidence = round(max(0.05, min(0.98, source_score - conflict_penalty - missing_penalty)), 3)
-
     fresh_count = sum(1 for signal in observed if signal.freshness_score >= 0.78)
     stale_count = sum(1 for signal in observed if signal.freshness_score < 0.5)
     low_quality_count = sum(1 for signal in observed if signal.quality_score < 0.6)
+    missing_penalty = min(0.25, 0.03 * (len(context.missing_data) + (1 if out_of_scope_count else 0)))
+    unhealthy_penalty = min(0.30, 0.08 * stale_count + 0.08 * low_quality_count)
+    grounding_confidence = round(
+        max(0.05, min(0.98, source_score - conflict_penalty - missing_penalty - unhealthy_penalty)),
+        3,
+    )
 
     return IntelligenceGroundingPacket(
         generated_at=current.isoformat(),
@@ -578,7 +676,14 @@ def build_intelligence_grounding(
         region=context.region,
         observed_facts=observed[:40],
         derived_context=derived[:20],
-        unknowns=list(dict.fromkeys(str(item) for item in context.missing_data if str(item).strip()))[:30],
+        unknowns=list(
+            dict.fromkeys(
+                [str(item) for item in context.missing_data if str(item).strip()]
+                + (["Out-of-scope field evidence was excluded from this decision."] if out_of_scope_count else [])
+                + (["Out-of-tenant or workspace evidence was excluded from this decision."] if out_of_tenant_count else [])
+                + (["Duplicate evidence records were excluded from this decision."] if duplicate_count else [])
+            )
+        )[:30],
         conflicts=conflicts,
         science_checks=checks,
         source_health={
@@ -588,11 +693,14 @@ def build_intelligence_grounding(
             "stale_count": stale_count,
             "low_quality_count": low_quality_count,
             "conflict_count": len(conflicts),
+            "out_of_scope_count": out_of_scope_count,
+            "out_of_tenant_count": out_of_tenant_count,
+            "duplicate_count": duplicate_count,
         },
         grounding_confidence=grounding_confidence,
         decision_constraints=[
             "Treat observed evidence, derived calculations, hypotheses, and unknowns as different classes.",
-            "Do not assert a number unless it appears in source evidence, the user's question, or a versioned deterministic science result.",
+            "Do not assert an operational number unless it appears in validated typed input, trusted measurement evidence, or a versioned deterministic science result.",
             "Do not infer missing crop coefficients, irrigation efficiency, root-zone depth, allowable depletion, pesticide labels, or legal/compliance status.",
             "Material irrigation, chemical, equipment, regulatory, or external-submission actions require explicit human approval.",
             "Every recommended action must include a verification condition so the result can be checked after execution.",

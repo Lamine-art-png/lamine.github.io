@@ -361,3 +361,33 @@ The system is successful when an operator can ask a hard operational question an
 10. what actually happened afterward.
 
 The long-term category is not “AI chat for agriculture.” It is **verified operating intelligence for agriculture**.
+
+## 11. Implemented safety baseline (August 2026)
+
+The `feat/intelligence-graph-gpt56` production upgrade now includes:
+
+- a tenant/workspace/field-aware evidence graph with observed, derived,
+  hypothesis, unknown, and conflict separation;
+- duplicate and wrong-field evidence exclusion;
+- GPT-5.6 Responses API structured-output integration with `store=false`, model
+  routing, evidence-as-untrusted-data boundaries, and deterministic postvalidation;
+- a versioned, fail-closed scientific-tool registry;
+- retirement of legacy operational irrigation heuristics and isolation of the
+  preview calibration pack;
+- source-specific flow/recent-irrigation validation without hidden freshness,
+  variance, or credit thresholds;
+- approval, citation, numeric provenance, verification, and no-side-effect
+  enforcement;
+- deterministic evaluation metrics and 93 named adversarial cases.
+
+The existing `DecisionRun` and `ExecutionVerification` persistence remains the
+canonical lifecycle store. A future schema migration should generalize it beyond
+irrigation and add immutable snapshots for evidence graph, model/provider,
+prompt/policy, tool calls, approval state, and verification state. Do not create
+a second parallel decision-memory architecture.
+
+Known follow-up before broad autonomous-assistance claims: field-state snapshots
+are still assembled per request rather than persisted as a canonical time-aware
+state object; lifecycle verification is irrigation-specific; expert-labelled
+calibration and outcome datasets are not yet available. These limitations do
+not reopen the removed legacy heuristic path.

@@ -115,6 +115,24 @@ def test_unsupported_numeric_recommendation_is_dropped():
     assert validated.recommendations == []
 
 
+def test_observed_flow_number_cannot_be_reinterpreted_as_runtime():
+    decision = _decision(
+        recommendations=[
+            Recommendation(
+                action="Irrigate for 120 minutes.",
+                priority="now",
+                rationale="A flow reading exists.",
+                evidence_ids=["ev-1"],
+                requires_human_approval=True,
+                expires_when="When telemetry changes.",
+                verification="Verify the resulting meter reading.",
+            )
+        ]
+    )
+
+    assert validate_decision(decision, _packet(), question="Review irrigation").recommendations == []
+
+
 def test_model_confidence_cannot_exceed_grounding_confidence():
     validated = validate_decision(_decision(), _packet(), question="What is the measured flow?")
 

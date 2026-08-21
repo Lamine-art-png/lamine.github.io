@@ -149,3 +149,18 @@ def test_flow_runtime_produces_measured_volume_without_efficiency_guess():
     assert result.value == 3600.0
     assert result.unit == "gallons"
     assert "efficiency" in " ".join(result.assumptions).lower()
+
+
+def test_wrong_workspace_and_tenant_rows_are_excluded_before_reasoning():
+    context = _context(
+        [
+            {"id": "wrong-org", "type": "telemetry", "organization_id": "org-2", "field_id": "field-1", "summary": "foreign"},
+            {"id": "wrong-ws", "type": "telemetry", "workspace_id": "ws-2", "field_id": "field-1", "summary": "foreign"},
+            {"id": "right", "type": "telemetry", "organization_id": "org-1", "workspace_id": "ws-1", "field_id": "field-1", "summary": "local"},
+        ]
+    )
+
+    packet = build_intelligence_grounding(context, now=NOW)
+
+    assert [row.evidence_id for row in packet.observed_facts] == ["right"]
+    assert packet.source_health["out_of_tenant_count"] == 2
