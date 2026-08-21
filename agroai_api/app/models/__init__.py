@@ -41,7 +41,8 @@ from app.assurance.models import (
     AssurancePassport, AssurancePassportSection, AssuranceEvidenceArtifact,
     AssuranceChecklistItem, AssuranceRiskScore, InputApplication,
     PesticideApplication, FertilizerApplication, HarvestLot, TraceabilityEvent,
-    BuyerRequirement, RulePack, AssuranceExport,
+    BuyerRequirement, RulePack, AssuranceExport, AssuranceReviewEvent,
+    AssuranceAuditEvent,
 )
 from app.agents.models import (
     AgentWorkflowRun, AgentTask, AgentFinding, AgentRecommendation,
@@ -90,7 +91,8 @@ __all__ = [
     "AssurancePassportSection", "AssuranceEvidenceArtifact", "AssuranceChecklistItem",
     "AssuranceRiskScore", "InputApplication", "PesticideApplication",
     "FertilizerApplication", "HarvestLot", "TraceabilityEvent", "BuyerRequirement",
-    "RulePack", "AssuranceExport", "AgentWorkflowRun", "AgentTask", "AgentFinding",
+    "RulePack", "AssuranceExport", "AssuranceReviewEvent", "AssuranceAuditEvent",
+    "AgentWorkflowRun", "AgentTask", "AgentFinding",
     "AgentRecommendation", "AgentActionProposal", "AgentToolCall", "AgentMessage",
     "AgentRunAuditEvent", "WorkbenchSessionRecord", "WorkbenchDataArtifactRecord",
     "WorkbenchAnalysisRecord", "WorkbenchAuditEventRecord", "WorkbenchEvidenceActionRecord",

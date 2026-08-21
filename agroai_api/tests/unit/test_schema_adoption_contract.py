@@ -31,7 +31,7 @@ def test_column_contract_accepts_complete_shape():
 
 
 def test_head_contract_covers_security_queue_provenance_access_appeals_platform_api_and_field_launch():
-    assert HEAD_ALEMBIC_REVISION == "029_platform_cli_device_auth"
+    assert HEAD_ALEMBIC_REVISION == "030_assurance_intelligence_v2"
     assert {"device_code_hash", "user_code", "status", "expires_at"}.issubset(
         HEAD_SCHEMA_REQUIREMENTS["platform_cli_device_authorizations"]
     )

@@ -170,7 +170,8 @@ jobs:
             if [[ "$base_ok" == "true" && "$mode_ok" == "true" && "$platform_identity" == "true" ]]; then ready=1; break; fi
             sleep 8
           done
-          jq -n --arg release_sha "$GITHUB_SHA" --arg backend_sha "$BACKEND_RELEASE_SHA" --arg mode "$PUBLIC_SELF_SERVICE_MODE" --argjson ready "$ready" '{release_sha:$release_sha,backend_release_sha:$backend_sha,public_test_self_service:($mode=="true"),ready:($ready==1)}' > platform-api-final-diagnostics.json
+          health_exact_backend_sha="$(jq -r '.build_sha // empty' proof/health.json 2>/dev/null || true)"
+          jq -n --arg release_sha "$GITHUB_SHA" --arg backend_sha "$BACKEND_RELEASE_SHA" --arg expected_backend_sha "$BACKEND_RELEASE_SHA" --arg health_exact_backend_sha "$health_exact_backend_sha" --arg mode "$PUBLIC_SELF_SERVICE_MODE" --argjson ready "$ready" '{release_sha:$release_sha,backend_release_sha:$backend_sha,expected_backend_sha:$expected_backend_sha,health_exact_backend_sha:$health_exact_backend_sha,public_test_self_service:($mode=="true"),ready:($ready==1)}' > platform-api-final-diagnostics.json
           echo "ready=$ready" >> "$GITHUB_OUTPUT"
 
       - name: Upload immutable production evidence

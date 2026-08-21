@@ -9,6 +9,7 @@ const sharedRoot = path.join(repoRoot, "shared");
 const read = (...parts) => fs.readFileSync(path.join(...parts), "utf8");
 const dynamicCopy = JSON.parse(read(sharedRoot, "ui-dynamic-copy.en.json"));
 const dynamicExtra = JSON.parse(read(sharedRoot, "ui-dynamic-copy-extra.en.json"));
+const dynamicAssurance = JSON.parse(read(sharedRoot, "ui-dynamic-copy-assurance.en.json"));
 const portalCatalog = read(appRoot, "portalLiteralCatalog.ts");
 const dynamicRuntime = read(appRoot, "dynamicLocaleCatalog.ts");
 const routeHook = read(appRoot, "hooks", "usePortalCopy.ts");
@@ -25,7 +26,7 @@ function assert(condition, message) {
   if (!condition) throw new Error(`dynamic UI i18n contract failed: ${message}`);
 }
 
-const dynamicEntries = { ...dynamicCopy, ...dynamicExtra };
+const dynamicEntries = { ...dynamicCopy, ...dynamicExtra, ...dynamicAssurance };
 assert(Object.keys(dynamicEntries).length >= 250, "dynamic copy catalog is too small to cover recorded monetization/operator surfaces");
 for (const key of [
   "dynamic.pricing.freeAvailable",
@@ -46,10 +47,16 @@ for (const key of [
   "dynamic.tour.sourcesBody",
   "dynamic.sources.organizedBody",
   "dynamic.sources.viewInSources",
+  "dynamic.assurance.decisionSupportBody",
+  "dynamic.assurance.reviewQueue",
+  "dynamic.assurance.packageTitle",
+  "dynamic.assurance.agentTitle",
+  "dynamic.assurance.agentBoundary",
 ]) assert(typeof dynamicEntries[key] === "string" && dynamicEntries[key].length > 0, `missing ${key}`);
 
 assert(portalCatalog.includes("ui-dynamic-copy.en.json"), "portal catalog must import primary dynamic copy");
 assert(portalCatalog.includes("ui-dynamic-copy-extra.en.json"), "portal catalog must import compact dynamic copy");
+assert(portalCatalog.includes("ui-dynamic-copy-assurance.en.json"), "portal catalog must import Assurance route copy");
 assert(portalCatalog.includes("STATIC_PORTAL_LITERAL_CATALOG"), "static portal catalog boundary missing");
 assert(portalCatalog.includes("dynamicCopySourceForNamespaces"), "namespace source selector missing");
 assert(portalCatalog.includes("portalCopySourceForValues"), "existing literal prioritization missing");
@@ -61,6 +68,7 @@ assert(!portalCatalog.includes("return { ...base, ...PORTAL_LITERAL_CATALOG };")
 
 assert(canonical.includes("ui-dynamic-copy.en.json"), "edge canonical source must authorize primary dynamic copy");
 assert(canonical.includes("ui-dynamic-copy-extra.en.json"), "edge canonical source must authorize compact dynamic copy");
+assert(canonical.includes("ui-dynamic-copy-assurance.en.json"), "edge canonical source must authorize Assurance route copy");
 assert(dynamicRuntime.includes("ensureLocaleSourceCatalog"), "route-scoped source hydration missing");
 assert(dynamicRuntime.includes("primeLocaleSourceCatalogFromCache"), "route-scoped cache priming missing");
 assert(routeHook.includes("ensureLocaleSourceCatalog"), "visible route copy must hydrate independently of full portal completion");
@@ -69,6 +77,7 @@ assert(routeHook.includes("useSyncExternalStore"), "route copy must react to ins
 for (const route of ["/operations", "/field-queue", "/tasks", "/readiness", "/fields", "/exceptions"]) {
   assert(layout.includes(`"${route}"`), `shell route-priority map missing ${route}`);
 }
+assert(layout.includes('pathname === "/assurance"'), "shell route-priority map missing /assurance");
 assert(layout.includes("PLAN_COPY_VALUES"), "shell must prioritize only exact plan labels on non-dynamic routes");
 assert(layout.includes("usePortalCopy(copyNamespacesForPath(location.pathname), PLAN_COPY_VALUES)"), "shell route hydration must stay narrow");
 assert(layout.includes("tx(currentPlanLabel)"), "sidebar plan name must not render raw English");

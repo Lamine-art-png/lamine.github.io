@@ -59,7 +59,7 @@ jobs:
       - name: Assert a single migration head
         run: |
           test "$(alembic heads | wc -l)" -eq 1
-          test "$(alembic heads)" = "029_platform_cli_device_auth (head)"
+          test "$(alembic heads)" = "030_assurance_intelligence_v2 (head)"
       - name: TEST self-service developer acceptance (release gate)
         id: self_service_gate
         shell: bash
