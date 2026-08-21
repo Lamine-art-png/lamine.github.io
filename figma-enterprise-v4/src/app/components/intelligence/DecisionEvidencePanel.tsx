@@ -32,37 +32,37 @@ export function DecisionEvidencePanel({ details, t }: { details: AnyRecord; t: (
       <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 sm:px-4">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-[12px] font-semibold" style={{ color: TEXT }}>
-            <ShieldCheck size={15} /> {t("intelligence.reasoning.title")}
+            <ShieldCheck size={15} /> {t("evidence")} · {t("intelligence")}
           </div>
-          <div className="mt-1 text-[11px] leading-relaxed" style={{ color: MUTED }}>{t("intelligence.reasoning.subtitle")}</div>
+          <div className="mt-1 text-[11px] leading-relaxed" style={{ color: MUTED }}>{t("fieldIntel.provenance")}</div>
         </div>
         <ChevronDown size={16} className="flex-shrink-0" style={{ color: MUTED }} />
       </summary>
 
       <div className="border-t px-3 pb-4 pt-3 sm:px-4" style={{ borderColor: BORDER }}>
         <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-          <Metric label={t("intelligence.reasoning.confidence")} value={confidenceScore === undefined ? confidenceLabel : `${Math.round(confidenceScore * 100)}%`} />
-          <Metric label={t("intelligence.reasoning.evidence")} value={String(evidenceCount)} />
-          <Metric label={t("intelligence.reasoning.conflicts")} value={String(conflictCount)} warning={conflictCount > 0} />
-          <Metric label={t("intelligence.reasoning.science")} value={String(scienceChecks.length)} />
+          <Metric label={t("fieldIntel.confidence")} value={confidenceScore === undefined ? confidenceLabel : `${Math.round(confidenceScore * 100)}%`} />
+          <Metric label={t("evidence")} value={String(evidenceCount)} />
+          <Metric label={t("fieldIntel.state.conflict")} value={String(conflictCount)} warning={conflictCount > 0} />
+          <Metric label={t("fieldIntel.correlation")} value={String(scienceChecks.length)} />
         </div>
 
-        {facts.length ? <ReasoningSection icon={<ShieldCheck size={14} />} title={t("intelligence.reasoning.facts")} rows={facts.map((row) => safeText(row.claim || row.statement))} /> : null}
+        {facts.length ? <ReasoningSection icon={<ShieldCheck size={14} />} title={t("fieldIntel.visibleFacts")} rows={facts.map((row) => safeText(row.claim || row.statement))} /> : null}
         {derived.length || scienceChecks.length ? (
           <ReasoningSection
             icon={<FlaskConical size={14} />}
-            title={t("intelligence.reasoning.derived")}
+            title={t("fieldIntel.correlation")}
             rows={[
               ...derived.map((row) => safeText(row.claim)),
               ...scienceChecks.map((row) => formatScienceCheck(row)),
             ].filter(Boolean)}
           />
         ) : null}
-        {conflicts.length ? <ReasoningSection icon={<AlertTriangle size={14} />} title={t("intelligence.reasoning.conflicts")} rows={conflicts.map((row) => safeText(row.summary || row.reason))} warning /> : null}
+        {conflicts.length ? <ReasoningSection icon={<AlertTriangle size={14} />} title={t("fieldIntel.state.conflict")} rows={conflicts.map((row) => safeText(row.summary || row.reason))} warning /> : null}
         {hypotheses.length || missing.length ? (
           <ReasoningSection
             icon={<CircleHelp size={14} />}
-            title={t("intelligence.reasoning.uncertainty")}
+            title={t("fieldIntel.uncertain")}
             rows={[
               ...hypotheses.map((row) => safeText(row.claim)),
               ...missing.map((row) => safeText(row.item || row.why_it_matters || row)),
@@ -72,7 +72,7 @@ export function DecisionEvidencePanel({ details, t }: { details: AnyRecord; t: (
         {verification.length ? (
           <ReasoningSection
             icon={<CheckCircle2 size={14} />}
-            title={t("intelligence.reasoning.verify")}
+            title={t("fieldIntel.verifyBy")}
             rows={verification.map((row) => {
               const action = safeText(row.action);
               const check = safeText(row.verification);
