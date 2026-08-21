@@ -26,7 +26,10 @@ done
 
 say "Installing AGRO-AI CLI from the official AGRO-AI source (${REF})..."
 
-if command -v pipx >/dev/null 2>&1; then
+# A caller-provided install root is an explicit request for an isolated,
+# predictable installation. pipx owns its own home/bin paths, so only use it
+# when the caller has not selected either location.
+if command -v pipx >/dev/null 2>&1 && [ -z "${AGROAI_CLI_HOME:-}" ] && [ -z "${AGROAI_BIN_DIR:-}" ]; then
   pipx install --force "$SPEC"
   CLI="$(command -v agroai 2>/dev/null || true)"
 else
