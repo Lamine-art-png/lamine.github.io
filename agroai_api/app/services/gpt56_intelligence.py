@@ -23,7 +23,6 @@ from app.services.language import resolve_language
 
 
 logger = logging.getLogger(__name__)
-
 _OPENAI_DEFAULT_BASE = "https://api.openai.com/v1"
 _HIGH_IMPACT_TERMS = (
     "irrigat", "water apply", "spray", "pesticide", "herbicide", "fungicide",
@@ -31,6 +30,11 @@ _HIGH_IMPACT_TERMS = (
     "controller", "valve", "compliance", "regulator", "audit", "food safety",
     "external submission", "submit externally",
 )
+_IDENTIFIER_PREFIX = re.compile(
+    r"(?:zone|block|field|valve|pump|controller|row|sensor|meter|station)\s*(?:#|no\.?)?\s*$",
+    flags=re.IGNORECASE,
+)
+_NUMBER_PATTERN = re.compile(r"(?<![A-Za-z])[-+]?\d+(?:,\d{3})*(?:\.\d+)?")
 
 _OUTPUT_SCHEMA = {
     "type": "object",
@@ -49,10 +53,7 @@ _OUTPUT_SCHEMA = {
             "type": "array",
             "items": {
                 "type": "object", "additionalProperties": False,
-                "properties": {
-                    "claim": {"type": "string"}, "rule_id": {"type": "string"},
-                    "evidence_ids": {"type": "array", "items": {"type": "string"}},
-                },
+                "properties": {"claim": {"type": "string"}, "rule_id": {"type": "string"}, "evidence_ids": {"type": "array", "items": {"type": "string"}}},
                 "required": ["claim", "rule_id", "evidence_ids"],
             },
         },
@@ -60,10 +61,7 @@ _OUTPUT_SCHEMA = {
             "type": "array",
             "items": {
                 "type": "object", "additionalProperties": False,
-                "properties": {
-                    "claim": {"type": "string"}, "confidence": {"type": "number", "minimum": 0, "maximum": 1},
-                    "how_to_verify": {"type": "string"},
-                },
+                "properties": {"claim": {"type": "string"}, "confidence": {"type": "number", "minimum": 0, "maximum": 1}, "how_to_verify": {"type": "string"}},
                 "required": ["claim", "confidence", "how_to_verify"],
             },
         },
@@ -79,11 +77,7 @@ _OUTPUT_SCHEMA = {
             "type": "array",
             "items": {
                 "type": "object", "additionalProperties": False,
-                "properties": {
-                    "summary": {"type": "string"},
-                    "evidence_ids": {"type": "array", "items": {"type": "string"}},
-                    "resolution": {"type": "string"},
-                },
+                "properties": {"summary": {"type": "string"}, "evidence_ids": {"type": "array", "items": {"type": "string"}}, "resolution": {"type": "string"}},
                 "required": ["summary", "evidence_ids", "resolution"],
             },
         },
@@ -107,21 +101,13 @@ _OUTPUT_SCHEMA = {
             "type": "array",
             "items": {
                 "type": "object", "additionalProperties": False,
-                "properties": {
-                    "severity": {"type": "string", "enum": ["info", "review", "high", "critical"]},
-                    "summary": {"type": "string"},
-                    "evidence_ids": {"type": "array", "items": {"type": "string"}},
-                },
+                "properties": {"severity": {"type": "string", "enum": ["info", "review", "high", "critical"]}, "summary": {"type": "string"}, "evidence_ids": {"type": "array", "items": {"type": "string"}}},
                 "required": ["severity", "summary", "evidence_ids"],
             },
         },
         "confidence": {
             "type": "object", "additionalProperties": False,
-            "properties": {
-                "level": {"type": "string", "enum": ["low", "medium", "high"]},
-                "score": {"type": "number", "minimum": 0, "maximum": 1},
-                "drivers": {"type": "array", "items": {"type": "string"}},
-            },
+            "properties": {"level": {"type": "string", "enum": ["low", "medium", "high"]}, "score": {"type": "number", "minimum": 0, "maximum": 1}, "drivers": {"type": "array", "items": {"type": "string"}}},
             "required": ["level", "score", "drivers"],
         },
     },
@@ -222,10 +208,7 @@ class GPT56Decision(BaseModel):
             "confidence": self.confidence.level,
             "confidence_score": self.confidence.score,
             "confidence_drivers": self.confidence.drivers,
-            "verification_plan": [
-                {"action": row.action, "verification": row.verification}
-                for row in self.recommendations if row.verification
-            ],
+            "verification_plan": [{"action": row.action, "verification": row.verification} for row in self.recommendations if row.verification],
             "intelligence_graph": {
                 "schema_version": packet.schema_version,
                 "science_ruleset_version": packet.science_ruleset_version,
@@ -295,9 +278,14 @@ def _filter_ids(values: list[str], allowed: set[str]) -> list[str]:
 
 
 def _numbers(text: str) -> set[str]:
+    """Extract quantities while excluding entity identifiers such as Zone 4."""
     values: set[str] = set()
-    for token in re.findall(r"(?<![A-Za-z])[-+]?\d+(?:,\d{3})*(?:\.\d+)?", text or ""):
-        normalized = token.replace(",", "").lstrip("+")
+    source = text or ""
+    for match in _NUMBER_PATTERN.finditer(source):
+        prefix = source[max(0, match.start() - 36):match.start()]
+        if _IDENTIFIER_PREFIX.search(prefix):
+            continue
+        normalized = match.group(0).replace(",", "").lstrip("+")
         try:
             value = float(normalized)
         except ValueError:
@@ -322,9 +310,7 @@ def _source_numbers(packet: IntelligenceGroundingPacket, question: str) -> set[s
 
 
 def _science_output_numbers(packet: IntelligenceGroundingPacket) -> set[str]:
-    return _numbers(
-        "\n".join(str(result.value) for result in packet.science_checks if result.status == "computed" and result.value is not None)
-    )
+    return _numbers("\n".join(str(result.value) for result in packet.science_checks if result.status == "computed" and result.value is not None))
 
 
 def _unsupported_numbers(text: str, allowed: set[str]) -> set[str]:
@@ -374,9 +360,7 @@ def validate_decision(decision: GPT56Decision, packet: IntelligenceGroundingPack
         row.evidence_ids = _filter_ids(row.evidence_ids, allowed_ids)
 
     sanitized_answer, removed_numbers = _sanitize_numeric_prose(decision.answer, allowed_numbers)
-    decision.answer = sanitized_answer or (
-        "AGRO-AI withheld unsupported numeric prose pending traceable evidence." if removed_numbers else decision.answer
-    )
+    decision.answer = sanitized_answer or ("AGRO-AI withheld unsupported numeric prose pending traceable evidence." if removed_numbers else decision.answer)
 
     safe_recommendations: list[Recommendation] = []
     for row in decision.recommendations[:12]:
@@ -418,9 +402,7 @@ def validate_decision(decision: GPT56Decision, packet: IntelligenceGroundingPack
     existing_unknowns = {row.item.casefold() for row in decision.unknowns}
     for item in packet.unknowns:
         if item.casefold() not in existing_unknowns:
-            decision.unknowns.append(
-                UnknownItem(item=item, why_it_matters="This input is missing from the current evidence graph and may change the decision.")
-            )
+            decision.unknowns.append(UnknownItem(item=item, why_it_matters="This input is missing from the current evidence graph and may change the decision."))
 
     known_conflict_keys = {tuple(sorted(row.evidence_ids)) for row in decision.conflicts if row.evidence_ids}
     for conflict in packet.conflicts:

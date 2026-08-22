@@ -144,8 +144,6 @@ async def resilient_intelligence_run(
         metadata={"task": payload.task, "route": "resilient_runtime"},
     )
 
-    # Grounding is a mandatory safety boundary. A failure here must never route to
-    # an unsanitized model fallback.
     try:
         packet = build_intelligence_grounding(context, field_id=payload.field_id)
         packet = enrich_grounding_packet(packet, context)
@@ -165,7 +163,7 @@ async def resilient_intelligence_run(
                 conversation_messages=payload.history,
                 preferred_language=payload.preferred_language,
             )
-        except Exception as exc:  # noqa: BLE001 - model failure may use sanitized recovery
+        except Exception as exc:  # noqa: BLE001
             logger.warning("gpt56_grounded inference_failed error=%s", exc.__class__.__name__)
             gpt56 = None
 
@@ -197,10 +195,7 @@ async def resilient_intelligence_run(
                     "result": body,
                     "missing_data": body["missing_data"],
                     "confidence": body["confidence"],
-                    "citations": [
-                        citation.model_dump(mode="python") if hasattr(citation, "model_dump") else citation
-                        for citation in context.citations[:8]
-                    ],
+                    "citations": [citation.model_dump(mode="python") if hasattr(citation, "model_dump") else citation for citation in context.citations[:8]],
                     "sample_mode": bool(bundle.get("sample_mode")),
                     "preferred_language": payload.preferred_language,
                     "response_language": response_language,
@@ -255,10 +250,10 @@ async def resilient_intelligence_run(
             "intelligence_profile": commercial.get("profile", "essential"),
         }
 
-    answer, removed_numbers = sanitize_customer_answer(result.content.strip(), packet, question=payload.question)
+    answer, removed_content = sanitize_customer_answer(result.content.strip(), packet, question=payload.question)
     body = local_plain_body(answer, context, question=payload.question)
-    if removed_numbers:
-        body["risk_flags"] = ["unsupported_numeric_content_removed"]
+    if removed_content:
+        body["risk_flags"] = ["unsupported_or_ungrounded_operational_content_removed"]
         body["confidence"] = "low"
     return {
         "status": "completed",
@@ -267,10 +262,7 @@ async def resilient_intelligence_run(
         "result": body,
         "missing_data": body["missing_data"],
         "confidence": body["confidence"],
-        "citations": [
-            citation.model_dump(mode="python") if hasattr(citation, "model_dump") else citation
-            for citation in context.citations[:8]
-        ],
+        "citations": [citation.model_dump(mode="python") if hasattr(citation, "model_dump") else citation for citation in context.citations[:8]],
         "sample_mode": bool(bundle.get("sample_mode")),
         "preferred_language": payload.preferred_language,
         "response_language": result.response_language,
@@ -299,18 +291,14 @@ async def chat(payload: ChatRequest, tenant_id: str = Depends(require_current_te
         body = _normalize(body, fallback)
         try:
             packet = enrich_grounding_packet(build_intelligence_grounding(context, field_id=payload.block_id), context)
-            summary, removed = sanitize_customer_answer(
-                str(body.get("summary") or body.get("answer") or ""),
-                packet,
-                question=payload.message,
-            )
+            summary, removed = sanitize_customer_answer(str(body.get("summary") or body.get("answer") or ""), packet, question=payload.message)
             if removed:
                 body["summary"] = summary
                 body["answer"] = summary
-                body["risk_flags"] = list(body.get("risk_flags") or []) + ["unsupported_numeric_content_removed"]
+                body["risk_flags"] = list(body.get("risk_flags") or []) + ["unsupported_or_ungrounded_operational_content_removed"]
                 body["confidence"] = "low"
-        except Exception as exc:  # noqa: BLE001 - deterministic fallback is the safe lane
-            logger.warning("ai_chat numeric_guard_failed error=%s", exc.__class__.__name__)
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("ai_chat safety_guard_failed error=%s", exc.__class__.__name__)
             body = fallback
     output = str(body.get("summary") or body.get("answer") or fallback["summary"])
     return ChatResponse(
