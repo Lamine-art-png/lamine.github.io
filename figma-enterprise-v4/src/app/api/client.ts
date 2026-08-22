@@ -402,7 +402,7 @@ export const apiClient = {
     createPackage: (workspaceId: string, passportId: string, payload: unknown) => post(`/v1/workspaces/${encodeURIComponent(workspaceId)}/assurance/passports/${encodeURIComponent(passportId)}/packages`, payload),
     downloadPackage: (workspaceId: string, passportId: string, packageId: string) => download(`/v1/workspaces/${encodeURIComponent(workspaceId)}/assurance/passports/${encodeURIComponent(passportId)}/packages/${encodeURIComponent(packageId)}/download`),
     agentRuns: (workspaceId: string, passportId: string) => get(`/v1/workspaces/${encodeURIComponent(workspaceId)}/assurance/passports/${encodeURIComponent(passportId)}/agent/runs`),
-    runAgent: (workspaceId: string, passportId: string) => post(`/v1/workspaces/${encodeURIComponent(workspaceId)}/assurance/passports/${encodeURIComponent(passportId)}/agent/runs`),
+    runAgent: (workspaceId: string, passportId: string, idempotencyKey: string) => post(`/v1/workspaces/${encodeURIComponent(workspaceId)}/assurance/passports/${encodeURIComponent(passportId)}/agent/runs`, { idempotency_key: idempotencyKey }),
     createFieldTask: (workspaceId: string, passportId: string, payload: unknown) => post(`/v1/workspaces/${encodeURIComponent(workspaceId)}/assurance/passports/${encodeURIComponent(passportId)}/actions`, payload),
   },
   evidence: { list: () => get("/v1/evidence"), summary: () => get("/v1/evidence/summary"), upload: uploadEvidence, uploadMetadata: (payload: unknown) => post("/v1/evidence", payload) },

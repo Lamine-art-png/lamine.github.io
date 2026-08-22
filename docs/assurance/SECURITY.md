@@ -32,6 +32,12 @@ live in the configured R2/S3-compatible store; private object URIs are never
 returned to the browser. Production fails closed if durable storage is absent.
 The historical API-key endpoint retains inline base64 solely for compatibility.
 
+Modern package generation reserves the existing `report_export` quota only
+after entitlement enforcement. The package rows, audit row, quota commit, and
+`UsageEvent` share one transaction boundary; failed generation rolls back
+partial product rows and releases the reservation. A package idempotency key
+therefore cannot charge twice.
+
 ## Assurance Agent boundary
 
 The modern Agent writes `IntelligenceRun` records in the current Organization
@@ -42,6 +48,12 @@ and are not consumed by the triage engine. A run may classify, flag gaps or
 conflicts, recommend a task, and prepare a draft-package proposal. It cannot
 make review decisions, generate/send a package, certify, file, or execute field
 work. Each such action remains a separate authenticated human mutation.
+
+Modern Agent runs use the same canonical reservation lifecycle with the
+`agent_run` metric. The Portal keeps a stable operation key across an
+unknown-outcome retry, and the deterministic `IntelligenceRun` ID is derived
+from that logical request. A replay returns the same run and committed usage
+event.
 
 `execution_assurance.py` is not called by V2. Its legacy demo/default-tenant
 behavior remains outside the V2 trust boundary.
@@ -55,4 +67,8 @@ behavior remains outside the V2 trust boundary.
 - review reason and append-only behavior;
 - stale/conflicting evidence scoring;
 - export idempotency/versioning;
+- allowed and exhausted Agent/export quotas, idempotent no-double-charge,
+  failed-operation release/retry, and billing-usage reconciliation;
+- PostgreSQL revision-030 empty roundtrip, modern-data refusal with ownership
+  and append-only events intact, and legacy-only safe downgrade;
 - evidence-borne prompt injection instructions.

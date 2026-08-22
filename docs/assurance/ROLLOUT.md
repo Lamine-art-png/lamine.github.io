@@ -28,7 +28,14 @@ Free accounts receive readiness preview only. Professional enables readiness, ma
 
 The immediate rollback is configuration-only: set `ASSURANCE_RELEASE_STATE=disabled`. This hides Portal Assurance while preserving all data and historical API-key endpoints. The Portal’s route-local recovery keeps the rest of the app operable if the Assurance chunk fails.
 
-Code rollback is safe because the migration is additive. Do not downgrade while Portal-era rows exist unless their retention has been planned: the downgrade intentionally refuses to make historical `tenant_id` non-null when null Portal rows exist. Immutable exports and review/audit history should be retained according to customer policy.
+Code rollback can leave the additive revision-030 schema in place. A schema
+downgrade is permitted only when its read-only preflight finds no
+workspace-owned row without a legacy `tenant_id` and no revision-030
+review/audit event. Otherwise it fails before dropping a table, index, or
+column and identifies the blocking tables and row counts. Migrate or archive
+the data into a legacy-compatible form—or remove it only through an explicitly
+approved retention procedure—before retrying. Immutable exports and
+review/audit history remain subject to customer retention policy.
 
 ## No deployment in this change
 

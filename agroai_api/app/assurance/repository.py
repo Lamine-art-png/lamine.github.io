@@ -37,7 +37,7 @@ from app.assurance.rule_packs import (
 )
 from app.models.field_intelligence import FieldObservation, FieldObservationAsset
 from app.models.operational_records import DataSource, EvidenceRecord, GeneratedArtifact, IngestionJob, IntelligenceRun
-from app.services.assurance_artifacts import stage_assurance_artifact
+from app.services.assurance_artifacts import StagedAssuranceArtifact, stage_assurance_artifact
 from app.models.compliance import (
     ComplianceEvidence,
     ComplianceJurisdiction,
@@ -114,6 +114,7 @@ class AssuranceRepository:
         self.workspace_id = workspace_id
         self.actor_user_id = actor_user_id
         self.owner_id = str(organization_id or tenant_id)
+        self._pending_artifact_promotions: list[StagedAssuranceArtifact] = []
 
     @classmethod
     def for_workspace(
@@ -813,7 +814,13 @@ class AssuranceRepository:
                 counts["water_budget"] = counts.get("water_budget", 0) + len(scoped_assets["water_budgets"])
         return counts
 
-    def readiness(self, passport_id: str, *, persist: bool = True) -> dict[str, Any]:
+    def readiness(
+        self,
+        passport_id: str,
+        *,
+        persist: bool = True,
+        commit: bool = True,
+    ) -> dict[str, Any]:
         passport = self._passport(passport_id)
         scoped_assets = self._scoped_compliance_assets(passport)
         counts = self._proof_counts(passport_id, scoped_assets)
@@ -977,7 +984,8 @@ class AssuranceRepository:
                 subject_id=passport_id,
                 details={"score": readiness_score, "status": status_value, "blocking_issue_count": len(blocking_issues)},
             )
-            self.db.commit()
+            if commit:
+                self.db.commit()
         return payload
 
     def overview(self) -> dict[str, Any]:
@@ -1246,6 +1254,7 @@ class AssuranceRepository:
         payload: dict[str, Any],
         *,
         legacy_inline: bool = False,
+        commit: bool = True,
     ) -> dict[str, Any]:
         passport = self._passport(passport_id)
         package_type = str(payload.get("package_type") or "assurance_passport")
@@ -1261,7 +1270,7 @@ class AssuranceRepository:
             if existing:
                 return self._export_response(existing, include_content=legacy_inline)
 
-        snapshot = self._export_payload(passport_id)
+        snapshot = self._export_payload(passport_id, commit=commit)
         readiness = snapshot["readiness"]
         if readiness["blocking_issues"]:
             package_status = "blocked"
@@ -1377,10 +1386,20 @@ class AssuranceRepository:
             subject_id=export.id,
             details={"package_type": package_type, "package_version": package_version, "package_status": package_status},
         )
-        self.db.commit()
-        if staged_artifact is not None:
-            staged_artifact.promote()
+        if commit:
+            self.db.commit()
+            if staged_artifact is not None:
+                staged_artifact.promote()
+        elif staged_artifact is not None:
+            self._pending_artifact_promotions.append(staged_artifact)
         return self._export_response(export, include_content=legacy_inline)
+
+    def promote_staged_artifacts(self) -> None:
+        """Finalize object markers only after the catalog transaction commits."""
+
+        pending, self._pending_artifact_promotions = self._pending_artifact_promotions, []
+        for staged_artifact in pending:
+            staged_artifact.promote()
 
     def package_artifact(self, passport_id: str, package_id: str) -> tuple[AssuranceExport, GeneratedArtifact]:
         """Resolve a package and catalog artifact strictly inside Portal scope."""
@@ -1399,7 +1418,13 @@ class AssuranceRepository:
             raise KeyError("Proof package not found")
         return row, artifact
 
-    def run_agent(self, passport_id: str) -> dict[str, Any]:
+    def run_agent(
+        self,
+        passport_id: str,
+        *,
+        request_id: str | None = None,
+        commit: bool = True,
+    ) -> dict[str, Any]:
         """Run deterministic, workspace-scoped Assurance triage.
 
         Evidence text is never interpreted as instruction. The run consumes
@@ -1411,7 +1436,21 @@ class AssuranceRepository:
         if not self.organization_id or not self.workspace_id or not self.actor_user_id:
             raise ValueError("Assurance Agent requires Portal workspace scope")
         passport = self._passport(passport_id)
-        readiness = self.readiness(passport_id)
+        run_id = (
+            f"air-{hashlib.sha256(f'{self.organization_id}|{self.workspace_id}|{passport_id}|{request_id}'.encode()).hexdigest()[:24]}"
+            if request_id
+            else f"air-{uuid.uuid4().hex[:16]}"
+        )
+        existing = self.db.query(IntelligenceRun).filter(
+            IntelligenceRun.id == run_id,
+            IntelligenceRun.tenant_id == self.organization_id,
+            IntelligenceRun.workspace_id == self.workspace_id,
+            IntelligenceRun.run_type == "assurance_agent_triage",
+        ).first()
+        if existing:
+            return self._agent_run_payload(existing)
+
+        readiness = self.readiness(passport_id, commit=commit)
         mappings = self._scope_query(AssuranceEvidenceArtifact).filter_by(passport_id=passport_id).all()
         classifications = [
             {
@@ -1475,7 +1514,7 @@ class AssuranceRepository:
             ],
         }
         run = IntelligenceRun(
-            id=f"air-{uuid.uuid4().hex[:16]}",
+            id=run_id,
             tenant_id=self.organization_id,
             workspace_id=self.workspace_id,
             user_id=self.actor_user_id,
@@ -1486,6 +1525,7 @@ class AssuranceRepository:
                 "rule_pack_versions": rule_pack_versions(passport.rule_pack_ids),
                 "evidence_mapping_ids": [row.id for row in mappings],
                 "untrusted_evidence_text_consumed": False,
+                "request_id": request_id,
             },
             output_json=output,
             citations_json=[row.id for row in mappings],
@@ -1493,11 +1533,13 @@ class AssuranceRepository:
                 "source": "assurance",
                 "engine": "deterministic",
                 "human_review_authoritative": True,
+                "request_id": request_id,
             },
             freshness_json={"evaluated_at": datetime.now(timezone.utc).isoformat()},
             status="completed",
         )
         self.db.add(run)
+        self.db.flush()
         self._audit(
             passport_id,
             "assurance_agent_triage_completed",
@@ -1509,7 +1551,8 @@ class AssuranceRepository:
                 "human_review_authoritative": True,
             },
         )
-        self.db.commit()
+        if commit:
+            self.db.commit()
         return self._agent_run_payload(run)
 
     def list_agent_runs(self, passport_id: str) -> list[dict[str, Any]]:
@@ -1540,10 +1583,10 @@ class AssuranceRepository:
             "freshness": row.freshness_json or {},
         }
 
-    def _export_payload(self, passport_id: str) -> dict[str, Any]:
+    def _export_payload(self, passport_id: str, *, commit: bool = True) -> dict[str, Any]:
         passport = self._passport(passport_id)
         scoped_assets = self._scoped_compliance_assets(passport)
-        readiness = self.readiness(passport_id, persist=True)
+        readiness = self.readiness(passport_id, persist=True, commit=commit)
         return {
             "passport": _as_dict(passport),
             "farm_summary": {

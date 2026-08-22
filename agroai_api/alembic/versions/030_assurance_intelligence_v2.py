@@ -35,6 +35,11 @@ SCOPED_TABLES = (
     "assurance_exports",
 )
 
+V2_EVENT_TABLES = (
+    "assurance_review_events",
+    "assurance_audit_events",
+)
+
 
 def _inspector() -> sa.Inspector:
     return sa.inspect(op.get_bind())
@@ -109,6 +114,56 @@ def _restore_legacy_tenant_required_when_safe(table: str) -> None:
             batch.alter_column("tenant_id", existing_type=sa.String(), nullable=False)
     else:
         op.alter_column(table, "tenant_id", existing_type=sa.String(), nullable=False)
+
+
+def _row_count(table: str, *, null_column: str | None = None) -> int:
+    """Count rows through reflected identifiers rather than interpolated SQL."""
+
+    reflected = sa.Table(table, sa.MetaData(), autoload_with=op.get_bind())
+    statement = sa.select(sa.func.count()).select_from(reflected)
+    if null_column is not None:
+        statement = statement.where(reflected.c[null_column].is_(None))
+    return int(op.get_bind().execute(statement).scalar() or 0)
+
+
+def _assert_downgrade_data_safe() -> None:
+    """Refuse to erase ownership or append-only history revision 029 cannot store.
+
+    This check must remain the first operation in ``downgrade``. PostgreSQL DDL
+    is transactional, but detecting incompatible customer data before any DDL
+    also keeps the guard effective on dialects with weaker DDL rollback.
+    """
+
+    blocked: dict[str, int] = {}
+    tables = _tables()
+    for table in SCOPED_TABLES:
+        if table not in tables:
+            continue
+        columns = _columns(table)
+        if "tenant_id" not in columns:
+            continue
+        count = _row_count(table, null_column="tenant_id")
+        if count:
+            blocked[table] = count
+
+    # Revision 029 has no tables capable of preserving V2 review or audit
+    # events. Dropping populated append-only history would be silent data loss,
+    # even if the parent passport still has a legacy tenant_id.
+    for table in V2_EVENT_TABLES:
+        if table in tables:
+            count = _row_count(table)
+            if count:
+                blocked[table] = count
+
+    if blocked:
+        details = ", ".join(f"{table}={count}" for table, count in sorted(blocked.items()))
+        raise RuntimeError(
+            "Downgrade from 030_assurance_intelligence_v2 is blocked before schema changes: "
+            "the legacy revision cannot represent workspace-scoped Assurance ownership or V2 "
+            f"append-only event history ({details}). Migrate or archive these rows into a "
+            "legacy-compatible form, or remove them through an explicitly approved data-retention "
+            "procedure, before retrying the downgrade."
+        )
 
 
 def _add_scope(table: str) -> None:
@@ -240,7 +295,9 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    for table in ("assurance_audit_events", "assurance_review_events"):
+    _assert_downgrade_data_safe()
+
+    for table in V2_EVENT_TABLES:
         if table in _tables():
             op.drop_table(table)
 

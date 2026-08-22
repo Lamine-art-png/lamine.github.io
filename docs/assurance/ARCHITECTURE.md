@@ -34,7 +34,12 @@ States include `missing`, `present`, `unreviewed`, `mapped`, `reviewer_required`
 ## Reused infrastructure
 
 - Authentication: `get_current_user` and `require_workspace_access`.
-- Commercial enforcement: `commercial_control.require_feature`.
+- Commercial enforcement: `commercial_control.require_feature` plus the
+  canonical `quota` reservation ledger. Agent runs meter `agent_run`; modern
+  proof-package creation meters `report_export`. Successful idempotent replays
+  reuse one reservation/`UsageEvent`, and failed product mutations release the
+  reservation. Historical API-key exports remain compatible and unmetered by
+  this Portal-only integration.
 - Canonical evidence: `EvidenceRecord` and `DataSource`.
 - Field proof: `FieldObservation` and `FieldObservationAsset` references.
 - Field actions: durable `IngestionJob` with `job_type=field_ops_task`.

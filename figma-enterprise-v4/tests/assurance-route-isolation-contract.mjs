@@ -20,6 +20,10 @@ assert.doesNotMatch(assurance, /window\.location\.href\s*=|Navigate to="\/"/, "A
 assert.doesNotMatch(assurance, /content_base64|window\.atob/, "modern proof packages must use authenticated server-side download");
 assert.match(apiClient, /packages\/\$\{encodeURIComponent\(packageId\)\}\/download/);
 assert.match(apiClient, /agent\/runs/);
+assert.match(apiClient, /agent\/runs`, \{ idempotency_key: idempotencyKey \}/);
+assert.match(assurance, /packageRequest = useRef/);
+assert.match(assurance, /agentRequest = useRef/);
+assert.match(assurance, /idempotency_key: packageRequest\.current\.key/);
 assert.match(assurance, /Human review remains authoritative/);
 
 console.log("Assurance route isolation contract passed");

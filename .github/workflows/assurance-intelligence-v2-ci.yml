@@ -1,0 +1,73 @@
+name: Assurance Intelligence V2 CI
+
+on:
+  pull_request:
+    paths:
+      - 'agroai_api/**'
+      - 'figma-enterprise-v4/**'
+      - '.github/workflows/assurance-intelligence-v2-ci.yml'
+      - '.github/workflows/field-intelligence-ci.yml'
+  push:
+    branches: [feature/aep-assurance-intelligence-v2]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  assurance-runtime:
+    name: Assurance API, quota, trust-boundary, and artifact contracts
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: agroai_api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: agroai_api/requirements.txt
+      - run: python -m pip install -q -r requirements.txt pytest==8.3.5
+      - name: Compile Assurance runtime and migration
+        run: python -m compileall -q app alembic/versions/030_assurance_intelligence_v2.py
+      - name: Run focused Assurance V2 contracts
+        run: >-
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short
+          tests/unit/test_assurance_v2.py
+
+  assurance-migration-postgres:
+    name: PostgreSQL 030 empty, refusal, and legacy downgrade safety
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_DB: agroai_assurance_migration_ci
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        working-directory: agroai_api
+    env:
+      DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agroai_assurance_migration_ci
+      ASSURANCE_MIGRATION_TEST_DATABASE_URL: postgresql://postgres@127.0.0.1:5432/agroai_assurance_migration_ci
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: agroai_api/requirements.txt
+      - run: python -m pip install -q -r requirements.txt pytest==8.3.5
+      - name: Run revision 030 fail-closed downgrade contracts on PostgreSQL
+        run: >-
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -p no:debugging -q --tb=short
+          tests/postgres/assurance_migration_safety.py

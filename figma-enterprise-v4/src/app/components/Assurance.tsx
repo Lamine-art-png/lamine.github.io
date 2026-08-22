@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
 import { apiClient } from "../api/client";
 import { useAuth } from "../auth/AuthProvider";
@@ -124,6 +124,13 @@ function readable(value: string) {
   return value.replaceAll("_", " ");
 }
 
+function newOperationKey(prefix: string) {
+  const random = globalThis.crypto && "randomUUID" in globalThis.crypto
+    ? globalThis.crypto.randomUUID()
+    : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return `${prefix}:${random}`;
+}
+
 export function Assurance() {
   const { currentWorkspace, entitlements } = useAuth();
   const { tx } = usePortalCopy(["assurance", "shared"]);
@@ -140,6 +147,8 @@ export function Assurance() {
   const [packageType, setPackageType] = useState("assurance_passport");
   const [busy, setBusy] = useState("");
   const [message, setMessage] = useState("");
+  const packageRequest = useRef<{ scope: string; key: string } | null>(null);
+  const agentRequest = useRef<{ scope: string; key: string } | null>(null);
   const canMap = entitlementEnabled(entitlements, "assurance.evidence_mapping");
   const canReview = entitlementEnabled(entitlements, "assurance.review");
   const canExport = entitlementEnabled(entitlements, "assurance.exports");
@@ -265,16 +274,24 @@ export function Assurance() {
 
   async function createPackage() {
     if (!selectedPassportId) return;
+    const requestScope = `${workspaceId}:${selectedPassportId}:${packageType}`;
+    if (!packageRequest.current || packageRequest.current.scope !== requestScope) {
+      packageRequest.current = {
+        scope: requestScope,
+        key: newOperationKey(`assurance-package:${selectedPassportId}:${packageType}`),
+      };
+    }
     setBusy("package");
     setMessage("");
     try {
       const result = await apiClient.assurance.createPackage(workspaceId, selectedPassportId, {
         package_type: packageType,
-        idempotency_key: `${selectedPassportId}:${packageType}:${Date.now()}`,
+        idempotency_key: packageRequest.current.key,
       }) as ProofPackage;
       await savePackageBlob(result);
       setMessage(tx("Immutable proof package generated."));
       await proofPackages.refresh({ silent: true });
+      packageRequest.current = null;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : tx("Proof package could not be generated."));
     } finally {
@@ -306,12 +323,20 @@ export function Assurance() {
 
   async function runAgent() {
     if (!selectedPassportId) return;
+    const requestScope = `${workspaceId}:${selectedPassportId}`;
+    if (!agentRequest.current || agentRequest.current.scope !== requestScope) {
+      agentRequest.current = {
+        scope: requestScope,
+        key: newOperationKey(`assurance-agent:${selectedPassportId}`),
+      };
+    }
     setBusy("agent");
     setMessage("");
     try {
-      await apiClient.assurance.runAgent(workspaceId, selectedPassportId);
+      await apiClient.assurance.runAgent(workspaceId, selectedPassportId, agentRequest.current.key);
       setMessage(tx("Assurance Agent triage prepared for human review."));
       await agentRuns.refresh({ silent: true });
+      agentRequest.current = null;
     } catch (error) {
       setMessage(error instanceof Error ? error.message : tx("Assurance Agent triage could not be prepared."));
     } finally {

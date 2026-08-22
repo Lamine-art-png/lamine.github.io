@@ -10,10 +10,19 @@ from app.assurance.models import (
     AssuranceExport,
     AssuranceReviewEvent,
 )
+from app.assurance.repository import AssuranceRepository
 from app.core.security import create_access_token
 from app.models.field_intelligence import FieldObservation, FieldObservationAsset
 from app.models.operational_records import EvidenceRecord, GeneratedArtifact, IngestionJob, IntelligenceRun
-from app.models.saas import Organization, OrganizationMembership, User, Workspace
+from app.models.saas import (
+    EntitlementOverride,
+    Organization,
+    OrganizationMembership,
+    QuotaReservation,
+    UsageEvent,
+    User,
+    Workspace,
+)
 
 
 def _auth(db, *, suffix: str, plan: str = "team"):
@@ -256,6 +265,16 @@ def test_packages_are_versioned_idempotent_and_never_claim_certification(client,
         workspace_id=workspace.id,
         artifact_type="assurance_proof_package",
     ).count() == 1
+    assert db.query(UsageEvent).filter_by(
+        organization_id="org-packages",
+        metric="report_export",
+        state="committed",
+    ).count() == 2
+    assert db.query(QuotaReservation).filter_by(
+        organization_id="org-packages",
+        metric="report_export",
+        state="committed",
+    ).count() == 2
 
     downloaded = client.get(first.json()["download_url"], headers=headers)
     assert downloaded.status_code == 200, downloaded.text
@@ -442,9 +461,10 @@ def test_portal_assurance_agent_is_workspace_scoped_deterministic_and_non_author
     )
     assert mapped.status_code == 201, mapped.text
 
+    run_headers = {**headers, "Idempotency-Key": "agent-triage-one"}
     response = client.post(
         f"/v1/workspaces/{workspace.id}/assurance/passports/{passport_id}/agent/runs",
-        headers=headers,
+        headers=run_headers,
     )
     assert response.status_code == 201, response.text
     body = response.json()
@@ -459,6 +479,24 @@ def test_portal_assurance_agent_is_workspace_scoped_deterministic_and_non_author
     assert run.input_context_json["untrusted_evidence_text_consumed"] is False
     assert db.query(AssuranceExport).filter_by(passport_id=passport_id).count() == 0
     assert db.query(IngestionJob).filter_by(tenant_id=org.id, workspace_id=workspace.id).count() == 0
+    replay = client.post(
+        f"/v1/workspaces/{workspace.id}/assurance/passports/{passport_id}/agent/runs",
+        headers=run_headers,
+    )
+    assert replay.status_code == 201, replay.text
+    assert replay.json()["id"] == body["id"]
+    assert db.query(UsageEvent).filter_by(
+        organization_id=org.id,
+        workspace_id=workspace.id,
+        metric="agent_run",
+        state="committed",
+    ).count() == 1
+    assert db.query(QuotaReservation).filter_by(
+        organization_id=org.id,
+        workspace_id=workspace.id,
+        metric="agent_run",
+        state="committed",
+    ).count() == 1
 
     listed = client.get(
         f"/v1/workspaces/{workspace.id}/assurance/passports/{passport_id}/agent/runs",
@@ -466,3 +504,109 @@ def test_portal_assurance_agent_is_workspace_scoped_deterministic_and_non_author
     )
     assert listed.status_code == 200
     assert listed.json()["runs"][0]["id"] == body["id"]
+
+
+def test_assurance_quotas_exhaust_and_billing_usage_stays_truthful(client, db):
+    _, org, workspace, headers = _auth(db, suffix="quota-exhaustion")
+    db.add_all([
+        EntitlementOverride(
+            organization_id=org.id,
+            feature_key="quota.agent_run.monthly",
+            value_json={"value": 1},
+        ),
+        EntitlementOverride(
+            organization_id=org.id,
+            feature_key="quota.report_export.monthly",
+            value_json={"value": 1},
+        ),
+    ])
+    db.commit()
+    passport_id = _passport(client, headers, workspace.id)
+
+    agent_url = f"/v1/workspaces/{workspace.id}/assurance/passports/{passport_id}/agent/runs"
+    first_agent = client.post(agent_url, headers={**headers, "Idempotency-Key": "agent-allowed"})
+    blocked_agent = client.post(agent_url, headers={**headers, "Idempotency-Key": "agent-blocked"})
+    assert first_agent.status_code == 201, first_agent.text
+    assert blocked_agent.status_code == 429, blocked_agent.text
+    assert blocked_agent.json()["detail"]["code"] == "quota_exceeded"
+
+    package_url = f"/v1/workspaces/{workspace.id}/assurance/passports/{passport_id}/packages"
+    first_package = client.post(
+        package_url,
+        headers=headers,
+        json={"package_type": "assurance_passport", "idempotency_key": "package-allowed"},
+    )
+    blocked_package = client.post(
+        package_url,
+        headers=headers,
+        json={"package_type": "assurance_passport", "idempotency_key": "package-blocked"},
+    )
+    assert first_package.status_code == 201, first_package.text
+    assert blocked_package.status_code == 429, blocked_package.text
+    assert blocked_package.json()["detail"]["code"] == "quota_exceeded"
+
+    billing = client.get(f"/v1/billing/status?organization_id={org.id}", headers=headers)
+    assert billing.status_code == 200, billing.text
+    metrics = billing.json()["usage"]["metrics"]
+    assert metrics["agent_run"] == {"used": 1, "reserved": 0, "limit": 1, "remaining": 0, "percent_used": 100.0}
+    assert metrics["report_export"] == {"used": 1, "reserved": 0, "limit": 1, "remaining": 0, "percent_used": 100.0}
+    assert db.query(UsageEvent).filter_by(organization_id=org.id, state="committed").count() == 2
+
+
+def test_failed_assurance_operations_release_and_rearm_the_same_reservation(client, db, monkeypatch):
+    _, org, workspace, headers = _auth(db, suffix="quota-release")
+    passport_id = _passport(client, headers, workspace.id)
+    agent_url = f"/v1/workspaces/{workspace.id}/assurance/passports/{passport_id}/agent/runs"
+    package_url = f"/v1/workspaces/{workspace.id}/assurance/passports/{passport_id}/packages"
+
+    original_run_agent = AssuranceRepository.run_agent
+    monkeypatch.setattr(
+        AssuranceRepository,
+        "run_agent",
+        lambda self, *args, **kwargs: (_ for _ in ()).throw(RuntimeError("agent failed safely")),
+    )
+    failed_agent = client.post(agent_url, headers={**headers, "Idempotency-Key": "retry-agent"})
+    assert failed_agent.status_code == 503, failed_agent.text
+    agent_reservation = db.query(QuotaReservation).filter_by(
+        organization_id=org.id,
+        metric="agent_run",
+    ).one()
+    assert agent_reservation.state == "released"
+    assert agent_reservation.metadata_json["release_reason"] == "assurance_operation_failed"
+    assert db.query(UsageEvent).filter_by(organization_id=org.id, metric="agent_run").count() == 0
+
+    monkeypatch.setattr(AssuranceRepository, "run_agent", original_run_agent)
+    retried_agent = client.post(agent_url, headers={**headers, "Idempotency-Key": "retry-agent"})
+    assert retried_agent.status_code == 201, retried_agent.text
+    db.refresh(agent_reservation)
+    assert agent_reservation.state == "committed"
+    assert db.query(UsageEvent).filter_by(organization_id=org.id, metric="agent_run").count() == 1
+
+    original_create_package = AssuranceRepository.create_package
+    monkeypatch.setattr(
+        AssuranceRepository,
+        "create_package",
+        lambda self, *args, **kwargs: (_ for _ in ()).throw(RuntimeError("package failed safely")),
+    )
+    package_payload = {"package_type": "assurance_passport", "idempotency_key": "retry-package"}
+    failed_package = client.post(package_url, headers=headers, json=package_payload)
+    assert failed_package.status_code == 503, failed_package.text
+    package_reservation = db.query(QuotaReservation).filter_by(
+        organization_id=org.id,
+        metric="report_export",
+    ).one()
+    assert package_reservation.state == "released"
+    assert db.query(UsageEvent).filter_by(organization_id=org.id, metric="report_export").count() == 0
+
+    monkeypatch.setattr(AssuranceRepository, "create_package", original_create_package)
+    retried_package = client.post(package_url, headers=headers, json=package_payload)
+    assert retried_package.status_code == 201, retried_package.text
+    db.refresh(package_reservation)
+    assert package_reservation.state == "committed"
+    assert db.query(UsageEvent).filter_by(organization_id=org.id, metric="report_export").count() == 1
+
+    billing = client.get(f"/v1/billing/status?organization_id={org.id}", headers=headers)
+    assert billing.status_code == 200, billing.text
+    metrics = billing.json()["usage"]["metrics"]
+    assert metrics["agent_run"]["used"] == 1 and metrics["agent_run"]["reserved"] == 0
+    assert metrics["report_export"]["used"] == 1 and metrics["report_export"]["reserved"] == 0

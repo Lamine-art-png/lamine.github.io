@@ -1,7 +1,10 @@
 """Assurance Passport API routes."""
 from __future__ import annotations
 
-from typing import Any, Literal
+import hashlib
+import uuid
+from collections.abc import Callable
+from typing import Any, Literal, TypeVar
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Response, status
 from fastapi.responses import StreamingResponse
@@ -17,6 +20,7 @@ from app.services.assurance_rollout import assurance_access
 from app.services.assurance_artifacts import assurance_artifact_content
 from app.services.api_key_service import APIKeyService
 from app.services.commercial_control import require_feature
+from app.services.quota import commit_reservation, release_reservation, reserve_quota
 
 router = APIRouter(prefix="/assurance", tags=["assurance"])
 portal_router = APIRouter(tags=["assurance-portal"])
@@ -176,6 +180,10 @@ class PackageIn(BaseModel):
     idempotency_key: str | None = Field(default=None, max_length=120)
 
 
+class AgentRunIn(BaseModel):
+    idempotency_key: str | None = Field(default=None, max_length=120)
+
+
 class FieldTaskIn(BaseModel):
     requirement_key: str
     title: str | None = Field(default=None, max_length=200)
@@ -225,6 +233,82 @@ def _feature(context: PortalAssuranceContext, feature_key: str, *, allow_preview
         recommended_plan="professional" if feature_key != "assurance.review" else "team",
         allow_preview=allow_preview,
     )
+
+
+OperationResult = TypeVar("OperationResult")
+
+
+def _quota_request_id(
+    context: PortalAssuranceContext,
+    *,
+    operation: str,
+    passport_id: str,
+    client_key: str | None,
+) -> str:
+    logical_key = client_key or uuid.uuid4().hex
+    source = (
+        f"{context.organization.id}|{context.workspace.id}|{passport_id}|"
+        f"{operation}|{logical_key}"
+    )
+    return f"assurance:{operation}:{hashlib.sha256(source.encode()).hexdigest()}"
+
+
+def _metered_operation(
+    context: PortalAssuranceContext,
+    *,
+    metric: Literal["agent_run", "report_export"],
+    request_id: str,
+    passport_id: str,
+    operation: Callable[[], OperationResult],
+) -> OperationResult:
+    """Execute the product mutation and usage commit in one outer transaction.
+
+    The reservation stays outside the nested operation savepoint. A failed
+    product mutation can therefore roll back all partial rows, persist a
+    released reservation, and leave both committed usage and quota snapshots
+    truthful. Successful idempotent replays reuse the canonical reservation
+    and UsageEvent rather than charging twice.
+    """
+
+    db = context.repo.db
+    reservation = reserve_quota(
+        db,
+        context.organization,
+        metric,
+        workspace_id=str(context.workspace.id),
+        user_id=context.repo.actor_user_id,
+        request_id=request_id,
+        metadata={
+            "product": "assurance_intelligence_v2",
+            "passport_id": passport_id,
+            "operation": metric,
+        },
+    )
+    try:
+        with db.begin_nested():
+            result = operation()
+            commit_reservation(
+                db,
+                reservation,
+                event_type=metric,
+                metadata={"passport_id": passport_id},
+            )
+        db.commit()
+        return result
+    except Exception:
+        # A healthy outer transaction still contains the reservation while the
+        # nested operation has been rolled back. If the database invalidated
+        # the entire transaction, rollback removes the uncommitted reservation
+        # and therefore cannot leave capacity stranded.
+        if db.is_active:
+            try:
+                release_reservation(db, reservation, reason="assurance_operation_failed")
+                db.commit()
+            except Exception:  # noqa: BLE001 - preserve the original operation error
+                db.rollback()
+        else:
+            db.rollback()
+        raise
 
 
 @router.get("/rule-packs")
@@ -419,8 +503,26 @@ def portal_create_package(
     context: PortalAssuranceContext = Depends(_portal_context),
 ) -> dict[str, Any]:
     _feature(context, "assurance.exports")
+    request_id = _quota_request_id(
+        context,
+        operation="package",
+        passport_id=passport_id,
+        client_key=payload.idempotency_key,
+    )
     try:
-        return context.repo.create_package(passport_id, payload.model_dump())
+        result = _metered_operation(
+            context,
+            metric="report_export",
+            request_id=request_id,
+            passport_id=passport_id,
+            operation=lambda: context.repo.create_package(
+                passport_id,
+                payload.model_dump(),
+                commit=False,
+            ),
+        )
+        context.repo.promote_staged_artifacts()
+        return result
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Passport not found") from exc
     except ValueError as exc:
@@ -481,15 +583,38 @@ def portal_list_agent_runs(
 )
 def portal_run_agent(
     passport_id: str,
+    payload: AgentRunIn | None = None,
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key", max_length=120),
     context: PortalAssuranceContext = Depends(_portal_context),
 ) -> dict[str, Any]:
     _feature(context, "assurance.agent")
+    body_key = payload.idempotency_key if payload else None
+    if body_key and idempotency_key and body_key != idempotency_key:
+        raise HTTPException(status_code=422, detail="Body and Idempotency-Key header must match")
+    request_id = _quota_request_id(
+        context,
+        operation="agent",
+        passport_id=passport_id,
+        client_key=idempotency_key or body_key,
+    )
     try:
-        return context.repo.run_agent(passport_id)
+        return _metered_operation(
+            context,
+            metric="agent_run",
+            request_id=request_id,
+            passport_id=passport_id,
+            operation=lambda: context.repo.run_agent(
+                passport_id,
+                request_id=request_id,
+                commit=False,
+            ),
+        )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Passport not found") from exc
     except ValueError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
 
 
 @portal_router.post("/workspaces/{workspace_id}/assurance/passports/{passport_id}/actions", status_code=201)

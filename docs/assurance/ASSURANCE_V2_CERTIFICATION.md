@@ -26,6 +26,8 @@ request before merge eligibility.
 | Human authority over Agent | COMPLETE | Agent runs cannot accept/reject mappings, generate/send packages, complete review, certify, or execute physical work; proposed actions require a separate human mutation. |
 | Prompt-injection isolation | COMPLETE | System prompt and deterministic Agent both treat uploaded evidence as untrusted data; the Agent does not ingest evidence text as instructions. |
 | Commercial entitlements | COMPLETE | Readiness, mapping, review, export, and agent capabilities are separately backend-enforced through `commercial_control`. |
+| Commercial usage quotas | COMPLETE | Portal Agent runs reserve/commit `agent_run`; modern proof packages reserve/commit `report_export`. Canonical quota reservations carry Organization, Workspace, user, and stable logical request IDs; failure releases and idempotent replay produces one `UsageEvent`. Historical API-key export remains compatible. |
+| Fail-closed migration downgrade | COMPLETE | Revision 030 performs a read-only preflight before DDL. Workspace-scoped rows with no legacy tenant and any V2 review/audit history block downgrade with a recovery message; empty and legacy-only PostgreSQL roundtrips remain supported. |
 | Localization | COMPLETE | Assurance owns a route-scoped dynamic catalog authorized by the edge canonical-source contract. |
 | Assurance-specific route recovery | COMPLETE | Lazy child route has its own error element and cannot replace or redirect the portal shell. |
 | Preserve Field Intelligence and existing AEP routes | COMPLETE | Changes are additive to the existing router; Field Intelligence ownership and media delivery remain unchanged. |
