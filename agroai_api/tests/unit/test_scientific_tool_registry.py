@@ -93,6 +93,32 @@ def test_freshness_requires_caller_supplied_threshold():
     assert fresh.output == {"age_hours": 12.0, "fresh": True}
 
 
+def test_freshness_rejects_material_future_timestamp():
+    result = get_scientific_tool_registry().run(
+        "evidence.freshness.v1",
+        {
+            "observed_at": "2026-08-21T13:00:00Z",
+            "evaluated_at": "2026-08-21T12:00:00Z",
+            "max_age_hours": 24.0,
+        },
+    )
+    assert result.status == "INVALID_INPUT"
+    assert result.invalid_inputs == ["observed_at_future"]
+
+
+def test_small_clock_skew_is_not_treated_as_freshness_age():
+    result = get_scientific_tool_registry().run(
+        "evidence.freshness.v1",
+        {
+            "observed_at": "2026-08-21T12:03:00Z",
+            "evaluated_at": "2026-08-21T12:00:00Z",
+            "max_age_hours": 24.0,
+        },
+    )
+    assert result.status == "COMPUTED"
+    assert result.output == {"age_hours": 0.0, "fresh": True}
+
+
 def test_sensor_plausibility_uses_explicit_bounds_only():
     registry = get_scientific_tool_registry()
     missing = registry.run("sensor.plausibility.v1", {"value": 25.0})

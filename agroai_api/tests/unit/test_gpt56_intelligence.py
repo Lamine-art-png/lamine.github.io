@@ -24,9 +24,11 @@ def _packet():
                 classification="observed",
                 title="Flow meter",
                 statement="Measured flow was 120 gpm.",
+                field_id="field-1",
                 freshness_score=1.0,
                 quality_score=0.95,
                 confidence_score=0.92,
+                provenance={"operational_eligible": True},
             )
         ],
         grounding_confidence=0.82,
@@ -54,7 +56,6 @@ def test_model_routing_uses_luna_terra_sol_by_workload(monkeypatch):
     monkeypatch.delenv("AGROAI_GPT56_SOL_MODEL", raising=False)
     monkeypatch.delenv("AGROAI_GPT56_TERRA_MODEL", raising=False)
     monkeypatch.delenv("AGROAI_GPT56_LUNA_MODEL", raising=False)
-
     assert select_model("fast", "Summarize the latest field notes") == ("gpt-5.6-luna", "low")
     assert select_model("reasoning", "Compare these field records") == ("gpt-5.6-terra", "medium")
     assert select_model("deep", "Analyze the operation") == ("gpt-5.6-sol", "high")
@@ -68,9 +69,7 @@ def test_invalid_evidence_ids_are_removed_from_facts():
             GroundedFact(claim="Invented source", evidence_ids=["not-real"]),
         ]
     )
-
     validated = validate_decision(decision, _packet(), question="What is the measured flow?")
-
     assert len(validated.facts) == 1
     assert validated.facts[0].evidence_ids == ["ev-1"]
 
@@ -89,10 +88,66 @@ def test_operational_action_is_forced_to_human_approval():
             )
         ]
     )
-
     validated = validate_decision(decision, _packet(), question="Review irrigation readiness")
-
     assert validated.recommendations[0].requires_human_approval is True
+    assert validated.recommendations[0].action_kind == "physical_execution"
+
+
+def test_start_zone_paraphrase_cannot_bypass_approval_policy():
+    decision = _decision(
+        recommendations=[
+            Recommendation(
+                action="Start Zone 4",
+                priority="now",
+                rationale="The operator requested a next step.",
+                evidence_ids=["ev-1"],
+                requires_human_approval=False,
+                expires_when="When telemetry changes.",
+                verification="Confirm controller state after execution.",
+            )
+        ]
+    )
+    validated = validate_decision(decision, _packet(), question="What should we do next?")
+    assert validated.recommendations[0].action_kind == "physical_execution"
+    assert validated.recommendations[0].requires_human_approval is True
+
+
+def test_unknown_action_fails_to_operational_approval_gate():
+    decision = _decision(
+        recommendations=[
+            Recommendation(
+                action="Optimize Block A now",
+                priority="next",
+                rationale="Review available evidence before changing operations.",
+                evidence_ids=["ev-1"],
+                requires_human_approval=False,
+                expires_when="When evidence changes.",
+                verification="Confirm the intended operation before execution.",
+            )
+        ]
+    )
+    validated = validate_decision(decision, _packet(), question="What should we do next?")
+    assert validated.recommendations[0].action_kind == "operational_recommendation"
+    assert validated.recommendations[0].requires_human_approval is True
+
+
+def test_inspection_action_remains_side_effect_free():
+    decision = _decision(
+        recommendations=[
+            Recommendation(
+                action="Inspect valve 2 for obstruction",
+                priority="next",
+                rationale="Inspection can collect evidence without changing controller state.",
+                evidence_ids=["ev-1"],
+                requires_human_approval=True,
+                expires_when="When the inspection is complete.",
+                verification="Record the inspection result.",
+            )
+        ]
+    )
+    validated = validate_decision(decision, _packet(), question="What should we inspect?")
+    assert validated.recommendations[0].action_kind == "inspection"
+    assert validated.recommendations[0].requires_human_approval is False
 
 
 def test_unsupported_numeric_recommendation_is_dropped():
@@ -109,9 +164,7 @@ def test_unsupported_numeric_recommendation_is_dropped():
             )
         ]
     )
-
     validated = validate_decision(decision, _packet(), question="What should I do?")
-
     assert validated.recommendations == []
 
 
@@ -129,12 +182,10 @@ def test_observed_flow_number_cannot_be_reinterpreted_as_runtime():
             )
         ]
     )
-
     assert validate_decision(decision, _packet(), question="Review irrigation").recommendations == []
 
 
 def test_model_confidence_cannot_exceed_grounding_confidence():
     validated = validate_decision(_decision(), _packet(), question="What is the measured flow?")
-
     assert validated.confidence.score == 0.82
     assert validated.confidence.level == "high"

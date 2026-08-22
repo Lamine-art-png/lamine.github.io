@@ -54,9 +54,40 @@ def _normalize(body: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]
     return merged
 
 
+def _grounding_failure_response(payload: BrainRunRequest, bundle: dict[str, Any], task_profile: str) -> dict[str, Any]:
+    """Fail closed when the evidence safety boundary cannot be constructed."""
+    language = resolve_language(payload.preferred_language, payload.question).response_code
+    message = (
+        "AGRO-AI cannot produce an operational conclusion because the evidence verification layer is unavailable. "
+        "No recommendation or operating number was generated."
+    )
+    return {
+        "status": "unavailable",
+        "task": payload.task,
+        "model_status": "unavailable",
+        "result": {
+            "summary": message,
+            "answer": message,
+            "error": "intelligence_grounding_unavailable",
+            "recommendations": [],
+            "next_actions": [],
+            "risk_flags": ["grounding_verification_unavailable"],
+            "customer_safe": True,
+        },
+        "missing_data": ["Evidence verification layer unavailable"],
+        "confidence": "low",
+        "citations": [],
+        "sample_mode": bool(bundle.get("sample_mode")),
+        "preferred_language": payload.preferred_language,
+        "response_language": language,
+        "task_profile": task_profile,
+        "intelligence_profile": (bundle.get("commercial_intelligence") or {}).get("profile", "essential"),
+        "reasoning_contract": "evidence_graph_v1_fail_closed",
+    }
+
+
 @router.get("/runtime/ai-router-status")
 async def ai_router_status() -> dict[str, Any]:
-    """Public, secret-free inference-lane diagnostics for production verification."""
     status = ModelRouter().status()
     return {
         "status": "ok",
@@ -79,7 +110,7 @@ async def resilient_intelligence_run(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """Production route: grounded GPT-5.6 first, then independent recovery lanes."""
+    """Production route: mandatory grounding, then GPT-5.6 or sanitized recovery lane."""
     org = db.query(Organization).filter(Organization.id == tenant_id).first()
     if org is None:
         raise ValueError("Organization not found")
@@ -112,10 +143,20 @@ async def resilient_intelligence_run(
         user_id=user.id,
         metadata={"task": payload.task, "route": "resilient_runtime"},
     )
+
+    # Grounding is a mandatory safety boundary. A failure here must never route to
+    # an unsanitized model fallback.
+    try:
+        packet = build_intelligence_grounding(context, field_id=payload.field_id)
+        packet = enrich_grounding_packet(packet, context)
+    except Exception as exc:  # noqa: BLE001
+        logger.error("intelligence_grounding_failed error=%s", exc.__class__.__name__)
+        release_reservation(db, reservation, reason="intelligence_grounding_failed")
+        db.commit()
+        return _grounding_failure_response(payload, bundle, task_profile)
+
     try:
         try:
-            packet = build_intelligence_grounding(context, field_id=payload.field_id)
-            packet = enrich_grounding_packet(packet, context)
             gpt56 = await run_gpt56_grounded_intelligence(
                 question=payload.question,
                 task=payload.task,
@@ -124,17 +165,12 @@ async def resilient_intelligence_run(
                 conversation_messages=payload.history,
                 preferred_language=payload.preferred_language,
             )
-        except Exception as exc:  # noqa: BLE001 - existing hybrid runtime is the fail-safe lane
-            logger.warning("gpt56_grounded preflight_failed error=%s", exc.__class__.__name__)
-            packet = None
+        except Exception as exc:  # noqa: BLE001 - model failure may use sanitized recovery
+            logger.warning("gpt56_grounded inference_failed error=%s", exc.__class__.__name__)
             gpt56 = None
 
-        if gpt56 is not None and packet is not None:
-            gpt56.decision = postvalidate_decision(
-                gpt56.decision,
-                packet,
-                question=payload.question,
-            )
+        if gpt56 is not None:
+            gpt56.decision = postvalidate_decision(gpt56.decision, packet, question=payload.question)
             response_language = resolve_language(payload.preferred_language, payload.question).response_code
             if language_matches_target(gpt56.decision.answer, response_language):
                 body = gpt56.decision.portal_body(packet)
@@ -190,6 +226,7 @@ async def resilient_intelligence_run(
                 "provider_internal": result.provider,
                 "model_internal": result.model,
                 "route": "resilient_runtime",
+                "grounding_schema": packet.schema_version,
             },
         )
         db.commit()
@@ -218,10 +255,7 @@ async def resilient_intelligence_run(
             "intelligence_profile": commercial.get("profile", "essential"),
         }
 
-    answer = result.content.strip()
-    removed_numbers: set[str] = set()
-    if packet is not None:
-        answer, removed_numbers = sanitize_customer_answer(answer, packet, question=payload.question)
+    answer, removed_numbers = sanitize_customer_answer(result.content.strip(), packet, question=payload.question)
     body = local_plain_body(answer, context, question=payload.question)
     if removed_numbers:
         body["risk_flags"] = ["unsupported_numeric_content_removed"]
@@ -242,6 +276,7 @@ async def resilient_intelligence_run(
         "response_language": result.response_language,
         "task_profile": result.profile,
         "intelligence_profile": commercial.get("profile", "essential"),
+        "reasoning_contract": "evidence_graph_v1_sanitized_fallback",
     }
 
 
@@ -274,7 +309,7 @@ async def chat(payload: ChatRequest, tenant_id: str = Depends(require_current_te
                 body["answer"] = summary
                 body["risk_flags"] = list(body.get("risk_flags") or []) + ["unsupported_numeric_content_removed"]
                 body["confidence"] = "low"
-        except Exception as exc:  # noqa: BLE001 - fail back to deterministic body on guard failure
+        except Exception as exc:  # noqa: BLE001 - deterministic fallback is the safe lane
             logger.warning("ai_chat numeric_guard_failed error=%s", exc.__class__.__name__)
             body = fallback
     output = str(body.get("summary") or body.get("answer") or fallback["summary"])

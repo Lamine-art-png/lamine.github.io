@@ -160,9 +160,7 @@ def test_verified_recent_event_applies_exact_uncapped_credit():
     }
     decision = _run(context)["decision"]
     assert decision["recent_irrigation_credit_status"] == "verified_recent"
-    assert decision["net_irrigation_depth_mm"] == pytest.approx(
-        baseline["net_irrigation_depth_mm"] - 4.0
-    )
+    assert decision["net_irrigation_depth_mm"] == pytest.approx(baseline["net_irrigation_depth_mm"] - 4.0)
 
 
 def test_recent_credit_without_validity_is_not_applied():
@@ -213,7 +211,7 @@ def test_explicit_net_requirement_bypasses_no_missing_water_balance_inputs():
     assert decision["decision_status"] == "ready_for_human_approval"
 
 
-def test_manual_override_is_subject_to_same_validation_gates():
+def test_manual_override_flow_is_analytical_only_and_cannot_create_trusted_flow_evidence():
     base = _complete_context()
     del base["flow_evidence"]
     override = {
@@ -222,12 +220,71 @@ def test_manual_override_is_subject_to_same_validation_gates():
             "flow_provenance": "flow_meter",
             "timestamp": "2026-05-15T06:00:00Z",
             "block": "Block A North",
+            "valid_until": "2026-05-15T18:00:00Z",
+            "pressure_state": "stable",
+            "calibration_status": "current",
         }
     }
     result = _run(base, overrides=override)
-    assert result["decision"]["flow_validation_status"] == "partial"
+    assert result["decision"]["flow_validation_status"] == "unavailable"
     assert result["decision"]["duration_minutes"] is None
     assert result["manual_overrides_used"] == ["sensor_context"]
+
+
+def test_trust_sensitive_top_level_overrides_are_ignored():
+    base = _complete_context()
+    del base["flow_evidence"]
+    override = {
+        "flow_evidence": {
+            "value_m3h": 99,
+            "provenance": "flow_meter",
+            "block": "Block A North",
+            "timestamp": "2026-05-15T06:00:00Z",
+            "valid_until": "2026-05-15T18:00:00Z",
+            "pressure_state": "stable",
+            "calibration_status": "current",
+        },
+        "validated_flow_m3h": 99,
+        "flow_validation_status": "validated",
+    }
+    result = _run(base, overrides=override)
+    assert result["decision"]["flow_validation_status"] == "unavailable"
+    assert result["decision"]["duration_minutes"] is None
+    assert set(result["ignored_trust_sensitive_overrides"]) == {
+        "flow_evidence", "validated_flow_m3h", "flow_validation_status"
+    }
+
+
+def test_future_flow_timestamp_is_inconsistent_and_withholds_duration():
+    context = _complete_context()
+    context["flow_evidence"]["timestamp"] = "2026-05-15T13:00:00Z"
+    context["flow_evidence"]["valid_until"] = "2026-05-15T18:00:00Z"
+    decision = _run(context)["decision"]
+    assert decision["flow_validation_status"] == "inconsistent"
+    assert decision["duration_minutes"] is None
+
+
+def test_future_recent_irrigation_timestamp_is_not_credited():
+    context = _complete_context()
+    context["recent_irrigation_evidence"] = {
+        "depth_mm": 4.0,
+        "block": "Block A North",
+        "timestamp": "2026-05-15T13:00:00Z",
+        "valid_until": "2026-05-15T18:00:00Z",
+        "confirmation": "controller_confirmed",
+    }
+    decision = _run(context)["decision"]
+    assert decision["recent_irrigation_credit_status"] == "partial"
+    assert decision["net_irrigation_depth_mm"] is None
+
+
+def test_valid_until_before_measurement_time_is_inconsistent():
+    context = _complete_context()
+    context["flow_evidence"]["timestamp"] = "2026-05-15T06:00:00Z"
+    context["flow_evidence"]["valid_until"] = "2026-05-15T05:00:00Z"
+    decision = _run(context)["decision"]
+    assert decision["flow_validation_status"] == "inconsistent"
+    assert decision["duration_minutes"] is None
 
 
 def test_negative_flow_is_rejected_without_clamping():

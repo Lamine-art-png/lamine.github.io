@@ -1,8 +1,9 @@
-"""Commercial intelligence policy resolution for AGRO-AI runtime execution."""
+"""Commercial and deterministic safety policy resolution for AGRO-AI intelligence."""
 from __future__ import annotations
 
+import re
 from dataclasses import asdict, dataclass
-from typing import Any
+from typing import Any, Literal
 
 from sqlalchemy.orm import Session
 
@@ -182,3 +183,90 @@ def resolve_intelligence_policy(
         task_profile=task_profile,
         **base,
     )
+
+
+# ---------------------------------------------------------------------------
+# Deterministic action safety policy
+# ---------------------------------------------------------------------------
+
+ActionKind = Literal[
+    "informational",
+    "inspection",
+    "data_collection",
+    "operational_recommendation",
+    "physical_execution",
+    "chemical_application",
+    "external_submission",
+]
+
+_CHEMICAL_TERMS = (
+    "pesticide", "herbicide", "fungicide", "insecticide", "chemical",
+    "spray", "fertilizer", "fertiliser", "nutrient application", "dose", "dosage",
+)
+_EXTERNAL_TERMS = (
+    "submit", "file with", "send externally", "publish", "transmit to", "report to regulator",
+)
+_PHYSICAL_PATTERNS = (
+    r"\birrigat(?:e|ion|ing)?\b",
+    r"\bwater\s+(?:the\s+)?(?:field|block|zone|crop|row|orchard|vineyard)\b",
+    r"\b(?:start|stop|run|activate|deactivate|open|close)\b.{0,40}\b(?:zone|valve|pump|controller|irrigation|motor|equipment)\b",
+    r"\b(?:zone|valve|pump|controller|irrigation|motor|equipment)\b.{0,40}\b(?:start|stop|run|activate|deactivate|open|close)\b",
+)
+_INFORMATIONAL_PREFIXES = (
+    "summarize ", "summarise ", "explain ", "describe ", "compare ", "document ",
+    "list ", "show ", "review the report", "review the evidence", "review the data",
+)
+_INSPECTION_PREFIXES = (
+    "inspect ", "check ", "visually inspect ", "review the field", "review the equipment",
+)
+_DATA_COLLECTION_PREFIXES = (
+    "measure ", "collect ", "capture ", "sample ", "record ", "verify ", "confirm ",
+    "re-read ", "reread ", "obtain ", "request a reading", "monitor ",
+)
+
+
+def _normalize_action_text(text: str) -> str:
+    return re.sub(r"\s+", " ", str(text or "")).strip().casefold()
+
+
+def classify_action_kind(action: str) -> ActionKind:
+    """Conservatively classify actions without trusting model-supplied labels.
+
+    Strong consequential patterns always win. Only explicit, narrow allowlists
+    are side-effect free. Unknown phrasing defaults to an operational
+    recommendation so paraphrasing cannot bypass approval.
+    """
+    text = _normalize_action_text(action)
+    if not text:
+        return "operational_recommendation"
+    if any(term in text for term in _CHEMICAL_TERMS):
+        return "chemical_application"
+    if any(term in text for term in _EXTERNAL_TERMS):
+        return "external_submission"
+    if any(re.search(pattern, text, flags=re.IGNORECASE | re.DOTALL) for pattern in _PHYSICAL_PATTERNS):
+        return "physical_execution"
+    if text.startswith(_DATA_COLLECTION_PREFIXES):
+        return "data_collection"
+    if text.startswith(_INSPECTION_PREFIXES):
+        return "inspection"
+    if text.startswith(_INFORMATIONAL_PREFIXES):
+        return "informational"
+    return "operational_recommendation"
+
+
+def action_requires_human_approval(kind: ActionKind) -> bool:
+    return kind in {
+        "operational_recommendation",
+        "physical_execution",
+        "chemical_application",
+        "external_submission",
+    }
+
+
+def contains_consequential_action(text: str) -> bool:
+    normalized = _normalize_action_text(text)
+    if not normalized:
+        return False
+    if any(term in normalized for term in _CHEMICAL_TERMS + _EXTERNAL_TERMS):
+        return True
+    return any(re.search(pattern, normalized, flags=re.IGNORECASE | re.DOTALL) for pattern in _PHYSICAL_PATTERNS)

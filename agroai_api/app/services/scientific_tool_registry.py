@@ -1,20 +1,21 @@
 """Versioned deterministic scientific tools for AGRO-AI.
 
-The registry is intentionally small and fail closed.  A tool either computes
+The registry is intentionally small and fail closed. A tool either computes
 from explicit inputs, reports the exact missing requirements, or rejects the
-input.  It never fills an agronomic parameter from model knowledge or a hidden
+input. It never fills an agronomic parameter from model knowledge or a hidden
 default.
 """
 from __future__ import annotations
 
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Callable, Literal
 
 from pydantic import BaseModel, Field
 
 
 ToolStatus = Literal["COMPUTED", "NOT_COMPUTABLE", "INVALID_INPUT"]
+DEFAULT_CLOCK_SKEW_TOLERANCE = timedelta(minutes=5)
 
 
 class ScientificToolSpec(BaseModel):
@@ -261,6 +262,8 @@ def _freshness(inputs: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any]]:
     observed = _parse_time(inputs.get("observed_at"), "observed_at")
     evaluated = _parse_time(inputs.get("evaluated_at"), "evaluated_at")
     max_age = _number(inputs, "max_age_hours")
+    if observed > evaluated + DEFAULT_CLOCK_SKEW_TOLERANCE:
+        raise ValueError("observed_at_future")
     age = max(0.0, (evaluated - observed).total_seconds() / 3600.0)
     return {"age_hours": age, "fresh": age <= max_age}, {
         "observed_at": observed.isoformat(),
@@ -374,11 +377,14 @@ _register(
     description="Evaluate source age against an explicit caller-supplied freshness requirement.",
     required_inputs=["observed_at", "evaluated_at", "max_age_hours"],
     expected_units={"max_age_hours": "h"},
-    valid_ranges={"observed_at": "valid timestamp", "evaluated_at": "valid timestamp", "max_age_hours": ">= 0"},
+    valid_ranges={"observed_at": "valid timestamp not materially in the future", "evaluated_at": "valid timestamp", "max_age_hours": ">= 0"},
     output_schema={"age_hours": "number", "fresh": "boolean"},
-    calculation_method="Age = evaluation time − observation time; compare to supplied maximum age.",
+    calculation_method="Age = evaluation time − observation time; reject material future timestamps; compare to supplied maximum age.",
     runner=_freshness,
-    limitations=["This tool does not invent a domain-specific freshness threshold."],
+    limitations=[
+        "This tool does not invent a domain-specific freshness threshold.",
+        "A five-minute clock-skew tolerance is an ingestion-safety allowance, not evidence freshness permission.",
+    ],
 )
 _register(
     tool_id="sensor.plausibility.v1",
