@@ -101,12 +101,24 @@ class PortalRuntimeBoundary extends Component<{ children: ReactNode }, PortalRun
 }
 
 export default function App() {
-  useEffect(() => { applyLocale(); }, []);
+  useEffect(() => {
+    applyLocale();
+    // Establish the API connection before the first authenticated request. This
+    // is best-effort and only changes connection setup latency, never auth state.
+    const apiOrigin = "https://api.agroai-pilot.com";
+    if (!document.head.querySelector(`link[rel="preconnect"][href="${apiOrigin}"]`)) {
+      const link = document.createElement("link");
+      link.rel = "preconnect";
+      link.href = apiOrigin;
+      link.crossOrigin = "anonymous";
+      document.head.appendChild(link);
+    }
+  }, []);
   return <PortalRuntimeBoundary><AuthProvider><AuthenticatedApp /></AuthProvider></PortalRuntimeBoundary>;
 }
 
 function AuthenticatedApp() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { token, isAuthenticated, isLoading } = useAuth();
   const { locale, catalogLoading } = useLocale();
   const [router, setRouter] = useState<any>(null);
   const [routerError, setRouterError] = useState("");
@@ -129,7 +141,11 @@ function AuthenticatedApp() {
   }, [catalogLoading, locale]);
 
   useEffect(() => {
-    if (!isAuthenticated) { setRouter(null); setRouterError(""); return; }
+    // A stored/new token is enough to start downloading the authenticated route
+    // bundle. Session validation continues in AuthProvider and remains the gate
+    // for rendering. This overlaps JS loading with /auth/me bootstrap instead of
+    // paying those costs serially after every login or refresh.
+    if (!token) { setRouter(null); setRouterError(""); return; }
     let mounted = true;
     import("./routes")
       .then((module) => { if (mounted) { setRouter(() => module.router); setRouterError(""); } })
@@ -141,7 +157,7 @@ function AuthenticatedApp() {
         }
       });
     return () => { mounted = false; };
-  }, [isAuthenticated]);
+  }, [token]);
 
   const path = window.location.pathname;
   if (isLoading) return <BrandedPortalLoader />;
