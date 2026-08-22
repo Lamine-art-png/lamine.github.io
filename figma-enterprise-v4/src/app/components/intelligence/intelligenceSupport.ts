@@ -96,6 +96,36 @@ export function normalizeAssistantResponse(response: unknown): string {
   const result = payload.result && typeof payload.result === "object" ? payload.result as AnyRecord : {};
   return safeText(result.answer || result.summary || payload.answer || payload.summary || payload.content || result.executive_summary, "");
 }
+export function decisionDetailsFromResponse(response: unknown): AnyRecord | null {
+  const payload = response && typeof response === "object" ? response as AnyRecord : {};
+  const result = payload.result && typeof payload.result === "object" ? payload.result as AnyRecord : {};
+  const graph = result.intelligence_graph && typeof result.intelligence_graph === "object" ? result.intelligence_graph : null;
+  const hasStructuredReasoning = Boolean(
+    graph
+    || asArray(result.evidence_used).length
+    || asArray(result.derived_findings).length
+    || asArray(result.hypotheses).length
+    || asArray(result.missing_evidence).length
+    || asArray(result.conflicts).length
+    || asArray(result.verification_plan).length
+  );
+  if (!hasStructuredReasoning) return null;
+  return {
+    evidence_used: asArray(result.evidence_used),
+    derived_findings: asArray(result.derived_findings),
+    hypotheses: asArray(result.hypotheses),
+    missing_evidence: asArray(result.missing_evidence),
+    conflicts: asArray(result.conflicts),
+    recommendations: asArray(result.recommendations),
+    verification_plan: asArray(result.verification_plan),
+    risk_flags: asArray(result.risk_flags),
+    confidence: safeText(result.confidence || payload.confidence, "low"),
+    confidence_score: typeof result.confidence_score === "number" ? result.confidence_score : undefined,
+    confidence_drivers: asArray(result.confidence_drivers),
+    intelligence_graph: graph,
+    reasoning_contract: payload.reasoning_contract,
+  };
+}
 export function isLanguageGenerationFailed(response: AnyRecord) {
   const status = String(response.status || response.model_status || response.result?.status || response.result?.error || "");
   return status.includes("language_generation_failed");
@@ -130,6 +160,7 @@ export function mapServerMessage(row: AnyRecord): AnyRecord {
     uploaded_evidence: row.uploaded_evidence || metadata.uploaded_evidence || [],
     artifact: row.artifact || metadata.artifact || null,
     agentic_actions: row.agentic_actions || metadata.agentic_actions || [],
+    decision_details: row.decision_details || metadata.decision_details || null,
     model_status: row.model_status || metadata.model_status,
   };
 }

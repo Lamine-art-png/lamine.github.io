@@ -1,93 +1,66 @@
-# Agronomic Decision Kernel v0.2
+# Agronomic Decision Kernel v0.3 (v0.2 compatibility name)
 
-The v0.2 kernel is a deterministic, no-fabrication decision layer for Water
-Command Center V2. It is designed for preview evaluation and technical diligence:
-it computes conservative irrigation decisions when enough evidence exists and
-withholds precision when evidence is missing.
+`AgronomicDecisionKernelV02` remains the import-compatible class name, but the
+production implementation is the fail-closed `agronomic_decision_kernel_v0.3`.
+The legacy v0.2 heuristic defaults are isolated and cannot authorize an
+operational recommendation.
 
-## Inputs
+## Safety contract
 
-The kernel accepts ETo, crop type, growth stage, crop coefficient, precipitation
-forecast, effective rainfall, soil type, root-zone depth, soil-moisture deficit,
-management allowable depletion, recent irrigation, irrigation method, irrigation
-efficiency, field area, controller capacity, flow rate, pressure state, operating
-window, field observations, confidence state, and missing-data state.
+The kernel never infers crop coefficient, effective rainfall, root-zone
+replenishment, irrigation efficiency, flow validity, operating window, or
+recent applied-water credit from crop/soil/method labels. Missing or invalid
+inputs produce `insufficient_data` or `inspect`; unsupported values remain
+`null` and are never clamped into plausible-looking numbers.
 
-## Formulas
+An operational irrigation proposal requires either:
 
-- crop demand = ETo * crop coefficient
-- net irrigation need = crop demand - effective rainfall + validated root-zone
-  replenishment need - recent verified irrigation credit
-- gross irrigation need = net irrigation need / irrigation efficiency
-- required volume = gross irrigation need * field area
-- duration = required volume / validated system flow
+- an explicit net irrigation requirement; or
+- matching ETo, supplied Kc, effective rainfall, root-zone replenishment, and a
+  verified recent-applied-water status.
 
-Duration is only emitted when validated flow or controller-capacity evidence is
-present. Otherwise the response includes the duration limitation and returns an
-inspect or insufficient-data action.
+It also requires crop and method identity, supplied irrigation efficiency,
+field area, source-validated flow, and a customer-approved operating window.
+The resulting status is `ready_for_human_approval`, never autonomous execution.
 
-## Actions
+## Versioned calculations
 
-- `irrigate`
-- `wait`
-- `inspect`
-- `insufficient_data`
+All calculations run through `ScientificToolRegistry` and return their tool
+version, normalized inputs, missing requirements, assumptions, limitations,
+and output:
 
-When evidence is insufficient, user-facing recommendations are:
+- `fao56.etc.single_kc.v1`: `ETc = Kc × ETo`
+- `irrigation.gross_requirement.v1`: `gross = net ÷ efficiency`
+- `irrigation.volume_from_depth.v1`: `volume = depth × area × 10`
+- `irrigation.duration_from_validated_flow.v1`: `duration = volume ÷ flow`
 
-- `Inspect and collect required evidence`
-- `Decision pending source review`
+Unit conversion, measured volume/depth, evidence freshness, and sensor
+plausibility are also registered as deterministic tools. Freshness and
+plausibility thresholds must be supplied by source calibration or policy; the
+tools contain no hidden domain thresholds.
 
-## Calibration Pack
+## Evidence validation
 
-Calibration defaults are versioned as `agroai_calibration_pack_v0.2`.
+Flow evidence must identify the matching block, trusted controller/flow-meter
+provenance, timestamp, explicit validity period or caller-supplied maximum age,
+stable pressure, and current calibration status. Observed variance is accepted
+only against an explicit source-specific limit.
 
-Crops: wine grapes, almonds, citrus, vegetables, generic specialty crop.
+Recent irrigation credit requires matching block, controller/flow-meter
+confirmation, timestamp, and explicit validity/freshness. It is applied exactly
+as verified, with no silent percentage or depth cap.
 
-Soils: sand, loam, clay loam, clay, unknown.
+## Output and verification
 
-Irrigation methods: drip, micro-sprinkler, sprinkler, flood, unknown.
+The response contains action/status, justified values or `null`, exact missing
+inputs, validation warnings, tool traces, and limitations. A proposed action
+requires approval preservation, controller/meter/operator execution evidence,
+as-applied reconciliation, and a post-action field or sensor observation before
+the outcome can be marked verified.
 
-The response returns:
+## Legacy isolation
 
-- `calibration_pack_version`
-- `calibration_status`
-- `assumptions`
-- `missing_inputs`
-
-Calibration status values are:
-
-- `calibrated_context`
-- `partial_calibration`
-- `assumptions_required`
-- `insufficient_context`
-
-Defaults are never presented as farm-specific calibration.
-
-## Outputs
-
-The kernel returns action, net irrigation depth, gross irrigation depth,
-estimated volume, duration only when justified, timing window, confidence,
-evidence completeness, key drivers, assumptions, limitations, missing inputs,
-verification requirements, calculation trace, calibration status,
-calibration-pack version, and recommendation origin.
-
-## Orchestration
-
-`IrrigationDecisionOrchestrator` maps uploaded artifacts and live provider
-context into the kernel. It first normalizes context through
-`IntelligenceEngineV1`, merges safe explicit manual overrides, evaluates data
-quality, then calls the kernel.
-
-Uploaded analysis uses parsed controller, weather, soil, flow, crop, field-note,
-earth-observation, and water-cost records. Live analysis uses provider reads from
-`LiveFieldContextAssembler` and stays degraded when provider credentials, target
-selection, crop profile, soil profile, field area, or flow evidence are missing.
-
-## Known Limitations
-
-- v0.2 defaults are conservative preview defaults, not farm-specific calibration.
-- Flow-rate validation is required for precise duration.
-- Durable tenant evidence persistence is future work.
-- Live provider telemetry depends on server-side credential provisioning and
-  target selection.
+`calibration_packs.py` is retained only for backward-compatible preview and
+research display. It declares `OPERATIONAL_USE_ALLOWED = False`; the production
+kernel does not import it. Its historical crop, soil, and method constants must
+not be presented as customer calibration.

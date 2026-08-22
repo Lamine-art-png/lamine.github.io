@@ -1,10 +1,23 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 from app.services.agronomic_decision_kernel import AgronomicDecisionInput, AgronomicDecisionKernelV02
 from app.services.intelligence_engine import IntelligenceEngineV1
+from app.services.scientific_tool_registry import get_scientific_tool_registry
+
+
+_FUTURE_CLOCK_SKEW_TOLERANCE = timedelta(minutes=5)
+_TRUST_SENSITIVE_OVERRIDE_KEYS = {
+    "metrics",
+    "flow_evidence",
+    "recent_irrigation_evidence",
+    "flow_validation_status",
+    "recent_irrigation_credit_status",
+    "validated_flow_m3h",
+    "evidence_reference_time",
+}
 
 
 def _num(value: Any) -> Optional[float]:
@@ -25,30 +38,41 @@ def _first_number(*values: Any) -> Optional[float]:
 
 
 def _merge_context(base: Dict[str, Any], overrides: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    if not overrides:
-        return dict(base)
+    """Merge user overrides without allowing them to manufacture trusted evidence."""
+    trusted_sensor = base.get("sensor_context") if isinstance(base.get("sensor_context"), dict) else None
     merged = dict(base)
-    for key, value in overrides.items():
-        if value not in (None, "", {}, []):
-            merged[key] = value
+    if overrides:
+        for key, value in overrides.items():
+            if key in _TRUST_SENSITIVE_OVERRIDE_KEYS:
+                continue
+            if value not in (None, "", {}, []):
+                merged[key] = value
     if "crop_type" in merged:
         merged["crop"] = merged["crop_type"]
     if "soil_type" in merged:
         merged["soil"] = merged["soil_type"]
-    if isinstance(merged.get("sensor_context"), dict):
+
+    # User-supplied sensor_context may provide analytical context such as moisture,
+    # but only sensor context already present in the trusted base can create flow
+    # evidence used by the operational validation gate.
+    sensor = merged.get("sensor_context") if isinstance(merged.get("sensor_context"), dict) else {}
+    if sensor:
         merged.setdefault("metrics", {})
-        sensor = merged["sensor_context"]
-        if sensor.get("flow_m3h") is not None:
-            merged["metrics"]["flow_m3h"] = sensor.get("flow_m3h")
-            merged["flow_evidence"] = {
-                "value_m3h": sensor.get("flow_m3h"),
-                "provenance": sensor.get("flow_provenance") or sensor.get("provenance"),
-                "block": sensor.get("block") or merged.get("block") or merged.get("field_id"),
-                "timestamp": sensor.get("timestamp"),
-                "pressure_state": sensor.get("pressure_state"),
-            }
         if sensor.get("moisture_percent") is not None:
             merged["metrics"]["avg_moisture_percent"] = sensor.get("moisture_percent")
+    if trusted_sensor and trusted_sensor.get("flow_m3h") is not None:
+        merged.setdefault("metrics", {})
+        merged["metrics"]["flow_m3h"] = trusted_sensor.get("flow_m3h")
+        merged["flow_evidence"] = {
+            "value_m3h": trusted_sensor.get("flow_m3h"),
+            "provenance": trusted_sensor.get("flow_provenance") or trusted_sensor.get("provenance"),
+            "block": trusted_sensor.get("block") or merged.get("block") or merged.get("field_id"),
+            "timestamp": trusted_sensor.get("timestamp"),
+            "pressure_state": trusted_sensor.get("pressure_state"),
+            "valid_until": trusted_sensor.get("valid_until"),
+            "max_age_hours": trusted_sensor.get("max_age_hours"),
+            "calibration_status": trusted_sensor.get("calibration_status"),
+        }
     if isinstance(merged.get("weather_context"), dict):
         merged.setdefault("metrics", {})
         weather = merged["weather_context"]
@@ -64,34 +88,24 @@ def _parse_time(value: Any) -> Optional[datetime]:
         return None
     try:
         parsed = datetime.fromisoformat(str(value).replace("Z", "+00:00"))
-        return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc)
     except ValueError:
         return None
 
 
 def _reference_time(metrics: Dict[str, Any]) -> datetime:
-    """Return the recency reference timestamp for evidence age checks.
-
-    Uses an explicit evidence_reference_time from the metrics when available
-    (historical package analysis). Otherwise falls back to current UTC time so
-    live and uploaded evidence are both evaluated against wall-clock age.
-    The evidence timestamp itself is never used as its own reference.
-    """
     explicit = _parse_time(metrics.get("evidence_reference_time"))
     return explicit if explicit is not None else datetime.now(timezone.utc)
 
 
-def _hours_old(timestamp: Any, reference: datetime) -> Optional[float]:
-    parsed = _parse_time(timestamp)
-    if parsed is None:
-        return None
-    return max(0.0, (reference - parsed).total_seconds() / 3600)
+def _future_timestamp(timestamp: datetime, reference: datetime) -> bool:
+    return timestamp > reference + _FUTURE_CLOCK_SKEW_TOLERANCE
 
 
 def _flow_validation(merged: Dict[str, Any], field_block: Optional[str]) -> Tuple[Optional[float], str, List[str]]:
     metrics = merged.get("metrics", {})
-    # No early-return bypass: every flow value — including pre-labeled validated_flow_m3h —
-    # must pass the full recency, provenance, block, variance, and pressure gate.
     evidence = merged.get("flow_evidence") or metrics.get("flow_evidence") or {}
     flow = _first_number(
         evidence.get("value_m3h"),
@@ -108,23 +122,51 @@ def _flow_validation(merged: Dict[str, Any], field_block: Optional[str]) -> Tupl
         notes.append("Flow evidence provenance is missing controller or flow-meter confirmation.")
 
     evidence_block = evidence.get("block") or metrics.get("flow_block")
-    if evidence_block and field_block and str(evidence_block).lower() != str(field_block).lower():
+    if not evidence_block or not field_block:
+        notes.append("Flow evidence must identify the matching field or block.")
+    elif str(evidence_block).lower() != str(field_block).lower():
         return None, "inconsistent", ["Flow evidence belongs to a different block."]
 
     reference = _reference_time(metrics)
-    age = _hours_old(evidence.get("timestamp"), reference)
-    if age is None:
+    timestamp = _parse_time(evidence.get("timestamp"))
+    if timestamp is None:
         notes.append("Flow evidence timestamp is unavailable.")
-    elif age > 72:
-        notes.append("Flow evidence is outside the 72 hour recency window.")
+    elif _future_timestamp(timestamp, reference):
+        return None, "inconsistent", ["Flow evidence timestamp is in the future relative to the evaluation clock."]
+
+    valid_until = _parse_time(evidence.get("valid_until") or metrics.get("flow_valid_until"))
+    max_age_hours = _first_number(evidence.get("max_age_hours"), metrics.get("flow_max_age_hours"))
+    if valid_until is not None:
+        if timestamp is not None and valid_until < timestamp:
+            return None, "inconsistent", ["Flow evidence validity ends before the measurement timestamp."]
+        if reference > valid_until:
+            notes.append("Flow evidence is outside its explicit validation period.")
+    elif timestamp is not None and max_age_hours is not None:
+        freshness = get_scientific_tool_registry().run(
+            "evidence.freshness.v1",
+            {"observed_at": timestamp, "evaluated_at": reference, "max_age_hours": max_age_hours},
+        )
+        if freshness.status != "COMPUTED" or not freshness.output.get("fresh"):
+            notes.append("Flow evidence is outside its explicit freshness requirement.")
+    else:
+        notes.append("Flow evidence lacks an explicit validity period or calibrated freshness requirement.")
 
     variance = _first_number(metrics.get("max_flow_variance_percent"), metrics.get("applied_variance_percent"))
-    if variance is not None and abs(variance) >= 20:
-        return None, "inconsistent", [f"Material flow inconsistency detected ({variance:.1f}%)."]
+    variance_limit = _first_number(evidence.get("max_variance_percent"), metrics.get("max_allowed_flow_variance_percent"))
+    if variance is not None and variance_limit is None:
+        notes.append("Observed flow variance lacks a source-specific acceptance limit.")
+    elif variance is not None and variance_limit is not None and abs(variance) > variance_limit:
+        return None, "inconsistent", ["Flow variance exceeds the explicit calibrated acceptance limit."]
 
     pressure = str(evidence.get("pressure_state") or merged.get("pressure_state") or "").lower()
     if pressure in {"severe", "critical", "low_pressure", "pressure_failure"} or evidence.get("severe_pressure_warning"):
         return None, "inconsistent", ["Severe pressure warning prevents validated flow use."]
+    if pressure not in {"stable", "normal"}:
+        notes.append("Flow evidence lacks a stable pressure confirmation.")
+
+    calibration_status = str(evidence.get("calibration_status") or metrics.get("flow_calibration_status") or "").lower()
+    if calibration_status not in {"validated", "calibrated", "accepted", "current"}:
+        notes.append("Flow evidence lacks current calibration or validation status.")
 
     if notes:
         return None, "partial", notes
@@ -133,32 +175,52 @@ def _flow_validation(merged: Dict[str, Any], field_block: Optional[str]) -> Tupl
 
 def _recent_credit(merged: Dict[str, Any], field_block: Optional[str]) -> Tuple[Optional[float], str, List[str]]:
     metrics = merged.get("metrics", {})
-    explicit_status = metrics.get("recent_irrigation_credit_status")
-    explicit_depth = _first_number(metrics.get("recent_irrigation_credit_mm"))
-    if explicit_status == "verified_recent" and explicit_depth and explicit_depth > 0:
-        return explicit_depth, "verified_recent", []
-
     evidence = merged.get("recent_irrigation_evidence") or metrics.get("recent_irrigation_evidence") or {}
+    if not isinstance(evidence, dict) or not evidence:
+        return None, "unavailable", ["Recent applied-water status is unavailable."]
     depth = _first_number(evidence.get("depth_mm"), evidence.get("applied_depth_mm"), metrics.get("recent_irrigation_depth_mm"))
-    if depth is None or depth <= 0:
-        return None, "unavailable", ["Recent applied-water credit is unavailable."]
 
     evidence_block = evidence.get("block")
-    if evidence_block and field_block and str(evidence_block).lower() != str(field_block).lower():
+    if not evidence_block or not field_block:
+        return None, "partial", ["Recent irrigation evidence must identify the matching field or block."]
+    if str(evidence_block).lower() != str(field_block).lower():
         return None, "unavailable", ["Recent irrigation event belongs to a different block."]
 
     confirmation = str(evidence.get("confirmation") or evidence.get("status") or "").lower()
     if confirmation not in {"controller_confirmed", "flow_meter_confirmed", "controller-confirmed", "flow-meter-confirmed", "complete"}:
         return None, "partial", ["Recent irrigation event lacks controller or flow-meter confirmation."]
 
-    reference = _reference_time(metrics)
-    age = _hours_old(evidence.get("timestamp"), reference)
-    if age is None:
-        return None, "partial", ["Recent irrigation event timestamp is unavailable."]
-    if age > 72:
-        return None, "stale", ["Recent irrigation event is outside the 72 hour credit window."]
+    if evidence.get("no_recent_irrigation_confirmed") is True:
+        depth = 0.0
+        status = "verified_none"
+    elif depth is None or depth <= 0:
+        return None, "unavailable", ["Recent applied-water credit is unavailable."]
+    else:
+        status = "verified_recent"
 
-    return min(depth, 12.0), "verified_recent", []
+    reference = _reference_time(metrics)
+    timestamp = _parse_time(evidence.get("timestamp"))
+    if timestamp is None:
+        return None, "partial", ["Recent irrigation event timestamp is unavailable."]
+    if _future_timestamp(timestamp, reference):
+        return None, "partial", ["Recent irrigation evidence timestamp is in the future relative to the evaluation clock."]
+    valid_until = _parse_time(evidence.get("valid_until"))
+    max_age_hours = _first_number(evidence.get("max_age_hours"), metrics.get("recent_irrigation_max_age_hours"))
+    if valid_until is not None:
+        if valid_until < timestamp:
+            return None, "partial", ["Recent irrigation validity ends before the event timestamp."]
+        if reference > valid_until:
+            return None, "stale", ["Recent irrigation evidence is outside its explicit validity period."]
+    elif max_age_hours is not None:
+        freshness = get_scientific_tool_registry().run(
+            "evidence.freshness.v1",
+            {"observed_at": timestamp, "evaluated_at": reference, "max_age_hours": max_age_hours},
+        )
+        if freshness.status != "COMPUTED" or not freshness.output.get("fresh"):
+            return None, "stale", ["Recent irrigation evidence is outside its explicit freshness requirement."]
+    else:
+        return None, "partial", ["Recent irrigation evidence lacks an explicit validity period or freshness requirement."]
+    return depth, status, []
 
 
 def _manual_payload_from_workbench(context: Dict[str, Any]) -> Dict[str, Any]:
@@ -183,15 +245,18 @@ def _manual_payload_from_workbench(context: Dict[str, Any]) -> Dict[str, Any]:
             "pressure_kpa": _first_number(metrics.get("pressure_kpa"), context.get("pressure_kpa")),
             "flow_m3h": flow_rate,
         },
-        "controller_context": {
-            "provider": context.get("provider_context"),
-            "online": context.get("controller_online"),
-        },
+        "controller_context": {"provider": context.get("provider_context"), "online": context.get("controller_online")},
         "recent_irrigation_context": {
             "last_depth_mm": _first_number(metrics.get("recent_irrigation_depth_mm"), context.get("recent_irrigation_depth_mm")),
             "events_last_7_days": metrics.get("controller_event_count"),
         },
         "field_observations": context.get("field_notes", []),
+        "crop_coefficient": _first_number(context.get("crop_coefficient"), metrics.get("crop_coefficient")),
+        "effective_rainfall_mm": _first_number(context.get("effective_rainfall_mm"), metrics.get("effective_rainfall_mm")),
+        "root_zone_replenishment_mm": _first_number(context.get("root_zone_replenishment_mm"), metrics.get("root_zone_replenishment_mm")),
+        "net_irrigation_requirement_mm": _first_number(context.get("net_irrigation_requirement_mm"), metrics.get("net_irrigation_requirement_mm")),
+        "irrigation_efficiency": _first_number(context.get("irrigation_efficiency"), metrics.get("irrigation_efficiency")),
+        "operating_window": context.get("operating_window"),
         "confidence_inputs": context.get("source_kinds", []),
     }
 
@@ -229,30 +294,30 @@ class IrrigationDecisionOrchestrator:
 
         flow, flow_status, flow_notes = _flow_validation(merged, field.field_id)
         recent_credit, recent_status, recent_notes = _recent_credit(merged, field.field_id)
-        pressure_state = "stable"
-        if metrics.get("missing_pressure_count", 0):
-            pressure_state = "partial"
+        pressure_state = "partial" if metrics.get("missing_pressure_count", 0) else "stable"
 
         missing: List[str] = list(quality.missing_inputs)
         if flow_status != "validated":
             missing.append("validated_flow_or_application_rate")
-        if recent_status != "verified_recent":
+        if recent_status not in {"verified_recent", "verified_none"}:
             missing.append("recent_verified_applied_water_credit")
 
         decision_input = AgronomicDecisionInput(
             eto_mm=field.weather_context.eto_mm,
             crop_type=field.crop_type,
             growth_stage=merged.get("growth_stage"),
-            crop_coefficient=_first_number(merged.get("crop_coefficient")),
+            crop_coefficient=_first_number(merged.get("crop_coefficient"), metrics.get("crop_coefficient")),
             precipitation_forecast_mm=field.weather_context.precipitation_forecast_mm,
-            effective_rainfall_mm=_first_number(merged.get("effective_rainfall_mm")),
+            effective_rainfall_mm=_first_number(merged.get("effective_rainfall_mm"), metrics.get("effective_rainfall_mm")),
             soil_type=field.soil_type,
             root_zone_depth_mm=_root_zone_mm(merged),
             soil_moisture_deficit_pct=_deficit_percent(merged),
             management_allowable_depletion=_first_number(merged.get("management_allowable_depletion")),
+            root_zone_replenishment_mm=_first_number(merged.get("root_zone_replenishment_mm"), metrics.get("root_zone_replenishment_mm")),
+            net_irrigation_requirement_mm=_first_number(merged.get("net_irrigation_requirement_mm"), metrics.get("net_irrigation_requirement_mm")),
             recent_irrigation_depth_mm=recent_credit,
             irrigation_method=field.irrigation_method,
-            irrigation_efficiency=_first_number(merged.get("irrigation_efficiency")),
+            irrigation_efficiency=_first_number(merged.get("irrigation_efficiency"), metrics.get("irrigation_efficiency")),
             field_area_ha=field.area,
             controller_capacity_m3h=_first_number(merged.get("controller_capacity_m3h")),
             flow_rate_m3h=flow,
@@ -270,14 +335,17 @@ class IrrigationDecisionOrchestrator:
         decision["recent_irrigation_credit_notes"] = recent_notes
 
         ref_time = _reference_time(metrics)
-        evaluation_mode_label = (
-            "historical_package" if metrics.get("evidence_reference_time") else "current_utc"
-        )
+        evaluation_mode_label = "historical_package" if metrics.get("evidence_reference_time") else "current_utc"
         return {
             "normalized_result": normalized,
             "data_quality": quality,
             "decision": decision,
-            "manual_overrides_used": sorted((manual_overrides or {}).keys()),
+            "manual_overrides_used": sorted(
+                key for key in (manual_overrides or {}).keys() if key not in _TRUST_SENSITIVE_OVERRIDE_KEYS
+            ),
+            "ignored_trust_sensitive_overrides": sorted(
+                key for key in (manual_overrides or {}).keys() if key in _TRUST_SENSITIVE_OVERRIDE_KEYS
+            ),
             "mode": mode,
             "origin": origin,
             "evaluation_reference_time": ref_time.isoformat(),

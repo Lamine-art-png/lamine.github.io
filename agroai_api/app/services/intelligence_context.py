@@ -76,6 +76,7 @@ def _source_rows(ctx: Any, source_limit: int) -> tuple[list[dict[str, Any]], lis
         rows.append(
             {
                 "id": source.id,
+                "type": f"data_source:{source.source_type}",
                 "provider": source.provider,
                 "source_type": source.source_type,
                 "filename": source.filename,
