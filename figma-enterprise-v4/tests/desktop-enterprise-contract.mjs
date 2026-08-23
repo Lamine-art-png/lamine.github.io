@@ -49,6 +49,10 @@ for (const dependency of [
 assert.match(cargo, /tauri-plugin-single-instance\s*=\s*\{[^\n]*features\s*=\s*\["deep-link"\]/);
 assert.ok(rustRuntime.indexOf("tauri_plugin_single_instance::init") < rustRuntime.indexOf("tauri_plugin_deep_link::init"), "single-instance must be registered before deep-link");
 assert.match(rustRuntime, /matches!\(parsed\.scheme\(\),\s*"https"\s*\|\s*"http"\s*\|\s*"mailto"\)/);
+assert.ok(rustRuntime.includes('Builder::new("agroai-desktop-navigation-guard")'));
+assert.ok(rustRuntime.includes('url.host_str() == Some("tauri.localhost")'));
+assert.ok(rustRuntime.includes(".on_navigation("));
+assert.ok(rustRuntime.includes("webbrowser::open(url.as_str())"));
 assert.equal(rustRuntime.includes("shell::open"), false);
 
 assert.ok(main.includes('import { installDesktopRuntime } from "./app/desktop/desktopRuntime"'));
