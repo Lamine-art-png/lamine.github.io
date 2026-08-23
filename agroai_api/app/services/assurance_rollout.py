@@ -8,14 +8,15 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.models.saas import Organization
 from app.services.field_intelligence_rollout import internal_operator_email
+from app.services.release_contract import runtime_build_sha
 
 logger = logging.getLogger(__name__)
 
 RELEASE_STATES = {"disabled", "internal", "canary", "general"}
-PRODUCTION_ENVS = {"production", "staging"}
 # Founder-approved GA release, 2026-08-23. An explicit ASSURANCE_RELEASE_STATE
 # always wins, so production can still be forced to disabled/internal/canary
-# without another code release. Staging remains fail-closed when unset.
+# without another code release. Unset production reaches GA only on an
+# immutable deployed build identity; staging remains fail-closed when unset.
 PRODUCTION_DEFAULT_RELEASE_STATE = "general"
 
 
@@ -32,7 +33,10 @@ def configured_release_state() -> str:
         return "disabled"
     environment = str(getattr(settings, "APP_ENV", "development") or "").strip().lower()
     if environment == "production":
-        return PRODUCTION_DEFAULT_RELEASE_STATE
+        # GA is source-controlled, but only a real immutable deployment may
+        # inherit it. Local/test processes pretending to be production remain
+        # disabled, preserving the fail-closed pre-deployment contract.
+        return PRODUCTION_DEFAULT_RELEASE_STATE if runtime_build_sha() else "disabled"
     if environment == "staging":
         return "disabled"
     return "general"
