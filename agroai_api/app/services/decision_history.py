@@ -9,6 +9,19 @@ from sqlalchemy.orm import Session
 from app.models.intelligence_memory import DecisionSnapshot
 
 
+CHANGE_DRIVER_TEXT = {
+    "first_decision": "No earlier immutable decision exists in the same field/domain scope.",
+    "evidence_changed": "The evidence set changed.",
+    "science_changed": "One or more deterministic science results changed.",
+    "conflicts_changed": "The recorded evidence-conflict set changed.",
+    "unknowns_changed": "The unresolved-unknown set changed.",
+    "confidence_changed": "Grounding confidence changed.",
+    "field_state_changed": "The decision references a different immutable Field State revision.",
+    "recommendation_changed": "The governed recommendation text changed after post-validation.",
+    "no_material_change": "No material persisted input or decision difference was detected.",
+}
+
+
 def _science_map(snapshot: DecisionSnapshot) -> dict[str, dict[str, Any]]:
     output: dict[str, dict[str, Any]] = {}
     for row in snapshot.science_trace_json or []:
@@ -45,6 +58,10 @@ def _packet_list(snapshot: DecisionSnapshot, key: str) -> list[Any]:
     return value if isinstance(value, list) else []
 
 
+def _driver_text(codes: list[str]) -> list[str]:
+    return [CHANGE_DRIVER_TEXT[code] for code in codes]
+
+
 def previous_decision_snapshot(db: Session, current: DecisionSnapshot) -> DecisionSnapshot | None:
     query = db.query(DecisionSnapshot).filter(
         DecisionSnapshot.organization_id == current.organization_id,
@@ -62,12 +79,14 @@ def previous_decision_snapshot(db: Session, current: DecisionSnapshot) -> Decisi
 
 def compare_decision_snapshots(current: DecisionSnapshot, previous: DecisionSnapshot | None) -> dict[str, Any]:
     if previous is None:
+        codes = ["first_decision"]
         return {
             "current_decision_id": current.id,
             "previous_decision_id": None,
             "first_decision_in_scope": True,
             "changed": False,
-            "change_drivers": ["No earlier immutable decision exists in the same field/domain scope."],
+            "change_driver_codes": codes,
+            "change_drivers": _driver_text(codes),
             "evidence": {"added": sorted(current.evidence_ids_json or []), "removed": []},
             "science": {"changed": []},
             "recommendations": {"changed": False, "previous": [], "current": _recommendations(current)},
@@ -99,30 +118,31 @@ def compare_decision_snapshots(current: DecisionSnapshot, previous: DecisionSnap
     previous_unknowns = _packet_list(previous, "unknowns")
     state_changed = current.field_state_revision_id != previous.field_state_revision_id
 
-    drivers: list[str] = []
+    codes: list[str] = []
     if added or removed:
-        drivers.append("The evidence set changed.")
+        codes.append("evidence_changed")
     if science_changes:
-        drivers.append("One or more deterministic science results changed.")
+        codes.append("science_changed")
     if current_conflicts != previous_conflicts:
-        drivers.append("The recorded evidence-conflict set changed.")
+        codes.append("conflicts_changed")
     if current_unknowns != previous_unknowns:
-        drivers.append("The unresolved-unknown set changed.")
+        codes.append("unknowns_changed")
     if confidence_delta:
-        drivers.append("Grounding confidence changed.")
+        codes.append("confidence_changed")
     if state_changed:
-        drivers.append("The decision references a different immutable Field State revision.")
+        codes.append("field_state_changed")
     if recommendations_changed:
-        drivers.append("The governed recommendation text changed after post-validation.")
-    if not drivers:
-        drivers.append("No material persisted input or decision difference was detected.")
+        codes.append("recommendation_changed")
+    if not codes:
+        codes.append("no_material_change")
 
     return {
         "current_decision_id": current.id,
         "previous_decision_id": previous.id,
         "first_decision_in_scope": False,
         "changed": bool(added or removed or science_changes or recommendations_changed or confidence_delta or state_changed or current_conflicts != previous_conflicts or current_unknowns != previous_unknowns),
-        "change_drivers": drivers,
+        "change_driver_codes": codes,
+        "change_drivers": _driver_text(codes),
         "evidence": {"added": added, "removed": removed},
         "science": {"changed": science_changes},
         "recommendations": {
