@@ -156,6 +156,8 @@ def transition_decision_lifecycle(
 
     Returns (lifecycle, event, created_new_event). Reusing an idempotency key
     with a different actor, payload, event type, or target state fails closed.
+    A successful verification also materializes historical outcome evidence in
+    this same transaction, so VERIFIED never exists without its learning record.
     Caller owns the transaction.
     """
     key = str(idempotency_key or "").strip()
@@ -226,6 +228,19 @@ def transition_decision_lifecycle(
         sequence=lifecycle.version,
     )
     db.flush()
+
+    if to_state == "verified":
+        # Local import avoids coupling the outcome service back into lifecycle
+        # module import order while keeping verification + learning one DB tx.
+        from app.services.outcome_learning import materialize_verified_outcome_evidence
+
+        materialize_verified_outcome_evidence(
+            db,
+            organization_id=lifecycle.organization_id,
+            lifecycle_id=lifecycle.id,
+        )
+        db.flush()
+
     return lifecycle, event, True
 
 
@@ -272,9 +287,6 @@ def create_decision_lifecycle(
         sequence=1,
     )
 
-    # A decision that is already outside its validity window must never enter an
-    # approval or execution lane, even during first creation. Persist it as an
-    # explicit terminal lifecycle so history remains complete and auditable.
     if expires_at is not None and datetime.utcnow() > expires_at:
         transition_decision_lifecycle(
             db,
