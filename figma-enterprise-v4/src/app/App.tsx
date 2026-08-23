@@ -12,7 +12,6 @@ import { applyLocale, t } from "./i18n";
 
 type PortalRuntimeBoundaryState = { error: string };
 
-const MAX_LOCALE_TRANSITION_COVER_MS = 12_000;
 const standalonePlatformHost = window.location.hostname.toLowerCase() === "platform.agroai-pilot.com";
 
 function PortalBootFallback({ reason }: { reason?: string }) {
@@ -32,10 +31,10 @@ function PortalBootFallback({ reason }: { reason?: string }) {
   );
 }
 
-function BrandedPortalLoader({ overlay = false }: { overlay?: boolean }) {
+function BrandedPortalLoader() {
   return (
     <div
-      className={`${overlay ? "fixed inset-0 z-[9999]" : "min-h-screen w-full"} flex items-center justify-center`}
+      className="min-h-screen w-full flex items-center justify-center"
       style={{ background: "#F6F4EE" }}
       role="status"
       aria-live="polite"
@@ -89,10 +88,6 @@ function BrandedPortalLoader({ overlay = false }: { overlay?: boolean }) {
   );
 }
 
-function LocaleTransitionCover() {
-  return <BrandedPortalLoader overlay />;
-}
-
 class PortalRuntimeBoundary extends Component<{ children: ReactNode }, PortalRuntimeBoundaryState> {
   state: PortalRuntimeBoundaryState = { error: "" };
   static getDerivedStateFromError(error: unknown): PortalRuntimeBoundaryState { return { error: error instanceof Error ? `${error.name}: ${error.message}` : String(error) }; }
@@ -101,35 +96,38 @@ class PortalRuntimeBoundary extends Component<{ children: ReactNode }, PortalRun
 }
 
 export default function App() {
-  useEffect(() => { applyLocale(); }, []);
+  useEffect(() => {
+    applyLocale();
+    // Establish the API connection before the first authenticated request. This
+    // is best-effort and only changes connection setup latency, never auth state.
+    const apiOrigin = "https://api.agroai-pilot.com";
+    if (!document.head.querySelector(`link[rel="preconnect"][href="${apiOrigin}"]`)) {
+      const link = document.createElement("link");
+      link.rel = "preconnect";
+      link.href = apiOrigin;
+      link.crossOrigin = "anonymous";
+      document.head.appendChild(link);
+    }
+  }, []);
   return <PortalRuntimeBoundary><AuthProvider><AuthenticatedApp /></AuthProvider></PortalRuntimeBoundary>;
 }
 
 function AuthenticatedApp() {
-  const { isAuthenticated, isLoading } = useAuth();
-  const { locale, catalogLoading } = useLocale();
+  const { token, isAuthenticated, isLoading } = useAuth();
+  const { locale } = useLocale();
   const [router, setRouter] = useState<any>(null);
   const [routerError, setRouterError] = useState("");
-  const [localeCoverVisible, setLocaleCoverVisible] = useState(false);
 
   useEffect(() => {
     applyLocale(locale);
   }, [locale]);
 
   useEffect(() => {
-    if (!catalogLoading) {
-      setLocaleCoverVisible(false);
-      return;
-    }
-    setLocaleCoverVisible(true);
-    const timer = window.setTimeout(() => {
-      setLocaleCoverVisible(false);
-    }, MAX_LOCALE_TRANSITION_COVER_MS);
-    return () => window.clearTimeout(timer);
-  }, [catalogLoading, locale]);
-
-  useEffect(() => {
-    if (!isAuthenticated) { setRouter(null); setRouterError(""); return; }
+    // A stored/new token is enough to start downloading the authenticated route
+    // bundle. Session validation continues in AuthProvider and remains the gate
+    // for rendering. This overlaps JS loading with the single auth bootstrap
+    // request instead of paying those costs serially after every login/refresh.
+    if (!token) { setRouter(null); setRouterError(""); return; }
     let mounted = true;
     import("./routes")
       .then((module) => { if (mounted) { setRouter(() => module.router); setRouterError(""); } })
@@ -141,7 +139,7 @@ function AuthenticatedApp() {
         }
       });
     return () => { mounted = false; };
-  }, [isAuthenticated]);
+  }, [token]);
 
   const path = window.location.pathname;
   if (isLoading) return <BrandedPortalLoader />;
@@ -151,10 +149,5 @@ function AuthenticatedApp() {
   if (!isAuthenticated) return standalonePlatformHost ? <PlatformAuthScreen /> : <AuthScreen />;
   if (routerError) return <PortalBootFallback reason={routerError} />;
   if (!router) return <BrandedPortalLoader />;
-  return (
-    <div className="relative min-h-screen">
-      <RouterProvider router={router} />
-      {localeCoverVisible ? <LocaleTransitionCover /> : null}
-    </div>
-  );
+  return <RouterProvider router={router} />;
 }

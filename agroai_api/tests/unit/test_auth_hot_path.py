@@ -62,6 +62,32 @@ def test_repeat_login_and_me_never_reseed_evaluation_context(client, db, monkeyp
     assert me.json()["user"]["email"] == email
 
 
+def test_portal_bootstrap_returns_first_paint_state_in_one_request(client, db):
+    email = _verified_account(client, db)
+    login = client.post(
+        "/v1/auth/login",
+        json={"email": email, "password": "strong-password"},
+    )
+    assert login.status_code == 200, login.text
+    token = login.json()["access_token"]
+
+    bootstrap = client.get(
+        "/v1/auth/bootstrap",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert bootstrap.status_code == 200, bootstrap.text
+    payload = bootstrap.json()
+    assert payload["user"]["email"] == email
+    assert payload["current_organization"]["id"] == login.json()["current_organization"]["id"]
+    assert payload["organizations"]
+    assert len(payload["workspaces"]) == 1
+    assert payload["workspaces"][0]["name"] == "Evaluation workspace"
+    assert isinstance(payload["entitlements"], dict)
+    assert "platform_developer" not in payload
+    assert "portal_bootstrap_total" in bootstrap.headers.get("server-timing", "")
+    assert float(bootstrap.headers["x-agroai-bootstrap-ms"]) >= 0
+
+
 def test_email_verification_confirm_keeps_one_time_activation_seed(client, db, monkeypatch):
     email = "verification-activation@example.com"
     _register_account(client, email)

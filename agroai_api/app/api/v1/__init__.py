@@ -7,8 +7,10 @@ api_router.include_router(health.router, tags=["v1"])
 
 from . import auth as auth_module  # noqa: E402
 from . import recovery_v2 as recovery_module  # noqa: E402
+from . import auth_bootstrap as auth_bootstrap_module  # noqa: E402
 
 auth_module.router.include_router(recovery_module.router)
+auth_module.router.include_router(auth_bootstrap_module.router)
 
 from . import billing as billing_module  # noqa: E402,F401
 from .router_compat import materialize_included_routes  # noqa: E402

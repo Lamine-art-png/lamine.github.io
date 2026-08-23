@@ -8,6 +8,7 @@ on:
       - "figma-enterprise-v4/src/app/dynamicLocaleCatalog.ts"
       - "figma-enterprise-v4/src/app/hooks/useLocale.ts"
       - "shared/supported-locales.json"
+      - "scripts/i18n-prewarm-critical.mjs"
       - "scripts/i18n-production-matrix.mjs"
       - "wrangler.toml"
       - ".github/workflows/i18n-production-locale-matrix.yml"
@@ -42,7 +43,7 @@ jobs:
   production-locale-matrix:
     needs: deploy-production-edge
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -50,6 +51,12 @@ jobs:
           node-version: "24"
       - name: Allow edge propagation to settle
         run: sleep 15
+      - name: Prewarm every critical Portal language shell at the edge
+        env:
+          I18N_PREWARM_ENDPOINT: https://api.agroai-pilot.com/v1/i18n/catalog
+          I18N_PREWARM_CONCURRENCY: "3"
+          I18N_PREWARM_ATTEMPTS: "5"
+        run: node scripts/i18n-prewarm-critical.mjs | tee i18n-critical-prewarm.jsonl
       - name: Prove every runtime locale on the live production endpoint
         env:
           I18N_SMOKE_ENDPOINT: https://api.agroai-pilot.com/v1/i18n/catalog
@@ -61,6 +68,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: i18n-production-locale-matrix-${{ github.sha }}
-          path: i18n-production-matrix.jsonl
+          path: |
+            i18n-critical-prewarm.jsonl
+            i18n-production-matrix.jsonl
           if-no-files-found: warn
           retention-days: 30
