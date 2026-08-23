@@ -7,6 +7,7 @@ const appRoot = path.resolve(here, "../src/app");
 const repoRoot = path.resolve(here, "../..");
 const component = fs.readFileSync(path.join(appRoot, "components/intelligence/DecisionMemoryWorkspace.tsx"), "utf8");
 const catalogModule = fs.readFileSync(path.join(appRoot, "decisionMemoryI18n.ts"), "utf8");
+const portalLiteralCatalog = fs.readFileSync(path.join(appRoot, "portalLiteralCatalog.ts"), "utf8");
 const backendI18n = fs.readFileSync(path.join(repoRoot, "agroai_api/app/api/v1/i18n.py"), "utf8");
 const canonicalCatalog = JSON.parse(fs.readFileSync(path.join(repoRoot, "shared/ui-decision-memory.en.json"), "utf8"));
 const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "shared/supported-locales.json"), "utf8"));
@@ -54,6 +55,18 @@ if (!component.includes("ensureLocaleSourceCatalog(selectedLocale, DECISION_MEMO
 }
 if (!component.includes("primeLocaleSourceCatalogFromCache")) {
   throw new Error("Decision Memory must reuse durable translated catalog cache");
+}
+if (!portalLiteralCatalog.includes('decisionMemoryCatalog from "../../../shared/ui-decision-memory.en.json"')) {
+  throw new Error("Decision Memory source must join the normal Portal background full-language hydration");
+}
+if (!portalLiteralCatalog.includes("...DECISION_MEMORY_UI_CATALOG")) {
+  throw new Error("Full Portal English source must include Decision Memory for background locale prehydration");
+}
+if (!component.includes("effectiveLocale") || !component.includes("toLocaleString(locale")) {
+  throw new Error("Decision Memory timestamps must format with the active AGRO-AI locale");
+}
+if (!component.includes("change_driver_codes") || !component.includes("CHANGE_DRIVER_KEYS")) {
+  throw new Error("Decision change explanations must render from locale-neutral reason codes");
 }
 if (/effectiveLocale\.toLowerCase\(\)\.startsWith\(["']fr["']\)/.test(component)) {
   throw new Error("Decision Memory must not branch UI copy between English and French");
