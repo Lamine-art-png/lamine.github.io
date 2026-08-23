@@ -6,10 +6,14 @@ type DesktopRuntimeInfo = {
 };
 
 type Invoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
+type NativeFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 
 type TauriGlobal = {
   core?: {
     invoke?: Invoke;
+  };
+  http?: {
+    fetch?: NativeFetch;
   };
 };
 
@@ -22,6 +26,7 @@ declare global {
 const deepLinkEvent = "agroai:desktop-deep-link";
 const desktopReadyEvent = "agroai:desktop-ready";
 const desktopRouteEvent = "agroai:desktop-route-requested";
+const browserFetch = window.fetch.bind(window);
 
 function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   const desktopInvoke = window.__TAURI__?.core?.invoke;
@@ -44,6 +49,34 @@ function normalizeDeepLink(raw: unknown): string | null {
   }
 }
 
+function inputUrl(input: RequestInfo | URL): string | null {
+  if (typeof input === "string") return input;
+  if (input instanceof URL) return input.toString();
+  if (typeof Request !== "undefined" && input instanceof Request) return input.url;
+  return null;
+}
+
+function isAgroAiApiRequest(input: RequestInfo | URL): boolean {
+  const raw = inputUrl(input);
+  if (!raw) return false;
+  try {
+    const url = new URL(raw, window.location.href);
+    return url.protocol === "https:" && url.hostname === "api.agroai-pilot.com";
+  } catch {
+    return false;
+  }
+}
+
+function installNativeHttpTransport(): void {
+  const nativeFetch = window.__TAURI__?.http?.fetch;
+  if (!nativeFetch) return;
+
+  window.fetch = ((input: RequestInfo | URL, init?: RequestInit) => {
+    if (isAgroAiApiRequest(input)) return nativeFetch(input, init);
+    return browserFetch(input, init);
+  }) as typeof window.fetch;
+}
+
 export async function requestDesktopOpenExternal(url: string): Promise<void> {
   if (!isDesktopRuntime()) {
     window.open(url, "_blank", "noopener,noreferrer");
@@ -56,6 +89,7 @@ export function installDesktopRuntime(): void {
   if (!isDesktopRuntime()) return;
 
   document.documentElement.dataset.agroaiDesktop = "true";
+  installNativeHttpTransport();
 
   window.addEventListener(deepLinkEvent, (event) => {
     const detail = event instanceof CustomEvent ? event.detail : undefined;
