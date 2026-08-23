@@ -59,6 +59,11 @@ def test_change_explanation_is_derived_only_from_persisted_snapshot_differences(
     assert diff["recommendations"]["changed"] is True
     assert diff["confidence"]["delta"] == 0.12
     assert diff["field_state_revision"]["changed"] is True
+    assert "evidence_changed" in diff["change_driver_codes"]
+    assert "science_changed" in diff["change_driver_codes"]
+    assert "confidence_changed" in diff["change_driver_codes"]
+    assert "field_state_changed" in diff["change_driver_codes"]
+    assert "recommendation_changed" in diff["change_driver_codes"]
     assert "The evidence set changed." in diff["change_drivers"]
     assert "One or more deterministic science results changed." in diff["change_drivers"]
 
@@ -69,6 +74,7 @@ def test_first_decision_does_not_invent_a_prior_cause():
     assert diff["first_decision_in_scope"] is True
     assert diff["changed"] is False
     assert diff["previous_decision_id"] is None
+    assert diff["change_driver_codes"] == ["first_decision"]
     assert diff["change_drivers"] == ["No earlier immutable decision exists in the same field/domain scope."]
 
 
