@@ -271,7 +271,21 @@ def create_decision_lifecycle(
         payload={"requires_human_approval": requires_human_approval},
         sequence=1,
     )
-    if requires_human_approval:
+
+    # A decision that is already outside its validity window must never enter an
+    # approval or execution lane, even during first creation. Persist it as an
+    # explicit terminal lifecycle so history remains complete and auditable.
+    if expires_at is not None and datetime.utcnow() > expires_at:
+        transition_decision_lifecycle(
+            db,
+            lifecycle.id,
+            to_state="expired",
+            event_type="decision_expired_before_activation",
+            actor_type="system",
+            idempotency_key=f"{key}:expired",
+            payload={"reason": "decision_validity_window_elapsed"},
+        )
+    elif requires_human_approval:
         transition_decision_lifecycle(
             db,
             lifecycle.id,
