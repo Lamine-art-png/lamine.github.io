@@ -72,6 +72,18 @@ def _evidence_ids(inputs: dict[str, CounterfactualInput]) -> list[str]:
     return sorted({eid for item in inputs.values() for eid in item.evidence_ids if str(eid).strip()})
 
 
+def _validate_baseline_provenance(inputs: dict[str, CounterfactualInput]) -> None:
+    for name, item in inputs.items():
+        evidence = [str(value).strip() for value in item.evidence_ids if str(value).strip()]
+        note = str(item.source_note or "").strip()
+        if item.information_class == "MODELED":
+            raise CounterfactualInputError("Baseline inputs must be observed or deterministically derived, not modeled")
+        if item.information_class == "OBSERVED" and not evidence:
+            raise CounterfactualInputError(f"Observed baseline input {name} requires at least one evidence ID")
+        if item.information_class == "DERIVED" and not evidence and not note:
+            raise CounterfactualInputError(f"Derived baseline input {name} requires evidence IDs or a derivation source note")
+
+
 def _to_result(
     scenario: CounterfactualScenario,
     inputs: dict[str, CounterfactualInput],
@@ -114,9 +126,10 @@ def compare_counterfactuals(
 ) -> CounterfactualComparison:
     """Re-run one scientific identity over explicit scenario changes.
 
-    The baseline must be fully computable. Scenarios may be computation scenarios
-    or evidence-only COLLECT_EVIDENCE/INSPECT branches. Computation scenarios
-    inherit baseline inputs and replace only explicitly supplied overrides.
+    The baseline must be fully computable and provenance-bearing. Scenarios may
+    be computation scenarios or evidence-only COLLECT_EVIDENCE/INSPECT branches.
+    Computation scenarios inherit baseline inputs and replace only explicit
+    overrides, preserving their modeled/evidenced classification.
     """
     registry = get_scientific_tool_registry()
     spec = registry.spec(tool_id)
@@ -125,8 +138,7 @@ def compare_counterfactuals(
         raise CounterfactualInputError(
             "Baseline is missing required inputs: " + ", ".join(missing_baseline)
         )
-    if any(item.information_class == "MODELED" for item in baseline_inputs.values()):
-        raise CounterfactualInputError("Baseline inputs must be observed or deterministically derived, not modeled")
+    _validate_baseline_provenance(baseline_inputs)
 
     baseline_science = registry.run(tool_id, _raw_inputs(baseline_inputs))
     if baseline_science.status != "COMPUTED":
