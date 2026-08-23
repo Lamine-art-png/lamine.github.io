@@ -34,14 +34,12 @@ export const DECISION_MEMORY_UI_CATALOG: Record<string, string> = {
   ...decisionMemoryCatalog,
 };
 
-// Lookup/template matching sees static, route-dynamic, and Decision Memory UI copy.
-// Route-dynamic copy still hydrates only for the active route. Decision Memory is
-// included in background full-language hydration so operating controls are ready
-// before the operator opens the decision workspace.
+// Generic literal matching remains limited to the existing static and route-copy
+// sources. Decision Memory uses explicit translation keys, so adding it here
+// would create value collisions for common words such as "Failed" or "Water".
 export const PORTAL_LITERAL_CATALOG: Record<string, string> = {
   ...STATIC_PORTAL_LITERAL_CATALOG,
   ...DYNAMIC_UI_COPY_CATALOG,
-  ...DECISION_MEMORY_UI_CATALOG,
 };
 
 function normalizeLiteralText(value: string): string {
