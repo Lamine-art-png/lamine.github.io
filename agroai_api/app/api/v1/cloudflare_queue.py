@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.db.base import SessionLocal, get_db
+from app.services.assurance_rollout import configured_release_state
 from app.services.connector_object_gc import run_connector_object_gc
 from app.services.object_storage_probe import probe_object_storage
 from app.services.production_readiness import evaluate_production_readiness
@@ -95,6 +96,7 @@ async def release_contract_health(db: Session = Depends(get_db)) -> dict:
         "production_ready": bool(production.get("ready")),
         "production_blocker_codes": [item.get("code") for item in production.get("blockers", [])],
         "platform_api_enabled": bool(getattr(settings, "PLATFORM_API_ENABLED", False)),
+        "assurance_release_state": configured_release_state(),
     }
     if (
         report["status"] != "ok"
