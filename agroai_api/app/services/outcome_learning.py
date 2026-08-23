@@ -8,7 +8,6 @@ from __future__ import annotations
 
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from datetime import datetime
 from typing import Any
 
 from sqlalchemy.orm import Session
@@ -20,6 +19,7 @@ from app.services.intelligence_memory_lock import advisory_xact_lock
 
 LEARNING_POLICY_VERSION = "agroai-outcome-learning/1.0.0"
 VERIFIED_OUTCOME_EVIDENCE_TYPE = "verified_decision_outcome"
+_OUTCOME_MARKER_PREFIX = "decision_lifecycle:"
 
 
 class OutcomeLearningError(ValueError):
@@ -30,6 +30,10 @@ class OutcomeLearningError(ValueError):
 class MaterializedOutcome:
     evidence_id: str
     created: bool
+
+
+def _outcome_marker(lifecycle_id: str) -> str:
+    return f"{_OUTCOME_MARKER_PREFIX}{lifecycle_id}"
 
 
 def _science_rule_ids(snapshot: DecisionSnapshot) -> list[str]:
@@ -56,21 +60,15 @@ def _verification_event(db: Session, lifecycle: DecisionLifecycle) -> DecisionLi
 
 
 def _existing_outcome_record(db: Session, lifecycle: DecisionLifecycle) -> EvidenceRecord | None:
-    rows = (
+    return (
         db.query(EvidenceRecord)
         .filter(
             EvidenceRecord.tenant_id == lifecycle.organization_id,
             EvidenceRecord.evidence_type == VERIFIED_OUTCOME_EVIDENCE_TYPE,
+            EvidenceRecord.source_excerpt == _outcome_marker(lifecycle.id),
         )
-        .order_by(EvidenceRecord.created_at.desc())
-        .limit(500)
-        .all()
+        .first()
     )
-    for row in rows:
-        metadata = row.metadata_json or {}
-        if metadata.get("decision_lifecycle_id") == lifecycle.id:
-            return row
-    return None
 
 
 def materialize_verified_outcome_evidence(
@@ -154,7 +152,7 @@ def materialize_verified_outcome_evidence(
         confidence=min(1.0, max(0.0, float(snapshot.grounding_confidence or 0.0))),
         quality_status="verified",
         citation_label="Verified AGRO-AI decision outcome",
-        source_excerpt=None,
+        source_excerpt=_outcome_marker(lifecycle.id),
         metadata_json={
             "learning_policy_version": LEARNING_POLICY_VERSION,
             "source": "decision_memory",
@@ -176,19 +174,30 @@ def materialize_missing_verified_outcomes(
     organization_id: str,
     limit: int = 200,
 ) -> dict[str, int]:
-    lifecycles = (
+    """Backfill up to ``limit`` missing verified outcomes and always make progress."""
+    markers = {
+        str(row[0])
+        for row in db.query(EvidenceRecord.source_excerpt).filter(
+            EvidenceRecord.tenant_id == organization_id,
+            EvidenceRecord.evidence_type == VERIFIED_OUTCOME_EVIDENCE_TYPE,
+            EvidenceRecord.source_excerpt.isnot(None),
+        ).all()
+        if str(row[0] or "").startswith(_OUTCOME_MARKER_PREFIX)
+    }
+    verified_lifecycles = (
         db.query(DecisionLifecycle)
         .filter(
             DecisionLifecycle.organization_id == organization_id,
             DecisionLifecycle.state == "verified",
         )
         .order_by(DecisionLifecycle.verified_at.asc())
-        .limit(max(1, min(limit, 1000)))
         .all()
     )
+    missing = [row for row in verified_lifecycles if _outcome_marker(row.id) not in markers]
+    selected = missing[: max(1, min(limit, 1000))]
     created = 0
     existing = 0
-    for lifecycle in lifecycles:
+    for lifecycle in selected:
         outcome = materialize_verified_outcome_evidence(
             db,
             organization_id=organization_id,
@@ -196,7 +205,14 @@ def materialize_missing_verified_outcomes(
         )
         created += int(outcome.created)
         existing += int(not outcome.created)
-    return {"verified_lifecycles": len(lifecycles), "created": created, "existing": existing}
+    return {
+        "verified_lifecycles": len(verified_lifecycles),
+        "missing_before": len(missing),
+        "processed": len(selected),
+        "created": created,
+        "existing": existing,
+        "remaining": max(0, len(missing) - len(selected)),
+    }
 
 
 def build_outcome_learning_summary(
