@@ -12,6 +12,7 @@ from app.models.operational_records import EvidenceRecord
 from app.models.saas import Organization, OrganizationMembership, User, Workspace
 from app.services.intelligence_grounding import EvidenceSignal, IntelligenceGroundingPacket
 from app.services.intelligence_memory_service import persist_grounded_decision_memory
+from app.services.outcome_learning import VERIFIED_OUTCOME_EVIDENCE_TYPE
 
 
 def _db():
@@ -94,7 +95,7 @@ def _life(db, owner, org, workspace):
     return refs
 
 
-def _evidence(db, org_id: str, workspace_id: str, *, evidence_id: str):
+def _evidence(db, org_id: str, workspace_id: str, *, evidence_id: str, quality_status: str = "verified"):
     row = EvidenceRecord(
         id=evidence_id,
         tenant_id=org_id,
@@ -104,9 +105,9 @@ def _evidence(db, org_id: str, workspace_id: str, *, evidence_id: str):
         block_id="block-a",
         title="Verified field record",
         summary="Operator recorded the observed state after the operation.",
-        value_json={"verified": True},
+        value_json={"verified": quality_status == "verified"},
         confidence=0.95,
-        quality_status="verified",
+        quality_status=quality_status,
         citation_label="Verified field record",
         metadata_json={},
     )
@@ -158,7 +159,30 @@ def test_execution_evidence_cannot_cross_tenant(monkeypatch):
         db.close()
 
 
-def test_full_authorized_api_lifecycle_uses_durable_evidence(monkeypatch):
+def test_unverified_evidence_cannot_certify_execution(monkeypatch):
+    db = _db()
+    try:
+        owner, _viewer, org, workspace = _seed_org(db)
+        refs = _life(db, owner, org, workspace)
+        pending = _evidence(db, org.id, workspace.id, evidence_id="pending-proof", quality_status="needs_review")
+        monkeypatch.setattr(api, "require_feature", lambda *_args, **_kwargs: None)
+        api.approve_decision(refs.lifecycle_id, "approve-quality", org.id, owner, db)
+        with pytest.raises(HTTPException) as exc:
+            api.mark_executed(
+                refs.lifecycle_id,
+                api.ExecutionEvidencePayload(execution_evidence_ids=[pending.id]),
+                "executed-quality",
+                org.id,
+                owner,
+                db,
+            )
+        assert exc.value.status_code == 422
+        assert api.get_lifecycle(refs.lifecycle_id, org.id, owner, db)["state"] == "approved"
+    finally:
+        db.close()
+
+
+def test_full_authorized_api_lifecycle_uses_durable_evidence_and_learns_verified_outcome(monkeypatch):
     db = _db()
     try:
         owner, _viewer, org, workspace = _seed_org(db)
@@ -194,6 +218,13 @@ def test_full_authorized_api_lifecycle_uses_durable_evidence(monkeypatch):
         assert [event["to_state"] for event in verified["events"]] == [
             "proposed", "awaiting_approval", "approved", "executed", "verified"
         ]
+        learned = db.query(EvidenceRecord).filter(
+            EvidenceRecord.tenant_id == org.id,
+            EvidenceRecord.evidence_type == VERIFIED_OUTCOME_EVIDENCE_TYPE,
+        ).all()
+        assert len(learned) == 1
+        assert learned[0].value_json["decision_lifecycle_id"] == refs.lifecycle_id
+        assert learned[0].metadata_json["operational_eligible"] is False
     finally:
         db.close()
 
