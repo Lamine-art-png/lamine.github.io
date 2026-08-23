@@ -21,6 +21,7 @@ from app.api.v1 import (
     brain_commercial,
     brain_safety,
     intelligence_analysis_api,
+    intelligence_history_api,
     intelligence_learning_api,
     intelligence_memory_api,
     platform_intelligence,
@@ -37,6 +38,7 @@ from app.services.commercial_control import require_feature
 router = APIRouter(tags=["ask-agro-ai-commercial"])
 install_ask_agro_ai_commercial_policy()
 router.include_router(intelligence_memory_api.router)
+router.include_router(intelligence_history_api.router)
 router.include_router(intelligence_analysis_api.router)
 router.include_router(intelligence_learning_api.router)
 
