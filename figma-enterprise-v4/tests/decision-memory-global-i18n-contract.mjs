@@ -8,7 +8,7 @@ const repoRoot = path.resolve(here, "../..");
 const component = fs.readFileSync(path.join(appRoot, "components/intelligence/DecisionMemoryWorkspace.tsx"), "utf8");
 const catalogModule = fs.readFileSync(path.join(appRoot, "decisionMemoryI18n.ts"), "utf8");
 const backendI18n = fs.readFileSync(path.join(repoRoot, "agroai_api/app/api/v1/i18n.py"), "utf8");
-const canonicalCatalog = JSON.parse(fs.readFileSync(path.join(repoRoot, "shared/ui-catalog.en.json"), "utf8"));
+const canonicalCatalog = JSON.parse(fs.readFileSync(path.join(repoRoot, "shared/ui-decision-memory.en.json"), "utf8"));
 const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "shared/supported-locales.json"), "utf8"));
 
 function objectBody(source, exportName) {
@@ -25,9 +25,11 @@ function keysFrom(body) {
   return [...body.matchAll(/"(decisionMemory\.[^"]+)"\s*:/g)].map((match) => match[1]).sort();
 }
 
-const enKeys = Object.keys(canonicalCatalog).filter((key) => key.startsWith("decisionMemory.")).sort();
+const enKeys = Object.keys(canonicalCatalog).sort();
 const frKeys = keysFrom(objectBody(catalogModule, "DECISION_MEMORY_FR"));
-if (!enKeys.length) throw new Error("Decision Memory canonical English source is empty");
+if (!enKeys.length || enKeys.some((key) => !key.startsWith("decisionMemory."))) {
+  throw new Error("Decision Memory canonical English source is empty or has a foreign namespace");
+}
 if (JSON.stringify(enKeys) !== JSON.stringify(frKeys)) {
   throw new Error("Decision Memory English/French base catalogs lost exact key parity");
 }
@@ -38,11 +40,14 @@ if (missingSourceKeys.length) {
   throw new Error(`Decision Memory UI uses keys missing from the canonical global English translation source: ${missingSourceKeys.join(", ")}`);
 }
 
-if (!catalogModule.includes('sharedUiCatalogEn from "../../../shared/ui-catalog.en.json"')) {
-  throw new Error("Decision Memory frontend source must come from the shared canonical UI catalog");
+if (!catalogModule.includes('sharedDecisionMemoryEn from "../../../shared/ui-decision-memory.en.json"')) {
+  throw new Error("Decision Memory frontend source must come from its shared canonical catalog");
 }
-if (!backendI18n.includes('_CANONICAL_CATALOG_PATH = _REPO_ROOT / "shared" / "ui-catalog.en.json"')) {
-  throw new Error("Backend UI translation must authorize the shared canonical UI catalog");
+if (!backendI18n.includes('_DECISION_MEMORY_CATALOG_PATH = _REPO_ROOT / "shared" / "ui-decision-memory.en.json"')) {
+  throw new Error("Backend UI translation must authorize the shared Decision Memory catalog");
+}
+if (!backendI18n.includes("merged.update(decision_memory)")) {
+  throw new Error("Backend canonical translation source must merge Decision Memory before validating requested subsets");
 }
 if (!component.includes("ensureLocaleSourceCatalog(selectedLocale, DECISION_MEMORY_EN)")) {
   throw new Error("Decision Memory must hydrate its operating catalog through the global dynamic locale service");
@@ -67,6 +72,12 @@ const localeCodes = new Set((manifest.locales || []).map((locale) => locale.code
 const missingMetadata = (manifest.enabledUiLocales || []).filter((locale) => !localeCodes.has(locale));
 if (missingMetadata.length) {
   throw new Error(`Enabled UI locales missing locale metadata: ${missingMetadata.join(", ")}`);
+}
+for (const rtlLocale of ["ar", "fa", "ur"]) {
+  const row = (manifest.locales || []).find((locale) => locale.code === rtlLocale);
+  if (!row || row.direction !== "rtl" || !enabled.has(rtlLocale)) {
+    throw new Error(`Decision Memory global UI requires enabled RTL metadata for ${rtlLocale}`);
+  }
 }
 
 console.log(`Decision Memory global i18n contract passed for ${(manifest.enabledUiLocales || []).length - 1} enabled language choices plus Auto.`);
