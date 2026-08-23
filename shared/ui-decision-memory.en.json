@@ -30,6 +30,7 @@
   "decisionMemory.domain.equipment": "Equipment",
   "decisionMemory.domain.assurance": "Assurance",
   "decisionMemory.domain.reporting": "Reporting",
+  "decisionMemory.domain.operations": "Operations",
   "decisionMemory.specialistStatus.evidence_available": "Evidence available",
   "decisionMemory.specialistStatus.evidence_limited": "Evidence limited",
   "decisionMemory.specialistStatus.conflict_review": "Conflict review",
@@ -53,5 +54,14 @@
   "decisionMemory.task.report_factory": "Report factory",
   "decisionMemory.task.connector_diagnosis": "Connector diagnosis",
   "decisionMemory.task.readiness_analysis": "Readiness analysis",
-  "decisionMemory.task.irrigation_decision": "Irrigation decision"
+  "decisionMemory.task.irrigation_decision": "Irrigation decision",
+  "decisionMemory.change.first_decision": "No earlier immutable decision exists in the same field and domain scope.",
+  "decisionMemory.change.evidence_changed": "The evidence set changed.",
+  "decisionMemory.change.science_changed": "One or more deterministic science results changed.",
+  "decisionMemory.change.conflicts_changed": "The recorded evidence-conflict set changed.",
+  "decisionMemory.change.unknowns_changed": "The unresolved-unknown set changed.",
+  "decisionMemory.change.confidence_changed": "Grounding confidence changed.",
+  "decisionMemory.change.field_state_changed": "The decision references a different immutable Field State revision.",
+  "decisionMemory.change.recommendation_changed": "The governed recommendation changed after post-validation.",
+  "decisionMemory.change.no_material_change": "No material persisted input or decision difference was detected."
 }
