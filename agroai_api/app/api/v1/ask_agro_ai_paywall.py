@@ -1,10 +1,11 @@
-"""Authoritative paid boundary for Ask AGRO-AI inference and decision-memory routes.
+"""Authoritative paid boundary for Ask AGRO-AI inference and intelligence-memory routes.
 
 The customer-facing portal has several rolling-deploy and recovery routes for
 Ask AGRO-AI. This router is included ahead of compatibility routes so a Free
 account cannot bypass the commercial boundary by calling an older endpoint.
-The decision-memory router also performs its own tenant, entitlement, and role
-checks because it may be mounted independently during compatibility releases.
+The intelligence-memory and analysis routers also perform their own tenant,
+entitlement, and role checks because they may be mounted independently during
+compatibility releases.
 """
 from __future__ import annotations
 
@@ -14,7 +15,16 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user
-from app.api.v1 import ai_stable, brain, brain_commercial, brain_safety, intelligence_memory_api, platform_intelligence
+from app.api.v1 import (
+    ai_stable,
+    brain,
+    brain_commercial,
+    brain_safety,
+    intelligence_analysis_api,
+    intelligence_learning_api,
+    intelligence_memory_api,
+    platform_intelligence,
+)
 from app.api.v1.brain import BrainRunRequest
 from app.core.security import require_current_tenant_id
 from app.db.base import get_db
@@ -27,6 +37,8 @@ from app.services.commercial_control import require_feature
 router = APIRouter(tags=["ask-agro-ai-commercial"])
 install_ask_agro_ai_commercial_policy()
 router.include_router(intelligence_memory_api.router)
+router.include_router(intelligence_analysis_api.router)
+router.include_router(intelligence_learning_api.router)
 
 
 def _require_paid_ask(db: Session, tenant_id: str) -> Organization:
