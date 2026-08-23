@@ -66,6 +66,10 @@ PACKAGE_TYPES = {
     "input_application_record_pack",
     "operational_execution_pack",
 }
+CORRECTABLE_METADATA_FIELDS = {
+    "evidence_type", "proof_domain", "truth_label", "reporting_period",
+    "confidence", "data_quality", "stale_after", "unresolved_issue",
+}
 
 
 def _dt(value: str | datetime | None) -> datetime | None:
@@ -355,6 +359,52 @@ class AssuranceRepository:
                     item.notes = "Evidence mapped for reviewer evaluation."
                     item.updated_at = datetime.utcnow()
 
+    def _requirement_specs(self, passport_id: str) -> dict[tuple[str, str], dict[str, Any]]:
+        passport = self._passport(passport_id)
+        return {
+            (spec["rule_pack_id"], spec["key"]): spec
+            for spec in checklist_for(passport.rule_pack_ids)
+        }
+
+    @staticmethod
+    def _evidence_satisfies_spec(evidence: AssuranceEvidenceArtifact, spec: dict[str, Any]) -> bool:
+        allowed = set(spec.get("evidence_types") or [])
+        return bool(allowed and evidence.evidence_type in allowed)
+
+    def _linked_requirements(
+        self,
+        passport_id: str,
+        mapping_id: str,
+    ) -> list[AssuranceChecklistItem]:
+        return [
+            item
+            for item in self._scope_query(AssuranceChecklistItem).filter_by(passport_id=passport_id).all()
+            if mapping_id in (item.evidence_artifact_ids or [])
+        ]
+
+    @staticmethod
+    def _requirement_link_state(item: AssuranceChecklistItem) -> dict[str, Any]:
+        return {
+            "checklist_item_id": item.id,
+            "rule_pack_id": item.rule_pack_id,
+            "requirement_key": item.requirement_key,
+            "status": item.status,
+            "evidence_mapping_ids": list(item.evidence_artifact_ids or []),
+        }
+
+    @staticmethod
+    def _mapping_review_state(mapping: AssuranceEvidenceArtifact | None) -> dict[str, Any]:
+        if mapping is None:
+            return {}
+        return {
+            "mapping_status": mapping.mapping_status,
+            "review_status": mapping.review_status,
+            **{
+                field: _iso(getattr(mapping, field))
+                for field in sorted(CORRECTABLE_METADATA_FIELDS)
+            },
+        }
+
     def evidence_candidates(self) -> dict[str, Any]:
         if not self.organization_id:
             return {"canonical_evidence": [], "field_observations": []}
@@ -459,7 +509,37 @@ class AssuranceRepository:
         else:
             raise ValueError("source_kind must be canonical_evidence or field_observation")
 
-        evidence_type = str(payload.get("evidence_type") or source_payload["evidence_type"])
+        source_evidence_type = str(source_payload["evidence_type"])
+        evidence_type = str(payload.get("evidence_type") or source_evidence_type)
+        if evidence_type != source_evidence_type:
+            raise ValueError(
+                f"Evidence type '{evidence_type}' does not match the authoritative source classification "
+                f"'{source_evidence_type}'; a reviewer must use correct_metadata to reclassify it"
+            )
+        requirement_keys = set(payload.get("requirement_keys") or [])
+        explicit_items: list[AssuranceChecklistItem] = []
+        if requirement_keys:
+            explicit_items = self._scope_query(AssuranceChecklistItem).filter(
+                AssuranceChecklistItem.passport_id == passport_id,
+                AssuranceChecklistItem.requirement_key.in_(requirement_keys),
+            ).all()
+            if len({item.requirement_key for item in explicit_items}) != len(requirement_keys):
+                raise ValueError("One or more requirement_keys do not belong to this passport")
+            specs = self._requirement_specs(passport_id)
+            incompatible = [
+                item
+                for item in explicit_items
+                if evidence_type not in set(
+                    specs.get((item.rule_pack_id, item.requirement_key), {}).get("evidence_types") or []
+                )
+            ]
+            if incompatible:
+                labels = ", ".join(
+                    f"{item.rule_pack_id}:{item.requirement_key}" for item in incompatible
+                )
+                raise ValueError(
+                    f"Evidence type '{evidence_type}' is incompatible with selected requirement(s): {labels}"
+                )
         existing = self._scope_query(AssuranceEvidenceArtifact).filter_by(
             passport_id=passport_id,
             source_kind=source_kind,
@@ -503,15 +583,8 @@ class AssuranceRepository:
         )
         self.db.add(row)
         self.db.flush()
-        requirement_keys = set(payload.get("requirement_keys") or [])
         if requirement_keys:
-            items = self._scope_query(AssuranceChecklistItem).filter(
-                AssuranceChecklistItem.passport_id == passport_id,
-                AssuranceChecklistItem.requirement_key.in_(requirement_keys),
-            ).all()
-            if len({item.requirement_key for item in items}) != len(requirement_keys):
-                raise ValueError("One or more requirement_keys do not belong to this passport")
-            for item in items:
+            for item in explicit_items:
                 ids = list(item.evidence_artifact_ids or [])
                 if row.id not in ids:
                     ids.append(row.id)
@@ -837,12 +910,15 @@ class AssuranceRepository:
         for item in items:
             spec = next((entry for entry in specs if entry["rule_pack_id"] == item.rule_pack_id and entry["key"] == item.requirement_key), {})
             linked = [mappings_by_id[value] for value in (item.evidence_artifact_ids or []) if value in mappings_by_id]
-            usable = [row for row in linked if row.mapping_status not in {"rejected"}]
+            compatible = [row for row in linked if self._evidence_satisfies_spec(row, spec)]
+            incompatible = [row for row in linked if not self._evidence_satisfies_spec(row, spec)]
+            usable = [row for row in compatible if row.mapping_status not in {"rejected"}]
             stale = [row for row in usable if row.stale_after and row.stale_after < datetime.utcnow()]
             conflicting = [row for row in usable if row.unresolved_issue or row.mapping_status == "conflicting"]
-            accepted_rows = [row for row in usable if row.mapping_status == "accepted" or row.review_status == "accepted"]
+            qualified = [row for row in usable if row not in stale and row not in conflicting]
+            accepted_rows = [row for row in qualified if row.mapping_status == "accepted" or row.review_status == "accepted"]
             not_applicable = any(row.mapping_status == "not_applicable" for row in linked) or item.status == "not_applicable"
-            is_satisfied = bool(usable and not stale and not conflicting) or not_applicable or item.status == "satisfied"
+            is_satisfied = bool(qualified) or not_applicable
             if not is_satisfied and spec.get("record_type") == "input_application":
                 is_satisfied = self._scope_query(InputApplication).filter_by(passport_id=passport_id).count() > 0
             if not is_satisfied and spec.get("evidence_types"):
@@ -853,6 +929,8 @@ class AssuranceRepository:
                 requirement_status = "conflicting"
             elif stale:
                 requirement_status = "stale"
+            elif incompatible:
+                requirement_status = "incompatible"
             elif accepted_rows:
                 requirement_status = "accepted"
             elif is_satisfied and (linked or spec.get("record_type")):
@@ -863,13 +941,13 @@ class AssuranceRepository:
                 requirement_status = "rejected"
             else:
                 requirement_status = "missing"
+            item.status = requirement_status
             if is_satisfied:
                 satisfied += 1
                 if requirement_status == "accepted":
                     accepted += 1
                 elif requirement_status not in {"not_applicable", "mapped", "present"}:
                     pending_review += 1
-                item.status = requirement_status
             else:
                 missing_item = {
                     "rule_pack_id": item.rule_pack_id,
@@ -882,7 +960,7 @@ class AssuranceRepository:
                     "needed_evidence_types": spec.get("evidence_types", []),
                 }
                 missing.append(missing_item)
-                if requirement_status in {"stale", "conflicting", "rejected"}:
+                if requirement_status in {"stale", "conflicting", "incompatible", "rejected"}:
                     warnings.append(missing_item)
             requirements.append({
                 "id": item.id,
@@ -900,6 +978,7 @@ class AssuranceRepository:
                 "needed_evidence_types": spec.get("evidence_types", []),
                 "optional_evidence_types": spec.get("optional_evidence_types", []),
                 "evidence_mapping_ids": list(item.evidence_artifact_ids or []),
+                "incompatible_evidence_mapping_ids": [row.id for row in incompatible],
             })
         total = max(len(items), 1)
         readiness_score = round(satisfied / total * 100, 1)
@@ -1072,39 +1151,91 @@ class AssuranceRepository:
         if not mapping and not item:
             raise ValueError("evidence_mapping_id or checklist_item_id is required")
 
+        linked_before = self._linked_requirements(passport_id, mapping.id) if mapping else []
+        linked_before_state = [self._requirement_link_state(link) for link in linked_before]
         previous_state = {
-            "mapping_status": mapping.mapping_status if mapping else None,
-            "review_status": mapping.review_status if mapping else None,
+            **self._mapping_review_state(mapping),
             "checklist_status": item.status if item else None,
+            "affected_requirement_links": linked_before_state,
         }
         next_status = REVIEW_ACTIONS[action]
+        correction_audit: dict[str, Any] | None = None
+        readiness_recomputed = False
         if mapping:
             if action == "correct_metadata":
                 corrections = payload.get("corrections") or {}
-                allowed = {
-                    "evidence_type", "proof_domain", "truth_label", "reporting_period",
-                    "confidence", "data_quality", "stale_after", "unresolved_issue",
-                }
-                unknown = set(corrections) - allowed
+                unknown = set(corrections) - CORRECTABLE_METADATA_FIELDS
                 if unknown:
                     raise ValueError(f"Unsupported correction fields: {', '.join(sorted(unknown))}")
+                if not corrections:
+                    raise ValueError("At least one metadata correction is required")
                 if "truth_label" in corrections and corrections["truth_label"] not in TRUTH_LABELS:
                     raise ValueError(f"truth_label must be one of {sorted(TRUTH_LABELS)}")
+                if "confidence" in corrections and corrections["confidence"] is not None:
+                    confidence = float(corrections["confidence"])
+                    if not 0.0 <= confidence <= 1.0:
+                        raise ValueError("confidence must be between 0 and 1")
+                    corrections["confidence"] = confidence
+                previous_values: dict[str, Any] = {}
+                next_values: dict[str, Any] = {}
                 for key, value in corrections.items():
-                    setattr(mapping, key, _dt(value) if key == "stale_after" else value)
+                    normalized = _dt(value) if key == "stale_after" else value
+                    before = getattr(mapping, key)
+                    if before == normalized:
+                        continue
+                    previous_values[key] = _iso(before)
+                    next_values[key] = _iso(normalized)
+                    setattr(mapping, key, normalized)
+                if not next_values:
+                    raise ValueError("Metadata correction does not change any values")
                 mapping.mapping_status = "reviewer_required"
                 mapping.review_status = "pending_review"
+                specs = self._requirement_specs(passport_id)
+                invalidated: list[dict[str, Any]] = []
+                for linked_item in linked_before:
+                    spec = specs.get((linked_item.rule_pack_id, linked_item.requirement_key), {})
+                    if not self._evidence_satisfies_spec(mapping, spec):
+                        ids = [value for value in (linked_item.evidence_artifact_ids or []) if value != mapping.id]
+                        linked_item.evidence_artifact_ids = ids
+                        linked_item.status = "missing"
+                        linked_item.notes = "Evidence link invalidated after metadata correction."
+                        invalidated.append(self._requirement_link_state(linked_item))
+                    else:
+                        linked_item.status = "unreviewed" if linked_item.review_required else "mapped"
+                        linked_item.notes = "Evidence metadata changed; requirement compatibility revalidated."
+                    linked_item.updated_at = datetime.utcnow()
+                # Persist the current deterministic posture inside the same
+                # transaction so no stale satisfied state survives correction.
+                self.readiness(passport_id, persist=True, commit=False)
+                readiness_recomputed = True
+                linked_after = self._linked_requirements(passport_id, mapping.id)
+                correction_audit = {
+                    "changed_fields": sorted(next_values),
+                    "previous_values": previous_values,
+                    "next_values": next_values,
+                    "affected_requirement_links_before": linked_before_state,
+                    "affected_requirement_links_after": [
+                        self._requirement_link_state(link) for link in linked_after
+                    ],
+                    "invalidated_requirement_links": invalidated,
+                }
             else:
                 mapping.mapping_status = next_status
                 mapping.review_status = "accepted" if action == "accept_mapping" else "rejected" if action == "reject_mapping" else "pending_review"
                 if action == "reopen":
                     mapping.unresolved_issue = None
+                    for linked_item in linked_before:
+                        linked_item.status = "unreviewed" if linked_item.review_required else "mapped"
+                        linked_item.notes = "Reviewer reopened this evidence mapping."
+                        linked_item.updated_at = datetime.utcnow()
                 elif action == "request_additional_proof":
                     mapping.unresolved_issue = reason
         if item:
             item.status = next_status
             item.notes = reason or f"Reviewer action: {action}."
             item.updated_at = datetime.utcnow()
+        if mapping and not readiness_recomputed:
+            self.readiness(passport_id, persist=True, commit=False)
         event = AssuranceReviewEvent(
             id=f"are-{uuid.uuid4().hex[:16]}",
             **self._scope_values(),
@@ -1117,11 +1248,17 @@ class AssuranceRepository:
             reason=reason,
             previous_state=previous_state,
             next_state={
-                "mapping_status": mapping.mapping_status if mapping else None,
-                "review_status": mapping.review_status if mapping else None,
+                **self._mapping_review_state(mapping),
                 "checklist_status": item.status if item else None,
+                "affected_requirement_links": [
+                    self._requirement_link_state(link)
+                    for link in (self._linked_requirements(passport_id, mapping.id) if mapping else [])
+                ],
             },
-            metadata_json=payload.get("metadata") or {},
+            metadata_json={
+                **(payload.get("metadata") or {}),
+                **({"metadata_correction": correction_audit} if correction_audit else {}),
+            },
         )
         self.db.add(event)
         self.db.flush()
@@ -1130,7 +1267,12 @@ class AssuranceRepository:
             "review_decision_recorded",
             subject_type="review_event",
             subject_id=event.id,
-            details={"action": action, "mapping_id": mapping.id if mapping else None, "checklist_item_id": item.id if item else None},
+            details={
+                "action": action,
+                "mapping_id": mapping.id if mapping else None,
+                "checklist_item_id": item.id if item else None,
+                **({"metadata_correction": correction_audit} if correction_audit else {}),
+            },
         )
         self.db.commit()
         return {
@@ -1292,47 +1434,25 @@ class AssuranceRepository:
             }
             for item in snapshot["evidence"]
         ]
-        report_title = package_type.replace("_", " ").title()
-        answer = (
-            f"Status: {package_status}. Readiness: {readiness['readiness_score']}%. "
-            f"Satisfied requirements: {readiness['satisfied_count']} of {readiness['checklist_count']}. "
-            f"Blocking issues: {len(readiness['blocking_issues'])}. Pending human reviews: {readiness['pending_review_count']}.\n\n"
-            f"{ASSURANCE_DISCLAIMER}"
-        )
-        try:
-            from app.api.v1.chat_artifacts import ReportPdfRequest, build_report_pdf_bytes
-
-            pdf_bytes = build_report_pdf_bytes(
-                ReportPdfRequest(
-                    title=report_title,
-                    question=f"Immutable Assurance package snapshot for {passport.farm_name}",
-                    answer=answer,
-                    uploaded_evidence=[
-                        {
-                            "filename": item.get("filename") or item.get("source_id"),
-                            "source_type": item.get("source_kind"),
-                            "warnings": [item["unresolved_issue"]] if item.get("unresolved_issue") else [],
-                        }
-                        for item in snapshot["evidence"]
-                    ],
-                ),
-                self.owner_id,
-            )
-        except (ImportError, ModuleNotFoundError):
-            pdf_bytes = render_passport_pdf(snapshot)
-        checksum = hashlib.sha256(pdf_bytes).hexdigest()
         export_id = f"aex-{uuid.uuid4().hex[:12]}"
+        report_title = package_type.replace("_", " ").title()
+        generated_at = datetime.now(timezone.utc).isoformat()
+        package_payload = {
+            **snapshot,
+            "package_id": export_id,
+            "immutable_package_reference": f"assurance-export:{export_id}",
+            "package_type": package_type,
+            "package_version": package_version,
+            "package_status": package_status,
+            "generated_at": generated_at,
+            "content_type": "application/pdf",
+        }
+        pdf_bytes = render_passport_pdf(package_payload)
+        checksum = hashlib.sha256(pdf_bytes).hexdigest()
         staged_artifact = None
         generated_artifact_id = None
         storage_backend = "inline_base64"
         storage_ref = None
-        package_payload = {
-            **snapshot,
-            "package_type": package_type,
-            "package_version": package_version,
-            "package_status": package_status,
-            "content_type": "application/pdf",
-        }
         if legacy_inline:
             package_payload["content_base64"] = base64.b64encode(pdf_bytes).decode("ascii")
         else:
@@ -1610,6 +1730,20 @@ class AssuranceRepository:
                 "events": [_as_dict(row) for row in self._scope_query(TraceabilityEvent).filter_by(passport_id=passport_id).all()],
             },
             "evidence": [self.evidence_payload(row) for row in self._scope_query(AssuranceEvidenceArtifact).filter_by(passport_id=passport_id).all()],
+            "review_history": [
+                {
+                    "id": row.id,
+                    "action": row.action,
+                    "actor_label": row.actor_label,
+                    "reason": row.reason,
+                    "evidence_artifact_id": row.evidence_artifact_id,
+                    "checklist_item_id": row.checklist_item_id,
+                    "created_at": _iso(row.created_at),
+                }
+                for row in self._scope_query(AssuranceReviewEvent).filter_by(passport_id=passport_id).order_by(
+                    AssuranceReviewEvent.created_at.asc(), AssuranceReviewEvent.id.asc()
+                ).all()
+            ],
             "readiness": readiness,
             "audit_trail": {
                 "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -1620,53 +1754,328 @@ class AssuranceRepository:
         }
 
 
+def _pdf_safe(value: Any, *, limit: int = 600) -> str:
+    """Bound and normalize untrusted snapshot values before PDF rendering."""
+
+    if value is None or value == "":
+        return "Not available"
+    if isinstance(value, (dict, list, tuple)):
+        value = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+    text_value = str(value)
+    text_value = text_value.replace("\u2010", "-").replace("\u2011", "-").replace("\u2012", "-")
+    text_value = text_value.replace("\u2013", "-").replace("\u2014", "-").replace("\u2212", "-")
+    text_value = " ".join(
+        "".join(character if character.isprintable() else " " for character in text_value).split()
+    )
+    if len(text_value) > limit:
+        return text_value[: max(0, limit - 16)].rstrip() + " [truncated]"
+    return text_value
+
+
+def _pdf_public_reference(value: Any, *, limit: int = 180) -> str:
+    candidate = _pdf_safe(value, limit=limit)
+    lowered = candidate.lower()
+    if "://" in lowered or lowered.startswith("/"):
+        return "Private storage reference withheld"
+    return candidate
+
+
 def render_passport_pdf(package: dict[str, Any]) -> bytes:
     from io import BytesIO
 
     try:
+        from xml.sax.saxutils import escape
+
+        from reportlab.lib import colors
+        from reportlab.lib.enums import TA_CENTER
         from reportlab.lib.pagesizes import letter
-        from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import inch
+        from reportlab.platypus import CondPageBreak, KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
     except ModuleNotFoundError:
         return _minimal_passport_pdf(package)
 
     buf = BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=letter, title="Assurance Passport Audit Readiness")
+    class AssuranceDocTemplate(SimpleDocTemplate):
+        def afterPage(self) -> None:
+            page_frame(self.canv, self)
+
+    doc = AssuranceDocTemplate(
+        buf,
+        pagesize=letter,
+        title="AGRO-AI Assurance Proof Package",
+        leftMargin=0.55 * inch,
+        rightMargin=0.55 * inch,
+        topMargin=0.72 * inch,
+        bottomMargin=0.62 * inch,
+    )
     styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(
+        name="AssuranceSmall",
+        parent=styles["BodyText"],
+        fontName="Helvetica",
+        fontSize=7.5,
+        leading=10,
+        textColor=colors.HexColor("#42534B"),
+    ))
+    styles.add(ParagraphStyle(
+        name="AssuranceBody",
+        parent=styles["BodyText"],
+        fontName="Helvetica",
+        fontSize=9,
+        leading=13,
+        textColor=colors.HexColor("#10231B"),
+    ))
+    styles.add(ParagraphStyle(
+        name="AssuranceSection",
+        parent=styles["Heading2"],
+        fontName="Helvetica-Bold",
+        fontSize=12,
+        leading=15,
+        spaceBefore=10,
+        spaceAfter=6,
+        textColor=colors.HexColor("#174D36"),
+        keepWithNext=1,
+    ))
+    styles.add(ParagraphStyle(
+        name="AssuranceTableHeader",
+        parent=styles["AssuranceSmall"],
+        fontName="Helvetica-Bold",
+        textColor=colors.white,
+    ))
+    styles.add(ParagraphStyle(
+        name="AssuranceTitle",
+        parent=styles["Title"],
+        fontName="Helvetica-Bold",
+        fontSize=20,
+        leading=24,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor("#10231B"),
+        spaceAfter=5,
+    ))
     story = []
 
-    def add_heading(text: str) -> None:
-        story.append(Paragraph(text, styles["Heading2"]))
+    def paragraph(value: Any, style: str = "AssuranceBody", *, limit: int = 600) -> Paragraph:
+        return Paragraph(escape(_pdf_safe(value, limit=limit)), styles[style])
 
-    def add_body(text: str) -> None:
-        story.append(Paragraph(text.replace("&", "&amp;"), styles["BodyText"]))
+    def add_heading(text: str) -> None:
+        story.append(paragraph(text, "AssuranceSection"))
+
+    def add_body(text: Any, *, limit: int = 1200) -> None:
+        story.append(paragraph(text, limit=limit))
         story.append(Spacer(1, 8))
+
+    def label_value(label: str, value: Any) -> list[Paragraph]:
+        return [paragraph(label, "AssuranceSmall"), paragraph(value)]
+
+    def page_frame(canvas, document) -> None:
+        canvas.saveState()
+        width, height = letter
+        canvas.setFillColor(colors.HexColor("#174D36"))
+        canvas.rect(0, height - 0.34 * inch, width, 0.34 * inch, stroke=0, fill=1)
+        canvas.setFillColor(colors.white)
+        canvas.setFont("Helvetica-Bold", 8)
+        canvas.drawString(0.55 * inch, height - 0.225 * inch, "AGRO-AI ASSURANCE")
+        canvas.setFillColor(colors.HexColor("#42534B"))
+        canvas.setFont("Helvetica", 7)
+        canvas.drawString(0.55 * inch, 0.30 * inch, "Immutable reviewer evidence snapshot - decision support only")
+        canvas.drawRightString(width - 0.55 * inch, 0.30 * inch, f"Page {document.page}")
+        canvas.restoreState()
 
     passport = package["passport"]
     readiness = package["readiness"]
-    story.append(Paragraph("Assurance Passport - Audit Readiness", styles["Title"]))
-    add_body(package["disclaimer"])
-    add_heading("Farm Summary")
-    add_body(f"Farm: {passport.get('farm_name')} | Crop: {passport.get('crop') or 'not provided'} | Period: {passport.get('reporting_period')}")
-    add_heading("Water Proof")
-    water = package["water_proof"]
-    add_body(f"Wells: {len(water['wells'])}; meters: {len(water['meters'])}; measurements: {len(water['measurements'])}; water budgets: {len(water['water_budgets'])}.")
-    add_heading("Input Proof")
-    add_body(f"Input application records: {len(package['input_proof'])}.")
-    add_heading("Traceability Proof")
-    trace = package["traceability_proof"]
-    add_body(f"Harvest lots: {len(trace['harvest_lots'])}; traceability events: {len(trace['events'])}.")
-    add_heading("Missing Evidence")
-    if readiness["missing_evidence"]:
-        add_body("; ".join(item["requirement_key"] for item in readiness["missing_evidence"]))
+    evidence_by_id = {item.get("id"): item for item in package.get("evidence", []) if item.get("id")}
+
+    story.append(paragraph("AGRO-AI", "AssuranceSmall"))
+    story.append(paragraph(_pdf_safe(package.get("package_type", "assurance proof package")).replace("_", " ").title(), "AssuranceTitle"))
+    story.append(paragraph("Immutable Assurance proof package for external reviewer evaluation", "AssuranceSmall"))
+    story.append(Spacer(1, 10))
+    summary = Table([
+        label_value("Package ID", package.get("package_id")),
+        label_value("Package version", package.get("package_version")),
+        label_value("Generated timestamp", package.get("generated_at") or package.get("audit_trail", {}).get("generated_at")),
+        label_value("Package status", package.get("package_status")),
+        label_value("Farm or operation", passport.get("farm_name")),
+        label_value("Entity type", passport.get("entity_type") or "farm"),
+        label_value("Crop", passport.get("crop")),
+        label_value("Reporting period", passport.get("reporting_period")),
+        label_value("Readiness score", f"{readiness.get('readiness_score', 0)}%"),
+        label_value("Immutable package reference", package.get("immutable_package_reference")),
+    ], colWidths=[1.65 * inch, 5.05 * inch], hAlign="LEFT")
+    summary.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#EAF2ED")),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#BFCFC5")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#D8E2DB")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 7),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.append(summary)
+
+    add_heading("How to interpret readiness")
+    explanation = readiness.get("score_explanation") or {}
+    add_body(
+        f"The readiness score is {readiness.get('satisfied_count', 0)} satisfied requirements out of "
+        f"{readiness.get('checklist_count', 0)} selected requirements. "
+        f"{explanation.get('formula') or 'It measures usable evidence coverage for the selected rule packs.'}"
+    )
+    does_not_mean = _pdf_safe(
+        explanation.get("does_not_mean")
+        or "certification, regulatory approval, or a legal compliance determination",
+        limit=600,
+    )
+    if "does not" not in does_not_mean.lower():
+        does_not_mean = f"The readiness score does not mean {does_not_mean[:1].lower()}{does_not_mean[1:]}"
+    add_body(does_not_mean)
+
+    add_heading("Selected rule packs and exact versions")
+    pack_rows = [[paragraph("Rule pack", "AssuranceTableHeader"), paragraph("Version", "AssuranceTableHeader")]]
+    for pack_id in passport.get("rule_pack_ids") or []:
+        pack = DEFAULT_RULE_PACKS.get(pack_id, {})
+        pack_rows.append([
+            paragraph(pack.get("title") or pack_id),
+            paragraph((readiness.get("rule_pack_versions") or {}).get(pack_id) or pack.get("version")),
+        ])
+    pack_table = Table(pack_rows, colWidths=[5.1 * inch, 1.6 * inch], repeatRows=1)
+    pack_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#174D36")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#C8D5CD")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.append(pack_table)
+
+    add_heading("Requirement-by-requirement matrix")
+    matrix_header = [
+        paragraph("Requirement", "AssuranceTableHeader"),
+        paragraph("Status", "AssuranceTableHeader"),
+        paragraph("Blocking", "AssuranceTableHeader"),
+        paragraph("Attached evidence references", "AssuranceTableHeader"),
+    ]
+    matrix_rows = []
+    for requirement in readiness.get("requirements") or []:
+        evidence_lines: list[str] = []
+        for mapping_id in requirement.get("evidence_mapping_ids") or []:
+            mapped = evidence_by_id.get(mapping_id)
+            if not mapped:
+                evidence_lines.append(_pdf_safe(mapping_id, limit=100))
+                continue
+            evidence_lines.append(
+                f"{_pdf_safe(mapping_id, limit=80)} | {_pdf_safe(mapped.get('source_kind'), limit=40)} | "
+                f"{_pdf_public_reference(mapped.get('source_id'), limit=100)} | type={_pdf_safe(mapped.get('evidence_type'), limit=60)}"
+            )
+        if not evidence_lines:
+            evidence_lines = ["No evidence attached"]
+        matrix_rows.append([
+            paragraph(
+                f"{requirement.get('title') or requirement.get('requirement_key')} "
+                f"[{requirement.get('rule_pack_id')} v{requirement.get('rule_pack_version')}]",
+                limit=300,
+            ),
+            paragraph(str(requirement.get("status") or "").replace("_", " "), "AssuranceSmall"),
+            paragraph("Yes" if requirement.get("blocking") else "No", "AssuranceSmall"),
+            paragraph("\n".join(evidence_lines), "AssuranceSmall", limit=1600),
+        ])
+    for start in range(0, len(matrix_rows), 3):
+        matrix = Table(
+            [matrix_header, *matrix_rows[start:start + 3]],
+            colWidths=[2.0 * inch, 1.0 * inch, 0.7 * inch, 3.0 * inch],
+            repeatRows=1,
+            hAlign="LEFT",
+        )
+        matrix.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#174D36")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5F8F6")]),
+            ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#C8D5CD")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story.append(matrix)
+        story.append(Spacer(1, 6))
+
+    add_heading("Evidence registry")
+    if not evidence_by_id:
+        add_body("No evidence mappings are present in this immutable snapshot.")
+    for mapping in evidence_by_id.values():
+        stale = bool(mapping.get("stale_after") and str(mapping.get("stale_after")) < datetime.utcnow().isoformat())
+        states = [mapping.get("mapping_status"), mapping.get("review_status")]
+        if stale:
+            states.append("stale")
+        if mapping.get("unresolved_issue"):
+            states.append("conflicting")
+        source = mapping.get("source") or {}
+        lines = [
+            f"Source kind: {_pdf_safe(mapping.get('source_kind'), limit=60)}",
+            f"Source identifier: {_pdf_public_reference(mapping.get('source_id'), limit=160)}",
+            f"Evidence type: {_pdf_safe(mapping.get('evidence_type'), limit=100)}",
+            f"Event timestamp: {_pdf_safe(mapping.get('event_timestamp') or source.get('occurred_at'), limit=80)}",
+            f"Truth label: {_pdf_safe(mapping.get('truth_label'), limit=60)}",
+            f"Confidence: {_pdf_safe(mapping.get('confidence'), limit=40)}",
+            f"Data quality: {_pdf_safe(mapping.get('data_quality'), limit=80)}",
+            f"Human review and evidence state: {_pdf_safe(', '.join(str(value) for value in states if value), limit=180)}",
+            f"Checksum or evidence reference: {_pdf_safe(mapping.get('checksum') or mapping.get('id'), limit=180)}",
+        ]
+        story.extend([
+            paragraph(f"Evidence {mapping.get('id')}", "AssuranceSection", limit=120),
+            paragraph(" | ".join(lines), "AssuranceSmall", limit=1800),
+            Spacer(1, 5),
+        ])
+
+    add_heading("Missing proof and blocking posture")
+    missing = readiness.get("missing_evidence") or []
+    if missing:
+        for item in missing:
+            add_body(
+                f"{item.get('rule_pack_id')}:{item.get('requirement_key')} - status {item.get('status')}; "
+                f"blocking={'yes' if item.get('blocking') else 'no'}; needed evidence types: "
+                f"{', '.join(item.get('needed_evidence_types') or [])}",
+                limit=900,
+            )
     else:
-        add_body("No missing checklist evidence detected for the selected rule packs.")
-    add_heading("Readiness Score")
-    add_body(f"{readiness['readiness_score']}% - {readiness['status']}.")
-    add_heading("Risk Score")
-    add_body(f"{readiness['risk_score']} ({readiness['risk_level']}).")
-    add_heading("Audit Trail")
-    add_body(f"Generated at {package['audit_trail']['generated_at']}. Scope: audit readiness evidence package for reviewer evaluation.")
+        add_body("No missing checklist evidence was detected for the selected rule packs at generation time.")
+
+    # Reserve enough room for the heading and at least one decision. Without
+    # this guard ReportLab can place the heading beside a split KeepTogether at
+    # the bottom of a dense evidence page.
+    story.append(CondPageBreak(1.7 * inch))
+    add_heading("Human review decisions")
+    reviews = package.get("review_history") or []
+    if reviews:
+        for review in reviews:
+            story.append(KeepTogether([
+                paragraph(
+                    f"{review.get('created_at')} | {review.get('action')} | mapping "
+                    f"{review.get('evidence_artifact_id') or 'not applicable'} | requirement "
+                    f"{review.get('checklist_item_id') or 'not applicable'} | reviewer "
+                    f"{review.get('actor_label') or 'authenticated reviewer'} | reason: "
+                    f"{_pdf_safe(review.get('reason') or 'not provided', limit=240)}",
+                    limit=760,
+                ),
+                Spacer(1, 8),
+            ]))
+    else:
+        add_body("No human review decisions were recorded in this snapshot. No human approval is claimed.")
+
+    story.append(KeepTogether([
+        paragraph("Strong disclaimer", "AssuranceSection"),
+        paragraph(package.get("disclaimer") or ASSURANCE_DISCLAIMER, limit=1800),
+        Spacer(1, 8),
+        paragraph(
+            "This package does not claim certification, regulatory approval, legal compliance, automatic filing, "
+            "verified live-source completeness, or human approval unless a specific human decision is shown above.",
+            limit=1000,
+        ),
+        Spacer(1, 8),
+    ]))
     doc.build(story)
     return buf.getvalue()
 
@@ -1675,15 +2084,26 @@ def _minimal_passport_pdf(package: dict[str, Any]) -> bytes:
     passport = package["passport"]
     readiness = package["readiness"]
     lines = [
-        "Assurance Passport - Audit Readiness",
-        package["disclaimer"],
-        f"Farm: {passport.get('farm_name')} | Crop: {passport.get('crop') or 'not provided'} | Period: {passport.get('reporting_period')}",
-        f"Readiness Score: {readiness['readiness_score']}% - {readiness['status']}.",
-        f"Risk Score: {readiness['risk_score']} ({readiness['risk_level']}).",
-        "Audit readiness evidence package for reviewer evaluation.",
+        "AGRO-AI Assurance Proof Package",
+        f"Package ID: {_pdf_safe(package.get('package_id'))}",
+        f"Package version: {_pdf_safe(package.get('package_version'))}",
+        f"Generated: {_pdf_safe(package.get('generated_at'))}",
+        f"Package status: {_pdf_safe(package.get('package_status'))}",
+        f"Farm or operation: {_pdf_safe(passport.get('farm_name'))}",
+        f"Reporting period: {_pdf_safe(passport.get('reporting_period'))}",
+        f"Readiness Score: {_pdf_safe(readiness.get('readiness_score'))}% - {_pdf_safe(readiness.get('status'))}.",
+        f"Immutable package reference: {_pdf_safe(package.get('immutable_package_reference'))}",
+        _pdf_safe(package.get("disclaimer") or ASSURANCE_DISCLAIMER, limit=1200),
+        "This is evidence readiness decision support only. It is not certification, regulatory approval, legal compliance, automatic filing, or a claim of complete live-source verification.",
     ]
-    text = "\\n".join(line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)") for line in lines)
-    stream = f"BT /F1 10 Tf 72 740 Td ({text}) Tj ET".encode("latin-1", errors="replace")
+    escaped_lines = [line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)") for line in lines]
+    text_ops = ["BT /F1 9 Tf 72 740 Td 12 TL"]
+    for index, line in enumerate(escaped_lines):
+        if index:
+            text_ops.append("T*")
+        text_ops.append(f"({line}) Tj")
+    text_ops.append("ET")
+    stream = " ".join(text_ops).encode("latin-1", errors="replace")
     objects = [
         b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n",
         b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n",

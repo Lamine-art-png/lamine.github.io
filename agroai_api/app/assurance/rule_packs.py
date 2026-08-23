@@ -14,7 +14,8 @@ ASSURANCE_DISCLAIMER = (
 DEFAULT_RULE_PACKS: dict[str, dict[str, Any]] = {
     "water_assurance_generic_v1": {
         "id": "water_assurance_generic_v1",
-        "title": "Water assurance — generic",
+        "title": "Water assurance",
+        "customer_description": "Organize water source, measurement, execution, and verification records.",
         "domain": "water",
         "scope": "standard",
         "version": "1.0.0",
@@ -36,6 +37,7 @@ DEFAULT_RULE_PACKS: dict[str, dict[str, Any]] = {
     "buyer_input_records_v1": {
         "id": "buyer_input_records_v1",
         "title": "Buyer input records",
+        "customer_description": "Organize application records and their supporting product documents for buyer review.",
         "domain": "inputs",
         "scope": "buyer",
         "version": "1.0.0",
@@ -55,6 +57,7 @@ DEFAULT_RULE_PACKS: dict[str, dict[str, Any]] = {
     "operational_execution_proof_v1": {
         "id": "operational_execution_proof_v1",
         "title": "Operational execution proof",
+        "customer_description": "Connect recommendations, human approvals, work orders, field execution, and verification.",
         "domain": "operational_execution",
         "scope": "standard",
         "version": "1.0.0",
@@ -147,7 +150,11 @@ def get_rule_pack(pack_id: str) -> dict[str, Any]:
 
 
 def validate_rule_pack_ids(pack_ids: list[str] | None) -> list[str]:
-    selected = pack_ids or list(DEFAULT_RULE_PACKS)
+    selected = list(DEFAULT_RULE_PACKS) if pack_ids is None else list(pack_ids)
+    if not selected:
+        raise ValueError("Select at least one supported assurance rule pack")
+    if len(selected) != len(set(selected)):
+        raise ValueError("Assurance rule packs must not be selected more than once")
     unknown = [pack_id for pack_id in selected if pack_id not in DEFAULT_RULE_PACKS]
     if unknown:
         raise ValueError(f"Unsupported assurance rule pack(s): {', '.join(unknown)}")

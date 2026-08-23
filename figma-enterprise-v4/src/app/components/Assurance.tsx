@@ -59,6 +59,8 @@ type EvidenceMapping = {
   mapping_status: string;
   review_status: string;
   truth_label: string;
+  reporting_period?: string;
+  confidence?: number;
   data_quality?: string;
   unresolved_issue?: string;
   stale_after?: string;
@@ -102,6 +104,16 @@ type AgentRun = {
   };
 };
 
+type RulePackOption = {
+  id: string;
+  title: string;
+  version: string;
+  customer_description?: string;
+};
+
+type ReviewAction = "accept_mapping" | "reject_mapping" | "correct_metadata" | "request_additional_proof" | "mark_not_applicable" | "reopen";
+type MetadataCorrections = Partial<Record<"evidence_type" | "proof_domain" | "truth_label" | "reporting_period" | "confidence" | "data_quality" | "stale_after" | "unresolved_issue", string | number | null>>;
+
 type Tab = "readiness" | "requirements" | "evidence" | "review" | "agent" | "packages";
 
 function entitlementEnabled(entitlements: Record<string, unknown>, key: string, fallback = false) {
@@ -141,6 +153,7 @@ export function Assurance() {
   const [farmName, setFarmName] = useState("");
   const [crop, setCrop] = useState("");
   const [reportingPeriod, setReportingPeriod] = useState(String(new Date().getFullYear()));
+  const [selectedRulePackIds, setSelectedRulePackIds] = useState<string[]>([]);
   const [candidateId, setCandidateId] = useState("");
   const [requirementKey, setRequirementKey] = useState("");
   const [reviewNote, setReviewNote] = useState("");
@@ -157,6 +170,10 @@ export function Assurance() {
 
   const passports = usePortalResource<{ passports: PassportSummary[] }>(
     useCallback(async () => (await apiClient.assurance.passports(workspaceId)) as { passports: PassportSummary[] }, [workspaceId]),
+    { enabled: Boolean(workspaceId) },
+  );
+  const rulePacks = usePortalResource<{ rule_packs: Record<string, RulePackOption> }>(
+    useCallback(async () => (await apiClient.assurance.rulePacks(workspaceId)) as { rule_packs: Record<string, RulePackOption> }, [workspaceId]),
     { enabled: Boolean(workspaceId) },
   );
   const detail = usePortalResource<PassportDetail>(
@@ -206,20 +223,23 @@ export function Assurance() {
       selectedPassportId ? reviewQueue.refresh({ silent: true }) : Promise.resolve(),
       selectedPassportId ? proofPackages.refresh({ silent: true }) : Promise.resolve(),
       selectedPassportId && canRunAgent ? agentRuns.refresh({ silent: true }) : Promise.resolve(),
+      selectedPassportId && canMap ? candidates.refresh({ silent: true }) : Promise.resolve(),
     ]);
   }
 
   async function createPassport() {
-    if (!farmName.trim() || !workspaceId) return;
+    if (!farmName.trim() || !workspaceId || !selectedRulePackIds.length) return;
     setBusy("create");
     setMessage("");
     try {
       const created = await apiClient.assurance.createPassport(workspaceId, {
         farm_name: farmName.trim(), crop: crop.trim() || null, reporting_period: reportingPeriod,
+        rule_pack_ids: selectedRulePackIds,
       }) as PassportDetail;
       setSelectedPassportId(created.passport.id);
       setShowCreate(false);
       setFarmName("");
+      setSelectedRulePackIds([]);
       setMessage(tx("Assurance Passport created."));
       await passports.refresh();
     } catch (error) {
@@ -251,9 +271,9 @@ export function Assurance() {
     }
   }
 
-  async function submitReview(mappingId: string, action: "accept_mapping" | "reject_mapping" | "request_additional_proof") {
-    if (action !== "accept_mapping" && !reviewNote.trim()) {
-      setMessage(tx("Add a reviewer note before rejecting or requesting proof."));
+  async function submitReview(mappingId: string, action: ReviewAction, corrections?: MetadataCorrections) {
+    if (["reject_mapping", "request_additional_proof", "mark_not_applicable"].includes(action) && !reviewNote.trim()) {
+      setMessage(tx("Add a reviewer note before rejecting, requesting proof, or marking not applicable."));
       return;
     }
     setBusy(`review:${mappingId}`);
@@ -261,6 +281,7 @@ export function Assurance() {
     try {
       await apiClient.assurance.review(workspaceId, selectedPassportId, {
         action, evidence_mapping_id: mappingId, reason: reviewNote.trim() || null,
+        corrections: corrections || {},
       });
       setReviewNote("");
       setMessage(tx("Review decision recorded in the append-only history."));
@@ -370,6 +391,13 @@ export function Assurance() {
     { id: "agent", label: tx("Assurance Agent") },
     { id: "packages", label: tx("Proof packages") },
   ];
+  const rulePackOptions = Object.values(rulePacks.data?.rule_packs || {});
+
+  function toggleRulePack(packId: string) {
+    setSelectedRulePackIds((current) => current.includes(packId)
+      ? current.filter((value) => value !== packId)
+      : [...current, packId]);
+  }
 
   return (
     <div className="min-h-full" style={{ background: BG }} data-assurance-v2>
@@ -402,7 +430,15 @@ export function Assurance() {
               <label className="text-[12px] font-medium" style={{ color: TEXT }}>{tx("Crop")}<input value={crop} onChange={(event) => setCrop(event.target.value)} className="mt-1.5 w-full rounded-lg px-3 py-2 font-normal" style={{ border: `1px solid ${BORDER}`, background: BG }} /></label>
               <label className="text-[12px] font-medium" style={{ color: TEXT }}>{tx("Reporting period")}<input value={reportingPeriod} onChange={(event) => setReportingPeriod(event.target.value)} className="mt-1.5 w-full rounded-lg px-3 py-2 font-normal" style={{ border: `1px solid ${BORDER}`, background: BG }} /></label>
             </div>
-            <div className="mt-4 flex gap-2"><PortalButton disabled={!farmName.trim() || busy === "create"} onClick={createPassport}>{busy === "create" ? tx("Creating…") : tx("Create passport")}</PortalButton><PortalButton variant="secondary" onClick={() => setShowCreate(false)}>{tx("Cancel")}</PortalButton></div>
+            <fieldset className="mt-4">
+              <legend className="text-[12px] font-semibold" style={{ color: TEXT }}>{tx("Choose the evidence programs this passport should evaluate")}</legend>
+              <p className="mt-1 text-[11px] leading-5" style={{ color: MUTED }}>{tx("Select one or more. Only the requirements from your choices will affect readiness.")}</p>
+              <div className="mt-3 grid gap-3 lg:grid-cols-3">
+                {rulePackOptions.map((pack) => <label key={pack.id} className="flex cursor-pointer gap-3 rounded-lg p-3" style={{ background: BG, border: `1px solid ${selectedRulePackIds.includes(pack.id) ? "#2D6A4F" : BORDER}` }}><input type="checkbox" checked={selectedRulePackIds.includes(pack.id)} onChange={() => toggleRulePack(pack.id)} /><span><span className="block text-[12px] font-semibold" style={{ color: TEXT }}>{tx(pack.title)}</span><span className="mt-1 block text-[11px] leading-5" style={{ color: MUTED }}>{tx(pack.customer_description || "Organize evidence for reviewer evaluation.")}</span></span></label>)}
+              </div>
+              {!rulePackOptions.length ? <div className="mt-3"><InlineState title={rulePacks.isLoading ? tx("Loading evidence programs…") : (rulePacks.error || tx("Evidence programs are unavailable."))} /></div> : null}
+            </fieldset>
+            <div className="mt-4 flex gap-2"><PortalButton disabled={!farmName.trim() || !selectedRulePackIds.length || busy === "create"} onClick={createPassport}>{busy === "create" ? tx("Creating…") : tx("Create passport")}</PortalButton><PortalButton variant="secondary" onClick={() => setShowCreate(false)}>{tx("Cancel")}</PortalButton></div>
           </section>
         ) : null}
 
@@ -449,6 +485,7 @@ export function Assurance() {
             {activeTab === "review" ? (
               <ReviewPanel
                 queue={reviewQueue.data?.review_queue || detail.data?.review_queue || []}
+                mappings={detail.data?.evidence || []}
                 canReview={canReview}
                 reviewNote={reviewNote}
                 busy={busy}
@@ -507,8 +544,34 @@ function EvidencePanel({ mappings, candidates, requirements, candidateId, requir
   return <Panel eyebrow={tx("Canonical evidence graph")} title={tx("Map evidence without duplicating source records")}><div className="rounded-lg p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}><div className="grid gap-3 lg:grid-cols-[1.4fr_1fr_auto] lg:items-end"><label className="text-[11px] font-semibold" style={{ color: TEXT }}>{tx("Evidence source")}<select value={candidateId} onChange={(event) => onCandidate(event.target.value)} disabled={!canMap} className="mt-1.5 w-full rounded-lg px-3 py-2 font-normal" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}><option value="">{tx("Select canonical evidence")}</option>{candidates.map((item) => <option key={`${item.source_kind}:${item.source_id}`} value={`${item.source_kind}:${item.source_id}`}>{item.title || item.source_id} · {readable(item.source_kind)}</option>)}</select></label><label className="text-[11px] font-semibold" style={{ color: TEXT }}>{tx("Requirement")}<select value={requirementKey} onChange={(event) => onRequirement(event.target.value)} disabled={!canMap} className="mt-1.5 w-full rounded-lg px-3 py-2 font-normal" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}><option value="">{tx("Match by evidence type")}</option>{requirements.map((item) => <option key={item.requirement_key} value={item.requirement_key}>{item.title || readable(item.requirement_key)}</option>)}</select></label><PortalButton disabled={!canMap || !candidateId || busy === "mapping"} onClick={onMap}>{canMap ? (busy === "mapping" ? tx("Mapping…") : tx("Map evidence")) : tx("Professional plan required")}</PortalButton></div></div><div className="mt-5 space-y-3">{mappings.length ? mappings.map((item) => <div key={item.id} className="grid gap-3 rounded-lg p-4 sm:grid-cols-[1.4fr_0.8fr_auto] sm:items-center" style={{ border: `1px solid ${BORDER}` }}><div><div className="text-[12px] font-semibold" style={{ color: TEXT }}>{item.source?.title || readable(item.evidence_type)}</div><div className="mt-1 text-[11px]" style={{ color: MUTED }}>{readable(item.source_kind)} · {item.truth_label} · {item.source?.assets?.length || 0} {tx("media references")}</div></div><div className="text-[11px]" style={{ color: MUTED }}>{item.source?.occurred_at || tx("No event timestamp")}</div><StatusBadge label={readable(item.mapping_status)} tone={toneForStatus(item.mapping_status)} /></div>) : <InlineState title={tx("No evidence mappings yet.")} detail={tx("Select a canonical Evidence Record or Field Intelligence observation above.")} />}</div></Panel>;
 }
 
-function ReviewPanel({ queue, canReview, reviewNote, busy, tx, onNote, onReview }: { queue: EvidenceMapping[]; canReview: boolean; reviewNote: string; busy: string; tx: (value: string) => string; onNote: (value: string) => void; onReview: (id: string, action: "accept_mapping" | "reject_mapping" | "request_additional_proof") => void }) {
-  return <Panel eyebrow={tx("Human review workflow")} title={tx("Evidence mapping review queue")}><label className="block text-[11px] font-semibold" style={{ color: TEXT }}>{tx("Reviewer note")}<textarea value={reviewNote} onChange={(event) => onNote(event.target.value)} rows={3} className="mt-1.5 w-full rounded-lg px-3 py-2 font-normal" style={{ background: BG, border: `1px solid ${BORDER}` }} placeholder={tx("Explain a rejection or request for additional proof.")} /></label><div className="mt-5 space-y-3">{queue.length ? queue.map((item) => <article key={item.id} className="rounded-lg p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><div className="text-[12px] font-semibold" style={{ color: TEXT }}>{item.source?.title || readable(item.evidence_type)}</div><div className="mt-1 text-[11px] leading-5" style={{ color: MUTED }}>{item.source?.summary || item.unresolved_issue || tx("Review the mapping, provenance, timing, and data quality.")}</div></div><StatusBadge label={readable(item.queue_reason || item.mapping_status)} tone={toneForStatus(item.queue_reason || item.mapping_status)} /></div><div className="mt-4 flex flex-wrap gap-2"><PortalButton disabled={!canReview || busy === `review:${item.id}`} onClick={() => onReview(item.id, "accept_mapping")}>{tx("Accept mapping")}</PortalButton><PortalButton variant="secondary" disabled={!canReview || busy === `review:${item.id}`} onClick={() => onReview(item.id, "reject_mapping")}>{tx("Reject")}</PortalButton><PortalButton variant="secondary" disabled={!canReview || busy === `review:${item.id}`} onClick={() => onReview(item.id, "request_additional_proof")}>{tx("Request proof")}</PortalButton></div></article>) : <InlineState title={tx("Review queue is clear.")} detail={tx("Accepted decisions remain in append-only review history.")} />}</div>{!canReview ? <div className="mt-4"><InlineState title={tx("Team plan required for reviewer decisions.")} detail={tx("Readiness remains visible, but review mutations are enforced by the backend entitlement gate.")} /></div> : null}</Panel>;
+function ReviewPanel({ queue, mappings, canReview, reviewNote, busy, tx, onNote, onReview }: { queue: EvidenceMapping[]; mappings: EvidenceMapping[]; canReview: boolean; reviewNote: string; busy: string; tx: (value: string) => string; onNote: (value: string) => void; onReview: (id: string, action: ReviewAction, corrections?: MetadataCorrections) => Promise<void> }) {
+  const [editingId, setEditingId] = useState("");
+  const [corrections, setCorrections] = useState<MetadataCorrections>({});
+  const queueIds = new Set(queue.map((item) => item.id));
+  const reviewed = mappings.filter((item) => !queueIds.has(item.id) && ["accepted", "rejected", "not_applicable"].includes(item.mapping_status));
+
+  function editField(field: keyof MetadataCorrections, value: string) {
+    setCorrections((current) => ({ ...current, [field]: field === "confidence" && value !== "" ? Number(value) : value }));
+  }
+
+  async function submitCorrection(mappingId: string) {
+    await onReview(mappingId, "correct_metadata", corrections);
+    setEditingId("");
+    setCorrections({});
+  }
+
+  function mappingCard(item: EvidenceMapping, reopenedOnly = false) {
+    const isBusy = busy === `review:${item.id}`;
+    return <article key={item.id} className="rounded-lg p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}><div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"><div><div className="text-[12px] font-semibold" style={{ color: TEXT }}>{item.source?.title || readable(item.evidence_type)}</div><div className="mt-1 text-[11px] leading-5" style={{ color: MUTED }}>{item.source?.summary || item.unresolved_issue || tx("Review the mapping, provenance, timing, and data quality.")}</div></div><StatusBadge label={readable(item.queue_reason || item.mapping_status)} tone={toneForStatus(item.queue_reason || item.mapping_status)} /></div>{reopenedOnly ? <div className="mt-4"><PortalButton variant="secondary" disabled={!canReview || isBusy} onClick={() => onReview(item.id, "reopen")}>{tx("Reopen")}</PortalButton></div> : <><div className="mt-4 flex flex-wrap gap-2"><PortalButton disabled={!canReview || isBusy} onClick={() => onReview(item.id, "accept_mapping")}>{tx("Accept mapping")}</PortalButton><PortalButton variant="secondary" disabled={!canReview || isBusy} onClick={() => onReview(item.id, "reject_mapping")}>{tx("Reject")}</PortalButton><PortalButton variant="secondary" disabled={!canReview || isBusy} onClick={() => onReview(item.id, "request_additional_proof")}>{tx("Request proof")}</PortalButton><PortalButton variant="secondary" disabled={!canReview || isBusy} onClick={() => onReview(item.id, "mark_not_applicable")}>{tx("Mark not applicable")}</PortalButton><PortalButton variant="secondary" disabled={!canReview || isBusy} onClick={() => { setEditingId(editingId === item.id ? "" : item.id); setCorrections({}); }}>{tx("Correct metadata")}</PortalButton>{["rejected", "not_applicable"].includes(item.mapping_status) ? <PortalButton variant="secondary" disabled={!canReview || isBusy} onClick={() => onReview(item.id, "reopen")}>{tx("Reopen")}</PortalButton> : null}</div>{editingId === item.id ? <div className="mt-4 rounded-lg p-4" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}><div className="text-[11px] font-semibold" style={{ color: TEXT }}>{tx("Change only fields that need correction")}</div><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><CorrectionInput label={tx("Evidence type")} placeholder={item.evidence_type} value={corrections.evidence_type} onChange={(value) => editField("evidence_type", value)} /><CorrectionInput label={tx("Proof domain")} placeholder={item.proof_domain} value={corrections.proof_domain} onChange={(value) => editField("proof_domain", value)} /><label className="text-[11px] font-semibold" style={{ color: TEXT }}>{tx("Truth label")}<select value={String(corrections.truth_label ?? "")} onChange={(event) => editField("truth_label", event.target.value)} className="mt-1.5 w-full rounded-lg px-3 py-2 font-normal" style={{ background: BG, border: `1px solid ${BORDER}` }}><option value="">{tx("Keep current")}</option><option value="measured">{tx("Measured")}</option><option value="reported">{tx("Reported")}</option><option value="estimated">{tx("Estimated")}</option><option value="calculated">{tx("Calculated")}</option><option value="AI-inferred">{tx("AI-inferred")}</option></select></label><CorrectionInput label={tx("Reporting period")} placeholder={item.reporting_period || tx("Not set")} value={corrections.reporting_period} onChange={(value) => editField("reporting_period", value)} /><CorrectionInput label={tx("Confidence (0 to 1)")} type="number" placeholder="0.00" value={corrections.confidence} onChange={(value) => editField("confidence", value)} /><CorrectionInput label={tx("Data quality")} placeholder={item.data_quality || tx("Unknown")} value={corrections.data_quality} onChange={(value) => editField("data_quality", value)} /><CorrectionInput label={tx("Stale after")} type="datetime-local" placeholder={item.stale_after || ""} value={corrections.stale_after} onChange={(value) => editField("stale_after", value)} /><CorrectionInput label={tx("Unresolved issue")} placeholder={item.unresolved_issue || tx("None")} value={corrections.unresolved_issue} onChange={(value) => editField("unresolved_issue", value)} /></div><div className="mt-3 flex gap-2"><PortalButton disabled={!Object.keys(corrections).length || isBusy} onClick={() => submitCorrection(item.id)}>{tx("Record correction")}</PortalButton><PortalButton variant="secondary" onClick={() => { setEditingId(""); setCorrections({}); }}>{tx("Cancel")}</PortalButton></div></div> : null}</>}</article>;
+  }
+
+  const queuedCards = queue.map((item) => mappingCard(item));
+  const reviewedCards = reviewed.map((item) => mappingCard(item, true));
+  return <Panel eyebrow={tx("Human review workflow")} title={tx("Evidence mapping review queue")}><label className="block text-[11px] font-semibold" style={{ color: TEXT }}>{tx("Reviewer note")}<textarea value={reviewNote} onChange={(event) => onNote(event.target.value)} rows={3} className="mt-1.5 w-full rounded-lg px-3 py-2 font-normal" style={{ background: BG, border: `1px solid ${BORDER}` }} placeholder={tx("Explain a rejection, request for proof, or not-applicable decision.")} /></label><div className="mt-5 space-y-3">{queue.length ? queuedCards : <InlineState title={tx("Review queue is clear.")} detail={tx("Accepted decisions remain in append-only review history.")} />}</div>{reviewed.length ? <div className="mt-6"><h3 className="text-[12px] font-semibold" style={{ color: TEXT }}>{tx("Completed decisions")}</h3><p className="mt-1 text-[11px]" style={{ color: MUTED }}>{tx("Reopen a completed mapping when new information requires another review.")}</p><div className="mt-3 space-y-3">{reviewedCards}</div></div> : null}{!canReview ? <div className="mt-4"><InlineState title={tx("Team plan required for reviewer decisions.")} detail={tx("Readiness remains visible, but review mutations are enforced by the backend entitlement gate.")} /></div> : null}</Panel>;
+}
+
+function CorrectionInput({ label, value, placeholder, type = "text", onChange }: { label: string; value: string | number | null | undefined; placeholder: string; type?: string; onChange: (value: string) => void }) {
+  return <label className="text-[11px] font-semibold" style={{ color: TEXT }}>{label}<input type={type} min={type === "number" ? 0 : undefined} max={type === "number" ? 1 : undefined} step={type === "number" ? 0.01 : undefined} value={value ?? ""} placeholder={placeholder} onChange={(event) => onChange(event.target.value)} className="mt-1.5 w-full rounded-lg px-3 py-2 font-normal" style={{ background: BG, border: `1px solid ${BORDER}` }} /></label>;
 }
 
 function AgentPanel({ runs, canRun, busy, tx, onRun }: { runs: AgentRun[]; canRun: boolean; busy: string; tx: (value: string) => string; onRun: () => void }) {

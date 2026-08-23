@@ -25,5 +25,15 @@ assert.match(assurance, /packageRequest = useRef/);
 assert.match(assurance, /agentRequest = useRef/);
 assert.match(assurance, /idempotency_key: packageRequest\.current\.key/);
 assert.match(assurance, /Human review remains authoritative/);
+assert.match(assurance, /rule_pack_ids: selectedRulePackIds/);
+assert.match(assurance, /Choose the evidence programs this passport should evaluate/);
+assert.match(assurance, /Only the requirements from your choices will affect readiness/);
+assert.match(assurance, /"correct_metadata"/);
+assert.match(assurance, /"mark_not_applicable"/);
+assert.match(assurance, /"reopen"/);
+assert.match(assurance, /Change only fields that need correction/);
+assert.match(assurance, /Evidence type/);
+assert.match(assurance, /Truth label/);
+assert.match(assurance, /Stale after/);
 
 console.log("Assurance route isolation contract passed");
