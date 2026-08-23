@@ -19,6 +19,7 @@ from app.models.saas import User
 
 router = APIRouter(prefix="/intelligence/memory", tags=["intelligence-evidence"])
 EvidencePurpose = Literal["execution", "verification"]
+_PROOF_QUALITY = ["verified", "accepted", "validated", "complete", "good", "ok", "usable", "live"]
 
 
 def _scope_snapshot(db: Session, tenant_id: str, lifecycle_id: str) -> tuple[DecisionLifecycle, DecisionSnapshot]:
@@ -67,13 +68,16 @@ def eligible_lifecycle_evidence(
     _organization_and_role(db, tenant_id, user)
     lifecycle, snapshot = _scope_snapshot(db, tenant_id, lifecycle_id)
 
-    records_query = db.query(EvidenceRecord).filter(EvidenceRecord.tenant_id == tenant_id)
+    records_query = db.query(EvidenceRecord).filter(
+        EvidenceRecord.tenant_id == tenant_id,
+        EvidenceRecord.quality_status.in_(_PROOF_QUALITY),
+    )
     records_query = _record_scope(records_query, EvidenceRecord, snapshot)
     records = records_query.order_by(desc(EvidenceRecord.occurred_at), desc(EvidenceRecord.created_at)).limit(limit).all()
 
     observations_query = db.query(FieldObservation).filter(
         FieldObservation.tenant_id == tenant_id,
-        FieldObservation.status.in_(["completed", "needs_review"]),
+        FieldObservation.status == "completed",
     )
     observations_query = _record_scope(observations_query, FieldObservation, snapshot)
     observations = observations_query.order_by(desc(FieldObservation.occurred_at), desc(FieldObservation.created_at)).limit(limit).all()
