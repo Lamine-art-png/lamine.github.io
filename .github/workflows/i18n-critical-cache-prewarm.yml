@@ -1,0 +1,37 @@
+name: I18n Critical Cache Prewarm
+
+on:
+  schedule:
+    - cron: "17 15 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: i18n-critical-cache-prewarm
+  cancel-in-progress: true
+
+jobs:
+  prewarm-production-critical-shells:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "24"
+      - name: Keep every production critical language shell hot
+        env:
+          I18N_PREWARM_ENDPOINT: https://api.agroai-pilot.com/v1/i18n/catalog
+          I18N_PREWARM_CONCURRENCY: "3"
+          I18N_PREWARM_ATTEMPTS: "5"
+        run: node scripts/i18n-prewarm-critical.mjs | tee i18n-critical-prewarm.jsonl
+      - name: Upload prewarm evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: i18n-critical-prewarm-${{ github.run_id }}
+          path: i18n-critical-prewarm.jsonl
+          if-no-files-found: warn
+          retention-days: 30
