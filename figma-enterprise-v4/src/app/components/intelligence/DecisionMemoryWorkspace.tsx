@@ -121,9 +121,8 @@ export function DecisionMemoryWorkspace() {
   const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>([]);
   const [outcome, setOutcome] = useState("effective");
 
-  primeLocaleSourceCatalogFromCache(selectedLocale, DECISION_MEMORY_EN);
-
   useEffect(() => {
+    primeLocaleSourceCatalogFromCache(selectedLocale, DECISION_MEMORY_EN);
     void ensureLocaleSourceCatalog(selectedLocale, DECISION_MEMORY_EN).catch(() => null);
   }, [selectedLocale]);
 
