@@ -200,13 +200,10 @@ def _control_plane_json(
     params: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     from . import session as _session
-    response = _session.control_plane_request(
-        method,
-        path,
-        json_body=json_body,
-        params=params,
-        timeout=args.timeout,
-    )
+    request_kwargs: dict[str, Any] = {"json_body": json_body, "timeout": args.timeout}
+    if params is not None:
+        request_kwargs["params"] = params
+    response = _session.control_plane_request(method, path, **request_kwargs)
     payload = response.json() if response.headers.get("content-type", "").startswith("application/json") else {"message": response.text}
     if response.status_code >= 400:
         message = payload.get("message") if isinstance(payload, dict) else None
@@ -243,8 +240,12 @@ def _cmd_projects_create(args, out, err) -> int:
 
 
 def _cmd_service_accounts_list(args, out, err) -> int:
-    params = {"project_id": args.project_id} if args.project_id else None
-    return _cp(args, "GET", "/v1/platform/developer/service-accounts", params=params, out=out, err=err)
+    return _fail(
+        "service-account listing is not exposed by the current Platform API control plane",
+        code=EXIT_USAGE,
+        as_json=args.json,
+        err=err,
+    )
 
 
 def _cmd_service_accounts_create(args, out, err) -> int:
@@ -359,7 +360,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     p_sa = sub.add_parser("service-accounts", help="Project service accounts (human control plane).")
     sasub = p_sa.add_subparsers(dest="service_accounts_command", required=True)
-    p_sal = sasub.add_parser("list", help="List service accounts.")
+    p_sal = sasub.add_parser("list", help="Report whether service-account listing is available.")
     p_sal.add_argument("--project-id", default=None)
     p_sal.set_defaults(func=_cmd_service_accounts_list)
     p_sac = sasub.add_parser("create", help="Create a service account.")
