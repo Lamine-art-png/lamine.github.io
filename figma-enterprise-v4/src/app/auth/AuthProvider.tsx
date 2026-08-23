@@ -1,4 +1,4 @@
-import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { apiClient, ApiError, LoginPayload, RegisterPayload } from "../api/client";
 
 const tokenKey = "agroai_access_token";
@@ -159,6 +159,12 @@ function workspaceFromResponse(response: unknown): Workspace | null {
   return candidate && typeof candidate === "object" ? candidate as Workspace : null;
 }
 
+function platformDeveloperIsFirstPaintCritical() {
+  const host = window.location.hostname.toLowerCase();
+  const path = window.location.pathname;
+  return host === "platform.agroai-pilot.com" || path === "/platform" || path.startsWith("/platform/");
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => getStoredToken());
   const [user, setUser] = useState<User | null>(null);
@@ -171,9 +177,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [platformDeveloper, setPlatformDeveloper] = useState(false);
   const [verification, setVerification] = useState<VerificationState | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const refreshInFlight = useRef<Promise<void> | null>(null);
 
   const clearSession = useCallback(() => {
     localStorage.removeItem(tokenKey);
+    refreshInFlight.current = null;
     setToken(null);
     setUser(null);
     setOrganizations([]);
@@ -194,39 +202,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setToken(nextToken);
   }, []);
 
-  const refreshMe = useCallback(async () => {
-    if (isExpiredToken(localStorage.getItem(tokenKey))) {
-      clearSession();
-      return;
-    }
-    const meResponse = await apiClient.me();
-    const orgsResponse = await apiClient.getOrgs().catch(() => null);
-    const workspacesResponse = await apiClient.getWorkspaces().catch(() => null);
-    const normalized = normalizeMe(meResponse);
-    const orgs = arrayFromResponse<Organization>(orgsResponse, "organizations");
-    const nextOrganization = normalized.currentOrganization || orgs[0] || null;
-    const nextWorkspaces = arrayFromResponse<Workspace>(workspacesResponse, "workspaces");
-    const organizationWorkspaces = nextOrganization?.id
-      ? nextWorkspaces.filter((workspace) => !workspace.organization_id || workspace.organization_id === nextOrganization.id)
-      : nextWorkspaces;
+  const refreshMe = useCallback((): Promise<void> => {
+    if (refreshInFlight.current) return refreshInFlight.current;
 
-    setUser(normalized.user);
-    setOrganizations(orgs.length ? orgs : normalized.organizations);
-    setCurrentOrganization(nextOrganization);
-    setWorkspaces(nextWorkspaces);
-    setCurrentWorkspace((previous) => {
-      const preferredId = previous?.organization_id === nextOrganization?.id
-        ? previous.id
-        : storedWorkspaceId(nextOrganization?.id);
-      const selected = organizationWorkspaces.find((workspace) => workspace.id === preferredId) || organizationWorkspaces[0] || null;
-      storeWorkspaceId(nextOrganization?.id, selected?.id);
-      return selected;
+    const pending = (async () => {
+      if (isExpiredToken(localStorage.getItem(tokenKey))) {
+        clearSession();
+        return;
+      }
+
+      const bootstrapResponse = await apiClient.get("/v1/auth/bootstrap") as Record<string, unknown>;
+      const normalized = normalizeMe(bootstrapResponse);
+      const nextOrganization = normalized.currentOrganization;
+      const nextWorkspaces = arrayFromResponse<Workspace>(bootstrapResponse, "workspaces");
+      const organizationWorkspaces = nextOrganization?.id
+        ? nextWorkspaces.filter((workspace) => !workspace.organization_id || workspace.organization_id === nextOrganization.id)
+        : nextWorkspaces;
+
+      setUser(normalized.user);
+      setOrganizations(normalized.organizations);
+      setCurrentOrganization(nextOrganization);
+      setWorkspaces(nextWorkspaces);
+      setCurrentWorkspace((previous) => {
+        const preferredId = previous?.organization_id === nextOrganization?.id
+          ? previous.id
+          : storedWorkspaceId(nextOrganization?.id);
+        const selected = organizationWorkspaces.find((workspace) => workspace.id === preferredId) || organizationWorkspaces[0] || null;
+        storeWorkspaceId(nextOrganization?.id, selected?.id);
+        return selected;
+      });
+      setEntitlements(normalized.entitlements);
+      setPlatformAdmin(normalized.platformAdmin);
+      setVerification(normalized.verification);
+
+      const developerHydration = apiClient.platformDeveloper.overview()
+        .then((developerOverview) => setPlatformDeveloper(Boolean(developerOverview)))
+        .catch(() => setPlatformDeveloper(false));
+
+      // Developer entitlement is required before first paint only on the
+      // standalone/compatibility Platform API surfaces. It must not hold the
+      // Enterprise Portal login screen hostage.
+      if (platformDeveloperIsFirstPaintCritical()) {
+        await developerHydration;
+      } else {
+        void developerHydration;
+      }
+    })();
+
+    refreshInFlight.current = pending.finally(() => {
+      refreshInFlight.current = null;
     });
-    setEntitlements(normalized.entitlements);
-    setPlatformAdmin(normalized.platformAdmin);
-    const developerOverview = await apiClient.platformDeveloper.overview().catch(() => null);
-    setPlatformDeveloper(Boolean(developerOverview));
-    setVerification(normalized.verification);
+    return refreshInFlight.current;
   }, [clearSession]);
 
   const selectWorkspace = useCallback((workspaceId: string) => {
@@ -341,8 +367,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCurrentWorkspace(normalized.currentWorkspace);
     setEntitlements(normalized.entitlements);
     setPlatformAdmin(normalized.platformAdmin);
-    const developerOverview = await apiClient.platformDeveloper.overview().catch(() => null);
-    setPlatformDeveloper(Boolean(developerOverview));
     setVerification(null);
 
     await refreshMe().catch(() => null);
