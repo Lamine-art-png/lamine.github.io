@@ -50,7 +50,8 @@ assert.ok(authSource.includes("Account creation does not enable LIVE projects"),
 assert.ok(authSource.includes("accept the current developer agreements"), "onboarding must state the legal acceptance boundary");
 
 assert.ok(selfServiceSource.includes('apiClient.get("/v1/platform/terms")'), "self-service must load the effective legal catalog from the server");
-assert.ok(selfServiceSource.includes('document.legal_review_status !== "approved_effective"'), "self-service must fail closed on unapproved legal documents");
+assert.ok(/legal_review_status\s*!==\s*"approved_effective"/.test(selfServiceSource), "self-service must fail closed on unapproved legal documents");
+assert.ok(selfServiceSource.includes("!item.version") && selfServiceSource.includes("!item.content_digest"), "self-service must reject incomplete effective legal documents");
 assert.ok(selfServiceSource.includes('apiClient.post("/v1/platform/terms/accept"'), "agreement acceptance must be versioned and server-side");
 assert.ok(selfServiceSource.includes("await refreshMe()"), "legal acceptance must refresh the server-authoritative enrollment state");
 assert.ok(selfServiceSource.includes("return <PlatformApplicationGate />"), "legacy reviewed enrollment remains a fail-closed fallback before launch");
