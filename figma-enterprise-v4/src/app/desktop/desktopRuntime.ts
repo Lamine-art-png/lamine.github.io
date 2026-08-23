@@ -28,9 +28,16 @@ declare global {
   }
 }
 
+const tokenKey = "agroai_access_token";
 const desktopReadyEvent = "agroai:desktop-ready";
 const desktopRouteEvent = "agroai:desktop-route-requested";
+const desktopCredentialEvent = "agroai:desktop-credential-state";
 const browserFetch = window.fetch.bind(window);
+const nativeStorageGetItem = Storage.prototype.getItem;
+const nativeStorageSetItem = Storage.prototype.setItem;
+const nativeStorageRemoveItem = Storage.prototype.removeItem;
+let desktopAccessToken: string | null = null;
+let credentialFacadeInstalled = false;
 
 const desktopRouteAllowlist = new Set([
   "/",
@@ -68,6 +75,63 @@ function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> 
 
 export function isDesktopRuntime(): boolean {
   return Boolean(window.__TAURI__?.core?.invoke);
+}
+
+function setCredentialState(state: "ready" | "empty" | "error"): void {
+  document.documentElement.dataset.agroaiDesktopCredentialState = state;
+  window.dispatchEvent(new CustomEvent(desktopCredentialEvent, { detail: { state } }));
+}
+
+function persistDesktopToken(token: string): void {
+  desktopAccessToken = token;
+  void invoke<void>("desktop_set_access_token", { token })
+    .then(() => setCredentialState("ready"))
+    .catch(() => setCredentialState("error"));
+}
+
+function deleteDesktopToken(): void {
+  desktopAccessToken = null;
+  void invoke<void>("desktop_delete_access_token")
+    .then(() => setCredentialState("empty"))
+    .catch(() => setCredentialState("error"));
+}
+
+function installCredentialFacade(): void {
+  if (credentialFacadeInstalled) return;
+  credentialFacadeInstalled = true;
+
+  Storage.prototype.getItem = function getItem(key: string): string | null {
+    if (this === window.localStorage && key === tokenKey && isDesktopRuntime()) {
+      return desktopAccessToken;
+    }
+    return nativeStorageGetItem.call(this, key);
+  };
+
+  Storage.prototype.setItem = function setItem(key: string, value: string): void {
+    if (this === window.localStorage && key === tokenKey && isDesktopRuntime()) {
+      persistDesktopToken(String(value));
+      return;
+    }
+    nativeStorageSetItem.call(this, key, value);
+  };
+
+  Storage.prototype.removeItem = function removeItem(key: string): void {
+    if (this === window.localStorage && key === tokenKey && isDesktopRuntime()) {
+      deleteDesktopToken();
+      return;
+    }
+    nativeStorageRemoveItem.call(this, key);
+  };
+}
+
+async function hydrateDesktopCredential(): Promise<void> {
+  try {
+    desktopAccessToken = await invoke<string | null>("desktop_get_access_token");
+    setCredentialState(desktopAccessToken ? "ready" : "empty");
+  } catch {
+    desktopAccessToken = null;
+    setCredentialState("error");
+  }
 }
 
 function normalizeDesktopRoute(raw: unknown): string | null {
@@ -141,14 +205,15 @@ export async function requestDesktopOpenExternal(url: string): Promise<void> {
   await invoke<void>("desktop_open_external", { url });
 }
 
-export function installDesktopRuntime(): void {
+export async function installDesktopRuntime(): Promise<void> {
   if (!isDesktopRuntime()) return;
 
   document.documentElement.dataset.agroaiDesktop = "true";
+  installCredentialFacade();
   installNativeHttpTransport();
   installDeepLinks();
 
-  void invoke<DesktopRuntimeInfo>("desktop_runtime_info")
+  const runtimeInfo = invoke<DesktopRuntimeInfo>("desktop_runtime_info")
     .then((info) => {
       document.documentElement.dataset.agroaiDesktopPlatform = info.platform;
       document.documentElement.dataset.agroaiDesktopVersion = info.version;
@@ -157,4 +222,6 @@ export function installDesktopRuntime(): void {
     .catch(() => {
       document.documentElement.dataset.agroaiDesktopPlatform = "unknown";
     });
+
+  await Promise.all([hydrateDesktopCredential(), runtimeInfo]);
 }
