@@ -122,6 +122,8 @@ jobs:
       - run: npm ci
       - name: Validate localization runtime contract
         run: node tests/i18n-contract.mjs 2>&1 | tee i18n-contract.log
+      - name: Validate Portal performance hot path
+        run: node tests/portal-performance-contract.mjs 2>&1 | tee portal-performance-contract.log
       - name: Validate exact UI literal inventory
         run: python3 scripts/check_ui_literal_inventory.py --check 2>&1 | tee i18n-inventory.log
       - name: Upload portal localization diagnostics
@@ -132,6 +134,7 @@ jobs:
           path: |
             figma-enterprise-v4/i18n-contract.log
             figma-enterprise-v4/i18n-inventory.log
+            figma-enterprise-v4/portal-performance-contract.log
           if-no-files-found: warn
           retention-days: 3
       - name: Build portal against custom API edge domain
