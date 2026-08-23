@@ -1,9 +1,9 @@
-import sharedDecisionMemoryEn from "../../../shared/ui-decision-memory.en.json";
+import sharedUiCatalogEn from "../../../shared/ui-catalog.en.json";
 import { TRANSLATIONS } from "./i18n";
 
-export const DECISION_MEMORY_EN: Record<string, string> = {
-  ...sharedDecisionMemoryEn,
-};
+export const DECISION_MEMORY_EN: Record<string, string> = Object.fromEntries(
+  Object.entries(sharedUiCatalogEn).filter(([key]) => key.startsWith("decisionMemory.")),
+);
 
 export const DECISION_MEMORY_FR: Record<string, string> = {
   "decisionMemory.lifecycle": "Cycle de décision",
