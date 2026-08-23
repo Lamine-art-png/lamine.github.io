@@ -7,6 +7,8 @@ const appRoot = path.resolve(here, "../src/app");
 const repoRoot = path.resolve(here, "../..");
 const component = fs.readFileSync(path.join(appRoot, "components/intelligence/DecisionMemoryWorkspace.tsx"), "utf8");
 const catalogModule = fs.readFileSync(path.join(appRoot, "decisionMemoryI18n.ts"), "utf8");
+const backendI18n = fs.readFileSync(path.join(repoRoot, "agroai_api/app/api/v1/i18n.py"), "utf8");
+const canonicalCatalog = JSON.parse(fs.readFileSync(path.join(repoRoot, "shared/ui-catalog.en.json"), "utf8"));
 const manifest = JSON.parse(fs.readFileSync(path.join(repoRoot, "shared/supported-locales.json"), "utf8"));
 
 function objectBody(source, exportName) {
@@ -23,9 +25,9 @@ function keysFrom(body) {
   return [...body.matchAll(/"(decisionMemory\.[^"]+)"\s*:/g)].map((match) => match[1]).sort();
 }
 
-const enKeys = keysFrom(objectBody(catalogModule, "DECISION_MEMORY_EN"));
+const enKeys = Object.keys(canonicalCatalog).filter((key) => key.startsWith("decisionMemory.")).sort();
 const frKeys = keysFrom(objectBody(catalogModule, "DECISION_MEMORY_FR"));
-if (!enKeys.length) throw new Error("Decision Memory English source is empty");
+if (!enKeys.length) throw new Error("Decision Memory canonical English source is empty");
 if (JSON.stringify(enKeys) !== JSON.stringify(frKeys)) {
   throw new Error("Decision Memory English/French base catalogs lost exact key parity");
 }
@@ -33,9 +35,15 @@ if (JSON.stringify(enKeys) !== JSON.stringify(frKeys)) {
 const usedKeys = [...component.matchAll(/"(decisionMemory\.[^"]+)"/g)].map((match) => match[1]);
 const missingSourceKeys = [...new Set(usedKeys.filter((key) => !enKeys.includes(key)))];
 if (missingSourceKeys.length) {
-  throw new Error(`Decision Memory UI uses keys missing from the global English translation source: ${missingSourceKeys.join(", ")}`);
+  throw new Error(`Decision Memory UI uses keys missing from the canonical global English translation source: ${missingSourceKeys.join(", ")}`);
 }
 
+if (!catalogModule.includes('sharedUiCatalogEn from "../../../shared/ui-catalog.en.json"')) {
+  throw new Error("Decision Memory frontend source must come from the shared canonical UI catalog");
+}
+if (!backendI18n.includes('_CANONICAL_CATALOG_PATH = _REPO_ROOT / "shared" / "ui-catalog.en.json"')) {
+  throw new Error("Backend UI translation must authorize the shared canonical UI catalog");
+}
 if (!component.includes("ensureLocaleSourceCatalog(selectedLocale, DECISION_MEMORY_EN)")) {
   throw new Error("Decision Memory must hydrate its operating catalog through the global dynamic locale service");
 }
