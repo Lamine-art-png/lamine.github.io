@@ -37,6 +37,7 @@ export const DECISION_MEMORY_FR: Record<string, string> = {
   "decisionMemory.domain.equipment": "Équipement",
   "decisionMemory.domain.assurance": "Assurance",
   "decisionMemory.domain.reporting": "Rapports",
+  "decisionMemory.domain.operations": "Opérations",
   "decisionMemory.specialistStatus.evidence_available": "Preuves disponibles",
   "decisionMemory.specialistStatus.evidence_limited": "Preuves limitées",
   "decisionMemory.specialistStatus.conflict_review": "Conflit à examiner",
@@ -61,6 +62,15 @@ export const DECISION_MEMORY_FR: Record<string, string> = {
   "decisionMemory.task.connector_diagnosis": "Diagnostic des connecteurs",
   "decisionMemory.task.readiness_analysis": "Analyse de préparation",
   "decisionMemory.task.irrigation_decision": "Décision d’irrigation",
+  "decisionMemory.change.first_decision": "Aucune décision immuable antérieure n’existe dans la même portée de champ et de domaine.",
+  "decisionMemory.change.evidence_changed": "L’ensemble des preuves a changé.",
+  "decisionMemory.change.science_changed": "Un ou plusieurs résultats scientifiques déterministes ont changé.",
+  "decisionMemory.change.conflicts_changed": "L’ensemble des conflits de preuves enregistrés a changé.",
+  "decisionMemory.change.unknowns_changed": "L’ensemble des inconnues non résolues a changé.",
+  "decisionMemory.change.confidence_changed": "La confiance de l’ancrage a changé.",
+  "decisionMemory.change.field_state_changed": "La décision fait référence à une autre révision immuable de l’état du champ.",
+  "decisionMemory.change.recommendation_changed": "La recommandation gouvernée a changé après validation.",
+  "decisionMemory.change.no_material_change": "Aucune différence matérielle dans les entrées persistées ou la décision n’a été détectée.",
 };
 
 let installed = false;
