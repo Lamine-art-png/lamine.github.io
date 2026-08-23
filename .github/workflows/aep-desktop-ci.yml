@@ -1,0 +1,125 @@
+name: CI - AEP Desktop Enterprise
+
+on:
+  pull_request:
+    paths:
+      - 'figma-enterprise-v4/src-tauri/**'
+      - 'figma-enterprise-v4/src/app/desktop/**'
+      - 'figma-enterprise-v4/src/main.tsx'
+      - 'figma-enterprise-v4/tests/desktop-enterprise-contract.mjs'
+      - 'figma-enterprise-v4/package.json'
+      - '.github/workflows/aep-desktop-ci.yml'
+      - 'docs/aep-desktop-release-runbook.md'
+  push:
+    branches:
+      - 'feature/aep-desktop-enterprise'
+    paths:
+      - 'figma-enterprise-v4/src-tauri/**'
+      - 'figma-enterprise-v4/src/app/desktop/**'
+      - 'figma-enterprise-v4/src/main.tsx'
+      - 'figma-enterprise-v4/tests/desktop-enterprise-contract.mjs'
+      - 'figma-enterprise-v4/package.json'
+      - '.github/workflows/aep-desktop-ci.yml'
+      - 'docs/aep-desktop-release-runbook.md'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: aep-desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  contract:
+    name: Desktop contract and web build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: figma-enterprise-v4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - name: Install locked portal dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Verify desktop enterprise contract
+        run: npm run test:desktop
+      - name: Build shared AEP frontend for desktop
+        env:
+          VITE_API_BASE_URL: https://api.agroai-pilot.com
+        run: npm run build
+
+  native-candidates:
+    name: ${{ matrix.name }} candidate
+    needs: contract
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS Apple Silicon
+            platform: macos-latest
+            args: '--target aarch64-apple-darwin'
+            rust_targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
+            artifact: 'figma-enterprise-v4/src-tauri/target/aarch64-apple-darwin/release/bundle/**'
+            artifact_name: 'aep-desktop-macos-arm64-unsigned'
+          - name: macOS Intel
+            platform: macos-latest
+            args: '--target x86_64-apple-darwin'
+            rust_targets: 'aarch64-apple-darwin,x86_64-apple-darwin'
+            artifact: 'figma-enterprise-v4/src-tauri/target/x86_64-apple-darwin/release/bundle/**'
+            artifact_name: 'aep-desktop-macos-x64-unsigned'
+          - name: Windows x64
+            platform: windows-latest
+            args: ''
+            rust_targets: ''
+            artifact: 'figma-enterprise-v4/src-tauri/target/release/bundle/**'
+            artifact_name: 'aep-desktop-windows-x64-unsigned'
+    runs-on: ${{ matrix.platform }}
+    defaults:
+      run:
+        working-directory: figma-enterprise-v4
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+      - name: Cache Rust build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: 'figma-enterprise-v4/src-tauri -> target'
+      - name: Install locked portal dependencies
+        run: npm ci --no-audit --no-fund
+      - name: Install Tauri CLI for CI only
+        run: npm install --no-save --no-audit --no-fund @tauri-apps/cli@^2
+      - name: Generate desktop icons from the existing AEP brand asset
+        run: npx tauri icon public/pwa-icon.svg
+      - name: Build unsigned internal desktop candidate
+        env:
+          VITE_API_BASE_URL: https://api.agroai-pilot.com
+        run: npx tauri build ${{ matrix.args }}
+      - name: Upload internal candidate bundles
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release-gate:
+    name: Public release remains fail-closed
+    needs: native-candidates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Confirm CI does not publish unsigned installers
+        run: |
+          echo 'Desktop installers produced by this workflow are internal QA candidates only.'
+          echo 'Public download requires platform code signing, macOS notarization, and the protected release workflow.'

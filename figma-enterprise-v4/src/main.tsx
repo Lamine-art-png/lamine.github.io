@@ -1,6 +1,7 @@
 import { createRoot } from "react-dom/client";
 import "./app/commercialBoundaryConversionLabels";
 import { CommercialBoundaryHost } from "./app/components/CommercialBoundaryHost";
+import { installDesktopRuntime } from "./app/desktop/desktopRuntime";
 import "./styles/index.css";
 
 const standalonePlatformHost = window.location.hostname.toLowerCase() === "platform.agroai-pilot.com";
@@ -127,7 +128,10 @@ const rootEl = document.getElementById("root");
 if (!rootEl) {
   bootFailure(new Error("Missing #root element"));
 } else {
-  import("./app/App.tsx")
+  // Desktop boot hydrates OS-protected credentials before AuthProvider is loaded.
+  // On the web this resolves immediately and preserves the existing browser path.
+  installDesktopRuntime()
+    .then(() => import("./app/App.tsx"))
     .then(({ default: App }) => {
       window.sessionStorage.removeItem(automaticRecoveryKey);
       createRoot(rootEl).render(<CommercialBoundaryHost><App /></CommercialBoundaryHost>);
