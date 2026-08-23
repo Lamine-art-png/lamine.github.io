@@ -1,4 +1,4 @@
-"""Fail-closed, server-side release gate for Assurance Intelligence V2."""
+"""Server-side release gate for Assurance Intelligence V2."""
 from __future__ import annotations
 
 import logging
@@ -13,6 +13,10 @@ logger = logging.getLogger(__name__)
 
 RELEASE_STATES = {"disabled", "internal", "canary", "general"}
 PRODUCTION_ENVS = {"production", "staging"}
+# Founder-approved GA release, 2026-08-23. An explicit ASSURANCE_RELEASE_STATE
+# always wins, so production can still be forced to disabled/internal/canary
+# without another code release. Staging remains fail-closed when unset.
+PRODUCTION_DEFAULT_RELEASE_STATE = "general"
 
 
 def _csv(value: str | None) -> set[str]:
@@ -27,7 +31,11 @@ def configured_release_state() -> str:
         logger.warning("Unknown ASSURANCE_RELEASE_STATE %r; treating as disabled", raw)
         return "disabled"
     environment = str(getattr(settings, "APP_ENV", "development") or "").strip().lower()
-    return "disabled" if environment in PRODUCTION_ENVS else "general"
+    if environment == "production":
+        return PRODUCTION_DEFAULT_RELEASE_STATE
+    if environment == "staging":
+        return "disabled"
+    return "general"
 
 
 def assurance_access(
