@@ -1547,13 +1547,16 @@ def reconcile_pending_objects(db: Session, *, grace_seconds: int | None = None, 
             if object_uri:
                 # The liveness check MUST succeed before any delete: if the
                 # database is unavailable here, fail safe and keep the object.
-                referenced = (
-                    db.query(FieldObservationAsset)
-                    .filter(FieldObservationAsset.object_ref == object_uri)
-                    .filter(FieldObservationAsset.status.in_(["stored", "pending_deletion"]))
-                    .count()
-                )
+                referenced = _pending_object_has_live_reference(db, object_uri)
                 if referenced:
+                    store.clear_pending_marker(entry["marker_key"])
+                    promoted += 1
+                    continue
+                # Re-read liveness immediately before deletion. The grace
+                # period makes a concurrent registration unlikely; the second
+                # authoritative read narrows the remaining race without
+                # weakening fail-closed behavior if either query fails.
+                if _pending_object_has_live_reference(db, object_uri):
                     store.clear_pending_marker(entry["marker_key"])
                     promoted += 1
                     continue
@@ -1570,6 +1573,69 @@ def reconcile_pending_objects(db: Session, *, grace_seconds: int | None = None, 
         if count:
             orphans_reconciled.labels(outcome=outcome).inc(count)
     return {"status": "ok", "promoted": promoted, "removed": removed, "skipped": skipped, "errors": errors}
+
+
+def _pending_object_has_live_reference(db: Session, object_uri: str) -> bool:
+    """Return whether any supported consumer authoritatively owns ``object_uri``.
+
+    Keep this check deliberately strict for Assurance: a GeneratedArtifact row
+    is live only when its immutable package metadata and linked AssuranceExport
+    agree on organization, workspace, Passport, artifact, storage reference,
+    and checksum. Any database error propagates to the reconciler's fail-closed
+    handler, which preserves both object and marker for a later retry.
+    """
+
+    if (
+        db.query(FieldObservationAsset.id)
+        .filter(FieldObservationAsset.object_ref == object_uri)
+        .filter(FieldObservationAsset.status.in_(["stored", "pending_deletion"]))
+        .first()
+    ):
+        return True
+
+    # Local imports keep Field Intelligence's normal startup path independent
+    # of Assurance while allowing the shared object-store reconciler to honor
+    # every registered consumer.
+    from app.assurance.models import AssuranceExport
+    from app.models.operational_records import GeneratedArtifact
+
+    artifacts = (
+        db.query(GeneratedArtifact)
+        .filter(GeneratedArtifact.storage_path == object_uri)
+        .filter(GeneratedArtifact.artifact_type == "assurance_proof_package")
+        .filter(GeneratedArtifact.content_type == "application/pdf")
+        .all()
+    )
+    for artifact in artifacts:
+        metadata = artifact.metadata_json or {}
+        export_id = str(metadata.get("assurance_export_id") or "")
+        passport_id = str(metadata.get("passport_id") or "")
+        checksum = str(metadata.get("checksum_sha256") or "")
+        connection_id = str(metadata.get("object_connection_id") or "")
+        if not (
+            artifact.tenant_id
+            and artifact.workspace_id
+            and export_id
+            and passport_id
+            and checksum
+            and connection_id == f"assurance-package-{artifact.id}"
+        ):
+            continue
+        export = (
+            db.query(AssuranceExport)
+            .filter(AssuranceExport.id == export_id)
+            .filter(AssuranceExport.organization_id == artifact.tenant_id)
+            .filter(AssuranceExport.workspace_id == artifact.workspace_id)
+            .filter(AssuranceExport.passport_id == passport_id)
+            .filter(AssuranceExport.generated_artifact_id == artifact.id)
+            .filter(AssuranceExport.storage_backend == "generated_artifact")
+            .filter(AssuranceExport.storage_ref == f"generated_artifact://{artifact.id}")
+            .filter(AssuranceExport.checksum == checksum)
+            .first()
+        )
+        if export:
+            return True
+    return False
 
 
 def read_asset_bytes(db: Session, ctx: AuthContext, asset_id: str) -> tuple[FieldObservationAsset, bytes]:

@@ -1,11 +1,11 @@
-"""Tenant-scoped persistence for Assurance Passports."""
+"""Legacy-tenant and Portal-workspace persistence for Assurance Passports."""
 from __future__ import annotations
 
 import base64
 import hashlib
 import json
 import uuid
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import or_
@@ -13,11 +13,13 @@ from sqlalchemy.orm import Session
 
 from app.assurance.models import (
     AssuranceChecklistItem,
+    AssuranceAuditEvent,
     AssuranceEvidenceArtifact,
     AssuranceExport,
     AssurancePassport,
     AssurancePassportSection,
     AssuranceRiskScore,
+    AssuranceReviewEvent,
     FertilizerApplication,
     HarvestLot,
     InputApplication,
@@ -25,7 +27,17 @@ from app.assurance.models import (
     RulePack,
     TraceabilityEvent,
 )
-from app.assurance.rule_packs import ASSURANCE_DISCLAIMER, DEFAULT_RULE_PACKS, checklist_for, validate_rule_pack_ids
+from app.assurance.rule_packs import (
+    ASSURANCE_DISCLAIMER,
+    CUSTOMER_RULE_PACK_IDS,
+    DEFAULT_RULE_PACKS,
+    checklist_for,
+    rule_pack_versions,
+    validate_rule_pack_ids,
+)
+from app.models.field_intelligence import FieldObservation, FieldObservationAsset
+from app.models.operational_records import DataSource, EvidenceRecord, GeneratedArtifact, IngestionJob, IntelligenceRun
+from app.services.assurance_artifacts import StagedAssuranceArtifact, stage_assurance_artifact
 from app.models.compliance import (
     ComplianceEvidence,
     ComplianceJurisdiction,
@@ -38,7 +50,26 @@ from app.models.compliance import (
 
 
 TRUTH_LABELS = {"measured", "reported", "estimated", "calculated", "AI-inferred"}
-SECTION_TYPES = ["farm_summary", "water_proof", "input_proof", "traceability_proof", "readiness_score", "risk_score"]
+SECTION_TYPES = ["farm_summary", "water_proof", "input_proof", "operational_proof", "traceability_proof", "readiness_score", "risk_score"]
+REVIEW_ACTIONS = {
+    "accept_mapping": "accepted",
+    "reject_mapping": "rejected",
+    "correct_metadata": "reviewer_required",
+    "request_additional_proof": "reviewer_required",
+    "mark_not_applicable": "not_applicable",
+    "reopen": "unreviewed",
+}
+PACKAGE_TYPES = {
+    "assurance_passport",
+    "water_evidence_pack",
+    "buyer_proof_pack",
+    "input_application_record_pack",
+    "operational_execution_pack",
+}
+CORRECTABLE_METADATA_FIELDS = {
+    "evidence_type", "proof_domain", "truth_label", "reporting_period",
+    "confidence", "data_quality", "stale_after", "unresolved_issue",
+}
 
 
 def _dt(value: str | datetime | None) -> datetime | None:
@@ -68,11 +99,82 @@ def _as_dict(row: Any) -> dict[str, Any]:
 
 
 class AssuranceRepository:
-    def __init__(self, db: Session, tenant_id: str):
-        if not tenant_id:
-            raise ValueError("tenant_id is required")
+    def __init__(
+        self,
+        db: Session,
+        tenant_id: str | None = None,
+        *,
+        organization_id: str | None = None,
+        workspace_id: str | None = None,
+        actor_user_id: str | None = None,
+    ):
+        if bool(tenant_id) == bool(organization_id):
+            raise ValueError("exactly one legacy tenant_id or organization_id is required")
+        if organization_id and not workspace_id:
+            raise ValueError("workspace_id is required for Portal Assurance")
         self.db = db
         self.tenant_id = tenant_id
+        self.organization_id = organization_id
+        self.workspace_id = workspace_id
+        self.actor_user_id = actor_user_id
+        self.owner_id = str(organization_id or tenant_id)
+        self._pending_artifact_promotions: list[StagedAssuranceArtifact] = []
+
+    @classmethod
+    def for_workspace(
+        cls,
+        db: Session,
+        *,
+        organization_id: str,
+        workspace_id: str,
+        actor_user_id: str,
+    ) -> "AssuranceRepository":
+        return cls(
+            db,
+            organization_id=organization_id,
+            workspace_id=workspace_id,
+            actor_user_id=actor_user_id,
+        )
+
+    def _scope_values(self) -> dict[str, str | None]:
+        return {
+            "tenant_id": self.tenant_id,
+            "organization_id": self.organization_id,
+            "workspace_id": self.workspace_id,
+        }
+
+    def _scope_query(self, model: Any):
+        query = self.db.query(model)
+        if self.organization_id:
+            return query.filter(
+                model.organization_id == self.organization_id,
+                model.workspace_id == self.workspace_id,
+            )
+        return query.filter(model.tenant_id == self.tenant_id)
+
+    def _audit(
+        self,
+        passport_id: str,
+        event_type: str,
+        *,
+        subject_type: str | None = None,
+        subject_id: str | None = None,
+        details: dict[str, Any] | None = None,
+        source_system: str = "assurance",
+    ) -> None:
+        passport = self._passport(passport_id)
+        self.db.add(AssuranceAuditEvent(
+            id=f"aae-{uuid.uuid4().hex[:16]}",
+            **self._scope_values(),
+            passport_id=passport_id,
+            event_type=event_type,
+            actor_user_id=self.actor_user_id,
+            source_system=source_system,
+            subject_type=subject_type,
+            subject_id=subject_id,
+            rule_pack_versions=rule_pack_versions(passport.rule_pack_ids),
+            details_json=details or {},
+        ))
 
     def ensure_rule_packs(self) -> None:
         for pack_id, pack in DEFAULT_RULE_PACKS.items():
@@ -92,16 +194,26 @@ class AssuranceRepository:
         self.db.commit()
 
     def _passport(self, passport_id: str) -> AssurancePassport:
-        row = self.db.query(AssurancePassport).filter_by(id=passport_id, tenant_id=self.tenant_id).first()
+        row = self._scope_query(AssurancePassport).filter(AssurancePassport.id == passport_id).first()
         if not row:
             raise KeyError("Passport not found")
         return row
 
     def create_passport(self, payload: dict[str, Any]) -> dict[str, Any]:
-        pack_ids = validate_rule_pack_ids(payload.get("rule_pack_ids"))
+        selected_pack_ids = payload.get("rule_pack_ids")
+        if selected_pack_ids is None:
+            selected_pack_ids = CUSTOMER_RULE_PACK_IDS if self.organization_id else [
+                "waterops_generic_v0_1",
+                "eudr_supplier_readiness_v0_1",
+                "buyer_input_records_v0_1",
+                "farm_finance_risk_pack_v0_1",
+            ]
+        pack_ids = validate_rule_pack_ids(selected_pack_ids)
         passport = AssurancePassport(
             id=payload.get("id") or f"ap-{uuid.uuid4().hex[:12]}",
-            tenant_id=self.tenant_id,
+            **self._scope_values(),
+            entity_type=payload.get("entity_type") or "farm",
+            entity_id=payload.get("entity_id"),
             farm_name=payload["farm_name"],
             farm_location=payload.get("farm_location"),
             crop=payload.get("crop"),
@@ -118,7 +230,7 @@ class AssuranceRepository:
         for section_type in SECTION_TYPES:
             self.db.add(AssurancePassportSection(
                 id=f"aps-{uuid.uuid4().hex[:12]}",
-                tenant_id=self.tenant_id,
+                **self._scope_values(),
                 passport_id=passport.id,
                 section_type=section_type,
                 status="pending",
@@ -128,48 +240,76 @@ class AssuranceRepository:
         for item in checklist_for(pack_ids):
             self.db.add(AssuranceChecklistItem(
                 id=f"aci-{uuid.uuid4().hex[:12]}",
-                tenant_id=self.tenant_id,
+                **self._scope_values(),
                 passport_id=passport.id,
                 rule_pack_id=item["rule_pack_id"],
                 requirement_key=item["key"],
                 section_type=item["section"],
                 status="missing",
                 severity=item.get("severity", "required"),
+                blocking=bool(item.get("blocking", True)),
+                explanation=item.get("explanation"),
+                review_required=bool(item.get("review_required", True)),
                 evidence_artifact_ids=[],
                 notes="Evidence not attached yet.",
             ))
+        self.db.flush()
+        self._audit(
+            passport.id,
+            "passport_created",
+            subject_type="passport",
+            subject_id=passport.id,
+            details={"rule_pack_ids": pack_ids, "entity_type": passport.entity_type, "entity_id": passport.entity_id},
+        )
         self.db.commit()
         return self.get_passport(passport.id)
+
+    def list_passports(self) -> list[dict[str, Any]]:
+        rows = self._scope_query(AssurancePassport).order_by(AssurancePassport.updated_at.desc()).all()
+        return [
+            {
+                **_as_dict(row),
+                "readiness": self.readiness(row.id, persist=False),
+            }
+            for row in rows
+        ]
 
     def get_passport(self, passport_id: str) -> dict[str, Any]:
         passport = self._passport(passport_id)
         return {
             "passport": _as_dict(passport),
-            "sections": [_as_dict(row) for row in self.db.query(AssurancePassportSection).filter_by(tenant_id=self.tenant_id, passport_id=passport_id).all()],
-            "evidence": [_as_dict(row) for row in self.db.query(AssuranceEvidenceArtifact).filter_by(tenant_id=self.tenant_id, passport_id=passport_id).all()],
-            "input_applications": [_as_dict(row) for row in self.db.query(InputApplication).filter_by(tenant_id=self.tenant_id, passport_id=passport_id).all()],
-            "harvest_lots": [_as_dict(row) for row in self.db.query(HarvestLot).filter_by(tenant_id=self.tenant_id, passport_id=passport_id).all()],
-            "traceability_events": [_as_dict(row) for row in self.db.query(TraceabilityEvent).filter_by(tenant_id=self.tenant_id, passport_id=passport_id).all()],
+            "sections": [_as_dict(row) for row in self._scope_query(AssurancePassportSection).filter_by(passport_id=passport_id).all()],
+            "evidence": [self.evidence_payload(row) for row in self._scope_query(AssuranceEvidenceArtifact).filter_by(passport_id=passport_id).all()],
+            "input_applications": [_as_dict(row) for row in self._scope_query(InputApplication).filter_by(passport_id=passport_id).all()],
+            "harvest_lots": [_as_dict(row) for row in self._scope_query(HarvestLot).filter_by(passport_id=passport_id).all()],
+            "traceability_events": [_as_dict(row) for row in self._scope_query(TraceabilityEvent).filter_by(passport_id=passport_id).all()],
             "latest_readiness": self.readiness(passport_id, persist=False),
             "disclaimer": ASSURANCE_DISCLAIMER,
         }
 
     def add_evidence(self, passport_id: str, payload: dict[str, Any], *, commit: bool = True) -> dict[str, Any]:
+        """Preserve the historical metadata-upload API as a legacy mapping.
+
+        V2 portal callers use :meth:`map_evidence`, which references an existing
+        canonical EvidenceRecord or Field Observation rather than copying it.
+        """
         self._passport(passport_id)
         truth_label = payload.get("truth_label", "reported")
         if truth_label not in TRUTH_LABELS:
             raise ValueError(f"truth_label must be one of {sorted(TRUTH_LABELS)}")
         compliance_evidence_id = payload.get("compliance_evidence_id")
         if compliance_evidence_id:
-            exists = self.db.query(ComplianceEvidence).filter_by(id=compliance_evidence_id, tenant_id=self.tenant_id).first()
+            exists = self.db.query(ComplianceEvidence).filter_by(id=compliance_evidence_id, tenant_id=self.owner_id).first()
             if not exists:
                 raise ValueError("compliance_evidence_id does not belong to authenticated tenant")
         row = AssuranceEvidenceArtifact(
             id=payload.get("id") or f"aev-{uuid.uuid4().hex[:12]}",
-            tenant_id=self.tenant_id,
+            **self._scope_values(),
             passport_id=passport_id,
             compliance_evidence_id=compliance_evidence_id,
             workbench_artifact_id=payload.get("workbench_artifact_id"),
+            source_kind=payload.get("source_kind") or "legacy",
+            source_id=payload.get("source_id") or compliance_evidence_id or payload.get("workbench_artifact_id"),
             evidence_type=payload["evidence_type"],
             proof_domain=payload.get("proof_domain") or payload["evidence_type"],
             file_ref=payload["file_ref"],
@@ -178,19 +318,36 @@ class AssuranceRepository:
             checksum=payload.get("checksum"),
             truth_label=truth_label,
             review_status=payload.get("review_status", "pending_review"),
+            mapping_status=payload.get("mapping_status", "mapped"),
             source_system=payload.get("source_system", "uploaded"),
+            event_timestamp=_dt(payload.get("event_timestamp")),
+            ingestion_timestamp=_dt(payload.get("ingestion_timestamp")) or datetime.utcnow(),
+            reporting_period=payload.get("reporting_period"),
+            confidence=payload.get("confidence"),
+            data_quality=payload.get("data_quality", "unknown"),
+            stale_after=_dt(payload.get("stale_after")),
+            unresolved_issue=payload.get("unresolved_issue"),
             metadata_json=payload.get("metadata") or {},
         )
         self.db.add(row)
+        self.db.flush()
         self._sync_checklist_for_evidence(passport_id, row)
+        self._audit(
+            passport_id,
+            "evidence_mapping_created",
+            subject_type="evidence_mapping",
+            subject_id=row.id,
+            details={"source_kind": row.source_kind, "source_id": row.source_id, "evidence_type": row.evidence_type},
+        )
         if commit:
             self.db.commit()
-        return _as_dict(row)
+        return self.evidence_payload(row)
 
     def _sync_checklist_for_evidence(self, passport_id: str, evidence: AssuranceEvidenceArtifact) -> None:
-        items = self.db.query(AssuranceChecklistItem).filter_by(tenant_id=self.tenant_id, passport_id=passport_id).all()
+        items = self._scope_query(AssuranceChecklistItem).filter_by(passport_id=passport_id).all()
+        specs = checklist_for(self._passport(passport_id).rule_pack_ids)
         for item in items:
-            for spec in checklist_for(self._passport(passport_id).rule_pack_ids):
+            for spec in specs:
                 if spec["rule_pack_id"] != item.rule_pack_id or spec["key"] != item.requirement_key:
                     continue
                 if evidence.evidence_type in spec.get("evidence_types", []):
@@ -198,16 +355,290 @@ class AssuranceRepository:
                     if evidence.id not in ids:
                         ids.append(evidence.id)
                     item.evidence_artifact_ids = ids
-                    item.status = "satisfied"
-                    item.notes = "Evidence attached for audit readiness review."
+                    item.status = "unreviewed" if item.review_required else "mapped"
+                    item.notes = "Evidence mapped for reviewer evaluation."
                     item.updated_at = datetime.utcnow()
+
+    def _requirement_specs(self, passport_id: str) -> dict[tuple[str, str], dict[str, Any]]:
+        passport = self._passport(passport_id)
+        return {
+            (spec["rule_pack_id"], spec["key"]): spec
+            for spec in checklist_for(passport.rule_pack_ids)
+        }
+
+    @staticmethod
+    def _evidence_satisfies_spec(evidence: AssuranceEvidenceArtifact, spec: dict[str, Any]) -> bool:
+        allowed = set(spec.get("evidence_types") or [])
+        return bool(allowed and evidence.evidence_type in allowed)
+
+    def _linked_requirements(
+        self,
+        passport_id: str,
+        mapping_id: str,
+    ) -> list[AssuranceChecklistItem]:
+        return [
+            item
+            for item in self._scope_query(AssuranceChecklistItem).filter_by(passport_id=passport_id).all()
+            if mapping_id in (item.evidence_artifact_ids or [])
+        ]
+
+    @staticmethod
+    def _requirement_link_state(item: AssuranceChecklistItem) -> dict[str, Any]:
+        return {
+            "checklist_item_id": item.id,
+            "rule_pack_id": item.rule_pack_id,
+            "requirement_key": item.requirement_key,
+            "status": item.status,
+            "evidence_mapping_ids": list(item.evidence_artifact_ids or []),
+        }
+
+    @staticmethod
+    def _mapping_review_state(mapping: AssuranceEvidenceArtifact | None) -> dict[str, Any]:
+        if mapping is None:
+            return {}
+        return {
+            "mapping_status": mapping.mapping_status,
+            "review_status": mapping.review_status,
+            **{
+                field: _iso(getattr(mapping, field))
+                for field in sorted(CORRECTABLE_METADATA_FIELDS)
+            },
+        }
+
+    def evidence_candidates(self) -> dict[str, Any]:
+        if not self.organization_id:
+            return {"canonical_evidence": [], "field_observations": []}
+        evidence_rows = self.db.query(EvidenceRecord).filter(
+            EvidenceRecord.tenant_id == self.organization_id,
+            EvidenceRecord.workspace_id == self.workspace_id,
+        ).order_by(EvidenceRecord.created_at.desc()).limit(500).all()
+        observation_rows = self.db.query(FieldObservation).filter(
+            FieldObservation.tenant_id == self.organization_id,
+            FieldObservation.workspace_id == self.workspace_id,
+            FieldObservation.status != "deleted",
+        ).order_by(FieldObservation.created_at.desc()).limit(500).all()
+        return {
+            "canonical_evidence": [self._canonical_evidence_payload(row) for row in evidence_rows],
+            "field_observations": [self._field_observation_payload(row) for row in observation_rows],
+        }
+
+    def _canonical_evidence_payload(self, row: EvidenceRecord) -> dict[str, Any]:
+        source = self.db.get(DataSource, row.data_source_id) if row.data_source_id else None
+        return {
+            "source_kind": "canonical_evidence",
+            "source_id": row.id,
+            "evidence_type": row.evidence_type,
+            "title": row.title,
+            "summary": row.summary,
+            "occurred_at": _iso(row.occurred_at),
+            "ingested_at": _iso(row.created_at),
+            "confidence": row.confidence,
+            "quality_status": row.quality_status,
+            "citation_label": row.citation_label,
+            "field_id": row.field_id,
+            "block_id": row.block_id,
+            "data_source": {
+                "id": source.id,
+                "source_type": source.source_type,
+                "provider": source.provider,
+                "filename": source.filename,
+                "content_type": source.content_type,
+                "content_sha256": source.content_sha256,
+            } if source and source.tenant_id == self.organization_id and source.workspace_id == self.workspace_id else None,
+        }
+
+    def _field_observation_payload(self, row: FieldObservation) -> dict[str, Any]:
+        assets = self.db.query(FieldObservationAsset).filter(
+            FieldObservationAsset.tenant_id == self.organization_id,
+            FieldObservationAsset.workspace_id == self.workspace_id,
+            FieldObservationAsset.observation_id == row.id,
+            FieldObservationAsset.status == "stored",
+        ).all()
+        return {
+            "source_kind": "field_observation",
+            "source_id": row.id,
+            "evidence_type": "field_observation",
+            "title": row.summary or row.event_type or "Field observation",
+            "summary": row.summary,
+            "occurred_at": _iso(row.occurred_at or row.observed_at),
+            "ingested_at": _iso(row.created_at),
+            "confidence": row.confidence,
+            "quality_status": "review_required" if row.status == "needs_review" else "usable",
+            "field_id": row.field_id,
+            "block_id": row.block_id,
+            "event_type": row.event_type,
+            # Reference the authoritative media rows; do not duplicate binary
+            # bytes or leak their private object keys into Assurance payloads.
+            "assets": [
+                {"id": asset.id, "kind": asset.kind, "filename": asset.filename, "content_type": asset.content_type, "checksum": asset.content_sha256}
+                for asset in assets
+            ],
+        }
+
+    def map_evidence(self, passport_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        self._passport(passport_id)
+        if not self.organization_id:
+            raise ValueError("canonical evidence mapping requires Portal workspace scope")
+        source_kind = str(payload.get("source_kind") or "")
+        source_id = str(payload.get("source_id") or "")
+        if source_kind == "canonical_evidence":
+            source = self.db.query(EvidenceRecord).filter(
+                EvidenceRecord.id == source_id,
+                EvidenceRecord.tenant_id == self.organization_id,
+                EvidenceRecord.workspace_id == self.workspace_id,
+            ).first()
+            if not source:
+                raise KeyError("Evidence source not found")
+            source_payload = self._canonical_evidence_payload(source)
+            canonical_id, observation_id = source.id, None
+            file_ref = f"evidence_record://{source.id}"
+            source_system = "evidence_records"
+        elif source_kind == "field_observation":
+            source = self.db.query(FieldObservation).filter(
+                FieldObservation.id == source_id,
+                FieldObservation.tenant_id == self.organization_id,
+                FieldObservation.workspace_id == self.workspace_id,
+                FieldObservation.status != "deleted",
+            ).first()
+            if not source:
+                raise KeyError("Evidence source not found")
+            source_payload = self._field_observation_payload(source)
+            canonical_id, observation_id = None, source.id
+            file_ref = f"field_observation://{source.id}"
+            source_system = "field_intelligence"
+        else:
+            raise ValueError("source_kind must be canonical_evidence or field_observation")
+
+        source_evidence_type = str(source_payload["evidence_type"])
+        evidence_type = str(payload.get("evidence_type") or source_evidence_type)
+        if evidence_type != source_evidence_type:
+            raise ValueError(
+                f"Evidence type '{evidence_type}' does not match the authoritative source classification "
+                f"'{source_evidence_type}'; a reviewer must use correct_metadata to reclassify it"
+            )
+        requirement_keys = set(payload.get("requirement_keys") or [])
+        explicit_items: list[AssuranceChecklistItem] = []
+        if requirement_keys:
+            explicit_items = self._scope_query(AssuranceChecklistItem).filter(
+                AssuranceChecklistItem.passport_id == passport_id,
+                AssuranceChecklistItem.requirement_key.in_(requirement_keys),
+            ).all()
+            if len({item.requirement_key for item in explicit_items}) != len(requirement_keys):
+                raise ValueError("One or more requirement_keys do not belong to this passport")
+            specs = self._requirement_specs(passport_id)
+            incompatible = [
+                item
+                for item in explicit_items
+                if evidence_type not in set(
+                    specs.get((item.rule_pack_id, item.requirement_key), {}).get("evidence_types") or []
+                )
+            ]
+            if incompatible:
+                labels = ", ".join(
+                    f"{item.rule_pack_id}:{item.requirement_key}" for item in incompatible
+                )
+                raise ValueError(
+                    f"Evidence type '{evidence_type}' is incompatible with selected requirement(s): {labels}"
+                )
+        existing = self._scope_query(AssuranceEvidenceArtifact).filter_by(
+            passport_id=passport_id,
+            source_kind=source_kind,
+            source_id=source_id,
+            evidence_type=evidence_type,
+        ).first()
+        if existing:
+            return self.evidence_payload(existing)
+        truth_label = str(payload.get("truth_label") or ("AI-inferred" if source_kind == "field_observation" else "reported"))
+        if truth_label not in TRUTH_LABELS:
+            raise ValueError(f"truth_label must be one of {sorted(TRUTH_LABELS)}")
+        occurred_at = _dt(source_payload.get("occurred_at"))
+        stale_after = _dt(payload.get("stale_after")) or (occurred_at + timedelta(days=365) if occurred_at else None)
+        row = AssuranceEvidenceArtifact(
+            id=f"aev-{uuid.uuid4().hex[:12]}",
+            **self._scope_values(),
+            passport_id=passport_id,
+            canonical_evidence_id=canonical_id,
+            field_observation_id=observation_id,
+            source_kind=source_kind,
+            source_id=source_id,
+            evidence_type=evidence_type,
+            proof_domain=payload.get("proof_domain") or evidence_type,
+            file_ref=file_ref,
+            checksum=(source_payload.get("data_source") or {}).get("content_sha256") if source_kind == "canonical_evidence" else None,
+            truth_label=truth_label,
+            review_status="pending_review",
+            mapping_status="mapped",
+            source_system=source_system,
+            event_timestamp=occurred_at,
+            ingestion_timestamp=_dt(source_payload.get("ingested_at")),
+            reporting_period=payload.get("reporting_period"),
+            confidence=source_payload.get("confidence"),
+            data_quality=source_payload.get("quality_status") or "unknown",
+            stale_after=stale_after,
+            unresolved_issue=payload.get("unresolved_issue"),
+            metadata_json={
+                "mapping_note": payload.get("mapping_note"),
+                "requirement_keys": payload.get("requirement_keys") or [],
+            },
+        )
+        self.db.add(row)
+        self.db.flush()
+        if requirement_keys:
+            for item in explicit_items:
+                ids = list(item.evidence_artifact_ids or [])
+                if row.id not in ids:
+                    ids.append(row.id)
+                item.evidence_artifact_ids = ids
+                item.status = "unreviewed" if item.review_required else "mapped"
+                item.notes = "Canonical evidence mapped for reviewer evaluation."
+        else:
+            self._sync_checklist_for_evidence(passport_id, row)
+        self._audit(
+            passport_id,
+            "evidence_mapping_created",
+            subject_type="evidence_mapping",
+            subject_id=row.id,
+            details={"source_kind": source_kind, "source_id": source_id, "evidence_type": evidence_type},
+        )
+        self.db.commit()
+        return self.evidence_payload(row)
+
+    def evidence_payload(self, row: AssuranceEvidenceArtifact) -> dict[str, Any]:
+        payload = _as_dict(row)
+        source: dict[str, Any] | None = None
+        if row.canonical_evidence_id and self.organization_id:
+            canonical = self.db.query(EvidenceRecord).filter(
+                EvidenceRecord.id == row.canonical_evidence_id,
+                EvidenceRecord.tenant_id == self.organization_id,
+                EvidenceRecord.workspace_id == self.workspace_id,
+            ).first()
+            source = self._canonical_evidence_payload(canonical) if canonical else None
+        elif row.field_observation_id and self.organization_id:
+            observation = self.db.query(FieldObservation).filter(
+                FieldObservation.id == row.field_observation_id,
+                FieldObservation.tenant_id == self.organization_id,
+                FieldObservation.workspace_id == self.workspace_id,
+            ).first()
+            source = self._field_observation_payload(observation) if observation else None
+        payload["source"] = source
+        payload["provenance"] = {
+            "source_kind": row.source_kind,
+            "source_id": row.source_id,
+            "source_system": row.source_system,
+            "event_timestamp": _iso(row.event_timestamp),
+            "ingestion_timestamp": _iso(row.ingestion_timestamp),
+            "truth_label": row.truth_label,
+            "confidence": row.confidence,
+            "data_quality": row.data_quality,
+        }
+        return payload
 
     def add_input_application(self, passport_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         self._passport(passport_id)
         app_type = payload.get("application_type", "input")
         row = InputApplication(
             id=payload.get("id") or f"inp-{uuid.uuid4().hex[:12]}",
-            tenant_id=self.tenant_id,
+            **self._scope_values(),
             passport_id=passport_id,
             application_type=app_type,
             applied_at=_dt(payload.get("applied_at")),
@@ -226,7 +657,7 @@ class AssuranceRepository:
         if app_type == "pesticide":
             self.db.add(PesticideApplication(
                 id=f"pest-{uuid.uuid4().hex[:12]}",
-                tenant_id=self.tenant_id,
+                **self._scope_values(),
                 passport_id=passport_id,
                 input_application_id=row.id,
                 active_ingredient=payload.get("active_ingredient"),
@@ -239,7 +670,7 @@ class AssuranceRepository:
         if app_type == "fertilizer":
             self.db.add(FertilizerApplication(
                 id=f"fert-{uuid.uuid4().hex[:12]}",
-                tenant_id=self.tenant_id,
+                **self._scope_values(),
                 passport_id=passport_id,
                 input_application_id=row.id,
                 nutrient_profile=payload.get("nutrient_profile") or {},
@@ -248,6 +679,13 @@ class AssuranceRepository:
                 potassium_kg=payload.get("potassium_kg"),
                 metadata_json=payload.get("fertilizer_metadata") or {},
             ))
+        self._audit(
+            passport_id,
+            "input_application_created",
+            subject_type="input_application",
+            subject_id=row.id,
+            details={"application_type": app_type, "truth_label": row.truth_label},
+        )
         if not payload.get("evidence_artifact_id"):
             self.add_evidence(passport_id, {
                 "evidence_type": "input_application_record",
@@ -264,7 +702,7 @@ class AssuranceRepository:
         self._passport(passport_id)
         row = HarvestLot(
             id=payload.get("id") or f"lot-{uuid.uuid4().hex[:12]}",
-            tenant_id=self.tenant_id,
+            **self._scope_values(),
             passport_id=passport_id,
             lot_code=payload["lot_code"],
             crop=payload.get("crop"),
@@ -278,17 +716,19 @@ class AssuranceRepository:
             metadata_json=payload.get("metadata") or {},
         )
         self.db.add(row)
+        self.db.flush()
+        self._audit(passport_id, "harvest_lot_created", subject_type="harvest_lot", subject_id=row.id)
         self.db.commit()
         return _as_dict(row)
 
     def add_traceability_event(self, passport_id: str, payload: dict[str, Any]) -> dict[str, Any]:
         self._passport(passport_id)
         lot_id = payload.get("harvest_lot_id")
-        if lot_id and not self.db.query(HarvestLot).filter_by(id=lot_id, tenant_id=self.tenant_id, passport_id=passport_id).first():
+        if lot_id and not self._scope_query(HarvestLot).filter_by(id=lot_id, passport_id=passport_id).first():
             raise ValueError("harvest_lot_id does not belong to this passport")
         row = TraceabilityEvent(
             id=payload.get("id") or f"trace-{uuid.uuid4().hex[:12]}",
-            tenant_id=self.tenant_id,
+            **self._scope_values(),
             passport_id=passport_id,
             harvest_lot_id=lot_id,
             event_type=payload["event_type"],
@@ -299,6 +739,14 @@ class AssuranceRepository:
             payload=payload.get("payload") or {},
         )
         self.db.add(row)
+        self.db.flush()
+        self._audit(
+            passport_id,
+            "traceability_event_created",
+            subject_type="traceability_event",
+            subject_id=row.id,
+            details={"event_type": row.event_type, "harvest_lot_id": row.harvest_lot_id},
+        )
         if not payload.get("evidence_artifact_id"):
             self.add_evidence(passport_id, {
                 "evidence_type": "traceability_record",
@@ -320,7 +768,7 @@ class AssuranceRepository:
         return missing
 
     def _linked_water_budget_ids(self, passport_id: str) -> set[str]:
-        evidence = self.db.query(AssuranceEvidenceArtifact).filter_by(tenant_id=self.tenant_id, passport_id=passport_id).all()
+        evidence = self._scope_query(AssuranceEvidenceArtifact).filter_by(passport_id=passport_id).all()
         linked_ids: set[str] = set()
         for row in evidence:
             metadata = row.metadata_json or {}
@@ -340,21 +788,21 @@ class AssuranceRepository:
         parcels = []
         if parcel_ids:
             parcels = self.db.query(ComplianceParcel).filter(
-                ComplianceParcel.tenant_id == self.tenant_id,
+                ComplianceParcel.tenant_id == self.owner_id,
                 ComplianceParcel.id.in_(parcel_ids),
             ).all()
 
         jurisdictions = []
         if passport.jurisdiction_id:
             jurisdictions = self.db.query(ComplianceJurisdiction).filter_by(
-                tenant_id=self.tenant_id,
+                tenant_id=self.owner_id,
                 id=passport.jurisdiction_id,
             ).all()
 
         wells = []
         if parcel_ids:
             wells = self.db.query(ComplianceWell).filter(
-                ComplianceWell.tenant_id == self.tenant_id,
+                ComplianceWell.tenant_id == self.owner_id,
                 ComplianceWell.parcel_id.in_(parcel_ids),
             ).all()
         well_ids = [row.id for row in wells]
@@ -362,7 +810,7 @@ class AssuranceRepository:
         meters = []
         if well_ids:
             meters = self.db.query(ComplianceMeter).filter(
-                ComplianceMeter.tenant_id == self.tenant_id,
+                ComplianceMeter.tenant_id == self.owner_id,
                 ComplianceMeter.well_id.in_(well_ids),
             ).all()
         meter_ids = [row.id for row in meters]
@@ -377,7 +825,7 @@ class AssuranceRepository:
             asset_filters.append((ComplianceMeasurement.related_asset_type == "meter") & ComplianceMeasurement.related_asset_id.in_(meter_ids))
         if passport.reporting_period and asset_filters:
             measurements = self.db.query(ComplianceMeasurement).filter(
-                ComplianceMeasurement.tenant_id == self.tenant_id,
+                ComplianceMeasurement.tenant_id == self.owner_id,
                 ComplianceMeasurement.reporting_period == str(passport.reporting_period),
                 or_(*asset_filters),
             ).all()
@@ -386,7 +834,7 @@ class AssuranceRepository:
         linked_budget_ids = self._linked_water_budget_ids(passport.id)
         if passport.reporting_period and linked_budget_ids:
             water_budgets = self.db.query(ComplianceWaterBudget).filter(
-                ComplianceWaterBudget.tenant_id == self.tenant_id,
+                ComplianceWaterBudget.tenant_id == self.owner_id,
                 ComplianceWaterBudget.id.in_(linked_budget_ids),
                 ComplianceWaterBudget.reporting_period == str(passport.reporting_period),
             ).all()
@@ -420,9 +868,15 @@ class AssuranceRepository:
         return {"id": row.id, "organization_id": row.tenant_id, "allocation_af": row.allocation, "extraction_af": row.extraction, "irrigation_application_af": row.irrigation_application, "remaining_balance_af": row.remaining_balance, "projected_balance_af": row.projected_balance, "threshold_status": row.threshold_status, "water_source": row.water_source, "reporting_period": row.reporting_period}
 
     def _proof_counts(self, passport_id: str, scoped_assets: dict[str, Any] | None = None) -> dict[str, int]:
-        evidence = self.db.query(AssuranceEvidenceArtifact).filter_by(tenant_id=self.tenant_id, passport_id=passport_id).all()
+        evidence = self._scope_query(AssuranceEvidenceArtifact).filter_by(passport_id=passport_id).all()
         counts: dict[str, int] = {}
         for row in evidence:
+            if (
+                row.mapping_status in {"rejected", "conflicting"}
+                or row.unresolved_issue
+                or (row.stale_after and row.stale_after < datetime.utcnow())
+            ):
+                continue
             counts[row.evidence_type] = counts.get(row.evidence_type, 0) + 1
         if scoped_assets and not scoped_assets["scope_missing"]:
             if scoped_assets["parcels"]:
@@ -433,53 +887,135 @@ class AssuranceRepository:
                 counts["water_budget"] = counts.get("water_budget", 0) + len(scoped_assets["water_budgets"])
         return counts
 
-    def readiness(self, passport_id: str, *, persist: bool = True) -> dict[str, Any]:
+    def readiness(
+        self,
+        passport_id: str,
+        *,
+        persist: bool = True,
+        commit: bool = True,
+    ) -> dict[str, Any]:
         passport = self._passport(passport_id)
         scoped_assets = self._scoped_compliance_assets(passport)
         counts = self._proof_counts(passport_id, scoped_assets)
-        items = self.db.query(AssuranceChecklistItem).filter_by(tenant_id=self.tenant_id, passport_id=passport_id).all()
+        items = self._scope_query(AssuranceChecklistItem).filter_by(passport_id=passport_id).all()
+        mappings = self._scope_query(AssuranceEvidenceArtifact).filter_by(passport_id=passport_id).all()
+        mappings_by_id = {row.id: row for row in mappings}
         missing: list[dict[str, Any]] = []
+        requirements: list[dict[str, Any]] = []
+        warnings: list[dict[str, Any]] = []
         satisfied = 0
+        accepted = 0
+        pending_review = 0
         specs = checklist_for(passport.rule_pack_ids)
         for item in items:
             spec = next((entry for entry in specs if entry["rule_pack_id"] == item.rule_pack_id and entry["key"] == item.requirement_key), {})
-            is_satisfied = item.status == "satisfied"
+            linked = [mappings_by_id[value] for value in (item.evidence_artifact_ids or []) if value in mappings_by_id]
+            compatible = [row for row in linked if self._evidence_satisfies_spec(row, spec)]
+            incompatible = [row for row in linked if not self._evidence_satisfies_spec(row, spec)]
+            usable = [row for row in compatible if row.mapping_status not in {"rejected"}]
+            stale = [row for row in usable if row.stale_after and row.stale_after < datetime.utcnow()]
+            conflicting = [row for row in usable if row.unresolved_issue or row.mapping_status == "conflicting"]
+            qualified = [row for row in usable if row not in stale and row not in conflicting]
+            accepted_rows = [row for row in qualified if row.mapping_status == "accepted" or row.review_status == "accepted"]
+            not_applicable = any(row.mapping_status == "not_applicable" for row in linked) or item.status == "not_applicable"
+            is_satisfied = bool(qualified) or not_applicable
             if not is_satisfied and spec.get("record_type") == "input_application":
-                is_satisfied = self.db.query(InputApplication).filter_by(tenant_id=self.tenant_id, passport_id=passport_id).count() > 0
+                is_satisfied = self._scope_query(InputApplication).filter_by(passport_id=passport_id).count() > 0
             if not is_satisfied and spec.get("evidence_types"):
                 is_satisfied = any(counts.get(evidence_type, 0) > 0 for evidence_type in spec["evidence_types"])
+            if not_applicable:
+                requirement_status = "not_applicable"
+            elif conflicting:
+                requirement_status = "conflicting"
+            elif stale:
+                requirement_status = "stale"
+            elif incompatible:
+                requirement_status = "incompatible"
+            elif accepted_rows:
+                requirement_status = "accepted"
+            elif is_satisfied and (linked or spec.get("record_type")):
+                requirement_status = "reviewer_required" if item.review_required else "mapped"
+            elif is_satisfied:
+                requirement_status = "present"
+            elif any(row.mapping_status == "rejected" for row in linked):
+                requirement_status = "rejected"
+            else:
+                requirement_status = "missing"
+            item.status = requirement_status
             if is_satisfied:
                 satisfied += 1
-                item.status = "satisfied"
+                if requirement_status == "accepted":
+                    accepted += 1
+                elif requirement_status not in {"not_applicable", "mapped", "present"}:
+                    pending_review += 1
             else:
-                missing.append({
+                missing_item = {
                     "rule_pack_id": item.rule_pack_id,
                     "requirement_key": item.requirement_key,
                     "section_type": item.section_type,
                     "severity": item.severity,
+                    "blocking": bool(item.blocking),
+                    "status": requirement_status,
+                    "explanation": item.explanation or spec.get("explanation"),
                     "needed_evidence_types": spec.get("evidence_types", []),
-                })
+                }
+                missing.append(missing_item)
+                if requirement_status in {"stale", "conflicting", "incompatible", "rejected"}:
+                    warnings.append(missing_item)
+            requirements.append({
+                "id": item.id,
+                "rule_pack_id": item.rule_pack_id,
+                "rule_pack_version": spec.get("rule_pack_version"),
+                "requirement_key": item.requirement_key,
+                "title": spec.get("title") or item.requirement_key.replace("_", " ").title(),
+                "domain": spec.get("domain") or item.section_type,
+                "section_type": item.section_type,
+                "status": requirement_status,
+                "severity": item.severity,
+                "blocking": bool(item.blocking),
+                "review_required": bool(item.review_required),
+                "explanation": item.explanation or spec.get("explanation"),
+                "needed_evidence_types": spec.get("evidence_types", []),
+                "optional_evidence_types": spec.get("optional_evidence_types", []),
+                "evidence_mapping_ids": list(item.evidence_artifact_ids or []),
+                "incompatible_evidence_mapping_ids": [row.id for row in incompatible],
+            })
         total = max(len(items), 1)
         readiness_score = round(satisfied / total * 100, 1)
-        risk_score = max(0.0, min(100.0, 100.0 - readiness_score + len([m for m in missing if m["severity"] == "required"]) * 5))
+        blocking_issues = [m for m in missing if m["blocking"]]
+        risk_score = max(0.0, min(100.0, 100.0 - readiness_score + len(blocking_issues) * 5 + len(warnings) * 5))
         risk_level = "low" if risk_score < 25 else "medium" if risk_score < 60 else "high"
         scope_missing = scoped_assets["scope_missing"]
-        status_value = "needs_scope_review" if scope_missing else "ready_for_review" if not missing else "missing_proof"
-        review_status = "needs_review" if scope_missing or missing else "ready_for_review"
+        status_value = "needs_scope_review" if scope_missing else "ready_for_review" if not blocking_issues else "missing_proof"
+        review_status = "needs_review" if scope_missing or blocking_issues or pending_review else "ready_for_review"
         payload = {
             "passport_id": passport_id,
             "tenant_id": self.tenant_id,
+            "organization_id": self.organization_id,
+            "workspace_id": self.workspace_id,
             "status": status_value,
             "review_status": review_status,
             "readiness_score": readiness_score,
             "risk_score": round(risk_score, 1),
             "risk_level": risk_level,
             "satisfied_count": satisfied,
+            "accepted_count": accepted,
+            "pending_review_count": pending_review,
             "checklist_count": len(items),
             "missing_evidence": missing,
+            "blocking_issues": blocking_issues,
+            "warnings": warnings,
+            "requirements": requirements,
             "proof_counts": counts,
             "rule_pack_ids": passport.rule_pack_ids,
+            "rule_pack_versions": rule_pack_versions(passport.rule_pack_ids),
             "language": "audit readiness",
+            "score_explanation": {
+                "numerator": satisfied,
+                "denominator": len(items),
+                "formula": "requirements with usable mapped evidence or an explicit not-applicable review decision / selected requirements",
+                "does_not_mean": "Certification, regulatory approval, or legal compliance determination.",
+            },
             "scope": {
                 "readiness_package_only": True,
                 "authority_submission": False,
@@ -504,7 +1040,7 @@ class AssuranceRepository:
         if persist:
             self.db.add(AssuranceRiskScore(
                 id=f"risk-{uuid.uuid4().hex[:12]}",
-                tenant_id=self.tenant_id,
+                **self._scope_values(),
                 passport_id=passport_id,
                 score_type="audit_readiness_risk",
                 score=payload["risk_score"],
@@ -512,7 +1048,7 @@ class AssuranceRepository:
                 factors={"missing_evidence": missing, "proof_counts": counts},
             ))
             for section_type in SECTION_TYPES:
-                section = self.db.query(AssurancePassportSection).filter_by(tenant_id=self.tenant_id, passport_id=passport_id, section_type=section_type).first()
+                section = self._scope_query(AssurancePassportSection).filter_by(passport_id=passport_id, section_type=section_type).first()
                 if section:
                     section.readiness_score = readiness_score
                     section.status = "needs_review" if scope_missing else "ready_for_review" if not [m for m in missing if m["section_type"] == section_type] else "missing_proof"
@@ -520,42 +1056,657 @@ class AssuranceRepository:
                     section.updated_at = datetime.utcnow()
             passport.status = payload["status"]
             passport.updated_at = datetime.utcnow()
-            self.db.commit()
+            self._audit(
+                passport_id,
+                "readiness_evaluated",
+                subject_type="passport",
+                subject_id=passport_id,
+                details={"score": readiness_score, "status": status_value, "blocking_issue_count": len(blocking_issues)},
+            )
+            if commit:
+                self.db.commit()
         return payload
 
-    def export_pdf(self, passport_id: str) -> dict[str, Any]:
-        package = self._export_payload(passport_id)
-        pdf_bytes = render_passport_pdf(package)
-        encoded = base64.b64encode(pdf_bytes).decode("ascii")
-        checksum = hashlib.sha256(pdf_bytes).hexdigest()
-        export = AssuranceExport(
-            id=f"aex-{uuid.uuid4().hex[:12]}",
-            tenant_id=self.tenant_id,
-            passport_id=passport_id,
-            export_type="pdf",
-            storage_backend="inline_base64",
-            storage_ref=None,
-            checksum=checksum,
-            payload={**package, "content_base64": encoded, "content_type": "application/pdf"},
-        )
-        self.db.add(export)
-        self.db.commit()
+    def overview(self) -> dict[str, Any]:
+        passports = self._scope_query(AssurancePassport).order_by(AssurancePassport.updated_at.desc()).all()
+        summaries = [self.readiness(row.id, persist=False) for row in passports]
+        total_requirements = sum(item["checklist_count"] for item in summaries)
+        total_satisfied = sum(item["satisfied_count"] for item in summaries)
+        readiness_score = round(total_satisfied / total_requirements * 100, 1) if total_requirements else 0.0
+        open_actions: list[dict[str, Any]] = []
+        for passport, summary in zip(passports, summaries):
+            for issue in summary["blocking_issues"][:5]:
+                open_actions.append({
+                    "passport_id": passport.id,
+                    "passport_name": passport.farm_name,
+                    "requirement_key": issue["requirement_key"],
+                    "status": issue["status"],
+                    "explanation": issue["explanation"],
+                })
         return {
-            "id": export.id,
-            "passport_id": passport_id,
-            "export_type": "pdf",
-            "content_type": "application/pdf",
-            "content_base64": encoded,
-            "checksum": checksum,
-            "storage_backend": export.storage_backend,
-            "created_at": export.created_at.isoformat(),
+            "workspace_id": self.workspace_id,
+            "organization_id": self.organization_id,
+            "readiness_score": readiness_score,
+            "passport_count": len(passports),
+            "requirement_count": total_requirements,
+            "satisfied_count": total_satisfied,
+            "missing_proof_count": sum(len(item["blocking_issues"]) for item in summaries),
+            "pending_review_count": sum(item["pending_review_count"] for item in summaries),
+            "open_actions": open_actions,
+            "passport_summaries": [
+                {
+                    "passport_id": passport.id,
+                    "farm_name": passport.farm_name,
+                    "status": summary["status"],
+                    "readiness_score": summary["readiness_score"],
+                    "blocking_issue_count": len(summary["blocking_issues"]),
+                    "pending_review_count": summary["pending_review_count"],
+                }
+                for passport, summary in zip(passports, summaries)
+            ],
             "disclaimer": ASSURANCE_DISCLAIMER,
         }
 
-    def _export_payload(self, passport_id: str) -> dict[str, Any]:
+    def review_queue(self, passport_id: str) -> list[dict[str, Any]]:
+        self._passport(passport_id)
+        rows = self._scope_query(AssuranceEvidenceArtifact).filter_by(passport_id=passport_id).order_by(
+            AssuranceEvidenceArtifact.created_at.asc()
+        ).all()
+        queue: list[dict[str, Any]] = []
+        for row in rows:
+            is_stale = bool(row.stale_after and row.stale_after < datetime.utcnow())
+            if row.mapping_status == "accepted" and not is_stale and not row.unresolved_issue:
+                continue
+            payload = self.evidence_payload(row)
+            payload["queue_reason"] = (
+                "stale" if is_stale else "conflicting" if row.unresolved_issue else row.mapping_status or row.review_status
+            )
+            queue.append(payload)
+        return queue
+
+    def review(self, passport_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        self._passport(passport_id)
+        action = str(payload.get("action") or "")
+        if action not in REVIEW_ACTIONS:
+            raise ValueError(f"action must be one of {sorted(REVIEW_ACTIONS)}")
+        reason = str(payload.get("reason") or "").strip() or None
+        if action in {"reject_mapping", "request_additional_proof", "mark_not_applicable"} and not reason:
+            raise ValueError(f"reason is required for {action}")
+        mapping_id = payload.get("evidence_mapping_id")
+        checklist_item_id = payload.get("checklist_item_id")
+        mapping = None
+        item = None
+        if mapping_id:
+            mapping = self._scope_query(AssuranceEvidenceArtifact).filter_by(
+                id=str(mapping_id), passport_id=passport_id
+            ).first()
+            if not mapping:
+                raise KeyError("Evidence mapping not found")
+        if checklist_item_id:
+            item = self._scope_query(AssuranceChecklistItem).filter_by(
+                id=str(checklist_item_id), passport_id=passport_id
+            ).first()
+            if not item:
+                raise KeyError("Checklist item not found")
+        if not mapping and not item:
+            raise ValueError("evidence_mapping_id or checklist_item_id is required")
+
+        linked_before = self._linked_requirements(passport_id, mapping.id) if mapping else []
+        linked_before_state = [self._requirement_link_state(link) for link in linked_before]
+        previous_state = {
+            **self._mapping_review_state(mapping),
+            "checklist_status": item.status if item else None,
+            "affected_requirement_links": linked_before_state,
+        }
+        next_status = REVIEW_ACTIONS[action]
+        correction_audit: dict[str, Any] | None = None
+        readiness_recomputed = False
+        if mapping:
+            if action == "correct_metadata":
+                corrections = payload.get("corrections") or {}
+                unknown = set(corrections) - CORRECTABLE_METADATA_FIELDS
+                if unknown:
+                    raise ValueError(f"Unsupported correction fields: {', '.join(sorted(unknown))}")
+                if not corrections:
+                    raise ValueError("At least one metadata correction is required")
+                if "truth_label" in corrections and corrections["truth_label"] not in TRUTH_LABELS:
+                    raise ValueError(f"truth_label must be one of {sorted(TRUTH_LABELS)}")
+                if "confidence" in corrections and corrections["confidence"] is not None:
+                    confidence = float(corrections["confidence"])
+                    if not 0.0 <= confidence <= 1.0:
+                        raise ValueError("confidence must be between 0 and 1")
+                    corrections["confidence"] = confidence
+                previous_values: dict[str, Any] = {}
+                next_values: dict[str, Any] = {}
+                for key, value in corrections.items():
+                    normalized = _dt(value) if key == "stale_after" else value
+                    before = getattr(mapping, key)
+                    if before == normalized:
+                        continue
+                    previous_values[key] = _iso(before)
+                    next_values[key] = _iso(normalized)
+                    setattr(mapping, key, normalized)
+                if not next_values:
+                    raise ValueError("Metadata correction does not change any values")
+                mapping.mapping_status = "reviewer_required"
+                mapping.review_status = "pending_review"
+                specs = self._requirement_specs(passport_id)
+                invalidated: list[dict[str, Any]] = []
+                for linked_item in linked_before:
+                    spec = specs.get((linked_item.rule_pack_id, linked_item.requirement_key), {})
+                    if not self._evidence_satisfies_spec(mapping, spec):
+                        ids = [value for value in (linked_item.evidence_artifact_ids or []) if value != mapping.id]
+                        linked_item.evidence_artifact_ids = ids
+                        linked_item.status = "missing"
+                        linked_item.notes = "Evidence link invalidated after metadata correction."
+                        invalidated.append(self._requirement_link_state(linked_item))
+                    else:
+                        linked_item.status = "unreviewed" if linked_item.review_required else "mapped"
+                        linked_item.notes = "Evidence metadata changed; requirement compatibility revalidated."
+                    linked_item.updated_at = datetime.utcnow()
+                # Persist the current deterministic posture inside the same
+                # transaction so no stale satisfied state survives correction.
+                self.readiness(passport_id, persist=True, commit=False)
+                readiness_recomputed = True
+                linked_after = self._linked_requirements(passport_id, mapping.id)
+                correction_audit = {
+                    "changed_fields": sorted(next_values),
+                    "previous_values": previous_values,
+                    "next_values": next_values,
+                    "affected_requirement_links_before": linked_before_state,
+                    "affected_requirement_links_after": [
+                        self._requirement_link_state(link) for link in linked_after
+                    ],
+                    "invalidated_requirement_links": invalidated,
+                }
+            else:
+                mapping.mapping_status = next_status
+                mapping.review_status = "accepted" if action == "accept_mapping" else "rejected" if action == "reject_mapping" else "pending_review"
+                if action == "reopen":
+                    mapping.unresolved_issue = None
+                    for linked_item in linked_before:
+                        linked_item.status = "unreviewed" if linked_item.review_required else "mapped"
+                        linked_item.notes = "Reviewer reopened this evidence mapping."
+                        linked_item.updated_at = datetime.utcnow()
+                elif action == "request_additional_proof":
+                    mapping.unresolved_issue = reason
+        if item:
+            item.status = next_status
+            item.notes = reason or f"Reviewer action: {action}."
+            item.updated_at = datetime.utcnow()
+        if mapping and not readiness_recomputed:
+            self.readiness(passport_id, persist=True, commit=False)
+        event = AssuranceReviewEvent(
+            id=f"are-{uuid.uuid4().hex[:16]}",
+            **self._scope_values(),
+            passport_id=passport_id,
+            evidence_artifact_id=mapping.id if mapping else None,
+            checklist_item_id=item.id if item else None,
+            action=action,
+            actor_user_id=self.actor_user_id,
+            actor_label=payload.get("actor_label"),
+            reason=reason,
+            previous_state=previous_state,
+            next_state={
+                **self._mapping_review_state(mapping),
+                "checklist_status": item.status if item else None,
+                "affected_requirement_links": [
+                    self._requirement_link_state(link)
+                    for link in (self._linked_requirements(passport_id, mapping.id) if mapping else [])
+                ],
+            },
+            metadata_json={
+                **(payload.get("metadata") or {}),
+                **({"metadata_correction": correction_audit} if correction_audit else {}),
+            },
+        )
+        self.db.add(event)
+        self.db.flush()
+        self._audit(
+            passport_id,
+            "review_decision_recorded",
+            subject_type="review_event",
+            subject_id=event.id,
+            details={
+                "action": action,
+                "mapping_id": mapping.id if mapping else None,
+                "checklist_item_id": item.id if item else None,
+                **({"metadata_correction": correction_audit} if correction_audit else {}),
+            },
+        )
+        self.db.commit()
+        return {
+            "review_event": _as_dict(event),
+            "evidence_mapping": self.evidence_payload(mapping) if mapping else None,
+            "checklist_item": _as_dict(item) if item else None,
+        }
+
+    def list_review_events(self, passport_id: str) -> list[dict[str, Any]]:
+        self._passport(passport_id)
+        return [
+            _as_dict(row)
+            for row in self._scope_query(AssuranceReviewEvent).filter_by(passport_id=passport_id).order_by(
+                AssuranceReviewEvent.created_at.asc()
+            ).all()
+        ]
+
+    def create_field_task(self, passport_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        passport = self._passport(passport_id)
+        if not self.organization_id or not self.workspace_id:
+            raise ValueError("field task creation requires Portal workspace scope")
+        requirement_key = str(payload.get("requirement_key") or "")
+        item = self._scope_query(AssuranceChecklistItem).filter_by(
+            passport_id=passport_id,
+            requirement_key=requirement_key,
+        ).first()
+        if not item:
+            raise KeyError("Checklist item not found")
+        idempotency_key = str(payload.get("idempotency_key") or _checksum({
+            "passport_id": passport_id,
+            "requirement_key": requirement_key,
+            "title": payload.get("title"),
+        }))[:64]
+        existing = self.db.query(IngestionJob).filter_by(
+            tenant_id=self.organization_id,
+            workspace_id=self.workspace_id,
+            idempotency_key=idempotency_key,
+        ).first()
+        if existing:
+            return _as_dict(existing)
+        job = IngestionJob(
+            id=f"assurance-task-{uuid.uuid4().hex[:12]}",
+            tenant_id=self.organization_id,
+            workspace_id=self.workspace_id,
+            job_type="field_ops_task",
+            status="queued",
+            input_json={
+                "title": payload.get("title") or f"Collect proof: {requirement_key.replace('_', ' ')}",
+                "description": payload.get("description") or item.explanation,
+                "assignee": payload.get("assignee"),
+                "due_at": payload.get("due_at"),
+                "provenance": {
+                    "source": "assurance",
+                    "passport_id": passport.id,
+                    "passport_name": passport.farm_name,
+                    "checklist_item_id": item.id,
+                    "requirement_key": requirement_key,
+                    "rule_pack_id": item.rule_pack_id,
+                    "workspace_id": self.workspace_id,
+                },
+            },
+            output_json={},
+            idempotency_key=idempotency_key,
+        )
+        self.db.add(job)
+        self.db.flush()
+        self._audit(
+            passport_id,
+            "field_task_created",
+            subject_type="ingestion_job",
+            subject_id=job.id,
+            details={"requirement_key": requirement_key, "idempotency_key": idempotency_key},
+        )
+        self.db.commit()
+        return _as_dict(job)
+
+    def export_pdf(self, passport_id: str) -> dict[str, Any]:
+        return self.create_package(
+            passport_id,
+            {"package_type": "assurance_passport", "export_type": "pdf"},
+            legacy_inline=True,
+        )
+
+    def list_exports(self, passport_id: str) -> list[dict[str, Any]]:
+        self._passport(passport_id)
+        rows = self._scope_query(AssuranceExport).filter_by(passport_id=passport_id).order_by(
+            AssuranceExport.created_at.desc()
+        ).all()
+        return [self._export_response(row, include_content=False) for row in rows]
+
+    def _export_response(self, row: AssuranceExport, *, include_content: bool) -> dict[str, Any]:
+        result = {
+            "id": row.id,
+            "passport_id": row.passport_id,
+            "export_type": row.export_type,
+            "package_type": row.package_type,
+            "package_version": row.package_version,
+            "package_status": row.package_status,
+            "content_type": "application/pdf",
+            "checksum": row.checksum,
+            "storage_backend": row.storage_backend,
+            "storage_ref": row.storage_ref,
+            "generated_artifact_id": row.generated_artifact_id,
+            "download_url": (
+                f"/v1/workspaces/{self.workspace_id}/assurance/passports/{row.passport_id}/packages/{row.id}/download"
+                if self.organization_id and row.generated_artifact_id
+                else None
+            ),
+            "rule_pack_versions": row.rule_pack_versions or {},
+            "evidence_references": row.evidence_references or [],
+            "created_at": row.created_at.isoformat(),
+            "disclaimer": ASSURANCE_DISCLAIMER,
+        }
+        if include_content:
+            result["content_base64"] = (row.payload or {}).get("content_base64")
+        return result
+
+    def create_package(
+        self,
+        passport_id: str,
+        payload: dict[str, Any],
+        *,
+        legacy_inline: bool = False,
+        commit: bool = True,
+    ) -> dict[str, Any]:
+        passport = self._passport(passport_id)
+        package_type = str(payload.get("package_type") or "assurance_passport")
+        if package_type not in PACKAGE_TYPES:
+            raise ValueError(f"package_type must be one of {sorted(PACKAGE_TYPES)}")
+        idempotency_key = payload.get("idempotency_key")
+        if idempotency_key:
+            existing = self._scope_query(AssuranceExport).filter_by(
+                passport_id=passport_id,
+                package_type=package_type,
+                idempotency_key=str(idempotency_key),
+            ).first()
+            if existing:
+                return self._export_response(existing, include_content=legacy_inline)
+
+        snapshot = self._export_payload(passport_id, commit=commit)
+        readiness = snapshot["readiness"]
+        if readiness["blocking_issues"]:
+            package_status = "blocked"
+        elif readiness["pending_review_count"]:
+            package_status = "reviewer_evaluation_required"
+        else:
+            package_status = "ready_for_reviewer_evaluation"
+        previous = self._scope_query(AssuranceExport).filter_by(
+            passport_id=passport_id,
+            package_type=package_type,
+        ).order_by(AssuranceExport.package_version.desc()).first()
+        package_version = (previous.package_version if previous else 0) + 1
+        evidence_references = [
+            {
+                "mapping_id": item["id"],
+                "source_kind": item["source_kind"],
+                "source_id": item["source_id"],
+                "checksum": item.get("checksum"),
+            }
+            for item in snapshot["evidence"]
+        ]
+        export_id = f"aex-{uuid.uuid4().hex[:12]}"
+        report_title = package_type.replace("_", " ").title()
+        generated_at = datetime.now(timezone.utc).isoformat()
+        package_payload = {
+            **snapshot,
+            "package_id": export_id,
+            "immutable_package_reference": f"assurance-export:{export_id}",
+            "package_type": package_type,
+            "package_version": package_version,
+            "package_status": package_status,
+            "generated_at": generated_at,
+            "content_type": "application/pdf",
+        }
+        pdf_bytes = render_passport_pdf(package_payload)
+        checksum = hashlib.sha256(pdf_bytes).hexdigest()
+        staged_artifact = None
+        generated_artifact_id = None
+        storage_backend = "inline_base64"
+        storage_ref = None
+        if legacy_inline:
+            package_payload["content_base64"] = base64.b64encode(pdf_bytes).decode("ascii")
+        else:
+            if not self.organization_id or not self.workspace_id:
+                raise ValueError("modern package delivery requires Portal workspace scope")
+            generated_artifact_id = f"artifact-{uuid.uuid4().hex[:16]}"
+            filename = f"{package_type}-v{package_version}.pdf"
+            staged_artifact = stage_assurance_artifact(
+                artifact_id=generated_artifact_id,
+                organization_id=self.organization_id,
+                workspace_id=self.workspace_id,
+                title=report_title,
+                filename=filename,
+                pdf_bytes=pdf_bytes,
+                metadata={
+                    "assurance_export_id": export_id,
+                    "passport_id": passport_id,
+                    "package_type": package_type,
+                    "package_version": package_version,
+                    "package_status": package_status,
+                    "immutable": True,
+                },
+            )
+            self.db.add(staged_artifact.artifact)
+            storage_backend = "generated_artifact"
+            storage_ref = f"generated_artifact://{generated_artifact_id}"
+        export = AssuranceExport(
+            id=export_id,
+            **self._scope_values(),
+            passport_id=passport_id,
+            export_type="pdf",
+            package_type=package_type,
+            package_version=package_version,
+            package_status=package_status,
+            generated_by_user_id=self.actor_user_id,
+            idempotency_key=str(idempotency_key) if idempotency_key else None,
+            rule_pack_versions=rule_pack_versions(passport.rule_pack_ids),
+            evidence_references=evidence_references,
+            generated_artifact_id=generated_artifact_id,
+            storage_backend=storage_backend,
+            storage_ref=storage_ref,
+            checksum=checksum,
+            payload=package_payload,
+        )
+        self.db.add(export)
+        self.db.flush()
+        self._audit(
+            passport_id,
+            "proof_package_generated",
+            subject_type="assurance_export",
+            subject_id=export.id,
+            details={"package_type": package_type, "package_version": package_version, "package_status": package_status},
+        )
+        if commit:
+            self.db.commit()
+            if staged_artifact is not None:
+                staged_artifact.promote()
+        elif staged_artifact is not None:
+            self._pending_artifact_promotions.append(staged_artifact)
+        return self._export_response(export, include_content=legacy_inline)
+
+    def promote_staged_artifacts(self) -> None:
+        """Finalize object markers only after the catalog transaction commits."""
+
+        pending, self._pending_artifact_promotions = self._pending_artifact_promotions, []
+        for staged_artifact in pending:
+            staged_artifact.promote()
+
+    def package_artifact(self, passport_id: str, package_id: str) -> tuple[AssuranceExport, GeneratedArtifact]:
+        """Resolve a package and catalog artifact strictly inside Portal scope."""
+
+        self._passport(passport_id)
+        row = self._scope_query(AssuranceExport).filter_by(id=package_id, passport_id=passport_id).first()
+        if not row or not row.generated_artifact_id:
+            raise KeyError("Proof package not found")
+        artifact = self.db.query(GeneratedArtifact).filter(
+            GeneratedArtifact.id == row.generated_artifact_id,
+            GeneratedArtifact.tenant_id == self.organization_id,
+            GeneratedArtifact.workspace_id == self.workspace_id,
+            GeneratedArtifact.artifact_type == "assurance_proof_package",
+        ).first()
+        if not artifact or str((artifact.metadata_json or {}).get("assurance_export_id")) != row.id:
+            raise KeyError("Proof package not found")
+        return row, artifact
+
+    def run_agent(
+        self,
+        passport_id: str,
+        *,
+        request_id: str | None = None,
+        commit: bool = True,
+    ) -> dict[str, Any]:
+        """Run deterministic, workspace-scoped Assurance triage.
+
+        Evidence text is never interpreted as instruction. The run consumes
+        only server-owned mappings, statuses, provenance identifiers, and the
+        deterministic readiness result. It proposes next actions but cannot
+        accept evidence, complete review, certify, or generate/send a package.
+        """
+
+        if not self.organization_id or not self.workspace_id or not self.actor_user_id:
+            raise ValueError("Assurance Agent requires Portal workspace scope")
+        passport = self._passport(passport_id)
+        run_id = (
+            f"air-{hashlib.sha256(f'{self.organization_id}|{self.workspace_id}|{passport_id}|{request_id}'.encode()).hexdigest()[:24]}"
+            if request_id
+            else f"air-{uuid.uuid4().hex[:16]}"
+        )
+        existing = self.db.query(IntelligenceRun).filter(
+            IntelligenceRun.id == run_id,
+            IntelligenceRun.tenant_id == self.organization_id,
+            IntelligenceRun.workspace_id == self.workspace_id,
+            IntelligenceRun.run_type == "assurance_agent_triage",
+        ).first()
+        if existing:
+            return self._agent_run_payload(existing)
+
+        readiness = self.readiness(passport_id, commit=commit)
+        mappings = self._scope_query(AssuranceEvidenceArtifact).filter_by(passport_id=passport_id).all()
+        classifications = [
+            {
+                "mapping_id": row.id,
+                "source_kind": row.source_kind,
+                "source_id": row.source_id,
+                "evidence_type": row.evidence_type,
+                "proof_domain": row.proof_domain,
+                "mapping_status": row.mapping_status,
+                "review_status": row.review_status,
+                "data_quality": row.data_quality,
+                "stale": bool(row.stale_after and row.stale_after < datetime.utcnow()),
+                "conflicting": bool(row.unresolved_issue or row.mapping_status == "conflicting"),
+            }
+            for row in mappings
+        ]
+        recommended_actions = [
+            {
+                "action_type": "collect_missing_evidence",
+                "requirement_key": item["requirement_key"],
+                "title": f"Collect proof: {item['requirement_key'].replace('_', ' ')}",
+                "requires_human_approval": True,
+                "execution": "Use the explicit Assurance field-task action after human confirmation.",
+            }
+            for item in readiness["blocking_issues"][:10]
+        ]
+        if not readiness["blocking_issues"]:
+            recommended_actions.append({
+                "action_type": "prepare_draft_package",
+                "title": "Prepare a draft reviewer package",
+                "requires_human_approval": True,
+                "execution": "Use the explicit package-generation action; no external delivery is automatic.",
+            })
+        output = {
+            "workflow_type": "assurance_intelligence_triage",
+            "passport_id": passport_id,
+            "summary": (
+                f"Deterministic triage found {len(readiness['blocking_issues'])} blocking issue(s), "
+                f"{readiness['pending_review_count']} pending human review(s), and {len(mappings)} evidence mapping(s)."
+            ),
+            "classifications": classifications,
+            "gaps": readiness["blocking_issues"],
+            "warnings": readiness["warnings"],
+            "recommended_actions": recommended_actions,
+            "draft_package": {
+                "package_type": "assurance_passport",
+                "status": "proposal_only",
+                "can_generate": not readiness["blocking_issues"],
+            },
+            "human_review_authoritative": True,
+            "requires_human_approval": True,
+            "prompt_injection_boundary": (
+                "Uploaded evidence is untrusted data. Evidence text cannot alter rules, approve mappings, "
+                "complete review, authorize an action, or override deterministic readiness."
+            ),
+            "truth_constraints": [
+                "Decision support only; never certification, legal compliance, approval, or filing.",
+                "Human review decisions remain authoritative and append-only.",
+                "No package generation, external delivery, or physical action occurs in this run.",
+                "The legacy unauthenticated execution-assurance routes are outside this workflow's trust boundary.",
+            ],
+        }
+        run = IntelligenceRun(
+            id=run_id,
+            tenant_id=self.organization_id,
+            workspace_id=self.workspace_id,
+            user_id=self.actor_user_id,
+            run_type="assurance_agent_triage",
+            question="Classify evidence state, detect gaps/conflicts, and recommend reviewer-safe next actions.",
+            input_context_json={
+                "passport_id": passport_id,
+                "rule_pack_versions": rule_pack_versions(passport.rule_pack_ids),
+                "evidence_mapping_ids": [row.id for row in mappings],
+                "untrusted_evidence_text_consumed": False,
+                "request_id": request_id,
+            },
+            output_json=output,
+            citations_json=[row.id for row in mappings],
+            provenance_json={
+                "source": "assurance",
+                "engine": "deterministic",
+                "human_review_authoritative": True,
+                "request_id": request_id,
+            },
+            freshness_json={"evaluated_at": datetime.now(timezone.utc).isoformat()},
+            status="completed",
+        )
+        self.db.add(run)
+        self.db.flush()
+        self._audit(
+            passport_id,
+            "assurance_agent_triage_completed",
+            subject_type="intelligence_run",
+            subject_id=run.id,
+            details={
+                "blocking_issue_count": len(readiness["blocking_issues"]),
+                "pending_review_count": readiness["pending_review_count"],
+                "human_review_authoritative": True,
+            },
+        )
+        if commit:
+            self.db.commit()
+        return self._agent_run_payload(run)
+
+    def list_agent_runs(self, passport_id: str) -> list[dict[str, Any]]:
+        self._passport(passport_id)
+        if not self.organization_id or not self.workspace_id:
+            return []
+        rows = self.db.query(IntelligenceRun).filter(
+            IntelligenceRun.tenant_id == self.organization_id,
+            IntelligenceRun.workspace_id == self.workspace_id,
+            IntelligenceRun.run_type == "assurance_agent_triage",
+        ).order_by(IntelligenceRun.created_at.desc()).limit(100).all()
+        return [
+            self._agent_run_payload(row)
+            for row in rows
+            if str((row.input_context_json or {}).get("passport_id")) == passport_id
+        ][:25]
+
+    def _agent_run_payload(self, row: IntelligenceRun) -> dict[str, Any]:
+        return {
+            "id": row.id,
+            "workspace_id": row.workspace_id,
+            "run_type": row.run_type,
+            "status": row.status,
+            "created_at": row.created_at.isoformat(),
+            "output": row.output_json or {},
+            "citations": row.citations_json or [],
+            "provenance": row.provenance_json or {},
+            "freshness": row.freshness_json or {},
+        }
+
+    def _export_payload(self, passport_id: str, *, commit: bool = True) -> dict[str, Any]:
         passport = self._passport(passport_id)
         scoped_assets = self._scoped_compliance_assets(passport)
-        readiness = self.readiness(passport_id, persist=True)
+        readiness = self.readiness(passport_id, persist=True, commit=commit)
         return {
             "passport": _as_dict(passport),
             "farm_summary": {
@@ -573,12 +1724,26 @@ class AssuranceRepository:
                 "measurements": [self._measurement_payload(row) for row in scoped_assets["measurements"]],
                 "water_budgets": [self._water_budget_payload(row) for row in scoped_assets["water_budgets"]],
             },
-            "input_proof": [_as_dict(row) for row in self.db.query(InputApplication).filter_by(tenant_id=self.tenant_id, passport_id=passport_id).all()],
+            "input_proof": [_as_dict(row) for row in self._scope_query(InputApplication).filter_by(passport_id=passport_id).all()],
             "traceability_proof": {
-                "harvest_lots": [_as_dict(row) for row in self.db.query(HarvestLot).filter_by(tenant_id=self.tenant_id, passport_id=passport_id).all()],
-                "events": [_as_dict(row) for row in self.db.query(TraceabilityEvent).filter_by(tenant_id=self.tenant_id, passport_id=passport_id).all()],
+                "harvest_lots": [_as_dict(row) for row in self._scope_query(HarvestLot).filter_by(passport_id=passport_id).all()],
+                "events": [_as_dict(row) for row in self._scope_query(TraceabilityEvent).filter_by(passport_id=passport_id).all()],
             },
-            "evidence": [_as_dict(row) for row in self.db.query(AssuranceEvidenceArtifact).filter_by(tenant_id=self.tenant_id, passport_id=passport_id).all()],
+            "evidence": [self.evidence_payload(row) for row in self._scope_query(AssuranceEvidenceArtifact).filter_by(passport_id=passport_id).all()],
+            "review_history": [
+                {
+                    "id": row.id,
+                    "action": row.action,
+                    "actor_label": row.actor_label,
+                    "reason": row.reason,
+                    "evidence_artifact_id": row.evidence_artifact_id,
+                    "checklist_item_id": row.checklist_item_id,
+                    "created_at": _iso(row.created_at),
+                }
+                for row in self._scope_query(AssuranceReviewEvent).filter_by(passport_id=passport_id).order_by(
+                    AssuranceReviewEvent.created_at.asc(), AssuranceReviewEvent.id.asc()
+                ).all()
+            ],
             "readiness": readiness,
             "audit_trail": {
                 "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -589,53 +1754,328 @@ class AssuranceRepository:
         }
 
 
+def _pdf_safe(value: Any, *, limit: int = 600) -> str:
+    """Bound and normalize untrusted snapshot values before PDF rendering."""
+
+    if value is None or value == "":
+        return "Not available"
+    if isinstance(value, (dict, list, tuple)):
+        value = json.dumps(value, sort_keys=True, separators=(",", ":"), default=str)
+    text_value = str(value)
+    text_value = text_value.replace("\u2010", "-").replace("\u2011", "-").replace("\u2012", "-")
+    text_value = text_value.replace("\u2013", "-").replace("\u2014", "-").replace("\u2212", "-")
+    text_value = " ".join(
+        "".join(character if character.isprintable() else " " for character in text_value).split()
+    )
+    if len(text_value) > limit:
+        return text_value[: max(0, limit - 16)].rstrip() + " [truncated]"
+    return text_value
+
+
+def _pdf_public_reference(value: Any, *, limit: int = 180) -> str:
+    candidate = _pdf_safe(value, limit=limit)
+    lowered = candidate.lower()
+    if "://" in lowered or lowered.startswith("/"):
+        return "Private storage reference withheld"
+    return candidate
+
+
 def render_passport_pdf(package: dict[str, Any]) -> bytes:
     from io import BytesIO
 
     try:
+        from xml.sax.saxutils import escape
+
+        from reportlab.lib import colors
+        from reportlab.lib.enums import TA_CENTER
         from reportlab.lib.pagesizes import letter
-        from reportlab.lib.styles import getSampleStyleSheet
-        from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer
+        from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+        from reportlab.lib.units import inch
+        from reportlab.platypus import CondPageBreak, KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
     except ModuleNotFoundError:
         return _minimal_passport_pdf(package)
 
     buf = BytesIO()
-    doc = SimpleDocTemplate(buf, pagesize=letter, title="Assurance Passport Audit Readiness")
+    class AssuranceDocTemplate(SimpleDocTemplate):
+        def afterPage(self) -> None:
+            page_frame(self.canv, self)
+
+    doc = AssuranceDocTemplate(
+        buf,
+        pagesize=letter,
+        title="AGRO-AI Assurance Proof Package",
+        leftMargin=0.55 * inch,
+        rightMargin=0.55 * inch,
+        topMargin=0.72 * inch,
+        bottomMargin=0.62 * inch,
+    )
     styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(
+        name="AssuranceSmall",
+        parent=styles["BodyText"],
+        fontName="Helvetica",
+        fontSize=7.5,
+        leading=10,
+        textColor=colors.HexColor("#42534B"),
+    ))
+    styles.add(ParagraphStyle(
+        name="AssuranceBody",
+        parent=styles["BodyText"],
+        fontName="Helvetica",
+        fontSize=9,
+        leading=13,
+        textColor=colors.HexColor("#10231B"),
+    ))
+    styles.add(ParagraphStyle(
+        name="AssuranceSection",
+        parent=styles["Heading2"],
+        fontName="Helvetica-Bold",
+        fontSize=12,
+        leading=15,
+        spaceBefore=10,
+        spaceAfter=6,
+        textColor=colors.HexColor("#174D36"),
+        keepWithNext=1,
+    ))
+    styles.add(ParagraphStyle(
+        name="AssuranceTableHeader",
+        parent=styles["AssuranceSmall"],
+        fontName="Helvetica-Bold",
+        textColor=colors.white,
+    ))
+    styles.add(ParagraphStyle(
+        name="AssuranceTitle",
+        parent=styles["Title"],
+        fontName="Helvetica-Bold",
+        fontSize=20,
+        leading=24,
+        alignment=TA_CENTER,
+        textColor=colors.HexColor("#10231B"),
+        spaceAfter=5,
+    ))
     story = []
 
-    def add_heading(text: str) -> None:
-        story.append(Paragraph(text, styles["Heading2"]))
+    def paragraph(value: Any, style: str = "AssuranceBody", *, limit: int = 600) -> Paragraph:
+        return Paragraph(escape(_pdf_safe(value, limit=limit)), styles[style])
 
-    def add_body(text: str) -> None:
-        story.append(Paragraph(text.replace("&", "&amp;"), styles["BodyText"]))
+    def add_heading(text: str) -> None:
+        story.append(paragraph(text, "AssuranceSection"))
+
+    def add_body(text: Any, *, limit: int = 1200) -> None:
+        story.append(paragraph(text, limit=limit))
         story.append(Spacer(1, 8))
+
+    def label_value(label: str, value: Any) -> list[Paragraph]:
+        return [paragraph(label, "AssuranceSmall"), paragraph(value)]
+
+    def page_frame(canvas, document) -> None:
+        canvas.saveState()
+        width, height = letter
+        canvas.setFillColor(colors.HexColor("#174D36"))
+        canvas.rect(0, height - 0.34 * inch, width, 0.34 * inch, stroke=0, fill=1)
+        canvas.setFillColor(colors.white)
+        canvas.setFont("Helvetica-Bold", 8)
+        canvas.drawString(0.55 * inch, height - 0.225 * inch, "AGRO-AI ASSURANCE")
+        canvas.setFillColor(colors.HexColor("#42534B"))
+        canvas.setFont("Helvetica", 7)
+        canvas.drawString(0.55 * inch, 0.30 * inch, "Immutable reviewer evidence snapshot - decision support only")
+        canvas.drawRightString(width - 0.55 * inch, 0.30 * inch, f"Page {document.page}")
+        canvas.restoreState()
 
     passport = package["passport"]
     readiness = package["readiness"]
-    story.append(Paragraph("Assurance Passport - Audit Readiness", styles["Title"]))
-    add_body(package["disclaimer"])
-    add_heading("Farm Summary")
-    add_body(f"Farm: {passport.get('farm_name')} | Crop: {passport.get('crop') or 'not provided'} | Period: {passport.get('reporting_period')}")
-    add_heading("Water Proof")
-    water = package["water_proof"]
-    add_body(f"Wells: {len(water['wells'])}; meters: {len(water['meters'])}; measurements: {len(water['measurements'])}; water budgets: {len(water['water_budgets'])}.")
-    add_heading("Input Proof")
-    add_body(f"Input application records: {len(package['input_proof'])}.")
-    add_heading("Traceability Proof")
-    trace = package["traceability_proof"]
-    add_body(f"Harvest lots: {len(trace['harvest_lots'])}; traceability events: {len(trace['events'])}.")
-    add_heading("Missing Evidence")
-    if readiness["missing_evidence"]:
-        add_body("; ".join(item["requirement_key"] for item in readiness["missing_evidence"]))
+    evidence_by_id = {item.get("id"): item for item in package.get("evidence", []) if item.get("id")}
+
+    story.append(paragraph("AGRO-AI", "AssuranceSmall"))
+    story.append(paragraph(_pdf_safe(package.get("package_type", "assurance proof package")).replace("_", " ").title(), "AssuranceTitle"))
+    story.append(paragraph("Immutable Assurance proof package for external reviewer evaluation", "AssuranceSmall"))
+    story.append(Spacer(1, 10))
+    summary = Table([
+        label_value("Package ID", package.get("package_id")),
+        label_value("Package version", package.get("package_version")),
+        label_value("Generated timestamp", package.get("generated_at") or package.get("audit_trail", {}).get("generated_at")),
+        label_value("Package status", package.get("package_status")),
+        label_value("Farm or operation", passport.get("farm_name")),
+        label_value("Entity type", passport.get("entity_type") or "farm"),
+        label_value("Crop", passport.get("crop")),
+        label_value("Reporting period", passport.get("reporting_period")),
+        label_value("Readiness score", f"{readiness.get('readiness_score', 0)}%"),
+        label_value("Immutable package reference", package.get("immutable_package_reference")),
+    ], colWidths=[1.65 * inch, 5.05 * inch], hAlign="LEFT")
+    summary.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (0, -1), colors.HexColor("#EAF2ED")),
+        ("BOX", (0, 0), (-1, -1), 0.5, colors.HexColor("#BFCFC5")),
+        ("INNERGRID", (0, 0), (-1, -1), 0.25, colors.HexColor("#D8E2DB")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 7),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 7),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.append(summary)
+
+    add_heading("How to interpret readiness")
+    explanation = readiness.get("score_explanation") or {}
+    add_body(
+        f"The readiness score is {readiness.get('satisfied_count', 0)} satisfied requirements out of "
+        f"{readiness.get('checklist_count', 0)} selected requirements. "
+        f"{explanation.get('formula') or 'It measures usable evidence coverage for the selected rule packs.'}"
+    )
+    does_not_mean = _pdf_safe(
+        explanation.get("does_not_mean")
+        or "certification, regulatory approval, or a legal compliance determination",
+        limit=600,
+    )
+    if "does not" not in does_not_mean.lower():
+        does_not_mean = f"The readiness score does not mean {does_not_mean[:1].lower()}{does_not_mean[1:]}"
+    add_body(does_not_mean)
+
+    add_heading("Selected rule packs and exact versions")
+    pack_rows = [[paragraph("Rule pack", "AssuranceTableHeader"), paragraph("Version", "AssuranceTableHeader")]]
+    for pack_id in passport.get("rule_pack_ids") or []:
+        pack = DEFAULT_RULE_PACKS.get(pack_id, {})
+        pack_rows.append([
+            paragraph(pack.get("title") or pack_id),
+            paragraph((readiness.get("rule_pack_versions") or {}).get(pack_id) or pack.get("version")),
+        ])
+    pack_table = Table(pack_rows, colWidths=[5.1 * inch, 1.6 * inch], repeatRows=1)
+    pack_table.setStyle(TableStyle([
+        ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#174D36")),
+        ("TEXTCOLOR", (0, 0), (-1, 0), colors.white),
+        ("GRID", (0, 0), (-1, -1), 0.35, colors.HexColor("#C8D5CD")),
+        ("VALIGN", (0, 0), (-1, -1), "TOP"),
+        ("LEFTPADDING", (0, 0), (-1, -1), 6),
+        ("RIGHTPADDING", (0, 0), (-1, -1), 6),
+        ("TOPPADDING", (0, 0), (-1, -1), 5),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+    ]))
+    story.append(pack_table)
+
+    add_heading("Requirement-by-requirement matrix")
+    matrix_header = [
+        paragraph("Requirement", "AssuranceTableHeader"),
+        paragraph("Status", "AssuranceTableHeader"),
+        paragraph("Blocking", "AssuranceTableHeader"),
+        paragraph("Attached evidence references", "AssuranceTableHeader"),
+    ]
+    matrix_rows = []
+    for requirement in readiness.get("requirements") or []:
+        evidence_lines: list[str] = []
+        for mapping_id in requirement.get("evidence_mapping_ids") or []:
+            mapped = evidence_by_id.get(mapping_id)
+            if not mapped:
+                evidence_lines.append(_pdf_safe(mapping_id, limit=100))
+                continue
+            evidence_lines.append(
+                f"{_pdf_safe(mapping_id, limit=80)} | {_pdf_safe(mapped.get('source_kind'), limit=40)} | "
+                f"{_pdf_public_reference(mapped.get('source_id'), limit=100)} | type={_pdf_safe(mapped.get('evidence_type'), limit=60)}"
+            )
+        if not evidence_lines:
+            evidence_lines = ["No evidence attached"]
+        matrix_rows.append([
+            paragraph(
+                f"{requirement.get('title') or requirement.get('requirement_key')} "
+                f"[{requirement.get('rule_pack_id')} v{requirement.get('rule_pack_version')}]",
+                limit=300,
+            ),
+            paragraph(str(requirement.get("status") or "").replace("_", " "), "AssuranceSmall"),
+            paragraph("Yes" if requirement.get("blocking") else "No", "AssuranceSmall"),
+            paragraph("\n".join(evidence_lines), "AssuranceSmall", limit=1600),
+        ])
+    for start in range(0, len(matrix_rows), 3):
+        matrix = Table(
+            [matrix_header, *matrix_rows[start:start + 3]],
+            colWidths=[2.0 * inch, 1.0 * inch, 0.7 * inch, 3.0 * inch],
+            repeatRows=1,
+            hAlign="LEFT",
+        )
+        matrix.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), colors.HexColor("#174D36")),
+            ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F5F8F6")]),
+            ("GRID", (0, 0), (-1, -1), 0.3, colors.HexColor("#C8D5CD")),
+            ("VALIGN", (0, 0), (-1, -1), "TOP"),
+            ("LEFTPADDING", (0, 0), (-1, -1), 5),
+            ("RIGHTPADDING", (0, 0), (-1, -1), 5),
+            ("TOPPADDING", (0, 0), (-1, -1), 5),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 5),
+        ]))
+        story.append(matrix)
+        story.append(Spacer(1, 6))
+
+    add_heading("Evidence registry")
+    if not evidence_by_id:
+        add_body("No evidence mappings are present in this immutable snapshot.")
+    for mapping in evidence_by_id.values():
+        stale = bool(mapping.get("stale_after") and str(mapping.get("stale_after")) < datetime.utcnow().isoformat())
+        states = [mapping.get("mapping_status"), mapping.get("review_status")]
+        if stale:
+            states.append("stale")
+        if mapping.get("unresolved_issue"):
+            states.append("conflicting")
+        source = mapping.get("source") or {}
+        lines = [
+            f"Source kind: {_pdf_safe(mapping.get('source_kind'), limit=60)}",
+            f"Source identifier: {_pdf_public_reference(mapping.get('source_id'), limit=160)}",
+            f"Evidence type: {_pdf_safe(mapping.get('evidence_type'), limit=100)}",
+            f"Event timestamp: {_pdf_safe(mapping.get('event_timestamp') or source.get('occurred_at'), limit=80)}",
+            f"Truth label: {_pdf_safe(mapping.get('truth_label'), limit=60)}",
+            f"Confidence: {_pdf_safe(mapping.get('confidence'), limit=40)}",
+            f"Data quality: {_pdf_safe(mapping.get('data_quality'), limit=80)}",
+            f"Human review and evidence state: {_pdf_safe(', '.join(str(value) for value in states if value), limit=180)}",
+            f"Checksum or evidence reference: {_pdf_safe(mapping.get('checksum') or mapping.get('id'), limit=180)}",
+        ]
+        story.extend([
+            paragraph(f"Evidence {mapping.get('id')}", "AssuranceSection", limit=120),
+            paragraph(" | ".join(lines), "AssuranceSmall", limit=1800),
+            Spacer(1, 5),
+        ])
+
+    add_heading("Missing proof and blocking posture")
+    missing = readiness.get("missing_evidence") or []
+    if missing:
+        for item in missing:
+            add_body(
+                f"{item.get('rule_pack_id')}:{item.get('requirement_key')} - status {item.get('status')}; "
+                f"blocking={'yes' if item.get('blocking') else 'no'}; needed evidence types: "
+                f"{', '.join(item.get('needed_evidence_types') or [])}",
+                limit=900,
+            )
     else:
-        add_body("No missing checklist evidence detected for the selected rule packs.")
-    add_heading("Readiness Score")
-    add_body(f"{readiness['readiness_score']}% - {readiness['status']}.")
-    add_heading("Risk Score")
-    add_body(f"{readiness['risk_score']} ({readiness['risk_level']}).")
-    add_heading("Audit Trail")
-    add_body(f"Generated at {package['audit_trail']['generated_at']}. Scope: audit readiness evidence package for reviewer evaluation.")
+        add_body("No missing checklist evidence was detected for the selected rule packs at generation time.")
+
+    # Reserve enough room for the heading and at least one decision. Without
+    # this guard ReportLab can place the heading beside a split KeepTogether at
+    # the bottom of a dense evidence page.
+    story.append(CondPageBreak(1.7 * inch))
+    add_heading("Human review decisions")
+    reviews = package.get("review_history") or []
+    if reviews:
+        for review in reviews:
+            story.append(KeepTogether([
+                paragraph(
+                    f"{review.get('created_at')} | {review.get('action')} | mapping "
+                    f"{review.get('evidence_artifact_id') or 'not applicable'} | requirement "
+                    f"{review.get('checklist_item_id') or 'not applicable'} | reviewer "
+                    f"{review.get('actor_label') or 'authenticated reviewer'} | reason: "
+                    f"{_pdf_safe(review.get('reason') or 'not provided', limit=240)}",
+                    limit=760,
+                ),
+                Spacer(1, 8),
+            ]))
+    else:
+        add_body("No human review decisions were recorded in this snapshot. No human approval is claimed.")
+
+    story.append(KeepTogether([
+        paragraph("Strong disclaimer", "AssuranceSection"),
+        paragraph(package.get("disclaimer") or ASSURANCE_DISCLAIMER, limit=1800),
+        Spacer(1, 8),
+        paragraph(
+            "This package does not claim certification, regulatory approval, legal compliance, automatic filing, "
+            "verified live-source completeness, or human approval unless a specific human decision is shown above.",
+            limit=1000,
+        ),
+        Spacer(1, 8),
+    ]))
     doc.build(story)
     return buf.getvalue()
 
@@ -644,15 +2084,26 @@ def _minimal_passport_pdf(package: dict[str, Any]) -> bytes:
     passport = package["passport"]
     readiness = package["readiness"]
     lines = [
-        "Assurance Passport - Audit Readiness",
-        package["disclaimer"],
-        f"Farm: {passport.get('farm_name')} | Crop: {passport.get('crop') or 'not provided'} | Period: {passport.get('reporting_period')}",
-        f"Readiness Score: {readiness['readiness_score']}% - {readiness['status']}.",
-        f"Risk Score: {readiness['risk_score']} ({readiness['risk_level']}).",
-        "Audit readiness evidence package for reviewer evaluation.",
+        "AGRO-AI Assurance Proof Package",
+        f"Package ID: {_pdf_safe(package.get('package_id'))}",
+        f"Package version: {_pdf_safe(package.get('package_version'))}",
+        f"Generated: {_pdf_safe(package.get('generated_at'))}",
+        f"Package status: {_pdf_safe(package.get('package_status'))}",
+        f"Farm or operation: {_pdf_safe(passport.get('farm_name'))}",
+        f"Reporting period: {_pdf_safe(passport.get('reporting_period'))}",
+        f"Readiness Score: {_pdf_safe(readiness.get('readiness_score'))}% - {_pdf_safe(readiness.get('status'))}.",
+        f"Immutable package reference: {_pdf_safe(package.get('immutable_package_reference'))}",
+        _pdf_safe(package.get("disclaimer") or ASSURANCE_DISCLAIMER, limit=1200),
+        "This is evidence readiness decision support only. It is not certification, regulatory approval, legal compliance, automatic filing, or a claim of complete live-source verification.",
     ]
-    text = "\\n".join(line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)") for line in lines)
-    stream = f"BT /F1 10 Tf 72 740 Td ({text}) Tj ET".encode("latin-1", errors="replace")
+    escaped_lines = [line.replace("\\", "\\\\").replace("(", "\\(").replace(")", "\\)") for line in lines]
+    text_ops = ["BT /F1 9 Tf 72 740 Td 12 TL"]
+    for index, line in enumerate(escaped_lines):
+        if index:
+            text_ops.append("T*")
+        text_ops.append(f"({line}) Tj")
+    text_ops.append("ET")
+    stream = " ".join(text_ops).encode("latin-1", errors="replace")
     objects = [
         b"1 0 obj << /Type /Catalog /Pages 2 0 R >> endobj\n",
         b"2 0 obj << /Type /Pages /Kids [3 0 R] /Count 1 >> endobj\n",

@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import get_current_user, require_org_membership, require_workspace_access
 from app.api.v1.auth import _unique_slug
+from app.assurance.repository import AssuranceRepository
 from app.db.base import get_db
 from app.models.saas import Organization, OrganizationMembership, UsageEvent, User, Workspace
 from app.services.entitlements import (
@@ -23,6 +24,8 @@ from app.services.entitlements import (
     require_workspace_mode,
     serialize_entitlements,
 )
+from app.services.assurance_rollout import assurance_access
+from app.services.commercial_control import require_feature
 
 router = APIRouter(tags=["saas"])
 
@@ -324,7 +327,30 @@ def update_portal_profile(payload: PortalProfileUpdate, user: User = Depends(get
 def assurance_overview(workspace_id: str, user: User = Depends(get_current_user), db: Session = Depends(get_db)) -> dict:
     workspace, _ = require_workspace_access(workspace_id, user, db)
     org = workspace.organization
-    return {"workspace": _workspace_payload(workspace), "readiness": 64 if workspace.mode == "evaluation" else 72, "open_actions": ["Reviewer approval required before any external use.", "Upload controller and flow-meter proof before live assurance."], "missing_proof_count": 3, "agent_runs": db.query(UsageEvent).filter(UsageEvent.workspace_id == workspace.id, UsageEvent.event_type == "agent_run").count(), "top_priority_work": "Complete proof coverage for irrigation event chain.", "ai_insight_summary": "Evaluation insight only. Not certified, not regulator-approved, and requires human review.", "connected_systems": ["Evaluation data package"] if workspace.mode == "evaluation" else ["Configured integrations"], "entitlements": serialize_entitlements(org)}
+    allowed, release_state, cohort = assurance_access(db, org, user_email=user.email)
+    if not allowed:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "assurance_not_available", "release_state": release_state, "cohort": cohort},
+        )
+    require_feature(db, org, "assurance.readiness", recommended_plan="professional", allow_preview=True)
+    repo = AssuranceRepository.for_workspace(
+        db,
+        organization_id=str(org.id),
+        workspace_id=str(workspace.id),
+        actor_user_id=str(user.id),
+    )
+    overview = repo.overview()
+    return {
+        "workspace": _workspace_payload(workspace),
+        **overview,
+        "readiness": overview["readiness_score"],
+        "agent_runs": db.query(UsageEvent).filter(
+            UsageEvent.workspace_id == workspace.id,
+            UsageEvent.event_type == "agent_run",
+        ).count(),
+        "entitlements": serialize_entitlements(org),
+    }
 
 
 @router.get("/workspaces/{workspace_id}/evidence")

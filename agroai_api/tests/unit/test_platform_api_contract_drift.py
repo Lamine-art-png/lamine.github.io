@@ -24,7 +24,9 @@ _PATH = re.compile(r"/v1/platform/[A-Za-z0-9_./{}\-]*")
 def _norm(path: str) -> str:
     # Normalise every path parameter to a single placeholder and drop trailing
     # query/format artefacts so client literals compare to manifest templates.
-    path = path.split("{query}")[0].split("?")[0].rstrip("/")
+    # The CLI names its optional ``?project_id=...`` fragment ``suffix``; it is
+    # query syntax, not a route parameter.
+    path = path.split("{query}")[0].split("{suffix}")[0].split("?")[0].rstrip("/")
     path = _PARAM.sub("{}", path)
     return path or "/v1/platform"
 

@@ -5,13 +5,22 @@ from typing import Mapping
 import sqlalchemy as sa
 
 
-HEAD_ALEMBIC_REVISION = "029_platform_cli_device_auth"
+HEAD_ALEMBIC_REVISION = "030_assurance_intelligence_v2"
 
 
 HEAD_SCHEMA_REQUIREMENTS: dict[str, set[str]] = {
     "platform_cli_device_authorizations": {"device_code_hash", "user_code", "status", "expires_at", "consumed_at"},
     "compliance_export_metadata": {"id", "tenant_id"},
-    "assurance_passports": {"id"},
+    "assurance_passports": {"id", "organization_id", "workspace_id", "entity_type", "rule_pack_ids"},
+    "assurance_evidence_artifacts": {
+        "id", "passport_id", "organization_id", "workspace_id", "source_kind",
+        "source_id", "canonical_evidence_id", "field_observation_id", "review_status",
+    },
+    "assurance_review_events": {"id", "passport_id", "action", "created_at"},
+    "assurance_audit_events": {"id", "passport_id", "event_type", "created_at"},
+    "assurance_exports": {
+        "id", "passport_id", "package_type", "package_version", "package_status", "generated_artifact_id",
+    },
     "agent_workflow_runs": {"id"},
     "users": {
         "id",

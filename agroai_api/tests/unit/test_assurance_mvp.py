@@ -8,6 +8,7 @@ from app.assurance.models import AssuranceEvidenceArtifact, AssuranceExport, Ass
 from app.agents.models import AgentWorkflowRun
 from app.models import Tenant
 from app.models.compliance import ComplianceMeasurement, ComplianceMeter, ComplianceParcel, ComplianceWaterBudget, ComplianceWell
+from app.models.saas import UsageEvent
 from app.services.api_key_service import APIKeyService
 from app.services import workbench_engine
 
@@ -231,6 +232,7 @@ def test_pdf_export_generation_uses_audit_readiness_language(client, db):
     assert b"%PDF" in base64.b64decode(body["content_base64"])[:16]
     assert "audit readiness" in body["disclaimer"].lower()
     assert "evidence package" in body["disclaimer"].lower()
+    assert db.query(UsageEvent).count() == 0
 
 
 def test_rule_pack_validation_and_catalog_have_no_california_api_names(client, db):
