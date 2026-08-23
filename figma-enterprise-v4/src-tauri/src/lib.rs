@@ -1,9 +1,6 @@
 use serde::Serialize;
-use tauri::{Manager, Runtime};
-use tauri_plugin_deep_link::DeepLinkExt;
+use tauri::Manager;
 use url::Url;
-
-const DESKTOP_DEEP_LINK_EVENT: &str = "agroai:desktop-deep-link";
 
 #[derive(Serialize)]
 struct DesktopRuntimeInfo {
@@ -23,33 +20,6 @@ fn desktop_platform() -> &'static str {
     } else {
         "unknown"
     }
-}
-
-fn validated_deep_link(raw: &str) -> Option<String> {
-    let parsed = Url::parse(raw).ok()?;
-    if parsed.scheme() != "agroai" {
-        return None;
-    }
-    Some(parsed.to_string())
-}
-
-fn dispatch_deep_link<R: Runtime>(app: &tauri::AppHandle<R>, raw: &str) {
-    let Some(url) = validated_deep_link(raw) else {
-        return;
-    };
-    let Some(window) = app.get_webview_window("main") else {
-        return;
-    };
-    let encoded = match serde_json::to_string(&url) {
-        Ok(value) => value,
-        Err(_) => return,
-    };
-    let script = format!(
-        "window.dispatchEvent(new CustomEvent('{DESKTOP_DEEP_LINK_EVENT}', {{ detail: {{ url: {encoded} }} }}));"
-    );
-    let _ = window.eval(&script);
-    let _ = window.show();
-    let _ = window.set_focus();
 }
 
 #[tauri::command]
@@ -74,31 +44,18 @@ fn desktop_open_external(url: String) -> Result<(), String> {
 
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+        // Keep this first. The deep-link plugin integrates with single-instance
+        // on Windows and Linux so an agroai:// URL is delivered to the running app.
+        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             if let Some(window) = app.get_webview_window("main") {
                 let _ = window.show();
                 let _ = window.set_focus();
-            }
-            for argument in argv {
-                if argument.starts_with("agroai://") {
-                    dispatch_deep_link(app, &argument);
-                    break;
-                }
             }
         }))
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![desktop_runtime_info, desktop_open_external])
-        .setup(|app| {
-            let handle = app.handle().clone();
-            app.deep_link().on_open_url(move |event| {
-                for url in event.urls() {
-                    dispatch_deep_link(&handle, url.as_str());
-                }
-            });
-            Ok(())
-        })
         .run(tauri::generate_context!())
         .expect("error while running AGRO-AI Enterprise Portal desktop application");
 }
