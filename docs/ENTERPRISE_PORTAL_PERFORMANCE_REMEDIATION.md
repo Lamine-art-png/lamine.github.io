@@ -33,16 +33,18 @@ Target: warm p95 API bootstrap <= 400 ms and warm p99 <= 800 ms from the US West
 - A separate weekly workflow refreshes those critical edge catalogs during quiet release periods so the 30-day cache does not become cold.
 - Portuguese (`pt`) is included in the mandatory dynamic-locale prewarm and production matrix and is the Brazilian-demo acceptance locale until a separate `pt-BR` UI locale is explicitly enabled.
 - On language selection, any validated local/edge catalog remains immediately reusable while core/full literals continue hydrating in the background.
-- The full-screen transition remains bounded and is released as soon as the critical navigation/settings shell is available.
+- Language switching no longer mounts a full-screen transition cover. The authenticated Portal stays usable while the selected catalog hydrates; the language selector itself carries the bounded loading/error state.
 
 Targets: cached critical language switch <= 150 ms p95 and cold edge critical switch <= 800 ms p95.
 
-### Frontend loading
+### Frontend loading and regression protection
 
 - Preconnect to the API origin on Portal boot.
 - Preload the authenticated route bundle while the session is being validated.
 - Route/page data should use skeletons and progressive rendering rather than a full-screen loader once the shell is usable.
 - Avoid duplicate fetches for session/workspace state.
+- `tests/portal-performance-contract.mjs` locks the single bootstrap request, refresh deduplication, nonblocking Platform developer hydration, route preload, API preconnect, and absence of a full-screen locale transition.
+- The primary pull-request CI runs this performance contract before the production Portal build.
 
 ## Remaining release gates
 
@@ -50,7 +52,7 @@ A production release is blocked until exact-head validation proves:
 
 - backend auth/bootstrap tests pass;
 - Portal production build and type checks pass;
-- localization contract tests pass;
+- localization and Portal performance contracts pass;
 - every supported dynamic locale passes the production critical-shell prewarm/matrix;
 - Portuguese can switch its critical shell without getting stuck or reverting the explicit user choice;
 - login journey p95 is <= 2.0 s on warm infrastructure in synthetic US West checks;
