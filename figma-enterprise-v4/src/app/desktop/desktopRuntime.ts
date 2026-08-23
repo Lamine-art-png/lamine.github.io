@@ -7,6 +7,7 @@ type DesktopRuntimeInfo = {
 
 type Invoke = <T>(command: string, args?: Record<string, unknown>) => Promise<T>;
 type NativeFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+type Unlisten = () => void;
 
 type TauriGlobal = {
   core?: {
@@ -14,6 +15,10 @@ type TauriGlobal = {
   };
   http?: {
     fetch?: NativeFetch;
+  };
+  deepLink?: {
+    getCurrent?: () => Promise<string[] | null>;
+    onOpenUrl?: (handler: (urls: string[]) => void) => Promise<Unlisten>;
   };
 };
 
@@ -23,10 +28,37 @@ declare global {
   }
 }
 
-const deepLinkEvent = "agroai:desktop-deep-link";
 const desktopReadyEvent = "agroai:desktop-ready";
 const desktopRouteEvent = "agroai:desktop-route-requested";
 const browserFetch = window.fetch.bind(window);
+
+const desktopRouteAllowlist = new Set([
+  "/",
+  "/field-queue",
+  "/field-intelligence",
+  "/tasks",
+  "/readiness",
+  "/fields",
+  "/exceptions",
+  "/decision-workbench",
+  "/report-factory",
+  "/operations",
+  "/operations/new",
+  "/assurance",
+  "/evidence",
+  "/reports",
+  "/agents",
+  "/intelligence",
+  "/integrations",
+  "/sources",
+  "/audit",
+  "/profile",
+  "/billing",
+  "/security",
+  "/support",
+  "/settings",
+  "/team",
+]);
 
 function invoke<T>(command: string, args?: Record<string, unknown>): Promise<T> {
   const desktopInvoke = window.__TAURI__?.core?.invoke;
@@ -38,15 +70,26 @@ export function isDesktopRuntime(): boolean {
   return Boolean(window.__TAURI__?.core?.invoke);
 }
 
-function normalizeDeepLink(raw: unknown): string | null {
+function normalizeDesktopRoute(raw: unknown): string | null {
   if (typeof raw !== "string" || raw.length > 4096) return null;
   try {
     const parsed = new URL(raw);
-    if (parsed.protocol !== "agroai:") return null;
-    return parsed.toString();
+    if (parsed.protocol !== "agroai:" || parsed.hostname !== "open") return null;
+    const path = parsed.pathname || "/";
+    if (!desktopRouteAllowlist.has(path)) return null;
+    return `${path}${parsed.search}`;
   } catch {
     return null;
   }
+}
+
+function dispatchDesktopRoute(raw: unknown): void {
+  const route = normalizeDesktopRoute(raw);
+  if (!route) return;
+  window.dispatchEvent(new CustomEvent(desktopRouteEvent, { detail: { route } }));
+  if (`${window.location.pathname}${window.location.search}` === route) return;
+  window.history.pushState({}, "", route);
+  window.dispatchEvent(new PopStateEvent("popstate"));
 }
 
 function inputUrl(input: RequestInfo | URL): string | null {
@@ -77,6 +120,19 @@ function installNativeHttpTransport(): void {
   }) as typeof window.fetch;
 }
 
+function installDeepLinks(): void {
+  const deepLink = window.__TAURI__?.deepLink;
+  if (!deepLink) return;
+
+  void deepLink.getCurrent?.()
+    .then((urls) => urls?.forEach(dispatchDesktopRoute))
+    .catch(() => undefined);
+
+  void deepLink.onOpenUrl?.((urls) => {
+    urls.forEach(dispatchDesktopRoute);
+  }).catch(() => undefined);
+}
+
 export async function requestDesktopOpenExternal(url: string): Promise<void> {
   if (!isDesktopRuntime()) {
     window.open(url, "_blank", "noopener,noreferrer");
@@ -90,13 +146,7 @@ export function installDesktopRuntime(): void {
 
   document.documentElement.dataset.agroaiDesktop = "true";
   installNativeHttpTransport();
-
-  window.addEventListener(deepLinkEvent, (event) => {
-    const detail = event instanceof CustomEvent ? event.detail : undefined;
-    const url = normalizeDeepLink(detail?.url);
-    if (!url) return;
-    window.dispatchEvent(new CustomEvent(desktopRouteEvent, { detail: { url } }));
-  });
+  installDeepLinks();
 
   void invoke<DesktopRuntimeInfo>("desktop_runtime_info")
     .then((info) => {
