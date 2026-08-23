@@ -9,6 +9,7 @@ import literalCatalogPart8 from "../../../shared/ui-literals.en.8.json";
 import dynamicCopyCatalog from "../../../shared/ui-dynamic-copy.en.json";
 import dynamicCopyExtraCatalog from "../../../shared/ui-dynamic-copy-extra.en.json";
 import dynamicFieldIntelligenceCatalog from "../../../shared/ui-dynamic-copy-field-intelligence.en.json";
+import decisionMemoryCatalog from "../../../shared/ui-decision-memory.en.json";
 import { formatTranslation, getStoredLocale, t, TRANSLATIONS } from "./i18n";
 
 export const STATIC_PORTAL_LITERAL_CATALOG: Record<string, string> = Object.assign(
@@ -29,12 +30,18 @@ export const DYNAMIC_UI_COPY_CATALOG: Record<string, string> = {
   ...dynamicFieldIntelligenceCatalog,
 };
 
-// Lookup/template matching sees both static and dynamic UI copy. Dynamic copy is
-// intentionally excluded from fullEnglishUiSource below and hydrates only for
-// the active route via usePortalCopy.
+export const DECISION_MEMORY_UI_CATALOG: Record<string, string> = {
+  ...decisionMemoryCatalog,
+};
+
+// Lookup/template matching sees static, route-dynamic, and Decision Memory UI copy.
+// Route-dynamic copy still hydrates only for the active route. Decision Memory is
+// included in background full-language hydration so operating controls are ready
+// before the operator opens the decision workspace.
 export const PORTAL_LITERAL_CATALOG: Record<string, string> = {
   ...STATIC_PORTAL_LITERAL_CATALOG,
   ...DYNAMIC_UI_COPY_CATALOG,
+  ...DECISION_MEMORY_UI_CATALOG,
 };
 
 function normalizeLiteralText(value: string): string {
@@ -153,5 +160,5 @@ export function portalCopySourceForValues(values: readonly string[]): Record<str
 }
 
 export function fullEnglishUiSource(base: Record<string, string>): Record<string, string> {
-  return { ...base, ...STATIC_PORTAL_LITERAL_CATALOG };
+  return { ...base, ...STATIC_PORTAL_LITERAL_CATALOG, ...DECISION_MEMORY_UI_CATALOG };
 }
