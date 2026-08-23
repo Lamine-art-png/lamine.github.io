@@ -1,7 +1,10 @@
 import { createRoot } from "react-dom/client";
 import "./app/commercialBoundaryConversionLabels";
 import { CommercialBoundaryHost } from "./app/components/CommercialBoundaryHost";
+import { installDesktopRuntime } from "./app/desktop/desktopRuntime";
 import "./styles/index.css";
+
+installDesktopRuntime();
 
 const standalonePlatformHost = window.location.hostname.toLowerCase() === "platform.agroai-pilot.com";
 const runtimeProductName = standalonePlatformHost ? "AGRO-AI Platform API" : "AGRO-AI Enterprise Portal";
