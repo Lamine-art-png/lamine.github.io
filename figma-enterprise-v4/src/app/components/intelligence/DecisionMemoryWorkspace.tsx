@@ -32,6 +32,7 @@ const DOMAIN_KEYS: Record<string, string> = {
   equipment: "decisionMemory.domain.equipment",
   assurance: "decisionMemory.domain.assurance",
   reporting: "decisionMemory.domain.reporting",
+  operations: "decisionMemory.domain.operations",
 };
 
 const SPECIALIST_STATUS_KEYS: Record<string, string> = {
@@ -57,6 +58,18 @@ const TASK_KEYS: Record<string, string> = {
   irrigation_decision: "decisionMemory.task.irrigation_decision",
 };
 
+const CHANGE_DRIVER_KEYS: Record<string, string> = {
+  first_decision: "decisionMemory.change.first_decision",
+  evidence_changed: "decisionMemory.change.evidence_changed",
+  science_changed: "decisionMemory.change.science_changed",
+  conflicts_changed: "decisionMemory.change.conflicts_changed",
+  unknowns_changed: "decisionMemory.change.unknowns_changed",
+  confidence_changed: "decisionMemory.change.confidence_changed",
+  field_state_changed: "decisionMemory.change.field_state_changed",
+  recommendation_changed: "decisionMemory.change.recommendation_changed",
+  no_material_change: "decisionMemory.change.no_material_change",
+};
+
 function query(workspaceId?: string) {
   return workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : "";
 }
@@ -77,12 +90,16 @@ function decisionKind(row: AnyRecord, t: Translate) {
   return translatedCode(row.task, TASK_KEYS, t);
 }
 
-function shortDate(value: unknown) {
+function shortDate(value: unknown, locale: string) {
   const text = safeText(value);
   if (!text) return "";
   const date = new Date(text);
   if (Number.isNaN(date.getTime())) return text;
-  return date.toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  try {
+    return date.toLocaleString(locale, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return date.toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
+  }
 }
 
 async function lifecycleMutation(lifecycleId: string, action: string, payload?: AnyRecord) {
@@ -95,17 +112,13 @@ async function lifecycleMutation(lifecycleId: string, action: string, payload?: 
     body: JSON.stringify(payload || {}),
   });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) {
-    const detail = data && typeof data === "object" ? (data.detail || data.message) : null;
-    const message = detail && typeof detail === "object" ? detail.message : detail;
-    throw new Error(String(message || response.status));
-  }
+  if (!response.ok) throw new Error(String(response.status));
   return data as AnyRecord;
 }
 
 export function DecisionMemoryWorkspace() {
   const { currentWorkspace } = useAuth();
-  const { t, selectedLocale } = useLocale();
+  const { t, selectedLocale, effectiveLocale } = useLocale();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState("");
@@ -130,13 +143,9 @@ export function DecisionMemoryWorkspace() {
     lifecycle: t("decisionMemory.lifecycle"),
     specialists: t("decisionMemory.specialists"),
     learning: t("decisionMemory.learning"),
-    approve: t("decisionMemory.approve"),
-    reject: t("decisionMemory.reject"),
     rejectionReason: t("decisionMemory.rejectionReason"),
-    startExecution: t("decisionMemory.startExecution"),
     executionEvidence: t("decisionMemory.executionEvidence"),
     recordExecution: t("decisionMemory.recordExecution"),
-    startVerification: t("decisionMemory.startVerification"),
     verificationEvidence: t("decisionMemory.verificationEvidence"),
     outcome: t("decisionMemory.outcome"),
     verify: t("decisionMemory.verify"),
@@ -166,8 +175,8 @@ export function DecisionMemoryWorkspace() {
       setLearning(learningResponse || {});
       setSpecialists(asArray(specialistResponse.specialists) as AnyRecord[]);
       if (!selectedId && decisionRows[0]?.id) setSelectedId(String(decisionRows[0].id));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("intelligence.retryState"));
+    } catch {
+      setError(t("intelligence.retryState"));
     } finally {
       setLoading(false);
     }
@@ -244,8 +253,8 @@ export function DecisionMemoryWorkspace() {
       setLifecycle(nextLifecycle);
       await loadEvidence(safeText(nextLifecycle.id || lifecycleId), safeText(nextLifecycle.state));
       await loadCore();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t("intelligence.actionExecuteFailed"));
+    } catch {
+      setError(t("intelligence.actionExecuteFailed"));
     } finally {
       setBusy("");
     }
@@ -281,7 +290,10 @@ export function DecisionMemoryWorkspace() {
   const decisionCount = Number(learning.decision_count || 0);
   const conflictCount = asArray(currentFieldState.conflicts).length;
   const unknownCount = asArray(currentFieldState.unknowns).length;
-  const drivers = asArray(changes.change_drivers).map((row) => safeText(row)).filter(Boolean);
+  const driverCodes = asArray(changes.change_driver_codes).map((row) => safeText(row)).filter(Boolean);
+  const drivers = driverCodes.length
+    ? driverCodes.map((code) => translatedCode(code, CHANGE_DRIVER_KEYS, t))
+    : asArray(changes.change_drivers).map((row) => safeText(row)).filter(Boolean);
   const events = asArray(lifecycle.events) as AnyRecord[];
 
   return (
@@ -327,7 +339,7 @@ export function DecisionMemoryWorkspace() {
                       <button key={String(row.id)} type="button" onClick={() => setSelectedId(String(row.id))} className="w-full rounded-xl p-3 text-left" style={{ background: active ? "#F0F5F1" : BG, border: `1px solid ${active ? "#A9B9AD" : BORDER}` }}>
                         <div className="flex items-center justify-between gap-2">
                           <span className="truncate text-[12px] font-semibold" style={{ color: TEXT }}>{decisionKind(row, t)}</span>
-                          <span className="flex-shrink-0 text-[10px]" style={{ color: MUTED }}>{shortDate(row.created_at)}</span>
+                          <span className="flex-shrink-0 text-[10px]" style={{ color: MUTED }}>{shortDate(row.created_at, effectiveLocale)}</span>
                         </div>
                         <div className="mt-1 truncate text-[11px]" style={{ color: MUTED }}>{translatedCode(row.lifecycle?.state, STATE_KEYS, t)}</div>
                       </button>
@@ -344,7 +356,7 @@ export function DecisionMemoryWorkspace() {
                           <div className="text-[10px] font-semibold uppercase tracking-[0.06em]" style={{ color: MUTED }}>{decisionKind(selected, t)}</div>
                           <div className="mt-1 break-words text-[13px] font-semibold" style={{ color: TEXT }}>{safeText(selected.question || selected.task)}</div>
                           <div className="mt-2 flex flex-wrap gap-2 text-[10px]" style={{ color: MUTED }}>
-                            <span>{translatedCode(state, STATE_KEYS, t)}</span><span>·</span><span>{Math.round(Number(selected.grounding_confidence || 0) * 100)}%</span><span>·</span><span>{shortDate(selected.created_at)}</span>
+                            <span>{translatedCode(state, STATE_KEYS, t)}</span><span>·</span><span>{Math.round(Number(selected.grounding_confidence || 0) * 100)}%</span><span>·</span><span>{shortDate(selected.created_at, effectiveLocale)}</span>
                           </div>
                         </div>
                         <LifecycleActions state={state} busy={busy} t={t} onApprove={() => mutate("approve")} onReject={reject} onExecutionPending={() => mutate("execution-pending")} onVerificationPending={() => mutate("verification-pending", { verification_status: "pending" })} />
@@ -364,7 +376,7 @@ export function DecisionMemoryWorkspace() {
                                     <span className="min-w-0">
                                       <span className="block truncate text-[11px] font-semibold" style={{ color: TEXT }}>{safeText(row.title || row.citation_label || translatedCode(row.type, EVIDENCE_TYPE_KEYS, t))}</span>
                                       <span className="mt-0.5 block line-clamp-2 text-[10px] leading-relaxed" style={{ color: MUTED }}>{safeText(row.summary)}</span>
-                                      <span className="mt-1 block text-[9px]" style={{ color: MUTED }}>{translatedCode(row.type, EVIDENCE_TYPE_KEYS, t)} · {shortDate(row.occurred_at)}</span>
+                                      <span className="mt-1 block text-[9px]" style={{ color: MUTED }}>{translatedCode(row.type, EVIDENCE_TYPE_KEYS, t)} · {shortDate(row.occurred_at, effectiveLocale)}</span>
                                     </span>
                                   </label>
                                 );
@@ -407,7 +419,7 @@ export function DecisionMemoryWorkspace() {
                                   {event.to_state === "verified" ? <CheckCircle2 size={13} /> : event.to_state === "rejected" || event.to_state === "failed" ? <AlertTriangle size={13} /> : <ShieldCheck size={13} />}
                                   {translatedCode(event.to_state, STATE_KEYS, t)}
                                 </div>
-                                <div className="mt-1 text-[10px]" style={{ color: MUTED }}>{shortDate(event.created_at)}</div>
+                                <div className="mt-1 text-[10px]" style={{ color: MUTED }}>{shortDate(event.created_at, effectiveLocale)}</div>
                               </div>
                             ))}
                           </div>
