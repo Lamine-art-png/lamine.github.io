@@ -24,7 +24,6 @@ def test_alembic_revision_ids_fit_existing_version_table_and_are_unique():
     revisions = {}
     violations = []
     paths = [path for path in VERSIONS_DIR.glob("*.py") if not path.name.startswith("__")]
-
     for path in sorted(paths):
         module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         revision = _literal_assignment(module, "revision")
@@ -32,18 +31,15 @@ def test_alembic_revision_ids_fit_existing_version_table_and_are_unique():
             violations.append(f"{path.name}: missing literal revision id")
             continue
         if len(revision) > MAX_REVISION_LENGTH:
-            violations.append(
-                f"{path.name}: revision {revision!r} is {len(revision)} chars; max is {MAX_REVISION_LENGTH}"
-            )
+            violations.append(f"{path.name}: revision {revision!r} is {len(revision)} chars; max is {MAX_REVISION_LENGTH}")
         previous = revisions.get(revision)
         if previous is not None:
             violations.append(f"{path.name}: duplicate revision {revision!r}; already in {previous.name}")
         revisions[revision] = path
-
     assert not violations, "\n".join(violations)
 
 
-def test_account_verification_platform_api_and_appeal_revisions_form_one_linear_tail():
+def test_account_verification_platform_api_field_and_intelligence_revisions_form_one_linear_tail():
     expected_tail = {
         "019_account_verification": "018_outreach_engagement",
         "020_platform_api_private_beta": "019_account_verification",
@@ -55,9 +51,10 @@ def test_account_verification_platform_api_and_appeal_revisions_form_one_linear_
         "026_platform_api_operations": "025_platform_api_commerce",
         "027_field_intelligence_launch": "026_platform_api_operations",
         "028_platform_api_live_catalog": "027_field_intelligence_launch",
+        "029_platform_cli_device_auth": "028_platform_api_live_catalog",
+        "030_intelligence_state_memory": "029_platform_cli_device_auth",
     }
     actual_tail = {}
-
     for path in sorted(VERSIONS_DIR.glob("*.py")):
         if path.name.startswith("__"):
             continue
@@ -65,7 +62,6 @@ def test_account_verification_platform_api_and_appeal_revisions_form_one_linear_
         revision = _literal_assignment(module, "revision")
         if revision in expected_tail:
             actual_tail[revision] = _literal_assignment(module, "down_revision")
-
     assert actual_tail == expected_tail
     all_down_revisions = set(actual_tail.values())
     assert "019_platform_api_private_beta" not in all_down_revisions
