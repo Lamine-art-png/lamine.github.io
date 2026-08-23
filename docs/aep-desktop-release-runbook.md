@@ -24,8 +24,9 @@ The native shell has a deliberately small capability set.
 2. No default filesystem capability is granted.
 3. Deep links are accepted only for the configured `agroai` scheme and the frontend only routes `agroai://open/...` to an explicit AEP route allowlist.
 4. External URLs opened by the native command are limited to `https`, `http`, and `mailto`.
-5. The desktop frontend runs under the Tauri CSP and the Windows production webview uses HTTPS scheme semantics.
-6. The web PWA remains independent. Desktop builds do not widen backend browser CORS to a desktop-local origin.
+5. External top-level navigation is refused inside the privileged desktop webview and is handed to the operating-system browser instead.
+6. The desktop frontend runs under the Tauri CSP and the Windows production webview uses HTTPS scheme semantics.
+7. The web PWA remains independent. Desktop builds do not widen backend browser CORS to a desktop-local origin.
 
 ## Build outputs
 
@@ -71,11 +72,30 @@ Release evidence must prove:
 
 ## Authentication hardening gate
 
-The current web AEP persists the access token in browser `localStorage`. The first desktop candidate intentionally reuses the existing AEP authentication contract so the shell can be validated without changing customer authentication at the same time.
+The web AEP keeps its existing browser `localStorage` authentication path. The desktop runtime now intercepts only the `agroai_access_token` storage key and routes that credential to OS-protected storage through the native Rust process:
 
-This is not the final desktop credential-storage design. Before general public desktop release, move the desktop session credential to OS-protected credential storage (macOS Keychain / Windows Credential Manager or an equivalent reviewed mechanism), keep the web storage path unchanged, and prove logout/credential-change/session-expiry invalidation on both operating systems.
+- macOS: Keychain-backed credential storage
+- Windows: Windows Credential Manager-backed storage
 
-Do not describe the desktop client as using OS keychain-backed credentials until this migration is implemented and tested.
+The desktop credential is hydrated before `AuthProvider` is imported so the existing AEP authentication contract can be reused without persisting the access token in desktop webview `localStorage`.
+
+This implementation is still a release gate until native builds and clean-machine tests prove all of the following on both operating systems:
+
+- first login writes the credential successfully
+- relaunch restores the active session from the OS credential store
+- logout removes the stored credential
+- expired or revoked sessions are cleared correctly
+- password/security changes invalidate the desktop session as expected
+- no plaintext access token is left in desktop webview local storage, installer output, crash logs, or CI artifacts
+- an immediate app exit after login/logout cannot leave the credential in the wrong state
+
+Do not describe the credential path as production-qualified until these tests pass.
+
+## Connector authorization gate
+
+OAuth provider pages must never load inside the privileged desktop webview. The native navigation guard opens provider authorization in the system browser.
+
+The current backend OAuth completion returns to the normal web AEP. Before general desktop availability, qualify a clean return experience for desktop users. Acceptable implementations include an authenticated desktop deep-link return or a bounded desktop connection-status polling flow. The user must not need to guess whether authorization completed.
 
 ## Update gate
 
@@ -106,9 +126,10 @@ Every public release must pass all of these checks:
 11. Field Intelligence capture, media, sync, and recovery pass.
 12. Reports, downloads, evidence uploads, and connector flows pass.
 13. `agroai://open/...` deep links cannot navigate outside the approved route set.
-14. Offline start, network loss, network recovery, API failure, and stale frontend recovery pass.
-15. Installer upgrade and uninstall preserve or remove local app data according to the documented policy.
-16. No secrets, signing material, customer data, or access tokens are present in build artifacts or CI logs.
+14. OAuth/provider authorization leaves the privileged desktop webview and has a verified desktop completion path.
+15. Offline start, network loss, network recovery, API failure, and stale frontend recovery pass.
+16. Installer upgrade and uninstall preserve or remove local app data according to the documented policy.
+17. No secrets, signing material, customer data, or access tokens are present in build artifacts or CI logs.
 
 ## Distribution surface
 
@@ -125,11 +146,12 @@ The existing PWA may remain available, but marketing and support copy must disti
 
 1. Merge the reviewed desktop foundation.
 2. Produce internal macOS and Windows candidates.
-3. Complete OS credential-storage hardening.
-4. Provision Apple and Windows signing identities.
-5. Add the protected signed-release workflow.
-6. Qualify installers on clean machines.
-7. Add updater signing and staged update delivery.
-8. Publish the AGRO-AI download page.
-9. Release to a small customer cohort.
-10. Move to general desktop availability only after telemetry and support checks are clean.
+3. Qualify OS-protected desktop credential storage.
+4. Complete the desktop OAuth return experience.
+5. Provision Apple and Windows signing identities.
+6. Add the protected signed-release workflow.
+7. Qualify installers on clean machines.
+8. Add updater signing and staged update delivery.
+9. Publish the AGRO-AI download page.
+10. Release to a small customer cohort.
+11. Move to general desktop availability only after telemetry and support checks are clean.
