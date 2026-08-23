@@ -1,5 +1,5 @@
 use serde::Serialize;
-use tauri::Manager;
+use tauri::{plugin::TauriPlugin, Manager, Runtime};
 use url::Url;
 
 #[derive(Serialize)]
@@ -20,6 +20,36 @@ fn desktop_platform() -> &'static str {
     } else {
         "unknown"
     }
+}
+
+fn is_local_desktop_navigation(url: &Url) -> bool {
+    if url.scheme() == "tauri" {
+        return true;
+    }
+    if url.scheme() == "https" && url.host_str() == Some("tauri.localhost") {
+        return true;
+    }
+    if cfg!(debug_assertions)
+        && url.scheme() == "http"
+        && matches!(url.host_str(), Some("127.0.0.1") | Some("localhost"))
+    {
+        return true;
+    }
+    false
+}
+
+fn desktop_navigation_guard<R: Runtime>() -> TauriPlugin<R> {
+    tauri::plugin::Builder::new("agroai-desktop-navigation-guard")
+        .on_navigation(|_webview, url| {
+            if is_local_desktop_navigation(url) {
+                return true;
+            }
+            if matches!(url.scheme(), "https" | "http" | "mailto") {
+                let _ = webbrowser::open(url.as_str());
+            }
+            false
+        })
+        .build()
 }
 
 #[tauri::command]
@@ -52,6 +82,7 @@ pub fn run() {
                 let _ = window.set_focus();
             }
         }))
+        .plugin(desktop_navigation_guard())
         .plugin(tauri_plugin_deep_link::init())
         .plugin(tauri_plugin_http::init())
         .plugin(tauri_plugin_notification::init())
