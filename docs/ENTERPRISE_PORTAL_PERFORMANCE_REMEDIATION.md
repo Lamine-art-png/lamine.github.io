@@ -4,57 +4,60 @@
 
 The Enterprise Portal must feel immediate during sign-in, navigation, and language switching. Performance is a release property, not a cosmetic follow-up.
 
-## Findings from the current production architecture
+## Findings from current main
 
-1. Authentication bootstrap is serialized in `AuthProvider.refreshMe()`: `/v1/auth/me`, organizations, workspaces, then Platform developer overview are awaited in sequence. The organization/workspace requests are also started only after `/auth/me` completes. This makes login wall-clock time the sum of several network/backend latencies.
-2. The authenticated route bundle was imported only after `isAuthenticated` became true, so JavaScript download/parse time was added after session bootstrap. The performance branch overlaps route loading with token validation.
-3. Dynamic localization can require live translation generation. The browser performs critical, core, then full hydration with bounded retries. The edge has durable catalog caching, but a cold locale/provider path can still reach generation and upstream fallback timeouts.
-4. A language change is locally authoritative and preference persistence is best-effort. Provider failure must never revert the user's explicit language choice.
+1. Authentication bootstrap uses several browser requests: `/v1/auth/me`, organizations, workspaces, then Platform developer overview. The browser pays multiple network/edge/backend round trips before the first authenticated shell is ready.
+2. A token state change can cause session refresh work to overlap with the login-triggered refresh unless the client deduplicates it.
+3. The authenticated route bundle starts loading only after authentication completes, adding JavaScript download/parse time after the session bootstrap.
+4. Dynamic localization can require live translation generation. The browser performs critical, core, then full hydration with bounded retries. The edge has durable catalog caching, but a cold locale/provider path can still reach generation and upstream fallback timeouts.
+5. A language change is locally authoritative and preference persistence is best-effort. Provider failure must never revert the user's explicit language choice.
 
-## P0 remediation required before calling the portal enterprise-grade
+## Implemented on the performance branch
 
 ### Login/session bootstrap
 
-- Add one authenticated `/v1/app/bootstrap` response containing the current user, organizations, active organization, workspaces, entitlements, verification state, and Platform developer-access boolean needed to render the first shell.
-- Keep existing endpoints for compatibility, but make the Portal use the aggregate bootstrap endpoint for first paint.
-- Run independent backend reads concurrently inside the bootstrap service.
-- Do not block Enterprise Portal first paint on Platform API developer overview. That state is not required for the Enterprise Portal shell and can hydrate after first paint.
-- Add `Server-Timing` for auth/database/bootstrap phases and propagate a request ID.
-- Target warm p95 API bootstrap <= 400 ms and warm p99 <= 800 ms from the US West production region.
+- `GET /v1/auth/bootstrap` returns the current user, organizations, token-selected active organization, workspaces, entitlements, verification state, and platform-admin state in one authenticated response.
+- Existing endpoints remain available for compatibility, but the Enterprise Portal first-paint path uses the aggregate bootstrap endpoint.
+- Concurrent browser refreshes share one in-flight bootstrap promise instead of issuing duplicate session requests.
+- Platform API developer overview is not part of the Enterprise Portal first-paint response. It hydrates after the Enterprise Portal shell is released. It remains blocking only on the standalone/compatibility Platform API surfaces where it is required to choose the correct product gate.
+- The bootstrap response exposes `Server-Timing` and `X-AGROAI-Bootstrap-Ms` and is explicitly `no-store`.
+- Authenticated route code begins loading as soon as a stored/new token exists, while server validation continues. Rendering remains gated by validated authenticated user state.
+- The Portal preconnects to the production API origin during boot.
+
+Target: warm p95 API bootstrap <= 400 ms and warm p99 <= 800 ms from the US West production region.
 
 ### Localization
 
-- Stop depending on model generation in the interactive language-switch critical path for supported production locales.
-- Build and publish versioned, validated critical/core locale catalogs at release time or through an asynchronous catalog build job.
-- Serve immutable locale catalogs from Cloudflare edge/cache using locale + source fingerprint.
-- On language selection: apply any validated local/edge catalog immediately, persist the choice locally, then hydrate remaining literals in the background.
-- Never blank or block the entire Portal while full literal hydration runs. A short transition is acceptable only until the translated navigation/settings shell is available.
-- Keep exact-key and placeholder validation fail-closed.
-- Add Portuguese (`pt-BR`) as a mandatory release smoke locale because it is used in customer demos.
-- Target cached critical language switch <= 150 ms p95 and cold edge critical switch <= 800 ms p95.
+- The existing exact-key and placeholder validation remains fail-closed.
+- Production localization releases now request the exact critical Portal source catalog for every supported dynamic locale before the live locale matrix runs. This warms the Cloudflare edge cache using the same locale + source fingerprint used by the browser.
+- A separate weekly workflow refreshes those critical edge catalogs during quiet release periods so the 30-day cache does not become cold.
+- Portuguese (`pt`) is included in the mandatory dynamic-locale prewarm and production matrix and is the Brazilian-demo acceptance locale until a separate `pt-BR` UI locale is explicitly enabled.
+- On language selection, any validated local/edge catalog remains immediately reusable while core/full literals continue hydrating in the background.
+- The full-screen transition remains bounded and is released as soon as the critical navigation/settings shell is available.
 
-### Frontend
+Targets: cached critical language switch <= 150 ms p95 and cold edge critical switch <= 800 ms p95.
+
+### Frontend loading
 
 - Preconnect to the API origin on Portal boot.
-- Preload the authenticated route bundle as soon as a valid-looking stored/new token exists while server validation runs. Rendering remains gated by authenticated user state.
-- Route/page data requests must use skeletons and progressive rendering rather than a full-screen loader when the shell is already usable.
-- Avoid duplicate fetches caused by multiple page-level hooks requesting the same session/workspace state.
+- Preload the authenticated route bundle while the session is being validated.
+- Route/page data should use skeletons and progressive rendering rather than a full-screen loader once the shell is usable.
+- Avoid duplicate fetches for session/workspace state.
 
-### Infrastructure
+## Remaining release gates
 
-Do not buy infrastructure before measurements prove the bottleneck. Cloudflare Pages/Workers should already make static shell delivery fast. If traces show Render cold starts or CPU saturation, move the API service to an always-on paid instance before adding more application complexity. If PostgreSQL connection acquisition dominates, use a bounded production pool and a managed pooler. Add Redis only where measured caching/session/rate-limit workloads justify it.
+A production release is blocked until exact-head validation proves:
 
-## Release gates
+- backend auth/bootstrap tests pass;
+- Portal production build and type checks pass;
+- localization contract tests pass;
+- every supported dynamic locale passes the production critical-shell prewarm/matrix;
+- Portuguese can switch its critical shell without getting stuck or reverting the explicit user choice;
+- login journey p95 is <= 2.0 s on warm infrastructure in synthetic US West checks;
+- production timing evidence can distinguish edge/network time from backend/database bootstrap time.
 
-A production release is blocked if any of these fail:
+## Infrastructure decision rule
 
-- login journey p95 exceeds 2.0 s on warm infrastructure in synthetic US West checks;
-- any supported locale cannot switch its critical shell;
-- `pt-BR` critical/core/full catalog smoke fails;
-- a language switch can leave the selector stuck, revert the explicit locale, or keep a full-screen cover indefinitely;
-- first authenticated shell requires a nonessential Platform developer request;
-- production traces cannot attribute time across edge, backend, database, and localization provider/cache.
+Do not buy infrastructure before measurements prove the bottleneck. Cloudflare Pages/Workers should already make static shell delivery fast. If production timing shows Render cold starts or CPU saturation dominate the remaining latency, move the API service to an always-on paid instance. If PostgreSQL connection acquisition dominates, tune the bounded production pool and use a managed pooler where justified. Add Redis only where measured caching/session/rate-limit workloads justify it.
 
-## Cost policy
-
-Prefer code-path removal, concurrency, edge caching, precomputed catalogs, and connection reuse first. A small always-on backend upgrade is justified if it removes verified cold-start latency. Do not assume a $2-$5 monthly spend can guarantee enterprise latency; choose the cheapest tier that meets measured p95/p99 targets and reassess with traffic growth.
+Prefer code-path removal, request consolidation, edge caching, prewarmed catalogs, and connection reuse first. A small infrastructure upgrade is justified when it measurably improves p95/p99 latency. Do not assume a $2-$5 monthly spend can guarantee enterprise latency; choose the least expensive tier that actually meets the measured target.
