@@ -191,9 +191,22 @@ def _cmd_logout(args, out, err) -> int:
     return EXIT_OK
 
 
-def _control_plane_json(args, method: str, path: str, *, json_body=None) -> dict[str, Any]:
+def _control_plane_json(
+    args,
+    method: str,
+    path: str,
+    *,
+    json_body=None,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     from . import session as _session
-    response = _session.control_plane_request(method, path, json_body=json_body, timeout=args.timeout)
+    response = _session.control_plane_request(
+        method,
+        path,
+        json_body=json_body,
+        params=params,
+        timeout=args.timeout,
+    )
     payload = response.json() if response.headers.get("content-type", "").startswith("application/json") else {"message": response.text}
     if response.status_code >= 400:
         message = payload.get("message") if isinstance(payload, dict) else None
@@ -203,9 +216,18 @@ def _control_plane_json(args, method: str, path: str, *, json_body=None) -> dict
     return payload if isinstance(payload, dict) else {"data": payload}
 
 
-def _cp(args, method: str, path: str, *, json_body=None, out=None, err=None) -> int:
+def _cp(
+    args,
+    method: str,
+    path: str,
+    *,
+    json_body=None,
+    params: dict[str, Any] | None = None,
+    out=None,
+    err=None,
+) -> int:
     try:
-        payload = _control_plane_json(args, method, path, json_body=json_body)
+        payload = _control_plane_json(args, method, path, json_body=json_body, params=params)
     except RuntimeError as exc:
         return _fail(str(exc), code=EXIT_ERROR, as_json=args.json, err=err)
     _emit(payload, as_json=args.json, out=out)
@@ -221,8 +243,8 @@ def _cmd_projects_create(args, out, err) -> int:
 
 
 def _cmd_service_accounts_list(args, out, err) -> int:
-    suffix = f"?project_id={args.project_id}" if args.project_id else ""
-    return _cp(args, "GET", f"/v1/platform/developer/service-accounts{suffix}", out=out, err=err)
+    params = {"project_id": args.project_id} if args.project_id else None
+    return _cp(args, "GET", "/v1/platform/developer/service-accounts", params=params, out=out, err=err)
 
 
 def _cmd_service_accounts_create(args, out, err) -> int:
