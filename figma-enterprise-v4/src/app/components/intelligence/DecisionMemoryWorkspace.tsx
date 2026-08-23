@@ -299,7 +299,7 @@ export function DecisionMemoryWorkspace() {
   return (
     <section className="border-b" style={{ background: SURFACE, borderColor: BORDER }}>
       <div className="mx-auto max-w-[1200px] px-4 py-3 sm:px-6">
-        <button type="button" onClick={() => setOpen((value) => !value)} className="flex w-full items-center justify-between gap-3 text-left">
+        <button type="button" onClick={() => setOpen((value) => !value)} className="flex w-full items-center justify-between gap-3 text-start">
           <div className="flex min-w-0 items-center gap-3">
             <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg" style={{ background: BG, color: "#0D2B1E" }}><ShieldCheck size={17} /></div>
             <div className="min-w-0">
@@ -336,7 +336,7 @@ export function DecisionMemoryWorkspace() {
                   {decisions.slice(0, 10).map((row) => {
                     const active = String(row.id) === String(selected.id);
                     return (
-                      <button key={String(row.id)} type="button" onClick={() => setSelectedId(String(row.id))} className="w-full rounded-xl p-3 text-left" style={{ background: active ? "#F0F5F1" : BG, border: `1px solid ${active ? "#A9B9AD" : BORDER}` }}>
+                      <button key={String(row.id)} type="button" onClick={() => setSelectedId(String(row.id))} className="w-full rounded-xl p-3 text-start" style={{ background: active ? "#F0F5F1" : BG, border: `1px solid ${active ? "#A9B9AD" : BORDER}` }}>
                         <div className="flex items-center justify-between gap-2">
                           <span className="truncate text-[12px] font-semibold" style={{ color: TEXT }}>{decisionKind(row, t)}</span>
                           <span className="flex-shrink-0 text-[10px]" style={{ color: MUTED }}>{shortDate(row.created_at, effectiveLocale)}</span>
