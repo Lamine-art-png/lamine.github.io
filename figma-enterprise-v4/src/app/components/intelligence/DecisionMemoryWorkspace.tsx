@@ -2,9 +2,60 @@ import { useEffect, useMemo, useState } from "react";
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, History, RefreshCw, ShieldCheck } from "lucide-react";
 import { API_BASE_URL, apiClient } from "../../api/client";
 import { useAuth } from "../../auth/AuthProvider";
+import { DECISION_MEMORY_EN, installDecisionMemoryBaseCatalogs } from "../../decisionMemoryI18n";
+import { ensureLocaleSourceCatalog, primeLocaleSourceCatalogFromCache } from "../../dynamicLocaleCatalog";
 import { useLocale } from "../../hooks/useLocale";
 import { BG, BORDER, MUTED, SURFACE, TEXT } from "../portalUi";
 import { AnyRecord, asArray, safeText } from "./intelligenceSupport";
+
+installDecisionMemoryBaseCatalogs();
+
+type Translate = (key: string) => string;
+
+const STATE_KEYS: Record<string, string> = {
+  proposed: "decisionMemory.state.proposed",
+  awaiting_approval: "decisionMemory.state.awaiting_approval",
+  approved: "decisionMemory.state.approved",
+  rejected: "decisionMemory.state.rejected",
+  execution_pending: "decisionMemory.state.execution_pending",
+  executed: "decisionMemory.state.executed",
+  verification_pending: "decisionMemory.state.verification_pending",
+  verified: "decisionMemory.state.verified",
+  failed: "decisionMemory.state.failed",
+  expired: "decisionMemory.state.expired",
+  cancelled: "decisionMemory.state.cancelled",
+};
+
+const DOMAIN_KEYS: Record<string, string> = {
+  water: "decisionMemory.domain.water",
+  crop_health: "decisionMemory.domain.crop_health",
+  equipment: "decisionMemory.domain.equipment",
+  assurance: "decisionMemory.domain.assurance",
+  reporting: "decisionMemory.domain.reporting",
+};
+
+const SPECIALIST_STATUS_KEYS: Record<string, string> = {
+  evidence_available: "decisionMemory.specialistStatus.evidence_available",
+  evidence_limited: "decisionMemory.specialistStatus.evidence_limited",
+  conflict_review: "decisionMemory.specialistStatus.conflict_review",
+};
+
+const EVIDENCE_TYPE_KEYS: Record<string, string> = {
+  evidence_record: "decisionMemory.evidenceType.evidence_record",
+  field_observation: "decisionMemory.evidenceType.field_observation",
+  execution_verification: "decisionMemory.evidenceType.execution_verification",
+};
+
+const TASK_KEYS: Record<string, string> = {
+  chat: "decisionMemory.task.chat",
+  field_diagnosis: "decisionMemory.task.field_diagnosis",
+  exception_triage: "decisionMemory.task.exception_triage",
+  decision_workbench: "decisionMemory.task.decision_workbench",
+  report_factory: "decisionMemory.task.report_factory",
+  connector_diagnosis: "decisionMemory.task.connector_diagnosis",
+  readiness_analysis: "decisionMemory.task.readiness_analysis",
+  irrigation_decision: "decisionMemory.task.irrigation_decision",
+};
 
 function query(workspaceId?: string) {
   return workspaceId ? `?workspace_id=${encodeURIComponent(workspaceId)}` : "";
@@ -12,6 +63,18 @@ function query(workspaceId?: string) {
 
 function stateLabel(value: unknown) {
   return safeText(value).replaceAll("_", " ");
+}
+
+function translatedCode(value: unknown, keys: Record<string, string>, t: Translate) {
+  const code = safeText(value);
+  const key = keys[code];
+  return key ? t(key) : stateLabel(code);
+}
+
+function decisionKind(row: AnyRecord, t: Translate) {
+  const domain = safeText(row.domain);
+  if (domain) return translatedCode(domain, DOMAIN_KEYS, t);
+  return translatedCode(row.task, TASK_KEYS, t);
 }
 
 function shortDate(value: unknown) {
@@ -40,62 +103,9 @@ async function lifecycleMutation(lifecycleId: string, action: string, payload?: 
   return data as AnyRecord;
 }
 
-function useMemoryCopy() {
-  const { effectiveLocale } = useLocale();
-  const fr = effectiveLocale.toLowerCase().startsWith("fr");
-  return fr ? {
-    approve: "Approuver la décision",
-    reject: "Rejeter la décision",
-    rejectionReason: "Motif du rejet",
-    startExecution: "Démarrer l’exécution",
-    executionEvidence: "Preuves d’exécution",
-    recordExecution: "Enregistrer l’exécution",
-    startVerification: "Démarrer la vérification",
-    verificationEvidence: "Preuves de vérification",
-    outcome: "Résultat vérifié",
-    verify: "Enregistrer le résultat vérifié",
-    noEvidence: "Aucune preuve durable admissible n’est disponible pour cette portée.",
-    selectEvidence: "Sélectionnez au moins une preuve durable.",
-    effective: "Efficace",
-    partial: "Partiellement efficace",
-    ineffective: "Inefficace",
-    matched: "Conforme",
-    deviated: "Écart constaté",
-    inconclusive: "Non concluant",
-    noChange: "Aucun changement",
-    lifecycle: "Cycle de décision",
-    specialists: "Cellules spécialisées",
-    learning: "Résultats vérifiés",
-  } : {
-    approve: "Approve decision",
-    reject: "Reject decision",
-    rejectionReason: "Reason for rejection",
-    startExecution: "Start execution",
-    executionEvidence: "Execution evidence",
-    recordExecution: "Record execution",
-    startVerification: "Start verification",
-    verificationEvidence: "Verification evidence",
-    outcome: "Verified outcome",
-    verify: "Record verified outcome",
-    noEvidence: "No eligible durable evidence is available for this scope.",
-    selectEvidence: "Select at least one durable evidence record.",
-    effective: "Effective",
-    partial: "Partially effective",
-    ineffective: "Ineffective",
-    matched: "Matched",
-    deviated: "Deviated",
-    inconclusive: "Inconclusive",
-    noChange: "No change",
-    lifecycle: "Decision lifecycle",
-    specialists: "Specialist cells",
-    learning: "Verified outcomes",
-  };
-}
-
 export function DecisionMemoryWorkspace() {
   const { currentWorkspace } = useAuth();
-  const { t } = useLocale();
-  const copy = useMemoryCopy();
+  const { t, selectedLocale } = useLocale();
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState("");
@@ -110,6 +120,30 @@ export function DecisionMemoryWorkspace() {
   const [eligibleEvidence, setEligibleEvidence] = useState<AnyRecord[]>([]);
   const [selectedEvidenceIds, setSelectedEvidenceIds] = useState<string[]>([]);
   const [outcome, setOutcome] = useState("effective");
+
+  primeLocaleSourceCatalogFromCache(selectedLocale, DECISION_MEMORY_EN);
+
+  useEffect(() => {
+    void ensureLocaleSourceCatalog(selectedLocale, DECISION_MEMORY_EN).catch(() => null);
+  }, [selectedLocale]);
+
+  const copy = {
+    lifecycle: t("decisionMemory.lifecycle"),
+    specialists: t("decisionMemory.specialists"),
+    learning: t("decisionMemory.learning"),
+    approve: t("decisionMemory.approve"),
+    reject: t("decisionMemory.reject"),
+    rejectionReason: t("decisionMemory.rejectionReason"),
+    startExecution: t("decisionMemory.startExecution"),
+    executionEvidence: t("decisionMemory.executionEvidence"),
+    recordExecution: t("decisionMemory.recordExecution"),
+    startVerification: t("decisionMemory.startVerification"),
+    verificationEvidence: t("decisionMemory.verificationEvidence"),
+    outcome: t("decisionMemory.outcome"),
+    verify: t("decisionMemory.verify"),
+    noEvidence: t("decisionMemory.noEvidence"),
+    selectEvidence: t("decisionMemory.selectEvidence"),
+  };
 
   const selected = useMemo(() => decisions.find((row) => String(row.id) === selectedId) || decisions[0] || {}, [decisions, selectedId]);
   const currentFieldState = fieldStates[0] || {};
@@ -200,17 +234,17 @@ export function DecisionMemoryWorkspace() {
 
   useEffect(() => {
     if (open && selected?.id) loadSelected(selected).catch(() => null);
-  }, [open, selected?.id, selected?.lifecycle?.id]);
+  }, [open, selected?.id, selected?.lifecycle?.id, selected?.lifecycle?.state]);
 
   async function mutate(action: string, payload?: AnyRecord) {
     if (!lifecycleId) return;
     setBusy(action);
     setError("");
     try {
-      await lifecycleMutation(lifecycleId, action, payload);
+      const nextLifecycle = await lifecycleMutation(lifecycleId, action, payload);
+      setLifecycle(nextLifecycle);
+      await loadEvidence(safeText(nextLifecycle.id || lifecycleId), safeText(nextLifecycle.state));
       await loadCore();
-      const fresh = decisions.find((row) => String(row.id) === String(selected.id)) || selected;
-      await loadSelected(fresh);
     } catch (err) {
       setError(err instanceof Error ? err.message : t("intelligence.actionExecuteFailed"));
     } finally {
@@ -293,10 +327,10 @@ export function DecisionMemoryWorkspace() {
                     return (
                       <button key={String(row.id)} type="button" onClick={() => setSelectedId(String(row.id))} className="w-full rounded-xl p-3 text-left" style={{ background: active ? "#F0F5F1" : BG, border: `1px solid ${active ? "#A9B9AD" : BORDER}` }}>
                         <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-[12px] font-semibold" style={{ color: TEXT }}>{stateLabel(row.domain || row.task)}</span>
+                          <span className="truncate text-[12px] font-semibold" style={{ color: TEXT }}>{decisionKind(row, t)}</span>
                           <span className="flex-shrink-0 text-[10px]" style={{ color: MUTED }}>{shortDate(row.created_at)}</span>
                         </div>
-                        <div className="mt-1 truncate text-[11px]" style={{ color: MUTED }}>{stateLabel(row.lifecycle?.state)}</div>
+                        <div className="mt-1 truncate text-[11px]" style={{ color: MUTED }}>{translatedCode(row.lifecycle?.state, STATE_KEYS, t)}</div>
                       </button>
                     );
                   })}
@@ -308,13 +342,13 @@ export function DecisionMemoryWorkspace() {
                     <div className="rounded-xl p-4" style={{ background: BG, border: `1px solid ${BORDER}` }}>
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="min-w-0">
-                          <div className="text-[10px] font-semibold uppercase tracking-[0.06em]" style={{ color: MUTED }}>{stateLabel(selected.domain)}</div>
+                          <div className="text-[10px] font-semibold uppercase tracking-[0.06em]" style={{ color: MUTED }}>{decisionKind(selected, t)}</div>
                           <div className="mt-1 break-words text-[13px] font-semibold" style={{ color: TEXT }}>{safeText(selected.question || selected.task)}</div>
                           <div className="mt-2 flex flex-wrap gap-2 text-[10px]" style={{ color: MUTED }}>
-                            <span>{stateLabel(state)}</span><span>·</span><span>{Math.round(Number(selected.grounding_confidence || 0) * 100)}%</span><span>·</span><span>{shortDate(selected.created_at)}</span>
+                            <span>{translatedCode(state, STATE_KEYS, t)}</span><span>·</span><span>{Math.round(Number(selected.grounding_confidence || 0) * 100)}%</span><span>·</span><span>{shortDate(selected.created_at)}</span>
                           </div>
                         </div>
-                        <LifecycleActions state={state} busy={busy} copy={copy} onApprove={() => mutate("approve")} onReject={reject} onExecutionPending={() => mutate("execution-pending")} onVerificationPending={() => mutate("verification-pending", { verification_status: "pending" })} />
+                        <LifecycleActions state={state} busy={busy} t={t} onApprove={() => mutate("approve")} onReject={reject} onExecutionPending={() => mutate("execution-pending")} onVerificationPending={() => mutate("verification-pending", { verification_status: "pending" })} />
                       </div>
 
                       {state === "execution_pending" || state === "verification_pending" ? (
@@ -329,9 +363,9 @@ export function DecisionMemoryWorkspace() {
                                   <label key={id} className="flex cursor-pointer items-start gap-3 rounded-lg p-3" style={{ background: SURFACE, border: `1px solid ${checked ? "#78907F" : BORDER}` }}>
                                     <input type="checkbox" checked={checked} onChange={() => toggleEvidence(id)} className="mt-0.5" />
                                     <span className="min-w-0">
-                                      <span className="block truncate text-[11px] font-semibold" style={{ color: TEXT }}>{safeText(row.title || row.citation_label || row.type)}</span>
+                                      <span className="block truncate text-[11px] font-semibold" style={{ color: TEXT }}>{safeText(row.title || row.citation_label || translatedCode(row.type, EVIDENCE_TYPE_KEYS, t))}</span>
                                       <span className="mt-0.5 block line-clamp-2 text-[10px] leading-relaxed" style={{ color: MUTED }}>{safeText(row.summary)}</span>
-                                      <span className="mt-1 block text-[9px]" style={{ color: MUTED }}>{stateLabel(row.type)} · {shortDate(row.occurred_at)}</span>
+                                      <span className="mt-1 block text-[9px]" style={{ color: MUTED }}>{translatedCode(row.type, EVIDENCE_TYPE_KEYS, t)} · {shortDate(row.occurred_at)}</span>
                                     </span>
                                   </label>
                                 );
@@ -341,13 +375,16 @@ export function DecisionMemoryWorkspace() {
 
                           {state === "verification_pending" ? (
                             <select value={outcome} onChange={(event) => setOutcome(event.target.value)} className="mt-3 w-full rounded-lg px-3 py-2 text-[11px]" style={{ background: SURFACE, color: TEXT, border: `1px solid ${BORDER}` }} aria-label={copy.outcome}>
-                              <option value="effective">{copy.effective}</option>
-                              <option value="partially_effective">{copy.partial}</option>
-                              <option value="ineffective">{copy.ineffective}</option>
-                              <option value="matched">{copy.matched}</option>
-                              <option value="deviated">{copy.deviated}</option>
-                              <option value="inconclusive">{copy.inconclusive}</option>
-                              <option value="no_change">{copy.noChange}</option>
+                              <option value="effective">{t("decisionMemory.outcome.effective")}</option>
+                              <option value="partially_effective">{t("decisionMemory.outcome.partially_effective")}</option>
+                              <option value="ineffective">{t("decisionMemory.outcome.ineffective")}</option>
+                              <option value="matched">{t("decisionMemory.outcome.matched")}</option>
+                              <option value="partially_matched">{t("decisionMemory.outcome.partially_matched")}</option>
+                              <option value="deviated">{t("decisionMemory.outcome.deviated")}</option>
+                              <option value="failed">{t("decisionMemory.outcome.failed")}</option>
+                              <option value="agronomically_ineffective">{t("decisionMemory.outcome.agronomically_ineffective")}</option>
+                              <option value="inconclusive">{t("decisionMemory.outcome.inconclusive")}</option>
+                              <option value="no_change">{t("decisionMemory.outcome.no_change")}</option>
                             </select>
                           ) : null}
                           <button type="button" disabled={Boolean(busy) || !selectedEvidenceIds.length} onClick={() => state === "execution_pending" ? recordExecution() : recordVerification()} className="mt-3 rounded-lg px-3 py-2 text-[11px] font-semibold disabled:opacity-50" style={{ background: "#0D2B1E", color: "white" }}>{state === "execution_pending" ? copy.recordExecution : copy.verify}</button>
@@ -369,7 +406,7 @@ export function DecisionMemoryWorkspace() {
                               <div key={String(event.id || event.sequence)} className="rounded-lg px-3 py-2" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
                                 <div className="flex items-center gap-2 text-[11px] font-semibold" style={{ color: TEXT }}>
                                   {event.to_state === "verified" ? <CheckCircle2 size={13} /> : event.to_state === "rejected" || event.to_state === "failed" ? <AlertTriangle size={13} /> : <ShieldCheck size={13} />}
-                                  {stateLabel(event.to_state)}
+                                  {translatedCode(event.to_state, STATE_KEYS, t)}
                                 </div>
                                 <div className="mt-1 text-[10px]" style={{ color: MUTED }}>{shortDate(event.created_at)}</div>
                               </div>
@@ -386,8 +423,8 @@ export function DecisionMemoryWorkspace() {
                       <div className="mt-3 grid gap-2 sm:grid-cols-2 xl:grid-cols-3">
                         {specialists.map((row) => (
                           <div key={safeText(row.domain)} className="rounded-lg px-3 py-2" style={{ background: SURFACE, border: `1px solid ${BORDER}` }}>
-                            <div className="text-[11px] font-semibold" style={{ color: TEXT }}>{stateLabel(row.domain)}</div>
-                            <div className="mt-1 text-[10px]" style={{ color: MUTED }}>{stateLabel(row.status)} · {Math.round(Number(row.confidence_cap || 0) * 100)}%</div>
+                            <div className="text-[11px] font-semibold" style={{ color: TEXT }}>{translatedCode(row.domain, DOMAIN_KEYS, t)}</div>
+                            <div className="mt-1 text-[10px]" style={{ color: MUTED }}>{translatedCode(row.status, SPECIALIST_STATUS_KEYS, t)} · {Math.round(Number(row.confidence_cap || 0) * 100)}%</div>
                           </div>
                         ))}
                       </div>
@@ -403,10 +440,10 @@ export function DecisionMemoryWorkspace() {
   );
 }
 
-function LifecycleActions({ state, busy, copy, onApprove, onReject, onExecutionPending, onVerificationPending }: { state: string; busy: string; copy: Record<string, string>; onApprove: () => void; onReject: () => void; onExecutionPending: () => void; onVerificationPending: () => void }) {
-  if (state === "awaiting_approval") return <div className="flex flex-shrink-0 flex-wrap gap-2"><ActionButton label={copy.approve} primary busy={busy} onClick={onApprove} /><ActionButton label={copy.reject} busy={busy} onClick={onReject} danger /></div>;
-  if (state === "approved") return <ActionButton label={copy.startExecution} primary busy={busy} onClick={onExecutionPending} />;
-  if (state === "executed") return <ActionButton label={copy.startVerification} primary busy={busy} onClick={onVerificationPending} />;
+function LifecycleActions({ state, busy, t, onApprove, onReject, onExecutionPending, onVerificationPending }: { state: string; busy: string; t: Translate; onApprove: () => void; onReject: () => void; onExecutionPending: () => void; onVerificationPending: () => void }) {
+  if (state === "awaiting_approval") return <div className="flex flex-shrink-0 flex-wrap gap-2"><ActionButton label={t("decisionMemory.approve")} primary busy={busy} onClick={onApprove} /><ActionButton label={t("decisionMemory.reject")} busy={busy} onClick={onReject} danger /></div>;
+  if (state === "approved") return <ActionButton label={t("decisionMemory.startExecution")} primary busy={busy} onClick={onExecutionPending} />;
+  if (state === "executed") return <ActionButton label={t("decisionMemory.startVerification")} primary busy={busy} onClick={onVerificationPending} />;
   return null;
 }
 
