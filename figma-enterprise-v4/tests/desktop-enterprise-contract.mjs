@@ -39,6 +39,7 @@ assert.deepEqual(httpPermission.allow, [{ url: "https://api.agroai-pilot.com/**"
 assert.equal(JSON.stringify(httpPermission).includes("*://*"), false, "native HTTP must never be globally scoped");
 
 for (const dependency of [
+  "keyring",
   "tauri-plugin-deep-link",
   "tauri-plugin-http",
   "tauri-plugin-notification",
@@ -46,6 +47,7 @@ for (const dependency of [
 ]) {
   assert.ok(cargo.includes(dependency), `missing ${dependency}`);
 }
+assert.match(cargo, /keyring\s*=\s*\{[^\n]*features\s*=\s*\["apple-native",\s*"windows-native"\]/);
 assert.match(cargo, /tauri-plugin-single-instance\s*=\s*\{[^\n]*features\s*=\s*\["deep-link"\]/);
 assert.ok(rustRuntime.indexOf("tauri_plugin_single_instance::init") < rustRuntime.indexOf("tauri_plugin_deep_link::init"), "single-instance must be registered before deep-link");
 assert.match(rustRuntime, /matches!\(parsed\.scheme\(\),\s*"https"\s*\|\s*"http"\s*\|\s*"mailto"\)/);
@@ -53,16 +55,30 @@ assert.ok(rustRuntime.includes('Builder::new("agroai-desktop-navigation-guard")'
 assert.ok(rustRuntime.includes('url.host_str() == Some("tauri.localhost")'));
 assert.ok(rustRuntime.includes(".on_navigation("));
 assert.ok(rustRuntime.includes("webbrowser::open(url.as_str())"));
+assert.ok(rustRuntime.includes('const CREDENTIAL_SERVICE: &str = "com.agroai.enterprise"'));
+assert.ok(rustRuntime.includes("desktop_get_access_token"));
+assert.ok(rustRuntime.includes("desktop_set_access_token"));
+assert.ok(rustRuntime.includes("desktop_delete_access_token"));
+assert.ok(rustRuntime.includes("keyring::Error::NoEntry"));
 assert.equal(rustRuntime.includes("shell::open"), false);
 
 assert.ok(main.includes('import { installDesktopRuntime } from "./app/desktop/desktopRuntime"'));
-assert.ok(main.includes("installDesktopRuntime();"));
+assert.ok(main.includes("installDesktopRuntime()"));
+assert.ok(main.includes('.then(() => import("./app/App.tsx"))'));
+assert.ok(main.indexOf("installDesktopRuntime()") < main.indexOf('import("./app/App.tsx")'), "desktop credential hydration must run before AuthProvider is imported");
 assert.ok(desktopRuntime.includes('url.hostname === "api.agroai-pilot.com"'));
 assert.ok(desktopRuntime.includes('url.protocol === "https:"'));
 assert.ok(desktopRuntime.includes('parsed.protocol !== "agroai:" || parsed.hostname !== "open"'));
 assert.ok(desktopRuntime.includes("desktopRouteAllowlist"));
 assert.ok(desktopRuntime.includes("deepLink.getCurrent"));
 assert.ok(desktopRuntime.includes("deepLink.onOpenUrl"));
+assert.ok(desktopRuntime.includes("Storage.prototype.getItem"));
+assert.ok(desktopRuntime.includes("Storage.prototype.setItem"));
+assert.ok(desktopRuntime.includes("Storage.prototype.removeItem"));
+assert.ok(desktopRuntime.includes("desktop_get_access_token"));
+assert.ok(desktopRuntime.includes("desktop_set_access_token"));
+assert.ok(desktopRuntime.includes("desktop_delete_access_token"));
+assert.ok(desktopRuntime.includes("key === tokenKey && isDesktopRuntime()"));
 assert.equal(desktopRuntime.includes("eval("), false, "desktop bridge must not inject runtime scripts");
 
 assert.ok(serviceWorker.includes("/v1/"), "PWA service worker API exclusion contract must remain present");
