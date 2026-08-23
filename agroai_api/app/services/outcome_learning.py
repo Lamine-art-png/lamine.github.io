@@ -81,7 +81,7 @@ def materialize_verified_outcome_evidence(
 
     Caller owns commit/rollback. Repeated calls are idempotent per lifecycle.
     """
-    advisory_xact_lock(db, "verified-outcome-learning", organization_id, lifecycle_id)
+    advisory_xact_lock(db, "verified-outcome-learning", f"{organization_id}:{lifecycle_id}")
     lifecycle = (
         db.query(DecisionLifecycle)
         .filter(
