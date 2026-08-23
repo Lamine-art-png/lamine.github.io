@@ -14,5 +14,13 @@
   "literal.803ac547e8328672": "Build on AGRO-AI.",
   "literal.8306b04a0be40994": "TEST access never grants live provider credentials, production customer data, or physical execution.",
   "literal.8390f6e4a1766b4e": "Create a verified developer organization",
-  "literal.8b93701638a7a137": "Primary crops"
+  "literal.8b93701638a7a137": "Primary crops",
+  "literal.8cc29ec0fa26e9eb": "Planned data sources",
+  "literal.8e92e1448f05ab02": "Automated screening protects the developer platform. Eligible owners/admins can activate TEST access after email verification and agreement acceptance.",
+  "literal.90165eec849454bb": "Developer workspace",
+  "literal.9203fa109c21555c": "Developer platform",
+  "literal.9619649d8dc1394f": "Workspace name",
+  "literal.9a6881a0a47155e9": "Farm manager, CTO, agronomist…",
+  "literal.a152f5d49424a427": "Fail-closed launch gate",
+  "literal.a1a02d8bcea84ab4": "Sign in to your verified AGRO-AI organization. Your TEST developer state is resolved server-side."
 }
