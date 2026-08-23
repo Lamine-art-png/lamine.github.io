@@ -22,7 +22,8 @@
         "center": true,
         "resizable": true,
         "fullscreen": false,
-        "visible": true
+        "visible": true,
+        "useHttpsScheme": true
       }
     ],
     "security": {
