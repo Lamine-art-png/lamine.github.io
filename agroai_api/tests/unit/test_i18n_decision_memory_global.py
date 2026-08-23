@@ -64,6 +64,7 @@ def test_decision_memory_covers_full_governed_operating_vocabulary():
         "decisionMemory.domain.equipment",
         "decisionMemory.domain.assurance",
         "decisionMemory.domain.reporting",
+        "decisionMemory.domain.operations",
         "decisionMemory.outcome.effective",
         "decisionMemory.outcome.partially_effective",
         "decisionMemory.outcome.ineffective",
@@ -74,5 +75,14 @@ def test_decision_memory_covers_full_governed_operating_vocabulary():
         "decisionMemory.outcome.agronomically_ineffective",
         "decisionMemory.outcome.inconclusive",
         "decisionMemory.outcome.no_change",
+        "decisionMemory.change.first_decision",
+        "decisionMemory.change.evidence_changed",
+        "decisionMemory.change.science_changed",
+        "decisionMemory.change.conflicts_changed",
+        "decisionMemory.change.unknowns_changed",
+        "decisionMemory.change.confidence_changed",
+        "decisionMemory.change.field_state_changed",
+        "decisionMemory.change.recommendation_changed",
+        "decisionMemory.change.no_material_change",
     }
     assert required.issubset(source)
