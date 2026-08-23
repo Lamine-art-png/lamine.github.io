@@ -13,6 +13,9 @@ from app.models.operational_records import EvidenceRecord
 
 MAX_EVIDENCE_REFERENCES = 50
 EVIDENCE_REFERENCE_TYPES = {"evidence_record", "field_observation", "execution_verification"}
+_ACCEPTED_RECORD_QUALITY = {"verified", "accepted", "validated", "complete", "good", "ok", "usable", "live"}
+_ACCEPTED_OBSERVATION_STATUS = {"completed"}
+_ACCEPTED_VERIFICATION_STATUS = {"complete", "verified"}
 
 
 class EvidenceReferenceError(ValueError):
@@ -25,6 +28,10 @@ class ValidatedEvidenceReference:
     evidence_type: str
 
 
+def _token(value: object) -> str:
+    return str(value or "").strip().casefold().replace("-", "_").replace(" ", "_")
+
+
 def validate_evidence_references(
     db: Session,
     *,
@@ -34,9 +41,11 @@ def validate_evidence_references(
 ) -> list[ValidatedEvidenceReference]:
     """Resolve every supplied ID inside the active tenant or fail without leakage.
 
-    ``allowed_types`` constrains which durable record classes may prove the
-    requested transition. A missing record and a record owned by another tenant
-    intentionally produce the same customer-visible error.
+    Existence is not enough for lifecycle proof. Evidence records must carry an
+    accepted/verified quality state, Field Intelligence observations must be
+    completed, and legacy execution-verification rows must be complete/verified.
+    A missing, foreign, unfinished, or rejected record intentionally produces
+    the same customer-visible error so the validator does not leak record state.
     """
     normalized = list(dict.fromkeys(str(value or "").strip() for value in evidence_ids if str(value or "").strip()))
     if not normalized:
@@ -51,23 +60,26 @@ def validate_evidence_references(
 
     resolved: dict[str, str] = {}
     if "evidence_record" in selected_types:
-        for row in db.query(EvidenceRecord.id).filter(
+        for row in db.query(EvidenceRecord.id, EvidenceRecord.quality_status).filter(
             EvidenceRecord.tenant_id == tenant_id,
             EvidenceRecord.id.in_(normalized),
         ).all():
-            resolved[str(row[0])] = "evidence_record"
+            if _token(row[1]) in _ACCEPTED_RECORD_QUALITY:
+                resolved[str(row[0])] = "evidence_record"
     if "field_observation" in selected_types:
-        for row in db.query(FieldObservation.id).filter(
+        for row in db.query(FieldObservation.id, FieldObservation.status).filter(
             FieldObservation.tenant_id == tenant_id,
             FieldObservation.id.in_(normalized),
         ).all():
-            resolved[str(row[0])] = "field_observation"
+            if _token(row[1]) in _ACCEPTED_OBSERVATION_STATUS:
+                resolved[str(row[0])] = "field_observation"
     if "execution_verification" in selected_types:
-        for row in db.query(ExecutionVerification.id).filter(
+        for row in db.query(ExecutionVerification.id, ExecutionVerification.verification_status).filter(
             ExecutionVerification.tenant_id == tenant_id,
             ExecutionVerification.id.in_(normalized),
         ).all():
-            resolved[str(row[0])] = "execution_verification"
+            if _token(row[1]) in _ACCEPTED_VERIFICATION_STATUS:
+                resolved[str(row[0])] = "execution_verification"
 
     unresolved = [value for value in normalized if value not in resolved]
     if unresolved:
