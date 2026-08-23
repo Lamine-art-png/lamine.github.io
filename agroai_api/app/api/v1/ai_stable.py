@@ -26,6 +26,7 @@ from app.services.intelligence_context import build_intelligence_context
 from app.services.intelligence_grounding import build_intelligence_grounding
 from app.services.intelligence_hardening import enrich_grounding_packet, postvalidate_decision, sanitize_customer_answer
 from app.services.intelligence_memory_service import persist_grounded_decision_memory
+from app.services.intelligence_specialists import run_specialists
 from app.services.language import language_matches_target, resolve_language
 from app.services.live_intelligence import LiveIntelligence
 from app.services.model_router import ModelRouter
@@ -118,6 +119,50 @@ def _decision_memory_failure_response(payload: BrainRunRequest, bundle: dict[str
     }
 
 
+def _attach_specialist_context(packet) -> None:
+    """Attach bounded, side-effect-free specialist summaries to model context.
+
+    The summaries live in analysis metadata. They do not become observed facts,
+    deterministic science, or authorization evidence and therefore cannot raise
+    the grounding confidence or authorize a physical action.
+    """
+    try:
+        results = run_specialists(packet)
+        packet.source_health["specialist_cells"] = [
+            {
+                "domain": row.domain,
+                "status": row.status,
+                "confidence_cap": row.confidence_cap,
+                "observed_evidence_ids": [
+                    str(item.get("evidence_id"))
+                    for item in row.observed_evidence[:12]
+                    if str(item.get("evidence_id") or "").strip()
+                ],
+                "deterministic_rule_ids": [
+                    str(item.get("rule_id"))
+                    for item in row.deterministic_findings[:8]
+                    if str(item.get("rule_id") or "").strip()
+                ],
+                "conflict_count": len(row.conflicts),
+                "unknowns": row.unknowns[:8],
+                "next_evidence_actions": [
+                    {
+                        "action_kind": action.action_kind,
+                        "action": action.action,
+                        "evidence_ids": action.evidence_ids[:8],
+                    }
+                    for action in row.next_evidence_actions[:3]
+                ],
+                "side_effect_free": True,
+            }
+            for row in results
+        ]
+        packet.source_health["specialist_cells_side_effect_free"] = True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("specialist_context_unavailable error=%s", exc.__class__.__name__)
+        packet.source_health["specialist_cells_unavailable"] = True
+
+
 @router.get("/runtime/ai-router-status")
 async def ai_router_status() -> dict[str, Any]:
     status = ModelRouter().status()
@@ -142,7 +187,7 @@ async def resilient_intelligence_run(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """Production route: mandatory grounding, durable memory, then safe recovery if needed."""
+    """Production route: mandatory grounding, specialist context, durable memory, safe recovery."""
     org = db.query(Organization).filter(Organization.id == tenant_id).first()
     if org is None:
         raise ValueError("Organization not found")
@@ -179,6 +224,7 @@ async def resilient_intelligence_run(
     try:
         packet = build_intelligence_grounding(context, field_id=payload.field_id)
         packet = enrich_grounding_packet(packet, context)
+        _attach_specialist_context(packet)
     except Exception as exc:  # noqa: BLE001
         logger.error("intelligence_grounding_failed error=%s", exc.__class__.__name__)
         release_reservation(db, reservation, reason="intelligence_grounding_failed")
@@ -241,6 +287,11 @@ async def resilient_intelligence_run(
                     "route": "resilient_runtime",
                     "grounding_schema": packet.schema_version,
                     "science_ruleset": packet.science_ruleset_version,
+                    "specialist_cells": [
+                        row.get("domain")
+                        for row in packet.source_health.get("specialist_cells", [])
+                        if isinstance(row, dict) and row.get("domain")
+                    ],
                 }
                 if memory_refs is not None:
                     usage_metadata.update(
@@ -265,7 +316,7 @@ async def resilient_intelligence_run(
                     "response_language": response_language,
                     "task_profile": task_profile,
                     "intelligence_profile": commercial.get("profile", "essential"),
-                    "reasoning_contract": "evidence_graph_v1_durable_memory",
+                    "reasoning_contract": "evidence_graph_v1_specialists_durable_memory",
                 }
             logger.warning("gpt56_grounded language_mismatch falling_back=true")
 
@@ -355,6 +406,7 @@ async def chat(payload: ChatRequest, tenant_id: str = Depends(require_current_te
         body = _normalize(body, fallback)
         try:
             packet = enrich_grounding_packet(build_intelligence_grounding(context, field_id=payload.block_id), context)
+            _attach_specialist_context(packet)
             summary, removed = sanitize_customer_answer(str(body.get("summary") or body.get("answer") or ""), packet, question=payload.message)
             if removed:
                 body["summary"] = summary
