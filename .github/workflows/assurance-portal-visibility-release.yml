@@ -5,11 +5,12 @@ on:
     branches: ["main"]
     paths:
       - "figma-enterprise-v4/**"
+      - "shared/ui-*.json"
       - ".github/workflows/assurance-portal-visibility-release.yml"
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   statuses: write
 
 concurrency:
@@ -33,6 +34,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -60,6 +63,60 @@ jobs:
             -H "Accept: application/vnd.github+json" \
             -H "X-GitHub-Api-Version: 2022-11-28" \
             --data "$(jq -nc '{state:"success",context:"assurance-portal-visibility/source",description:"Assurance sidebar source contract present"}')" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
+
+      - name: Capture exact deterministic UI literal mismatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, sys
+          from pathlib import Path
+          root = Path('figma-enterprise-v4').resolve()
+          sys.path.insert(0, str(root))
+          from scripts.check_ui_literal_inventory import build_catalog, load_parts
+          expected = build_catalog()
+          current, paths = load_parts()
+          missing = {k: expected[k] for k in sorted(set(expected) - set(current))}
+          extra = {k: current[k] for k in sorted(set(current) - set(expected))}
+          changed = {
+              k: {"current": current[k], "expected": expected[k]}
+              for k in sorted(set(current).intersection(expected))
+              if current[k] != expected[k]
+          }
+          payload = {
+              "expected_count": len(expected),
+              "current_count": len(current),
+              "catalog_parts": [str(p) for p in paths],
+              "missing": missing,
+              "extra": extra,
+              "changed": changed,
+          }
+          Path('diagnostics').mkdir(exist_ok=True)
+          Path('diagnostics/assurance-literal-inventory.json').write_text(
+              json.dumps(payload, indent=2, ensure_ascii=False, sort_keys=True) + '\n', encoding='utf-8'
+          )
+          Path('diagnostics/assurance-literal-summary.txt').write_text(
+              f"expected={len(expected)} current={len(current)} missing={len(missing)} extra={len(extra)} changed={len(changed)}\n",
+              encoding='utf-8',
+          )
+          PY
+          cat diagnostics/assurance-literal-summary.txt
+          short="${GITHUB_SHA:0:12}"
+          branch="diagnostics/assurance-live-literal-${short}"
+          git config user.name "AGRO-AI Release Diagnostics"
+          git config user.email "actions@users.noreply.github.com"
+          git checkout -b "$branch"
+          git add diagnostics/assurance-literal-inventory.json diagnostics/assurance-literal-summary.txt
+          git commit -m "diagnostics: capture live Assurance literal mismatch"
+          git push origin "$branch"
+          git checkout --detach "$GITHUB_SHA"
+          summary="$(cat diagnostics/assurance-literal-summary.txt 2>/dev/null || true)"
+          curl --fail-with-body --silent --show-error -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            --data "$(jq -nc --arg description "${summary:-Literal mismatch captured}" '{state:"success",context:"assurance-portal-visibility/literal-delta",description:$description}')" \
             "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
 
       - name: Build exact current portal
