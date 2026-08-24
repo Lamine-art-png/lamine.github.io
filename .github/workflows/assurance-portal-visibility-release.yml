@@ -1,0 +1,145 @@
+name: Assurance Portal Visibility Release
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "figma-enterprise-v4/**"
+      - ".github/workflows/assurance-portal-visibility-release.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  statuses: write
+
+concurrency:
+  group: assurance-portal-visibility-production
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: "22"
+  PORTAL_PROJECT: agroai-portal
+  PORTAL_URL: https://app.agroai-pilot.com
+  API_URL: https://app.agroai-pilot.com
+
+jobs:
+  deploy-and-prove:
+    name: Deploy and prove visible Assurance navigation
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: figma-enterprise-v4/package-lock.json
+
+      - name: Prove source contains visible Assurance sidebar item
+        shell: bash
+        run: |
+          set -euo pipefail
+          file="figma-enterprise-v4/src/app/components/MainLayout.tsx"
+          grep -F 'const canAssurance = capabilityEnabled(entitlements, "assurance.readiness", false);' "$file" >/dev/null
+          grep -F '{ name: tx("Assurance"), path: "/assurance", icon: Shield, locked: !canAssurance' "$file" >/dev/null
+          route="figma-enterprise-v4/src/app/routes.tsx"
+          grep -F 'path: "assurance"' "$route" >/dev/null
+          grep -F 'import("./components/Assurance")' "$route" >/dev/null
+          printf 'assurance_sidebar_source=ok\n'
+
+      - name: Build exact current portal
+        working-directory: figma-enterprise-v4
+        env:
+          VITE_API_BASE_URL: ${{ env.API_URL }}
+          VITE_DEPLOYMENT_ENVIRONMENT: production
+          VITE_BUILD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          npm ci
+          npm run test:i18n
+          node tests/assurance-route-isolation-contract.mjs
+          npm run build
+          grep -Fx 'AGROAI_ASSURANCE_SIDEBAR_V2_VISIBLE' dist/assurance-sidebar-v2-release.txt >/dev/null
+
+      - name: Deploy exact portal bundle to authoritative Pages project
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -n "${CLOUDFLARE_API_TOKEN:-}" ]] || { echo "Missing CLOUDFLARE_API_TOKEN" >&2; exit 1; }
+          [[ -n "${CLOUDFLARE_ACCOUNT_ID:-}" ]] || { echo "Missing CLOUDFLARE_ACCOUNT_ID" >&2; exit 1; }
+          npx --yes wrangler@4.107.0 pages deploy figma-enterprise-v4/dist \
+            --project-name "${PORTAL_PROJECT}" \
+            --branch main \
+            --commit-hash "${GITHUB_SHA}"
+
+      - name: Prove production is serving this portal release
+        shell: bash
+        run: |
+          set -euo pipefail
+          cache_bust="assurance_sidebar_release=${GITHUB_SHA}"
+          marker="$(curl --fail --silent --show-error --location --max-time 20 \
+            -H 'Cache-Control: no-cache' \
+            "${PORTAL_URL}/assurance-sidebar-v2-release.txt?${cache_bust}")"
+          [[ "$marker" == "AGROAI_ASSURANCE_SIDEBAR_V2_VISIBLE" ]] || {
+            echo "Production marker mismatch: $marker" >&2
+            exit 1
+          }
+
+          rm -rf portal-smoke
+          mkdir -p portal-smoke/assets
+          curl --fail --silent --show-error --location --max-time 20 \
+            -H 'Cache-Control: no-cache' \
+            "${PORTAL_URL}/?${cache_bust}" -o portal-smoke/index.html
+          title="$(sed -n 's:.*<title>\(.*\)</title>.*:\1:p' portal-smoke/index.html | head -1)"
+          [[ "$title" == "AGRO-AI Enterprise Portal" ]]
+
+          grep -oE '/assets/[A-Za-z0-9._/-]+\.js' portal-smoke/index.html | sed 's#^/##' > portal-smoke/queue.txt
+          : > portal-smoke/seen.txt
+          for pass in 1 2 3 4; do
+            sort -u portal-smoke/queue.txt -o portal-smoke/queue.txt
+            while IFS= read -r asset; do
+              [ -n "$asset" ] || continue
+              grep -Fx "$asset" portal-smoke/seen.txt >/dev/null 2>&1 && continue
+              echo "$asset" >> portal-smoke/seen.txt
+              target="portal-smoke/assets/$(basename "$asset")"
+              curl --fail --silent --show-error --max-time 20 \
+                -H 'Cache-Control: no-cache' \
+                "${PORTAL_URL}/${asset}" -o "$target"
+              grep -oE 'assets/[A-Za-z0-9._/-]+\.js' "$target" >> portal-smoke/queue.txt || true
+              grep -oE '\./[A-Za-z0-9._/-]+\.js' "$target" | sed 's#^\./#assets/#' >> portal-smoke/queue.txt || true
+            done < portal-smoke/queue.txt
+          done
+          cat portal-smoke/assets/*.js > portal-smoke/all-js.txt
+          grep -F 'assurance.readiness' portal-smoke/all-js.txt >/dev/null
+          grep -F '/assurance' portal-smoke/all-js.txt >/dev/null
+
+          curl --fail --silent --show-error --location --max-time 20 \
+            -H 'Cache-Control: no-cache' \
+            "${PORTAL_URL}/assurance?${cache_bust}" -o portal-smoke/assurance.html
+          assurance_title="$(sed -n 's:.*<title>\(.*\)</title>.*:\1:p' portal-smoke/assurance.html | head -1)"
+          [[ "$assurance_title" == "AGRO-AI Enterprise Portal" ]]
+          printf 'production_assurance_sidebar_bundle=ok\n'
+
+      - name: Publish production visibility status
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "${{ job.status }}" == "success" ]]; then
+            state=success
+            description="Assurance sidebar release is live in production portal"
+          else
+            state=failure
+            description="Assurance sidebar production release failed"
+          fi
+          curl --fail-with-body --silent --show-error -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            --data "$(jq -nc --arg state "$state" --arg context assurance-portal-visibility-production --arg description "$description" '{state:$state,context:$context,description:$description}')" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/statuses/$GITHUB_SHA" >/dev/null
