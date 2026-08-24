@@ -3,6 +3,10 @@
 ## Purpose
 AGRO-AI Intelligence Engine v1 is the first production-oriented irrigation decision layer that turns mixed farm signals into a truthful recommendation with confidence, limitations, and verification requirements.
 
+The original v1 arithmetic heuristic is retired from the operational path.
+The compatibility service now delegates numerical work to the fail-closed
+Agronomic Decision Kernel v0.3 and versioned scientific tools.
+
 It is designed to answer:
 **What should this farm do with water today, why, with what confidence, and what must be verified afterward?**
 
@@ -24,6 +28,10 @@ The normalized field context accepts source-aware and partial-data workloads:
 - `weather_context`, `sensor_context`, `controller_context`
 - `recent_irrigation_context`, `field_observations`
 - `data_quality_score`, `missing_inputs`, `confidence_inputs`
+- supplied scientific inputs: `crop_coefficient`, `effective_rainfall_mm`,
+  `root_zone_replenishment_mm` or `net_irrigation_requirement_mm`,
+  `irrigation_efficiency`, validated flow/status, verified recent-water status,
+  and `operating_window`
 
 This allows one model for:
 - WiseConn-connected zones
@@ -101,6 +109,10 @@ Recommendation responses include a source trace with:
 
 If telemetry is missing, the system degrades honestly with warnings and conservative output rather than fabricated readings.
 
+Crop, soil, and irrigation-method labels are descriptive context only. They do
+not select Kc, root-zone capacity, allowable depletion, efficiency, rainfall
+credit, flow tolerances, timing, depth floors/caps, or runtime factors.
+
 ## Data Quality Logic
 Data quality score (0-100) is computed from evidence availability and critical agronomic metadata.
 
@@ -125,6 +137,9 @@ Confidence is derived from data quality and constrained by decision risk:
 No fabricated precision policy:
 - If data is weak, depth/duration can be omitted (`null`).
 - Low confidence recommendations shift to `inspect` or `insufficient_data`.
+- Unsupported numerical prose is removed after model generation.
+- Operational recommendations without valid evidence IDs or verification are dropped.
+- Physical/external actions are always forced to human approval.
 
 ## Recommendation Limitations
 Current v1 logic is deterministic and conservative.
@@ -145,3 +160,13 @@ If translation infrastructure is unavailable, response falls back to English and
 4. **Verify**: output verification plan with warning trigger.
 
 This separation ensures truthful recommendations without pretending execution or outcomes.
+
+The engine does not invoke controllers. Controller requests pass through the
+existing typed action/approval layer, and model inference remains side-effect
+free.
+
+The compatibility `/recommend` surface also does not trust client-supplied
+`validated` flow or recent-water status labels because its normalized payload
+lacks the source evidence needed to prove them. Those claims are withheld. The
+Workbench/live orchestrator is the path that validates block scope, provenance,
+freshness, pressure, calibration, and confirmation before calling the kernel.
