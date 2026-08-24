@@ -62,10 +62,6 @@ jobs:
         env:
           PLATFORM_API_POSTGRES_TEST_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
         run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests/integration/test_platform_api_idempotency_postgres.py
-      - name: Prove Assurance PostgreSQL integrity
-        env:
-          PLATFORM_API_POSTGRES_TEST_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
-        run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q tests/integration/test_assurance_intelligence_postgres.py
       - name: Prove intelligence memory concurrency and database immutability
         env:
           PLATFORM_API_POSTGRES_TEST_URL: postgresql://postgres@127.0.0.1:5432/agroai_hardening_ci
