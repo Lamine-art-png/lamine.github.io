@@ -13,6 +13,7 @@ def test_column_contract_detects_partial_existing_table():
     metadata = sa.MetaData()
     sa.Table("example", metadata, sa.Column("id", sa.String(), primary_key=True))
     metadata.create_all(engine)
+
     with engine.connect() as connection:
         gaps = schema_contract_gaps(connection, {"example": {"id", "required_value"}})
         assert gaps == {"example": ["required_value"]}
@@ -24,12 +25,13 @@ def test_column_contract_accepts_complete_shape():
     metadata = sa.MetaData()
     sa.Table("example", metadata, sa.Column("id", sa.String(), primary_key=True), sa.Column("required_value", sa.String()))
     metadata.create_all(engine)
+
     with engine.connect() as connection:
         assert schema_contract_gaps(connection, {"example": {"id", "required_value"}}) == {}
 
 
-def test_head_contract_covers_security_platform_field_launch_and_intelligence_memory():
-    assert HEAD_ALEMBIC_REVISION == "030_intelligence_state_memory"
+def test_head_contract_covers_security_assurance_platform_field_launch_and_intelligence_memory():
+    assert HEAD_ALEMBIC_REVISION == "031_merge_assurance_intelligence"
     assert {"device_code_hash", "user_code", "status", "expires_at"}.issubset(
         HEAD_SCHEMA_REQUIREMENTS["platform_cli_device_authorizations"]
     )
@@ -39,10 +41,28 @@ def test_head_contract_covers_security_platform_field_launch_and_intelligence_me
     assert {"provenance_json", "freshness_json"}.issubset(HEAD_SCHEMA_REQUIREMENTS["intelligence_runs"])
     assert {"access_restriction_reason", "access_restricted_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["users"])
     assert {
-        "user_id", "token_hash", "token_expires_at", "status", "submitted_at", "reviewed_at",
+        "user_id",
+        "token_hash",
+        "token_expires_at",
+        "status",
+        "submitted_at",
+        "reviewed_at",
     }.issubset(HEAD_SCHEMA_REQUIREMENTS["account_access_appeals"])
     assert {"key", "value_json", "updated_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["field_runtime_flags"])
     assert {"worker_id", "git_sha", "last_heartbeat_at"}.issubset(HEAD_SCHEMA_REQUIREMENTS["field_worker_heartbeats"])
+
+    assert {"organization_id", "workspace_id", "entity_type", "rule_pack_ids"}.issubset(
+        HEAD_SCHEMA_REQUIREMENTS["assurance_passports"]
+    )
+    assert {"organization_id", "workspace_id", "canonical_evidence_id", "review_status"}.issubset(
+        HEAD_SCHEMA_REQUIREMENTS["assurance_evidence_artifacts"]
+    )
+    assert {"passport_id", "action", "created_at"}.issubset(
+        HEAD_SCHEMA_REQUIREMENTS["assurance_review_events"]
+    )
+    assert {"passport_id", "event_type", "created_at"}.issubset(
+        HEAD_SCHEMA_REQUIREMENTS["assurance_audit_events"]
+    )
 
     assert {
         "scope_key", "revision", "state_json", "unknowns_json", "conflicts_json", "state_hash",
