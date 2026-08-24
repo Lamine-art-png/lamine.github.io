@@ -5,13 +5,29 @@ on:
     paths:
       - 'agroai_api/app/api/v1/i18n.py'
       - 'agroai_api/tests/unit/test_i18n_catalog_contract.py'
+      - 'agroai_api/tests/unit/test_i18n_decision_memory_global.py'
+      - 'shared/ui-decision-memory.en.json'
+      - 'shared/supported-locales.json'
+      - 'figma-enterprise-v4/src/app/decisionMemoryI18n.ts'
+      - 'figma-enterprise-v4/src/app/components/intelligence/DecisionMemoryWorkspace.tsx'
+      - 'figma-enterprise-v4/tests/decision-memory-global-i18n-contract.mjs'
       - '.github/workflows/apply-language-hotfix-test-patch.yml'
   push:
     branches: [main]
     paths:
       - 'agroai_api/app/api/v1/i18n.py'
       - 'agroai_api/tests/unit/test_i18n_catalog_contract.py'
+      - 'agroai_api/tests/unit/test_i18n_decision_memory_global.py'
+      - 'shared/ui-decision-memory.en.json'
+      - 'shared/supported-locales.json'
+      - 'figma-enterprise-v4/src/app/decisionMemoryI18n.ts'
+      - 'figma-enterprise-v4/src/app/components/intelligence/DecisionMemoryWorkspace.tsx'
+      - 'figma-enterprise-v4/tests/decision-memory-global-i18n-contract.mjs'
       - '.github/workflows/apply-language-hotfix-test-patch.yml'
+
+concurrency:
+  group: language-catalog-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
@@ -31,7 +47,10 @@ jobs:
           cache: pip
           cache-dependency-path: agroai_api/requirements.txt
       - run: python -m pip install -q -r requirements.txt pytest
-      - run: PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --tb=short tests/unit/test_i18n_catalog_contract.py
+      - run: >-
+          PYTEST_DISABLE_PLUGIN_AUTOLOAD=1 python -m pytest -q --tb=short
+          tests/unit/test_i18n_catalog_contract.py
+          tests/unit/test_i18n_decision_memory_global.py
       - name: Enforce bounded first-load translation fanout
         run: |
           python - <<'PY'
@@ -40,3 +59,6 @@ jobs:
           assert _MAX_PARALLEL_MODEL_CALLS >= 4
           print(f'chunk_size={_TRANSLATION_CHUNK_SIZE} parallel_calls={_MAX_PARALLEL_MODEL_CALLS}')
           PY
+      - name: Validate global Decision Memory frontend contract
+        working-directory: figma-enterprise-v4
+        run: node tests/decision-memory-global-i18n-contract.mjs

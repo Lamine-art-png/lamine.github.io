@@ -24,6 +24,7 @@ router = APIRouter(tags=["i18n"])
 _REPO_ROOT = Path(__file__).resolve().parents[4]
 _CANONICAL_CATALOG_PATH = _REPO_ROOT / "shared" / "ui-catalog.en.json"
 _COMMERCIAL_BOUNDARY_CATALOG_PATH = _REPO_ROOT / "shared" / "ui-commercial-boundary.en.json"
+_DECISION_MEMORY_CATALOG_PATH = _REPO_ROOT / "shared" / "ui-decision-memory.en.json"
 _LITERAL_CATALOG_GLOB = "ui-literals.en.*.json"
 _PLACEHOLDER_NAME_RE = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 _MAX_KEYS = 2_000
@@ -74,12 +75,19 @@ def canonical_source_catalog() -> dict[str, str]:
     commercial = json.loads(_COMMERCIAL_BOUNDARY_CATALOG_PATH.read_text(encoding="utf-8"))
     if not isinstance(commercial, dict) or not commercial:
         raise RuntimeError("canonical_ui_commercial_catalog_invalid")
+    decision_memory = json.loads(_DECISION_MEMORY_CATALOG_PATH.read_text(encoding="utf-8"))
+    if not isinstance(decision_memory, dict) or not decision_memory:
+        raise RuntimeError("canonical_ui_decision_memory_catalog_invalid")
     merged: dict[str, str] = {}
     merged.update(base)
     overlap = set(merged).intersection(commercial)
     if overlap:
         raise RuntimeError(f"duplicate_ui_commercial_catalog_keys:{sorted(overlap)[:3]}")
     merged.update(commercial)
+    overlap = set(merged).intersection(decision_memory)
+    if overlap:
+        raise RuntimeError(f"duplicate_ui_decision_memory_catalog_keys:{sorted(overlap)[:3]}")
+    merged.update(decision_memory)
     for path in sorted((_REPO_ROOT / "shared").glob(_LITERAL_CATALOG_GLOB)):
         part = json.loads(path.read_text(encoding="utf-8"))
         if not isinstance(part, dict):

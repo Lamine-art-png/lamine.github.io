@@ -25,6 +25,8 @@ from app.services.gpt56_intelligence import run_gpt56_grounded_intelligence
 from app.services.intelligence_context import build_intelligence_context
 from app.services.intelligence_grounding import build_intelligence_grounding
 from app.services.intelligence_hardening import enrich_grounding_packet, postvalidate_decision, sanitize_customer_answer
+from app.services.intelligence_memory_service import persist_grounded_decision_memory
+from app.services.intelligence_specialists import run_specialists
 from app.services.language import language_matches_target, resolve_language
 from app.services.live_intelligence import LiveIntelligence
 from app.services.model_router import ModelRouter
@@ -55,7 +57,6 @@ def _normalize(body: dict[str, Any], fallback: dict[str, Any]) -> dict[str, Any]
 
 
 def _grounding_failure_response(payload: BrainRunRequest, bundle: dict[str, Any], task_profile: str) -> dict[str, Any]:
-    """Fail closed when the evidence safety boundary cannot be constructed."""
     language = resolve_language(payload.preferred_language, payload.question).response_code
     message = (
         "AGRO-AI cannot produce an operational conclusion because the evidence verification layer is unavailable. "
@@ -86,6 +87,82 @@ def _grounding_failure_response(payload: BrainRunRequest, bundle: dict[str, Any]
     }
 
 
+def _decision_memory_failure_response(payload: BrainRunRequest, bundle: dict[str, Any], task_profile: str) -> dict[str, Any]:
+    language = resolve_language(payload.preferred_language, payload.question).response_code
+    message = (
+        "AGRO-AI verified the evidence but could not create the durable decision record. "
+        "No operational recommendation was released."
+    )
+    return {
+        "status": "unavailable",
+        "task": payload.task,
+        "model_status": "unavailable",
+        "result": {
+            "summary": message,
+            "answer": message,
+            "error": "decision_memory_unavailable",
+            "recommendations": [],
+            "next_actions": [],
+            "risk_flags": ["durable_decision_memory_unavailable"],
+            "confidence": "low",
+            "customer_safe": True,
+        },
+        "missing_data": ["Durable decision memory unavailable"],
+        "confidence": "low",
+        "citations": [],
+        "sample_mode": bool(bundle.get("sample_mode")),
+        "preferred_language": payload.preferred_language,
+        "response_language": language,
+        "task_profile": task_profile,
+        "intelligence_profile": (bundle.get("commercial_intelligence") or {}).get("profile", "essential"),
+        "reasoning_contract": "evidence_graph_v1_memory_fail_closed",
+    }
+
+
+def _attach_specialist_context(packet) -> None:
+    """Attach bounded, side-effect-free specialist summaries to model context.
+
+    The summaries live in analysis metadata. They do not become observed facts,
+    deterministic science, or authorization evidence and therefore cannot raise
+    the grounding confidence or authorize a physical action.
+    """
+    try:
+        results = run_specialists(packet)
+        packet.source_health["specialist_cells"] = [
+            {
+                "domain": row.domain,
+                "status": row.status,
+                "confidence_cap": row.confidence_cap,
+                "observed_evidence_ids": [
+                    str(item.get("evidence_id"))
+                    for item in row.observed_evidence[:12]
+                    if str(item.get("evidence_id") or "").strip()
+                ],
+                "deterministic_rule_ids": [
+                    str(item.get("rule_id"))
+                    for item in row.deterministic_findings[:8]
+                    if str(item.get("rule_id") or "").strip()
+                ],
+                "conflict_count": len(row.conflicts),
+                "unknowns": row.unknowns[:8],
+                "next_evidence_actions": [
+                    {
+                        "action_kind": action.action_kind,
+                        "action": action.action,
+                        "evidence_ids": action.evidence_ids[:8],
+                    }
+                    for action in row.next_evidence_actions[:3]
+                ],
+                "side_effect_free": True,
+            }
+            for row in results
+        ]
+        packet.source_health["specialist_cells_side_effect_free"] = True
+    except Exception as exc:  # noqa: BLE001
+        logger.warning("specialist_context_unavailable error=%s", exc.__class__.__name__)
+        packet.source_health["specialist_cells_unavailable"] = True
+
+
 @router.get("/runtime/ai-router-status")
 async def ai_router_status() -> dict[str, Any]:
     status = ModelRouter().status()
@@ -110,7 +187,7 @@ async def resilient_intelligence_run(
     user: User = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> dict[str, Any]:
-    """Production route: mandatory grounding, then GPT-5.6 or sanitized recovery lane."""
+    """Production route: mandatory grounding, specialist context, durable memory, safe recovery."""
     org = db.query(Organization).filter(Organization.id == tenant_id).first()
     if org is None:
         raise ValueError("Organization not found")
@@ -147,6 +224,7 @@ async def resilient_intelligence_run(
     try:
         packet = build_intelligence_grounding(context, field_id=payload.field_id)
         packet = enrich_grounding_packet(packet, context)
+        _attach_specialist_context(packet)
     except Exception as exc:  # noqa: BLE001
         logger.error("intelligence_grounding_failed error=%s", exc.__class__.__name__)
         release_reservation(db, reservation, reason="intelligence_grounding_failed")
@@ -172,21 +250,58 @@ async def resilient_intelligence_run(
             response_language = resolve_language(payload.preferred_language, payload.question).response_code
             if language_matches_target(gpt56.decision.answer, response_language):
                 body = gpt56.decision.portal_body(packet)
-                commit_reservation(
-                    db,
-                    reservation,
-                    event_type="ai_run",
-                    metadata={
-                        "status": "ok",
-                        "task_profile": task_profile,
-                        "provider_internal": "openai",
-                        "model_internal": gpt56.model,
-                        "reasoning_effort_internal": gpt56.reasoning_effort,
-                        "route": "resilient_runtime",
-                        "grounding_schema": packet.schema_version,
-                        "science_ruleset": packet.science_ruleset_version,
-                    },
-                )
+                memory_refs = None
+                try:
+                    with db.begin_nested():
+                        memory_refs = persist_grounded_decision_memory(
+                            db,
+                            packet,
+                            gpt56.decision,
+                            request_id=reservation.request_id,
+                            task=payload.task,
+                            question=payload.question,
+                            user_id=user.id,
+                            model_provider="openai",
+                            model_name=gpt56.model,
+                            reasoning_effort=gpt56.reasoning_effort,
+                        )
+                except Exception as exc:  # noqa: BLE001
+                    logger.error("decision_memory_persistence_failed error=%s", exc.__class__.__name__)
+                    if gpt56.decision.recommendations:
+                        release_reservation(db, reservation, reason="decision_memory_unavailable")
+                        db.commit()
+                        return _decision_memory_failure_response(payload, bundle, task_profile)
+                    body["decision_memory"] = {"status": "unavailable"}
+                    body["risk_flags"] = list(body.get("risk_flags") or []) + [
+                        {"severity": "review", "summary": "Durable decision memory is temporarily unavailable.", "evidence_ids": []}
+                    ]
+                else:
+                    body["decision_memory"] = {"status": "persisted", **memory_refs.customer_safe_dict()}
+
+                usage_metadata = {
+                    "status": "ok",
+                    "task_profile": task_profile,
+                    "provider_internal": "openai",
+                    "model_internal": gpt56.model,
+                    "reasoning_effort_internal": gpt56.reasoning_effort,
+                    "route": "resilient_runtime",
+                    "grounding_schema": packet.schema_version,
+                    "science_ruleset": packet.science_ruleset_version,
+                    "specialist_cells": [
+                        row.get("domain")
+                        for row in packet.source_health.get("specialist_cells", [])
+                        if isinstance(row, dict) and row.get("domain")
+                    ],
+                }
+                if memory_refs is not None:
+                    usage_metadata.update(
+                        {
+                            "decision_snapshot_id": memory_refs.decision_snapshot_id,
+                            "decision_lifecycle_id": memory_refs.lifecycle_id,
+                            "field_state_revision_id": memory_refs.field_state_revision_id,
+                        }
+                    )
+                commit_reservation(db, reservation, event_type="ai_run", metadata=usage_metadata)
                 db.commit()
                 return {
                     "status": "completed",
@@ -201,7 +316,7 @@ async def resilient_intelligence_run(
                     "response_language": response_language,
                     "task_profile": task_profile,
                     "intelligence_profile": commercial.get("profile", "essential"),
-                    "reasoning_contract": "evidence_graph_v1",
+                    "reasoning_contract": "evidence_graph_v1_specialists_durable_memory",
                 }
             logger.warning("gpt56_grounded language_mismatch falling_back=true")
 
@@ -226,8 +341,7 @@ async def resilient_intelligence_run(
         )
         db.commit()
     except Exception:
-        release_reservation(db, reservation, reason="resilient_runtime_exception")
-        db.commit()
+        db.rollback()
         raise
 
     if result.status == "language_generation_failed":
@@ -255,6 +369,7 @@ async def resilient_intelligence_run(
     if removed_content:
         body["risk_flags"] = ["unsupported_or_ungrounded_operational_content_removed"]
         body["confidence"] = "low"
+    body["decision_memory"] = {"status": "not_applicable_to_recovery_lane"}
     return {
         "status": "completed",
         "task": payload.task,
@@ -291,6 +406,7 @@ async def chat(payload: ChatRequest, tenant_id: str = Depends(require_current_te
         body = _normalize(body, fallback)
         try:
             packet = enrich_grounding_packet(build_intelligence_grounding(context, field_id=payload.block_id), context)
+            _attach_specialist_context(packet)
             summary, removed = sanitize_customer_answer(str(body.get("summary") or body.get("answer") or ""), packet, question=payload.message)
             if removed:
                 body["summary"] = summary

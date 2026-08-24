@@ -32,6 +32,10 @@ from app.models.field_intelligence import (
     FieldObservationProcessingRun, FieldObservationAuditEvent, FieldStorageReservation,
     FieldRuntimeFlag, FieldWorkerHeartbeat,
 )
+from app.models.intelligence_memory import (
+    DecisionLifecycle, DecisionLifecycleEvent, DecisionSnapshot,
+    FieldState, FieldStateRevision,
+)
 from app.models.compliance import (
     ComplianceJurisdiction, ComplianceOrganizationRole, ComplianceParcel,
     ComplianceWell, ComplianceMeter, ComplianceMeasurement, ComplianceExecutionLedger,
@@ -82,8 +86,10 @@ __all__ = [
     "DataSource", "IngestionJob", "EvidenceRecord", "IntelligenceRun",
     "GeneratedArtifact", "ChatConversation", "ChatMessage",
     "FieldCaptureSession", "FieldObservation", "FieldObservationAsset",
-    "FieldObservationProcessingRun", "FieldObservationAuditEvent", "ComplianceJurisdiction",
-    "ComplianceOrganizationRole", "ComplianceParcel", "ComplianceWell",
+    "FieldObservationProcessingRun", "FieldObservationAuditEvent", "FieldStorageReservation",
+    "FieldRuntimeFlag", "FieldWorkerHeartbeat",
+    "FieldState", "FieldStateRevision", "DecisionSnapshot", "DecisionLifecycle", "DecisionLifecycleEvent",
+    "ComplianceJurisdiction", "ComplianceOrganizationRole", "ComplianceParcel", "ComplianceWell",
     "ComplianceMeter", "ComplianceMeasurement", "ComplianceExecutionLedger",
     "ComplianceWaterBudget", "ComplianceEvidence", "ComplianceRulePack",
     "ComplianceExportMetadata", "ComplianceReadinessSnapshot", "AssurancePassport",
@@ -97,12 +103,10 @@ __all__ = [
     "ActionSafetyConfiguration", "ApiProject", "ApiServiceAccount",
     "PlatformApiKey", "PlatformApiUsageEvent", "PlatformIdempotencyRecord",
     "PlatformWebhookAuditEvent", "PlatformWebhookDeliveryAttempt", "PlatformWebhookEndpoint",
-    "PlatformWebhookOutbox",
-    "PlatformWebhookEvent", "ProviderCapabilityRecord", "ProviderExternalIdentityMap",
+    "PlatformWebhookOutbox", "PlatformWebhookEvent", "ProviderCapabilityRecord", "ProviderExternalIdentityMap",
     "PlatformAbuseEvent", "PlatformApiApplication", "PlatformApiOperationCost",
     "PlatformApiPlan", "PlatformApiSubscription", "PlatformCheckoutIdempotency",
-    "PlatformCreditReservation",
-    "PlatformLiveAccessRequest", "PlatformNotification", "PlatformPartnerDossier",
+    "PlatformCreditReservation", "PlatformLiveAccessRequest", "PlatformNotification", "PlatformPartnerDossier",
     "PlatformProductAuditEvent", "PlatformProgramEnrollment", "PlatformRequestLog",
     "PlatformSandboxState", "PlatformStatusComponent", "PlatformStatusIncident",
     "PlatformStatusIncidentUpdate", "PlatformStripeEvent", "PlatformStripeMeterOutbox",
