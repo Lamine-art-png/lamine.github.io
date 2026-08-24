@@ -59,7 +59,7 @@ jobs:
       - name: Assert a single migration head
         run: |
           test "$(alembic heads | wc -l)" -eq 1
-          test "$(alembic heads)" = "030_intelligence_state_memory (head)"
+          test "$(alembic heads)" = "031_merge_assurance_intelligence (head)"
       - name: TEST self-service developer acceptance (release gate)
         id: self_service_gate
         shell: bash
