@@ -23,6 +23,7 @@ from app.models.saas import Organization, User, Workspace
 
 PG_URL = os.environ.get("ASSURANCE_MIGRATION_TEST_DATABASE_URL", "")
 ROOT = Path(__file__).resolve().parents[2]
+MERGED_HEAD = "031_merge_assurance_intelligence"
 
 pytestmark = pytest.mark.skipif(
     not PG_URL.startswith("postgresql"),
@@ -71,7 +72,7 @@ def test_empty_030_roundtrip_is_safe(isolated_database):
     engine = isolated_database
     config = _config()
     command.upgrade(config, "head")
-    assert _revision(engine) == "030_assurance_intelligence_v2"
+    assert _revision(engine) == MERGED_HEAD
 
     command.downgrade(config, "029_platform_cli_device_auth")
     inspector = sa.inspect(engine)
@@ -81,7 +82,7 @@ def test_empty_030_roundtrip_is_safe(isolated_database):
     assert "organization_id" not in {column["name"] for column in inspector.get_columns("assurance_passports")}
 
     command.upgrade(config, "head")
-    assert _revision(engine) == "030_assurance_intelligence_v2"
+    assert _revision(engine) == MERGED_HEAD
 
 
 def test_modern_workspace_rows_block_before_destructive_schema_changes(isolated_database):
@@ -149,7 +150,9 @@ def test_modern_workspace_rows_block_before_destructive_schema_changes(isolated_
     assert "assurance_audit_events=1" in message
 
     inspector = sa.inspect(engine)
-    assert _revision(engine) == "030_assurance_intelligence_v2"
+    # The destructive Assurance downgrade is transactional. The failed downgrade
+    # must therefore leave the combined schema at the merged production head.
+    assert _revision(engine) == MERGED_HEAD
     assert "assurance_audit_events" in inspector.get_table_names()
     passport_columns = {column["name"] for column in inspector.get_columns("assurance_passports")}
     assert {"organization_id", "workspace_id", "entity_type"} <= passport_columns
@@ -211,4 +214,4 @@ def test_legacy_tenant_only_rows_can_downgrade_safely(isolated_database):
         assert legacy.metadata_json == {"legacy": True}
 
     command.upgrade(config, "head")
-    assert _revision(engine) == "030_assurance_intelligence_v2"
+    assert _revision(engine) == MERGED_HEAD
