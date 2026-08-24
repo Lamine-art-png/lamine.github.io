@@ -1,12 +1,4 @@
 {
-  "literal.0c9e41e72530e3e4": "Terminal authorized.",
-  "literal.0daf88b2a2c8a3d8": "`agroai logout` revokes the server-side CLI session.",
-  "literal.0ec4ab0a886f903f": "Almonds, pistachios…",
-  "literal.1db870dfc799b3e0": "First-party device flow",
-  "literal.2469c6a3d6275e66": "Checking developer agreements…",
-  "literal.288f5681d295c196": "Return to the terminal. The CLI will finish the one-time exchange automatically.",
-  "literal.312157dababe5aa3": ". After sign-in, an owner or admin can accept the current developer agreements and activate bounded TEST access without an API-access review.",
-  "literal.31e0a12a41c61bdb": "Access restricted?",
   "literal.4edc8bfafc6bd936": "Products",
   "literal.7c49b43a11717e88": "API access reviews"
 }
