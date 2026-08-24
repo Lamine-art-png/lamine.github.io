@@ -20,10 +20,32 @@ def _literal_assignment(module, name):
     return None
 
 
+def _down_revision(module):
+    for node in module.body:
+        value = None
+        if isinstance(node, ast.Assign):
+            if any(isinstance(target, ast.Name) and target.id == "down_revision" for target in node.targets):
+                value = node.value
+        elif isinstance(node, ast.AnnAssign):
+            if isinstance(node.target, ast.Name) and node.target.id == "down_revision":
+                value = node.value
+        if isinstance(value, ast.Constant) and isinstance(value.value, str):
+            return value.value
+        if isinstance(value, (ast.Tuple, ast.List)):
+            result = []
+            for item in value.elts:
+                if not isinstance(item, ast.Constant) or not isinstance(item.value, str):
+                    return None
+                result.append(item.value)
+            return tuple(result)
+    return None
+
+
 def test_alembic_revision_ids_fit_existing_version_table_and_are_unique():
     revisions = {}
     violations = []
     paths = [path for path in VERSIONS_DIR.glob("*.py") if not path.name.startswith("__")]
+
     for path in sorted(paths):
         module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         revision = _literal_assignment(module, "revision")
@@ -31,16 +53,19 @@ def test_alembic_revision_ids_fit_existing_version_table_and_are_unique():
             violations.append(f"{path.name}: missing literal revision id")
             continue
         if len(revision) > MAX_REVISION_LENGTH:
-            violations.append(f"{path.name}: revision {revision!r} is {len(revision)} chars; max is {MAX_REVISION_LENGTH}")
+            violations.append(
+                f"{path.name}: revision {revision!r} is {len(revision)} chars; max is {MAX_REVISION_LENGTH}"
+            )
         previous = revisions.get(revision)
         if previous is not None:
             violations.append(f"{path.name}: duplicate revision {revision!r}; already in {previous.name}")
         revisions[revision] = path
+
     assert not violations, "\n".join(violations)
 
 
-def test_account_verification_platform_api_field_and_intelligence_revisions_form_one_linear_tail():
-    expected_tail = {
+def test_account_verification_platform_api_field_assurance_and_intelligence_revisions_converge_at_one_head():
+    expected = {
         "019_account_verification": "018_outreach_engagement",
         "020_platform_api_private_beta": "019_account_verification",
         "021_platform_api_hardening": "020_platform_api_private_beta",
@@ -52,17 +77,25 @@ def test_account_verification_platform_api_field_and_intelligence_revisions_form
         "027_field_intelligence_launch": "026_platform_api_operations",
         "028_platform_api_live_catalog": "027_field_intelligence_launch",
         "029_platform_cli_device_auth": "028_platform_api_live_catalog",
+        "030_assurance_intelligence_v2": "029_platform_cli_device_auth",
         "030_intelligence_state_memory": "029_platform_cli_device_auth",
+        "031_merge_assurance_intelligence": (
+            "030_assurance_intelligence_v2",
+            "030_intelligence_state_memory",
+        ),
     }
-    actual_tail = {}
+    actual = {}
+
     for path in sorted(VERSIONS_DIR.glob("*.py")):
         if path.name.startswith("__"):
             continue
         module = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
         revision = _literal_assignment(module, "revision")
-        if revision in expected_tail:
-            actual_tail[revision] = _literal_assignment(module, "down_revision")
-    assert actual_tail == expected_tail
-    all_down_revisions = set(actual_tail.values())
-    assert "019_platform_api_private_beta" not in all_down_revisions
-    assert "020_platform_api_hardening" not in actual_tail
+        if revision in expected:
+            actual[revision] = _down_revision(module)
+
+    assert actual == expected
+    assert "019_platform_api_private_beta" not in set(
+        value for value in actual.values() if isinstance(value, str)
+    )
+    assert "020_platform_api_hardening" not in actual
